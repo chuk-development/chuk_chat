@@ -64,6 +64,11 @@ class BaseEnvironment(ABC):
     ) -> None:
         self._snapshot_path = snapshot_path
         self._cwd = initial_cwd
+        #: The workspace root. A ``cd`` in one command moves ``_cwd`` for the
+        #: next one; the file tools and each new run start from here instead
+        #: (live test 2026-10-09: ``cd tmp/images`` made later relative paths
+        #: point into ``tmp/images/tmp/images``).
+        self._workspace_root = initial_cwd
         self._max_output_chars = max_output_chars
         # The agent's permissions (docs/WIRE_CONTRACT.md, "Agent permissions").
         # ``None`` = nobody configured any: the environment behaves exactly as
@@ -145,6 +150,16 @@ class BaseEnvironment(ABC):
         return self._cwd
 
     @property
+    def root(self) -> str:
+        """The workspace root: where the shell started, and where relative
+        paths of the file tools point."""
+        return self._workspace_root
+
+    def reset_cwd(self) -> None:
+        """Move the shell back to the workspace root."""
+        self._cwd = self._workspace_root
+
+    @property
     def policy(self) -> SandboxPolicy | None:
         """The permissions this environment applies now, or ``None`` when no
         policy was configured (then every permission is on, as before)."""
@@ -195,6 +210,9 @@ class BaseEnvironment(ABC):
         """
         with self._policy_lock:
             if self._leases == 0:
+                # A new run starts in the workspace root, not where the
+                # last run's final ``cd`` left the shell.
+                self._cwd = self._workspace_root
                 if self._policy_provider is not None:
                     self._apply_locked(self._policy_provider())
                 elif self._has_pending:

@@ -470,6 +470,23 @@ class LadderConfig:
     # A user message after a pause this long (seconds) drops the tool calls
     # and tool results before it. 0 turns the rule off.
     idle_drop_seconds: float = 1800.0
+    # A new task drops the tool calls and tool results of the earlier tasks
+    # when they hold at least this many tokens (bead cowork-g7oc, live test
+    # 2026-10-09): the answers stay, the transcript keeps the rest. Without
+    # it, a research task's page dumps rode along on every round of the next
+    # task (an image job paid ~10k tokens of old tool results on each of its
+    # 26 rounds). Below the floor the previous task stays a byte-exact prefix
+    # of the next for the provider cache (cowork-g85d): a few small results
+    # cost less than one cache miss. 0 turns the rule off.
+    old_task_tools_drop_tokens: int = 4_000
+    # Browser results of the current task are folded to this many tokens once
+    # they are not among the newest ``browser_keep`` (live test 2026-10-09: 30
+    # ``browser_evaluate`` results, 75k characters, re-sent on every step).
+    # The fold point moves in steps of ``browser_fold_step`` results, so the
+    # payload prefix changes once per step block, not on every call. 0 = off.
+    browser_fold_tokens: int = 150
+    browser_keep: int = 3
+    browser_fold_step: int = 5
 
     enabled: bool = True
 
@@ -582,6 +599,10 @@ def idle_cut(messages: list[dict], timestamps: list[float] | None, gap_seconds: 
 
 #: The head of a task-start memory recall row (``memory.RECALL_PREFIX``).
 RECALL_MARK = "[memory recall"
+#: The head of a task-start clock row (``clock.CLOCK_PREFIX``). An old one
+#: goes the same way as an old recall row: only the current task's clock is
+#: true, and a stale weekday in the history only misleads the model.
+CLOCK_MARK = "[clock]"
 #: The head of a fired automation's prompt and the line before its payload
 #: (``automations.fired_prompt`` / ``automations.PAYLOAD_MARKER``).
 AUTOMATION_MARK = "[automation "
@@ -593,7 +614,7 @@ def _stale_marks(
     messages: list[dict], head_end: int, turn_start: int, recall_end: int | None = None
 ) -> tuple[list[dict], int]:
     """Old injected rows before the current turn (``messages[turn_start]`` is
-    its prompt): a memory recall row of an earlier task is flagged (only the
+    its prompt): a memory recall or clock row of an earlier task is flagged (only the
     current task's recall matters; the notes are still in memory), and the
     payload of an earlier fired automation is collapsed to its first lines.
     Same slots as the input, like :func:`_idle_marks`.
@@ -615,7 +636,7 @@ def _stale_marks(
         content = message.get("content")
         if message.get("role") != "user" or not isinstance(content, str):
             continue
-        if content.startswith(RECALL_MARK):
+        if content.startswith((RECALL_MARK, CLOCK_MARK)):
             if i >= recall_end:
                 continue
             replacement = {**message, IDLE_DROP_KEY: True}
@@ -629,6 +650,52 @@ def _stale_marks(
         out[i] = replacement
         changed += 1
     return out, changed
+
+
+def _is_browser_result(message: dict) -> bool:
+    if message.get("role") != "tool" or message.get(IDLE_DROP_KEY):
+        return False
+    name = str(message.get("name") or "")
+    return name.startswith("browser_") or "__browser_" in name
+
+
+def _fold_browser_results(messages: list[dict], start: int, cfg: "LadderConfig") -> list[dict]:
+    """Shorten the older browser results of the current task (from
+    ``start``). The newest ``browser_keep`` stay whole; the rest are cut to
+    ``browser_fold_tokens``, in blocks of ``browser_fold_step`` so the cached
+    prefix is rewritten once per block. Same slots as the input."""
+    if cfg.browser_fold_tokens <= 0:
+        return messages
+    indexes = [i for i in range(start, len(messages)) if _is_browser_result(messages[i])]
+    foldable = len(indexes) - max(0, cfg.browser_keep)
+    if foldable <= 0:
+        return messages
+    step = max(1, cfg.browser_fold_step)
+    upto = (foldable // step) * step
+    if upto <= 0:
+        return messages
+    out = messages
+    for i in indexes[:upto]:
+        folded = _truncate_content(messages[i].get("content"), cfg.browser_fold_tokens)
+        if folded is None:
+            continue
+        if out is messages:
+            out = list(messages)
+        out[i] = {**messages[i], "content": folded}
+    return out
+
+
+def _tool_traffic_tokens(messages: list[dict], start: int, end: int) -> int:
+    """Estimated tokens of the tool results and tool calls in
+    ``messages[start:end]``: what :func:`_idle_marks` would drop there."""
+    total = 0
+    for message in messages[start:end]:
+        role = message.get("role")
+        if role == "tool":
+            total += estimate_message_tokens(message)
+        elif role == "assistant" and message.get("tool_calls"):
+            total += estimate_message_tokens({"role": "assistant", "tool_calls": message["tool_calls"]})
+    return total
 
 
 def _idle_marks(messages: list[dict], head_end: int, cut: int) -> tuple[list[dict], int]:
@@ -1117,9 +1184,18 @@ class ContextLadder:
         # below is made on the unflagged size (``_measure_all``), so the
         # result is never larger than without them (a drop that lowered the
         # pressure under tier 2 left the whole middle verbatim).
-        marked, stats.idle_dropped = _idle_marks(messages, head_end, idle_cut)
+        tool_cut = idle_cut
+        if (
+            cfg.old_task_tools_drop_tokens > 0
+            and turn_start > max(idle_cut, head_end)
+            and _tool_traffic_tokens(messages, max(idle_cut, head_end), turn_start)
+            >= cfg.old_task_tools_drop_tokens
+        ):
+            tool_cut = turn_start
+        marked, stats.idle_dropped = _idle_marks(messages, head_end, tool_cut)
         marked, stale = _stale_marks(marked, head_end, turn_start, recall_end=idle_cut)
         stats.idle_dropped += stale
+        marked = _fold_browser_results(marked, max(head_end, turn_start), cfg)
         # What the two passes shrank without flagging (a collapsed payload, a
         # turn that lost its tool calls); added back for the tier decisions.
         self._decision_extra = max(0, self._measure_all(messages) - self._measure_all(marked))

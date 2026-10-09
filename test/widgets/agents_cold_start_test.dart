@@ -275,6 +275,7 @@ void main() {
     // every thread; this test is about the steady state.
     SharedPreferences.setMockInitialValues(<String, Object>{
       kReplayRepeatRepairKey: true,
+      kReplayFileRepairKey: true,
     });
     // Thread B was replayed earlier in this session: its rows reached memory
     // and disk, and its loader revision moved past 0.

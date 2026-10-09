@@ -27,7 +27,11 @@ class _JobAwareModel(MockModelClient):
     def complete(self, messages):
         if not self._chosen:
             self._chosen = True
-            last_user = next((m for m in reversed(messages) if m.get("role") == "user"), {})
+            last_user = next(
+                (m for m in reversed(messages) if m.get("role") == "user"
+                 and not str(m.get("content") or "").startswith("[clock]")),
+                {},
+            )  # the runtime's [clock] note follows each prompt
             text = str(last_user.get("content") or "")
             if text.startswith("[job "):
                 self._responses = ["The build finished: " + text.splitlines()[-1]]

@@ -20,9 +20,15 @@ wherever it came from.
 The copy is **non-destructive**: a seed skill is written only when the agent
 does not already have a directory of that name. That keeps the agent's own
 edits and any user-added skills untouched, and makes seeding safe to run on
-every host boot. It is not an upgrade path — a changed seed does not overwrite
-an agent's existing copy; that is a deliberate v1 boundary (the workspace is
-the agent's territory, §11).
+every host boot.
+
+One exception: a **built-in** skill documents the app's own machinery, so the
+app keeps it current. When the shipped copy carries a higher
+``metadata.version`` than the installed copy, the shipped files replace it
+(live test 2026-10-09: the old ``automations`` description told the model to
+set up a routine whenever a request said "daily"). An installed copy without a
+readable version is left alone: it may be the agent's own file. A
+``workspace`` seed is never replaced.
 
 The seed directory is found next to the repository root, located by walking up
 from this file until a ``skills/`` directory is seen. ``AGENTS_SEED_SKILLS``
@@ -34,14 +40,34 @@ a missing seed set must never take the host down.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 from pathlib import Path
 
-from chuk_agents_runtime.skills import SKILL_FILENAME, iter_seed_skills
+from chuk_agents_runtime.skills import SKILL_FILENAME, SOURCE_BUILTIN, iter_seed_skills
 
 SKILLS_DIRNAME = "skills"
 
-__all__ = ["SKILL_FILENAME", "seed_skills_dir", "seed_workspace_skills"]
+__all__ = ["SKILL_FILENAME", "seed_skills_dir", "seed_workspace_skills", "skill_version"]
+
+#: ``version: "1.2"`` in the frontmatter's ``metadata`` block.
+_VERSION_RE = re.compile(r"^\s*version:\s*[\"']?(\d+(?:\.\d+)*)[\"']?\s*$", re.MULTILINE)
+
+
+def skill_version(skill_dir: str | Path) -> tuple[int, ...] | None:
+    """The ``metadata.version`` of a skill directory's SKILL.md as a tuple,
+    or ``None`` when there is no file, no frontmatter or no version."""
+    try:
+        text = (Path(skill_dir) / SKILL_FILENAME).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+    if not text.startswith("---"):
+        return None
+    frontmatter = text.split("---", 2)[1] if text.count("---") >= 2 else ""
+    match = _VERSION_RE.search(frontmatter)
+    if match is None:
+        return None
+    return tuple(int(part) for part in match.group(1).split("."))
 
 
 def seed_skills_dir() -> Path | None:
@@ -82,13 +108,28 @@ def seed_workspace_skills(
 
     dest_root = Path(workspace).expanduser() / SKILLS_DIRNAME
     seeded: list[str] = []
-    for _source, name, directory in iter_seed_skills(src):
+    for group, name, directory in iter_seed_skills(src):
         target = dest_root / name
         if target.exists():
-            continue  # the agent already has this skill — leave it alone
+            # The agent already has this skill: leave it alone, unless it is
+            # an older copy of a built-in (see the module docstring).
+            if group == SOURCE_BUILTIN and _outdated(target, directory):
+                try:
+                    shutil.copytree(directory, target, dirs_exist_ok=True)
+                except OSError:
+                    continue
+                seeded.append(name)
+            continue
         try:
             shutil.copytree(directory, target)
         except OSError:
             continue
         seeded.append(name)
     return seeded
+
+
+def _outdated(installed: Path, shipped: Path) -> bool:
+    """True when both copies carry a version and the shipped one is higher."""
+    have = skill_version(installed)
+    ship = skill_version(shipped)
+    return have is not None and ship is not None and ship > have

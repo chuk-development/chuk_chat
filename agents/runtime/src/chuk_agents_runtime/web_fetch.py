@@ -29,6 +29,11 @@ What it enforces, in order:
 7. **Bounded result** — the Markdown is capped at :data:`FETCH_CAP` characters
    (the ``READ_CAP`` pattern of :mod:`chuk_agents_runtime.tools`) and the result
    carries ``truncated`` so the model knows the page continues.
+8. **Short result** — JSON comes back compact (``fields`` keeps only the named
+   keys), an Atom/RSS feed as one line per entry, and ``extract="images"``
+   lists a page's images instead of its text (:mod:`chuk_agents_runtime.web_extract`).
+   A 403 from a bot check carries a ``hint`` to use the browser, so the model
+   does not burn rounds on curl tricks (live test 2026-10-09: five rounds).
 
 Residual risk, stated plainly: the address is validated and then httpx resolves
 the name again when it connects, so a DNS entry that changes between the two
@@ -42,7 +47,6 @@ stdlib only, no new dependency for a job this size.
 from __future__ import annotations
 
 import ipaddress
-import json
 import re
 import socket
 from collections.abc import Callable, Iterable
@@ -52,6 +56,15 @@ from urllib.parse import urljoin, urlsplit
 import httpx
 
 from .registry import ToolRegistry
+from .web_extract import (
+    compile_grep,
+    extract_images,
+    grep_sources,
+    parse_fields,
+    render_feed,
+    render_json,
+    script_urls,
+)
 
 # -- limits -------------------------------------------------------------------
 
@@ -61,6 +74,10 @@ FETCH_CAP = 40_000
 # Byte cap on the download itself, enforced while streaming.
 MAX_BYTES = 2_000_000
 MAX_REDIRECTS = 5
+#: ``grep`` with ``scripts``: at most this many script files, and this many
+#: bytes over all of them (a Next.js page loads ~10 chunks of 30-300 KB).
+MAX_SCRIPTS = 25
+MAX_SCRIPT_BYTES = 8_000_000
 DEFAULT_TIMEOUT = 20.0
 MAX_TIMEOUT = 60.0
 
@@ -76,6 +93,10 @@ ALLOWED_CONTENT_TYPES = (
     "application/ld+json",
     "application/xml",
     "application/xhtml+xml",
+    # Script files are text; ``grep`` reads the data a page bundles in them.
+    "application/javascript",
+    "application/x-javascript",
+    "application/ecmascript",
 )
 
 # Written out even though :mod:`ipaddress` already classifies most of them:
@@ -108,9 +129,11 @@ WEB_FETCH_SCHEMA = {
     "type": "object",
     "description": (
         "Fetch one known static page or API response (http/https; HTML, text, "
-        "Markdown, JSON, XML) as Markdown or plain text, truncated at 40000 "
-        "characters. Not for search-engine result pages (use web_search) or "
-        "for dynamic pages, cookies and interaction (use the browser)."
+        "Markdown, JSON, XML) as Markdown or text, truncated at 40000 "
+        "characters. JSON comes back compact; Atom/RSS feeds (arXiv API, "
+        "GitHub releases.atom) as one line per entry. Prefer an API URL over "
+        "the HTML page. Not for search-engine result pages (use web_search) or "
+        "for dynamic pages, bot checks, cookies and interaction (use the browser)."
     ),
     "properties": {
         "url": {
@@ -122,9 +145,64 @@ WEB_FETCH_SCHEMA = {
             "description": "Return at most this many characters.",
             "default": FETCH_CAP,
         },
+        "fields": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": (
+                "JSON only: keep just these dotted keys of each item, e.g. "
+                "['sha','commit.author.date','commit.message','html_url']."
+            ),
+        },
+        "grep": {
+            "type": "string",
+            "description": (
+                "Search the raw page source instead of reading the text. Plain "
+                "words, several separated by | or a comma (no regex). Returns "
+                "short snippets, dated ones first. Finds data that the visible "
+                "text hides (entries and dates in scripts)."
+            ),
+        },
+        "scripts": {
+            "type": "boolean",
+            "description": "With grep on an HTML page: also search the page's script files.",
+            "default": False,
+        },
+        "extract": {
+            "type": "string",
+            "enum": ["text", "images"],
+            "description": (
+                "'images': list the page's images (url, alt, size, where found; "
+                "logos and icons flagged) instead of its text."
+            ),
+            "default": "text",
+        },
     },
     "required": ["url"],
 }
+
+#: Response headers that say a bot check (not the page) answered.
+_BOT_CHECK_HEADERS = ("cf-mitigated", "x-datadome", "x-amzn-waf-action", "x-px-blocked")
+_BOT_CHECK_BODY = ("just a moment", "challenge-platform", "captcha", "are you a robot",
+                   "access denied", "attention required")
+BOT_CHECK_HINT = (
+    "The site blocks scripted requests (a bot check). curl and python will be "
+    "blocked too. Open the page in the browser instead (browser_navigate), "
+    "then read only what you need (browser_evaluate)."
+)
+
+
+def _bot_check(response: httpx.Response, body: bytes) -> bool:
+    """True when a 403/429/503 came from a bot check, not from the page."""
+    if response.status_code not in (401, 403, 429, 503):
+        return False
+    headers = {k.lower() for k in response.headers}
+    if any(name in headers for name in _BOT_CHECK_HEADERS):
+        return True
+    server = response.headers.get("server", "").lower()
+    text = body[:4000].decode("utf-8", "replace").lower()
+    if any(marker in text for marker in _BOT_CHECK_BODY):
+        return True
+    return server in ("cloudflare", "akamaighost", "ddos-guard") and response.status_code in (403, 503)
 
 
 class UrlRejected(Exception):
@@ -537,13 +615,10 @@ def make_web_fetch_handler(
             return http_client, False
         return httpx.Client(timeout=timeout, follow_redirects=False), True
 
-    def web_fetch(url: str, max_chars: int = FETCH_CAP) -> dict:
-        try:
-            cap = max(1, min(int(max_chars), FETCH_CAP))
-        except (TypeError, ValueError):
-            cap = FETCH_CAP
-
-        client, owned = _client()
+    def _get(client: httpx.Client, url: str) -> dict:
+        """One GET with every safety rule: the URL check per hop, the redirect
+        limit, the status, the content type and the byte cap. Returns either
+        ``{"failure": <result>}`` or the response facts."""
         current = url
         hops: list[str] = []
         try:
@@ -568,68 +643,169 @@ def make_web_fetch_handler(
                         continue
 
                     if response.status_code >= 400:
-                        return {
+                        failure = {
                             "ok": False,
                             "url": current,
                             "status": response.status_code,
                             "error": f"HTTP {response.status_code}",
                         }
+                        if response.status_code in (401, 403, 429, 503):
+                            head, _ = _read_bounded(response, 8_000)
+                            if _bot_check(response, head):
+                                failure["hint"] = BOT_CHECK_HINT
+                        return {"failure": failure}
 
                     mime, charset = _split_content_type(
                         response.headers.get("content-type", "")
                     )
                     if not is_allowed_content_type(mime):
                         return {
-                            "ok": False,
-                            "url": current,
-                            "status": response.status_code,
-                            "error": f"content type not allowed: {mime}",
+                            "failure": {
+                                "ok": False,
+                                "url": current,
+                                "status": response.status_code,
+                                "error": f"content type not allowed: {mime}",
+                            }
                         }
 
                     raw, size_truncated = _read_bounded(response, max_bytes)
+                    return {
+                        "url": current,
+                        "status": response.status_code,
+                        "mime": mime,
+                        "text": _decode(raw, charset),
+                        "bytes": len(raw),
+                        "truncated": size_truncated,
+                        "hops": hops,
+                    }
 
-                text = _decode(raw, charset)
-                title = ""
-                if mime in ("text/html", "application/xhtml+xml"):
-                    text, title = html_to_markdown(text, base_url=current)
-                elif mime.endswith(("json", "+json")):
-                    text = _pretty_json(text)
+            return {
+                "failure": {
+                    "ok": False,
+                    "url": current,
+                    "error": f"too many redirects (limit {max_redirects})",
+                }
+            }
+        except UrlRejected as exc:
+            return {"failure": {"ok": False, "url": url, "error": str(exc)}}
+        except httpx.TimeoutException:
+            return {"failure": {"ok": False, "url": current, "error": "request timed out"}}
+        except httpx.HTTPError as exc:
+            return {
+                "failure": {
+                    "ok": False,
+                    "url": current,
+                    "error": f"request failed: {type(exc).__name__}",
+                }
+            }
 
-                truncated = size_truncated
-                if len(text) > cap:
-                    text = text[:cap]
-                    truncated = True
+    def _grep(client: httpx.Client, page: dict, pattern, with_scripts: bool) -> dict:
+        """Search the page source (and, on request, its script files) for
+        ``pattern``. A listing whose rows open by JavaScript keeps its data
+        (slugs, dates) in the source or in a script bundle, not in the text
+        the reader sees (live test 2026-10-09: the TurnBench submission
+        dates)."""
+        sources: list[tuple[str, str]] = [(page["url"], page["text"])]
+        skipped: list[str] = []
+        if with_scripts and _is_html(page["mime"], page["text"]):
+            budget = MAX_SCRIPT_BYTES
+            for script_url in script_urls(page["text"], page["url"])[:MAX_SCRIPTS]:
+                # Check the budget before the download, so the total stays
+                # within one file of MAX_SCRIPT_BYTES.
+                if budget <= 0:
+                    break
+                got = _get(client, script_url)
+                if "failure" in got:
+                    skipped.append(script_url)
+                    continue
+                budget -= got["bytes"]
+                sources.append((got["url"], got["text"]))
+        found = grep_sources(sources, pattern)
+        result = {
+            "ok": True,
+            "url": page["url"],
+            "status": page["status"],
+            "content_type": page["mime"],
+            **found,
+        }
+        if skipped:
+            result["scripts_failed"] = skipped
+        if page["hops"]:
+            result["redirects"] = page["hops"]
+        return result
 
+    def web_fetch(
+        url: str,
+        max_chars: int = FETCH_CAP,
+        fields: list[str] | str | None = None,
+        extract: str | None = None,
+        grep: str | None = None,
+        scripts: bool = False,
+    ) -> dict:
+        try:
+            cap = max(1, min(int(max_chars), FETCH_CAP))
+        except (TypeError, ValueError):
+            cap = FETCH_CAP
+        keep = parse_fields(fields)
+        want_images = str(extract or "").strip().lower() == "images"
+        pattern = compile_grep(grep) if isinstance(grep, str) and grep.strip() else None
+        with_scripts = scripts is True or str(scripts).strip().lower() in ("true", "1", "yes")
+
+        client, owned = _client()
+        try:
+            page = _get(client, url)
+            if "failure" in page:
+                return page["failure"]
+            if pattern is not None:
+                return _grep(client, page, pattern, with_scripts)
+            current, text, mime = page["url"], page["text"], page["mime"]
+            title = ""
+            is_html = _is_html(mime, text)
+            if want_images:
+                if not is_html:
+                    return {
+                        "ok": False,
+                        "url": current,
+                        "status": page["status"],
+                        "error": f"extract='images' needs an HTML page, got {mime or 'no type'}",
+                    }
                 result = {
                     "ok": True,
                     "url": current,
-                    "status": response.status_code,
+                    "status": page["status"],
                     "content_type": mime,
-                    "content": text,
-                    "truncated": truncated,
-                    "bytes_read": len(raw),
+                    **extract_images(text, base_url=current),
+                    "truncated": page["truncated"],
                 }
-                if title:
-                    result["title"] = title[:200]
-                if hops:
-                    result["redirects"] = hops
+                if page["hops"]:
+                    result["redirects"] = page["hops"]
                 return result
+            if is_html:
+                text, title = html_to_markdown(text, base_url=current)
+            elif mime.endswith(("json", "+json")):
+                text = render_json(text, keep)
+            elif mime.endswith("xml"):
+                text = render_feed(text) or text
 
-            return {
-                "ok": False,
+            truncated = page["truncated"]
+            if len(text) > cap:
+                text = text[:cap]
+                truncated = True
+
+            result = {
+                "ok": True,
                 "url": current,
-                "error": f"too many redirects (limit {max_redirects})",
+                "status": page["status"],
+                "content_type": mime,
+                "content": text,
+                "truncated": truncated,
+                "bytes_read": page["bytes"],
             }
-        except UrlRejected as exc:
-            return {"ok": False, "url": url, "error": str(exc)}
-        except httpx.TimeoutException:
-            return {"ok": False, "url": current, "error": "request timed out"}
-        except httpx.HTTPError as exc:
-            return {
-                "ok": False,
-                "url": current,
-                "error": f"request failed: {type(exc).__name__}",
-            }
+            if title:
+                result["title"] = title[:200]
+            if page["hops"]:
+                result["redirects"] = page["hops"]
+            return result
         finally:
             if owned:
                 client.close()
@@ -637,12 +813,16 @@ def make_web_fetch_handler(
     return web_fetch
 
 
+def _is_html(mime: str, text: str) -> bool:
+    return mime in ("text/html", "application/xhtml+xml") or (
+        not mime and text.lstrip()[:200].lower().startswith(("<!doctype html", "<html"))
+    )
+
+
 def _pretty_json(text: str) -> str:
-    """JSON stays JSON, just normalised. Invalid JSON is passed through."""
-    try:
-        return json.dumps(json.loads(text), indent=2, ensure_ascii=False)
-    except (ValueError, TypeError):
-        return text
+    """JSON stays JSON, compact (:func:`web_extract.render_json`). Invalid
+    JSON is passed through. Kept for callers of the old name."""
+    return render_json(text)
 
 
 def register_web_fetch(

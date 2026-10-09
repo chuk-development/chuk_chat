@@ -28,6 +28,7 @@ from chuk_agents_manager import (
 )
 
 from .protocol import (
+    FragmentAssembler,
     METHOD_EVENT,
     METHOD_RUN_TASK,
     METHOD_STOP,
@@ -61,6 +62,9 @@ class ControllerSession:
         # the same time without either losing frames.
         self._inbox: dict[str, list[dict[str, Any]]] = {}
         self._closed: set[str] = set()
+        # A payload too large for one frame arrives as ``fragment`` frames; the
+        # inbox gets the joined payload once, as the app does.
+        self._fragments = FragmentAssembler()
 
     def send_task(
         self,
@@ -180,7 +184,9 @@ class ControllerSession:
             if match is None:
                 return
             rid = match.request.request_id
-            self._inbox.setdefault(rid, []).append(self._open(match.result["frame"]))
+            whole = self._fragments.add(self._open(match.result["frame"]))
+            if whole is not None:
+                self._inbox.setdefault(rid, []).append(whole)
             self._closed.add(rid)
             return
 
@@ -188,7 +194,9 @@ class ControllerSession:
             params = frame.get("params", {}) or {}
             rid = params.get("requestId")
             if isinstance(rid, str):
-                self._inbox.setdefault(rid, []).append(self._open(params["frame"]))
+                whole = self._fragments.add(self._open(params["frame"]))
+                if whole is not None:
+                    self._inbox.setdefault(rid, []).append(whole)
 
     def _open(self, frame_b64: str) -> dict[str, Any]:
         return decode_payload(self._opener.open(b64_to_frame(frame_b64)))

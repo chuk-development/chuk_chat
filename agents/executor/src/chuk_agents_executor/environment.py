@@ -71,6 +71,13 @@ class SandboxEnvironment:
         """
         self._inner.cancel()
 
+    @property
+    def root(self) -> str | None:
+        """The workspace root of the inner environment (where relative paths
+        of the file tools point), or ``None`` when it does not say."""
+        root = getattr(self._inner, "root", None)
+        return root if isinstance(root, str) and root else None
+
     def run_bash(
         self,
         cmd: str,

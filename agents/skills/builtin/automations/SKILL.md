@@ -1,11 +1,27 @@
 ---
 name: automations
-description: Put work on a clock or watch something 24/7 and wake yourself when it changes. Use whenever the user says "every day", "every morning", "remind me", "monitor", "watch", "notify me when", "keep an eye on", "poll", "check regularly", "cron", or wants something to happen while they are away.
+description: Put work on a clock or watch something 24/7. Load it only when the user explicitly asks to set up, change or remove a schedule, a reminder or a watcher ("richte ... ein", "jeden Tag um 9", "erinnere mich"). "Daily" in a report request is not such a request.
 metadata:
-  version: "1.0"
+  version: "1.1"
 ---
 
 # Automations: schedules, watchers, self-wake
+
+## When to create one
+
+An automation runs again and again, and each run costs the user credits.
+Create, change or delete one ONLY when the user asks for exactly that:
+"richte einen täglichen Check ein", "jeden Montag um 9 ...", "erinnere mich
+morgen ...", "sag mir Bescheid, wenn ...", "stop the routine".
+
+A request for a report or a check that only describes it as "daily",
+"täglich" or "weekly" ("Täglicher OSS-Check zu X, bitte gründlich: ...") is
+NOT such a request. Do the check now, one time, and give the result. At the
+end you may offer the routine in one sentence ("Soll ich das jeden Morgen um
+9 machen?"). When you are not sure, do not create it.
+
+For a time in the answer, take today from the `[clock]` note and read the
+weekday from `next_fire_local` in the tool result. Do not calculate it.
 
 You have six tools for work that happens later or keeps happening:
 

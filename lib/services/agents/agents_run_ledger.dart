@@ -27,7 +27,6 @@ import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/automations/automation_ledger.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_run_cost.dart'; // F1: cost
-import 'package:chuk_chat/services/agents/agents_run_changes.dart'; // run changes
 import 'package:chuk_chat/services/image_storage_service.dart';
 
 /// The renderer's shape of one host `tool` frame.
@@ -1152,7 +1151,6 @@ class AgentsRunLedger extends ChangeNotifier {
     int? firstMid,
     int? lastMid,
     AgentsRunCost? cost, // F1: cost
-    AgentsRunChangesSummary? changes, // run changes
   }) {
     final run = _ensure(sessionKey);
     run.running = false;
@@ -1177,10 +1175,9 @@ class AgentsRunLedger extends ChangeNotifier {
     if (cost != null) run.cost = cost;
     // The run id rides along too: it folds a quiet automation run to one
     // line ("notify only on change").
-    // run changes: what the run changed in the workspace rides along too.
     putRunMeta(
       run.toolCalls,
-      runMetaCall(cost: cost, runId: runId, changes: changes),
+      runMetaCall(cost: cost, runId: runId),
     );
     // ── end F1 ──
     // Nothing may be left spinning once the host says the run is over.

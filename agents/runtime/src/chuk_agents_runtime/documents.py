@@ -14,20 +14,20 @@ try ``anydoc``, on ``UnsupportedError`` route to a vision model. This module
 takes that branch through a :class:`VisionReader`, which is a one-method seam so
 it can be faked in tests.
 
-What is actually *verified* about the backend (read from ``api_server/main.py``,
-not assumed):
+What is actually *verified* about the backend (read from
+``api_server/routers/ai/openai_compat.py``, not assumed; checked again after
+the live test of 2026-10-09, when the old multipart ``/v1/ai/chat`` route
+answered 404):
 
-- ``POST /v1/ai/chat`` is a **multipart form** endpoint: ``message`` (required),
-  ``images`` (repeatable file part), ``model_id``, ``system_prompt``,
-  ``history``, ``reasoning_effort``, ``provider_slug``. It answers with an
-  ``text/event-stream`` of ``data: {json}`` lines, where the assistant text
-  arrives as ``{"content": "..."}`` segments and the stream ends with
-  ``data: [DONE]``. Errors arrive as ``{"error": "..."}``.
-- The endpoint attaches a file **only when its content type starts with
-  ``image/``** (``main.py``: ``if image.content_type and
-  image.content_type.startswith("image/")``). Anything else is dropped
-  silently, and the model then answers about a message with no attachment.
-- Per-image ceiling: ``MAX_IMAGE_SIZE`` = 20 MB.
+- ``POST /v1/chat/completions`` takes OpenAI messages. A user ``content``
+  part ``{"type": "image_url", "image_url": {"url": "data:image/...;base64,..."}}``
+  carries the picture; ``stream: false`` answers with one JSON body whose
+  ``choices[0].message.content`` is the text. Errors arrive as
+  ``{"error": {"message": ...}}``.
+- The model must be marked ``supports_vision`` in the catalogue
+  (``qwen/qwen3.6-35b-a3b`` is).
+- A big picture is shrunk to :data:`VISION_MAX_SIDE` pixels first: the
+  answer does not get better, the bill gets smaller.
 
 So :class:`BackendVisionReader` is a real, working image path.
 **Video is not**: there is no endpoint today that accepts a video part, even
@@ -42,7 +42,7 @@ the prompt (§7.9).
 
 from __future__ import annotations
 
-import json
+import base64
 import mimetypes
 from pathlib import PurePosixPath
 from typing import Protocol
@@ -70,7 +70,9 @@ DOCUMENT_MAX_BYTES = 20 * 1024 * 1024
 # exactly like `read_file` (§7.9).
 MARKDOWN_CAP = 60_000
 
-CHAT_PATH = "/v1/ai/chat"
+CHAT_PATH = "/v1/chat/completions"
+#: A picture check is a short answer; a transcription of a scan is longer.
+VISION_MAX_TOKENS = 4096
 # Open-weight default from §9: cheap MoE, ~3B active, reads images and video.
 DEFAULT_VISION_MODEL = "qwen/qwen3.6-35b-a3b"
 VISION_TIMEOUT = 180.0
@@ -89,8 +91,9 @@ READ_DOCUMENT_SCHEMA = {
         "Read a document and get its content back as Markdown. Handles Word, "
         "PowerPoint, Excel, OpenDocument, RTF, EPUB, CSV and text-layer PDF "
         "offline. A scan or a picture is read by a vision model instead, when "
-        "one is configured. Use this for anything that is not plain text; for "
-        "plain text `read_file` is cheaper."
+        "one is configured: pass `instruction` to ask about a picture (which "
+        "product, which colour, is it a logo). Use this for anything that is "
+        "not plain text; for plain text `read_file` is cheaper."
     ),
     "properties": {
         "path": {
@@ -101,7 +104,8 @@ READ_DOCUMENT_SCHEMA = {
             "type": "string",
             "description": (
                 "Only used for the vision path (scans and images): what to look "
-                "for. Leave it out for a plain transcription."
+                "for, or a question about the picture. Leave it out for a plain "
+                "transcription."
             ),
         },
     },
@@ -208,34 +212,56 @@ def _clip(markdown: str) -> tuple[str, bool]:
 
 # -- the backend vision route -------------------------------------------------
 
+#: A picture is sent at most this big on its longer side. A product photo of
+#: 4400 px costs many image tokens and tells a vision model nothing more.
+VISION_MAX_SIDE = 1600
 
-def _sse_text(body: str) -> tuple[str, str | None]:
-    """Fold the ``/v1/ai/chat`` event stream into one string.
 
-    Returns ``(text, error)``. Unknown keys (``reasoning``, ``usage``, ``tps``,
-    ``meta``, ``retrying``) are ignored on purpose — only the answer is wanted,
-    and reasoning must never be folded into content.
-    """
-    chunks: list[str] = []
-    error: str | None = None
-    for line in body.splitlines():
-        line = line.strip()
-        if not line.startswith("data:"):
-            continue
-        payload = line[len("data:") :].strip()
-        if not payload or payload == "[DONE]":
-            continue
-        try:
-            event = json.loads(payload)
-        except ValueError:
-            continue
-        if not isinstance(event, dict):
-            continue
-        if isinstance(event.get("content"), str):
-            chunks.append(event["content"])
-        elif event.get("error") and error is None:
-            error = str(event["error"])[:300]
-    return "".join(chunks), error
+def _shrink(data: bytes, mime_type: str) -> tuple[bytes, str]:
+    """A big picture as a JPEG of at most :data:`VISION_MAX_SIDE` pixels on
+    its longer side; anything Pillow cannot read is sent as it is."""
+    try:
+        from io import BytesIO
+
+        from PIL import Image
+    except ImportError:  # pragma: no cover - Pillow ships with the runtime
+        return data, mime_type
+    try:
+        image = Image.open(BytesIO(data))
+        image.load()
+    except Exception:  # noqa: BLE001 - not readable here: send it unchanged
+        return data, mime_type
+    if max(image.size) <= VISION_MAX_SIDE and mime_type in ("image/jpeg", "image/png"):
+        return data, mime_type
+    image.thumbnail((VISION_MAX_SIDE, VISION_MAX_SIDE))
+    out = BytesIO()
+    image.convert("RGB").save(out, "JPEG", quality=88)
+    return out.getvalue(), "image/jpeg"
+
+
+def _completion_text(response: httpx.Response) -> tuple[str, str | None]:
+    """The answer of a ``/v1/chat/completions`` reply, or its error.
+    Reasoning (``reasoning_content``) is never folded into the answer."""
+    try:
+        body = response.json()
+    except ValueError:
+        return "", "the vision route did not answer with JSON"
+    if not isinstance(body, dict):
+        return "", "the vision route answered with an unknown shape"
+    error = body.get("error")
+    if error:
+        message = error.get("message") if isinstance(error, dict) else error
+        return "", str(message)[:300]
+    choices = body.get("choices") or []
+    if not choices or not isinstance(choices[0], dict):
+        return "", "the vision model returned no choice"
+    message = choices[0].get("message") or {}
+    content = message.get("content") if isinstance(message, dict) else None
+    if isinstance(content, list):
+        content = "".join(
+            part.get("text", "") for part in content if isinstance(part, dict)
+        )
+    return (content if isinstance(content, str) else ""), None
 
 
 class BackendVisionReader:
@@ -245,6 +271,11 @@ class BackendVisionReader:
     exactly as ``web_search`` does, and a 401/403 is retried once after a
     refresh. The model id defaults to the open-weight MoE the plan pins; it is
     a constructor argument because model ids churn.
+
+    The route is the backend's OpenAI-compatible ``POST /v1/chat/completions``
+    with the picture as an ``image_url`` data URI. The older multipart
+    ``/v1/ai/chat`` is gone; it answered 404 in the live test of 2026-10-09,
+    so every picture check failed and the agent guessed colours by hand.
     """
 
     def __init__(
@@ -262,13 +293,12 @@ class BackendVisionReader:
         self._client = http_client
         self._timeout = timeout
 
-    def _post(self, *, filename: str, data: bytes, mime_type: str, message: str):
+    def _post(self, payload: dict) -> httpx.Response:
         client = self._client or httpx.Client(timeout=self._timeout)
         try:
             return client.post(
                 self._url,
-                data={"message": message, "model_id": self._model_id},
-                files={"images": (filename, data, mime_type)},
+                json=payload,
                 headers={"Authorization": f"Bearer {self._session.access_token}"},
             )
         finally:
@@ -279,8 +309,8 @@ class BackendVisionReader:
         self, *, filename: str, data: bytes, mime_type: str, instruction: str
     ) -> str:
         if not mime_type.startswith("image/"):
-            # The endpoint drops a non-image part without a word, so the model
-            # would get an answer about an empty message. Fail loudly instead.
+            # Only a picture is a valid image part; anything else would get an
+            # answer about nothing. Fail loudly instead.
             raise VisionError(
                 f"the backend vision route takes images only, not {mime_type}"
             )
@@ -289,30 +319,40 @@ class BackendVisionReader:
                 f"image is {len(data)} bytes, over the backend's "
                 f"{VISION_MAX_IMAGE_BYTES} byte limit"
             )
+        data, mime_type = _shrink(data, mime_type)
+        payload = {
+            "model": self._model_id,
+            "stream": False,
+            "max_tokens": VISION_MAX_TOKENS,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": instruction},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{mime_type};base64,"
+                                + base64.b64encode(data).decode("ascii")
+                            },
+                        },
+                    ],
+                }
+            ],
+        }
         try:
-            response = self._post(
-                filename=filename,
-                data=data,
-                mime_type=mime_type,
-                message=instruction,
-            )
+            response = self._post(payload)
             if response.status_code in (401, 403):
                 self._session.refresh()
-                response = self._post(
-                    filename=filename,
-                    data=data,
-                    mime_type=mime_type,
-                    message=instruction,
-                )
+                response = self._post(payload)
         except httpx.TimeoutException:
             raise VisionError("the vision model timed out") from None
         except Exception as exc:
             raise VisionError(f"vision request failed: {type(exc).__name__}") from None
 
+        text, error = _completion_text(response)
         if response.status_code != 200:
-            raise VisionError(f"vision route returned HTTP {response.status_code}")
-
-        text, error = _sse_text(response.text)
+            raise VisionError(error or f"vision route returned HTTP {response.status_code}")
         if error:
             raise VisionError(error)
         if not text.strip():

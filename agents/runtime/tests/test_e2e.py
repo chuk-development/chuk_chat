@@ -44,9 +44,10 @@ def test_run_command_end_to_end(tmp_path):
     assert sid is not None
     convo = store.get_conversation(sid)
     roles = [m.role for m in convo]
-    assert roles == ["system", "user", "assistant", "tool", "assistant"]
+    # ``clock``: the task's date note, right after the prompt (bead chuk_chat-gaep).
+    assert roles == ["system", "user", "clock", "assistant", "tool", "assistant"]
 
-    tool_msg = convo[3].content
+    tool_msg = convo[4].content
     assert tool_msg["name"] == "run_command"
     assert tool_msg["content"]["exit_code"] == 0
     assert tool_msg["content"]["timed_out"] is False

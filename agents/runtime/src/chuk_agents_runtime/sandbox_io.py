@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import posixpath
 import shlex
 from dataclasses import dataclass
 
@@ -53,10 +54,24 @@ class FetchedFile:
     data: bytes
 
 
+def workspace_path(env: Environment, path: str) -> str:
+    """A relative ``path`` joined to the environment's workspace root.
+
+    The sandbox shell keeps its working directory between commands, so a
+    relative path would otherwise follow the agent's last ``cd`` and miss the
+    file (live test 2026-10-09). An absolute path, a ``~`` path and an
+    environment without a ``root`` are left as they are."""
+    text = path if isinstance(path, str) else str(path or "")
+    root = getattr(env, "root", None)
+    if not text or text.startswith(("/", "~")) or not isinstance(root, str) or not root:
+        return text
+    return posixpath.join(root, text)
+
+
 def stat_file(env: Environment, path: str, *, timeout: int = 30) -> int:
     """Size of a regular file, in bytes. Raises :class:`TransferError` if the
     path is not a readable regular file (a directory, a device, or missing)."""
-    quoted = shlex.quote(path)
+    quoted = shlex.quote(workspace_path(env, path))
     result = env.run_bash(f"test -f {quoted} && wc -c < {quoted}", timeout=timeout)
     if not result.ok:
         raise TransferError(f"not a readable file: {path}")
@@ -92,7 +107,7 @@ def fetch_bytes(
             f"file is {size} bytes, over the {max_bytes} byte limit for this tool"
         )
 
-    quoted = shlex.quote(path)
+    quoted = shlex.quote(workspace_path(env, path))
     block = max(1024, int(chunk_bytes))
     out = bytearray()
     index = 0

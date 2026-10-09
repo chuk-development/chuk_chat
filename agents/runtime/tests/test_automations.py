@@ -292,3 +292,47 @@ def test_hook_module_has_no_agent_imports():
     assert "chuk_agents_runtime" not in source.replace("chuk_agents_runtime/agents_hooks", "")
     assert "from ." not in source
     assert os.path.basename(agents_hooks.__file__) == "agents_hooks.py"
+
+
+# -- live test 2026-10-09: no unasked routines, right weekdays ---------------
+
+
+def test_the_schedule_tools_say_they_need_an_explicit_request():
+    """Bead chuk_chat-2l0v: "Taeglicher ... Check, bitte gruendlich" made the
+    agent set up a daily routine nobody asked for. The tool text itself now
+    says when a routine is wanted."""
+    from chuk_agents_runtime.automations import (
+        SCHEDULE_TASK_SCHEMA,
+        START_WATCHER_SCHEMA,
+        WATCH_MAIL_SCHEMA,
+        WATCH_URL_SCHEMA,
+    )
+
+    text = SCHEDULE_TASK_SCHEMA["description"]
+    assert "ONLY when the user explicitly asks" in text
+    assert "'daily' in a request for a report is not such a request" in text
+    for schema in (WATCH_URL_SCHEMA, WATCH_MAIL_SCHEMA, START_WATCHER_SCHEMA):
+        assert schema["description"].startswith("Use only when the user explicitly asks")
+
+
+def test_schedule_and_list_results_name_the_weekday_of_the_next_run():
+    """Bead chuk_chat-gaep: the model turned a unix timestamp into the wrong
+    weekday. The result now carries the weekday as text."""
+    from datetime import datetime
+
+    from chuk_agents_runtime.automations import with_local_times
+
+    backend = RecordingBackend()
+    registry = ToolRegistry()
+    register_automation_tools(registry, backend)
+    out = registry.dispatch("schedule_task", {"spec": "every 5m", "prompt": "x"})
+    assert out["next_fire_at"] == 300.0
+    assert "next_fire_local" in out
+    listed = registry.dispatch("list_automations", {})
+    assert "next_fire_local" in listed["automations"][0]
+
+    saturday_nine = datetime(2026, 10, 10, 9, 0).astimezone().timestamp()
+    row = with_local_times({"id": "a1", "next_fire_at": saturday_nine, "last_fired_at": None})
+    assert row["next_fire_local"].startswith("Saturday, 2026-10-10 09:00")
+    assert "last_fired_local" not in row
+    assert with_local_times({"ok": False, "error": "not found"}) == {"ok": False, "error": "not found"}

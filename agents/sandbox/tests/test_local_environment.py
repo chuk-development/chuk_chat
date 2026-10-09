@@ -179,3 +179,27 @@ def test_cancel_does_not_poison_the_next_command(env, tmp_path):
     # The plumbing that runs after a stop (a journal commit, a cleanup) still
     # needs a working shell.
     assert env.run("echo still here").stdout.strip() == "still here"
+
+
+def test_the_workspace_root_stays_and_a_new_run_starts_there(tmp_path):
+    """Live test 2026-10-09: ``cd tmp/images`` in one command made the next
+    run, and the file tools, look in the wrong directory."""
+    work = tmp_path / "ws"
+    work.mkdir()
+    (work / "sub").mkdir()
+    with LocalEnvironment(workdir=str(work)) as env:
+        assert env.root == str(work)
+        env.run("cd sub")
+        assert env.cwd == str(work / "sub")
+        assert env.root == str(work)
+        env.begin_run()
+        try:
+            assert env.cwd == str(work)  # a new run starts in the root
+            env.run("cd sub")
+            env.begin_run()  # a second run that shares the box keeps the shell
+            assert env.cwd == str(work / "sub")
+            env.end_run()
+        finally:
+            env.end_run()
+        env.reset_cwd()
+        assert env.cwd == str(work)

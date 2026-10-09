@@ -12,7 +12,6 @@ import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/agents_replay_loader.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import 'package:chuk_chat/services/agents/agents_run_cost.dart';
-import 'package:chuk_chat/services/agents/agents_run_changes.dart'; // run changes
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/services/storage/chat_origin.dart';
 
@@ -36,6 +35,7 @@ void main() {
     // the steady state these tests describe: mark it done.
     SharedPreferences.setMockInitialValues(<String, Object>{
       kReplayRepeatRepairKey: true,
+      kReplayFileRepairKey: true,
     });
     loader.reset();
     AgentsRelayLink.instance.reset();
@@ -90,9 +90,40 @@ void main() {
     expect(rows[0]['role'], 'user');
     expect(rows[0]['text'], 'do the thing');
     expect(rows[1]['role'], 'ai');
-    expect(rows[1]['text'], 'all set');
+    // Two stored turns of one run: one answer, two paragraphs.
+    expect(rows[1]['text'], 'all\n\nset');
     expect(rows.every((row) => row['sentAt'] == null), isTrue);
   });
+
+  test(
+    'the text of every turn of a run stays, one paragraph per turn '
+    '(beads chuk_chat-6ze4, chuk_chat-qcdt)',
+    () async {
+      const report = '## Ergebnisse\n\n- GitHub: nichts Neues\n';
+      const heading = '📅 Tägliche Routine wird eingerichtet';
+      const closing = 'Die Routine läuft jetzt täglich.';
+      await replay(const <AgentsRelayInbound>[
+        AgentsRelayUser('check it', mid: 1),
+        AgentsRelayDelta(report, replay: true, mid: 2),
+        AgentsRelayTool('run_command', arguments: 'ls', replay: true, mid: 2),
+        AgentsRelayDelta(heading, replay: true, mid: 4),
+        AgentsRelayDelta(closing, replay: true, mid: 6),
+        AgentsRelayDone(reason: 'finished', replay: true),
+        AgentsRelayDone(reason: 'replay', replay: true),
+      ]);
+
+      final rows = rowsFor(sessionKey);
+      expect(rows, hasLength(2));
+      // The same text as the host's `final_answer`: the turns stripped and
+      // joined with a paragraph break. The heading does not take in the
+      // closing line.
+      expect(
+        rows[1]['text'],
+        '## Ergebnisse\n\n- GitHub: nichts Neues'
+        '$agentsPassBreak$heading$agentsPassBreak$closing',
+      );
+    },
+  );
 
   test('replay preserves real host timestamps independently of run duration', () async {
     final userTime = DateTime.utc(2026, 9, 8, 12, 30);
@@ -785,33 +816,6 @@ void main() {
     expect(loader.cursorFor(sessionKey), 9);
   });
   // ── end chuk_chat-dksi ──
-
-  // ── run changes ──
-  test('a replayed done keeps what the run changed on its answer', () async {
-    await replay(const <AgentsRelayInbound>[
-      AgentsRelayUser('tidy the notes', mid: 4),
-      AgentsRelayDelta('done', replay: true, mid: 9),
-      AgentsRelayDone(
-        reason: 'finished',
-        replay: true,
-        runId: 'run-7',
-        changes: AgentsRunChangesSummary(files: 3, additions: 4, undone: 1),
-      ),
-      AgentsRelayDone(reason: 'replay', replay: true),
-    ]);
-    final Object? raw = rowsFor(sessionKey)[1]['toolCalls'];
-    final calls = (jsonDecode(raw! as String) as List)
-        .map((Object? e) => ToolCall.fromJson(e! as Map<String, dynamic>))
-        .toList();
-    final meta = splitRunMeta(calls, null);
-    expect(meta.runId, 'run-7');
-    expect(
-      meta.changes,
-      const AgentsRunChangesSummary(files: 3, additions: 4, undone: 1),
-    );
-    expect(meta.toolCalls, isEmpty);
-  });
-  // ── end run changes ──
 
   test('a LIVE user frame is ignored like every other live frame (F13)',
       () async {

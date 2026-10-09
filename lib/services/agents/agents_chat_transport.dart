@@ -19,7 +19,6 @@ import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/agents_replay_loader.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import 'package:chuk_chat/services/agents/agents_run_cost.dart'; // F1: cost
-import 'package:chuk_chat/services/agents/agents_run_changes.dart'; // run changes
 import 'package:chuk_chat/services/agents/agents_queued_marks.dart';
 import 'package:chuk_chat/services/agents/agents_task_outbox.dart';
 import 'package:chuk_chat/services/settings/verbose_service.dart';
@@ -212,7 +211,6 @@ class AgentsChatTransport {
       int? firstMid,
       int? lastMid,
       AgentsRunCost? cost, // F1: cost
-      AgentsRunChangesSummary? changes, // run changes
     }) {
       if (terminated) return;
       terminated = true;
@@ -236,7 +234,6 @@ class AgentsChatTransport {
         firstMid: firstMid,
         lastMid: lastMid,
         cost: cost, // F1: cost
-        changes: changes, // run changes
       );
       // Token delivery is provisional: the host's terminal answer is the
       // complete canonical response, even after missing/filtered tail deltas.
@@ -515,7 +512,6 @@ class AgentsChatTransport {
             firstMid: event.firstMid,
             lastMid: event.lastMid,
             cost: event.cost, // F1: cost
-            changes: event.changes, // run changes
           );
         // The `run_ack` is the thread view's (its `_onInbound`, WS-7): it
         // sees every live terminal for the thread, including a run adopted

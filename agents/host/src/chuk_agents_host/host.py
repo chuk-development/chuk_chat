@@ -704,11 +704,37 @@ class LocalHost:
         seeded = seed_workspace_skills(workspace)
         if seeded:
             self._log(f"[cowork-host] seeded skills for {agent.name}: {', '.join(seeded)}")
+        # The other coworkers' workspaces get new and updated built-in seeds
+        # once per boot too; otherwise they are seeded only when created.
+        self._seed_other_workspaces(workspace)
         if agent.workspace_dir != str(workspace):
             updated = self._roster.update(agent.id, workspace_dir=str(workspace))
             if updated is not None:
                 agent = updated
         return agent
+
+    def _seed_other_workspaces(self, own: Path) -> None:
+        """Seed every other coworker workspace under the agents directory.
+
+        Once per boot, so a new seed skill or a newer built-in reaches a
+        coworker that already exists. Non-destructive like the first seed
+        (see :mod:`chuk_agents_host.seed_skills`). Never raises.
+        """
+        try:
+            entries = sorted(p for p in self._agents_dir.iterdir() if p.is_dir())
+        except OSError:
+            return
+        for workspace in entries:
+            if workspace == own or not (workspace / "skills").is_dir():
+                continue
+            try:
+                seeded = seed_workspace_skills(workspace)
+            except Exception:  # noqa: BLE001 — a broken seed must not stop the host
+                continue
+            if seeded:
+                self._log(
+                    f"[cowork-host] seeded skills for {workspace.name}: {', '.join(seeded)}"
+                )
 
     # -- lifecycle -------------------------------------------------------
 

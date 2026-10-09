@@ -142,11 +142,7 @@ CREATE TABLE IF NOT EXISTS runs (
     -- are rows of ``usage_lines``.
     prompt_tokens     INTEGER NOT NULL DEFAULT 0,
     completion_tokens INTEGER NOT NULL DEFAULT 0,
-    cost_eur          REAL,
-    -- What the run changed in the workspace, as JSON
-    -- (chuk_agents_runtime.run_changes.run_change_summary): files, additions,
-    -- deletions, undone. NULL = no history or no file changed.
-    changes_json      TEXT
+    cost_eur          REAL
 );
 
 CREATE INDEX IF NOT EXISTS idx_runs_session ON runs(session_key, started_at);
@@ -199,8 +195,8 @@ RUNS_MIGRATIONS: tuple[tuple[str, str], ...] = (
     ("prompt_tokens", "INTEGER NOT NULL DEFAULT 0"),
     ("completion_tokens", "INTEGER NOT NULL DEFAULT 0"),
     ("cost_eur", "REAL"),
-    # "What did it do" (bead chuk_chat-4qry). Old rows read NULL: unknown.
-    ("changes_json", "TEXT"),
+    # An old database can also have a ``changes_json`` column. Nothing reads
+    # or writes it; it stays so that no migration drops user data.
 )
 
 #: The timing columns, in the order :meth:`StateStore.finish_run` writes them.
@@ -222,6 +218,11 @@ RUN_TIMING_COLUMNS: tuple[str, ...] = (
 RUN_RUNNING = "running"
 RUN_FINISHED = "finished"
 RUN_FAILED = "failed"
+#: A limit (steps, iteration budget, token budget) ended the run before the
+#: work was done (live test 2026-10-09: such a run said "finished").
+RUN_INCOMPLETE = "incomplete"
+#: The ``reason`` values that close a run as :data:`RUN_INCOMPLETE`.
+INCOMPLETE_REASONS = frozenset({"max_iterations", "budget_exhausted", "token_budget_exhausted"})
 
 # Run ids bound per ``IN (...)`` query; below SQLite's oldest 999-parameter cap.
 _USAGE_IN_CHUNK = 500
@@ -252,18 +253,6 @@ def run_stamp_fields(row: dict | None) -> dict[str, Any]:
         if value is not None:
             fields[key] = int(value)
     return fields
-
-
-def run_changes_field(row: dict | None) -> dict[str, Any] | None:
-    """The ``changes`` block of a ``done`` from a ``runs`` row, or ``None``."""
-    raw = (row or {}).get("changes_json")
-    if not raw:
-        return None
-    try:
-        value = json.loads(raw)
-    except (TypeError, ValueError):
-        return None
-    return value if isinstance(value, dict) and value.get("files") else None
 
 
 def _close_open_approvals(
@@ -925,7 +914,8 @@ class StateStore:
         timings: dict[str, int] | None = None,
         cost_eur: float | None = None,
     ) -> None:
-        """Close a run as ``finished``. ``last_mid`` is the message cursor at the
+        """Close a run as ``finished`` (``incomplete`` when a limit ended it,
+        see :data:`INCOMPLETE_REASONS`). ``last_mid`` is the message cursor at the
         end, so a replay can place the run's terminal after its last turn.
 
         ``timings`` is :meth:`chuk_agents_runtime.loop.RunTimings.as_row` — where the
@@ -954,7 +944,7 @@ class StateStore:
                 "tokens_spent=?, last_mid=?, finished_at=?, cost_eur=?" + timing_sql
                 + " WHERE run_id=?",
                 (
-                    RUN_FINISHED,
+                    RUN_INCOMPLETE if reason in INCOMPLETE_REASONS else RUN_FINISHED,
                     reason,
                     final_answer,
                     int(iterations),
@@ -1095,16 +1085,6 @@ class StateStore:
         ).fetchone()
         return dict(row) if row else None
 
-    def set_run_changes(self, run_id: str, changes: dict | None) -> None:
-        """Store the run's change summary (docs/WIRE_CONTRACT.md, "What did it
-        do: run changes and undo"); ``None`` clears it."""
-        text = json.dumps(changes, separators=(",", ":")) if changes else None
-
-        def op(cur: sqlite3.Cursor) -> None:
-            cur.execute("UPDATE runs SET changes_json=? WHERE run_id=?", (text, run_id))
-
-        self._write(op)
-
     def latest_run(self, session_key: str) -> dict | None:
         """The most recently started run for a session, or None."""
         row = self._conn().execute(
@@ -1122,11 +1102,11 @@ class StateStore:
         last message is past ``after_id`` — the client already has the rest —
         and, with ``before_id`` (replay paging), below it."""
         rows = self._conn().execute(
-            "SELECT * FROM runs WHERE session_key=? AND state IN (?, ?) "
+            "SELECT * FROM runs WHERE session_key=? AND state IN (?, ?, ?) "
             "AND COALESCE(last_mid, 0) > ? "
             + ("AND COALESCE(last_mid, 0) < ? " if before_id > 0 else "")
             + "ORDER BY COALESCE(last_mid, 0), started_at",
-            (session_key, RUN_FINISHED, RUN_FAILED, after_id)
+            (session_key, RUN_FINISHED, RUN_FAILED, RUN_INCOMPLETE, after_id)
             + ((before_id,) if before_id > 0 else ()),
         ).fetchall()
         # One grouped query for the window's cost lines, not one per run.
@@ -1156,11 +1136,6 @@ class StateStore:
             cost = cost_block(lines.get(r["run_id"], []))
             if cost:
                 events[-1]["cost"] = cost
-            # What the run changed in the workspace ("What did it do"): the
-            # same block a live done carries.
-            changes = run_changes_field(dict(r))
-            if changes:
-                events[-1]["changes"] = changes
         return events
 
     def mark_run_notified(self, run_id: str) -> bool:

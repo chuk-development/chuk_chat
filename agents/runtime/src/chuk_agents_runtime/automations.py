@@ -31,6 +31,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 from urllib.parse import urlsplit
 
+from .clock import describe_local_time
 from .registry import ToolRegistry
 
 KIND_SCHEDULE = "schedule"
@@ -553,7 +554,13 @@ class AutomationBackend(Protocol):
 SCHEDULE_TASK_SCHEMA = {
     "type": "object",
     "description": (
-        "Put a task on a clock. When it fires, a new task with `prompt` starts "
+        "Put a task on a clock, "
+        "ONLY when the user explicitly asks for a routine, a reminder or a "
+        "watch ('set up', 'every day at 9', 'remind me', 'richte ... ein'). "
+        "A word like 'daily' in a request for a report is not such a request: "
+        "do the job now and offer the routine in one sentence. Every run costs "
+        "the user credits. "
+        "When it fires, a new task with `prompt` starts "
         "in this same conversation and the user is notified when it ends. "
         "`spec` is one of: a 5-field cron ('0 9 * * 1-5'), 'every 5m' / "
         "'every 2h' (60 s minimum), 'at 2026-09-06T09:00' (once) or "
@@ -587,6 +594,7 @@ SCHEDULE_TASK_SCHEMA = {
 WATCH_URL_SCHEMA = {
     "type": "object",
     "description": (
+        "Use only when the user explicitly asks to watch this page. "
         "Watch a web page without a script: the host fetches `url` every "
         "`every` (15 minutes minimum, default 1h; plain HTTP, no JavaScript) "
         "and starts a task with `prompt` in this conversation ONLY when the "
@@ -617,6 +625,7 @@ WATCH_URL_SCHEMA = {
 WATCH_MAIL_SCHEMA = {
     "type": "object",
     "description": (
+        "Use only when the user explicitly asks for it. "
         "Start a task with `prompt` in this conversation each time a mail "
         "arrives in the agent mailbox whose sender contains `from` and/or "
         "whose subject contains `subject` (case-insensitive). The task gets "
@@ -665,6 +674,7 @@ AUTOMATION_RESULT_SCHEMA = {
 START_WATCHER_SCHEMA = {
     "type": "object",
     "description": (
+        "Use only when the user explicitly asks to watch something. "
         "Run a Python script from the workspace 24/7 in the background, "
         "supervised (restarted on crash). The script polls whatever it "
         "watches and calls `agents_hooks.trigger(reason, payload=...)` ONLY "
@@ -718,6 +728,31 @@ def _error(message: str) -> dict:
     return {"ok": False, "error": message}
 
 
+#: Keys of an automation row that hold unix seconds. Each one gets a readable
+#: ``<key>_local`` twin (bead chuk_chat-gaep): the model got the weekday of a
+#: raw timestamp wrong, so it is told the weekday instead of computing it.
+_TIME_KEYS = ("next_fire_at", "last_fired_at")
+
+
+def with_local_times(row: Any) -> Any:
+    """A copy of an automation row (or a result dict) with ``*_local`` text
+    next to every timestamp: ``Saturday, 2026-10-10 09:00 (UTC+02:00)``.
+    Anything that is not a dict, or a key that does not hold a number, is
+    passed through as it is."""
+    if not isinstance(row, dict):
+        return row
+    out = dict(row)
+    for key in _TIME_KEYS:
+        value = row.get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+            continue
+        try:
+            out[f"{key.removesuffix('_at')}_local"] = describe_local_time(value)
+        except (OverflowError, OSError, ValueError):
+            continue
+    return out
+
+
 def make_schedule_task_handler(backend: AutomationBackend):
     def schedule_task(
         spec: str, prompt: str, name: str | None = None, notify: str | None = None
@@ -731,8 +766,10 @@ def make_schedule_task_handler(backend: AutomationBackend):
             return _error(str(exc))
         if mode == NOTIFY_ALWAYS:
             # The old three-argument call: a backend without ``notify`` works.
-            return backend.schedule(parsed, prompt.strip(), _clean_name(name))
-        return backend.schedule(parsed, prompt.strip(), _clean_name(name), notify=mode)
+            return with_local_times(backend.schedule(parsed, prompt.strip(), _clean_name(name)))
+        return with_local_times(
+            backend.schedule(parsed, prompt.strip(), _clean_name(name), notify=mode)
+        )
 
     return schedule_task
 
@@ -798,7 +835,7 @@ def make_start_watcher_handler(backend: AutomationBackend):
 
 def make_list_automations_handler(backend: AutomationBackend):
     def list_automations() -> dict:
-        return {"ok": True, "automations": backend.list()}
+        return {"ok": True, "automations": [with_local_times(row) for row in backend.list()]}
 
     return list_automations
 
@@ -807,7 +844,7 @@ def make_control_handler(backend: AutomationBackend, action: str):
     def control(id: str) -> dict:  # noqa: A002 — the tool argument is named ``id``
         if not isinstance(id, str) or not id.strip():
             return _error("id must not be empty")
-        return backend.control(id.strip(), action)
+        return with_local_times(backend.control(id.strip(), action))
 
     control.__name__ = f"{action}_automation"
     return control

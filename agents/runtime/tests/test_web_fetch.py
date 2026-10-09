@@ -114,7 +114,8 @@ def test_json_is_normalised_not_converted():
     )
     result = _fetch({"https://ok.test/j": page})("https://ok.test/j")
     assert result["ok"] is True
-    assert '"b": 1' in result["content"]
+    # Compact: indentation is pure token cost (live test 2026-10-09).
+    assert result["content"] == '{"b":1,"a":[2]}'
 
 
 def test_a_non_utf8_charset_is_honoured():

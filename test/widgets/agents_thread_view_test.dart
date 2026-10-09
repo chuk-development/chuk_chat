@@ -1129,8 +1129,8 @@ void main() {
         const AgentsRelayRunState(sessionKey: 'thread-1', state: 'idle'),
       );
       controller.emit(const AgentsRelayUser('do the thing', mid: 1));
-      controller.emit(const AgentsRelayDelta('all ', replay: true, mid: 2));
-      controller.emit(const AgentsRelayDelta('set', replay: true, mid: 3));
+      controller.emit(const AgentsRelayDelta('all set', replay: true, mid: 2));
+      controller.emit(const AgentsRelayDelta('done', replay: true, mid: 3));
       controller.emit(const AgentsRelayDone(reason: 'replay', replay: true));
       await tester.pumpAndSettle();
 
