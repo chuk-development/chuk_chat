@@ -355,8 +355,7 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
         ),
         const SizedBox(height: 4),
         Text(
-          profiles.profileOf(agent.id).role ??
-              agent.role ??
+          profiles.profileOf(agent.id).roleOver(agent.role) ??
               _l.agentsCwRoleFallback,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,

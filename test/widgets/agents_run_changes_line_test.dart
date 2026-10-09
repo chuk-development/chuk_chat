@@ -199,7 +199,8 @@ void main() {
       );
     });
 
-    testWidgets('in the chat list it sits next to the cost line', (
+    testWidgets('in the chat list it sits under the answer, with no cost '
+        'line', (
       tester,
     ) async {
       final original = AgentsRunChangesService.instance;
@@ -218,7 +219,7 @@ void main() {
           ]),
         ),
       );
-      expect(find.text('€0.41 · 5.2k tokens'), findsOneWidget);
+      expect(find.text('€0.41 · 5.2k tokens'), findsNothing);
       expect(find.text('3 files changed · Undo'), findsOneWidget);
       final bubble = tester.widget<MessageBubble>(find.byType(MessageBubble));
       expect(bubble.toolCalls, isEmpty);

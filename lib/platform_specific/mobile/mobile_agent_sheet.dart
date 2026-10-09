@@ -100,10 +100,7 @@ class MobileAgentSheet extends StatelessWidget {
   List<List<Widget>> menuGroups(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
     final AgentProfile profile = AgentProfileStore.instance.profileOf(agent.id);
-    final String? stored = profile.role?.trim();
-    final String? role = (stored?.isNotEmpty ?? false)
-        ? stored
-        : agent.role?.trim();
+    final String? role = profile.roleOver(agent.role);
     return <List<Widget>>[
       <Widget>[
         MenuActionRow(

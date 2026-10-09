@@ -81,6 +81,33 @@ class AgentProfile {
   /// host serves a brief.
   final String? brief;
 
+  /// The role line to show, over the agent's [own] one. A stored value wins;
+  /// a stored empty value means the user cleared it on purpose, so nothing
+  /// shows. Without a stored value the agent's own line shows.
+  String? roleOver(String? own) => _textOver(role, own);
+
+  /// The brief to show, by the same rule as [roleOver].
+  String? briefOver(String? own) => _textOver(brief, own);
+
+  /// The value to store for an edited text field over the agent's [own]
+  /// value: the text, an empty text when the user cleared a line the agent
+  /// has (so the clear sticks), or null when there is nothing to override.
+  static String? storedText(String edited, String? own) {
+    final String text = edited.trim();
+    if (text.isNotEmpty) return text;
+    final String? base = own?.trim();
+    return (base == null || base.isEmpty) ? null : '';
+  }
+
+  static String? _textOver(String? stored, String? own) {
+    if (stored != null) {
+      final String text = stored.trim();
+      return text.isEmpty ? null : text;
+    }
+    final String? base = own?.trim();
+    return (base == null || base.isEmpty) ? null : base;
+  }
+
   bool get isEmpty =>
       photoPath == null &&
       colorValue == null &&

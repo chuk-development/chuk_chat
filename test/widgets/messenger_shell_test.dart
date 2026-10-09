@@ -1258,9 +1258,23 @@ void main() {
         tester.getRect(find.byType(AgentsThreadView)).right,
         lessThanOrEqualTo(pane.left),
       );
+      // The first page is the screen and the routines; the gear opens the
+      // Settings page, and its technical section holds the host's blocks.
+      await tester.tap(
+        find.byKey(const ValueKey<String>('desk-details-settings')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey<String>('details-technical-toggle')),
+      );
+      await tester.pumpAndSettle();
       // Every block the host can fill has a heading; the schedule field and the
       // integrations list are gone, because nothing ever filled them.
-      expect(find.text('MODEL'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('details-settings-group')),
+        findsOneWidget,
+      );
+      expect(find.text('LAST RUN'), findsOneWidget);
       expect(find.text('TOKEN USE'), findsOneWidget);
       expect(find.text('SESSION RUNTIME'), findsOneWidget);
       expect(find.text('SANDBOX'), findsOneWidget);

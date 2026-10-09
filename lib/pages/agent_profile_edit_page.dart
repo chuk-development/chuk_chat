@@ -87,17 +87,11 @@ class _AgentProfileEditPageState extends State<AgentProfileEditPage> {
   bool _clearColor = false;
   bool _busy = false;
 
-  String _initialRole() {
-    final String? stored = _store.profileOf(widget.agent.id).role?.trim();
-    if (stored != null && stored.isNotEmpty) return stored;
-    return widget.agent.role?.trim() ?? '';
-  }
+  String _initialRole() =>
+      _store.profileOf(widget.agent.id).roleOver(widget.agent.role) ?? '';
 
-  String _initialBrief() {
-    final String? stored = _store.profileOf(widget.agent.id).brief?.trim();
-    if (stored != null && stored.isNotEmpty) return stored;
-    return widget.agent.brief?.trim() ?? '';
-  }
+  String _initialBrief() =>
+      _store.profileOf(widget.agent.id).briefOver(widget.agent.brief) ?? '';
 
   @override
   void dispose() {
@@ -160,12 +154,17 @@ class _AgentProfileEditPageState extends State<AgentProfileEditPage> {
       widget.onRename!(widget.agent.copyWith(name: name));
     }
 
+    final String? roleValue = AgentProfile.storedText(role, widget.agent.role);
+    final String? briefValue = AgentProfile.storedText(
+      brief,
+      widget.agent.brief,
+    );
     await _store.update(
       widget.agent.id,
-      role: role.isEmpty ? null : role,
-      brief: brief.isEmpty ? null : brief,
-      clearRole: role.isEmpty,
-      clearBrief: brief.isEmpty,
+      role: roleValue,
+      brief: briefValue,
+      clearRole: roleValue == null,
+      clearBrief: briefValue == null,
       colorValue: _color,
       clearColor: _clearColor,
       shape: _shape,

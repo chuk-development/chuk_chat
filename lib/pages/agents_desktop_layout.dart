@@ -43,6 +43,16 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
   /// 'details' | 'rooms' | null — what the right pane shows.
   String? _deskRightPane;
 
+  /// The coworker whose details pane shows its Settings page (the gear);
+  /// null shows the first page (screen and routines). Another coworker, or
+  /// closing the pane, goes back to the first page.
+  String? _deskDetailsSettingsFor;
+
+  /// The coworker the details pane showed last. A different one resets
+  /// [_deskDetailsSettingsFor], so coming back to a coworker opens its first
+  /// page again.
+  String? _deskDetailsShownFor;
+
   /// The room open in the centre pane, over the (still mounted) thread.
   String? _deskRoomId;
 
@@ -124,7 +134,10 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
 
   /// Opens [pane] on the right, or closes it when it is already there.
   void _deskToggleRightPane(String pane) {
-    setState(() => _deskRightPane = _deskRightPane == pane ? null : pane);
+    setState(() {
+      _deskRightPane = _deskRightPane == pane ? null : pane;
+      _deskDetailsSettingsFor = null;
+    });
     _deskScheduleSave();
   }
 
@@ -136,7 +149,10 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
 
   void _deskCloseRightPane() {
     if (_deskRightPane == null) return;
-    setState(() => _deskRightPane = null);
+    setState(() {
+      _deskRightPane = null;
+      _deskDetailsSettingsFor = null;
+    });
     _deskScheduleSave();
   }
 
@@ -471,31 +487,104 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
     );
   }
 
-  /// The details pane: the agent panel under chuk's panel header.
+  /// The details pane, in two pages under chuk's panel header.
+  ///
+  ///  * First page, "Details": the coworker's screen (a tap opens the viewer)
+  ///    and its routines. The gear opens the second page.
+  ///  * Second page, "Settings": the agent panel in its profile layout (face,
+  ///    name, role and description, one settings group, the technical blocks
+  ///    folded). The back arrow returns. The name saves through the roster's
+  ///    rename path; role and description go to the profile store.
   Widget _buildDeskDetailsPane(BuildContext context, AgentsAgent agent) {
     final String sessionKey = agent.threads.isEmpty
         ? agent.id
         : agent.threads.first.key;
+    if (_deskDetailsShownFor != agent.id) {
+      _deskDetailsShownFor = agent.id;
+      _deskDetailsSettingsFor = null;
+    }
+    final bool settings = _deskDetailsSettingsFor == agent.id;
+    final Widget closeButton = IconButton(
+      icon: const AppIcon(Icons.close, size: 18),
+      tooltip: 'Close (Esc)',
+      onPressed: _deskCloseRightPane,
+    );
+    if (!settings) {
+      return Material(
+        type: MaterialType.transparency,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            PaneHeader.text(
+              icon: Icons.tune,
+              text: 'Details',
+              actions: <Widget>[
+                IconButton(
+                  key: const ValueKey<String>('desk-details-settings'),
+                  icon: const AppIcon(Icons.settings_outlined, size: 18),
+                  tooltip: 'Settings',
+                  onPressed: () =>
+                      setState(() => _deskDetailsSettingsFor = agent.id),
+                ),
+                closeButton,
+              ],
+            ),
+            Expanded(
+              child: AgentDetailsOverview(
+                key: ValueKey<String>('desk-overview-${agent.id}'),
+                name: agent.name,
+                sessionKey: sessionKey,
+                onOpenScreen: _openAgentScreenOrNull,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     return Material(
       type: MaterialType.transparency,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          PaneHeader.text(
-            icon: Icons.tune,
-            text: 'Details',
-            actions: <Widget>[
-              IconButton(
-                icon: const AppIcon(Icons.refresh, size: 18),
-                tooltip: 'Refresh',
-                onPressed: () => unawaited(_deskRefreshDetails(sessionKey)),
+          // chuk's panel header in form (height, padding, hairline), with
+          // the back arrow where [PaneHeader] puts its icon.
+          Container(
+            height: 56,
+            padding: const EdgeInsets.only(left: 4, right: 12),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: Theme.of(context).resolvedIconColor
+                      .withValues(alpha: 0.12),
+                ),
               ),
-              IconButton(
-                icon: const AppIcon(Icons.close, size: 18),
-                tooltip: 'Close (Esc)',
-                onPressed: _deskCloseRightPane,
-              ),
-            ],
+            ),
+            child: Row(
+              children: <Widget>[
+                IconButton(
+                  key: const ValueKey<String>('desk-details-back'),
+                  icon: const AppIcon(Icons.arrow_back, size: 18),
+                  tooltip: 'Back',
+                  onPressed: () =>
+                      setState(() => _deskDetailsSettingsFor = null),
+                ),
+                const SizedBox(width: 2),
+                const Expanded(
+                  child: Text(
+                    'Settings',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: PaneHeader.titleStyle,
+                  ),
+                ),
+                IconButton(
+                  icon: const AppIcon(Icons.refresh, size: 18),
+                  tooltip: 'Refresh',
+                  onPressed: () => unawaited(_deskRefreshDetails(sessionKey)),
+                ),
+                closeButton,
+              ],
+            ),
           ),
           Expanded(
             child: AgentControlPanel(
@@ -504,6 +593,9 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
               source: _controlSource,
               showHeader: true,
               showRefresh: false,
+              profileLayout: true,
+              onRename: (String name) => _renameAgent(agent.id, name),
+              profiles: _agentProfiles,
               onScheduleSubmitted: (spec) =>
                   _roster.setSchedule(agent.id, spec),
             ),

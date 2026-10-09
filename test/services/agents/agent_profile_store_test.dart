@@ -54,4 +54,35 @@ void main() {
       expect(restored.profileOf('alex').colorValue, 0xFF00BFA5);
     },
   );
+
+  group('role and brief over the agent\'s own line', () {
+    test('a stored line wins, none falls back to the agent\'s own', () {
+      expect(const AgentProfile(role: ' Writer ').roleOver('Coder'), 'Writer');
+      expect(const AgentProfile().roleOver(' Coder '), 'Coder');
+      expect(const AgentProfile().roleOver('  '), isNull);
+      expect(const AgentProfile(brief: 'Mine').briefOver('Theirs'), 'Mine');
+    });
+
+    test('a stored empty line is a clear on purpose: nothing shows', () {
+      expect(const AgentProfile(role: '').roleOver('Coder'), isNull);
+      expect(const AgentProfile(brief: ' ').briefOver('Theirs'), isNull);
+    });
+
+    test('storedText keeps a clear only when the agent has a line', () {
+      expect(AgentProfile.storedText(' New ', 'Old'), 'New');
+      expect(AgentProfile.storedText('', 'Old'), '');
+      expect(AgentProfile.storedText('  ', null), isNull);
+      expect(AgentProfile.storedText('', ''), isNull);
+    });
+
+    test('a cleared role survives a reload from disk', () async {
+      final AgentProfileStore store = AgentProfileStore();
+      final AgentProfileStore restored = AgentProfileStore();
+      addTearDown(store.dispose);
+      addTearDown(restored.dispose);
+      await store.update('alex', role: AgentProfile.storedText('', 'Coder'));
+      await restored.load();
+      expect(restored.profileOf('alex').roleOver('Coder'), isNull);
+    });
+  });
 }

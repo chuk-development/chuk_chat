@@ -518,9 +518,6 @@ class AgentChromePill extends StatelessWidget {
   }
 
   String? _roleOf(AgentProfileStore store) {
-    final String? stored = store.profileOf(agent.id).role?.trim();
-    if (stored != null && stored.isNotEmpty) return stored;
-    final String? own = agent.role?.trim();
-    return (own == null || own.isEmpty) ? null : own;
+    return store.profileOf(agent.id).roleOver(agent.role);
   }
 }

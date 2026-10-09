@@ -233,7 +233,16 @@ void main() {
       await details();
       expect(rightPane, findsOneWidget);
       expect(find.text('Details'), findsOneWidget);
-      expect(find.text('MODEL'), findsOneWidget);
+      // The first page: the coworker's screen and its routines.
+      expect(
+        find.descendant(
+          of: rightPane,
+          matching: find.byKey(const ValueKey<String>('details-screen')),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Routines'), findsOneWidget);
+      expect(find.text('MODEL'), findsNothing);
 
       await details();
       expect(rightPane, findsNothing);
@@ -277,11 +286,114 @@ void main() {
     });
   });
 
+  /// The gear in the details pane's header: the Settings page.
+  Future<void> openDetailsSettings(WidgetTester tester) async {
+    await tester.tap(find.byKey(const ValueKey<String>('desk-details-settings')));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('the gear opens the Settings page, the back arrow returns, and '
+      'another coworker starts on the first page', (tester) async {
+    final (roster, _) = await pumpDesktop(tester);
+    await shortcut(tester, LogicalKeyboardKey.period);
+    final String shown = tester
+        .widget<Text>(
+          find.byKey(const ValueKey<String>('details-screen-caption')),
+        )
+        .data!;
+    expect(shown, endsWith("'s screen"));
+
+    await openDetailsSettings(tester);
+    expect(find.text('Settings'), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('details-screen')), findsNothing);
+    expect(
+      find.descendant(
+        of: rightPane,
+        matching: find.byKey(const ValueKey<String>('details-face')),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('details-settings-group')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey<String>('desk-details-back')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey<String>('details-screen')), findsOneWidget);
+
+    // Settings open, then another coworker: its pane starts on page one.
+    await openDetailsSettings(tester);
+    final String other = roster.agents
+        .firstWhere((a) => "${a.name}'s screen" != shown)
+        .id;
+    await tester.tap(find.byKey(ValueKey<String>('agent-tile-$other')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey<String>('details-screen')), findsOneWidget);
+
+    // Back to the first coworker: its Settings page is not remembered.
+    final String first = roster.agents
+        .firstWhere((a) => "${a.name}'s screen" == shown)
+        .id;
+    await tester.tap(find.byKey(ValueKey<String>('agent-tile-$first')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey<String>('details-screen')), findsOneWidget);
+
+    // Closing the pane forgets the page too.
+    await openDetailsSettings(tester);
+    await shortcut(tester, LogicalKeyboardKey.period);
+    await shortcut(tester, LogicalKeyboardKey.period);
+    expect(find.byKey(const ValueKey<String>('details-screen')), findsOneWidget);
+  });
+
+  testWidgets('the Settings page is a profile: the name field renames the '
+      'coworker, the technical details are folded', (tester) async {
+    final (roster, _) = await pumpDesktop(tester);
+    await shortcut(tester, LogicalKeyboardKey.period);
+    await openDetailsSettings(tester);
+
+    final Finder name = find.descendant(
+      of: rightPane,
+      matching: find.byKey(const ValueKey<String>('details-name-field')),
+    );
+    expect(name, findsOneWidget);
+    final String shown = tester.widget<TextField>(name).controller!.text;
+    final String id = roster.agents.firstWhere((a) => a.name == shown).id;
+    expect(
+      find.descendant(
+        of: rightPane,
+        matching: find.byKey(const ValueKey<String>('details-role-field')),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: rightPane,
+        matching: find.byKey(const ValueKey<String>('details-brief-field')),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Technical details'), findsOneWidget);
+    expect(find.text('SANDBOX'), findsNothing);
+
+    await tester.enterText(name, 'steady-kestrel');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(roster.byId(id)?.name, 'steady-kestrel');
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('details-technical-toggle')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('SANDBOX'), findsOneWidget);
+  });
+
   testWidgets('a failing Refresh in the details pane says so, without the '
       'error text', (tester) async {
     final _FailingRefreshSource source = _FailingRefreshSource();
     await pumpDesktop(tester, controlSource: source);
     await shortcut(tester, LogicalKeyboardKey.period);
+    await openDetailsSettings(tester);
 
     source.failNext = true;
     await tester.tap(

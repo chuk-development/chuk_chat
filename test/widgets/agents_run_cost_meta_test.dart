@@ -132,8 +132,8 @@ void main() {
   group('in the chat list', () {
     tearDown(() => AutomationsSource.instance.reset());
 
-    testWidgets('the cost call is lifted off the tool lines and shown under '
-        'the answer', (tester) async {
+    testWidgets('the cost call is lifted off the tool lines and not shown '
+        'under the answer', (tester) async {
       final shell = ToolCall(name: 'shell', status: ToolCallStatus.completed);
       await tester.pumpWidget(
         _app(_item(<ToolCall>[shell, runMetaCall(cost: _cost(eur: 0.41))!])),
@@ -141,7 +141,12 @@ void main() {
       await tester.pump();
       final bubble = tester.widget<MessageBubble>(find.byType(MessageBubble));
       expect(bubble.toolCalls!.map((c) => c.name), <String>['shell']);
-      expect(find.text('€0.41 · 5.2k tokens'), findsOneWidget);
+      // The owner does not want cost or token counts in the chat.
+      expect(find.text('€0.41 · 5.2k tokens'), findsNothing);
+      expect(
+        find.byKey(const ValueKey<String>('agents-run-cost-meta')),
+        findsNothing,
+      );
     });
 
     testWidgets('an answer with no cost has no meta line', (tester) async {

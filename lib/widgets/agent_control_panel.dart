@@ -7,7 +7,19 @@
 /// blocks here that nothing can fill: the schedule field and the integrations
 /// list were removed when it became clear that neither reached the host (the
 /// Automations page and the connector settings own those).
+///
+/// The desktop details pane draws the same data in a calmer order
+/// ([AgentControlPanel.profileLayout]): the coworker's face and its name, role
+/// and description as fields, then one settings group (model, weekly budget),
+/// then everything else (last run, usage, cost, runtime, sandbox, skills,
+/// channels) in a "Technical details" section that is closed by default. The
+/// phone keeps the long list.
 library;
+
+// The desktop pane's first page sits next to this panel; the messenger shell
+// reaches both through this import.
+export 'package:chuk_chat/widgets/agent_details_overview.dart'
+    show AgentDetailsOverview;
 
 import 'package:flutter/material.dart';
 
@@ -16,14 +28,17 @@ import 'package:chuk_chat/ui/expressive/icon_map.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/services/agents/agent_control_source.dart';
+import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agents_channels_service.dart';
 import 'package:chuk_chat/services/agents/agents_permissions_service.dart';
 import 'package:chuk_chat/services/agents/schedule_spec.dart';
 import 'package:chuk_chat/services/agents/coworker_model.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/agent_details_identity.dart';
 import 'package:chuk_chat/widgets/agents_channels/agent_telegram_section.dart';
 import 'package:chuk_chat/widgets/coworker_model_tile.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
 
 class AgentControlPanel extends StatefulWidget {
@@ -36,7 +51,23 @@ class AgentControlPanel extends StatefulWidget {
     this.showRefresh = true,
     this.channels,
     this.permissions,
+    this.profileLayout = false,
+    this.onRename,
+    this.profiles,
   });
+
+  /// The desktop details pane's order: face, name, role and description, one
+  /// settings group, and the technical blocks folded away. Only the desktop
+  /// pane sets it; the phone keeps the long list.
+  final bool profileLayout;
+
+  /// The shell's rename path, for the name field of [profileLayout]. Null
+  /// makes the name read-only.
+  final ValueChanged<String>? onRename;
+
+  /// Where [profileLayout] keeps the role and the description. Defaults to
+  /// [AgentProfileStore.instance].
+  final AgentProfileStore? profiles;
 
   /// Where the weekly budget is read and sent (F2). Defaults to
   /// [AgentsPermissionsService.instance]; the field shows only for a host
@@ -67,6 +98,11 @@ class AgentControlPanel extends StatefulWidget {
 
 class _AgentControlPanelState extends State<AgentControlPanel> {
   String? _actionError;
+
+  /// [AgentControlPanel.profileLayout]: whether the weekly budget field and
+  /// the technical details are open. Both start closed.
+  bool _budgetOpen = false;
+  bool _technicalOpen = false;
 
   /// The coworker's thread key IS its session key on the host, so the panel
   /// asks about exactly the coworker it is showing.
@@ -115,6 +151,13 @@ class _AgentControlPanelState extends State<AgentControlPanel> {
     return ValueListenableBuilder<AgentControlSnapshot>(
       valueListenable: widget.source.snapshotFor(_sessionKey),
       builder: (context, snapshot, _) {
+        if (widget.profileLayout) return _buildProfile(context, snapshot);
+        // The user's own role and brief win, a cleared one included.
+        final AgentProfile profile = (widget.profiles ??
+                AgentProfileStore.instance)
+            .profileOf(widget.agent.id);
+        final String? shownRole = profile.roleOver(widget.agent.role);
+        final String? shownBrief = profile.briefOver(widget.agent.brief);
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
@@ -138,11 +181,11 @@ class _AgentControlPanelState extends State<AgentControlPanel> {
                     ),
                 ],
               ),
-            if (widget.agent.role != null)
+            if (shownRole != null)
               Padding(
                 padding: const EdgeInsets.only(top: 2),
                 child: Text(
-                  widget.agent.role!,
+                  shownRole,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.primary,
                   ),
@@ -162,11 +205,11 @@ class _AgentControlPanelState extends State<AgentControlPanel> {
                   ),
                 ),
               ),
-            if (widget.agent.brief != null)
+            if (shownBrief != null)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(
-                  widget.agent.brief!,
+                  shownBrief,
                   style: theme.textTheme.bodySmall,
                 ),
               ),
@@ -231,12 +274,171 @@ class _AgentControlPanelState extends State<AgentControlPanel> {
     );
   }
 
+  // --- profile layout (desktop details pane) ---------------------------------
+
+  Widget _buildProfile(BuildContext context, AgentControlSnapshot snapshot) {
+    final ThemeData theme = Theme.of(context);
+    return ListView(
+      key: const ValueKey<String>('details-profile'),
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+      children: <Widget>[
+        AgentDetailsIdentity(
+          agent: widget.agent,
+          onRename: widget.onRename,
+          profiles: widget.profiles,
+        ),
+        if (!widget.agent.runsOnHost &&
+            snapshot.sandbox is! ControlAvailable<AgentSandbox>)
+          Padding(
+            padding: const EdgeInsets.only(top: 10, left: 4),
+            child: Text(
+              'Created in the app. It is not installed on the host yet.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.hintColor,
+              ),
+            ),
+          ),
+        if (_actionError != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 10, left: 4),
+            child: Text(
+              _actionError!,
+              style: TextStyle(color: theme.colorScheme.error),
+            ),
+          ),
+        const SizedBox(height: 20),
+        _buildSettingsGroup(context),
+        const SizedBox(height: 16),
+        ExpressiveGroup(
+          children: <Widget>[
+            ExpressiveRow(
+              key: const ValueKey<String>('details-technical-toggle'),
+              icon: Icons.build_outlined,
+              title: 'Technical details',
+              subtitle: 'Last run, usage, cost, sandbox, skills',
+              trailing: AppIcon(
+                _technicalOpen ? Icons.expand_less : Icons.expand_more,
+                size: 20,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              onTap: () => setState(() => _technicalOpen = !_technicalOpen),
+            ),
+          ],
+        ),
+        if (_technicalOpen)
+          Padding(
+            key: const ValueKey<String>('details-technical'),
+            padding: const EdgeInsets.fromLTRB(4, 16, 4, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                _section(
+                  context,
+                  'Last run',
+                  _buildModel(context, snapshot.model, label: false),
+                ),
+                _section(
+                  context,
+                  'Token use',
+                  _buildTokens(context, snapshot.tokens),
+                ),
+                if (snapshot.cost case ControlAvailable<AgentCostTotals>(
+                  value: final AgentCostTotals cost,
+                ))
+                  _section(
+                    context,
+                    _l10n(context).costHeading,
+                    _buildCost(context, cost),
+                  ),
+                _section(
+                  context,
+                  'Session runtime',
+                  _buildRuntime(context, snapshot.runtime),
+                ),
+                _section(
+                  context,
+                  'Sandbox',
+                  _buildSandbox(context, snapshot.sandbox),
+                ),
+                _section(
+                  context,
+                  'Skills',
+                  _buildSkills(context, snapshot.skills),
+                ),
+                _buildChannels(context),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// The one settings group: the model the next message runs on and, for a
+  /// host that keeps budgets, the weekly budget. A tap on the budget opens
+  /// the budget field inside the group.
+  Widget _buildSettingsGroup(BuildContext context) {
+    final AgentsPermissionsService service = _permissions;
+    return ListenableBuilder(
+      listenable: service,
+      builder: (BuildContext context, Widget? _) {
+        final bool budget = service.budgetSupported;
+        if (budget && service.budgetOf(widget.agent.id) == null) {
+          // A host that names the capability only after the pane opened.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _askBudget();
+          });
+        }
+        final ColorScheme scheme = Theme.of(context).colorScheme;
+        final AppLocalizations l = _l10n(context);
+        final double? value = service.budgetOf(widget.agent.id);
+        return ExpressiveGroup(
+          key: const ValueKey<String>('details-settings-group'),
+          children: <Widget>[
+            CoworkerModelTile(
+              chatId: _sessionKey,
+              coworkerName: widget.agent.name,
+              controlSource: widget.source,
+            ),
+            if (budget)
+              ExpressiveRow(
+                key: const ValueKey<String>('details-budget-row'),
+                icon: Icons.credit_card,
+                title: l.budgetWeeklyLabel,
+                subtitle: value == null
+                    ? 'Loading…'
+                    : value <= 0
+                    ? l.budgetNoLimit
+                    : formatEuro(value),
+                trailing: AppIcon(
+                  _budgetOpen ? Icons.expand_less : Icons.expand_more,
+                  size: 20,
+                  color: scheme.onSurfaceVariant,
+                ),
+                onTap: () => setState(() => _budgetOpen = !_budgetOpen),
+              ),
+            if (budget && _budgetOpen)
+              ExpressiveTile(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                child: WeeklyBudgetField(
+                  agentId: widget.agent.id,
+                  service: service,
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
   // --- blocks ----------------------------------------------------------------
 
+  /// What the last run used. [label] puts "Last run" above it; the profile
+  /// layout has the label as its section heading instead.
   Widget _buildModel(
     BuildContext context,
-    ControlValue<AgentModelChoice> value,
-  ) {
+    ControlValue<AgentModelChoice> value, {
+    bool label = true,
+  }) {
     final theme = Theme.of(context);
     return switch (value) {
       ControlUnavailable<AgentModelChoice>(:final reason) => _notReported(
@@ -249,12 +451,13 @@ class _AgentControlPanelState extends State<AgentControlPanel> {
       ControlAvailable<AgentModelChoice>(value: final choice) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Last run',
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: theme.hintColor,
+          if (label)
+            Text(
+              'Last run',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.hintColor,
+              ),
             ),
-          ),
           Text(choice.id),
           if (_runDetail(choice) case final String detail)
             Text(
