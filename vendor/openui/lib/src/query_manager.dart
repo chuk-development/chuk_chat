@@ -222,6 +222,7 @@ class QueryManager {
       _timers.remove(id)?.cancel();
       _timerSeconds.remove(id);
       _latest.remove(id);
+      _fired.remove(id);
     }
   }
 

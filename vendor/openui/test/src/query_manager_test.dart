@@ -515,5 +515,28 @@ void main() {
       manager.retainTimers(const {});
       expect(manager.activeTimerCount, 0);
     });
+
+    test('a dropped query that comes back fetches again', () async {
+      final tool = _ToolTracker(
+        name: 'stub',
+        description: 'stub',
+        handler: (args) async => const ToolResult('ok'),
+      );
+      final store = Store();
+      final manager = _manager(
+        library: tool.library,
+        toolRegistry: tool.toolRegistry,
+        store: store,
+        onError: (_) {},
+      );
+      manager.ensureFired(canonical('a', 10), _ctx(store));
+      await Future<void>.delayed(Duration.zero);
+      expect(tool.calls, 1);
+      manager.retainTimers(const {});
+      manager.ensureFired(canonical('a', 10), _ctx(store));
+      await Future<void>.delayed(Duration.zero);
+      expect(tool.calls, 2);
+      manager.retainTimers(const {});
+    });
   });
 }
