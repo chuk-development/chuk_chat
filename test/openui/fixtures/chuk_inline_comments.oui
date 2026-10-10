@@ -1,0 +1,11 @@
+Here is a short overview. It's a plain answer with one view.
+
+```openui-lang
+# The root comes first.
+root = Card([intro, steps, actions]) // the chat root
+intro = TextContent("Three steps to **brew** coffee:")
+steps = Steps([StepsItem("Grind", "Medium-fine, 18 g."), StepsItem("Bloom", "40 g water, wait 30 s."), StepsItem("Pour", "Slowly to 300 g.")])
+actions = Buttons([Button("More tips", Action([@ToAssistant("Give me more coffee tips")]), "secondary"), Button("Buy beans", Action([@OpenUrl("https://example.com/beans")]), "tertiary")])
+```
+
+Enjoy your coffee.

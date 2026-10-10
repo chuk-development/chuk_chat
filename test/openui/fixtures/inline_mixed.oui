@@ -1,0 +1,8 @@
+Here is your chart:
+
+```openui-lang
+root = Stack([chart])
+chart = BarChart(["Oct", "Nov"], [Series("A", [1, 2])])
+```
+
+Done.

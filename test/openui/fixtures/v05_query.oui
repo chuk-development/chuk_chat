@@ -1,0 +1,12 @@
+$days = "7"
+root = Stack([title, filter, chart, tbl, kpi, btn, link])
+title = TextContent("Showing last " + $days + " days", "large-heavy")
+filter = Select("days", [SelectItem("7", "7 days"), SelectItem("30", "30 days")], null, null, $days)
+data = Query("analytics", {days: $days}, {rows: []}, 30)
+chart = LineChart(data.rows.day, [Series("Views", data.rows.views)])
+sorted = @Sort(@Filter(data.rows, "views", ">", 10), "views", "desc")
+tbl = Table([Col("Day", sorted.day), Col("Views", sorted.views, "number")])
+kpi = TextContent("" + @Sum(data.rows.views) + " total, avg " + @Round(@Avg(data.rows.views), 1), "large-heavy")
+save = Mutation("save_note", {days: $days})
+btn = Button("Save", Action([@Run(save), @Run(data), @Reset($days)]), "primary")
+link = Button("Docs", Action([@OpenUrl("https://example.com")]), "secondary")

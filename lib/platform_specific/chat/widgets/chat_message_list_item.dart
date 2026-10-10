@@ -36,6 +36,7 @@ class ChatMessageListItem extends StatelessWidget {
     required this.onSwitchVariant,
     this.onAskUserAnswer,
     this.onConnectMcpServer,
+    this.onOpenUiMessage,
     this.onContinueGeneration,
     this.messengerMode = false,
     this.reaction,
@@ -61,6 +62,10 @@ class ChatMessageListItem extends StatelessWidget {
   final ValueChanged<int> onSwitchVariant;
   final ValueChanged<String>? onAskUserAnswer;
   final ValueChanged<String>? onConnectMcpServer;
+
+  /// Sends a message an OpenUI view in this answer composed, as a user
+  /// message in the same chat.
+  final ValueChanged<String>? onOpenUiMessage;
   final VoidCallback? onContinueGeneration;
 
   /// Agents's messenger behaviour: reactions, reply and the long-press menu.
@@ -149,6 +154,8 @@ class ChatMessageListItem extends StatelessWidget {
       showTps: showTps,
       onAskUserAnswer: onAskUserAnswer,
       onConnectMcpServer: onConnectMcpServer,
+      messageId: uiKey,
+      onOpenUiMessage: data.isUser ? null : onOpenUiMessage,
       useSharedSelectionArea: true,
       variantIndex: data.variantIndex,
       variantCount: data.variantCount,

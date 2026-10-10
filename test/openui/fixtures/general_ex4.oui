@@ -1,0 +1,7 @@
+root = Stack([title, tabs])
+title = TextContent("React vs Vue", "large-heavy")
+tabs = Tabs([tabReact, tabVue])
+tabReact = TabItem("react", "React", reactContent)
+tabVue = TabItem("vue", "Vue", vueContent)
+reactContent = [TextContent("React is a library by Meta for building UIs."), Callout("info", "Note", "React uses JSX syntax.")]
+vueContent = [TextContent("Vue is a progressive framework by Evan You."), Callout("success", "Tip", "Vue has a gentle learning curve.")]

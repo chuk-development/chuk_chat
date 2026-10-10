@@ -4,6 +4,8 @@
 // gets at start, and the marker a spoken task carries when it lands in the
 // chat as a user message. No Flutter, no LiveKit.
 
+import 'package:chuk_chat/utils/openui_fence.dart';
+
 /// Prefix of a task the voice worker hands to the chat. It shows in the
 /// thread, so the reader can tell a spoken task from a typed one. The same
 /// marker in a normal chat and in an Agents thread.
@@ -37,9 +39,10 @@ final RegExp _whitespace = RegExp(r'\s+');
 ///
 /// Only the `text` field is read, so attachments, images, tool calls and
 /// reasoning never reach the worker. Empty rows and the "Thinking..."
-/// placeholder are skipped. Visual tags (`<chart>`, `<map>`, …) are dropped,
-/// and each message is folded to one line. When the lines do not fit, the
-/// oldest go first; a single newest line that alone is too long is cut.
+/// placeholder are skipped. Visual tags (`<chart>`, `<map>`, …) and OpenUI
+/// programs are dropped, and each message is folded to one line. When the
+/// lines do not fit, the oldest go first; a single newest line that alone
+/// is too long is cut.
 String buildVoiceCallContext(
   List<Map<String, String>> messages, {
   int maxMessages = kVoiceContextMaxMessages,
@@ -75,7 +78,7 @@ String buildVoiceCallContext(
 String? _contextLine(Map<String, String> message, int maxLineChars) {
   final String raw = message['text'] ?? '';
   if (raw.trim() == _kThinkingPlaceholder) return null;
-  final String text = raw
+  final String text = stripOpenUiPrograms(raw)
       .replaceAll(_visualTag, ' ')
       .replaceAll(_whitespace, ' ')
       .trim();
@@ -100,9 +103,16 @@ String? voiceTaskMessageText(String task) {
   return '$kVoiceTaskMarker$trimmed';
 }
 
-/// Cuts a task result to what the worker gets back.
-String voiceResultText(String text) =>
-    _cut(text.trim(), kVoiceResultMaxChars);
+/// What the worker speaks instead of an answer that is only an OpenUI view.
+const String kVoiceOpenUiOnlyText =
+    'The answer is an interactive view in the chat.';
+
+/// Cuts a task result to what the worker gets back. An OpenUI program in
+/// it is a view for the screen, not speech, so it is dropped.
+String voiceResultText(String text) => _cut(
+  stripOpenUiPrograms(text, whenEmpty: kVoiceOpenUiOnlyText).trim(),
+  kVoiceResultMaxChars,
+);
 
 /// The texts the chat pipeline finalizes a turn with when the turn did not
 /// produce an answer. A voice task that ends on one of them is `failed`.

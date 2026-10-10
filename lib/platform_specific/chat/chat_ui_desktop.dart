@@ -1540,6 +1540,19 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     };
   }
 
+  /// Sends the message an OpenUI view composed (a button, a follow-up, a
+  /// form submit) as a user message in this chat. It goes the way a voice
+  /// task goes: no attachments, and the reader's draft stays in the
+  /// composer. While an answer is still on the way, it waits.
+  void _sendOpenUiMessage(String text) {
+    if (text.trim().isEmpty) return;
+    if (_isSending || _isStreaming || _activeSendOperationId != null) {
+      showSnackBar(AppLocalizations.of(context)!.openUiPleaseWait);
+      return;
+    }
+    unawaited(_sendMessage(voiceText: text));
+  }
+
   /// Returns a callback for the inline MCP Connect card if [index] is the last
   /// AI message, is idle, and contains a completed request_mcp_server call.
   /// The callback resumes the same conversation with a fresh send, exactly
@@ -1852,6 +1865,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         userMessageActions: _buildUserMessageActionsForIndex(i, data),
         onAskUserAnswer: _askUserCallbackForIndex(i, data),
         onConnectMcpServer: _connectMcpCallbackForIndex(i, data),
+        onOpenUiMessage: _sendOpenUiMessage,
         onSwitchVariant: (variant) => switchVariantAt(i, variant),
         onContinueGeneration:
             !data.isUser &&

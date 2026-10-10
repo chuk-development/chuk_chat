@@ -1,0 +1,9 @@
+root = Card([title, tbl, followUps])
+title = TextContent("Top Languages", "large-heavy")
+tbl = Table([Col("Language", langs), Col("Users (M)", users), Col("Year", years)])
+langs = ["Python", "JavaScript", "Java"]
+users = [15.7, 14.2, 12.1]
+years = [1991, 1995, 1995]
+followUps = FollowUpBlock([fu1, fu2])
+fu1 = FollowUpItem("Tell me more about Python")
+fu2 = FollowUpItem("Show me a JavaScript comparison")

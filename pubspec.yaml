@@ -124,6 +124,14 @@ dependencies:
   # markdraw requires re-vendoring + re-applying these patches.
   markdraw:
     path: vendor/markdraw
+  # OpenUI Lang (thesysdev/openui spec v0.5) parser and renderer, vendored
+  # from mtwichel/openui_flutter at e1525eed (MIT, Very Good Ventures).
+  # Patched for the canonical v0.5 language; see vendor/openui*/NOTICE.md
+  # and docs/OPENUI.md. The chuk_chat components live in lib/openui/.
+  openui_core:
+    path: vendor/openui_core
+  openui:
+    path: vendor/openui
 
   # --- Agents platform -------------------------------------------------------
   # Everything below came in with the Agents tree. Nothing above depends on it;

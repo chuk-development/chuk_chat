@@ -1317,6 +1317,54 @@ class AppLocalizations {
   String ubAllowAgainRefused(String reason) =>
       _get('ubAllowAgainRefused').replaceAll('{reason}', reason);
   // ── end browser resume ──
+
+  // ── OpenUI (generated UI in chat answers) ──
+  String get openUiFieldRequired => _get('openUiFieldRequired');
+  String get openUiOptionRequired => _get('openUiOptionRequired');
+  String get openUiInvalidEmail => _get('openUiInvalidEmail');
+  String get openUiInvalidUrl => _get('openUiInvalidUrl');
+  String get openUiMustBeNumber => _get('openUiMustBeNumber');
+  String openUiMinValue(String n) =>
+      _get('openUiMinValue').replaceAll('{n}', n);
+  String openUiMaxValue(String n) =>
+      _get('openUiMaxValue').replaceAll('{n}', n);
+  String openUiMinLength(String n) =>
+      _get('openUiMinLength').replaceAll('{n}', n);
+  String openUiMaxLength(String n) =>
+      _get('openUiMaxLength').replaceAll('{n}', n);
+  String get openUiInvalidFormat => _get('openUiInvalidFormat');
+  String get openUiRequiredSuffix => _get('openUiRequiredSuffix');
+  String get openUiSelectPlaceholder => _get('openUiSelectPlaceholder');
+  String get openUiPickDate => _get('openUiPickDate');
+  String get openUiPickDateRange => _get('openUiPickDateRange');
+  String get openUiOneChange => _get('openUiOneChange');
+  String openUiChanges(String n) => _get('openUiChanges').replaceAll('{n}', n);
+  String get openUiReset => _get('openUiReset');
+  String get openUiSaveChanges => _get('openUiSaveChanges');
+  String get openUiEditCell => _get('openUiEditCell');
+  String openUiEditColumn(String name) =>
+      _get('openUiEditColumn').replaceAll('{name}', name);
+  String get openUiOpenLink => _get('openUiOpenLink');
+  String openUiPageRange(String first, String last, String total) =>
+      _get('openUiPageRange')
+          .replaceAll('{first}', first)
+          .replaceAll('{last}', last)
+          .replaceAll('{total}', total);
+  String get openUiPreviousPage => _get('openUiPreviousPage');
+  String get openUiNextPage => _get('openUiNextPage');
+  String get openUiPrevious => _get('openUiPrevious');
+  String get openUiNext => _get('openUiNext');
+  String get openUiClose => _get('openUiClose');
+  String get openUiShowPassword => _get('openUiShowPassword');
+  String get openUiHidePassword => _get('openUiHidePassword');
+  String get openUiTotal => _get('openUiTotal');
+  String openUiSeriesN(String n) => _get('openUiSeriesN').replaceAll('{n}', n);
+  String openUiItemN(String n) => _get('openUiItemN').replaceAll('{n}', n);
+  String get openUiSource => _get('openUiSource');
+  String get openUiSeparator => _get('openUiSeparator');
+  String get openUiViewFailed => _get('openUiViewFailed');
+  String get openUiPleaseWait => _get('openUiPleaseWait');
+  // ── end OpenUI ──
 }
 
 class _AppLocalizationsDelegate

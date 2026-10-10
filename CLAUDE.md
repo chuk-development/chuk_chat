@@ -410,6 +410,7 @@ The AI can emit special tags in responses that the UI renders as interactive blo
 | `<chart>` | Interactive chart (bar, line, pie, scatter, radar) | `<chart>{"type":"line","title":"...","labels":[...],"datasets":[...]}</chart>` |
 | `<map>` | Interactive map (markers, places, routes) | `<map>{"type":"markers","markers":[{"lat":54.3,"lon":10.1,"label":"Kiel"}]}</map>` |
 | `<email>` | Email card with "Open in Mail App" button | `<email>{"to":"...","subject":"...","body":"..."}</email>` |
+| ```` ```openui-lang ```` fence | Native OpenUI view (cards, tables, lists, forms, follow-ups); model loads the `openui` skill first | ```` ```openui-lang ```` + `root = Card([...])` + ```` ``` ```` — see `docs/OPENUI.md` |
 
 Configured in `lib/services/tool_prompt_builder.dart`. Rendered in `lib/widgets/message_bubble.dart`.
 

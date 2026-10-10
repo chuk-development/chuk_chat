@@ -1,5 +1,7 @@
 // lib/models/stored_chat.dart
 
+import 'package:chuk_chat/utils/openui_fence.dart';
+
 import 'chat_message.dart';
 
 /// Represents a stored chat with metadata.
@@ -105,8 +107,8 @@ class StoredChat {
             : msg.text;
       }
     }
-    // Fall back to first message
-    final first = _messages.first.text;
+    // Fall back to first message (an OpenUI program is not a preview)
+    final first = stripOpenUiPrograms(_messages.first.text);
     return first.length > 100 ? '${first.substring(0, 100)}...' : first;
   }
 

@@ -1,0 +1,15 @@
+/// Flutter renderer for OpenUI Lang.
+///
+/// This is the only file consumers should import from `openui`. The
+/// `src/` tree is private. Every public symbol is currently marked
+/// `@experimental` — the shape may change between v0.1 and v0.2.
+library;
+
+export 'src/component_registry.dart'
+    show ComponentRegistry, ComponentRender, DataNode;
+export 'src/error_boundary.dart' show ErrorBoundary;
+export 'src/form_state_cache.dart' show FormStateCache;
+export 'src/query_manager.dart' show QueryManager;
+export 'src/renderer.dart' show Renderer;
+export 'src/renderer_scope.dart' show RendererScope;
+export 'src/tool_registry.dart' show ToolExecutor, ToolRegistry;

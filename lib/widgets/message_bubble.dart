@@ -47,6 +47,8 @@ import 'package:chuk_chat/widgets/map_block_renderer.dart';
 import 'package:chuk_chat/widgets/weather_widget.dart';
 import 'package:chuk_chat/utils/tool_detail_format.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
+import 'package:chuk_chat/widgets/openui_message_block.dart';
+import 'package:chuk_chat/utils/openui_fence.dart';
 import 'package:chuk_chat/models/chat_reply.dart';
 import 'package:chuk_chat/widgets/menu_tile_group.dart';
 import 'package:chuk_chat/widgets/messenger_context_menu.dart';
@@ -214,9 +216,22 @@ class MessageBubble extends StatefulWidget {
     this.reaction,
     this.onReaction,
     this.senderLabel,
+    this.messageId,
+    this.onOpenUiMessage,
   });
 
   final String message;
+
+  /// A stable id of this message. It keys the form values and `$state` of
+  /// the OpenUI views in the answer, so they survive a scroll or a stream
+  /// rebuild. `null`: the views keep no memory.
+  final String? messageId;
+
+  /// Sends a user message in the same chat. An OpenUI view in the answer
+  /// calls it for a button, a follow-up or a form submit (the text comes
+  /// from `OpenUiActionHandler.composeMessage`). `null`: those controls do
+  /// nothing; links still open.
+  final ValueChanged<String>? onOpenUiMessage;
   final VoidCallback? onReply;
   final VoidCallback? onEditRequested;
   final String? reaction;
@@ -375,6 +390,10 @@ class _MessageBubbleState extends State<MessageBubble> {
   String? _strippedMessageCache;
   String? _strippedMessageSource;
 
+  /// Counts the OpenUI programs while one build draws the answer. Reset at
+  /// the start of each build, so each program keeps the same index.
+  int _openUiProgramCount = 0;
+
   @override
   void initState() {
     super.initState();
@@ -416,6 +435,7 @@ class _MessageBubbleState extends State<MessageBubble> {
         : (Stopwatch()..start());
 
     final bool isUserMessage = widget.isUser;
+    _openUiProgramCount = 0;
     final Widget body = isUserMessage
         ? _buildUserBubble(context)
         : _buildAiBubble(context);
