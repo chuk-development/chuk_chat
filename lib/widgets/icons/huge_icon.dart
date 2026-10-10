@@ -180,6 +180,225 @@ abstract final class HugeIcons {
   static const HugeIconData task01 = HugeIconData('task01');
   static const HugeIconData unlink01 = HugeIconData('unlink01');
   static const HugeIconData userCircle = HugeIconData('user-circle');
+
+  // Added for the OpenUI Icon component (lib/openui/openui_icons.dart).
+  static const HugeIconData tickDouble02 = HugeIconData('tick-double02');
+  static const HugeIconData cancelCircle = HugeIconData('cancel-circle');
+  static const HugeIconData addCircle = HugeIconData('add-circle');
+  static const HugeIconData minusSign = HugeIconData('minus-sign');
+  static const HugeIconData minusSignCircle = HugeIconData('minus-sign-circle');
+  static const HugeIconData helpCircle = HugeIconData('help-circle');
+  static const HugeIconData unavailable = HugeIconData('unavailable');
+  static const HugeIconData shield01 = HugeIconData('shield01');
+  static const HugeIconData securityCheck = HugeIconData('security-check');
+  static const HugeIconData shieldAlert = HugeIconData('shield-alert');
+  static const HugeIconData squareLock02 = HugeIconData('square-lock02');
+  static const HugeIconData squareUnlock02 = HugeIconData('square-unlock02');
+  static const HugeIconData slidersHorizontal = HugeIconData(
+    'sliders-horizontal',
+  );
+  static const HugeIconData moreVertical = HugeIconData('more-vertical');
+  static const HugeIconData notificationOff01 = HugeIconData(
+    'notification-off01',
+  );
+  static const HugeIconData favourite = HugeIconData('favourite');
+  static const HugeIconData thumbsUp = HugeIconData('thumbs-up');
+  static const HugeIconData thumbsDown = HugeIconData('thumbs-down');
+  static const HugeIconData flag01 = HugeIconData('flag01');
+  static const HugeIconData tag01 = HugeIconData('tag01');
+  static const HugeIconData award01 = HugeIconData('award01');
+  static const HugeIconData champion = HugeIconData('champion');
+  static const HugeIconData medal01 = HugeIconData('medal01');
+  static const HugeIconData crown = HugeIconData('crown');
+  static const HugeIconData fire = HugeIconData('fire');
+  static const HugeIconData rocket01 = HugeIconData('rocket01');
+  static const HugeIconData target01 = HugeIconData('target01');
+  static const HugeIconData idea01 = HugeIconData('idea01');
+  static const HugeIconData gift = HugeIconData('gift');
+  static const HugeIconData record = HugeIconData('record');
+  static const HugeIconData square = HugeIconData('square');
+  static const HugeIconData undo02 = HugeIconData('undo02');
+  static const HugeIconData redo02 = HugeIconData('redo02');
+  static const HugeIconData clipboard = HugeIconData('clipboard');
+  static const HugeIconData clipboardList = HugeIconData('clipboard-list');
+  static const HugeIconData clipboardCheck = HugeIconData('clipboard-check');
+  static const HugeIconData upload01 = HugeIconData('upload01');
+  static const HugeIconData login01 = HugeIconData('login01');
+  static const HugeIconData power = HugeIconData('power');
+  static const HugeIconData checkList = HugeIconData('check-list');
+  static const HugeIconData leftToRightListNumber = HugeIconData(
+    'left-to-right-list-number',
+  );
+  static const HugeIconData dashboardSquare01 = HugeIconData(
+    'dashboard-square01',
+  );
+  static const HugeIconData package = HugeIconData('package');
+  static const HugeIconData folderOpen = HugeIconData('folder-open');
+  static const HugeIconData camera01 = HugeIconData('camera01');
+  static const HugeIconData musicNote01 = HugeIconData('music-note01');
+  static const HugeIconData headphones = HugeIconData('headphones');
+  static const HugeIconData volumeHigh = HugeIconData('volume-high');
+  static const HugeIconData volumeMute01 = HugeIconData('volume-mute01');
+  static const HugeIconData play = HugeIconData('play');
+  static const HugeIconData pause = HugeIconData('pause');
+  static const HugeIconData tv01 = HugeIconData('tv01');
+  static const HugeIconData book02 = HugeIconData('book02');
+  static const HugeIconData news = HugeIconData('news');
+  static const HugeIconData paintBrush01 = HugeIconData('paint-brush01');
+  static const HugeIconData serverStack01 = HugeIconData('server-stack01');
+  static const HugeIconData cpu = HugeIconData('cpu');
+  static const HugeIconData hardDrive = HugeIconData('hard-drive');
+  static const HugeIconData quoteDown = HugeIconData('quote-down');
+  static const HugeIconData hashtag = HugeIconData('hashtag');
+  static const HugeIconData at = HugeIconData('at');
+  static const HugeIconData userAdd01 = HugeIconData('user-add01');
+  static const HugeIconData contact01 = HugeIconData('contact01');
+  static const HugeIconData smile = HugeIconData('smile');
+  static const HugeIconData sad01 = HugeIconData('sad01');
+  static const HugeIconData baby01 = HugeIconData('baby01');
+  static const HugeIconData briefcase01 = HugeIconData('briefcase01');
+  static const HugeIconData building03 = HugeIconData('building03');
+  static const HugeIconData factory = HugeIconData('factory');
+  static const HugeIconData store01 = HugeIconData('store01');
+  static const HugeIconData school = HugeIconData('school');
+  static const HugeIconData hospital01 = HugeIconData('hospital01');
+  static const HugeIconData stethoscope = HugeIconData('stethoscope');
+  static const HugeIconData cardiogram01 = HugeIconData('cardiogram01');
+  static const HugeIconData activity01 = HugeIconData('activity01');
+  static const HugeIconData medicine01 = HugeIconData('medicine01');
+  static const HugeIconData accessibility = HugeIconData('accessibility');
+  static const HugeIconData hold01 = HugeIconData('hold01');
+  static const HugeIconData agreement01 = HugeIconData('agreement01');
+  static const HugeIconData calendar03 = HugeIconData('calendar03');
+  static const HugeIconData calendarCheckIn01 = HugeIconData(
+    'calendar-check-in01',
+  );
+  static const HugeIconData hourglass = HugeIconData('hourglass');
+  static const HugeIconData alarmClock = HugeIconData('alarm-clock');
+  static const HugeIconData workHistory = HugeIconData('work-history');
+  static const HugeIconData smartWatch01 = HugeIconData('smart-watch01');
+  static const HugeIconData euro = HugeIconData('euro');
+  static const HugeIconData pound = HugeIconData('pound');
+  static const HugeIconData bitcoin = HugeIconData('bitcoin');
+  static const HugeIconData wallet01 = HugeIconData('wallet01');
+  static const HugeIconData money03 = HugeIconData('money03');
+  static const HugeIconData coins01 = HugeIconData('coins01');
+  static const HugeIconData piggyBank = HugeIconData('piggy-bank');
+  static const HugeIconData invoice01 = HugeIconData('invoice01');
+  static const HugeIconData percent = HugeIconData('percent');
+  static const HugeIconData calculator01 = HugeIconData('calculator01');
+  static const HugeIconData bank = HugeIconData('bank');
+  static const HugeIconData chartIncrease = HugeIconData('chart-increase');
+  static const HugeIconData chartDecrease = HugeIconData('chart-decrease');
+  static const HugeIconData chartLineData01 = HugeIconData('chart-line-data01');
+  static const HugeIconData chartHistogram = HugeIconData('chart-histogram');
+  static const HugeIconData pieChart = HugeIconData('pie-chart');
+  static const HugeIconData chartAverage = HugeIconData('chart-average');
+  static const HugeIconData dashboardSpeed01 = HugeIconData(
+    'dashboard-speed01',
+  );
+  static const HugeIconData balanceScale = HugeIconData('balance-scale');
+  static const HugeIconData shoppingCart01 = HugeIconData('shopping-cart01');
+  static const HugeIconData shoppingBag01 = HugeIconData('shopping-bag01');
+  static const HugeIconData shoppingBasket01 = HugeIconData(
+    'shopping-basket01',
+  );
+  static const HugeIconData deliveryTruck01 = HugeIconData('delivery-truck01');
+  static const HugeIconData ticket01 = HugeIconData('ticket01');
+  static const HugeIconData qrCode = HugeIconData('qr-code');
+  static const HugeIconData barcode = HugeIconData('barcode');
+  static const HugeIconData scan = HugeIconData('scan');
+  static const HugeIconData discount = HugeIconData('discount');
+  static const HugeIconData maps = HugeIconData('maps');
+  static const HugeIconData navigation03 = HugeIconData('navigation03');
+  static const HugeIconData compass01 = HugeIconData('compass01');
+  static const HugeIconData airplane01 = HugeIconData('airplane01');
+  static const HugeIconData airplaneTakeOff01 = HugeIconData(
+    'airplane-take-off01',
+  );
+  static const HugeIconData airplaneLanding01 = HugeIconData(
+    'airplane-landing01',
+  );
+  static const HugeIconData car01 = HugeIconData('car01');
+  static const HugeIconData bus01 = HugeIconData('bus01');
+  static const HugeIconData train01 = HugeIconData('train01');
+  static const HugeIconData bicycle01 = HugeIconData('bicycle01');
+  static const HugeIconData boat = HugeIconData('boat');
+  static const HugeIconData hotel01 = HugeIconData('hotel01');
+  static const HugeIconData bed = HugeIconData('bed');
+  static const HugeIconData luggage01 = HugeIconData('luggage01');
+  static const HugeIconData mountain = HugeIconData('mountain');
+  static const HugeIconData tent = HugeIconData('tent');
+  static const HugeIconData route01 = HugeIconData('route01');
+  static const HugeIconData fuelStation = HugeIconData('fuel-station');
+  static const HugeIconData parkingAreaSquare = HugeIconData(
+    'parking-area-square',
+  );
+  static const HugeIconData restaurant01 = HugeIconData('restaurant01');
+  static const HugeIconData coffee01 = HugeIconData('coffee01');
+  static const HugeIconData drink = HugeIconData('drink');
+  static const HugeIconData pizza01 = HugeIconData('pizza01');
+  static const HugeIconData anchor = HugeIconData('anchor');
+  static const HugeIconData cloud = HugeIconData('cloud');
+  static const HugeIconData cloudAngledRain = HugeIconData('cloud-angled-rain');
+  static const HugeIconData cloudLittleRain = HugeIconData('cloud-little-rain');
+  static const HugeIconData cloudSnow = HugeIconData('cloud-snow');
+  static const HugeIconData cloudAngledZap = HugeIconData('cloud-angled-zap');
+  static const HugeIconData sunCloud01 = HugeIconData('sun-cloud01');
+  static const HugeIconData cloudFog = HugeIconData('cloud-fog');
+  static const HugeIconData fastWind = HugeIconData('fast-wind');
+  static const HugeIconData temperature = HugeIconData('temperature');
+  static const HugeIconData droplet = HugeIconData('droplet');
+  static const HugeIconData umbrella = HugeIconData('umbrella');
+  static const HugeIconData snow = HugeIconData('snow');
+  static const HugeIconData sunrise = HugeIconData('sunrise');
+  static const HugeIconData sunset = HugeIconData('sunset');
+  static const HugeIconData rainbow = HugeIconData('rainbow');
+  static const HugeIconData tornado01 = HugeIconData('tornado01');
+  static const HugeIconData pineTree = HugeIconData('pine-tree');
+  static const HugeIconData tree06 = HugeIconData('tree06');
+  static const HugeIconData leaf01 = HugeIconData('leaf01');
+  static const HugeIconData flower = HugeIconData('flower');
+  static const HugeIconData plant01 = HugeIconData('plant01');
+  static const HugeIconData cat = HugeIconData('cat');
+  static const HugeIconData recycle01 = HugeIconData('recycle01');
+  static const HugeIconData wifi01 = HugeIconData('wifi01');
+  static const HugeIconData bluetooth = HugeIconData('bluetooth');
+  static const HugeIconData smartPhone01 = HugeIconData('smart-phone01');
+  static const HugeIconData tablet01 = HugeIconData('tablet01');
+  static const HugeIconData printer = HugeIconData('printer');
+  static const HugeIconData rss = HugeIconData('rss');
+  static const HugeIconData batteryFull = HugeIconData('battery-full');
+  static const HugeIconData plug01 = HugeIconData('plug01');
+  static const HugeIconData cursor01 = HugeIconData('cursor01');
+  static const HugeIconData arrowRight02 = HugeIconData('arrow-right02');
+  static const HugeIconData arrowUp02 = HugeIconData('arrow-up02');
+  static const HugeIconData arrowDown02 = HugeIconData('arrow-down02');
+  static const HugeIconData arrowDownRight01 = HugeIconData(
+    'arrow-down-right01',
+  );
+  static const HugeIconData arrowDataTransferVertical = HugeIconData(
+    'arrow-data-transfer-vertical',
+  );
+  static const HugeIconData arrowDataTransferHorizontal = HugeIconData(
+    'arrow-data-transfer-horizontal',
+  );
+  static const HugeIconData repeat = HugeIconData('repeat');
+  static const HugeIconData shuffle = HugeIconData('shuffle');
+  static const HugeIconData maximize01 = HugeIconData('maximize01');
+  static const HugeIconData minimize01 = HugeIconData('minimize01');
+  static const HugeIconData move = HugeIconData('move');
+  static const HugeIconData dumbbell01 = HugeIconData('dumbbell01');
+  static const HugeIconData gameController01 = HugeIconData(
+    'game-controller01',
+  );
+  static const HugeIconData football = HugeIconData('football');
+  static const HugeIconData hammer = HugeIconData('hammer');
+  static const HugeIconData scissor01 = HugeIconData('scissor01');
+  static const HugeIconData microscope = HugeIconData('microscope');
+  static const HugeIconData testTube = HugeIconData('test-tube');
+  static const HugeIconData atom01 = HugeIconData('atom01');
+  static const HugeIconData ruler = HugeIconData('ruler');
 }
 
 /// An icon of the set, drawn like a Material [Icon].

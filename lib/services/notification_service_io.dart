@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/utils/openui_fence.dart';
 import 'package:chuk_chat/utils/tool_parser.dart';
 
 /// Service for handling local notifications (completion notifications with deep linking)
@@ -209,8 +210,14 @@ class NotificationService {
   static String _formatContentPreview(String content, {int maxLength = 120}) {
     if (content.isEmpty) return '';
 
+    // An OpenUI program is not text for a notification: drop it.
+    final String prose = stripOpenUiPrograms(
+      content,
+      whenEmpty: 'New AI response',
+    );
+
     // Strip common markdown
-    String cleaned = stripToolCallBlocksForDisplay(content)
+    String cleaned = stripToolCallBlocksForDisplay(prose)
         .replaceAll(RegExp(r'```[\s\S]*?```'), '[code]') // Code blocks
         .replaceAll(RegExp(r'`[^`]+`'), '[code]') // Inline code
         .replaceAll(RegExp(r'\*\*([^*]+)\*\*'), r'$1') // Bold

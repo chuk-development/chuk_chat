@@ -395,6 +395,20 @@ void main() {
     });
   });
 
+  group('ToolPromptBuilder openui line', () {
+    String build(List<Skill> catalog) =>
+        ToolPromptBuilder(discoveryMode: false).buildToolProtocolSection(
+          tools: _tools,
+          skillToolDef: catalog.isEmpty ? null : _skillToolDef,
+          skillCatalog: catalog,
+        );
+
+    test('points at the openui skill only when it is in the catalog', () {
+      expect(build(kBuiltinSkills), contains('load the `openui` skill'));
+      expect(build(const []), isNot(contains('openui')));
+    });
+  });
+
   group('ToolPromptBuilder skills token budget', () {
     test('the real catalog costs fewer tokens than the blocks it removes', () {
       // The point of M1: the catalog is not a new cost, it is a net saving.

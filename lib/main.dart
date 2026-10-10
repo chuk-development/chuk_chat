@@ -36,6 +36,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:chuk_chat/assistant/assistant_overlay.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
+import 'package:chuk_chat/openui/openui_license.dart';
 import 'package:chuk_chat/pages/login_page.dart';
 import 'package:chuk_chat/pages/messenger_shell.dart';
 import 'package:chuk_chat/platform_config.dart';
@@ -110,6 +111,9 @@ void _installLogDeduper() {
 /* ---------- MAIN ---------- */
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // OpenUI Lang (Thesys Inc., MIT) for the licence page.
+  registerOpenUiLicense();
 
   // Dedupe spammy repeated log lines (debug only).
   if (kDebugMode) {

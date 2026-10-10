@@ -1,0 +1,8 @@
+$role = "engineer"
+root = Card([title, contactForm])
+title = TextContent("Contact us", "large-heavy")
+contactForm = Form("contact", submitBtn, [nameField, emailField, roleField])
+nameField = FormControl("Name", Input("name", "Enter your name", "text", {required: true}, $name))
+emailField = FormControl("Email", Input("email", "Enter your email", "email", {required: true, email: true}, $email))
+roleField = FormControl("Role", Select("role", [SelectItem("engineer", "Engineer"), SelectItem("designer", "Designer"), SelectItem("pm", "PM")], null, {required: true}, $role))
+submitBtn = Button("Submit")

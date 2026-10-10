@@ -1241,6 +1241,11 @@ Body text.
     buffer.writeln(
       'You can embed charts and maps directly in your responses. These are NOT tools — just write the JSON inside the tags.',
     );
+    if (_migratedToSkill('openui')) {
+      buffer.writeln(
+        'Rich UI (cards, tables, lists, forms, metrics, follow-up buttons): load the `openui` skill, then write one ```openui-lang fence.',
+      );
+    }
 
     // The chart schema is migrated to the `chart-authoring` skill; the
     // catalog entry points the model at it.

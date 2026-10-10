@@ -1,7 +1,8 @@
 // lib/widgets/message_bubble/rich_blocks.dart
 //
 // Part of message_bubble.dart — the inline rich output blocks the AI can emit
-// in its text: <chart>, <map>, <email>, <weather>, <news>, <image>, <diff>.
+// in its text: <chart>, <map>, <email>, <weather>, <news>, <image>, <diff>,
+// and ```openui-lang fences (native OpenUI views, docs/OPENUI.md).
 // Parses the interleaved markdown + tag stream and renders each block, with
 // the plain-text paragraph fallbacks.
 
@@ -11,7 +12,91 @@ part of '../message_bubble.dart';
 
 extension _MessageBubbleRichBlocks on _MessageBubbleState {
   bool _hasVisualBlocks(String content) {
-    return _visualBlockStartRegex.hasMatch(content);
+    return _visualBlockStartRegex.hasMatch(content) ||
+        _openUiPartsOf(content) != null;
+  }
+
+  /// The markdown and OpenUI parts of [content], or `null` when the
+  /// OpenUI path has nothing to do (no program, and no half fence line
+  /// to hide while streaming).
+  List<OpenUiTextPart>? _openUiPartsOf(String content) {
+    if (!mayContainOpenUiFence(content)) return null;
+    final parts = splitOpenUiFences(
+      content,
+      streaming: widget.isStreamingMessage,
+    );
+    if (parts.any((p) => p.isProgram)) return parts;
+    // No program: at most one markdown part. It differs from the content
+    // only when a half fence line was dropped at the end of the stream.
+    final markdown = parts.isEmpty ? '' : parts.single.text;
+    return markdown == content ? null : parts;
+  }
+
+  /// Renders an answer that holds ```openui-lang fences: each program as
+  /// native widgets ([OpenUiMessageBlock]), the text between them as
+  /// markdown with its rich tags. A program is never shown as code.
+  Widget _buildOpenUiContent({
+    required List<OpenUiTextPart> parts,
+    required Color textColor,
+    required Color bgColor,
+  }) {
+    final widgets = <Widget>[];
+    for (final part in parts) {
+      if (part.isProgram) {
+        // One index per program in the whole message (the build resets
+        // it), so the key and the memory stay with the same program.
+        final ordinal = _openUiProgramCount++;
+        final id = widget.messageId;
+        widgets.add(
+          Padding(
+            // The key sits on the Column child, where siblings are matched.
+            key: ValueKey<String>('openui:${id ?? ''}:$ordinal'),
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            // The view takes the full answer width, like the other cards.
+            child: SizedBox(
+              width: double.infinity,
+              child: OpenUiMessageBlock(
+                source: part.text,
+                isStreaming: widget.isStreamingMessage && !part.isClosed,
+                memoryKey: id == null ? null : '$id#$ordinal',
+                onSendMessage: widget.onOpenUiMessage,
+              ),
+            ),
+          ),
+        );
+        continue;
+      }
+      final text = part.text.trim();
+      if (text.isEmpty) continue;
+      if (_visualBlockStartRegex.hasMatch(text)) {
+        widgets.add(
+          _buildVisualContent(
+            content: text,
+            textColor: textColor,
+            bgColor: bgColor,
+            openUi: false,
+          ),
+        );
+        continue;
+      }
+      widgets.add(
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: MarkdownMessage(
+            text: text,
+            textColor: textColor,
+            backgroundColor: bgColor,
+            wrapWithSelectionArea: !widget.useSharedSelectionArea,
+            fontFamily: _chatFontFamily,
+            paragraphFontSize: _chatFontSize,
+          ),
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: widgets,
+    );
   }
 
   /// Lenient JSON for a block a model wrote.
@@ -42,7 +127,16 @@ extension _MessageBubbleRichBlocks on _MessageBubbleState {
     required String content,
     required Color textColor,
     required Color bgColor,
+    bool openUi = true,
   }) {
+    final openUiParts = openUi ? _openUiPartsOf(content) : null;
+    if (openUiParts != null) {
+      return _buildOpenUiContent(
+        parts: openUiParts,
+        textColor: textColor,
+        bgColor: bgColor,
+      );
+    }
     final widgets = <Widget>[];
     var lastEnd = 0;
 

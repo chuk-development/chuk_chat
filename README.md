@@ -255,6 +255,11 @@ docker build -t agents-base:latest agents/sandbox/docker
 
 [Business Source License 1.1](LICENSE) — free for non-production use. Converts to GPL v3 after 3 years per release.
 
+### Credits
+
+- [OpenUI Lang](https://github.com/thesysdev/openui) by Thesys Inc. (MIT) — the language the AI uses for rich UI in answers.
+- [openui_flutter](https://github.com/mtwichel/openui_flutter) by Very Good Ventures (MIT) — the Flutter parser and renderer, vendored in `vendor/openui*`.
+
 ## Links
 
 - [Website](https://chuk.chat) — Product page & pricing

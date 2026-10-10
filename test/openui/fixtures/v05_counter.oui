@@ -1,0 +1,6 @@
+$count = 0
+root = Stack([title, controls])
+title = TextContent("Count: " + $count, "large-heavy")
+controls = Stack([incBtn, resetBtn], "row")
+incBtn = Button("Increment", Action([@Set($count, $count + 1)]), "primary")
+resetBtn = Button("Reset", Action([@Reset($count)]), "secondary")

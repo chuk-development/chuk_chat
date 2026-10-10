@@ -2,6 +2,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:chuk_chat/utils/openui_fence.dart';
 import 'package:chuk_chat/utils/tool_parser.dart';
 
 /// Service to keep AI streaming alive when app is backgrounded or screen locked.
@@ -229,7 +230,10 @@ class StreamingForegroundService {
 
   /// Strip common markdown syntax for clean notification display.
   static String _stripMarkdown(String content) {
-    final plainContent = stripToolCallBlocksForDisplay(content);
+    // An OpenUI program is not text for a notification: drop it.
+    final plainContent = stripToolCallBlocksForDisplay(
+      stripOpenUiPrograms(content),
+    );
     return plainContent
         .replaceAll(RegExp(r'```[\s\S]*?```'), '[code]') // Code blocks
         .replaceAll(RegExp(r'`[^`]+`'), '[code]') // Inline code
