@@ -257,7 +257,12 @@ class AxisScale {
       hi += pad;
       if (!fromZero || lo != 0) lo -= pad;
     }
+    // A range that is not finite, or a step too small to move the
+    // largest value, would make the tick loops run forever.
+    if (!(hi - lo).isFinite) return const AxisScale._(0, 1, 0.2);
     final step = niceInterval(hi - lo);
+    final edge = math.max(lo.abs(), hi.abs());
+    if (edge + step == edge) return const AxisScale._(0, 1, 0.2);
     final min = (lo / step).floorToDouble() * step;
     var max = (hi / step).ceilToDouble() * step;
     if (max <= min) max = min + step;

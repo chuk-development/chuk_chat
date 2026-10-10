@@ -242,7 +242,8 @@ flutter test --concurrency=1 test/openui
 ## 10. Language support (vendored core)
 
 Statements `name = expr`, `$var = default`, `name = Query("tool", {args},
-{defaults}, refreshSeconds?)`, `name = Mutation("tool", {args})`;
+{defaults}, refreshSeconds?)` (interval clamped to 5 s .. 1 day, paused
+while streaming), `name = Mutation("tool", {args})`;
 positional arguments only; forward references; `//` and `#` comments;
 fences with prose around them (inline mode), also an open fence while
 streaming. Expressions: literals, arrays, objects, `a.b`, `a[i]`, array
@@ -301,7 +302,9 @@ Actions:
   stays. While an answer is on the way, the chat shows "Please wait" and
   sends nothing. Old messages stay interactive.
 - `openUrl` opens only `http`, `https` (with a host), `mailto` and `tel`
-  (`safeOpenUiUri`), in an external application.
+  (`safeOpenUiUri`), in an external application. The renderer applies
+  the same rule (`safeOpenUrl` in `vendor/openui`) before it calls
+  `onOpenUrl`, so both filter alike.
 
 State across rebuilds: each program has the key
 `openui:<message id>:<index>` (the index counts the programs of the

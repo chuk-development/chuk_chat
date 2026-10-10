@@ -10,6 +10,6 @@ export 'src/component_registry.dart'
 export 'src/error_boundary.dart' show ErrorBoundary;
 export 'src/form_state_cache.dart' show FormStateCache;
 export 'src/query_manager.dart' show QueryManager;
-export 'src/renderer.dart' show Renderer;
+export 'src/renderer.dart' show Renderer, kOpenUrlSchemes, safeOpenUrl;
 export 'src/renderer_scope.dart' show RendererScope;
 export 'src/tool_registry.dart' show ToolExecutor, ToolRegistry;

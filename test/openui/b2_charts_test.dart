@@ -247,6 +247,19 @@ void main() {
   });
 
   group('helpers', () {
+    test('an axis with an unusable range falls back and ends', () {
+      // -1e308..1e308 overflows to Infinity; 1e17..1e17+10 has a step
+      // that does not move the value. Both looped forever before.
+      for (final (lo, hi) in <(double, double)>[
+        (-1e308, 1e308),
+        (1e17, 1e17 + 10),
+      ]) {
+        final scale = AxisScale.fit(lo, hi, fromZero: false);
+        expect(scale.interval, greaterThan(0));
+        expect(scale.max + scale.interval, isNot(scale.max));
+      }
+    });
+
     test('formatAxisValue is compact', () {
       expect(formatAxisValue(0), '0');
       expect(formatAxisValue(1500), '1500');
