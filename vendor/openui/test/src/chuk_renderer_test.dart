@@ -35,6 +35,7 @@ final _library = LibraryDefinition(
     _def('Slot', {'child': _any}),
     _def('Deep', {'value': _any}),
   ],
+  tools: const [ToolDefinition(name: 'ping', description: 'ping')],
 );
 
 /// Flattens nested lists and maps: widgets stay, other values become
@@ -207,13 +208,13 @@ void main() {
         _app(
           response:
               'root = Text("n=" + n)\n'
-              'n = Query("tick", {}, 0, 1)\n',
+              'n = Query("tick", {}, 0, 5)\n',
           toolRegistry: tools,
         ),
       );
       await tester.pump();
       expect(find.text('n=1'), findsOneWidget);
-      await tester.pump(const Duration(milliseconds: 1100));
+      await tester.pump(const Duration(milliseconds: 5100));
       await tester.pump();
       expect(find.text('n=2'), findsOneWidget);
       // Dropping the refresh argument stops the timer.
@@ -225,7 +226,7 @@ void main() {
           toolRegistry: tools,
         ),
       );
-      await tester.pump(const Duration(seconds: 3));
+      await tester.pump(const Duration(seconds: 11));
       expect(calls, 2);
       await tester.pumpWidget(const SizedBox());
     });
@@ -576,6 +577,219 @@ void main() {
       expect(find.text('first'), findsOneWidget);
       expect(find.text('sec'), findsOneWidget);
       unawaited(Future<void>.value());
+    });
+  });
+
+  // chuk_chat: fixes for CodeRabbit findings on the vendored port.
+  group('review fixes', () {
+    test('safeOpenUrl allows http, https, mailto and tel only', () {
+      expect(safeOpenUrl('https://a.example'), isNotNull);
+      expect(safeOpenUrl('HTTP://a.example'), isNotNull);
+      expect(safeOpenUrl('mailto:a@b.example'), isNotNull);
+      expect(safeOpenUrl('tel:+4930123'), isNotNull);
+      for (final bad in [
+        'javascript:alert(1)',
+        'file:///etc/passwd',
+        'intent://x#Intent;end',
+        'myapp://open',
+        'https://',
+        'mailto:',
+        '',
+      ]) {
+        expect(safeOpenUrl(bad), isNull, reason: bad);
+      }
+    });
+
+    testWidgets('@OpenUrl does not pass unsafe schemes on', (tester) async {
+      final urls = <String>[];
+      await tester.pumpWidget(
+        _app(
+          response:
+              'root = Column([a, b, c, d])\n'
+              'a = Btn("A", @OpenUrl("javascript:alert(1)"))\n'
+              'b = Btn("B", {type: "open_url", url: "file:///etc/passwd"})\n'
+              'c = Btn("C", @OpenUrl("mailto:a@b.example"))\n'
+              'd = Btn("D", @OpenUrl("tel:+4930123"))\n',
+          onOpenUrl: urls.add,
+        ),
+      );
+      for (final label in ['A', 'B', 'C', 'D']) {
+        await tester.tap(find.text(label));
+        await tester.pumpAndSettle();
+      }
+      expect(urls, ['mailto:a@b.example', 'tel:+4930123']);
+    });
+
+    testWidgets('an error result of @Run(tool) or a legacy mutation halts', (
+      tester,
+    ) async {
+      final messages = <String>[];
+      final errors = <OpenUIError>[];
+      await tester.pumpWidget(
+        _app(
+          response:
+              'root = Column([a, b])\n'
+              'a = Btn("A", Action([@Run(ping), @ToAssistant("after")]))\n'
+              'b = Btn("B", Action([@Run(m), @ToAssistant("after")]))\n'
+              'm = Mutation(name: "ping")\n',
+          toolRegistry: ToolRegistry(
+            executors: {
+              'ping': (_) async => const ToolResult('down', isError: true),
+            },
+          ),
+          onContinueConversation: messages.add,
+          onError: (e) => errors
+            ..clear()
+            ..addAll(e),
+        ),
+      );
+      for (final label in ['A', 'B']) {
+        await tester.tap(find.text(label));
+        await tester.pumpAndSettle();
+      }
+      expect(messages, isEmpty);
+      expect(
+        errors.whereType<EvaluationError>().map((e) => e.statementId),
+        containsAll(<String>['ping', 'm']),
+      );
+    });
+
+    testWidgets('errors are deduplicated and reported after the frame', (
+      tester,
+    ) async {
+      final snapshots = <List<OpenUIError>>[];
+      var shown = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Material(
+            child: StatefulBuilder(
+              builder: (context, setState) => Column(
+                children: [
+                  Text('shown=$shown'),
+                  Renderer(
+                    response:
+                        '\$n = 0\n'
+                        'root = Column([Nope("x"), b])\n'
+                        'b = Btn("+" + \$n, Action([@Set(\$n, \$n + 1)]))\n',
+                    library: _library,
+                    componentRegistry: _registry,
+                    toolRegistry: const ToolRegistry(executors: {}),
+                    // A host that calls setState here must not break.
+                    onError: (errors) {
+                      snapshots.add(errors);
+                      setState(() => shown = errors.length);
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      for (var i = 0; i < 3; i++) {
+        await tester.tap(find.byType(TextButton));
+        await tester.pumpAndSettle();
+      }
+      expect(tester.takeException(), isNull);
+      expect(find.text('+3'), findsOneWidget);
+      expect(snapshots, hasLength(1));
+      expect(snapshots.single.single, isA<UnknownComponentError>());
+      expect(find.text('shown=1'), findsOneWidget);
+    });
+
+    testWidgets('a new response clears the old errors', (tester) async {
+      var last = const <OpenUIError>[];
+      void onError(List<OpenUIError> e) => last = e;
+      await tester.pumpWidget(
+        _app(response: 'root = Column([Nope("x")])\n', onError: onError),
+      );
+      await tester.pumpAndSettle();
+      expect(last, hasLength(1));
+      await tester.pumpWidget(
+        _app(response: 'root = Text("ok")\n', onError: onError),
+      );
+      await tester.pumpAndSettle();
+      expect(last, isEmpty);
+    });
+
+    ToolRegistry counting(void Function() onCall) => ToolRegistry(
+      executors: {
+        'tick': (_) async {
+          onCall();
+          return const ToolResult(1);
+        },
+      },
+    );
+
+    testWidgets('a tiny refreshSeconds polls no faster than 5 s', (
+      tester,
+    ) async {
+      var calls = 0;
+      await tester.pumpWidget(
+        _app(
+          response:
+              'root = Text("n=" + n)\n'
+              'n = Query("tick", {}, 0, 0.0001)\n',
+          toolRegistry: counting(() => calls++),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 4));
+      expect(calls, 1);
+      await tester.pump(const Duration(milliseconds: 1100));
+      expect(calls, 2);
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('a query the new response drops stops polling', (
+      tester,
+    ) async {
+      var calls = 0;
+      final tools = counting(() => calls++);
+      await tester.pumpWidget(
+        _app(
+          response:
+              'root = Text("n=" + n)\n'
+              'n = Query("tick", {}, 0, 5)\n',
+          toolRegistry: tools,
+        ),
+      );
+      await tester.pump();
+      expect(calls, 1);
+      await tester.pumpWidget(
+        _app(response: 'root = Text("gone")\n', toolRegistry: tools),
+      );
+      await tester.pump(const Duration(seconds: 12));
+      expect(calls, 1);
+    });
+
+    testWidgets('refresh timers wait while the response streams', (
+      tester,
+    ) async {
+      var calls = 0;
+      final tools = counting(() => calls++);
+      const program =
+          'root = Text("n=" + n)\n'
+          'n = Query("tick", {}, 0, 5)\n';
+      await tester.pumpWidget(_app(response: program, toolRegistry: tools));
+      await tester.pump();
+      expect(calls, 1);
+      await tester.pumpWidget(
+        _app(
+          response: '${program}x = Text("more',
+          toolRegistry: tools,
+          isStreaming: true,
+        ),
+      );
+      await tester.pump(const Duration(seconds: 12));
+      expect(calls, 1);
+      await tester.pumpWidget(
+        _app(response: '${program}x = Text("more")\n', toolRegistry: tools),
+      );
+      await tester.pump(const Duration(milliseconds: 5100));
+      expect(calls, 2);
+      await tester.pumpWidget(const SizedBox());
     });
   });
 }

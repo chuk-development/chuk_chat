@@ -74,14 +74,18 @@ void main() {
         _form('DatePicker("day", "single", {required: true})'),
       );
       expect(find.text('Pick a date'), findsOneWidget);
+      // The picker opens on today. Take the date before and after, so
+      // the test also holds when it runs across midnight.
+      final before = _iso(DateTime.now());
       await tester.tap(find.text('Pick a date'));
       await tester.pumpAndSettle();
       expect(find.byType(DatePickerDialog), findsOneWidget);
       await tester.tap(find.text('OK'));
       await tester.pumpAndSettle();
-      expect(await _submit(tester, h), <String, Object?>{
-        'day': _iso(DateTime.now()),
-      });
+      final after = _iso(DateTime.now());
+      final values = await _submit(tester, h);
+      expect(values?.keys, ['day']);
+      expect(values?['day'], anyOf(before, after));
     });
 
     testWidgets('shows a bound range', (tester) async {

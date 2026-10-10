@@ -44,3 +44,21 @@ tests in `test/src/chuk_renderer_test.dart`.
    array or object statement (`slides = [[a, b], [c]]`) keeps its
    shape; a cycle through such statements is reported. Plain values
    inside stay values.
+9. Review fixes (tests in `test/src/chuk_renderer_test.dart` and
+   `test/src/query_manager_test.dart`, group `chuk_chat` / `review
+   fixes`):
+   - `@OpenUrl` hands only http/https (with a host), mailto and tel
+     URLs to `onOpenUrl` (`safeOpenUrl`, `kOpenUrlSchemes`, exported;
+     the chat host uses the same rule).
+   - A `ToolResult` with `isError` from a legacy `Mutation(name: ...)`
+     or a direct `@Run(tool)` throws `EvaluationError`, so the action
+     plan stops, like the canonical form.
+   - Legacy `@Query` args are compared deeply, so list or map args do
+     not re-fire the tool on every pass.
+   - Errors: an error already reported is not added again; `onError`
+     runs after the frame (only while mounted), never during build;
+     a response that is not a continuation clears the old errors.
+   - `refreshSeconds`: a non-finite value means no timer; the interval
+     is clamped to 5 s .. 1 day; timers of queries that the new parse
+     dropped are cancelled (`QueryManager.retainTimers`); timers skip
+     their tick while the response streams (`QueryManager.paused`).

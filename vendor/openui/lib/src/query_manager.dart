@@ -59,6 +59,18 @@ class QueryManager {
       <String, (QueryDecl, EvalContext)>{};
   bool _disposed = false;
 
+  /// chuk_chat: the shortest refresh interval a program may ask for.
+  /// The model writes `refreshSeconds`, so a tiny value must not turn
+  /// into a busy loop against the tool backend.
+  static const Duration minRefreshInterval = Duration(seconds: 5);
+
+  /// chuk_chat: the longest refresh interval (one day).
+  static const Duration maxRefreshInterval = Duration(days: 1);
+
+  /// chuk_chat: while `true`, refresh timers skip their tick. The
+  /// renderer sets it while the response is still streaming.
+  bool paused = false;
+
   /// Fires the query identified by [decl] when its
   /// `(statementId, evaluated-args)` fingerprint differs from the
   /// last fire. Subsequent calls with the same args are no-ops.
@@ -77,7 +89,9 @@ class QueryManager {
         if (arg.name != null) arg.name!: evaluate(arg.value, ctx),
     };
     final last = _fired[decl.statementId];
-    if (last != null && _mapEquals(last, evaluatedArgs)) return;
+    // chuk_chat: compare deeply. `evaluate` builds new lists and maps
+    // on every call, so `!=` saw a change each time and re-ran the tool.
+    if (last != null && _deepEquals(last, evaluatedArgs)) return;
     // Set the in-flight gate synchronously so a second `ensureFired`
     // landing in the same micro-task tick short-circuits before
     // dispatching a duplicate tool call.
@@ -176,7 +190,7 @@ class QueryManager {
   void _syncTimer(QueryDecl decl) {
     final id = decl.statementId;
     final seconds = decl.refreshSeconds;
-    if (seconds == null || seconds <= 0) {
+    if (seconds == null || !seconds.isFinite || seconds <= 0) {
       _timers.remove(id)?.cancel();
       _timerSeconds.remove(id);
       return;
@@ -184,16 +198,36 @@ class QueryManager {
     if (_timerSeconds[id] == seconds && _timers.containsKey(id)) return;
     _timers.remove(id)?.cancel();
     _timerSeconds[id] = seconds;
+    final ms = (seconds * 1000).round().clamp(
+      minRefreshInterval.inMilliseconds,
+      maxRefreshInterval.inMilliseconds,
+    );
     _timers[id] = Timer.periodic(
-      Duration(milliseconds: (seconds * 1000).round()),
+      Duration(milliseconds: ms),
       (_) {
         final latest = _latest[id];
-        if (_disposed || latest == null) return;
+        if (_disposed || paused || latest == null) return;
         _fired.remove(id);
         _ensureCanonical(latest.$1, latest.$2);
       },
     );
   }
+
+  /// chuk_chat: cancels the refresh timers of queries whose ids are not
+  /// in [liveIds]. The renderer calls it after each parse, so a query
+  /// that a new response removed stops polling.
+  void retainTimers(Set<String> liveIds) {
+    for (final id in _timers.keys.toList()) {
+      if (liveIds.contains(id)) continue;
+      _timers.remove(id)?.cancel();
+      _timerSeconds.remove(id);
+      _latest.remove(id);
+    }
+  }
+
+  /// Number of running refresh timers. For tests.
+  @visibleForTesting
+  int get activeTimerCount => _timers.length;
 
   /// Drops the fingerprint for [decl] and re-runs [ensureFired]
   /// against [ctx]. Used by the renderer's `@Run($var)` path and by
@@ -314,7 +348,17 @@ class QueryManager {
         MissingToolExecutorError(toolName: toolName, statementId: statementId),
       );
     }
-    return executor(toolArgs);
+    // chuk_chat: an error result is a failure, as in the canonical
+    // form, so the action plan stops.
+    return executor(toolArgs).then((value) {
+      if (value.isError) {
+        throw EvaluationError(
+          message: value.result?.toString() ?? 'Tool call failed',
+          statementId: statementId,
+        );
+      }
+      return value;
+    });
   }
 }
 
@@ -366,14 +410,4 @@ bool _deepEquals(Object? a, Object? b) {
     return true;
   }
   return a == b;
-}
-
-bool _mapEquals(Map<String, Object?> a, Map<String, Object?> b) {
-  if (identical(a, b)) return true;
-  if (a.length != b.length) return false;
-  for (final entry in a.entries) {
-    if (!b.containsKey(entry.key)) return false;
-    if (b[entry.key] != entry.value) return false;
-  }
-  return true;
 }

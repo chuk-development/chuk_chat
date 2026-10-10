@@ -255,6 +255,24 @@ void main() {
       expect(field().obscureText, isFalse);
     });
 
+    testWidgets('model-written fields never ask for autofill', (
+      tester,
+    ) async {
+      // A submit sends the values as a chat message, so a password
+      // manager must not offer saved credentials here.
+      await pumpOpenUi(
+        tester,
+        'root = Card([f])\n'
+        'f = Form("f", Button("Go"), [p, e])\n'
+        'p = FormControl("Password", Input("pw", "Password", "password"))\n'
+        'e = FormControl("Email", Input("mail", "Email", "email"))\n',
+      );
+      for (final label in <String>['Password', 'Email']) {
+        final field = tester.widget<TextField>(_field(label));
+        expect(field.autofillHints, isNull, reason: label);
+      }
+    });
+
     testWidgets('a TextArea has several lines', (tester) async {
       final h = await pumpOpenUi(
         tester,

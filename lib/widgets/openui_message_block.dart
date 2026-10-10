@@ -10,36 +10,22 @@ import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'package:openui/openui.dart' show kOpenUrlSchemes, safeOpenUrl;
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:chuk_chat/openui/openui.dart';
 
-/// The URL schemes an OpenUI `@OpenUrl` may open.
-const Set<String> kOpenUiUrlSchemes = <String>{
-  'http',
-  'https',
-  'mailto',
-  'tel',
-};
+/// The URL schemes an OpenUI `@OpenUrl` may open. The renderer uses
+/// the same set, so both filter alike.
+const Set<String> kOpenUiUrlSchemes = kOpenUrlSchemes;
 
 /// [url] as a [Uri] when the chat may open it, else `null`.
 ///
 /// Only http, https, mailto and tel. A web link must have a host. Other
 /// schemes (`javascript:`, `file:`, `intent:`, app links) are refused,
-/// because the model writes the URL.
-Uri? safeOpenUiUri(String url) {
-  final uri = Uri.tryParse(url.trim());
-  if (uri == null) return null;
-  final scheme = uri.scheme.toLowerCase();
-  if (!kOpenUiUrlSchemes.contains(scheme)) return null;
-  if ((scheme == 'http' || scheme == 'https') && uri.host.isEmpty) {
-    return null;
-  }
-  if ((scheme == 'mailto' || scheme == 'tel') && uri.path.trim().isEmpty) {
-    return null;
-  }
-  return uri;
-}
+/// because the model writes the URL. The rule is the renderer's
+/// [safeOpenUrl].
+Uri? safeOpenUiUri(String url) => safeOpenUrl(url);
 
 /// Opens [uri] outside the app.
 Future<void> _launchExternal(Uri uri) async {

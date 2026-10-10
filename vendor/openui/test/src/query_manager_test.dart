@@ -412,4 +412,108 @@ void main() {
       expect(tool.calls, 0);
     });
   });
+
+  // chuk_chat: CodeRabbit fixes.
+  group('chuk_chat', () {
+    test('list args that evaluate equal do not re-fire', () async {
+      final tool = _ToolTracker(
+        name: 'stub',
+        description: 'stub',
+        handler: (_) async => const ToolResult('ok'),
+      );
+      final store = Store();
+      final manager = _manager(
+        library: tool.library,
+        toolRegistry: tool.toolRegistry,
+        store: store,
+        onError: (_) {},
+      );
+      final decl = _decl(
+        namedArgs: [
+          Argument(
+            name: 'ids',
+            value: ArrayLit(const [
+              Literal(1, offset: 0),
+              Literal(2, offset: 0),
+            ], offset: 0),
+            offset: 0,
+          ),
+        ],
+      );
+      manager.ensureFired(decl, _ctx(store));
+      await Future<void>.delayed(Duration.zero);
+      manager.ensureFired(decl, _ctx(store));
+      await Future<void>.delayed(Duration.zero);
+      expect(tool.calls, 1);
+    });
+
+    test('a legacy mutation with an error result throws', () async {
+      final tool = _ToolTracker(
+        name: 'mut',
+        description: 'mut',
+        handler: (_) async => const ToolResult('nope', isError: true),
+      );
+      final errors = <OpenUIError>[];
+      final manager = _manager(
+        library: tool.library,
+        toolRegistry: tool.toolRegistry,
+        store: Store(),
+        onError: errors.add,
+      );
+      const args = [
+        Argument(
+          name: 'name',
+          value: Literal('mut', offset: 0),
+          offset: 0,
+        ),
+      ];
+      await expectLater(
+        manager.fireMutation('del', args),
+        throwsA(
+          isA<EvaluationError>().having((e) => e.message, 'message', 'nope'),
+        ),
+      );
+      expect(errors.single, isA<EvaluationError>());
+    });
+
+    QueryDecl canonical(String id, num? refresh) => QueryDecl(
+      statementId: id,
+      toolName: 'stub',
+      namedArgs: const [],
+      refreshSeconds: refresh,
+      isCanonical: true,
+    );
+
+    test('non-finite or non-positive refresh starts no timer', () {
+      final store = Store();
+      final manager = _manager(
+        library: const LibraryDefinition(),
+        toolRegistry: const ToolRegistry(executors: {}),
+        store: store,
+        onError: (_) {},
+      );
+      for (final r in [double.infinity, double.nan, 0, -1]) {
+        manager.ensureFired(canonical('q', r), _ctx(store));
+        expect(manager.activeTimerCount, 0, reason: '$r');
+      }
+    });
+
+    test('retainTimers cancels timers of dropped queries', () {
+      final store = Store();
+      final manager = _manager(
+        library: const LibraryDefinition(),
+        toolRegistry: const ToolRegistry(executors: {}),
+        store: store,
+        onError: (_) {},
+      );
+      manager
+        ..ensureFired(canonical('a', 10), _ctx(store))
+        ..ensureFired(canonical('b', 0.0001), _ctx(store));
+      expect(manager.activeTimerCount, 2);
+      manager.retainTimers({'a'});
+      expect(manager.activeTimerCount, 1);
+      manager.retainTimers(const {});
+      expect(manager.activeTimerCount, 0);
+    });
+  });
 }

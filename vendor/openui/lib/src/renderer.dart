@@ -14,6 +14,29 @@ import 'package:openui/src/renderer_scope.dart';
 import 'package:openui/src/tool_registry.dart';
 import 'package:openui_core/openui_core.dart';
 
+/// chuk_chat: the URL schemes `@OpenUrl` may hand to
+/// [Renderer.onOpenUrl].
+const Set<String> kOpenUrlSchemes = <String>{'http', 'https', 'mailto', 'tel'};
+
+/// chuk_chat: [url] as a [Uri] when `@OpenUrl` may open it, else `null`.
+///
+/// Only http, https, mailto and tel. A web link must have a host, and a
+/// mailto or tel link a target. Other schemes (`javascript:`, `file:`,
+/// `intent:`, app links) are refused, because the model writes the URL.
+Uri? safeOpenUrl(String url) {
+  final uri = Uri.tryParse(url.trim());
+  if (uri == null) return null;
+  final scheme = uri.scheme.toLowerCase();
+  if (!kOpenUrlSchemes.contains(scheme)) return null;
+  if ((scheme == 'http' || scheme == 'https') && uri.host.isEmpty) {
+    return null;
+  }
+  if ((scheme == 'mailto' || scheme == 'tel') && uri.path.trim().isEmpty) {
+    return null;
+  }
+  return uri;
+}
+
 /// Callback fired when a continue-conversation action occurs.
 typedef ContinueConversationCallback = void Function(String message);
 
@@ -95,7 +118,7 @@ class Renderer extends StatefulWidget {
   final String rootName;
 
   /// chuk_chat: invoked after [onAction] for `@OpenUrl` steps and
-  /// `{type: "open_url"}` actions with a non-empty URL.
+  /// `{type: "open_url"}` actions whose URL [safeOpenUrl] accepts.
   final void Function(String url)? onOpenUrl;
 
   /// chuk_chat: builds the in-tree placeholder for an unknown
@@ -114,6 +137,10 @@ class _RendererState extends State<Renderer> {
   QueryManager? _queryManager;
   ParseResult? _lastResult;
   List<OpenUIError> _lastReportedErrors = const <OpenUIError>[];
+  // chuk_chat: the list last handed to `onError`, and whether a
+  // post-frame notification is already queued.
+  List<OpenUIError> _lastNotifiedErrors = const <OpenUIError>[];
+  bool _errorNotifyScheduled = false;
   void Function()? _storeUnsubscribe;
 
   // "Last good root" cache. Mid-stream, autoClose patches the pending
@@ -205,6 +232,12 @@ class _RendererState extends State<Renderer> {
     if (response.length < _previousResponse.length ||
         !response.startsWith(_previousResponse)) {
       _lastGoodRoot = null;
+      // chuk_chat: a new program; errors of the old one are gone. Build
+      // errors of the new one are reported again on the next build.
+      if (_lastReportedErrors.isNotEmpty) {
+        _lastReportedErrors = const <OpenUIError>[];
+        _scheduleErrorNotify();
+      }
     }
     _previousResponse = response;
     final ParseResult result;
@@ -249,8 +282,6 @@ class _RendererState extends State<Renderer> {
   }
 
   void _maybeReportErrors(ParseResult result) {
-    final onError = widget.onError;
-    if (onError == null) return;
     final errors = <OpenUIError>[
       for (final parseError in result.meta.errors)
         ParseError(
@@ -267,7 +298,7 @@ class _RendererState extends State<Renderer> {
     }
     if (!_errorListsEqual(errors, _lastReportedErrors)) {
       _lastReportedErrors = List.unmodifiable(errors);
-      onError(errors);
+      _scheduleErrorNotify();
     }
   }
 
@@ -300,7 +331,10 @@ class _RendererState extends State<Renderer> {
         if (event.type == BuiltinActionType.openUrl) {
           onAction?.call(event);
           final url = event.params['url'];
-          if (url is String && url.isNotEmpty) widget.onOpenUrl?.call(url);
+          // chuk_chat: the model writes the URL; pass on safe ones only.
+          if (url is String && safeOpenUrl(url) != null) {
+            widget.onOpenUrl?.call(url);
+          }
           return;
         }
         onAction?.call(event);
@@ -319,7 +353,12 @@ class _RendererState extends State<Renderer> {
 
   void _fireReadyQueries(ParseResult result, {bool canonicalOnly = false}) {
     final manager = _queryManager;
-    if (manager == null || widget.isStreaming) return;
+    if (manager == null) return;
+    // chuk_chat: refresh timers wait while the response streams.
+    manager.paused = widget.isStreaming;
+    if (widget.isStreaming) return;
+    // chuk_chat: stop refresh timers of queries the program dropped.
+    manager.retainTimers({for (final q in result.meta.queries) q.statementId});
     final incomplete = result.meta.incomplete.toSet();
     final fireCtx = _buildEvalContext(result);
     for (final query in result.meta.queries) {
@@ -357,7 +396,16 @@ class _RendererState extends State<Renderer> {
         _reportError(error);
         throw error;
       }
-      await executor(args);
+      // chuk_chat: an error result stops the plan, like a mutation.
+      final value = await executor(args);
+      if (value.isError) {
+        final error = EvaluationError(
+          message: value.result?.toString() ?? 'Tool call failed',
+          statementId: id,
+        );
+        _reportError(error);
+        throw error;
+      }
       return;
     }
     throw EvaluationError(
@@ -874,13 +922,34 @@ class _RendererState extends State<Renderer> {
   /// in [_renderAst], and [_errorPlaceholder] (unknown component, etc).
   /// All call sites land here so the reporting policy lives in one
   /// place.
+  ///
+  /// chuk_chat: an error already in the list is not added again (each
+  /// rebuild reports build-time errors anew), and `onError` runs after
+  /// the frame, never during build, so the host may call `setState`.
   void _reportError(OpenUIError error) {
-    final next = <OpenUIError>[..._lastReportedErrors, error];
-    if (_errorListsEqual(next, _lastReportedErrors)) return;
-    _lastReportedErrors = List.unmodifiable(next);
-    final onError = widget.onError;
-    if (onError == null) return;
-    onError(_lastReportedErrors);
+    if (_lastReportedErrors.contains(error)) return;
+    _lastReportedErrors = List.unmodifiable(<OpenUIError>[
+      ..._lastReportedErrors,
+      error,
+    ]);
+    _scheduleErrorNotify();
+  }
+
+  void _scheduleErrorNotify() {
+    if (widget.onError == null || _errorNotifyScheduled) return;
+    _errorNotifyScheduled = true;
+    // Outside a frame (a tool future, a timer), ensureVisualUpdate
+    // makes sure a frame comes and runs the callback.
+    WidgetsBinding.instance
+      ..addPostFrameCallback((_) {
+        _errorNotifyScheduled = false;
+        if (!mounted) return;
+        final errors = _lastReportedErrors;
+        if (_errorListsEqual(errors, _lastNotifiedErrors)) return;
+        _lastNotifiedErrors = errors;
+        widget.onError?.call(errors);
+      })
+      ..ensureVisualUpdate();
   }
 
   Widget _errorPlaceholder(OpenUIError error) {

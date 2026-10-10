@@ -138,21 +138,18 @@ class _OpenUiTextFieldViewState extends State<OpenUiTextFieldView>
         : 1;
     final placeholder = props.string('placeholder');
 
-    final (TextInputType keyboard, List<String> hints) = switch (type) {
-      'email' => (TextInputType.emailAddress, <String>[AutofillHints.email]),
-      'number' => (
-        const TextInputType.numberWithOptions(decimal: true, signed: true),
-        const <String>[],
+    // No autofill hints: the model writes these fields, and a submit
+    // sends the values as a chat message. A password manager must never
+    // offer saved credentials here.
+    final TextInputType keyboard = switch (type) {
+      'email' => TextInputType.emailAddress,
+      'number' => const TextInputType.numberWithOptions(
+        decimal: true,
+        signed: true,
       ),
-      'url' => (TextInputType.url, <String>[AutofillHints.url]),
-      'password' => (
-        TextInputType.visiblePassword,
-        <String>[AutofillHints.password],
-      ),
-      _ => (
-        widget.multiline ? TextInputType.multiline : TextInputType.text,
-        const <String>[],
-      ),
+      'url' => TextInputType.url,
+      'password' => TextInputType.visiblePassword,
+      _ => widget.multiline ? TextInputType.multiline : TextInputType.text,
     };
 
     Widget? suffix;
@@ -187,7 +184,7 @@ class _OpenUiTextFieldViewState extends State<OpenUiTextFieldView>
       enabled: field.enabled,
       readOnly: !field.enabled,
       keyboardType: keyboard,
-      autofillHints: field.enabled ? hints : null,
+      autofillHints: null,
       obscureText: password && _obscured,
       enableSuggestions: !password && type != 'email' && type != 'url',
       autocorrect: type == 'text' && !password,
