@@ -18,27 +18,21 @@ const Map<String, String> _defaultHeaders = {
   'User-Agent': 'chuk-chat/1.0',
 };
 
-/// What a places lookup produces: the text the model reads, and the map
-/// card the reader sees.
+/// What a places lookup produces: the text the model reads, and the raw
+/// entries behind it.
 ///
-/// The card is built here rather than left to the model. The data already
-/// has coordinates, address and rating — waiting for the model to copy
-/// them into a `<map>` tag costs a round trip and gets them wrong often
-/// enough to matter.
+/// The chat never draws these itself. The model gets the text and writes
+/// its own `<map>` block from it; a tool only fetches data.
 class PlacesToolResult {
   const PlacesToolResult({
     required this.text,
-    this.mapTag,
     this.places = const <Map<String, dynamic>>[],
   });
 
   /// Formatted result for the model.
   final String text;
 
-  /// A ready `<map>…</map>` block, or null when no place had coordinates.
-  final String? mapTag;
-
-  /// The raw Brave entries behind [text] and [mapTag], newest lookup first.
+  /// The raw Brave entries behind [text], newest lookup first.
   ///
   /// Surfaces exist that render their own card instead of a `<map>` tag (the
   /// assistant overlay draws a native list), and re-parsing the tag to get
@@ -46,66 +40,8 @@ class PlacesToolResult {
   final List<Map<String, dynamic>> places;
 }
 
-/// Most places put on one card. Beyond this the map stops being a glance.
-const int kMaxPlacesOnMap = 6;
-
-/// Build the `<map>` block for [places], or null when none can be pinned.
-///
-/// Only the fields the map card renders are copied, so a bulky Brave
-/// payload does not end up in the chat history.
-String? buildPlacesMapTag({
-  required List<Map<String, dynamic>> places,
-  required String title,
-  int max = kMaxPlacesOnMap,
-}) {
-  final pinned = <Map<String, dynamic>>[];
-
-  for (final place in places) {
-    final lat = _asDouble(place['lat']);
-    final lon = _asDouble(place['lon']);
-    if (lat == null || lon == null) continue;
-
-    final name = _asString(place['name']).trim();
-    final entry = <String, dynamic>{
-      'name': name.isEmpty ? title : name,
-      'lat': lat,
-      'lon': lon,
-    };
-
-    void put(String key, String value) {
-      if (value.trim().isNotEmpty) entry[key] = value.trim();
-    }
-
-    put('address', _asString(place['address']));
-    put('opening_hours', _asString(place['opening_hours']));
-    put('cuisine', _asString(place['cuisine']));
-    put('price_range', _asString(place['price_range']));
-    put('description', _asString(place['description']));
-
-    final rating = _asDouble(place['rating']);
-    if (rating != null) entry['rating'] = rating;
-    final reviews = _asDouble(place['review_count']);
-    if (reviews != null) entry['review_count'] = reviews.round();
-
-    pinned.add(entry);
-    if (pinned.length >= max) break;
-  }
-
-  if (pinned.isEmpty) return null;
-
-  return '<map>\n'
-      '${jsonEncode({'type': 'places', 'title': title, 'places': pinned})}\n'
-      '</map>';
-}
-
-double? _asDouble(Object? value) {
-  if (value is num) return value.toDouble();
-  if (value is String) return double.tryParse(value.trim());
-  return null;
-}
-
 /// Search places via server-side Brave Local proxy.
-/// Text-only form, kept for callers that do not render a map card.
+/// Text-only form, the one the chat tool loop uses.
 Future<String> executeSearchPlaces({
   required String? serverHttpUrl,
   required Map<String, String> serverHeaders,
@@ -121,8 +57,8 @@ Future<String> executeSearchPlaces({
   return result.text;
 }
 
-/// Search places via the server-side Brave Local proxy, and build the map
-/// card from the same data.
+/// Search places via the server-side Brave Local proxy, keeping the raw
+/// entries for the assistant overlay's native list.
 Future<PlacesToolResult> searchPlacesWithMap({
   required String? serverHttpUrl,
   required Map<String, String> serverHeaders,
@@ -168,7 +104,6 @@ Future<PlacesToolResult> searchPlacesWithMap({
         heading: 'Found ${places.length} places for "$query":',
         places: places,
       ),
-      mapTag: buildPlacesMapTag(places: places, title: query),
       places: places,
     );
   } catch (error) {
@@ -180,7 +115,7 @@ Future<PlacesToolResult> searchPlacesWithMap({
   }
 }
 
-/// Text-only form, kept for callers that do not render a map card.
+/// Text-only form, the one the chat tool loop uses.
 Future<String> executeSearchRestaurants({
   required String? serverHttpUrl,
   required Map<String, String> serverHeaders,
@@ -196,8 +131,8 @@ Future<String> executeSearchRestaurants({
   return result.text;
 }
 
-/// Search restaurants via the server-side Brave Local proxy, and build the
-/// map card from the same data.
+/// Search restaurants via the server-side Brave Local proxy, keeping the
+/// raw entries for the assistant overlay's native list.
 Future<PlacesToolResult> searchRestaurantsWithMap({
   required String? serverHttpUrl,
   required Map<String, String> serverHeaders,
@@ -250,7 +185,6 @@ Future<PlacesToolResult> searchRestaurantsWithMap({
         heading: 'Found ${places.length} restaurants for "$label":',
         places: places,
       ),
-      mapTag: buildPlacesMapTag(places: places, title: label),
       places: places,
     );
   } catch (error) {
@@ -484,6 +418,7 @@ String _formatBravePlaces({
     final phone = _asString(place['phone']).trim();
     final website = _asString(place['website']).trim();
     final hours = _asString(place['opening_hours']).trim();
+    final week = _asString(place['opening_hours_week']).trim();
     final cuisine = _asString(place['cuisine']).trim();
     final rating = place['rating'];
     final reviews = place['review_count'];
@@ -497,6 +432,9 @@ String _formatBravePlaces({
     if (phone.isNotEmpty) buf.writeln('  Phone: $phone');
     if (website.isNotEmpty) buf.writeln('  Website: $website');
     if (hours.isNotEmpty) buf.writeln('  Hours: $hours');
+    if (week.isNotEmpty && week != hours) {
+      buf.writeln('  Hours this week: $week');
+    }
     final ratingBits = <String>[];
     if (rating != null) ratingBits.add('rating $rating');
     if (reviews != null) ratingBits.add('$reviews reviews');

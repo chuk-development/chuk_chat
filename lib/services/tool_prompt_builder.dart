@@ -286,9 +286,11 @@ class ToolPromptBuilder {
       buffer.writeln();
       buffer.writeln(
         'CONTINUATION — you already have the tool results above:\n'
-        '- The tool output (images, data, etc.) is ALREADY shown to the user. '
-        'Do NOT restate it, repeat URLs / IDs / dimensions / metadata, or '
-        'describe what a tool returned.\n'
+        '- Generated images and downloaded file cards are ALREADY shown to '
+        'the user. Other tool output is NOT: the user sees only what you '
+        'write, so present the data they need yourself (a <map>, <chart> or '
+        'short list, with source links where they help). Do NOT dump raw '
+        'IDs / dimensions / metadata or narrate what a tool returned.\n'
         '- Do NOT re-announce your plan or narrate what you are "about to" do '
         '(no "I\'ll generate…", "Let me…", "Now I will…") — that step is done.\n'
         '- If the results fully satisfy the request, reply ONCE with a short '
@@ -363,8 +365,9 @@ class ToolPromptBuilder {
       ..writeln(
         'Do NOT stall with intention-only text ("I will search…"): either make '
         'the tool call now, or give the final answer. After tool results come '
-        'back, do not restate them or re-announce your plan — reply once with '
-        'the final answer, and only call another tool if real work remains.',
+        'back, do not narrate raw tool output or re-announce your plan — reply '
+        'once with the final answer (present the data the user needs, e.g. a '
+        '<map> for places), and only call another tool if real work remains.',
       );
     if (tools.any((t) => (t['name']?.toString() ?? '') == 'search_chats')) {
       buffer
