@@ -1,0 +1,16 @@
+[
+  {"tool": "wait_for", "args": {"by": "semantics_id", "value": "login_email_field", "timeout_ms": 120000}},
+  {"tool": "enter_text", "args": {"by": "semantics_id", "value": "login_email_field", "text": "{{E2E_EMAIL}}"}},
+  {"tool": "enter_text", "args": {"by": "semantics_id", "value": "login_password_field", "text": "{{E2E_PASSWORD}}"}},
+  {"tool": "screenshot", "args": {"name": "01_sign_in", "inline": false}},
+  {"tool": "tap", "args": {"by": "semantics_id", "value": "login_submit_button"}},
+  {"tool": "wait_for", "args": {"by": "text", "value": "Ask me anything", "timeout_ms": 60000}},
+  {"tool": "wait", "args": {"ms": 1500}},
+  {"tool": "screenshot", "args": {"name": "02_chat_home", "inline": false}},
+  {"tool": "enter_text", "args": {"by": "text", "value": "Ask me anything", "text": "Hello from the agent driver"}},
+  {"tool": "tap", "args": {"by": "icon", "value": "0xf57e"}},
+  {"tool": "wait_for", "args": {"by": "text_contains", "value": "Echo: Hello from the agent driver", "timeout_ms": 60000}},
+  {"tool": "wait", "args": {"ms": 1500}},
+  {"tool": "screenshot", "args": {"name": "03_chat_answer", "inline": false}},
+  {"tool": "read_state", "args": {}}
+]

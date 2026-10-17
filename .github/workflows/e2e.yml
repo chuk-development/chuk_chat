@@ -1,0 +1,107 @@
+name: E2E
+
+# Offline integration test with screenshots. The app runs against local
+# Supabase (Docker) and the API emulator (tool/emulator). No secrets: the
+# stack uses the public local demo keys and a seeded test user.
+#
+# This workflow has a read-only token, also for pull requests from forks.
+# It only uploads the screenshots as an artifact. The pull request comment
+# comes from .github/workflows/e2e-comment.yml (workflow_run), which never
+# runs code from the pull request. See docs/E2E_CI.md.
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+concurrency:
+  group: e2e-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Keep in step with every other build path; scripts/check_flutter_pins.sh
+  # reads this line and fails on drift.
+  FLUTTER_VERSION: '3.47.0'
+  SUPABASE_CLI_VERSION: '2.72.8'
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Linux build dependencies and Xvfb
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang cmake ninja-build pkg-config \
+            libgtk-3-dev liblzma-dev libstdc++-12-dev libsecret-1-dev \
+            libayatana-appindicator3-dev \
+            xvfb xauth
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+
+      - uses: supabase/setup-cli@v3
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+
+      - run: flutter pub get
+
+      # Supabase in Docker, the DB build, the seed user, the API emulator,
+      # and _scratch/e2e.defines.json. The script writes the defines file
+      # itself; nothing in _scratch/ is committed.
+      - name: Start the offline stack
+        run: scripts/e2e_stack.sh up
+
+      # Same command as docs/INTEGRATION_TESTS.md. The XDG directories give
+      # the app an empty data directory, so the first screen is sign-in.
+      - name: Integration test (Xvfb)
+        run: |
+          H="$RUNNER_TEMP/it_home"
+          mkdir -p "$H/data" "$H/cache" "$H/state"
+          CHUK_MULTI_INSTANCE=1 \
+          XDG_DATA_HOME="$H/data" XDG_CACHE_HOME="$H/cache" XDG_STATE_HOME="$H/state" \
+          xvfb-run -a -s "-screen 0 1440x900x24" \
+            flutter test integration_test/app_test.dart -d linux \
+            --dart-define-from-file=_scratch/e2e.defines.json
+
+      # Context for the comment workflow. It is informational only: the
+      # comment workflow finds the pull request from the trusted
+      # workflow_run event, not from this file.
+      - name: Run metadata
+        if: always()
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          mkdir -p build/integration_shots
+          jq -n --arg event "$GITHUB_EVENT_NAME" --arg pr "$PR_NUMBER" \
+            --arg sha "$HEAD_SHA" '{event: $event, pr: $pr, head_sha: $sha}' \
+            > build/integration_shots/run.json
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: e2e-shots
+          path: build/integration_shots/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload stack logs
+        if: failure()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: e2e-logs
+          path: _scratch/*.log
+          if-no-files-found: ignore
+          retention-days: 7
