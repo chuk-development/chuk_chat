@@ -66,6 +66,45 @@ abstract final class VoiceCallStore {
     return _serial(() => LocalChatCacheService.kvDelete(_key(chatId)));
   }
 
+  /// Removes only the transcript snapshot already saved in ordinary history.
+  /// A concurrent save may have added/corrected turns; those must survive.
+  /// Rich cards remain in their original record even after its turns move.
+  static Future<void> removeMigratedTurns(
+    String chatId,
+    List<VoiceCallRecord> migrated, {
+    required bool Function() stillOwned,
+  }) => _serial(() async {
+    if (kIsWeb || !stillOwned()) return;
+    final records = await _read(chatId);
+    if (!stillOwned()) return;
+    final kept = <VoiceCallRecord>[];
+    for (final record in records) {
+      final turns = <String>{
+        for (final snapshot in migrated)
+          if (snapshot.startedAt.isAtSameMomentAs(record.startedAt))
+            for (final turn in snapshot.turns) jsonEncode(turn.toJson()),
+      };
+      final remaining = record.turns.where(
+        (turn) => !turns.contains(jsonEncode(turn.toJson())),
+      );
+      if (remaining.isEmpty && record.cards.isEmpty) continue;
+      kept.add(
+        VoiceCallRecord(
+          chatId: record.chatId,
+          mode: record.mode,
+          startedAt: record.startedAt,
+          endedAt: record.endedAt,
+          turns: remaining.toList(),
+          cards: record.cards,
+        ),
+      );
+    }
+    await LocalChatCacheService.kvSet(
+      _key(chatId),
+      jsonEncode([for (final record in kept) record.toJson()]),
+    );
+  });
+
   static Future<List<VoiceCallRecord>> _read(String chatId) async {
     final String? raw = await LocalChatCacheService.kvGet(_key(chatId));
     if (raw == null || raw.isEmpty) return <VoiceCallRecord>[];

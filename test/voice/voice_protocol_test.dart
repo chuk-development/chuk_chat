@@ -209,6 +209,7 @@ void main() {
         'chat_title',
         'agent_name',
         'context',
+        'voice_instructions',
         'stt_language',
         'delegate_available',
         'voice_id',
@@ -242,10 +243,10 @@ void main() {
       expect(meta['delegate_available'], isFalse);
     });
 
-    test('STT language: the asked one, else the device language', () {
+    test('STT language: explicit override, else auto-detect', () {
       expect(VoiceProtocol.resolveSttLanguage('en', 'de'), 'en');
-      expect(VoiceProtocol.resolveSttLanguage(null, 'de'), 'de');
-      expect(VoiceProtocol.resolveSttLanguage('  ', 'DE'), 'de');
+      expect(VoiceProtocol.resolveSttLanguage(null, 'de'), isNull);
+      expect(VoiceProtocol.resolveSttLanguage('  ', 'DE'), isNull);
       expect(VoiceProtocol.resolveSttLanguage(null, 'und'), isNull);
       expect(VoiceProtocol.resolveSttLanguage(null, ''), isNull);
       expect(VoiceProtocol.resolveSttLanguage(null, null), isNull);

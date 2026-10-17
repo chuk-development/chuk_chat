@@ -197,6 +197,25 @@ class _StatusRow extends StatelessWidget {
                 : scheme.surfaceContainerHighest,
           ),
         ),
+        const SizedBox(width: 8),
+        VoiceCallControl(
+          semanticsId: 'voice-call-video',
+          tooltip: c.cameraEnabled ? 'Turn video off' : 'Turn video on',
+          toggled: c.cameraEnabled,
+          fill: c.cameraEnabled
+              ? scheme.secondaryContainer
+              : scheme.surfaceContainerHighest,
+          onTap: !live || c.phase == VoiceCallPhase.ending
+              ? null
+              : () => c.setCameraEnabled(!c.cameraEnabled),
+          child: Icon(
+            c.cameraEnabled ? Icons.videocam : Icons.videocam_outlined,
+            size: 20,
+            color: c.cameraEnabled
+                ? scheme.onSecondaryContainer
+                : scheme.onSurfaceVariant,
+          ),
+        ),
         if (c.canSwitchSpeaker) ...<Widget>[
           const SizedBox(width: 8),
           _SpeakerToggle(controller: c),

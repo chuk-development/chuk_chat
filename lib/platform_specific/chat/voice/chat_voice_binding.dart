@@ -6,7 +6,7 @@
 //    coworker's name and the last messages as context;
 //  * hands the call a delegate that sends spoken tasks through the screen's
 //    own send path (voice_task_delegates.dart);
-//  * keeps the chat's call records for the message list (display only).
+//  * writes finalized voice turns into the chat's ordinary message history.
 //
 // A chat screen creates one binding ONLY when [voiceCallUiEnabled] is true.
 // With the flag off nothing here is built, listened to or registered.
@@ -21,11 +21,12 @@ import 'package:chuk_chat/platform_specific/chat/voice/voice_task_delegates.dart
 import 'package:chuk_chat/platform_specific/chat/voice/voice_turn_queue.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/storage/chat_origin.dart';
+import 'package:chuk_chat/tool_handlers/notes_tools.dart';
 import 'package:chuk_chat/voice/voice_call_controller.dart';
 import 'package:chuk_chat/voice/voice_call_models.dart';
 import 'package:chuk_chat/voice/voice_call_service.dart';
-import 'package:chuk_chat/voice/voice_call_store.dart';
 
 /// Whether this build shows the voice call at all: the build flag and a
 /// configured token server. Everything in this folder is behind it.
@@ -69,7 +70,9 @@ class ChatVoiceBinding {
     required bool Function() isBusy,
     required VoiceTurnSend send,
     required this.onRecordsChanged,
+    this.onVoiceTurns,
     this.agentName,
+    this.systemPrompt,
     this.ensureChatId,
     this.discardChat,
     bool Function()? isOffline,
@@ -103,10 +106,17 @@ class ChatVoiceBinding {
   /// Called when the records of the chat on screen changed.
   final VoidCallback onRecordsChanged;
 
+  /// Appends finalized voice turns as ordinary chat rows. The screen owns
+  /// persistence so voice and typed messages share the same encrypted store.
+  final void Function(List<VoiceTurn> turns)? onVoiceTurns;
+
   /// The coworker this screen talks to, when the screen knows it (the
   /// desktop Agents thread is handed the coworker's name). A call started
   /// without a name uses it before it falls back to the thread title.
   final String? Function()? agentName;
+
+  /// The resolved prompt for the current chat, including workspace context.
+  final Future<String?> Function()? systemPrompt;
 
   /// Gives a new chat (no id yet) its id, so a call can start before the
   /// first message. The screen assigns the id to itself, the way its first
@@ -131,13 +141,13 @@ class ChatVoiceBinding {
   /// The id [ensureChatId] made for a call, until that call is over.
   String? _onDemandChatId;
 
-  /// The call in [_onDemandChatId] saved a record (something was said).
+  /// The call in [_onDemandChatId] added turns to the chat history.
   bool _onDemandRecorded = false;
   bool _onDemandSettling = false;
 
-  String? _recordsChatId;
-  List<VoiceCallRecord> _records = const <VoiceCallRecord>[];
-  int _loadGen = 0;
+  String? _transcriptChatId;
+  final Map<String, String> _appendedVoiceTurns = <String, String>{};
+  Future<void> _backgroundPersistence = Future<void>.value();
 
   // ── Call state ──────────────────────────────────────────────────────
 
@@ -177,7 +187,8 @@ class ChatVoiceBinding {
     String? callReason,
     bool initiatedByAgent = false,
   }) async {
-    if (_disposed || _creating) return;
+    if (_disposed || _creating || _starting) return;
+    if (isLiveFor(currentChatId())) return;
     final String? onScreen = currentChatId();
     final bool needsChat = onScreen == null || onScreen.isEmpty;
     if (needsChat && ensureChatId == null) return;
@@ -191,6 +202,7 @@ class ChatVoiceBinding {
       if (controller.isActive) await controller.end();
       _endCallTasks();
       final VoiceTurnDelegate delegate = _adopt(chatId, mode);
+      _appendedVoiceTurns.clear();
       final String? title = storedChatTitle(chatId);
       final String? name = mode == VoiceCallMode.agents
           ? (_nonEmpty(agentName) ?? _nonEmpty(this.agentName?.call()) ?? title)
@@ -204,12 +216,14 @@ class ChatVoiceBinding {
         initiatedByAgent: initiatedByAgent,
         hasDelegate: true,
       ));
+      final String voiceInstructions = await _voiceInstructions();
       await controller.start(
         chatId: chatId,
         mode: mode,
         chatTitle: title,
         agentName: name,
         context: buildVoiceCallContext(messages()),
+        voiceInstructions: voiceInstructions,
         delegate: delegate,
         callId: callId,
         callReason: callReason,
@@ -219,6 +233,52 @@ class ChatVoiceBinding {
       _starting = false;
       _onController();
     }
+  }
+
+  Future<String> _voiceInstructions() async {
+    final parts = <String>[];
+    try {
+      final prompt = await systemPrompt?.call();
+      if (prompt != null && prompt.trim().isNotEmpty) {
+        parts.add('Chat system instructions:\n${prompt.trim()}');
+      }
+    } catch (_) {
+      // Voice should still start if optional prompt loading is unavailable.
+    }
+    try {
+      if (await isIdentityEnabled()) {
+        final soul = await loadSoulText();
+        final user = await loadUserInfoText();
+        final memory = await loadMemoryText();
+        final identity = <String>[];
+        if (soul.trim().isNotEmpty) identity.add('SOUL:\n${soul.trim()}');
+        if (user.trim().isNotEmpty) identity.add('USER:\n${user.trim()}');
+        if (memory.trim().isNotEmpty) identity.add('MEMORY:\n${memory.trim()}');
+        if (identity.isNotEmpty) parts.add(identity.join('\n\n'));
+      }
+      final auth = SupabaseService.isInitialized
+          ? SupabaseService.auth.currentUser
+          : null;
+      if (auth != null) {
+        String? name = auth.userMetadata?['display_name'] as String?;
+        try {
+          final row = await SupabaseService.client
+              .from('profiles')
+              .select('display_name')
+              .eq('id', auth.id)
+              .maybeSingle();
+          name = row?['display_name'] as String? ?? name;
+        } catch (_) {
+          // Profile display name can fall back to the auth metadata.
+        }
+        if (name != null && name.trim().isNotEmpty) {
+          parts.add('The user\'s name is ${name.trim()}.');
+        }
+      }
+    } catch (_) {
+      // Identity is optional; do not block a voice call on a profile read.
+    }
+    return parts.join('\n\n');
   }
 
   /// Runs [ensureChatId] once and remembers the id it made, so the chat can
@@ -286,6 +346,7 @@ class ChatVoiceBinding {
         : ChatVoiceDelegate(send);
     _delegate = delegate;
     _delegateChatId = chatId;
+    _transcriptChatId = chatId;
     return delegate;
   }
 
@@ -304,11 +365,72 @@ class ChatVoiceBinding {
 
   void _onController() {
     if (_starting) return;
+    _appendFinalVoiceTurns(controller.turns);
     _settleOnDemandChat();
+    if (_disposed && !controller.isActive) {
+      unawaited(Future<void>.delayed(Duration.zero, _stopTranscriptListening));
+    }
     if (_delegate == null) return;
     final bool ours =
         controller.chatId == _delegateChatId && controller.isActive;
     if (!ours) _endCallTasks();
+  }
+
+  void _appendFinalVoiceTurns(List<VoiceTurn> turns, {String? chatId}) {
+    final String? owner = chatId ?? controller.chatId;
+    if (owner == null) return;
+    final ChatVoiceBinding? visible = ChatVoiceSessions.instance.forChat(owner);
+    // Only the latest screen for this chat writes it. Other mounted chats
+    // must never receive transcript rows from the app-wide controller.
+    final bool onScreen =
+        !_disposed && currentChatId() == owner && visible == this;
+    final bool adopted = _transcriptChatId == owner || _onDemandChatId == owner;
+    if (!onScreen && (!adopted || visible != null)) return;
+    final List<VoiceTurn> pending = <VoiceTurn>[];
+    for (final VoiceTurn turn in turns) {
+      if (!turn.isFinal || turn.text.trim().isEmpty) continue;
+      final String identity = voiceTurnMessageId(turn);
+      if (_appendedVoiceTurns[identity] == turn.text) continue;
+      _appendedVoiceTurns[identity] = turn.text;
+      pending.add(turn);
+    }
+    if (pending.isEmpty) return;
+    if (owner == _onDemandChatId) _onDemandRecorded = true;
+    if (onScreen && onVoiceTurns != null) {
+      onVoiceTurns!(pending);
+      return;
+    }
+    // Navigating to another chat during a call does not move its messages.
+    // Serialize writes through the same encrypted store as ordinary chat.
+    _backgroundPersistence = _backgroundPersistence
+        .then((_) async {
+          final chat = await ChatStorageService.loadFullChat(owner);
+          if (chat == null) return;
+          final rows = <Map<String, dynamic>>[
+            for (final message in chat.messages) message.toJson(),
+          ];
+          for (final turn in pending) {
+            final id = voiceTurnMessageId(turn);
+            final index = rows.indexWhere((row) => row['messageId'] == id);
+            final row = <String, dynamic>{
+              'role': turn.role,
+              'text': turn.text,
+              'messageId': id,
+              'sentAt': turn.at.toUtc().toIso8601String(),
+            };
+            if (index < 0) {
+              rows.add(row);
+            } else {
+              rows[index] = {...rows[index], ...row};
+            }
+          }
+          await ChatStorageService.updateChat(owner, rows);
+        })
+        .catchError((Object error) {
+          if (kDebugMode) {
+            debugPrint('[ChatVoice] transcript save: ${error.runtimeType}');
+          }
+        });
   }
 
   /// The call of [_delegate] is over (hung up, dropped, failed, or replaced
@@ -338,57 +460,21 @@ class ChatVoiceBinding {
     _queue.fail(chatId, index, 'The answer was interrupted.');
   }
 
-  // ── Records (display only) ──────────────────────────────────────────
-
-  /// The call records of [chatId], oldest first. The first ask for a chat
-  /// starts the load and answers empty; [onRecordsChanged] fires when the
-  /// records arrive.
-  List<VoiceCallRecord> recordsFor(String? chatId) {
-    if (chatId == null || chatId.isEmpty) return const <VoiceCallRecord>[];
-    if (_recordsChatId == chatId) return _records;
-    _recordsChatId = chatId;
-    _records = const <VoiceCallRecord>[];
-    final int gen = ++_loadGen;
-    unawaited(_load(chatId, gen));
-    return _records;
-  }
-
-  Future<void> _load(String chatId, int gen) async {
-    List<VoiceCallRecord> loaded;
-    try {
-      loaded = await VoiceCallStore.forChat(chatId);
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[ChatVoice] records not loaded: ${e.runtimeType}');
-      }
+  // ── Voice turns ──────────────────────────────────────────────────────
+  void _onCallEnded(VoiceCallRecord record) {
+    if (record.chatId == _onDemandChatId) _onDemandRecorded = true;
+    if (record.chatId != _transcriptChatId &&
+        record.chatId != _onDemandChatId) {
       return;
     }
-    if (_disposed || gen != _loadGen || _recordsChatId != chatId) return;
-    if (loaded.isEmpty && _records.isEmpty) return;
-    _records = _merge(_records, loaded);
-    onRecordsChanged();
+    _appendFinalVoiceTurns(record.turns, chatId: record.chatId);
+    if (_disposed) _stopTranscriptListening();
   }
 
-  void _onCallEnded(VoiceCallRecord record) {
-    if (_disposed) return;
-    if (record.chatId == _onDemandChatId) _onDemandRecorded = true;
-    if (record.chatId != _recordsChatId) return;
-    _records = _merge(_records, <VoiceCallRecord>[record]);
-    onRecordsChanged();
-  }
-
-  static List<VoiceCallRecord> _merge(
-    List<VoiceCallRecord> a,
-    List<VoiceCallRecord> b,
-  ) {
-    final Map<int, VoiceCallRecord> byStart = <int, VoiceCallRecord>{
-      for (final VoiceCallRecord r in a) r.startedAt.microsecondsSinceEpoch: r,
-      for (final VoiceCallRecord r in b) r.startedAt.microsecondsSinceEpoch: r,
-    };
-    return byStart.values.toList()..sort(
-      (VoiceCallRecord x, VoiceCallRecord y) =>
-          x.startedAt.compareTo(y.startedAt),
-    );
+  void _stopTranscriptListening() {
+    controller.removeListener(_onController);
+    unawaited(_endedSub?.cancel());
+    _endedSub = null;
   }
 
   /// The screen goes away. A call that is still running keeps going, but
@@ -399,9 +485,11 @@ class ChatVoiceBinding {
   void dispose() {
     if (_disposed) return;
     _disposed = true;
-    controller.removeListener(_onController);
-    unawaited(_endedSub?.cancel());
-    _endedSub = null;
+    // Retain only transcript persistence until the active call ends. The
+    // disposed screen is never called, and task delegates are detached now.
+    if (!controller.isActive || controller.chatId != _transcriptChatId) {
+      _stopTranscriptListening();
+    }
     final VoiceTurnDelegate? delegate = _delegate;
     _delegate = null;
     _delegateChatId = null;
@@ -557,3 +645,7 @@ typedef VoiceCallStartProbe = ({
 /// Test seam: sees every [VoiceCallStartProbe] just before the start.
 @visibleForTesting
 void Function(VoiceCallStartProbe probe)? debugOnVoiceCallStart;
+
+/// Stable identity also preserved by the ordinary encrypted message model.
+String voiceTurnMessageId(VoiceTurn turn) =>
+    'voice:${turn.role}:${turn.at.microsecondsSinceEpoch}';

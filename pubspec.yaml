@@ -49,7 +49,7 @@ dependencies:
   # Pinned by flutter_localizations; `any` lets pub pick the matching build.
   intl: any
 
-  cupertino_icons: ^1.0.8
+  cupertino_icons: ^2.0.0
   flutter_riverpod: ^3.4.2  # State management for chat runtime / streaming (perf re-architecture)
   # Material You / system accent colour (Android 12+, some desktops).
   dynamic_color: ^2.1.0
@@ -88,7 +88,7 @@ dependencies:
   archive: ^4.0.7
   yaml: ^3.1.3  # SKILL.md frontmatter — already in the tree via pdfrx
   desktop_drop: ^0.8.0
-  tray_manager: ^0.7.0
+  tray_manager: ^0.8.0
   window_manager: ^0.5.1
   image: ^4.8.0  # 4.9.x needs xml ^7 — worth a try now that enough_mail is gone
   pdfx: ^2.8.0  # PDF viewing (mobile/macOS — used by workspace viewer)
@@ -141,7 +141,7 @@ dependencies:
   # Material motion: the container transform that grows a chat out of its
   # inbox row, and the shared-axis transition between filters. Used by the
   # expressive UI layer (lib/ui/expressive/**).
-  animations: ^2.0.11
+  animations: ^3.0.0
 
   # The agent's screen on phones and tablets: noVNC runs inside this WebView
   # and decodes Tight/ZRLE, which the pure-Dart client cannot (bead
@@ -167,18 +167,20 @@ dependencies:
   mobile_scanner: ^7.4.0
 
   # Push wake-up for the agent host.
-  firebase_core: ^4.1.1
-  firebase_messaging: ^16.0.3
+  firebase_core: ^5.0.0
+  firebase_messaging: ^17.0.0
 
   # Voice call (FEATURE_VOICE_CALL, owner-only test, off by default): the
   # LiveKit room the voice worker joins. lib/voice/ is the only user. Pulls in
   # flutter_webrtc; builds on Linux and Android.
   livekit_client: ^2.13.0
+  flutter_webrtc: ^1.6.2+hotfix.4 # Per-track playback volume on desktop/iOS.
   # The agent calls the user (FEATURE_VOICE_CALL, spec §6.3): the incoming-call
   # screen over the lock screen, and the self-managed ConnectionService whose
   # phoneCall + microphone foreground service keeps a call's microphone alive
   # in the background. lib/voice/incoming/ is the only user.
   flutter_callkit_incoming: ^3.1.6
+  audioplayers: ^6.8.1
 
 # super_native_extensions (via markdraw -> super_clipboard) caps device_info_plus
 # at <12.0.0, which pins win32 to 5.x and blocks file_picker 12, share_plus 13,

@@ -28,6 +28,8 @@ import 'package:chuk_chat/services/offline_send_coordinator.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/tts_audio_service.dart';
+import 'package:chuk_chat/voice/voice_transcript_migration.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/core/model_selection_events.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
@@ -83,8 +85,8 @@ import 'package:chuk_chat/platform_specific/chat/widgets/chat_message_list_item.
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_binding.dart';
 import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_call_button.dart';
-import 'package:chuk_chat/platform_specific/chat/voice/voice_chat_widgets.dart';
 import 'package:chuk_chat/platform_specific/chat/voice/voice_turn_queue.dart';
+import 'package:chuk_chat/voice/voice_call_models.dart' show VoiceTurn;
 
 part 'desktop_send_logic.dart';
 
@@ -402,6 +404,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     _audioHandler = AudioRecordingHandler();
     messageActionsHandler = MessageActionsHandler()
       ..onShowSnackBar = showSnackBar
+      ..onSpeak = _speakMessage
       ..onSubmitEdit = (index, newText) {
         unawaited(
           _submitEditedMessage(
@@ -491,6 +494,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       onProcessFilePaths: _fileHandler.processFilePaths,
     );
     scrollController.addListener(onScrollChanged);
+    TtsAudioService.activeText.addListener(_onSpeechPlaybackChanged);
     if (voiceCallUiEnabled) {
       _voice = ChatVoiceBinding(
         currentChatId: () => _activeChatId,
@@ -498,6 +502,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         // The coworker's name (agents_thread_view hands it in as the title).
         agentName: () => widget.agentsThread ? widget.agentsTitle : null,
         messages: () => _messages,
+        onVoiceTurns: _appendVoiceTurns,
+        systemPrompt: _resolveSystemPromptForSend,
         isBusy: () =>
             _isSending || _isStreaming || _activeSendOperationId != null,
         send: (String text, VoiceTurnStarted onStarted) =>
@@ -709,6 +715,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     _audioHandler.onLevelsChanged = null;
     _providerRefreshSubscription?.cancel();
     scrollController.removeListener(onScrollChanged);
+    TtsAudioService.activeText.removeListener(_onSpeechPlaybackChanged);
     composerController.dispose();
     scrollController.dispose();
     _composerScrollController.dispose();
@@ -841,6 +848,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   /// and `MultiplexSession.openForChat` has been triggered.
   void _applyLoadedChat(StoredChat storedChat, String chatId) {
     if (!mounted) return;
+    _migrateLegacyVoiceHistory(chatId);
 
     // Build the new message list synchronously. We deliberately do not yield
     // mid-loop here (unlike the async _populateMessagesFromStoredChat path)
@@ -1013,6 +1021,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           mapStopwatch.stop();
           mapMs = mapStopwatch.elapsedMilliseconds;
           if (!applied) return;
+          _migrateLegacyVoiceHistory(chatId);
 
           final bool shouldRecoverStaleToolCalls =
               !_streamingManager.isStreaming(chatId) &&
@@ -1629,6 +1638,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     final String messageText = rawMessage['text'] ?? '';
 
     return messageActionsHandler.buildActionsForMessage(
+      activeSpeechText: TtsAudioService.activeText.value,
       index: index,
       messageText: messageText,
       isUser: data.isUser,
@@ -1637,6 +1647,69 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       onResendMessage: resendMessageAt,
       onBranch: branchFromIndex,
     );
+  }
+
+  void _onSpeechPlaybackChanged() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _speakMessage(String text) async {
+    try {
+      await TtsAudioService.speak(text);
+    } on Object catch (error) {
+      if (mounted) showSnackBar(error.toString());
+    }
+  }
+
+  void _migrateLegacyVoiceHistory(String chatId) {
+    // Schedule after the synchronous load so cached chats still paint at once.
+    unawaited(
+      Future<void>(() async {
+        if (!mounted || _activeChatId != chatId) return;
+        final migrated = await VoiceTranscriptMigration.shared.migrate(chatId);
+        if (!mounted || _activeChatId != chatId || migrated == null) return;
+        setState(() {
+          final ids = {for (final row in _messages) row['messageId']};
+          for (final message in migrated.messages) {
+            final id = message.messageId;
+            if (id == null || !id.startsWith('voice:') || !ids.add(id)) {
+              continue;
+            }
+            _messages.add(ChatUiHelpers.messageToRawMap(message));
+          }
+        });
+      }),
+    );
+  }
+
+  void _appendVoiceTurns(List<VoiceTurn> turns) {
+    if (!mounted || turns.isEmpty || _activeChatId == null) return;
+    setState(() {
+      for (final VoiceTurn turn in turns) {
+        final String id = voiceTurnMessageId(turn);
+        final int existing = _messages.indexWhere(
+          (row) => row['messageId'] == id,
+        );
+        final row = <String, String>{
+          'sender': turn.isUser ? 'user' : 'ai',
+          'text': turn.text,
+          'messageId': id,
+          'sentAt': turn.at.toUtc().toIso8601String(),
+        };
+        if (existing < 0) {
+          _messages.add(row);
+        } else {
+          _messages[existing] = {..._messages[existing], ...row};
+        }
+      }
+    });
+    if (_voiceChatId == _activeChatId) {
+      // Ordinary rows now own the chat; keep its existing workspace link.
+      _voiceChatId = null;
+      _voiceWorkspaceId = null;
+    }
+    scrollChatToBottom(force: true);
+    unawaited(persistChat());
   }
 
   // ---------------------------------------------------------------------------
@@ -1877,20 +1950,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       );
     }
 
-    // Finished calls of this chat, drawn between its rows (display only).
-    final ChatVoiceBinding? voice = _voice;
-    final voicePlacement = voice == null
-        ? null
-        : placeVoiceRecords(_messages, voice.recordsFor(_activeChatId));
-    Widget itemBuilder(BuildContext context, int i) =>
-        voicePlacement == null || i >= _messages.length
-        ? rowBuilder(context, i)
-        : withVoiceRecords(
-            item: rowBuilder(context, i),
-            index: i,
-            messageCount: _messages.length,
-            placement: voicePlacement,
-          );
+    Widget itemBuilder(BuildContext context, int i) => rowBuilder(context, i);
 
     if (widget.agentsThread) {
       transcriptBottomInset = bottomPadding;
@@ -2219,7 +2279,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                       // The Agents thread has its own header for it.
                       if (_voice != null && !widget.agentsThread)
                         Positioned(
-                          key: const ValueKey<String>('desktop-chat-voice-call'),
+                          key: const ValueKey<String>(
+                            'desktop-chat-voice-call',
+                          ),
                           top:
                               kTopInitialSpacing +
                               (kButtonVisualHeight - kMinInteractiveDimension) /
@@ -2248,10 +2310,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                               child: Column(
                                 mainAxisSize: MainAxisSize.min, // Crucial for column inside AnimatedPositioned/Center
                                 children: [
-                                  // The live call of this chat, above the
-                                  // composer; the composer stays usable.
-                                  if (_voice != null)
-                                    VoiceCallPanelSlot(chatId: _activeChatId),
                                   // Search Bar (attachment bar is now inside)
                                   _buildSearchBar(
                                     isCompactMode: widget.isCompactMode,

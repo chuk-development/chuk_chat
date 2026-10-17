@@ -215,7 +215,7 @@ Pass via `--dart-define=FLAG=value`. Defined in `lib/platform_config.dart`.
 | `FEATURE_IMAGE_GEN` | **always on** | Hardcoded, no flag needed |
 | `FEATURE_MEDIA_MANAGER` | **always on** | Hardcoded, no flag needed |
 | `FEATURE_VOICE_MODE` | `false` | Voice mode button (old placeholder; release builds set it `true`, so never gate private work on it) |
-| `FEATURE_VOICE_CALL` | `false` | Owner-only LiveKit voice calls (`lib/voice/`, worker `agents/voice/`). Needs `VOICE_TOKEN_URL` in `.env`; never set in CI. See `docs/PERSONAL_AGENT_SPEC.md` |
+| `FEATURE_VOICE_CALL` | `false` | Owner-only LiveKit voice calls (`lib/voice/`, worker `/home/user/git/api_server/voice/`). Needs `VOICE_TOKEN_URL` in `.env`; never set in CI. See `docs/PERSONAL_AGENT_SPEC.md` |
 | `FEATURE_SERVER_TOOLS` | `false` | GitHub, Slack, Gmail, Google Calendar (need backend OAuth) |
 | `FEATURE_SKILLS` | `false` | Agent Skills — `skill` tool + on-demand prompt blocks (see below) |
 | `FEATURE_MCP` | **`true`** | Remote MCP connectors — OAuth sign-in in the browser, tools join the registry. See `docs/MCP_CONNECTORS.md`. Native only (web has no loopback port) |

@@ -47,6 +47,8 @@ import 'package:chuk_chat/services/agents/agents_thread_composer.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/tts_audio_service.dart';
+import 'package:chuk_chat/voice/voice_transcript_migration.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/message_composition_service.dart';
@@ -100,8 +102,8 @@ import 'package:chuk_chat/platform_specific/chat/chat_metrics_observer.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_binding.dart';
 import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_call_button.dart';
-import 'package:chuk_chat/platform_specific/chat/voice/voice_chat_widgets.dart';
 import 'package:chuk_chat/platform_specific/chat/voice/voice_turn_queue.dart';
+import 'package:chuk_chat/voice/voice_call_models.dart' show VoiceTurn;
 
 /// What the plus menu can start.
 enum _AttachChoice { camera, photos, files, workspace }
@@ -429,9 +431,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         currentChatId: () => _activeChatId,
         isAgentsScreen: widget.messengerMode,
         messages: () => _messages,
+        onVoiceTurns: _appendVoiceTurns,
+        systemPrompt: _resolveSystemPromptForSend,
         isBusy: () => _isSendingMessage || _isCurrentChatStreaming,
-        send: (String text, VoiceTurnStarted onStarted) =>
-            _sendComposerOrVoice(voiceText: text, onVoiceTurnStarted: onStarted),
+        send: (String text, VoiceTurnStarted onStarted) => _sendComposerOrVoice(
+          voiceText: text,
+          onVoiceTurnStarted: onStarted,
+        ),
         onRecordsChanged: () {
           if (mounted) setState(() {});
         },
@@ -588,6 +594,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     messageActionsHandler = MessageActionsHandler()
       ..onShowSnackBar = showSnackBar
+      ..onSpeak = _speakMessage
       ..onSubmitEdit = (index, newText) {
         unawaited(
           submitEditedMessage(
@@ -823,6 +830,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   void _initializeListeners() {
     // Scroll listener for scroll-to-bottom button
     scrollController.addListener(onScrollChanged);
+    TtsAudioService.activeText.addListener(_onSpeechPlaybackChanged);
 
     // Agents's, kept: re-pin the newest message when the keyboard resizes the
     // chat. See [_viewInsetRepin].
@@ -1097,6 +1105,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       _networkStatusListener,
     );
     scrollController.removeListener(onScrollChanged);
+    TtsAudioService.activeText.removeListener(_onSpeechPlaybackChanged);
     composerController.removeListener(_onControllerChanged);
     composerController.dispose();
     scrollController.dispose();
@@ -1210,6 +1219,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   /// and `MultiplexSession.openForChat` has been triggered.
   void _applyLoadedChat(StoredChat chat, bool sidebarWasExpanded) {
     if (!mounted) return;
+    _migrateLegacyVoiceHistory(chat.id);
 
     // Use the shared ChatMessage->raw-map bridge so mobile and desktop stay in
     // lockstep (it carries modelId/provider/images/attachments/toolCalls/
@@ -3445,6 +3455,68 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     MultiplexSession.closeForChat(chatId);
   }
 
+  void _onSpeechPlaybackChanged() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _speakMessage(String text) async {
+    try {
+      await TtsAudioService.speak(text);
+    } on Object catch (error) {
+      if (mounted) showSnackBar(error.toString());
+    }
+  }
+
+  void _migrateLegacyVoiceHistory(String chatId) {
+    // Schedule after the synchronous load so cached chats still paint at once.
+    unawaited(
+      Future<void>(() async {
+        if (!mounted || _activeChatId != chatId) return;
+        final migrated = await VoiceTranscriptMigration.shared.migrate(chatId);
+        if (!mounted || _activeChatId != chatId || migrated == null) return;
+        setState(() {
+          final ids = {for (final row in _messages) row['messageId']};
+          for (final message in migrated.messages) {
+            final id = message.messageId;
+            if (id == null || !id.startsWith('voice:') || !ids.add(id)) {
+              continue;
+            }
+            _messages.add(ChatUiHelpers.messageToRawMap(message));
+          }
+        });
+      }),
+    );
+  }
+
+  void _appendVoiceTurns(List<VoiceTurn> turns) {
+    if (!mounted || turns.isEmpty || _activeChatId == null) return;
+    setState(() {
+      for (final VoiceTurn turn in turns) {
+        final String id = voiceTurnMessageId(turn);
+        final int existing = _messages.indexWhere(
+          (row) => row['messageId'] == id,
+        );
+        final row = <String, String>{
+          'sender': turn.isUser ? 'user' : 'ai',
+          'text': turn.text,
+          'messageId': id,
+          'sentAt': turn.at.toUtc().toIso8601String(),
+        };
+        if (existing < 0) {
+          _messages.add(row);
+        } else {
+          _messages[existing] = {..._messages[existing], ...row};
+        }
+      }
+    });
+    if (_voiceChatId == _activeChatId) {
+      // The next typed turn continues this ordinary conversation.
+      _voiceChatId = null;
+    }
+    scrollChatToBottom(force: true);
+    unawaited(persistChat());
+  }
+
   /// The message list. Upstream: the plain [ListView]. Messenger mode: the
   /// bottom-anchored transcript ([ChatScrollMixin.buildAnchoredTranscript]),
   /// which opens a thread at its bottom without laying out the rows above.
@@ -3497,6 +3569,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         isStreaming: _isCurrentChatStreaming,
       );
       final actions = messageActionsHandler.buildActionsForMessage(
+        activeSpeechText: TtsAudioService.activeText.value,
         index: i,
         messageText: data.displayText,
         isUser: data.isUser,
@@ -3569,20 +3642,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       );
     }
 
-    // Finished calls of this chat, drawn between its rows (display only).
-    final ChatVoiceBinding? voice = _voice;
-    final voicePlacement = voice == null
-        ? null
-        : placeVoiceRecords(_messages, voice.recordsFor(_activeChatId));
-    Widget itemBuilder(BuildContext context, int i) =>
-        voicePlacement == null || i >= _messages.length
-        ? rowBuilder(context, i)
-        : withVoiceRecords(
-            item: rowBuilder(context, i),
-            index: i,
-            messageCount: _messages.length,
-            placement: voicePlacement,
-          );
+    Widget itemBuilder(BuildContext context, int i) => rowBuilder(context, i);
 
     if (widget.messengerMode) {
       // The pin room comes and goes; the bottom of the thread does not.
@@ -3835,10 +3895,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                // The live call of this chat, above the
-                                // composer; the composer stays usable.
-                                if (_voice != null)
-                                  VoiceCallPanelSlot(chatId: _activeChatId),
                                 _buildSearchBar(
                                   isCompactMode: isCompactModeForModelDropdown,
                                   theme: theme,

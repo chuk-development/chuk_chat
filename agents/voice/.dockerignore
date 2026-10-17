@@ -1,8 +1,0 @@
-.venv
-__pycache__
-.env.local*
-.pytest_cache
-.gitignore
-tests
-run.sh
-README.md

@@ -13,16 +13,19 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart' as webrtc;
 import 'package:livekit_client/livekit_client.dart' as lk;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
 import 'package:chuk_chat/voice/voice_call_models.dart';
+import 'package:chuk_chat/voice/voice_audio_output.dart';
 import 'package:chuk_chat/voice/voice_call_service.dart';
-import 'package:chuk_chat/voice/voice_call_store.dart';
 import 'package:chuk_chat/voice/voice_location.dart';
 import 'package:chuk_chat/voice/voice_protocol.dart';
+import 'package:chuk_chat/voice/voice_preferences.dart';
 import 'package:chuk_chat/voice/voice_tasks.dart';
 import 'package:chuk_chat/voice/voice_transcript.dart';
 
@@ -71,6 +74,18 @@ class VoiceCallController extends ChangeNotifier {
 
   VoiceCallPhase _phase = VoiceCallPhase.idle;
   bool _micMuted = false;
+  bool _cameraEnabled = false;
+  double _volume = 1;
+  int _volumeRevision = 0;
+  String _voiceId = 'Bastian';
+  String _defaultVoiceId = 'Bastian';
+  String? _preferencesOwner;
+  int _preferenceRevision = 0;
+  bool _changingVoice = false;
+  final VoiceAudioOutput _audioOutput = const VoiceAudioOutput();
+  final ValueNotifier<double> _audioLevel = ValueNotifier(0);
+  Timer? _audioLevelTimer;
+  int _fullscreenRequest = 0;
   bool _agentSpeaking = false;
   bool _agentThinking = false;
   bool _agentPresent = false;
@@ -118,6 +133,27 @@ class VoiceCallController extends ChangeNotifier {
 
   VoiceCallPhase get phase => _phase;
   bool get micMuted => _micMuted;
+  bool get cameraEnabled => _cameraEnabled;
+  double get volume => _volume;
+  String get voiceId => _voiceId;
+  String get defaultVoiceId => _defaultVoiceId;
+  bool get changingVoice => _changingVoice;
+  List<String> get availableVoices => const [
+    'Bastian',
+    'Ashley',
+    'Dennis',
+    'Olivia',
+  ];
+  ValueListenable<double> get audioLevel => _audioLevel;
+  int get fullscreenRequest => _fullscreenRequest;
+
+  /// An explicit return from a notification, independent of automatic opening.
+  void requestFullscreen() {
+    if (!isActive) return;
+    _fullscreenRequest++;
+    notifyListeners();
+  }
+
   bool get agentSpeaking => _agentSpeaking;
   String? get chatId => _chatId;
   VoiceCallMode? get mode => _mode;
@@ -174,8 +210,8 @@ class VoiceCallController extends ChangeNotifier {
 
   /// Fires once for every call that ends with a final turn or a card —
   /// hung up here, ended by the worker, or dropped by the network. The same
-  /// record [end] returns. It is already saved in `VoiceCallStore` when it
-  /// fires. Listen to the controller itself for phase changes.
+  /// record [end] returns. The owning chat screen persists its turns as
+  /// ordinary messages when this event fires.
   Stream<VoiceCallRecord> get onCallEnded => _ended.stream;
 
   // ── Start ─────────────────────────────────────────────────────────────
@@ -192,6 +228,7 @@ class VoiceCallController extends ChangeNotifier {
     String? chatTitle,
     String? agentName,
     String context = '',
+    String voiceInstructions = '',
     VoiceTaskDelegate? delegate,
     String? sttLanguage,
     String? callId,
@@ -211,6 +248,7 @@ class VoiceCallController extends ChangeNotifier {
     _location.resetForNewCall();
     _error = null;
     _micMuted = false;
+    _cameraEnabled = false;
     _agentSpeaking = false;
     _agentThinking = false;
     _agentPresent = false;
@@ -236,8 +274,13 @@ class VoiceCallController extends ChangeNotifier {
     try {
       await _ensureMicPermission();
       if (gen != _generation) return;
+      // The ongoing-call service can now start its microphone foreground
+      // service while the app is still connecting and in the foreground.
+      notifyListeners();
 
       final String callerId = await VoiceCallService.callerId();
+      if (gen != _generation) return;
+      await _loadVoicePreference(callerId, gen);
       if (gen != _generation) return;
       final String identity = '${VoiceProtocol.identityPrefix}$callerId';
       final String roomName = '${VoiceProtocol.roomPrefix}${const Uuid().v4()}';
@@ -247,6 +290,8 @@ class VoiceCallController extends ChangeNotifier {
         chatTitle: chatTitle,
         agentName: agentName,
         context: context,
+        voiceInstructions: voiceInstructions,
+        voiceId: _voiceId,
         sttLanguage: VoiceProtocol.resolveSttLanguage(
           sttLanguage,
           PlatformDispatcher.instance.locale.languageCode,
@@ -269,6 +314,13 @@ class VoiceCallController extends ChangeNotifier {
 
       final lk.Room room = lk.Room(
         roomOptions: const lk.RoomOptions(
+          // Keep the published microphone track alive while muted. WebRTC
+          // emits silence for a disabled track, which lets the voice worker's
+          // VAD/turn detector observe end-of-utterance instead of losing the
+          // trailing silence when capture is stopped on mute.
+          defaultAudioCaptureOptions: lk.AudioCaptureOptions(
+            stopAudioCaptureOnMute: false,
+          ),
           // Speech bitrate (24 kbps) + DTX + RED, as the prototype: less
           // bandwidth and steadier turns under packet loss.
           defaultAudioPublishOptions: lk.AudioPublishOptions(
@@ -286,11 +338,24 @@ class VoiceCallController extends ChangeNotifier {
       if (_micMuted) {
         await room.localParticipant?.setMicrophoneEnabled(false);
       }
-      final bool? speaker = _speakerOn;
-      if (speaker != null && canSwitchSpeaker) {
-        await lk.AudioManager.instance.setSpeakerOutputPreferred(speaker);
+      if (canSwitchSpeaker) {
+        // Apply explicitly after connection: an earlier call/CallKit may have
+        // left the phone on its earpiece even when the UI says speaker.
+        _speakerOn ??= true;
+        await lk.AudioManager.instance.setSpeakerOutputPreferred(_speakerOn!);
       }
       if (gen != _generation) return;
+      await _quietly(() => _audioOutput.setCallActive(true));
+      await _refreshOutputVolume();
+      if (gen != _generation) return;
+      _audioLevelTimer?.cancel();
+      _audioLevelTimer = Timer.periodic(const Duration(milliseconds: 80), (_) {
+        if (gen != _generation) return;
+        final level = room.agentParticipant?.audioLevel ?? 0;
+        if ((_audioLevel.value - level).abs() > 0.015 || level == 0) {
+          _audioLevel.value = level.clamp(0.0, 1.0);
+        }
+      });
       _refreshAgent(gen);
       if (!_agentPresent) _armAgentJoinTimer(gen);
       _setPhase(VoiceCallPhase.live);
@@ -385,6 +450,14 @@ class VoiceCallController extends ChangeNotifier {
       ..on<lk.ParticipantDisconnectedEvent>((_) => _onParticipantLeft(gen))
       ..on<lk.ParticipantAttributesChanged>((_) => _refreshAgent(gen))
       ..on<lk.ActiveSpeakersChangedEvent>((_) => _refreshAgent(gen))
+      ..on<lk.TrackSubscribedEvent>((event) {
+        _refreshAgent(gen);
+        if (!_audioOutput.isAndroid && event.track is lk.RemoteAudioTrack) {
+          unawaited(
+            _quietly(() => _setTrackVolume(event.track as lk.RemoteAudioTrack)),
+          );
+        }
+      })
       ..on<lk.DataReceivedEvent>((lk.DataReceivedEvent e) => _onData(gen, e));
     _roomListener = listener;
   }
@@ -393,6 +466,19 @@ class VoiceCallController extends ChangeNotifier {
   void _onData(int gen, lk.DataReceivedEvent event) {
     if (gen != _generation) return;
     switch (event.topic) {
+      case VoiceProtocol.voiceTopic:
+        if (event.participant?.identity != _agentIdentity) return;
+        try {
+          final payload = jsonDecode(utf8.decode(event.data));
+          if (payload is Map &&
+              payload['v'] == 1 &&
+              availableVoices.contains(payload['voice_id'])) {
+            _voiceId = payload['voice_id'] as String;
+            notifyListeners();
+          }
+        } catch (_) {
+          // Ignore malformed state updates; no content is logged.
+        }
       case VoiceProtocol.cardTopic:
         final VoiceCard? card = VoiceProtocol.parseCard(event.data);
         if (card == null) return;
@@ -500,6 +586,11 @@ class VoiceCallController extends ChangeNotifier {
       _agentLeftTimer?.cancel();
       _agentLeftTimer = null;
       final String? state = agent.attributes[_agentStateAttribute];
+      final voice = agent.attributes['chuk.voice_id'];
+      if (availableVoices.contains(voice) && voice != _voiceId) {
+        _voiceId = voice!;
+        notifyListeners();
+      }
       speaking = state == null ? agent.isSpeaking : state == 'speaking';
       thinking = state == 'thinking';
     }
@@ -697,6 +788,143 @@ class VoiceCallController extends ChangeNotifier {
 
   // ── Controls ──────────────────────────────────────────────────────────
 
+  Future<void> _loadVoicePreference(String userId, int gen) async {
+    _preferencesOwner = userId;
+    try {
+      final saved = await VoicePreferences.loadLocal(userId);
+      if (gen != _generation) return;
+      _defaultVoiceId = availableVoices.contains(saved) ? saved! : 'Bastian';
+      _voiceId = _defaultVoiceId;
+      notifyListeners();
+      final preferenceRevision = _preferenceRevision;
+      // Cloud settings refresh the next call's default without delaying this
+      // one or changing a voice unexpectedly during an ongoing conversation.
+      unawaited(() async {
+        try {
+          final voice = await VoicePreferences.loadSynced(userId);
+          if (_preferencesOwner != userId ||
+              preferenceRevision != _preferenceRevision ||
+              !availableVoices.contains(voice)) {
+            return;
+          }
+          _defaultVoiceId = voice!;
+          notifyListeners();
+          await VoicePreferences.saveLocal(userId, voice);
+        } catch (_) {
+          // An unavailable settings sync must not interrupt a voice call.
+        }
+      }());
+    } catch (_) {
+      if (gen == _generation) {
+        _defaultVoiceId = 'Bastian';
+        _voiceId = _defaultVoiceId;
+      }
+    }
+  }
+
+  Future<void> setDefaultVoice(String voice) async {
+    if (!availableVoices.contains(voice)) throw StateError('Unknown voice.');
+    _preferenceRevision++;
+    final owner = await VoiceCallService.callerId();
+    if (isActive && _preferencesOwner != null && _preferencesOwner != owner) {
+      throw StateError('Wait until the call settings have loaded.');
+    }
+    await VoicePreferences.saveLocal(owner, voice);
+    if (_preferencesOwner != null && _preferencesOwner != owner) return;
+    _defaultVoiceId = voice;
+    notifyListeners();
+    unawaited(VoicePreferences.saveSynced(owner, voice));
+  }
+
+  Future<void> _refreshOutputVolume() async {
+    try {
+      final value = await _audioOutput.readVolume();
+      if (value != null && isActive) {
+        _volume = value;
+        notifyListeners();
+      }
+    } on PlatformException {
+      // Physical volume buttons remain available if the platform refuses.
+    } on MissingPluginException {
+      // Older native shells do not expose call volume yet.
+    }
+  }
+
+  Future<void> _setTrackVolume(lk.RemoteAudioTrack track) =>
+      webrtc.Helper.setVolume(_volume, track.mediaStreamTrack);
+
+  /// Android controls the real call stream, so both the slider and hardware
+  /// keys affect the same output. Other platforms adjust received audio.
+  Future<void> setVolume(double value) async {
+    if (!value.isFinite) return;
+    final revision = ++_volumeRevision;
+    final previous = _volume;
+    _volume = value.clamp(0.0, 1.0);
+    notifyListeners();
+    try {
+      final actual = await _audioOutput.setVolume(_volume);
+      if (!_audioOutput.isAndroid) {
+        for (final participant
+            in _room?.remoteParticipants.values ?? <lk.RemoteParticipant>[]) {
+          for (final publication in participant.audioTrackPublications) {
+            final track = publication.track;
+            if (track != null) await _setTrackVolume(track);
+          }
+        }
+      }
+      if (revision == _volumeRevision) {
+        _volume = actual;
+        notifyListeners();
+      }
+    } catch (_) {
+      if (revision == _volumeRevision) {
+        _volume = previous;
+        notifyListeners();
+      }
+      throw StateError(
+        'Could not change call volume. Use the device volume buttons.',
+      );
+    }
+  }
+
+  /// Switches synthesis on the worker, preserving the ongoing conversation.
+  Future<void> setVoice(String voice) async {
+    if (!availableVoices.contains(voice)) throw StateError('Unknown voice.');
+    if (voice == _voiceId || _changingVoice) return;
+    final local = _room?.localParticipant;
+    final agent = _agentIdentity;
+    if (local == null || agent == null || _phase != VoiceCallPhase.live) {
+      throw StateError('Wait until the assistant has joined the call.');
+    }
+    final gen = _generation;
+    _changingVoice = true;
+    notifyListeners();
+    try {
+      final response = await local.performRpc(
+        lk.PerformRpcParams(
+          destinationIdentity: agent,
+          method: VoiceProtocol.changeVoiceMethod,
+          payload: jsonEncode({'voice_id': voice}),
+          responseTimeoutMs: const Duration(seconds: 10),
+        ),
+      );
+      final result = jsonDecode(response);
+      if (result is! Map ||
+          result['status'] != 'ok' ||
+          result['voice_id'] != voice) {
+        throw StateError('The voice could not be changed.');
+      }
+      if (gen == _generation) _voiceId = voice;
+    } catch (_) {
+      throw StateError('The voice could not be changed. Try again.');
+    } finally {
+      if (gen == _generation) {
+        _changingVoice = false;
+        notifyListeners();
+      }
+    }
+  }
+
   /// Mutes or unmutes the microphone. Before the room is up the choice is
   /// kept and applied once it connects.
   Future<void> setMicMuted(bool muted) async {
@@ -724,6 +952,39 @@ class VoiceCallController extends ChangeNotifier {
     }
   }
 
+  /// Publishes a low-bandwidth camera feed for the voice video mode.
+  /// The worker still sends only one frame to its vision model every 2 seconds.
+  Future<void> setCameraEnabled(bool enabled) async {
+    if (_cameraEnabled == enabled) return;
+    if (enabled && !kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      final PermissionStatus status = await Permission.camera.request();
+      if (!status.isGranted) {
+        _error = 'Camera permission is required for video mode';
+        notifyListeners();
+        return;
+      }
+    }
+    final lk.Room? room = _room;
+    if (room == null || _phase != VoiceCallPhase.live) return;
+    try {
+      await room.localParticipant?.setCameraEnabled(
+        enabled,
+        cameraCaptureOptions: const lk.CameraCaptureOptions(
+          maxFrameRate: 1,
+          params: lk.VideoParametersPresets.h360_169,
+        ),
+      );
+      _cameraEnabled = enabled;
+      notifyListeners();
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[VoiceCall] camera switch failed: ${e.runtimeType}');
+      }
+      _error = enabled ? 'Could not start the camera' : _error;
+      notifyListeners();
+    }
+  }
+
   /// Prefers the speaker ([on] true) or the earpiece. A headset always wins.
   /// Phones only ([canSwitchSpeaker]); elsewhere it does nothing.
   Future<void> setSpeakerOn(bool on) async {
@@ -733,6 +994,7 @@ class VoiceCallController extends ChangeNotifier {
     if (_phase != VoiceCallPhase.live) return;
     try {
       await lk.AudioManager.instance.setSpeakerOutputPreferred(on);
+      await _refreshOutputVolume();
     } catch (e) {
       if (kDebugMode) {
         debugPrint('[VoiceCall] speaker switch failed: ${e.runtimeType}');
@@ -792,7 +1054,13 @@ class VoiceCallController extends ChangeNotifier {
     String? error,
   ) async {
     _generation++;
+    _volumeRevision++;
+    _changingVoice = false;
+    _audioLevelTimer?.cancel();
+    _audioLevelTimer = null;
+    _audioLevel.value = 0;
     _setPhase(VoiceCallPhase.ending);
+    await _quietly(() => _audioOutput.setCallActive(false));
 
     _agentJoinTimer?.cancel();
     _agentJoinTimer = null;
@@ -807,6 +1075,7 @@ class VoiceCallController extends ChangeNotifier {
     final lk.Room? room = _room;
     final lk.EventsListener<lk.RoomEvent>? listener = _roomListener;
     _room = null;
+    _cameraEnabled = false;
     _roomListener = null;
     if (room != null) {
       for (final String method in VoiceProtocol.appMethods) {
@@ -819,7 +1088,13 @@ class VoiceCallController extends ChangeNotifier {
     }
 
     final DateTime endedAt = DateTime.now();
-    final List<VoiceTurn> recordTurns = _transcript.recordTurns();
+    // Preserve the audible partial response when a call is interrupted or
+    // hung up before its transcription trailer arrives.
+    final List<VoiceTurn> recordTurns = _transcript
+        .recordTurns()
+        .map((turn) => turn.copyWith(isFinal: true))
+        .toList();
+    _turns = List<VoiceTurn>.unmodifiable(recordTurns);
     final List<VoiceCard> recordCards = List<VoiceCard>.of(_cardList);
     final String? chatId = _chatId;
     final VoiceCallMode? mode = _mode;
@@ -838,13 +1113,6 @@ class VoiceCallController extends ChangeNotifier {
         turns: recordTurns,
         cards: recordCards,
       );
-      try {
-        await VoiceCallStore.save(record);
-      } catch (e) {
-        if (kDebugMode) {
-          debugPrint('[VoiceCall] record not saved: ${e.runtimeType}');
-        }
-      }
     }
 
     _tasks.reset(null);
@@ -862,7 +1130,7 @@ class VoiceCallController extends ChangeNotifier {
     if (kDebugMode) {
       debugPrint(
         '[VoiceCall] ${target.name}: ${recordTurns.length} turns, '
-        'saved=${record != null}',
+        'turns_ready=${record != null}',
       );
     }
     if (record != null) _ended.add(record);

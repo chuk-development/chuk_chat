@@ -14,7 +14,6 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import android.view.View
 import android.widget.RemoteViews
 import android.widget.Toast
 import com.hiennv.flutter_callkit_incoming.CallkitIncomingBroadcastReceiver
@@ -30,8 +29,8 @@ import io.flutter.plugin.common.MethodChannel
 
 /**
  * The native half of lib/voice/incoming/ongoing_call_notification.dart
- * (FEATURE_VOICE_CALL): the ongoing-call notification with Hang up,
- * Mute/Unmute, Speaker on/off, Volume up and Volume down; the unlock prompt
+ * (FEATURE_VOICE_CALL): the ongoing-call notification with two large actions,
+ * Mute/Unmute and Hang up; the unlock prompt
  * after a call is accepted on the lock screen; and the clean-up when the app
  * dies during a call.
  *
@@ -218,6 +217,23 @@ class VoiceCallBridge(private val activity: Activity, messenger: BinaryMessenger
           adjustCallVolume(context, call.argument<Int>("direction") ?: 1)
           result.success(null)
         }
+        "getCallVolume" -> {
+          val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+          val max = audio.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL).coerceAtLeast(1)
+          result.success(audio.getStreamVolume(AudioManager.STREAM_VOICE_CALL).toDouble() / max)
+        }
+        "setCallVolume" -> {
+          val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+          val max = audio.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL).coerceAtLeast(1)
+          val volume = (call.argument<Number>("volume")?.toDouble() ?: 1.0).coerceIn(0.0, 1.0)
+          audio.setStreamVolume(AudioManager.STREAM_VOICE_CALL, kotlin.math.round(volume * max).toInt(), 0)
+          result.success(audio.getStreamVolume(AudioManager.STREAM_VOICE_CALL).toDouble() / max)
+        }
+        "setCallVolumeControls" -> {
+          activity.volumeControlStream = if (call.argument<Boolean>("active") == true)
+            AudioManager.STREAM_VOICE_CALL else AudioManager.USE_DEFAULT_STREAM_TYPE
+          result.success(null)
+        }
         else -> result.notImplemented()
       }
     } catch (e: Exception) {
@@ -269,8 +285,6 @@ class VoiceCallBridge(private val activity: Activity, messenger: BinaryMessenger
     val title = call.argument<String>("title") ?: context.getString(R.string.voice_call_default_title)
     val status = call.argument<String>("status") ?: ""
     val muted = call.argument<Boolean>("muted") == true
-    val speakerOn = call.argument<Boolean>("speakerOn") == true
-    val canSwitchSpeaker = call.argument<Boolean>("canSwitchSpeaker") == true
     val connectedAtMs = (call.argument<Any>("connectedAtMs") as? Number)?.toLong() ?: 0L
 
     val manager = notificationManager() ?: return
@@ -279,16 +293,8 @@ class VoiceCallBridge(private val activity: Activity, messenger: BinaryMessenger
 
     val small = RemoteViews(context.packageName, R.layout.voice_call_notification)
     val big = RemoteViews(context.packageName, R.layout.voice_call_notification_big)
-    for (views in listOf(small, big)) {
-      bindCommon(views, id, title, status, muted, speakerOn, canSwitchSpeaker)
-    }
-    bindButton(big, R.id.voice_call_volume_down, id, BUTTON_VOLUME_DOWN, R.string.voice_call_volume_down)
-    bindButton(big, R.id.voice_call_volume_up, id, BUTTON_VOLUME_UP, R.string.voice_call_volume_up)
-    // A headset takes the audio: no speaker switch, and no empty slot for it.
-    big.setViewVisibility(
-      R.id.voice_call_speaker_slot,
-      if (canSwitchSpeaker) View.VISIBLE else View.GONE,
-    )
+    bindCommon(small, id, title, status, muted, false)
+    bindCommon(big, id, title, status, muted, true)
 
     val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
       Notification.Builder(context, NOTIFICATION_CHANNEL_ID)
@@ -319,6 +325,9 @@ class VoiceCallBridge(private val activity: Activity, messenger: BinaryMessenger
     } else {
       builder.setShowWhen(false)
     }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      builder.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
+    }
     manager.notify(id, builder.build())
     shownIds.add(id)
   }
@@ -329,8 +338,7 @@ class VoiceCallBridge(private val activity: Activity, messenger: BinaryMessenger
     title: String,
     status: String,
     muted: Boolean,
-    speakerOn: Boolean,
-    canSwitchSpeaker: Boolean,
+    expanded: Boolean,
   ) {
     views.setTextViewText(R.id.voice_call_title, title)
     views.setTextViewText(R.id.voice_call_status, status)
@@ -340,28 +348,21 @@ class VoiceCallBridge(private val activity: Activity, messenger: BinaryMessenger
       if (muted) R.string.voice_call_unmute else R.string.voice_call_mute,
     )
     views.setImageViewResource(
-      R.id.voice_call_mute,
+      if (expanded) R.id.voice_call_mute_icon else R.id.voice_call_mute,
       if (muted) R.drawable.ic_voice_call_mic_off else R.drawable.ic_voice_call_mic,
     )
     views.setInt(
       R.id.voice_call_mute,
       "setBackgroundResource",
-      if (muted) R.drawable.voice_call_button_active else R.drawable.voice_call_button,
+      if (expanded) {
+        if (muted) R.drawable.voice_call_action_active else R.drawable.voice_call_action
+      } else {
+        if (muted) R.drawable.voice_call_button_active else R.drawable.voice_call_button
+      },
     )
-
-    if (canSwitchSpeaker) {
-      views.setViewVisibility(R.id.voice_call_speaker, View.VISIBLE)
-      bindButton(
-        views, R.id.voice_call_speaker, id, BUTTON_SPEAKER,
-        if (speakerOn) R.string.voice_call_speaker_off else R.string.voice_call_speaker_on,
-      )
-      views.setInt(
-        R.id.voice_call_speaker,
-        "setBackgroundResource",
-        if (speakerOn) R.drawable.voice_call_button_active else R.drawable.voice_call_button,
-      )
-    } else {
-      views.setViewVisibility(R.id.voice_call_speaker, View.GONE)
+    if (expanded) {
+      views.setTextViewText(R.id.voice_call_mute_label,
+        context.getString(if (muted) R.string.voice_call_unmute else R.string.voice_call_mute))
     }
 
     bindButton(views, R.id.voice_call_hangup, id, BUTTON_HANGUP, R.string.voice_call_hang_up)

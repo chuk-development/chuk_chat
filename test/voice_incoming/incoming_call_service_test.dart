@@ -39,6 +39,7 @@ void main() {
     starter = FakeStarter(call);
     opened = <(String, VoiceCallMode?)>[];
     mic = FakeMic();
+    var userCallCount = 0;
     service = IncomingCallService(
       hostFrames: frames.stream,
       callkit: callkit,
@@ -50,7 +51,7 @@ void main() {
           opened.add((chatId, mode)),
       mic: mic,
       now: () => now,
-      newCallKey: () => 'user-call-1',
+      newCallKey: () => 'user-call-${++userCallCount}',
       repostDelays: const <Duration>[],
     )..start();
   });
@@ -293,6 +294,37 @@ void main() {
       },
     );
 
+    test('deferred service failure declines without starting audio', () async {
+      mic.granted = false;
+      callkit.startError = StateError('service unavailable');
+      await ring();
+      callkit.emit(CallkitSignalKind.accept, id);
+      await settle();
+      expect(sender.sent, <(String, String)>[(id, 'declined')]);
+      expect(starter.started, isEmpty);
+      expect(callkit.ended, contains(id));
+      expect(ui.notices, hasLength(1));
+    });
+
+    test('host cancellation during deferred native startup wins', () async {
+      mic.granted = false;
+      final pending = Completer<void>();
+      callkit.pendingStart = pending;
+      await ring();
+      callkit.emit(CallkitSignalKind.accept, id);
+      await settle();
+      expect(callkit.started, hasLength(1));
+      frames.add(stateFrame(id, 'ended'));
+      await settle();
+      final endsBeforeCompletion = callkit.ended.length;
+      pending.complete();
+      await settle();
+      expect(callkit.ended.length, greaterThan(endsBeforeCompletion));
+      expect(starter.started, isEmpty);
+      expect(sender.sent, isEmpty);
+      expect(service.book[id]!.status, IncomingCallStatus.ended);
+    });
+
     test(
       'granted at the ring: no question, callkit runs the service itself',
       () async {
@@ -450,6 +482,26 @@ void main() {
 
   group('a call the user started', () {
     test(
+      'foreground service waits for mic permission, then starts before live',
+      () async {
+        mic.granted = false;
+        call.begin(chatId: thread, mode: VoiceCallMode.chat);
+        await settle();
+        expect(callkit.started, isEmpty);
+        expect(mic.requests, 0);
+        mic.granted = true;
+        call.notifyListeners();
+        await settle();
+        expect(call.phase, VoiceCallPhase.connecting);
+        expect(callkit.started, hasLength(1));
+        call.finish();
+        await settle();
+        expect(callkit.ended, ['user-call-1']);
+        expect(ui.cancelled, ['user-call-1']);
+      },
+    );
+
+    test(
       'runs the callkit ongoing call and our notification, no frames',
       () async {
         call.begin(
@@ -458,9 +510,10 @@ void main() {
           agentName: 'Crypto Desk',
         );
         await settle();
-        // Not before the room is up: the microphone permission is asked in
-        // between, and the foreground service must start with it.
-        expect(callkit.started, isEmpty);
+        // Start while the app is still connecting once microphone access
+        // is granted, so immediately backgrounding it keeps capture alive.
+        expect(callkit.started.single.id, 'user-call-1');
+        expect(ui.shown.last.status, 'Connecting…');
 
         call.goLive(agent: false);
         await settle();
@@ -478,6 +531,77 @@ void main() {
         expect(callkit.ended, <String>['user-call-1']);
         expect(ui.cancelled, <String>['user-call-1']);
         expect(sender.sent, isEmpty);
+      },
+    );
+
+    test('hanging up during native startup cannot restore a call', () async {
+      final pending = Completer<void>();
+      callkit.pendingStart = pending;
+      call.begin(chatId: thread, mode: VoiceCallMode.chat);
+      await settle();
+      expect(callkit.started, hasLength(1));
+      call.finish();
+      await settle();
+      final shownBeforeCompletion = ui.shown.length;
+      pending.complete();
+      await settle();
+      expect(service.sessionKey, isNull);
+      expect(ui.shown, hasLength(shownBeforeCompletion));
+      expect(callkit.ended.last, 'user-call-1');
+      expect(ui.cancelled.last, 'user-call-1');
+    });
+
+    test(
+      'replacement call starts after stale native startup finishes',
+      () async {
+        final pending = Completer<void>();
+        callkit.pendingStart = pending;
+        call.begin(chatId: thread, mode: VoiceCallMode.chat);
+        await settle();
+        call.finish();
+        call.begin(chatId: 'replacement', mode: VoiceCallMode.chat);
+        await settle();
+        expect(callkit.started, hasLength(1));
+        pending.complete();
+        await settle();
+        expect(callkit.started, hasLength(2));
+        expect(call.chatId, 'replacement');
+        expect(call.endCalls, 0);
+        expect(service.sessionKey, isNotNull);
+        expect(ui.shown.last.status, 'Connecting…');
+      },
+    );
+
+    test(
+      'native startup failure ends the call and clears notification',
+      () async {
+        callkit.startError = StateError('service unavailable');
+        call.begin(chatId: thread, mode: VoiceCallMode.chat);
+        await settle();
+        expect(call.endCalls, 1);
+        expect(call.isActive, isFalse);
+        expect(service.sessionKey, isNull);
+        expect(callkit.ended, contains('user-call-1'));
+        expect(ui.cancelled, contains('user-call-1'));
+        expect(ui.notices, hasLength(1));
+      },
+    );
+
+    test(
+      'connection and custom notification wait for native startup',
+      () async {
+        final pending = Completer<void>();
+        callkit.pendingStart = pending;
+        call.begin(chatId: thread, mode: VoiceCallMode.chat);
+        await settle();
+        call.goLive();
+        await settle();
+        expect(callkit.connected, isEmpty);
+        expect(ui.shown, isEmpty);
+        pending.complete();
+        await settle();
+        expect(callkit.connected, ['user-call-1']);
+        expect(ui.shown.single.status, 'On call');
       },
     );
 

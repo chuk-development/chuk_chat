@@ -51,6 +51,9 @@ class FakeCallkit implements CallkitPort {
   /// the device.
   bool echoOnEnd = true;
 
+  Completer<void>? pendingStart;
+  Object? startError;
+
   @override
   Stream<CallkitSignal> get signals => controller.stream;
 
@@ -71,6 +74,9 @@ class FakeCallkit implements CallkitPort {
   @override
   Future<void> startOutgoing(CallKitParams params) async {
     started.add(params);
+    await pendingStart?.future;
+    final error = startError;
+    if (error != null) throw error;
     _accepted.add(params.id);
   }
 

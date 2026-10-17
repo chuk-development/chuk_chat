@@ -71,6 +71,9 @@ import 'package:chuk_chat/widgets/chat_maintenance_gate.dart';
 import 'package:chuk_chat/widgets/app_lifecycle_observer.dart';
 import 'package:chuk_chat/widgets/auth_gate.dart';
 import 'package:chuk_chat/voice/incoming/incoming_call_bootstrap.dart';
+import 'package:chuk_chat/voice/voice_call_controller.dart';
+import 'package:chuk_chat/voice/voice_call_models.dart';
+import 'package:chuk_chat/voice/widgets/voice_call_fullscreen_page.dart';
 
 /// Collapse consecutive identical debug log lines into a single line with a
 /// `(×N)` count, so spammy repeats (e.g. "[Lifecycle] App resumed" firing
@@ -279,6 +282,8 @@ class _AgentsAppState extends State<AgentsApp> {
   late final DateTime _appStartedAt;
   Timer? _resumeSettingsSyncTimer;
   DateTime? _lastResumeSettingsSyncAt;
+  DateTime? _shownVoiceCallAt;
+  int _shownVoiceFullscreenRequest = 0;
   static const Duration _linuxResumeSyncCooldown = Duration(seconds: 90);
   static const Duration _linuxResumeSyncDelay = Duration(seconds: 2);
 
@@ -299,11 +304,41 @@ class _AgentsAppState extends State<AgentsApp> {
     // Listen to theme changes
     _themeService.addListener(_onThemeChanged);
     _theme.addListener(_onThemeControllerChanged);
+    if (kFeatureVoiceCall) {
+      VoiceCallController.instance.addListener(_showStartedVoiceCall);
+    }
 
     // Initialize after first frame (session manager needs Supabase ready)
     WidgetsBinding.instance.addPostFrameCallback((_) => _initializeApp());
     // Delay tray setup slightly to avoid contending with first paint/startup.
     unawaited(_initializeDesktopTrayInBackground());
+  }
+
+  /// Incoming calls, profile actions and chat actions share one root route.
+  /// Returning to chat does not reopen it on every subsequent speech update.
+  void _showStartedVoiceCall() {
+    final controller = VoiceCallController.instance;
+    final startedAt = controller.startedAt;
+    if (!mounted ||
+        !controller.isActive ||
+        controller.phase == VoiceCallPhase.ending ||
+        startedAt == null ||
+        (startedAt == _shownVoiceCallAt &&
+            controller.fullscreenRequest == _shownVoiceFullscreenRequest)) {
+      return;
+    }
+    _shownVoiceCallAt = startedAt;
+    _shownVoiceFullscreenRequest = controller.fullscreenRequest;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final context = navigatorKey.currentState?.overlay?.context;
+      if (!mounted ||
+          context == null ||
+          !controller.isActive ||
+          controller.startedAt != startedAt) {
+        return;
+      }
+      unawaited(VoiceCallFullscreenPage.show(context, controller: controller));
+    });
   }
 
   Future<void> _initializeDesktopTrayInBackground() async {
@@ -421,13 +456,12 @@ class _AgentsAppState extends State<AgentsApp> {
     }
 
     unawaited(
-      SettingsSyncService.syncAllFromSupabase(forceRefresh: false).catchError((
-        error,
-      ) {
-        if (kDebugMode) {
-          debugPrint('⚠️ [Main] Settings background sync failed: $error');
-        }
-      }),
+      SettingsSyncService.syncAllFromSupabase(forceRefresh: false)
+          .catchError((error) {
+            if (kDebugMode) {
+              debugPrint('⚠️ [Main] Settings background sync failed: $error');
+            }
+          }),
     );
   }
 
@@ -497,6 +531,7 @@ class _AgentsAppState extends State<AgentsApp> {
 
   @override
   void dispose() {
+    VoiceCallController.instance.removeListener(_showStartedVoiceCall);
     _resumeSettingsSyncTimer?.cancel();
     _lifecycleService.removeOnResumeCallback(_syncSettingsInBackground);
     _themeService.removeListener(_onThemeChanged);

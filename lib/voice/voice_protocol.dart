@@ -1,6 +1,6 @@
 // lib/voice/voice_protocol.dart
 //
-// The wire contract between this app and the voice worker (agents/voice/,
+// The wire contract between this app and the voice worker (api_server/voice/,
 // agent_name `chuk-voice`): the token request, the dispatch metadata, and the
 // RPC payloads. Pure functions, no LiveKit, so every payload is unit-tested.
 //
@@ -23,6 +23,8 @@ abstract final class VoiceProtocol {
 
   /// App -> worker: a delegated task finished.
   static const String taskResultMethod = 'chuk.task_result';
+  static const String changeVoiceMethod = 'change_voice';
+  static const String voiceTopic = 'ui.voice';
 
   /// Worker -> app device tools (names from the prototype's
   /// `agent_ui_bridge.dart`).
@@ -47,6 +49,7 @@ abstract final class VoiceProtocol {
   static const String chatClosed = 'the chat was closed';
 
   static const int maxContextChars = 4000;
+  static const int maxVoiceInstructionsChars = 16000;
   static const int maxResultChars = 6000;
 
   /// LiveKit caps an RPC payload at 15 KiB. A result that fits in
@@ -68,6 +71,8 @@ abstract final class VoiceProtocol {
     String context = '',
     String? sttLanguage,
     required bool delegateAvailable,
+    String voiceInstructions = '',
+    String? voiceId,
     bool initiatedByAgent = false,
     String? callId,
     String? callReason,
@@ -77,23 +82,25 @@ abstract final class VoiceProtocol {
     'chat_title': chatTitle,
     'agent_name': agentName,
     'context': truncateRunes(context.trim(), maxContextChars),
+    'voice_instructions': truncateRunes(
+      voiceInstructions.trim(),
+      maxVoiceInstructionsChars,
+    ),
     'stt_language': sttLanguage,
     'delegate_available': delegateAvailable,
-    'voice_id': null,
+    'voice_id': voiceId,
     'llm_model': null,
     'initiated_by': initiatedByAgent ? 'agent' : 'user',
     'call_id': callId,
     'call_reason': callReason,
   };
 
-  /// The STT language for the worker: the one the caller asked for, else the
-  /// device language (`de`, `en`, ...), else null (the worker detects it).
+  /// The STT language for the worker. Null means automatic detection; the
+  /// device locale is not a reliable indicator of the spoken language.
   static String? resolveSttLanguage(String? requested, String? deviceLanguage) {
     final String? asked = requested?.trim();
     if (asked != null && asked.isNotEmpty) return asked;
-    final String? device = deviceLanguage?.trim().toLowerCase();
-    if (device == null || device.isEmpty || device == 'und') return null;
-    return device;
+    return null;
   }
 
   /// The POST body for the token server (see new-voicemode's

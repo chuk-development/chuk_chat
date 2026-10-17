@@ -1,6 +1,0 @@
-# Secrets: never commit. run.sh falls back to the new-voicemode env file.
-.env.local*
-.venv/
-__pycache__/
-*.pyc
-.pytest_cache/
