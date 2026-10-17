@@ -191,8 +191,16 @@ dependency_overrides:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  integration_test:
+    sdk: flutter
+  flutter_driver:
+    sdk: flutter
 
   flutter_lints: ^6.0.0
+  shelf: ^1.4.2
+  shelf_web_socket: ^3.0.0
+  # Agent driver (tool/agent_driver): talks to the app's VM service.
+  vm_service: ^15.0.0
 
 flutter:
   uses-material-design: true

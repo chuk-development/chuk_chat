@@ -80,6 +80,82 @@ String getApiBaseUrl() {
   return apiConfigDefaultProductionUrl;
 }
 
+// Agents relay base URL override. Empty means "derive it from the API base",
+// which is what every normal build does. Set it with
+// --dart-define=AGENTS_RELAY_URL=ws://127.0.0.1:8787 when the relay lives
+// somewhere else than the API (for example a split local emulator).
+const String apiConfigAgentsRelayUrl = String.fromEnvironment(
+  'AGENTS_RELAY_URL',
+);
+
+/// The relay base the production build dials. Kept as the fallback for an
+/// unusable configured URL, so a bad define can never send the relay to a
+/// half-built address.
+const String agentsRelayDefaultBaseUrl = 'wss://api.chuk.chat';
+
+/// Turns an API or relay URL into a websocket base with no path:
+/// `https`/`wss` become `wss`; `http`/`ws` become `ws` for a loopback host
+/// and `wss` for every other host. Host and an explicit port are kept. A bare host gets `wss`. Returns null when [raw] is not a
+/// usable address.
+String? normalizeAgentsRelayBase(String raw) {
+  final text = raw.trim();
+  if (text.isEmpty) return null;
+  final withScheme = text.contains('://') ? text : 'wss://$text';
+  final Uri parsed;
+  try {
+    parsed = Uri.parse(withScheme);
+  } on FormatException {
+    return null;
+  }
+  if (parsed.host.isEmpty) return null;
+  // Cleartext only for a loopback host (a local emulator). Every other host
+  // keeps TLS, also when the API base is plain http.
+  final host = parsed.host.toLowerCase();
+  final loopback = host == '127.0.0.1' || host == 'localhost' || host == '::1';
+  final scheme = switch (parsed.scheme.toLowerCase()) {
+    'wss' || 'https' => 'wss',
+    'ws' || 'http' => loopback ? 'ws' : 'wss',
+    _ => null,
+  };
+  if (scheme == null) return null;
+  return Uri(
+    scheme: scheme,
+    host: parsed.host,
+    port: parsed.hasPort ? parsed.port : null,
+  ).toString();
+}
+
+/// Resolves the Agents relay base from an API base URL and an optional
+/// override. Order: a usable [override], then [apiBaseUrl] mapped to its
+/// websocket form, then [agentsRelayDefaultBaseUrl]. With no defines the
+/// result is `wss://api.chuk.chat`, the same string the app always used.
+String resolveAgentsRelayBase({
+  required String apiBaseUrl,
+  String override = '',
+}) {
+  return normalizeAgentsRelayBase(override) ??
+      normalizeAgentsRelayBase(apiBaseUrl) ??
+      agentsRelayDefaultBaseUrl;
+}
+
+/// The Agents relay base for this build: [apiConfigAgentsRelayUrl] when set,
+/// otherwise derived from [getApiBaseUrl].
+String getAgentsRelayBaseUrl() => resolveAgentsRelayBase(
+  apiBaseUrl: getApiBaseUrl(),
+  override: apiConfigAgentsRelayUrl,
+);
+
+/// The https/http origin that serves the same backend as [relayBase]
+/// (`wss://h` becomes `https://h`, `ws://h:p` becomes `http://h:p`).
+String agentsHttpOriginForRelay(String relayBase) {
+  final uri = Uri.parse(relayBase);
+  return Uri(
+    scheme: uri.scheme == 'ws' ? 'http' : 'https',
+    host: uri.host,
+    port: uri.hasPort ? uri.port : null,
+  ).toString();
+}
+
 // Artifacts hosting service base URL. Override with
 // --dart-define=ARTIFACTS_BASE_URL=…; otherwise the production host is used.
 const String artifactsConfigEnvUrl = String.fromEnvironment(

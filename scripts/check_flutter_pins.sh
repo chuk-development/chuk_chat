@@ -28,6 +28,10 @@ check dev.chuk.chat.yml \
   "$(grep -oP 'flutter_linux_\K[0-9.]+(?=-stable)' dev.chuk.chat.yml)"
 check .github/workflows/release-macos.yml \
   "$(grep -oP "FLUTTER_VERSION: '\K[0-9.]+" .github/workflows/release-macos.yml | head -1)"
+check .github/workflows/ci.yml \
+  "$(grep -oP "FLUTTER_VERSION: '\K[0-9.]+" .github/workflows/ci.yml | head -1)"
+check .github/workflows/e2e.yml \
+  "$(grep -oP "FLUTTER_VERSION: '\K[0-9.]+" .github/workflows/e2e.yml | head -1)"
 cross="$(grep -oP 'flutter\.git -b \K[0-9.]+' .github/workflows/build-cross-platform.yml | sort -u)"
 if [ -z "$cross" ]; then
   # No match means the pin moved or changed shape, which is exactly the drift

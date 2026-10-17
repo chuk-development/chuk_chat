@@ -108,6 +108,14 @@ void _installLogDeduper() {
   };
 }
 
+/// Key of the root [RepaintBoundary] that wraps the whole app (every route,
+/// dialog and overlay). Integration tests use it to capture full-app
+/// screenshots (`integration_test/support/shots.dart`). The boundary exists
+/// only in debug and profile builds; release builds do not add it.
+final GlobalKey appCaptureBoundaryKey = GlobalKey(
+  debugLabel: 'appCaptureBoundary',
+);
+
 /* ---------- MAIN ---------- */
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -595,11 +603,18 @@ class _AgentsAppState extends State<AgentsApp> {
               // Apply user-chosen UI scale to all text in the app via
               // MediaQuery. This is the safest scaling approach — it doesn't
               // break layout calculations the way Transform.scale would.
-              return MediaQuery(
+              final Widget scaled = MediaQuery(
                 data: MediaQuery.of(context).copyWith(
                   textScaler: TextScaler.linear(_themeService.uiScale),
                 ),
                 child: child,
+              );
+              // Debug/profile only: a root boundary for full-app screenshots
+              // in integration tests. Release keeps the tree unchanged.
+              if (kReleaseMode) return scaled;
+              return RepaintBoundary(
+                key: appCaptureBoundaryKey,
+                child: scaled,
               );
             },
             // The Android assist activity starts this engine on
