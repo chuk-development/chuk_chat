@@ -1,0 +1,78 @@
+name: CI
+
+# Static analysis and the unit tests on every pull request and every push to
+# master. No secrets: the tests run without Supabase credentials.
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Keep in step with every other build path; scripts/check_flutter_pins.sh
+  # reads this line and fails on drift.
+  FLUTTER_VERSION: '3.47.0'
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Flutter pins agree
+        run: ./scripts/check_flutter_pins.sh
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+
+      - run: flutter pub get
+
+      # Explicit paths: vendor/openui_core/test needs its own dev
+      # dependencies (package:test, very_good_analysis), which the app's
+      # package config does not resolve, so a bare `flutter analyze` reports
+      # thousands of unresolved-import errors there. Errors stay fatal.
+      # Warnings are not fatal yet: lib/models/content_block.dart has one
+      # (invalid_use_of_visible_for_testing_member). Drop
+      # --no-fatal-warnings when that is fixed.
+      - name: Analyze
+        run: >
+          flutter analyze --no-fatal-infos --no-fatal-warnings
+          lib test tool integration_test test_driver test_screenshots
+          vendor/markdraw/lib vendor/openui/lib vendor/openui_core/lib
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Test (shard ${{ matrix.shard }} of 4)
+        run: >
+          flutter test
+          --total-shards 4 --shard-index ${{ matrix.shard }}
+          --reporter expanded

@@ -26,15 +26,22 @@
 /// whitespace is dropped, because that is what a person produces.
 library;
 
+import 'package:chuk_chat/services/api_config_base.dart';
+
 /// The relay every client dials unless an invite names another one.
-const String kDefaultAgentsRelayBase = 'wss://api.chuk.chat';
+///
+/// Derived from the configured API base (`getApiBaseUrl`, `https` -> `wss`,
+/// `http` -> `ws`), or taken from `--dart-define=AGENTS_RELAY_URL=…`. With no
+/// defines it is `wss://api.chuk.chat`, as before. A local API emulator at
+/// `http://127.0.0.1:8787` therefore gives `ws://127.0.0.1:8787`.
+final String kDefaultAgentsRelayBase = getAgentsRelayBaseUrl();
 
 /// The Linux installer for the Agents host. It is served by the same API
 /// server as [kDefaultAgentsRelayBase] (the same host, over https), so the
 /// install command and the relay always name one backend. A test keeps the
 /// two hosts equal.
-const String kAgentsInstallScriptUrl =
-    'https://api.chuk.chat/agents/install.sh';
+final String kAgentsInstallScriptUrl =
+    '${agentsHttpOriginForRelay(kDefaultAgentsRelayBase)}/agents/install.sh';
 
 /// The scheme and host of the pairing URI. `cowork://pair?…`.
 const String kAgentsPairingUriScheme = 'cowork';
@@ -163,25 +170,8 @@ class AgentsPairingInvite {
   static Uri? _relayBaseFrom(String? raw) {
     final text = raw?.trim() ?? '';
     if (text.isEmpty) return Uri.parse(kDefaultAgentsRelayBase);
-    final withScheme = text.contains('://') ? text : 'wss://$text';
-    final Uri parsed;
-    try {
-      parsed = Uri.parse(withScheme);
-    } on FormatException {
-      return null;
-    }
-    if (parsed.host.isEmpty) return null;
-    final scheme = switch (parsed.scheme.toLowerCase()) {
-      'wss' || 'https' => 'wss',
-      'ws' || 'http' => 'ws',
-      _ => null,
-    };
-    if (scheme == null) return null;
-    return Uri(
-      scheme: scheme,
-      host: parsed.host,
-      port: parsed.hasPort ? parsed.port : null,
-    );
+    final normalized = normalizeAgentsRelayBase(text);
+    return normalized == null ? null : Uri.parse(normalized);
   }
 
   @override
