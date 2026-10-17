@@ -1,0 +1,109 @@
+name: E2E live
+
+# Smoke test against production (api.chuk.chat) with one test account.
+# Manual and nightly only. Never on pull_request or pull_request_target:
+# a fork must never get these secrets. See docs/E2E_CI.md.
+#
+# Secrets, in the GitHub Environment "e2e-live":
+#   E2E_TEST_EMAIL, E2E_TEST_PASSWORD   the test account (no private data)
+# Secrets, repository level (already used by the release builds):
+#   SUPABASE_URL, SUPABASE_ANON_KEY     the production Supabase project
+#
+# When a secret is missing, the job skips the smoke test with a notice and
+# stays green. A failed smoke test on the schedule opens or updates one issue.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 3 * * *'
+
+concurrency:
+  group: e2e-live
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    # Forks have no secrets and no reason to call production.
+    if: github.repository == 'chuk-development/chuk_chat'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: e2e-live
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Check the secrets
+        id: inputs
+        env:
+          E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
+          E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          missing=""
+          for v in E2E_TEST_EMAIL E2E_TEST_PASSWORD SUPABASE_URL SUPABASE_ANON_KEY; do
+            [ -n "${!v}" ] || missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then
+            msg="Smoke test skipped. Missing secrets:$missing. Add them to the GitHub Environment 'e2e-live' (see docs/E2E_CI.md)."
+            echo "::notice title=E2E live skipped::$msg"
+            echo "### E2E live: skipped" >> "$GITHUB_STEP_SUMMARY"
+            echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Smoke test against api.chuk.chat
+        if: steps.inputs.outputs.ready == 'true'
+        env:
+          SMOKE_API_URL: https://api.chuk.chat
+          SMOKE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SMOKE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SMOKE_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
+          SMOKE_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+        run: |
+          set -o pipefail
+          # Keep the exit code, so the summary is written on a failure too.
+          # Workflow commands (lines that start with "::", for example the
+          # ::add-mask:: line that carries the access token) go to the runner
+          # only, never into smoke.txt or the summary.
+          rc=0
+          : > "$RUNNER_TEMP/smoke.txt"
+          scripts/e2e_live_smoke.sh \
+            | awk -v out="$RUNNER_TEMP/smoke.txt" '{ print; fflush() } !/^::/ { print > out }' \
+            || rc=$?
+          {
+            echo "### E2E live"
+            echo '```'
+            cat "$RUNNER_TEMP/smoke.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"
+
+  report:
+    # One open issue for a failing nightly run. Manual runs do not open issues.
+    needs: smoke
+    if: failure() && github.event_name == 'schedule' && github.repository == 'chuk-development/chuk_chat'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="E2E live smoke test fails"
+          body="The nightly smoke test against api.chuk.chat failed: $RUN_URL"
+          num="$(gh issue list --state open --search "\"$title\" in:title" --json number,title \
+            --jq "map(select(.title == \"$title\")) | .[0].number // empty")"
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body"
+          fi

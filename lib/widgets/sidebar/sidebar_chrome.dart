@@ -11,6 +11,7 @@
 // resolve for itself is its own labels: every tooltip and hint falls back to
 // `AppLocalizations`, so a caller that passes nothing still speaks the user's
 // language instead of English.
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/constants.dart';
@@ -1118,6 +1119,13 @@ List<SbChatGroup<T>> sbGroupByTime<T>(
   ];
 }
 
+/// Test runs only: the text [sbChatDateLine] shows for a chat from today.
+///
+/// The integration test sets it, so the chat list screenshots do not change
+/// with the clock minute. Release builds ignore it.
+@visibleForTesting
+String? debugSbChatTimeOfDayOverride;
+
 /// The muted line under a chat title: the time for anything from today, the
 /// date for everything else. Formatted through [MaterialLocalizations], so it
 /// follows the user's locale and 12/24-hour setting.
@@ -1131,6 +1139,8 @@ String sbChatDateLine(BuildContext context, DateTime? date, {DateTime? now}) {
   final bool isToday =
       date.year == now.year && date.month == now.month && date.day == now.day;
   if (isToday) {
+    final String? override = debugSbChatTimeOfDayOverride;
+    if (!kReleaseMode && override != null) return override;
     return localizations.formatTimeOfDay(
       TimeOfDay.fromDateTime(date),
       alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(context),
