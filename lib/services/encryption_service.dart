@@ -392,6 +392,9 @@ class EncryptionService {
 
   static bool get hasKey => _cachedKey != null;
 
+  /// Opaque identity used to invalidate work when the unlocked key changes.
+  static Object? get keyIdentity => _cachedKey;
+
   // SharedPreferences fallback for platforms where Keychain/keyring
   // is unreliable without code signing (macOS unsigned builds) or
   // causes startup stalls (Linux without libsecret).

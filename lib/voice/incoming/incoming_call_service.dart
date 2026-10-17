@@ -22,8 +22,8 @@
 //     answered on another device).
 //  4. While any voice call runs (agent-started or user-started) the callkit
 //     "ongoing call" holds the phoneCall + microphone foreground service, and
-//     our own notification takes its place with Hang up, Mute, Speaker and
-//     Volume buttons. When the call ends: `ended` (for an agent call), the
+//     our own notification takes its place with large Mute and Hang up
+//     buttons. When the call ends: `ended` (for an agent call), the
 //     callkit call ends and the notification goes.
 //
 // Privacy: the reason travels only to the voice worker. Log lines carry the
@@ -89,6 +89,8 @@ class IncomingCallService {
   _Session? _session;
   OngoingCallSnapshot? _shown;
   bool _started = false;
+  bool _startingOutgoing = false;
+  bool _outgoingStartRequested = false;
 
   /// The voice call this service mirrors right now, if any (tests).
   @visibleForTesting
@@ -303,12 +305,30 @@ class IncomingCallService {
     if (entry.serviceDeferred) {
       // The ring was shown without callkit's own service on Accept; start
       // it now, with the permission in place, under the same id.
-      await _quietly(
-        () => callkit.startOutgoing(
+      try {
+        await callkit.startOutgoing(
           outgoingCallkitParams(id: entry.callId, name: entry.call.agentName),
-        ),
-      );
-      if (entry.status != IncomingCallStatus.accepting) return;
+        );
+      } catch (error) {
+        _ignore(error);
+        if (entry.status == IncomingCallStatus.accepting) {
+          entry.status = IncomingCallStatus.declined;
+          _send(entry, AgentsVoiceCallFrames.declined);
+          unawaited(
+            _quietly(
+              () => ui.notice(
+                'Could not start the background call. Please try again.',
+              ),
+            ),
+          );
+        }
+        await _quietly(() => callkit.end(entry.callId));
+        return;
+      }
+      if (!_started || entry.status != IncomingCallStatus.accepting) {
+        await _quietly(() => callkit.end(entry.callId));
+        return;
+      }
     }
 
     entry.status = IncomingCallStatus.accepted;
@@ -351,28 +371,14 @@ class IncomingCallService {
         );
         // callkit posts its own ongoing call as the accept lands.
         _scheduleReposts();
-      } else if (call.phase == VoiceCallPhase.live) {
-        // A call the user started (the microphone permission is settled by
-        // now, so the foreground service gets its microphone type).
-        final _Session session = _Session(
-          key: _newCallKey(),
-          chatId: call.chatId,
-          startedAt: call.startedAt,
-        );
-        _session = session;
-        unawaited(
-          _quietly(
-            () => callkit.startOutgoing(
-              outgoingCallkitParams(id: session.key, name: _titleFor(session)),
-            ),
-          ),
-        );
-        _scheduleReposts();
+      } else if (call.phase == VoiceCallPhase.connecting ||
+          call.phase == VoiceCallPhase.live) {
+        unawaited(_startOutgoingAfterPermission());
       }
     }
 
     final _Session? session = _session;
-    if (session == null) return;
+    if (session == null || !session.serviceReady) return;
     if (!session.connected &&
         call.phase == VoiceCallPhase.live &&
         call.agentPresent) {
@@ -382,6 +388,78 @@ class IncomingCallService {
       _scheduleReposts();
     }
     _show(_snapshotFor(session));
+  }
+
+  Future<void> _startOutgoingAfterPermission() async {
+    if (_session != null || !_started) return;
+    if (_startingOutgoing) {
+      _outgoingStartRequested = true;
+      return;
+    }
+    _startingOutgoing = true;
+    _outgoingStartRequested = false;
+    final startedAt = call.startedAt;
+    final chatId = call.chatId;
+    try {
+      // Do not request permission from here. The call controller notifies
+      // again as soon as its foreground microphone request has completed.
+      if (!await mic.isGranted() ||
+          !_started ||
+          !call.isActive ||
+          call.phase == VoiceCallPhase.ending ||
+          call.startedAt != startedAt ||
+          call.chatId != chatId ||
+          _session != null) {
+        return;
+      }
+      final session = _Session(
+        key: _newCallKey(),
+        chatId: chatId,
+        startedAt: startedAt,
+        serviceReady: false,
+      );
+      _session = session;
+      await callkit.startOutgoing(
+        outgoingCallkitParams(id: session.key, name: _titleFor(session)),
+      );
+      // A hang-up while the native service was starting must not resurrect
+      // an orphan notification or leave its microphone service running.
+      if (!_started ||
+          _session != session ||
+          !_stillRuns(session) ||
+          call.phase == VoiceCallPhase.ending) {
+        if (_session == session) _close(session);
+        // The plugin may have posted after the earlier hang-up cancelled it.
+        await _quietly(() => callkit.end(session.key));
+        await _quietly(() => ui.cancel(session.key));
+        return;
+      }
+      session.serviceReady = true;
+      _scheduleReposts();
+      _onCall();
+    } catch (error) {
+      _ignore(error);
+      if (call.isActive &&
+          call.startedAt == startedAt &&
+          call.chatId == chatId) {
+        await _quietly(
+          () => ui.notice(
+            'Could not start the background call. Please try again.',
+          ),
+        );
+        if (_started &&
+            call.isActive &&
+            call.startedAt == startedAt &&
+            call.chatId == chatId) {
+          await _quietly(call.end);
+        }
+      }
+    } finally {
+      _startingOutgoing = false;
+      // A replacement call (or a permission notification) may have arrived
+      // while the previous permission check / native start was pending.
+      if (_started && _outgoingStartRequested) _onCall();
+    }
   }
 
   /// The running call is still the one [session] mirrors.
@@ -501,12 +579,14 @@ class _Session {
     required this.chatId,
     required this.startedAt,
     this.entry,
+    this.serviceReady = true,
   });
 
   final String key;
   final IncomingCallEntry? entry;
   final String? chatId;
   final DateTime? startedAt;
+  bool serviceReady;
   bool connected = false;
   DateTime? connectedAt;
 }

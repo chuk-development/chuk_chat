@@ -185,9 +185,10 @@ These come from existing decisions. This spec does not change them unless it say
 
 ### 5.1 Where the voice worker runs — decision
 
-**Phase 1 (build now): chuk runs the voice worker** as a LiveKit agent, as the
-prototype does today. It is the mouth and the ears. It is **not** the brain for
-actions.
+**Phase 1 (current): the API repository deploys the voice worker** as a
+separate LiveKit agent service. It is the mouth and the ears. It is **not** the
+brain for actions. The worker and LiveKit SFU run in isolated containers,
+separate from the API process, so voice-service restarts do not restart the API.
 
 - It keeps its fast, cheap voice tools (time, weather, calculate, stay_silent).
 - For everything else it calls **`ask_agent(text)`**. That tool sends a LiveKit

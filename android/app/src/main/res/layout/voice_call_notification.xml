@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Ongoing-call notification, collapsed (VoiceCallBridge.kt). The name and
-     status, then Mute, Speaker and Hang up. -->
+     status, then the two Mute and Hang up actions. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -32,8 +32,8 @@
 
     <ImageButton
         android:id="@+id/voice_call_mute"
-        android:layout_width="36dp"
-        android:layout_height="36dp"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
         android:layout_marginStart="8dp"
         android:background="@drawable/voice_call_button"
         android:contentDescription="@string/voice_call_mute"
@@ -41,19 +41,9 @@
         android:src="@drawable/ic_voice_call_mic" />
 
     <ImageButton
-        android:id="@+id/voice_call_speaker"
-        android:layout_width="36dp"
-        android:layout_height="36dp"
-        android:layout_marginStart="8dp"
-        android:background="@drawable/voice_call_button"
-        android:contentDescription="@string/voice_call_speaker_on"
-        android:scaleType="center"
-        android:src="@drawable/ic_voice_call_speaker" />
-
-    <ImageButton
         android:id="@+id/voice_call_hangup"
-        android:layout_width="36dp"
-        android:layout_height="36dp"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
         android:layout_marginStart="8dp"
         android:background="@drawable/voice_call_button_hangup"
         android:contentDescription="@string/voice_call_hang_up"

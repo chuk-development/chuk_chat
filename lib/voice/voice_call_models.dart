@@ -76,8 +76,8 @@ class VoiceTurn {
 }
 
 /// What a finished call leaves behind in its chat: when it ran and what was
-/// said. Stored locally by `VoiceCallStore` and drawn by
-/// `VoiceCallRecordCard`.
+/// said. New calls are persisted as ordinary encrypted chat messages; old
+/// `VoiceCallStore` records are retained only until their transcript migrates.
 class VoiceCallRecord {
   VoiceCallRecord({
     required this.chatId,

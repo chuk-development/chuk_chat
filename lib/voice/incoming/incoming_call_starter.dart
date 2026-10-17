@@ -24,6 +24,7 @@ const Duration kAcceptedCallThreadWait = Duration(seconds: 2);
 /// through the shared chat pointer.
 void openVoiceCallChat(String chatId, VoiceCallMode? mode) {
   if (chatId.isEmpty) return;
+  VoiceCallController.instance.requestFullscreen();
   if (mode == VoiceCallMode.agents || ChatOrigin.isAgentsThread(chatId)) {
     NotificationRouter.instance.open(NotificationTarget(sessionKey: chatId));
     return;

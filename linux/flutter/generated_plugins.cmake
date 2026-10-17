@@ -3,12 +3,13 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  app_links_linux
+  audioplayers_linux
   desktop_drop
   dynamic_color
   file_selector_linux
   flutter_secure_storage_linux
   flutter_webrtc
-  gtk
   irondash_engine_context
   livekit_client
   pasteboard
@@ -20,7 +21,6 @@ list(APPEND FLUTTER_PLUGIN_LIST
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
-  cnativeapi
   jni
 )
 

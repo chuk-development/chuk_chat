@@ -23,9 +23,11 @@ ENV_FILE="$APP_DIR/.env"
 TARGET_PLATFORM=android-arm64
 NO_INSTALL=
 SERIAL=
+VOICE_CALL=
 for arg in "$@"; do
   case "$arg" in
     --no-install) NO_INSTALL=1 ;;
+    --voice) VOICE_CALL=1 ;;
     # The phone is arm64, the local AVD is x86_64. Gradle follows this through
     # the target-platform property (android/app/build.gradle.kts).
     --emulator|--x64) TARGET_PLATFORM=android-x64 ;;
@@ -54,6 +56,10 @@ DEFINES=(
   "--build-number=$BUILD_NUMBER"
 )
 
+if [ -n "$VOICE_CALL" ]; then
+  DEFINES+=("--dart-define=FEATURE_VOICE_CALL=true" "--dart-define=FEATURE_VOICE_MODE=true")
+fi
+
 echo "==> flutter build apk --release --target-platform $TARGET_PLATFORM"
 flutter build apk --release --target-platform "$TARGET_PLATFORM" "${DEFINES[@]}"
 ls -lh "$OUT"
@@ -77,9 +83,8 @@ adb() { command adb -s "$SERIAL" "$@"; }
 # uninstall first — that drops the app's local data, pairing included.
 echo "==> adb install"
 if ! adb install -r -d "$OUT"; then
-  echo "==> install refused, uninstalling $PKG and retrying (app data is lost)"
-  adb uninstall "$PKG" >/dev/null
-  adb install -r "$OUT"
+  echo "install refused; existing app and local data were preserved" >&2
+  exit 1
 fi
 
 adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true

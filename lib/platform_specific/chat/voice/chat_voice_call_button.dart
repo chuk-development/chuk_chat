@@ -15,8 +15,6 @@ import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_binding.dart';
 import 'package:chuk_chat/ui/expressive/huge_icon.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/voice/voice_call.dart';
-import 'package:chuk_chat/voice/widgets/voice_call_controls.dart'
-    show VoiceHangUpGlyph;
 import 'package:chuk_chat/widgets/floating_chrome_surface.dart';
 
 /// Which surface the target sits on.
@@ -85,10 +83,13 @@ class ChatVoiceCallButton extends StatelessWidget {
             b != null &&
             ((chatId != null && chatId.isNotEmpty) || b.ensureChatId != null);
         final bool live = ready && b.isLiveFor(b.currentChatId());
-        final String tooltip = live ? 'Hang up' : 'Voice call';
+        final String tooltip = live ? 'Open voice call' : 'Voice call';
         void onTap() {
           if (b == null) return;
-          unawaited(b.toggleCall(agentName: agentName));
+          if (!live) unawaited(b.startCall(agentName: agentName));
+          unawaited(
+            VoiceCallFullscreenPage.show(context, controller: controller),
+          );
         }
 
         return switch (style) {
@@ -130,7 +131,7 @@ class ChatVoiceCallButton extends StatelessWidget {
         ),
       );
     }
-    final Color glyph = Theme.of(context).colorScheme.error;
+    final Color glyph = Theme.of(context).colorScheme.primary;
     return Semantics(
       identifier: semanticsId,
       button: true,
@@ -148,7 +149,7 @@ class ChatVoiceCallButton extends StatelessWidget {
             onTap: onTap,
             child: SizedBox.square(
               dimension: size,
-              child: Center(child: VoiceHangUpGlyph(color: glyph)),
+              child: Center(child: HugeIcon(HugeIcons.call02, color: glyph)),
             ),
           ),
         ),
@@ -165,7 +166,7 @@ class ChatVoiceCallButton extends StatelessWidget {
   ) {
     final ThemeData theme = Theme.of(context);
     final Color base = live
-        ? theme.colorScheme.error
+        ? theme.colorScheme.primary
         : theme.resolvedIconColor.withValues(alpha: ready ? 0.6 : 0.3);
     return Semantics(
       identifier: semanticsId,
@@ -184,14 +185,12 @@ class ChatVoiceCallButton extends StatelessWidget {
               height: size,
               decoration: BoxDecoration(
                 color: live
-                    ? theme.colorScheme.error.withValues(alpha: 0.15)
+                    ? theme.colorScheme.primary.withValues(alpha: 0.15)
                     : Colors.transparent,
                 shape: BoxShape.circle,
               ),
               child: Center(
-                child: live
-                    ? VoiceHangUpGlyph(color: base)
-                    : HugeIcon(HugeIcons.call02, size: 20, color: base),
+                child: HugeIcon(HugeIcons.call02, size: 20, color: base),
               ),
             ),
           ),
@@ -201,8 +200,7 @@ class ChatVoiceCallButton extends StatelessWidget {
   }
 
   /// The phone chrome's chip: 42 px painted, 48 px pressed. Idle it is the
-  /// chrome surface with the call glyph; live it is a flat error fill with
-  /// the hang-up glyph (no shadow, no glow).
+  /// chrome surface with the call glyph; live it uses the active accent.
   Widget _chip(
     BuildContext context,
     bool live,
@@ -214,10 +212,10 @@ class ChatVoiceCallButton extends StatelessWidget {
     const double press = 48;
     final ThemeData theme = Theme.of(context);
     final Color fill = live
-        ? theme.colorScheme.error
+        ? theme.colorScheme.primary
         : FloatingChromeSurface.fillOf(context);
     final Color glyph = live
-        ? theme.colorScheme.onError
+        ? theme.colorScheme.onPrimary
         : theme.resolvedIconColor.withValues(alpha: ready ? 1 : 0.45);
     return Semantics(
       identifier: semanticsId,
@@ -239,11 +237,12 @@ class ChatVoiceCallButton extends StatelessWidget {
                 child: Ink(
                   width: chip,
                   height: chip,
-                  decoration: BoxDecoration(color: fill, shape: BoxShape.circle),
+                  decoration: BoxDecoration(
+                    color: fill,
+                    shape: BoxShape.circle,
+                  ),
                   child: Center(
-                    child: live
-                        ? VoiceHangUpGlyph(color: glyph, size: 22)
-                        : HugeIcon(HugeIcons.call02, size: 22, color: glyph),
+                    child: HugeIcon(HugeIcons.call02, size: 22, color: glyph),
                   ),
                 ),
               ),
