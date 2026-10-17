@@ -51,6 +51,11 @@ on:
         required: false
         default: true
         type: boolean
+      enable_voice:
+        description: 'Enable Voice calls and Agents for testing'
+        required: false
+        default: false
+        type: boolean
       prerelease:
         description: 'Cut a pre-release: tag v<ver>-pre.N, marked pre-release, up to 20 per version (bump pubspec for the 21st)'
         required: false
@@ -343,7 +348,10 @@ jobs:
             --dart-define=PLATFORM_MOBILE=true \
             --dart-define=FEATURE_PROJECTS=false \
             --dart-define=FEATURE_IMAGE_GEN=false \
-            --dart-define=FEATURE_VOICE_MODE=false \
+            --dart-define=FEATURE_AGENTS=${{ inputs.enable_voice && 'true' || 'false' }} \
+            --dart-define=FEATURE_VOICE_CALL=${{ inputs.enable_voice && 'true' || 'false' }} \
+            --dart-define=FEATURE_VOICE_MODE=${{ inputs.enable_voice && 'true' || 'false' }} \
+            --dart-define=VOICE_TOKEN_URL=${{ inputs.enable_voice && 'https://api.chuk.chat/v1/voice/token' || '' }} \
             --dart-define=FEATURE_SERVER_TOOLS=false \
             --tree-shake-icons
 
@@ -397,7 +405,10 @@ jobs:
             --dart-define=PLATFORM_DESKTOP=true \
             --dart-define=FEATURE_PROJECTS=false \
             --dart-define=FEATURE_IMAGE_GEN=false \
-            --dart-define=FEATURE_VOICE_MODE=false \
+            --dart-define=FEATURE_AGENTS=${{ inputs.enable_voice && 'true' || 'false' }} \
+            --dart-define=FEATURE_VOICE_CALL=${{ inputs.enable_voice && 'true' || 'false' }} \
+            --dart-define=FEATURE_VOICE_MODE=${{ inputs.enable_voice && 'true' || 'false' }} \
+            --dart-define=VOICE_TOKEN_URL=${{ inputs.enable_voice && 'https://api.chuk.chat/v1/voice/token' || '' }} \
             --dart-define=FEATURE_SERVER_TOOLS=false \
             --tree-shake-icons
 
@@ -636,7 +647,10 @@ jobs:
             --dart-define=PLATFORM_DESKTOP=true \
             --dart-define=FEATURE_PROJECTS=false \
             --dart-define=FEATURE_IMAGE_GEN=false \
-            --dart-define=FEATURE_VOICE_MODE=false \
+            --dart-define=FEATURE_AGENTS=${{ inputs.enable_voice && 'true' || 'false' }} \
+            --dart-define=FEATURE_VOICE_CALL=${{ inputs.enable_voice && 'true' || 'false' }} \
+            --dart-define=FEATURE_VOICE_MODE=${{ inputs.enable_voice && 'true' || 'false' }} \
+            --dart-define=VOICE_TOKEN_URL=${{ inputs.enable_voice && 'https://api.chuk.chat/v1/voice/token' || '' }} \
             --dart-define=FEATURE_SERVER_TOOLS=false \
             --tree-shake-icons
 
@@ -821,7 +835,10 @@ jobs:
             --dart-define=LINUX_VARIANT=full \
             --dart-define=FEATURE_PROJECTS=false \
             --dart-define=FEATURE_IMAGE_GEN=false \
-            --dart-define=FEATURE_VOICE_MODE=false \
+            --dart-define=FEATURE_AGENTS=${{ inputs.enable_voice && 'true' || 'false' }} \
+            --dart-define=FEATURE_VOICE_CALL=${{ inputs.enable_voice && 'true' || 'false' }} \
+            --dart-define=FEATURE_VOICE_MODE=${{ inputs.enable_voice && 'true' || 'false' }} \
+            --dart-define=VOICE_TOKEN_URL=${{ inputs.enable_voice && 'https://api.chuk.chat/v1/voice/token' || '' }} \
             --dart-define=FEATURE_SERVER_TOOLS=false \
             --tree-shake-icons
 
@@ -1043,7 +1060,10 @@ jobs:
             --dart-define=LINUX_VARIANT=full \
             --dart-define=FEATURE_PROJECTS=false \
             --dart-define=FEATURE_IMAGE_GEN=false \
-            --dart-define=FEATURE_VOICE_MODE=false \
+            --dart-define=FEATURE_AGENTS=${{ inputs.enable_voice && 'true' || 'false' }} \
+            --dart-define=FEATURE_VOICE_CALL=${{ inputs.enable_voice && 'true' || 'false' }} \
+            --dart-define=FEATURE_VOICE_MODE=${{ inputs.enable_voice && 'true' || 'false' }} \
+            --dart-define=VOICE_TOKEN_URL=${{ inputs.enable_voice && 'https://api.chuk.chat/v1/voice/token' || '' }} \
             --dart-define=FEATURE_SERVER_TOOLS=false \
             --tree-shake-icons
 
@@ -1197,7 +1217,10 @@ jobs:
             --dart-define=BUILD_TIMESTAMP=${{ needs.version-bump.outputs.build_timestamp }} `
             --dart-define=FEATURE_PROJECTS=false `
             --dart-define=FEATURE_IMAGE_GEN=false `
-            --dart-define=FEATURE_VOICE_MODE=false `
+            --dart-define=FEATURE_AGENTS=${{ inputs.enable_voice && 'true' || 'false' }} `
+            --dart-define=FEATURE_VOICE_CALL=${{ inputs.enable_voice && 'true' || 'false' }} `
+            --dart-define=FEATURE_VOICE_MODE=${{ inputs.enable_voice && 'true' || 'false' }} `
+            --dart-define=VOICE_TOKEN_URL=${{ inputs.enable_voice && 'https://api.chuk.chat/v1/voice/token' || '' }} `
             --dart-define=FEATURE_SERVER_TOOLS=false `
             --tree-shake-icons
 
@@ -1351,7 +1374,10 @@ jobs:
             --dart-define=BUILD_TIMESTAMP=${{ needs.version-bump.outputs.build_timestamp }} \
             --dart-define=FEATURE_PROJECTS=false \
             --dart-define=FEATURE_IMAGE_GEN=false \
-            --dart-define=FEATURE_VOICE_MODE=false \
+            --dart-define=FEATURE_AGENTS=${{ inputs.enable_voice && 'true' || 'false' }} \
+            --dart-define=FEATURE_VOICE_CALL=${{ inputs.enable_voice && 'true' || 'false' }} \
+            --dart-define=FEATURE_VOICE_MODE=${{ inputs.enable_voice && 'true' || 'false' }} \
+            --dart-define=VOICE_TOKEN_URL=${{ inputs.enable_voice && 'https://api.chuk.chat/v1/voice/token' || '' }} \
             --dart-define=FEATURE_SERVER_TOOLS=false \
             --tree-shake-icons
 
@@ -1426,7 +1452,10 @@ jobs:
             --dart-define=PLATFORM_MOBILE=true \
             --dart-define=FEATURE_PROJECTS=false \
             --dart-define=FEATURE_IMAGE_GEN=false \
-            --dart-define=FEATURE_VOICE_MODE=false \
+            --dart-define=FEATURE_AGENTS=${{ inputs.enable_voice && 'true' || 'false' }} \
+            --dart-define=FEATURE_VOICE_CALL=${{ inputs.enable_voice && 'true' || 'false' }} \
+            --dart-define=FEATURE_VOICE_MODE=${{ inputs.enable_voice && 'true' || 'false' }} \
+            --dart-define=VOICE_TOKEN_URL=${{ inputs.enable_voice && 'https://api.chuk.chat/v1/voice/token' || '' }} \
             --dart-define=FEATURE_SERVER_TOOLS=false
 
       - name: Create archive and upload
