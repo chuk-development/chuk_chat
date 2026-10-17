@@ -61,7 +61,11 @@ if [ -n "$VOICE_CALL" ]; then
 fi
 
 echo "==> flutter build apk --release --target-platform $TARGET_PLATFORM"
-flutter build apk --release --target-platform "$TARGET_PLATFORM" "${DEFINES[@]}"
+# Match CI's release shrinking locally too. Gradle otherwise disables R8 on
+# developer machines, adding several MB of unused Android code/resources.
+# Set ORG_GRADLE_PROJECT_enableR8=false explicitly for a faster local build.
+ORG_GRADLE_PROJECT_enableR8="${ORG_GRADLE_PROJECT_enableR8:-true}" \
+  flutter build apk --release --target-platform "$TARGET_PLATFORM" "${DEFINES[@]}"
 ls -lh "$OUT"
 
 [ -n "$NO_INSTALL" ] && exit 0
