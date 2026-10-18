@@ -75,6 +75,8 @@ class VoiceCallController extends ChangeNotifier {
   VoiceCallPhase _phase = VoiceCallPhase.idle;
   bool _micMuted = false;
   bool _cameraEnabled = false;
+  lk.LocalVideoTrack? _debugCameraTrack;
+  bool _cameraMirrored = true;
   double _volume = 1;
   int _volumeRevision = 0;
   String _voiceId = 'Bastian';
@@ -85,11 +87,18 @@ class VoiceCallController extends ChangeNotifier {
   final VoiceAudioOutput _audioOutput = const VoiceAudioOutput();
   final ValueNotifier<double> _audioLevel = ValueNotifier(0);
   Timer? _audioLevelTimer;
+  Timer? _outputRouteTimer;
+  bool _readingOutputRoute = false;
   int _fullscreenRequest = 0;
   bool _agentSpeaking = false;
   bool _agentThinking = false;
   bool _agentPresent = false;
   bool? _speakerOn;
+  String? _outputRoute;
+  bool _changingSpeaker = false;
+  bool? _debugCanSwitchSpeaker;
+  String? get outputRoute => _outputRoute;
+  bool get changingSpeaker => _changingSpeaker;
   String? _chatId;
   String? _callId;
   VoiceCallMode? _mode;
@@ -97,6 +106,8 @@ class VoiceCallController extends ChangeNotifier {
   String? _error;
   DateTime? _startedAt;
   final VoiceTranscript _transcript = VoiceTranscript();
+  bool _speechSnapshots = false;
+  int _settledSpeechThroughMs = 0;
   List<VoiceTurn> _turns = const <VoiceTurn>[];
   final List<VoiceCard> _cardList = <VoiceCard>[];
   List<VoiceCard> _cards = const <VoiceCard>[];
@@ -134,6 +145,29 @@ class VoiceCallController extends ChangeNotifier {
   VoiceCallPhase get phase => _phase;
   bool get micMuted => _micMuted;
   bool get cameraEnabled => _cameraEnabled;
+  lk.LocalVideoTrack? get cameraTrack {
+    if (_debugCameraTrack != null) return _debugCameraTrack;
+    for (final publication
+        in _room?.localParticipant?.videoTrackPublications ??
+            <lk.LocalTrackPublication<lk.LocalVideoTrack>>[]) {
+      if (publication.source == lk.TrackSource.camera) return publication.track;
+    }
+    return null;
+  }
+
+  bool get cameraMirrored => _cameraMirrored;
+
+  Future<void> switchCamera() async {
+    final track = cameraTrack;
+    if (track == null) return;
+    final front = !_cameraMirrored;
+    await track.setCameraPosition(
+      front ? lk.CameraPosition.front : lk.CameraPosition.back,
+    );
+    _cameraMirrored = front;
+    notifyListeners();
+  }
+
   double get volume => _volume;
   String get voiceId => _voiceId;
   String get defaultVoiceId => _defaultVoiceId;
@@ -192,7 +226,8 @@ class VoiceCallController extends ChangeNotifier {
   /// Whether the output can be switched between speaker and earpiece
   /// (phones only; a headset always wins).
   bool get canSwitchSpeaker =>
-      !kIsWeb && lk.AudioManager.instance.canSwitchSpeakerphone;
+      _debugCanSwitchSpeaker ??
+      (!kIsWeb && lk.AudioManager.instance.canSwitchSpeakerphone);
 
   /// True when the speaker is the preferred output (LiveKit's default).
   bool get speakerOn =>
@@ -253,6 +288,8 @@ class VoiceCallController extends ChangeNotifier {
     _agentThinking = false;
     _agentPresent = false;
     _agentIdentity = null;
+    _speechSnapshots = false;
+    _settledSpeechThroughMs = 0;
     _startedAt = DateTime.now();
     _transcript.clear();
     _turns = const <VoiceTurn>[];
@@ -343,11 +380,19 @@ class VoiceCallController extends ChangeNotifier {
         // left the phone on its earpiece even when the UI says speaker.
         _speakerOn ??= true;
         await lk.AudioManager.instance.setSpeakerOutputPreferred(_speakerOn!);
+        await _quietly(() => _applyNativeRoute(_speakerOn!));
       }
       if (gen != _generation) return;
       await _quietly(() => _audioOutput.setCallActive(true));
       await _refreshOutputVolume();
+      await _refreshOutputRoute();
       if (gen != _generation) return;
+      _outputRouteTimer?.cancel();
+      _outputRouteTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+        if (gen == _generation && !_changingSpeaker) {
+          unawaited(_refreshOutputRoute());
+        }
+      });
       _audioLevelTimer?.cancel();
       _audioLevelTimer = Timer.periodic(const Duration(milliseconds: 80), (_) {
         if (gen != _generation) return;
@@ -423,6 +468,10 @@ class VoiceCallController extends ChangeNotifier {
 
   void _attach(lk.Room room, int gen) {
     room.registerTextStreamHandler(
+      'ui.speech',
+      (reader, identity) => unawaited(_onSpeechStream(gen, reader, identity)),
+    );
+    room.registerTextStreamHandler(
       VoiceTranscriptionAttributes.topic,
       (lk.TextStreamReader reader, String identity) =>
           _onTranscriptionStream(room, gen, reader, identity),
@@ -466,6 +515,9 @@ class VoiceCallController extends ChangeNotifier {
   void _onData(int gen, lk.DataReceivedEvent event) {
     if (gen != _generation) return;
     switch (event.topic) {
+      case 'ui.speech':
+        if (event.participant?.identity != _agentIdentity) return;
+        _applySpeechData(event.data);
       case VoiceProtocol.voiceTopic:
         if (event.participant?.identity != _agentIdentity) return;
         try {
@@ -506,6 +558,82 @@ class VoiceCallController extends ChangeNotifier {
     }
   }
 
+  void _applySpeechData(List<int> bytes) {
+    try {
+      final payload = jsonDecode(utf8.decode(bytes));
+      if (payload is! Map ||
+          payload['v'] != 1 ||
+          payload['turn_id'] is! String ||
+          payload['spoken_text'] is! String ||
+          payload['generated_text'] is! String ||
+          payload['interrupted'] is! bool) {
+        return;
+      }
+      final id = payload['turn_id'] as String;
+      final spoken = payload['spoken_text'] as String;
+      final generated = payload['generated_text'] as String;
+      if (id.isEmpty ||
+          id.length > 160 ||
+          spoken.length > 100000 ||
+          generated.length > 100000) {
+        return;
+      }
+      _speechSnapshots = true;
+      final ended = payload['finished_at'];
+      if (ended is num && ended.isFinite) {
+        final ms = (ended * 1000).round();
+        if (ms > _settledSpeechThroughMs) _settledSpeechThroughMs = ms;
+      }
+      final created = payload['created_at'];
+      final at = created is num && created.isFinite
+          ? DateTime.fromMillisecondsSinceEpoch(
+              (created * 1000).round(),
+              isUtc: true,
+            ).toLocal()
+          : DateTime.now();
+      if (_transcript.applySpeechSnapshot(
+        turnId: id,
+        spokenText: spoken,
+        generatedText: generated,
+        interrupted: payload['interrupted'] as bool,
+        generationComplete: payload['generation_complete'] is bool
+            ? payload['generation_complete'] as bool
+            : null,
+        at: at,
+        finishedAt: ended is num && ended.isFinite
+            ? DateTime.fromMillisecondsSinceEpoch(
+                (ended * 1000).round(),
+                isUtc: true,
+              ).toLocal()
+            : null,
+      )) {
+        _publishTurns();
+      }
+    } catch (_) {
+      // Invalid room data never reaches storage or logs.
+    }
+  }
+
+  Future<void> _onSpeechStream(
+    int gen,
+    lk.TextStreamReader reader,
+    String identity,
+  ) async {
+    if (identity != _agentIdentity || gen != _generation) return;
+    try {
+      // LiveKit text streams avoid the reliable data packet size limit.
+      final buffer = StringBuffer();
+      await for (final chunk in reader) {
+        if (gen != _generation) return;
+        buffer.write(utf8.decode(chunk.content));
+        if (buffer.length > 300000) return;
+      }
+      if (gen == _generation) _applySpeechData(utf8.encode(buffer.toString()));
+    } catch (_) {
+      // Room disconnects and invalid payloads are content-free failures.
+    }
+  }
+
   void _onTranscriptionStream(
     lk.Room room,
     int gen,
@@ -514,6 +642,10 @@ class VoiceCallController extends ChangeNotifier {
   ) {
     final lk.TextStreamInfo? info = reader.info;
     if (info == null || gen != _generation) return;
+    if (identity != room.localParticipant?.identity &&
+        identity != _agentIdentity) {
+      return;
+    }
     final String role = identity == room.localParticipant?.identity
         ? VoiceTurn.roleUser
         : VoiceTurn.roleAssistant;
@@ -531,6 +663,11 @@ class VoiceCallController extends ChangeNotifier {
     reader.listen(
       (chunk) {
         if (gen != _generation) return;
+        if (role == VoiceTurn.roleAssistant &&
+            _speechSnapshots &&
+            info.timestamp <= _settledSpeechThroughMs) {
+          return;
+        }
         final String text;
         try {
           text = utf8.decode(chunk.content);
@@ -542,7 +679,9 @@ class VoiceCallController extends ChangeNotifier {
           segmentId: segmentId,
           streamId: streamId,
           text: text,
-          isFinal: headerFinal,
+          isFinal:
+              headerFinal &&
+              !(role == VoiceTurn.roleAssistant && _speechSnapshots),
           at: at,
         );
         if (changed) _publishTurns();
@@ -553,7 +692,8 @@ class VoiceCallController extends ChangeNotifier {
         // the info just before the stream closes.
         final Map<String, String> attributes =
             reader.info?.attributes ?? const <String, String>{};
-        if (VoiceTranscriptionAttributes.parseFinal(attributes) &&
+        if (!(role == VoiceTurn.roleAssistant && _speechSnapshots) &&
+            VoiceTranscriptionAttributes.parseFinal(attributes) &&
             _transcript.finalizeSegment(role: role, segmentId: segmentId)) {
           _publishTurns();
         }
@@ -581,6 +721,8 @@ class VoiceCallController extends ChangeNotifier {
     bool thinking = false;
     if (agent != null) {
       _agentIdentity = agent.identity;
+      _speechSnapshots =
+          agent.attributes['chuk.speech_snapshots'] == '1' || _speechSnapshots;
       _agentJoinTimer?.cancel();
       _agentJoinTimer = null;
       _agentLeftTimer?.cancel();
@@ -836,6 +978,30 @@ class VoiceCallController extends ChangeNotifier {
     unawaited(VoicePreferences.saveSynced(owner, voice));
   }
 
+  Future<void> _refreshOutputRoute() async {
+    if (!_audioOutput.isAndroid || _readingOutputRoute) return;
+    final gen = _generation;
+    _readingOutputRoute = true;
+    try {
+      final route = await _audioOutput.readRoute();
+      if (gen != _generation ||
+          !isActive ||
+          route == null ||
+          route == 'unknown') {
+        return;
+      }
+      if (_outputRoute != route || speakerOn != (route == 'speaker')) {
+        _outputRoute = route;
+        _speakerOn = route == 'speaker';
+        notifyListeners();
+      }
+    } catch (_) {
+      // An older native shell may not expose effective device routing.
+    } finally {
+      _readingOutputRoute = false;
+    }
+  }
+
   Future<void> _refreshOutputVolume() async {
     try {
       final value = await _audioOutput.readVolume();
@@ -975,6 +1141,7 @@ class VoiceCallController extends ChangeNotifier {
         ),
       );
       _cameraEnabled = enabled;
+      if (enabled) _cameraMirrored = true;
       notifyListeners();
     } catch (e) {
       if (kDebugMode) {
@@ -987,17 +1154,48 @@ class VoiceCallController extends ChangeNotifier {
 
   /// Prefers the speaker ([on] true) or the earpiece. A headset always wins.
   /// Phones only ([canSwitchSpeaker]); elsewhere it does nothing.
+  Future<void> _applyNativeRoute(bool on) async {
+    if (!_audioOutput.isAndroid) return;
+    final route = await _audioOutput.setSpeaker(on);
+    _outputRoute = route;
+    if (route != null && route != 'unknown') _speakerOn = route == 'speaker';
+  }
+
   Future<void> setSpeakerOn(bool on) async {
-    if (!canSwitchSpeaker || speakerOn == on) return;
-    _speakerOn = on;
+    if (!canSwitchSpeaker || _changingSpeaker || speakerOn == on) return;
+    if (_phase != VoiceCallPhase.live) {
+      _speakerOn = on;
+      notifyListeners();
+      return;
+    }
+    final gen = _generation;
+    final previous = speakerOn;
+    _changingSpeaker = true;
     notifyListeners();
-    if (_phase != VoiceCallPhase.live) return;
     try {
       await lk.AudioManager.instance.setSpeakerOutputPreferred(on);
+      if (gen != _generation) return;
+      await _applyNativeRoute(on);
+      if (gen != _generation) return;
+      if (!_audioOutput.isAndroid) _speakerOn = on;
       await _refreshOutputVolume();
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[VoiceCall] speaker switch failed: ${e.runtimeType}');
+    } catch (_) {
+      if (gen == _generation) {
+        _speakerOn = previous;
+        await _quietly(() async {
+          final route = await _audioOutput.readRoute();
+          if (gen != _generation) return;
+          _outputRoute = route;
+          if (route != null && route != 'unknown') {
+            _speakerOn = route == 'speaker';
+          }
+        });
+      }
+      throw StateError('Could not switch the audio output.');
+    } finally {
+      if (gen == _generation) {
+        _changingSpeaker = false;
+        notifyListeners();
       }
     }
   }
@@ -1056,8 +1254,11 @@ class VoiceCallController extends ChangeNotifier {
     _generation++;
     _volumeRevision++;
     _changingVoice = false;
+    _changingSpeaker = false;
     _audioLevelTimer?.cancel();
     _audioLevelTimer = null;
+    _outputRouteTimer?.cancel();
+    _outputRouteTimer = null;
     _audioLevel.value = 0;
     _setPhase(VoiceCallPhase.ending);
     await _quietly(() => _audioOutput.setCallActive(false));
@@ -1082,6 +1283,7 @@ class VoiceCallController extends ChangeNotifier {
         room.unregisterRpcMethod(method);
       }
       room.unregisterTextStreamHandler(VoiceTranscriptionAttributes.topic);
+      room.unregisterTextStreamHandler('ui.speech');
       await _quietly(() async => listener?.dispose());
       await _quietly(room.disconnect);
       await _quietly(room.dispose);
@@ -1166,6 +1368,12 @@ class VoiceCallController extends ChangeNotifier {
     List<VoiceCard> cards = const <VoiceCard>[],
     List<VoiceToolActivity> runningTools = const <VoiceToolActivity>[],
     bool micMuted = false,
+    bool cameraEnabled = false,
+    lk.LocalVideoTrack? cameraTrack,
+    bool? speakerOn,
+    String? outputRoute,
+    bool changingSpeaker = false,
+    bool? canSwitchSpeaker,
     bool agentSpeaking = false,
     bool agentThinking = false,
     bool agentPresent = true,
@@ -1183,6 +1391,12 @@ class VoiceCallController extends ChangeNotifier {
     _cards = List<VoiceCard>.unmodifiable(cards);
     _runningTools = List<VoiceToolActivity>.unmodifiable(runningTools);
     _micMuted = micMuted;
+    _cameraEnabled = cameraEnabled;
+    _debugCameraTrack = cameraTrack;
+    _speakerOn = speakerOn;
+    _outputRoute = outputRoute;
+    _changingSpeaker = changingSpeaker;
+    _debugCanSwitchSpeaker = canSwitchSpeaker;
     _agentSpeaking = agentSpeaking;
     _agentThinking = agentThinking;
     _agentPresent = agentPresent;

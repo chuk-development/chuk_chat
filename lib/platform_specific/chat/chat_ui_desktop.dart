@@ -1693,6 +1693,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         final row = <String, String>{
           'sender': turn.isUser ? 'user' : 'ai',
           'text': turn.text,
+          if (turn.playbackMetadata != null)
+            'voicePlayback': turn.playbackMetadata!,
           'messageId': id,
           'sentAt': turn.at.toUtc().toIso8601String(),
         };

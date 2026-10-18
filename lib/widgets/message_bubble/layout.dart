@@ -1123,6 +1123,19 @@ extension _MessageBubbleLayout on _MessageBubbleState {
         : _strippedMessage;
 
     if (!isUserMessage &&
+        VoicePlaybackDetails.parse(widget.voicePlayback)?.interrupted == true &&
+        VoicePlaybackDetails.parse(widget.voicePlayback)
+                ?.appliesTo(displayText) ==
+            true) {
+      return VoicePlaybackCaption(
+        heard: displayText,
+        metadata: widget.voicePlayback,
+        textStyle: Theme.of(context).textTheme.bodyLarge
+            ?.copyWith(color: iconFgColor),
+      );
+    }
+
+    if (!isUserMessage &&
         (displayText.trim().isEmpty || displayText == 'Thinking...')) {
       return null;
     }

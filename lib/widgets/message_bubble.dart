@@ -23,6 +23,8 @@ import 'package:flutter/material.dart';
 
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:chuk_chat/utils/favicon.dart';
+import 'package:chuk_chat/voice/widgets/voice_playback_caption.dart';
+import 'package:chuk_chat/voice/voice_playback_context.dart';
 import 'package:chuk_chat/models/chat_message.dart' show ChatMessageStatus;
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/stream_phase.dart';
@@ -175,6 +177,7 @@ class MessageBubble extends StatefulWidget {
     this.maxWidth,
     this.actions = const <MessageBubbleAction>[],
     this.reasoning,
+    this.voicePlayback,
     this.isReasoningStreaming = false,
     this.modelLabel,
     this.modelProvider,
@@ -258,6 +261,7 @@ class MessageBubble extends StatefulWidget {
   final double? maxWidth; // Neue optionale Eigenschaft für responsive Breite
   final List<MessageBubbleAction> actions;
   final String? reasoning;
+  final String? voicePlayback;
   final bool isReasoningStreaming;
   final String? modelLabel;
   final String? modelProvider;

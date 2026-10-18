@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:livekit_client/livekit_client.dart' as lk;
 
 import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
 import 'package:chuk_chat/ui/expressive/huge_icon.dart';
@@ -123,68 +124,47 @@ class _VoiceCallFullscreenPageState extends State<VoiceCallFullscreenPage> {
                   child: Column(
                     children: [
                       Expanded(
-                        child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
                           child: Column(
-                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Semantics(
-                                label: c.agentSpeaking
-                                    ? 'Assistant speaking'
-                                    : _status(c),
-                                child: ValueListenableBuilder<double>(
-                                  valueListenable: c.audioLevel,
-                                  builder: (context, level, _) =>
-                                      AnimatedContainer(
-                                        key: const ValueKey(
-                                          'voice-visualization',
-                                        ),
-                                        duration: kExpressiveShort,
-                                        width:
-                                            (compact ? 108.0 : 170.0) *
-                                            (1 + level.clamp(0, 1) * 0.12),
-                                        height:
-                                            (compact ? 108.0 : 170.0) *
-                                            (1 + level.clamp(0, 1) * 0.12),
-                                        decoration: BoxDecoration(
-                                          color: c.agentSpeaking
-                                              ? scheme.primaryContainer
-                                              : scheme.surfaceContainerHigh,
-                                          borderRadius: BorderRadius.circular(
-                                            c.agentSpeaking ? 58 : 70,
-                                          ),
-                                        ),
-                                        child: Center(
-                                          child: VoiceSpeakingBars(
-                                            speaking: c.agentSpeaking,
-                                            color: c.agentSpeaking
-                                                ? scheme.onPrimaryContainer
-                                                : scheme.onSurfaceVariant,
-                                            size:
-                                                (compact ? 48.0 : 70.0) *
-                                                (1 + level.clamp(0, 1) * 0.25),
-                                          ),
-                                        ),
+                              Expanded(
+                                child: c.cameraEnabled
+                                    ? _cameraPreview(scheme)
+                                    : Center(
+                                        child: _visualization(compact, scheme),
                                       ),
-                                ),
                               ),
-                              const SizedBox(height: 20),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 24,
-                                ),
-                                child: Text(
-                                  failed
-                                      ? (c.error ?? 'Call failed')
-                                      : _status(c),
-                                  style: theme.textTheme.titleMedium?.copyWith(
-                                    color: failed
-                                        ? scheme.error
-                                        : scheme.onSurface,
+                              const SizedBox(height: 16),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  if (c.cameraEnabled) ...[
+                                    SizedBox(
+                                      width: 24,
+                                      height: 24,
+                                      child: _visualization(true, scheme),
+                                    ),
+                                    const SizedBox(width: 10),
+                                  ],
+                                  Flexible(
+                                    child: Text(
+                                      failed
+                                          ? (c.error ?? 'Call failed')
+                                          : _status(c),
+                                      style: theme.textTheme.titleMedium
+                                          ?.copyWith(
+                                            color: failed
+                                                ? scheme.error
+                                                : scheme.onSurface,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                      textAlign: TextAlign.center,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
-                                  textAlign: TextAlign.center,
-                                  maxLines: 3,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                                ],
                               ),
                               if (c.runningTools.isNotEmpty)
                                 Padding(
@@ -221,7 +201,7 @@ class _VoiceCallFullscreenPageState extends State<VoiceCallFullscreenPage> {
                         ),
                       SizedBox(
                         key: const ValueKey('voice-compact-transcript'),
-                        height: compact ? 62 : 100,
+                        height: compact ? 62 : 108,
                         child: c.turns.isEmpty
                             ? Center(
                                 child: Text(
@@ -245,23 +225,9 @@ class _VoiceCallFullscreenPageState extends State<VoiceCallFullscreenPage> {
                                       c.turns[c.turns.length - index - 1];
                                   return Padding(
                                     padding: const EdgeInsets.only(bottom: 6),
-                                    child: Text.rich(
-                                      TextSpan(
-                                        children: [
-                                          TextSpan(
-                                            text:
-                                                '${turn.isUser ? 'You' : name}: ',
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                          TextSpan(text: turn.text),
-                                        ],
-                                      ),
-                                      style: theme.textTheme.bodySmall
-                                          ?.copyWith(
-                                            color: scheme.onSurfaceVariant,
-                                          ),
+                                    child: VoiceTurnCaption(
+                                      turn: turn,
+                                      name: name,
                                     ),
                                   );
                                 },
@@ -286,7 +252,7 @@ class _VoiceCallFullscreenPageState extends State<VoiceCallFullscreenPage> {
                               ),
                             ),
                             SizedBox(
-                              width: 128,
+                              width: 112,
                               child: TextButton.icon(
                                 icon: const HugeIcon(
                                   HugeIcons.userCircle,
@@ -306,15 +272,16 @@ class _VoiceCallFullscreenPageState extends State<VoiceCallFullscreenPage> {
                         ),
                       ),
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 18),
                         child: Wrap(
-                          spacing: 14,
+                          spacing: 12,
                           runSpacing: 8,
                           alignment: WrapAlignment.center,
                           children: [
                             VoiceCallControl(
                               semanticsId: 'voice-call-mute',
                               tooltip: c.micMuted ? 'Unmute' : 'Mute',
+                              label: c.micMuted ? 'Unmute' : 'Mute',
                               toggled: c.micMuted,
                               size: 52,
                               fill: c.micMuted
@@ -341,6 +308,7 @@ class _VoiceCallFullscreenPageState extends State<VoiceCallFullscreenPage> {
                               tooltip: c.cameraEnabled
                                   ? 'Turn video off'
                                   : 'Turn video on',
+                              label: 'Camera',
                               toggled: c.cameraEnabled,
                               size: 52,
                               fill: c.cameraEnabled
@@ -366,12 +334,15 @@ class _VoiceCallFullscreenPageState extends State<VoiceCallFullscreenPage> {
                                 tooltip: c.speakerOn
                                     ? 'Use earpiece'
                                     : 'Use speaker',
+                                label: c.changingSpeaker
+                                    ? 'Switching…'
+                                    : _outputLabel(c),
                                 toggled: c.speakerOn,
                                 size: 52,
                                 fill: c.speakerOn
-                                    ? scheme.secondaryContainer
+                                    ? scheme.inverseSurface
                                     : scheme.surfaceContainerHighest,
-                                onTap: failed
+                                onTap: failed || c.changingSpeaker
                                     ? null
                                     : () => unawaited(
                                         _action(
@@ -379,13 +350,18 @@ class _VoiceCallFullscreenPageState extends State<VoiceCallFullscreenPage> {
                                         ),
                                       ),
                                 child: HugeIcon(
-                                  HugeIcons.volumeHigh,
-                                  color: scheme.onSurface,
+                                  c.speakerOn
+                                      ? HugeIcons.volumeHigh
+                                      : HugeIcons.smartPhone01,
+                                  color: c.speakerOn
+                                      ? scheme.onInverseSurface
+                                      : scheme.onSurface,
                                 ),
                               ),
                             VoiceCallControl(
                               semanticsId: 'voice-call-hang-up',
                               tooltip: failed ? 'Close' : 'End call',
+                              label: failed ? 'Close' : 'End',
                               size: 52,
                               fill: scheme.error,
                               onTap: () async {
@@ -416,6 +392,93 @@ class _VoiceCallFullscreenPageState extends State<VoiceCallFullscreenPage> {
         ),
       );
     },
+  );
+
+  Widget _visualization(bool compact, ColorScheme scheme) => Semantics(
+    label: c.agentSpeaking ? 'Assistant speaking' : _status(c),
+    child: ValueListenableBuilder<double>(
+      valueListenable: c.audioLevel,
+      builder: (context, level, _) => AnimatedContainer(
+        key: const ValueKey('voice-visualization'),
+        duration: kExpressiveShort,
+        width: (compact ? 76.0 : 144.0) * (1 + level.clamp(0, 1) * .1),
+        height: (compact ? 76.0 : 144.0) * (1 + level.clamp(0, 1) * .1),
+        decoration: BoxDecoration(
+          color: c.agentSpeaking
+              ? scheme.primaryContainer
+              : scheme.surfaceContainer,
+          borderRadius: BorderRadius.circular(compact ? 28 : 54),
+        ),
+        child: Center(
+          child: VoiceSpeakingBars(
+            speaking: c.agentSpeaking,
+            color: c.agentSpeaking
+                ? scheme.onPrimaryContainer
+                : scheme.onSurfaceVariant,
+            size: (compact ? 32.0 : 64.0) * (1 + level.clamp(0, 1) * .2),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  Widget _cameraPreview(ColorScheme scheme) => ConstrainedBox(
+    constraints: const BoxConstraints(maxWidth: 440),
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(22),
+      child: Stack(
+        key: const ValueKey('voice-camera-preview'),
+        fit: StackFit.expand,
+        children: [
+          ColoredBox(color: scheme.surfaceContainerHigh),
+          if (c.cameraTrack case final track?)
+            lk.VideoTrackRenderer(
+              track,
+              fit: lk.VideoViewFit.cover,
+              mirrorMode: c.cameraMirrored
+                  ? lk.VideoViewMirrorMode.mirror
+                  : lk.VideoViewMirrorMode.off,
+            )
+          else
+            Center(
+              child: Text(
+                'Starting camera…',
+                style: TextStyle(color: scheme.onSurfaceVariant),
+              ),
+            ),
+          Positioned(
+            top: 10,
+            left: 10,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: scheme.surface,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                child: Text('Your camera'),
+              ),
+            ),
+          ),
+          if (c.cameraTrack != null)
+            Positioned(
+              bottom: 10,
+              right: 10,
+              child: VoiceCallControl(
+                semanticsId: 'voice-switch-camera',
+                tooltip: 'Switch camera',
+                fill: scheme.surface,
+                onTap: () => unawaited(_action(c.switchCamera)),
+                child: HugeIcon(
+                  HugeIcons.repeat,
+                  color: scheme.onSurface,
+                  size: 20,
+                ),
+              ),
+            ),
+        ],
+      ),
+    ),
   );
 
   Future<void> _chooseVoice() async {
@@ -476,6 +539,14 @@ class _VoiceCallFullscreenPageState extends State<VoiceCallFullscreenPage> {
     if (selected != null && mounted) await _action(() => c.setVoice(selected));
   }
 
+  static String _outputLabel(VoiceCallController c) => switch (c.outputRoute) {
+    'bluetooth' => 'Bluetooth',
+    'wired' => 'Headphones',
+    'speaker' => 'Speaker on',
+    'earpiece' => 'Earpiece',
+    _ => 'Audio output',
+  };
+
   static String _status(VoiceCallController c) {
     if (c.phase == VoiceCallPhase.connecting) return 'Connecting…';
     if (c.phase == VoiceCallPhase.ending) return 'Ending call…';
@@ -488,3 +559,50 @@ class _VoiceCallFullscreenPageState extends State<VoiceCallFullscreenPage> {
 
 String formatVoiceDuration(Duration value) =>
     '${value.inMinutes}:${(value.inSeconds % 60).toString().padLeft(2, '0')}';
+
+/// Keep the words that reached playback distinct from an interrupted draft.
+class VoiceTurnCaption extends StatelessWidget {
+  const VoiceTurnCaption({super.key, required this.turn, required this.name});
+  final VoiceTurn turn;
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final intended = turn.intendedText;
+    final showDraft =
+        !turn.isUser &&
+        turn.interrupted &&
+        intended != null &&
+        intended != turn.text;
+    final samePrefix = showDraft && intended.startsWith(turn.text);
+    final style = theme.textTheme.bodySmall?.copyWith(color: scheme.onSurface);
+    final dim = TextStyle(
+      color: scheme.onSurfaceVariant.withValues(alpha: .65),
+      fontWeight: FontWeight.w300,
+    );
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(
+            text: '${turn.isUser ? 'You' : name}: ',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          TextSpan(text: turn.text),
+          if (showDraft)
+            TextSpan(
+              text: samePrefix
+                  ? intended.substring(turn.text.length)
+                  : '\nUnspoken: $intended',
+              style: dim,
+            ),
+        ],
+      ),
+      style: style,
+      semanticsLabel: showDraft
+          ? '${turn.isUser ? 'You' : name}: ${turn.text}. Interrupted. Unspoken: ${samePrefix ? intended.substring(turn.text.length) : intended}'
+          : null,
+    );
+  }
+}

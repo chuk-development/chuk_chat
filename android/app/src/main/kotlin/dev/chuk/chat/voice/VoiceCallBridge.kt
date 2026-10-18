@@ -5,16 +5,17 @@ import android.app.KeyguardManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.Person
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import android.widget.RemoteViews
 import android.widget.Toast
 import com.hiennv.flutter_callkit_incoming.CallkitIncomingBroadcastReceiver
 import com.hiennv.flutter_callkit_incoming.CallkitNotificationService
@@ -29,7 +30,7 @@ import io.flutter.plugin.common.MethodChannel
 
 /**
  * The native half of lib/voice/incoming/ongoing_call_notification.dart
- * (FEATURE_VOICE_CALL): the ongoing-call notification with two large actions,
+ * (FEATURE_VOICE_CALL): the native ongoing-call notification with two actions,
  * Mute/Unmute and Hang up; the unlock prompt
  * after a call is accepted on the lock screen; and the clean-up when the app
  * dies during a call.
@@ -159,6 +160,7 @@ class VoiceCallBridge(private val activity: Activity, messenger: BinaryMessenger
   private val context: Context = activity.applicationContext
   private val methods = MethodChannel(messenger, METHOD_CHANNEL)
   private val events = EventChannel(messenger, EVENT_CHANNEL)
+  private var requestedAudioRoute = false
 
   init {
     methods.setMethodCallHandler(::onMethodCall)
@@ -229,9 +231,18 @@ class VoiceCallBridge(private val activity: Activity, messenger: BinaryMessenger
           audio.setStreamVolume(AudioManager.STREAM_VOICE_CALL, kotlin.math.round(volume * max).toInt(), 0)
           result.success(audio.getStreamVolume(AudioManager.STREAM_VOICE_CALL).toDouble() / max)
         }
+        "getCallAudioRoute" -> result.success(callAudioRoute())
+        "setCallSpeaker" -> {
+          setCallSpeaker(call.argument<Boolean>("speaker") == true, result)
+        }
         "setCallVolumeControls" -> {
-          activity.volumeControlStream = if (call.argument<Boolean>("active") == true)
+          val active = call.argument<Boolean>("active") == true
+          activity.volumeControlStream = if (active)
             AudioManager.STREAM_VOICE_CALL else AudioManager.USE_DEFAULT_STREAM_TYPE
+          if (!active && requestedAudioRoute && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            (context.getSystemService(Context.AUDIO_SERVICE) as AudioManager).clearCommunicationDevice()
+            requestedAudioRoute = false
+          }
           result.success(null)
         }
         else -> result.notImplemented()
@@ -240,6 +251,77 @@ class VoiceCallBridge(private val activity: Activity, messenger: BinaryMessenger
       Log.w(TAG, "${call.method} failed: ${e.javaClass.simpleName}")
       result.error("voice_call", e.javaClass.simpleName, null)
     }
+  }
+
+  // ── Call audio routing ───────────────────────────────────────────────
+
+  /** The real communication output, rather than the UI's requested preference. */
+  @Suppress("DEPRECATION")
+  private fun callAudioRoute(): String {
+    val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      return when (audio.communicationDevice?.type) {
+        AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "speaker"
+        AudioDeviceInfo.TYPE_BUILTIN_EARPIECE -> "earpiece"
+        AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
+        AudioDeviceInfo.TYPE_BLE_HEADSET -> "bluetooth"
+        AudioDeviceInfo.TYPE_WIRED_HEADSET,
+        AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+        AudioDeviceInfo.TYPE_USB_HEADSET -> "wired"
+        else -> "unknown"
+      }
+    }
+    return when {
+      audio.isBluetoothScoOn -> "bluetooth"
+      audio.isSpeakerphoneOn -> "speaker"
+      audio.isWiredHeadsetOn -> "wired"
+      else -> "earpiece"
+    }
+  }
+
+  /**
+   * LiveKit owns audio focus and call-mode lifetime. Select the actual output
+   * after changing its speaker preference, then wait for Android to confirm it.
+   * A successful preference write alone does not mean that routing changed.
+   */
+  @Suppress("DEPRECATION")
+  private fun setCallSpeaker(speaker: Boolean, result: MethodChannel.Result) {
+    val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    val wanted = if (speaker) "speaker" else "earpiece"
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      val deviceType = if (speaker) AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
+        else AudioDeviceInfo.TYPE_BUILTIN_EARPIECE
+      val device = audio.availableCommunicationDevices.firstOrNull { it.type == deviceType }
+      if (device == null) {
+        result.error("voice_audio_route", "Requested audio output is unavailable", null)
+        return
+      }
+      if (!audio.setCommunicationDevice(device)) {
+        result.error("voice_audio_route", "Android refused the audio output change", null)
+        return
+      }
+      requestedAudioRoute = true
+    } else {
+      audio.isSpeakerphoneOn = speaker
+    }
+    // The platform changes communication devices asynchronously. Poll only for
+    // this bounded request; no persistent handler or microphone session is added.
+    val deadline = android.os.SystemClock.uptimeMillis() + 1500L
+    fun confirm() {
+      try {
+        val actual = callAudioRoute()
+        if (actual == wanted) {
+          result.success(actual)
+        } else if (android.os.SystemClock.uptimeMillis() >= deadline) {
+          result.error("voice_audio_route", "Audio output did not change", actual)
+        } else {
+          main.postDelayed({ confirm() }, 50L)
+        }
+      } catch (e: Exception) {
+        result.error("voice_audio_route", e.javaClass.simpleName, null)
+      }
+    }
+    confirm()
   }
 
   // ── Lock screen ──────────────────────────────────────────────────────
@@ -291,11 +373,6 @@ class VoiceCallBridge(private val activity: Activity, messenger: BinaryMessenger
     ensureChannel(manager)
     val id = key.hashCode()
 
-    val small = RemoteViews(context.packageName, R.layout.voice_call_notification)
-    val big = RemoteViews(context.packageName, R.layout.voice_call_notification_big)
-    bindCommon(small, id, title, status, muted, false)
-    bindCommon(big, id, title, status, muted, true)
-
     val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
       Notification.Builder(context, NOTIFICATION_CHANNEL_ID)
     } else {
@@ -312,13 +389,30 @@ class VoiceCallBridge(private val activity: Activity, messenger: BinaryMessenger
       .setCategory(Notification.CATEGORY_CALL)
       .setVisibility(Notification.VISIBILITY_PUBLIC)
       .setColor(context.getColor(R.color.voice_call_accent))
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-      builder
-        .setStyle(Notification.DecoratedCustomViewStyle())
-        .setCustomContentView(small)
-        .setCustomBigContentView(big)
+    val mute = Notification.Action.Builder(
+      if (muted) R.drawable.ic_voice_call_mic_off else R.drawable.ic_voice_call_mic,
+      context.getString(if (muted) R.string.voice_call_unmute else R.string.voice_call_mute),
+      buttonIntent(id, BUTTON_MUTE),
+    ).build()
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      // Android supplies the compact call template and full-width pill actions.
+      // Reuse callkit's notification id: its foreground microphone service stays
+      // the owner, and notification taps/actions retain the existing Dart path.
+      val person = Person.Builder().setName(title.ifBlank {
+        context.getString(R.string.voice_call_default_title)
+      }).setImportant(true).build()
+      builder.setStyle(
+        Notification.CallStyle.forOngoingCall(person, buttonIntent(id, BUTTON_HANGUP))
+          .setDeclineButtonColorHint(context.getColor(R.color.voice_call_hangup)),
+      ).addAction(mute)
     } else {
-      builder.setContent(small)
+      // Standard actions on older Android also avoid nested custom-view padding
+      // and duplicate title/status rows. Mute toggles capture; it is not Pause.
+      builder.addAction(Notification.Action.Builder(
+        R.drawable.ic_voice_call_end,
+        context.getString(R.string.voice_call_hang_up),
+        buttonIntent(id, BUTTON_HANGUP),
+      ).build()).addAction(mute)
     }
     if (connectedAtMs > 0) {
       builder.setWhen(connectedAtMs).setShowWhen(true).setUsesChronometer(true)
@@ -330,47 +424,6 @@ class VoiceCallBridge(private val activity: Activity, messenger: BinaryMessenger
     }
     manager.notify(id, builder.build())
     shownIds.add(id)
-  }
-
-  private fun bindCommon(
-    views: RemoteViews,
-    id: Int,
-    title: String,
-    status: String,
-    muted: Boolean,
-    expanded: Boolean,
-  ) {
-    views.setTextViewText(R.id.voice_call_title, title)
-    views.setTextViewText(R.id.voice_call_status, status)
-
-    bindButton(
-      views, R.id.voice_call_mute, id, BUTTON_MUTE,
-      if (muted) R.string.voice_call_unmute else R.string.voice_call_mute,
-    )
-    views.setImageViewResource(
-      if (expanded) R.id.voice_call_mute_icon else R.id.voice_call_mute,
-      if (muted) R.drawable.ic_voice_call_mic_off else R.drawable.ic_voice_call_mic,
-    )
-    views.setInt(
-      R.id.voice_call_mute,
-      "setBackgroundResource",
-      if (expanded) {
-        if (muted) R.drawable.voice_call_action_active else R.drawable.voice_call_action
-      } else {
-        if (muted) R.drawable.voice_call_button_active else R.drawable.voice_call_button
-      },
-    )
-    if (expanded) {
-      views.setTextViewText(R.id.voice_call_mute_label,
-        context.getString(if (muted) R.string.voice_call_unmute else R.string.voice_call_mute))
-    }
-
-    bindButton(views, R.id.voice_call_hangup, id, BUTTON_HANGUP, R.string.voice_call_hang_up)
-  }
-
-  private fun bindButton(views: RemoteViews, viewId: Int, id: Int, button: String, label: Int) {
-    views.setOnClickPendingIntent(viewId, buttonIntent(id, button))
-    views.setContentDescription(viewId, context.getString(label))
   }
 
   private fun buttonIntent(id: Int, button: String): PendingIntent {

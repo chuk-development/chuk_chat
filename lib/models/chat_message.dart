@@ -56,6 +56,7 @@ class ChatMessage {
     required this.role,
     required this.text,
     this.reasoning,
+    this.voicePlayback,
     this.replyContext,
     this.images,
     this.imageMetas,
@@ -82,6 +83,7 @@ class ChatMessage {
       role: json['role'] as String? ?? json['sender'] as String? ?? 'user',
       text: json['text'] as String? ?? '',
       reasoning: json['reasoning'] as String?,
+      voicePlayback: json['voicePlayback'] as String?,
       replyContext: json['replyContext'] as String?,
       images: json['images'] as String?,
       imageMetas: json['imageMetas'] as String?,
@@ -107,6 +109,9 @@ class ChatMessage {
   final String role;
   final String text;
   final String? reasoning;
+
+  /// Encrypted voice playback metadata; [text] contains only what was heard.
+  final String? voicePlayback;
   final String? replyContext;
   final String? images;
 
@@ -196,6 +201,7 @@ class ChatMessage {
     String? role,
     String? text,
     String? reasoning,
+    String? voicePlayback,
     String? replyContext,
     String? images,
     String? imageMetas,
@@ -220,6 +226,7 @@ class ChatMessage {
       role: role ?? this.role,
       text: text ?? this.text,
       reasoning: reasoning ?? this.reasoning,
+      voicePlayback: voicePlayback ?? this.voicePlayback,
       replyContext: replyContext ?? this.replyContext,
       images: images ?? this.images,
       imageMetas: imageMetas ?? this.imageMetas,
@@ -245,6 +252,8 @@ class ChatMessage {
   Map<String, dynamic> toJson() => {
     'role': role,
     'text': text,
+    if (voicePlayback != null && voicePlayback!.isNotEmpty)
+      'voicePlayback': voicePlayback,
     if (reasoning != null && reasoning!.isNotEmpty) 'reasoning': reasoning,
     if (replyContext != null && replyContext!.isNotEmpty)
       'replyContext': replyContext,

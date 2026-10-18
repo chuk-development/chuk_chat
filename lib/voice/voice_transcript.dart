@@ -32,6 +32,8 @@ abstract final class VoiceTranscriptionAttributes {
 class VoiceTranscript {
   final List<VoiceTurn> _turns = <VoiceTurn>[];
   final Map<String, _Segment> _segments = <String, _Segment>{};
+  final Map<String, int> _speechTurns = {};
+  final Set<String> _settledSegments = {};
 
   /// Turns in the order their segments started. Partials are replaced in
   /// place when their final text arrives.
@@ -55,6 +57,7 @@ class VoiceTranscript {
   }) {
     if (text.isEmpty && !isFinal) return false;
     final String key = _key(role, segmentId);
+    if (_settledSegments.contains(key)) return false;
     final _Segment? segment = _segments[key];
     if (segment == null) {
       _segments[key] = _Segment(index: _turns.length, streamId: streamId);
@@ -87,10 +90,65 @@ class VoiceTranscript {
     return true;
   }
 
+  /// Authoritative worker snapshot after synchronized playout or interruption.
+  /// Live assistant transcription is temporary; speech output is serialized,
+  /// so the oldest temporary assistant segment is the corresponding one.
+  /// The worker's stable ID owns every subsequent correction and retry.
+  bool applySpeechSnapshot({
+    required String turnId,
+    required String spokenText,
+    required String generatedText,
+    required bool interrupted,
+    required DateTime at,
+    bool? generationComplete,
+    DateTime? finishedAt,
+  }) {
+    var index = _speechTurns[turnId];
+    index ??= _turns.indexWhere(
+      (turn) =>
+          !turn.isUser &&
+          turn.segmentId == null &&
+          (finishedAt == null || !turn.at.isAfter(finishedAt)),
+    );
+    final next = VoiceTurn(
+      role: VoiceTurn.roleAssistant,
+      text: spokenText,
+      intendedText: generatedText,
+      interrupted: interrupted,
+      generationComplete: generationComplete,
+      segmentId: turnId,
+      at: index >= 0 ? _turns[index].at : at,
+      isFinal: true,
+    );
+    if (index < 0) {
+      index = _turns.indexWhere((turn) => turn.at.isAfter(at));
+      if (index < 0) index = _turns.length;
+      for (final segment in _segments.values) {
+        if (segment.index >= index) segment.index++;
+      }
+      for (final id in _speechTurns.keys.toList()) {
+        if (_speechTurns[id]! >= index) {
+          _speechTurns[id] = _speechTurns[id]! + 1;
+        }
+      }
+      _turns.insert(index, next);
+    } else {
+      if (_turns[index] == next) return false;
+      _turns[index] = next;
+      for (final entry in _segments.entries) {
+        if (entry.value.index == index) _settledSegments.add(entry.key);
+      }
+    }
+    _speechTurns[turnId] = index;
+    return true;
+  }
+
   /// Marks a segment final (its stream closed with the final flag in the
   /// trailer). Returns true when the visible transcript changed.
   bool finalizeSegment({required String role, required String segmentId}) {
-    final _Segment? segment = _segments[_key(role, segmentId)];
+    final key = _key(role, segmentId);
+    if (_settledSegments.contains(key)) return false;
+    final _Segment? segment = _segments[key];
     if (segment == null) return false;
     final VoiceTurn current = _turns[segment.index];
     if (current.isFinal) return false;
@@ -101,12 +159,16 @@ class VoiceTranscript {
   /// The turns worth keeping in a record: every turn with text, in order.
   List<VoiceTurn> recordTurns() => <VoiceTurn>[
     for (final VoiceTurn turn in _turns)
-      if (turn.text.trim().isNotEmpty) turn.copyWith(text: turn.text.trim()),
+      if (turn.text.trim().isNotEmpty ||
+          (turn.intendedText?.trim().isNotEmpty ?? false))
+        turn.copyWith(text: turn.text.trim()),
   ];
 
   void clear() {
     _turns.clear();
     _segments.clear();
+    _speechTurns.clear();
+    _settledSegments.clear();
   }
 
   static String _key(String role, String segmentId) => '$role\u0000$segmentId';
@@ -115,6 +177,6 @@ class VoiceTranscript {
 class _Segment {
   _Segment({required this.index, required this.streamId});
 
-  final int index;
+  int index;
   String streamId;
 }

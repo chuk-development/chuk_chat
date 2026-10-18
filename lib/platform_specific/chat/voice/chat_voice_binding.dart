@@ -12,6 +12,7 @@
 // With the flag off nothing here is built, listened to or registered.
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
@@ -58,6 +59,7 @@ List<Map<String, String>> storedChatRows(String chatId) {
       <String, String>{
         'sender': m.role == 'user' ? 'user' : 'ai',
         'text': m.text,
+        if (m.voicePlayback != null) 'voicePlayback': m.voicePlayback!,
       },
   ];
 }
@@ -388,10 +390,15 @@ class ChatVoiceBinding {
     if (!onScreen && (!adopted || visible != null)) return;
     final List<VoiceTurn> pending = <VoiceTurn>[];
     for (final VoiceTurn turn in turns) {
-      if (!turn.isFinal || turn.text.trim().isEmpty) continue;
+      if (!turn.isFinal ||
+          (turn.text.trim().isEmpty &&
+              (turn.intendedText?.trim().isEmpty ?? true))) {
+        continue;
+      }
       final String identity = voiceTurnMessageId(turn);
-      if (_appendedVoiceTurns[identity] == turn.text) continue;
-      _appendedVoiceTurns[identity] = turn.text;
+      final fingerprint = jsonEncode([turn.text, turn.playbackMetadata]);
+      if (_appendedVoiceTurns[identity] == fingerprint) continue;
+      _appendedVoiceTurns[identity] = fingerprint;
       pending.add(turn);
     }
     if (pending.isEmpty) return;
@@ -415,6 +422,8 @@ class ChatVoiceBinding {
             final row = <String, dynamic>{
               'role': turn.role,
               'text': turn.text,
+              if (turn.playbackMetadata != null)
+                'voicePlayback': turn.playbackMetadata,
               'messageId': id,
               'sentAt': turn.at.toUtc().toIso8601String(),
             };
@@ -648,4 +657,4 @@ void Function(VoiceCallStartProbe probe)? debugOnVoiceCallStart;
 
 /// Stable identity also preserved by the ordinary encrypted message model.
 String voiceTurnMessageId(VoiceTurn turn) =>
-    'voice:${turn.role}:${turn.at.microsecondsSinceEpoch}';
+    'voice:${turn.role}:${turn.segmentId ?? turn.at.microsecondsSinceEpoch}';

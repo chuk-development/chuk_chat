@@ -12,6 +12,25 @@ class VoiceAudioOutput {
   bool get isAndroid =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
+  /// The effective communication output, confirmed by Android.
+  ///
+  /// Returns `speaker`, `earpiece`, `bluetooth`, `wired`, or `unknown`; other
+  /// platforms return null and continue using their LiveKit audio handling.
+  Future<String?> readRoute() async {
+    if (!isAndroid) return null;
+    return channel.invokeMethod<String>('getCallAudioRoute');
+  }
+
+  /// Switches the actual Android call output and waits for confirmation.
+  ///
+  /// Call after changing LiveKit's speaker preference so that both routing
+  /// owners agree. A refused or unconfirmed change throws [PlatformException]
+  /// rather than making the UI display a route that never became active.
+  Future<String?> setSpeaker(bool speaker) async {
+    if (!isAndroid) return null;
+    return channel.invokeMethod<String>('setCallSpeaker', {'speaker': speaker});
+  }
+
   Future<double?> readVolume() async {
     if (!isAndroid) return null;
     final value = await channel.invokeMethod<num>('getCallVolume');

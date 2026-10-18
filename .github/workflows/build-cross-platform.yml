@@ -389,6 +389,8 @@ jobs:
             clang cmake ninja-build pkg-config \
             libgtk-3-dev liblzma-dev libstdc++-12-dev libsecret-1-dev \
             libayatana-appindicator3-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
             dpkg-dev rpm file wget fuse libfuse2
 
       - uses: subosito/flutter-action@v2
@@ -458,7 +460,7 @@ jobs:
           Description: Privacy-focused AI chat with end-to-end encryption
            Chuk Chat is a cross-platform chat application that uses
            open-weight AI models with AES-256-GCM end-to-end encryption.
-          Depends: libgtk-3-0, libblkid1, liblzma5
+          Depends: libgtk-3-0, libblkid1, liblzma5, libgstreamer1.0-0, libgstreamer-plugins-base1.0-0, gstreamer1.0-plugins-base, gstreamer1.0-plugins-good
           EOF
 
           cat > debian/DEBIAN/postinst <<'SCRIPT'
@@ -558,7 +560,7 @@ jobs:
           URL:            https://chuk.chat
           Source0:        chuk-chat-%{version}.tar.gz
           BuildArch:      x86_64
-          Requires:       gtk3, libblkid, xz-libs
+          Requires:       gtk3, libblkid, xz-libs, gstreamer1, gstreamer1-plugins-base, gstreamer1-plugins-good
 
           %description
           Chuk Chat is a cross-platform chat application that uses
@@ -620,6 +622,8 @@ jobs:
             clang cmake ninja-build pkg-config \
             libgtk-3-dev liblzma-dev libstdc++-14-dev libsecret-1-dev \
             libayatana-appindicator3-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
             dpkg-dev rpm file wget curl unzip git libfuse2
 
       - name: Install Flutter (manual ARM64)
@@ -712,7 +716,7 @@ jobs:
           Description: Privacy-focused AI chat with end-to-end encryption
            Chuk Chat is a cross-platform chat application that uses
            open-weight AI models with AES-256-GCM end-to-end encryption.
-          Depends: libgtk-3-0, libblkid1, liblzma5
+          Depends: libgtk-3-0, libblkid1, liblzma5, libgstreamer1.0-0, libgstreamer-plugins-base1.0-0, gstreamer1.0-plugins-base, gstreamer1.0-plugins-good
           EOF
 
           cat > debian/DEBIAN/postinst <<'SCRIPT'
@@ -813,6 +817,8 @@ jobs:
             clang cmake ninja-build pkg-config \
             libgtk-3-dev liblzma-dev libstdc++-12-dev libsecret-1-dev \
             libayatana-appindicator3-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
             libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libxdamage1 \
             libxkbcommon0 libxcomposite1 libxrandr2 libgbm1 libasound2t64 \
             dpkg-dev rpm file wget fuse libfuse2
@@ -892,7 +898,7 @@ jobs:
            Bundles a Chromium Embedded Framework (CEF) runtime for real
            HTML and Excalidraw artifact rendering on Linux. If you prefer
            a smaller install, use the non-"-full" artifact instead.
-          Depends: libgtk-3-0, libblkid1, liblzma5, libnss3, libxkbcommon0, libxdamage1, libxcomposite1, libgbm1, libasound2t64
+          Depends: libgtk-3-0, libblkid1, liblzma5, libgstreamer1.0-0, libgstreamer-plugins-base1.0-0, gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, libnss3, libxkbcommon0, libxdamage1, libxcomposite1, libgbm1, libasound2t64
           EOF
           cat > debian/DEBIAN/postinst <<'SCRIPT'
           #!/bin/bash
@@ -962,7 +968,7 @@ jobs:
           URL:            https://chuk.chat
           Source0:        chuk-chat-%{version}.tar.gz
           BuildArch:      x86_64
-          Requires:       gtk3, libblkid, xz-libs, nss, libxkbcommon, libXdamage, libXcomposite, mesa-libgbm, alsa-lib
+          Requires:       gtk3, libblkid, xz-libs, gstreamer1, gstreamer1-plugins-base, gstreamer1-plugins-good, nss, libxkbcommon, libXdamage, libXcomposite, mesa-libgbm, alsa-lib
 
           %description
           Chuk Chat -full bundles a Chromium Embedded Framework runtime
@@ -1027,6 +1033,8 @@ jobs:
             clang cmake ninja-build pkg-config \
             libgtk-3-dev liblzma-dev libstdc++-14-dev libsecret-1-dev \
             libayatana-appindicator3-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
             libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libxdamage1 \
             libxkbcommon0 libxcomposite1 libxrandr2 libgbm1 libasound2t64 \
             dpkg-dev rpm file wget curl unzip git libfuse2
@@ -1121,7 +1129,7 @@ jobs:
           Maintainer: Chuk Development <support@chuk.dev>
           Homepage: https://chuk.chat
           Description: Privacy-focused AI chat with CEF-backed Linux WebView (full)
-          Depends: libgtk-3-0, libblkid1, liblzma5, libnss3, libxkbcommon0, libxdamage1, libxcomposite1, libgbm1, libasound2t64
+          Depends: libgtk-3-0, libblkid1, liblzma5, libgstreamer1.0-0, libgstreamer-plugins-base1.0-0, gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, libnss3, libxkbcommon0, libxdamage1, libxcomposite1, libgbm1, libasound2t64
           EOF
           cat > debian/DEBIAN/postinst <<'SCRIPT'
           #!/bin/bash

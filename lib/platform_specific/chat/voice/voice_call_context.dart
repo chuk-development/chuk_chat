@@ -5,6 +5,7 @@
 // chat as a user message. No Flutter, no LiveKit.
 
 import 'package:chuk_chat/utils/openui_fence.dart';
+import 'package:chuk_chat/voice/voice_playback_context.dart';
 
 /// Prefix of a task the voice worker hands to the chat. It shows in the
 /// thread, so the reader can tell a spoken task from a typed one. The same
@@ -76,7 +77,10 @@ String buildVoiceCallContext(
 }
 
 String? _contextLine(Map<String, String> message, int maxLineChars) {
-  final String raw = message['text'] ?? '';
+  final String raw = voicePlaybackContext(
+    message['text'] ?? '',
+    message['voicePlayback'],
+  );
   if (raw.trim() == _kThinkingPlaceholder) return null;
   final String text = stripOpenUiPrograms(raw)
       .replaceAll(_visualTag, ' ')
