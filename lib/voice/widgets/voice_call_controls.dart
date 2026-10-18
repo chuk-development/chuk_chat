@@ -23,6 +23,7 @@ class VoiceCallControl extends StatelessWidget {
     this.size = 40,
     this.toggled,
     this.semanticsId,
+    this.label,
   });
 
   final Widget child;
@@ -34,10 +35,11 @@ class VoiceCallControl extends StatelessWidget {
   /// Non-null for a toggle: its state for assistive tech.
   final bool? toggled;
   final String? semanticsId;
+  final String? label;
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
+    final control = Semantics(
       identifier: semanticsId,
       button: true,
       toggled: toggled,
@@ -62,6 +64,17 @@ class VoiceCallControl extends StatelessWidget {
           ),
         ),
       ),
+    );
+    if (label == null) return control;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        control,
+        const SizedBox(height: 7),
+        ExcludeSemantics(
+          child: Text(label!, style: Theme.of(context).textTheme.labelSmall),
+        ),
+      ],
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:chuk_chat/utils/tool_sanitizer.dart';
+import 'package:chuk_chat/voice/voice_playback_context.dart';
 
 // Per-result and per-message caps for prior tool-call context. Past tool
 // results bloat fast (search results often >10k chars each), so cap
@@ -18,7 +19,8 @@ String? formatAssistantContent(
   bool includeReasoning = false,
   bool includeToolResults = true,
 }) {
-  final text = (message['text'] ?? '').trim();
+  final rawText = (message['text'] ?? '').trim();
+  final text = voicePlaybackContext(rawText, message['voicePlayback']);
   if (text == 'Thinking...') {
     return null;
   }

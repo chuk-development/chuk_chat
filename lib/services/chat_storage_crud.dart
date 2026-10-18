@@ -923,6 +923,7 @@ class ChatStorageCrud {
         role: role,
         text: text,
         reasoning: m['reasoning'] as String?,
+        voicePlayback: m['voicePlayback'] as String?,
         replyContext: m['replyContext'] as String?,
         images: m['images'] as String?,
         imageMetas: m['imageMetas'] as String?,

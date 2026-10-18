@@ -8,6 +8,7 @@
 // these types without a room.
 
 import 'dart:async';
+import 'dart:convert';
 
 /// Which kind of chat the call belongs to. The worker reads it from the
 /// dispatch metadata (`"mode": "chat" | "agents"`).
@@ -27,6 +28,10 @@ class VoiceTurn {
     required this.text,
     required this.at,
     required this.isFinal,
+    this.intendedText,
+    this.interrupted = false,
+    this.segmentId,
+    this.generationComplete,
   });
 
   factory VoiceTurn.fromJson(Map<String, dynamic> json) => VoiceTurn(
@@ -34,6 +39,10 @@ class VoiceTurn {
     text: json['text'] is String ? json['text'] as String : '',
     at: _parseTime(json['at']),
     isFinal: json['is_final'] != false,
+    intendedText: json['intended_text'] as String?,
+    interrupted: json['interrupted'] == true,
+    segmentId: json['segment_id'] as String?,
+    generationComplete: json['generation_complete'] as bool?,
   );
 
   static const String roleUser = 'user';
@@ -46,14 +55,40 @@ class VoiceTurn {
   /// When the segment started.
   final DateTime at;
   final bool isFinal;
+  final String? intendedText;
+  final bool interrupted;
+  final String? segmentId;
+  final bool? generationComplete;
 
   bool get isUser => role == roleUser;
 
-  VoiceTurn copyWith({String? text, bool? isFinal}) => VoiceTurn(
+  /// Encrypted alongside the ordinary chat row, never a server-side record.
+  String? get playbackMetadata => intendedText == null
+      ? null
+      : jsonEncode({
+          'intended_text': intendedText,
+          'spoken_text': text,
+          'interrupted': interrupted,
+          if (generationComplete != null)
+            'generation_complete': generationComplete,
+        });
+
+  VoiceTurn copyWith({
+    String? text,
+    bool? isFinal,
+    String? intendedText,
+    bool? interrupted,
+    String? segmentId,
+    bool? generationComplete,
+  }) => VoiceTurn(
     role: role,
     text: text ?? this.text,
     at: at,
     isFinal: isFinal ?? this.isFinal,
+    intendedText: intendedText ?? this.intendedText,
+    interrupted: interrupted ?? this.interrupted,
+    segmentId: segmentId ?? this.segmentId,
+    generationComplete: generationComplete ?? this.generationComplete,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -61,6 +96,10 @@ class VoiceTurn {
     'text': text,
     'at': at.toUtc().toIso8601String(),
     'is_final': isFinal,
+    if (intendedText != null) 'intended_text': intendedText,
+    if (interrupted) 'interrupted': true,
+    if (segmentId != null) 'segment_id': segmentId,
+    if (generationComplete != null) 'generation_complete': generationComplete,
   };
 
   @override
@@ -69,10 +108,23 @@ class VoiceTurn {
       other.role == role &&
       other.text == text &&
       other.at == at &&
-      other.isFinal == isFinal;
+      other.isFinal == isFinal &&
+      other.intendedText == intendedText &&
+      other.interrupted == interrupted &&
+      other.segmentId == segmentId &&
+      other.generationComplete == generationComplete;
 
   @override
-  int get hashCode => Object.hash(role, text, at, isFinal);
+  int get hashCode => Object.hash(
+    role,
+    text,
+    at,
+    isFinal,
+    intendedText,
+    interrupted,
+    segmentId,
+    generationComplete,
+  );
 }
 
 /// What a finished call leaves behind in its chat: when it ran and what was

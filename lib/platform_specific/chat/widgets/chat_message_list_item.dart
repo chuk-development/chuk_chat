@@ -124,6 +124,7 @@ class ChatMessageListItem extends StatelessWidget {
       key: ValueKey<String>(uiKey),
       message: text,
       reasoning: reasoning,
+      voicePlayback: messages[index]['voicePlayback'],
       isUser: data.isUser,
       startsNewGroup: startsNewGroup,
       endsGroup: endsGroup,

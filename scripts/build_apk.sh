@@ -39,11 +39,18 @@ done
 PKG=dev.chuk.chat
 OUT=build/app/outputs/flutter-apk/app-release.apk
 APP_VERSION="$(grep -m1 '^version:' pubspec.yaml | awk '{print $2}')"
-# Same version code as the release: major*100000 + minor*1000 + patch, the
-# formula in build.sh, android/fastlane/Fastfile and build-cross-platform.yml.
-# Without it this build got version code 2000001, above every release APK
-# (1.0.111 arm64 = 102111), so the phone refused the release as a downgrade.
-BUILD_NUMBER="$(echo "${APP_VERSION%%+*}" | awk -F. '{print ($1*100000)+($2*1000)+$3}')"
+# Keep the shared semantic-version base formula unchanged. CI builds split APKs;
+# Flutter adds ABI_VERSION * 1000 to each split (FlutterPluginConstants.kt and
+# FlutterPlugin.kt). This script builds one ABI without splits, so apply the
+# same offset explicitly: arm64=2 and x86_64=4. Otherwise a locally built APK
+# cannot upgrade the same-version APK downloaded from GitHub.
+BASE_BUILD_NUMBER="$(echo "${APP_VERSION%%+*}" | awk -F. '{print ($1*100000)+($2*1000)+$3}')"
+case "$TARGET_PLATFORM" in
+  android-arm64) ABI_BUILD_OFFSET=2000 ;;
+  android-x64) ABI_BUILD_OFFSET=4000 ;;
+  *) echo "unsupported APK target: $TARGET_PLATFORM" >&2; exit 2 ;;
+esac
+BUILD_NUMBER="$((BASE_BUILD_NUMBER + ABI_BUILD_OFFSET))"
 BUILD_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 DEFINES=(
@@ -81,10 +88,9 @@ else
 fi
 echo "==> device $SERIAL"
 adb() { command adb -s "$SERIAL" "$@"; }
-# An older split-per-abi build leaves a higher version code on the phone (arm64
-# splits get +2000), and then a normal install fails with
-# INSTALL_FAILED_VERSION_DOWNGRADE. -d covers it; if the phone still refuses,
-# uninstall first — that drops the app's local data, pairing included.
+# Replace the existing package in place. Never uninstall on failure: that would
+# erase local chats, encryption state and pairing. Keep -d for supported test
+# downgrades, but matching CI's ABI code above avoids relying on it for releases.
 echo "==> adb install"
 if ! adb install -r -d "$OUT"; then
   echo "install refused; existing app and local data were preserved" >&2

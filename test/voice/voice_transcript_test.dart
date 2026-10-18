@@ -4,6 +4,142 @@ import 'package:chuk_chat/voice/voice_call_models.dart';
 import 'package:chuk_chat/voice/voice_transcript.dart';
 
 void main() {
+  test('a delayed snapshot inserts before its interrupting user turn', () {
+    final transcript = VoiceTranscript();
+    final speechAt = DateTime.utc(2026, 10, 18);
+    transcript.applyChunk(
+      role: 'user',
+      segmentId: 'u1',
+      streamId: 'u1',
+      text: 'Stop',
+      isFinal: true,
+      at: speechAt.add(const Duration(seconds: 2)),
+    );
+    transcript.applyChunk(
+      role: 'assistant',
+      segmentId: 'SG_2',
+      streamId: 's2',
+      text: 'Okay',
+      at: speechAt.add(const Duration(seconds: 3)),
+    );
+    transcript.applySpeechSnapshot(
+      turnId: 'item_1',
+      spokenText: 'Hello',
+      generatedText: 'Hello there',
+      interrupted: true,
+      at: speechAt,
+      finishedAt: speechAt.add(const Duration(seconds: 1)),
+    );
+    expect(transcript.turns.map((turn) => turn.text), [
+      'Hello',
+      'Stop',
+      'Okay',
+    ]);
+    transcript.applyChunk(
+      role: 'assistant',
+      segmentId: 'SG_2',
+      streamId: 's2',
+      text: '!',
+    );
+    expect(transcript.turns.last.text, 'Okay!');
+    transcript.applySpeechSnapshot(
+      turnId: 'item_2',
+      spokenText: 'Okay!',
+      generatedText: 'Okay!',
+      interrupted: false,
+      at: speechAt.add(const Duration(seconds: 3)),
+    );
+    expect(transcript.turns, hasLength(3));
+  });
+
+  test(
+    'speech snapshot replaces temporary speech and blocks late trailers',
+    () {
+      final transcript = VoiceTranscript();
+      final now = DateTime.utc(2026, 10, 18);
+      transcript.applyChunk(
+        role: 'assistant',
+        segmentId: 'SG_1',
+        streamId: 'stream',
+        text: 'Hello there',
+        at: now,
+      );
+      expect(
+        transcript.applySpeechSnapshot(
+          turnId: 'item_1',
+          spokenText: 'Hello',
+          generatedText: 'Hello there friend',
+          interrupted: true,
+          at: now,
+        ),
+        isTrue,
+      );
+      expect(transcript.turns, hasLength(1));
+      expect(transcript.turns.single.text, 'Hello');
+      expect(transcript.turns.single.intendedText, 'Hello there friend');
+      expect(transcript.turns.single.interrupted, isTrue);
+      expect(
+        transcript.applyChunk(
+          role: 'assistant',
+          segmentId: 'SG_1',
+          streamId: 'stream',
+          text: ' friend',
+          isFinal: true,
+        ),
+        isFalse,
+      );
+      expect(
+        transcript.finalizeSegment(role: 'assistant', segmentId: 'SG_1'),
+        isFalse,
+      );
+      expect(
+        transcript.applySpeechSnapshot(
+          turnId: 'item_1',
+          spokenText: 'Hello',
+          generatedText: 'Hello there friend',
+          interrupted: true,
+          at: now,
+        ),
+        isFalse,
+      );
+      expect(transcript.turns, hasLength(1));
+    },
+  );
+  test('snapshot before speech and a later reply keep separate stable IDs', () {
+    final transcript = VoiceTranscript();
+    final now = DateTime.utc(2026, 10, 18);
+    transcript.applySpeechSnapshot(
+      turnId: 'item_1',
+      spokenText: '',
+      generatedText: 'Unspoken',
+      interrupted: true,
+      at: now,
+    );
+    transcript.applyChunk(
+      role: 'user',
+      segmentId: 'user_1',
+      streamId: 'userstream',
+      text: 'Stop',
+      isFinal: true,
+    );
+    transcript.applyChunk(
+      role: 'assistant',
+      segmentId: 'SG_2',
+      streamId: 'stream2',
+      text: 'Okay',
+    );
+    transcript.applySpeechSnapshot(
+      turnId: 'item_2',
+      spokenText: 'Okay',
+      generatedText: 'Okay',
+      interrupted: false,
+      at: now,
+    );
+    expect(transcript.turns, hasLength(3));
+    expect(transcript.turns.last.segmentId, 'item_2');
+    expect(transcript.recordTurns(), hasLength(3));
+  });
+
   late VoiceTranscript transcript;
 
   setUp(() => transcript = VoiceTranscript());

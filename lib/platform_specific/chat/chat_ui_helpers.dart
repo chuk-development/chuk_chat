@@ -260,7 +260,8 @@ class ChatUiHelpers {
     // continued as if the model had written it.
     final String rawText = message['text'] ?? '';
     final String? rawBlocks = message['contentBlocks'];
-    final bool carriedNotice = rawText.contains(kConnectionErrorNotice) ||
+    final bool carriedNotice =
+        rawText.contains(kConnectionErrorNotice) ||
         (rawBlocks?.contains(kConnectionErrorNotice) ?? false);
     final priorText = stripStreamErrorNotice(rawText.trim());
     final priorContentBlocksJson = stripStreamErrorNoticeFromBlocksJson(
@@ -588,6 +589,9 @@ class ChatUiHelpers {
     if (message.startedAt != null && message.startedAt!.isNotEmpty) {
       map['startedAt'] = message.startedAt!;
     }
+    if (message.voicePlayback != null && message.voicePlayback!.isNotEmpty) {
+      map['voicePlayback'] = message.voicePlayback!;
+    }
     if (message.generationMs != null && message.generationMs!.isNotEmpty) {
       map['generationMs'] = message.generationMs!;
     }
@@ -624,6 +628,7 @@ class ChatUiHelpers {
     'toolCalls',
     'modelId',
     'provider',
+    'voicePlayback',
     'generationMs',
     'tps',
     'images',
