@@ -1206,7 +1206,7 @@ Never wrap an <artifact> tag inside a markdown code fence (```…```); the parse
   }
 
   /// How an answer starts, and the `:::` blocks `MarkdownMessage` renders
-  /// natively (`lib/utils/answer_blocks_parser.dart`). About 190 tokens.
+  /// natively (`lib/utils/answer_blocks_parser.dart`). About 600 tokens.
   String _answerFormatSection() {
     return '''
 ## ANSWER FORMAT
@@ -1227,7 +1227,46 @@ Body text.
 2700: Warm white
 @ 2700: your lamp
 :::
-  Scale is experimental: use it only to place one value on a known range.''';
+  Scale is experimental: use it only to place one value on a known range.
+::: bars Optional title
+Step 5 | ~1.200 GB | 600B total
+GLM Flash | ~640 GB | 320B total
+! note line under the bars
+:::
+  Bars compare 2-5 sizes/amounts with real numbers: label | value | note.
+::: kpi
+82 % | Humidity | droplet
+7 km/h S | Wind | wind
+:::
+  KPI tiles for 2-4 key figures: value | label | icon. Icons: droplet wind temperature sun cloud rain snow star users clock battery cpu speed euro percent download shield mountain hotel cart chart sparkles robot search calendar pin.
+::: tiles
+Chatbot | chat
+Search crawler | search
+:::
+  Icon tiles for 2-6 options/examples: label | icon | optional subline (same icons as kpi).
+::: cards Hotels
+Alpenruhe Panorama
+image: https://example.com/a.jpg
+subtitle: Grindelwald, Switzerland
+meta: 4.8 - 128 reviews
+chips: Panorama balcony, Mountain spa
+price: 248 CHF / night
+url: https://example.com/a
+action: Details
+--
+Auralis Quiet One
+price: 249 EUR
+:::
+  Card carousel for 2-5 recommendations (stays, products, tools). One record per card, separated by a blank line or `--`; first line = title, then keys: image badge subtitle meta (repeatable) chips price url action. Only real URLs from tool results, else omit image/url.
+::: ask Which basis do you want to dive into?
+Active parameters
+BF16 & FP8
+:::
+  Follow-up chips the reader taps to send as their next message. Optional question line, then one short chip per line. Use at the END of an answer when 2-3 concrete directions exist.
+::: source
+Article title | https://example.org/article
+:::
+  One row per source you actually used. Never invent a URL.''';
   }
 
   /// Chart and map rendering protocol — these are output formats, not tools.

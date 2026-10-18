@@ -218,6 +218,158 @@ void main() {
     });
   });
 
+  group('visual blocks', () {
+    test('bars: rows, note and tag', () {
+      final AnswerBlockSegment seg = _onlyBlock(
+        splitAnswerBlocks(
+          '::: bars BF16 · nur Modellgewichte\ntag: Rechenbasis\n'
+          'Step 5 | ~1.200 GB | 600B Gesamtparameter\n'
+          'GLM Flash | ~640 GB | 320B Gesamtparameter\n'
+          '! Parameter × 2 Byte\n:::',
+        ),
+      );
+      expect(seg.kind, AnswerBlockKind.bars);
+      final BarsSpec spec = parseBars(seg.arg, seg.lines);
+      expect(spec.title, 'BF16 · nur Modellgewichte');
+      expect(spec.tag, 'Rechenbasis');
+      expect(spec.rows, hasLength(2));
+      expect(spec.rows[0].label, 'Step 5');
+      expect(spec.rows[0].valueText, '~1.200 GB');
+      expect(spec.rows[0].value, 1200);
+      expect(spec.rows[0].sub, '600B Gesamtparameter');
+      expect(spec.rows[1].value, 640);
+      expect(spec.note, 'Parameter × 2 Byte');
+    });
+
+    test('kpi: value, label, icon, tag', () {
+      final AnswerBlockSegment seg = _onlyBlock(
+        splitAnswerBlocks('::: kpi\n82 % | Luftfeuchtigkeit | droplet\n7 km/h | Wind | wind\n:::'),
+      );
+      final KpiSpec spec = parseKpi(seg.arg, seg.lines);
+      expect(spec.tiles, hasLength(2));
+      expect(spec.tiles[0].value, '82 %');
+      expect(spec.tiles[0].label, 'Luftfeuchtigkeit');
+      expect(spec.tiles[0].icon, 'droplet');
+      expect(spec.tiles[1].icon, 'wind');
+      expect(spec.title, isEmpty);
+    });
+
+    test('kpi parser: tag line is read, not a tile', () {
+      final KpiSpec spec = parseKpi('', <String>['tag: Heute', '15 °C | Kiel']);
+      expect(spec.tag, 'Heute');
+      expect(spec.tiles, hasLength(1));
+    });
+
+    test('tiles: label, icon, sub', () {
+      final TilesSpec spec = parseTiles('Bot', <String>[
+        'Chatbot | chat',
+        'Such-Crawler | search | durchsucht Seiten',
+      ]);
+      expect(spec.title, 'Bot');
+      expect(spec.tiles[0].label, 'Chatbot');
+      expect(spec.tiles[0].icon, 'chat');
+      expect(spec.tiles[0].sub, isEmpty);
+      expect(spec.tiles[1].sub, 'durchsucht Seiten');
+    });
+
+    test('cards: records with keys, chips split, blank line separates', () {
+      final CardsSpec spec = parseCards('Hotels', <String>[
+        'Alpenruhe Panorama',
+        'image: https://example.com/a.jpg',
+        'badge: Für deinen Bergmoment',
+        'subtitle: Grindelwald, Schweiz',
+        'meta: 4,8 · 128 Bewertungen',
+        'meta: Panoramabalkon inklusive',
+        'chips: Panoramabalkon, Berg-Spa',
+        'price: 248 CHF / Nacht',
+        'url: https://example.com/a',
+        'action: Details',
+        '',
+        'Auralis Quiet One',
+        'price: 249 €',
+      ]);
+      expect(spec.label, 'Hotels');
+      expect(spec.cards, hasLength(2));
+      expect(spec.cards[0].title, 'Alpenruhe Panorama');
+      expect(spec.cards[0].image, 'https://example.com/a.jpg');
+      expect(spec.cards[0].badge, 'Für deinen Bergmoment');
+      expect(spec.cards[0].subtitle, 'Grindelwald, Schweiz');
+      expect(spec.cards[0].metas, hasLength(2));
+      expect(spec.cards[0].chips, <String>['Panoramabalkon', 'Berg-Spa']);
+      expect(spec.cards[0].price, '248 CHF / Nacht');
+      expect(spec.cards[0].url, 'https://example.com/a');
+      expect(spec.cards[0].action, 'Details');
+      expect(spec.cards[1].title, 'Auralis Quiet One');
+      expect(spec.cards[1].price, '249 €');
+    });
+
+    test('cards: a line before any key is the title', () {
+      final CardsSpec spec = parseCards('', <String>[
+        'Title line',
+        'Some fact without a key',
+      ]);
+      expect(spec.cards, hasLength(1));
+      expect(spec.cards[0].title, 'Title line');
+      expect(spec.cards[0].metas, <String>['Some fact without a key']);
+    });
+
+    test('cards: a known key with an empty value is dropped', () {
+      final CardsSpec spec = parseCards('', <String>[
+        'Some stay',
+        'image:',
+        'url: ',
+        'chips:',
+      ]);
+      expect(spec.cards, hasLength(1));
+      expect(spec.cards[0].title, 'Some stay');
+      expect(spec.cards[0].image, isEmpty);
+      expect(spec.cards[0].url, isEmpty);
+      expect(spec.cards[0].chips, isEmpty);
+      expect(spec.cards[0].metas, isEmpty);
+    });
+
+    test('ask: question and chips', () {
+      final AskSpec spec = parseAsk('Welche Basis?', <String>[
+        'Aktive Parameter',
+        '- BF16 & FP8',
+      ]);
+      expect(spec.question, 'Welche Basis?');
+      expect(spec.chips, <String>['Aktive Parameter', 'BF16 & FP8']);
+    });
+
+    test('source: rows with and without url', () {
+      final SourceSpec spec = parseSource('', <String>[
+        'Artikel | https://example.org/a',
+        'Nur Titel',
+      ]);
+      expect(spec.rows, hasLength(2));
+      expect(spec.rows[0].title, 'Artikel');
+      expect(spec.rows[0].url, 'https://example.org/a');
+      expect(spec.rows[1].url, isEmpty);
+    });
+
+    test('source: url-only row falls back to the argument as title', () {
+      final SourceSpec spec = parseSource('Quelle', <String>[
+        '| https://example.org/a',
+      ]);
+      expect(spec.rows, hasLength(1));
+      expect(spec.rows[0].title, 'Quelle');
+      expect(spec.rows[0].url, 'https://example.org/a');
+    });
+
+    test('prompt documents the visual blocks', () {
+      final String prompt = ToolPromptBuilder(discoveryMode: false)
+          .buildToolProtocolSection(tools: const <Map<String, dynamic>>[]);
+      expect(prompt, contains('::: bars'));
+      expect(prompt, contains('::: kpi'));
+      expect(prompt, contains('::: tiles'));
+      expect(prompt, contains('::: cards'));
+      expect(prompt, contains('::: ask'));
+      expect(prompt, contains('::: source'));
+      expect(prompt, contains('Never invent a URL'));
+    });
+  });
+
   group('answer format prompt', () {
     final String prompt = ToolPromptBuilder(discoveryMode: false)
         .buildToolProtocolSection(tools: const <Map<String, dynamic>>[]);
@@ -232,9 +384,12 @@ void main() {
 
     test('stays small', () {
       final int start = prompt.indexOf('## ANSWER FORMAT');
-      final int end = prompt.indexOf('experimental', start);
-      final String section = prompt.substring(start, end);
-      expect(TokenEstimator.estimateTokens(section), lessThan(300));
+      final int end = prompt.indexOf('Never invent a URL', start);
+      final String section = prompt.substring(
+        start,
+        end + 'Never invent a URL'.length,
+      );
+      expect(TokenEstimator.estimateTokens(section), lessThan(650));
     });
   });
 }

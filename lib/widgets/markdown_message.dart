@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data' show BytesBuilder, Uint8List;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:highlight/highlight.dart' as hi;
+import 'package:http/http.dart' as http;
 import 'package:chuk_chat/utils/highlight_registry.dart' as highlight_registry;
 import 'package:markdown/markdown.dart' as m;
 import 'package:markdown_widget/markdown_widget.dart';
@@ -16,13 +18,18 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'package:chuk_chat/services/current_user.dart';
 import 'package:chuk_chat/utils/answer_blocks_parser.dart';
+import 'package:chuk_chat/utils/host_lookup.dart';
 import 'package:chuk_chat/utils/input_validator.dart';
+import 'package:chuk_chat/utils/lru_byte_cache.dart';
+import 'package:chuk_chat/utils/non_public_ip.dart';
 import 'package:chuk_chat/utils/phone_linkify.dart';
 import 'package:chuk_chat/widgets/chuk_table.dart';
 import 'package:chuk_chat/widgets/chuk_table_classic.dart';
+import 'package:chuk_chat/widgets/icons/huge_icon.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 part 'answer_blocks.dart';
+part 'visual_answer_blocks.dart';
 
 /// Lays [overlay] on top of [base] field by field.
 ///
@@ -295,6 +302,7 @@ class MarkdownMessage extends StatefulWidget {
     this.paragraphHeight,
     this.paragraphFontWeight,
     this.fontFamily,
+    this.onFollowUp,
   });
 
   /// Empties the shared parse and highlight caches. They hold one account's
@@ -325,6 +333,11 @@ class MarkdownMessage extends StatefulWidget {
   /// Weight of paragraph text. Answer blocks use it for step titles.
   final FontWeight? paragraphFontWeight;
   final String? fontFamily;
+
+  /// Called with the label when the reader taps a follow-up chip of an
+  /// `::: ask` block. The chat bubble passes its send-message callback here;
+  /// `null` leaves the chips visible but inert (documents, agents).
+  final ValueChanged<String>? onFollowUp;
 
   @override
   State<MarkdownMessage> createState() => _MarkdownMessageState();
@@ -358,7 +371,11 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
         widget.paragraphFontSize != oldWidget.paragraphFontSize ||
         widget.paragraphHeight != oldWidget.paragraphHeight ||
         widget.paragraphFontWeight != oldWidget.paragraphFontWeight ||
-        widget.fontFamily != oldWidget.fontFamily) {
+        widget.fontFamily != oldWidget.fontFamily ||
+        // Only the null state matters (null keeps the follow-up chips
+        // inert): comparing identity would rebuild every block on each
+        // parent build for callers that pass a fresh closure.
+        (widget.onFollowUp == null) != (oldWidget.onFollowUp == null)) {
       // A text that changes under a live bubble is a stream in progress: parse
       // it, but do not keep the partial in the shared parse cache.
       _rebuildCache(keepParse: widget.text == oldWidget.text);
@@ -788,9 +805,11 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
                   textColor: widget.textColor,
                   backgroundColor: widget.backgroundColor,
                   accent: accentColor,
+                  onAccent: theme.colorScheme.onPrimary,
                   fontFamily: proseFontFamily,
                   baseFontSize: baseFontSize,
                 ),
+                onFollowUp: _followUpForwarder,
               ),
             ),
           );
@@ -854,6 +873,13 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
     _lastBrightness = theme.brightness;
     _lastAccent = theme.colorScheme.primary;
   }
+
+  /// The follow-up callback as the cached blocks hold it: a forwarder that
+  /// reads the CURRENT widget at tap time, so a rebuilt parent's new callback
+  /// is used without rebuilding every block (only null vs non-null rebuilds).
+  ValueChanged<String>? get _followUpForwarder => widget.onFollowUp == null
+      ? null
+      : (String label) => widget.onFollowUp?.call(label);
 
   Color _codeBackground() {
     final HSLColor hsl = HSLColor.fromColor(widget.backgroundColor);

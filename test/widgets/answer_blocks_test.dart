@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:chuk_chat/widgets/icons/huge_icon.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
 
 const Color _text = Color(0xFF111111);
@@ -15,6 +16,7 @@ Future<void> _pump(
   String markdown, {
   double width = 360,
   double textScale = 1,
+  ValueChanged<String>? onFollowUp,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -33,6 +35,7 @@ Future<void> _pump(
                   text: markdown,
                   textColor: _text,
                   backgroundColor: _bubble,
+                  onFollowUp: onFollowUp,
                 ),
               ),
             ),
@@ -214,6 +217,189 @@ void main() {
     final String all = _allText(tester);
     expect(all, contains('Some text'));
     expect(all, isNot(contains(':::')));
+  });
+
+  testWidgets('bars: labels, values, sublines, note, no overflow at 1.3', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      '::: bars BF16 · nur Modellgewichte\n'
+      'Step 5 | ~1.200 GB | 600B Gesamtparameter\n'
+      'DeepSeek Flash | ~1.104 GB | 552B Gesamtparameter\n'
+      'GLM Flash | ~640 GB | 320B Gesamtparameter\n'
+      '! Parameter × 2 Byte — zusätzlicher Laufzeitspeicher nötig\n'
+      ':::',
+      textScale: 1.3,
+    );
+    expect(_allText(tester), contains('Step 5'));
+    expect(_allText(tester), contains('~1.200 GB'));
+    expect(_allText(tester), contains('320B Gesamtparameter'));
+    expect(_allText(tester), contains('zusätzlicher Laufzeitspeicher nötig'));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('kpi: tiles with value, label and icon', (WidgetTester tester) async {
+    await _pump(
+      tester,
+      '::: kpi\n'
+      '82 % | Luftfeuchtigkeit | droplet\n'
+      '7 km/h S | Wind aus Süden | wind\n'
+      ':::',
+    );
+    expect(find.text('82 %'), findsOneWidget);
+    expect(find.text('Luftfeuchtigkeit'), findsOneWidget);
+    expect(find.text('7 km/h S'), findsOneWidget);
+    expect(find.byType(HugeIcon), findsNWidgets(2));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('tiles: label tiles render, three per row', (WidgetTester tester) async {
+    await _pump(
+      tester,
+      '::: tiles Bot\n'
+      'Chatbot | chat\n'
+      'Such-Crawler | search\n'
+      'Spiele-Bot | game\n'
+      ':::',
+      textScale: 1.3,
+    );
+    expect(find.text('Chatbot'), findsOneWidget);
+    expect(find.text('Such-Crawler'), findsOneWidget);
+    expect(find.text('Spiele-Bot'), findsOneWidget);
+    expect(find.byType(HugeIcon), findsNWidgets(3));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('cards: carousel renders card content and counter', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      '::: cards Hotels\n'
+      'Alpenruhe Panorama\n'
+      'badge: Für deinen Bergmoment\n'
+      'subtitle: Grindelwald, Schweiz\n'
+      'meta: 4,8 · 128 Bewertungen\n'
+      'chips: Panoramabalkon, Berg-Spa\n'
+      'price: 248 CHF / Nacht\n'
+      '--\n'
+      'Felsenblick\n'
+      'price: 219 CHF / Nacht\n'
+      ':::',
+      textScale: 1.3,
+    );
+    expect(_allText(tester), contains('Alpenruhe Panorama'));
+    expect(_allText(tester), contains('Grindelwald, Schweiz'));
+    expect(_allText(tester), contains('248 CHF / Nacht'));
+    expect(_allText(tester), contains('Panoramabalkon'));
+    expect(_allText(tester), contains('1 / 2 Hotels'));
+    // No network access in tests: the image-less cards must not throw, and a
+    // card with a broken image URL falls back to its placeholder.
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('cards: image URL that fails loading falls back, no throw', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      '::: cards\n'
+      'Hotel mit Bild\n'
+      'image: https://example.invalid/broken.jpg\n'
+      ':::',
+    );
+    expect(_allText(tester), contains('Hotel mit Bild'));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('cards: private-network image URLs are never requested', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      '::: cards\n'
+      'Lokales Bild\n'
+      'image: https://127.0.0.1/secret.jpg\n'
+      ':::',
+    );
+    expect(_allText(tester), contains('Lokales Bild'));
+    // The placeholder renders, but no network image is created for a
+    // loopback host — the model must not make the app knock on itself.
+    expect(find.byType(Image), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('ask: chips tap sends the label', (WidgetTester tester) async {
+    final List<String> sent = <String>[];
+    await _pump(
+      tester,
+      '::: ask Welche Rechenbasis möchtest du verstehen?\n'
+      'Aktive Parameter\n'
+      'BF16 & FP8\n'
+      ':::',
+      onFollowUp: (String text) => sent.add(text),
+    );
+    expect(_allText(tester), contains('Welche Rechenbasis möchtest du verstehen?'));
+    await tester.tap(find.text('Aktive Parameter'));
+    expect(sent, <String>['Aktive Parameter']);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('ask: without a callback the chips stay visible', (
+    WidgetTester tester,
+  ) async {
+    await _pump(tester, '::: ask\nEin Thema\nNoch eins\n:::');
+    expect(find.text('Ein Thema'), findsOneWidget);
+    expect(find.text('Noch eins'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('source: rows with title and url', (WidgetTester tester) async {
+    await _pump(
+      tester,
+      '::: source\n'
+      'Notizen zur Tagesplanung | https://example.org/notizen\n'
+      ':::',
+    );
+    expect(_allText(tester), contains('Notizen zur Tagesplanung'));
+    expect(_allText(tester), contains('example.org/notizen'));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('source: the row is tappable and opens its url', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      '::: source\n'
+      'Doku | https://example.org/doku\n'
+      ':::',
+    );
+    // The link-styled row carries an InkWell: the tap target exists (the
+    // launch itself is platform work, not asserted here).
+    expect(find.byType(InkWell), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('kpi: two tiles share one row at phone width', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      '::: kpi\n'
+      '82 % | Luftfeuchtigkeit | droplet\n'
+      '7 km/h S | Wind aus Süden | wind\n'
+      ':::',
+    );
+    // Both tiles side by side: same row (equal tops), second starts after
+    // the first ends.
+    final Rect first = tester.getRect(find.text('82 %'));
+    final Rect second = tester.getRect(find.text('7 km/h S'));
+    expect((first.top - second.top).abs(), lessThan(2));
+    expect(second.left, greaterThan(first.right));
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('GitHub alert: label and body, no literal [!NOTE]', (

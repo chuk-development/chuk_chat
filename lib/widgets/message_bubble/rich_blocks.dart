@@ -89,6 +89,7 @@ extension _MessageBubbleRichBlocks on _MessageBubbleState {
             wrapWithSelectionArea: !widget.useSharedSelectionArea,
             fontFamily: _chatFontFamily,
             paragraphFontSize: _chatFontSize,
+            onFollowUp: widget.onOpenUiMessage,
           ),
         ),
       );
@@ -153,6 +154,7 @@ extension _MessageBubbleRichBlocks on _MessageBubbleState {
               wrapWithSelectionArea: !widget.useSharedSelectionArea,
               fontFamily: _chatFontFamily,
               paragraphFontSize: _chatFontSize,
+              onFollowUp: widget.onOpenUiMessage,
             ),
           ),
         );
@@ -238,6 +240,7 @@ extension _MessageBubbleRichBlocks on _MessageBubbleState {
             wrapWithSelectionArea: !widget.useSharedSelectionArea,
             fontFamily: _chatFontFamily,
             paragraphFontSize: _chatFontSize,
+            onFollowUp: widget.onOpenUiMessage,
           ),
         ),
       );
@@ -254,6 +257,7 @@ extension _MessageBubbleRichBlocks on _MessageBubbleState {
             wrapWithSelectionArea: !widget.useSharedSelectionArea,
             fontFamily: _chatFontFamily,
             paragraphFontSize: _chatFontSize,
+            onFollowUp: widget.onOpenUiMessage,
           ),
         ),
       );
@@ -626,6 +630,7 @@ extension _MessageBubbleRichBlocks on _MessageBubbleState {
         wrapWithSelectionArea: !widget.useSharedSelectionArea,
         fontFamily: _chatFontFamily,
         paragraphFontSize: _chatFontSize,
+        onFollowUp: widget.onOpenUiMessage,
       ),
     );
   }
