@@ -14,6 +14,7 @@ class _AnswerBlockStyle {
     required this.textColor,
     required this.backgroundColor,
     required this.accent,
+    required this.onAccent,
     required this.fontFamily,
     required this.baseFontSize,
   }) : dark =
@@ -30,6 +31,21 @@ class _AnswerBlockStyle {
   Color get muted => textColor.withValues(alpha: 0.62);
   Color get secondary => textColor.withValues(alpha: 0.82);
   Color get hairline => textColor.withValues(alpha: 0.16);
+
+  /// Readable text on an [accent] fill (the theme's `onPrimary`).
+  final Color onAccent;
+
+  /// Flat fill of a visual module card (the "Antwortmodul"): an accent wash on
+  /// light, a neutral lift on dark — no border, no shadow (DESIGN.md §8).
+  Color get cardFill =>
+      dark ? textColor.withValues(alpha: 0.05) : accent.withValues(alpha: 0.06);
+
+  /// Fill of a tile nested inside a module card, one step stronger.
+  Color get tileFill =>
+      dark ? textColor.withValues(alpha: 0.08) : accent.withValues(alpha: 0.11);
+
+  /// Fill of a chip nested inside a module card (keeps the bubble colour).
+  Color get chipFill => backgroundColor;
 
   Color get warn => dark ? const Color(0xFFFFC860) : const Color(0xFF8A5A00);
   Color get warnSoft =>
@@ -64,7 +80,11 @@ class _AnswerBlockStyle {
 
 /// Builds the widget for one block. Throws only on a programming error; the
 /// caller falls back to plain text then.
-Widget _buildAnswerBlock(AnswerBlockSegment block, _AnswerBlockStyle s) {
+Widget _buildAnswerBlock(
+  AnswerBlockSegment block,
+  _AnswerBlockStyle s, {
+  ValueChanged<String>? onFollowUp,
+}) {
   switch (block.kind) {
     case AnswerBlockKind.steps:
       return _StepsBlock(spec: parseSteps(block.arg, block.lines), s: s);
@@ -86,6 +106,22 @@ Widget _buildAnswerBlock(AnswerBlockSegment block, _AnswerBlockStyle s) {
       return _ScaleBlock(spec: spec, s: s);
     case AnswerBlockKind.alert:
       return _AlertBlock(type: block.arg, lines: block.lines, s: s);
+    case AnswerBlockKind.bars:
+      return _BarsBlock(spec: parseBars(block.arg, block.lines), s: s);
+    case AnswerBlockKind.kpi:
+      return _KpiBlock(spec: parseKpi(block.arg, block.lines), s: s);
+    case AnswerBlockKind.tiles:
+      return _TilesBlock(spec: parseTiles(block.arg, block.lines), s: s);
+    case AnswerBlockKind.cards:
+      return _CardsBlock(spec: parseCards(block.arg, block.lines), s: s);
+    case AnswerBlockKind.ask:
+      return _AskBlock(
+        spec: parseAsk(block.arg, block.lines),
+        s: s,
+        onFollowUp: onFollowUp,
+      );
+    case AnswerBlockKind.source:
+      return _SourceBlock(spec: parseSource(block.arg, block.lines), s: s);
   }
 }
 

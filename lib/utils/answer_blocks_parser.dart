@@ -16,7 +16,18 @@
 //   argument and the body stay as text.
 
 /// The block kinds the renderer draws natively.
-enum AnswerBlockKind { steps, timeline, scale, alert }
+enum AnswerBlockKind {
+  steps,
+  timeline,
+  scale,
+  alert,
+  bars,
+  kpi,
+  tiles,
+  cards,
+  ask,
+  source,
+}
 
 /// One slice of a message: Markdown text or a parsed block.
 sealed class AnswerSegment {
@@ -55,6 +66,12 @@ const Map<String, AnswerBlockKind> _kBlockNames = <String, AnswerBlockKind>{
   'steps': AnswerBlockKind.steps,
   'timeline': AnswerBlockKind.timeline,
   'scale': AnswerBlockKind.scale,
+  'bars': AnswerBlockKind.bars,
+  'kpi': AnswerBlockKind.kpi,
+  'tiles': AnswerBlockKind.tiles,
+  'cards': AnswerBlockKind.cards,
+  'ask': AnswerBlockKind.ask,
+  'source': AnswerBlockKind.source,
 };
 
 final RegExp _openRe = RegExp(r'^ {0,3}:::\s*([A-Za-z][\w-]*)[ \t]*(.*)$');
@@ -476,4 +493,432 @@ ScaleSpec? parseScale(String arg, List<String> lines) {
     ticks: List<ScalePoint>.unmodifiable(ticks),
     markers: List<ScalePoint>.unmodifiable(markers),
   );
+}
+
+// ---------------------------------------------------------------------------
+// bars — labelled horizontal bar comparison
+//
+// ::: bars Optional title
+// Step 5 | ~1.200 GB | 600B Gesamtparameter
+// GLM Flash | ~640 GB | 320B Gesamtparameter
+// ! Parameter × 2 Byte — zusätzlicher Laufzeitspeicher nötig
+// :::
+//
+// The bar length comes from the first number in the value; the value text is
+// shown unchanged. A line starting with `! ` is the note under the bars.
+
+class BarRow {
+  const BarRow({
+    required this.label,
+    required this.valueText,
+    required this.sub,
+    required this.value,
+  });
+
+  final String label;
+  final String valueText;
+  final String sub;
+
+  /// First number in [valueText], or null (row draws at full length then).
+  final double? value;
+}
+
+class BarsSpec {
+  const BarsSpec({
+    required this.title,
+    required this.rows,
+    this.note = '',
+    this.tag = '',
+  });
+  final String title;
+  final List<BarRow> rows;
+  final String note;
+
+  /// Optional small label chip above the title (`tag: BF16 · nur Gewichte`).
+  final String tag;
+}
+
+BarsSpec parseBars(String arg, List<String> lines) {
+  final List<BarRow> rows = <BarRow>[];
+  String note = '';
+  String tag = '';
+  for (final String raw in lines) {
+    final String line = raw.trim();
+    if (line.isEmpty) continue;
+    if (line.startsWith('! ')) {
+      note = line.substring(2).trim();
+      continue;
+    }
+    if (line.startsWith('tag:')) {
+      tag = line.substring(4).trim();
+      continue;
+    }
+    final List<String> parts = line.split('|').map((p) => p.trim()).toList();
+    final String label = parts.isNotEmpty ? parts[0] : '';
+    final String valueText = parts.length > 1 ? parts[1] : '';
+    final String sub = parts.length > 2 ? parts.sublist(2).join(' · ') : '';
+    if (label.isEmpty && valueText.isEmpty) continue;
+    rows.add(
+      BarRow(
+        label: label,
+        valueText: valueText,
+        sub: sub,
+        value: parseLooseNumber(valueText),
+      ),
+    );
+  }
+  return BarsSpec(
+    title: arg.trim(),
+    rows: List<BarRow>.unmodifiable(rows),
+    note: note,
+    tag: tag,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// kpi — stat tiles (value first)
+//
+// ::: kpi Optional title
+// 82 % | Luftfeuchtigkeit | droplet
+// 7 km/h S | Wind aus Süden | wind
+// :::
+
+class KpiTile {
+  const KpiTile({
+    required this.value,
+    required this.label,
+    this.icon = '',
+  });
+  final String value;
+  final String label;
+  final String icon;
+}
+
+class KpiSpec {
+  const KpiSpec({required this.title, required this.tiles, this.tag = ''});
+  final String title;
+  final List<KpiTile> tiles;
+  final String tag;
+}
+
+KpiSpec parseKpi(String arg, List<String> lines) {
+  final List<KpiTile> tiles = <KpiTile>[];
+  String tag = '';
+  for (final String raw in lines) {
+    final String line = raw.trim();
+    if (line.isEmpty) continue;
+    if (line.startsWith('tag:')) {
+      tag = line.substring(4).trim();
+      continue;
+    }
+    final List<String> parts = line.split('|').map((p) => p.trim()).toList();
+    final String value = parts.isNotEmpty ? parts[0] : '';
+    if (value.isEmpty) continue;
+    tiles.add(
+      KpiTile(
+        value: value,
+        label: parts.length > 1 ? parts[1] : '',
+        icon: parts.length > 2 ? parts[2] : '',
+      ),
+    );
+  }
+  return KpiSpec(
+    title: arg.trim(),
+    tiles: List<KpiTile>.unmodifiable(tiles),
+    tag: tag,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// tiles — icon tiles (label first)
+//
+// ::: tiles Optional title
+// Chatbot | chat
+// Such-Crawler | search
+// Spiele-Bot | game
+// :::
+
+class IconTile {
+  const IconTile({required this.label, this.icon = '', this.sub = ''});
+  final String label;
+  final String icon;
+  final String sub;
+}
+
+class TilesSpec {
+  const TilesSpec({required this.title, required this.tiles, this.tag = ''});
+  final String title;
+  final List<IconTile> tiles;
+  final String tag;
+}
+
+TilesSpec parseTiles(String arg, List<String> lines) {
+  final List<IconTile> tiles = <IconTile>[];
+  String tag = '';
+  for (final String raw in lines) {
+    final String line = raw.trim();
+    if (line.isEmpty) continue;
+    if (line.startsWith('tag:')) {
+      tag = line.substring(4).trim();
+      continue;
+    }
+    String body = line.startsWith('- ') ? line.substring(2).trim() : line;
+    final List<String> parts = body.split('|').map((p) => p.trim()).toList();
+    final String label = parts.isNotEmpty ? parts[0] : '';
+    if (label.isEmpty) continue;
+    tiles.add(
+      IconTile(
+        label: label,
+        icon: parts.length > 1 ? parts[1] : '',
+        sub: parts.length > 2 ? parts.sublist(2).join(' · ') : '',
+      ),
+    );
+  }
+  return TilesSpec(
+    title: arg.trim(),
+    tiles: List<IconTile>.unmodifiable(tiles),
+    tag: tag,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// cards — card carousel (hotel / product / item cards)
+//
+// ::: cards Hotels
+// Alpenruhe Panorama
+// image: https://example.com/alpenruhe.jpg
+// badge: Für deinen Bergmoment
+// subtitle: Grindelwald, Schweiz
+// meta: 4,8 · 128 Bewertungen
+// chips: Panoramabalkon, Berg-Spa
+// price: 248 CHF / Nacht
+// url: https://example.com/alpenruhe
+// --
+// Auralis Quiet One
+// ...
+// :::
+//
+// The first line of a record is the title, the rest are `key: value` pairs.
+// `meta` and `chips` may repeat; chips split on commas. `--` on its own line
+// (or a blank line) starts the next card.
+
+class AnswerCard {
+  const AnswerCard({
+    required this.title,
+    this.subtitle = '',
+    this.image = '',
+    this.badge = '',
+    this.price = '',
+    this.url = '',
+    this.action = '',
+    this.metas = const <String>[],
+    this.chips = const <String>[],
+  });
+  final String title;
+  final String subtitle;
+  final String image;
+  final String badge;
+  final String price;
+  final String url;
+
+  /// Label of the action button (default "Open" in the widget).
+  final String action;
+  final List<String> metas;
+  final List<String> chips;
+}
+
+class CardsSpec {
+  const CardsSpec({required this.label, required this.cards});
+  final String label;
+  final List<AnswerCard> cards;
+}
+
+const List<String> _kCardKeys = <String>[
+  'image',
+  'badge',
+  'subtitle',
+  'price',
+  'url',
+  'link',
+  'action',
+];
+
+AnswerCard _parseCardRecord(List<String> record) {
+  String title = '';
+  String subtitle = '';
+  String image = '';
+  String badge = '';
+  String price = '';
+  String url = '';
+  String action = '';
+  final List<String> metas = <String>[];
+  final List<String> chips = <String>[];
+
+  for (final String raw in record) {
+    final String line = raw.trim();
+    if (line.isEmpty) continue;
+    final int colon = line.indexOf(':');
+    final String key =
+        colon > 0 ? line.substring(0, colon).trim().toLowerCase() : '';
+    final String value = colon > 0 ? line.substring(colon + 1).trim() : '';
+    // A known key with an empty value (`image:` from a tool that returned
+    // nothing) is not content: drop it instead of letting it become the
+    // title or a meta line.
+    if (value.isEmpty &&
+        (_kCardKeys.contains(key) || key == 'chips' || key == 'meta')) {
+      continue;
+    }
+    if (value.isNotEmpty && _kCardKeys.contains(key)) {
+      switch (key) {
+        case 'image':
+          image = value;
+          continue;
+        case 'badge':
+          badge = value;
+          continue;
+        case 'subtitle':
+          subtitle = value;
+          continue;
+        case 'price':
+          price = value;
+          continue;
+        case 'action':
+          action = value;
+          continue;
+        case 'url':
+        case 'link':
+          url = value;
+          continue;
+      }
+    }
+    if (key == 'chips' && value.isNotEmpty) {
+      chips.addAll(value.split(',').map((c) => c.trim()).where((c) => c.isNotEmpty));
+      continue;
+    }
+    if (key == 'meta' && value.isNotEmpty) {
+      metas.add(value);
+      continue;
+    }
+    if (title.isEmpty) {
+      title = line.startsWith('- ') ? line.substring(2).trim() : line;
+    } else {
+      // An extra plain line: read it as a fact line.
+      metas.add(line);
+    }
+  }
+  return AnswerCard(
+    title: title,
+    subtitle: subtitle,
+    image: image,
+    badge: badge,
+    price: price,
+    url: url,
+    action: action,
+    metas: List<String>.unmodifiable(metas),
+    chips: List<String>.unmodifiable(chips),
+  );
+}
+
+CardsSpec parseCards(String arg, List<String> lines) {
+  final List<List<String>> records = <List<String>>[];
+  List<String> current = <String>[];
+
+  void flushRecord() {
+    if (current.any((l) => l.trim().isNotEmpty)) {
+      records.add(current);
+    }
+    current = <String>[];
+  }
+
+  for (final String line in lines) {
+    final String t = line.trim();
+    if (t == '--' || t == '---' || t.isEmpty) {
+      flushRecord();
+      continue;
+    }
+    current.add(line);
+  }
+  flushRecord();
+
+  final List<AnswerCard> cards = <AnswerCard>[
+    for (final List<String> record in records) _parseCardRecord(record),
+  ].where((AnswerCard c) => c.title.isNotEmpty).toList();
+
+  return CardsSpec(
+    label: arg.trim(),
+    cards: List<AnswerCard>.unmodifiable(cards),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ask — follow-up chips the reader can tap to send as the next question
+//
+// ::: ask Welche Rechenbasis möchtest du verstehen?
+// Aktive Parameter
+// BF16 & FP8
+// :::
+
+class AskSpec {
+  const AskSpec({required this.question, required this.chips});
+  final String question;
+  final List<String> chips;
+}
+
+AskSpec parseAsk(String arg, List<String> lines) {
+  final List<String> chips = <String>[];
+  for (final String raw in lines) {
+    final String line = raw.trim();
+    if (line.isEmpty) continue;
+    chips.add(line.startsWith('- ') ? line.substring(2).trim() : line);
+  }
+  return AskSpec(
+    question: arg.trim(),
+    chips: List<String>.unmodifiable(chips.where((c) => c.isNotEmpty)),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// source — link rows ("Quelle & Verweis")
+//
+// ::: source
+// Notizen zur Tagesplanung | https://example.org/notizen
+// :::
+
+class SourceRow {
+  const SourceRow({required this.title, this.url = ''});
+  final String title;
+  final String url;
+}
+
+class SourceSpec {
+  const SourceSpec({required this.rows});
+  final List<SourceRow> rows;
+}
+
+SourceSpec parseSource(String arg, List<String> lines) {
+  final List<SourceRow> rows = <SourceRow>[];
+  String pendingTitle = arg.trim();
+  for (final String raw in lines) {
+    final String line = raw.trim();
+    if (line.isEmpty) continue;
+    final int bar = line.indexOf('|');
+    if (bar < 0) {
+      rows.add(SourceRow(title: line));
+      continue;
+    }
+    // `| https://…` (no title) or `Title | https://…`.
+    final String title = line.substring(0, bar).trim();
+    final String url = line.substring(bar + 1).trim();
+    if (title.isEmpty && url.isEmpty) continue;
+    if (title.isEmpty && pendingTitle.isNotEmpty) {
+      rows.add(SourceRow(title: pendingTitle, url: url));
+      pendingTitle = '';
+      continue;
+    }
+    rows.add(SourceRow(title: title, url: url));
+  }
+  if (rows.isEmpty && pendingTitle.isNotEmpty) {
+    rows.add(SourceRow(title: pendingTitle));
+  }
+  return SourceSpec(rows: List<SourceRow>.unmodifiable(rows));
 }
