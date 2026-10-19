@@ -137,7 +137,18 @@ class ModelCacheService {
   /// in it — callers then show the id, which is ugly but never wrong.
   static Future<String?> displayNameFor(String modelId) async {
     if (modelId.isEmpty) return null;
-    final models = await loadAvailableModels();
+    // The name is cosmetic and callers fire this unawaited from the chat
+    // screens, so a cache that cannot be opened (no support directory, a
+    // locked DB) means "no name", not an uncaught async error.
+    final List<Map<String, dynamic>> models;
+    try {
+      models = await loadAvailableModels();
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('ModelCacheService.displayNameFor: cache unavailable: $e');
+      }
+      return null;
+    }
     for (final model in models) {
       if (model['id'] == modelId) {
         final name = model['name'];

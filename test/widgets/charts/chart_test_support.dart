@@ -61,6 +61,17 @@ Directory? _findMaterialFonts() {
   return null;
 }
 
+/// The `updated_at` the document goldens carry, in epoch seconds.
+///
+/// A document's meta line shows `updated_at` as local wall-clock time
+/// (`documentFreshness`). A fixed epoch value therefore renders as
+/// `13.09. 00:15` on a machine in Europe/Berlin and as `12.09. 22:15` on a
+/// CI runner in UTC, and the goldens fail on the runner by exactly those
+/// glyphs. This value is built from a LOCAL date and time, so every time zone
+/// renders the same `13.09. 00:15` that the committed PNGs show.
+final double kGoldenDocumentUpdatedAt =
+    DateTime(2026, 9, 13, 0, 15).millisecondsSinceEpoch / 1000;
+
 /// The app's own scheme shape: a neutral seed, so the chart's colours come
 /// from the chart, not from a purple Material default.
 ThemeData chartTheme(Brightness brightness) => ThemeData(

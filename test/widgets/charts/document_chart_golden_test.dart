@@ -32,7 +32,7 @@ Map<String, dynamic> specDocument() => <String, dynamic>{
   'caption': 'Vorläufiges Endergebnis, Zweitstimmen',
   'source_url': 'https://wahlergebnisse.sachsen-anhalt.de/wahlen/lt26/',
   'retrieved_at': '2026-09-12T20:15:00Z',
-  'updated_at': 1789251300.0,
+  'updated_at': kGoldenDocumentUpdatedAt,
   'chart': <String, Object?>{
     'kind': 'bar',
     'unit': '%',

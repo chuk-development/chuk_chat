@@ -119,6 +119,20 @@ class EnvLoader {
     }
   }
 
+  /// Marks the loader as done without reading any file.
+  ///
+  /// The test harness calls this once (`test/flutter_test_config.dart`). The
+  /// loader otherwise reads the developer's `.env` (also the fallback under
+  /// `~/git/chuk_chat`), so a local `flutter test` sees configured Supabase
+  /// credentials while CI, which has no `.env`, does not. The two then render
+  /// different screens (the login page shows the "not configured" notice only
+  /// on CI). With this call every run sees the CI state.
+  @visibleForTesting
+  static void skipFileForTests() {
+    _values.clear();
+    _loaded = true;
+  }
+
   static void _parseEnvFile(String contents) {
     final lines = contents.split('\n');
     for (final line in lines) {
