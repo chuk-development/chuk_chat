@@ -91,18 +91,35 @@ Future<String> _generateImageRequest({
 /// Human-readable display names per generator key. Adding a model = one entry
 /// here (and the matching server registry entry). The single `generate_image`
 /// tool routes everything through `/v1/ai/image/generate` (mux: image_generate).
-///
-/// PRIVACY note: the per-model privacy warning is driven by the prompt text in
-/// `tool_prompt_builder.dart` (COST & PRIVACY rule). Confirmed no-retention
-/// models (no privacy warning): turbo, flux. Keep that list in sync there when
-/// adding/verifying a model — hunyuan/ideogram/edit currently keep the warning.
+/// The server runs every model on OpenRouter with Zero Data Retention.
 const Map<String, String> imageModelDisplayNames = {
-  'turbo': 'Z-Image Turbo',
-  'hunyuan': 'Hunyuan Image 3',
-  'flux': 'FLUX 2 Klein 9B',
-  'ideogram': 'Ideogram v4',
-  'edit': 'Qwen Image Edit Plus',
+  'krea': 'Krea 2 Large',
+  'turbo': 'Krea 2 Medium Turbo',
+  'hunyuan': 'Hunyuan Image 3.5',
+  'seedream': 'Seedream 5 Lite',
+  'edit': 'Krea K3 Edit',
 };
+
+/// Default generator key when the model omits or blanks `model`.
+const String defaultImageModel = 'krea';
+
+/// Old generator keys that map onto the current lineup. The server accepts
+/// them too; the client folds them here so the display name is current.
+const Map<String, String> legacyImageModelAliases = {
+  'quality': 'krea',
+  'flux': 'krea',
+  'ideogram': 'seedream',
+  'k3': 'edit',
+};
+
+/// Normalises a generator key: trims, lower-cases, maps legacy aliases and
+/// falls back to [defaultImageModel] for an empty value. Unknown keys are
+/// returned unchanged so the caller can report them.
+String normalizeImageModel(String? raw) {
+  final key = (raw ?? '').trim().toLowerCase();
+  if (key.isEmpty) return defaultImageModel;
+  return legacyImageModelAliases[key] ?? key;
+}
 
 /// Single image generation/editing tool. `args['model']` selects the
 /// generator; only the params relevant to that model are forwarded.
@@ -111,7 +128,7 @@ Future<String> executeGenerateImage({
   required String? accessToken,
   required Map<String, dynamic> args,
 }) async {
-  final model = (args['model'] as String? ?? 'turbo').trim().toLowerCase();
+  final model = normalizeImageModel(args['model'] as String?);
   final modelName = imageModelDisplayNames[model];
   if (modelName == null) {
     return 'Error: unknown image model "$model". '
@@ -125,44 +142,23 @@ Future<String> executeGenerateImage({
 
   final fields = <String, String>{'model': model, 'prompt': prompt};
 
-  switch (model) {
-    case 'edit':
-      final imageUrl = (args['image_url'] as String? ?? '').trim();
-      if (imageUrl.isEmpty) {
-        return 'Error: "image_url" parameter required for model "edit" — '
-            'provide the URL of an image to edit';
-      }
-      fields['image_url'] = imageUrl;
-      fields['image_size'] = (args['image_size'] as String? ?? 'auto').trim();
-      break;
-    case 'ideogram':
-      fields['tier'] = (args['tier'] as String? ?? 'quality').trim();
-      final resolution = (args['resolution'] as String?)?.trim();
-      if (resolution != null && resolution.isNotEmpty) {
-        fields['resolution'] = resolution;
-      }
-      final jsonPrompt = (args['json_prompt'] as String?)?.trim();
-      if (jsonPrompt != null && jsonPrompt.isNotEmpty) {
-        fields['json_prompt'] = jsonPrompt;
-      }
-      break;
-    default:
-      // turbo / hunyuan / flux: aspect_ratio (hunyuan/flux only) overrides
-      // image_size. turbo has no aspect_ratio, so it always uses image_size.
-      final aspectRatio = (args['aspect_ratio'] as String?)?.trim();
-      if (model != 'turbo' && aspectRatio != null && aspectRatio.isNotEmpty) {
-        fields['aspect_ratio'] = aspectRatio;
-      } else {
-        fields['image_size'] =
-            (args['image_size'] as String? ?? 'landscape_4_3').trim();
-      }
-      if (model == 'flux') {
-        final megapixels = (args['megapixels'] as String?)?.trim();
-        if (megapixels != null && megapixels.isNotEmpty) {
-          fields['megapixels'] = megapixels;
-        }
-      }
-      break;
+  final imageUrl = (args['image_url'] as String? ?? '').trim();
+  if (model == 'edit') {
+    if (imageUrl.isEmpty) {
+      return 'Error: "image_url" parameter required for model "edit" — '
+          'provide the URL of the image to edit (up to 8 URLs, one per line)';
+    }
+    fields['image_url'] = imageUrl;
+    fields['image_size'] = (args['image_size'] as String? ?? 'auto').trim();
+  } else {
+    // aspect_ratio overrides the image_size preset.
+    final aspectRatio = (args['aspect_ratio'] as String?)?.trim();
+    if (aspectRatio != null && aspectRatio.isNotEmpty) {
+      fields['aspect_ratio'] = aspectRatio;
+    } else {
+      fields['image_size'] =
+          (args['image_size'] as String? ?? 'landscape_4_3').trim();
+    }
   }
 
   return _generateImageRequest(

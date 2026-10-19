@@ -72,7 +72,7 @@ Services in `lib/services/` use singleton-like patterns (static methods or const
 | Service | Purpose |
 |---------|---------|
 | `ImageStorageService` | Encrypted image storage, listing, deletion |
-| `ImageGenerationService` | AI image gen via Z-Image Turbo |
+| `ImageGenerationService` | AI image gen via the `generate_image` tool (OpenRouter, ZDR) |
 | `ImageCompressionService` | JPEG compression (2MB target) |
 
 ## State Management

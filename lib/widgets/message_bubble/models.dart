@@ -18,7 +18,7 @@ class ImageMeta {
   /// Optional short subtitle supplied by the AI, shown under the image.
   final String? caption;
 
-  /// Human-readable image-generation model label (e.g. "FLUX 2 Klein 9B").
+  /// Human-readable image-generation model label (e.g. "Krea 2 Large").
   /// Only set for generated images. Shown under the caption and as a corner
   /// badge on the image so it is always clear which generator produced it.
   final String? model;
