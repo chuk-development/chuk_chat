@@ -5,7 +5,9 @@
 ///  * **attached + foreground** — the user is watching: nothing.
 ///  * **attached + background** — the app itself shows a local toast on the
 ///    live `done` ([onLiveDone]); the host sees a controller and does NOT
-///    push.
+///    push. The toast is the only one for the run: the chat screen's own
+///    completion toast stands down for Agents threads
+///    (`NotificationService.showCompletionNotification`).
 ///  * **not attached** — the host pushes (Supabase → FCM) and toasts on its
 ///    own desktop; the app only learns about it later, when a replay lands
 ///    with `while_away` ([onAnswerReplayed]): then the row is consumed and
@@ -62,13 +64,23 @@ class AgentsNotifications {
   }
 
   /// A live `done` reached the thread view for [sessionKey]. Toast only when
-  /// the app is not in front of the user.
-  Future<void> onLiveDone(String sessionKey, {String? runId}) async {
+  /// the app is not in front of the user: "Name is done". [answer] becomes
+  /// a short preview in the body only when the user turned the preview
+  /// setting on ([LocalNotifications.showAnswerPreviewKey], default off).
+  /// [stopped] is a run that ended without finishing.
+  Future<void> onLiveDone(
+    String sessionKey, {
+    String? runId,
+    String? answer,
+    bool stopped = false,
+  }) async {
     if (_inForeground) return;
     await LocalNotifications.instance.showAnswerReady(
       sessionKey: sessionKey,
       threadLabel: threadLabel(sessionKey),
       runId: runId,
+      preview: answer,
+      stopped: stopped,
     );
   }
 

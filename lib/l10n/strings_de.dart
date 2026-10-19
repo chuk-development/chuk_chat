@@ -131,6 +131,12 @@ const Map<String, String> stringsDe = {
   'autoGenerateTitles': 'Chat-Titel automatisch generieren',
   'autoGenerateTitlesSubtitle':
       'KI zum Generieren von Titeln für neue Chats verwenden',
+  'notificationsSection': 'Benachrichtigungen',
+  'settingSaveFailed': 'Einstellung konnte nicht gespeichert werden',
+  'notificationAnswerPreview':
+      'Antwortvorschau in Benachrichtigungen',
+  'notificationAnswerPreviewSubtitle':
+      'Zeigt den Anfang der Antwort in der Benachrichtigung. Aus: Die Benachrichtigung sagt nur, wer fertig ist.',
   'titleGenerationPrompt': 'Titelgenerierungs-Prompt',
   'usingCustomPrompt': 'Benutzerdefinierter Prompt aktiv',
   'usingDefaultPrompt': 'Standard-Prompt aktiv',
@@ -703,6 +709,9 @@ const Map<String, String> stringsDe = {
   'addMessageOrDocs': 'Nachricht oder Dokumente senden',
   'micAccessFailed': 'Mikrofonzugriff fehlgeschlagen',
   'transcriptionFailed': 'Transkription fehlgeschlagen',
+  'voiceMessage': 'Sprachnachricht',
+  'voiceMessageShowTranscript': 'Transkript anzeigen',
+  'voiceMessageHideTranscript': 'Transkript ausblenden',
   'nothingToResend': 'Nichts zum erneuten Senden',
   'freeMessagesUsed': 'Kostenlose Nachrichten aufgebraucht',
   'ok': 'OK',

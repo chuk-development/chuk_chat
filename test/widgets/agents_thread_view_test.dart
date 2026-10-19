@@ -346,6 +346,7 @@ void main() {
     Future<(List<FakeRelayController>, AgentsPairingStore)> pumpPersistent(
       WidgetTester tester, {
       bool hostAway = false,
+      bool? linkAnswers,
     }) async {
       tester.view.physicalSize = const Size(1400, 900);
       tester.view.devicePixelRatio = 1;
@@ -358,7 +359,11 @@ void main() {
         _app(
           AgentsThreadView(
             controllerBuilder: () async {
-              final c = FakeRelayController()..reconnectFails = hostAway;
+              final c =
+                  (linkAnswers == null
+                        ? FakeRelayController()
+                        : _ProbingRelayController(linkAnswers))
+                    ..reconnectFails = hostAway;
               controllers.add(c);
               return c;
             },
@@ -395,6 +400,106 @@ void main() {
       await tester.pump();
       await tester.pump();
       expect(controllers.length, before + 1);
+      expect(controllers.last.reconnectCalls, 1);
+    });
+
+    // Bead chuk_chat-kl8x: the way back from the background must not throw a
+    // live socket away. The run's final answer is on it (or still buffered on
+    // it); a new dial, sign-in, handshake and replay is what made the reader
+    // wait about five seconds on the old screen.
+    testWidgets(
+      'resume keeps a socket that still answers and only reconciles',
+      (tester) async {
+        final (controllers, _) = await pumpPersistent(
+          tester,
+          linkAnswers: true,
+        );
+        final live = controllers.single as _ProbingRelayController;
+        final reconnectsBefore = live.reconnectCalls;
+        final replaysBefore = live.replayRequests.length;
+        final state = tester.state<AgentsThreadViewState>(
+          find.byType(AgentsThreadView),
+        );
+        state.didChangeAppLifecycleState(AppLifecycleState.paused);
+        state.didChangeAppLifecycleState(AppLifecycleState.resumed);
+        await tester.pump();
+        await tester.pump();
+
+        expect(live.probes, 1);
+        expect(controllers, hasLength(1), reason: 'no second controller');
+        expect(live.reconnectCalls, reconnectsBefore, reason: 'no new dial');
+        expect(
+          live.replayRequests.length,
+          replaysBefore + 1,
+          reason: 'a delta replay reconciles in the background',
+        );
+        expect(AgentsRelayLink.instance.controller.value, same(live));
+
+        // The host answers the replay: the socket is confirmed end to end,
+        // and the probation timer must not replace it later.
+        live.emit(
+          const AgentsRelayRunState(sessionKey: 'default', state: 'idle'),
+        );
+        await tester.pump(AgentsThreadViewState.resumeHostAnswerTimeout * 2);
+        await tester.pump();
+        expect(controllers, hasLength(1), reason: 'host answered, kept');
+        expect(live.reconnectCalls, reconnectsBefore);
+      },
+    );
+
+    // The relay answers the probe itself, so a pong does not prove the host.
+    // A host that restarted while the app was away (and signed in to the
+    // relay again under the same device id) drops the sealed replay. With no
+    // host answer in time, the kept socket is replaced after all.
+    testWidgets(
+      'resume replaces a kept socket when the host does not answer the replay',
+      (tester) async {
+        final (controllers, _) = await pumpPersistent(
+          tester,
+          linkAnswers: true,
+        );
+        final live = controllers.single as _ProbingRelayController;
+        final state = tester.state<AgentsThreadViewState>(
+          find.byType(AgentsThreadView),
+        );
+        state.didChangeAppLifecycleState(AppLifecycleState.paused);
+        state.didChangeAppLifecycleState(AppLifecycleState.resumed);
+        await tester.pump();
+        await tester.pump();
+        expect(controllers, hasLength(1), reason: 'kept at first');
+
+        // Not yet: the fallback waits out its timeout, it does not block.
+        await tester.pump(
+          AgentsThreadViewState.resumeHostAnswerTimeout -
+              const Duration(milliseconds: 100),
+        );
+        expect(controllers, hasLength(1));
+
+        await tester.pump(const Duration(milliseconds: 200));
+        await tester.pump();
+        await tester.pump();
+        expect(live.probes, 1);
+        expect(controllers, hasLength(2), reason: 'forced reconnect');
+        expect(controllers.last.reconnectCalls, 1);
+      },
+    );
+
+    testWidgets('resume replaces a socket that does not answer', (
+      tester,
+    ) async {
+      final (controllers, _) = await pumpPersistent(tester, linkAnswers: false);
+      final dead = controllers.single as _ProbingRelayController;
+      final state = tester.state<AgentsThreadViewState>(
+        find.byType(AgentsThreadView),
+      );
+      state.didChangeAppLifecycleState(AppLifecycleState.paused);
+      state.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump();
+      await tester.pump();
+
+      expect(dead.probes, 1);
+      expect(controllers, hasLength(2));
       expect(controllers.last.reconnectCalls, 1);
     });
 
@@ -991,6 +1096,98 @@ void main() {
         expect(controller.reconnectCalls, reconnectsBefore);
       });
 
+      testWidgets('a flushed prompt stays tracked until the host acks it', (
+        tester,
+      ) async {
+        final controller = await pumpPaired(tester);
+        await tester.pumpAndSettle();
+        await AgentsTaskOutbox.enqueue(
+          sessionKey: 'thread-1',
+          prompt: 'erst nach dem ack weg',
+        );
+        unawaited(OfflineRetryManager.instance.retryNow());
+        await tester.pumpAndSettle();
+
+        expect(controller.tasks, contains('erst nach dem ack weg'));
+        final String? taskId = controller.taskIds.last;
+        expect(taskId, isNotNull, reason: 'a flush names its task');
+        expect(await AgentsTaskOutbox.pendingFor('thread-1'), isEmpty);
+        // Written to the socket is not delivered: still recorded for a
+        // re-send until the host says it holds the task.
+        expect(
+          (await AgentsPendingTasks.pendingFor('thread-1'))
+              .map((PendingTask t) => t.taskId),
+          contains(taskId),
+        );
+
+        controller.emit(
+          AgentsRelayTaskAck(
+            taskId: taskId!,
+            status: 'accepted',
+            sessionKey: 'thread-1',
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(await AgentsPendingTasks.pendingFor('thread-1'), isEmpty);
+      });
+
+      testWidgets('a resume on a kept socket sends the backlog only after the '
+          'host answered', (tester) async {
+        tester.view.physicalSize = const Size(1400, 900);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final store = AgentsPairingStore(backend: _MemoryStore());
+        final hostPub = await (await AgentsDeviceKeys.generate())
+            .extractPublicKey();
+        await store.savePairing(
+          AgentsStoredPairing(
+            hostUrl: Uri.parse('ws://10.0.0.9:8787'),
+            channelId: 'cowork00deadbeef',
+            channelKey: Uint8List(32),
+            peerDeviceId: 'cowork-host',
+            peerPublicKey: hostPub,
+          ),
+        );
+        final controllers = <_ProbingRelayController>[];
+        await tester.pumpWidget(
+          _app(
+            AgentsThreadView(
+              threadKey: 'thread-1',
+              controllerBuilder: () async {
+                final c = _ProbingRelayController(true);
+                controllers.add(c);
+                return c;
+              },
+              sessionSource: const _FakeSessionSource(),
+              pairingStore: store,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final live = controllers.single;
+        await AgentsTaskOutbox.enqueue(
+          sessionKey: 'thread-1',
+          prompt: 'nach der antwort',
+        );
+
+        final state = tester.state<AgentsThreadViewState>(
+          find.byType(AgentsThreadView),
+        );
+        state.didChangeAppLifecycleState(AppLifecycleState.paused);
+        state.didChangeAppLifecycleState(AppLifecycleState.resumed);
+        await tester.pump();
+        await tester.pump();
+        expect(live.tasks, isNot(contains('nach der antwort')));
+
+        live.emit(
+          const AgentsRelayRunState(sessionKey: 'thread-1', state: 'idle'),
+        );
+        await tester.pumpAndSettle();
+        expect(live.tasks, contains('nach der antwort'));
+        expect(controllers, hasLength(1));
+      });
+
       testWidgets('an app resume sends the backlog too, not only a pairing', (
         tester,
       ) async {
@@ -1460,4 +1657,21 @@ void main() {
 Future<void> _flushIdleTimers(WidgetTester tester) async {
   await MultiplexSession.shutdown();
   await tester.pumpAndSettle();
+}
+
+/// A fake whose socket can be asked whether it still answers.
+class _ProbingRelayController extends FakeRelayController
+    implements AgentsLinkProbe {
+  _ProbingRelayController(this.answers);
+
+  final bool answers;
+  int probes = 0;
+
+  @override
+  Future<bool> probeLink({
+    Duration timeout = const Duration(milliseconds: 1500),
+  }) async {
+    probes++;
+    return answers;
+  }
 }

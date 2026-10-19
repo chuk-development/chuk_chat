@@ -538,6 +538,33 @@ void main() {
     expect(loader.cursorFor(sessionKey), 4);
   });
 
+  // Bead chuk_chat-kl8x: the reconcile after a resume must not remount the
+  // screen when the live stream already painted every word of the delta.
+  test('a delta that is already on screen changes nothing and repaints nothing',
+      () async {
+    await replay(const <AgentsRelayInbound>[
+      AgentsRelayUser('first', mid: 1),
+      AgentsRelayDelta('first answer', replay: true, mid: 2),
+      AgentsRelayDone(reason: 'replay', replay: true),
+    ]);
+    const delta = <AgentsRelayInbound>[
+      AgentsRelayUser('second', mid: 3),
+      AgentsRelayDelta('second answer', replay: true, mid: 4),
+      AgentsRelayDone(reason: 'replay', replay: true),
+    ];
+    loader.attach();
+    await replay(delta, afterId: 2);
+    final int revision = loader.revisionFor(sessionKey);
+    final rowsBefore = rowsFor(sessionKey);
+
+    loader.attach();
+    await replay(delta, afterId: 2);
+
+    expect(loader.revisionFor(sessionKey), revision, reason: 'no remount');
+    expect(rowsFor(sessionKey), rowsBefore, reason: 'no turn twice');
+    expect(loader.cursorFor(sessionKey), 4);
+  });
+
   test('a host that ignores the cursor replaces instead of duplicating',
       () async {
     const script = <AgentsRelayInbound>[

@@ -28,6 +28,7 @@ import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/chat_persistence_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/message_actions_handler.dart';
 import 'package:chuk_chat/services/chat_runtime.dart';
+import 'package:chuk_chat/services/dictation_tracker.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
 
 mixin ChatMessageEditMixin<W extends StatefulWidget>
@@ -70,6 +71,12 @@ mixin ChatMessageEditMixin<W extends StatefulWidget>
 
   Future<void> sendMessage();
 
+  /// Store [newText] as the message at [index] and resend from there.
+  ///
+  /// [applyDictation]: update the message's voice keys for the edit
+  /// ([DictationTracker.applyToEdit]). The host does it only once the edit
+  /// passed its guards (no stream, no send in flight), right before the new
+  /// text is stored, so a rejected edit leaves the voice flag as it was.
   Future<void> submitEditedMessage(
     int index,
     String newText, {
@@ -77,6 +84,7 @@ mixin ChatMessageEditMixin<W extends StatefulWidget>
     bool clearMessagesBelow = false,
     List<AttachedFile>? attachedFilesOverride,
     bool isRegenerate = false,
+    bool applyDictation = false,
   });
 
   Future<void> persistChat({
@@ -181,12 +189,16 @@ mixin ChatMessageEditMixin<W extends StatefulWidget>
       final attachedSnapshot = List<AttachedFile>.from(composerAttachedFiles);
       cancelEditMessage();
       if (newText.isNotEmpty || attachedSnapshot.isNotEmpty) {
+        // A re-dictated edit becomes a voice message; a rewrite by hand
+        // turns a voice message into a typed one. The host applies it after
+        // its guards, so a rejected edit keeps the old voice flag.
         await submitEditedMessage(
           editIndex,
           newText,
           attachedFilesOverride: attachedSnapshot,
           removeFollowingAssistant: false,
           clearMessagesBelow: true,
+          applyDictation: true,
         );
       }
     } else {

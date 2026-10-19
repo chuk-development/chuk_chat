@@ -331,6 +331,8 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
           keywords: 'customization language sprache font size ui scale zoom '
               'reasoning tokens model info tps images in context downloads '
               'auto titles title generation typography anpassung schriftgröße '
+              'notification notifications preview benachrichtigung '
+              'benachrichtigungen vorschau '
               'skalierung${agentsChatCore ? ' verbose full log detail' : ''}',
           builder: (_) => CustomizationPage(config: widget.config),
         ),

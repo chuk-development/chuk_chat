@@ -352,6 +352,25 @@ class TimelineEntry {
   return (line.substring(0, at).trim(), line.substring(at + 2).trim());
 }
 
+/// A label the model wrapped in bold: `**Goethe:** Faust` or
+/// `**Goethe**: Faust`. The colon is required, inside the markers (group 1)
+/// or right after them (group 2); group 3 is the text after it. A bold start
+/// with no colon (`**Big news** on 2021: launch`) is not a label: the line
+/// splits at its `: ` instead.
+final RegExp _boldLabelRe = RegExp(
+  r'^(?:\*\*|__)(?:(.+?:)(?:\*\*|__)|(.+?)(?:\*\*|__)\s*:)\s+(.*)$',
+);
+
+/// Drops a wrapping `**…**` / `__…__` and a trailing colon from a label.
+/// The label is drawn as plain text, so a marker left in it shows literally.
+String stripLabelEmphasis(String label) {
+  String l = label.trim();
+  final RegExpMatch? m = RegExp(r'^(\*\*|__)(.+)\1$').firstMatch(l);
+  if (m != null) l = m.group(2)!.trim();
+  if (l.endsWith(':')) l = l.substring(0, l.length - 1).trimRight();
+  return l;
+}
+
 List<TimelineEntry> parseTimeline(List<String> lines) {
   final List<TimelineEntry> out = <TimelineEntry>[];
   for (final String raw in lines) {
@@ -363,10 +382,48 @@ List<TimelineEntry> parseTimeline(List<String> lines) {
       hi = true;
       line = line.substring(1).trimLeft();
     }
-    final (String label, String text) = splitKeyValue(line);
+    final RegExpMatch? bold = _boldLabelRe.firstMatch(line);
+    final String? boldLabel = bold == null
+        ? null
+        : (bold.group(1) ?? bold.group(2));
+    final String label;
+    final String text;
+    if (boldLabel != null && !boldLabel.contains('*')) {
+      // A bold label ends at its closing marker, not at the first `: ` of
+      // the sentence after it.
+      label = stripLabelEmphasis(boldLabel);
+      text = bold!.group(3)!.trim();
+    } else {
+      final (String k, String v) = splitKeyValue(line);
+      label = stripLabelEmphasis(k);
+      text = v;
+    }
     out.add(TimelineEntry(label: label, text: text, highlight: hi));
   }
   return out;
+}
+
+final RegExp _digitRe = RegExp(r'\d');
+
+/// The longest label the timeline's date column draws, in characters
+/// (`2021-01-15`, `12:30 Uhr`, `um 1800`).
+const int kTimelineLabelMaxChars = 14;
+
+/// True when [entries] is a real timeline: most entries carry a short,
+/// date-like label (it holds a digit). A bullet list with bold names
+/// (`- **Goethe:** Faust`) is not one; it is drawn as plain Markdown, so the
+/// names do not end up in the narrow date column.
+bool timelineIsDated(List<TimelineEntry> entries) {
+  if (entries.isEmpty) return false;
+  int dated = 0;
+  for (final TimelineEntry e in entries) {
+    if (e.label.isNotEmpty &&
+        e.label.length <= kTimelineLabelMaxChars &&
+        _digitRe.hasMatch(e.label)) {
+      dated++;
+    }
+  }
+  return dated * 2 >= entries.length;
 }
 
 // ---------------------------------------------------------------------------

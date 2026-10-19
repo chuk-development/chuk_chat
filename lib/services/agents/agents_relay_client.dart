@@ -44,6 +44,7 @@ import 'package:chuk_chat/services/agents/agents_frame_fragments.dart';
 import 'package:chuk_chat/services/agents/agents_pairing.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
 import 'package:chuk_chat/services/agents/agents_reconnect.dart';
+import 'package:chuk_chat/services/agents/agents_resume_trace.dart';
 import 'package:chuk_chat/services/agents/agents_run_cost.dart'; // F1: cost
 import 'package:chuk_chat/services/agents/agents_controller_session.dart';
 import 'package:chuk_chat/services/agents/agents_cloud_relay.dart'
@@ -73,6 +74,37 @@ abstract interface class RelaySocket {
 
   /// Closes the socket.
   Future<void> close();
+}
+
+/// A [RelaySocket] that can say whether it still reaches the other end.
+///
+/// The cloud relay answers a `ping` itself, so one round trip tells a socket
+/// that survived the app's time in the background from one the OS or the
+/// relay cut while the app was away (bead chuk_chat-kl8x).
+///
+/// It proves the app-to-relay leg ONLY. A host that restarted and signed in
+/// to the relay again under the same device id is not seen here: the relay
+/// then sends no `executor_status` `online: false`, and the new host has no
+/// traffic key for this controller session. The thread view therefore keeps
+/// a probed socket only until the host answers the post-resume replay
+/// (`AgentsThreadViewState._awaitHostAfterResume`).
+abstract interface class RelaySocketProbe {
+  /// True when the far end answered within [timeout]. False at once when the
+  /// socket is already known to be gone. Never throws.
+  Future<bool> probe(Duration timeout);
+}
+
+/// A controller that can check its live socket without replacing it.
+///
+/// On a resume the thread view asks this first: a socket that still answers
+/// keeps delivering what arrived while the app was away, so the thread paints
+/// from it at once instead of waiting for a new dial, a new handshake and a
+/// replay (bead chuk_chat-kl8x).
+abstract interface class AgentsLinkProbe {
+  /// True when the current socket is paired and answered within [timeout].
+  /// The answer comes from the relay, not from the host; see
+  /// [RelaySocketProbe].
+  Future<bool> probeLink({Duration timeout});
 }
 
 /// Opens a [RelaySocket] to [url]. Default is [defaultRelaySocketConnector];
@@ -1774,6 +1806,7 @@ abstract interface class AgentsAgentStatusControl {
 class AgentsRelayClient
     implements
         AgentsRelayController,
+        AgentsLinkProbe,
         ExecutorTransport,
         AgentsAutomationControl,
         // ── F2: automations + cost totals ──
@@ -2322,6 +2355,7 @@ class AgentsRelayClient
       _fail('Could not reach host: $e');
       rethrow;
     }
+    AgentsResumeTrace.mark('relay client: transport ready, resuming session');
     _socket = socket;
     // A fresh socket is a fresh transcript budget: let auto-replay fire again.
     _autoReplayed.clear();
@@ -2382,6 +2416,7 @@ class AgentsRelayClient
 
     try {
       await done.future.timeout(_pairingTimeout);
+      AgentsResumeTrace.mark('relay client: host session resumed');
     } catch (e) {
       _fail(_pairingErrorText(e));
       await _closeSocket();
@@ -2810,6 +2845,22 @@ class AgentsRelayClient
   Future<void> requestRoomHistory(String roomId) => _sendFramePayload(
     <String, dynamic>{'type': 'room_history_request', 'room_id': roomId},
   );
+
+  @override
+  Future<bool> probeLink({
+    Duration timeout = const Duration(milliseconds: 1500),
+  }) async {
+    final RelaySocket? socket = _socket;
+    if (_disposed || socket == null || !_state.value.isPaired) return false;
+    // A socket that cannot be asked (the local relay of a desktop host) is
+    // treated as unknown: the caller then replaces it, as before.
+    if (socket is! RelaySocketProbe) return false;
+    try {
+      return await (socket as RelaySocketProbe).probe(timeout);
+    } catch (_) {
+      return false;
+    }
+  }
 
   @override
   Future<void> requestStop({String sessionKey = 'default'}) =>
@@ -3273,14 +3324,14 @@ class AgentsRelayClient
   }
 
   void _enqueueFrame(Map<String, dynamic> env) {
-    _frameQueue = _frameQueue
-        .then((_) => _handleFrame(env))
-        .catchError((Object error) {
-          // One bad frame must never stop the frames after it.
-          if (kDebugMode) {
-            debugPrint('[agents-relay] frame failed: ${error.runtimeType}');
-          }
-        });
+    _frameQueue = _frameQueue.then((_) => _handleFrame(env)).catchError((
+      Object error,
+    ) {
+      // One bad frame must never stop the frames after it.
+      if (kDebugMode) {
+        debugPrint('[agents-relay] frame failed: ${error.runtimeType}');
+      }
+    });
   }
 
   Future<void> _handleFrame(Map<String, dynamic> env) async {

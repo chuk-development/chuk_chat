@@ -1,6 +1,7 @@
 // lib/platform_specific/chat/handlers/streaming_message_handler.dart
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import 'package:chuk_chat/models/chat_stream_event.dart';
@@ -506,8 +507,14 @@ class StreamingMessageHandler {
       }
 
       if (currentPass >= kMaxStreamingPasses) {
-        const stopMessage =
-            'Tool loop stopped after reaching the safety limit.';
+        // The tool loop shuts the tools a few passes before this point and
+        // forces a final answer (see `finalAnswerRequested` below), so this
+        // is only reached when even that produced nothing new. Keep what the
+        // turn already wrote; the stop text is only for a turn with no text.
+        final written = accumulatedText.toString().trim();
+        final stopMessage = written.isNotEmpty
+            ? written
+            : 'Tool loop stopped after reaching the safety limit.';
         finalizeStaleToolState();
         if (onMessageFinalize != null) {
           onMessageFinalize!(placeholderIndex, stopMessage, '', chatId, null);
@@ -633,6 +640,13 @@ class StreamingMessageHandler {
               final turnSignals = ToolTurnSignals.fromMeta(
                 _streamingManager.getLatestMeta(chatId),
               );
+
+              // Keep the last passes of the budget for the forced final
+              // answer: from here on a tool request is not run, the next
+              // pass goes out without tools and asks for the answer.
+              if (currentPass + 1 >= kMaxStreamingPasses - 3) {
+                toolSession.finalAnswerRequested = true;
+              }
 
               final loopResult = await toolCallHandler.processAssistantResponse(
                 session: toolSession,

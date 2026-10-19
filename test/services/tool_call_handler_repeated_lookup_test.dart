@@ -189,7 +189,8 @@ void main() {
       );
     });
 
-    test('a model that keeps repeating gets the tools closed, then a stop', () async {
+    test('a model that keeps repeating gets the tools closed, then a forced '
+        'final pass', () async {
       final handler = ToolCallHandler();
       final session = newSession(handler)..toolCalls.add(completedWeather());
       expect(handler.nativeToolDefinitions(session), isNotEmpty);
@@ -217,15 +218,28 @@ void main() {
       expect(session.toolCalls.last.result, contains(kToolsClosedNote));
       expect(handler.nativeToolDefinitions(session), isEmpty);
 
-      // Still asking with the tools closed: the turn ends instead of looping.
+      // Still asking with the tools closed: nothing runs, and the next pass
+      // asks for the answer with no tools.
+      final callsBefore = session.toolCalls.length;
       final third = await handler.processAssistantResponse(
         session: session,
         content: '',
         reasoning: '',
         nativeToolCalls: [nativeWeather('call-4', kielArgs)],
       );
-      expect(third.shouldContinue, isFalse);
-      expect(third.finalContent, isNotEmpty);
+      expect(third.shouldContinue, isTrue);
+      expect(third.nextStep!.message, kForcedFinalAnswerNote);
+      expect(session.toolCalls, hasLength(callsBefore));
+      expect(handler.nativeToolDefinitions(session), isEmpty);
+
+      const answer = 'Kiel: 15 °C.';
+      final done = await handler.processAssistantResponse(
+        session: session,
+        content: answer,
+        reasoning: '',
+      );
+      expect(done.shouldContinue, isFalse);
+      expect(done.finalContent, answer);
     });
 
     test('an answer after the tools closed ends the turn normally', () async {
@@ -241,16 +255,12 @@ void main() {
       }
       expect(session.toolsClosed, isTrue);
 
+      // No [VERIFY] pass once the tools are closed: it would invite new tool
+      // calls, and this answer is the end of the turn.
       const answer = 'Kiel: 15 °C, aufgelockert bewölkt.';
-      final verify = await handler.processAssistantResponse(
-        session: session,
-        content: answer,
-        reasoning: '',
-      );
-      expect(verify.nextStep!.message, contains('[VERIFY]'));
       final done = await handler.processAssistantResponse(
         session: session,
-        content: '[OK]',
+        content: answer,
         reasoning: '',
       );
       expect(done.shouldContinue, isFalse);
@@ -323,7 +333,7 @@ void main() {
     });
 
     test('a model that asks the same thing every pass is stopped within '
-        'four passes, and the tool runs once', () async {
+        'six passes, and the tool runs once', () async {
       // The failure seen live: one call, then the identical call on every
       // pass. Nothing is pre-seeded here; the loop starts from scratch.
       final handler = ToolCallHandler();
@@ -348,14 +358,17 @@ void main() {
       } while (result.shouldContinue && passes < 30);
 
       expect(result.shouldContinue, isFalse);
-      expect(passes, lessThanOrEqualTo(4));
+      // run, repeat, repeat (tools close), two forced final passes, end.
+      expect(passes, lessThanOrEqualTo(6));
+      expect(result.finalContent, isNot(contains('safety limit')));
       final executed = session.toolCalls.where(
         (c) => !(c.result ?? '').startsWith(kRepeatedToolCallNote),
       );
       expect(executed, hasLength(1));
     });
 
-    test('new calls on every pass stop at the round cap', () async {
+    test('new calls on every pass stop at the round cap with forced final '
+        'passes', () async {
       final handler = ToolCallHandler();
       final session = newSession(handler);
       expect(kMaxToolRoundsPerTurn, lessThanOrEqualTo(16));
@@ -379,7 +392,10 @@ void main() {
       } while (result.shouldContinue && passes < 100);
 
       expect(result.shouldContinue, isFalse);
-      expect(passes, kMaxToolRoundsPerTurn + 1);
+      // The limit round and the two forced final passes run no tool.
+      expect(passes, kMaxToolRoundsPerTurn + 3);
+      expect(session.toolCalls, hasLength(kMaxToolRoundsPerTurn));
+      expect(result.finalContent, isNot(contains('safety limit')));
     });
 
     test('a tool with a changing result is never reused', () {

@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:chuk_chat/services/settings/mobile_chat_preferences.dart';
 
 import 'package:flutter/foundation.dart'
@@ -30,6 +31,7 @@ import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/agents_replay_loader.dart';
+import 'package:chuk_chat/services/agents/agents_resume_trace.dart';
 import 'package:chuk_chat/services/agents/agents_queued_marks.dart';
 import 'package:chuk_chat/services/agents/agents_task_outbox.dart';
 import 'package:chuk_chat/services/mcp/mcp_service.dart';
@@ -239,6 +241,15 @@ class AgentsThreadView extends StatefulWidget {
 class AgentsThreadViewState extends State<AgentsThreadView>
     with WidgetsBindingObserver {
   bool _wasBackgrounded = false;
+
+  /// Armed by a resume that KEPT its socket: fires when the host has not
+  /// answered the post-resume replay in [resumeHostAnswerTimeout]. See
+  /// [_awaitHostAfterResume].
+  Timer? _resumeHostTimer;
+
+  /// The controller [_resumeHostTimer] watches. A timer that outlives a
+  /// controller swap must not tear down the new one.
+  AgentsRelayController? _resumeHostController;
   bool _rebuildingForResume = false;
   late final TextEditingController _hostController;
   final TextEditingController _codeController = TextEditingController();
@@ -352,6 +363,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   void _onSkillProposalsChanged() {
     if (mounted) setState(() {});
   }
+
   // ── end skill proposals ──
   bool _automationsCollapsed = true;
 
@@ -557,6 +569,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     OfflineRetryManager.instance.registerReconnect(null);
     _autoReconnectTimer?.cancel();
     _watchdogTimer?.cancel();
+    _cancelResumeHostWait();
     VerboseService.instance.removeListener(_onVerboseChanged);
     AppThemeService.instance.removeListener(_onThemeChanged);
     _skillProposals.removeListener(_onSkillProposalsChanged); // skill proposals
@@ -592,21 +605,154 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       _wasBackgrounded = true;
     } else if (state == AppLifecycleState.resumed && _wasBackgrounded) {
       _wasBackgrounded = false;
-      // Android may leave a suspended socket marked paired. Replace it on
-      // resume rather than waiting for a heartbeat or an old backoff timer.
-      if (_storedPairing != null && !_manuallyDisconnected) {
-        unawaited(reconnect(force: true));
+      AgentsResumeTrace.start();
+      AgentsResumeTrace.mark(
+        'thread view resume: phase=${_controller?.state.value.phase.name}',
+      );
+      unawaited(_onResumed());
+    }
+  }
+
+  /// How long a resume waits for the old socket to answer before it is
+  /// replaced. The relay answers a ping in one round trip; a socket that does
+  /// not answer in this time is treated as dead.
+  static const Duration resumeProbeTimeout = Duration(milliseconds: 1500);
+
+  /// How long a kept socket has for the HOST to answer the post-resume replay
+  /// before it is replaced after all. See [_awaitHostAfterResume].
+  static const Duration resumeHostAnswerTimeout = Duration(seconds: 2);
+
+  /// The app is in front again (bead chuk_chat-kl8x).
+  ///
+  /// The thread stays on screen exactly as the local cache and the last live
+  /// events left it; nothing here blanks it or waits before painting. What
+  /// this decides is only what happens to the socket:
+  ///
+  ///  * **It still answers.** Android keeps the process (and the socket) alive
+  ///    through the foreground service while a run streams, so the events of
+  ///    the run, its final answer included, are already here or arrive the
+  ///    moment the process runs again. The socket is KEPT, and a delta replay
+  ///    reconciles with the host in the background. Replacing it used to throw
+  ///    away the frames still buffered on it and made the reader wait for a new
+  ///    dial, relay sign-in, host handshake and full replay — measured at
+  ///    1.1 s to the relay sign-in alone on the emulator, before the host had
+  ///    said anything.
+  ///  * **It is gone or does not answer.** Replace it at once, as before.
+  ///
+  /// The probe only proves the app-to-relay leg: the relay answers the ping
+  /// itself. A host that restarted while the app was away has no traffic key
+  /// for this controller session and drops every sealed frame. So a kept
+  /// socket is on probation until the host answers the replay asked for here
+  /// ([_awaitHostAfterResume]); the queued prompts wait for that answer.
+  Future<void> _onResumed() async {
+    final AgentsRelayController? controller = _controller;
+    if (controller != null &&
+        controller.state.value.isPaired &&
+        controller is AgentsLinkProbe) {
+      final bool alive = await (controller as AgentsLinkProbe).probeLink(
+        timeout: resumeProbeTimeout,
+      );
+      if (!mounted) return;
+      if (alive &&
+          identical(controller, _controller) &&
+          controller.state.value.isPaired) {
+        AgentsResumeTrace.mark('resume: socket answered, kept');
+        // Background reconcile: a delta from the cursor. Rows the live stream
+        // already painted are folded, not repainted. Its answer is also the
+        // end-to-end check: the outbox goes out once the host has answered.
+        if (widget.threadKey.isNotEmpty) {
+          _awaitHostAfterResume(controller);
+          _requestReplay();
+          return;
+        }
+        unawaited(_flushOutbox(controller));
         return;
       }
-      // Still paired and nothing to reconnect: the queue may still hold a
-      // prompt typed while the phone was away. The `paired` transition is not
-      // the only moment a flush is owed — that transition may never come
-      // again on a socket that stayed up (bead cowork-i7sd follow-up). Each
-      // entry has its own backoff, so a resume cannot hammer the host.
-      final controller = _controller;
-      if (controller != null && controller.state.value.isPaired) {
-        unawaited(_flushOutbox(controller));
+      AgentsResumeTrace.mark('resume: socket did not answer, replacing');
+    }
+    if (!mounted) return;
+    // Android may leave a suspended socket marked paired. Replace it on
+    // resume rather than waiting for a heartbeat or an old backoff timer.
+    if (_storedPairing != null && !_manuallyDisconnected) {
+      unawaited(reconnect(force: true));
+      return;
+    }
+    // Still paired and nothing to reconnect: the queue may still hold a
+    // prompt typed while the phone was away. The `paired` transition is not
+    // the only moment a flush is owed — that transition may never come
+    // again on a socket that stayed up (bead cowork-i7sd follow-up). Each
+    // entry has its own backoff, so a resume cannot hammer the host.
+    final current = _controller;
+    if (current != null && current.state.value.isPaired) {
+      unawaited(_flushOutbox(current));
+    }
+  }
+
+  /// Puts a kept socket on probation after a resume.
+  ///
+  /// The relay answers the resume probe itself, so a pong says nothing about
+  /// the host. The failure this closes: the host process restarts while the
+  /// app is in the background and registers with the relay again under the
+  /// same device id. The relay replaces the registration and announces only
+  /// `executor_status` `online: true` (api_server
+  /// `routers/cowork/cowork_ws.py`, `register_executor` +
+  /// `broadcast_executor_status`); the late cleanup of the old host socket
+  /// does not announce `online: false`, because `unregister_executor` in
+  /// `routers/cowork/cowork_relay.py` refuses to remove the new entry. The app
+  /// closes only on `online: false` (`agents_cloud_relay.dart`,
+  /// `executor_status`), so its socket stays "paired" while the new host,
+  /// which has no traffic key for this controller session, drops every sealed
+  /// frame. The host has no sealed no-op to ask instead: its cloud relay
+  /// answers a `ping` as a relay control frame
+  /// (`agents/host/src/chuk_agents_host/cloud_relay.py`), not end to end.
+  ///
+  /// So the replay [_onResumed] asks for is the check: its `run_state` header
+  /// (or its closing replay `done`) can only come from a host that holds the
+  /// current key. No answer in [resumeHostAnswerTimeout] means the host on the
+  /// other end is not the one this socket shook hands with, and the old forced
+  /// reconnect runs. Nothing here blocks the paint: the thread stays on screen
+  /// from the cache while the timer runs.
+  void _awaitHostAfterResume(AgentsRelayController controller) {
+    _cancelResumeHostWait();
+    _resumeHostController = controller;
+    _resumeHostTimer = Timer(resumeHostAnswerTimeout, () {
+      final AgentsRelayController? watched = _resumeHostController;
+      _resumeHostTimer = null;
+      _resumeHostController = null;
+      if (!mounted || !identical(watched, _controller)) return;
+      AgentsResumeTrace.mark('resume: host did not answer, replacing');
+      if (_storedPairing != null && !_manuallyDisconnected) {
+        unawaited(reconnect(force: true));
       }
+    });
+  }
+
+  void _cancelResumeHostWait() {
+    _resumeHostTimer?.cancel();
+    _resumeHostTimer = null;
+    _resumeHostController = null;
+  }
+
+  /// True for a frame that answers this thread's replay: the `run_state`
+  /// header that opens it, or the `done` that closes it.
+  bool _answersReplay(AgentsRelayInbound event) => switch (event) {
+    AgentsRelayRunState(:final sessionKey) => sessionKey == widget.threadKey,
+    AgentsRelayDone() =>
+      event.isReplay &&
+          (event.sessionKey == null || event.sessionKey == widget.threadKey),
+    _ => false,
+  };
+
+  /// The host answered the post-resume replay: the kept socket reaches it end
+  /// to end, so what was typed while the app was away can go out now.
+  void _onHostAnsweredAfterResume() {
+    final AgentsRelayController? watched = _resumeHostController;
+    _cancelResumeHostWait();
+    AgentsResumeTrace.mark('resume: host answered, socket confirmed');
+    if (watched != null &&
+        identical(watched, _controller) &&
+        watched.state.value.isPaired) {
+      unawaited(_flushOutbox(watched));
     }
   }
 
@@ -715,9 +861,8 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   /// Whether the store holds a transcript for this thread right now.
   bool get _threadHasRows {
     if (widget.threadKey.isEmpty) return false;
-    final rows = ChatStorageService.getChatById(
-      widget.threadKey,
-    )?.messagesOrNull;
+    final rows = ChatStorageService.getChatById(widget.threadKey)
+        ?.messagesOrNull;
     return rows != null && rows.isNotEmpty;
   }
 
@@ -767,6 +912,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     final bool wasPaired = _lastPhase == AgentsRelayPhase.paired;
     _lastPhase = phase;
     if (phase == AgentsRelayPhase.paired) {
+      AgentsResumeTrace.mark('transport paired');
       _reconnectAttempts = 0;
       // The link is up, so the failures behind us are history: a single drop
       // months later must not walk straight into the "it is really broken" bar.
@@ -818,7 +964,9 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       }
       return;
     }
-    // Not paired any more: Retry falls back to fetching the host.
+    // Not paired any more: the normal reconnect takes over from a resume
+    // probation, and Retry falls back to fetching the host.
+    _cancelResumeHostWait();
     OfflineRetryManager.instance.registerFlush(widget.threadKey, null);
     if ((phase == AgentsRelayPhase.closed || phase == AgentsRelayPhase.error) &&
         _storedPairing != null &&
@@ -838,21 +986,10 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     final String sessionKey = widget.threadKey;
     if (sessionKey.isEmpty) return 0;
     try {
-      final int sent = await AgentsTaskOutbox.flush(sessionKey, (task) async {
-        await controller.sendTask(
-          task.prompt,
-          sessionKey: sessionKey,
-          modelId: task.modelId,
-          providerSlug: task.providerSlug,
-          reasoningEffort: task.reasoningEffort,
-        );
-        // It is on the wire: the bubble stops saying "waiting" and stops
-        // offering Retry for something already on its way.
-        await AgentsQueuedMarks.clearMark(
-          sessionKey: sessionKey,
-          queueId: task.localId,
-        );
-      });
+      final int sent = await AgentsTaskOutbox.flush(
+        sessionKey,
+        (task) => _sendQueuedTask(controller, task),
+      );
       if (sent > 0 && kDebugMode) {
         debugPrint(
           '[agents-outbox] sent $sent queued prompt(s) for $sessionKey',
@@ -869,25 +1006,62 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     }
   }
 
+  /// Sends one queued prompt into the thread it was typed in.
+  ///
+  /// The outbox drops the entry as soon as this returns, and a returned
+  /// `send()` is no proof the host has the prompt: a socket whose host
+  /// restarted, or a half-open one, takes the frame and nobody reads it. So
+  /// the prompt is first handed to [AgentsPendingTasks] under a `task_id`,
+  /// the same record a live send writes. That record is cleared only by the
+  /// host's `task_ack` (or the run's own output) and is re-sent with the same
+  /// id on the next pairing ([_resendUnacknowledged]); the host dedupes on the
+  /// id, so a copy that did arrive is not run twice. The id is derived from the
+  /// queue entry, so two flushes of one entry are one task to the host too.
+  Future<void> _sendQueuedTask(
+    AgentsRelayController controller,
+    OutboxTask task,
+  ) async {
+    final String taskId = _taskIdForQueued(task);
+    await AgentsPendingTasks.record(
+      sessionKey: task.sessionKey,
+      taskId: taskId,
+      prompt: task.prompt,
+      modelId: task.modelId,
+      providerSlug: task.providerSlug,
+      reasoningEffort: task.reasoningEffort,
+    );
+    _ledger.taskSent(task.sessionKey, taskId);
+    await controller.sendTask(
+      task.prompt,
+      sessionKey: task.sessionKey,
+      modelId: task.modelId,
+      providerSlug: task.providerSlug,
+      reasoningEffort: task.reasoningEffort,
+      taskId: taskId,
+    );
+    // It is on the wire and tracked until the host acknowledges it: the
+    // bubble stops saying "waiting" and stops offering Retry.
+    await AgentsQueuedMarks.clearMark(
+      sessionKey: task.sessionKey,
+      queueId: task.localId,
+    );
+  }
+
+  /// The wire contract caps `task_id` at 64 characters.
+  static String _taskIdForQueued(OutboxTask task) {
+    final String id = 'o-${task.localId}';
+    return id.length <= 64 ? id : id.substring(0, 64);
+  }
+
   /// Every thread's queued prompts, each into the conversation it was typed
   /// in — not only this view's. The paired transition and the watchdog (a
   /// backed-off send coming due) dial in here; the per-session claim inside
   /// [AgentsTaskOutbox.flush] makes a double run harmless.
   Future<void> _flushAllThreads(AgentsRelayController controller) async {
     try {
-      await AgentsTaskOutbox.flushAll((task) async {
-        await controller.sendTask(
-          task.prompt,
-          sessionKey: task.sessionKey,
-          modelId: task.modelId,
-          providerSlug: task.providerSlug,
-          reasoningEffort: task.reasoningEffort,
-        );
-        await AgentsQueuedMarks.clearMark(
-          sessionKey: task.sessionKey,
-          queueId: task.localId,
-        );
-      });
+      await AgentsTaskOutbox.flushAll(
+        (task) => _sendQueuedTask(controller, task),
+      );
     } catch (error) {
       if (kDebugMode) {
         debugPrint('[agents-outbox] flushAll failed: $error');
@@ -949,6 +1123,15 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     unawaited(_resendUnacknowledged(controller));
   }
 
+  /// The answer text a finish notification previews: only the run's own
+  /// final answer. A stored row may belong to an earlier turn (this turn is
+  /// often not saved yet, and a run adopted from the host never wrote one),
+  /// so it is never used. Stays on the device.
+  String? _answerForNotification(String? finalAnswer) {
+    if (finalAnswer == null || finalAnswer.trim().isEmpty) return null;
+    return finalAnswer;
+  }
+
   /// Asks the host to re-stream this thread from the replay cursor.
   void _requestReplay() {
     final controller = _controller;
@@ -958,6 +1141,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     // one would mint a cursor namespace for a key nobody ever writes.
     if (sessionKey.isEmpty) return;
     final afterId = _loader.cursorFor(sessionKey);
+    AgentsResumeTrace.mark('replay requested (after_id=$afterId)');
     _loader.expect(sessionKey, afterId: afterId);
     unawaited(
       controller
@@ -1053,10 +1237,13 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       final latest = await widget.pairingStore?.loadPairing() ?? stored;
       if (!mounted) return;
       _storedPairing = latest;
+      AgentsResumeTrace.mark('reconnect: pairing loaded');
       await controller.reconnect(hostUrl: latest.hostUrl, pairing: latest);
+      AgentsResumeTrace.mark('reconnect: relay handshake done');
       final session = widget.sessionSource.current();
       if (session != null) {
         await controller.provisionAccount(session);
+        AgentsResumeTrace.mark('reconnect: account provisioned');
       }
     } catch (error) {
       if (mounted) setState(() => _localError = _connectionFailureText(error));
@@ -1079,8 +1266,11 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     _rebuildingForResume = true;
     if (mounted) setState(() {});
     try {
+      AgentsResumeTrace.mark('forced reconnect: rebuilding controller');
       await _rebuildController();
+      AgentsResumeTrace.mark('forced reconnect: controller built');
       await _reconnect();
+      AgentsResumeTrace.mark('forced reconnect: done');
     } catch (error) {
       if (kDebugMode) {
         debugPrint('[cowork-thread] reconnect failed: ${error.runtimeType}');
@@ -1330,6 +1520,12 @@ class AgentsThreadViewState extends State<AgentsThreadView>
 
   void _onInbound(AgentsRelayInbound event) {
     if (!mounted) return;
+    if (AgentsResumeTrace.active) {
+      AgentsResumeTrace.mark('inbound ${event.runtimeType}');
+    }
+    if (_resumeHostTimer != null && _answersReplay(event)) {
+      _onHostAnsweredAfterResume();
+    }
     switch (event) {
       case AgentsRelayApprovalRequest():
         // A here.now publish is waiting on the user, and the run is blocked on
@@ -1436,6 +1632,11 @@ class AgentsThreadViewState extends State<AgentsThreadView>
           AgentsNotifications.instance.onLiveDone(
             widget.threadKey,
             runId: runId,
+            // A stopped run gets no preview: its body says it stopped.
+            answer: event.wasStopped
+                ? null
+                : _answerForNotification(event.finalAnswer),
+            stopped: event.wasStopped,
           ),
         );
       case AgentsRelayTaskAck():
@@ -1860,9 +2061,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   /// painted no revision of them yet, which is exactly the mount-on-a-miss
   /// case the remount is for.
   bool get _screenIsEmpty =>
-      !_mountedWithRows &&
-      _revision == _revisionAtMount &&
-      _cacheRevision == 0;
+      !_mountedWithRows && _revision == _revisionAtMount && _cacheRevision == 0;
 
   /// Adopt a new replay revision — but never while a run is in flight: the
   /// remount would throw away the answer streaming into the screen right now.
@@ -1870,7 +2069,11 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   void _syncRevision() {
     final revision = _loader.revisionFor(widget.threadKey);
     if (revision == _revision) return;
-    if (_ledger.isRunning(widget.threadKey)) return;
+    if (_ledger.isRunning(widget.threadKey)) {
+      AgentsResumeTrace.mark('replay revision $revision held: run in flight');
+      return;
+    }
+    AgentsResumeTrace.mark('replay revision $revision painted (remount)');
     setState(() {
       _revision = revision;
       _screenGeneration++;
@@ -2361,8 +2564,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     required bool dense,
   }) {
     final AgentsRelayController? controller = _controller;
-    final bool canOpen =
-        controller != null && controller.state.value.isPaired;
+    final bool canOpen = controller != null && controller.state.value.isPaired;
     return AgentsTakeoverCard(
       request: request,
       coworkerName: widget.title ?? widget.agent?.name ?? '',
@@ -2910,9 +3112,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     final reconnecting = _busy;
     final status =
         banner ??
-        (reconnecting
-            ? 'Reconnecting…'
-            : 'Your computer is not connected.');
+        (reconnecting ? 'Reconnecting…' : 'Your computer is not connected.');
     return SafeArea(
       top: false,
       child: Padding(

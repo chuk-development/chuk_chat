@@ -268,31 +268,50 @@ extension _MessageBubbleLayout on _MessageBubbleState {
       border: Border.all(color: iconFgColor.withValues(alpha: .3)),
     );
 
-    final Widget bubbleContent = Container(
-      margin: EdgeInsets.only(top: _runGapAbove, bottom: 2),
-      padding: containerPadding,
-      decoration: decoration,
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: _buildClassicLayout(
-          iconFgColor: bubbleTextColor,
-          accentColor: accentColor,
-          bgColor: bgColor,
-          isUserMessage: isUserMessage,
-          alignRight: alignRight,
-          hasInfoStatusBar: false,
-          hasVisibleToolCalls: false,
-        ),
+    final Widget userText = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: _buildClassicLayout(
+        iconFgColor: bubbleTextColor,
+        accentColor: accentColor,
+        bgColor: bgColor,
+        isUserMessage: isUserMessage,
+        alignRight: alignRight,
+        hasInfoStatusBar: false,
+        hasVisibleToolCalls: false,
       ),
     );
+    final bool hasUserActions = widget.userMessageActions.isNotEmpty;
+    // A dictated message: the voice bubble owns the tap (open / fold the
+    // transcript) and shows the action bar while it is open.
+    final bool asVoice = widget.isVoiceInput && widget.message.trim().isNotEmpty;
+    final Widget bubbleContent = asVoice
+        ? VoiceMessageBubble(
+            text: widget.message,
+            transcript: userText,
+            duration: widget.voiceInputDuration,
+            foregroundColor: bubbleTextColor,
+            decoration: decoration,
+            margin: EdgeInsets.only(top: _runGapAbove, bottom: 2),
+            padding: containerPadding,
+            onExpandedChanged: hasUserActions && !widget.messengerMode
+                ? (bool open) => setState(() => _showUserActions = open)
+                : null,
+          )
+        : Container(
+            margin: EdgeInsets.only(top: _runGapAbove, bottom: 2),
+            padding: containerPadding,
+            decoration: decoration,
+            clipBehavior: Clip.antiAlias,
+            child: userText,
+          );
 
     // The messenger thread keeps its long-press menu (reply, react, copy) in
     // place of the tap-to-open action bar.
-    final bool hasUserActions = widget.userMessageActions.isNotEmpty;
     final Widget userBubble = widget.messengerMode
         ? _withMessengerMenu(bubbleContent)
+        : asVoice
+        ? bubbleContent
         : hasUserActions
         ? GestureDetector(
             onTap: () => setState(() => _showUserActions = !_showUserActions),
