@@ -997,9 +997,12 @@ class McpService {
   /// Does nothing when no host is attached: an unpaired app has nobody to ask,
   /// and the list keeps saying "not checked" rather than inventing a zero.
   static Future<void> probe({McpProbeControl? control}) async {
-    final McpProbeControl? target =
-        control ??
-        AgentsRelayLink.instance.controller.value as McpProbeControl?;
+    // An `is` check, not a cast: the link carries whatever controller is bound
+    // (a fake in tests, a local-socket controller without MCP), and a frame
+    // they cannot send is a probe that does not happen — never a crash in the
+    // middle of a pairing notification.
+    final Object? bound = control ?? AgentsRelayLink.instance.controller.value;
+    final McpProbeControl? target = bound is McpProbeControl ? bound : null;
     if (target == null) return;
     try {
       final List<Map<String, dynamic>> payloads = await store.forwardPayloads();

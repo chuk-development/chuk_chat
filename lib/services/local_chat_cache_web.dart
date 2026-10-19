@@ -41,6 +41,16 @@ class LocalChatCacheService {
     await prefs.remove('kv_$key');
   }
 
+  /// Every stored key that starts with [prefix], unordered. Mirrors the
+  /// native implementation; see there for why the filter runs in Dart.
+  static Future<List<String>> kvKeys(String prefix) async {
+    final prefs = await SharedPreferences.getInstance();
+    return <String>[
+      for (final String key in prefs.getKeys())
+        if (key.startsWith('kv_$prefix')) key.substring(3),
+    ];
+  }
+
   // ─── Skills store ──────────────────────────────────────────────────
   // Mirrors the native SQLite `skills` table over a per-user JSON blob. Rows
   // carry id, user_id, source, catalog_name, baseline_hash, updated_at.

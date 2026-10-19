@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:chuk_chat/services/agents/agents_task_outbox.dart';
@@ -28,6 +30,7 @@ void main() {
     AgentsTaskOutbox.read = null;
     AgentsTaskOutbox.write = null;
     AgentsTaskOutbox.delete = null;
+    AgentsTaskOutbox.readKeys = null;
     AgentsTaskOutbox.now = () => DateTime.now().toUtc();
   });
 
@@ -66,6 +69,24 @@ void main() {
     expect(sent, ['eins', 'zwei']);
     expect(await AgentsTaskOutbox.pendingFor('t'), isEmpty);
     expect(disk, isEmpty);
+  });
+
+  test('two flushes of one thread in the same moment send the prompt once',
+      () async {
+    await AgentsTaskOutbox.enqueue(sessionKey: 't', prompt: 'einmal');
+    final sent = <String>[];
+    final Completer<void> release = Completer<void>();
+    final Future<int> first = AgentsTaskOutbox.flush('t', (task) async {
+      sent.add(task.prompt);
+      await release.future; // the first flush is still in flight …
+    });
+    final Future<int> second = AgentsTaskOutbox.flush('t', (task) async {
+      sent.add(task.prompt);
+    });
+    release.complete();
+    final counts = await Future.wait(<Future<int>>[first, second]);
+    expect(counts, <int>[1, 0]);
+    expect(sent, <String>['einmal']);
   });
 
   test('a flush that fails stops and keeps everything', () async {
@@ -109,6 +130,56 @@ void main() {
     AgentsTaskOutbox.delete = null;
     // No SQLite in a plain unit test: the calls fail soft rather than throw.
     expect(await AgentsTaskOutbox.pendingFor('t'), isEmpty);
+  });
+
+  test('flushAll sends every thread queue, each into its own thread', () async {
+    await AgentsTaskOutbox.enqueue(sessionKey: 'a', prompt: 'a1');
+    await AgentsTaskOutbox.enqueue(sessionKey: 'a', prompt: 'a2');
+    await AgentsTaskOutbox.enqueue(sessionKey: 'b', prompt: 'b1');
+    // The key listing reads the same disk the rows live on.
+    AgentsTaskOutbox.readKeys = (prefix) async => <String>[
+      for (final String key in disk.keys)
+        if (key.startsWith(prefix)) key,
+    ];
+
+    final sent = <String, List<String>>{};
+    final count = await AgentsTaskOutbox.flushAll((task) async {
+      (sent[task.sessionKey] ??= <String>[]).add(task.prompt);
+    });
+
+    expect(count, 3);
+    expect(sent['a'], ['a1', 'a2']);
+    expect(sent['b'], ['b1']);
+    expect(await AgentsTaskOutbox.pendingFor('a'), isEmpty);
+    expect(await AgentsTaskOutbox.pendingFor('b'), isEmpty);
+  });
+
+  test('flushAll keeps going when one thread queue is unreadable', () async {
+    await AgentsTaskOutbox.enqueue(sessionKey: 'good', prompt: 'g1');
+    disk['$kTaskOutboxPrefix' 'bad'] = 'not json at all';
+    AgentsTaskOutbox.readKeys = (prefix) async => <String>[
+      '$kTaskOutboxPrefix' 'bad',
+      '$kTaskOutboxPrefix' 'good',
+    ];
+
+    final sent = <String>[];
+    final count = await AgentsTaskOutbox.flushAll((task) async {
+      sent.add(task.prompt);
+    });
+
+    // The unreadable row is an empty queue, and 'good' still went out.
+    expect(count, 1);
+    expect(sent, ['g1']);
+  });
+
+  test('flushAll with no key listing sends nothing and does not throw',
+      () async {
+    await AgentsTaskOutbox.enqueue(sessionKey: 't', prompt: 'x');
+    AgentsTaskOutbox.readKeys = (prefix) => throw StateError('no store');
+    final count = await AgentsTaskOutbox.flushAll((task) async {});
+    expect(count, 0);
+    // The queue is untouched.
+    expect((await AgentsTaskOutbox.pendingFor('t')).single.prompt, 'x');
   });
 
   // ── the airplane-mode path ─────────────────────────────────────────────

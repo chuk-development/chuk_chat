@@ -13,6 +13,7 @@ import 'package:chuk_chat/platform_specific/mobile/mobile_chat_chrome.dart';
 import 'package:chuk_chat/services/account_session.dart';
 import 'package:chuk_chat/services/agents/agent_control_source.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
+import 'package:chuk_chat/services/agents/roster_pins.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
@@ -82,13 +83,13 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     AgentsRelayLink.instance.reset();
     AgentsRunLedger.instance.reset();
-    DesktopRosterPins.instance.reset();
+    RosterPins.instance.reset();
   });
   tearDown(() {
     AgentsRelayLink.instance.reset();
     AgentsRunLedger.instance.reset();
     NotificationRouter.instance.reset();
-    DesktopRosterPins.instance.reset();
+    RosterPins.instance.reset();
   });
 
   /// A 1400 × 900 window with [agents] coworkers and [rooms].

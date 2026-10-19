@@ -147,6 +147,80 @@ void main() {
         throwsA(isA<McpAuthException>()),
       );
     });
+
+    test('a first-party allowlist with a custom scheme is refused too',
+        () async {
+      final oauth = McpOAuth(
+        httpClient: _compliantServer(
+          registeredRedirectUris: <String>['cursor://callback'],
+        ),
+      );
+      final server = await oauth.discover(serverUrl);
+
+      expect(
+        () => oauth.register(
+          server,
+          Uri.parse('http://localhost:4321/mcp/callback'),
+        ),
+        throwsA(isA<McpAuthException>()),
+      );
+    });
+
+    test('a server that normalises the loopback redirect — Fastmail drops the '
+        'port — still registers', () async {
+      // Fastmail answers a registration for `http://localhost:49152/mcp/…`
+      // with `http://localhost/mcp/callback`: the port gone, per RFC 8252 §7.3
+      // the port on a loopback redirect is the server's to ignore. Refusing
+      // here made Fastmail impossible to connect ("fixed set of apps").
+      final oauth = McpOAuth(
+        httpClient: _compliantServer(
+          registeredRedirectUris: <String>['http://localhost/mcp/callback'],
+        ),
+      );
+      final server = await oauth.discover(serverUrl);
+
+      final credentials = await oauth.register(
+        server,
+        Uri.parse('http://localhost:49152/mcp/callback'),
+        scope: 'read write',
+      );
+      expect(credentials.clientId, 'cid-9');
+    });
+
+    test('a loopback redirect on the other loopback name still registers',
+        () async {
+      final oauth = McpOAuth(
+        httpClient: _compliantServer(
+          registeredRedirectUris: <String>['http://localhost/mcp/callback'],
+        ),
+      );
+      final server = await oauth.discover(serverUrl);
+
+      final credentials = await oauth.register(
+        server,
+        Uri.parse('http://127.0.0.1:4321/mcp/callback'),
+      );
+      expect(credentials.clientId, 'cid-9');
+    });
+
+    test('a loopback registration with a different path is refused', () async {
+      // Same host family, but the path is where the server will send the
+      // browser: a path we do not listen on loses the code.
+      final oauth = McpOAuth(
+        httpClient: _compliantServer(
+          registeredRedirectUris: <String>['http://localhost/other/app'],
+        ),
+      );
+      final server = await oauth.discover(serverUrl);
+
+      expect(
+        () => oauth.register(
+          server,
+          Uri.parse('http://localhost:4321/mcp/callback'),
+        ),
+        throwsA(isA<McpAuthException>()),
+      );
+    });
   });
 
   group('authorization', () {

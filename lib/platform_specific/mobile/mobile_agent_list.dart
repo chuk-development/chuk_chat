@@ -48,6 +48,7 @@ import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agent_read_marks.dart';
 import 'package:chuk_chat/services/agents/thread_preview_store.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
+import 'package:chuk_chat/services/agents/roster_pins.dart';
 import 'package:chuk_chat/services/agents/room_source.dart';
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
 import 'package:chuk_chat/ui/expressive/connected_group.dart';
@@ -209,6 +210,14 @@ class _MobileAgentListState extends State<MobileAgentList> {
       widget.profiles ?? AgentProfileStore.instance;
 
   @override
+  void initState() {
+    super.initState();
+    // Idempotent; the desktop shell loads the same pins, and the local read
+    // answers before the remote merge lands.
+    unawaited(RosterPins.instance.load());
+  }
+
+  @override
   void dispose() {
     _query.dispose();
     _searchFocus.dispose();
@@ -294,7 +303,21 @@ class _MobileAgentListState extends State<MobileAgentList> {
             ).toLowerCase().contains(q),
       );
     }
-    return list.toList(growable: false);
+    // Pinned first, then by the last time anything happened in the thread —
+    // the inbox order the user expects: the conversation they just used is at
+    // the top, and the ones they pinned stay where they put them. A coworker
+    // that has never been active keeps its roster position among the
+    // timestampless, rather than jumping under a fabricated epoch.
+    final RosterPins pins = RosterPins.instance;
+    final List<AgentsAgent> all = list.toList(growable: false);
+    return <AgentsAgent>[
+      for (final AgentsAgent agent in all)
+        if (pins.isPinned(agent.id)) agent,
+      ...<AgentsAgent>[
+        for (final AgentsAgent agent in all)
+          if (!pins.isPinned(agent.id)) agent,
+      ]..sort(compareByLastActivity),
+    ];
   }
 
   /// The role line: the one the user set in the profile wins over the one the
@@ -317,6 +340,15 @@ class _MobileAgentListState extends State<MobileAgentList> {
             value: 'profile',
             child: _MenuRow(icon: Icons.person_rounded, label: 'Profile'),
           ),
+        PopupMenuItem<String>(
+          value: 'pin',
+          child: _MenuRow(
+            icon: RosterPins.instance.isPinned(agent.id)
+                ? Icons.push_pin_outlined
+                : Icons.push_pin_rounded,
+            label: RosterPins.instance.isPinned(agent.id) ? 'Unpin' : 'Pin',
+          ),
+        ),
         if (widget.onRenameAgent != null)
           const PopupMenuItem<String>(
             value: 'rename',
@@ -353,6 +385,8 @@ class _MobileAgentListState extends State<MobileAgentList> {
     switch (choice) {
       case 'profile':
         widget.onOpenProfile?.call(agent);
+      case 'pin':
+        RosterPins.instance.toggle(agent.id);
       case 'rename':
         widget.onRenameAgent?.call(agent);
       case 'read':
@@ -375,6 +409,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
         _query,
         _marks,
         _profiles,
+        RosterPins.instance,
         ThreadPreviewStore.instance,
       ]),
       builder: (BuildContext context, Widget? _) => _buildList(context),
@@ -671,6 +706,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
                               role: _roleOf(agent),
                               now: _now(),
                               profiles: _profiles,
+                              pinned: RosterPins.instance.isPinned(agent.id),
                               padded: padded,
                               onTap: !padded || agent.threads.isEmpty
                                   ? null
@@ -931,6 +967,7 @@ class MobileAgentRow extends StatelessWidget {
     this.onTap,
     this.onLongPress,
     this.profiles,
+    this.pinned = false,
     this.padded = true,
   });
 
@@ -938,6 +975,10 @@ class MobileAgentRow extends StatelessWidget {
   final DateTime now;
   final bool selected;
   final bool unread;
+
+  /// The user pinned this chat to the top of the list. Shown as a small glyph
+  /// beside the time, and the reason the row sits above the dated ones.
+  final bool pinned;
 
   /// How many of this coworker's threads have something new in them. Shown as
   /// the number on the badge.
@@ -1065,6 +1106,14 @@ class MobileAgentRow extends StatelessWidget {
                                 ),
                               ),
                             ),
+                            if (pinned) ...<Widget>[
+                              const SizedBox(width: 6),
+                              Icon(
+                                Icons.push_pin_rounded,
+                                size: 13,
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ],
                             if (time.isNotEmpty) ...<Widget>[
                               const SizedBox(width: 8),
                               Text(

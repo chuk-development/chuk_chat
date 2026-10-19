@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
+import 'package:chuk_chat/services/agents/roster_pins.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart'
     show AgentsHostAgentName;
 import 'package:chuk_chat/services/agents/schedule_spec.dart';
@@ -25,7 +26,7 @@ import '../support/icon_finder.dart';
 void main() {
   final DateTime now = DateTime(2026, 8, 13, 12);
 
-  setUp(() => DesktopRosterPins.instance.reset());
+  setUp(() => RosterPins.instance.reset());
 
   testWidgets('Chuk Chat brand has no C logo', (tester) async {
     await tester.pumpWidget(
@@ -469,7 +470,7 @@ void main() {
       expect(find.text('Unpin'), findsNothing);
       await tester.tap(find.text('Pin'));
       await tester.pumpAndSettle();
-      expect(DesktopRosterPins.instance.isPinned(b.id), isTrue);
+      expect(RosterPins.instance.isPinned(b.id), isTrue);
       expect(find.text('Pinned'), findsOneWidget);
       expect(y('cobalt-lynx'), lessThan(y('amber-otter')));
 
@@ -483,7 +484,7 @@ void main() {
       expect(find.text('Pin'), findsNothing);
       await tester.tap(find.text('Unpin'));
       await tester.pumpAndSettle();
-      expect(DesktopRosterPins.instance.isPinned(b.id), isFalse);
+      expect(RosterPins.instance.isPinned(b.id), isFalse);
       expect(find.text('Pinned'), findsNothing);
       expect(y('amber-otter'), lessThan(y('cobalt-lynx')));
     });
@@ -542,9 +543,9 @@ void main() {
       expect(find.text('Pinned'), findsOneWidget);
       expect(y('cobalt-lynx'), lessThan(y('amber-otter')));
       expect(
-        desktopRosterOrder(
+        rosterPinOrder(
           source.visibleAgents,
-          DesktopRosterPins.instance.ids,
+          RosterPins.instance.ids,
         ).first.id,
         b.id,
       );

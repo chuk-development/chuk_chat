@@ -22,11 +22,8 @@
 library;
 
 import 'dart:async';
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
@@ -35,6 +32,7 @@ import 'package:chuk_chat/models/agents_room.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agent_read_marks.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
+import 'package:chuk_chat/services/agents/roster_pins.dart';
 import 'package:chuk_chat/services/agents/room_source.dart';
 import 'package:chuk_chat/services/profile_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -57,77 +55,6 @@ export 'package:chuk_chat/widgets/coworker_name_dialog.dart';
 /// The face in front of a coworker or a room in the open pane. It fits the
 /// chat tile's two lines with air above and below.
 const double kRosterTileFace = 32;
-
-/// Which coworkers the user pinned to the top of the desktop roster. Local to
-/// this device, like the pane widths: a pin is how one window is arranged, not
-/// something the host needs to know.
-class DesktopRosterPins extends ChangeNotifier {
-  DesktopRosterPins._();
-
-  static final DesktopRosterPins instance = DesktopRosterPins._();
-
-  static const String _kKey = 'agents.desktop.pinned_v1';
-
-  final Set<String> _ids = <String>{};
-  bool _loaded = false;
-
-  Set<String> get ids => Set<String>.unmodifiable(_ids);
-
-  bool isPinned(String agentId) => _ids.contains(agentId);
-
-  Future<void> load() async {
-    if (_loaded) return;
-    _loaded = true;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final String? raw = prefs.getString(_kKey);
-      if (raw == null) return;
-      final Object? data = jsonDecode(raw);
-      if (data is! List) return;
-      _ids
-        ..clear()
-        ..addAll(data.whereType<String>());
-      notifyListeners();
-    } catch (_) {
-      // Unreadable pins are no pins.
-    }
-  }
-
-  void toggle(String agentId) {
-    if (!_ids.remove(agentId)) _ids.add(agentId);
-    notifyListeners();
-    unawaited(_save());
-  }
-
-  Future<void> _save() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_kKey, jsonEncode(_ids.toList()));
-    } catch (_) {
-      // A pin that is not written is lost on the next launch, nothing more.
-    }
-  }
-
-  @visibleForTesting
-  void reset() {
-    _ids.clear();
-    _loaded = false;
-    notifyListeners();
-  }
-}
-
-/// The agents in the order the desktop roster shows them: pinned first, then
-/// the rest, each keeping the roster's own order. Ctrl+1 … Ctrl+9 count this
-/// list, so the roster and the shortcut can never disagree.
-List<AgentsAgent> desktopRosterOrder(
-  List<AgentsAgent> agents,
-  Set<String> pinned,
-) => <AgentsAgent>[
-  for (final AgentsAgent a in agents)
-    if (pinned.contains(a.id)) a,
-  for (final AgentsAgent a in agents)
-    if (!pinned.contains(a.id)) a,
-];
 
 class AgentRosterView extends StatefulWidget {
   const AgentRosterView({
@@ -220,7 +147,7 @@ class AgentRosterView extends StatefulWidget {
 
   final AgentReadMarks? readMarks;
   final AgentProfileStore? profiles;
-  final DesktopRosterPins? pins;
+  final RosterPins? pins;
 
   @override
   State<AgentRosterView> createState() => _AgentRosterViewState();
@@ -290,7 +217,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
 
   bool get _hosted => SupabaseService.isInitialized;
 
-  DesktopRosterPins get _pins => widget.pins ?? DesktopRosterPins.instance;
+  RosterPins get _pins => widget.pins ?? RosterPins.instance;
   AgentReadMarks get _marks => widget.readMarks ?? AgentReadMarks.instance;
   AgentProfileStore get _profiles =>
       widget.profiles ?? AgentProfileStore.instance;
@@ -600,7 +527,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
   }
 
   List<AgentsAgent> get _orderedAgents =>
-      desktopRosterOrder(widget.source.visibleAgents, _pins.ids);
+      rosterPinOrder(widget.source.visibleAgents, _pins.ids);
 
   List<AgentsRoom> get _rooms => widget.onOpenRoom == null
       ? const <AgentsRoom>[]

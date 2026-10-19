@@ -276,6 +276,19 @@ class LocalChatCacheService {
     await db.delete('kv_cache', where: 'key = ?', whereArgs: [key]);
   }
 
+  /// Every stored key that starts with [prefix], unordered. Used to find the
+  /// per-thread outbox rows without knowing the thread keys. The rows are read
+  /// whole and filtered in Dart rather than in SQL: kv_cache is small, and
+  /// escaping LIKE metacharacters in key material is a trap not worth having.
+  static Future<List<String>> kvKeys(String prefix) async {
+    final db = await _getDb();
+    final rows = await db.query('kv_cache', columns: ['key']);
+    return <String>[
+      for (final row in rows)
+        if ((row['key'] as String).startsWith(prefix)) row['key'] as String,
+    ];
+  }
+
   // ─── Skills store ──────────────────────────────────────────────────────
   //
   // The local source of truth for the user's skills. Rows are PLAINTEXT here,
