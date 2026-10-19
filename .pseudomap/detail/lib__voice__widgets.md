@@ -82,14 +82,14 @@
   - L834 `final VoiceCard card`
   - L837 `Widget build(BuildContext context)`
 
-## lib/voice/widgets/voice_call_button.dart  (67 Z.)
-- L15 `class VoiceCallButton extends StatelessWidget`
-  - L16 `const VoiceCallButton({ super.key, required this.onPressed, this.size = 40, this.tooltip = 'Voice call', this.active = false, })`
-  - L24 `final VoidCallback onPressed`
-  - L27 `final double size`  — The square hit box. 40 matches the chat header slot.
-  - L28 `final String tooltip`
-  - L31 `final bool active`  — A call is running in this chat: the glyph takes the accent.
-  - L34 `Widget build(BuildContext context)`
+## lib/voice/widgets/voice_call_button.dart  (66 Z.)
+- L14 `class VoiceCallButton extends StatelessWidget`
+  - L15 `const VoiceCallButton({ super.key, required this.onPressed, this.size = 40, this.tooltip = 'Voice call', this.active = false, })`
+  - L23 `final VoidCallback onPressed`
+  - L26 `final double size`  — The square hit box. 40 matches the chat header slot.
+  - L27 `final String tooltip`
+  - L30 `final bool active`  — A call is running in this chat: the glyph takes the accent.
+  - L33 `Widget build(BuildContext context)`
 
 ## lib/voice/widgets/voice_call_controls.dart  (253 Z.)
 - L16 `class VoiceCallControl extends StatelessWidget`  — A square call control: the expressive squircle (corner = size x 0.34),

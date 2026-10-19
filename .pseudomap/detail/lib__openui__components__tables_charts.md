@@ -1,0 +1,295 @@
+# lib/openui/components/tables_charts · Signaturen
+
+## lib/openui/components/tables_charts/cartesian_charts.dart  (841 Z.)
+- L15 `_kSwap = Duration(milliseconds: 180)`  — The time fl_chart takes to move to new data (a stream adds values).
+- L18 `_kMinLabelSlot = 46`  — The smallest room one x label gets before labels are skipped.
+- L20 `double _textWidth(String text, TextStyle style, TextScaler scaler)`
+- L33 `double _leftReserved(BuildContext context, AxisScale scale)`  — The room the y axis labels need.
+- L48 `int _labelStep(int count, double plotWidth)`  — The step between two printed x labels, so labels never collide.
+- L54 `Widget _xLabel( BuildContext context, List<String> labels, double value, int step, double slot, )`
+- L81 `FlTitlesData _titles( BuildContext context, { required List<String> labels, required AxisScale scale, required double leftReserved, required int step, required double slot, })`
+- L127 `FlGridData _grid(OpenUiChartColors colors, AxisScale scale)`
+- L136 `FlBorderData _border(OpenUiChartColors colors)`
+- L141 `String _seriesName(ChartSeries s, int i)`
+- L144 `Widget? _legend(Chart2D data, OpenUiChartColors colors)`
+- L158 `Widget buildBarChart(BuildContext context, OpenUiProps p)`  — Builds `BarChart(labels, series, variant?, xLabel?, yLabel?, height?)`.
+- L178 `Widget _barChart( BuildContext context, Chart2D data, OpenUiChartColors colors, bool stacked, double width, )`
+- L360 `Widget buildLineChart(BuildContext context, OpenUiProps p)`  — Builds `LineChart(labels, series, variant?, xLabel?, yLabel?, height?)`.
+- L364 `Widget buildAreaChart(BuildContext context, OpenUiProps p)`  — Builds `AreaChart(labels, series, variant?, xLabel?, yLabel?, height?)`.
+- L367 `Widget _buildLineLike( BuildContext context, OpenUiProps p, { required bool area, })`
+- L397 `Widget _lineChart( BuildContext context, Chart2D data, OpenUiChartColors colors, { required String variant, required bool area, required double width, })`
+- L520 `LineTooltipItem _lineTooltip( BuildContext context, Chart2D data, OpenUiChartColors colors, LineBarSpot spot, { required bool first, })`
+- L552 `Widget buildHorizontalBarChart(BuildContext context, OpenUiProps p)`  — Builds `HorizontalBarChart(labels, series, variant?, xLabel?, yLabel?)`.
+- L599 `class _HorizontalBars extends StatelessWidget`
+  - L600 `const _HorizontalBars({ required this.data, required this.colors, required this.stacked, })`
+  - L606 `final Chart2D data`
+  - L607 `final OpenUiChartColors colors`
+  - L608 `final bool stacked`
+  - L611 `Widget build(BuildContext context)`
+- L784 `class _BarTrack extends StatelessWidget`  — One horizontal bar on a quiet track. [parts] are value ranges with
+  - L785 `const _BarTrack({ required this.lo, required this.hi, required this.parts, required this.height, required this.track, })`
+  - L793 `final double lo`
+  - L794 `final double hi`
+  - L795 `final List<(double, double, Color)> parts`
+  - L796 `final double height`
+  - L797 `final Color track`
+  - L800 `Widget build(BuildContext context)`
+
+## lib/openui/components/tables_charts/chart_common.dart  (621 Z.)
+- L25 `@immutable class ChartSeries`  — One named series of a 2D chart. A `null` value is a gap.
+  - L28 `const ChartSeries(this.name, this.values)`  — Creates a series.
+  - L31 `final String name`  — The series name (the `category` of upstream `Series`).
+  - L34 `final List<double?> values`  — The values, position for position with the chart labels.
+  - L37 `double? at(int i)`  — The value at [i], or `null` when it is missing.
+- L41 `@immutable class Chart2D`  — The data of a 2D chart: x labels and the series.
+  - L44 `const Chart2D(this.labels, this.series)`  — Creates the data.
+  - L47 `final List<String> labels`  — The category labels, one per x position.
+  - L50 `final List<ChartSeries> series`  — The series. Each one has at most [labels.length] values.
+  - L53 `int get length`  — The number of x positions.
+  - L56 `bool get hasData`  — Whether there is at least one number to draw.
+  - L60 `Iterable<double> get allValues`  — Every finite value.
+- L70 `@immutable class ChartSlice`  — A label and a value (a pie slice, a radial bar, a stacked part).
+  - L73 `const ChartSlice(this.label, this.value)`  — Creates a slice.
+  - L76 `final String label`  — The category.
+  - L79 `final double value`  — The value.
+- L84 `double? chartNumber(Object? v)`  — A number from a model value, or `null`. Numeric strings parse
+- L96 `String chartLabel(Object? v)`  — The text of a label value. Numbers lose a `.0`.
+- L113 `Chart2D readChart2D(OpenUiProps p)`  — Reads `labels` and `series` of a 2D chart.
+- L164 `List<ChartSlice> readChart1D(OpenUiProps p)`  — Reads `labels` and `values` of a 1D chart (pie, radial, single
+- L195 `_grouped = NumberFormat('#,##0.##', 'en_US')`
+- L199 `String formatChartValue(double v)`  — A value for a tooltip, a legend or a bar end: grouped thousands, at
+- L206 `String formatAxisValue(double value)`  — A compact axis value: 1500 is "1.5K", 2000000 is "2M".
+- L224 `double niceInterval(double range, {int targetTicks = 5})`  — A round step for about [targetTicks] axis ticks over [range].
+- L244 `@immutable class AxisScale`  — The value axis of a chart: a round minimum, maximum and step.
+  - L246 `const AxisScale._(this.min, this.max, this.interval)`
+  - L249 `factory AxisScale.fit(double lo, double hi, {bool fromZero = true})`  — Fits [lo]..[hi]. With [fromZero], the axis includes 0.
+  - L273 `final double min`  — The axis minimum.
+  - L276 `final double max`  — The axis maximum.
+  - L279 `final double interval`  — The step between two ticks.
+- L286 `_hueOrder = <int>[0, 8, 6, 3, 10, 1, 7, 4, 9, 2, 5, 11, 12]`  — The order the palette hues are used in: far apart first, so two
+- L291 `Color _chartAccent(ChartPalette palette)`  — The user's accent, moved to a lightness that reads as a filled
+- L312 `@immutable class OpenUiChartColors`  — The series colours of one chart.
+  - L314 `const OpenUiChartColors._(this.palette, this._colors)`
+  - L317 `factory OpenUiChartColors.of(BuildContext context)`  — Reads the palette for the current theme.
+  - L336 `final ChartPalette palette`  — The app chart palette (grid, text, up/down colours).
+  - L338 `final List<Color> _colors`
+  - L341 `Color at(int i)`  — The fill colour of series [i].
+  - L344 `Color inkAt(int i)`  — A text colour in the hue of series [i], readable on the card.
+- L350 `TextStyle chartAxisStyle(BuildContext context)`  — Axis tick text: 10 px, the quiet colour (as the `<chart>` renderer).
+- L358 `TextStyle chartCaptionStyle(BuildContext context)`  — Legend and axis title text.
+- L365 `Color chartTooltipColor(BuildContext context)`  — The tooltip fill: a raised neutral surface, no glow.
+- L369 `BorderSide chartTooltipBorder(BuildContext context)`  — The tooltip border.
+- L373 `TextStyle chartTooltipTitleStyle(BuildContext context)`  — The first tooltip line (the x label).
+- L380 `TextStyle chartTooltipValueStyle(Color ink)`  — A tooltip value line in the series colour.
+- L390 `double chartHeight(OpenUiProps p, {double fallback = 220})`  — The chart height: the `height` prop clamped, else [fallback].
+- L397 `bool chartIsStreaming(BuildContext context, OpenUiProps p)`  — Whether the statement of [p] still streams.
+- L405 `class ChartFrame extends StatelessWidget`  — The card a chart is drawn on: the inner block surface of the OpenUI
+  - L407 `const ChartFrame({ required this.child, this.topLabel, this.bottomLabel, this.legend, super.key, })`  — Creates the frame.
+  - L416 `final Widget child`  — The plot.
+  - L419 `final String? topLabel`  — A caption above the plot (the y axis title).
+  - L422 `final String? bottomLabel`  — A caption under the plot (the x axis title).
+  - L425 `final Widget? legend`  — The legend under everything, or `null`.
+  - L428 `Widget build(BuildContext context)`
+- L471 `class ChartSwatch extends StatelessWidget`  — A small square swatch for a legend entry.
+  - L473 `const ChartSwatch(this.color, {this.size = 10, super.key})`  — Creates a swatch of [color].
+  - L476 `final Color color`  — The fill.
+  - L479 `final double size`  — The side length.
+  - L482 `Widget build(BuildContext context)`
+- L496 `class ChartLegend extends StatelessWidget`  — The legend of a multi-series chart: one swatch and name per series,
+  - L498 `const ChartLegend({required this.names, required this.colors, super.key})`  — Creates the legend for [names] in [colors].
+  - L501 `final List<String> names`  — The series names.
+  - L504 `final OpenUiChartColors colors`  — The colours.
+  - L507 `Widget build(BuildContext context)`
+- L539 `class SliceLegend extends StatelessWidget`  — The legend of a 1D chart: one row per slice with its value and its
+  - L541 `const SliceLegend({ required this.slices, required this.colors, this.showShare = true, super.key, })`  — Creates the legend.
+  - L549 `final List<ChartSlice> slices`  — The slices.
+  - L552 `final OpenUiChartColors colors`  — The colours.
+  - L555 `final bool showShare`  — Whether to print the share of the total.
+  - L558 `Widget build(BuildContext context)`
+- L613 `Widget chartPlaceholder(BuildContext context, OpenUiProps p, double height)`  — What a chart draws while its data still streams and nothing is
+
+## lib/openui/components/tables_charts/data_table.dart  (638 Z.)
+- L30 `kTableEdgePad = 12`  — Room a cell keeps on the outer edges of the table.
+- L33 `kTableGutter = 8`  — Half the gap between two columns.
+- L36 `kTableRowPadY = 9`  — Air above and below the text of a row.
+- L39 `kTableMinText = 44`  — A text column never gets less room than this for its text.
+- L42 `kTableMaxText = 240`  — A text column never claims more room than this for its text.
+- L45 `kTableRowsSampled = 200`  — How many rows are read to measure the column widths.
+- L48 `@immutable class OpenUiTableStyles`  — The text styles of a table.
+  - L51 `factory OpenUiTableStyles.of(BuildContext context)`  — Reads the styles for the current theme and chat font.
+  - L90 `const OpenUiTableStyles._({ required this.header, required this.body, required this.subject, required this.number, required this.link, required this.muted, })`
+  - L100 `final TextStyle header`  — The header label.
+  - L103 `final TextStyle body`  — A body cell.
+  - L106 `final TextStyle subject`  — A cell of the first column (the subject of the row).
+  - L109 `final TextStyle number`  — A number cell (tabular figures).
+  - L112 `final TextStyle link`  — A link cell.
+  - L115 `final TextStyle muted`  — A quiet cell (an empty mark).
+- L119 `double measureTableText(String text, TextStyle style, TextScaler scaler)`  — The one-line width of [text] in [style].
+- L135 `double tableCellPadLeft(int c)`  — The left padding of column [c].
+- L138 `double tableCellPadRight(int c, int count)`  — The right padding of column [c] of [count].
+- L144 `({List<double> widths, bool scrolls}) planTableColumns( List<double> natural, double available, )`  — Fits the natural column widths [natural] (padding included) into
+- L160 `class OpenUiTableShell extends StatefulWidget`  — The card around a table, with the horizontal scroll and its bar.
+  - L163 `const OpenUiTableShell({required this.builder, this.footer, super.key})`  — Creates the shell. [builder] gets the available width and builds
+  - L166 `final ({Widget table, double width, bool scrolls}) Function( BuildContext context, double available, ) builder`  — Builds the table for the available width.
+  - L173 `final Widget? footer`  — A row under the table (pager, save bar), or `null`.
+  - L176 `State<OpenUiTableShell> createState()`
+- L179 `class _OpenUiTableShellState extends State<OpenUiTableShell>`
+  - L180 `final ScrollController _h = ScrollController()`
+  - L183 `void dispose()`
+  - L189 `Widget build(BuildContext context)`
+- L223 `Uri? tableCellUrl(Object? v)`  — A web link in a cell, or `null`.
+- L233 `void openTableUrl(BuildContext context, String url)`  — Opens [url] through the host of the view.
+- L238 `class TableLinkCell extends StatelessWidget`  — A link cell: the host (or the given text) in the accent, and an
+  - L240 `const TableLinkCell({ required this.url, required this.style, this.text, super.key, })`  — Creates a link cell for [url].
+  - L248 `final Uri url`  — The link target.
+  - L251 `final TextStyle style`  — The text style.
+  - L254 `final String? text`  — The visible text; the host when `null`.
+  - L257 `Widget build(BuildContext context)`
+- L288 `enum _ColKind`  — What a Table column shows.
+  - L288 `text`
+  - L288 `number`
+  - L288 `widget`
+- L290 `class _ColSpec`
+  - L291 `_ColSpec(this.label, this.cells, this.type)`
+  - L293 `final String label`
+  - L294 `final List<Object?> cells`
+  - L295 `final String type`
+  - L297 `late final _ColKind kind = _kindOf()`
+  - L299 `_ColKind _kindOf()`
+  - L316 `static bool _isWidget(Object? c)`
+- L321 `bool _isDrawn(Object? v)`  — Whether [v] is a rendered component (a data node draws nothing).
+- L324 `String tableCellText(Object? v)`  — The plain text of a cell value (numbers lose a `.0`).
+- L348 `List<_ColSpec> _readColumns(OpenUiProps p)`
+- L377 `Widget buildTable(BuildContext context, OpenUiProps p)`  — Builds `Table(columns)`.
+- L384 `kTablePageSize = 10`  — The rows shown on one page.
+- L387 `class _OpenUiDataTable extends StatefulWidget`  — The Table widget. Pages of [kTablePageSize] rows.
+  - L388 `const _OpenUiDataTable({required this.columns})`
+  - L390 `final List<_ColSpec> columns`
+  - L393 `State<_OpenUiDataTable> createState()`
+- L396 `class _OpenUiDataTableState extends State<_OpenUiDataTable>`
+  - L397 `int _page = 0`
+  - L399 `int get _rowCount`
+  - L403 `Widget build(BuildContext context)`
+  - L435 `List<double> _naturalWidths(BuildContext context, OpenUiTableStyles s)`
+  - L469 `Widget _table( BuildContext context, OpenUiTableStyles s, List<double> widths, int first, int last, )`
+  - L540 `Widget _cell( BuildContext context, OpenUiTableStyles s, _ColSpec col, Object? v, { required bool subject, })`
+- L585 `class _Pager extends StatelessWidget`  — The page control under a long table.
+  - L586 `const _Pager({ required this.first, required this.last, required this.total, required this.onPrev, required this.onNext, })`
+  - L594 `final int first`
+  - L595 `final int last`
+  - L596 `final int total`
+  - L597 `final VoidCallback? onPrev`
+  - L598 `final VoidCallback? onNext`
+  - L601 `Widget build(BuildContext context)`
+
+## lib/openui/components/tables_charts/editable_table.dart  (718 Z.)
+- L32 `kEditableTableSaveMessage = 'Save Changes'`  — The message a save sends, as upstream.
+- L35 `_kTypes = <String>[ 'text', 'number', 'date-single', 'select', 'url', ]`  — The column types upstream allows.
+- L43 `@immutable class _EColumn`
+  - L45 `const _EColumn({ required this.type, required this.key, required this.header, required this.width, required this.options, })`
+  - L53 `final String type`
+  - L54 `final String key`
+  - L55 `final String header`
+  - L56 `final double? width`
+  - L57 `final List<({String value, String label})> options`
+  - L59 `String labelOf(Object? v)`
+- L68 `@immutable class _ERow`
+  - L70 `const _ERow(this.id, this.values)`
+  - L72 `final String id`
+  - L73 `final List<Object?> values`
+  - L75 `_ERow copyWith(int index, Object? value)`
+  - L84 `Object? at(int i)`
+  - L86 `Map<String, Object?> toJson()`
+- L92 `List<_EColumn> _readColumns(OpenUiProps p)`
+- L111 `List<_ERow> _readRows(List<Object?> raw)`
+- L133 `Widget buildEditableTable(BuildContext context, OpenUiProps p)`  — Builds `EditableTable(name?, columns?, data?)`.
+- L167 `class _EditableTable extends StatefulWidget`
+  - L168 `const _EditableTable({ required this.name, required this.columns, required this.rows, required this.locked, })`
+  - L175 `final String name`
+  - L176 `final List<_EColumn> columns`
+  - L177 `final List<_ERow> rows`
+  - L180 `final bool locked`  — While the statement streams, the cells do not take edits.
+  - L183 `State<_EditableTable> createState()`
+- L186 `class _EditableTableState extends State<_EditableTable>`
+  - L187 `late List<_ERow> _rows = List<_ERow>.of(widget.rows)`
+  - L188 `Map<String, _ERow>? _baseline`
+  - L189 `bool _readForm = false`
+  - L192 `int? _editRow`
+  - L193 `int? _editCol`
+  - L194 `final TextEditingController _edit = TextEditingController()`
+  - L195 `final FocusNode _focus = FocusNode()`
+  - L198 `void initState()`
+  - L207 `void didChangeDependencies()`
+  - L221 `void didUpdateWidget(_EditableTable old)`
+  - L230 `void dispose()`
+  - L236 `void _setBaseline(List<_ERow> rows)`
+  - L240 `int get _changedCount`
+  - L254 `bool _changed(int row, int col)`
+  - L259 `static bool _same(Object? a, Object? b)`
+  - L264 `List<Map<String, Object?>> get _value`
+  - L266 `void _writeForm()`
+  - L270 `void _set(int row, int col, Object? value)`
+  - L278 `void _startText(int row, int col)`
+  - L296 `void _commitText()`
+  - L326 `Future<void> _pickDate(int row, int col)`
+  - L339 `Future<void> _pickOption(BuildContext anchor, int row, int col)`
+  - L370 `void _reset()`
+  - L381 `Future<void> _save(BuildContext context)`
+  - L392 `String _display(_EColumn col, Object? v)`
+  - L404 `List<double> _naturalWidths(BuildContext context, OpenUiTableStyles s)`
+  - L440 `Widget build(BuildContext context)`
+  - L461 `Widget _table( BuildContext context, OpenUiTableStyles s, List<double> widths, )`
+  - L526 `Widget _cell(BuildContext context, OpenUiTableStyles s, int r, int c)`
+- L649 `class _ChangesBar extends StatelessWidget`  — The bar under an edited table: the change count, Reset, Save.
+  - L650 `const _ChangesBar({ required this.count, required this.onReset, required this.onSave, })`
+  - L656 `final int count`
+  - L657 `final VoidCallback onReset`
+  - L658 `final Future<void> Function(BuildContext context) onSave`
+  - L661 `Widget build(BuildContext context)`
+
+## lib/openui/components/tables_charts/round_charts.dart  (499 Z.)
+- L20 `_kSideBySide = 440`  — Above this width the round chart and its legend sit side by side.
+- L23 `Widget _roundLayout({ required Widget Function(double size) figure, required Widget legend, double maxSize = 220, double heightFactor = 1, })`  — Lays out a round chart [figure] and its legend.
+- L67 `List<ChartSlice> _drawable(List<ChartSlice> slices)`  — The slices a round chart can draw: positive values only.
+- L75 `Widget buildPieChart(BuildContext context, OpenUiProps p)`  — Builds `PieChart(labels, values, variant?, appearance?)`.
+- L111 `class _CenterTotal extends StatelessWidget`
+  - L112 `const _CenterTotal({required this.total, required this.size})`
+  - L114 `final double total`
+  - L115 `final double size`
+  - L118 `Widget build(BuildContext context)`
+- L148 `class _PiePainter extends CustomPainter`
+  - L149 `_PiePainter({ required this.values, required this.colors, required this.gapColor, required this.donut, required this.semi, })`
+  - L157 `final List<double> values`
+  - L158 `final List<Color> colors`
+  - L159 `final Color gapColor`
+  - L160 `final bool donut`
+  - L161 `final bool semi`
+  - L164 `void paint(Canvas canvas, Size size)`
+  - L235 `bool shouldRepaint(_PiePainter old)`
+- L243 `bool _sameList<T>(List<T> a, List<T> b)`
+- L255 `Widget buildRadialChart(BuildContext context, OpenUiProps p)`  — Builds `RadialChart(labels, values)`: one ring per category, the
+- L279 `class _RadialPainter extends CustomPainter`
+  - L280 `_RadialPainter({ required this.values, required this.colors, required this.track, })`
+  - L286 `final List<double> values`
+  - L287 `final List<Color> colors`
+  - L288 `final Color track`
+  - L291 `static const double _maxSweep = 1.5 * math.pi`  — The sweep of the largest value: three quarters of a circle.
+  - L294 `void paint(Canvas canvas, Size size)`
+  - L332 `bool shouldRepaint(_RadialPainter old)`
+- L342 `Widget buildSingleStackedBarChart(BuildContext context, OpenUiProps p)`  — Builds `SingleStackedBarChart(labels, values)`: one bar split into
+- L395 `Widget buildRadarChart(BuildContext context, OpenUiProps p)`  — Builds `RadarChart(labels, series)`. With fewer than three labels a
+- L498 `String _short(String s)`
+
+## lib/openui/components/tables_charts/scatter_chart.dart  (236 Z.)
+- L13 `@immutable class ScatterPoint`  — One point of a scatter set. [z] sizes the dot when present.
+  - L16 `const ScatterPoint(this.x, this.y, [this.z])`  — Creates a point.
+  - L19 `final double x`  — The x value.
+  - L22 `final double y`  — The y value.
+  - L25 `final double? z`  — The optional size value.
+- L29 `@immutable class ScatterSet`  — One named scatter set.
+  - L32 `const ScatterSet(this.name, this.points)`  — Creates a set.
+  - L35 `final String name`  — The set name.
+  - L38 `final List<ScatterPoint> points`  — The valid points.
+- L41 `ScatterPoint? _point(Object? x, Object? y, Object? z)`
+- L51 `List<ScatterSet> readScatter(OpenUiProps p)`  — Reads the `datasets` of a ScatterChart. `Point` items and object
+- L79 `Widget buildScatterChart(BuildContext context, OpenUiProps p)`  — Builds `ScatterChart(datasets, xLabel?, yLabel?)`.

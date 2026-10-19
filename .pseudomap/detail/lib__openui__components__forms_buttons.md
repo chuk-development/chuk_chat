@@ -1,0 +1,357 @@
+# lib/openui/components/forms_buttons · Signaturen
+
+## lib/openui/components/forms_buttons/buttons.dart  (319 Z.)
+- L25 `Widget buildOpenUiButtons(BuildContext context, OpenUiProps props)`  — Builds `Buttons(buttons, direction?)`.
+- L53 `Widget buildOpenUiIconButton(BuildContext context, OpenUiProps props)`  — Builds `IconButton(name, icon, action?, variant?, size?, shape?)`.
+- L68 `class OpenUiIconButtonView extends StatelessWidget`  — An icon-only button. [name] is the accessible label, the tooltip
+  - L70 `const OpenUiIconButtonView({ required this.name, this.icon, this.action, this.variant = 'secondary', this.size = 'medium', this.circle = false, this.statementId = '', super.key, })`  — Creates an icon button.
+  - L82 `final String name`  — The label.
+  - L86 `final Widget? icon`  — The icon widget (an OpenUI `Icon`). It may be absent while the
+  - L89 `final OpenUiAction? action`  — The action, or `null` (then a tap sends [name] to the assistant).
+  - L92 `final String variant`  — `primary`, `secondary` or `tertiary`.
+  - L95 `final String size`  — `extra-small`, `small`, `medium` or `large`.
+  - L98 `final bool circle`  — Round instead of the app's rounded square.
+  - L101 `final String statementId`  — The statement of the button, to detect a still-streaming one.
+  - L104 `Widget build(BuildContext context)`
+  - L170 `void _onTap(BuildContext context)`
+- L181 `Widget buildOpenUiFollowUpBlock(BuildContext context, OpenUiProps props)`  — Builds `FollowUpBlock(items)`.
+- L193 `class OpenUiFollowUpList extends StatelessWidget`  — The follow-up suggestions: one connected run of tiles (the app's
+  - L195 `const OpenUiFollowUpList({ required this.items, this.statementId = '', super.key, })`  — Creates the list.
+  - L202 `final List<({String text, String statementId})> items`  — The suggestions and the statement each came from.
+  - L205 `final String statementId`  — The statement of the block.
+  - L207 `static const double _outer = 18`
+  - L208 `static const double _inner = 6`
+  - L209 `static const double _gap = 3`
+  - L212 `Widget build(BuildContext context)`
+- L245 `class _FollowUpTile extends StatelessWidget`
+  - L246 `const _FollowUpTile({ required this.text, required this.radius, required this.fill, required this.enabled, })`
+  - L253 `final String text`
+  - L254 `final BorderRadius radius`
+  - L255 `final Color fill`
+  - L256 `final bool enabled`
+  - L258 `static const double _fontSize = 14.5`
+  - L259 `static const double _line = 20`
+  - L262 `Widget build(BuildContext context)`
+  - L314 `void _send(BuildContext context)`
+
+## lib/openui/components/forms_buttons/choices.dart  (816 Z.)
+- L24 `_kRowLine = 24`  — The height of the first text line of an option row. The control
+- L26 `TextStyle _optionLabelStyle(OpenUiTheme t, {bool enabled = true})`
+- L34 `TextStyle _optionDescriptionStyle(OpenUiTheme t)`
+- L39 `class _OptionRow extends StatelessWidget`  — One row of a check box or radio group: the control, then the label
+  - L40 `const _OptionRow({ required this.control, required this.label, required this.description, required this.onTap, required this.enabled, })`
+  - L48 `final Widget control`
+  - L49 `final String label`
+  - L50 `final String description`
+  - L51 `final VoidCallback? onTap`
+  - L52 `final bool enabled`
+  - L55 `Widget build(BuildContext context)`
+- L89 `_kDense = VisualDensity(horizontal: -4, vertical: -4)`
+- L92 `Map<String, bool> _boolMap(Object? v)`  — Reads a stored map of name to bool. Anything else gives an empty map.
+- L105 `Widget buildOpenUiCheckBoxGroup(BuildContext context, OpenUiProps props)`  — Builds `CheckBoxGroup(name, items, rules?, value?)`.
+- L109 `Widget buildOpenUiSwitchGroup(BuildContext context, OpenUiProps props)`  — Builds `SwitchGroup(name, items, variant?, value?)`.
+- L113 `class OpenUiToggleGroupView extends StatefulWidget`  — A group of on/off items: check boxes or switches.
+  - L115 `const OpenUiToggleGroupView({ required this.props, required this.switches, super.key, })`  — Creates the group from its props.
+  - L122 `final OpenUiProps props`  — The component props.
+  - L125 `final bool switches`  — `SwitchGroup` when true, else `CheckBoxGroup`.
+  - L128 `State<OpenUiToggleGroupView> createState()`
+- L131 `class _OpenUiToggleGroupViewState extends State<OpenUiToggleGroupView> with OpenUiFieldStateMixin<OpenUiToggleGroupView>`
+  - L134 `Widget build(BuildContext context)`
+- L228 `class _SwitchRow extends StatelessWidget`
+  - L229 `const _SwitchRow({ required this.label, required this.description, required this.value, required this.enabled, required this.onChanged, })`
+  - L237 `final String label`
+  - L238 `final String description`
+  - L239 `final bool value`
+  - L240 `final bool enabled`
+  - L241 `final ValueChanged<bool> onChanged`
+  - L244 `Widget build(BuildContext context)`
+- L288 `Widget buildOpenUiRadioGroup(BuildContext context, OpenUiProps props)`  — Builds `RadioGroup(name, items, defaultValue?, rules?, value?)`.
+- L292 `class OpenUiRadioGroupView extends StatefulWidget`  — The `RadioGroup` field.
+  - L294 `const OpenUiRadioGroupView({required this.props, super.key})`  — Creates a radio group from its props.
+  - L297 `final OpenUiProps props`  — The component props.
+  - L300 `State<OpenUiRadioGroupView> createState()`
+- L303 `class _OpenUiRadioGroupViewState extends State<OpenUiRadioGroupView> with OpenUiFieldStateMixin<OpenUiRadioGroupView>`
+  - L306 `Widget build(BuildContext context)`
+- L375 `List<String> _selection(bool multiple, Object? stored, Object? fallback)`  — The selection as a list, from the stored value or else the default
+- L390 `Object? _storedSelection(bool multiple, List<String> selection)`  — The value to store for a selection. An empty single selection is
+- L394 `List<String> _toggle(bool multiple, List<String> selection, String value)`
+- L409 `mixin _SelectionField<W extends StatefulWidget> on State<W>, OpenUiFieldStateMixin<W>`  — Shared state of `Chips` and `OptionCards`.
+  - L411 `({OpenUiField field, bool multiple, List<String> selection}) resolveSelection( BuildContext context, OpenUiProps props, )`
+  - L434 `void toggleSelection( OpenUiField field, bool multiple, Object? fallback, String value, )`
+- L453 `Widget buildOpenUiChips(BuildContext context, OpenUiProps props)`  — Builds `Chips(name, type?, items?, rules?, defaultValue?)`.
+- L457 `class OpenUiChipsView extends StatefulWidget`  — The `Chips` field: a wrap of selectable pills.
+  - L459 `const OpenUiChipsView({required this.props, super.key})`  — Creates the chips from their props.
+  - L462 `final OpenUiProps props`  — The component props.
+  - L465 `State<OpenUiChipsView> createState()`
+- L468 `class _OpenUiChipsViewState extends State<OpenUiChipsView> with OpenUiFieldStateMixin<OpenUiChipsView>, _SelectionField<OpenUiChipsView>`
+  - L473 `Widget build(BuildContext context)`
+- L507 `class _Chip extends StatelessWidget`
+  - L508 `const _Chip({ required this.label, required this.icon, required this.selected, required this.multiple, required this.hasError, required this.enabled, required this.onTap, })`
+  - L518 `final String label`
+  - L519 `final Widget? icon`
+  - L520 `final bool selected`
+  - L521 `final bool multiple`
+  - L522 `final bool hasError`
+  - L523 `final bool enabled`
+  - L524 `final VoidCallback onTap`
+  - L527 `Widget build(BuildContext context)`
+- L591 `Widget buildOpenUiOptionCards(BuildContext context, OpenUiProps props)`  — Builds `OptionCards(name, type?, items?, rules?, defaultValue?)`.
+- L595 `class OpenUiOptionCardsView extends StatefulWidget`  — The `OptionCards` field: selectable cards in a responsive grid.
+  - L597 `const OpenUiOptionCardsView({required this.props, super.key})`  — Creates the cards from their props.
+  - L600 `final OpenUiProps props`  — The component props.
+  - L603 `State<OpenUiOptionCardsView> createState()`
+- L606 `class _OpenUiOptionCardsViewState extends State<OpenUiOptionCardsView> with OpenUiFieldStateMixin<OpenUiOptionCardsView>, _SelectionField<OpenUiOptionCardsView>`
+  - L610 `static const double _gap = 10`
+  - L613 `Widget build(BuildContext context)`
+- L666 `class _OptionCard extends StatelessWidget`
+  - L667 `const _OptionCard({ required this.title, required this.subtitle, required this.top, required this.selected, required this.multiple, required this.hasError, required this.enabled, required this.onTap, })`
+  - L678 `final String title`
+  - L679 `final String subtitle`
+  - L680 `final Widget? top`
+  - L681 `final bool selected`
+  - L682 `final bool multiple`
+  - L683 `final bool hasError`
+  - L684 `final bool enabled`
+  - L685 `final VoidCallback onTap`
+  - L688 `Widget build(BuildContext context)`
+
+## lib/openui/components/forms_buttons/field.dart  (458 Z.)
+- L29 `class OpenUiFormValidator extends ChangeNotifier`  — The validation state of one `Form`: the fields with rules, and the
+  - L31 `OpenUiRuleMessages messages = OpenUiRuleMessages.english`  — The texts of the errors. The `Form` sets the app locale's texts.
+  - L33 `final Map<String, _Registration> _fields = <String, _Registration>{}`
+  - L34 `final Map<String, String> _errors = <String, String>{}`
+  - L35 `bool _disposed = false`
+  - L41 `void register( String name, Object token, OpenUiRules rules, Object? Function() read, )`  — Registers (or updates) the field [name]. [token] identifies the
+  - L51 `void unregister(String name, Object token)`  — Removes the field [name] when [token] still owns it.
+  - L59 `String? errorOf(String name)`  — The current error of [name], or `null`.
+  - L62 `bool has(String name)`  — Whether a field [name] with rules is registered.
+  - L66 `bool validateField(String name, Object? value)`  — Checks [value] against the rules of [name] and shows the result.
+  - L75 `void clearError(String name)`  — Hides the error of [name].
+  - L78 `bool validateAll()`  — Checks every registered field. Returns whether all are valid.
+  - L102 `void _setError(String name, String? error)`
+  - L112 `void _notify()`
+  - L117 `void dispose()`
+- L123 `class _Registration`
+  - L124 `const _Registration(this.token, this.rules, this.read)`
+  - L126 `final Object token`
+  - L127 `final OpenUiRules rules`
+  - L128 `final Object? Function() read`
+- L132 `class OpenUiFormValidationScope extends InheritedNotifier<OpenUiFormValidator>`  — Gives the fields and buttons of one `Form` its validator.
+  - L134 `const OpenUiFormValidationScope({ required OpenUiFormValidator validator, required super.child, super.key, }) : super(notifier: validator)`  — Creates the scope.
+  - L142 `static OpenUiFormValidator? of(BuildContext context)`  — The validator of the enclosing form, and a rebuild when an error
+  - L147 `static OpenUiFormValidator? read(BuildContext context)`  — The validator of the enclosing form, with no rebuild dependency.
+- L154 `class OpenUiFieldSlot extends ChangeNotifier`  — What a `FormControl` learns from the field inside it: its name and
+  - L155 `String? _name`
+  - L156 `bool _required = false`
+  - L157 `bool _disposed = false`
+  - L158 `bool _pending = false`
+  - L161 `String? get name`  — The name of the field in the control, or `null`.
+  - L164 `bool get required`  — Whether the field has the `required` rule.
+  - L168 `void attach(String name, {required bool required})`  — Called by the field during its build. Listeners hear of a change
+  - L181 `void dispose()`
+- L188 `class OpenUiFieldSlotScope extends InheritedWidget`  — Gives a field the slot of its `FormControl`.
+  - L190 `const OpenUiFieldSlotScope({ required this.slot, required super.child, super.key, })`  — Creates the scope.
+  - L197 `final OpenUiFieldSlot slot`  — The slot.
+  - L200 `static OpenUiFieldSlot? maybeOf(BuildContext context)`  — The slot of the enclosing `FormControl`, or `null`.
+  - L204 `bool updateShouldNotify(OpenUiFieldSlotScope oldWidget)`
+- L210 `class OpenUiField`  — One field as seen in one build: where its value lives, and its
+  - L211 `OpenUiField._({ required this.name, required this.form, required this.binding, required this.literal, required this.validator, required this.streaming, required this.rules, })`
+  - L222 `final String name`  — The field name (the first argument).
+  - L225 `final OpenUiFormState? form`  — The state of the enclosing form, or `null` outside a form.
+  - L228 `final OpenUiBinding? binding`  — The `$variable` of the `value` slot, or `null`.
+  - L231 `final Object? literal`  — A literal (not bound) `value` argument, or `null`.
+  - L234 `final OpenUiFormValidator? validator`  — The validator of the enclosing form, or `null`.
+  - L237 `final bool streaming`  — Whether the view still streams. Fields are read-only then.
+  - L240 `final OpenUiRules rules`  — The rules of the field.
+  - L243 `bool get enabled`  — Whether the user can change the field now.
+  - L248 `Object? get stored`  — The stored value: the form state first (it survives a remount of
+  - L258 `Object? latest(BuildContext context)`  — The value right now, also when it changed after this build (two
+  - L271 `String? get error`  — The error to show, or `null`.
+  - L274 `void write(BuildContext context, Object? value)`  — Writes [value] to the form state and to the binding.
+  - L280 `void validate(Object? value)`  — Shows the result of the rules for [value] (on a change or a blur).
+  - L286 `void clearError()`  — Hides the error of the field.
+- L298 `mixin OpenUiFieldStateMixin<W extends StatefulWidget> on State<W>`  — Shared state logic of every OpenUI form field widget.
+  - L299 `final Object _token = Object()`
+  - L300 `OpenUiFormState? _listened`
+  - L301 `OpenUiFormValidator? _registeredWith`
+  - L302 `String? _registeredName`
+  - L309 `OpenUiField resolveField( BuildContext context, OpenUiProps props, { Object? startValue, Object? Function(Object? stored)? validationValue, })`  — Resolves the field of [props] for this build.
+  - L341 `void _listen(OpenUiFormState? form)`
+  - L348 `void _onFormChanged()`
+  - L352 `void _register( OpenUiField field, Object? Function(Object? stored)? validationValue, )`
+  - L384 `void _hydrate(OpenUiField field, Object? effective)`  — Keeps the form state, the binding and the start value in line.
+  - L416 `void dispose()`
+- L430 `bool openUiDeepEquals(Object? a, Object? b)`  — Deep equality for the plain values a field stores (lists, maps,
+- L452 `bool openUiStatementStreaming(BuildContext context, String statementId)`  — Whether the statement [statementId] still streams (taps wait).
+
+## lib/openui/components/forms_buttons/form.dart  (313 Z.)
+- L15 `kOpenUiFormGap = 16`  — Space between the fields of a form, and before its buttons.
+- L18 `kOpenUiLabelGap = 6`  — Space between a label and its field, and a field and its hint.
+- L25 `Widget buildOpenUiForm(BuildContext context, OpenUiProps props)`  — Builds `Form(name, buttons, fields?)`.
+- L36 `class OpenUiFormView extends StatefulWidget`  — The body of a `Form`: the fields, then the buttons. It gives them
+  - L38 `const OpenUiFormView({ required this.name, required this.fields, required this.buttons, super.key, })`  — Creates a form body.
+  - L46 `final String name`  — The form name. The form state in the view is keyed by it.
+  - L49 `final List<Widget> fields`  — The rendered fields (normally `FormControl`s).
+  - L52 `final List<Widget> buttons`  — The rendered buttons (a `Buttons` row or single `Button`s).
+  - L55 `State<OpenUiFormView> createState()`
+- L58 `class _OpenUiFormViewState extends State<OpenUiFormView>`
+  - L59 `final OpenUiFormValidator _validator = OpenUiFormValidator()`
+  - L62 `void didChangeDependencies()`
+  - L69 `void dispose()`
+  - L75 `Widget build(BuildContext context)`
+- L119 `Widget buildOpenUiFormControl(BuildContext context, OpenUiProps props)`  — Builds `FormControl(label, input, hint?)`.
+- L129 `class OpenUiFormControlView extends StatefulWidget`  — A label, one field, and a line under it: the error of the field, or
+  - L131 `const OpenUiFormControlView({ required this.label, this.hint, this.input, super.key, })`  — Creates a form control.
+  - L139 `final String label`  — The label text.
+  - L142 `final String? hint`  — The hint text, or `null`.
+  - L145 `final Widget? input`  — The field. It may be absent while the program streams.
+  - L148 `State<OpenUiFormControlView> createState()`
+- L151 `class _OpenUiFormControlViewState extends State<OpenUiFormControlView>`
+  - L152 `final OpenUiFieldSlot _slot = OpenUiFieldSlot()`
+  - L155 `void dispose()`
+  - L161 `Widget build(BuildContext context)`
+- L194 `Widget buildOpenUiLabel(BuildContext context, OpenUiProps props)`  — Builds `Label(text)`.
+- L201 `class OpenUiLabelText extends StatelessWidget`  — The label of a field. A required field gets a star after it.
+  - L203 `const OpenUiLabelText(this.text, {this.required = false, super.key})`  — Creates a label.
+  - L206 `final String text`  — The text.
+  - L209 `final bool required`  — Whether to mark the field as required.
+  - L212 `Widget build(BuildContext context)`
+- L239 `class OpenUiFieldMessage extends StatelessWidget`  — The line under a field: a hint (muted) or an error (danger colour,
+  - L241 `const OpenUiFieldMessage(this.text, {this.isError = false, super.key})`  — Creates a hint or error line.
+  - L244 `final String text`  — The text.
+  - L247 `final bool isError`  — Whether this is an error.
+  - L249 `static const double _fontSize = 12.5`
+  - L250 `static const double _lineHeight = 18`
+  - L253 `Widget build(BuildContext context)`
+- L286 `InputDecoration openUiFieldDecoration( BuildContext context, { String? hint, bool hasError = false, Widget? prefixIcon, Widget? suffixIcon, EdgeInsetsGeometry? contentPadding, })`  — The input decoration of every OpenUI field: the app's filled field
+
+## lib/openui/components/forms_buttons/pickers.dart  (663 Z.)
+- L36 `class OpenUiFieldButton extends StatefulWidget`  — A field-shaped button: the filled field look, a text or a
+  - L38 `const OpenUiFieldButton({ required this.text, required this.placeholder, required this.trailing, required this.onTap, this.leading, this.hasError = false, this.open = false, this.verticalPadding = 13, this.semanticsLabel, super.key, })`  — Creates a field button.
+  - L52 `final String? text`  — The value text, or `null` to show [placeholder].
+  - L55 `final String placeholder`  — Shown when [text] is `null`.
+  - L58 `final HugeIconData trailing`  — The icon at the end.
+  - L61 `final HugeIconData? leading`  — The icon at the start, or `null`.
+  - L64 `final ValueChanged<BuildContext>? onTap`  — Called with the context of the box. `null` disables the box.
+  - L67 `final bool hasError`  — Whether to draw the error border.
+  - L70 `final bool open`  — Whether the menu or picker of the box is open (focus border).
+  - L73 `final double verticalPadding`  — The vertical padding of the text (the size of a `Select`).
+  - L76 `final String? semanticsLabel`  — The accessible label, when the text does not say enough.
+  - L79 `State<OpenUiFieldButton> createState()`
+- L82 `class _OpenUiFieldButtonState extends State<OpenUiFieldButton>`
+  - L83 `bool _focused = false`
+  - L86 `Widget build(BuildContext context)`
+- L151 `Widget buildOpenUiSelect(BuildContext context, OpenUiProps props)`  — Builds `Select(name, items, placeholder?, rules?, value?, size?)`.
+- L155 `class OpenUiSelectView extends StatefulWidget`  — The `Select` field.
+  - L157 `const OpenUiSelectView({required this.props, super.key})`  — Creates a select from its props.
+  - L160 `final OpenUiProps props`  — The component props.
+  - L163 `State<OpenUiSelectView> createState()`
+- L166 `class _OpenUiSelectViewState extends State<OpenUiSelectView> with OpenUiFieldStateMixin<OpenUiSelectView>`
+  - L168 `bool _open = false`
+  - L171 `Widget build(BuildContext context)`
+  - L217 `static String? _asValue(Object? v)`
+  - L223 `Future<void> _openMenu( BuildContext box, OpenUiField field, List<({String value, String label})> items, String? current, )`
+- L264 `Widget buildOpenUiDatePicker(BuildContext context, OpenUiProps props)`  — Builds `DatePicker(name, mode?, rules?, value?)`.
+- L268 `class OpenUiDatePickerView extends StatefulWidget`  — The `DatePicker` field.
+  - L270 `const OpenUiDatePickerView({required this.props, super.key})`  — Creates a date picker from its props.
+  - L273 `final OpenUiProps props`  — The component props.
+  - L276 `State<OpenUiDatePickerView> createState()`
+- L279 `class _OpenUiDatePickerViewState extends State<OpenUiDatePickerView> with OpenUiFieldStateMixin<OpenUiDatePickerView>`
+  - L281 `static final DateTime _first = DateTime(1900)`
+  - L282 `static final DateTime _last = DateTime(2100, 12, 31)`
+  - L283 `bool _open = false`
+  - L286 `Widget build(BuildContext context)`
+  - L319 `Future<void> _pick(OpenUiField field, bool range)`
+  - L359 `Widget _themed(BuildContext context, Widget? child)`  — The pickers in the app look: the dialog surface and radius, no
+  - L390 `static String _formatDay(BuildContext context, DateTime d)`  — `Mar 2, 2026` in the locale of the app. Falls back to the
+  - L399 `static _Day? _readDay(Object? v)`
+  - L409 `static _Range? _readRange(Object? v)`
+- L428 `class _Day`
+  - L429 `_Day(DateTime d) : date = DateUtils.dateOnly(d)`
+  - L431 `final DateTime date`
+  - L433 `String toStored()`
+- L436 `class _Range`
+  - L437 `_Range(DateTime a, DateTime b) : start = DateUtils.dateOnly(a), end = DateUtils.dateOnly(b)`
+  - L441 `final DateTime start`
+  - L442 `final DateTime end`
+  - L444 `Map<String, Object?> toStored()`
+- L450 `String _iso(DateTime d)`
+- L461 `Widget buildOpenUiSlider(BuildContext context, OpenUiProps props)`  — Builds `Slider(name, variant, min, max, step?, defaultValue?, label?,
+- L465 `class OpenUiSliderView extends StatefulWidget`  — The `Slider` field.
+  - L467 `const OpenUiSliderView({required this.props, super.key})`  — Creates a slider from its props.
+  - L470 `final OpenUiProps props`  — The component props.
+  - L473 `State<OpenUiSliderView> createState()`
+- L476 `class _OpenUiSliderViewState extends State<OpenUiSliderView> with OpenUiFieldStateMixin<OpenUiSliderView>`
+  - L479 `List<double>? _drag`  — The values while a thumb moves; `null` when idle.
+  - L482 `Widget build(BuildContext context)`
+  - L605 `static List<double> _numbers(Object? v)`
+  - L617 `static List<double> _clamp(List<double> v, double min, double max)`
+  - L621 `static List<num> _clean( List<double> v, double min, double max, [ int digits = 2, ])`  — The values as stored: clamped, rounded, whole numbers as `int`.
+  - L630 `static num _round(double v, int digits)`
+  - L636 `static int _digits(double step)`
+  - L644 `static String _format(double v, int digits)`
+  - L652 `static String _group(int v)`
+
+## lib/openui/components/forms_buttons/rules.dart  (319 Z.)
+- L15 `kOpenUiRulesType = '{required?: boolean, email?: boolean, url?: boolean, numeric?: boolean, ' 'min?: number, max?: numbe`  — The type text of the `rules` slot, exactly as upstream.
+- L21 `@immutable class OpenUiRuleMessages`  — The texts of the rule errors. `{n}` stands for the limit.
+  - L24 `const OpenUiRuleMessages({ required this.required, required this.optionRequired, required this.email, required this.url, required this.number, required this.min, required this.max, required this.minLength, required this.maxLength, required this.pattern, })`  — Creates the messages.
+  - L38 `static const OpenUiRuleMessages english = OpenUiRuleMessages( required: 'This field is required', optionRequired: 'At least one option is required', email: 'Please enter a valid email', url: 'Please enter a valid URL', number: 'Must be a number', min: 'Must be at least {n}', max: 'Must be no more than {n}', minLength: 'Must be at least {n} characters', maxLength: 'Must be no more than {n} characters', pattern: 'Invalid format', )`  — The upstream English messages.
+  - L52 `factory OpenUiRuleMessages.of(AppLocalizations l)`  — The messages of the app locale [l].
+  - L66 `final String required`  — An empty required field.
+  - L69 `final String optionRequired`  — A required check box group with nothing checked.
+  - L72 `final String email`  — A bad email.
+  - L75 `final String url`  — A bad URL.
+  - L78 `final String number`  — Not a number.
+  - L81 `final String min`  — Below `min`.
+  - L84 `final String max`  — Above `max`.
+  - L87 `final String minLength`  — Shorter than `minLength`.
+  - L90 `final String maxLength`  — Longer than `maxLength`.
+  - L93 `final String pattern`  — No `pattern` match.
+  - L96 `bool operator ==(Object other)`
+  - L110 `int get hashCode`
+- L125 `@immutable class OpenUiRule`  — One rule: its [type] (`minLength`) and its argument (`3`), if any.
+  - L128 `const OpenUiRule(this.type, [this.arg])`  — Creates a rule.
+  - L131 `final String type`  — The rule key.
+  - L134 `final Object? arg`  — The argument. `null` for a boolean rule.
+  - L137 `String toString()`
+- L141 `@immutable class OpenUiRules`  — The parsed rules of one field.
+  - L144 `const OpenUiRules(this.rules)`  — Creates rules from a list.
+  - L147 `static const OpenUiRules none = OpenUiRules(<OpenUiRule>[])`  — No rules.
+  - L149 `static const Set<String> _known = <String>{ 'required', 'email', 'url', 'numeric', 'min', 'max', 'minLength', 'maxLength', 'pattern', }`
+  - L163 `factory OpenUiRules.parse(Object? raw)`  — Parses an OpenUI object literal (`{required: true, minLength: 3}`).
+  - L188 `static bool _needsArg(String key)`
+  - L196 `final List<OpenUiRule> rules`  — The rules, in the order of the object literal.
+  - L199 `bool get isEmpty`  — Whether there are no rules.
+  - L202 `bool get required`  — Whether the field must have a value.
+  - L206 `String? validate( Object? value, [ OpenUiRuleMessages messages = OpenUiRuleMessages.english, ])`  — The first error for [value], or `null` when the value is valid.
+  - L219 `static bool isEmptyValue(Object? value)`  — Whether [value] counts as empty: `null`, blank text, an empty list
+  - L227 `static String? _check( OpenUiRule rule, Object? value, OpenUiRuleMessages m, )`
+  - L292 `static final RegExp _email = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')`
+  - L294 `static bool _isUrl(String value)`
+  - L301 `static double? _toNumber(Object? v)`
+  - L310 `static String _limit(String template, double limit)`
+  - L313 `static String _fmt(double v)`
+  - L317 `String toString()`
+
+## lib/openui/components/forms_buttons/text_fields.dart  (213 Z.)
+- L19 `Widget buildOpenUiInput(BuildContext context, OpenUiProps props)`  — Builds `Input(name, placeholder?, type?, rules?, value?)`.
+- L23 `Widget buildOpenUiTextArea(BuildContext context, OpenUiProps props)`  — Builds `TextArea(name, placeholder?, rows?, rules?, value?)`.
+- L27 `class OpenUiTextFieldView extends StatefulWidget`  — The text field of `Input` and `TextArea`.
+  - L29 `const OpenUiTextFieldView({ required this.props, required this.multiline, super.key, })`  — Creates a text field from the props of an `Input` or `TextArea`.
+  - L36 `final OpenUiProps props`  — The component props.
+  - L39 `final bool multiline`  — `TextArea` when true.
+  - L42 `State<OpenUiTextFieldView> createState()`
+- L45 `class _OpenUiTextFieldViewState extends State<OpenUiTextFieldView> with OpenUiFieldStateMixin<OpenUiTextFieldView>`
+  - L47 `final TextEditingController _controller = TextEditingController()`
+  - L48 `final FocusNode _focus = FocusNode()`
+  - L49 `OpenUiField? _field`
+  - L50 `bool _seeded = false`
+  - L51 `bool _obscured = true`
+  - L54 `void initState()`
+  - L60 `void dispose()`
+  - L67 `void _onFocusChanged()`
+  - L77 `static String _asText(Object? v)`
+  - L90 `void _syncController(OpenUiField field)`  — Keeps the controller in line with the stored value. The first
+  - L117 `void _onChanged(String text)`
+  - L125 `Widget build(BuildContext context)`

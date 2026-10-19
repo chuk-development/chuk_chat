@@ -1,6 +1,15 @@
 # test/services/agents · Signaturen
 
-## test/services/agents/agent_profile_store_test.dart  (58 Z.)
+## test/services/agents/agent_mail_crypto_test.dart  (142 Z.)
+- L11 `void main()`  — The seal format `chuk-agent-mail-v1` against the test vector of
+
+## test/services/agents/agent_mail_key_handover_test.dart  (218 Z.)
+- L19 `void main()`  — The mail key goes to the host over the end-to-end channel
+
+## test/services/agents/agent_mail_service_test.dart  (720 Z.)
+- L16 `void main()`  — The agent mail client against the v2 contract (docs/AGENT_MAIL.md §3,
+
+## test/services/agents/agent_profile_store_test.dart  (89 Z.)
 - L5 `void main()`
 
 ## test/services/agents/agent_read_marks_persist_test.dart  (42 Z.)
@@ -64,6 +73,10 @@
   - L170 `int nextInt(int max)`
   - L180 `bool nextBool()`
   - L183 `double nextDouble()`
+
+## test/services/agents/agents_frame_fragments_test.dart  (120 Z.)
+- L13 `List<Map<String, dynamic>> split( Map<String, dynamic> payload, { int chunk = 256 * 1024, String id = 'abc123', })`  — The host's split (`fragment_plaintexts` in chuk_agents_executor.protocol).
+- L38 `void main()`
 
 ## test/services/agents/agents_heal_channel_test.dart  (400 Z.)
 - L26 `class _Session implements AccountSessionSource`
@@ -212,55 +225,55 @@
 ## test/services/agents/agents_reconnect_test.dart  (374 Z.)
 - L20 `void main()`  — Reconnect handshake tests: the cross-language vector (byte-for-byte against
 
-## test/services/agents/agents_relay_client_test.dart  (2140 Z.)
-- L26 `class FakeMcpStore extends McpStore`  — A stand-in [McpStore] whose forward payloads are canned, so a task-frame
-  - L27 `FakeMcpStore(this._payloads)`
-  - L29 `final List<Map<String, dynamic>> _payloads`
-  - L32 `Future<List<Map<String, dynamic>>> forwardPayloads()`
-- L37 `class FakeHereNowStore extends HereNowStore`  — A stand-in [HereNowStore] whose forward payload is canned, so a task-frame
-  - L38 `FakeHereNowStore(this._payload)`
-  - L40 `final Map<String, dynamic>? _payload`
-  - L43 `Future<Map<String, dynamic>?> forwardPayload()`
-- L48 `class FakeRelaySocket implements RelaySocket`  — A fake duplex socket. `send()` from the client is captured on [outbound];
-  - L49 `final StreamController<dynamic> _incoming = StreamController<dynamic>.broadcast()`
-  - L51 `final StreamController<String> _outbound = StreamController<String>.broadcast()`
-  - L52 `bool closed = false`
-  - L55 `Stream<dynamic> get incoming`
-  - L58 `Stream<String> get outbound`  — Envelopes the client sent (join, pairing steps, frames).
-  - L61 `void send(String data)`
-  - L67 `void deliver(String data)`  — Push an envelope down to the client.
-  - L72 `Future<void> close()`
-- L82 `class FakeExecutorHost`  — The in-Dart executor: it plays the pairing INITIATOR and, once paired, seals
-  - L83 `FakeExecutorHost({ required this.socket, required this.deviceId, required this.channelId, required this.digits, required this.signingKeyPair, required this.nowMs, })`
-  - L92 `final FakeRelaySocket socket`
-  - L93 `final String deviceId`
-  - L94 `final String channelId`
-  - L95 `final String digits`
-  - L96 `final SimpleKeyPair signingKeyPair`
-  - L97 `final int Function() nowMs`
-  - L99 `final AgentsApprovedDevices approved = AgentsApprovedDevices.empty()`
-  - L100 `late final AgentsPairing _initiator`
-  - L102 `AgentsFrameSealer? _sealer`
-  - L103 `AgentsFrameOpener? _opener`
-  - L106 `final List<Map<String, dynamic>> received = <Map<String, dynamic>>[]`  — Payloads the host opened from the client (account_authentication, task…).
-  - L108 `final Completer<void> paired = Completer<void>()`
-  - L110 `static String frameToWire(AgentsFrame f)`
-  - L112 `static AgentsFrame frameFromWire(String w)`
-  - L115 `Future<void> start()`
-  - L127 `void _sendPairing(String step, Map<String, dynamic> data)`
-  - L133 `Future<void> _onClientEnvelope(String raw)`
-  - L146 `Future<void> _onPairing(Map<String, dynamic> env)`
-  - L163 `void _establishCodec()`
-  - L178 `Future<void> _onFrame(Map<String, dynamic> env)`
-  - L185 `Future<void> emit(Map<String, dynamic> payload)`  — Seal a payload and push it to the client (delta / tool / done / error).
-- L195 `class _SessionSource implements AccountSessionSource`  — A session source the test scripts: what `current()` returns and what a
-  - L196 `_SessionSource({required AccountSession current, AccountSession? refreshed}) : _current = current, _refreshed = refreshed`
-  - L200 `AccountSession _current`
-  - L201 `final AccountSession? _refreshed`
-  - L202 `int refreshCalls = 0`
-  - L205 `AccountSession? current()`
-  - L208 `Future<AccountSession?> refresh()`
-- L216 `void main()`
+## test/services/agents/agents_relay_client_test.dart  (2336 Z.)
+- L27 `class FakeMcpStore extends McpStore`  — A stand-in [McpStore] whose forward payloads are canned, so a task-frame
+  - L28 `FakeMcpStore(this._payloads)`
+  - L30 `final List<Map<String, dynamic>> _payloads`
+  - L33 `Future<List<Map<String, dynamic>>> forwardPayloads()`
+- L38 `class FakeHereNowStore extends HereNowStore`  — A stand-in [HereNowStore] whose forward payload is canned, so a task-frame
+  - L39 `FakeHereNowStore(this._payload)`
+  - L41 `final Map<String, dynamic>? _payload`
+  - L44 `Future<Map<String, dynamic>?> forwardPayload()`
+- L49 `class FakeRelaySocket implements RelaySocket`  — A fake duplex socket. `send()` from the client is captured on [outbound];
+  - L50 `final StreamController<dynamic> _incoming = StreamController<dynamic>.broadcast()`
+  - L52 `final StreamController<String> _outbound = StreamController<String>.broadcast()`
+  - L53 `bool closed = false`
+  - L56 `Stream<dynamic> get incoming`
+  - L59 `Stream<String> get outbound`  — Envelopes the client sent (join, pairing steps, frames).
+  - L62 `void send(String data)`
+  - L68 `void deliver(String data)`  — Push an envelope down to the client.
+  - L73 `Future<void> close()`
+- L83 `class FakeExecutorHost`  — The in-Dart executor: it plays the pairing INITIATOR and, once paired, seals
+  - L84 `FakeExecutorHost({ required this.socket, required this.deviceId, required this.channelId, required this.digits, required this.signingKeyPair, required this.nowMs, })`
+  - L93 `final FakeRelaySocket socket`
+  - L94 `final String deviceId`
+  - L95 `final String channelId`
+  - L96 `final String digits`
+  - L97 `final SimpleKeyPair signingKeyPair`
+  - L98 `final int Function() nowMs`
+  - L100 `final AgentsApprovedDevices approved = AgentsApprovedDevices.empty()`
+  - L101 `late final AgentsPairing _initiator`
+  - L103 `AgentsFrameSealer? _sealer`
+  - L104 `AgentsFrameOpener? _opener`
+  - L107 `final List<Map<String, dynamic>> received = <Map<String, dynamic>>[]`  — Payloads the host opened from the client (account_authentication, task…).
+  - L109 `final Completer<void> paired = Completer<void>()`
+  - L111 `static String frameToWire(AgentsFrame f)`
+  - L113 `static AgentsFrame frameFromWire(String w)`
+  - L116 `Future<void> start()`
+  - L128 `void _sendPairing(String step, Map<String, dynamic> data)`
+  - L134 `Future<void> _onClientEnvelope(String raw)`
+  - L147 `Future<void> _onPairing(Map<String, dynamic> env)`
+  - L164 `void _establishCodec()`
+  - L179 `Future<void> _onFrame(Map<String, dynamic> env)`
+  - L186 `Future<void> emit(Map<String, dynamic> payload)`  — Seal a payload and push it to the client (delta / tool / done / error).
+- L196 `class _SessionSource implements AccountSessionSource`  — A session source the test scripts: what `current()` returns and what a
+  - L197 `_SessionSource({required AccountSession current, AccountSession? refreshed}) : _current = current, _refreshed = refreshed`
+  - L201 `AccountSession _current`
+  - L202 `final AccountSession? _refreshed`
+  - L203 `int refreshCalls = 0`
+  - L206 `AccountSession? current()`
+  - L209 `Future<AccountSession?> refresh()`
+- L217 `void main()`
 
 ## test/services/agents/agents_relay_done_reason_test.dart  (26 Z.)
 - L8 `void main()`  — `done.reason` semantics the thread view relies on (docs/WIRE_CONTRACT.md,
@@ -298,14 +311,14 @@
 ## test/services/agents/agents_relay_secrets_test.dart  (136 Z.)
 - L14 `void main()`  — The secrets frames over the real sealed channel (docs/WIRE_CONTRACT.md,
 
-## test/services/agents/agents_replay_loader_test.dart  (736 Z.)
-- L19 `void main()`
-- L731 `Future<void> _drain()`  — Lets the loader's internal handler chain settle.
+## test/services/agents/agents_replay_loader_test.dart  (837 Z.)
+- L20 `void main()`
+- L832 `Future<void> _drain()`  — Lets the loader's internal handler chain settle.
 
-## test/services/agents/agents_replay_paging_test.dart  (153 Z.)
+## test/services/agents/agents_replay_paging_test.dart  (154 Z.)
 - L18 `void main()`  — Replay paging in the loader (docs/WIRE_CONTRACT.md "Replay paging", Bead
 
-## test/services/agents/agents_replay_repeat_test.dart  (181 Z.)
+## test/services/agents/agents_replay_repeat_test.dart  (207 Z.)
 - L12 `Map<String, String> user(String text)`  — Bead cowork-4rpt: the same message, twice.
 - L18 `Map<String, String> ai(String text)`
 - L24 `List<String> texts(List<Map<String, String>> rows)`
@@ -313,25 +326,39 @@
 - L140 `void _pagingTests()`
 - L157 `void _repairTests()`
 
+## test/services/agents/agents_run_cost_test.dart  (281 Z.)
+- L11 `_block = <String, dynamic>{ 'currency': 'EUR', 'eur': 0.002345, 'input_tokens': 5000, 'output_tokens': 150, 'cached_toke`
+- L40 `AgentsRelayApprovalRequest _action({ String? decision, String? scope, List<String> options = const <String>[ 'once', 'always_this_agent', 'always_this_site', 'deny', ], })`
+- L68 `void main()`
+
 ## test/services/agents/agents_run_ledger_test.dart  (371 Z.)
 - L11 `void main()`
 
 ## test/services/agents/agents_shell_status_test.dart  (84 Z.)
 - L6 `void main()`
 
-## test/services/agents/agents_stopped_run_test.dart  (296 Z.)
-- L23 `void main()`  — A run that ends with nothing must END — visibly (bead cowork-gnr8).
-- L285 `List<Map<String, dynamic>> _rowsFor(String session)`
-- L291 `Future<void> _drain()`
+## test/services/agents/agents_skill_proposal_relay_test.dart  (261 Z.)
+- L13 `void main()`  — Skill proposals over the real sealed channel (docs/WIRE_CONTRACT.md,
 
-## test/services/agents/agents_task_delivery_test.dart  (310 Z.)
+## test/services/agents/agents_stopped_run_test.dart  (297 Z.)
+- L23 `void main()`  — A run that ends with nothing must END — visibly (bead cowork-gnr8).
+- L286 `List<Map<String, dynamic>> _rowsFor(String session)`
+- L292 `Future<void> _drain()`
+
+## test/services/agents/agents_task_delivery_test.dart  (358 Z.)
 - L26 `void main()`  — A message sent at 04:49 was gone. The app drew a sent bubble and a typing
-- L305 `Future<void> _drain()`  — Lets the adapter's internal handler chain settle.
+- L353 `Future<void> _drain()`  — Lets the adapter's internal handler chain settle.
 
 ## test/services/agents/agents_task_outbox_test.dart  (230 Z.)
 - L10 `void main()`  — Bead cowork-i7sd: "ob die Nachrichten im Backend ankommen, ist irgendwie
 
-## test/services/agents/browser_presence_test.dart  (345 Z.)
+## test/services/agents/agents_tool_phase_l10n_test.dart  (71 Z.)
+- L13 `void main()`  — The running tool and the automation states speak the reader's language
+
+## test/services/agents/agents_turn_phase_test.dart  (155 Z.)
+- L11 `void main()`  — The live phase of an Agents turn (research item 4): every phase is read
+
+## test/services/agents/browser_presence_test.dart  (425 Z.)
 - L6 `void main()`
 
 ## test/services/agents/chat_core_routing_test.dart  (308 Z.)
@@ -348,6 +375,9 @@
 - L24 `Future<String> _encryptWithKey(String plaintext, SecretKey key)`  — Builds the production ciphertext envelope around [plaintext] with an
 - L42 `void main()`
 
+## test/services/agents/coworker_templates_test.dart  (166 Z.)
+- L12 `void main()`
+
 ## test/services/agents/offline_retry_manager_test.dart  (150 Z.)
 - L9 `void main()`  — The Retry button in the imported bubble calls
 
@@ -359,14 +389,14 @@
 ## test/services/agents/schedule_spec_test.dart  (431 Z.)
 - L7 `void main()`  — 2026-02-03 is a Tuesday. Every date in this file is built from local
 
-## test/services/agents/tool_card_parity_test.dart  (317 Z.)
-- L33 `Map<String, dynamic> _visible(Map<String, dynamic> call)`  — The fields of a card the reader can see: everything the renderer reads
-- L43 `_t0 = DateTime.fromMillisecondsSinceEpoch(1_757_040_000_000)`  — The host's clock, as a current host sends it: unix seconds.
-- L44 `DateTime _at(int seconds)`
-- L47 `_liveRun = <AgentsRelayInbound>[ const AgentsRelayDelta('Let me look.'), AgentsRelayTool( 'run_command', arguments: 'ls `  — One run: a command that worked, one that failed, a child agent.
-- L92 `_replayedRun = <AgentsRelayInbound>[ const AgentsRelayUser('do the thing', mid: 1), const AgentsRelayDelta('Let me look.`  — The same run as the host replays it: every frame marked, in row order,
-- L144 `void main()`
-- L312 `Future<void> _drain()`
+## test/services/agents/tool_card_parity_test.dart  (334 Z.)
+- L34 `Map<String, dynamic> _visible(Map<String, dynamic> call)`  — The fields of a card the reader can see: everything the renderer reads
+- L44 `_t0 = DateTime.fromMillisecondsSinceEpoch(1_757_040_000_000)`  — The host's clock, as a current host sends it: unix seconds.
+- L45 `DateTime _at(int seconds)`
+- L48 `_liveRun = <AgentsRelayInbound>[ const AgentsRelayDelta('Let me look.'), AgentsRelayTool( 'run_command', arguments: 'ls `  — One run: a command that worked, one that failed, a child agent.
+- L95 `_replayedRun = <AgentsRelayInbound>[ const AgentsRelayUser('do the thing', mid: 1), const AgentsRelayDelta('Let me look.`  — The same run as the host replays it: every frame marked, in row order,
+- L147 `void main()`
+- L329 `Future<void> _drain()`
 
 ## test/services/agents/tool_events_contract_test.dart  (178 Z.)
 - L11 `void main()`

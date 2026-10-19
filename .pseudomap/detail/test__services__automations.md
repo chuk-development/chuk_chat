@@ -4,6 +4,15 @@
 - L10 `Map<String, dynamic> eventPayload({ String event = 'created', String id = 'ab12cd34', String state = 'active', String kind = 'schedule', Map<String, dynamic> spec = const {'every': 300}, int fireCount = 0, String? runId, String? reason, bool replay = false, int? mid, })`  — The wire shapes of docs/WIRE_CONTRACT.md, "Automations", as the host
 - L44 `void main()`
 
+## test/services/automations/automation_event_triggers_test.dart  (466 Z.)
+- L15 `class FakeEditController extends FakeAutomationController implements AgentsAutomationEditControl`  — The test double plus the two frames of the create / edit sheet.
+  - L17 `final List<Map<String, dynamic>> creates = <Map<String, dynamic>>[]`
+  - L18 `final List<Map<String, dynamic>> updates = <Map<String, dynamic>>[]`
+  - L21 `Future<void> sendAutomationCreate(Map<String, dynamic> frame)`
+  - L27 `Future<void> sendAutomationUpdate(Map<String, dynamic> frame)`
+- L33 `Map<String, dynamic> row( String id, { String kind = 'watch_url', Map<String, dynamic>? spec, String notify = 'on_change', String? summary, int unchanged = 0, })`
+- L54 `void main()`
+
 ## test/services/automations/automations_source_test.dart  (167 Z.)
 - L11 `class FakeAutomationController extends FakeRelayController implements AgentsAutomationControl`  — The shared test double, plus the two automation frames the source sends.
   - L13 `final List<(String, String)> controls = <(String, String)>[]`

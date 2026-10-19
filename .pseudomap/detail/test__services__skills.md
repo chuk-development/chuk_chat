@@ -12,6 +12,15 @@
 - L10 `_minimal = 'name: weather-cards\ndescription: Does a thing.'`
 - L12 `void main()`
 
+## test/services/skills/skill_proposals_source_test.dart  (279 Z.)
+- L7 `class _FakeControl implements AgentsSkillProposalControl`
+  - L8 `_FakeControl(this.answer)`
+  - L10 `AgentsSkillProposalResult Function(String id) answer`
+  - L11 `final List<Map<String, Object?>> sent = <Map<String, Object?>>[]`
+  - L14 `Future<AgentsSkillProposalResult> sendSkillProposalDecision({ required String proposalId, required bool accept, String? name, String? description, String? body, })`
+- L32 `AgentsRelaySkillProposal _proposal( String id, { String thread = 'thread-1', bool replay = false, String? status, String? savedName, })`
+- L50 `void main()`
+
 ## test/services/skills/skill_registry_user_layer_test.dart  (199 Z.)
 - L7 `Skill _userSkill(String name, {String? id})`
 - L15 `void main()`

@@ -97,5 +97,5 @@
   - L52 `dynamic noSuchMethod(Invocation invocation)`
 - L55 `void main()`
 
-## test/voice_incoming/voice_call_permissions_section_test.dart  (60 Z.)
+## test/voice_incoming/voice_call_permissions_section_test.dart  (56 Z.)
 - L10 `void main()`

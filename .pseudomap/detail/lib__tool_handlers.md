@@ -110,11 +110,60 @@
   - L810 `final String role`
   - L811 `final String text`
 
-## lib/tool_handlers/find_tools_handler.dart  (343 Z.)
+## lib/tool_handlers/file_fetch_tools.dart  (583 Z.)
+- L24 `kFetchFilesMaxCount = 20`  — Most URLs one call may fetch.
+- L27 `kFetchFilesMaxFileBytes = 15 * 1024 * 1024`  — Largest single download.
+- L31 `kFetchFilesMaxTotalBytes = 25 * 1024 * 1024`  — Largest sum of all downloads. The encrypted upload is about 1.4x the
+- L34 `class FetchFilesResult`  — What one `fetch_files` call produced.
+  - L35 `const FetchFilesResult({ required this.text, required this.isError, this.file, })`
+  - L42 `final String text`  — The answer the model reads.
+  - L43 `final bool isError`
+  - L46 `final SandboxArtifactPayload? file`  — The file card for the user. Null when nothing could be fetched.
+- L49 `class _Fetched`
+  - L50 `_Fetched(this.name, this.mime, this.bytes)`
+  - L51 `final String name`
+  - L52 `final String mime`
+  - L53 `final Uint8List bytes`
+- L61 `Future<FetchFilesResult> executeFetchFiles( Map<String, dynamic> args, { http.Client? client, Future<String> Function(Uint8List bytes)? upload, Future<List<String>> Function(String host) lookup = lookupHostAddresses, })`  — Downloads the files in `args['files']` and stores them as one card.
+- L227 `class _FetchFailure implements Exception`
+  - L228 `const _FetchFailure(this.reason)`
+  - L229 `final String reason`
+- L232 `class _Download`
+  - L233 `const _Download(this.uri, this.bytes, this.contentType, this.disposition)`
+  - L234 `final Uri uri`
+  - L235 `final Uint8List bytes`
+  - L236 `final String? contentType`
+  - L237 `final String? disposition`
+- L242 `Future<String> _uploadEncryptedOnly(Uint8List bytes)`  — Stores the file encrypted or not at all: a sign-out during the download
+- L245 `_maxRedirects = 5`
+- L248 `_downloadDeadline = Duration(seconds: 60)`  — Longest one download may take, redirects and body included.
+- L252 `_callDeadline = Duration(minutes: 3)`  — Longest the whole call may take. Files not reached by then are reported
+- L255 `_idleTimeout = Duration(seconds: 30)`  — Longest pause between two parts of a response.
+- L265 `Future<_Download> _download( http.Client client, Uri start, { required int maxBytes, required Future<List<String>> Function(String host) lookup, required DateTime deadline, })`  — GETs [start] and reads at most [maxBytes] of the body before [deadline].
+- L336 `Future<void> _discard(http.StreamedResponse response)`  — Drops a response body without reading it.
+- L346 `Future<void> _checkPublicHost( Uri uri, Future<List<String>> Function(String host) lookup, Duration timeout, )`  — Refuses hosts on the user's own machine or network: loopback, private
+- L381 `List<int>? _parseIp(String host)`  — The address bytes of an IPv4 or IPv6 literal, or null for a name.
+- L399 `bool _isNonPublic(List<int> ip)`
+- L431 `class _Request`
+  - L432 `const _Request(this.url, this.name)`
+  - L433 `final String url`
+  - L434 `final String? name`
+- L437 `List<_Request> _parseRequests(Map<String, dynamic> args, List<String> invalid)`
+- L470 `String _fileName({ required String? requested, required String? disposition, required Uri uri, required String mime, required int index, })`
+- L491 `String? _dispositionName(String? header)`
+- L511 `String _sanitize(String name)`  — Keeps a name safe as a ZIP entry and as a saved file: no folders, no
+- L519 `String _uniqueName(String name, Set<String> used)`
+- L530 `String _zipName(Object? requested)`
+- L537 `_extToMime = { 'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'gif': 'image/gif', 'webp': 'image/webp', `
+- L560 `String _mimeOf(String? contentType, String path)`
+- L571 `String? _extensionFor(String mime)`
+- L579 `String _shortError(Object e)`
+
+## lib/tool_handlers/find_tools_handler.dart  (344 Z.)
 - L6 `companions = <String, List<String>>{ 'web_search': ['web_crawl'], 'web_crawl': ['web_search'], 'generate_image': ['web_s`  — Companion tools that are always bundled together.
-- L21 `void _appendToolDefinition( StringBuffer buf, ClientTool tool, String Function(String) getDescription, )`
-- L53 `String executeFindTools({ required Map<String, dynamic> args, required Map<String, ClientTool> tools, required String Function(String) getDescription, required bool Function(String) isAvailable, List<McpCatalogueEntry> unconnectedMcpServers = const [], })`  — Find tools by keyword/query. Returns full tool definitions for matching
-- L316 `String _mcpConnectHints( List<String> queryWords, List<McpCatalogueEntry> unconnected, )`  — Lines describing not-connected catalogue servers whose id / name / category
+- L22 `void _appendToolDefinition( StringBuffer buf, ClientTool tool, String Function(String) getDescription, )`
+- L54 `String executeFindTools({ required Map<String, dynamic> args, required Map<String, ClientTool> tools, required String Function(String) getDescription, required bool Function(String) isAvailable, List<McpCatalogueEntry> unconnectedMcpServers = const [], })`  — Find tools by keyword/query. Returns full tool definitions for matching
+- L317 `String _mcpConnectHints( List<String> queryWords, List<McpCatalogueEntry> unconnected, )`  — Lines describing not-connected catalogue servers whose id / name / category
 
 ## lib/tool_handlers/image_tools.dart  (253 Z.)
 - L11 `Future<String> _generateImageRequest({ required String? serverHttpUrl, required String? accessToken, required String endpoint, required Map<String, String> fields, required String muxTool, required String modelName, })`  — Shared helper: send a multipart POST to an image generation endpoint
@@ -124,35 +173,31 @@
 - L229 `String executeViewChatImagesUnsupported()`
 - L233 `String _detectMimeType({required String contentType, required String url})`
 
-## lib/tool_handlers/map_tools.dart  (660 Z.)
+## lib/tool_handlers/map_tools.dart  (598 Z.)
 - L12 `_networkTimeout = Duration(seconds: 20)`  — These endpoints are called straight from the device, so a stalled
 - L14 `_nominatimBaseUrl = 'https://nominatim.openstreetmap.org'`
 - L15 `_osrmBaseUrl = 'https://router.workspace-osrm.org'`
 - L16 `_defaultHeaders = { 'Accept': 'application/json', 'User-Agent': 'chuk-chat/1.0', }`
-- L28 `class PlacesToolResult`  — What a places lookup produces: the text the model reads, and the map
-  - L29 `const PlacesToolResult({ required this.text, this.mapTag, this.places = const <Map<String, dynamic>>[], })`
-  - L36 `final String text`  — Formatted result for the model.
-  - L39 `final String? mapTag`  — A ready `<map>…</map>` block, or null when no place had coordinates.
-  - L46 `final List<Map<String, dynamic>> places`  — The raw Brave entries behind [text] and [mapTag], newest lookup first.
-- L50 `kMaxPlacesOnMap = 6`  — Most places put on one card. Beyond this the map stops being a glance.
-- L56 `String? buildPlacesMapTag({ required List<Map<String, dynamic>> places, required String title, int max = kMaxPlacesOnMap, })`  — Build the `<map>` block for [places], or null when none can be pinned.
-- L101 `double? _asDouble(Object? value)`
-- L109 `Future<String> executeSearchPlaces({ required String? serverHttpUrl, required Map<String, String> serverHeaders, required Map<String, dynamic> args, http.Client? client, })`  — Search places via server-side Brave Local proxy.
-- L126 `Future<PlacesToolResult> searchPlacesWithMap({ required String? serverHttpUrl, required Map<String, String> serverHeaders, required Map<String, dynamic> args, http.Client? client, })`  — Search places via the server-side Brave Local proxy, and build the map
-- L184 `Future<String> executeSearchRestaurants({ required String? serverHttpUrl, required Map<String, String> serverHeaders, required Map<String, dynamic> args, http.Client? client, })`  — Text-only form, kept for callers that do not render a map card.
-- L201 `Future<PlacesToolResult> searchRestaurantsWithMap({ required String? serverHttpUrl, required Map<String, String> serverHeaders, required Map<String, dynamic> args, http.Client? client, })`  — Search restaurants via the server-side Brave Local proxy, and build the
-- L266 `Future<String> executeGeocode( Map<String, dynamic> args, { http.Client? client, })`  — Forward / reverse geocoding via Nominatim (kept; no server proxy).
-- L326 `Future<String> executeGetRoute( Map<String, dynamic> args, { http.Client? client, })`
-- L417 `Future<List<Map<String, dynamic>>> _fetchBravePlaces({ required String baseUrl, required Map<String, String> serverHeaders, required http.Client client, required String query, required int count, String country = 'DE', String searchLang = 'de', })`
-- L468 `String _formatBravePlaces({ required String heading, required List<Map<String, dynamic>> places, })`
-- L513 `Future<List<Map<String, dynamic>>> _searchNominatim({ required http.Client client, required String query, required int limit, double? latitude, double? longitude, int? radiusMeters, })`
-- L572 `String _extractCountry(Map<String, dynamic> args)`
-- L578 `String _extractLang(Map<String, dynamic> args)`
-- L585 `String _buildInstruction({ required Map<String, dynamic> maneuver, required String roadName, })`
-- L615 `String _formatDistance(double meters)`
-- L622 `double? _coerceDouble(dynamic value)`
-- L632 `int _coerceInt(dynamic value, {required int fallback})`
-- L649 `String _asString(dynamic value)`  — Coerce a JSON-decoded value to a String. Server tools normally hand back
+- L26 `class PlacesToolResult`  — What a places lookup produces: the text the model reads, and the raw
+  - L27 `const PlacesToolResult({ required this.text, this.places = const <Map<String, dynamic>>[], })`
+  - L33 `final String text`  — Formatted result for the model.
+  - L40 `final List<Map<String, dynamic>> places`  — The raw Brave entries behind [text], newest lookup first.
+- L45 `Future<String> executeSearchPlaces({ required String? serverHttpUrl, required Map<String, String> serverHeaders, required Map<String, dynamic> args, http.Client? client, })`  — Search places via server-side Brave Local proxy.
+- L62 `Future<PlacesToolResult> searchPlacesWithMap({ required String? serverHttpUrl, required Map<String, String> serverHeaders, required Map<String, dynamic> args, http.Client? client, })`  — Search places via the server-side Brave Local proxy, keeping the raw
+- L119 `Future<String> executeSearchRestaurants({ required String? serverHttpUrl, required Map<String, String> serverHeaders, required Map<String, dynamic> args, http.Client? client, })`  — Text-only form, the one the chat tool loop uses.
+- L136 `Future<PlacesToolResult> searchRestaurantsWithMap({ required String? serverHttpUrl, required Map<String, String> serverHeaders, required Map<String, dynamic> args, http.Client? client, })`  — Search restaurants via the server-side Brave Local proxy, keeping the
+- L200 `Future<String> executeGeocode( Map<String, dynamic> args, { http.Client? client, })`  — Forward / reverse geocoding via Nominatim (kept; no server proxy).
+- L260 `Future<String> executeGetRoute( Map<String, dynamic> args, { http.Client? client, })`
+- L351 `Future<List<Map<String, dynamic>>> _fetchBravePlaces({ required String baseUrl, required Map<String, String> serverHeaders, required http.Client client, required String query, required int count, String country = 'DE', String searchLang = 'de', })`
+- L402 `String _formatBravePlaces({ required String heading, required List<Map<String, dynamic>> places, })`
+- L451 `Future<List<Map<String, dynamic>>> _searchNominatim({ required http.Client client, required String query, required int limit, double? latitude, double? longitude, int? radiusMeters, })`
+- L510 `String _extractCountry(Map<String, dynamic> args)`
+- L516 `String _extractLang(Map<String, dynamic> args)`
+- L523 `String _buildInstruction({ required Map<String, dynamic> maneuver, required String roadName, })`
+- L553 `String _formatDistance(double meters)`
+- L560 `double? _coerceDouble(dynamic value)`
+- L570 `int _coerceInt(dynamic value, {required int fallback})`
+- L587 `String _asString(dynamic value)`  — Coerce a JSON-decoded value to a String. Server tools normally hand back
 
 ## lib/tool_handlers/notes_tools.dart  (926 Z.)
 - L17 `_notesPrefsKey = 'tool_notes'`

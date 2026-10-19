@@ -1,0 +1,179 @@
+# lib/openui/components/data_cards · Signaturen
+
+## lib/openui/components/data_cards/card_blocks.dart  (654 Z.)
+- part of '../data_cards.dart'
+- L8 `class _BlockSettings`  — The shared settings of one card block call.
+  - L9 `_BlockSettings(BuildContext context, OpenUiProps p, {required double gap}) : action = p.action('action'), carousel = p.choice('layout', fallback: 'grid') == 'carousel', responsive = p.boolean('responsive', fallback: true), gap = _blockGap(p, gap), streaming = _streamingHere(context, p.statementId)`
+  - L16 `final OpenUiAction? action`
+  - L17 `final bool carousel`
+  - L18 `final bool responsive`
+  - L19 `final double gap`
+  - L20 `final bool streaming`
+  - L23 `bool get clickable`  — Whether the cards take a tap.
+- L27 `Widget _slot( Widget? child, _CardInfo info, String slot, { String? textSize, String? tagSize, bool compact = false, bool onImage = false, })`  — Wraps [child] in a slot of a card.
+- L49 `VoidCallback? _cardTap( BuildContext context, _BlockSettings s, String Function() label, Map<String, Object?> Function() item, )`  — The tap handler of card [index], or `null` when not clickable.
+- L64 `Widget _buildSnippetBlock(BuildContext context, OpenUiProps p)`
+- L132 `Widget _buildOverviewBlock(BuildContext context, OpenUiProps p)`
+- L204 `Widget _buildContextBlock(BuildContext context, OpenUiProps p)`
+- L264 `class _ContextCard extends StatelessWidget`
+  - L265 `const _ContextCard({ required this.info, required this.titleText, required this.titleWidget, required this.body, required this.gray, required this.image, required this.alt, required this.clickable, })`
+  - L276 `final _CardInfo info`
+  - L277 `final String titleText`
+  - L278 `final Widget? titleWidget`
+  - L279 `final String body`
+  - L280 `final bool gray`
+  - L281 `final String? image`
+  - L282 `final String? alt`
+  - L283 `final bool clickable`
+  - L286 `Widget build(BuildContext context)`
+- L376 `class _PhotoScrim extends StatelessWidget`  — A neutral dark wash over a photo so white text on it stays legible.
+  - L377 `const _PhotoScrim()`
+  - L380 `Widget build(BuildContext context)`
+- L397 `Widget _buildCompositeBlock(BuildContext context, OpenUiProps p)`
+- L500 `Widget? _footerPart(Object? v, {required bool bold})`  — A footer part: a rendered child, or plain text for a price.
+- L513 `class _PlainPrice extends StatelessWidget`
+  - L514 `const _PlainPrice({required this.text})`
+  - L516 `final String text`
+  - L519 `Widget build(BuildContext context)`
+- L533 `Widget _buildVisualBlock(BuildContext context, OpenUiProps p)`
+
+## lib/openui/components/data_cards/shared.dart  (649 Z.)
+- part of '../data_cards.dart'
+- L15 `_tabular = <FontFeature>[FontFeature.tabularFigures()]`  — Tabular figures, so numbers line up in columns and do not jump.
+- L18 `String _str(Object? v)`  — [v] as display text. Numbers drop a `.0`; maps and lists give ''.
+- L31 `double? _num(Object? v)`  — [v] as a number, or `null`.
+- L45 `String? _httpUrl(Object? url)`  — [url] when it is an http or https URL, else `null`.
+- L56 `Color? _metricTone(OpenUiTheme t, String variant, String subtext)`  — The colour of a `metric` subtext: green for a leading `+`, red for a
+- L66 `double _blockGap(OpenUiProps p, double fallback)`  — The gap of a card block: a number (pixels), a gap name of the
+- L90 `TextStyle _style( OpenUiTheme t, { required double size, FontWeight weight = FontWeight.w400, Color? color, bool number = false, double height = 1.35, })`  — A text style of the B4 components, from the app theme.
+- L114 `class _CardInfo`  — What the children of one card wrote about themselves while they were
+  - L115 `final Map<String, Map<String, String>> _slots = <String, Map<String, String>>{}`
+  - L118 `void report(String slot, Map<String, String?> fields)`
+  - L128 `String? read(String slot, String field, [List<String> fallbacks = const []])`  — The first non-empty [field] of [slot], else of the [fallbacks] in
+- L144 `class _SlotScope extends InheritedWidget`  — Puts the children of one slot of a card (the `lhs`, the `body`, the
+  - L145 `const _SlotScope({ required super.child, this.info, this.slot = '', this.textSize, this.tagSize, this.compact = false, this.onImage = false, })`
+  - L156 `final _CardInfo? info`  — Where the children write their text, or `null`.
+  - L159 `final String slot`  — The slot name in [info].
+  - L163 `final String? textSize`  — The size `Text`, `BoldText` and the icon and image rows take, or
+  - L166 `final String? tagSize`  — The size a `Tag` takes, or `null` for its own.
+  - L169 `final bool compact`  — Lists (`EntityList`, `ListBlock`) draw small.
+  - L172 `final bool onImage`  — The children sit on a photo: tags draw dark and see-through.
+  - L174 `static _SlotScope? maybeOf(BuildContext context)`
+  - L178 `static void report(BuildContext context, Map<String, String?> fields)`  — Writes [fields] to the card of the nearest slot, if any.
+  - L184 `bool updateShouldNotify(_SlotScope old)`
+- L199 `class _NetImage extends StatelessWidget`  — A network image with a calm placeholder while it loads and a quiet
+  - L200 `const _NetImage({required this.src, this.alt, this.iconSize = 20})`
+  - L202 `final String? src`
+  - L203 `final String? alt`
+  - L204 `final double iconSize`
+  - L207 `Widget build(BuildContext context)`
+- L260 `class _Pressable extends StatelessWidget`  — A card surface that springs when pressed (the app's MorphTap), or a
+  - L261 `const _Pressable({ required this.child, required this.onTap, this.radius = OpenUiTokens.radiusCard, this.semanticLabel, })`
+  - L268 `final Widget child`
+  - L269 `final VoidCallback? onTap`
+  - L270 `final double radius`
+  - L271 `final String? semanticLabel`
+  - L274 `Widget build(BuildContext context)`
+- L294 `class _Chevron extends StatelessWidget`  — The small chevron that marks a clickable card.
+  - L295 `const _Chevron({this.onImage = false, this.size = 16})`
+  - L297 `final bool onImage`
+  - L298 `final double size`
+  - L301 `Widget build(BuildContext context)`
+- L330 `class _EqualRow extends MultiChildRenderObjectWidget`  — A row whose children all get the height of the tallest one, without
+  - L331 `const _EqualRow({required super.children, this.gap = 0, this.itemWidth})`
+  - L333 `final double gap`
+  - L334 `final double? itemWidth`
+  - L337 `RenderObject createRenderObject(BuildContext context)`
+  - L341 `void updateRenderObject(BuildContext context, _RenderEqualRow renderObject)`
+- L348 `class _EqualRowData extends ContainerBoxParentData<RenderBox>`
+- L350 `class _RenderEqualRow extends RenderBox with ContainerRenderObjectMixin<RenderBox, _EqualRowData>, RenderBoxContainerDefaultsMixin<RenderBox, _EqualRowData>`
+  - L354 `_RenderEqualRow(this._gap, this._itemWidth)`
+  - L356 `double _gap`
+  - L357 `set gap(double v)`
+  - L363 `double? _itemWidth`
+  - L364 `set itemWidth(double? v)`
+  - L371 `void setupParentData(RenderBox child)`
+  - L375 `double _childWidth(BoxConstraints c)`
+  - L384 `void performLayout()`
+  - L416 `void paint(PaintingContext context, Offset offset)`
+  - L420 `bool hitTestChildren(BoxHitTestResult result, {required Offset position})`
+  - L424 `double computeMinIntrinsicHeight(double width)`
+  - L427 `double computeMaxIntrinsicHeight(double width)`
+  - L430 `double computeMinIntrinsicWidth(double height)`
+  - L433 `double computeMaxIntrinsicWidth(double height)`
+- L442 `List<int> _rowConfiguration(int n, int maxPerRow)`  — How many cards go in each row: at most [maxPerRow] (2 or 3), and
+- L463 `class _CardBlockLayout extends StatelessWidget`  — The grid or the carousel of a card block.
+  - L464 `const _CardBlockLayout({ required this.cards, required this.maxPerRow, required this.carousel, required this.responsive, required this.gap, required this.carouselWidth, required this.carouselWidthNarrow, })`
+  - L474 `final List<Widget> cards`
+  - L475 `final int maxPerRow`
+  - L476 `final bool carousel`
+  - L477 `final bool responsive`
+  - L478 `final double gap`
+  - L479 `final double carouselWidth`
+  - L480 `final double carouselWidthNarrow`
+  - L483 `Widget build(BuildContext context)`
+- L545 `void _runItemAction( BuildContext context, OpenUiAction action, { required String label, required Map<String, Object?> item, })`  — Runs the shared [action] of a card block for one card.
+- L588 `bool _streamingHere(BuildContext context, String statementId)`  — Whether the statement [statementId] is still being streamed. A card
+- L602 `List<InlineSpan> _inlineMarkdown(String text, TextStyle base, Color link)`  — Inline markdown as text spans: `**bold**`, `*italic*` / `_italic_`,
+
+## lib/openui/components/data_cards/text_blocks.dart  (914 Z.)
+- part of '../data_cards.dart'
+- L11 `Widget _buildIcon(BuildContext context, OpenUiProps p)`
+- L19 `Widget? _iconSlot(OpenUiProps p, String name)`  — The icon of an `icon` slot: an `Icon(...)` child, or a bare lucide
+- L31 `Widget _buildTag(BuildContext context, OpenUiProps p)`
+- L52 `Widget _buildTagBlock(BuildContext context, OpenUiProps p)`
+- L69 `Color _statusInk(BuildContext context, OpenUiTheme t, String variant)`  — The text and glyph colour on the soft fill of a status [variant].
+- L76 `class _TagView extends StatelessWidget`  — A tag or badge: a small rounded label in a status colour.
+  - L77 `const _TagView({ required this.text, this.icon, this.size = 'md', this.variant = 'neutral', this.onImage = false, })`
+  - L85 `final String text`
+  - L86 `final Widget? icon`
+  - L87 `final String size`
+  - L88 `final String variant`
+  - L89 `final bool onImage`
+  - L92 `Widget build(BuildContext context)`
+- L165 `Widget _buildEntityList(BuildContext context, OpenUiProps p)`
+- L207 `class _EntityRow extends StatelessWidget`
+  - L208 `const _EntityRow({ required this.row, required this.kind, required this.small, })`
+  - L214 `final Map<String, Object?> row`
+  - L215 `final String kind`
+  - L216 `final bool small`
+  - L219 `Widget build(BuildContext context)`
+- L262 `Widget _buildListBlock(BuildContext context, OpenUiProps p)`
+- L291 `class _ListRow extends StatelessWidget`
+  - L292 `const _ListRow({ required this.item, required this.index, required this.image, required this.small, required this.anySubtitle, required this.last, })`
+  - L301 `final OpenUiProps item`
+  - L302 `final int index`
+  - L303 `final bool image`
+  - L304 `final bool small`
+  - L305 `final bool anySubtitle`
+  - L306 `final bool last`
+  - L309 `Widget build(BuildContext context)`
+- L415 `Widget _buildText(BuildContext context, OpenUiProps p)`
+- L418 `Widget _buildBoldText(BuildContext context, OpenUiProps p)`
+- L421 `Widget _buildTextLine( BuildContext context, OpenUiProps p, { required bool bold, })`
+- L490 `class _TitleBlock extends StatelessWidget`  — The title and subtitle beside an icon badge or a thumbnail.
+  - L491 `const _TitleBlock({ required this.title, required this.subtitle, required this.bold, this.size, })`
+  - L498 `final String title`
+  - L499 `final String subtitle`
+  - L500 `final bool bold`
+  - L501 `final String? size`
+  - L504 `Widget build(BuildContext context)`
+- L540 `Widget _leadingWithTitle({ required Widget leading, required _TitleBlock text, required bool vertical, required double gap, })`  — A leading picture (badge or thumbnail) with a title block, side by
+- L564 `Widget _buildIconText(BuildContext context, OpenUiProps p)`
+- L602 `class _IconBadge extends StatelessWidget`  — An icon in a rounded tinted square (upstream IconTag).
+  - L603 `const _IconBadge({ required this.icon, required this.variant, required this.size, })`
+  - L609 `final Widget icon`
+  - L610 `final String variant`
+  - L611 `final String size`
+  - L614 `Widget build(BuildContext context)`
+- L657 `Widget _buildImageText(BuildContext context, OpenUiProps p)`
+- L698 `Widget _buildImageTextLarge(BuildContext context, OpenUiProps p)`
+- L761 `({bool up, String text})? _trend(OpenUiProps p)`  — The `{direction, value}` trend of a metric, or `null`.
+- L777 `class _TrendView extends StatelessWidget`  — A trend: an arrow and the signed percentage, green up, red down.
+  - L778 `const _TrendView({required this.up, required this.text})`
+  - L780 `static const double size = 13`
+  - L782 `final bool up`
+  - L783 `final String text`
+  - L786 `Widget build(BuildContext context)`
+- L814 `Widget _buildMetricInline(BuildContext context, OpenUiProps p)`
+- L853 `Widget _buildMetricStrike(BuildContext context, OpenUiProps p)`

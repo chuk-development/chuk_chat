@@ -319,6 +319,17 @@
 ## lib/utils/highlight_registry.dart  (98 Z.)
 - L42 `allLanguages = { 'dart': dart, 'json': json, 'python': python, 'py': python, 'javascript': javascript, 'js': javascript,`
 
+## lib/utils/host_lookup.dart  (5 Z.)
+- reicht weiter: 'host_lookup_stub.dart' if (dart.library.io) 'host_lookup_io.dart'
+
+## lib/utils/host_lookup_io.dart  (39 Z.)
+- L8 `Future<List<String>> lookupHostAddresses(String host)`  — The IP addresses [host] resolves to, as text.
+- L20 `http.Client? publicOnlyHttpClient(bool Function(List<int> ip) isNonPublic)`  — An HTTP client that connects only to addresses [isNonPublic] accepts.
+
+## lib/utils/host_lookup_stub.dart  (13 Z.)
+- L7 `Future<List<String>> lookupHostAddresses(String host)`  — The IP addresses [host] resolves to, as text. Empty on web.
+- L11 `http.Client? publicOnlyHttpClient(bool Function(List<int> ip) isNonPublic)`  — Null on web: the browser opens the connection, so nothing here can hold
+
 ## lib/utils/image_clipboard_service.dart  (37 Z.)
 - L7 `class ImageClipboardService`
   - L8 `const ImageClipboardService._()`
@@ -450,6 +461,26 @@
 - L12 `bool hasPointSpread(List<LatLng> points)`  — True when [points] cover more than one place on the map.
 - L27 `double _shortestLonDelta(double a, double b)`  — Degrees between two longitudes the short way round.
 
+## lib/utils/openui_fence.dart  (206 Z.)
+- L11 `class OpenUiTextPart`  — One piece of an assistant answer: markdown text or one OpenUI program.
+  - L13 `const OpenUiTextPart.markdown(this.text) : isProgram = false, isClosed = true, ordinal = -1`  — Creates a markdown part.
+  - L20 `const OpenUiTextPart.program( this.text, { required this.ordinal, required this.isClosed, }) : isProgram = true`  — Creates a program part. [ordinal] counts the programs of the text,
+  - L27 `final String text`  — The markdown text, or the program source without the fence lines.
+  - L30 `final bool isProgram`  — Whether this part is an OpenUI program.
+  - L35 `final bool isClosed`  — Whether the program fence has its closing line. Always true for
+  - L38 `final int ordinal`  — The index of the program in the text, or -1 for markdown.
+  - L41 `String toString()`
+- L48 `_openUiOpener = RegExp( r'^ {0,3}(`{3,})[ \t]*(?:openui-lang|openui)[ \t\r]*$', caseSensitive: false, )`  — An opening fence line of an OpenUI program: three or more backticks,
+- L55 `_anyOpener = RegExp(r'^ {0,3}(`{3,}|~{3,})(.*)$')`  — Any fence opening line (code blocks): backticks or tildes, then an
+- L58 `_partialOpener = RegExp(r'^ {0,3}`{3,}([A-Za-z-]*)\r?$')`  — The info string of the fence line that the stream writes now.
+- L60 `_openUiInfo = 'openui-lang'`
+- L64 `bool mayContainOpenUiFence(String text)`  — Whether [text] can hold an OpenUI fence. A cheap check before
+- L78 `List<OpenUiTextPart> splitOpenUiFences(String text, {bool streaming = false})`  — Splits [text] into markdown parts and OpenUI program parts.
+- L165 `bool _closesFence(String line, String char, int minLength)`
+- L179 `bool _canBecomeOpenUiOpener(String line)`
+- L186 `bool hasOpenUiProgram(String text)`  — Whether [text] holds an OpenUI program (closed or open).
+- L195 `String stripOpenUiPrograms(String text, {String whenEmpty = ''})`  — [text] without its OpenUI programs: only the markdown parts, joined
+
 ## lib/utils/path_provider_stub.dart  (8 Z.)
 - L5 `Future<Directory> getTemporaryDirectory()`
 - L6 `Future<Directory> getApplicationDocumentsDirectory()`
@@ -532,36 +563,42 @@
 ## lib/utils/stream_error_sanitizer.dart  (41 Z.)
 - L15 `String sanitizeStreamError(Object error)`  — Turns a transport exception into something safe and readable to show.
 
-## lib/utils/theme_extensions.dart  (257 Z.)
-- L3 `extension ThemeDataIconColorX on ThemeData`
-  - L4 `Color get resolvedIconColor`
-  - L16 `Color accentButtonForeground(Color fill)`  — The glyph colour for a button that is filled with the accent — the send
-- L24 `@immutable class MaterialYouTokens extends ThemeExtension<MaterialYouTokens>`  — Material You extension tokens that aren't exposed on the default
-  - L26 `const MaterialYouTokens({ required this.surfaceContainerLow, required this.surfaceContainer, required this.surfaceContainerHigh, required this.surfaceContainerHighest, required this.primaryContainer, required this.onPrimaryContainer, required this.secondaryContainer, required this.onSecondaryContainer, required this.tertiaryContainer, required this.onTertiaryContainer, required this.outline, required this.outlineVariant, required this.onSurfaceVariant, required this.success, required this.onSuccess, required this.successContainer, required this.onSuccessContainer, required this.warning, required this.warningContainer, required this.onWarningContainer, })`
-  - L49 `final Color surfaceContainerLow`
-  - L50 `final Color surfaceContainer`
-  - L51 `final Color surfaceContainerHigh`
-  - L52 `final Color surfaceContainerHighest`
-  - L53 `final Color primaryContainer`
-  - L54 `final Color onPrimaryContainer`
-  - L55 `final Color secondaryContainer`
-  - L56 `final Color onSecondaryContainer`
-  - L57 `final Color tertiaryContainer`
-  - L58 `final Color onTertiaryContainer`
-  - L59 `final Color outline`
-  - L60 `final Color outlineVariant`
-  - L61 `final Color onSurfaceVariant`
-  - L62 `final Color success`
-  - L63 `final Color onSuccess`
-  - L64 `final Color successContainer`
-  - L65 `final Color onSuccessContainer`
-  - L66 `final Color warning`
-  - L67 `final Color warningContainer`
-  - L68 `final Color onWarningContainer`
-  - L71 `MaterialYouTokens copyWith({ Color? surfaceContainerLow, Color? surfaceContainer, Color? surfaceContainerHigh, Color? surfaceContainerHighest, Color? primaryContainer, Color? onPrimaryContainer, Color? secondaryContainer, Color? onSecondaryContainer, Color? tertiaryContainer, Color? onTertiaryContainer, Color? outline, Color? outlineVariant, Color? onSurfaceVariant, Color? success, Color? onSuccess, Color? successContainer, Color? onSuccessContainer, Color? warning, Color? warningContainer, Color? onWarningContainer, })`
-  - L119 `MaterialYouTokens lerp( covariant ThemeExtension<MaterialYouTokens>? other, double t, )`
-- L209 `extension MaterialYouTokensX on ThemeData`
-  - L212 `MaterialYouTokens get m3`  — Returns Material You extension tokens. Falls back to sensible defaults
+## lib/utils/theme_extensions.dart  (329 Z.)
+- L4 `double contrastRatio(Color a, Color b)`  — The WCAG contrast ratio of two opaque colours, from 1.0 to 21.0.
+- L12 `kMinOnFillContrast = 2.0`  — The lowest contrast at which the reader's own foreground colour stays on
+- L25 `Color readableOnFill( Color fill, Color preferred, { double minContrast = kMinOnFillContrast, })`  — The text or glyph colour for something that sits on a [fill] (an accent
+- L40 `kMinAccentForegroundContrast = 3.0`  — The lowest contrast for the accent used as a text or icon colour on a
+- L46 `Color accentForegroundFor( Color accent, Color surface, { double minContrast = kMinAccentForegroundContrast, })`  — [accent] as a text or icon colour on [surface]. Returns [accent] when it
+- L65 `extension ThemeDataIconColorX on ThemeData`
+  - L66 `Color get resolvedIconColor`
+  - L73 `Color accentForegroundOn([Color? surface])`  — The accent as a text or icon colour on [surface] (by default the
+  - L88 `Color accentButtonForeground(Color fill)`  — The glyph colour for a button that is filled with the accent — the send
+- L96 `@immutable class MaterialYouTokens extends ThemeExtension<MaterialYouTokens>`  — Material You extension tokens that aren't exposed on the default
+  - L98 `const MaterialYouTokens({ required this.surfaceContainerLow, required this.surfaceContainer, required this.surfaceContainerHigh, required this.surfaceContainerHighest, required this.primaryContainer, required this.onPrimaryContainer, required this.secondaryContainer, required this.onSecondaryContainer, required this.tertiaryContainer, required this.onTertiaryContainer, required this.outline, required this.outlineVariant, required this.onSurfaceVariant, required this.success, required this.onSuccess, required this.successContainer, required this.onSuccessContainer, required this.warning, required this.warningContainer, required this.onWarningContainer, })`
+  - L121 `final Color surfaceContainerLow`
+  - L122 `final Color surfaceContainer`
+  - L123 `final Color surfaceContainerHigh`
+  - L124 `final Color surfaceContainerHighest`
+  - L125 `final Color primaryContainer`
+  - L126 `final Color onPrimaryContainer`
+  - L127 `final Color secondaryContainer`
+  - L128 `final Color onSecondaryContainer`
+  - L129 `final Color tertiaryContainer`
+  - L130 `final Color onTertiaryContainer`
+  - L131 `final Color outline`
+  - L132 `final Color outlineVariant`
+  - L133 `final Color onSurfaceVariant`
+  - L134 `final Color success`
+  - L135 `final Color onSuccess`
+  - L136 `final Color successContainer`
+  - L137 `final Color onSuccessContainer`
+  - L138 `final Color warning`
+  - L139 `final Color warningContainer`
+  - L140 `final Color onWarningContainer`
+  - L143 `MaterialYouTokens copyWith({ Color? surfaceContainerLow, Color? surfaceContainer, Color? surfaceContainerHigh, Color? surfaceContainerHighest, Color? primaryContainer, Color? onPrimaryContainer, Color? secondaryContainer, Color? onSecondaryContainer, Color? tertiaryContainer, Color? onTertiaryContainer, Color? outline, Color? outlineVariant, Color? onSurfaceVariant, Color? success, Color? onSuccess, Color? successContainer, Color? onSuccessContainer, Color? warning, Color? warningContainer, Color? onWarningContainer, })`
+  - L191 `MaterialYouTokens lerp( covariant ThemeExtension<MaterialYouTokens>? other, double t, )`
+- L281 `extension MaterialYouTokensX on ThemeData`
+  - L284 `MaterialYouTokens get m3`  — Returns Material You extension tokens. Falls back to sensible defaults
 
 ## lib/utils/token_estimator.dart  (58 Z.)
 - L3 `class TokenEstimator`
@@ -596,7 +633,7 @@
 - L16 `String? formatAssistantContent( Map<String, String> message, { bool includeReasoning = false, bool includeToolResults = true, })`  — Builds the assistant `content` string for one stored message, optionally
 - L51 `String _buildPreviousToolResultsBlock(String? toolCallsJson)`
 
-## lib/utils/tool_parser.dart  (774 Z.)
+## lib/utils/tool_parser.dart  (775 Z.)
 - L5 `toolCallStart = '<tool_call>'`
 - L6 `toolCallEnd = '</tool_call>'`
 - L8 `_xmlToolCallBlockPattern = RegExp( r'<tool_call>[\s\S]*?</tool_call>', caseSensitive: false, )`
@@ -612,28 +649,28 @@
 - L95 `_invokeToolCallPattern = RegExp( '<\\s*$_foreignToolTagNamespace' // `\b` before `name`: without it the non-greedy scan `
 - L106 `_invokeParameterPattern = RegExp( '<\\s*$_foreignToolTagNamespace' r'''parameter\b[^>]*?\bname\s*=\s*["']([^"']+)["'][^>`
 - L118 `_foreignToolProtocolStartPattern = RegExp( '<\\s*$_notCanonicalToolCallTag$_foreignToolTagNamespace' '$_foreignToolTagNa`
-- L126 `_knownDirectXmlToolNames = <String>{ 'ask_user', 'web_search', 'web_crawl', 'generate_image', 'fetch_image', 'view_chat_`
-- L153 `Map<String, dynamic>? tryParseToolJson(String raw)`  — Try to parse JSON from a tool call, with repair for common LLM errors:
-- L186 `Map<String, dynamic>? _parseLegacyToolCallSyntax(String raw)`
-- L234 `Map<String, dynamic>? _extractEmbeddedToolJson(String raw)`
-- L257 `Map<String, dynamic>? _extractInlineArgumentsObject(String s)`
-- L278 `String? _extractBalancedObject(String s, int startIndex)`
-- L319 `int _countUnclosedBracesOutsideStrings(String s)`
-- L358 `Map<String, dynamic> _coerceStringKeyedMap(dynamic rawArgs)`
-- L384 `bool hasToolCallStartMarker(String content)`  — Returns true when a response has started emitting a tool-call marker,
-- L394 `bool hasForeignToolProtocolMarker(String content)`  — True when the text carries a tool-call protocol this app does not parse
-- L408 `List<({int start, int end})> _codeSpanRanges(String content)`  — Start/end offsets of fenced blocks and inline code spans.
-- L437 `bool _isInsideCode(int index, List<({int start, int end})> codeRanges)`
-- L444 `Match? _firstMatchOutsideCode( RegExp pattern, String content, List<({int start, int end})> codeRanges, )`
-- L459 `String _stripForeignToolProtocol( String content, { required bool stripIncomplete, })`  — Removes foreign tool-call protocol text so it never reaches the user.
-- L496 `String stripToolCallBlocksForDisplay( String content, { bool stripIncomplete = true, })`  — Removes tool-call XML blocks from user-visible text.
-- L589 `int _earliestCaseInsensitiveIndex(String haystack, String needle)`
-- L595 `List<Map<String, dynamic>> parseToolCalls(String content)`  — Parse ALL tool calls from LLM response content (supports multiple).
-- L686 `dynamic _decodeInvokeParameterValue(String raw)`  — `<parameter>` bodies are untyped text. Only unambiguous JSON shapes are
-- L706 `bool hasToolCalls(String content)`  — Check if the content contains any tool call tags.
-- L727 `bool _isKnownDirectXmlToolName(String tagName)`
-- L731 `Map<String, dynamic> _parseDirectXmlToolArgs(String inner)`
-- L762 `int _earliestDirectXmlToolStart(String content)`
+- L126 `_knownDirectXmlToolNames = <String>{ 'ask_user', 'web_search', 'web_crawl', 'generate_image', 'fetch_image', 'fetch_file`
+- L154 `Map<String, dynamic>? tryParseToolJson(String raw)`  — Try to parse JSON from a tool call, with repair for common LLM errors:
+- L187 `Map<String, dynamic>? _parseLegacyToolCallSyntax(String raw)`
+- L235 `Map<String, dynamic>? _extractEmbeddedToolJson(String raw)`
+- L258 `Map<String, dynamic>? _extractInlineArgumentsObject(String s)`
+- L279 `String? _extractBalancedObject(String s, int startIndex)`
+- L320 `int _countUnclosedBracesOutsideStrings(String s)`
+- L359 `Map<String, dynamic> _coerceStringKeyedMap(dynamic rawArgs)`
+- L385 `bool hasToolCallStartMarker(String content)`  — Returns true when a response has started emitting a tool-call marker,
+- L395 `bool hasForeignToolProtocolMarker(String content)`  — True when the text carries a tool-call protocol this app does not parse
+- L409 `List<({int start, int end})> _codeSpanRanges(String content)`  — Start/end offsets of fenced blocks and inline code spans.
+- L438 `bool _isInsideCode(int index, List<({int start, int end})> codeRanges)`
+- L445 `Match? _firstMatchOutsideCode( RegExp pattern, String content, List<({int start, int end})> codeRanges, )`
+- L460 `String _stripForeignToolProtocol( String content, { required bool stripIncomplete, })`  — Removes foreign tool-call protocol text so it never reaches the user.
+- L497 `String stripToolCallBlocksForDisplay( String content, { bool stripIncomplete = true, })`  — Removes tool-call XML blocks from user-visible text.
+- L590 `int _earliestCaseInsensitiveIndex(String haystack, String needle)`
+- L596 `List<Map<String, dynamic>> parseToolCalls(String content)`  — Parse ALL tool calls from LLM response content (supports multiple).
+- L687 `dynamic _decodeInvokeParameterValue(String raw)`  — `<parameter>` bodies are untyped text. Only unambiguous JSON shapes are
+- L707 `bool hasToolCalls(String content)`  — Check if the content contains any tool call tags.
+- L728 `bool _isKnownDirectXmlToolName(String tagName)`
+- L732 `Map<String, dynamic> _parseDirectXmlToolArgs(String inner)`
+- L763 `int _earliestDirectXmlToolStart(String content)`
 
 ## lib/utils/tool_sanitizer.dart  (45 Z.)
 - L6 `String sanitizeResultForModel(String result)`  — Strip large binary/base64 data from tool results before sending to the

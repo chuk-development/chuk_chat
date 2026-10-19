@@ -67,7 +67,7 @@
   - L22 `Widget build(BuildContext context)`
 - L25 `void main()`
 
-## test/services/chat_model_selection_service_test.dart  (91 Z.)
+## test/services/chat_model_selection_service_test.dart  (147 Z.)
 - L5 `void main()`
 
 ## test/services/chat_payload_codec_test.dart  (244 Z.)
@@ -87,31 +87,31 @@
 - L116 `String _chatJson({int rounds = 30})`
 - L140 `void main()`
 
-## test/services/chat_payload_migration_test.dart  (870 Z.)
-- L29 `userId = 'user-1'`
-- L31 `String _id(int i)`
-- L33 `String _updatedAt(int i)`
-- L38 `_unreadableJson = '{"v":2,"messages":[42]}'`  — JSON that parses but is no chat payload this app can read: a message
-- L40 `String _v2Json(int i)`
-- L61 `Future<String> _sealV1(String text, List<int> key)`
-- L79 `class _FakeCloud implements ChatMigrationCloud`  — An in-memory `encrypted_chats` with the prod trigger's rule: a written
-  - L80 `_FakeCloud(this.key)`
-  - L82 `final List<int> key`
-  - L83 `final Map<String, ({String encrypted, String updatedAt})> rows = {}`
-  - L84 `final List<String> writes = []`
-  - L85 `bool offline = false`
-  - L86 `bool keyAvailable = true`
-  - L89 `Completer<void>? listGate`  — Holds the cloud list until completed (a slow network).
-  - L92 `String? changeBeforeWrite`  — Simulates another device saving a chat between read and write.
-  - L95 `final Map<String, Object> failRead = {}`  — Chats whose read fails with the given error (a server error, say).
-  - L98 `Future<List<String>> listPlainEnvelopeChats(String userId)`
-  - L108 `Future<({String encrypted, String updatedAt})?> readRow( String userId, String chatId, )`
-  - L118 `Future<String?> writeRow( String userId, String chatId, { required String encrypted, required String updatedAt, required String expectedUpdatedAt, })`
-  - L143 `Future<ChatEnvelopeV3?> convert(String encrypted)`
-  - L150 `Future<String> fingerprint(String encrypted)`
-  - L154 `int get currentKeyVersion`
-  - L157 `Future<bool> ensureKey()`
-- L160 `void main()`
+## test/services/chat_payload_migration_test.dart  (838 Z.)
+- L27 `userId = 'user-1'`
+- L29 `String _id(int i)`
+- L31 `String _updatedAt(int i)`
+- L36 `_unreadableJson = '{"v":2,"messages":[42]}'`  — JSON that parses but is no chat payload this app can read: a message
+- L38 `String _v2Json(int i)`
+- L59 `Future<String> _sealV1(String text, List<int> key)`
+- L77 `class _FakeCloud implements ChatMigrationCloud`  — An in-memory `encrypted_chats` with the prod trigger's rule: a written
+  - L78 `_FakeCloud(this.key)`
+  - L80 `final List<int> key`
+  - L81 `final Map<String, ({String encrypted, String updatedAt})> rows = {}`
+  - L82 `final List<String> writes = []`
+  - L83 `bool offline = false`
+  - L84 `bool keyAvailable = true`
+  - L87 `Completer<void>? listGate`  — Holds the cloud list until completed (a slow network).
+  - L90 `String? changeBeforeWrite`  — Simulates another device saving a chat between read and write.
+  - L93 `final Map<String, Object> failRead = {}`  — Chats whose read fails with the given error (a server error, say).
+  - L96 `Future<List<String>> listPlainEnvelopeChats(String userId)`
+  - L106 `Future<({String encrypted, String updatedAt})?> readRow( String userId, String chatId, )`
+  - L116 `Future<String?> writeRow( String userId, String chatId, { required String encrypted, required String updatedAt, required String expectedUpdatedAt, })`
+  - L141 `Future<ChatEnvelopeV3?> convert(String encrypted)`
+  - L148 `Future<String> fingerprint(String encrypted)`
+  - L152 `int get currentKeyVersion`
+  - L155 `Future<bool> ensureKey()`
+- L158 `void main()`
 
 ## test/services/chat_reaction_service_test.dart  (76 Z.)
 - L5 `void main()`
@@ -130,6 +130,22 @@
 
 ## test/services/chat_storage_title_sync_test.dart  (56 Z.)
 - L12 `void main()`
+
+## test/services/coworker_composer_model_test.dart  (206 Z.)
+- L20 `_chat = 'host:alex'`
+- L21 `_pro = 'deepseek/deepseek-v4-pro-0813'`
+- L23 `class _Composer extends StatefulWidget`
+  - L24 `const _Composer({super.key, required this.coworkerThread})`
+  - L25 `final bool coworkerThread`
+  - L27 `State<_Composer> createState()`
+- L30 `class _ComposerState extends State<_Composer> with ModelProviderResolutionMixin, ChatModelSelectionMixin`
+  - L33 `String? get activeChatId`
+  - L36 `bool get skipRepeatedModelSave`
+  - L41 `Future<void> refreshSelectedModelName([String? modelId])`
+  - L43 `Future<void> refreshCustomModelName()`
+  - L45 `Future<void> refreshPickedModels()`
+  - L48 `Widget build(BuildContext context)`
+- L51 `void main()`
 
 ## test/services/encryption_service_test.dart  (702 Z.)
 - L15 `void main()`  — Tests for the core AES-GCM encryption logic used by EncryptionService.
@@ -325,7 +341,7 @@
 ## test/services/tool_image_result_service_test.dart  (178 Z.)
 - L8 `void main()`
 
-## test/services/tool_prompt_builder_test.dart  (439 Z.)
+## test/services/tool_prompt_builder_test.dart  (453 Z.)
 - L8 `_skillToolDef = { 'name': 'skill', 'description': 'Load a skill.', 'parameters': <String, dynamic>{'name': 'string'}, }`
 - L14 `_tools = [ { 'name': 'find_tools', 'description': 'Discovery', 'parameters': <String, dynamic>{}, }, { 'name': 'web_sear`
 - L37 `_testSkill = Skill( name: 'weather-cards', description: 'Renders weather. Use when the user asks about weather.', body: `
@@ -346,10 +362,13 @@
 ## test/services/user_scoped_cache_race_test.dart  (309 Z.)
 - L21 `void main()`  — The sign-out-mid-flight race: an operation starts as user A, A signs out and
 
-## test/services/websocket_chat_service_test.dart  (730 Z.)
-- L23 `List<AgentsRelayInbound> _everyVariant()`  — Every inbound variant the relay can produce, so the "never a ToolCallsEvent"
-- L78 `void main()`
-- L725 `Future<void> _drain()`  — Lets the adapter's internal handler chain settle.
+## test/services/websocket_chat_service_test.dart  (783 Z.)
+- L24 `List<AgentsRelayInbound> _everyVariant()`  — Every inbound variant the relay can produce, so the "never a ToolCallsEvent"
+- L79 `void main()`
+- L778 `Future<void> _drain()`  — Lets the adapter's internal handler chain settle.
+
+## test/services/window_title_service_test.dart  (58 Z.)
+- L6 `void main()`
 
 ## test/services/workspace_encrypted_meta_test.dart  (1172 Z.)
 - L16 `_prefix = 'FAKEKEY:'`

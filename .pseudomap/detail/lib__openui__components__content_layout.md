@@ -1,0 +1,213 @@
+# lib/openui/components/content_layout · Signaturen
+
+## lib/openui/components/content_layout/containers.dart  (493 Z.)
+- part of '../content_layout.dart'
+- L12 `Widget _buildStack(BuildContext context, OpenUiProps props)`
+- L80 `Widget _buildCarousel(BuildContext context, OpenUiProps props)`
+- L91 `class _Carousel extends StatefulWidget`
+  - L92 `const _Carousel({required this.slides, required this.variant})`
+  - L94 `final List<List<Widget>> slides`
+  - L95 `final String variant`
+  - L98 `static const double gap = 10`  — The gap between two slides.
+  - L102 `static const double maxSlideWidth = 320`  — The widest a slide gets (desktop); on a phone it is 82 % of the
+  - L105 `State<_Carousel> createState()`
+- L108 `class _CarouselState extends State<_Carousel>`
+  - L109 `final ScrollController _scroll = ScrollController()`
+  - L110 `final Map<int, double> _heights = <int, double>{}`
+  - L111 `double _tallest = 0`
+  - L112 `bool _canBack = false`
+  - L113 `bool _canForward = false`
+  - L114 `double _slideWidth = _Carousel.maxSlideWidth`
+  - L117 `void initState()`
+  - L123 `void didUpdateWidget(covariant _Carousel oldWidget)`
+  - L132 `void dispose()`
+  - L139 `void _updateArrows()`
+  - L153 `void _measured(int index, double height)`
+  - L162 `void _step(int direction)`
+  - L177 `Widget build(BuildContext context)`
+- L274 `Widget _buildModal(BuildContext context, OpenUiProps props)`
+- L285 `class _Modal extends StatefulWidget`
+  - L286 `const _Modal({ required this.title, required this.binding, required this.literalOpen, required this.size, required this.children, })`
+  - L294 `final String title`
+  - L295 `final OpenUiBinding? binding`
+  - L298 `final bool literalOpen`  — `open: true` written as a literal: the dialog shows once.
+  - L299 `final String size`
+  - L300 `final List<Widget> children`
+  - L302 `bool get wantsOpen`
+  - L304 `double get maxWidth`
+  - L311 `State<_Modal> createState()`
+- L314 `class _ModalState extends State<_Modal> with SingleTickerProviderStateMixin`
+  - L315 `final OverlayPortalController _portal = OverlayPortalController()`
+  - L316 `late final AnimationController _anim = AnimationController( vsync: this, duration: const Duration(milliseconds: 220), reverseDuration: kExpressiveShort, )`
+  - L321 `late final CurvedAnimation _curve = CurvedAnimation( parent: _anim, curve: kExpressiveDecelerate, reverseCurve: Curves.easeIn, )`
+  - L326 `bool _dismissedLiteral = false`
+  - L327 `bool _syncScheduled = false`
+  - L329 `bool get _shouldShow`
+  - L333 `void initState()`
+  - L339 `void didUpdateWidget(covariant _Modal oldWidget)`
+  - L345 `void dispose()`
+  - L353 `void _scheduleSync()`
+  - L370 `void _close()`
+  - L380 `Widget build(BuildContext context)`
+  - L393 `Widget _buildDialog(BuildContext context)`
+
+## lib/openui/components/content_layout/disclosure.dart  (611 Z.)
+- part of '../content_layout.dart'
+- L15 `Widget _buildTabs(BuildContext context, OpenUiProps props)`
+- L21 `class _Tabs extends StatefulWidget`
+  - L22 `const _Tabs({required this.panels, required this.streaming})`
+  - L24 `final List<_Panel> panels`
+  - L25 `final bool streaming`
+  - L28 `State<_Tabs> createState()`
+- L31 `class _TabsState extends State<_Tabs>`
+  - L32 `final _FollowStream _follow = _FollowStream()`
+  - L33 `String? _selected`
+  - L35 `List<String> get _values`
+  - L38 `void initState()`
+  - L44 `void didUpdateWidget(covariant _Tabs oldWidget)`
+  - L50 `void _pick(int index)`
+  - L59 `Widget build(BuildContext context)`
+- L85 `class _TabStrip extends StatelessWidget`  — The tab switch. [ConnectedGroup] when every label fits in an equal
+  - L86 `const _TabStrip({ required this.labels, required this.selected, required this.onSelected, })`
+  - L92 `final List<String> labels`
+  - L93 `final int selected`
+  - L94 `final ValueChanged<int> onSelected`
+  - L96 `static const TextStyle _labelStyle = TextStyle( fontWeight: FontWeight.w700, fontSize: 14, )`
+  - L102 `static const double _segmentPadding = 12`  — The side padding of a segment label in [ConnectedGroup].
+  - L105 `Widget build(BuildContext context)`
+  - L123 `Widget _strip(TextScaler scaler)`
+  - L144 `bool _fits(double width, TextScaler scaler)`
+- L164 `class _ScrollingTabStrip extends StatefulWidget`
+  - L165 `const _ScrollingTabStrip({ required this.labels, required this.selected, required this.onSelected, })`
+  - L171 `final List<String> labels`
+  - L172 `final int selected`
+  - L173 `final ValueChanged<int> onSelected`
+  - L176 `State<_ScrollingTabStrip> createState()`
+- L179 `class _ScrollingTabStripState extends State<_ScrollingTabStrip>`
+  - L180 `final GlobalKey _selectedKey = GlobalKey()`
+  - L183 `void didUpdateWidget(covariant _ScrollingTabStrip oldWidget)`
+  - L201 `Widget build(BuildContext context)`
+- L262 `class _FoldHeader extends StatelessWidget`
+  - L263 `const _FoldHeader({ required this.label, required this.open, required this.onTap, required this.style, required this.padding, })`
+  - L271 `final String label`
+  - L272 `final bool open`
+  - L273 `final VoidCallback onTap`
+  - L274 `final TextStyle style`
+  - L275 `final EdgeInsets padding`
+  - L278 `Widget build(BuildContext context)`
+- L314 `Widget _foldBody({ required bool open, required List<Widget> content, required EdgeInsets padding, })`  — The body of a fold: grows and shrinks with the expressive curve.
+- L333 `Widget _buildAccordion(BuildContext context, OpenUiProps props)`
+- L339 `class _Accordion extends StatefulWidget`
+  - L340 `const _Accordion({required this.panels, required this.streaming})`
+  - L342 `final List<_Panel> panels`
+  - L343 `final bool streaming`
+  - L346 `State<_Accordion> createState()`
+- L349 `class _AccordionState extends State<_Accordion>`
+  - L350 `final _FollowStream _follow = _FollowStream()`
+  - L351 `String? _open`
+  - L353 `List<String> get _values`
+  - L356 `void initState()`
+  - L362 `void didUpdateWidget(covariant _Accordion oldWidget)`
+  - L368 `void _toggle(String value)`
+  - L376 `Widget build(BuildContext context)`
+- L425 `Widget _buildSectionBlock(BuildContext context, OpenUiProps props)`
+- L442 `class _SectionBlock extends StatefulWidget`
+  - L443 `const _SectionBlock({required this.panels, required this.streaming})`
+  - L445 `final List<_Panel> panels`
+  - L446 `final bool streaming`
+  - L449 `State<_SectionBlock> createState()`
+- L452 `class _SectionBlockState extends State<_SectionBlock>`
+  - L453 `final _FollowStream _follow = _FollowStream()`
+  - L454 `final Set<String> _open = <String>{}`
+  - L456 `List<String> get _values`
+  - L459 `void initState()`
+  - L466 `void didUpdateWidget(covariant _SectionBlock oldWidget)`
+  - L477 `void _toggle(String value)`
+  - L485 `Widget build(BuildContext context)`
+- L517 `Widget _buildSteps(BuildContext context, OpenUiProps props)`
+
+## lib/openui/components/content_layout/media.dart  (324 Z.)
+- part of '../content_layout.dart'
+- L11 `_kImageRadius = OpenUiTokens.radiusInner`  — The corner of an image tile.
+- L14 `_kImageMaxHeight = 360`  — The tallest an Image or a one-image gallery gets.
+- L17 `_kGalleryTileMaxHeight = 220`  — The tallest a gallery tile gets; a wide column then crops it.
+- L20 `_kImageBlockHeight = 240`  — The height of an ImageBlock (upstream: 240).
+- L23 `void _openImageViewer(BuildContext context, List<String> urls, int index)`  — Opens the app's full-screen image viewer on [urls] at [index].
+- L40 `Widget _buildImage(BuildContext context, OpenUiProps props)`
+- L67 `class _ImageTile extends StatelessWidget`  — A rounded tile that fills its box with an image, or with a calm
+  - L68 `const _ImageTile({ required this.url, required this.alt, this.broken = false, this.onTap, this.showAlt = true, })`
+  - L76 `final String? url`
+  - L77 `final String alt`
+  - L80 `final bool broken`  — Whether the source is known to be bad (not a web URL).
+  - L81 `final VoidCallback? onTap`
+  - L84 `final bool showAlt`  — Whether a failed tile prints the alt text (off for small tiles).
+  - L87 `Widget build(BuildContext context)`
+- L137 `class _ImagePlaceholder extends StatelessWidget`  — The sunk tile that stands in for an image: an image icon while it
+  - L138 `const _ImagePlaceholder({ required this.alt, this.broken = false, this.showAlt = true, this.filled = true, })`
+  - L145 `final String alt`
+  - L146 `final bool broken`
+  - L147 `final bool showAlt`
+  - L151 `final bool filled`  — Whether the tile paints its own sunk fill. Off inside an
+  - L154 `Widget build(BuildContext context)`
+- L194 `Widget _buildImageBlock(BuildContext context, OpenUiProps props)`
+- L254 `typedef _GalleryImage = ({String? url, String alt, bool broken})`
+- L256 `Widget _buildImageGallery(BuildContext context, OpenUiProps props)`
+- L270 `class _Gallery extends StatelessWidget`
+  - L271 `const _Gallery({required this.images})`
+  - L273 `final List<_GalleryImage> images`
+  - L275 `static const double _gap = 6`
+  - L278 `Widget build(BuildContext context)`
+
+## lib/openui/components/content_layout/text_blocks.dart  (544 Z.)
+- part of '../content_layout.dart'
+- L13 `Widget _buildCard(BuildContext context, OpenUiProps props)`
+- L31 `class _CardSources extends InheritedWidget`  — Gives the `sources` of the nearest Card to the text blocks in it.
+  - L32 `const _CardSources({required this.sources, required super.child})`
+  - L34 `final List<Map<String, Object?>> sources`
+  - L36 `static List<Map<String, Object?>> of(BuildContext context)`
+  - L41 `bool updateShouldNotify(_CardSources oldWidget)`
+- L50 `class _SourcesStrip extends StatelessWidget`
+  - L51 `const _SourcesStrip({required this.sources})`
+  - L53 `final List<Map<String, Object?>> sources`
+  - L56 `Widget build(BuildContext context)`
+  - L82 `static String _sourceLabel(Map<String, Object?> s, String fallback)`
+- L91 `class _SourcePill extends StatelessWidget`
+  - L92 `const _SourcePill({ required this.index, required this.label, required this.onTap, required this.theme, })`
+  - L99 `final int index`
+  - L100 `final String label`
+  - L101 `final VoidCallback? onTap`
+  - L102 `final OpenUiTheme theme`
+  - L105 `Widget build(BuildContext context)`
+- L140 `_codeSpans = RegExp(r'(`{3,}[\s\S]*?(?:`{3,}|$))|(`[^`\n]*`)')`
+- L144 `_citationRun = RegExp( r'(?<![\]!\\\w])((?:\[\d{1,3}\])+)(?![(\[:])', )`
+- L147 `_citationMarker = RegExp(r'\[(\d{1,3})\]')`
+- L149 `String _linkCitations(String text, List<Map<String, Object?>> sources)`
+- L163 `String _linkCitationsInProse(String s, List<Map<String, Object?>> sources)`
+- L182 `Widget _buildTextContent(BuildContext context, OpenUiProps props)`
+- L210 `Widget _buildMarkDownRenderer(BuildContext context, OpenUiProps props)`
+- L232 `Widget _buildCardHeader(BuildContext context, OpenUiProps props)`
+- L258 `Widget _buildInlineHeader(BuildContext context, OpenUiProps props)`
+- L285 `Widget _buildCallout(BuildContext context, OpenUiProps props)`
+- L298 `class _Callout extends StatefulWidget`
+  - L299 `const _Callout({ required this.variant, required this.title, required this.description, required this.binding, required this.literalVisible, })`
+  - L307 `final String variant`
+  - L308 `final String title`
+  - L309 `final String description`
+  - L310 `final OpenUiBinding? binding`
+  - L311 `final bool literalVisible`
+  - L314 `static const Duration autoDismiss = Duration(seconds: 3)`  — How long a callout with a `$visible` binding stays.
+  - L316 `bool get visible`
+  - L320 `State<_Callout> createState()`
+- L323 `class _CalloutState extends State<_Callout>`
+  - L324 `Timer? _timer`
+  - L327 `void initState()`
+  - L333 `void didUpdateWidget(covariant _Callout oldWidget)`
+  - L342 `void _arm()`
+  - L353 `void dispose()`
+  - L359 `Widget build(BuildContext context)`
+  - L371 `Widget _tile(BuildContext context)`
+  - L436 `static HugeIconData _calloutIcon(String variant)`
+- L449 `Widget _buildTextCallout(BuildContext context, OpenUiProps props)`
+- L497 `Widget _buildCodeBlock(BuildContext context, OpenUiProps props)`
+- L509 `String _fence(String code, String language)`  — Wraps [code] in a fence longer than any backtick run inside it.
+- L523 `Widget _buildSeparator(BuildContext context, OpenUiProps props)`

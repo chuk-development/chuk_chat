@@ -1,43 +1,66 @@
 # lib/widgets/agents_permissions · Signaturen
 
-## lib/widgets/agents_permissions/agent_permissions_section.dart  (316 Z.)
-- L19 `@immutable class AgentPermissionSpec`  — One switch of the section: the wire key, the words and the icon.
-  - L21 `const AgentPermissionSpec({ required this.key, required this.title, required this.explanation, required this.icon, })`
-  - L28 `final String key`
-  - L29 `final String title`
-  - L30 `final String explanation`
-  - L33 `final IconData icon`  — A glyph the app's icon table maps to a HugeIcon.
-- L37 `kAgentPermissionSpecs = <AgentPermissionSpec>[ AgentPermissionSpec( key: AgentPermissions.keySudo, title: 'Root access (`  — The switches, in the order of [AgentPermissions.keys].
-- L71 `kPermissionsAppliesLine = 'Changes apply from the next task. The sandbox is rebuilt then; the ' 'files in its workspace `  — The line under the switches while everything is fine.
-- L76 `kPermissionNotEnforced = 'Not enforced on this host'`  — The subtitle of a switch this host cannot enforce (the local backend).
-- L78 `class AgentPermissionsSection extends StatefulWidget`
-  - L79 `const AgentPermissionsSection({ super.key, required this.agentId, this.service, this.answerTimeout = const Duration(seconds: 10), })`
-  - L87 `final String agentId`  — The coworker, which is also its thread's `session_key`.
-  - L90 `final AgentsPermissionsService? service`  — Defaults to [AgentsPermissionsService.instance].
-  - L94 `final Duration answerTimeout`  — How long to wait for the host (its capability, then its answer) before
-  - L97 `State<AgentPermissionsSection> createState()`
-- L101 `enum _Phase`
-  - L101 `asking`
-  - L101 `offline`
-  - L101 `unsupported`
-  - L101 `noAnswer`
-  - L101 `ready`
-- L103 `class _AgentPermissionsSectionState extends State<AgentPermissionsSection>`
-  - L104 `late AgentsPermissionsService _service`
-  - L105 `_Phase _phase = _Phase.asking`
-  - L106 `Timer? _answerTimer`
-  - L109 `bool _asked = false`  — A `get` went out on the current connection and was not answered yet.
-  - L110 `bool _wasConnected = false`
-  - L111 `bool _wasSupported = false`
-  - L114 `void initState()`
-  - L120 `void didUpdateWidget(AgentPermissionsSection old)`
-  - L129 `void dispose()`
-  - L137 `void _bind(AgentsPermissionsService service)`  — Called from [initState] and [didUpdateWidget], which both build next,
-  - L153 `_Phase _phaseNow()`
-  - L165 `void _maybeAsk()`  — Ask when there is a host that can answer and nothing went out yet. A
-  - L179 `Future<void> _ask()`
-  - L194 `void _onChanged()`
-  - L218 `Future<void> _toggle(String key, bool on)`
-  - L226 `Widget build(BuildContext context)`
-  - L275 `Widget _row( AgentPermissionSpec spec, AgentPermissions permissions, bool editable, )`
-  - L296 `String _statusLine(bool known)`
+## lib/widgets/agents_permissions/agent_approvals_section.dart  (295 Z.)
+- L24 `class AgentApprovalsSection extends StatelessWidget`
+  - L25 `const AgentApprovalsSection({ super.key, required this.agentId, required this.service, required this.editable, })`
+  - L32 `final String agentId`
+  - L33 `final AgentsPermissionsService service`
+  - L37 `final bool editable`  — The host answered and is connected. Before that the choices are shown
+  - L40 `Widget build(BuildContext context)`
+- L88 `class _ClassCard extends StatelessWidget`
+  - L89 `const _ClassCard({ required this.agentId, required this.service, required this.approvals, required this.actionClass, required this.editable, })`
+  - L97 `final String agentId`
+  - L98 `final AgentsPermissionsService service`
+  - L99 `final AgentApprovals approvals`
+  - L100 `final String actionClass`
+  - L101 `final bool editable`
+  - L103 `static String modeLabel(AppLocalizations? l, String mode)`
+  - L109 `static (String, String) words(AppLocalizations? l, String actionClass)`
+  - L132 `static HugeIconData iconFor(String actionClass)`
+  - L140 `Future<void> _pick(BuildContext context, String mode)`
+  - L151 `Future<void> _remove(BuildContext context, String site)`
+  - L166 `Widget build(BuildContext context)`
+
+## lib/widgets/agents_permissions/agent_permissions_section.dart  (385 Z.)
+- L22 `@immutable class AgentPermissionSpec`  — One switch of the section: the wire key, the words and the icon.
+  - L24 `const AgentPermissionSpec({ required this.key, required this.title, required this.explanation, required this.icon, })`
+  - L31 `final String key`
+  - L32 `final String title`
+  - L33 `final String explanation`
+  - L36 `final IconData icon`  — A glyph the app's icon table maps to a HugeIcon.
+- L40 `kAgentPermissionSpecs = <AgentPermissionSpec>[ AgentPermissionSpec( key: AgentPermissions.keySudo, title: 'Root access (`  — The switches, in the order of [AgentPermissions.keys].
+- L74 `kPermissionsAppliesLine = 'Changes apply from the next task. The sandbox is rebuilt then; the ' 'files in its workspace `  — The line under the switches while everything is fine.
+- L79 `kPermissionNotEnforced = 'Not enforced on this host'`  — The subtitle of a switch this host cannot enforce (the local backend).
+- L81 `class AgentPermissionsSection extends StatefulWidget`
+  - L82 `const AgentPermissionsSection({ super.key, required this.agentId, this.service, this.answerTimeout = const Duration(seconds: 10), })`
+  - L90 `final String agentId`  — The coworker, which is also its thread's `session_key`.
+  - L93 `final AgentsPermissionsService? service`  — Defaults to [AgentsPermissionsService.instance].
+  - L97 `final Duration answerTimeout`  — How long to wait for the host (its capability, then its answer) before
+  - L100 `State<AgentPermissionsSection> createState()`
+- L104 `enum _Phase`
+  - L104 `asking`
+  - L104 `offline`
+  - L104 `unsupported`
+  - L104 `noAnswer`
+  - L104 `ready`
+- L106 `class _AgentPermissionsSectionState extends State<AgentPermissionsSection>`
+  - L107 `late AgentsPermissionsService _service`
+  - L108 `_Phase _phase = _Phase.asking`
+  - L109 `Timer? _answerTimer`
+  - L112 `bool _asked = false`  — A `get` went out on the current connection and was not answered yet.
+  - L113 `bool _wasConnected = false`
+  - L114 `bool _wasSupported = false`
+  - L117 `void initState()`
+  - L123 `void didUpdateWidget(AgentPermissionsSection old)`
+  - L132 `void dispose()`
+  - L140 `void _bind(AgentsPermissionsService service)`  — Called from [initState] and [didUpdateWidget], which both build next,
+  - L156 `_Phase _phaseNow()`
+  - L168 `void _maybeAsk()`  — Ask when there is a host that can answer and nothing went out yet. A
+  - L182 `Future<void> _ask()`
+  - L197 `void _onChanged()`
+  - L221 `Future<void> _toggle(String key, bool on)`
+  - L229 `Widget build(BuildContext context)`
+  - L315 `Widget _row( AgentPermissionSpec spec, AgentPermissions permissions, bool editable, )`
+  - L344 `String _userBrowserSubtitle(AgentPermissionSpec spec)`  — "Paired with Chrome", "Add-on not connected", "Ada is using your
+  - L356 `Future<void> _checkUserBrowser()`
+  - L365 `String _statusLine(bool known)`

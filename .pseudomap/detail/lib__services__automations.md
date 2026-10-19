@@ -1,44 +1,79 @@
 # lib/services/automations · Signaturen
 
-## lib/services/automations/agents_automation.dart  (203 Z.)
-- L11 `@immutable class AgentsAutomation`  — One automation of a coworker: a schedule (cron / every / at) or a watcher
-  - L13 `const AgentsAutomation({ required this.id, required this.sessionKey, required this.kind, required this.name, required this.state, this.spec = const <String, dynamic>{}, this.prompt = '', this.nextFireAt, this.lastFiredAt, this.fireCount = 0, this.suppressedCount = 0, this.lastError, this.logPath, this.createdAt, })`
-  - L31 `final String id`  — The host's short handle (`ab12cd34`).
-  - L34 `final String sessionKey`  — The conversation that owns it. An agent only ever sees its own.
-  - L37 `final String kind`  — `schedule` or `watcher`.
-  - L40 `final String name`  — The label the model gave, or the host's default from the spec.
-  - L43 `final String state`  — `active`, `paused`, `done` or `failed`.
-  - L47 `final Map<String, dynamic> spec`  — `{cron}` / `{every}` / `{at}` for a schedule, `{script_path, restart}`
-  - L50 `final String prompt`  — What a fired task says to the model (may be empty for a watcher).
-  - L52 `final DateTime? nextFireAt`
-  - L53 `final DateTime? lastFiredAt`
-  - L54 `final int fireCount`
-  - L57 `final int suppressedCount`  — Triggers folded by the rate limit (watcher).
-  - L60 `final String? lastError`  — Why it failed, or the last non-fatal problem.
-  - L63 `final String? logPath`  — Workspace-relative log of a watcher (`.agents/automations/<id>.log`).
-  - L65 `final DateTime? createdAt`
-  - L67 `bool get isSchedule`
-  - L68 `bool get isWatcher`
-  - L69 `bool get isActive`
-  - L70 `bool get isPaused`
-  - L73 `bool get isOver`  — `done` or `failed`: nothing more will happen.
-  - L77 `String get specLabel`  — A short human reading of the spec (`every 5m`, `cron 0 9 * * 1-5`,
-  - L100 `static AgentsAutomation? fromPayload(Map<String, dynamic> payload)`  — Reads an `automation` event or an `automation_list` entry. Null when
-  - L131 `Map<String, dynamic> toJson()`
-  - L151 `static int? _int(Object? value)`
-  - L158 `static DateTime? _epoch(Object? value)`
-  - L165 `static String _stamp(DateTime when)`
-  - L172 `bool operator ==(Object other)`
-  - L183 `int get hashCode`
-- L190 `abstract interface class AgentsAutomationControl`  — The two frames the app sends about automations. Kept apart from
-  - L193 `Future<void> sendAutomationControl({ required String id, required String action, })`  — `automation_control`: pause / resume / cancel one automation. The host
-  - L201 `Future<void> requestAutomationList({String? sessionKey})`  — `automation_list`: ask for every automation of one session, or of the
+## lib/services/automations/agents_automation.dart  (490 Z.)
+- L13 `@immutable class AgentsAutomation`  — One automation of a coworker: a schedule (cron / every / at) or a watcher
+  - L15 `const AgentsAutomation({ required this.id, required this.sessionKey, required this.kind, required this.name, required this.state, this.spec = const <String, dynamic>{}, this.prompt = '', this.nextFireAt, this.lastFiredAt, this.fireCount = 0, this.suppressedCount = 0, this.lastError, this.logPath, this.createdAt, this.notify = 'always', this.lastSummary, this.lastResultAt, this.unchangedCount = 0, })`
+  - L37 `final String id`  — The host's short handle (`ab12cd34`).
+  - L40 `final String sessionKey`  — The conversation that owns it. An agent only ever sees its own.
+  - L43 `final String kind`  — `schedule`, `watcher`, `watch_url` or `mail`.
+  - L46 `final String name`  — The label the model gave, or the host's default from the spec.
+  - L49 `final String state`  — `active`, `paused`, `done` or `failed`.
+  - L53 `final Map<String, dynamic> spec`  — `{cron}` / `{every}` / `{at}` for a schedule, `{script_path, restart}`
+  - L56 `final String prompt`  — What a fired task says to the model (may be empty for a watcher).
+  - L58 `final DateTime? nextFireAt`
+  - L59 `final DateTime? lastFiredAt`
+  - L60 `final int fireCount`
+  - L63 `final int suppressedCount`  — Triggers folded by the rate limit (watcher).
+  - L66 `final String? lastError`  — Why it failed, or the last non-fatal problem.
+  - L69 `final String? logPath`  — Workspace-relative log of a watcher (`.agents/automations/<id>.log`).
+  - L71 `final DateTime? createdAt`
+  - L75 `final String notify`  — `always` (every run notifies) or `on_change` (only a run that reports a
+  - L78 `final String? lastSummary`  — The facts the last `on_change` run reported, in its own short words.
+  - L81 `final DateTime? lastResultAt`  — When that last result came.
+  - L84 `final int unchangedCount`  — How many runs in a row reported no change.
+  - L87 `bool get notifiesOnChange`  — True when only a run that reports a change tells the user.
+  - L90 `bool get isWatchUrl`  — A page the host checks (`{url, every}`).
+  - L93 `bool get isMail`  — An incoming agent mail that matches a filter (`{from?, subject?}`).
+  - L97 `String get trigger`  — What sets it off, in the user's words: `clock` (a schedule), `page` (a
+  - L105 `String? get watchedUrl`  — The URL a page watch checks, or null.
+  - L112 `int? get everySeconds`  — The check interval of a page watch, or the interval of an `every`
+  - L118 `String? get mailFrom`  — The sender filter of a mail trigger, or null.
+  - L124 `String? get mailSubject`  — The subject filter of a mail trigger, or null.
+  - L132 `String? get scheduleText`  — The schedule as the host's spec grammar writes it (`0 9 * * 1-5`,
+  - L143 `bool get isSchedule`
+  - L144 `bool get isWatcher`
+  - L145 `bool get isActive`
+  - L146 `bool get isPaused`
+  - L149 `bool get isOver`  — `done` or `failed`: nothing more will happen.
+  - L154 `String stateLabel([AppLocalizations? l10n])`  — The words of the state chip, localised and in sentence case ("Active",
+  - L159 `String get specLabel`  — A short human reading of the spec (`every 5m`, `cron 0 9 * * 1-5`,
+  - L181 `String get _eventSpecLabel`
+  - L200 `static String _duration(int seconds)`  — `30m`, `2h`, `1d`, `45s`: the largest whole unit.
+  - L209 `static AgentsAutomation? fromPayload(Map<String, dynamic> payload)`  — Reads an `automation` event or an `automation_list` entry. Null when
+  - L244 `static String? _text(Object? value)`
+  - L247 `Map<String, dynamic> toJson()`
+  - L272 `static int? _int(Object? value)`
+  - L279 `static DateTime? _epoch(Object? value)`
+  - L286 `static String _stamp(DateTime when)`
+  - L293 `bool operator ==(Object other)`
+  - L310 `int get hashCode`
+- L317 `abstract interface class AgentsAutomationControl`  — The two frames the app sends about automations. Kept apart from
+  - L320 `Future<void> sendAutomationControl({ required String id, required String action, })`  — `automation_control`: pause / resume / cancel one automation. The host
+  - L328 `Future<void> requestAutomationList({String? sessionKey})`  — `automation_list`: ask for every automation of one session, or of the
+- L334 `String automationStateLabel(String state, [AppLocalizations? l10n])`  — The words for an automation [state] (`active`, `paused`, `done`,
+- L358 `kWatchUrlMinSeconds = 900`  — The page watch's floor: the host checks a page at most every 15 minutes.
+- L361 `kWatchUrlDefaultSeconds = 3600`  — The page watch's default interval when the user gives none.
+- L364 `kMailFilterMaxLength = 200`  — The longest mail filter the host accepts, per field.
+- L368 `kCreatableAutomationKinds = <String>[ 'schedule', 'watch_url', 'mail', ]`  — The kinds the app can create. A `watcher` needs a script in the workspace,
+- L374 `abstract interface class AgentsAutomationEditControl`
+  - L376 `Future<void> sendAutomationCreate(Map<String, dynamic> frame)`  — `automation_create`. The host answers with one `automation_saved`.
+  - L379 `Future<void> sendAutomationUpdate(Map<String, dynamic> frame)`  — `automation_update`. The host answers with one `automation_saved`.
+- L383 `@immutable class AutomationSaveResult`  — The host's answer to a create or an update: the saved row, or why not.
+  - L385 `const AutomationSaveResult.saved(this.automation) : error = null`
+  - L386 `const AutomationSaveResult.failed(this.error) : automation = null`
+  - L388 `final AgentsAutomation? automation`
+  - L391 `final String? error`  — The host's own words, shown as they are.
+  - L393 `bool get ok`
+  - L397 `static AutomationSaveResult fromPayload(Map<String, dynamic> payload)`  — Reads an `automation_saved` frame. A frame that says `ok` without a row
+- L423 `Object automationSpecFor( String kind, { String schedule = '', String url = '', int? everySeconds, String mailFrom = '', String mailSubject = '', })`  — The spec a create or an update carries for [kind]: the schedule text as
+- L448 `Map<String, dynamic> automationCreateFrame({ required String sessionKey, required String kind, required Object spec, required String prompt, String? name, bool notifyOnChange = false, })`  — `automation_create` for [sessionKey].
+- L467 `Map<String, dynamic>? automationUpdateFrame({ required AgentsAutomation before, required Object spec, required String prompt, required String name, required bool notifyOnChange, })`  — `automation_update` for [before]: only the keys whose value differs from
 
-## lib/services/automations/automation_ledger.dart  (74 Z.)
+## lib/services/automations/automation_ledger.dart  (106 Z.)
 - L12 `ToolCall automationCallFromRelay( ToolCall? existing, AgentsRelayAutomation event, { DateTime? now, })`  — The transcript line of one automation: ONE [ToolCall] per automation id,
-- L48 `String automationEventText(AgentsRelayAutomation event)`  — One line of English for an automation event, for the transcript card.
+- L64 `String automationEventText(AgentsRelayAutomation event)`  — One line of English for an automation event, for the transcript card.
 
-## lib/services/automations/automations_source.dart  (190 Z.)
+## lib/services/automations/automations_source.dart  (379 Z.)
 - L18 `class AutomationsSource extends ChangeNotifier`  — The app's copy of the host's automations, kept current from the relay.
   - L19 `AutomationsSource._()`
   - L21 `static final AutomationsSource instance = AutomationsSource._()`
@@ -48,17 +83,36 @@
   - L30 `final Set<String> _listed = <String>{}`  — Sessions whose list the host has answered at least once.
   - L31 `bool _listedAll = false`
   - L34 `void attach()`  — Starts listening. Idempotent.
-  - L39 `List<AgentsAutomation> get all`  — Every automation known to this app, newest first.
-  - L51 `List<AgentsAutomation> get distinct`  — Every automation, one row per automation, newest first.
-  - L66 `static String identityOf(AgentsAutomation a)`  — What makes two rows the same automation: the same thread, the same kind,
-  - L69 `static bool _better(AgentsAutomation a, AgentsAutomation b)`
-  - L75 `List<AgentsAutomation> forSession(String sessionKey)`  — The automations of one conversation, newest first.
-  - L84 `String coworkerName(String sessionKey)`  — The name to put over a group of rows: what the rest of the app calls that
-  - L103 `List<AgentsAutomation> liveForSession(String sessionKey)`  — The active and paused ones of one conversation: what a thread's strip
-  - L106 `AgentsAutomation? byId(String id)`
-  - L110 `bool listed(String? sessionKey)`  — True once the host answered a list request for [sessionKey] (or for the
-  - L115 `Future<bool> refresh({String? sessionKey})`  — Ask the host for the current list. Returns false when nothing is
-  - L128 `Future<bool> control(String id, String action)`  — Pause / resume / cancel one automation. The host answers with the
-  - L139 `void _onInbound(AgentsRelayInbound event)`
-  - L171 `static int _newestFirst(AgentsAutomation a, AgentsAutomation b)`
-  - L181 `void reset()`  — Test seam: forget everything and stop listening.
+  - L41 `List<AgentsAutomation> get all`  — Every automation known to this app, newest first.
+  - L53 `List<AgentsAutomation> get distinct`  — Every automation, one row per automation, newest first.
+  - L68 `static String identityOf(AgentsAutomation a)`  — What makes two rows the same automation: the same thread, the same kind,
+  - L71 `static bool _better(AgentsAutomation a, AgentsAutomation b)`
+  - L77 `List<AgentsAutomation> forSession(String sessionKey)`  — The automations of one conversation, newest first.
+  - L86 `String coworkerName(String sessionKey)`  — The name to put over a group of rows: what the rest of the app calls that
+  - L106 `List<AgentsAutomation> liveForSession(String sessionKey)`  — The active and paused ones of one conversation: what a thread's strip
+  - L109 `AgentsAutomation? byId(String id)`
+  - L113 `bool listed(String? sessionKey)`  — True once the host answered a list request for [sessionKey] (or for the
+  - L118 `Future<bool> refresh({String? sessionKey})`  — Ask the host for the current list. Returns false when nothing is
+  - L131 `Future<bool> control(String id, String action)`  — Pause / resume / cancel one automation. The host answers with the
+  - L142 `void _onInbound(AgentsRelayInbound event)`
+  - L175 `static int _newestFirst(AgentsAutomation a, AgentsAutomation b)`
+  - L186 `static Duration saveTimeout = const Duration(seconds: 20)`  — How long a create or an update waits for the host's `automation_saved`.
+  - L193 `final List<_PendingSave> _pendingSaves = <_PendingSave>[]`  — Requests waiting for their `automation_saved`, oldest first. Each
+  - L200 `final List<DateTime> _orphanedSaves = <DateTime>[]`  — When each request that timed out gave up, oldest first. A late answer
+  - L203 `static Duration orphanLifetime = const Duration(minutes: 2)`  — How long a timed-out request may still be answered late.
+  - L205 `int _saveSeq = 0`
+  - L209 `final Map<String, String> _quietRuns = <String, String>{}`  — Runs of an `on_change` automation that found nothing new: run id →
+  - L214 `String? quietRunSummary(String runId)`  — The summary of a quiet run (an `on_change` run that reported no
+  - L217 `bool isQuietRun(String runId)`  — True when [runId] was an `on_change` run that found nothing new.
+  - L221 `Map<String, String> get coworkerNames`  — The coworkers the app knows by name (`agent_list`), session key → name.
+  - L226 `Future<AutomationSaveResult> create({ required String sessionKey, required String kind, required Object spec, required String prompt, String? name, bool notifyOnChange = false, })`  — Sends `automation_create`. Completes with the host's answer, or a
+  - L249 `Future<AutomationSaveResult> update(Map<String, dynamic> frame)`  — Sends `automation_update` with only the keys of [frame]
+  - L258 `Future<AutomationSaveResult> _save( Future<void> Function(AgentsAutomationEditControl control, String requestId) send, )`  — Sends one create or update tagged with a fresh `request_id` (echoed by
+  - L292 `void _onSaved(Map<String, dynamic> payload)`
+  - L324 `void _onDone(Map<String, dynamic> payload)`  — A live `done` of a fired `on_change` run says its verdict before the
+  - L334 `void _noteResult(AgentsRelayAutomation event)`
+  - L347 `void reset()`  — Test seam: forget everything and stop listening.
+- L372 `class _PendingSave`  — One create / update waiting for its `automation_saved`.
+  - L373 `_PendingSave(this.requestId)`
+  - L375 `final String requestId`
+  - L376 `final Completer<AutomationSaveResult> completer = Completer<AutomationSaveResult>()`

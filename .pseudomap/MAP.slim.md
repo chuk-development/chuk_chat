@@ -1,6 +1,6 @@
 # pseudomap · chuk_chat
 
-611 Dateien · 2765 Typen/Funktionen · 15134 Member · 1251/1720 öffentliche Symbole mit Zweckzeile · Stand 2026-09-30
+691 Dateien · 3492 Typen/Funktionen · 18252 Member · 1600/2092 öffentliche Symbole mit Zweckzeile · Stand 2026-10-17
 
 Diese Datei ist `.pseudomap/MAP.md` — Stufe 1: was es gibt und wo es liegt.
 
@@ -11,8 +11,8 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - Neu bauen: `pseudomap build` (läuft nach jedem Edit automatisch).
 
 ## lib
-### constants.dart  (563 Z.)
-- const: kDefaultBgColor kDefaultAccentColor kDefaultIconFgColor kDefaultThemeMode kDefaultDynamicColorEnabled kDefaultShowReasoningTokens kDefaultShowModelInfo kDefaultShowTps kDefaultUiLocale kDefaultToolCallingEnabled kDefaultToolDiscoveryMode kDefaultShowToolCalls kDefaultIncludeToolResultsInHistory kDefaultChatFontSize kMinChatFontSize kMaxChatFontSize kDefaultUiScale kMinUiScale kMaxUiScale kChatFontFamilySystem kChatFontFamilyArimo kChatFontFamilyMerriweather kChatFontFamilyJetBrainsMono kDefaultChatFontFamily kSupportedChatFontFamilies +25
+### constants.dart  (574 Z.)
+- const: kDefaultBgColor kDefaultAccentColor kDefaultIconFgColor kDefaultThemeMode kDefaultDynamicColorEnabled kDefaultShowReasoningTokens kDefaultShowModelInfo kDefaultShowTps kDefaultUiLocale kDefaultToolCallingEnabled kDefaultToolDiscoveryMode kDefaultShowToolCalls kDefaultIncludeToolResultsInHistory kDefaultChatFontSize kMinChatFontSize kMaxChatFontSize kDefaultUiScale kMinUiScale kMaxUiScale kChatFontFamilySystem kChatFontFamilyArimo kChatFontFamilyMerriweather kChatFontFamilyJetBrainsMono kDefaultChatFontFamily kSupportedChatFontFamilies +26
 - `double contrastFactor(double contrast)`  — Maps the [kMinContrast]..[kMaxContrast] slider value to the multiplier
 - `ThemeData buildAppTheme({ required Color accent, required Color iconFg, required Color bg, required Brightness brightnes …)`
 - `Color _shiftHue(Color c, double degrees)`
@@ -20,7 +20,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### env_loader.dart  (158 Z.)
 - `class EnvLoader`  — Loads environment variables from .env file at runtime.
 
-### main.dart  (786 Z.)
+### main.dart  (774 Z.)
 - `void _installLogDeduper()`  — Collapse consecutive identical debug log lines into a single line with a
 - `Future<void> main()`
 - `class AgentsApp extends StatefulWidget`
@@ -28,7 +28,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _OnboardingFirstLaunchGate extends StatefulWidget`  — Starts the interactive onboarding tour if the signed-in user has never
 - `class _OnboardingFirstLaunchGateState extends State<_OnboardingFirstLaunchGate>`
 
-### model_selector_page.dart  (1988 Z.)
+### model_selector_page.dart  (1960 Z.)
 - `class PricingDetails`
 - `class ModelProviderInfo`
 - `class CustomModelInfo`
@@ -191,27 +191,27 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _SearchTrigger extends StatelessWidget`  — Subtle search icon button. No layout shift, no inline bar.
 
 ## lib/l10n
-### app_localizations.dart  (809 Z.)
+### app_localizations.dart  (1386 Z.)
 - `class AppLocalizations`  — Holds all translated UI strings for the current locale.
 - `class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations>`
 
-### strings_de.dart  (784 Z.)
+### strings_de.dart  (1373 Z.)
 - const: stringsDe
 
-### strings_en.dart  (773 Z.)
+### strings_en.dart  (1355 Z.)
 - const: stringsEn
 
-### strings_es.dart  (615 Z.)
+### strings_es.dart  (652 Z.)
 - const: stringsEs
 
-### strings_fr.dart  (622 Z.)
+### strings_fr.dart  (659 Z.)
 - const: stringsFr
 
-### strings_pt.dart  (608 Z.)
+### strings_pt.dart  (645 Z.)
 - const: stringsPt
 
 ## lib/models
-### agents_agent.dart  (130 Z.)
+### agents_agent.dart  (144 Z.)
 - `enum AgentActivity`  — What a coworker is doing, as far as the app can actually tell.
 - `@immutable class AgentsThreadInfo`  — One conversation with one agent. An agent can have many (§4).
 - `@immutable class AgentsAgent`  — One coworker.
@@ -268,7 +268,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `enum ToolType`  — Type of tool.
 - `enum ToolCategory`  — Tool categories for grouping and enabling/disabling.
 
-### content_block.dart  (173 Z.)
+### content_block.dart  (193 Z.)
 - `enum ContentBlockType`  — The type of a content block within an AI response.
 - `class SandboxArtifactPayload`  — Payload for a [ContentBlockType.sandboxArtifact] block.
 - `class ContentBlock`  — An ordered block of content within an AI response.
@@ -284,7 +284,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `bool _listEquals(List<String> a, List<String> b)`
 - `bool _mapEquals(Map<String, String> a, Map<String, String> b)`
 
-### stored_chat.dart  (202 Z.)
+### stored_chat.dart  (204 Z.)
 - `class StoredChat`  — Represents a stored chat with metadata.
 
 ### stream_phase.dart  (39 Z.)
@@ -299,6 +299,422 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class Workspace`  — Represents a workspace that combines AI persona, system prompts, files,
 - `class WorkspaceFile`  — Represents a file attached to a workspace
 
+## lib/openui
+### openui.dart  (19 Z.)
+- reicht weiter: 'package:openui/openui.dart' show ToolExecutor · 'package:openui_core/openui_core.dart' show OpenUIError, ToolResult · 'package:chuk_chat/openui/openui_actions.dart' · 'package:chuk_chat/openui/openui_component.dart' · 'package:chuk_chat/openui/openui_library.dart' · 'package:chuk_chat/openui/openui_props.dart' · 'package:chuk_chat/openui/openui_theme.dart' · 'package:chuk_chat/openui/openui_view.dart'
+
+### openui_actions.dart  (257 Z.)
+- `abstract class OpenUiActionHandler`  — What the host app does when an OpenUI view acts.
+- `class CallbackOpenUiActionHandler extends OpenUiActionHandler`  — An [OpenUiActionHandler] made from callbacks. Missing callbacks do
+- `class OpenUiFormState extends ChangeNotifier`  — The values of one OpenUI `Form`, keyed by field name.
+- `class OpenUiForms`  — All forms of one view, by name.
+- `class OpenUiFormScope extends InheritedWidget`  — Marks a subtree as the body of the `Form` called [formName].
+- `class OpenUiScope extends InheritedWidget`  — Per-view services for components: the host handler, the forms, and
+
+### openui_component.dart  (157 Z.)
+- `typedef OpenUiBuilder = Widget Function( BuildContext context, OpenUiProps props, )`  — Draws one component from its typed props.
+- `@immutable class OpenUiParam`  — One positional parameter of a component.
+- `@immutable class OpenUiComponentDef`  — One OpenUI Lang component of the chuk_chat library.
+
+### openui_icons.dart  (591 Z.)
+- const: kOpenUiLucideIcons kOpenUiIconCategories kOpenUiDefaultIcon _shapeWords
+- `String? openUiIconStem(String? name)`  — The app icon for the lucide [name], or `null` when no step of the
+- `HugeIconData openUiIcon(String? name, [String? category])`  — The app icon for the lucide [name]. When the name does not resolve,
+- `String normaliseOpenUiIconName(String? name)`  — [name] in lucide kebab-case: trimmed, lower case, `CircleCheck` and
+- `Iterable<String> _candidates(String n)`  — The names to try for [n], best first.
+- `class OpenUiIconStyle extends InheritedWidget`  — The size and colour an [OpenUiIcon] takes when its caller does not
+- `class OpenUiIcon extends StatelessWidget`  — An OpenUI icon: a lucide [name] drawn as the matching app icon.
+- `IconThemeData? _localIconTheme(BuildContext context)`  — The [IconTheme] a parent set on purpose (`IconTheme.merge` in a
+
+### openui_library.dart  (117 Z.)
+- const: chukOpenUiLibrary
+- `class OpenUiLibrary`  — A set of [OpenUiComponentDef]s, ready for the vendored renderer.
+- `class _OpenUiComponentHost extends StatelessWidget`  — Calls the builder of one component inside its own build, so the
+
+### openui_license.dart  (49 Z.)
+- const: kOpenUiLicensePackage kOpenUiLicenseText _registered
+- `void registerOpenUiLicense()`  — Adds the OpenUI Lang licence to [LicenseRegistry]. Call it once at
+
+### openui_props.dart  (289 Z.)
+- `typedef OpenUiDefLookup = OpenUiComponentDef? Function(String name)`  — Looks up a component definition by name (used for data children).
+- `@immutable class OpenUiProps`  — The props of one component call, with typed readers.
+- `@immutable class OpenUiAction`  — The action of an action slot (`Action([...])`, a bare step such as
+- `@immutable class OpenUiBinding`  — A two-way binding to a `$variable` of the OpenUI program.
+
+### openui_strings.dart  (15 Z.)
+- const: _english
+- `AppLocalizations openUiStrings(BuildContext context)`  — The app strings for the current locale. English when the tree has no
+
+### openui_theme.dart  (220 Z.)
+- `abstract final class OpenUiTokens`  — Fixed sizes: spacing, radii, paddings.
+- `@immutable class OpenUiTheme`  — Colours and text styles, taken from the app theme.
+
+### openui_view.dart  (207 Z.)
+- `class OpenUiView extends StatefulWidget`  — Renders an OpenUI Lang program as native widgets.
+- `class _OpenUiViewState extends State<OpenUiView>`
+- `class _FailureLine extends StatelessWidget`
+
+## lib/openui/components
+### content_layout.dart  (479 Z.)
+- part 'content_layout/containers.dart' · part 'content_layout/disclosure.dart' · part 'content_layout/media.dart' · part 'content_layout/text_blocks.dart'
+- const: _kContentBase _kContentLists contentLayoutComponents
+- `bool _isStreaming(BuildContext context)`  — Whether the renderer above [context] still receives the program.
+- `bool _truthy(Object? v)`  — A `$binding<boolean>` value: `true` or the text `"true"`.
+- `List<Widget> _widgetsOf(Object? raw)`  — The rendered widgets of one raw value (a widget, a list of widgets,
+- `String? _webUrl(Object? raw)`  — [raw] as an http(s) URL, or `null`. Other schemes (file:, data:,
+- `Widget _blockColumn(List<Widget> children, {double? gap})`  — A vertical list of blocks with the default content gap.
+- `Widget _hairline(OpenUiTheme t)`  — The hairline between rows of a card.
+- `Widget _markdown( BuildContext context, String text, { double? size, FontWeight? weight, Color? color, Color? background …)`  — The app's markdown, in the chat font, so a block reads like the rest
+- `class _FollowStream`  — The open/closed state rule that Tabs, Accordion and SectionBlock
+- `typedef _Panel = ({String value, String trigger, List<Widget> content})`  — One item of Tabs, Accordion or SectionBlock: an id, a label and
+- `List<_Panel> _panels(OpenUiProps p, String name, String fallbackLabel)`  — Reads the data children of [name] as panels. A missing or doubled
+
+### data_cards.dart  (423 Z.)
+- part 'data_cards/card_blocks.dart' · part 'data_cards/shared.dart' · part 'data_cards/text_blocks.dart'
+- const: _blockModes _textVariant _subtextVariant _textSize _status _entityRow _trendType dataCardsComponents
+
+### forms_buttons.dart  (507 Z.)
+- reicht weiter: 'package:chuk_chat/openui/components/forms_buttons/field.dart' show OpenUiFormValidationScope, OpenUiFormValidator · 'package:chuk_chat/openui/components/forms_buttons/rules.dart' show OpenUiRule, OpenUiRules
+- const: _sizes _variants _selectionType formsButtonsComponents
+- `Widget _buildButton(BuildContext context, OpenUiProps props)`
+- `class OpenUiButton extends StatelessWidget`  — The OpenUI button. Reuse it for `Buttons`, `IconButton` and the
+
+### tables_charts.dart  (252 Z.)
+- const: _tables _charts2d _charts1d _scatter _params2d _params1d tablesChartsComponents
+
+## lib/openui/components/content_layout
+### containers.dart  (493 Z.)
+- part of '../content_layout.dart'
+- `Widget _buildStack(BuildContext context, OpenUiProps props)`
+- `Widget _buildCarousel(BuildContext context, OpenUiProps props)`
+- `class _Carousel extends StatefulWidget`
+- `class _CarouselState extends State<_Carousel>`
+- `Widget _buildModal(BuildContext context, OpenUiProps props)`
+- `class _Modal extends StatefulWidget`
+- `class _ModalState extends State<_Modal> with SingleTickerProviderStateMixin`
+
+### disclosure.dart  (611 Z.)
+- part of '../content_layout.dart'
+- `Widget _buildTabs(BuildContext context, OpenUiProps props)`
+- `class _Tabs extends StatefulWidget`
+- `class _TabsState extends State<_Tabs>`
+- `class _TabStrip extends StatelessWidget`  — The tab switch. [ConnectedGroup] when every label fits in an equal
+- `class _ScrollingTabStrip extends StatefulWidget`
+- `class _ScrollingTabStripState extends State<_ScrollingTabStrip>`
+- `class _FoldHeader extends StatelessWidget`
+- `Widget _foldBody({ required bool open, required List<Widget> content, required EdgeInsets padding, })`  — The body of a fold: grows and shrinks with the expressive curve.
+- `Widget _buildAccordion(BuildContext context, OpenUiProps props)`
+- `class _Accordion extends StatefulWidget`
+- `class _AccordionState extends State<_Accordion>`
+- `Widget _buildSectionBlock(BuildContext context, OpenUiProps props)`
+- `class _SectionBlock extends StatefulWidget`
+- `class _SectionBlockState extends State<_SectionBlock>`
+- `Widget _buildSteps(BuildContext context, OpenUiProps props)`
+
+### media.dart  (324 Z.)
+- part of '../content_layout.dart'
+- const: _kImageRadius _kImageMaxHeight _kGalleryTileMaxHeight _kImageBlockHeight
+- `void _openImageViewer(BuildContext context, List<String> urls, int index)`  — Opens the app's full-screen image viewer on [urls] at [index].
+- `Widget _buildImage(BuildContext context, OpenUiProps props)`
+- `class _ImageTile extends StatelessWidget`  — A rounded tile that fills its box with an image, or with a calm
+- `class _ImagePlaceholder extends StatelessWidget`  — The sunk tile that stands in for an image: an image icon while it
+- `Widget _buildImageBlock(BuildContext context, OpenUiProps props)`
+- `typedef _GalleryImage = ({String? url, String alt, bool broken})`
+- `Widget _buildImageGallery(BuildContext context, OpenUiProps props)`
+- `class _Gallery extends StatelessWidget`
+
+### text_blocks.dart  (544 Z.)
+- part of '../content_layout.dart'
+- const: _codeSpans _citationRun _citationMarker
+- `Widget _buildCard(BuildContext context, OpenUiProps props)`
+- `class _CardSources extends InheritedWidget`  — Gives the `sources` of the nearest Card to the text blocks in it.
+- `class _SourcesStrip extends StatelessWidget`
+- `class _SourcePill extends StatelessWidget`
+- `String _linkCitations(String text, List<Map<String, Object?>> sources)`
+- `String _linkCitationsInProse(String s, List<Map<String, Object?>> sources)`
+- `Widget _buildTextContent(BuildContext context, OpenUiProps props)`
+- `Widget _buildMarkDownRenderer(BuildContext context, OpenUiProps props)`
+- `Widget _buildCardHeader(BuildContext context, OpenUiProps props)`
+- `Widget _buildInlineHeader(BuildContext context, OpenUiProps props)`
+- `Widget _buildCallout(BuildContext context, OpenUiProps props)`
+- `class _Callout extends StatefulWidget`
+- `class _CalloutState extends State<_Callout>`
+- `Widget _buildTextCallout(BuildContext context, OpenUiProps props)`
+- `Widget _buildCodeBlock(BuildContext context, OpenUiProps props)`
+- `String _fence(String code, String language)`  — Wraps [code] in a fence longer than any backtick run inside it.
+- `Widget _buildSeparator(BuildContext context, OpenUiProps props)`
+
+## lib/openui/components/data_cards
+### card_blocks.dart  (654 Z.)
+- part of '../data_cards.dart'
+- `class _BlockSettings`  — The shared settings of one card block call.
+- `Widget _slot( Widget? child, _CardInfo info, String slot, { String? textSize, String? tagSize, bool compact = false, boo …)`  — Wraps [child] in a slot of a card.
+- `VoidCallback? _cardTap( BuildContext context, _BlockSettings s, String Function() label, Map<String, Object?> Function() …)`  — The tap handler of card [index], or `null` when not clickable.
+- `Widget _buildSnippetBlock(BuildContext context, OpenUiProps p)`
+- `Widget _buildOverviewBlock(BuildContext context, OpenUiProps p)`
+- `Widget _buildContextBlock(BuildContext context, OpenUiProps p)`
+- `class _ContextCard extends StatelessWidget`
+- `class _PhotoScrim extends StatelessWidget`  — A neutral dark wash over a photo so white text on it stays legible.
+- `Widget _buildCompositeBlock(BuildContext context, OpenUiProps p)`
+- `Widget? _footerPart(Object? v, {required bool bold})`  — A footer part: a rendered child, or plain text for a price.
+- `class _PlainPrice extends StatelessWidget`
+- `Widget _buildVisualBlock(BuildContext context, OpenUiProps p)`
+
+### shared.dart  (649 Z.)
+- part of '../data_cards.dart'
+- const: _tabular
+- `String _str(Object? v)`  — [v] as display text. Numbers drop a `.0`; maps and lists give ''.
+- `double? _num(Object? v)`  — [v] as a number, or `null`.
+- `String? _httpUrl(Object? url)`  — [url] when it is an http or https URL, else `null`.
+- `Color? _metricTone(OpenUiTheme t, String variant, String subtext)`  — The colour of a `metric` subtext: green for a leading `+`, red for a
+- `double _blockGap(OpenUiProps p, double fallback)`  — The gap of a card block: a number (pixels), a gap name of the
+- `TextStyle _style( OpenUiTheme t, { required double size, FontWeight weight = FontWeight.w400, Color? color, bool number …)`  — A text style of the B4 components, from the app theme.
+- `class _CardInfo`  — What the children of one card wrote about themselves while they were
+- `class _SlotScope extends InheritedWidget`  — Puts the children of one slot of a card (the `lhs`, the `body`, the
+- `class _NetImage extends StatelessWidget`  — A network image with a calm placeholder while it loads and a quiet
+- `class _Pressable extends StatelessWidget`  — A card surface that springs when pressed (the app's MorphTap), or a
+- `class _Chevron extends StatelessWidget`  — The small chevron that marks a clickable card.
+- `class _EqualRow extends MultiChildRenderObjectWidget`  — A row whose children all get the height of the tallest one, without
+- `class _EqualRowData extends ContainerBoxParentData<RenderBox>`
+- `class _RenderEqualRow extends RenderBox with ContainerRenderObjectMixin<RenderBox, _EqualRowData>, RenderBoxContainerDef …)`
+- `List<int> _rowConfiguration(int n, int maxPerRow)`  — How many cards go in each row: at most [maxPerRow] (2 or 3), and
+- `class _CardBlockLayout extends StatelessWidget`  — The grid or the carousel of a card block.
+- `void _runItemAction( BuildContext context, OpenUiAction action, { required String label, required Map<String, Object?> i …)`  — Runs the shared [action] of a card block for one card.
+- `bool _streamingHere(BuildContext context, String statementId)`  — Whether the statement [statementId] is still being streamed. A card
+- `List<InlineSpan> _inlineMarkdown(String text, TextStyle base, Color link)`  — Inline markdown as text spans: `**bold**`, `*italic*` / `_italic_`,
+
+### text_blocks.dart  (914 Z.)
+- part of '../data_cards.dart'
+- `Widget _buildIcon(BuildContext context, OpenUiProps p)`
+- `Widget? _iconSlot(OpenUiProps p, String name)`  — The icon of an `icon` slot: an `Icon(...)` child, or a bare lucide
+- `Widget _buildTag(BuildContext context, OpenUiProps p)`
+- `Widget _buildTagBlock(BuildContext context, OpenUiProps p)`
+- `Color _statusInk(BuildContext context, OpenUiTheme t, String variant)`  — The text and glyph colour on the soft fill of a status [variant].
+- `class _TagView extends StatelessWidget`  — A tag or badge: a small rounded label in a status colour.
+- `Widget _buildEntityList(BuildContext context, OpenUiProps p)`
+- `class _EntityRow extends StatelessWidget`
+- `Widget _buildListBlock(BuildContext context, OpenUiProps p)`
+- `class _ListRow extends StatelessWidget`
+- `Widget _buildText(BuildContext context, OpenUiProps p)`
+- `Widget _buildBoldText(BuildContext context, OpenUiProps p)`
+- `Widget _buildTextLine( BuildContext context, OpenUiProps p, { required bool bold, })`
+- `class _TitleBlock extends StatelessWidget`  — The title and subtitle beside an icon badge or a thumbnail.
+- `Widget _leadingWithTitle({ required Widget leading, required _TitleBlock text, required bool vertical, required double g …)`  — A leading picture (badge or thumbnail) with a title block, side by
+- `Widget _buildIconText(BuildContext context, OpenUiProps p)`
+- `class _IconBadge extends StatelessWidget`  — An icon in a rounded tinted square (upstream IconTag).
+- `Widget _buildImageText(BuildContext context, OpenUiProps p)`
+- `Widget _buildImageTextLarge(BuildContext context, OpenUiProps p)`
+- `({bool up, String text})? _trend(OpenUiProps p)`  — The `{direction, value}` trend of a metric, or `null`.
+- `class _TrendView extends StatelessWidget`  — A trend: an arrow and the signed percentage, green up, red down.
+- `Widget _buildMetricInline(BuildContext context, OpenUiProps p)`
+- `Widget _buildMetricStrike(BuildContext context, OpenUiProps p)`
+
+## lib/openui/components/forms_buttons
+### buttons.dart  (319 Z.)
+- `Widget buildOpenUiButtons(BuildContext context, OpenUiProps props)`  — Builds `Buttons(buttons, direction?)`.
+- `Widget buildOpenUiIconButton(BuildContext context, OpenUiProps props)`  — Builds `IconButton(name, icon, action?, variant?, size?, shape?)`.
+- `class OpenUiIconButtonView extends StatelessWidget`  — An icon-only button. [name] is the accessible label, the tooltip
+- `Widget buildOpenUiFollowUpBlock(BuildContext context, OpenUiProps props)`  — Builds `FollowUpBlock(items)`.
+- `class OpenUiFollowUpList extends StatelessWidget`  — The follow-up suggestions: one connected run of tiles (the app's
+- `class _FollowUpTile extends StatelessWidget`
+
+### choices.dart  (816 Z.)
+- const: _kRowLine _kDense
+- `TextStyle _optionLabelStyle(OpenUiTheme t, {bool enabled = true})`
+- `TextStyle _optionDescriptionStyle(OpenUiTheme t)`
+- `class _OptionRow extends StatelessWidget`  — One row of a check box or radio group: the control, then the label
+- `Map<String, bool> _boolMap(Object? v)`  — Reads a stored map of name to bool. Anything else gives an empty map.
+- `Widget buildOpenUiCheckBoxGroup(BuildContext context, OpenUiProps props)`  — Builds `CheckBoxGroup(name, items, rules?, value?)`.
+- `Widget buildOpenUiSwitchGroup(BuildContext context, OpenUiProps props)`  — Builds `SwitchGroup(name, items, variant?, value?)`.
+- `class OpenUiToggleGroupView extends StatefulWidget`  — A group of on/off items: check boxes or switches.
+- `class _OpenUiToggleGroupViewState extends State<OpenUiToggleGroupView> with OpenUiFieldStateMixin<OpenUiToggleGroupView>`
+- `class _SwitchRow extends StatelessWidget`
+- `Widget buildOpenUiRadioGroup(BuildContext context, OpenUiProps props)`  — Builds `RadioGroup(name, items, defaultValue?, rules?, value?)`.
+- `class OpenUiRadioGroupView extends StatefulWidget`  — The `RadioGroup` field.
+- `class _OpenUiRadioGroupViewState extends State<OpenUiRadioGroupView> with OpenUiFieldStateMixin<OpenUiRadioGroupView>`
+- `List<String> _selection(bool multiple, Object? stored, Object? fallback)`  — The selection as a list, from the stored value or else the default
+- `Object? _storedSelection(bool multiple, List<String> selection)`  — The value to store for a selection. An empty single selection is
+- `List<String> _toggle(bool multiple, List<String> selection, String value)`
+- `mixin _SelectionField<W extends StatefulWidget> on State<W>, OpenUiFieldStateMixin<W>`  — Shared state of `Chips` and `OptionCards`.
+- `Widget buildOpenUiChips(BuildContext context, OpenUiProps props)`  — Builds `Chips(name, type?, items?, rules?, defaultValue?)`.
+- `class OpenUiChipsView extends StatefulWidget`  — The `Chips` field: a wrap of selectable pills.
+- `class _OpenUiChipsViewState extends State<OpenUiChipsView> with OpenUiFieldStateMixin<OpenUiChipsView>, _SelectionField< …)`
+- `class _Chip extends StatelessWidget`
+- `Widget buildOpenUiOptionCards(BuildContext context, OpenUiProps props)`  — Builds `OptionCards(name, type?, items?, rules?, defaultValue?)`.
+- `class OpenUiOptionCardsView extends StatefulWidget`  — The `OptionCards` field: selectable cards in a responsive grid.
+- `class _OpenUiOptionCardsViewState extends State<OpenUiOptionCardsView> with OpenUiFieldStateMixin<OpenUiOptionCardsView> …)`
+- `class _OptionCard extends StatelessWidget`
+
+### field.dart  (458 Z.)
+- `class OpenUiFormValidator extends ChangeNotifier`  — The validation state of one `Form`: the fields with rules, and the
+- `class _Registration`
+- `class OpenUiFormValidationScope extends InheritedNotifier<OpenUiFormValidator>`  — Gives the fields and buttons of one `Form` its validator.
+- `class OpenUiFieldSlot extends ChangeNotifier`  — What a `FormControl` learns from the field inside it: its name and
+- `class OpenUiFieldSlotScope extends InheritedWidget`  — Gives a field the slot of its `FormControl`.
+- `class OpenUiField`  — One field as seen in one build: where its value lives, and its
+- `mixin OpenUiFieldStateMixin<W extends StatefulWidget> on State<W>`  — Shared state logic of every OpenUI form field widget.
+- `bool openUiDeepEquals(Object? a, Object? b)`  — Deep equality for the plain values a field stores (lists, maps,
+- `bool openUiStatementStreaming(BuildContext context, String statementId)`  — Whether the statement [statementId] still streams (taps wait).
+
+### form.dart  (313 Z.)
+- const: kOpenUiFormGap kOpenUiLabelGap
+- `Widget buildOpenUiForm(BuildContext context, OpenUiProps props)`  — Builds `Form(name, buttons, fields?)`.
+- `class OpenUiFormView extends StatefulWidget`  — The body of a `Form`: the fields, then the buttons. It gives them
+- `class _OpenUiFormViewState extends State<OpenUiFormView>`
+- `Widget buildOpenUiFormControl(BuildContext context, OpenUiProps props)`  — Builds `FormControl(label, input, hint?)`.
+- `class OpenUiFormControlView extends StatefulWidget`  — A label, one field, and a line under it: the error of the field, or
+- `class _OpenUiFormControlViewState extends State<OpenUiFormControlView>`
+- `Widget buildOpenUiLabel(BuildContext context, OpenUiProps props)`  — Builds `Label(text)`.
+- `class OpenUiLabelText extends StatelessWidget`  — The label of a field. A required field gets a star after it.
+- `class OpenUiFieldMessage extends StatelessWidget`  — The line under a field: a hint (muted) or an error (danger colour,
+- `InputDecoration openUiFieldDecoration( BuildContext context, { String? hint, bool hasError = false, Widget? prefixIcon …)`  — The input decoration of every OpenUI field: the app's filled field
+
+### pickers.dart  (663 Z.)
+- `class OpenUiFieldButton extends StatefulWidget`  — A field-shaped button: the filled field look, a text or a
+- `class _OpenUiFieldButtonState extends State<OpenUiFieldButton>`
+- `Widget buildOpenUiSelect(BuildContext context, OpenUiProps props)`  — Builds `Select(name, items, placeholder?, rules?, value?, size?)`.
+- `class OpenUiSelectView extends StatefulWidget`  — The `Select` field.
+- `class _OpenUiSelectViewState extends State<OpenUiSelectView> with OpenUiFieldStateMixin<OpenUiSelectView>`
+- `Widget buildOpenUiDatePicker(BuildContext context, OpenUiProps props)`  — Builds `DatePicker(name, mode?, rules?, value?)`.
+- `class OpenUiDatePickerView extends StatefulWidget`  — The `DatePicker` field.
+- `class _OpenUiDatePickerViewState extends State<OpenUiDatePickerView> with OpenUiFieldStateMixin<OpenUiDatePickerView>`
+- `class _Day`
+- `class _Range`
+- `String _iso(DateTime d)`
+- `Widget buildOpenUiSlider(BuildContext context, OpenUiProps props)`  — Builds `Slider(name, variant, min, max, step?, defaultValue?, label?,
+- `class OpenUiSliderView extends StatefulWidget`  — The `Slider` field.
+- `class _OpenUiSliderViewState extends State<OpenUiSliderView> with OpenUiFieldStateMixin<OpenUiSliderView>`
+
+### rules.dart  (319 Z.)
+- const: kOpenUiRulesType
+- `@immutable class OpenUiRuleMessages`  — The texts of the rule errors. `{n}` stands for the limit.
+- `@immutable class OpenUiRule`  — One rule: its [type] (`minLength`) and its argument (`3`), if any.
+- `@immutable class OpenUiRules`  — The parsed rules of one field.
+
+### text_fields.dart  (213 Z.)
+- `Widget buildOpenUiInput(BuildContext context, OpenUiProps props)`  — Builds `Input(name, placeholder?, type?, rules?, value?)`.
+- `Widget buildOpenUiTextArea(BuildContext context, OpenUiProps props)`  — Builds `TextArea(name, placeholder?, rows?, rules?, value?)`.
+- `class OpenUiTextFieldView extends StatefulWidget`  — The text field of `Input` and `TextArea`.
+- `class _OpenUiTextFieldViewState extends State<OpenUiTextFieldView> with OpenUiFieldStateMixin<OpenUiTextFieldView>`
+
+## lib/openui/components/tables_charts
+### cartesian_charts.dart  (841 Z.)
+- const: _kSwap _kMinLabelSlot
+- `double _textWidth(String text, TextStyle style, TextScaler scaler)`
+- `double _leftReserved(BuildContext context, AxisScale scale)`  — The room the y axis labels need.
+- `int _labelStep(int count, double plotWidth)`  — The step between two printed x labels, so labels never collide.
+- `Widget _xLabel( BuildContext context, List<String> labels, double value, int step, double slot, )`
+- `FlTitlesData _titles( BuildContext context, { required List<String> labels, required AxisScale scale, required double le …)`
+- `FlGridData _grid(OpenUiChartColors colors, AxisScale scale)`
+- `FlBorderData _border(OpenUiChartColors colors)`
+- `String _seriesName(ChartSeries s, int i)`
+- `Widget? _legend(Chart2D data, OpenUiChartColors colors)`
+- `Widget buildBarChart(BuildContext context, OpenUiProps p)`  — Builds `BarChart(labels, series, variant?, xLabel?, yLabel?, height?)`.
+- `Widget _barChart( BuildContext context, Chart2D data, OpenUiChartColors colors, bool stacked, double width, )`
+- `Widget buildLineChart(BuildContext context, OpenUiProps p)`  — Builds `LineChart(labels, series, variant?, xLabel?, yLabel?, height?)`.
+- `Widget buildAreaChart(BuildContext context, OpenUiProps p)`  — Builds `AreaChart(labels, series, variant?, xLabel?, yLabel?, height?)`.
+- `Widget _buildLineLike( BuildContext context, OpenUiProps p, { required bool area, })`
+- `Widget _lineChart( BuildContext context, Chart2D data, OpenUiChartColors colors, { required String variant, required boo …)`
+- `LineTooltipItem _lineTooltip( BuildContext context, Chart2D data, OpenUiChartColors colors, LineBarSpot spot, { required …)`
+- `Widget buildHorizontalBarChart(BuildContext context, OpenUiProps p)`  — Builds `HorizontalBarChart(labels, series, variant?, xLabel?, yLabel?)`.
+- `class _HorizontalBars extends StatelessWidget`
+- `class _BarTrack extends StatelessWidget`  — One horizontal bar on a quiet track. [parts] are value ranges with
+
+### chart_common.dart  (621 Z.)
+- const: _grouped _hueOrder
+- `@immutable class ChartSeries`  — One named series of a 2D chart. A `null` value is a gap.
+- `@immutable class Chart2D`  — The data of a 2D chart: x labels and the series.
+- `@immutable class ChartSlice`  — A label and a value (a pie slice, a radial bar, a stacked part).
+- `double? chartNumber(Object? v)`  — A number from a model value, or `null`. Numeric strings parse
+- `String chartLabel(Object? v)`  — The text of a label value. Numbers lose a `.0`.
+- `Chart2D readChart2D(OpenUiProps p)`  — Reads `labels` and `series` of a 2D chart.
+- `List<ChartSlice> readChart1D(OpenUiProps p)`  — Reads `labels` and `values` of a 1D chart (pie, radial, single
+- `String formatChartValue(double v)`  — A value for a tooltip, a legend or a bar end: grouped thousands, at
+- `String formatAxisValue(double value)`  — A compact axis value: 1500 is "1.5K", 2000000 is "2M".
+- `double niceInterval(double range, {int targetTicks = 5})`  — A round step for about [targetTicks] axis ticks over [range].
+- `@immutable class AxisScale`  — The value axis of a chart: a round minimum, maximum and step.
+- `Color _chartAccent(ChartPalette palette)`  — The user's accent, moved to a lightness that reads as a filled
+- `@immutable class OpenUiChartColors`  — The series colours of one chart.
+- `TextStyle chartAxisStyle(BuildContext context)`  — Axis tick text: 10 px, the quiet colour (as the `<chart>` renderer).
+- `TextStyle chartCaptionStyle(BuildContext context)`  — Legend and axis title text.
+- `Color chartTooltipColor(BuildContext context)`  — The tooltip fill: a raised neutral surface, no glow.
+- `BorderSide chartTooltipBorder(BuildContext context)`  — The tooltip border.
+- `TextStyle chartTooltipTitleStyle(BuildContext context)`  — The first tooltip line (the x label).
+- `TextStyle chartTooltipValueStyle(Color ink)`  — A tooltip value line in the series colour.
+- `double chartHeight(OpenUiProps p, {double fallback = 220})`  — The chart height: the `height` prop clamped, else [fallback].
+- `bool chartIsStreaming(BuildContext context, OpenUiProps p)`  — Whether the statement of [p] still streams.
+- `class ChartFrame extends StatelessWidget`  — The card a chart is drawn on: the inner block surface of the OpenUI
+- `class ChartSwatch extends StatelessWidget`  — A small square swatch for a legend entry.
+- `class ChartLegend extends StatelessWidget`  — The legend of a multi-series chart: one swatch and name per series,
+- `class SliceLegend extends StatelessWidget`  — The legend of a 1D chart: one row per slice with its value and its
+- `Widget chartPlaceholder(BuildContext context, OpenUiProps p, double height)`  — What a chart draws while its data still streams and nothing is
+
+### data_table.dart  (638 Z.)
+- const: kTableEdgePad kTableGutter kTableRowPadY kTableMinText kTableMaxText kTableRowsSampled kTablePageSize
+- `@immutable class OpenUiTableStyles`  — The text styles of a table.
+- `double measureTableText(String text, TextStyle style, TextScaler scaler)`  — The one-line width of [text] in [style].
+- `double tableCellPadLeft(int c)`  — The left padding of column [c].
+- `double tableCellPadRight(int c, int count)`  — The right padding of column [c] of [count].
+- `({List<double> widths, bool scrolls}) planTableColumns( List<double> natural, double available, )`  — Fits the natural column widths [natural] (padding included) into
+- `class OpenUiTableShell extends StatefulWidget`  — The card around a table, with the horizontal scroll and its bar.
+- `class _OpenUiTableShellState extends State<OpenUiTableShell>`
+- `Uri? tableCellUrl(Object? v)`  — A web link in a cell, or `null`.
+- `void openTableUrl(BuildContext context, String url)`  — Opens [url] through the host of the view.
+- `class TableLinkCell extends StatelessWidget`  — A link cell: the host (or the given text) in the accent, and an
+- `enum _ColKind`  — What a Table column shows.
+- `class _ColSpec`
+- `bool _isDrawn(Object? v)`  — Whether [v] is a rendered component (a data node draws nothing).
+- `String tableCellText(Object? v)`  — The plain text of a cell value (numbers lose a `.0`).
+- `List<_ColSpec> _readColumns(OpenUiProps p)`
+- `Widget buildTable(BuildContext context, OpenUiProps p)`  — Builds `Table(columns)`.
+- `class _OpenUiDataTable extends StatefulWidget`  — The Table widget. Pages of [kTablePageSize] rows.
+- `class _OpenUiDataTableState extends State<_OpenUiDataTable>`
+- `class _Pager extends StatelessWidget`  — The page control under a long table.
+
+### editable_table.dart  (718 Z.)
+- const: kEditableTableSaveMessage _kTypes
+- `@immutable class _EColumn`
+- `@immutable class _ERow`
+- `List<_EColumn> _readColumns(OpenUiProps p)`
+- `List<_ERow> _readRows(List<Object?> raw)`
+- `Widget buildEditableTable(BuildContext context, OpenUiProps p)`  — Builds `EditableTable(name?, columns?, data?)`.
+- `class _EditableTable extends StatefulWidget`
+- `class _EditableTableState extends State<_EditableTable>`
+- `class _ChangesBar extends StatelessWidget`  — The bar under an edited table: the change count, Reset, Save.
+
+### round_charts.dart  (499 Z.)
+- const: _kSideBySide
+- `Widget _roundLayout({ required Widget Function(double size) figure, required Widget legend, double maxSize = 220, double …)`  — Lays out a round chart [figure] and its legend.
+- `List<ChartSlice> _drawable(List<ChartSlice> slices)`  — The slices a round chart can draw: positive values only.
+- `Widget buildPieChart(BuildContext context, OpenUiProps p)`  — Builds `PieChart(labels, values, variant?, appearance?)`.
+- `class _CenterTotal extends StatelessWidget`
+- `class _PiePainter extends CustomPainter`
+- `bool _sameList<T>(List<T> a, List<T> b)`
+- `Widget buildRadialChart(BuildContext context, OpenUiProps p)`  — Builds `RadialChart(labels, values)`: one ring per category, the
+- `class _RadialPainter extends CustomPainter`
+- `Widget buildSingleStackedBarChart(BuildContext context, OpenUiProps p)`  — Builds `SingleStackedBarChart(labels, values)`: one bar split into
+- `Widget buildRadarChart(BuildContext context, OpenUiProps p)`  — Builds `RadarChart(labels, series)`. With fewer than three labels a
+- `String _short(String s)`
+
+### scatter_chart.dart  (236 Z.)
+- `@immutable class ScatterPoint`  — One point of a scatter set. [z] sizes the dot when present.
+- `@immutable class ScatterSet`  — One named scatter set.
+- `ScatterPoint? _point(Object? x, Object? y, Object? z)`
+- `List<ScatterSet> readScatter(OpenUiProps p)`  — Reads the `datasets` of a ScatterChart. `Point` items and object
+- `Widget buildScatterChart(BuildContext context, OpenUiProps p)`  — Builds `ScatterChart(datasets, xLabel?, yLabel?)`.
+
+## lib/openui/dev
+### gallery_main.dart  (329 Z.)
+- const: _kFile _kDir
+- `void main()`
+- `class OpenUiGalleryApp extends StatefulWidget`  — The gallery app.
+- `class _OpenUiGalleryAppState extends State<OpenUiGalleryApp>`
+- `class _GalleryPage extends StatefulWidget`
+- `class _GalleryPageState extends State<_GalleryPage>`
+- `class _Sample extends StatefulWidget`  — One sample: its name, the rendered view in a chat-wide column, and
+- `class _SampleState extends State<_Sample>`
+- `class _Pill extends StatelessWidget`
+
 ## lib/pages
 ### about_page.dart  (597 Z.)
 - `class AboutPage extends StatefulWidget`
@@ -311,12 +727,37 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _LicenseDetailPage extends StatelessWidget`
 - `String? _inferLicenseName(String text)`
 
-### account_settings_page.dart  (739 Z.)
+### account_settings_page.dart  (747 Z.)
 - `class AccountSettingsPage extends StatefulWidget`
 - `class _AccountSettingsPageState extends State<AccountSettingsPage>`
 - `class _FieldLabel extends StatelessWidget`
 
-### agent_profile_edit_page.dart  (613 Z.)
+### agent_mail_contacts_page.dart  (405 Z.)
+- `class AgentMailContactsPage extends StatefulWidget`
+- `class _AgentMailContactsPageState extends State<AgentMailContactsPage>`
+- `class _ContactTile extends StatelessWidget`  — One contact: the address in full (it may wrap, it is never cut), what it
+- `class _AddContactDialog extends StatefulWidget`  — Address or `@domain`, then Trust or Block. Pops `(address, block)`.
+- `class _AddContactDialogState extends State<_AddContactDialog>`
+
+### agent_mail_detail_page.dart  (882 Z.)
+- `enum AgentMailOutcome`  — What happened to the mail while its page was open. The list uses it to
+- `class AgentMailDetailPage extends StatefulWidget`
+- `class _AgentMailDetailPageState extends State<AgentMailDetailPage>`
+- `class _DraftField extends StatefulWidget`  — One field of the draft: the app's filled field, its label inside it over
+- `class _DraftFieldState extends State<_DraftField>`
+- `class _FieldTile extends StatelessWidget`  — A label over its value, the value free to wrap: an address is never cut.
+- `class _AttachmentTile extends StatelessWidget`  — One attachment: its name in full (the extension matters), its size, and a
+
+### agent_mailbox_page.dart  (864 Z.)
+- const: kAgentMailFilters kAgentMailArchive kAgentMailPageSize
+- `@immutable class AgentMailFilter`  — One segment of the folder switch and the list query behind it.
+- `class AgentMailboxPage extends StatefulWidget`
+- `class _AgentMailboxPageState extends State<AgentMailboxPage>`
+- `class _AddressTile extends StatelessWidget`  — The agent's address on a line of its own, so it is never cut: at a narrow
+- `class _FolderSwitch extends StatelessWidget`  — The folder switch. It never scrolls and never clips: when the labels do
+- `class AgentMailRow extends StatelessWidget`  — One mail in the list: sender, date, subject, the agent's note or the
+
+### agent_profile_edit_page.dart  (612 Z.)
 - `class AgentProfileEditPage extends StatefulWidget`
 - `class _AgentProfileEditPageState extends State<AgentProfileEditPage>`
 - `class _FacePreview extends StatelessWidget`  — The face as it will look, with the colour the user is trying out.
@@ -324,14 +765,16 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _ColorRow extends StatelessWidget`  — The colour palette, plus a "back to the derived colour" target.
 - `class _ShapeRow extends StatelessWidget`  — The silhouettes a coworker can be given, drawn as themselves.
 
-### agent_profile_page.dart  (663 Z.)
+### agent_profile_page.dart  (753 Z.)
 - `class AgentProfilePage extends StatelessWidget`
+- `class _SectionLabel extends StatelessWidget`  — The small capitals over a block of the profile body.
 - `class _StatePill extends StatelessWidget`  — The live-state pill under the name: what the coworker is doing right now.
 - `class _ActionRow extends StatelessWidget`  — The row of round targets under the header.
 - `class _Action extends StatelessWidget`
+- `class _HostRow extends StatelessWidget`  — Where the coworker runs, told from what the app knows (bead
 - `class _InfoCard extends StatelessWidget`  — One labelled card in the profile body.
 
-### agents_desktop_layout.dart  (639 Z.)
+### agents_desktop_layout.dart  (696 Z.)
 - part of 'messenger_shell.dart'
 - `mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost`  — The Agents desktop layout: chuk_chat's desktop with coworkers in it.
 
@@ -347,7 +790,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class AgentsPairingPage extends StatefulWidget`
 - `class _AgentsPairingPageState extends State<AgentsPairingPage>`
 
-### agents_shell_state.dart  (1166 Z.)
+### agents_shell_state.dart  (1295 Z.)
 - part of 'messenger_shell.dart'
 - `Future<AgentsRelayController> _buildRelayController( AgentsPairingStore store, AccountSessionSource sessionSource, )`  — Builds the default production relay controller: a real [AgentsRelayClient]
 - `mixin AgentsShellHost on State<MessengerShell>`  — Everything the shell OWNS, as opposed to how it lays it out.
@@ -361,7 +804,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _Step extends StatelessWidget`
 - `class _AllSet extends StatelessWidget`
 
-### automations_page.dart  (193 Z.)
+### automations_page.dart  (247 Z.)
 - `class AutomationsPage extends StatefulWidget`  — Every automation of the host, grouped by the coworker that owns it, with
 - `class _AutomationsPageState extends State<AutomationsPage>`
 
@@ -371,6 +814,10 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### connector_detail_page.dart  (245 Z.)
 - `class ConnectorDetailPage extends StatefulWidget`  — Full-screen detail page for a single tool, showing enable/disable,
 - `class _ConnectorDetailPageState extends State<ConnectorDetailPage>`
+
+### coworker_model_page.dart  (728 Z.)
+- `class CoworkerModelPage extends StatefulWidget`
+- `class _CoworkerModelPageState extends State<CoworkerModelPage>`
 
 ### customization_page.dart  (803 Z.)
 - `class CustomizationPage extends StatefulWidget`
@@ -382,7 +829,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Future<void> showDesktopMediaModal(BuildContext context)`  — Opens the media library over the current page.
 - `class DesktopMediaModal extends StatelessWidget`  — The panel itself: a header row, then the library.
 
-### desktop_settings_modal.dart  (886 Z.)
+### desktop_settings_modal.dart  (896 Z.)
 - `Future<void> showDesktopSettingsModal( BuildContext context, { required AppShellConfig config, String? initialSectionId …)`  — Opens the desktop settings modal over the current chat UI.
 - `class _SettingsDest`  — A settings destination: either a page shown in the right pane, or an
 - `class _SettingsGroup`
@@ -441,12 +888,16 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _MediaFilterBar extends StatelessWidget`  — Images / Artifacts, as one segmented track with the count in the label.
 - `class _ArtifactTile extends StatelessWidget`
 
-### messenger_shell.dart  (1115 Z.)
+### messenger_shell.dart  (1142 Z.)
 - part 'agents_shell_state.dart' · part 'agents_desktop_layout.dart'
 - `class MessengerShell extends StatefulWidget`  — The messenger: coworkers down the left, the selected thread in the middle,
 - `class _MessengerShellState extends State<MessengerShell> with AgentsShellHost, _AgentsDesktopLayout, SingleTickerProvide …)`
 
-### mobile_agents_settings_page.dart  (398 Z.)
+### mobile_agent_permissions_page.dart  (116 Z.)
+- `class MobileAgentPermissionsPage extends StatefulWidget`
+- `class _MobileAgentPermissionsPageState extends State<MobileAgentPermissionsPage>`
+
+### mobile_agents_settings_page.dart  (494 Z.)
 - `class MobileAgentsSettingsPage extends StatefulWidget`  — The mobile contact page: everyday choices first, technical details second.
 - `class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage>`
 
@@ -480,7 +931,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class SetNewPasswordPage extends StatefulWidget`  — Page shown after a user clicks a password reset link.
 - `class _SetNewPasswordPageState extends State<SetNewPasswordPage>`
 
-### settings_page.dart  (1127 Z.)
+### settings_page.dart  (1158 Z.)
 - `class SettingsPage extends StatefulWidget`
 - `class _SettingsPageState extends State<SettingsPage>`
 - `class _PlanInfo`
@@ -523,7 +974,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _PresetDots extends StatelessWidget`
 - `class _FontCard extends StatelessWidget`
 
-### tool_calling_settings_page.dart  (759 Z.)
+### tool_calling_settings_page.dart  (761 Z.)
 - `class ToolCallingSettingsPage extends StatefulWidget`
 - `class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage>`
 - `class _ToolRow extends StatelessWidget`  — One tool: the switch turns it off, the tile itself opens its detail.
@@ -601,14 +1052,14 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### root_wrapper.dart  (5 Z.)
 - reicht weiter: 'root_wrapper_stub.dart' if (dart.library.io) 'root_wrapper_io.dart'
 
-### root_wrapper_desktop.dart  (796 Z.)
+### root_wrapper_desktop.dart  (820 Z.)
 - `class RootWrapperDesktop extends StatefulWidget`
 - `class _RootWrapperDesktopState extends State<RootWrapperDesktop>`
 
 ### root_wrapper_io.dart  (76 Z.)
 - `class RootWrapper extends StatelessWidget`
 
-### root_wrapper_mobile.dart  (819 Z.)
+### root_wrapper_mobile.dart  (825 Z.)
 - `class RootWrapperMobile extends StatefulWidget`
 - `class _RootWrapperMobileState extends State<RootWrapperMobile> with WidgetsBindingObserver, SingleTickerProviderStateMix …)`
 
@@ -640,7 +1091,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### chat_metrics_observer.dart  (15 Z.)
 - `class ChatMetricsObserver with WidgetsBindingObserver`  — Calls back on every view-metrics change — the soft keyboard opening or
 
-### chat_model_selection_mixin.dart  (335 Z.)
+### chat_model_selection_mixin.dart  (540 Z.)
 - `mixin ChatModelSelectionMixin<W extends StatefulWidget> on State<W>, ModelProviderResolutionMixin<W>`
 
 ### chat_scroll_mixin.dart  (538 Z.)
@@ -648,7 +1099,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `mixin ChatScrollMixin<T extends StatefulWidget> on State<T>`  — Shared message-list scroll behaviour for the desktop and mobile chat UIs.
 - `class _TranscriptScrollController extends ScrollController`  — A [ScrollController] whose initial offset is read when a position is
 
-### chat_ui_desktop.dart  (2706 Z.)
+### chat_ui_desktop.dart  (2842 Z.)
 - part 'desktop_send_logic.dart'
 - `class ChukChatUIDesktop extends StatefulWidget`
 - `class ChukChatUIDesktopState extends State<ChukChatUIDesktop> with SingleTickerProviderStateMixin, ChatScrollMixin, Mode …)`
@@ -667,7 +1118,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `bool messageStartsRun(List<Map<String, String>> messages, int index)`  — Whether the row at [index] opens a new run: it is the first row, the sender
 - `bool messageEndsRun(List<Map<String, String>> messages, int index)`  — Whether the row at [index] closes its run: the last row, or the next row
 
-### chat_ui_mobile.dart  (4177 Z.)
+### chat_ui_mobile.dart  (4299 Z.)
 - `enum _AttachChoice`  — What the plus menu can start.
 - `class _WorkspaceChoice`  — A row in the workspace menu: a workspace to switch to (null clears it),
 - `@visibleForTesting String queuedMessagesForComposer(String pending, List<String> followUps)`  — The text a cancelled queue puts back into the composer: the pending
@@ -689,7 +1140,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - part of 'chat_ui_desktop.dart'
 - `extension DesktopSendLogic on ChukChatUIDesktopState`  — Extension on [ChukChatUIDesktopState] containing the large send/streaming
 
-### model_provider_resolution_mixin.dart  (186 Z.)
+### model_provider_resolution_mixin.dart  (199 Z.)
 - `mixin ModelProviderResolutionMixin<T extends StatefulWidget> on State<T>`  — Shared model → provider-slug resolution for the desktop and mobile chat UIs.
 
 ### regen_variant_seed.dart  (150 Z.)
@@ -731,7 +1182,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _StreamingSnapshot`
 
 ## lib/platform_specific/chat/voice
-### chat_voice_binding.dart  (474 Z.)
+### chat_voice_binding.dart  (560 Z.)
 - const: debugOnVoiceCallStart
 - `VoiceCallMode voiceCallModeFor(String chatId)`  — Whether this build shows the voice call at all: the build flag and a
 - `String? storedChatTitle(String chatId)`  — The stored title of [chatId], or null.
@@ -743,17 +1194,17 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Future<void> startAgentsThreadVoiceCall({ required String threadKey, String? agentName, Duration waitForThread = Duratio …)`  — Starts a call for an Agents thread from a page that is not the thread.
 - `typedef VoiceCallStartProbe = ({ String chatId, VoiceCallMode mode, String? agentName, String? callId, String? callReaso`  — What a start from this file hands to `VoiceCallController.start`, for a
 
-### chat_voice_call_button.dart  (263 Z.)
+### chat_voice_call_button.dart  (257 Z.)
 - `enum ChatVoiceCallStyle`  — Which surface the target sits on.
 - `class ChatVoiceCallButton extends StatelessWidget`
 
-### voice_call_context.dart  (117 Z.)
-- const: kVoiceTaskMarker kVoiceContextMaxMessages kVoiceContextMaxChars kVoiceContextMaxLineChars kVoiceResultMaxChars _kThinkingPlaceholder _visualTag _whitespace
+### voice_call_context.dart  (127 Z.)
+- const: kVoiceTaskMarker kVoiceContextMaxMessages kVoiceContextMaxChars kVoiceContextMaxLineChars kVoiceResultMaxChars _kThinkingPlaceholder _visualTag _whitespace kVoiceOpenUiOnlyText
 - `String buildVoiceCallContext( List<Map<String, String>> messages, { int maxMessages = kVoiceContextMaxMessages, int maxC …)`  — The call context: the last [maxMessages] text messages of a chat as plain
 - `String? _contextLine(Map<String, String> message, int maxLineChars)`
 - `String _cut(String text, int max)`
 - `String? voiceTaskMessageText(String task)`  — The text a spoken task is sent with: the marker, then the task on one
-- `String voiceResultText(String text)`  — Cuts a task result to what the worker gets back.
+- `String voiceResultText(String text)`  — Cuts a task result to what the worker gets back. An OpenUI program in
 - `bool looksLikeFailedTurn(String text)`  — The texts the chat pipeline finalizes a turn with when the turn did not
 
 ### voice_chat_widgets.dart  (102 Z.)
@@ -784,7 +1235,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _Pending`
 
 ## lib/platform_specific/chat/widgets
-### chat_message_list_item.dart  (198 Z.)
+### chat_message_list_item.dart  (224 Z.)
 - `class ChatMessageListItem extends StatelessWidget`  — One message row shared by the desktop and mobile chat lists.
 
 ### mobile_chat_widgets.dart  (213 Z.)
@@ -794,7 +1245,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Widget buildKeyboardListener({ required FocusNode focusNode, required TextEditingController controller, required VoidCal …)`  — Build keyboard listener for text field (handles Enter/Shift+Enter)
 
 ## lib/platform_specific/mobile
-### mobile_agent_list.dart  (1430 Z.)
+### mobile_agent_list.dart  (1482 Z.)
 - const: _kBarReach
 - `String accountMonogram(String? label)`  — The account monogram: "alex.smith@…" → "A", "Alex Smith" → "AS".
 - `class MobileAgentList extends StatefulWidget`
@@ -804,22 +1255,23 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _SearchField extends StatelessWidget`  — The roster's search input: one rounded, filled field that carries its own
 - `class MobileAgentRow extends StatelessWidget`
 - `class MobileRoomRow extends StatelessWidget`  — One ROOM, in the inbox's own row grammar.
-- `class _RoleTag extends StatelessWidget`  — The small grey tag next to the name (the coworker's role).
+- `class _NameWithRole extends StatelessWidget`  — The small grey tag next to the name (the coworker's role).
+- `class _RoleTag extends StatelessWidget`
 - `class _MenuRow extends StatelessWidget`
 - `class _EmptyState extends StatelessWidget`
 - `String mobileTimeLabel(DateTime? when, {required DateTime now})`  — The time column of an inbox row, like a messenger: a clock time today,
 - `class _UnreadBadge extends StatelessWidget`  — The number of new threads on a coworker, in that coworker's colour.
 
-### mobile_agent_sheet.dart  (211 Z.)
+### mobile_agent_sheet.dart  (208 Z.)
 - `class MobileAgentSheet extends StatelessWidget`
 
-### mobile_chat_chrome.dart  (498 Z.)
+### mobile_chat_chrome.dart  (524 Z.)
 - const: kMobileChromeChip kMobileChromeRow kMobileChromePillRadius _kReach _kPillFaceSize _kPillStatusFontSize
 - `class MobileChatChrome extends StatelessWidget`
-- `class _ChromeChip extends StatelessWidget`  — One round chip of the bar: chuk's floating chip — the chrome surface, a
-- `class _AgentPill extends StatelessWidget`  — The coworker pill: chuk's title pill with the face, the name and the live
+- `class ChromeChip extends StatelessWidget`  — One round chip of the bar: chuk's floating chip — the chrome surface, a
+- `class AgentChromePill extends StatelessWidget`  — The coworker pill: chuk's title pill with the face, the name and the live
 
-### mobile_chat_screen.dart  (220 Z.)
+### mobile_chat_screen.dart  (226 Z.)
 - `typedef MobileChatBodyBuilder = Widget Function(BuildContext context, double topInset)`  — Builds the chat body. [topInset] is the space the body must leave at the
 - `class MobileChatScreen extends StatefulWidget`
 - `class _MobileChatScreenState extends State<MobileChatScreen> with TickerProviderStateMixin`
@@ -911,7 +1363,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### artifact_tag_processor.dart  (142 Z.)
 - `class ArtifactTagProcessor`  — Processes inline `<artifact>` tags emitted by the assistant. For each tag:
 
-### auth_service.dart  (205 Z.)
+### auth_service.dart  (208 Z.)
 - `class AuthService`
 - `class AuthServiceException implements Exception`
 
@@ -937,8 +1389,8 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `@immutable class ModeConfig`  — One mode's independent settings: which model, on which provider, at which
 - `class ChatModeService`
 
-### chat_model_selection_service.dart  (118 Z.)
-- `@immutable class ChatModelSelection`
+### chat_model_selection_service.dart  (185 Z.)
+- `@immutable class ChatModelSelection`  — A coworker's own model: the model, the provider it runs on, and how hard
 - `class ChatModelSelectionService extends ChangeNotifier`  — A model AND provider belong to one account/chat, never just to a model ID.
 
 ### chat_payload_codec.dart  (561 Z.)
@@ -966,7 +1418,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `List<dynamic> _resolveToolCalls(List<dynamic> blocks, List<dynamic> toolCalls)`
 - `Map<String, dynamic> _normalizeV1(Map<String, dynamic> msg)`  — A v1 message with its field names normalised; all fields are kept.
 
-### chat_payload_migration_service.dart  (1247 Z.)
+### chat_payload_migration_service.dart  (1193 Z.)
 - `String bumpTimestampByOneMicrosecond(String timestamp)`  — `updated_at` + 1 µs, as Postgres wants it. Works on the web too, where a
 - `@immutable class ChatMaintenanceProgress`  — Progress of a run, for the two bars of the maintenance screen.
 - `@immutable class ChatMaintenancePlan`  — What needs rewriting for one account.
@@ -1131,7 +1583,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _CompressionParams`  — Parameters for background image compression
 - `class ImageCompressionService`  — Service for compressing images with no size limit
 
-### image_storage_service.dart  (476 Z.)
+### image_storage_service.dart  (516 Z.)
 - `class StoredImage`  — Represents a stored image with metadata
 - `class ChatUsingImage`  — Represents a chat that uses a specific image
 - `String _utf8DecodeInBackground(Uint8List bytes)`  — Top-level function for UTF-8 decoding in background isolate
@@ -1194,7 +1646,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### notification_service.dart  (46 Z.)
 - `class NotificationService`
 
-### notification_service_io.dart  (250 Z.)
+### notification_service_io.dart  (257 Z.)
 - `class NotificationService`  — Service for handling local notifications (completion notifications with deep linking)
 
 ### notification_service_stub.dart  (38 Z.)
@@ -1264,7 +1716,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Uint8List _frame(int codec, List<int> raw, List<int> data)`
 - `bool _sameBytes(List<int> a, List<int> b)`
 
-### pdf_attachment_service.dart  (38 Z.)
+### pdf_attachment_service.dart  (40 Z.)
 - `class PdfAttachmentService`
 
 ### per_model_system_prompt_service.dart  (555 Z.)
@@ -1318,7 +1770,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### streaming_foreground_service.dart  (43 Z.)
 - `class StreamingForegroundService`
 
-### streaming_foreground_service_io.dart  (307 Z.)
+### streaming_foreground_service_io.dart  (311 Z.)
 - `class StreamingForegroundService`  — Service to keep AI streaming alive when app is backgrounded or screen locked.
 - `@pragma('vm:entry-point') void _foregroundTaskCallback()`  — Callback for foreground task - we don't need to do anything here
 - `class _StreamingTaskHandler extends TaskHandler`  — Minimal task handler - just keeps the service running
@@ -1374,7 +1826,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class TokenActivityStatsService`  — Pure aggregation for the token-activity panel. Stateless: every method is
 - `class _DayAggregate`
 
-### tool_call_handler.dart  (2179 Z.)
+### tool_call_handler.dart  (2181 Z.)
 - const: _readOnlyToolNames repeatableLookupToolNames kRepeatedToolCallNote kToolsClosedNote kMaxToolRoundsPerTurn _kMalformedArgumentsKey
 - `@visibleForTesting String toolCallIdentityKey(String name, Map<String, dynamic> arguments)`  — A key that is equal for two calls with the same name and the same
 - `Object? _canonicalJson(Object? value)`
@@ -1386,7 +1838,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class ToolCallHandler`
 - `class _DiscoveryContextState`  — Per-chat context that survives across user turns (in memory only — it does
 
-### tool_enforcer.dart  (420 Z.)
+### tool_enforcer.dart  (421 Z.)
 - `class ToolEnforcer`  — Client-side Tool Call Enforcer (inspired by Kimi K2's Enforcer).
 - `class HallucinationCheckResult`
 - `class EnforcedToolCall`
@@ -1404,10 +1856,10 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _ExtractionResult`
 - `class ToolImageResultService`
 
-### tool_prompt_builder.dart  (1367 Z.)
+### tool_prompt_builder.dart  (1376 Z.)
 - `class ToolPromptBuilder`  — Builds system prompts with tool calling protocol for LLM.
 
-### tool_registry.dart  (1814 Z.)
+### tool_registry.dart  (1867 Z.)
 - const: _serverBackedToolNames toolCategoryMap discoveryCatalog builtinTools
 - `bool _isMobileRuntime()`  — Whether the current platform is a mobile device (Android/iOS).
 - `void registerBuiltinTools(ToolExecutor executor)`  — Register all built-in tools from [builtinTools] into a [ToolExecutor].
@@ -1473,6 +1925,18 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### window_close_service_stub.dart  (5 Z.)
 - `Future<void> initializeWindowCloseHandler()`
 
+### window_title_service.dart  (103 Z.)
+- `class WindowTitleService`  — Keeps the desktop window title on the chat in view:
+
+### window_title_setter.dart  (5 Z.)
+- reicht weiter: 'window_title_setter_stub.dart' if (dart.library.io) 'window_title_setter_io.dart'
+
+### window_title_setter_io.dart  (17 Z.)
+- `Future<void> setNativeWindowTitle(String title)`
+
+### window_title_setter_stub.dart  (5 Z.)
+- `Future<void> setNativeWindowTitle(String title)`
+
 ### workspace_file_upload.dart  (88 Z.)
 - `class WorkspaceUploadOutcome`  — What came out of [pickAndUploadWorkspaceFile].
 - `Future<WorkspaceUploadOutcome> pickAndUploadWorkspaceFile({ required String workspaceId, required void Function(String f …)`  — Asks for a file and uploads it to [workspaceId].
@@ -1486,7 +1950,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class WorkspaceStorageService`  — Service for managing workspace workspaces, chat assignments, and file attachments
 
 ## lib/services/agents
-### agent_control_source.dart  (496 Z.)
+### agent_control_source.dart  (587 Z.)
 - `@immutable sealed class ControlValue<T>`  — One block of the control surface: known, loading, or not connected.
 - `@immutable class ControlAvailable<T> extends ControlValue<T>`  — The host reported a real value.
 - `@immutable class ControlLoading<T> extends ControlValue<T>`  — A request is in flight.
@@ -1496,6 +1960,8 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `@immutable class AgentTokenUsage`  — What this coworker has spent, summed over the runs it really made.
 - `@immutable class AgentSessionRuntime`  — The coworker's clock: when it first ran, and how long it has been working.
 - `@immutable class AgentSandbox`  — The box this coworker works in (§6, bead cowork-jo2).
+- `@immutable class AgentCostTotals`  — What this coworker has cost in euro, as the host priced it
+- `String formatEuro(double amount)`  — `€0.41` for an amount of at least a cent, `< €0.01` below that, `€0.00`
 - `@immutable class AgentControlSnapshot`  — Everything the control surface shows, one [ControlValue] per block.
 - `abstract interface class AgentControlSource`  — The control surface's data source. One instance for the app; every call
 - `class RelayAgentControlSource implements AgentControlSource`  — The production source: the host's own figures, over the relay.
@@ -1515,7 +1981,64 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### agent_file_saver_stub.dart  (18 Z.)
 - `class DownloadsAgentFileSaver implements AgentFileSaver`
 
-### agent_profile_store.dart  (281 Z.)
+### agent_mail_crypto.dart  (329 Z.)
+- const: kAgentMailSealLabel kAgentMailBinaryMagic _keyLength _nonceLength _tagLength _x25519 _hkdf _aes _label
+- `class AgentMailSealException implements Exception`  — A seal that could not be opened: bad shape, wrong key, or tampered bytes.
+- `class AgentMailKeyPair`  — The user's mail key: the raw 32-byte X25519 private and public key.
+- `Future<SecretKey> _messageKey({ required SimpleKeyPair ephemeralOrRecipient, required List<int> remotePublicKey, require …)`
+- `typedef _Sealed = ({Uint8List epk, Uint8List nonce, Uint8List ct})`  — The parts of one seal: `E`, the nonce, and `ct ‖ tag`.
+- `Future<_Sealed> _seal( List<int> plaintext, List<int> recipientPublicKey, { List<int>? ephemeralPrivateKey, List<int>? n …)`
+- `Future<Uint8List> _open( List<int> epk, List<int> nonce, List<int> ct, AgentMailKeyPair key, )`
+- `Future<String> sealAgentMailText( String plaintext, List<int> recipientPublicKey, { List<int>? ephemeralPrivateKey, List …)`  — Seals [plaintext] (UTF-8) to [recipientPublicKey] in the text form.
+- `Future<Uint8List> sealAgentMailBytes( List<int> plaintext, List<int> recipientPublicKey, { List<int>? ephemeralPrivateKe …)`  — Seals [plaintext] to [recipientPublicKey] in the binary form.
+- `Future<String> unsealAgentMailText( Object? envelope, AgentMailKeyPair key, )`  — Opens a text-form seal. [envelope] is the JSON object as the server sends
+- `Future<Map<String, dynamic>> unsealAgentMailJson( Object? envelope, AgentMailKeyPair key, )`  — Opens a text-form seal whose plaintext is a JSON object.
+- `Future<Uint8List> unsealAgentMailBytes( List<int> blob, AgentMailKeyPair key, )`  — Opens a binary-form seal (an attachment object).
+
+### agent_mail_key_handover.dart  (138 Z.)
+- const: kAgentMailKeyFrameType
+- `Map<String, dynamic> agentMailKeyFrame(AgentMailKeyPair key)`  — The hand-over frame for [key].
+- `typedef AgentMailFrameSender = Future<void> Function( Map<String, dynamic> payload, )`  — Seals and sends one app frame to the host. Throws when not connected.
+- `typedef AgentMailChannelSource = AgentMailFrameSender? Function()`  — The sender of the live, paired channel, or null when there is none.
+- `AgentMailFrameSender? _linkedChannel()`
+- `class AgentMailKeyHandover`
+
+### agent_mail_service.dart  (1056 Z.)
+- const: _backgroundUnsealMinBytes kAgentMailOutboundAttachmentsMax
+- `enum MailboxStatus`  — `frozen`: the subscription ended, no send, incoming mail is rejected.
+- `enum MailTrust`  — How far the server trusts the sender of a mail (§2). [self] is the
+- `enum MailFolder`  — The folders the server keeps. The wire name is [MailFolder.name].
+- `enum MailTrustFilter`  — The `trust` query of the message list.
+- `enum MailImportance`  — What the restricted run thinks of a mail.
+- `MailTrust _trust(Object? raw)`
+- `MailFolder? _folder(Object? raw)`
+- `MailImportance? _importance(Object? raw)`
+- `DateTime? _time(Object? raw)`
+- `String? _text(Object? raw)`
+- `String? _raw(Object? raw)`  — The value when it is a string, as is (no trim): subjects and bodies.
+- `List<String> _addresses(Object? raw)`
+- `int? _int(Object? raw)`
+- `Future<Map<String, dynamic>?> _openDocument( Object? sealed, AgentMailKeyPair key, )`  — Opens one sealed JSON document of a row. Null when the row has no such
+- `@immutable class Mailbox`  — `GET /v1/agent-mail/mailbox`.
+- `@immutable class MailSummary`  — One row of the message list (`Summary`), its sealed parts opened.
+- `@immutable class MailAttachment`  — One attachment of a mail, as `sealed_body.attachments` lists it.
+- `@immutable class MailAuth`  — The DKIM result of an incoming mail (§2): did a signature whose `d=`
+- `@immutable class MailMessage`  — `GET /v1/agent-mail/messages/{id}`: the summary plus the opened body.
+- `@immutable class MailPage`  — One page of the message list. [nextBefore] goes back as `before` for the
+- `@immutable class MailContact`  — An address or an `@domain.tld` the mailbox knows. The server keeps only
+- `@immutable class MailSendResult`  — What `POST /v1/agent-mail/drafts/{id}/send` answered.
+- `class AgentMailException implements Exception`  — A non-2xx answer, no answer, or a mail key problem. [code] is the
+- `abstract interface class AgentMailSecretBox`  — Seals the raw mail private key with the user's chuk key, and opens it
+- `class ChukKeySecretBox implements AgentMailSecretBox`  — [AgentMailSecretBox] over [EncryptionService]: AES-256-GCM under the
+- `typedef AgentMailTokenSource = Future<String?> Function()`  — Hands out a usable access token, or null when signed out.
+- `typedef AgentMailUserSource = String? Function()`  — The id of the signed-in user, or null.
+- `Future<String?> supabaseAgentMailToken()`  — The live account's token: refreshed only when it is about to lapse.
+- `String? _supabaseUserId()`
+- `Future<Uint8List> _unsealBytesInBackground( (Uint8List, Uint8List, Uint8List) job, )`
+- `class AgentMailService`
+- `bool isValidMailContactAddress(String raw)`  — A plain address or `@domain.tld`, as `PUT /contacts` takes it.
+
+### agent_profile_store.dart  (308 Z.)
 - `enum AgentAvatarShape`  — One coworker's display profile. Every field is optional: an agent with no
 - `@immutable class AgentProfile`
 - `class AgentProfileStore extends ChangeNotifier`
@@ -1523,12 +2046,12 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### agent_read_marks.dart  (175 Z.)
 - `class AgentReadMarks extends ChangeNotifier`
 
-### agent_roster_source.dart  (517 Z.)
+### agent_roster_source.dart  (565 Z.)
 - `abstract class AgentRosterSource extends ChangeNotifier`  — Read/write access to the roster, as a [ChangeNotifier] the UI listens to.
 - `class LocalAgentRosterSource extends AgentRosterSource`  — The roster the app ships with, kept in memory and cached on disk.
 - `class AgentNameGenerator`  — Auto-assigned coworker names (§4): adjective-noun, the same shape the
 
-### agent_roster_store.dart  (258 Z.)
+### agent_roster_store.dart  (260 Z.)
 - const: kAgentRosterPrefsKey
 - `@immutable class AgentRosterSnapshot`  — What one launch reads back off disk.
 - `class AgentRosterStore`
@@ -1539,10 +2062,17 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### agents_backoff.dart  (59 Z.)
 - `class AgentsBackoff`  — The delay curve for one kind of work.
 
+### agents_channels_service.dart  (302 Z.)
+- const: kAgentChannelsCapability kTelegramChannel
+- `enum AgentChannelAction`  — What the user can ask the host to do with a channel.
+- `@immutable class AgentChannelState`  — One coworker's Telegram channel, as the host last said.
+- `Future<void> _sendOverRelay(Map<String, dynamic> payload)`
+- `class AgentsChannelsService extends ChangeNotifier`  — The app's copy of the host's channel answers, per coworker.
+
 ### agents_chat_core.dart  (31 Z.)
 - const: debugAgentsChatCoreOverride
 
-### agents_chat_transport.dart  (838 Z.)
+### agents_chat_transport.dart  (902 Z.)
 - const: _taskSeq
 - `class AgentsChatTransport`  — Service for handling streaming chat responses.
 - `PendingTask _unrecorded(String sessionKey, String taskId)`  — The value a failed [AgentsPendingTasks.record] falls back to.
@@ -1575,6 +2105,11 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - const: _cipher kAgentsChannelKeyLength
 - `class AgentsFrameSealer`  — Seals outgoing Agents frames: AES-256-GCM under the account key, then an
 - `class AgentsFrameOpener`  — Opens incoming Agents frames, in this order:
+
+### agents_frame_fragments.dart  (122 Z.)
+- const: kAgentsFragmentType kAgentsMaxFragmentCount kAgentsMaxFragmentTotalBytes kAgentsMaxPendingFragments
+- `class AgentsFragmentAssembler`  — Joins `fragment` payloads back into the payload the host split.
+- `class _PendingPayload`
 
 ### agents_heal_channel.dart  (48 Z.)
 - const: kAgentsHealChannelLabel
@@ -1630,13 +2165,17 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - const: kDefaultAgentsRelayBase kAgentsInstallScriptUrl kAgentsPairingUriScheme kAgentsPairingUriHost
 - `class AgentsPairingInvite`  — A parsed pairing invite: what to claim, what to prove, where to dial.
 
-### agents_permissions_service.dart  (347 Z.)
-- const: kAgentPermissionsCapability
+### agents_permissions_service.dart  (969 Z.)
+- const: kAgentPermissionsCapability kUserBrowserResumeCapability kCostBudgetCapability kBudgetWeeklyMax kActionApprovalsCapability
 - `enum AgentWorkspaceMount`  — How the workspace is bound into the sandbox.
 - `@immutable class AgentPermissions`  — One coworker's permissions. The defaults are the host's defaults.
 - `typedef AgentsControlFrameSender = Future<void> Function( Map<String, dynamic> payload, )`  — Seals and sends one control frame to the host. Throws when nothing is
 - `Future<void> _sendOverRelay(Map<String, dynamic> payload)`
+- `double? parseBudgetWeekly(String text)`  — Reads what the user typed as a weekly budget: euro with a dot or a comma,
 - `class AgentsPermissionsService extends ChangeNotifier`  — The app's copy of the host's answers, per coworker.
+- `@immutable class UserBrowserStatus`  — The host's status of the user's own browser: the `user_browser` block of
+- `String userBrowserDisplayName(String id)`  — A browser id as people say it: `chrome` -> `Chrome`. Unknown ids get a
+- `@immutable class AgentApprovals`  — One coworker's approval policy: per action class `ask`, `allow` or `deny`,
 
 ### agents_queued_marks.dart  (168 Z.)
 - `typedef QueuedMarkReader = List<Map<String, dynamic>>? Function(String sessionKey)`  — Reads and writes the transcript. Tests replace both.
@@ -1652,8 +2191,8 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class AgentsReconnect`  — A single-use, code-free reconnect handshake state machine for one role.
 - `SimplePublicKey agentsReconnectPeerKeyFromBase64(String encoded)`  — Parses a peer public key stored in a trust record. Delegates the length +
 
-### agents_relay_client.dart  (3355 Z.)
-- const: kReplayPageSize
+### agents_relay_client.dart  (3899 Z.)
+- const: kReplayPageSize kBrowserTargetUserBrowser kBrowserTargetSandbox
 - `abstract interface class RelaySocket`  — A minimal duplex socket seam: an inbound stream of text frames and a way to
 - `typedef RelaySocketConnector = Future<RelaySocket> Function(Uri url)`  — Opens a [RelaySocket] to [url]. Default is [defaultRelaySocketConnector];
 - `Future<RelaySocket> defaultRelaySocketConnector(Uri url)`  — Production connector.
@@ -1675,6 +2214,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class AgentsRelayAutomation extends AgentsRelayInbound`  — One state change of an automation (docs/WIRE_CONTRACT.md, "Automations"):
 - `class AgentsRelayAutomationList extends AgentsRelayInbound`  — The host's answer to an `automation_list` request: every automation of
 - `class AgentsRelaySkillsList extends AgentsRelayInbound`  — The host's answer to a `skills_list` request or a `skill_control`
+- `class AgentsRelaySkillProposal extends AgentsRelayInbound`  — The agent offers to save the task it just finished as a skill
 - `@immutable class AgentsRelayAgentStatus`  — What one coworker runs on, has spent and how long it has worked
 - `@immutable class AgentsHostAgentName`  — One coworker name the host keeps for this pairing (bead cowork-817,
 - `class AgentsRelayAgentList extends AgentsRelayInbound`  — The host's `agent_list`: every coworker name it keeps, sent once per attach
@@ -1691,7 +2231,8 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class AgentsRelayDocuments extends AgentsRelayInbound`  — The real transport. Also an [ExecutorTransport]: [provisionAccount] shapes
 - `abstract interface class AgentsDocumentsControl`
 - `abstract interface class AgentsAgentStatusControl`  — Asks the host what a coworker runs on and what it has spent
-- `class AgentsRelayClient implements AgentsRelayController, ExecutorTransport, AgentsAutomationControl, AgentsDocumentsCon …)`
+- `class AgentsRelayClient implements AgentsRelayController, ExecutorTransport, AgentsAutomationControl, // ── F2: automati …)`
+- `String? parseBrowserTarget(Object? raw)`  — Reads `run_state.browser_target`: [kBrowserTargetUserBrowser], or
 
 ### agents_relay_link.dart  (89 Z.)
 - `class AgentsRelayLink`  — Process-wide singleton joining the relay transport to the imported chat UI.
@@ -1699,20 +2240,43 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### agents_replay_guard.dart  (89 Z.)
 - `class AgentsReplayGuard`  — Replay protection for one peer device: a strictly monotonic `seq` inside a
 
-### agents_replay_loader.dart  (950 Z.)
-- const: kReplayCursorPrefix kReplayTimestampCursorPrefix kReplayRepeatRepairKey
+### agents_replay_loader.dart  (1033 Z.)
+- const: kReplayCursorPrefix kReplayTimestampCursorPrefix kReplayRunMetaCursorPrefix kReplayRepeatRepairKey kReplayFileRepairKey agentsPassBreak
 - `class _Draft`  — One session's in-progress replay fold.
 - `class AgentsReplayLoader extends ChangeNotifier`  — Folds the host's replay stream into the local instant-paint cache.
 
-### agents_run_ledger.dart  (955 Z.)
+### agents_run_cost.dart  (430 Z.)
+- const: kAgentsRunMetaTool
+- `@immutable class AgentsRunCostLine`  — One kind of model use inside a run: `run` (the agent loop), `aux` (the
+- `@immutable class AgentsRunCost`  — The `cost` block of a `done`. [eur] is the total and is present only when
+- `String? _text(Object? value)`
+- `int? _int(Object? value)`
+- `double? _eur(Object? value)`
+- `ToolCall? runMetaCall({AgentsRunCost? cost, String? runId, DateTime? now})`  — The run's meta as the call the answer keeps. ONE mapping for the live
+- `void putRunMeta(List<ToolCall> calls, ToolCall? call)`  — Puts [call] on [calls] in place of an earlier meta call, keeping what the
+- `({ List<ToolCall>? toolCalls, List<ContentBlock>? contentBlocks, AgentsRunCost? cost, String? runId, }) splitRunMeta(Lis …)`  — The answer's tool calls and content blocks without the meta call, and what
+- `String formatRunCostEur(double eur, {String locale = 'en'})`  — The meta line's euro figure: two decimals from €0.01, else "< €0.01".
+- `String formatRunCostLineEur(double eur, {String locale = 'en'})`  — A line's euro figure in the detail sheet: four decimals below €0.01, so a
+- `String formatTokenCount(int tokens, {String locale = 'en'})`  — 950 -> "950", 5150 -> "5.2k", 1250000 -> "1.3M" ("5,2k" in German).
+- `String _numberLocale(String locale)`  — Only the locales the app ships; everything else formats as English.
+- `@immutable class AgentsBudgetWarning`  — A `budget_warning` frame: the coworker's week reached 80 % (`warning`) or
+- `class AgentsBudgetNotices extends ChangeNotifier`  — The budget notices the threads show. One per coworker, week and level:
+- `class AgentsBudgetOverride`  — "Run anyway": the next task of one thread goes over the weekly budget
+
+### agents_run_ledger.dart  (1231 Z.)
 - `ToolCall toolCallFromRelay(AgentsRelayTool event, {DateTime? now})`  — The renderer's shape of one host `tool` frame.
 - `enum AgentsRunOutcome`  — How a run ended, once it is over.
 - `AgentsRunOutcome agentsRunOutcomeFor({String? reason, String? finalAnswer})`  — What a run terminal means for the thread, from the two fields that say it.
 - `String? agentsRunEndNotice(AgentsRunOutcome outcome)`  — The one quiet line a run that produced nothing leaves in the thread. Null
+- `enum AgentsRunSignal`  — The kind of the newest frame that folded into a run: what the coworker
 - `class AgentsRun`  — Everything one run produced, in renderer shapes.
 - `ToolCall subagentCallFromRelay( ToolCall? existing, { required String subagentId, required String title, required String …)`  — Process-wide ledger of host runs, keyed by session key.
 - `ContentBlock artifactBlockFromFile(String storagePath, AgentsRelayFile file)`  — The renderer's shape of one relayed file, once its bytes are in the local
 - `ToolCall approvalCallFromRelay( AgentsRelayApprovalRequest request, { bool decided = false, DateTime? now, })`  — The renderer's shape of a here.now publish approval, as a completed
+- `ToolCall takeoverCallFromRelay( AgentsRelayApprovalRequest request, { bool decided = false, DateTime? now, })`  — The transcript line of a browser takeover (`approval_request` with
+- `ToolCall actionApprovalCallFromRelay( AgentsRelayApprovalRequest request, { bool decided = false, DateTime? now, })`  — The transcript line of a per-action approval (docs/WIRE_CONTRACT.md,
+- `String approvalOptionLabel(String option, {String? site})`  — The transcript's word for one offered answer. The card itself names the
+- `String approvalDecisionLabel({ required bool approved, String? scope, String? site, })`  — What an answer covered, for the transcript line.
 - `class AgentsRunLedger extends ChangeNotifier`
 
 ### agents_shell_status.dart  (129 Z.)
@@ -1728,19 +2292,51 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `@immutable class PendingTask`  — One task the socket took, still waiting for the host's `task_ack`.
 - `class AgentsPendingTasks`  — Tasks the socket accepted but the host has not acknowledged.
 
+### agents_thread_composer.dart  (42 Z.)
+- `typedef AgentsThreadSender = bool Function(String chatId, String text)`  — Sends [text] as a user message of [chatId]. False when this screen does
+- `class AgentsThreadComposer`
+
 ### agents_tool_call_handler.dart  (160 Z.)
 - `class AgentsToolCallHandler implements ToolCallHandler`  — The Agents fold: one pass per turn, no client-side tool dispatch.
+
+### agents_turn_phase.dart  (286 Z.)
+- `enum AgentsTurnPhase`  — The phases of one Agents turn, roughly in the order they occur.
+- `class AgentsTurnStatus`  — One status, as the line prints it.
+- `AgentsTurnStatus? agentsTurnStatusFor({ required AgentsRun? run, required bool linkUp, StreamPhase? streamPhase, })`  — The status of the turn on [run], or null when there is nothing to say.
+- `AgentsTurnStatus? _hostStatus(AgentsRun run)`  — The host's `heartbeat.phase`, mapped. Null for a phase this app does not
+- `String agentsTurnPhaseLabel( AgentsTurnPhase phase, { AppLocalizations? l10n, String? toolLabel, })`  — The words for [phase]. English when no [l10n] is at hand (tests, a widget
+- `String? _runningToolName(AgentsRun run)`  — The name of the most recent tool that is still open on [run].
 
 ### agents_voice_call_frames.dart  (101 Z.)
 - `abstract interface class AgentsVoiceCallControl`  — The app → host half: a transport that can send a `voice_call_state`.
 - `class AgentsVoiceCallFrames`  — The process-wide router of the voice-call control frames.
 
-### browser_presence.dart  (269 Z.)
+### browser_presence.dart  (299 Z.)
 - const: kBrowserPresenceFreshness
 - `class BrowserPresence extends ValueNotifier<bool>`  — Whether the host explicitly offers a viewable sandbox browser.
 
 ### chat_debug_export.dart  (307 Z.)
 - `abstract final class ChatDebugExport`  — Builds and copies the structured debug export for one thread.
+
+### coworker_model.dart  (383 Z.)
+- `@immutable class CoworkerProvider`  — One provider of a model, as the account's catalogue lists it.
+- `@immutable class CoworkerCatalogueModel`  — One model of the catalogue, with the providers that serve it.
+- `@immutable class CoworkerModelState`  — What a coworker runs on right now.
+- `class CoworkerModel`  — Reads and writes a coworker's model. Static, like the services it sits on.
+- `String providerLabelFromSlug(String slug)`  — `fireworks/serverless` → `Fireworks`; `deepinfra` → `Deepinfra`. Only for a
+- `String providerLabel( String slug, { String? modelId, List<CoworkerCatalogueModel> models = const <CoworkerCatalogueMode …)`  — The provider's name for [slug] from [models], else from the slug itself.
+- `String modelLabel( String modelId, { List<CoworkerCatalogueModel> models = const <CoworkerCatalogueModel>[], })`  — The model's short name from [models], else a prettified id.
+- `String formatPerMillion(double perToken)`  — `$0.42` per million tokens from a per-token price.
+
+### coworker_templates.dart  (532 Z.)
+- const: kCoworkerPersonaMaxLength _blue _violet _purple _pink _red _deepOrange _orange _green _teal _cyan _sky _slate kCoworkerTemplates
+- `enum CoworkerTemplateCategory`  — The filter segments of the picker, in their order.
+- `enum CoworkerTemplateTool`  — What a template's coworker mostly works with. A hint in the picker; the
+- `@immutable class CoworkerStarterAutomation`  — A schedule the user may switch on while creating the coworker. Its
+- `@immutable class CoworkerTemplate`
+- `CoworkerTemplate? coworkerTemplateById(String id)`  — The template with [id], or null.
+- `@immutable class CoworkerHostOutcome`  — What happened when a new coworker was announced to the host.
+- `Future<CoworkerHostOutcome> announceCoworkerToHost({ required Future<void> Function()? createAgent, Future<AutomationSav …)`  — Tells the host about a new coworker (`agent_create`), then — only when
 
 ### media_index.dart  (236 Z.)
 - `enum MediaKind`  — What kind of thing an entry points at.
@@ -1770,16 +2366,24 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class ThreadPreviewStore extends ChangeNotifier`
 
 ## lib/services/automations
-### agents_automation.dart  (203 Z.)
+### agents_automation.dart  (490 Z.)
+- const: kWatchUrlMinSeconds kWatchUrlDefaultSeconds kMailFilterMaxLength kCreatableAutomationKinds
 - `@immutable class AgentsAutomation`  — One automation of a coworker: a schedule (cron / every / at) or a watcher
 - `abstract interface class AgentsAutomationControl`  — The two frames the app sends about automations. Kept apart from
+- `String automationStateLabel(String state, [AppLocalizations? l10n])`  — The words for an automation [state] (`active`, `paused`, `done`,
+- `abstract interface class AgentsAutomationEditControl`
+- `@immutable class AutomationSaveResult`  — The host's answer to a create or an update: the saved row, or why not.
+- `Object automationSpecFor( String kind, { String schedule = '', String url = '', int? everySeconds, String mailFrom = '' …)`  — The spec a create or an update carries for [kind]: the schedule text as
+- `Map<String, dynamic> automationCreateFrame({ required String sessionKey, required String kind, required Object spec, req …)`  — `automation_create` for [sessionKey].
+- `Map<String, dynamic>? automationUpdateFrame({ required AgentsAutomation before, required Object spec, required String pr …)`  — `automation_update` for [before]: only the keys whose value differs from
 
-### automation_ledger.dart  (74 Z.)
+### automation_ledger.dart  (106 Z.)
 - `ToolCall automationCallFromRelay( ToolCall? existing, AgentsRelayAutomation event, { DateTime? now, })`  — The transcript line of one automation: ONE [ToolCall] per automation id,
 - `String automationEventText(AgentsRelayAutomation event)`  — One line of English for an automation event, for the transcript card.
 
-### automations_source.dart  (190 Z.)
+### automations_source.dart  (379 Z.)
 - `class AutomationsSource extends ChangeNotifier`  — The app's copy of the host's automations, kept current from the relay.
+- `class _PendingSave`  — One create / update waiting for its `automation_saved`.
 
 ## lib/services/herenow
 ### herenow_store.dart  (104 Z.)
@@ -1955,6 +2559,19 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `String _requireString(YamlMap parsed, String field)`
 - `String? _optionalString(YamlMap parsed, String field)`
 
+### skill_proposal.dart  (186 Z.)
+- `class AgentsSkillProposalResult`  — The host's terminal answer to a `skill_proposal_decision`
+- `abstract interface class AgentsSkillProposalControl`  — Sends the user's answer to a skill proposal. The real relay client
+- `enum SkillDraftFieldError`  — What is wrong with one field of the edit form, before anything is sent.
+- `abstract final class SkillDraftRules`  — The limits of a saved skill, as the host enforces them.
+- `enum SkillDraftField`  — Which form field one of the host's error strings belongs to, so it can be
+- `SkillDraftField? skillDraftFieldForHostError(String error)`
+
+### skill_proposals_source.dart  (258 Z.)
+- `enum SkillProposalState`  — Where one proposal stands, as the card draws it.
+- `@immutable class SkillProposalEntry`  — One proposal of one thread.
+- `class SkillProposalsSource extends ChangeNotifier`  — One instance for the app, like [SkillsSource]. It listens to
+
 ### skill_registry.dart  (115 Z.)
 - `class SkillRegistry`
 
@@ -2058,7 +2675,31 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _MessageMatch`
 - `class _RecentMessageEntry`
 
-### find_tools_handler.dart  (343 Z.)
+### file_fetch_tools.dart  (583 Z.)
+- const: kFetchFilesMaxCount kFetchFilesMaxFileBytes kFetchFilesMaxTotalBytes _maxRedirects _downloadDeadline _callDeadline _idleTimeout _extToMime
+- `class FetchFilesResult`  — What one `fetch_files` call produced.
+- `class _Fetched`
+- `Future<FetchFilesResult> executeFetchFiles( Map<String, dynamic> args, { http.Client? client, Future<String> Function(Ui …)`  — Downloads the files in `args['files']` and stores them as one card.
+- `class _FetchFailure implements Exception`
+- `class _Download`
+- `Future<String> _uploadEncryptedOnly(Uint8List bytes)`  — Stores the file encrypted or not at all: a sign-out during the download
+- `Future<_Download> _download( http.Client client, Uri start, { required int maxBytes, required Future<List<String>> Funct …)`  — GETs [start] and reads at most [maxBytes] of the body before [deadline].
+- `Future<void> _discard(http.StreamedResponse response)`  — Drops a response body without reading it.
+- `Future<void> _checkPublicHost( Uri uri, Future<List<String>> Function(String host) lookup, Duration timeout, )`  — Refuses hosts on the user's own machine or network: loopback, private
+- `List<int>? _parseIp(String host)`  — The address bytes of an IPv4 or IPv6 literal, or null for a name.
+- `bool _isNonPublic(List<int> ip)`
+- `class _Request`
+- `List<_Request> _parseRequests(Map<String, dynamic> args, List<String> invalid)`
+- `String _fileName({ required String? requested, required String? disposition, required Uri uri, required String mime, req …)`
+- `String? _dispositionName(String? header)`
+- `String _sanitize(String name)`  — Keeps a name safe as a ZIP entry and as a saved file: no folders, no
+- `String _uniqueName(String name, Set<String> used)`
+- `String _zipName(Object? requested)`
+- `String _mimeOf(String? contentType, String path)`
+- `String? _extensionFor(String mime)`
+- `String _shortError(Object e)`
+
+### find_tools_handler.dart  (344 Z.)
 - const: companions
 - `void _appendToolDefinition( StringBuffer buf, ClientTool tool, String Function(String) getDescription, )`
 - `String executeFindTools({ required Map<String, dynamic> args, required Map<String, ClientTool> tools, required String Fu …)`  — Find tools by keyword/query. Returns full tool definitions for matching
@@ -2072,15 +2713,13 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `String executeViewChatImagesUnsupported()`
 - `String _detectMimeType({required String contentType, required String url})`
 
-### map_tools.dart  (660 Z.)
-- const: _networkTimeout _nominatimBaseUrl _osrmBaseUrl _defaultHeaders kMaxPlacesOnMap
-- `class PlacesToolResult`  — What a places lookup produces: the text the model reads, and the map
-- `String? buildPlacesMapTag({ required List<Map<String, dynamic>> places, required String title, int max = kMaxPlacesOnMap …)`  — Build the `<map>` block for [places], or null when none can be pinned.
-- `double? _asDouble(Object? value)`
+### map_tools.dart  (598 Z.)
+- const: _networkTimeout _nominatimBaseUrl _osrmBaseUrl _defaultHeaders
+- `class PlacesToolResult`  — What a places lookup produces: the text the model reads, and the raw
 - `Future<String> executeSearchPlaces({ required String? serverHttpUrl, required Map<String, String> serverHeaders, require …)`  — Search places via server-side Brave Local proxy.
-- `Future<PlacesToolResult> searchPlacesWithMap({ required String? serverHttpUrl, required Map<String, String> serverHeader …)`  — Search places via the server-side Brave Local proxy, and build the map
-- `Future<String> executeSearchRestaurants({ required String? serverHttpUrl, required Map<String, String> serverHeaders, re …)`  — Text-only form, kept for callers that do not render a map card.
-- `Future<PlacesToolResult> searchRestaurantsWithMap({ required String? serverHttpUrl, required Map<String, String> serverH …)`  — Search restaurants via the server-side Brave Local proxy, and build the
+- `Future<PlacesToolResult> searchPlacesWithMap({ required String? serverHttpUrl, required Map<String, String> serverHeader …)`  — Search places via the server-side Brave Local proxy, keeping the raw
+- `Future<String> executeSearchRestaurants({ required String? serverHttpUrl, required Map<String, String> serverHeaders, re …)`  — Text-only form, the one the chat tool loop uses.
+- `Future<PlacesToolResult> searchRestaurantsWithMap({ required String? serverHttpUrl, required Map<String, String> serverH …)`  — Search restaurants via the server-side Brave Local proxy, keeping the
 - `Future<String> executeGeocode( Map<String, dynamic> args, { http.Client? client, })`  — Forward / reverse geocoding via Nominatim (kept; no server proxy).
 - `Future<String> executeGetRoute( Map<String, dynamic> args, { http.Client? client, })`
 - `Future<List<Map<String, dynamic>>> _fetchBravePlaces({ required String baseUrl, required Map<String, String> serverHeade …)`
@@ -2450,6 +3089,17 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### highlight_registry.dart  (98 Z.)
 - const: allLanguages
 
+### host_lookup.dart  (5 Z.)
+- reicht weiter: 'host_lookup_stub.dart' if (dart.library.io) 'host_lookup_io.dart'
+
+### host_lookup_io.dart  (39 Z.)
+- `Future<List<String>> lookupHostAddresses(String host)`  — The IP addresses [host] resolves to, as text.
+- `http.Client? publicOnlyHttpClient(bool Function(List<int> ip) isNonPublic)`  — An HTTP client that connects only to addresses [isNonPublic] accepts.
+
+### host_lookup_stub.dart  (13 Z.)
+- `Future<List<String>> lookupHostAddresses(String host)`  — The IP addresses [host] resolves to, as text. Empty on web.
+- `http.Client? publicOnlyHttpClient(bool Function(List<int> ip) isNonPublic)`  — Null on web: the browser opens the connection, so nothing here can hold
+
 ### image_clipboard_service.dart  (37 Z.)
 - `class ImageClipboardService`
 
@@ -2495,6 +3145,16 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `bool hasPointSpread(List<LatLng> points)`  — True when [points] cover more than one place on the map.
 - `double _shortestLonDelta(double a, double b)`  — Degrees between two longitudes the short way round.
 
+### openui_fence.dart  (206 Z.)
+- const: _openUiOpener _anyOpener _partialOpener _openUiInfo
+- `class OpenUiTextPart`  — One piece of an assistant answer: markdown text or one OpenUI program.
+- `bool mayContainOpenUiFence(String text)`  — Whether [text] can hold an OpenUI fence. A cheap check before
+- `List<OpenUiTextPart> splitOpenUiFences(String text, {bool streaming = false})`  — Splits [text] into markdown parts and OpenUI program parts.
+- `bool _closesFence(String line, String char, int minLength)`
+- `bool _canBecomeOpenUiOpener(String line)`
+- `bool hasOpenUiProgram(String text)`  — Whether [text] holds an OpenUI program (closed or open).
+- `String stripOpenUiPrograms(String text, {String whenEmpty = ''})`  — [text] without its OpenUI programs: only the markdown parts, joined
+
 ### path_provider_stub.dart  (8 Z.)
 - `Future<Directory> getTemporaryDirectory()`
 - `Future<Directory> getApplicationDocumentsDirectory()`
@@ -2537,7 +3197,11 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### stream_error_sanitizer.dart  (41 Z.)
 - `String sanitizeStreamError(Object error)`  — Turns a transport exception into something safe and readable to show.
 
-### theme_extensions.dart  (257 Z.)
+### theme_extensions.dart  (329 Z.)
+- const: kMinOnFillContrast kMinAccentForegroundContrast
+- `double contrastRatio(Color a, Color b)`  — The WCAG contrast ratio of two opaque colours, from 1.0 to 21.0.
+- `Color readableOnFill( Color fill, Color preferred, { double minContrast = kMinOnFillContrast, })`  — The text or glyph colour for something that sits on a [fill] (an accent
+- `Color accentForegroundFor( Color accent, Color surface, { double minContrast = kMinAccentForegroundContrast, })`  — [accent] as a text or icon colour on [surface]. Returns [accent] when it
 - `extension ThemeDataIconColorX on ThemeData`
 - `@immutable class MaterialYouTokens extends ThemeExtension<MaterialYouTokens>`  — Material You extension tokens that aren't exposed on the default
 - `extension MaterialYouTokensX on ThemeData`
@@ -2562,7 +3226,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `String? formatAssistantContent( Map<String, String> message, { bool includeReasoning = false, bool includeToolResults = …)`  — Builds the assistant `content` string for one stored message, optionally
 - `String _buildPreviousToolResultsBlock(String? toolCallsJson)`
 
-### tool_parser.dart  (774 Z.)
+### tool_parser.dart  (775 Z.)
 - const: toolCallStart toolCallEnd _xmlToolCallBlockPattern _xmlDirectToolTagBlockPattern _xmlToolCallStartPattern _kimiToolCallStartPattern _previousToolResultsBlockPattern _previousToolResultsStartPattern _foreignToolTagNames _foreignToolTagNamespace _notCanonicalToolCallTag _foreignToolProtocolBlockPattern _invokeToolCallPattern _invokeParameterPattern _foreignToolProtocolStartPattern _knownDirectXmlToolNames
 - `Map<String, dynamic>? tryParseToolJson(String raw)`  — Try to parse JSON from a tool call, with repair for common LLM errors:
 - `Map<String, dynamic>? _parseLegacyToolCallSyntax(String raw)`
@@ -2709,11 +3373,14 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `abstract final class VoiceCallPermissions`
 - `class PermissionHandlerMic implements MicPermission`  — [MicPermission] over permission_handler (the incoming-call service).
 
-### voice_call_permissions_section.dart  (144 Z.)
+### voice_call_permissions_section.dart  (140 Z.)
 - const: _copy
 - `class VoiceCallPermissionsSection extends StatefulWidget`
 - `class _GrantCopy`
 - `class _VoiceCallPermissionsSectionState extends State<VoiceCallPermissionsSection> with WidgetsBindingObserver`
+
+### voice_call_settings_page.dart  (59 Z.)
+- `class VoiceCallSettingsPage extends StatelessWidget`
 
 ## lib/voice/widgets
 ### voice_agent_card.dart  (861 Z.)
@@ -2736,7 +3403,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _DeviceBody extends StatelessWidget`
 - `class _GenericBody extends StatelessWidget`
 
-### voice_call_button.dart  (67 Z.)
+### voice_call_button.dart  (66 Z.)
 - `class VoiceCallButton extends StatelessWidget`
 
 ### voice_call_controls.dart  (253 Z.)
@@ -2775,12 +3442,44 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### agent_avatar.dart  (88 Z.)
 - `class AgentAvatar extends StatelessWidget`
 
-### agent_control_panel.dart  (413 Z.)
+### agent_control_panel.dart  (1009 Z.)
+- reicht weiter: 'package:chuk_chat/widgets/agent_details_overview.dart' show AgentDetailsOverview
 - `class AgentControlPanel extends StatefulWidget`
 - `class _AgentControlPanelState extends State<AgentControlPanel>`
 - `String formatRuntime(Duration d)`  — `1h 04m` / `4m 12s` / `12s`.
 - `String formatCount(int value)`  — `1 234 567` — grouped, so a six-figure token count is readable at a glance.
 - `String formatTimestamp(DateTime when)`  — `2026-02-03 14:00` — stable and unambiguous, no locale guessing.
+- `class WeeklyBudgetField extends StatefulWidget`  — The coworker's weekly budget in euro (docs/WIRE_CONTRACT.md, "The budget
+- `class _WeeklyBudgetFieldState extends State<WeeklyBudgetField>`
+
+### agent_details_identity.dart  (334 Z.)
+- `class AgentDetailsIdentity extends StatefulWidget`
+- `class _AgentDetailsIdentityState extends State<AgentDetailsIdentity>`
+
+### agent_details_overview.dart  (363 Z.)
+- const: _weekdays
+- `class AgentDetailsOverview extends StatelessWidget`  — The root page: the screen box, then the routines.
+- `class AgentScreenPreview extends StatelessWidget`  — The coworker's screen as a 16:10 box with a caption.
+- `class AgentRoutinesList extends StatefulWidget`  — The coworker's routines: its automations that are still running or
+- `class _AgentRoutinesListState extends State<AgentRoutinesList>`
+- `String routineScheduleText(AgentsAutomation automation)`  — A plain reading of when a routine runs: "Every day at 08:13",
+- `String? _cronText(String cron)`  — `13 8 * * *` → "Every day at 08:13". Only the plain shapes: a fixed
+- `String _spanText(int seconds)`  — 1800 → "30 minutes", 3600 → "hour", 86400 → "day", 7200 → "2 hours".
+- `String _two(int v)`
+- `String _dateTime(DateTime when)`
+
+### agent_mail_widgets.dart  (213 Z.)
+- `String agentMailErrorText(AppLocalizations l, Object error)`  — The text a user sees for a failed mail call. Never the raw body.
+- `String formatMailDate(BuildContext context, DateTime? when, {DateTime? now})`  — Today: the time. This year: day and month. Older: the short date.
+- `String formatMailDateTime(BuildContext context, DateTime? when)`  — The full date and time, for the mail page.
+- `String formatMailBytes(int? bytes)`  — `1.4 MB`, `820 KB`, `12 B`.
+- `String mailPartyLabel(AppLocalizations l, MailSummary mail)`  — Who a row is about: the sender of a received mail, the recipients of a
+- `String mailSenderName(AppLocalizations l, MailSummary mail)`  — The sender's name line: "You" for the owner's own mail, else the display
+- `String? mailSenderAddress(AppLocalizations l, MailSummary mail)`  — The address under the name line, or null when the name line already is
+- `String mailSubjectLabel(AppLocalizations l, MailSummary mail)`
+- `class MailTag extends StatelessWidget`  — A short state word in a small pill: trust, bulk, draft, importance.
+- `class MailTrustBadge extends StatelessWidget`  — The sender's trust (§2) as a tag: you, trusted, or unknown. The agent's
+- `class MailImportanceTag extends StatelessWidget`  — The importance the restricted run gave a mail.
 
 ### agent_markdown.dart  (153 Z.)
 - const: _chartBlock _chartStart _chartEnd
@@ -2791,13 +3490,14 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `List<AgentSegment> splitAgentSegments(String data)`  — Split an agent reply into prose and `<chart>` blocks.
 - `class AgentMarkdown extends StatelessWidget`  — Renders an agent reply as Markdown, with `<chart>` blocks drawn as charts.
 
-### agent_roster_view.dart  (1201 Z.)
+### agent_roster_view.dart  (1293 Z.)
 - reicht weiter: 'package:chuk_chat/widgets/coworker_name_dialog.dart'
 - const: kRosterTileFace
 - `class DesktopRosterPins extends ChangeNotifier`  — Which coworkers the user pinned to the top of the desktop roster. Local to
 - `List<AgentsAgent> desktopRosterOrder( List<AgentsAgent> agents, Set<String> pinned, )`  — The agents in the order the desktop roster shows them: pinned first, then
 - `class AgentRosterView extends StatefulWidget`
 - `class _NavRow`  — One row of the navigation block. The open pane draws it as a card, the
+- `class _NewEntry`  — One row of the "+" menu: what it makes, its glyph and its shortcut.
 - `class _AgentRosterViewState extends State<AgentRosterView>`
 - `String lastActivityLabel(DateTime? when, {required DateTime now})`  — "just now" / "5m ago" / "2h ago" / "3d ago", or a plain statement that
 
@@ -2810,22 +3510,70 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _AgentFileCardState extends State<AgentFileCard>`
 - `String formatBytes(int bytes)`  — Formats a byte count the way a file manager does.
 
+### agents_action_approval_card.dart  (484 Z.)
+- `typedef _Req = AgentsRelayApprovalRequest`
+- `class AgentsActionApprovalCard extends StatelessWidget`
+- `String humanApprovalBytes(int bytes)`  — 1024 -> "1.0 KB". A plain binary size, no locale or package dependency.
+- `class _Field extends StatelessWidget`  — "Label  value" on one line; the value wraps under itself.
+- `class _Quote extends StatelessWidget`  — The mail preview, or the connector arguments in a monospace block.
+
+### agents_budget_notice.dart  (239 Z.)
+- `class AgentsBudgetWarningNotice extends StatelessWidget`  — "Weekly budget: 80 % used (€4.02 of €5.00)".
+- `class AgentsBudgetRefusalCard extends StatelessWidget`  — A task the weekly budget refused.
+
+### agents_quiet_run_fold.dart  (118 Z.)
+- `class AgentsQuietRunFold extends StatefulWidget`
+- `class _AgentsQuietRunFoldState extends State<AgentsQuietRunFold>`
+
+### agents_run_cost_meta.dart  (227 Z.)
+- `class AgentsRunCostMeta extends StatelessWidget`  — The line under an answer.
+- `Future<void> showRunCostSheet(BuildContext context, AgentsRunCost cost)`  — The sheet behind the meta line: the total, then one row per line
+- `String _kindLabel(AppLocalizations? l, String kind)`
+- `String _tokensLine(AppLocalizations? l, int total, int cached, String locale)`
+- `class _CostLineRow extends StatelessWidget`
+- `class _TotalsRow extends StatelessWidget`  — A block from a host that sent totals and no lines.
+- `class _SheetRow extends StatelessWidget`
+
+### agents_skill_proposal_card.dart  (684 Z.)
+- `typedef SkillProposalDecide = Future<AgentsSkillProposalResult> Function({ required bool accept, String? name, String? d`  — Sends one answer; see [SkillProposalsSource.decide].
+- `class AgentsSkillProposalCard extends StatefulWidget`
+- `class _AgentsSkillProposalCardState extends State<AgentsSkillProposalCard>`
+
 ### agents_status_panel.dart  (276 Z.)
 - `class AgentsStatusPanel extends StatelessWidget`
 - `class _Primary extends StatelessWidget`  — The one filled action. While [busy] it says what it is doing and ignores
 
-### agents_thread_header.dart  (444 Z.)
-- `enum AgentsThreadConnection`  — One button in the thread's floating row.
-- `@immutable class AgentsThreadAction`
-- `class AgentsThreadHeader extends StatelessWidget`  — The actions of a desktop thread, as chuk_chat draws the buttons over its
-- `class ChromeIconButton extends StatelessWidget`  — chuk's icon button over the chat: a 20 px glyph in the icon colour, round
-- `class _OfflineChip extends StatelessWidget`  — The relay is down: a quiet dot and "Offline", with the way back when there
+### agents_takeover_card.dart  (248 Z.)
+- `enum AgentsTakeoverStage`  — Where a takeover stands, as the card draws it.
+- `class AgentsTakeoverCard extends StatelessWidget`
+
+### agents_thread_header.dart  (571 Z.)
+- `enum AgentsThreadConnection`  — How the relay looks to the reader. Not the phase enum: the header only
+- `@immutable class AgentsThreadAction`  — One entry of the header's "…" menu.
+- `class AgentsThreadHeader extends StatelessWidget`  — The top bar of a desktop Agents thread: the phone's chat top bar
+- `class AgentsHeaderBand extends StatelessWidget`  — The band a desktop centre pane floats its top row on: the page colour
+- `class _OfflineChip extends StatelessWidget`  — The relay is down and there is no coworker pill to say so: a quiet dot
 - `class _AutomationChip extends StatelessWidget`  — The running automation, as small as it can be and still be read: a state
 
-### agents_thread_view.dart  (2296 Z.)
+### agents_thread_view.dart  (2910 Z.)
 - const: kAgentsThreadHeaderInset kAgentsDevHostUrl
 - `class AgentsThreadView extends StatefulWidget`
 - `class AgentsThreadViewState extends State<AgentsThreadView> with WidgetsBindingObserver`
+
+### agents_user_browser.dart  (615 Z.)
+- const: kUserBrowserSetupCommand
+- `AppLocalizations _l(BuildContext context)`
+- `String userBrowserSubtitle( AppLocalizations l, UserBrowserStatus? status, { required String agentId, required bool held …)`  — The subtitle of the "Your browser" switch, from the host's status.
+- `enum UserBrowserNoticeKind`  — What the thread's notice says.
+- `@immutable class UserBrowserNotice`  — One notice at the end of a thread.
+- `UserBrowserNotice? userBrowserNoticeFor({ required UserBrowserStatus? status, required bool heldByOther, required String …)`  — What the end of a thread says about the user's browser, or null for
+- `class AgentsUserBrowserNoticeView extends StatelessWidget`  — The notice at the end of a thread. A plain pill for the label; a card for
+- `class AgentsUserBrowserSetupCard extends StatelessWidget`  — The setup card: three plain steps, the one command with a copy button,
+- `class _Step extends StatelessWidget`
+- `class _CommandBox extends StatelessWidget`  — The command in a monospace block that wraps, with a copy button.
+- `Future<void> showUserBrowserSetupSheet( BuildContext context, { required String agentId, AgentsPermissionsService? servi …)`  — Opens the setup card in a sheet, for the thread's "How to set up". It
+- `class AgentsUserBrowserAllowAgainButton extends StatelessWidget`  — "Allow again": lifts the user's Stop from the app. The thread's Stop
+- `Future<void> allowUserBrowserAgain( BuildContext context, AgentsPermissionsService service, )`  — Sends "Allow again" through [service] and says so when it could not go
 
 ### anchored_menu.dart  (395 Z.)
 - const: _kAnchorGap _kEdgeMargin _kMinRoomAbove _kMenuDuration
@@ -2912,9 +3660,15 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver`
 - `class _RecoveringView extends StatelessWidget`  — Shown while the host is asked for the live session: a quiet wait, not a
 
-### automation_card.dart  (226 Z.)
+### automation_card.dart  (276 Z.)
 - `class AutomationCard extends StatefulWidget`  — One automation as a settings row: what it is, when it runs, what state it
 - `class _AutomationCardState extends State<AutomationCard>`
+
+### automation_editor_sheet.dart  (472 Z.)
+- `Future<AgentsAutomation?> showAutomationEditor( BuildContext context, { AgentsAutomation? existing, String? sessionKey …)`  — Opens the sheet. [existing] edits that row; otherwise a new automation is
+- `AppLocalizations _l10n(BuildContext context)`
+- `class AutomationEditorForm extends StatefulWidget`  — The form inside the sheet. Public so a test can pump it without a sheet.
+- `class _AutomationEditorFormState extends State<AutomationEditorForm>`
 
 ### brand_wordmark.dart  (36 Z.)
 - `class BrandWordmark extends StatelessWidget`  — Brand lockup rendered from the frozen brand SVG (assets/wordmark.svg,
@@ -2995,11 +3749,10 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _EmptyBlock extends StatelessWidget`  — The panel's one empty state, in the house shape: a large quiet icon, the
 - `class _MiddleEllipsis extends StatelessWidget`  — A screen title that loses its middle, not its end.
 
-### chat_maintenance_gate.dart  (303 Z.)
+### chat_maintenance_gate.dart  (218 Z.)
 - `class ChatMaintenanceGate extends StatefulWidget`
 - `class _ChatMaintenanceGateState extends State<ChatMaintenanceGate>`
-- `class _Checking extends StatefulWidget`  — The app surface while the check runs. On a normal start that is a few
-- `class _CheckingState extends State<_Checking>`
+- `class _Checking extends StatelessWidget`  — The app surface while the check runs: the local state is read in
 - `class ChatMaintenanceScreen extends StatelessWidget`
 - `class _ProgressRow extends StatelessWidget`
 
@@ -3046,11 +3799,26 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _RecordingWaveformBarState extends State<RecordingWaveformBar>`
 - `class ComposerSelectionControls extends MaterialTextSelectionControls`  — Selection controls for the composer that leave out the collapsed cursor
 
+### coworker_model_tile.dart  (193 Z.)
+- `class CoworkerModelTile extends StatefulWidget`
+- `class _CoworkerModelTileState extends State<CoworkerModelTile>`
+- `String coworkerModelSummary( CoworkerModelState state, { List<CoworkerCatalogueModel> models = const <CoworkerCatalogueM …)`  — `Fireworks · Reasoning low`, prefixed with `App default (Fast) · ` while the
+- `class CoworkerModelLogoTile extends StatelessWidget`  — The lab's logo in the settings icon tile; the sparkle when the lab has no
+
 ### coworker_name_dialog.dart  (179 Z.)
 - const: _fieldBorder
 - `Future<String?> showCoworkerNameDialog( BuildContext context, { required String title, required String submitLabel, Stri …)`  — Asks for a coworker's name. Returns the trimmed text, or null on Cancel.
 - `class CoworkerNameDialog extends StatefulWidget`
 - `class _CoworkerNameDialogState extends State<CoworkerNameDialog>`
+
+### coworker_template_picker.dart  (571 Z.)
+- const: _segments _fieldBorder
+- `@immutable class CoworkerCreateRequest`  — What the user asked for. [template] null is the blank coworker.
+- `Future<CoworkerCreateRequest?> showCoworkerTemplatePicker( BuildContext context, { required String suggestedName, })`  — Opens the picker. Null when the user cancelled.
+- `class CoworkerTemplatePicker extends StatefulWidget`
+- `class _CoworkerTemplatePickerState extends State<CoworkerTemplatePicker>`
+- `class _ToolChip extends StatelessWidget`  — One "works with" hint. A quiet filled capsule: it states, it does not act.
+- `class CoworkerTemplateFace extends StatelessWidget`  — The face a template's coworker gets: its silhouette in its colour, with
 
 ### credit_display.dart  (897 Z.)
 - const: _supabase _kCachedCredits _kCachedHasSubscription _kCachedFreeMessagesRemaining _kCachedFreeMessagesTotal _kCachedTotalCreditsAllocated _kCachedRemainingCredits _kCachedBillingPeriodStart _kCachedBillingPeriodEnd
@@ -3103,7 +3871,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `String _fmt(num v)`
 - `double _d(dynamic v)`
 
-### expressive_settings.dart  (503 Z.)
+### expressive_settings.dart  (508 Z.)
 - const: kExpressiveOuterRadius kExpressiveInnerRadius kExpressiveTileGap
 - `extension ExpressiveOnColor on ColorScheme`  — Picks the contrast colour of a tone from the scheme.
 - `class ExpressiveGroup extends StatelessWidget`  — A group of settings tiles. The first and last tile round outwards, the
@@ -3224,9 +3992,9 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Future<T?> showMenuSheet<T>( BuildContext context, { required List<List<Widget>> groups, Widget? header, Color? color, } …)`  — A menu as a bottom sheet: the house sheet chrome, then the same tiles a
 - `class MenuAnchorButton extends StatelessWidget`  — The control a menu hangs off: the current value, an arrow, and the tap
 
-### message_bubble.dart  (471 Z.)
+### message_bubble.dart  (504 Z.)
 - part 'message_bubble/models.dart' · part 'message_bubble/layout.dart' · part 'message_bubble/chrome.dart' · part 'message_bubble/rich_blocks.dart' · part 'message_bubble/tools.dart' · part 'message_bubble/images.dart' · part 'message_bubble/cards.dart'
-- const: _kBlockGap _kArtifactGap _kCardStackGap _kInfoBarGap _kMobileBottomBarHeight _richBlockRegex _visualBlockStartRegex _diffBlockRegex _attachmentHeaderRe _kAiResponseFontFamilyDefault _cachedShowReasoningTokens _cachedShowModelInfo
+- const: _kBlockGap _kArtifactGap _kCardStackGap _kInfoBarGap _kFileGap _kMobileBottomBarHeight _richBlockRegex _visualBlockStartRegex _diffBlockRegex _attachmentHeaderRe _kAiResponseFontFamilyDefault _cachedShowReasoningTokens _cachedShowModelInfo
 - `class MessageBubble extends StatefulWidget`
 - `class _MessageBubbleState extends State<MessageBubble>`
 
@@ -3255,6 +4023,15 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### nice_snackbar.dart  (55 Z.)
 - `class NiceSnackBar`  — The old name for [AppNotifications], kept so the call sites that already
 
+### openui_message_block.dart  (180 Z.)
+- const: kOpenUiUrlSchemes
+- `Uri? safeOpenUiUri(String url)`  — [url] as a [Uri] when the chat may open it, else `null`.
+- `Future<void> _launchExternal(Uri uri)`  — Opens [uri] outside the app.
+- `class ChatOpenUiActionHandler extends OpenUiActionHandler`  — The chat's [OpenUiActionHandler].
+- `class OpenUiViewMemoryEntry`  — What one program of one message keeps between rebuilds.
+- `class OpenUiViewMemory`  — Form values and `$state` of the OpenUI programs in the chat, keyed by
+- `class OpenUiMessageBlock extends StatelessWidget`  — One OpenUI program in an assistant answer.
+
 ### pane_header.dart  (71 Z.)
 - `class PaneHeader extends StatelessWidget`  — A side pane's header: 56 px high, a quiet line under it, an 18 px glyph
 
@@ -3279,7 +4056,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class RoomFaces extends StatelessWidget`
 - `class _RingedFace extends StatelessWidget`  — One member's face with the gap that lifts it off the face beneath it.
 
-### room_list_view.dart  (295 Z.)
+### room_list_view.dart  (297 Z.)
 - `class RoomListView extends StatelessWidget`
 - `class _RenameDialog extends StatefulWidget`  — The rename dialog. A StatefulWidget so it owns and disposes its own text
 - `class _RenameDialogState extends State<_RenameDialog>`
@@ -3303,11 +4080,11 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _RoomMentionPickerState extends State<RoomMentionPicker>`
 - `class _MentionRow extends StatelessWidget`  — One compact line: the face, the name, the handle in the quiet colour, and
 
-### room_thread_page.dart  (508 Z.)
+### room_thread_page.dart  (520 Z.)
 - `class RoomThreadPage extends StatefulWidget`
 - `class _RoomThreadPageState extends State<RoomThreadPage>`
 
-### room_thread_view.dart  (280 Z.)
+### room_thread_view.dart  (310 Z.)
 - const: _kFaceSize _kFaceGap
 - `class RoomThreadView extends StatelessWidget`
 
@@ -3434,18 +4211,20 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _WorkspaceSelectionDropdownState extends State<WorkspaceSelectionDropdown>`
 
 ## lib/widgets/agent_activity
-### agent_activity_model.dart  (462 Z.)
+### agent_activity_model.dart  (478 Z.)
 - const: _subjectKeys _maxDetailChars _maxThinkingChars maxSourcesPerStep
 - `enum AgentActivityKind`  — What a timeline line represents. Drives the icon and the wording.
 - `class AgentActivitySource`  — A page a step pulled in, shown as a chip under that step.
 - `class AgentActivityEntry`  — One line in the timeline.
 - `AgentActivityKind _kindOf(ToolCall call)`
+- `AgentActivityKind _kindOfName(String rawName)`
 - `String? _subjectOf(ToolCall call)`
 - `String _clip(String value, int max)`
 - `String _shortenUrl(String url)`  — Strip the scheme and any `www.` so a URL reads as a place, not a link.
 - `String _humanizeToolName(String name)`  — Human wording for a tool name: `generate_image` → `generate image`.
-- `String? runningActivityLabel(List<ToolCall> calls)`  — Present-tense name for what a running turn is doing RIGHT NOW, so the
-- `String _runningVerbFor(String name)`  — Present-tense phrase for a non-search, non-page tool the turn is waiting on.
+- `String? runningActivityLabel(List<ToolCall> calls, [AppLocalizations? l10n])`  — Present-tense name for what a running turn is doing RIGHT NOW, so the
+- `String toolActivityLabel(String name, [AppLocalizations? l10n])`  — Present-tense phrase for a running tool called [name], localised when
+- `String? knownToolActivityLabel(String name, [AppLocalizations? l10n])`  — The natural verb for a tool this app knows by name, or null. Known tools
 - `AgentActivityEntry _entryFor(ToolCall call)`
 - `class AgentActivityStep`  — One thing that happened in a round, in the order it happened: either a
 - `AgentActivityEntry reasoningEntry(String text)`  — The line and the body for one stretch of reasoning.
@@ -3457,14 +4236,27 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `String formatAgentDurationLive(Duration duration)`  — Compact duration wording: `4s`, `1m 3s`, `2h 5m`.
 - `String formatAgentDuration(Duration duration)`
 
-### agent_activity_timeline.dart  (507 Z.)
+### agent_activity_timeline.dart  (555 Z.)
 - `class AgentActivityTimeline extends StatefulWidget`
 - `class _AgentActivityTimelineState extends State<AgentActivityTimeline>`
 
-### turn_status.dart  (124 Z.)
+### agents_live_status.dart  (253 Z.)
+- `bool agentsLinkUp([AgentsRelayLink? link])`  — Whether the computer can be reached through [link] right now.
+- `class AgentsLiveStatus`  — The live status of one Agents thread, for the bubble's header.
+- `class AgentsRetryButton extends StatelessWidget`  — The one action the status line can offer: go and get the computer.
+- `class AgentsLiveStatusLine extends StatefulWidget`  — The status of a run this screen has no bubble for: a run the host was
+- `class _AgentsLiveStatusLineState extends State<AgentsLiveStatusLine>`
+
+### turn_status.dart  (139 Z.)
 - `class TurnStatus`  — The status of one assistant turn, as the header above it reports it.
 - `bool hasRunningToolCall(List<ToolCall> calls)`  — True while any call in [calls] is still pending or running.
 - `Duration? resolveTurnElapsed({ Duration? finalDuration, DateTime? startedAt, required DateTime now, required bool isRunn …)`  — How long the turn has taken, from the most trustworthy source available.
+
+## lib/widgets/agents_channels
+### agent_telegram_section.dart  (574 Z.)
+- `class AgentTelegramSection extends StatefulWidget`
+- `class _AgentTelegramSectionState extends State<AgentTelegramSection>`
+- `class _Gate extends StatelessWidget`  — Greys out and blocks a button while the host has not answered. The button
 
 ## lib/widgets/agents_desktop
 ### desktop_controls.dart  (79 Z.)
@@ -3478,7 +4270,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class AgentsDesktopDialog extends StatelessWidget`  — The dialog frame itself: chuk_chat's dialog — the surface, corner and
 
 ### desktop_metrics.dart  (31 Z.)
-- const: kDeskRosterMin kDeskRosterMax kDeskRosterDefault kDeskRailWidth kDeskDetailsMin kDeskDetailsMax kDeskDetailsDefault kDeskThreadMin kDeskDialogMaxWidth kDeskDialogRadius
+- const: kDeskRosterWidth kDeskRailWidth kDeskDetailsMin kDeskDetailsMax kDeskDetailsDefault kDeskThreadMin kDeskDialogMaxWidth kDeskDialogRadius
 
 ### quick_switcher.dart  (335 Z.)
 - `sealed class QuickSwitcherPick`  — What the user picked.
@@ -3489,7 +4281,11 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _QuickSwitcherState extends State<QuickSwitcher>`
 
 ## lib/widgets/agents_permissions
-### agent_permissions_section.dart  (316 Z.)
+### agent_approvals_section.dart  (295 Z.)
+- `class AgentApprovalsSection extends StatelessWidget`
+- `class _ClassCard extends StatelessWidget`
+
+### agent_permissions_section.dart  (385 Z.)
 - const: kAgentPermissionSpecs kPermissionsAppliesLine kPermissionNotEnforced
 - `@immutable class AgentPermissionSpec`  — One switch of the section: the wire key, the words and the icon.
 - `class AgentPermissionsSection extends StatefulWidget`
@@ -3551,13 +4347,13 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class ChukChartFallback extends StatelessWidget`  — What a chart that could not be drawn shows instead.
 
 ## lib/widgets/icons
-### huge_icon.dart  (211 Z.)
+### huge_icon.dart  (453 Z.)
 - const: _opticalInset
 - `@immutable class HugeIconData`  — One icon of the set. The name is the file stem, so `HugeIcons.message01`
 - `abstract final class HugeIcons`
 - `class HugeIcon extends StatelessWidget`  — An icon of the set, drawn like a Material [Icon].
 
-### icon_map.dart  (266 Z.)
+### icon_map.dart  (306 Z.)
 - const: _map
 - `HugeIconData? hugeIconFor(IconData icon)`  — The app's icon for [icon], or null when the set has nothing for it.
 - `class AppIcon extends StatelessWidget`  — An icon that prefers the app's set and falls back to Material.
@@ -3577,7 +4373,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _ArtifactErrorCard extends StatelessWidget`  — Visible error chip when an inline artifact tag (or artifact_manager tool
 - `class _NewsCard extends StatelessWidget`  — News article card: thumbnail (left, 96x96), title, publisher · age, summary,
 
-### chrome.dart  (412 Z.)
+### chrome.dart  (424 Z.)
 - part of '../message_bubble.dart'
 - `extension _MessageBubbleChrome on _MessageBubbleState`
 
@@ -3585,7 +4381,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - part of '../message_bubble.dart'
 - `extension _MessageBubbleImages on _MessageBubbleState`
 
-### layout.dart  (1134 Z.)
+### layout.dart  (1169 Z.)
 - part of '../message_bubble.dart'
 - `extension _MessageBubbleLayout on _MessageBubbleState`
 
@@ -3597,11 +4393,11 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _RenderSegment`
 - `class _ToolTimelineEntry`
 
-### rich_blocks.dart  (562 Z.)
+### rich_blocks.dart  (656 Z.)
 - part of '../message_bubble.dart'
 - `extension _MessageBubbleRichBlocks on _MessageBubbleState`
 
-### tools.dart  (828 Z.)
+### tools.dart  (856 Z.)
 - part of '../message_bubble.dart'
 - `extension _MessageBubbleTools on _MessageBubbleState`
 
@@ -3619,7 +4415,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class HoverMarqueeText extends StatefulWidget`  — A single-line title that shows an ellipsis at rest and, when the pointer
 - `class _HoverMarqueeTextState extends State<HoverMarqueeText> with SingleTickerProviderStateMixin`
 
-### sidebar_chrome.dart  (1795 Z.)
+### sidebar_chrome.dart  (1815 Z.)
 - const: kSbCardGap kSbBlockInset kSbCardRadius kSbCardJointRadius kSbNavCardHeight kSbNavRowStep _kSbMenuCentre kSbNavBlockTop kSbNavIconLeft kSbNavIconTile kSbNavIconTop kSbNavIconCentre
 - `Color sbPanelBackground(BuildContext context)`  — The colour the sidebar panel is painted in — the same step off the page
 - `double sbNavRowTop(int index)`  — Top of row [index] of the navigation block — the cards when the panel is
@@ -3704,6 +4500,18 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `def main() -> int`
 
 ## tool
+### gen_openui_skill.dart  (449 Z.)
+- const: kOpenUiSkillPath kOpenUiGroupOrder kOpenUiSkillDescription _kSkillNotes _header _examples _kObjectAliasNames _kContentAlias _objectType _unionGroup
+- `List<String> openUiSkillExamplePrograms()`  — The example programs of the skill (the fence bodies), for tests.
+- `class OpenUiTypeAlias`  — A short name for a long type that repeats in the signatures. The
+- `List<OpenUiTypeAlias> openUiSkillAliases(OpenUiLibrary library)`  — The aliases for [library]: object types that show 3+ times, and the
+- `List<String> _members(String union)`
+- `String openUiSkillShortType(String type, List<OpenUiTypeAlias> aliases)`  — [type] with the long parts replaced by alias names.
+- `String expandOpenUiSkillType(String short, List<OpenUiTypeAlias> aliases)`  — [short] with the alias names replaced by their full text again.
+- `String openUiSkillSignature(OpenUiComponentDef def, List<OpenUiTypeAlias> a)`  — The signature as the skill writes it, with alias names.
+- `String buildOpenUiSkillMarkdown(OpenUiLibrary library)`  — Builds the SKILL.md text for [library].
+- `void main()`
+
 ### gen_skills.dart  (191 Z.)
 - const: kSkillsDir kOutputPath
 - `void main(List<String> args)`
@@ -3712,7 +4520,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `String renderBuiltinSkillsFile(List<Skill> skills)`  — Renders the generated Dart source for [skills].
 - `String _dartString(String value)`  — Escapes [value] into a single-quoted Dart string literal.
 
-### generate_hugeicons.py  (119 Z.)
+### generate_hugeicons.py  (179 Z.)
 - const: WANTED CAMEL
 - `def parse(source: str) -> list`  — Read the module's array. Keys are bare identifiers, values are already
 - `def attribute_name(key: str) -> str`  — `strokeLinecap` -> `stroke-linecap`.
@@ -3726,56 +4534,56 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `lib/platform_specific/chat/composer_menu.dart` — 59 Zeilen, von keiner Datei benutzt
 - `lib/platform_specific/chat/composer_menu_choices.dart` — 18 Zeilen, von keiner Datei benutzt
 - `lib/platform_specific/mobile/mobile_chips.dart` — 63 Zeilen, von keiner Datei benutzt
-- `lib/services/notification_service_io.dart` — 250 Zeilen, von keiner Datei benutzt
+- `lib/services/notification_service_io.dart` — 257 Zeilen, von keiner Datei benutzt
 - `lib/services/notification_service_stub.dart` — 38 Zeilen, von keiner Datei benutzt
 - `lib/services/service_credentials_service.dart` — 212 Zeilen, von keiner Datei benutzt
 - `lib/services/settings/debug_settings.dart` — 41 Zeilen, von keiner Datei benutzt
-- `lib/services/streaming_foreground_service_io.dart` — 307 Zeilen, von keiner Datei benutzt
+- `lib/services/streaming_foreground_service_io.dart` — 311 Zeilen, von keiner Datei benutzt
 - `lib/services/streaming_foreground_service_stub.dart` — 71 Zeilen, von keiner Datei benutzt
 - `lib/ui/expressive/waveform.dart` — 9 Zeilen, von keiner Datei benutzt
 - `lib/widgets/chat_theme.dart` — 150 Zeilen, von keiner Datei benutzt
 
-**Importzyklen (16)**
+**Importzyklen (20)**
 - 3 Dateien: lib/services/account_session.dart → lib/services/session_refresh_scheduler.dart → lib/services/supabase_service.dart
 - 2 Dateien: lib/services/agents/agents_pairing_store.dart → lib/services/agents/supabase_pairing_sync.dart
 - 2 Dateien: lib/services/mcp/mcp_catalogue.dart → lib/services/mcp/mcp_connection.dart
 - 5 Dateien: lib/services/agents/agents_cloud_relay.dart → lib/services/agents/agents_relay_client.dart → lib/services/agents/agents_relay_link.dart → lib/services/mcp/mcp_service.dart → lib/services/mcp/mcp_store
 - 9 Dateien: lib/services/agents/agents_queued_marks.dart → lib/services/chat_preload_service.dart → lib/services/chat_storage_crud.dart → lib/services/chat_storage_mutations.dart → lib/services/chat_storage_servi
 
-**Größte Dateien (76 über der Schwelle)**
-- `lib/platform_specific/chat/chat_ui_mobile.dart` — 4177 Zeilen, 167 Symbole
-- `lib/services/agents/agents_relay_client.dart` — 3355 Zeilen, 411 Symbole
+**Größte Dateien (89 über der Schwelle)**
+- `lib/platform_specific/chat/chat_ui_mobile.dart` — 4299 Zeilen, 173 Symbole
+- `lib/services/agents/agents_relay_client.dart` — 3899 Zeilen, 479 Symbole
 - `lib/services/artifact_storage_service.dart` — 3209 Zeilen, 133 Symbole
-- `lib/platform_specific/chat/chat_ui_desktop.dart` — 2706 Zeilen, 134 Symbole
-- `lib/platform_specific/chat/desktop_send_logic.dart` — 2573 Zeilen, 24 Symbole
+- `lib/widgets/agents_thread_view.dart` — 2910 Zeilen, 171 Symbole
+- `lib/platform_specific/chat/chat_ui_desktop.dart` — 2842 Zeilen, 142 Symbole
 
 ## Mehrfach vergebene Namen
 
-271 Namen existieren in mehr als einer Datei. Meist kopierter Code. Bevor du so etwas neu schreibst, eine der Stellen wiederverwenden. Volle Liste: `pseudomap dupes`.
+341 Namen existieren in mehr als einer Datei. Meist kopierter Code. Bevor du so etwas neu schreibst, eine der Stellen wiederverwenden. Volle Liste: `pseudomap dupes`.
 
-- `_load` — lib/pages/diagnostics_settings_page.dart:42 · lib/pages/settings/embedding_settings_page.dart:32 · lib/pages/workspace_files_page.dart:70 · lib/pages/workspace_mobile_detail_page.dart:68 +7
-- `_save` — lib/pages/agent_profile_edit_page.dart:149 · lib/pages/skills_settings_page.dart:323 · lib/pages/workspace_instructions_page.dart:57 · lib/services/agents/agents_task_outbox.dart:229 +7
-- `Function` — lib/pages/mcp_connectors_page.dart:1041 · lib/platform_specific/chat/handlers/scanned_pdf_pages.dart:20 · lib/platform_specific/chat/voice/voice_record_placement.dart:43 · lib/services/chat_payload_codec.dart:488 +5
-- `_persist` — lib/services/agents/agent_profile_store.dart:264 · lib/services/agents/agent_read_marks.dart:156 · lib/services/agents/agent_roster_source.dart:184 · lib/services/agents/agent_roster_store.dart:169 +5
+- `Function` — lib/openui/components/data_cards/card_blocks.dart:49 · lib/openui/components/tables_charts/round_charts.dart:23 · lib/pages/mcp_connectors_page.dart:1041 · lib/platform_specific/chat/handlers/scanned_pdf_pages.dart:20 +13
+- `_load` — lib/openui/dev/gallery_main.dart:110 · lib/pages/agent_mail_contacts_page.dart:50 · lib/pages/agent_mail_detail_page.dart:98 · lib/pages/coworker_model_page.dart:131 +12
+- `_save` — lib/openui/components/tables_charts/editable_table.dart:381 · lib/pages/agent_mail_detail_page.dart:283 · lib/pages/agent_profile_edit_page.dart:143 · lib/pages/skills_settings_page.dart:323 +12
+- `_open` — lib/pages/agent_mailbox_page.dart:263 · lib/pages/assistant_settings_page.dart:153 · lib/pages/mcp_connectors_page.dart:354 · lib/services/agents/agent_mail_crypto.dart:161 +7
+- `_persist` — lib/services/agents/agent_profile_store.dart:291 · lib/services/agents/agent_read_marks.dart:156 · lib/services/agents/agent_roster_source.dart:197 · lib/services/agents/agent_roster_store.dart:169 +5
 - `_key` — lib/platform_specific/chat/voice/voice_turn_queue.dart:156 · lib/services/agents/agents_task_outbox.dart:192 · lib/services/agents/agents_task_outbox.dart:472 · lib/services/chat_dirty_store.dart:50 +4
-- `_open` — lib/pages/assistant_settings_page.dart:153 · lib/pages/mcp_connectors_page.dart:354 · lib/services/offline_queue_service_native.dart:37 · lib/widgets/agents_desktop/quick_switcher.dart:162 +3
-- `_row` — lib/pages/mcp_connectors_page.dart:330 · lib/pages/mobile_agents_settings_page.dart:345 · lib/pages/skills_settings_page.dart:724 · lib/voice/incoming/voice_call_permissions_section.dart:120 +3
-- `_onInbound` — lib/services/agents/browser_presence.dart:177 · lib/services/automations/automations_source.dart:139 · lib/services/skills/skills_source.dart:104 · lib/widgets/agents_thread_view.dart:1168 +2
+- `_onChanged` — lib/openui/components/forms_buttons/text_fields.dart:117 · lib/pages/automations_page.dart:62 · lib/pages/skills_settings_page.dart:592 · lib/pages/workspace_instructions_page.dart:53 +3
+- `_row` — lib/pages/mcp_connectors_page.dart:330 · lib/pages/mobile_agents_settings_page.dart:440 · lib/pages/skills_settings_page.dart:724 · lib/voice/incoming/voice_call_permissions_section.dart:120 +3
+- `_onInbound` — lib/services/agents/browser_presence.dart:200 · lib/services/automations/automations_source.dart:142 · lib/services/skills/skills_source.dart:104 · lib/widgets/agents_thread_view.dart:1276 +2
+- `_refresh` — lib/pages/agent_mailbox_page.dart:229 · lib/pages/assistant_settings_page.dart:123 · lib/pages/automations_page.dart:66 · lib/pages/skills_settings_page.dart:596 +2
+- `_send` — lib/openui/components/forms_buttons/buttons.dart:314 · lib/services/agents/agent_mail_service.dart:785 · lib/services/multiplex_connection.dart:896 · lib/voice/incoming/incoming_call_service.dart:331 +2
+- `_table` — lib/openui/components/tables_charts/data_table.dart:469 · lib/openui/components/tables_charts/editable_table.dart:461 · lib/services/customization_preferences_service.dart:214 · lib/services/profile_service.dart:44 +2
+- `_text` — lib/assistant/assistant_tools.dart:121 · lib/services/agents/agent_mail_service.dart:68 · lib/services/agents/agents_run_cost.dart:126 · lib/services/automations/agents_automation.dart:244 +2
+- `_toggle` — lib/openui/components/content_layout/disclosure.dart:368 · lib/openui/components/content_layout/disclosure.dart:477 · lib/openui/components/forms_buttons/choices.dart:394 · lib/pages/skills_settings_page.dart:606 +2
+- `_ask` — lib/voice/incoming/voice_call_permissions.dart:86 · lib/voice/incoming/voice_call_permissions_section.dart:98 · lib/widgets/agent_details_overview.dart:204 · lib/widgets/agents_channels/agent_telegram_section.dart:107 +1
 - `_formatDate` — lib/pages/media_manager_page.dart:580 · lib/pages/usage_details_page.dart:920 · lib/pages/workspace_mobile_detail_page.dart:526 · lib/services/workspace_message_service.dart:260 +1
-- `_onChanged` — lib/pages/automations_page.dart:60 · lib/pages/skills_settings_page.dart:592 · lib/pages/workspace_instructions_page.dart:53 · lib/widgets/agents_permissions/agent_permissions_section.dart:194 +1
-- `_refresh` — lib/pages/assistant_settings_page.dart:123 · lib/pages/automations_page.dart:64 · lib/pages/skills_settings_page.dart:596 · lib/voice/incoming/voice_call_permissions_section.dart:87 +1
-- `_build` — lib/pages/agent_profile_page.dart:130 · lib/ui/expressive/agent_face.dart:235 · lib/ui/expressive/shapes.dart:29 · lib/ui/expressive/shapes.dart:140
-- `_coerceInt` — lib/services/tool_executor.dart:1288 · lib/tool_handlers/chat_search_tools.dart:726 · lib/tool_handlers/map_tools.dart:632 · lib/tool_handlers/web_tools.dart:24
-- `_confirmDelete` — lib/pages/agent_profile_page.dart:362 · lib/pages/skills_settings_page.dart:108 · lib/pages/workspace_mobile_detail_page.dart:111 · lib/widgets/agent_roster_view.dart:360
-- `_connect` — lib/pages/mcp_connectors_page.dart:745 · lib/voice/voice_call_controller.dart:314 · lib/widgets/agents_thread_view.dart:943 · lib/widgets/mcp_connect_card.dart:54
-- `_copy` — lib/pages/agents_install_page.dart:161 · lib/widgets/chuk_table.dart:408 · lib/widgets/chuk_table_classic.dart:68 · lib/widgets/selection_copy_area.dart:175
-- `_emit` — lib/platform_specific/chat/voice/voice_task_delegates.dart:88 · lib/services/offline_queue_service_native.dart:223 · lib/services/offline_queue_service_web.dart:151 · lib/services/offline_retry_manager.dart:341
-- `_ensureEncryptionKey` — lib/services/agents/supabase_pairing_sync.dart:178 · lib/services/mcp/chuk_mcp_mirror.dart:182 · lib/services/mcp/mcp_connector_sync.dart:137 · lib/services/secrets/secrets_sync.dart:122
-- `_formatDuration` — lib/assistant/assistant_tools.dart:809 · lib/services/device_services.dart:518 · lib/utils/api_rate_limiter.dart:207 · lib/widgets/agent_run_views.dart:150
-- `_onControllerChanged` — lib/platform_specific/chat/chat_ui_mobile.dart:866 · lib/widgets/settings_search_bar.dart:81 · lib/widgets/sidebar/sidebar_chrome.dart:685 · lib/widgets/vnc_trackpad_overlay.dart:188
-- `_select` — lib/pages/agents_shell_state.dart:200 · lib/pages/messenger_shell.dart:622 · lib/services/storage/agents_chat_store.dart:904 · lib/widgets/chat_documents_panel.dart:254
-- `_set` — lib/assistant/assistant_session.dart:467 · lib/services/agents/agents_install_flow.dart:225 · lib/services/agents/agents_relay_client.dart:3334 · lib/services/chat_payload_migration_service.dart:1211
-- `_submit` — lib/pages/secrets_settings_page.dart:222 · lib/pages/workspaces_page.dart:619 · lib/widgets/coworker_name_dialog.dart:69 · lib/widgets/room_create_sheet.dart:85
-- `_syncCacheToCurrentUser` — lib/services/per_model_system_prompt_service.dart:153 · lib/services/skills/user_skills_service.dart:63 · lib/services/title_generation_service.dart:106 · lib/services/user_preferences_service.dart:45
-- `_table` — lib/services/customization_preferences_service.dart:214 · lib/services/profile_service.dart:44 · lib/services/theme_settings_service.dart:129 · lib/widgets/chat_document_view.dart:364
-- … +246 weitere
+- `_pick` — lib/openui/components/content_layout/disclosure.dart:50 · lib/openui/components/forms_buttons/pickers.dart:319 · lib/pages/settings/embedding_settings_page.dart:41 · lib/widgets/agent_roster_view.dart:354 +1
+- `_select` — lib/pages/agent_mailbox_page.dart:219 · lib/pages/agents_shell_state.dart:203 · lib/pages/messenger_shell.dart:645 · lib/services/storage/agents_chat_store.dart:904 +1
+- `_service` — lib/pages/agent_mail_contacts_page.dart:35 · lib/pages/agent_mail_detail_page.dart:64 · lib/pages/agent_mailbox_page.dart:86 · lib/pages/mobile_agent_permissions_page.dart:62 +1
+- `_set` — lib/assistant/assistant_session.dart:467 · lib/openui/components/tables_charts/editable_table.dart:270 · lib/services/agents/agents_install_flow.dart:225 · lib/services/agents/agents_relay_client.dart:3859 +1
+- `_submit` — lib/pages/agent_mail_contacts_page.dart:355 · lib/pages/secrets_settings_page.dart:222 · lib/pages/workspaces_page.dart:619 · lib/widgets/coworker_name_dialog.dart:69 +1
+- `_write` — lib/pages/coworker_model_page.dart:216 · lib/services/diagnostics_log_service_io.dart:369 · lib/services/offline_queue_service_web.dart:52 · lib/services/window_title_service.dart:71 +1
+- `_actions` — lib/pages/agent_mail_detail_page.dart:598 · lib/widgets/agents_skill_proposal_card.dart:532 · lib/widgets/agents_status_panel.dart:181 · lib/widgets/automation_card.dart:225
+- `_build` — lib/pages/agent_profile_page.dart:141 · lib/ui/expressive/agent_face.dart:235 · lib/ui/expressive/shapes.dart:29 · lib/ui/expressive/shapes.dart:140
+- `_cell` — lib/openui/components/tables_charts/data_table.dart:540 · lib/openui/components/tables_charts/editable_table.dart:526 · lib/widgets/chuk_table.dart:918 · lib/widgets/chuk_table_classic.dart:254
+- … +316 weitere

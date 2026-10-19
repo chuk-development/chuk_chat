@@ -42,43 +42,218 @@
   - L526 `Widget build(BuildContext context)`
 - L562 `String? _inferLicenseName(String text)`
 
-## lib/pages/account_settings_page.dart  (739 Z.)
-- L28 `class AccountSettingsPage extends StatefulWidget`
-  - L29 `const AccountSettingsPage({super.key})`
-  - L32 `State<AccountSettingsPage> createState()`
-- L35 `class _AccountSettingsPageState extends State<AccountSettingsPage>`
-  - L36 `final ProfileService _profileService = const ProfileService()`
-  - L37 `final TextEditingController _displayNameCtrl = TextEditingController()`
-  - L38 `final TextEditingController _emailCtrl = TextEditingController()`
-  - L39 `final TextEditingController _currentPasswordCtrl = TextEditingController()`
-  - L40 `final TextEditingController _newPasswordCtrl = TextEditingController()`
-  - L41 `final TextEditingController _confirmPasswordCtrl = TextEditingController()`
-  - L43 `bool _isSaving = false`
-  - L44 `bool _isLoading = true`
-  - L45 `bool _isDeletingAccount = false`
-  - L46 `bool _isChangingPassword = false`
-  - L47 `bool _obscureCurrentPassword = true`
-  - L48 `bool _obscureNewPassword = true`
-  - L49 `bool _obscureConfirmPassword = true`
-  - L50 `ProfileRecord? _profile`
-  - L51 `String? _errorMessage`
-  - L52 `String? _passwordChangeError`
-  - L53 `String? _passwordChangeNotice`
-  - L56 `void initState()`
-  - L62 `void dispose()`
-  - L71 `Future<void> _loadProfile()`
-  - L101 `Future<void> _saveAccountSettings()`
-  - L164 `Widget _buildRecoverChatsSection([AppLocalizations? localizations])`
-  - L207 `Future<void> _changePassword()`
-  - L256 `Future<void> _deleteAccount()`
-  - L444 `Widget build(BuildContext context)`
-- L701 `class _FieldLabel extends StatelessWidget`
-  - L702 `const _FieldLabel(this.label, {this.helper})`
-  - L704 `final String label`
-  - L705 `final String? helper`
-  - L708 `Widget build(BuildContext context)`
+## lib/pages/account_settings_page.dart  (747 Z.)
+- L29 `class AccountSettingsPage extends StatefulWidget`
+  - L30 `const AccountSettingsPage({super.key})`
+  - L33 `State<AccountSettingsPage> createState()`
+- L36 `class _AccountSettingsPageState extends State<AccountSettingsPage>`
+  - L37 `final ProfileService _profileService = const ProfileService()`
+  - L38 `final TextEditingController _displayNameCtrl = TextEditingController()`
+  - L39 `final TextEditingController _emailCtrl = TextEditingController()`
+  - L40 `final TextEditingController _currentPasswordCtrl = TextEditingController()`
+  - L41 `final TextEditingController _newPasswordCtrl = TextEditingController()`
+  - L42 `final TextEditingController _confirmPasswordCtrl = TextEditingController()`
+  - L44 `bool _isSaving = false`
+  - L45 `bool _isLoading = true`
+  - L46 `bool _isDeletingAccount = false`
+  - L47 `bool _isChangingPassword = false`
+  - L48 `bool _obscureCurrentPassword = true`
+  - L49 `bool _obscureNewPassword = true`
+  - L50 `bool _obscureConfirmPassword = true`
+  - L51 `ProfileRecord? _profile`
+  - L52 `String? _errorMessage`
+  - L53 `String? _passwordChangeError`
+  - L54 `String? _passwordChangeNotice`
+  - L57 `void initState()`
+  - L63 `void dispose()`
+  - L72 `Future<void> _loadProfile()`
+  - L106 `Future<void> _saveAccountSettings()`
+  - L172 `Widget _buildRecoverChatsSection([AppLocalizations? localizations])`
+  - L215 `Future<void> _changePassword()`
+  - L264 `Future<void> _deleteAccount()`
+  - L452 `Widget build(BuildContext context)`
+- L709 `class _FieldLabel extends StatelessWidget`
+  - L710 `const _FieldLabel(this.label, {this.helper})`
+  - L712 `final String label`
+  - L713 `final String? helper`
+  - L716 `Widget build(BuildContext context)`
 
-## lib/pages/agent_profile_edit_page.dart  (613 Z.)
+## lib/pages/agent_mail_contacts_page.dart  (405 Z.)
+- L24 `class AgentMailContactsPage extends StatefulWidget`
+  - L25 `const AgentMailContactsPage({super.key, this.service})`
+  - L28 `final AgentMailService? service`  — Null uses [AgentMailService.instance].
+  - L31 `State<AgentMailContactsPage> createState()`
+- L34 `class _AgentMailContactsPageState extends State<AgentMailContactsPage>`
+  - L35 `AgentMailService get _service`
+  - L37 `bool _loading = true`
+  - L38 `Object? _error`
+  - L39 `List<MailContact> _contacts = const <MailContact>[]`
+  - L42 `final Set<String> _pending = <String>{}`  — Contact ids with a change on its way, so a second tap waits.
+  - L45 `void initState()`
+  - L50 `Future<void> _load()`
+  - L72 `Future<void> _remove(MailContact contact)`
+  - L103 `Future<void> _add()`
+  - L136 `Widget build(BuildContext context)`
+  - L164 `List<Widget> _content(AppLocalizations l)`
+- L252 `class _ContactTile extends StatelessWidget`  — One contact: the address in full (it may wrap, it is never cut), what it
+  - L253 `const _ContactTile({ super.key, required this.contact, required this.icon, required this.busy, required this.onRemove, })`
+  - L261 `final MailContact contact`
+  - L262 `final IconData icon`
+  - L263 `final bool busy`
+  - L264 `final VoidCallback onRemove`
+  - L267 `Widget build(BuildContext context)`
+- L338 `class _AddContactDialog extends StatefulWidget`  — Address or `@domain`, then Trust or Block. Pops `(address, block)`.
+  - L339 `const _AddContactDialog()`
+  - L342 `State<_AddContactDialog> createState()`
+- L345 `class _AddContactDialogState extends State<_AddContactDialog>`
+  - L346 `final TextEditingController _address = TextEditingController()`
+  - L347 `String? _error`
+  - L350 `void dispose()`
+  - L355 `void _submit({required bool block})`
+  - L367 `Widget build(BuildContext context)`
+
+## lib/pages/agent_mail_detail_page.dart  (882 Z.)
+- L33 `enum AgentMailOutcome`  — What happened to the mail while its page was open. The list uses it to
+  - L36 `changed`
+  - L40 `removed`
+- L43 `class AgentMailDetailPage extends StatefulWidget`
+  - L44 `const AgentMailDetailPage({ super.key, required this.summary, this.service, this.fileSaver = const DownloadsAgentFileSaver(), })`
+  - L53 `final MailSummary summary`  — The row the page was opened from. The header draws from it while the
+  - L56 `final AgentMailService? service`  — Null uses [AgentMailService.instance].
+  - L57 `final AgentFileSaver fileSaver`
+  - L60 `State<AgentMailDetailPage> createState()`
+- L63 `class _AgentMailDetailPageState extends State<AgentMailDetailPage>`
+  - L64 `AgentMailService get _service`
+  - L66 `MailMessage? _message`
+  - L67 `Object? _error`
+  - L68 `bool _loading = true`
+  - L71 `bool _busy = false`  — An action is on its way to the server; the others wait.
+  - L72 `AgentMailOutcome? _outcome`
+  - L75 `bool _trustedNow = false`  — The sender was trusted or blocked on this page.
+  - L76 `bool _blockedNow = false`
+  - L78 `final Set<String> _saving = <String>{}`
+  - L80 `final TextEditingController _subject = TextEditingController()`
+  - L81 `final TextEditingController _text = TextEditingController()`
+  - L83 `MailSummary get _summary`
+  - L86 `void initState()`
+  - L92 `void dispose()`
+  - L98 `Future<void> _load()`
+  - L125 `Future<void> _markRead()`
+  - L142 `Future<bool> _run(Future<void> Function() action)`  — Runs one server action with the page locked. Returns false when it
+  - L163 `void _leave(String message)`
+  - L168 `Future<void> _move(MailFolder folder)`
+  - L181 `Future<bool> _confirm({ required String title, required String body, required String confirm, })`
+  - L207 `Future<void> _delete()`
+  - L221 `Future<void> _trust()`
+  - L237 `Future<void> _block()`
+  - L259 `Future<void> _sendDraft()`
+  - L283 `Future<void> _save(MailAttachment attachment)`
+  - L320 `MailTrust get _shownTrust`
+  - L327 `Widget build(BuildContext context)`
+  - L354 `List<Widget> _body(BuildContext context, AppLocalizations l)`
+  - L459 `Widget _header( BuildContext context, AppLocalizations l, MailSummary mail, MailMessage? message, )`
+  - L500 `List<Widget> _textSection( BuildContext context, AppLocalizations l, MailMessage message, )`
+  - L530 `static String _domainOf(String address)`
+  - L535 `List<Widget> _draftEditor( BuildContext context, AppLocalizations l, MailMessage message, )`
+  - L598 `List<Widget> _actions(AppLocalizations l, MailSummary mail)`
+- L655 `class _DraftField extends StatefulWidget`  — One field of the draft: the app's filled field, its label inside it over
+  - L656 `const _DraftField({ required this.fieldKey, required this.label, required this.controller, required this.enabled, required this.minLines, required this.maxLines, this.maxLength, this.singleLine = false, })`
+  - L667 `final Key fieldKey`
+  - L668 `final String label`
+  - L669 `final TextEditingController controller`
+  - L670 `final bool enabled`
+  - L671 `final int minLines`
+  - L672 `final int? maxLines`
+  - L673 `final int? maxLength`
+  - L676 `final bool singleLine`  — A subject: it wraps to show itself, but Enter never adds a line.
+  - L679 `State<_DraftField> createState()`
+- L682 `class _DraftFieldState extends State<_DraftField>`
+  - L683 `final FocusNode _focus = FocusNode()`
+  - L686 `void dispose()`
+  - L692 `Widget build(BuildContext context)`
+- L744 `class _FieldTile extends StatelessWidget`  — A label over its value, the value free to wrap: an address is never cut.
+  - L745 `const _FieldTile({ required this.label, required this.value, this.detail, this.trailing, })`
+  - L752 `final String label`
+  - L753 `final String value`
+  - L754 `final String? detail`
+  - L755 `final Widget? trailing`
+  - L758 `Widget build(BuildContext context)`
+- L803 `class _AttachmentTile extends StatelessWidget`  — One attachment: its name in full (the extension matters), its size, and a
+  - L804 `const _AttachmentTile({ required this.attachment, required this.saving, required this.onSave, })`
+  - L810 `final MailAttachment attachment`
+  - L811 `final bool saving`
+  - L812 `final VoidCallback onSave`
+  - L815 `Widget build(BuildContext context)`
+
+## lib/pages/agent_mailbox_page.dart  (864 Z.)
+- L34 `@immutable class AgentMailFilter`  — One segment of the folder switch and the list query behind it.
+  - L36 `const AgentMailFilter(this.folder, [this.trust])`
+  - L38 `final MailFolder folder`
+  - L39 `final MailTrustFilter? trust`
+- L46 `kAgentMailFilters = <AgentMailFilter>[ AgentMailFilter(MailFolder.inbox, MailTrustFilter.known), AgentMailFilter(MailFol`  — Inbox | Unknown | Drafts | Sent. The inbox holds only mail from known
+- L54 `kAgentMailArchive = AgentMailFilter(MailFolder.archive)`  — The archive, opened from its row under the address.
+- L57 `kAgentMailPageSize = 50`  — Rows fetched per page.
+- L59 `class AgentMailboxPage extends StatefulWidget`
+  - L60 `const AgentMailboxPage({ super.key, this.service, this.fileSaver = const DownloadsAgentFileSaver(), this.now, this.only, })`
+  - L69 `final AgentMailService? service`  — Null uses [AgentMailService.instance].
+  - L73 `final AgentMailFilter? only`  — Set: the page is one folder's list and nothing else (the archive). No
+  - L76 `final AgentFileSaver fileSaver`  — Where an attachment lands when the user saves it (the mail page).
+  - L79 `final DateTime Function()? now`  — The clock for the dates in the list. Tests pin it.
+  - L82 `State<AgentMailboxPage> createState()`
+- L85 `class _AgentMailboxPageState extends State<AgentMailboxPage>`
+  - L86 `AgentMailService get _service`
+  - L88 `bool _loadingMailbox = true`
+  - L89 `Mailbox? _mailbox`
+  - L90 `Object? _mailboxError`
+  - L92 `int _filter = 0`
+  - L93 `bool _loadingList = false`
+  - L94 `List<MailSummary> _messages = const <MailSummary>[]`
+  - L95 `String? _nextBefore`
+  - L96 `Object? _listError`
+  - L100 `int _listGeneration = 0`  — Bumped on every list load, so a slow answer for a segment the user has
+  - L105 `int? _moreGeneration`  — The list generation whose "Load older mail" is on its way. A load of a
+  - L106 `bool get _loadingMore`
+  - L108 `bool get _single`
+  - L109 `AgentMailFilter get _current`
+  - L112 `void initState()`
+  - L122 `Future<void> _loadAll()`
+  - L151 `Future<void> _loadList()`
+  - L182 `Future<void> _loadMore()`
+  - L215 `void _endMore(int generation)`  — Clears the paging mark, but only its own: a newer segment's load stays.
+  - L219 `void _select(int index)`
+  - L229 `Future<void> _refresh()`
+  - L240 `Future<void> _refreshMailbox()`  — The mailbox row again (frozen, suspended), without dropping the list.
+  - L256 `Future<void> _copyAddress(String address)`
+  - L263 `Future<void> _open(MailSummary mail)`
+  - L296 `void _openContacts()`
+  - L304 `Future<void> _openArchive()`
+  - L321 `Widget build(BuildContext context)`
+  - L351 `List<Widget> _body(BuildContext context, AppLocalizations l)`
+  - L422 `List<Widget> _mailboxProblem(AppLocalizations l, Object error)`
+  - L464 `Widget _retryGroup(AppLocalizations l, Future<void> Function() retry)`
+  - L475 `List<Widget> _list(BuildContext context, AppLocalizations l)`
+  - L550 `static IconData _emptyIcon(AgentMailFilter filter)`
+  - L557 `static String _emptyTitle(AppLocalizations l, AgentMailFilter filter)`
+- L571 `class _AddressTile extends StatelessWidget`  — The agent's address on a line of its own, so it is never cut: at a narrow
+  - L572 `const _AddressTile({required this.address, required this.onCopy})`
+  - L574 `final String address`
+  - L575 `final VoidCallback onCopy`
+  - L578 `Widget build(BuildContext context)`
+- L632 `class _FolderSwitch extends StatelessWidget`  — The folder switch. It never scrolls and never clips: when the labels do
+  - L633 `const _FolderSwitch({ required this.labels, required this.selected, required this.onSelected, })`
+  - L639 `final List<String> labels`
+  - L640 `final int selected`
+  - L641 `final ValueChanged<int> onSelected`
+  - L644 `static const double _kMinLabelScale = 0.75`  — The smallest the labels are set: 14 px x 0.75, still over 10 px.
+  - L647 `Widget build(BuildContext context)`
+- L693 `class AgentMailRow extends StatelessWidget`  — One mail in the list: sender, date, subject, the agent's note or the
+  - L694 `const AgentMailRow({ super.key, required this.mail, required this.onTap, required this.now, })`
+  - L701 `final MailSummary mail`
+  - L702 `final VoidCallback onTap`
+  - L703 `final DateTime now`
+  - L706 `Widget build(BuildContext context)`
+
+## lib/pages/agent_profile_edit_page.dart  (612 Z.)
 - L26 `class AgentProfileEditPage extends StatefulWidget`
   - L27 `const AgentProfileEditPage({ super.key, required this.agent, required this.source, this.onRename, this.profiles, this.imagePicker, })`
   - L36 `final AgentsAgent agent`
@@ -98,121 +273,132 @@
   - L87 `bool _clearColor = false`
   - L88 `bool _busy = false`
   - L90 `String _initialRole()`
-  - L96 `String _initialBrief()`
-  - L103 `void dispose()`
-  - L110 `Future<void> _pickPhoto()`
-  - L144 `Future<void> _removePhoto()`
-  - L149 `Future<void> _save()`
-  - L180 `Widget build(BuildContext context)`
-- L411 `class _FacePreview extends StatelessWidget`  — The face as it will look, with the colour the user is trying out.
-  - L412 `const _FacePreview({ required this.agent, required this.store, required this.overrideColor, required this.shape, })`
-  - L419 `final AgentsAgent agent`
-  - L420 `final AgentProfileStore store`
-  - L421 `final int? overrideColor`
-  - L422 `final AgentAvatarShape? shape`
-  - L425 `Widget build(BuildContext context)`
-- L445 `class _SectionLabel extends StatelessWidget`
-  - L446 `const _SectionLabel(this.label)`
-  - L448 `final String label`
-  - L451 `Widget build(BuildContext context)`
-- L465 `class _ColorRow extends StatelessWidget`  — The colour palette, plus a "back to the derived colour" target.
-  - L466 `const _ColorRow({ required this.selected, required this.onPick, required this.onReset, })`
-  - L472 `final int? selected`
-  - L473 `final ValueChanged<int> onPick`
-  - L474 `final VoidCallback onReset`
-  - L477 `Widget build(BuildContext context)`
-- L537 `class _ShapeRow extends StatelessWidget`  — The silhouettes a coworker can be given, drawn as themselves.
-  - L538 `const _ShapeRow({ required this.agentId, required this.colour, required this.selected, required this.onPick, })`
-  - L545 `final String agentId`
-  - L546 `final Color colour`
-  - L547 `final AgentAvatarShape? selected`
-  - L548 `final ValueChanged<AgentAvatarShape?> onPick`
-  - L550 `static const List<AgentAvatarShape> _offered = <AgentAvatarShape>[ AgentAvatarShape.expressive, AgentAvatarShape.round, AgentAvatarShape.roundedSquare, AgentAvatarShape.oval, AgentAvatarShape.triangle, AgentAvatarShape.gem, AgentAvatarShape.clover, AgentAvatarShape.flower, AgentAvatarShape.cookie, AgentAvatarShape.diamond, AgentAvatarShape.burst, AgentAvatarShape.square, ]`
-  - L566 `Widget build(BuildContext context)`
+  - L93 `String _initialBrief()`
+  - L97 `void dispose()`
+  - L104 `Future<void> _pickPhoto()`
+  - L138 `Future<void> _removePhoto()`
+  - L143 `Future<void> _save()`
+  - L179 `Widget build(BuildContext context)`
+- L410 `class _FacePreview extends StatelessWidget`  — The face as it will look, with the colour the user is trying out.
+  - L411 `const _FacePreview({ required this.agent, required this.store, required this.overrideColor, required this.shape, })`
+  - L418 `final AgentsAgent agent`
+  - L419 `final AgentProfileStore store`
+  - L420 `final int? overrideColor`
+  - L421 `final AgentAvatarShape? shape`
+  - L424 `Widget build(BuildContext context)`
+- L444 `class _SectionLabel extends StatelessWidget`
+  - L445 `const _SectionLabel(this.label)`
+  - L447 `final String label`
+  - L450 `Widget build(BuildContext context)`
+- L464 `class _ColorRow extends StatelessWidget`  — The colour palette, plus a "back to the derived colour" target.
+  - L465 `const _ColorRow({ required this.selected, required this.onPick, required this.onReset, })`
+  - L471 `final int? selected`
+  - L472 `final ValueChanged<int> onPick`
+  - L473 `final VoidCallback onReset`
+  - L476 `Widget build(BuildContext context)`
+- L536 `class _ShapeRow extends StatelessWidget`  — The silhouettes a coworker can be given, drawn as themselves.
+  - L537 `const _ShapeRow({ required this.agentId, required this.colour, required this.selected, required this.onPick, })`
+  - L544 `final String agentId`
+  - L545 `final Color colour`
+  - L546 `final AgentAvatarShape? selected`
+  - L547 `final ValueChanged<AgentAvatarShape?> onPick`
+  - L549 `static const List<AgentAvatarShape> _offered = <AgentAvatarShape>[ AgentAvatarShape.expressive, AgentAvatarShape.round, AgentAvatarShape.roundedSquare, AgentAvatarShape.oval, AgentAvatarShape.triangle, AgentAvatarShape.gem, AgentAvatarShape.clover, AgentAvatarShape.flower, AgentAvatarShape.cookie, AgentAvatarShape.diamond, AgentAvatarShape.burst, AgentAvatarShape.square, ]`
+  - L565 `Widget build(BuildContext context)`
 
-## lib/pages/agent_profile_page.dart  (663 Z.)
-- L35 `class AgentProfilePage extends StatelessWidget`
-  - L36 `const AgentProfilePage({ super.key, required this.agentId, required this.source, this.onRename, this.onDelete, this.onOpenControls, this.onOpenBrowser, this.onMessage, this.profiles, })`
-  - L50 `final String agentId`  — The coworker is read from the roster by id on every build, so a rename or a
-  - L51 `final AgentRosterSource source`
-  - L54 `final void Function(AgentsAgent agent)? onRename`  — Renames the coworker. This is the one field that reaches the host.
-  - L57 `final void Function(AgentsAgent agent)? onDelete`  — Deletes the coworker. The page pops itself first.
-  - L60 `final VoidCallback? onOpenControls`  — Opens the agent control surface.
-  - L63 `final VoidCallback? onOpenBrowser`  — Opens the coworker's browser. Null when it has none open.
-  - L67 `final VoidCallback? onMessage`  — Back to the conversation. Null when the page was opened from the chat
-  - L69 `final AgentProfileStore? profiles`
-  - L72 `static Future<void> open( BuildContext context, { required String agentId, required AgentRosterSource source, void Function(AgentsAgent agent)? onRename, void Function(AgentsAgent agent)? onDelete, VoidCallback? onOpenControls, VoidCallback? onOpenBrowser, VoidCallback? onMessage, AgentProfileStore? profiles, })`  — Pushes the page as a route.
-  - L99 `AgentProfileStore get _store`
-  - L104 `void _startVoiceCall(BuildContext context, AgentsAgent agent)`  — Back to the conversation, where the call panel and its transcript show,
-  - L112 `Widget build(BuildContext context)`
-  - L130 `Widget _build(BuildContext context, AgentsAgent agent)`
-  - L362 `Future<void> _confirmDelete(BuildContext context, AgentsAgent agent)`
-  - L392 `String? _roleOf(AgentsAgent agent, AgentProfile profile)`
-  - L399 `String? _briefOf(AgentsAgent agent, AgentProfile profile)`
-- L408 `class _StatePill extends StatelessWidget`  — The live-state pill under the name: what the coworker is doing right now.
-  - L409 `const _StatePill({required this.agent, required this.accent})`
-  - L411 `final AgentsAgent agent`
-  - L412 `final Color accent`
+## lib/pages/agent_profile_page.dart  (753 Z.)
+- L41 `class AgentProfilePage extends StatelessWidget`
+  - L42 `const AgentProfilePage({ super.key, required this.agentId, required this.source, this.onRename, this.onDelete, this.onOpenControls, this.onOpenBrowser, this.onMessage, this.profiles, this.link, })`
+  - L57 `final String agentId`  — The coworker is read from the roster by id on every build, so a rename or a
+  - L58 `final AgentRosterSource source`
+  - L61 `final void Function(AgentsAgent agent)? onRename`  — Renames the coworker. This is the one field that reaches the host.
+  - L64 `final void Function(AgentsAgent agent)? onDelete`  — Deletes the coworker. The page pops itself first.
+  - L67 `final VoidCallback? onOpenControls`  — Opens the agent control surface.
+  - L70 `final VoidCallback? onOpenBrowser`  — Opens the coworker's browser. Null when it has none open.
+  - L74 `final VoidCallback? onMessage`  — Back to the conversation. Null when the page was opened from the chat
+  - L76 `final AgentProfileStore? profiles`
+  - L80 `final AgentsRelayLink? link`  — The host link, for the "Runs on the host" row: whether the host is
+  - L83 `static Future<void> open( BuildContext context, { required String agentId, required AgentRosterSource source, void Function(AgentsAgent agent)? onRename, void Function(AgentsAgent agent)? onDelete, VoidCallback? onOpenControls, VoidCallback? onOpenBrowser, VoidCallback? onMessage, AgentProfileStore? profiles, })`  — Pushes the page as a route.
+  - L110 `AgentProfileStore get _store`
+  - L115 `void _startVoiceCall(BuildContext context, AgentsAgent agent)`  — Back to the conversation, where the call panel and its transcript show,
+  - L123 `Widget build(BuildContext context)`
+  - L141 `Widget _build(BuildContext context, AgentsAgent agent)`
+  - L371 `Future<void> _confirmDelete(BuildContext context, AgentsAgent agent)`
+  - L401 `String? _roleOf(AgentsAgent agent, AgentProfile profile)`
+  - L404 `String? _briefOf(AgentsAgent agent, AgentProfile profile)`
+- L409 `class _SectionLabel extends StatelessWidget`  — The small capitals over a block of the profile body.
+  - L410 `const _SectionLabel(this.label)`
+  - L412 `final String label`
   - L415 `Widget build(BuildContext context)`
-- L456 `class _ActionRow extends StatelessWidget`  — The row of round targets under the header.
-  - L457 `const _ActionRow({ required this.onMessage, required this.onOpenControls, required this.onOpenBrowser, this.onCall, })`
-  - L464 `final VoidCallback? onMessage`
-  - L465 `final VoidCallback? onOpenControls`
-  - L466 `final VoidCallback? onOpenBrowser`
-  - L469 `final VoidCallback? onCall`  — Starts a voice call. Null keeps the target parked.
-  - L472 `Widget build(BuildContext context)`
-- L540 `class _Action extends StatelessWidget`
-  - L541 `const _Action({ required this.icon, required this.label, required this.onTap, this.color, this.onColor, this.parked = false, })`
-  - L550 `final IconData icon`
-  - L551 `final String label`
-  - L552 `final VoidCallback onTap`
-  - L553 `final Color? color`
-  - L554 `final Color? onColor`
-  - L555 `final bool parked`
-  - L558 `Widget build(BuildContext context)`
-- L592 `class _InfoCard extends StatelessWidget`  — One labelled card in the profile body.
-  - L593 `const _InfoCard({ required this.icon, required this.label, required this.value, this.note, })`
-  - L600 `final IconData icon`
-  - L601 `final String label`
-  - L602 `final String value`
-  - L606 `final String? note`  — A second line that qualifies the value — used where the app must say that
-  - L609 `Widget build(BuildContext context)`
+- L432 `class _StatePill extends StatelessWidget`  — The live-state pill under the name: what the coworker is doing right now.
+  - L433 `const _StatePill({required this.agent, required this.accent})`
+  - L435 `final AgentsAgent agent`
+  - L436 `final Color accent`
+  - L439 `Widget build(BuildContext context)`
+- L480 `class _ActionRow extends StatelessWidget`  — The row of round targets under the header.
+  - L481 `const _ActionRow({ required this.onMessage, required this.onOpenControls, required this.onOpenBrowser, this.onCall, })`
+  - L488 `final VoidCallback? onMessage`
+  - L489 `final VoidCallback? onOpenControls`
+  - L490 `final VoidCallback? onOpenBrowser`
+  - L493 `final VoidCallback? onCall`  — Starts a voice call. Null keeps the target parked.
+  - L496 `Widget build(BuildContext context)`
+- L564 `class _Action extends StatelessWidget`
+  - L565 `const _Action({ required this.icon, required this.label, required this.onTap, this.color, this.onColor, this.parked = false, })`
+  - L574 `final IconData icon`
+  - L575 `final String label`
+  - L576 `final VoidCallback onTap`
+  - L577 `final Color? color`
+  - L578 `final Color? onColor`
+  - L579 `final bool parked`
+  - L582 `Widget build(BuildContext context)`
+- L622 `class _HostRow extends StatelessWidget`  — Where the coworker runs, told from what the app knows (bead
+  - L623 `const _HostRow({required this.agent, required this.link})`
+  - L625 `final AgentsAgent agent`
+  - L626 `final AgentsRelayLink link`
+  - L629 `Widget build(BuildContext context)`
+  - L643 `Widget _card({required bool paired})`
+- L681 `class _InfoCard extends StatelessWidget`  — One labelled card in the profile body.
+  - L682 `const _InfoCard({ super.key, required this.icon, required this.label, required this.value, this.note, })`
+  - L690 `final IconData icon`
+  - L691 `final String label`
+  - L692 `final String value`
+  - L696 `final String? note`  — A second line that qualifies the value — used where the app must say that
+  - L699 `Widget build(BuildContext context)`
 
-## lib/pages/agents_desktop_layout.dart  (639 Z.)
+## lib/pages/agents_desktop_layout.dart  (696 Z.)
 - part of 'messenger_shell.dart'
-- L28 `mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost`  — The Agents desktop layout: chuk_chat's desktop with coworkers in it.
-  - L31 `void _openSettings()`
-  - L34 `Widget? _agentsModeSwitch()`  — The Chat | Agents switch, or null when there is no Chat half.
-  - L38 `double _deskRosterWidth = kDeskRosterDefault`
-  - L39 `bool _deskRosterCollapsed = false`
-  - L40 `double _deskDetailsWidth = kDeskDetailsDefault`
-  - L43 `String? _deskRightPane`  — 'details' | 'rooms' | null — what the right pane shows.
-  - L46 `String? _deskRoomId`  — The room open in the centre pane, over the (still mounted) thread.
-  - L48 `final FocusNode _deskFocus = FocusNode(debugLabel: 'agents-desktop-shell')`
-  - L50 `static const String _kDeskPanesKey = 'agents.desktop.panes_v1'`
-  - L51 `Timer? _deskSaveTimer`
-  - L53 `void _deskInit()`
-  - L58 `void _deskDispose()`
-  - L67 `Future<void> _deskLoad()`  — Pane widths and which panes were open, as the user left them.
-  - L99 `Future<void> _deskSave()`
-  - L117 `void _deskScheduleSave()`  — Written once the reader stops dragging, not on every pixel.
-  - L127 `void _deskToggleRoster()`
-  - L133 `void _deskToggleRightPane(String pane)`  — Opens [pane] on the right, or closes it when it is already there.
-  - L138 `void _deskShowRightPane(String pane)`
-  - L144 `void _deskCloseRightPane()`
-  - L150 `void _deskOpenRoom(String roomId)`
-  - L155 `void _deskCloseRoom()`
-  - L162 `List<AgentsAgent> get _deskAgentOrder`  — The agents in the order the roster shows them: pinned first, then the
-  - L165 `void _deskOpenNth(int n)`
-  - L174 `Future<void> _deskOpenQuickSwitcher()`
-  - L195 `KeyEventResult _deskOnKey(FocusNode node, KeyEvent event)`  — The shell's keyboard. Returns handled only for its own combos, so
-  - L257 `List<AgentsThreadAction> _deskBarActions(AgentsAgent? agent)`  — The thread's floating buttons on the desktop: Control Rooms, the
-  - L279 `List<AgentsThreadAction> _deskMenuActions(AgentsAgent? agent)`
+- L30 `mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost`  — The Agents desktop layout: chuk_chat's desktop with coworkers in it.
+  - L33 `void _openSettings()`
+  - L36 `Widget? _agentsModeSwitch()`  — The Chat | Agents switch, or null when there is no Chat half.
+  - L40 `bool _deskRosterCollapsed = false`
+  - L41 `double _deskDetailsWidth = kDeskDetailsDefault`
+  - L44 `String? _deskRightPane`  — 'details' | 'rooms' | null — what the right pane shows.
+  - L49 `String? _deskDetailsSettingsFor`  — The coworker whose details pane shows its Settings page (the gear);
+  - L54 `String? _deskDetailsShownFor`  — The coworker the details pane showed last. A different one resets
+  - L57 `String? _deskRoomId`  — The room open in the centre pane, over the (still mounted) thread.
+  - L59 `final FocusNode _deskFocus = FocusNode(debugLabel: 'agents-desktop-shell')`
+  - L61 `static const String _kDeskPanesKey = 'agents.desktop.panes_v1'`
+  - L62 `Timer? _deskSaveTimer`
+  - L64 `void _deskInit()`
+  - L69 `void _deskDispose()`
+  - L78 `Future<void> _deskLoad()`  — Pane widths and which panes were open, as the user left them.
+  - L103 `Future<void> _deskSave()`
+  - L120 `void _deskScheduleSave()`  — Written once the reader stops dragging, not on every pixel.
+  - L130 `void _deskToggleRoster()`
+  - L136 `void _deskToggleRightPane(String pane)`  — Opens [pane] on the right, or closes it when it is already there.
+  - L144 `void _deskShowRightPane(String pane)`
+  - L150 `void _deskCloseRightPane()`
+  - L159 `void _deskOpenRoom(String roomId)`
+  - L164 `void _deskCloseRoom()`
+  - L171 `List<AgentsAgent> get _deskAgentOrder`  — The agents in the order the roster shows them: pinned first, then the
+  - L174 `void _deskOpenNth(int n)`
+  - L183 `Future<void> _deskOpenQuickSwitcher()`
+  - L204 `KeyEventResult _deskOnKey(FocusNode node, KeyEvent event)`  — The shell's keyboard. Returns handled only for its own combos, so
+  - L267 `List<AgentsThreadAction> _deskMenuActions(AgentsAgent? agent)`  — The thread header's "…" menu on the desktop. Documents, Call and Screen
   - L295 `Widget _buildDesktopBody( BuildContext context, double width, AgentsAgent? agent, )`
-  - L516 `Widget _buildDeskDetailsPane(BuildContext context, AgentsAgent agent)`  — The details pane: the agent panel under chuk's panel header.
-  - L559 `Future<void> _deskRefreshDetails(String sessionKey)`  — Refresh in the details pane. A host that cannot answer says so; the
-  - L577 `Widget _buildDeskRoomsPane(BuildContext context)`  — Control Rooms in the right pane: the room list under chuk's panel header.
-  - L607 `Widget _buildDeskRoom(BuildContext context, AgentsRoom room)`  — A room in the centre pane. Its name and faces are the room's own intro
+  - L498 `Widget _buildDeskDetailsPane(BuildContext context, AgentsAgent agent)`  — The details pane, in two pages under chuk's panel header.
+  - L610 `Future<void> _deskRefreshDetails(String sessionKey)`  — Refresh in the details pane. A host that cannot answer says so; the
+  - L628 `Widget _buildDeskRoomsPane(BuildContext context)`  — Control Rooms in the right pane: the room list under chuk's panel header.
+  - L659 `Widget _buildDeskRoom(BuildContext context, AgentsRoom room)`  — A room in the centre pane. Its name and faces are the room's own intro
 
 ## lib/pages/agents_install_page.dart  (360 Z.)
 - L36 `typedef AgentsCodePageOpener = Future<AgentsPairingInvite?> Function( BuildContext context, )`  — Opens the code page and hands back what the user scanned or typed.
@@ -275,101 +461,104 @@
   - L272 `Widget _defaultQrView( BuildContext context, { required ValueChanged<String> onCode, required ValueChanged<String> onUnavailable, })`  — The real camera. Every failure the scanner can report — a refused
   - L299 `static String _cameraErrorText(MobileScannerException error)`
 
-## lib/pages/agents_shell_state.dart  (1166 Z.)
+## lib/pages/agents_shell_state.dart  (1295 Z.)
 - part of 'messenger_shell.dart'
 - L8 `Future<AgentsRelayController> _buildRelayController( AgentsPairingStore store, AccountSessionSource sessionSource, )`  — Builds the default production relay controller: a real [AgentsRelayClient]
-- L68 `mixin AgentsShellHost on State<MessengerShell>`  — Everything the shell OWNS, as opposed to how it lays it out.
-  - L69 `final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>()`
-  - L73 `late final AgentsPairingStore _pairingStore = widget.pairingStore ?? AgentsPairingStore()`  — Owned by the state, not the widget: a parent rebuild must never hand the
-  - L75 `late final AgentRosterSource _roster = widget.rosterSource ?? LocalAgentRosterSource()`
-  - L77 `late final RoomSource _rooms = widget.roomSource ?? LocalRoomSource()`
-  - L82 `final ValueNotifier<AgentsRelayController?> _controller = ValueNotifier<AgentsRelayController?>(null)`  — The live transport, handed up by the thread view so a room can stream over
-  - L88 `final ValueNotifier<AgentsLinkReport> _linkReport = ValueNotifier<AgentsLinkReport>(AgentsLinkReport.initial)`  — The link as the thread view last reported it. With [_restoreReason], the
-  - L93 `final ValueNotifier<AgentsPairingRestoreReason> _restoreReason = ValueNotifier<AgentsPairingRestoreReason>( AgentsPairingRestoreReason.checking, )`  — Why the cloud restore last stopped, mirrored from [_pairingRestore] so
-  - L106 `final ValueNotifier<bool?> _hasComputer = ValueNotifier<bool?>(null)`  — Whether this device has a computer to talk to: true with a stored
-  - L109 `bool _localPairing = false`  — The last local read of the pairing store, and whether one has finished.
-  - L110 `bool _localPairingKnown = false`
-  - L111 `int _pairingReads = 0`
-  - L115 `bool _pairingRemoved = false`  — The pairing was here and is gone ("Remove this computer"). That is a
-  - L121 `static const Duration _kRestoreGrace = Duration(seconds: 10)`  — How long an unpaired device waits for a restore that can still work
-  - L122 `Timer? _restoreGraceTimer`
-  - L123 `bool _restoreGraceOver = false`
-  - L128 `final Set<String> _pendingHostDeletes = <String>{}`  — Rooms deleted while the socket was down. The host never heard the delete
-  - L129 `late final AgentControlSource _controlSource = widget.controlSource ?? HostUnavailableControlSource()`
-  - L133 `late final bool _ownsControlSource = widget.controlSource == null`  — Only a source this state created is this state's to dispose.
-  - L138 `late final ThemeController _themeController = widget.themeController ?? ThemeController()`  — The theme controller the app hands down. Kept alive as the bridge
-  - L140 `late final bool _ownsThemeController = widget.themeController == null`
-  - L146 `GlobalKey _threadViewKey = GlobalKey()`  — Keeps the one live thread view (and its socket) alive when the layout
-  - L148 `String? _selectedAgentId`
-  - L158 `String _selectedThreadKey = ''`  — The thread on screen. EMPTY means "nothing to mount yet", and that is
-  - L162 `static const String _kLastAgentKey = 'cowork.last_agent_id'`  — Where the last session left off. Written on every pick, read once at
-  - L163 `static const String _kLastThreadKey = 'cowork.last_thread_key'`
-  - L169 `static const String _kLastPickKey = 'cowork.last_pick_v2'`  — Both halves of the pick in ONE key, `[agentId, threadKey]` as JSON: on
-  - L171 `String? _restoredAgentId`
-  - L172 `String? _restoredThreadKey`
-  - L177 `bool _restoreLoaded = false`  — Whether the remembered pick has been read off disk yet. Nothing is
-  - L183 `bool _selectionIsAuto = false`  — Whether the current selection is the app's own choice rather than the
-  - L187 `bool _showThreadOnNarrow = false`  — On a phone: the chat is in front of the inbox. Flipped by [_select], by
-  - L191 `void _openAgentProfile(AgentsAgent agent)`  — Opens a coworker's profile page. Implemented by the layout, which owns the
-  - L196 `VoidCallback? get _openAgentScreenOrNull`  — Opens the coworker's screen, or null while it has none open — the header
-  - L200 `void _select(String agentId, String threadKey)`  — Selects a coworker's thread. Implemented by the layout, which also
-  - L205 `bool get _threadIsOnScreen`  — Whether the selected thread is really in front of the reader. On a desktop
-  - L207 `AgentsAgent? get _selectedAgent`
-  - L211 `AgentReadMarks get _readMarks`  — What the user has already seen, per thread — the inbox's unread answer.
-  - L214 `AgentProfileStore get _agentProfiles`  — The coworkers' display profiles (picture, colour, role, brief).
-  - L218 `AppLifecycleListener? _hostLifecycle`  — The `initState` half of the host. Called by the state after `super`.
-  - L220 `void _hostInit()`
-  - L279 `StreamSubscription<AgentsRelayInbound>? _hostInboundSub`
-  - L284 `final Set<String> _deletedAgentIds = <String>{}`  — Ids deleted in this session. The host still lists them (delete is not on
-  - L286 `void _onHostInbound(AgentsRelayInbound event)`
-  - L301 `Future<void> _loadLastSelection()`  — Reads the persisted roster and the remembered pick, then lands on it.
-  - L334 `void _rememberSelection(String agentId, String threadKey)`  — Writes the pick for the next launch and marks the selection as the
-  - L350 `static const Duration _kRememberDelay = Duration(milliseconds: 1500)`
-  - L351 `Timer? _rememberTimer`
-  - L352 `(String, String)? _pendingPick`
-  - L355 `Future<void> _writeRememberedSelection()`  — Writes the remembered pick, skipping a key that already holds it.
-  - L372 `static (String, String)? _decodePick(String? raw)`
-  - L388 `void _flushPendingWrites()`
-  - L393 `void _onRosterChanged()`
-  - L399 `StreamSubscription<String?>? _historySub`
-  - L404 `bool _seedingActivity = false`  — True while [_seedActivityFromHistory] scans. Each seeded time notifies
-  - L413 `void _seedActivityFromHistory([String? onlyKey])`  — Fills in "last active" from the history the app already holds, for every
-  - L446 `void _autoSelect()`  — Lands on a thread without waiting for the user.
-  - L476 `void _hostDispose()`  — The `dispose` half of the host. Called by the state before `super`.
-  - L500 `String _threadLabel(String threadKey)`
-  - L517 `void _onNotificationTap()`  — Opens the thread a notification named. Selecting it is enough: the
-  - L557 `void _restoreCloudPairing()`  — Restores this account's pairing from Supabase when the device has none
-  - L577 `void _onRestoreReason()`
-  - L583 `void _onPairingStoreChanged()`
-  - L587 `Future<void> _readLocalPairing()`  — Reads the pairing store once and folds the answer into [_hasComputer].
-  - L604 `void _resolveHasComputer()`
-  - L633 `Future<void> _pairWithInvite(AgentsPairingInvite invite)`  — Runs the shared invite pairing for the install page.
-  - L657 `Future<String?> _waitForInstallClaim( AgentsPairingInvite invite, { required DateTime deadline, required AgentsClaimCancel cancel, })`  — The install page's wait: the app's own device identity claims the
-  - L675 `Future<bool> _openInstallPage()`  — Opens the install page. Completes with true when a computer was linked.
-  - L692 `AgentsThreadViewState? get _threadViewState`  — The live thread view's state, for the status panel's actions.
-  - L700 `Widget _buildStatusPanel({double topInset = 0})`  — What the shell shows while there is no conversation: the one status that
-  - L737 `AgentsPairingRestore? _pairingRestore`  — Keeps trying until this device is linked. Disposed with the shell.
-  - L741 `String? _agentIdForThread(String threadKey)`  — Which coworker owns [threadKey]. A run's events belong to the thread that
-  - L750 `void _onPaired(String peerDeviceId)`
-  - L779 `AgentsThreadView _buildThread({ double topInset = 0, bool phone = false, List<AgentsThreadAction> actions = const <AgentsThreadAction>[], List<AgentsThreadAction> menuActions = const <AgentsThreadAction>[], })`  — The one thread view. Built by exactly one place in the tree at a time;
-  - L827 `void _openModelScreen()`  — Opens the full model catalogue from the composer's "More models" way out.
-  - L833 `Future<void> _openOnboarding()`  — New coworker (bead cowork-817): chuk's rename dialog shape — one
-  - L850 `void _renameAgent(String agentId, String name)`  — Rename (bead cowork-817): the roster row's menu → chuk's dialog → here.
-  - L857 `Future<void> _openAgentRename(AgentsAgent agent)`
-  - L872 `Widget _buildRoomList({bool showHeader = true})`  — The rooms list, for the desktop panel and the phone route alike. A room
-  - L882 `Future<void> _openRoomCreate()`
-  - L914 `void _openRoom(String roomId)`  — Opens a room. The phone pushes it as its own route, so the agent thread
-  - L928 `Widget _buildRoomBody(AgentsRoom room)`  — A room's conversation, for the phone route and the desktop centre pane.
-  - L971 `void _onRoomOpened(AgentsRelayController controller, AgentsRoom room)`  — Called once a room page is ready. Re-sync the room to the host first — it
-  - L979 `Future<void> _manageRoomMembers(String roomId)`
-  - L1033 `void _onController(AgentsRelayController controller)`
-  - L1047 `void _hostDeleteRoom(String roomId)`  — Delete a room on the host, or queue it if the socket is down so it is not
-  - L1056 `void _deleteRoom(String roomId)`
-  - L1061 `void _renameRoom(String roomId, String name)`
-  - L1066 `void _deleteAgent(String agentId)`
-  - L1118 `Future<void> _copyFullChat()`  — Copies the selected thread's full debug export, like chuk_chat's
-  - L1141 `AgentsRelayController? _pairedControllerOrExplain()`  — The paired transport, or null (with a note to the user) when there is
-- L1155 `@visibleForTesting DateTime? newestMessageTime(List<ChatMessage>? messages)`  — The newest timestamp among [messages] (`sentAt`, else `startedAt`), or
+- L71 `mixin AgentsShellHost on State<MessengerShell>`  — Everything the shell OWNS, as opposed to how it lays it out.
+  - L72 `final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>()`
+  - L76 `late final AgentsPairingStore _pairingStore = widget.pairingStore ?? AgentsPairingStore()`  — Owned by the state, not the widget: a parent rebuild must never hand the
+  - L78 `late final AgentRosterSource _roster = widget.rosterSource ?? LocalAgentRosterSource()`
+  - L80 `late final RoomSource _rooms = widget.roomSource ?? LocalRoomSource()`
+  - L85 `final ValueNotifier<AgentsRelayController?> _controller = ValueNotifier<AgentsRelayController?>(null)`  — The live transport, handed up by the thread view so a room can stream over
+  - L91 `final ValueNotifier<AgentsLinkReport> _linkReport = ValueNotifier<AgentsLinkReport>(AgentsLinkReport.initial)`  — The link as the thread view last reported it. With [_restoreReason], the
+  - L96 `final ValueNotifier<AgentsPairingRestoreReason> _restoreReason = ValueNotifier<AgentsPairingRestoreReason>( AgentsPairingRestoreReason.checking, )`  — Why the cloud restore last stopped, mirrored from [_pairingRestore] so
+  - L109 `final ValueNotifier<bool?> _hasComputer = ValueNotifier<bool?>(null)`  — Whether this device has a computer to talk to: true with a stored
+  - L112 `bool _localPairing = false`  — The last local read of the pairing store, and whether one has finished.
+  - L113 `bool _localPairingKnown = false`
+  - L114 `int _pairingReads = 0`
+  - L118 `bool _pairingRemoved = false`  — The pairing was here and is gone ("Remove this computer"). That is a
+  - L124 `static const Duration _kRestoreGrace = Duration(seconds: 10)`  — How long an unpaired device waits for a restore that can still work
+  - L125 `Timer? _restoreGraceTimer`
+  - L126 `bool _restoreGraceOver = false`
+  - L131 `final Set<String> _pendingHostDeletes = <String>{}`  — Rooms deleted while the socket was down. The host never heard the delete
+  - L132 `late final AgentControlSource _controlSource = widget.controlSource ?? HostUnavailableControlSource()`
+  - L136 `late final bool _ownsControlSource = widget.controlSource == null`  — Only a source this state created is this state's to dispose.
+  - L141 `late final ThemeController _themeController = widget.themeController ?? ThemeController()`  — The theme controller the app hands down. Kept alive as the bridge
+  - L143 `late final bool _ownsThemeController = widget.themeController == null`
+  - L149 `GlobalKey _threadViewKey = GlobalKey()`  — Keeps the one live thread view (and its socket) alive when the layout
+  - L151 `String? _selectedAgentId`
+  - L161 `String _selectedThreadKey = ''`  — The thread on screen. EMPTY means "nothing to mount yet", and that is
+  - L165 `static const String _kLastAgentKey = 'cowork.last_agent_id'`  — Where the last session left off. Written on every pick, read once at
+  - L166 `static const String _kLastThreadKey = 'cowork.last_thread_key'`
+  - L172 `static const String _kLastPickKey = 'cowork.last_pick_v2'`  — Both halves of the pick in ONE key, `[agentId, threadKey]` as JSON: on
+  - L174 `String? _restoredAgentId`
+  - L175 `String? _restoredThreadKey`
+  - L180 `bool _restoreLoaded = false`  — Whether the remembered pick has been read off disk yet. Nothing is
+  - L186 `bool _selectionIsAuto = false`  — Whether the current selection is the app's own choice rather than the
+  - L190 `bool _showThreadOnNarrow = false`  — On a phone: the chat is in front of the inbox. Flipped by [_select], by
+  - L194 `void _openAgentProfile(AgentsAgent agent)`  — Opens a coworker's profile page. Implemented by the layout, which owns the
+  - L199 `VoidCallback? get _openAgentScreenOrNull`  — Opens the coworker's screen, or null while it has none open — the header
+  - L203 `void _select(String agentId, String threadKey)`  — Selects a coworker's thread. Implemented by the layout, which also
+  - L208 `bool get _threadIsOnScreen`  — Whether the selected thread is really in front of the reader. On a desktop
+  - L210 `AgentsAgent? get _selectedAgent`
+  - L214 `AgentReadMarks get _readMarks`  — What the user has already seen, per thread — the inbox's unread answer.
+  - L217 `AgentProfileStore get _agentProfiles`  — The coworkers' display profiles (picture, colour, role, brief).
+  - L221 `AppLifecycleListener? _hostLifecycle`  — The `initState` half of the host. Called by the state after `super`.
+  - L223 `void _hostInit()`
+  - L287 `StreamSubscription<AgentsRelayInbound>? _hostInboundSub`
+  - L292 `final Set<String> _deletedAgentIds = <String>{}`  — Ids deleted in this session. The host still lists them (delete is not on
+  - L294 `void _onHostInbound(AgentsRelayInbound event)`
+  - L327 `Future<void> _loadLastSelection()`  — Reads the persisted roster and the remembered pick, then lands on it.
+  - L360 `void _rememberSelection(String agentId, String threadKey)`  — Writes the pick for the next launch and marks the selection as the
+  - L376 `static const Duration _kRememberDelay = Duration(milliseconds: 1500)`
+  - L377 `Timer? _rememberTimer`
+  - L378 `(String, String)? _pendingPick`
+  - L381 `Future<void> _writeRememberedSelection()`  — Writes the remembered pick, skipping a key that already holds it.
+  - L398 `static (String, String)? _decodePick(String? raw)`
+  - L414 `void _flushPendingWrites()`
+  - L419 `void _onRosterChanged()`
+  - L428 `String? _windowTitleNameFor(String chatId)`  — The coworker's name for an Agents thread, or null for any other chat.
+  - L433 `StreamSubscription<String?>? _historySub`
+  - L438 `bool _seedingActivity = false`  — True while [_seedActivityFromHistory] scans. Each seeded time notifies
+  - L447 `void _seedActivityFromHistory([String? onlyKey])`  — Fills in "last active" from the history the app already holds, for every
+  - L480 `void _autoSelect()`  — Lands on a thread without waiting for the user.
+  - L510 `void _hostDispose()`  — The `dispose` half of the host. Called by the state before `super`.
+  - L538 `String _threadLabel(String threadKey)`
+  - L555 `void _onNotificationTap()`  — Opens the thread a notification named. Selecting it is enough: the
+  - L595 `void _restoreCloudPairing()`  — Restores this account's pairing from Supabase when the device has none
+  - L615 `void _onRestoreReason()`
+  - L621 `void _onPairingStoreChanged()`
+  - L625 `Future<void> _readLocalPairing()`  — Reads the pairing store once and folds the answer into [_hasComputer].
+  - L642 `void _resolveHasComputer()`
+  - L671 `Future<void> _pairWithInvite(AgentsPairingInvite invite)`  — Runs the shared invite pairing for the install page.
+  - L695 `Future<String?> _waitForInstallClaim( AgentsPairingInvite invite, { required DateTime deadline, required AgentsClaimCancel cancel, })`  — The install page's wait: the app's own device identity claims the
+  - L713 `Future<bool> _openInstallPage()`  — Opens the install page. Completes with true when a computer was linked.
+  - L730 `AgentsThreadViewState? get _threadViewState`  — The live thread view's state, for the status panel's actions.
+  - L738 `Widget _buildStatusPanel({double topInset = 0})`  — What the shell shows while there is no conversation: the one status that
+  - L775 `AgentsPairingRestore? _pairingRestore`  — Keeps trying until this device is linked. Disposed with the shell.
+  - L779 `String? _agentIdForThread(String threadKey)`  — Which coworker owns [threadKey]. A run's events belong to the thread that
+  - L790 `AppLocalizations get _l10n`  — The shell's strings; English when no localizations are in the tree
+  - L793 `void _onPaired(String peerDeviceId)`
+  - L831 `AgentsThreadView _buildThread({ double topInset = 0, bool phone = false, VoidCallback? onOpenAgent, List<AgentsThreadAction> menuActions = const <AgentsThreadAction>[], })`  — The one thread view. Built by exactly one place in the tree at a time;
+  - L881 `void _openModelScreen()`  — Opens the full model catalogue from the composer's "More models" way out.
+  - L891 `Future<void> _openOnboarding()`  — New coworker (bead cowork-817, templates chuk_chat-dsh0): the template
+  - L933 `Future<void> _createOnHost( AgentsAgent agent, CoworkerTemplate? template, { required bool startAutomation, })`  — Tells the host about a new coworker, then — only when the user turned
+  - L979 `void _renameAgent(String agentId, String name)`  — Rename (bead cowork-817): the roster row's menu → chuk's dialog → here.
+  - L986 `Future<void> _openAgentRename(AgentsAgent agent)`
+  - L1001 `Widget _buildRoomList({bool showHeader = true})`  — The rooms list, for the desktop panel and the phone route alike. A room
+  - L1011 `Future<void> _openRoomCreate()`
+  - L1043 `void _openRoom(String roomId)`  — Opens a room. The phone pushes it as its own route, so the agent thread
+  - L1057 `Widget _buildRoomBody(AgentsRoom room)`  — A room's conversation, for the phone route and the desktop centre pane.
+  - L1100 `void _onRoomOpened(AgentsRelayController controller, AgentsRoom room)`  — Called once a room page is ready. Re-sync the room to the host first — it
+  - L1108 `Future<void> _manageRoomMembers(String roomId)`
+  - L1162 `void _onController(AgentsRelayController controller)`
+  - L1176 `void _hostDeleteRoom(String roomId)`  — Delete a room on the host, or queue it if the socket is down so it is not
+  - L1185 `void _deleteRoom(String roomId)`
+  - L1190 `void _renameRoom(String roomId, String name)`
+  - L1195 `void _deleteAgent(String agentId)`
+  - L1247 `Future<void> _copyFullChat()`  — Copies the selected thread's full debug export, like chuk_chat's
+  - L1270 `AgentsRelayController? _pairedControllerOrExplain()`  — The paired transport, or null (with a note to the user) when there is
+- L1284 `@visibleForTesting DateTime? newestMessageTime(List<ChatMessage>? messages)`  — The newest timestamp among [messages] (`sentAt`, else `startedAt`), or
 
 ## lib/pages/assistant_settings_page.dart  (410 Z.)
 - L24 `class AssistantSettingsPage extends StatefulWidget`  — One job: make Chuk Chat the assistant of this phone.
@@ -408,24 +597,27 @@
   - L385 `const _AllSet()`
   - L388 `Widget build(BuildContext context)`
 
-## lib/pages/automations_page.dart  (193 Z.)
-- L20 `class AutomationsPage extends StatefulWidget`  — Every automation of the host, grouped by the coworker that owns it, with
-  - L21 `const AutomationsPage({ super.key, AutomationsSource? source, this.sessionKey, this.chatName, }) : _injectedSource = source`
-  - L28 `final AutomationsSource? _injectedSource`
-  - L31 `final String? sessionKey`  — Null is the global account view; chat settings always supply a scope.
-  - L32 `final String? chatName`
-  - L35 `State<AutomationsPage> createState()`
-- L38 `class _AutomationsPageState extends State<AutomationsPage>`
-  - L39 `late final AutomationsSource _source = widget._injectedSource ?? AutomationsSource.instance`
-  - L42 `bool _refreshing = false`
-  - L43 `bool _offline = false`
-  - L44 `bool _showFinished = false`
-  - L47 `void initState()`
-  - L55 `void dispose()`
-  - L60 `void _onChanged()`
-  - L64 `Future<void> _refresh()`
-  - L74 `Future<void> _control(AgentsAutomation a, String action)`
-  - L81 `Widget build(BuildContext context)`
+## lib/pages/automations_page.dart  (247 Z.)
+- L22 `class AutomationsPage extends StatefulWidget`  — Every automation of the host, grouped by the coworker that owns it, with
+  - L23 `const AutomationsPage({ super.key, AutomationsSource? source, this.sessionKey, this.chatName, }) : _injectedSource = source`
+  - L30 `final AutomationsSource? _injectedSource`
+  - L33 `final String? sessionKey`  — Null is the global account view; chat settings always supply a scope.
+  - L34 `final String? chatName`
+  - L37 `State<AutomationsPage> createState()`
+- L40 `class _AutomationsPageState extends State<AutomationsPage>`
+  - L41 `late final AutomationsSource _source = widget._injectedSource ?? AutomationsSource.instance`
+  - L44 `bool _refreshing = false`
+  - L45 `bool _offline = false`
+  - L46 `bool _showFinished = false`
+  - L49 `void initState()`
+  - L57 `void dispose()`
+  - L62 `void _onChanged()`
+  - L66 `Future<void> _refresh()`
+  - L76 `Future<void> _control(AgentsAutomation a, String action)`
+  - L85 `Map<String, String> _coworkerChoices()`  — The coworkers a new automation can belong to on the global page: every
+  - L96 `Future<void> _create()`
+  - L112 `Future<void> _edit(AgentsAutomation a)`
+  - L127 `Widget build(BuildContext context)`
 
 ## lib/pages/coming_soon_page.dart  (95 Z.)
 - L17 `class ComingSoonPage extends StatelessWidget`
@@ -454,6 +646,56 @@
   - L63 `bool get _promptChanged`
   - L67 `Widget build(BuildContext context)`
   - L222 `Widget _buildParameterRow(String name, String description)`
+
+## lib/pages/coworker_model_page.dart  (728 Z.)
+- L41 `class CoworkerModelPage extends StatefulWidget`
+  - L42 `const CoworkerModelPage({ super.key, required this.chatId, this.coworkerName, this.controlSource, })`
+  - L50 `final String chatId`  — The coworker's thread key, which its model is stored under.
+  - L53 `final String? coworkerName`  — Used in the page's sentences ("Every message to Alex …").
+  - L57 `final AgentControlSource? controlSource`  — Where the last run's model comes from. Null builds one over the relay in
+  - L59 `static Future<void> open( BuildContext context, { required String chatId, String? coworkerName, AgentControlSource? controlSource, })`
+  - L77 `State<CoworkerModelPage> createState()`
+- L80 `class _CoworkerModelPageState extends State<CoworkerModelPage>`
+  - L82 `static const int _kListedModels = 8`  — How many models the page lists before the rest go behind "All models".
+  - L84 `CoworkerModelState? _state`
+  - L85 `List<CoworkerCatalogueModel> _models = const <CoworkerCatalogueModel>[]`
+  - L86 `Set<String> _pinned = const <String>{}`
+  - L87 `bool _loading = true`
+  - L88 `bool _saving = false`
+  - L92 `bool _catalogueFailed = false`  — The catalogue did not load (offline, empty cache, a hung fetch). The
+  - L93 `bool _retrying = false`
+  - L94 `Timer? _watchdog`
+  - L96 `AgentControlSource? _ownedSource`
+  - L97 `AgentControlSource? get _source`
+  - L99 `String get _name`
+  - L105 `void initState()`
+  - L116 `void dispose()`
+  - L123 `void _onStoreChanged()`
+  - L131 `Future<void> _load()`  — Loads the coworker's choice, the catalogue and the pinned models, each
+  - L159 `void _startWatchdog()`  — Ends a wait that hangs: what is known shows, and the list offers Retry.
+  - L173 `Future<void> _retryCatalogue()`  — Retry after a catalogue that did not load.
+  - L183 `Future<void> _loadState()`
+  - L193 `Future<Set<String>> _loadPinned()`  — The models the reader has enabled on the model screen.
+  - L207 `CoworkerCatalogueModel? _model(String id)`
+  - L216 `Future<void> _write({ required String modelId, required String providerSlug, required String reasoningEffort, })`
+  - L247 `Future<void> _pickModel(String modelId)`
+  - L266 `Future<void> _pickProvider(String slug)`
+  - L279 `Future<void> _pickEffort(String level)`
+  - L289 `Future<void> _useDefault()`
+  - L307 `Future<void> _openDefaults()`
+  - L315 `Future<void> _openAllModels(BuildContext anchorContext)`
+  - L344 `Widget build(BuildContext context)`
+  - L365 `Widget _summary(BuildContext context, CoworkerModelState state)`  — What the next message runs on, and what the last one ran on.
+  - L429 `Widget _lastRun(BuildContext context, CoworkerModelState state)`
+  - L469 `List<Widget> _modelSection(BuildContext context, CoworkerModelState state)`
+  - L535 `List<Widget> _providerSection( BuildContext context, CoworkerModelState state, )`
+  - L600 `String? _providerLine(CoworkerProvider provider)`
+  - L609 `List<Widget> _reasoningSection( BuildContext context, CoworkerModelState state, )`
+  - L636 `List<Widget> _defaultSection(BuildContext context, CoworkerModelState state)`
+  - L687 `Widget _catalogueRetryRow(BuildContext context)`  — "Could not load the model list", with Retry. The rows under it still
+  - L713 `Widget _check(ColorScheme scheme)`
+  - L716 `static String _capitalised(String text)`
+  - L719 `static String _formatContext(int tokens)`
 
 ## lib/pages/customization_page.dart  (803 Z.)
 - L29 `class CustomizationPage extends StatefulWidget`
@@ -501,51 +743,51 @@
   - L52 `const DesktopMediaModal({super.key})`
   - L55 `Widget build(BuildContext context)`
 
-## lib/pages/desktop_settings_modal.dart  (886 Z.)
-- L67 `Future<void> showDesktopSettingsModal( BuildContext context, { required AppShellConfig config, String? initialSectionId, })`  — Opens the desktop settings modal over the current chat UI.
-- L99 `class _SettingsDest`  — A settings destination: either a page shown in the right pane, or an
-  - L100 `const _SettingsDest({ required this.id, required this.icon, required this.label, this.keywords = '', this.builder, this.onAction, this.tone, })`
-  - L110 `final String id`
-  - L111 `final IconData icon`
-  - L112 `final String label`
-  - L117 `final String keywords`  — Extra search terms covering the rows INSIDE this page, so the settings
-  - L120 `final WidgetBuilder? builder`  — Page to show in the right pane. Null for action-only destinations.
-  - L123 `final Future<void> Function(BuildContext modalContext)? onAction`  — Runs on tap instead of showing a page. Receives the modal context.
-  - L126 `final Color? tone`  — Optional accent tone for the icon (e.g. destructive/dev).
-  - L128 `bool get isPage`
-- L131 `class _SettingsGroup`
-  - L132 `const _SettingsGroup(this.title, this.items)`
-  - L133 `final String title`
-  - L134 `final List<_SettingsDest> items`
-- L137 `class DesktopSettingsModal extends StatefulWidget`
-  - L138 `const DesktopSettingsModal({ super.key, required this.config, this.initialSectionId, })`
-  - L144 `final AppShellConfig config`
-  - L147 `final String? initialSectionId`  — Section to open on first show (e.g. `'model'`). Null starts on Account.
-  - L150 `State<DesktopSettingsModal> createState()`
-- L153 `class _DesktopSettingsModalState extends State<DesktopSettingsModal>`
-  - L154 `late String _selectedId = widget.initialSectionId ?? 'account'`
-  - L155 `String _query = ''`
-  - L156 `final TextEditingController _searchController = TextEditingController()`
-  - L157 `bool _developerOptions = false`
-  - L161 `bool _compact = false`  — Whether the modal is in single-column (small window) layout. Computed in
-  - L164 `late String? _compactPageId = widget.initialSectionId`  — In compact layout, the page currently drilled into (null = the nav list).
-  - L167 `void initState()`
-  - L174 `void dispose()`
-  - L180 `void _onDevOptions()`
-  - L187 `List<_SettingsGroup> _groups(AppLocalizations l)`
-  - L369 `_SettingsDest? _findPage(List<_SettingsGroup> groups, String id)`
-  - L378 `void _onSelect(_SettingsDest dest)`
-  - L397 `Widget build(BuildContext context)`
-  - L451 `Widget _buildWide( BuildContext context, AppLocalizations l, List<_SettingsGroup> groups, _SettingsDest? selectedPage, )`
-  - L500 `Widget _buildCompact( BuildContext context, AppLocalizations l, List<_SettingsGroup> groups, )`
-  - L563 `Widget _buildNavRail( BuildContext context, AppLocalizations l, List<_SettingsGroup> groups, { required bool compact, })`
-  - L681 `Widget _navItem(BuildContext context, _SettingsDest dest)`
-  - L738 `static String? _tourSlotFor(String id)`  — The tour points at the same destinations here as on the phone, so the
-  - L753 `Widget _buildRailFooter(BuildContext context, AppLocalizations l)`
-  - L792 `Future<void> _logout()`
-  - L807 `Future<void> _replayOnboarding(BuildContext modalContext)`
-  - L819 `Future<void> _exportChats(BuildContext modalContext)`
-  - L884 `SnackBar _snack(String text)`  — The pill this page shows its messages in — the app's one notification
+## lib/pages/desktop_settings_modal.dart  (896 Z.)
+- L68 `Future<void> showDesktopSettingsModal( BuildContext context, { required AppShellConfig config, String? initialSectionId, })`  — Opens the desktop settings modal over the current chat UI.
+- L100 `class _SettingsDest`  — A settings destination: either a page shown in the right pane, or an
+  - L101 `const _SettingsDest({ required this.id, required this.icon, required this.label, this.keywords = '', this.builder, this.onAction, this.tone, })`
+  - L111 `final String id`
+  - L112 `final IconData icon`
+  - L113 `final String label`
+  - L118 `final String keywords`  — Extra search terms covering the rows INSIDE this page, so the settings
+  - L121 `final WidgetBuilder? builder`  — Page to show in the right pane. Null for action-only destinations.
+  - L124 `final Future<void> Function(BuildContext modalContext)? onAction`  — Runs on tap instead of showing a page. Receives the modal context.
+  - L127 `final Color? tone`  — Optional accent tone for the icon (e.g. destructive/dev).
+  - L129 `bool get isPage`
+- L132 `class _SettingsGroup`
+  - L133 `const _SettingsGroup(this.title, this.items)`
+  - L134 `final String title`
+  - L135 `final List<_SettingsDest> items`
+- L138 `class DesktopSettingsModal extends StatefulWidget`
+  - L139 `const DesktopSettingsModal({ super.key, required this.config, this.initialSectionId, })`
+  - L145 `final AppShellConfig config`
+  - L148 `final String? initialSectionId`  — Section to open on first show (e.g. `'model'`). Null starts on Account.
+  - L151 `State<DesktopSettingsModal> createState()`
+- L154 `class _DesktopSettingsModalState extends State<DesktopSettingsModal>`
+  - L155 `late String _selectedId = widget.initialSectionId ?? 'account'`
+  - L156 `String _query = ''`
+  - L157 `final TextEditingController _searchController = TextEditingController()`
+  - L158 `bool _developerOptions = false`
+  - L162 `bool _compact = false`  — Whether the modal is in single-column (small window) layout. Computed in
+  - L165 `late String? _compactPageId = widget.initialSectionId`  — In compact layout, the page currently drilled into (null = the nav list).
+  - L168 `void initState()`
+  - L175 `void dispose()`
+  - L181 `void _onDevOptions()`
+  - L188 `List<_SettingsGroup> _groups(AppLocalizations l)`
+  - L379 `_SettingsDest? _findPage(List<_SettingsGroup> groups, String id)`
+  - L388 `void _onSelect(_SettingsDest dest)`
+  - L407 `Widget build(BuildContext context)`
+  - L461 `Widget _buildWide( BuildContext context, AppLocalizations l, List<_SettingsGroup> groups, _SettingsDest? selectedPage, )`
+  - L510 `Widget _buildCompact( BuildContext context, AppLocalizations l, List<_SettingsGroup> groups, )`
+  - L573 `Widget _buildNavRail( BuildContext context, AppLocalizations l, List<_SettingsGroup> groups, { required bool compact, })`
+  - L691 `Widget _navItem(BuildContext context, _SettingsDest dest)`
+  - L748 `static String? _tourSlotFor(String id)`  — The tour points at the same destinations here as on the phone, so the
+  - L763 `Widget _buildRailFooter(BuildContext context, AppLocalizations l)`
+  - L802 `Future<void> _logout()`
+  - L817 `Future<void> _replayOnboarding(BuildContext modalContext)`
+  - L829 `Future<void> _exportChats(BuildContext modalContext)`
+  - L894 `SnackBar _snack(String text)`  — The pill this page shows its messages in — the app's one notification
 
 ## lib/pages/diagnostics_settings_page.dart  (381 Z.)
 - L21 `class DeveloperOptionsPage extends StatefulWidget`
@@ -906,102 +1148,119 @@
   - L1493 `static String _relative(DateTime updatedAt)`
   - L1502 `static IconData _iconForType(ArtifactType type)`
 
-## lib/pages/messenger_shell.dart  (1115 Z.)
+## lib/pages/messenger_shell.dart  (1142 Z.)
 - part 'agents_shell_state.dart' · part 'agents_desktop_layout.dart'
-- L159 `class MessengerShell extends StatefulWidget`  — The messenger: coworkers down the left, the selected thread in the middle,
-  - L160 `const MessengerShell({ super.key, this.relayControllerBuilder, this.sessionSource = const SupabaseAccountSession(), this.pairingStore, this.rosterSource, this.roomSource, this.controlSource, this.onSignOut, this.themeController, this.shellConfig, this.chatDebugExport, this.readMarks, this.agentProfiles, this.pairingRestoreBuilder, this.appMode, this.chatModeBuilder, this.installClaimWaiter, })`
-  - L183 `final Future<AgentsRelayController> Function()? relayControllerBuilder`  — Builds the relay transport controller. Injectable so widget tests supply
-  - L186 `final AccountSessionSource sessionSource`  — Account session provisioned to the executor once paired.
-  - L190 `final AgentsPairingStore? pairingStore`  — Persistent trust store: the stable device identity and the stored pairing
-  - L193 `final AgentRosterSource? rosterSource`  — The roster of coworkers. Built by the state when omitted.
-  - L196 `final RoomSource? roomSource`  — The group rooms the user has built. Built by the state when omitted.
-  - L200 `final AgentControlSource? controlSource`  — The control surface's data source. The default reports every block as not
-  - L203 `final VoidCallback? onSignOut`  — Sign-out hook. Defaults to the real [AuthService].
-  - L208 `final ThemeController? themeController`  — The app's theme controller. Kept as the bridge `main.dart` and
-  - L216 `final AppShellConfig? shellConfig`  — chuk_chat's `AppShellConfig` — the theme, typography and display settings
-  - L226 `final Future<String> Function(String threadKey)? chatDebugExport`  — Copies one thread's debug export and returns the short note to show —
-  - L230 `final AgentReadMarks? readMarks`  — What the reader has already seen, per thread — the inbox's unread answer.
-  - L233 `final AgentProfileStore? agentProfiles`  — The coworkers' display profiles (picture, colour, role, brief).
-  - L240 `final AgentsPairingRestore Function( AgentsPairingStore store, AccountSessionSource sessionSource, Future<void> Function() onRestored, )? pairingRestoreBuilder`  — Builds the cloud-pairing restore supervisor. Null builds the real one.
-  - L250 `final AppModeService? appMode`  — Which half is in front: Chat or Agents. Null builds one that remembers
-  - L259 `final Widget Function( BuildContext context, { required bool phone, required Widget? modeSwitch, required VoidCallback? onAddComputer, })? chatModeBuilder`  — Builds the Chat half. Null builds chuk_chat's own root wrapper from
-  - L270 `final AgentsInstallClaimWaiter? installClaimWaiter`  — Replaces the install page's wait for the computer (the relay claim). A
-  - L273 `State<MessengerShell> createState()`
-- L276 `class _MessengerShellState extends State<MessengerShell> with AgentsShellHost, _AgentsDesktopLayout, SingleTickerProviderStateMixin`
-  - L282 `BrowserPresence? _browserPresence`  — Whether the agent has a browser open, derived from the live transport's
-  - L283 `bool get _browserOpen`
-  - L284 `bool _browserViewVisible = false`
-  - L288 `bool _isPhone = false`
-  - L301 `late final AnimationController _push = AnimationController( vsync: this, duration: MobileContainerTransform.duration, )`  — The chat-open travel (see [_buildPhoneBody]). One explicit controller,
-  - L309 `ContainerTransformSource? _openFrom`  — The row the open travel starts from, captured on the tap that opened the
-  - L313 `String? _openFromAgentId`  — Which coworker's row [_openFrom] is a copy of, so the list can hide the
-  - L319 `ContainerTransformSource? _pendingOpenFrom`  — The row handed up by the list on THIS tap, claimed by the [_select] that
-  - L325 `double? _pushTarget`  — Where [_push] has been told to go, so a rebuild does not re-fire it.
-  - L329 `late final AppModeService _appMode = widget.appMode ?? AppModeService()`
-  - L330 `late final bool _ownsAppMode = widget.appMode == null`
-  - L337 `bool _chatListening = false`  — Whether there is a chuk_chat to switch to. Without a shell config (a
-  - L339 `bool get _chatModeAvailable`
-  - L344 `AppMode _shownMode = AppMode.agents`  — The half on screen. Follows [_appMode], and is always Agents when there
-  - L348 `bool _chatModeBuilt = false`  — Whether the Chat half has been shown yet. It is built on first show and
-  - L352 `String? _chatModeChatId`  — chuk_chat's chat as the Chat half last had it: null is a new chat. See
-  - L355 `void initState()`
-  - L385 `Future<bool> _hasPairing()`  — Whether this device holds a pairing: the default half with nothing
-  - L391 `AppMode get _wantedMode`  — The half the shell should show: what [_appMode] says, except that a
-  - L396 `bool get _showModeSwitch`  — The switch shows only when there is a computer to switch to. While that
-  - L399 `VoidCallback? get _addComputerAction`  — The install entry's action: only on a device that has no computer.
-  - L406 `Widget? _buildModeSwitch()`  — The switch, wired to [_appMode]. One widget for every place it sits.
-  - L415 `Future<void> _addComputer()`  — "Add your computer": the install page, and the Agents half once the
-  - L421 `void _onHasComputerChanged()`
-  - L428 `void _onModeChanged()`
-  - L448 `void _handOverChatPointer()`  — Points the shared pointer at the chat of the half in front.
-  - L457 `String? _readChatModeChatId()`  — What chuk's wrapper reads as the chat in view.
-  - L459 `bool _isAgentsChatId(String id)`
-  - L472 `void _onSharedChatPointer()`  — The shared pointer moved.
-  - L501 `Widget _buildChatMode(BuildContext context, bool phone)`  — The Chat half: chuk_chat's own root wrapper, with the switch in its top
-  - L533 `Widget? _agentsModeSwitch()`  — The switch for the Agents half's own layouts, or null without a Chat
-  - L539 `void _onPushStatus(AnimationStatus status)`  — The travel is fully back: the row the chat grew out of belongs to the list
-  - L549 `void dispose()`
-  - L571 `void _onControllerForBrowser()`  — A transport arrived or changed: follow it with a fresh [BrowserPresence]
-  - L581 `void _onBrowserPresenceChanged()`
-  - L592 `void _explainNoScreen()`  — The screen target, tapped while the coworker has no screen. Says what has
-  - L622 `void _select(String agentId, String threadKey)`
-  - L661 `bool get _threadIsOnScreen`  — On a phone the inbox can cover the thread; a desktop window always shows
-  - L667 `VoidCallback? get _openAgentScreenOrNull`  — The screen target's action, or null while the coworker has no screen open.
-  - L673 `void _openRooms()`  — Control Rooms: the right panel on a desktop window, a route on a phone.
-  - L700 `Future<void> _openBrowserView()`  — The agent's browser: a full-screen route on every form factor (Bead
-  - L722 `void _openAgentProfile(AgentsAgent agent)`  — A coworker's profile page: the face, the state, the brief, and everything
-  - L804 `void _openSettings()`  — chuk's settings entry: the modal over the chat on a desktop window
-  - L823 `void _openModelScreen()`  — The composer's "More models" way out, wired as chuk wires it: the settings
-  - L827 `void _openChatModel(String chatKey)`
-  - L835 `void _openChatFiles(String chatKey, String name)`
-  - L851 `Widget build(BuildContext context)`
-  - L894 `void _openControlDrawer()`  — The agent controls: the details pane on a desktop window. The phone
-  - L901 `void _openRoom(String roomId)`  — A room: in the centre pane on a desktop window, a route on a phone.
-  - L934 `void _drivePush(bool open, bool reducedMotion)`  — The phone layout (docs/MOBILE_GROKBOT_STRUCTURE.md, cowork-c6): the
-  - L961 `Widget _buildPhoneBody(BuildContext context, AgentsAgent? agent)`
+- L169 `class MessengerShell extends StatefulWidget`  — The messenger: coworkers down the left, the selected thread in the middle,
+  - L170 `const MessengerShell({ super.key, this.relayControllerBuilder, this.sessionSource = const SupabaseAccountSession(), this.pairingStore, this.rosterSource, this.roomSource, this.controlSource, this.onSignOut, this.themeController, this.shellConfig, this.chatDebugExport, this.readMarks, this.agentProfiles, this.pairingRestoreBuilder, this.appMode, this.chatModeBuilder, this.installClaimWaiter, })`
+  - L193 `final Future<AgentsRelayController> Function()? relayControllerBuilder`  — Builds the relay transport controller. Injectable so widget tests supply
+  - L196 `final AccountSessionSource sessionSource`  — Account session provisioned to the executor once paired.
+  - L200 `final AgentsPairingStore? pairingStore`  — Persistent trust store: the stable device identity and the stored pairing
+  - L203 `final AgentRosterSource? rosterSource`  — The roster of coworkers. Built by the state when omitted.
+  - L206 `final RoomSource? roomSource`  — The group rooms the user has built. Built by the state when omitted.
+  - L210 `final AgentControlSource? controlSource`  — The control surface's data source. The default reports every block as not
+  - L213 `final VoidCallback? onSignOut`  — Sign-out hook. Defaults to the real [AuthService].
+  - L218 `final ThemeController? themeController`  — The app's theme controller. Kept as the bridge `main.dart` and
+  - L226 `final AppShellConfig? shellConfig`  — chuk_chat's `AppShellConfig` — the theme, typography and display settings
+  - L236 `final Future<String> Function(String threadKey)? chatDebugExport`  — Copies one thread's debug export and returns the short note to show —
+  - L240 `final AgentReadMarks? readMarks`  — What the reader has already seen, per thread — the inbox's unread answer.
+  - L243 `final AgentProfileStore? agentProfiles`  — The coworkers' display profiles (picture, colour, role, brief).
+  - L250 `final AgentsPairingRestore Function( AgentsPairingStore store, AccountSessionSource sessionSource, Future<void> Function() onRestored, )? pairingRestoreBuilder`  — Builds the cloud-pairing restore supervisor. Null builds the real one.
+  - L260 `final AppModeService? appMode`  — Which half is in front: Chat or Agents. Null builds one that remembers
+  - L269 `final Widget Function( BuildContext context, { required bool phone, required Widget? modeSwitch, required VoidCallback? onAddComputer, })? chatModeBuilder`  — Builds the Chat half. Null builds chuk_chat's own root wrapper from
+  - L280 `final AgentsInstallClaimWaiter? installClaimWaiter`  — Replaces the install page's wait for the computer (the relay claim). A
+  - L283 `State<MessengerShell> createState()`
+- L286 `class _MessengerShellState extends State<MessengerShell> with AgentsShellHost, _AgentsDesktopLayout, SingleTickerProviderStateMixin`
+  - L292 `BrowserPresence? _browserPresence`  — Whether the agent has a browser open, derived from the live transport's
+  - L293 `bool get _browserOpen`
+  - L294 `bool _browserViewVisible = false`
+  - L298 `bool _isPhone = false`
+  - L311 `late final AnimationController _push = AnimationController( vsync: this, duration: MobileContainerTransform.duration, )`  — The chat-open travel (see [_buildPhoneBody]). One explicit controller,
+  - L319 `ContainerTransformSource? _openFrom`  — The row the open travel starts from, captured on the tap that opened the
+  - L323 `String? _openFromAgentId`  — Which coworker's row [_openFrom] is a copy of, so the list can hide the
+  - L329 `ContainerTransformSource? _pendingOpenFrom`  — The row handed up by the list on THIS tap, claimed by the [_select] that
+  - L335 `double? _pushTarget`  — Where [_push] has been told to go, so a rebuild does not re-fire it.
+  - L339 `late final AppModeService _appMode = widget.appMode ?? AppModeService()`
+  - L340 `late final bool _ownsAppMode = widget.appMode == null`
+  - L347 `bool _chatListening = false`  — Whether there is a chuk_chat to switch to. Without a shell config (a
+  - L349 `bool get _chatModeAvailable`
+  - L354 `AppMode _shownMode = AppMode.agents`  — The half on screen. Follows [_appMode], and is always Agents when there
+  - L358 `bool _chatModeBuilt = false`  — Whether the Chat half has been shown yet. It is built on first show and
+  - L362 `String? _chatModeChatId`  — chuk_chat's chat as the Chat half last had it: null is a new chat. See
+  - L365 `void initState()`
+  - L395 `Future<bool> _hasPairing()`  — Whether this device holds a pairing: the default half with nothing
+  - L401 `AppMode get _wantedMode`  — The half the shell should show: what [_appMode] says, except that a
+  - L406 `bool get _showModeSwitch`  — The switch shows only when there is a computer to switch to. While that
+  - L409 `VoidCallback? get _addComputerAction`  — The install entry's action: only on a device that has no computer.
+  - L416 `Widget? _buildModeSwitch()`  — The switch, wired to [_appMode]. One widget for every place it sits.
+  - L425 `Future<void> _addComputer()`  — "Add your computer": the install page, and the Agents half once the
+  - L431 `void _onHasComputerChanged()`
+  - L438 `void _onModeChanged()`
+  - L458 `void _handOverChatPointer()`  — Points the shared pointer at the chat of the half in front.
+  - L467 `String? _readChatModeChatId()`  — What chuk's wrapper reads as the chat in view.
+  - L469 `bool _isAgentsChatId(String id)`
+  - L482 `void _onSharedChatPointer()`  — The shared pointer moved.
+  - L511 `Widget _buildChatMode(BuildContext context, bool phone)`  — The Chat half: chuk_chat's own root wrapper, with the switch in its top
+  - L543 `Widget? _agentsModeSwitch()`  — The switch for the Agents half's own layouts, or null without a Chat
+  - L549 `void _onPushStatus(AnimationStatus status)`  — The travel is fully back: the row the chat grew out of belongs to the list
+  - L559 `void dispose()`
+  - L581 `void _onControllerForBrowser()`  — A transport arrived or changed: follow it with a fresh [BrowserPresence]
+  - L591 `void _onBrowserPresenceChanged()`
+  - L602 `void _explainNoScreen()`  — The screen target, tapped while the coworker has no screen. Says what has
+  - L645 `void _select(String agentId, String threadKey)`
+  - L684 `bool get _threadIsOnScreen`  — On a phone the inbox can cover the thread; a desktop window always shows
+  - L690 `VoidCallback? get _openAgentScreenOrNull`  — The screen target's action, or null while the coworker has no screen open.
+  - L696 `void _openRooms()`  — Control Rooms: the right panel on a desktop window, a route on a phone.
+  - L723 `Future<void> _openBrowserView()`  — The agent's browser: a full-screen route on every form factor (Bead
+  - L745 `void _openAgentProfile(AgentsAgent agent)`  — A coworker's profile page: the face, the state, the brief, and everything
+  - L827 `void _openSettings()`  — chuk's settings entry: the modal over the chat on a desktop window
+  - L846 `void _openModelScreen()`  — The composer's "More models" way out, wired as chuk wires it: the settings
+  - L850 `void _openChatModel(String chatKey)`
+  - L858 `void _openChatFiles(String chatKey, String name)`
+  - L874 `Widget build(BuildContext context)`
+  - L917 `void _openControlDrawer()`  — The agent controls: the details pane on a desktop window. The phone
+  - L924 `void _openRoom(String roomId)`  — A room: in the centre pane on a desktop window, a route on a phone.
+  - L957 `void _drivePush(bool open, bool reducedMotion)`  — The phone layout (docs/MOBILE_GROKBOT_STRUCTURE.md, cowork-c6): the
+  - L984 `Widget _buildPhoneBody(BuildContext context, AgentsAgent? agent)`
 
-## lib/pages/mobile_agents_settings_page.dart  (398 Z.)
-- L22 `class MobileAgentsSettingsPage extends StatefulWidget`  — The mobile contact page: everyday choices first, technical details second.
-  - L23 `const MobileAgentsSettingsPage({ super.key, required this.agentId, required this.source, required this.onEdit, required this.onControls, required this.onModel, required this.onAutomations, required this.onSkills, required this.onConnectors, required this.onSecrets, required this.onRooms, required this.onSettings, this.onDocuments, this.onCopyChat, this.onBrowser, this.onDelete, this.profiles, this.preferences, this.onChat, this.chatId, })`
-  - L46 `final String agentId`
-  - L47 `final String? chatId`
-  - L48 `final AgentRosterSource source`
-  - L49 `final AgentProfileStore? profiles`
-  - L50 `final MobileChatPreferences? preferences`
-  - L51 `final VoidCallback onEdit, onControls, onModel, onAutomations, onSkills, onConnectors, onSecrets, onRooms, onSettings`
-  - L60 `final VoidCallback? onDocuments, onCopyChat, onBrowser, onDelete, onChat`
-  - L63 `State<MobileAgentsSettingsPage> createState()`
-- L67 `class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage>`
-  - L68 `MobileChatPreferences get _preferences`
-  - L72 `void initState()`
-  - L80 `Future<void> _remove(AgentsAgent agent)`
-  - L106 `Widget build(BuildContext context)`
-  - L268 `Widget _contact(AgentsAgent agent, AgentProfileStore profiles)`  — The coworker the page is about: face, name and role, centred over the
-  - L297 `Widget _actionRow()`
-  - L314 `Widget _action(String label, IconData icon, VoidCallback onTap)`  — One quick action: the settings icon tile over its label, the whole
-  - L345 `Widget _row( String title, IconData icon, VoidCallback action, { String? subtitle, })`
-  - L358 `Widget _switch( String title, String subtitle, IconData icon, bool value, Future<void> Function(bool) changed, String id, )`
-  - L376 `Widget _removeButton(AgentsAgent agent)`  — Removing a coworker is the page's one destructive action, drawn the way
+## lib/pages/mobile_agent_permissions_page.dart  (116 Z.)
+- L27 `class MobileAgentPermissionsPage extends StatefulWidget`
+  - L28 `const MobileAgentPermissionsPage({ super.key, required this.agentId, this.service, })`
+  - L35 `final String agentId`  — The coworker, which is also its thread's `session_key`.
+  - L38 `final AgentsPermissionsService? service`  — Defaults to [AgentsPermissionsService.instance].
+  - L40 `static Future<void> open( BuildContext context, { required String agentId, AgentsPermissionsService? service, })`
+  - L52 `State<MobileAgentPermissionsPage> createState()`
+- L56 `class _MobileAgentPermissionsPageState extends State<MobileAgentPermissionsPage>`
+  - L60 `final Set<String> _budgetAsked = <String>{}`  — Coworkers whose budget this page already asked for: a host that never
+  - L62 `AgentsPermissionsService get _service`
+  - L65 `AppLocalizations get _l`
+  - L70 `void _askBudget()`  — The same ask the desktop details pane makes: once the host keeps
+  - L80 `Widget build(BuildContext context)`
+
+## lib/pages/mobile_agents_settings_page.dart  (494 Z.)
+- L26 `class MobileAgentsSettingsPage extends StatefulWidget`  — The mobile contact page: everyday choices first, technical details second.
+  - L27 `const MobileAgentsSettingsPage({ super.key, required this.agentId, required this.source, required this.onEdit, required this.onControls, required this.onModel, required this.onAutomations, required this.onSkills, required this.onConnectors, required this.onSecrets, required this.onRooms, required this.onSettings, this.onDocuments, this.onCopyChat, this.onBrowser, this.onDelete, this.profiles, this.preferences, this.onChat, this.chatId, this.permissions, // polish })`
+  - L51 `final String agentId`
+  - L52 `final String? chatId`
+  - L53 `final AgentRosterSource source`
+  - L54 `final AgentProfileStore? profiles`
+  - L55 `final MobileChatPreferences? preferences`
+  - L58 `final VoidCallback onEdit, onControls, onModel, onAutomations, onSkills, onConnectors, onSecrets, onRooms, onSettings`  — [onModel] runs only for a coworker with no thread yet; with one, the
+  - L67 `final VoidCallback? onDocuments, onCopyChat, onBrowser, onDelete, onChat`
+  - L72 `final AgentsPermissionsService? permissions`  — Where the Permissions page reads and sends (sandbox switches, approvals,
+  - L76 `State<MobileAgentsSettingsPage> createState()`
+- L80 `class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage>`
+  - L81 `MobileChatPreferences get _preferences`
+  - L85 `AppLocalizations get _l`  — The page's words; English when the tree has no localisations (tests).
+  - L89 `void initState()`
+  - L97 `void _openModel(AgentsAgent agent)`  — The coworker's model page — the one place its model, provider and
+  - L108 `Future<void> _remove(AgentsAgent agent)`
+  - L133 `Widget build(BuildContext context)`
+  - L339 `Widget _contact(AgentsAgent agent, AgentProfileStore profiles)`  — The coworker the page is about: face, name and role, centred over the
+  - L371 `Widget _actionRow(AgentsAgent agent)`
+  - L407 `Widget _action(String label, IconData icon, VoidCallback onTap)`  — One quick action: the settings icon tile over its label, the whole
+  - L440 `Widget _row( String id, String title, IconData icon, VoidCallback action, { String? subtitle, })`  — [id] is the row's fixed English name: it keys the row, so a test or a
+  - L454 `Widget _switch( String title, String subtitle, IconData icon, bool value, Future<void> Function(bool) changed, String id, )`
+  - L472 `Widget _removeButton(AgentsAgent agent)`  — Removing a coworker is the page's one destructive action, drawn the way
 
 ## lib/pages/otp_verification_page.dart  (291 Z.)
 - L26 `class OtpVerificationPage extends StatefulWidget`  — Reusable page for entering a 6-digit email verification code.
@@ -1131,85 +1390,85 @@
   - L56 `Future<void> _handleSetPassword()`
   - L130 `Widget build(BuildContext context)`
 
-## lib/pages/settings_page.dart  (1127 Z.)
-- L63 `class SettingsPage extends StatefulWidget`
-  - L64 `final AppShellConfig config`
-  - L66 `const SettingsPage({super.key, required this.config})`
-  - L69 `State<SettingsPage> createState()`
-- L72 `class _SettingsPageState extends State<SettingsPage>`
-  - L73 `bool _developerOptionsEnabled = false`
-  - L76 `void initState()`
-  - L90 `void dispose()`
-  - L95 `void _onDeveloperOptions()`
-  - L102 `Future<void> _refreshDeveloperOptions()`
-  - L135 `Widget build(BuildContext context)`
-  - L547 `Future<void> _replayOnboarding(BuildContext context)`
-  - L562 `Future<void> _exportChats(BuildContext context)`
-  - L614 `Future<String?> _saveExportToLinux(Uint8List data, String fileName)`
-  - L635 `Future<Directory?> _linuxInitialDirectory()`
-- L659 `class _PlanInfo`
-  - L660 `final String heroLabel`
-  - L662 `const _PlanInfo({required this.heroLabel})`
-- L665 `class _AccountRow extends StatefulWidget`
-  - L666 `final Future<void> Function() onTap`
-  - L668 `const _AccountRow({required this.onTap})`
-  - L671 `State<_AccountRow> createState()`
-- L674 `class _AccountRowState extends State<_AccountRow>`
-  - L675 `late Future<_PlanInfo> _planFuture`
-  - L676 `ProfileRecord? _profile`
-  - L679 `void initState()`
-  - L685 `Future<void> _loadProfile()`
-  - L702 `Future<_PlanInfo> _loadPlan()`
-  - L710 `static _PlanInfo _planInfoFrom(Map<String, dynamic>? status)`
-  - L721 `({String displayName, String email}) _identity()`
-  - L749 `Widget build(BuildContext context)`
-- L839 `class _PlanBadge extends StatelessWidget`
-  - L840 `final String label`
-  - L842 `const _PlanBadge({required this.label})`
-  - L845 `Widget build(BuildContext context)`
-- L868 `class _SettingsRow extends StatelessWidget`
-  - L869 `final IconData icon`
-  - L870 `final String title`
-  - L871 `final String? subtitle`
-  - L872 `final VoidCallback onTap`
-  - L874 `const _SettingsRow({ required this.icon, required this.title, required this.onTap, this.subtitle, })`
-  - L882 `Widget build(BuildContext context)`
-- L890 `class _DevTile extends StatelessWidget`
-  - L891 `final String title`
-  - L892 `final String subtitle`
-  - L893 `final VoidCallback onTap`
-  - L895 `const _DevTile({ required this.title, required this.subtitle, required this.onTap, })`
-  - L902 `Widget build(BuildContext context)`
-- L966 `enum BadgeTone`
-  - L966 `neutral`
-  - L966 `primary`
-  - L966 `success`
-  - L966 `warning`
-  - L966 `error`
-- L968 `class _Badge extends StatelessWidget`
-  - L969 `final String label`
-  - L970 `final BadgeTone tone`
-  - L972 `const _Badge(this.label, {required this.tone})`
-  - L975 `Widget build(BuildContext context)`
-- L1021 `class _MiniChip extends StatelessWidget`
-  - L1022 `final String label`
-  - L1023 `final bool connected`
-  - L1026 `const _MiniChip(this.label, {this.connected = false})`
-  - L1029 `Widget build(BuildContext context)`
-- L1063 `class DottedBorderBox extends StatelessWidget`  — Paints a dashed rounded-rectangle border around [child].
-  - L1064 `final Widget child`
-  - L1065 `final Color color`
-  - L1066 `final double radius`
-  - L1068 `const DottedBorderBox({ super.key, required this.child, required this.color, this.radius = 12, })`
-  - L1076 `Widget build(BuildContext context)`
-- L1084 `class _DashedRectPainter extends CustomPainter`
-  - L1085 `final Color color`
-  - L1086 `final double radius`
-  - L1087 `final double dashWidth`
-  - L1088 `final double dashSpace`
-  - L1090 `_DashedRectPainter({required this.color, required this.radius}) : dashWidth = 5, dashSpace = 4`
-  - L1095 `void paint(Canvas canvas, Size size)`
-  - L1121 `bool shouldRepaint(covariant _DashedRectPainter oldDelegate)`
+## lib/pages/settings_page.dart  (1158 Z.)
+- L64 `class SettingsPage extends StatefulWidget`
+  - L65 `final AppShellConfig config`
+  - L67 `const SettingsPage({super.key, required this.config})`
+  - L70 `State<SettingsPage> createState()`
+- L73 `class _SettingsPageState extends State<SettingsPage>`
+  - L74 `bool _developerOptionsEnabled = false`
+  - L77 `void initState()`
+  - L91 `void dispose()`
+  - L96 `void _onDeveloperOptions()`
+  - L103 `Future<void> _refreshDeveloperOptions()`
+  - L136 `Widget build(BuildContext context)`
+  - L578 `Future<void> _replayOnboarding(BuildContext context)`
+  - L593 `Future<void> _exportChats(BuildContext context)`
+  - L645 `Future<String?> _saveExportToLinux(Uint8List data, String fileName)`
+  - L666 `Future<Directory?> _linuxInitialDirectory()`
+- L690 `class _PlanInfo`
+  - L691 `final String heroLabel`
+  - L693 `const _PlanInfo({required this.heroLabel})`
+- L696 `class _AccountRow extends StatefulWidget`
+  - L697 `final Future<void> Function() onTap`
+  - L699 `const _AccountRow({required this.onTap})`
+  - L702 `State<_AccountRow> createState()`
+- L705 `class _AccountRowState extends State<_AccountRow>`
+  - L706 `late Future<_PlanInfo> _planFuture`
+  - L707 `ProfileRecord? _profile`
+  - L710 `void initState()`
+  - L716 `Future<void> _loadProfile()`
+  - L733 `Future<_PlanInfo> _loadPlan()`
+  - L741 `static _PlanInfo _planInfoFrom(Map<String, dynamic>? status)`
+  - L752 `({String displayName, String email}) _identity()`
+  - L780 `Widget build(BuildContext context)`
+- L870 `class _PlanBadge extends StatelessWidget`
+  - L871 `final String label`
+  - L873 `const _PlanBadge({required this.label})`
+  - L876 `Widget build(BuildContext context)`
+- L899 `class _SettingsRow extends StatelessWidget`
+  - L900 `final IconData icon`
+  - L901 `final String title`
+  - L902 `final String? subtitle`
+  - L903 `final VoidCallback onTap`
+  - L905 `const _SettingsRow({ required this.icon, required this.title, required this.onTap, this.subtitle, })`
+  - L913 `Widget build(BuildContext context)`
+- L921 `class _DevTile extends StatelessWidget`
+  - L922 `final String title`
+  - L923 `final String subtitle`
+  - L924 `final VoidCallback onTap`
+  - L926 `const _DevTile({ required this.title, required this.subtitle, required this.onTap, })`
+  - L933 `Widget build(BuildContext context)`
+- L997 `enum BadgeTone`
+  - L997 `neutral`
+  - L997 `primary`
+  - L997 `success`
+  - L997 `warning`
+  - L997 `error`
+- L999 `class _Badge extends StatelessWidget`
+  - L1000 `final String label`
+  - L1001 `final BadgeTone tone`
+  - L1003 `const _Badge(this.label, {required this.tone})`
+  - L1006 `Widget build(BuildContext context)`
+- L1052 `class _MiniChip extends StatelessWidget`
+  - L1053 `final String label`
+  - L1054 `final bool connected`
+  - L1057 `const _MiniChip(this.label, {this.connected = false})`
+  - L1060 `Widget build(BuildContext context)`
+- L1094 `class DottedBorderBox extends StatelessWidget`  — Paints a dashed rounded-rectangle border around [child].
+  - L1095 `final Widget child`
+  - L1096 `final Color color`
+  - L1097 `final double radius`
+  - L1099 `const DottedBorderBox({ super.key, required this.child, required this.color, this.radius = 12, })`
+  - L1107 `Widget build(BuildContext context)`
+- L1115 `class _DashedRectPainter extends CustomPainter`
+  - L1116 `final Color color`
+  - L1117 `final double radius`
+  - L1118 `final double dashWidth`
+  - L1119 `final double dashSpace`
+  - L1121 `_DashedRectPainter({required this.color, required this.radius}) : dashWidth = 5, dashSpace = 4`
+  - L1126 `void paint(Canvas canvas, Size size)`
+  - L1152 `bool shouldRepaint(covariant _DashedRectPainter oldDelegate)`
 
 ## lib/pages/skills_settings_page.dart  (733 Z.)
 - L28 `class SkillsSettingsPage extends StatefulWidget`  — Lists built-in skills and lets the user author their own.
@@ -1421,60 +1680,60 @@
   - L1073 `const _FontCard({ required this.title, required this.subtitle, required this.sample, required this.value, required this.options, required this.labelFor, required this.onChanged, })`
   - L1084 `Widget build(BuildContext context)`
 
-## lib/pages/tool_calling_settings_page.dart  (759 Z.)
+## lib/pages/tool_calling_settings_page.dart  (761 Z.)
 - L23 `class ToolCallingSettingsPage extends StatefulWidget`
   - L24 `const ToolCallingSettingsPage({super.key, required this.config})`
   - L26 `final AppShellConfig config`
   - L29 `State<ToolCallingSettingsPage> createState()`
 - L33 `class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage>`
-  - L34 `static const Map<String, IconData> _toolIcons = { 'web_search': Icons.search, 'web_crawl': Icons.language, 'generate_image': Icons.image_outlined, 'fetch_image': Icons.download_outlined, 'view_chat_images': Icons.visibility_outlined, 'weather': Icons.cloud_outlined, 'search_places': Icons.place_outlined, 'search_restaurants': Icons.restaurant, 'geocode': Icons.pin_drop_outlined, 'get_route': Icons.alt_route, 'calculate': Icons.calculate, 'get_time': Icons.access_time, 'random_number': Icons.casino_outlined, 'flip_coin': Icons.currency_exchange, 'roll_dice': Icons.casino, 'countdown': Icons.timer_outlined, 'password_generator': Icons.key_outlined, 'uuid_generator': Icons.fingerprint, 'notes': Icons.note_outlined, 'generate_qr': Icons.qr_code_2, }`
-  - L57 `static Map<String, String> _toolDisplayNames(AppLocalizations l)`
-  - L80 `late bool _toolCallingEnabled`
-  - L81 `late bool _toolDiscoveryMode`
-  - L82 `late bool _showToolCalls`
-  - L83 `late final ToolExecutor _toolExecutor`
-  - L84 `bool _isLoadingToolPreferences = true`
-  - L87 `void initState()`
-  - L107 `void dispose()`
-  - L114 `void _onDevOptionsChanged()`
-  - L119 `Future<void> _loadToolPreferences()`
-  - L157 `int _categoryOrder(ToolCategory category)`
-  - L180 `String _categoryLabel(ToolCategory category)`
-  - L204 `IconData _categoryIcon(ToolCategory category)`
-  - L227 `String _categoryDescription(ToolCategory category)`
-  - L253 `String? _categoryServiceName(ToolCategory category)`  — Map a ToolCategory to the service name used by platform_tools.
-  - L266 `bool _isCategoryConnectable(ToolCategory category)`
-  - L271 `bool _isCategoryConnected(ToolCategory category)`
-  - L279 `Future<void> _connectService(ToolCategory category)`
-  - L301 `Future<void> _disconnectService(ToolCategory category)`
-  - L335 `String _displayName(String toolName)`
-  - L352 `String _trimDescription(String text, {int maxChars = 110})`
-  - L365 `static const Set<ToolCategory> _devOnlyCategories = { ToolCategory.github, }`
-  - L369 `bool _isCategoryDevOnly(ToolCategory category)`
-  - L376 `static const Set<String> _hiddenTools = { 'find_tools', 'ask_user', 'request_mcp_server', 'skill', 'create_artifact', 'update_artifact', 'update_project', 'typst_compile', 'search_chats', }`
-  - L390 `static const Set<String> _artifactTools = { 'artifact_manager', 'artifact_schema', }`
-  - L395 `bool _anyRegistered(Set<String> names)`
-  - L398 `List<ClientTool> _visibleTools()`
-  - L443 `List<Widget> _buildToolSections()`
-  - L519 `void _appendCollapsedInfraRows(List<Widget> widgets, AppLocalizations l)`  — Artifacts are one capability to the user, not a pile of internal tools.
-  - L541 `Future<void> _openToolDetail(ClientTool tool)`
-  - L556 `Future<void> _resetAllToolPreferences()`
-  - L589 `Widget build(BuildContext context)`
-- L684 `class _ToolRow extends StatelessWidget`  — One tool: the switch turns it off, the tile itself opens its detail.
-  - L685 `const _ToolRow({ required this.icon, required this.iconEnabled, required this.title, required this.subtitle, required this.value, required this.onChanged, this.onTap, this.alwaysOn = false, })`
-  - L696 `final IconData icon`
-  - L697 `final bool iconEnabled`
-  - L698 `final String title`
-  - L699 `final String subtitle`
-  - L700 `final bool value`
-  - L701 `final ValueChanged<bool> onChanged`
-  - L702 `final VoidCallback? onTap`
-  - L703 `final bool alwaysOn`
-  - L706 `Widget build(BuildContext context)`
-- L737 `class _CategoryLabel extends StatelessWidget`  — A light category label under the single "Tools" section header. Smaller and
-  - L738 `const _CategoryLabel(this.label)`
-  - L740 `final String label`
-  - L743 `Widget build(BuildContext context)`
+  - L34 `static const Map<String, IconData> _toolIcons = { 'web_search': Icons.search, 'web_crawl': Icons.language, 'generate_image': Icons.image_outlined, 'fetch_image': Icons.download_outlined, 'fetch_files': Icons.folder_zip_outlined, 'view_chat_images': Icons.visibility_outlined, 'weather': Icons.cloud_outlined, 'search_places': Icons.place_outlined, 'search_restaurants': Icons.restaurant, 'geocode': Icons.pin_drop_outlined, 'get_route': Icons.alt_route, 'calculate': Icons.calculate, 'get_time': Icons.access_time, 'random_number': Icons.casino_outlined, 'flip_coin': Icons.currency_exchange, 'roll_dice': Icons.casino, 'countdown': Icons.timer_outlined, 'password_generator': Icons.key_outlined, 'uuid_generator': Icons.fingerprint, 'notes': Icons.note_outlined, 'generate_qr': Icons.qr_code_2, }`
+  - L58 `static Map<String, String> _toolDisplayNames(AppLocalizations l)`
+  - L82 `late bool _toolCallingEnabled`
+  - L83 `late bool _toolDiscoveryMode`
+  - L84 `late bool _showToolCalls`
+  - L85 `late final ToolExecutor _toolExecutor`
+  - L86 `bool _isLoadingToolPreferences = true`
+  - L89 `void initState()`
+  - L109 `void dispose()`
+  - L116 `void _onDevOptionsChanged()`
+  - L121 `Future<void> _loadToolPreferences()`
+  - L159 `int _categoryOrder(ToolCategory category)`
+  - L182 `String _categoryLabel(ToolCategory category)`
+  - L206 `IconData _categoryIcon(ToolCategory category)`
+  - L229 `String _categoryDescription(ToolCategory category)`
+  - L255 `String? _categoryServiceName(ToolCategory category)`  — Map a ToolCategory to the service name used by platform_tools.
+  - L268 `bool _isCategoryConnectable(ToolCategory category)`
+  - L273 `bool _isCategoryConnected(ToolCategory category)`
+  - L281 `Future<void> _connectService(ToolCategory category)`
+  - L303 `Future<void> _disconnectService(ToolCategory category)`
+  - L337 `String _displayName(String toolName)`
+  - L354 `String _trimDescription(String text, {int maxChars = 110})`
+  - L367 `static const Set<ToolCategory> _devOnlyCategories = { ToolCategory.github, }`
+  - L371 `bool _isCategoryDevOnly(ToolCategory category)`
+  - L378 `static const Set<String> _hiddenTools = { 'find_tools', 'ask_user', 'request_mcp_server', 'skill', 'create_artifact', 'update_artifact', 'update_project', 'typst_compile', 'search_chats', }`
+  - L392 `static const Set<String> _artifactTools = { 'artifact_manager', 'artifact_schema', }`
+  - L397 `bool _anyRegistered(Set<String> names)`
+  - L400 `List<ClientTool> _visibleTools()`
+  - L445 `List<Widget> _buildToolSections()`
+  - L521 `void _appendCollapsedInfraRows(List<Widget> widgets, AppLocalizations l)`  — Artifacts are one capability to the user, not a pile of internal tools.
+  - L543 `Future<void> _openToolDetail(ClientTool tool)`
+  - L558 `Future<void> _resetAllToolPreferences()`
+  - L591 `Widget build(BuildContext context)`
+- L686 `class _ToolRow extends StatelessWidget`  — One tool: the switch turns it off, the tile itself opens its detail.
+  - L687 `const _ToolRow({ required this.icon, required this.iconEnabled, required this.title, required this.subtitle, required this.value, required this.onChanged, this.onTap, this.alwaysOn = false, })`
+  - L698 `final IconData icon`
+  - L699 `final bool iconEnabled`
+  - L700 `final String title`
+  - L701 `final String subtitle`
+  - L702 `final bool value`
+  - L703 `final ValueChanged<bool> onChanged`
+  - L704 `final VoidCallback? onTap`
+  - L705 `final bool alwaysOn`
+  - L708 `Widget build(BuildContext context)`
+- L739 `class _CategoryLabel extends StatelessWidget`  — A light category label under the single "Tools" section header. Smaller and
+  - L740 `const _CategoryLabel(this.label)`
+  - L742 `final String label`
+  - L745 `Widget build(BuildContext context)`
 
 ## lib/pages/usage_details_page.dart  (1340 Z.)
 - L14 `_kMonthNames = <String>[ 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', ]`

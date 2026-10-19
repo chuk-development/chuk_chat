@@ -1,5 +1,10 @@
 # test/agents_permissions · Signaturen
 
+## test/agents_permissions/agent_approvals_section_test.dart  (140 Z.)
+- L11 `Map<String, dynamic> _reply({ Map<String, String> classes = const <String, String>{ 'publish': 'ask', 'send_external': 'allow', 'mcp_destructive': 'ask', 'browser_act': 'ask', }, List<String> sites = const <String>['github.com', 'shop.example'], })`
+- L34 `Future<(FakeHost, AgentsPermissionsService)> _open( WidgetTester tester, { bool approvals = true, })`
+- L59 `void main()`
+
 ## test/agents_permissions/agent_permissions_section_test.dart  (329 Z.)
 - L16 `Widget _page(AgentsPermissionsService service, {String agentId = 'a'})`
 - L26 `Switch _switch(WidgetTester tester, String key)`
@@ -26,3 +31,12 @@
   - L33 `void detach()`
   - L34 `void nameCapability()`
 - L38 `Map<String, dynamic> permissionsReply( String agentId, AgentPermissions? p, { String? error, Map<String, bool>? enforced, })`
+
+## test/agents_permissions/user_browser_status_test.dart  (420 Z.)
+- L16 `Map<String, dynamic> _block({ bool hostListening = true, bool installed = true, bool connected = true, String? browser = 'chrome', bool inUse = false, Map<String, dynamic>? inUseBy, bool? mine, bool stopped = false, })`
+- L39 `Map<String, dynamic> _reply(String agentId, Map<String, dynamic> block)`
+- L45 `Map<String, dynamic> _push(Map<String, dynamic> block)`
+- L50 `_en = AppLocalizations(const Locale('en'))`
+- L51 `_de = AppLocalizations(const Locale('de'))`
+- L53 `String _subtitle( UserBrowserStatus? s, { String agentId = 'a', bool heldByOther = false, AppLocalizations? l, })`
+- L66 `void main()`

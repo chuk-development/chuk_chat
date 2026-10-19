@@ -22,9 +22,7 @@
   - L46 `Widget build(BuildContext context)`
 
 ## lib/widgets/agents_desktop/desktop_metrics.dart  (31 Z.)
-- L12 `kDeskRosterMin = 220`  — Left pane (roster): resizable between these. The default is the width of
-- L13 `kDeskRosterMax = 360`
-- L14 `kDeskRosterDefault = 320`
+- L14 `kDeskRosterWidth = kDesktopSidebarWidth`  — Left pane (roster): exactly as wide as chuk's desktop sidebar, and not
 - L17 `kDeskRailWidth = 56`  — The roster folded to chuk's mini rail.
 - L20 `kDeskDetailsMin = 300`  — Right pane (details): resizable between these.
 - L21 `kDeskDetailsMax = 420`

@@ -5,6 +5,19 @@
 - L16 `ChatVoiceBinding _binding(VoiceCallController controller, String chatId)`
 - L29 `void main()`
 
+## test/voice_integration/chat_voice_binding_on_demand_test.dart  (165 Z.)
+- L11 `class _Screen`  — A fake chat screen: a new chat (no id) until [ensureChatId] gives it one.
+  - L12 `String? chatId`
+  - L13 `final List<Map<String, String>> messages = <Map<String, String>>[]`
+  - L14 `final List<String> discarded = <String>[]`
+  - L15 `int creates = 0`
+  - L18 `Completer<void>? gate`  — When set, a creation waits for it (a slow first save).
+  - L20 `Future<String?> ensureChatId()`
+  - L28 `Future<void> discardChat(String id)`
+- L36 `ChatVoiceBinding _binding( VoiceCallController controller, _Screen screen, { bool onDemand = true, })`  — No LiveKit: the test build has no token server, so a started call fails
+- L55 `Future<void> _hangUp(VoiceCallController controller)`  — Hangs up the failed call (its panel goes away) and lets the binding
+- L60 `void main()`
+
 ## test/voice_integration/chat_voice_binding_test.dart  (193 Z.)
 - L13 `ChatVoiceBinding _binding({ required VoiceCallController controller, required String? Function() chatId, bool agents = false, List<String>? sent, bool Function()? busy, String? Function()? agentName, })`  — A binding over a fake screen. No LiveKit: the test build has no token
 - L36 `void main()`

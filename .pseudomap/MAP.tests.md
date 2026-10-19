@@ -1,6 +1,6 @@
 # pseudomap · chuk_chat · Tests
 
-357 Dateien · 974 Typen/Funktionen · 955 Member · Stand 2026-09-30
+417 Dateien · 1172 Typen/Funktionen · 1060 Member · Stand 2026-10-17
 
 Diese Datei ist `.pseudomap/MAP.md` — Stufe 1: was es gibt und wo es liegt.
 
@@ -57,7 +57,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### verify_languages.dart  (19 Z.)
 - `void main()`
 
-### widget_test.dart  (318 Z.)
+### widget_test.dart  (324 Z.)
 - `class _FailingAuthService extends AuthService`  — Auth service that always fails, so the login test can exercise the error
   - signInWithPassword
 - `class _FakeSessionSource implements AccountSessionSource`  — Session source returning fixed tokens, so tests never touch Supabase.
@@ -69,6 +69,11 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void main()`
 
 ## test/agents_permissions
+### agent_approvals_section_test.dart  (140 Z.)
+- `Map<String, dynamic> _reply({ Map<String, String> classes = const <String, String>{ 'publish': 'ask', 'send_external': ' …)`
+- `Future<(FakeHost, AgentsPermissionsService)> _open( WidgetTester tester, { bool approvals = true, })`
+- `void main()`
+
 ### agent_permissions_section_test.dart  (329 Z.)
 - `Widget _page(AgentsPermissionsService service, {String agentId = 'a'})`
 - `Switch _switch(WidgetTester tester, String key)`
@@ -86,6 +91,14 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class FakeHost`  — A stand-in for the host connection: what it sends, whether a host is
   - send service attach detach nameCapability connection capabilities sent fail
 - `Map<String, dynamic> permissionsReply( String agentId, AgentPermissions? p, { String? error, Map<String, bool>? enforced …)`
+
+### user_browser_status_test.dart  (420 Z.)
+- const: _en _de
+- `Map<String, dynamic> _block({ bool hostListening = true, bool installed = true, bool connected = true, String? browser = …)`
+- `Map<String, dynamic> _reply(String agentId, Map<String, dynamic> block)`
+- `Map<String, dynamic> _push(Map<String, dynamic> block)`
+- `String _subtitle( UserBrowserStatus? s, { String agentId = 'a', bool heldByOther = false, AppLocalizations? l, })`
+- `void main()`
 
 ## test/assistant
 ### assistant_microphone_test.dart  (153 Z.)
@@ -121,7 +134,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Map<String, dynamic> _table(String title)`
 - `void main()`
 
-### every_screen_layout_test.dart  (842 Z.)
+### every_screen_layout_test.dart  (998 Z.)
 - const: _cannotMount _chukSizes
 - `class _Bag`  — Anything a screen made that has to be thrown away afterwards.
   - Function
@@ -133,7 +146,9 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `List<AgentsAgent> _roster()`
 - `AgentsRoomMember _member(String id, String handle)`
 - `AgentsRoom _fullRoom()`  — A room at the cap, which is the case the member sheet has to survive.
+- `Widget _mailDetail(String id)`  — The mail page for one of the fake server's mails.
 - `Widget _hosted(Widget child)`  — Wraps a panel that has no scaffold of its own.
+- `Widget _telegram(_Bag bag, Map<String, dynamic> state)`  — The Telegram section with the host's [state] already in, on a host that
 - `Widget _sheetHost(WidgetBuilder builder)`  — Presents [builder] the way `agents_shell_state` presents it: a scroll
 - `Future<void> _openSheet(WidgetTester tester)`
 - `List<_Screen> _screens()`
@@ -258,11 +273,125 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### workspace_model_test.dart  (535 Z.)
 - `void main()`
 
+## test/openui
+### b1_layout_test.dart  (375 Z.)
+- `Finder _rich(String text)`
+- `Future<void> _pumpAt( WidgetTester tester, String source, { double width = 360, bool isStreaming = false, bool settle = …)`  — Pumps [source] at [width] (phone 360, desktop chat 720).
+- `void main()`
+
+### b1_media_test.dart  (91 Z.)
+- `void main()`
+
+### b1_text_blocks_test.dart  (232 Z.)
+- `Finder _rich(String text)`
+- `List<String> _linkSpanTexts(WidgetTester tester)`  — The texts of every tappable span (a link) on screen.
+- `void main()`
+
+### b2_charts_test.dart  (293 Z.)
+- const: _samples
+- `Future<void> _pump( WidgetTester tester, String source, { double width = 360, Brightness brightness = Brightness.dark, b …)`
+- `void main()`
+
+### b2_tables_test.dart  (305 Z.)
+- const: _roster
+- `Future<RecordingOpenUiHandler> _pump( WidgetTester tester, String source, { double width = 360, Brightness brightness = …)`
+- `Text _text(WidgetTester tester, String s)`
+- `void main()`
+
+### b3_buttons_test.dart  (255 Z.)
+- const: _all
+- `Future<RecordingOpenUiHandler> _pump( WidgetTester tester, String source, { double width = OpenUiTokens.chatColumnWidth …)`
+- `void main()`
+
+### b3_choices_test.dart  (328 Z.)
+- `Finder _rich(String text)`
+- `String _form(String input, {String state = ''})`  — A form called "f" with one control, and a Send button.
+- `Future<Map<String, Object?>?> _submit( WidgetTester tester, RecordingOpenUiHandler h, )`
+- `String _iso(DateTime d)`
+- `void main()`
+
+### b3_forms_test.dart  (370 Z.)
+- const: _contact
+- `Finder _field(String placeholder)`
+- `Finder _rich(String text)`
+- `void main()`
+
+### b4_data_cards_test.dart  (345 Z.)
+- const: _all
+- `Future<RecordingOpenUiHandler> pumpAt( WidgetTester tester, String source, { double width = OpenUiTokens.chatColumnWidth …)`  — Pumps [source] at [width] (the chat column) and settles.
+- `void main()`
+
+### b4_icons_test.dart  (173 Z.)
+- `void main()`
+
+### openui_fixtures_test.dart  (113 Z.)
+- `Set<String> componentNames(String source)`  — The component names a program calls (not `Action` and `Query`).
+- `Map<String, List<String>> unknownComponents()`  — Unknown component names per fixture.
+- `void main()`
+
+### openui_gallery_test.dart  (39 Z.)
+- `void main()`
+
+### openui_l10n_test.dart  (107 Z.)
+- const: _form
+- `Future<void> _pump(WidgetTester tester, String source, Locale? locale)`
+- `void main()`
+
+### openui_license_test.dart  (19 Z.)
+- `void main()`
+
+### openui_nested_values_test.dart  (65 Z.)
+- `Finder _rich(String text)`
+- `Future<void> _pump(WidgetTester tester, String source)`
+- `void main()`
+
+### openui_props_test.dart  (309 Z.)
+- const: _def
+- `Widget _noop(BuildContext context, OpenUiProps props)`
+- `OpenUiProps _props(Map<String, Object?> values)`
+- `void main()`
+
+### openui_signatures_test.dart  (60 Z.)
+- `Map<String, String> _signatures(String file)`
+- `Map<String, String> upstreamSignatures()`  — The 86 upstream components chuk_chat ports, with their signatures.
+- `void main()`
+
+### openui_skill_freshness_test.dart  (90 Z.)
+- `void main()`
+
+### openui_test_helper.dart  (126 Z.)
+- const: openUiFixtureDir
+- `typedef SentMessage = ({ String text, String? context, Map<String, Object?>? formValues, })`  — One recorded [OpenUiActionHandler.sendToAssistant] call.
+- `class RecordingOpenUiHandler extends OpenUiActionHandler`  — An [OpenUiActionHandler] that records every call.
+  - sendToAssistant openUrl onStateChanged messages urls states
+- `ThemeData openUiTestTheme(Brightness brightness)`  — The app theme the gallery and the tests use.
+- `Widget openUiTestApp( Widget child, { Brightness brightness = Brightness.dark, double width = OpenUiTokens.chatColumnWid …)`  — Wraps [child] in the app theme, in a chat-bubble-wide column.
+- `Future<RecordingOpenUiHandler> pumpOpenUi( WidgetTester tester, String source, { bool isStreaming = false, Brightness br …)`  — Pumps [source] in an [OpenUiView] and settles. Returns the handler
+- `Map<String, String> readOpenUiFixtures()`  — Every `*.oui` fixture, by file name, sorted.
+
+### openui_view_test.dart  (305 Z.)
+- const: _formLibrary
+- `class _TestField extends StatelessWidget`
+  - name
+- `Finder _rich(String text)`
+- `void main()`
+
 ## test/pages
+### agent_mail_contacts_page_test.dart  (184 Z.)
+- `void main()`  — Mailbox > Contacts (docs/AGENT_MAIL.md §2, §8): trusted and blocked
+
+### agent_mail_detail_page_test.dart  (527 Z.)
+- `class _RecordingSaver implements AgentFileSaver`
+  - save saved
+- `void main()`  — One mail (docs/AGENT_MAIL.md §8): what it shows once opened with the mail
+
+### agent_mailbox_page_test.dart  (553 Z.)
+- `void main()`  — Settings > Agents > Mailbox (docs/AGENT_MAIL.md §8): the address with a
+
 ### agent_profile_edit_page_test.dart  (115 Z.)
 - `void main()`
 
-### agent_profile_page_test.dart  (50 Z.)
+### agent_profile_page_test.dart  (291 Z.)
 - `void main()`
 
 ### agents_install_page_test.dart  (281 Z.)
@@ -281,7 +410,13 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `AgentsAutomation _automation( String id, { String session = 'thread-1', String state = 'active', })`
 - `void main()`
 
-### desktop_settings_modal_test.dart  (180 Z.)
+### coworker_model_page_test.dart  (318 Z.)
+- const: _chat _catalogue
+- `Future<void> _pump( WidgetTester tester, { AgentControlSource? source, Size size = const Size(420, 900), double textScal …)`
+- `Future<void> _tapVisible(WidgetTester tester, Finder finder)`
+- `void main()`
+
+### desktop_settings_modal_test.dart  (182 Z.)
 - `void main()`  — The desktop settings modal lists the same destinations as the phone's
 
 ### mcp_connectors_page_test.dart  (273 Z.)
@@ -289,7 +424,16 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
   - read write delete map
 - `void main()`
 
-### mobile_agents_settings_page_test.dart  (267 Z.)
+### mobile_agent_permissions_page_test.dart  (225 Z.)
+- const: _phone
+- `Map<String, dynamic> _reply({double budget = 25})`
+- `Widget _app(Widget home)`  — A localised app whose every route reads 1.3 text scale.
+- `Future<void> _phoneView(WidgetTester tester)`
+- `Future<void> _reveal(WidgetTester tester, Finder finder)`  — Drags the list until [finder] can be hit.
+- `void _expectInsideWindow(WidgetTester tester)`  — Every text on screen sits inside the 360 px window.
+- `void main()`
+
+### mobile_agents_settings_page_test.dart  (349 Z.)
 - `void main()`
 
 ### model_selector_design_test.dart  (114 Z.)
@@ -305,7 +449,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `String _j(Map<String, String> m)`
 - `void main()`
 
-### settings_page_test.dart  (213 Z.)
+### settings_page_test.dart  (228 Z.)
 - `void main()`  — One settings page for both builds. With Agents on it is upstream
 
 ### skills_settings_page_test.dart  (357 Z.)
@@ -439,13 +583,13 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void main()`
 
 ## test/platform_specific/mobile
-### mobile_agent_list_test.dart  (368 Z.)
+### mobile_agent_list_test.dart  (419 Z.)
 - `void main()`
 
 ### mobile_agent_sheet_test.dart  (82 Z.)
 - `void main()`
 
-### mobile_chat_chrome_test.dart  (528 Z.)
+### mobile_chat_chrome_test.dart  (556 Z.)
 - `void main()`
 
 ### mobile_chat_screen_test.dart  (129 Z.)
@@ -532,7 +676,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
   - selectedModelId modelSelectionChatId selectedProviderSlug
 - `void main()`
 
-### chat_model_selection_service_test.dart  (91 Z.)
+### chat_model_selection_service_test.dart  (147 Z.)
 - `void main()`
 
 ### chat_payload_codec_test.dart  (244 Z.)
@@ -551,7 +695,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `String _chatJson({int rounds = 30})`
 - `void main()`
 
-### chat_payload_migration_test.dart  (870 Z.)
+### chat_payload_migration_test.dart  (838 Z.)
 - const: userId _unreadableJson
 - `String _id(int i)`
 - `String _updatedAt(int i)`
@@ -576,6 +720,14 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void main()`
 
 ### chat_storage_title_sync_test.dart  (56 Z.)
+- `void main()`
+
+### coworker_composer_model_test.dart  (206 Z.)
+- const: _chat _pro
+- `class _Composer extends StatefulWidget`
+  - coworkerThread
+- `class _ComposerState extends State<_Composer> with ModelProviderResolutionMixin, ChatModelSelectionMixin`
+  - refreshSelectedModelName refreshCustomModelName refreshPickedModels activeChatId skipRepeatedModelSave
 - `void main()`
 
 ### encryption_service_test.dart  (702 Z.)
@@ -721,7 +873,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### tool_image_result_service_test.dart  (178 Z.)
 - `void main()`
 
-### tool_prompt_builder_test.dart  (439 Z.)
+### tool_prompt_builder_test.dart  (453 Z.)
 - const: _skillToolDef _tools _testSkill
 - `void main()`
 
@@ -740,10 +892,13 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### user_scoped_cache_race_test.dart  (309 Z.)
 - `void main()`  — The sign-out-mid-flight race: an operation starts as user A, A signs out and
 
-### websocket_chat_service_test.dart  (730 Z.)
+### websocket_chat_service_test.dart  (783 Z.)
 - `List<AgentsRelayInbound> _everyVariant()`  — Every inbound variant the relay can produce, so the "never a ToolCallsEvent"
 - `void main()`
 - `Future<void> _drain()`  — Lets the adapter's internal handler chain settle.
+
+### window_title_service_test.dart  (58 Z.)
+- `void main()`
 
 ### workspace_encrypted_meta_test.dart  (1172 Z.)
 - const: _prefix _projectStamp _fileStamp
@@ -760,7 +915,16 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void main()`
 
 ## test/services/agents
-### agent_profile_store_test.dart  (58 Z.)
+### agent_mail_crypto_test.dart  (142 Z.)
+- `void main()`  — The seal format `chuk-agent-mail-v1` against the test vector of
+
+### agent_mail_key_handover_test.dart  (218 Z.)
+- `void main()`  — The mail key goes to the host over the end-to-end channel
+
+### agent_mail_service_test.dart  (720 Z.)
+- `void main()`  — The agent mail client against the v2 contract (docs/AGENT_MAIL.md §3,
+
+### agent_profile_store_test.dart  (89 Z.)
 - `void main()`
 
 ### agent_read_marks_persist_test.dart  (42 Z.)
@@ -782,6 +946,10 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void main()`  — Cross-language byte-compatibility proof for the Agents frame crypto.
 - `class _FixedByteRandom implements Random`  — A [Random] that hands out a fixed byte sequence through [nextInt], so the
   - nextInt nextBool nextDouble
+
+### agents_frame_fragments_test.dart  (120 Z.)
+- `List<Map<String, dynamic>> split( Map<String, dynamic> payload, { int chunk = 256 * 1024, String id = 'abc123', })`  — The host's split (`fragment_plaintexts` in chuk_agents_executor.protocol).
+- `void main()`
 
 ### agents_heal_channel_test.dart  (400 Z.)
 - `class _Session implements AccountSessionSource`
@@ -855,7 +1023,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### agents_reconnect_test.dart  (374 Z.)
 - `void main()`  — Reconnect handshake tests: the cross-language vector (byte-for-byte against
 
-### agents_relay_client_test.dart  (2140 Z.)
+### agents_relay_client_test.dart  (2336 Z.)
 - `class FakeMcpStore extends McpStore`  — A stand-in [McpStore] whose forward payloads are canned, so a task-frame
   - forwardPayloads
 - `class FakeHereNowStore extends HereNowStore`  — A stand-in [HereNowStore] whose forward payload is canned, so a task-frame
@@ -881,14 +1049,14 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### agents_relay_secrets_test.dart  (136 Z.)
 - `void main()`  — The secrets frames over the real sealed channel (docs/WIRE_CONTRACT.md,
 
-### agents_replay_loader_test.dart  (736 Z.)
+### agents_replay_loader_test.dart  (837 Z.)
 - `void main()`
 - `Future<void> _drain()`  — Lets the loader's internal handler chain settle.
 
-### agents_replay_paging_test.dart  (153 Z.)
+### agents_replay_paging_test.dart  (154 Z.)
 - `void main()`  — Replay paging in the loader (docs/WIRE_CONTRACT.md "Replay paging", Bead
 
-### agents_replay_repeat_test.dart  (181 Z.)
+### agents_replay_repeat_test.dart  (207 Z.)
 - `Map<String, String> user(String text)`  — Bead cowork-4rpt: the same message, twice.
 - `Map<String, String> ai(String text)`
 - `List<String> texts(List<Map<String, String>> rows)`
@@ -896,25 +1064,39 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void _pagingTests()`
 - `void _repairTests()`
 
+### agents_run_cost_test.dart  (281 Z.)
+- const: _block
+- `AgentsRelayApprovalRequest _action({ String? decision, String? scope, List<String> options = const <String>[ 'once', 'al …)`
+- `void main()`
+
 ### agents_run_ledger_test.dart  (371 Z.)
 - `void main()`
 
 ### agents_shell_status_test.dart  (84 Z.)
 - `void main()`
 
-### agents_stopped_run_test.dart  (296 Z.)
+### agents_skill_proposal_relay_test.dart  (261 Z.)
+- `void main()`  — Skill proposals over the real sealed channel (docs/WIRE_CONTRACT.md,
+
+### agents_stopped_run_test.dart  (297 Z.)
 - `void main()`  — A run that ends with nothing must END — visibly (bead cowork-gnr8).
 - `List<Map<String, dynamic>> _rowsFor(String session)`
 - `Future<void> _drain()`
 
-### agents_task_delivery_test.dart  (310 Z.)
+### agents_task_delivery_test.dart  (358 Z.)
 - `void main()`  — A message sent at 04:49 was gone. The app drew a sent bubble and a typing
 - `Future<void> _drain()`  — Lets the adapter's internal handler chain settle.
 
 ### agents_task_outbox_test.dart  (230 Z.)
 - `void main()`  — Bead cowork-i7sd: "ob die Nachrichten im Backend ankommen, ist irgendwie
 
-### browser_presence_test.dart  (345 Z.)
+### agents_tool_phase_l10n_test.dart  (71 Z.)
+- `void main()`  — The running tool and the automation states speak the reader's language
+
+### agents_turn_phase_test.dart  (155 Z.)
+- `void main()`  — The live phase of an Agents turn (research item 4): every phase is read
+
+### browser_presence_test.dart  (425 Z.)
 - `void main()`
 
 ### chat_core_routing_test.dart  (308 Z.)
@@ -930,6 +1112,9 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Future<String> _encryptWithKey(String plaintext, SecretKey key)`  — Builds the production ciphertext envelope around [plaintext] with an
 - `void main()`
 
+### coworker_templates_test.dart  (166 Z.)
+- `void main()`
+
 ### offline_retry_manager_test.dart  (150 Z.)
 - `void main()`  — The Retry button in the imported bubble calls
 
@@ -941,7 +1126,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### schedule_spec_test.dart  (431 Z.)
 - `void main()`  — 2026-02-03 is a Tuesday. Every date in this file is built from local
 
-### tool_card_parity_test.dart  (317 Z.)
+### tool_card_parity_test.dart  (334 Z.)
 - const: _t0 _liveRun _replayedRun
 - `Map<String, dynamic> _visible(Map<String, dynamic> call)`  — The fields of a card the reader can see: everything the renderer reads
 - `DateTime _at(int seconds)`
@@ -954,6 +1139,12 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ## test/services/automations
 ### agents_automation_test.dart  (223 Z.)
 - `Map<String, dynamic> eventPayload({ String event = 'created', String id = 'ab12cd34', String state = 'active', String ki …)`  — The wire shapes of docs/WIRE_CONTRACT.md, "Automations", as the host
+- `void main()`
+
+### automation_event_triggers_test.dart  (466 Z.)
+- `class FakeEditController extends FakeAutomationController implements AgentsAutomationEditControl`  — The test double plus the two frames of the create / edit sheet.
+  - sendAutomationCreate sendAutomationUpdate creates updates
+- `Map<String, dynamic> row( String id, { String kind = 'watch_url', Map<String, dynamic>? spec, String notify = 'on_change …)`
 - `void main()`
 
 ### automations_source_test.dart  (167 Z.)
@@ -1064,6 +1255,12 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `String _md(String frontmatter, {String body = '# Body\n\nDo the thing.'})`  — Builds a SKILL.md with [frontmatter] verbatim between the --- fences.
 - `void main()`
 
+### skill_proposals_source_test.dart  (279 Z.)
+- `class _FakeControl implements AgentsSkillProposalControl`
+  - sendSkillProposalDecision answer sent
+- `AgentsRelaySkillProposal _proposal( String id, { String thread = 'thread-1', bool replay = false, String? status, String …)`
+- `void main()`
+
 ### skill_registry_user_layer_test.dart  (199 Z.)
 - `Skill _userSkill(String name, {String? id})`
 - `void main()`
@@ -1122,9 +1319,19 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void main()`
 
 ## test/support
-### fake_relay_controller.dart  (265 Z.)
+### agent_mail_fake.dart  (639 Z.)
+- const: kFakeMailBase kFakeMailToken kFakeMailUser kFakeMailPrivateKey
+- `class FakeChukSecretBox implements AgentMailSecretBox`  — A stand-in for `EncryptionService`: reversible, marked, and lockable. It
+  - sealSync seal open prefix locked seals opens
+- `Map<String, dynamic> fakeMail({ required String id, String direction = 'inbound', String from = 'ada@example.com', Strin …)`  — A mail as the fixtures keep it: plain text. The server seals it on the
+- `MailSummary fakeSummary(Map<String, dynamic> m)`  — The opened summary of a fixture, as the service would hand it out. For a
+- `List<Map<String, dynamic>> fakeMailbox()`  — A few mails over every folder, long enough to test a narrow window.
+- `class FakeAgentMailServer`
+  - bodiesOf service fixture summaryOf errorResponse _publicKey _summaryRow _messageRow handle calls mails contacts secretBox keyRow mailboxStatus mailboxDetail frozen sendSuspended userId pageSize holdOlderPages sendResponse failures blobs requests status broken
+
+### fake_relay_controller.dart  (279 Z.)
 - `class FakeRelayController implements AgentsRelayController`  — A controller the test drives directly: set [set], push [emit] — no socket
-  - connect reconnect provisionAccount setRoomAgentToAgent sendRoomTask requestRoomHistory deleteRoom renameRoom createAgent renameAgent requestAgentList addRoomMember removeRoomMember sendRunAck startBrowserView stopBrowserView sendBrowserData sendApprovalDecision sendSecrets set emit state inbound establishedTrust replaySessionKeys connectCalls connects trustOnConnect connectError replayPages reconnectCalls provisioned reconnectFails tasks taskSessionKeys taskModelIds taskProviderSlugs taskReasoning taskDebugFlags taskRegenerateFlags +12
+  - connect reconnect provisionAccount setRoomAgentToAgent sendRoomTask requestRoomHistory deleteRoom renameRoom createAgent renameAgent requestAgentList addRoomMember removeRoomMember sendRunAck startBrowserView stopBrowserView sendBrowserData sendApprovalDecision sendSecrets set emit state inbound establishedTrust replaySessionKeys connectCalls connects trustOnConnect connectError replayPages reconnectCalls provisioned reconnectFails tasks taskSessionKeys taskModelIds taskProviderSlugs taskReasoning taskDebugFlags taskRegenerateFlags +14
 
 ### icon_finder.dart  (34 Z.)
 - `Finder findIcon(IconData icon)`  — Finds an icon whether it draws as Material or as the app's own set.
@@ -1158,11 +1365,13 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void main()`
 
 ## test/tool_handlers
+### file_fetch_tools_test.dart  (251 Z.)
+- `void main()`
+
 ### map_tools_test.dart  (147 Z.)
 - `void main()`
 
-### places_map_card_test.dart  (145 Z.)
-- `Map<String, dynamic> _decodeTag(String tag)`
+### places_text_test.dart  (52 Z.)
 - `void main()`
 
 ### weather_tools_test.dart  (316 Z.)
@@ -1193,7 +1402,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### artifact_tag_parser_test.dart  (208 Z.)
 - `void main()`
 
-### build_app_theme_agents_test.dart  (50 Z.)
+### build_app_theme_agents_test.dart  (58 Z.)
 - `void main()`  — The theme has one side. The Agents build uses chuk_chat's theme as is: the
 
 ### build_app_theme_contrast_test.dart  (161 Z.)
@@ -1222,6 +1431,13 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### lru_byte_cache_test.dart  (168 Z.)
 - `Uint8List _bytes(int size)`  — Helper: create a Uint8List of [size] bytes.
+- `void main()`
+
+### on_fill_contrast_test.dart  (148 Z.)
+- `void main()`
+
+### openui_fence_test.dart  (123 Z.)
+- const: _program
 - `void main()`
 
 ### phone_linkify_test.dart  (99 Z.)
@@ -1367,13 +1583,20 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
   - state
 - `void main()`
 
-### voice_call_permissions_section_test.dart  (60 Z.)
+### voice_call_permissions_section_test.dart  (56 Z.)
 - `void main()`
 
 ## test/voice_integration
 ### chat_voice_binding_agent_call_test.dart  (138 Z.)
 - const: _thread
 - `ChatVoiceBinding _binding(VoiceCallController controller, String chatId)`
+- `void main()`
+
+### chat_voice_binding_on_demand_test.dart  (165 Z.)
+- `class _Screen`  — A fake chat screen: a new chat (no id) until [ensureChatId] gives it one.
+  - ensureChatId discardChat chatId messages discarded creates gate
+- `ChatVoiceBinding _binding( VoiceCallController controller, _Screen screen, { bool onDemand = true, })`  — No LiveKit: the test build has no token server, so a started call fails
+- `Future<void> _hangUp(VoiceCallController controller)`  — Hangs up the failed call (its panel goes away) and lets the binding
 - `void main()`
 
 ### chat_voice_binding_test.dart  (193 Z.)
@@ -1411,13 +1634,22 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - const: _electionChart
 - `void main()`
 
-### agent_control_panel_test.dart  (241 Z.)
+### agent_control_panel_cost_test.dart  (394 Z.)
+- `AgentsAgent _agent()`
+- `AgentControlSnapshot _withCost(Map<String, dynamic>? cost)`
+- `void main()`
+
+### agent_control_panel_test.dart  (462 Z.)
 - const: _fullSnapshot
 - `AgentsAgent _agent({bool onHost = true})`
 - `Future<void> _pump( WidgetTester tester, AgentControlSource source, { AgentsAgent? agent, })`
 - `void main()`
 - `class _ThrowingControlSource implements AgentControlSource`  — Wraps a source and refuses the skill toggle, to prove the failure surfaces.
   - snapshotFor refresh setSkillEnabled
+
+### agent_details_overview_test.dart  (211 Z.)
+- `AgentsAutomation _routine( String id, { String session = 'amber-main', String state = 'active', String kind = 'schedule' …)`
+- `void main()`
 
 ### agent_face_test.dart  (91 Z.)
 - `void main()`
@@ -1426,7 +1658,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Widget _host(Widget child, {Brightness brightness = Brightness.light})`
 - `void main()`
 
-### agent_roster_view_test.dart  (927 Z.)
+### agent_roster_view_test.dart  (1021 Z.)
 - `void main()`
 
 ### agent_run_views_test.dart  (288 Z.)
@@ -1436,7 +1668,20 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Widget _host(Widget child)`
 - `void main()`
 
-### agents_cold_start_test.dart  (398 Z.)
+### agent_telegram_section_test.dart  (479 Z.)
+- `void main()`  — Bead chuk_chat-02s5: the app side of a coworker's Telegram channel. The
+
+### agents_action_approval_card_test.dart  (486 Z.)
+- const: _allOptions
+- `class _NoopSaver implements AgentFileSaver`
+  - save
+- `class _FakeSessionSource implements AccountSessionSource`
+  - current refresh
+- `Widget _app(Widget child, {Locale locale = const Locale('en')})`
+- `AgentsRelayApprovalRequest _request({ String id = 'ap-1', String actionClass = 'browser_act', List<String> options = _al …)`
+- `void main()`
+
+### agents_cold_start_test.dart  (399 Z.)
 - const: _guard
 - `class _NoopSaver implements AgentFileSaver`
   - save
@@ -1451,16 +1696,28 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void _silenceUnrelatedPlugins(WidgetTester tester)`  — The imported screen constructs an [AudioRecorder] on mount, which calls the
 - `Future<void> _settle(WidgetTester tester)`  — [WidgetTester.pumpAndSettle] never returns here: the thread view arms an
 
-### agents_desktop_shell_test.dart  (502 Z.)
+### agents_desktop_shell_test.dart  (661 Z.)
 - `class _MemoryStore implements AgentsSecureKeyValueStore`
   - read write delete map
 - `class _FailingRefreshSource extends FakeAgentControlSource`  — A host that answers the panel's first look and then fails a refresh.
   - refresh failNext
 - `class _Session implements AccountSessionSource`
   - current refresh
+- `class _FailingCreateController extends FakeRelayController`  — A host link whose `agent_create` send fails.
+  - createAgent
 - `void main()`
 
-### agents_shell_states_test.dart  (327 Z.)
+### agents_live_status_test.dart  (247 Z.)
+- `Widget _app(Widget child, {Locale locale = const Locale('en')})`
+- `void main()`  — The status line above a running Agents answer (research item 4): it says
+
+### agents_run_cost_meta_test.dart  (335 Z.)
+- `Widget _app(Widget child, {Locale locale = const Locale('en')})`
+- `AgentsRunCost _cost({double? eur = 0.002345})`
+- `Widget _item(List<ToolCall> calls, {String text = 'the answer'})`
+- `void main()`
+
+### agents_shell_states_test.dart  (333 Z.)
 - const: kDesktop kPhone
 - `class _MemoryStore implements AgentsSecureKeyValueStore`
   - read write delete map
@@ -1471,12 +1728,51 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _HangingController extends FakeRelayController`  — A reconnect that never finishes: the link stays "connecting".
   - reconnect
 - `class _EmptyHostRoster extends LocalAgentRosterSource`  — A host that lists no agents: pairing does not bring a host coworker.
-  - ensureHostAgent
+  - replaceableLabels
 - `void main()`
 
-### agents_thread_header_test.dart  (250 Z.)
-- `Widget _wrap(Widget child, {double width = 900})`  — The row only ever gets the width its parent has, so every test states
+### agents_skill_proposal_card_test.dart  (571 Z.)
+- const: _draft
+- `Widget _app(Widget child, {Locale locale = const Locale('en')})`
+- `SkillProposalEntry _entry({ SkillProposalState state = SkillProposalState.pending, String? savedName, })`
+- `class _Decisions`  — Records every answer and replies with [reply].
+  - decide reply sent
+- `Finder _key(String k)`
+- `Future<void> _tap(WidgetTester tester, Finder finder)`  — The card can be taller than the test window: scroll the target in first.
+- `Future<void> _pump(WidgetTester tester, Widget widget)`  — The localizations load on the first frame; settle before looking.
+- `void main()`
+- `class _NoopSaver implements AgentFileSaver`
+  - save
+- `class _FakeSessionSource implements AccountSessionSource`
+  - current refresh
+- `class _SkillFakeController extends FakeRelayController implements AgentsSkillProposalControl`  — The fake transport, plus the decision a real relay client sends.
+  - sendSkillProposalDecision decisions
+
+### agents_takeover_card_test.dart  (619 Z.)
+- `class _NoopSaver implements AgentFileSaver`
+  - save
+- `class _FakeSessionSource implements AccountSessionSource`
+  - current refresh
+- `Widget _app(Widget child, {Locale locale = const Locale('en')})`
+- `AgentsRelayApprovalRequest _takeover({ String id = 'tk-1', String? kind = 'login', String? site = 'accounts.google.com' …)`
+- `void main()`  — The takeover card (research item 6): a login, 2FA code or CAPTCHA in the
+
+### agents_thread_header_test.dart  (318 Z.)
+- `Widget _wrap(Widget child, {double width = 700})`  — The header only ever gets the width its parent has, so every test states
 - `AgentsThreadAction _action(String tooltip, List<String> log)`
+- `void main()`
+
+### agents_thread_table_test.dart  (541 Z.)
+- const: _wideTable _linux _answerText _tableScroller
+- `class _NoopSaver implements AgentFileSaver`
+  - save
+- `class _FakeSessionSource implements AccountSessionSource`
+  - current refresh
+- `ScrollPosition _tablePosition(WidgetTester tester)`  — The horizontal scroller inside the one table on screen.
+- `Rect _tableScrollbarRect(WidgetTester tester)`
+- `Map<String, Object?> _tableLook(WidgetTester tester)`  — Everything that decides how the table looks and pans, read off the tree.
+- `Future<void> _expectPansSideways(WidgetTester tester)`  — Drags the thumb, then shift + wheel, a sideways wheel and a trackpad pan:
+- `Widget _plainChat(String text, {double width = 760})`  — chuk_chat's plain desktop transcript around one answer: a selection area,
 - `void main()`
 
 ### agents_thread_view_notifications_test.dart  (201 Z.)
@@ -1507,7 +1803,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Widget _app(Widget child)`
 - `void main()`  — The visible run must end when the host says the run ended, whatever else the
 
-### agents_thread_view_test.dart  (1456 Z.)
+### agents_thread_view_test.dart  (1457 Z.)
 - `class _MemoryStore implements AgentsSecureKeyValueStore`  — In-memory secure backend so the store round-trips with no platform channel.
   - read write delete map
 - `class _NoopSaver implements AgentFileSaver`  — A saver that never touches a filesystem.
@@ -1517,6 +1813,25 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Widget _app(Widget child)`  — The app shell the imported chat screen expects around it: localisations and
 - `void main()`
 - `Future<void> _flushIdleTimers(WidgetTester tester)`  — The imported chat screen schedules a 60 s idle-close timer for its
+
+### agents_user_browser_test.dart  (747 Z.)
+- `Map<String, dynamic> _block({ bool installed = true, bool connected = true, bool inUse = false, Map<String, dynamic>? in …)`
+- `Map<String, dynamic> _reply( String agentId, Map<String, dynamic> block, { bool userBrowser = false, })`
+- `Map<String, dynamic> _push(Map<String, dynamic> block)`
+- `Widget _localized( Widget child, { Locale locale = const Locale('en'), double width = 800, double textScale = 1, })`
+- `extension on WidgetTester`
+  - pumpL
+- `Finder _subtitleOf(String text)`
+- `Future<(FakeHost, AgentsPermissionsService)> _section( WidgetTester tester, { Locale locale = const Locale('en'), })`
+- `void main()`
+
+### agents_user_browser_thread_test.dart  (234 Z.)
+- `class _NoopSaver implements AgentFileSaver`
+  - save
+- `class _FakeSessionSource implements AccountSessionSource`
+  - current refresh
+- `Map<String, dynamic> _push({ bool connected = true, bool stopped = false, Map<String, dynamic>? inUseBy, })`
+- `void main()`
 
 ### anchored_menu_test.dart  (181 Z.)
 - const: _screen
@@ -1532,7 +1847,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### app_lifecycle_observer_test.dart  (43 Z.)
 - `void main()`  — `AppLifecycleService.handleLifecycleState` was called by NOBODY in
 
-### app_mode_switch_test.dart  (943 Z.)
+### app_mode_switch_test.dart  (1008 Z.)
 - const: kPhone kSwitchOnPhone kWidePhone kPhoneInsets
 - `class _MemoryStore implements AgentsSecureKeyValueStore`
   - read write delete map
@@ -1559,6 +1874,9 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### automation_card_test.dart  (120 Z.)
 - `AgentsAutomation _automation({ String state = 'active', String kind = 'schedule', int fireCount = 3, String? error, })`
 - `Widget _wrap(Widget child)`
+- `void main()`
+
+### automation_editor_sheet_test.dart  (348 Z.)
 - `void main()`
 
 ### browser_view_page_test.dart  (203 Z.)
@@ -1601,7 +1919,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Map<String, dynamic> file(String path, {int? size})`
 - `void main()`
 
-### chat_maintenance_gate_test.dart  (164 Z.)
+### chat_maintenance_gate_test.dart  (134 Z.)
 - `Widget _app(Widget child, {Locale locale = const Locale('en')})`
 - `void main()`
 
@@ -1638,6 +1956,14 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void main()`
 
 ### composer_recording_row_test.dart  (96 Z.)
+- `void main()`
+
+### coworker_template_picker_test.dart  (253 Z.)
+- `class _Harness`  — Opens the picker from a button and keeps what it returned.
+  - result closed locale
+- `void _size(WidgetTester tester, Size size)`
+- `Future<_Harness> _open( WidgetTester tester, { Size size = const Size(360, 800), String locale = 'en', double textScale …)`
+- `Finder _key(String key)`
 - `void main()`
 
 ### diff_widget_test.dart  (62 Z.)
@@ -1706,6 +2032,12 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### message_bubble_no_tool_status_test.dart  (62 Z.)
 - `void main()`
 
+### message_bubble_openui_test.dart  (197 Z.)
+- const: _closed
+- `Finder _rich(String text)`
+- `Widget _app(Widget child)`
+- `void main()`
+
 ### message_bubble_pending_image_test.dart  (129 Z.)
 - `void main()`
 
@@ -1720,6 +2052,9 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Widget _wrap(Widget child)`
 - `void main()`
 
+### message_bubble_user_contrast_test.dart  (70 Z.)
+- `void main()`  — The user bubble's text keeps the reader's icon colour unless that falls
+
 ### message_bubble_variant_pager_test.dart  (89 Z.)
 - `void main()`
 
@@ -1730,11 +2065,11 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Widget wrap(Widget child)`
 - `void main()`
 
-### messenger_shell_test.dart  (1963 Z.)
+### messenger_shell_test.dart  (2149 Z.)
 - `class _MemoryStore implements AgentsSecureKeyValueStore`
   - read write delete map
 - `class _FakeRelayController implements AgentsRelayController`  — A controller the test drives: it can report itself paired, and it records
-  - connect reconnect provisionAccount setRoomAgentToAgent sendRoomTask requestRoomHistory deleteRoom renameRoom createAgent renameAgent requestAgentList addRoomMember removeRoomMember sendRunAck startBrowserView stopBrowserView sendBrowserData sendApprovalDecision sendSecrets pair emit state inbound establishedTrust sessionKeys sessionKey roomTasks createdRooms createdRoomPolicies agentToAgentSets agentToAgent historyRequests deletedRooms renamedRooms createdAgents renamedAgents agentListRequests removedMembers
+  - connect reconnect provisionAccount setRoomAgentToAgent sendRoomTask requestRoomHistory deleteRoom renameRoom createAgent renameAgent requestAgentList addRoomMember removeRoomMember sendRunAck startBrowserView stopBrowserView sendBrowserData sendApprovalDecision sendSecrets pair emit state inbound establishedTrust sessionKeys sessionKey roomTasks createdRooms createdRoomPolicies agentToAgentSets agentToAgent historyRequests deletedRooms renamedRooms createdAgents renamedAgents createdTemplates agentListRequests removedMembers
 - `class _FakeSessionSource implements AccountSessionSource`
   - current refresh
 - `Future<void> settle(WidgetTester tester)`  — Pump a few frames without waiting for the tree to go quiet.
@@ -1777,7 +2112,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `AgentsAgent agent(String id, String name, {String? role})`
 - `void main()`
 
-### room_thread_page_test.dart  (728 Z.)
+### room_thread_page_test.dart  (805 Z.)
 - `void main()`
 - `class _FakeController implements AgentsRelayController`  — A minimal AgentsRelayController for the rebind test: only [inbound] is real;
   - emit close inbound

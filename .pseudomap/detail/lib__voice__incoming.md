@@ -305,7 +305,7 @@
   - L130 `Future<bool> isGranted()`
   - L136 `Future<bool> request()`  — A permission refused for good cannot be asked again from here: that is
 
-## lib/voice/incoming/voice_call_permissions_section.dart  (144 Z.)
+## lib/voice/incoming/voice_call_permissions_section.dart  (140 Z.)
 - L15 `class VoiceCallPermissionsSection extends StatefulWidget`
   - L16 `const VoiceCallPermissionsSection({super.key, this.load, this.ask})`
   - L19 `final Future<Map<VoiceCallGrant, bool>> Function()? load`  — Test seams: the status source and the request. Default: Android.
@@ -316,7 +316,7 @@
   - L30 `final IconData icon`
   - L31 `final String title`
   - L34 `final String buys`  — What stops working without it.
-- L37 `_copy = <VoiceCallGrant, _GrantCopy>{ VoiceCallGrant.microphone: _GrantCopy( Icons.mic_none_rounded, 'Microphone', 'Need`
+- L37 `_copy = <VoiceCallGrant, _GrantCopy>{ VoiceCallGrant.microphone: _GrantCopy( Icons.mic_rounded, 'Microphone', 'Needed be`
 - L62 `class _VoiceCallPermissionsSectionState extends State<VoiceCallPermissionsSection> with WidgetsBindingObserver`
   - L65 `Map<VoiceCallGrant, bool> _granted = const <VoiceCallGrant, bool>{}`
   - L68 `void initState()`
@@ -326,3 +326,10 @@
   - L98 `Future<void> _ask(VoiceCallGrant grant)`
   - L104 `Widget build(BuildContext context)`
   - L120 `Widget _row( VoiceCallGrant grant, _GrantCopy copy, bool granted, ColorScheme scheme, )`
+
+## lib/voice/incoming/voice_call_settings_page.dart  (59 Z.)
+- L13 `class VoiceCallSettingsPage extends StatelessWidget`
+  - L14 `const VoiceCallSettingsPage({super.key, this.load, this.ask})`
+  - L17 `final Future<Map<VoiceCallGrant, bool>> Function()? load`  — Test seams, handed to [VoiceCallPermissionsSection].
+  - L18 `final Future<void> Function(VoiceCallGrant grant)? ask`
+  - L21 `Widget build(BuildContext context)`

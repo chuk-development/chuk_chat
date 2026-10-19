@@ -1,0 +1,42 @@
+# lib/widgets/agents_channels · Signaturen
+
+## lib/widgets/agents_channels/agent_telegram_section.dart  (574 Z.)
+- L22 `class AgentTelegramSection extends StatefulWidget`
+  - L23 `const AgentTelegramSection({ super.key, required this.agentId, this.service, this.answerTimeout = const Duration(seconds: 10), })`
+  - L31 `final String agentId`  — The coworker, as the host knows it (its id is its thread's key).
+  - L34 `final AgentsChannelsService? service`  — Defaults to [AgentsChannelsService.instance].
+  - L37 `final Duration answerTimeout`  — How long to wait for the host's answer before saying it gave none.
+  - L40 `State<AgentTelegramSection> createState()`
+- L43 `class _AgentTelegramSectionState extends State<AgentTelegramSection>`
+  - L44 `late AgentsChannelsService _service`
+  - L45 `final TextEditingController _token = TextEditingController()`
+  - L46 `final TextEditingController _code = TextEditingController()`
+  - L47 `Timer? _answerTimer`
+  - L50 `bool _asked = false`  — A `get` went out on the current connection.
+  - L51 `bool _wasConnected = false`
+  - L52 `bool _wasSupported = false`
+  - L55 `bool _noAnswer = false`  — The host did not answer in time.
+  - L59 `bool _enteringToken = false`  — The user flipped the switch on and the host has no token yet: the token
+  - L62 `void initState()`
+  - L68 `void didUpdateWidget(AgentTelegramSection old)`
+  - L80 `void dispose()`
+  - L88 `void _bind(AgentsChannelsService service)`
+  - L101 `void _maybeAsk()`
+  - L107 `Future<void> _ask()`
+  - L118 `void _waitForAnswer()`  — Starts the clock on the host's answer to what just went out.
+  - L131 `void _onChanged()`
+  - L158 `Future<void> _act( AgentChannelAction action, { String? token, String? code, })`
+  - L182 `void _onSwitch(bool on, AgentChannelState state)`
+  - L200 `Future<void> _paste()`
+  - L211 `Widget build(BuildContext context)`
+  - L427 `void _submitToken()`
+  - L442 `void _submitCode()`
+  - L448 `Widget _field( BuildContext context, { required String label, required Widget child, })`
+  - L471 `Widget _hint(BuildContext context, String text, {Key? key})`
+  - L486 `String _statusLine( AppLocalizations? l, AgentChannelState? state, bool connected, )`
+  - L529 `String _errorText(AppLocalizations? l, String code)`
+- L562 `class _Gate extends StatelessWidget`  — Greys out and blocks a button while the host has not answered. The button
+  - L563 `const _Gate({required this.enabled, required this.child})`
+  - L565 `final bool enabled`
+  - L566 `final Widget child`
+  - L569 `Widget build(BuildContext context)`

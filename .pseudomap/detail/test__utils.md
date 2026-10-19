@@ -13,8 +13,8 @@
 ## test/utils/artifact_tag_parser_test.dart  (208 Z.)
 - L6 `void main()`
 
-## test/utils/build_app_theme_agents_test.dart  (50 Z.)
-- L10 `void main()`  — The theme has one side. The Agents build uses chuk_chat's theme as is: the
+## test/utils/build_app_theme_agents_test.dart  (58 Z.)
+- L11 `void main()`  — The theme has one side. The Agents build uses chuk_chat's theme as is: the
 
 ## test/utils/build_app_theme_contrast_test.dart  (161 Z.)
 - L10 `void main()`
@@ -43,6 +43,13 @@
 ## test/utils/lru_byte_cache_test.dart  (168 Z.)
 - L6 `Uint8List _bytes(int size)`  — Helper: create a Uint8List of [size] bytes.
 - L8 `void main()`
+
+## test/utils/on_fill_contrast_test.dart  (148 Z.)
+- L10 `void main()`
+
+## test/utils/openui_fence_test.dart  (123 Z.)
+- L9 `_program = 'root = Card([t])\nt = TextContent("Hi")'`
+- L11 `void main()`
 
 ## test/utils/phone_linkify_test.dart  (99 Z.)
 - L5 `void main()`

@@ -1,90 +1,99 @@
 # lib/platform_specific/chat/voice · Signaturen
 
-## lib/platform_specific/chat/voice/chat_voice_binding.dart  (474 Z.)
+## lib/platform_specific/chat/voice/chat_voice_binding.dart  (560 Z.)
 - L35 `VoiceCallMode voiceCallModeFor(String chatId)`  — Whether this build shows the voice call at all: the build flag and a
 - L41 `String? storedChatTitle(String chatId)`  — The stored title of [chatId], or null.
 - L52 `List<Map<String, String>> storedChatRows(String chatId)`  — The stored messages of [chatId] as chat rows, for a call started from a
 - L64 `class ChatVoiceBinding`
-  - L65 `ChatVoiceBinding({ required this.currentChatId, required this.isAgentsScreen, required this.messages, required bool Function() isBusy, required VoiceTurnSend send, required this.onRecordsChanged, this.agentName, bool Function()? isOffline, VoiceCallController? controller, }) : controller = controller ?? VoiceCallController.instance`
-  - L90 `final VoiceCallController controller`
-  - L93 `final String? Function() currentChatId`  — The chat on screen right now; null for a new chat that has no id yet.
-  - L96 `final bool isAgentsScreen`  — This screen is the Agents thread view (one per app).
-  - L99 `final List<Map<String, String>> Function() messages`  — The rows of the chat on screen, for the call context.
-  - L102 `final VoidCallback onRecordsChanged`  — Called when the records of the chat on screen changed.
-  - L107 `final String? Function()? agentName`  — The coworker this screen talks to, when the screen knows it (the
-  - L109 `late final VoiceTurnQueue _queue`
-  - L110 `StreamSubscription<VoiceCallRecord>? _endedSub`
-  - L111 `VoiceTurnDelegate? _delegate`
-  - L112 `String? _delegateChatId`
-  - L113 `bool _starting = false`
-  - L114 `bool _disposed = false`
-  - L116 `String? _recordsChatId`
-  - L117 `List<VoiceCallRecord> _records = const <VoiceCallRecord>[]`
-  - L118 `int _loadGen = 0`
-  - L123 `bool isLiveFor(String? chatId)`  — True while a call for [chatId] holds the room.
-  - L128 `bool showsPanelFor(String? chatId)`  — Whether the call panel belongs on screen for [chatId]: its call is
-  - L134 `Future<void> toggleCall({String? agentName})`  — Starts a call for the chat on screen, or hangs up the one running there.
-  - L149 `Future<void> startCall({ String? agentName, String? callId, String? callReason, bool initiatedByAgent = false, })`  — Starts a call for the chat on screen.
-  - L198 `VoiceTurnDelegate _adopt(String chatId, VoiceCallMode mode)`  — A fresh delegate for a call in [chatId], held as the current one. Each
-  - L213 `VoiceTurnDelegate debugAdoptDelegate()`  — Test seam: holds a delegate for the chat on screen as if its call had
-  - L218 `static String? _nonEmpty(String? s)`
-  - L223 `void _onController()`
-  - L234 `void _endCallTasks()`  — The call of [_delegate] is over (hung up, dropped, failed, or replaced
-  - L246 `void completeTurn(String? chatId, int index, String text)`  — The screen finalized assistant row [index] of [chatId] with [text].
-  - L252 `void failTurn(String? chatId, int index)`  — The turn at row [index] of [chatId] was torn down without an answer.
-  - L262 `List<VoiceCallRecord> recordsFor(String? chatId)`  — The call records of [chatId], oldest first. The first ask for a chat
-  - L272 `Future<void> _load(String chatId, int gen)`
-  - L288 `void _onCallEnded(VoiceCallRecord record)`
-  - L294 `static List<VoiceCallRecord> _merge( List<VoiceCallRecord> a, List<VoiceCallRecord> b, )`
-  - L313 `void dispose()`  — The screen goes away. A call that is still running keeps going, but
-- L335 `class ChatVoiceSessions extends ChangeNotifier`  — The chat screens that can hold a call, so a header drawn outside a
-  - L336 `ChatVoiceSessions._()`
-  - L338 `static final ChatVoiceSessions instance = ChatVoiceSessions._()`
-  - L340 `final List<ChatVoiceBinding> _bindings = <ChatVoiceBinding>[]`
-  - L342 `void _add(ChatVoiceBinding binding)`
-  - L347 `void _remove(ChatVoiceBinding binding)`
-  - L353 `ChatVoiceBinding? forRole({required bool agents})`  — The Agents thread screen, or the normal chat screen. The newest one
-  - L361 `ChatVoiceBinding? forChat(String chatId)`  — The screen that has [chatId] open, if any.
-- L372 `String? voiceThreadKeyFor(AgentsAgent agent)`  — The thread a call with [agent] runs in: the one open on the Agents
-- L386 `Future<void> startAgentVoiceCall( AgentsAgent agent, { Duration waitForThread = Duration.zero, })`  — Starts a call with [agent] from a page that is not its thread (the
-- L409 `Future<void> startAgentsThreadVoiceCall({ required String threadKey, String? agentName, Duration waitForThread = Duration.zero, VoiceCallController? controller, String? callId, String? callReason, bool initiatedByAgent = false, bool? enabled, })`  — Starts a call for an Agents thread from a page that is not the thread.
-- L461 `typedef VoiceCallStartProbe = ({ String chatId, VoiceCallMode mode, String? agentName, String? callId, String? callReaso`  — What a start from this file hands to `VoiceCallController.start`, for a
-- L473 `debugOnVoiceCallStart`  — Test seam: sees every [VoiceCallStartProbe] just before the start.
+  - L65 `ChatVoiceBinding({ required this.currentChatId, required this.isAgentsScreen, required this.messages, required bool Function() isBusy, required VoiceTurnSend send, required this.onRecordsChanged, this.agentName, this.ensureChatId, this.discardChat, bool Function()? isOffline, VoiceCallController? controller, }) : controller = controller ?? VoiceCallController.instance`
+  - L92 `final VoiceCallController controller`
+  - L95 `final String? Function() currentChatId`  — The chat on screen right now; null for a new chat that has no id yet.
+  - L98 `final bool isAgentsScreen`  — This screen is the Agents thread view (one per app).
+  - L101 `final List<Map<String, String>> Function() messages`  — The rows of the chat on screen, for the call context.
+  - L104 `final VoidCallback onRecordsChanged`  — Called when the records of the chat on screen changed.
+  - L109 `final String? Function()? agentName`  — The coworker this screen talks to, when the screen knows it (the
+  - L114 `final Future<String?> Function()? ensureChatId`  — Gives a new chat (no id yet) its id, so a call can start before the
+  - L119 `final Future<void> Function(String chatId)? discardChat`  — Gives back a chat id that [ensureChatId] made for a call, once that
+  - L121 `late final VoiceTurnQueue _queue`
+  - L122 `StreamSubscription<VoiceCallRecord>? _endedSub`
+  - L123 `VoiceTurnDelegate? _delegate`
+  - L124 `String? _delegateChatId`
+  - L125 `bool _starting = false`
+  - L126 `bool _disposed = false`
+  - L129 `bool _creating = false`  — [ensureChatId] runs: one creation at a time.
+  - L132 `String? _onDemandChatId`  — The id [ensureChatId] made for a call, until that call is over.
+  - L135 `bool _onDemandRecorded = false`  — The call in [_onDemandChatId] saved a record (something was said).
+  - L136 `bool _onDemandSettling = false`
+  - L138 `String? _recordsChatId`
+  - L139 `List<VoiceCallRecord> _records = const <VoiceCallRecord>[]`
+  - L140 `int _loadGen = 0`
+  - L145 `bool isLiveFor(String? chatId)`  — True while a call for [chatId] holds the room.
+  - L150 `bool showsPanelFor(String? chatId)`  — Whether the call panel belongs on screen for [chatId]: its call is
+  - L157 `Future<void> toggleCall({String? agentName})`  — Starts a call for the chat on screen, or hangs up the one running there.
+  - L174 `Future<void> startCall({ String? agentName, String? callId, String? callReason, bool initiatedByAgent = false, })`  — Starts a call for the chat on screen.
+  - L226 `Future<String?> _createChat()`  — Runs [ensureChatId] once and remembers the id it made, so the chat can
+  - L248 `void _settleOnDemandChat()`  — The call in the chat [ensureChatId] made is over (its panel is gone):
+  - L280 `VoiceTurnDelegate _adopt(String chatId, VoiceCallMode mode)`  — A fresh delegate for a call in [chatId], held as the current one. Each
+  - L295 `VoiceTurnDelegate debugAdoptDelegate()`  — Test seam: holds a delegate for the chat on screen as if its call had
+  - L300 `static String? _nonEmpty(String? s)`
+  - L305 `void _onController()`
+  - L318 `void _endCallTasks()`  — The call of [_delegate] is over (hung up, dropped, failed, or replaced
+  - L330 `void completeTurn(String? chatId, int index, String text)`  — The screen finalized assistant row [index] of [chatId] with [text].
+  - L336 `void failTurn(String? chatId, int index)`  — The turn at row [index] of [chatId] was torn down without an answer.
+  - L346 `List<VoiceCallRecord> recordsFor(String? chatId)`  — The call records of [chatId], oldest first. The first ask for a chat
+  - L356 `Future<void> _load(String chatId, int gen)`
+  - L372 `void _onCallEnded(VoiceCallRecord record)`
+  - L380 `static List<VoiceCallRecord> _merge( List<VoiceCallRecord> a, List<VoiceCallRecord> b, )`
+  - L399 `void dispose()`  — The screen goes away. A call that is still running keeps going, but
+- L421 `class ChatVoiceSessions extends ChangeNotifier`  — The chat screens that can hold a call, so a header drawn outside a
+  - L422 `ChatVoiceSessions._()`
+  - L424 `static final ChatVoiceSessions instance = ChatVoiceSessions._()`
+  - L426 `final List<ChatVoiceBinding> _bindings = <ChatVoiceBinding>[]`
+  - L428 `void _add(ChatVoiceBinding binding)`
+  - L433 `void _remove(ChatVoiceBinding binding)`
+  - L439 `ChatVoiceBinding? forRole({required bool agents})`  — The Agents thread screen, or the normal chat screen. The newest one
+  - L447 `ChatVoiceBinding? forChat(String chatId)`  — The screen that has [chatId] open, if any.
+- L458 `String? voiceThreadKeyFor(AgentsAgent agent)`  — The thread a call with [agent] runs in: the one open on the Agents
+- L472 `Future<void> startAgentVoiceCall( AgentsAgent agent, { Duration waitForThread = Duration.zero, })`  — Starts a call with [agent] from a page that is not its thread (the
+- L495 `Future<void> startAgentsThreadVoiceCall({ required String threadKey, String? agentName, Duration waitForThread = Duration.zero, VoiceCallController? controller, String? callId, String? callReason, bool initiatedByAgent = false, bool? enabled, })`  — Starts a call for an Agents thread from a page that is not the thread.
+- L547 `typedef VoiceCallStartProbe = ({ String chatId, VoiceCallMode mode, String? agentName, String? callId, String? callReaso`  — What a start from this file hands to `VoiceCallController.start`, for a
+- L559 `debugOnVoiceCallStart`  — Test seam: sees every [VoiceCallStartProbe] just before the start.
 
-## lib/platform_specific/chat/voice/chat_voice_call_button.dart  (263 Z.)
-- L24 `enum ChatVoiceCallStyle`  — Which surface the target sits on.
-  - L27 `bar`
-  - L30 `chip`
-  - L35 `composer`
-- L38 `class ChatVoiceCallButton extends StatelessWidget`
-  - L40 `const ChatVoiceCallButton({ super.key, required ChatVoiceBinding this.binding, this.style = ChatVoiceCallStyle.bar, this.size = 40, this.agentName, this.semanticsId = 'voice-call-button', }) : agentsThread = false`  — The target of [binding]'s screen.
-  - L51 `const ChatVoiceCallButton.agentsThread({ super.key, this.style = ChatVoiceCallStyle.bar, this.size = 40, this.agentName, this.semanticsId = 'voice-call-button', }) : binding = null, agentsThread = true`  — The target of the Agents thread screen, found through
-  - L60 `final ChatVoiceBinding? binding`
-  - L61 `final bool agentsThread`
-  - L62 `final ChatVoiceCallStyle style`
-  - L65 `final double size`  — The square hit box of the bar style.
-  - L68 `final String? agentName`  — The coworker's name, for the worker's greeting.
-  - L69 `final String semanticsId`
-  - L72 `Widget build(BuildContext context)`
-  - L121 `Widget _bar( BuildContext context, bool live, bool ready, String tooltip, VoidCallback onTap, )`
-  - L165 `Widget _composer( BuildContext context, bool live, bool ready, String tooltip, VoidCallback onTap, )`
-  - L212 `Widget _chip( BuildContext context, bool live, bool ready, String tooltip, VoidCallback onTap, )`  — The phone chrome's chip: 42 px painted, 48 px pressed. Idle it is the
+## lib/platform_specific/chat/voice/chat_voice_call_button.dart  (257 Z.)
+- L23 `enum ChatVoiceCallStyle`  — Which surface the target sits on.
+  - L26 `bar`
+  - L29 `chip`
+  - L34 `composer`
+- L37 `class ChatVoiceCallButton extends StatelessWidget`
+  - L39 `const ChatVoiceCallButton({ super.key, required ChatVoiceBinding this.binding, this.style = ChatVoiceCallStyle.bar, this.size = 40, this.agentName, this.semanticsId = 'voice-call-button', }) : agentsThread = false`  — The target of [binding]'s screen.
+  - L50 `const ChatVoiceCallButton.agentsThread({ super.key, this.style = ChatVoiceCallStyle.bar, this.size = 40, this.agentName, this.semanticsId = 'voice-call-button', }) : binding = null, agentsThread = true`  — The target of the Agents thread screen, found through
+  - L59 `final ChatVoiceBinding? binding`
+  - L60 `final bool agentsThread`
+  - L61 `final ChatVoiceCallStyle style`
+  - L64 `final double size`  — The square hit box of the bar style.
+  - L67 `final String? agentName`  — The coworker's name, for the worker's greeting.
+  - L68 `final String semanticsId`
+  - L71 `Widget build(BuildContext context)`
+  - L115 `Widget _bar( BuildContext context, bool live, bool ready, String tooltip, VoidCallback onTap, )`
+  - L159 `Widget _composer( BuildContext context, bool live, bool ready, String tooltip, VoidCallback onTap, )`
+  - L206 `Widget _chip( BuildContext context, bool live, bool ready, String tooltip, VoidCallback onTap, )`  — The phone chrome's chip: 42 px painted, 48 px pressed. Idle it is the
 
-## lib/platform_specific/chat/voice/voice_call_context.dart  (117 Z.)
-- L10 `kVoiceTaskMarker = '🎙 '`  — Prefix of a task the voice worker hands to the chat. It shows in the
-- L13 `kVoiceContextMaxMessages = 10`  — Most recent messages the call context carries.
-- L16 `kVoiceContextMaxChars = 4000`  — Upper bound of the call context, in characters.
-- L20 `kVoiceContextMaxLineChars = 1200`  — One message line is cut here, so one long answer cannot use the whole
-- L24 `kVoiceResultMaxChars = 6000`  — A task result longer than this is cut before it goes back to the worker.
-- L27 `_kThinkingPlaceholder = 'Thinking...'`  — The placeholder text a chat row carries while its answer is on the way.
-- L29 `_visualTag = RegExp( r'<(chart|map|email|think)\b[^>]*>[\s\S]*?</\1>', caseSensitive: false, )`
-- L33 `_whitespace = RegExp(r'\s+')`
-- L43 `String buildVoiceCallContext( List<Map<String, String>> messages, { int maxMessages = kVoiceContextMaxMessages, int maxChars = kVoiceContextMaxChars, int maxLineChars = kVoiceContextMaxLineChars, })`  — The call context: the last [maxMessages] text messages of a chat as plain
-- L75 `String? _contextLine(Map<String, String> message, int maxLineChars)`
-- L88 `String _cut(String text, int max)`
-- L96 `String? voiceTaskMessageText(String task)`  — The text a spoken task is sent with: the marker, then the task on one
-- L104 `String voiceResultText(String text)`  — Cuts a task result to what the worker gets back.
-- L109 `bool looksLikeFailedTurn(String text)`  — The texts the chat pipeline finalizes a turn with when the turn did not
+## lib/platform_specific/chat/voice/voice_call_context.dart  (127 Z.)
+- L12 `kVoiceTaskMarker = '🎙 '`  — Prefix of a task the voice worker hands to the chat. It shows in the
+- L15 `kVoiceContextMaxMessages = 10`  — Most recent messages the call context carries.
+- L18 `kVoiceContextMaxChars = 4000`  — Upper bound of the call context, in characters.
+- L22 `kVoiceContextMaxLineChars = 1200`  — One message line is cut here, so one long answer cannot use the whole
+- L26 `kVoiceResultMaxChars = 6000`  — A task result longer than this is cut before it goes back to the worker.
+- L29 `_kThinkingPlaceholder = 'Thinking...'`  — The placeholder text a chat row carries while its answer is on the way.
+- L31 `_visualTag = RegExp( r'<(chart|map|email|think)\b[^>]*>[\s\S]*?</\1>', caseSensitive: false, )`
+- L35 `_whitespace = RegExp(r'\s+')`
+- L46 `String buildVoiceCallContext( List<Map<String, String>> messages, { int maxMessages = kVoiceContextMaxMessages, int maxChars = kVoiceContextMaxChars, int maxLineChars = kVoiceContextMaxLineChars, })`  — The call context: the last [maxMessages] text messages of a chat as plain
+- L78 `String? _contextLine(Map<String, String> message, int maxLineChars)`
+- L91 `String _cut(String text, int max)`
+- L99 `String? voiceTaskMessageText(String task)`  — The text a spoken task is sent with: the marker, then the task on one
+- L107 `kVoiceOpenUiOnlyText = 'The answer is an interactive view in the chat.'`  — What the worker speaks instead of an answer that is only an OpenUI view.
+- L112 `String voiceResultText(String text)`  — Cuts a task result to what the worker gets back. An OpenUI program in
+- L119 `bool looksLikeFailedTurn(String text)`  — The texts the chat pipeline finalizes a turn with when the turn did not
 
 ## lib/platform_specific/chat/voice/voice_chat_widgets.dart  (102 Z.)
 - L16 `kVoiceRecordGap = 14`  — Gap between a call card and the rows around it: the gap between two runs

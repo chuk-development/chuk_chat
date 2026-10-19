@@ -1,103 +1,146 @@
 # lib/widgets/agent_activity · Signaturen
 
-## lib/widgets/agent_activity/agent_activity_model.dart  (462 Z.)
-- L12 `enum AgentActivityKind`  — What a timeline line represents. Drives the icon and the wording.
-  - L14 `search`
-  - L17 `page`
-  - L20 `thinking`
-  - L23 `other`
-- L27 `class AgentActivitySource`  — A page a step pulled in, shown as a chip under that step.
-  - L28 `const AgentActivitySource({ required this.url, required this.host, required this.title, })`
-  - L34 `final String url`
-  - L35 `final String host`
-  - L36 `final String title`
-- L40 `class AgentActivityEntry`  — One line in the timeline.
-  - L41 `const AgentActivityEntry({ required this.kind, required this.label, this.detail, this.children = const <AgentActivityEntry>[], this.hasError = false, this.toolCall, this.sources = const <AgentActivitySource>[], this.body, })`
-  - L52 `final AgentActivityKind kind`
-  - L55 `final String label`  — Leading text, e.g. `Searched web for` or `Ran 4 searches`.
-  - L58 `final String? detail`  — The subject, rendered in a monospace face: a query or a URL.
-  - L61 `final List<AgentActivityEntry> children`  — Steps folded under a group header.
-  - L64 `final bool hasError`  — Whether any step behind this line failed.
-  - L69 `final ToolCall? toolCall`  — The call this line stands for, so a reader can open its arguments and
-  - L74 `final List<AgentActivitySource> sources`  — Pages this step brought in. Rendered as chips under the line, the
-  - L78 `final String? body`  — The whole of what the model wrote, when the line is only its first
-  - L80 `bool get isGroup`
-  - L82 `bool get hasBody`
-- L86 `_subjectKeys = <String>[ 'query', 'q', 'search_query', 'searchQuery', 'url', 'link', 'page', 'path', 'prompt', ]`  — Argument keys that hold the thing a tool acted on, in priority order.
-- L99 `_maxDetailChars = 96`  — Longest subject shown before it is cut with an ellipsis.
-- L102 `_maxThinkingChars = 120`  — Longest thinking line shown.
-- L104 `AgentActivityKind _kindOf(ToolCall call)`
-- L120 `String? _subjectOf(ToolCall call)`
-- L130 `String _clip(String value, int max)`
-- L136 `String _shortenUrl(String url)`  — Strip the scheme and any `www.` so a URL reads as a place, not a link.
-- L143 `String _humanizeToolName(String name)`  — Human wording for a tool name: `generate_image` → `generate image`.
-- L153 `String? runningActivityLabel(List<ToolCall> calls)`  — Present-tense name for what a running turn is doing RIGHT NOW, so the
-- L177 `String _runningVerbFor(String name)`  — Present-tense phrase for a non-search, non-page tool the turn is waiting on.
-- L193 `AgentActivityEntry _entryFor(ToolCall call)`
-- L234 `class AgentActivityStep`  — One thing that happened in a round, in the order it happened: either a
-  - L235 `const AgentActivityStep.reasoning(String text) : reasoning = text, toolCall = null`
-  - L238 `const AgentActivityStep.tool(ToolCall call) : toolCall = call, reasoning = null`
-  - L242 `final String? reasoning`
-  - L243 `final ToolCall? toolCall`
-- L252 `AgentActivityEntry reasoningEntry(String text)`  — The line and the body for one stretch of reasoning.
-- L267 `List<AgentActivityEntry> buildAgentActivityEntriesFromSteps( List<AgentActivityStep> steps, )`  — Build the timeline lines for an ordered mix of reasoning and calls.
-- L308 `List<AgentActivityEntry> buildAgentActivityEntries( List<ToolCall> calls, { bool includeRoundThinking = true, })`  — Build the timeline lines for [calls].
-- L326 `maxSourcesPerStep = 8`  — Most source chips shown under one step.
-- L334 `List<AgentActivitySource> extractSourcesFor(ToolCall call)`  — The pages a call pulled in.
-- L389 `String _firstSentence(String text)`  — First sentence of [text], or the whole string when it has no break.
-- L399 `Duration? agentActivityDuration( List<ToolCall> calls, { required DateTime now, bool running = false, })`  — Total wall time of a round: first start to last completion.
-- L434 `String formatAgentDurationLive(Duration duration)`  — Compact duration wording: `4s`, `1m 3s`, `2h 5m`.
-- L441 `String formatAgentDuration(Duration duration)`
+## lib/widgets/agent_activity/agent_activity_model.dart  (478 Z.)
+- L13 `enum AgentActivityKind`  — What a timeline line represents. Drives the icon and the wording.
+  - L15 `search`
+  - L18 `page`
+  - L21 `thinking`
+  - L24 `other`
+- L28 `class AgentActivitySource`  — A page a step pulled in, shown as a chip under that step.
+  - L29 `const AgentActivitySource({ required this.url, required this.host, required this.title, })`
+  - L35 `final String url`
+  - L36 `final String host`
+  - L37 `final String title`
+- L41 `class AgentActivityEntry`  — One line in the timeline.
+  - L42 `const AgentActivityEntry({ required this.kind, required this.label, this.detail, this.children = const <AgentActivityEntry>[], this.hasError = false, this.toolCall, this.sources = const <AgentActivitySource>[], this.body, })`
+  - L53 `final AgentActivityKind kind`
+  - L56 `final String label`  — Leading text, e.g. `Searched web for` or `Ran 4 searches`.
+  - L59 `final String? detail`  — The subject, rendered in a monospace face: a query or a URL.
+  - L62 `final List<AgentActivityEntry> children`  — Steps folded under a group header.
+  - L65 `final bool hasError`  — Whether any step behind this line failed.
+  - L70 `final ToolCall? toolCall`  — The call this line stands for, so a reader can open its arguments and
+  - L75 `final List<AgentActivitySource> sources`  — Pages this step brought in. Rendered as chips under the line, the
+  - L79 `final String? body`  — The whole of what the model wrote, when the line is only its first
+  - L81 `bool get isGroup`
+  - L83 `bool get hasBody`
+- L87 `_subjectKeys = <String>[ 'query', 'q', 'search_query', 'searchQuery', 'url', 'link', 'page', 'path', 'prompt', ]`  — Argument keys that hold the thing a tool acted on, in priority order.
+- L100 `_maxDetailChars = 96`  — Longest subject shown before it is cut with an ellipsis.
+- L103 `_maxThinkingChars = 120`  — Longest thinking line shown.
+- L105 `AgentActivityKind _kindOf(ToolCall call)`
+- L107 `AgentActivityKind _kindOfName(String rawName)`
+- L123 `String? _subjectOf(ToolCall call)`
+- L133 `String _clip(String value, int max)`
+- L139 `String _shortenUrl(String url)`  — Strip the scheme and any `www.` so a URL reads as a place, not a link.
+- L146 `String _humanizeToolName(String name)`  — Human wording for a tool name: `generate_image` → `generate image`.
+- L156 `String? runningActivityLabel(List<ToolCall> calls, [AppLocalizations? l10n])`  — Present-tense name for what a running turn is doing RIGHT NOW, so the
+- L170 `String toolActivityLabel(String name, [AppLocalizations? l10n])`  — Present-tense phrase for a running tool called [name], localised when
+- L191 `String? knownToolActivityLabel(String name, [AppLocalizations? l10n])`  — The natural verb for a tool this app knows by name, or null. Known tools
+- L209 `AgentActivityEntry _entryFor(ToolCall call)`
+- L250 `class AgentActivityStep`  — One thing that happened in a round, in the order it happened: either a
+  - L251 `const AgentActivityStep.reasoning(String text) : reasoning = text, toolCall = null`
+  - L254 `const AgentActivityStep.tool(ToolCall call) : toolCall = call, reasoning = null`
+  - L258 `final String? reasoning`
+  - L259 `final ToolCall? toolCall`
+- L268 `AgentActivityEntry reasoningEntry(String text)`  — The line and the body for one stretch of reasoning.
+- L283 `List<AgentActivityEntry> buildAgentActivityEntriesFromSteps( List<AgentActivityStep> steps, )`  — Build the timeline lines for an ordered mix of reasoning and calls.
+- L324 `List<AgentActivityEntry> buildAgentActivityEntries( List<ToolCall> calls, { bool includeRoundThinking = true, })`  — Build the timeline lines for [calls].
+- L342 `maxSourcesPerStep = 8`  — Most source chips shown under one step.
+- L350 `List<AgentActivitySource> extractSourcesFor(ToolCall call)`  — The pages a call pulled in.
+- L405 `String _firstSentence(String text)`  — First sentence of [text], or the whole string when it has no break.
+- L415 `Duration? agentActivityDuration( List<ToolCall> calls, { required DateTime now, bool running = false, })`  — Total wall time of a round: first start to last completion.
+- L450 `String formatAgentDurationLive(Duration duration)`  — Compact duration wording: `4s`, `1m 3s`, `2h 5m`.
+- L457 `String formatAgentDuration(Duration duration)`
 
-## lib/widgets/agent_activity/agent_activity_timeline.dart  (507 Z.)
+## lib/widgets/agent_activity/agent_activity_timeline.dart  (555 Z.)
 - L20 `class AgentActivityTimeline extends StatefulWidget`
-  - L21 `const AgentActivityTimeline({ super.key, required this.toolCalls, this.steps, this.isRunning = false, this.clock, this.initiallyExpanded, this.onStepTap, this.onSourceTap, this.footer, this.phase, this.startedAt, this.finalDuration, })`
-  - L38 `final List<ToolCall> toolCalls`  — The round's calls, in the order the model made them. Drives the
-  - L42 `final List<AgentActivityStep>? steps`  — The round as it happened, with reasoning between the calls. Pass this
-  - L46 `final bool isRunning`  — Whether the round is still going. While true the timeline stays open
-  - L50 `final DateTime Function()? clock`  — Injectable clock. Tests pass a fixed value so the counting header is
-  - L54 `final bool? initiallyExpanded`  — Overrides the default open/closed state (open while running, closed
-  - L58 `final void Function(ToolCall toolCall)? onStepTap`  — Called when a reader taps a step, to show its arguments and result.
-  - L61 `final void Function(AgentActivitySource source)? onSourceTap`  — Called when a reader taps a source chip.
-  - L65 `final Widget? footer`  — Shown under the last step when the timeline is open. The model line
-  - L69 `final StreamPhase? phase`  — What the turn is doing right now, so the header can name the wait
-  - L74 `final DateTime? startedAt`  — When the request went out. The clock runs from here, not from the
-  - L79 `final Duration? finalDuration`  — The turn's measured length, kept with the message. Once it is there
-  - L82 `State<AgentActivityTimeline> createState()`
-- L85 `class _AgentActivityTimelineState extends State<AgentActivityTimeline>`
-  - L87 `bool? _expandedOverride`  — Null until the reader taps: before that the state follows the round.
-  - L89 `Timer? _ticker`
-  - L93 `Duration? _settledDuration`  — What the live counter showed when the turn settled. Used only when the
-  - L96 `static const double _badgeSize = 26`  — Diameter of the icon badge sitting on the rail.
-  - L99 `static const double _railCenter = _badgeSize / 2`  — Where the rail runs, measured from the left edge of the timeline.
-  - L102 `void initState()`
-  - L109 `void didUpdateWidget(AgentActivityTimeline oldWidget)`
-  - L127 `void dispose()`
-  - L134 `void _syncTicker()`  — The header counts seconds, so it needs a repaint per second — but
-  - L148 `bool get _isExpanded`
-  - L151 `final Set<int> _openBodies = <int>{}`  — Thinking notes the reader opened, by their position in the list.
-  - L153 `DateTime get _now`
-  - L156 `Widget build(BuildContext context)`
-  - L216 `static Duration _nonNegative(Duration d)`
-  - L218 `Widget _buildHeader(ThemeData theme, Color muted, TurnStatus status)`
-  - L259 `Widget _buildEntry( ThemeData theme, Color muted, AgentActivityEntry entry, { required int index, required bool isFirst, required bool isLast, bool soleStep = false, })`  — One step: the rail with its badge on the left, the line and the
-  - L357 `Widget _buildRail( ThemeData theme, AgentActivityEntry entry, { required Color color, required Color railColor, required bool isFirst, required bool isLast, })`  — The badge plus the line above and below it, so the steps read as one
-  - L402 `Widget _buildEntryText( ThemeData theme, AgentActivityEntry entry, Color color, )`
-  - L440 `Widget _buildSourceChips(ThemeData theme, List<AgentActivitySource> sources)`  — The pages a step found, as chips that scroll sideways — the row must
-  - L454 `Widget _buildSourceChip(ThemeData theme, AgentActivitySource source)`
-  - L494 `IconData _iconFor(AgentActivityEntry entry)`
+  - L21 `const AgentActivityTimeline({ super.key, required this.toolCalls, this.steps, this.isRunning = false, this.clock, this.initiallyExpanded, this.onStepTap, this.onSourceTap, this.footer, this.phase, this.startedAt, this.finalDuration, this.liveVerb, this.liveTrailing, this.liveListenable, })`
+  - L43 `final String? Function(BuildContext context)? liveVerb`  — The phase an Agents turn reports, read again on every repaint while the
+  - L47 `final Widget? Function(BuildContext context)? liveTrailing`  — Shown after the header while the round runs, e.g. a Retry target when
+  - L51 `final Listenable? liveListenable`  — Repaints the header the moment it fires, instead of on the next tick —
+  - L55 `final List<ToolCall> toolCalls`  — The round's calls, in the order the model made them. Drives the
+  - L59 `final List<AgentActivityStep>? steps`  — The round as it happened, with reasoning between the calls. Pass this
+  - L63 `final bool isRunning`  — Whether the round is still going. While true the timeline stays open
+  - L67 `final DateTime Function()? clock`  — Injectable clock. Tests pass a fixed value so the counting header is
+  - L71 `final bool? initiallyExpanded`  — Overrides the default open/closed state (open while running, closed
+  - L75 `final void Function(ToolCall toolCall)? onStepTap`  — Called when a reader taps a step, to show its arguments and result.
+  - L78 `final void Function(AgentActivitySource source)? onSourceTap`  — Called when a reader taps a source chip.
+  - L82 `final Widget? footer`  — Shown under the last step when the timeline is open. The model line
+  - L86 `final StreamPhase? phase`  — What the turn is doing right now, so the header can name the wait
+  - L91 `final DateTime? startedAt`  — When the request went out. The clock runs from here, not from the
+  - L96 `final Duration? finalDuration`  — The turn's measured length, kept with the message. Once it is there
+  - L99 `State<AgentActivityTimeline> createState()`
+- L102 `class _AgentActivityTimelineState extends State<AgentActivityTimeline>`
+  - L104 `bool? _expandedOverride`  — Null until the reader taps: before that the state follows the round.
+  - L106 `Timer? _ticker`
+  - L110 `Duration? _settledDuration`  — What the live counter showed when the turn settled. Used only when the
+  - L113 `static const double _badgeSize = 26`  — Diameter of the icon badge sitting on the rail.
+  - L116 `static const double _railCenter = _badgeSize / 2`  — Where the rail runs, measured from the left edge of the timeline.
+  - L119 `void initState()`
+  - L126 `void _onLive()`
+  - L131 `void didUpdateWidget(AgentActivityTimeline oldWidget)`
+  - L153 `void dispose()`
+  - L161 `void _syncTicker()`  — The header counts seconds, so it needs a repaint per second — but
+  - L175 `bool get _isExpanded`
+  - L178 `final Set<int> _openBodies = <int>{}`  — Thinking notes the reader opened, by their position in the list.
+  - L180 `DateTime get _now`
+  - L183 `Widget build(BuildContext context)`
+  - L260 `static Duration _nonNegative(Duration d)`
+  - L262 `Widget _buildHeader(ThemeData theme, Color muted, TurnStatus status)`
+  - L307 `Widget _buildEntry( ThemeData theme, Color muted, AgentActivityEntry entry, { required int index, required bool isFirst, required bool isLast, bool soleStep = false, })`  — One step: the rail with its badge on the left, the line and the
+  - L405 `Widget _buildRail( ThemeData theme, AgentActivityEntry entry, { required Color color, required Color railColor, required bool isFirst, required bool isLast, })`  — The badge plus the line above and below it, so the steps read as one
+  - L450 `Widget _buildEntryText( ThemeData theme, AgentActivityEntry entry, Color color, )`
+  - L488 `Widget _buildSourceChips(ThemeData theme, List<AgentActivitySource> sources)`  — The pages a step found, as chips that scroll sideways — the row must
+  - L502 `Widget _buildSourceChip(ThemeData theme, AgentActivitySource source)`
+  - L542 `IconData _iconFor(AgentActivityEntry entry)`
 
-## lib/widgets/agent_activity/turn_status.dart  (124 Z.)
+## lib/widgets/agent_activity/agents_live_status.dart  (253 Z.)
+- L33 `bool agentsLinkUp([AgentsRelayLink? link])`  — Whether the computer can be reached through [link] right now.
+- L42 `class AgentsLiveStatus`  — The live status of one Agents thread, for the bubble's header.
+  - L43 `AgentsLiveStatus._( this.chatId, { this.turnStartedAt, AgentsRunLedger? ledger, AgentsRelayLink? link, StreamPhase? Function(String chatId)? streamPhase, Future<void> Function()? retry, }) : _ledger = ledger ?? AgentsRunLedger.instance, _link = link, // ignore: prefer_initializing_formals _streamPhase = streamPhase, // ignore: prefer_initializing_formals _retry = retry`
+  - L57 `static AgentsLiveStatus? forChat(String? chatId, {DateTime? turnStartedAt})`  — The status source for [chatId], or null when it is not an Agents thread
+  - L65 `static AgentsLiveStatus forTest( String chatId, { DateTime? turnStartedAt, required AgentsRunLedger ledger, AgentsRelayLink? link, StreamPhase? Function(String chatId)? streamPhase, Future<void> Function()? retry, })`  — A source with every dependency injected. Test seam.
+  - L81 `final String chatId`
+  - L85 `final DateTime? turnStartedAt`  — When this bubble's request went out. A run the ledger still holds from
+  - L87 `final AgentsRunLedger _ledger`
+  - L88 `final AgentsRelayLink? _link`
+  - L89 `final StreamPhase? Function(String chatId)? _streamPhase`
+  - L90 `final Future<void> Function()? _retry`
+  - L94 `Listenable get listenable`  — Fires whenever the run changes in a way the line can show. Stable: the
+  - L97 `AgentsTurnStatus? status()`  — The status right now.
+  - L116 `String? verb(BuildContext context)`  — The words for the header, or null to keep the stream's wording.
+  - L120 `Widget? trailing(BuildContext context)`  — Retry, while the computer cannot be reached; null otherwise.
+- L132 `class AgentsRetryButton extends StatelessWidget`  — The one action the status line can offer: go and get the computer.
+  - L133 `const AgentsRetryButton({super.key, this.onRetry})`
+  - L136 `final Future<void> Function()? onRetry`  — Test seam; production retries through [OfflineRetryManager].
+  - L139 `Widget build(BuildContext context)`
+- L161 `class AgentsLiveStatusLine extends StatefulWidget`  — The status of a run this screen has no bubble for: a run the host was
+  - L162 `const AgentsLiveStatusLine({ super.key, required this.sessionKey, this.ledger, this.link, this.clock, })`
+  - L170 `final String sessionKey`
+  - L173 `final AgentsRunLedger? ledger`  — Injectable for tests; default the process-wide ones.
+  - L174 `final AgentsRelayLink? link`
+  - L175 `final DateTime Function()? clock`
+  - L178 `State<AgentsLiveStatusLine> createState()`
+- L181 `class _AgentsLiveStatusLineState extends State<AgentsLiveStatusLine>`
+  - L182 `Timer? _ticker`
+  - L184 `AgentsRunLedger get _ledger`
+  - L187 `void initState()`
+  - L195 `void didUpdateWidget(AgentsLiveStatusLine oldWidget)`
+  - L204 `void dispose()`
+  - L210 `void _repaint()`
+  - L215 `Widget build(BuildContext context)`
+
+## lib/widgets/agent_activity/turn_status.dart  (139 Z.)
 - L17 `class TurnStatus`  — The status of one assistant turn, as the header above it reports it.
-  - L18 `const TurnStatus({ required this.isRunning, required this.hasToolCalls, this.hasSteps = false, this.phase, this.runningToolLabel, this.elapsed, })`
-  - L28 `final bool isRunning`  — Whether the turn is still going.
-  - L32 `final bool hasToolCalls`  — Whether the turn made any tool call — it decides between the thinking
-  - L36 `final bool hasSteps`  — Whether anything has arrived yet — a stretch of reasoning or a call.
-  - L40 `final StreamPhase? phase`  — What the stream is doing right now. Null when nothing is running, and
-  - L45 `final String? runningToolLabel`  — Present-tense name of the tool the turn is waiting on, e.g.
-  - L48 `final Duration? elapsed`  — How long the turn has taken so far, or took in total.
-  - L55 `String get verb`  — The verb in front of the duration: what the turn is doing, or did.
-  - L76 `bool get showsDuration`  — Whether a duration is printed next to [verb].
-  - L83 `String get label`  — The whole header line, e.g. `Prompt processing for 3s`.
-- L93 `bool hasRunningToolCall(List<ToolCall> calls)`  — True while any call in [calls] is still pending or running.
-- L106 `Duration? resolveTurnElapsed({ Duration? finalDuration, DateTime? startedAt, required DateTime now, required bool isRunning, Duration? lastLiveDuration, List<ToolCall> toolCalls = const <ToolCall>[], })`  — How long the turn has taken, from the most trustworthy source available.
+  - L18 `const TurnStatus({ required this.isRunning, required this.hasToolCalls, this.hasSteps = false, this.phase, this.runningToolLabel, this.elapsed, this.liveVerb, })`
+  - L36 `final String? liveVerb`  — The phase as an Agents turn reports it (`agents_turn_phase.dart`): what
+  - L39 `final bool isRunning`  — Whether the turn is still going.
+  - L43 `final bool hasToolCalls`  — Whether the turn made any tool call — it decides between the thinking
+  - L47 `final bool hasSteps`  — Whether anything has arrived yet — a stretch of reasoning or a call.
+  - L51 `final StreamPhase? phase`  — What the stream is doing right now. Null when nothing is running, and
+  - L56 `final String? runningToolLabel`  — Present-tense name of the tool the turn is waiting on, e.g.
+  - L59 `final Duration? elapsed`  — How long the turn has taken so far, or took in total.
+  - L66 `String get verb`  — The verb in front of the duration: what the turn is doing, or did.
+  - L89 `bool get showsDuration`  — Whether a duration is printed next to [verb].
+  - L96 `String get label`  — The whole header line, e.g. `Prompt processing for 3s`.
+- L108 `bool hasRunningToolCall(List<ToolCall> calls)`  — True while any call in [calls] is still pending or running.
+- L121 `Duration? resolveTurnElapsed({ Duration? finalDuration, DateTime? startedAt, required DateTime now, required bool isRunning, Duration? lastLiveDuration, List<ToolCall> toolCalls = const <ToolCall>[], })`  — How long the turn has taken, from the most trustworthy source available.

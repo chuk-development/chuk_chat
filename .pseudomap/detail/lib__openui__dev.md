@@ -1,0 +1,46 @@
+# lib/openui/dev · Signaturen
+
+## lib/openui/dev/gallery_main.dart  (329 Z.)
+- L24 `_kFile = String.fromEnvironment('OPENUI_FILE')`
+- L25 `_kDir = String.fromEnvironment( 'OPENUI_DIR', defaultValue: 'test/openui/fixtures', )`
+- L30 `void main()`
+- L33 `class OpenUiGalleryApp extends StatefulWidget`  — The gallery app.
+  - L35 `const OpenUiGalleryApp({super.key})`  — Creates the gallery app.
+  - L38 `State<OpenUiGalleryApp> createState()`
+- L41 `class _OpenUiGalleryAppState extends State<OpenUiGalleryApp>`
+  - L42 `Brightness _brightness = Brightness.dark`
+  - L44 `ThemeData _theme(Brightness b)`
+  - L54 `Widget build(BuildContext context)`
+- L71 `class _GalleryPage extends StatefulWidget`
+  - L72 `const _GalleryPage({ required this.brightness, required this.onToggleBrightness, })`
+  - L77 `final Brightness brightness`
+  - L78 `final VoidCallback onToggleBrightness`
+  - L81 `State<_GalleryPage> createState()`
+- L84 `class _GalleryPageState extends State<_GalleryPage>`
+  - L85 `Map<String, String> _programs = const <String, String>{}`
+  - L86 `String? _error`
+  - L87 `Timer? _watch`
+  - L88 `DateTime? _modified`
+  - L91 `void initState()`
+  - L105 `void dispose()`
+  - L110 `void _load()`
+  - L139 `void _show(String text)`
+  - L146 `Widget build(BuildContext context)`
+- L210 `class _Sample extends StatefulWidget`  — One sample: its name, the rendered view in a chat-wide column, and
+  - L211 `const _Sample({ required this.name, required this.source, required this.handler, super.key, })`
+  - L218 `final String name`
+  - L219 `final String source`
+  - L220 `final OpenUiActionHandler handler`
+  - L223 `State<_Sample> createState()`
+- L226 `class _SampleState extends State<_Sample>`
+  - L227 `Timer? _stream`
+  - L228 `int? _shown`
+  - L229 `bool _showSource = false`
+  - L232 `void dispose()`
+  - L237 `void _replay()`
+  - L252 `Widget build(BuildContext context)`
+- L305 `class _Pill extends StatelessWidget`
+  - L306 `const _Pill({required this.label, required this.onTap})`
+  - L308 `final String label`
+  - L309 `final VoidCallback onTap`
+  - L312 `Widget build(BuildContext context)`

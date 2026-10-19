@@ -35,6 +35,87 @@
 - L217 `String _requireString(YamlMap parsed, String field)`
 - L232 `String? _optionalString(YamlMap parsed, String field)`
 
+## lib/services/skills/skill_proposal.dart  (186 Z.)
+- L15 `class AgentsSkillProposalResult`  — The host's terminal answer to a `skill_proposal_decision`
+  - L16 `const AgentsSkillProposalResult({ required this.proposalId, required this.status, this.name, this.errors = const <String>[], this.path, this.scrubbed = false, this.alreadyDecided = false, })`
+  - L27 `static const String statusSaved = 'saved'`  — The file is on disk.
+  - L30 `static const String statusDismissed = 'dismissed'`  — The draft is gone; nothing was written.
+  - L33 `static const String statusInvalid = 'invalid'`  — Nothing was written and the draft stays pending. [errors] says why.
+  - L36 `static const String statusNotFound = 'not_found'`  — The host knows no proposal with this id.
+  - L40 `static const String statusFailed = 'failed'`  — App side only: the decision did not reach the host, or no answer came
+  - L42 `final String proposalId`
+  - L45 `final String status`  — One of the `status*` constants.
+  - L48 `final String? name`  — The skill's name as the host saw it (the edited one, on an edit).
+  - L51 `final List<String> errors`  — Every reason the host gave, worded by the host. Shown as they are.
+  - L54 `final String? path`  — The host path of the SKILL.md, only on [statusSaved].
+  - L57 `final bool scrubbed`  — Secrets or personal data were removed from the edits.
+  - L61 `final bool alreadyDecided`  — Another device (or an earlier tap) decided first; [status] is that
+  - L63 `bool get isSaved`
+  - L64 `bool get isDismissed`
+  - L65 `bool get isInvalid`
+  - L66 `bool get isDecided`
+  - L69 `factory AgentsSkillProposalResult.failed(String proposalId, String reason)`  — A result built on the app side when the host could not be asked.
+  - L78 `static AgentsSkillProposalResult? fromPayload(Map<String, dynamic> payload)`  — Reads a decoded `skill_proposal_result` payload, or null when it names
+- L105 `abstract interface class AgentsSkillProposalControl`  — Sends the user's answer to a skill proposal. The real relay client
+  - L110 `Future<AgentsSkillProposalResult> sendSkillProposalDecision({ required String proposalId, required bool accept, String? name, String? description, String? body, })`  — Seals `skill_proposal_decision {proposal_id, accept, name?, description?,
+- L120 `enum SkillDraftFieldError`  — What is wrong with one field of the edit form, before anything is sent.
+  - L121 `nameEmpty`
+  - L122 `nameTooLong`
+  - L123 `nameInvalid`
+  - L124 `descriptionEmpty`
+  - L125 `descriptionTooLong`
+  - L126 `descriptionMultiline`
+  - L127 `bodyEmpty`
+  - L128 `bodyTooLong`
+- L132 `abstract final class SkillDraftRules`  — The limits of a saved skill, as the host enforces them.
+  - L133 `static const int maxNameChars = 64`
+  - L134 `static const int maxDescriptionChars = 300`
+  - L135 `static const int maxBodyLines = 500`
+  - L136 `static const int maxBodyChars = 40000`
+  - L139 `static final RegExp namePattern = RegExp(r'^[a-z0-9]+(-[a-z0-9]+)*$')`  — Lower-case letters and digits joined by single hyphens.
+  - L141 `static SkillDraftFieldError? validateName(String name)`
+  - L148 `static SkillDraftFieldError? validateDescription(String description)`
+  - L159 `static SkillDraftFieldError? validateBody(String body)`
+- L173 `enum SkillDraftField`  — Which form field one of the host's error strings belongs to, so it can be
+  - L173 `name`
+  - L173 `description`
+  - L173 `body`
+- L175 `SkillDraftField? skillDraftFieldForHostError(String error)`
+
+## lib/services/skills/skill_proposals_source.dart  (258 Z.)
+- L16 `enum SkillProposalState`  — Where one proposal stands, as the card draws it.
+  - L16 `pending`
+  - L16 `saved`
+  - L16 `dismissed`
+- L19 `@immutable class SkillProposalEntry`  — One proposal of one thread.
+  - L21 `const SkillProposalEntry({ required this.proposal, required this.threadKey, this.state = SkillProposalState.pending, this.savedName, this.hidden = false, })`
+  - L29 `final AgentsRelaySkillProposal proposal`
+  - L30 `final String threadKey`
+  - L31 `final SkillProposalState state`
+  - L34 `final String? savedName`  — The name the skill was saved under, once [state] is saved.
+  - L37 `final bool hidden`  — A decided card the thread has moved past. It is no longer drawn.
+  - L39 `String get proposalId`
+  - L40 `bool get isPending`
+  - L42 `SkillProposalEntry copyWith({ AgentsRelaySkillProposal? proposal, SkillProposalState? state, String? savedName, bool? hidden, })`
+- L65 `class SkillProposalsSource extends ChangeNotifier`  — One instance for the app, like [SkillsSource]. It listens to
+  - L66 `SkillProposalsSource._()`
+  - L68 `static final SkillProposalsSource instance = SkillProposalsSource._()`
+  - L70 `final Map<String, List<SkillProposalEntry>> _byThread = <String, List<SkillProposalEntry>>{}`
+  - L72 `StreamSubscription<AgentsRelayInbound>? _sub`
+  - L76 `AgentsSkillProposalControl? Function()? controlOverride`  — Where the answer goes. Null reads the bound relay controller.
+  - L81 `Future<bool> Function()? refreshSkillsOverride`  — Called after a save, to refresh the Skills page. Null asks
+  - L84 `void attach()`  — Starts listening. Idempotent.
+  - L89 `List<SkillProposalEntry> forThread(String threadKey)`  — The proposals [threadKey] draws, oldest first.
+  - L96 `SkillProposalEntry? byId(String proposalId)`
+  - L106 `void ingest(AgentsRelayInbound event)`  — Takes one inbound event. Public for tests; [attach] wires it.
+  - L121 `void _onProposal(AgentsRelaySkillProposal proposal)`
+  - L164 `bool _hideDecided(String thread)`
+  - L183 `Future<AgentsSkillProposalResult> decide( String proposalId, { required bool accept, String? name, String? description, String? body, })`  — Sends the user's answer and folds the host's reply into the card.
+  - L214 `void _markDecided(String proposalId, AgentsSkillProposalResult result)`
+  - L233 `AgentsSkillProposalControl? _control()`
+  - L240 `Future<void> _refreshSkills()`
+  - L250 `void reset()`  — Test seam: forget everything and stop listening.
+
 ## lib/services/skills/skill_registry.dart  (115 Z.)
 - L24 `class SkillRegistry`
   - L25 `const SkillRegistry._()`

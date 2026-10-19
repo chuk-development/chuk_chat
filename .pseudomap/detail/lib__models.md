@@ -1,6 +1,6 @@
 # lib/models · Signaturen
 
-## lib/models/agents_agent.dart  (130 Z.)
+## lib/models/agents_agent.dart  (144 Z.)
 - L15 `enum AgentActivity`  — What a coworker is doing, as far as the app can actually tell.
   - L17 `working`
   - L20 `waiting`
@@ -12,19 +12,21 @@
   - L40 `final DateTime? lastActivity`
   - L42 `AgentsThreadInfo copyWith({String? title, DateTime? lastActivity})`
 - L51 `@immutable class AgentsAgent`  — One coworker.
-  - L53 `const AgentsAgent({ required this.id, required this.name, required this.threads, this.role, this.brief, this.schedule, this.attachmentNames = const <String>[], this.onHost = false, this.running = false, this.lastActivity, })`
-  - L66 `final String id`
-  - L67 `final String name`
-  - L73 `final String? role`  — An optional short role the user gave the coworker — "researcher",
-  - L77 `final String? brief`  — The standing job the user gave it at onboarding (§4). Null when the user
-  - L81 `final ScheduleSpec? schedule`  — A schedule the user set in the app. It is not installed on the host yet —
-  - L86 `final List<String> attachmentNames`  — Names of files the user attached at onboarding. Only the names: the
-  - L90 `final bool onHost`  — True only for the agent that really runs on the paired host. False for an
-  - L93 `final bool running`  — A run is in flight for this agent right now.
-  - L97 `final DateTime? lastActivity`  — The last time anything happened in one of its threads, as observed by this
-  - L99 `final List<AgentsThreadInfo> threads`
-  - L101 `AgentActivity get activity`
-  - L107 `AgentsAgent copyWith({ String? name, String? role, String? brief, ScheduleSpec? schedule, List<String>? attachmentNames, bool? onHost, bool? running, DateTime? lastActivity, List<AgentsThreadInfo>? threads, })`
+  - L53 `const AgentsAgent({ required this.id, required this.name, required this.threads, this.role, this.brief, this.schedule, this.attachmentNames = const <String>[], this.onHost = false, this.knownToHost = false, this.running = false, this.lastActivity, })`
+  - L67 `final String id`
+  - L68 `final String name`
+  - L74 `final String? role`  — An optional short role the user gave the coworker — "researcher",
+  - L78 `final String? brief`  — The standing job the user gave it at onboarding (§4). Null when the user
+  - L82 `final ScheduleSpec? schedule`  — A schedule the user set in the app. It is not installed on the host yet —
+  - L87 `final List<String> attachmentNames`  — Names of files the user attached at onboarding. Only the names: the
+  - L91 `final bool onHost`  — True only for the agent that really runs on the paired host. False for an
+  - L98 `final bool knownToHost`  — True once the paired host listed this coworker in its `agent_list`: the
+  - L102 `bool get runsOnHost`  — The coworker runs on the host: it is the host's own, or the host listed
+  - L105 `final bool running`  — A run is in flight for this agent right now.
+  - L109 `final DateTime? lastActivity`  — The last time anything happened in one of its threads, as observed by this
+  - L111 `final List<AgentsThreadInfo> threads`
+  - L113 `AgentActivity get activity`
+  - L119 `AgentsAgent copyWith({ String? name, String? role, String? brief, ScheduleSpec? schedule, List<String>? attachmentNames, bool? onHost, bool? knownToHost, bool? running, DateTime? lastActivity, List<AgentsThreadInfo>? threads, })`
 
 ## lib/models/agents_room.dart  (157 Z.)
 - L15 `@immutable class AgentsRoomMember`  — One coworker in a room: the agent id the app tracks and the handle it is
@@ -330,37 +332,40 @@
   - L67 `google`
   - L68 `mcp`
 
-## lib/models/content_block.dart  (173 Z.)
+## lib/models/content_block.dart  (193 Z.)
 - L7 `enum ContentBlockType`  — The type of a content block within an AI response.
   - L7 `text`
   - L7 `toolCalls`
   - L7 `reasoning`
   - L7 `sandboxArtifact`
 - L15 `class SandboxArtifactPayload`  — Payload for a [ContentBlockType.sandboxArtifact] block.
-  - L16 `const SandboxArtifactPayload({ required this.storagePath, required this.filename, required this.mime, required this.sizeBytes, this.document, })`
-  - L28 `final String storagePath`  — Storage path returned by [PdfAttachmentService.upload]:
-  - L29 `final String filename`
-  - L30 `final String mime`
-  - L31 `final int sizeBytes`
-  - L35 `final Map<String, dynamic>? document`  — Full table/Markdown snapshot. Stored inside the encrypted chat payload,
-  - L37 `Map<String, dynamic> toJson()`
-  - L45 `factory SandboxArtifactPayload.fromJson(Map<String, dynamic> j)`
-- L62 `class ContentBlock`  — An ordered block of content within an AI response.
-  - L63 `const ContentBlock._({ required this.type, this.text, this.toolCalls, this.sandboxArtifact, })`
-  - L71 `const ContentBlock.text(String text) : this._(type: ContentBlockType.text, text: text)`  — A block of visible text shown to the user.
-  - L75 `const ContentBlock.toolCalls(List<ToolCall> calls) : this._(type: ContentBlockType.toolCalls, toolCalls: calls)`  — A block of tool calls (expandable in the UI).
-  - L79 `const ContentBlock.reasoning(String text) : this._(type: ContentBlockType.reasoning, text: text)`  — A reasoning/thinking block (expandable in the UI).
-  - L85 `const ContentBlock.sandboxArtifact(SandboxArtifactPayload payload) : this._(type: ContentBlockType.sandboxArtifact, sandboxArtifact: payload)`  — A sandbox-produced file handed to the user (downloadable / inline-
-  - L88 `final ContentBlockType type`
-  - L92 `final String? text`  — The text content (for [ContentBlockType.text] and
-  - L95 `final List<ToolCall>? toolCalls`  — The tool calls (for [ContentBlockType.toolCalls] blocks).
-  - L98 `final SandboxArtifactPayload? sandboxArtifact`  — Sandbox artifact metadata (for [ContentBlockType.sandboxArtifact]).
-  - L100 `Map<String, dynamic> toJson()`
-  - L111 `static const String _legacySandboxArtifactType = 'sandboxArtifact'`  — Stored type name of file blocks. Chat used to write them from the
-  - L118 `static bool get decodesFileBlocks`  — Whether a stored file block decodes to a file card. With Agents on, it
-  - L122 `static set decodesFileBlocks(bool value)`  — A test picks a side here. Sets the one shared override.
-  - L125 `factory ContentBlock.fromJson(Map<String, dynamic> json)`
-  - L163 `static String legacySandboxArtifactNote(Map<String, dynamic> json)`  — The note shown in place of a legacy code-sandbox file block.
+  - L16 `const SandboxArtifactPayload({ required this.storagePath, required this.filename, required this.mime, required this.sizeBytes, this.document, this.origin, })`
+  - L26 `static const String originFetchFiles = 'fetch_files'`  — [origin] of a file the chat itself fetched with the `fetch_files` tool.
+  - L32 `final String storagePath`  — Storage path returned by [PdfAttachmentService.upload]:
+  - L33 `final String filename`
+  - L34 `final String mime`
+  - L35 `final int sizeBytes`
+  - L39 `final Map<String, dynamic>? document`  — Full table/Markdown snapshot. Stored inside the encrypted chat payload,
+  - L44 `final String? origin`  — Who wrote the block. Null for an Agents host delivery and for the old
+  - L46 `Map<String, dynamic> toJson()`
+  - L55 `factory SandboxArtifactPayload.fromJson(Map<String, dynamic> j)`
+- L73 `class ContentBlock`  — An ordered block of content within an AI response.
+  - L74 `const ContentBlock._({ required this.type, this.text, this.toolCalls, this.sandboxArtifact, })`
+  - L82 `const ContentBlock.text(String text) : this._(type: ContentBlockType.text, text: text)`  — A block of visible text shown to the user.
+  - L86 `const ContentBlock.toolCalls(List<ToolCall> calls) : this._(type: ContentBlockType.toolCalls, toolCalls: calls)`  — A block of tool calls (expandable in the UI).
+  - L90 `const ContentBlock.reasoning(String text) : this._(type: ContentBlockType.reasoning, text: text)`  — A reasoning/thinking block (expandable in the UI).
+  - L96 `const ContentBlock.sandboxArtifact(SandboxArtifactPayload payload) : this._(type: ContentBlockType.sandboxArtifact, sandboxArtifact: payload)`  — A sandbox-produced file handed to the user (downloadable / inline-
+  - L99 `final ContentBlockType type`
+  - L103 `final String? text`  — The text content (for [ContentBlockType.text] and
+  - L106 `final List<ToolCall>? toolCalls`  — The tool calls (for [ContentBlockType.toolCalls] blocks).
+  - L109 `final SandboxArtifactPayload? sandboxArtifact`  — Sandbox artifact metadata (for [ContentBlockType.sandboxArtifact]).
+  - L111 `Map<String, dynamic> toJson()`
+  - L122 `static const String _legacySandboxArtifactType = 'sandboxArtifact'`  — Stored type name of file blocks. Chat used to write them from the
+  - L129 `static bool get decodesFileBlocks`  — Whether a stored file block decodes to a file card. With Agents on, it
+  - L133 `static set decodesFileBlocks(bool value)`  — A test picks a side here. Sets the one shared override.
+  - L136 `factory ContentBlock.fromJson(Map<String, dynamic> json)`
+  - L177 `static bool _hasOrigin(Map<String, dynamic> json)`
+  - L183 `static String legacySandboxArtifactNote(Map<String, dynamic> json)`  — The note shown in place of a legacy code-sandbox file block.
 
 ## lib/models/queued_message.dart  (103 Z.)
 - L6 `class QueuedMessage`  — A message persisted in the offline queue, waiting for connectivity so it
@@ -417,28 +422,28 @@
 - L260 `bool _listEquals(List<String> a, List<String> b)`
 - L268 `bool _mapEquals(Map<String, String> a, Map<String, String> b)`
 
-## lib/models/stored_chat.dart  (202 Z.)
-- L7 `class StoredChat`  — Represents a stored chat with metadata.
-  - L8 `StoredChat({ required this.id, List<ChatMessage>? messages, required this.createdAt, required this.isStarred, this.title, this.customName, this.updatedAt, this.keyVersion, this.isLocked = false, this.assistantId, }) : _messages = messages != null ? List<ChatMessage>.unmodifiable(messages) : null`
-  - L24 `factory StoredChat.forSidebar({ required String id, required DateTime createdAt, required bool isStarred, String? title, String? customName, DateTime? updatedAt, int? keyVersion, bool isLocked = false, String? assistantId, })`  — Create a lightweight chat for sidebar (title only, no messages)
-  - L49 `final String id`
-  - L50 `final List<ChatMessage>? _messages`
-  - L51 `final DateTime createdAt`
-  - L52 `final DateTime? updatedAt`
-  - L53 `final bool isStarred`
-  - L54 `final String? customName`
-  - L57 `final String? title`  — Decrypted title for sidebar display (from encrypted_title column)
-  - L61 `final int? keyVersion`  — The encryption key version that was used to encrypt this chat.
-  - L65 `final String? assistantId`  — Optional ID of the assistant this chat belongs to.
-  - L68 `List<ChatMessage> get messages`  — Get messages - throws if not fully loaded
-  - L78 `bool get isFullyLoaded`  — Check if this chat has its messages loaded
-  - L83 `final bool isLocked`  — Whether this chat is locked (encrypted with an old key after password reset).
-  - L86 `List<ChatMessage>? get messagesOrNull`  — Get messages or null if not loaded (safe access)
-  - L91 `String get previewText`  — Get a preview of the chat (first user message or first message text)
-  - L113 `factory StoredChat.fromRow( Map<String, dynamic> row, List<ChatMessage> messages, { String? customName, String? title, int? keyVersion, bool isLocked = false, String? assistantId, })`
-  - L139 `factory StoredChat.fromRowTitleOnly( Map<String, dynamic> row, { String? title, int? keyVersion, bool isLocked = false, String? assistantId, })`  — Create from row with title only (for sidebar)
-  - L160 `StoredChat copyWith({ String? id, List<ChatMessage>? messages, DateTime? createdAt, DateTime? updatedAt, bool? isStarred, String? customName, String? title, int? keyVersion, bool? isLocked, String? assistantId, })`
-  - L187 `StoredChat withMessages(List<ChatMessage> messages, {String? customName})`  — Create a fully loaded version of this chat
+## lib/models/stored_chat.dart  (204 Z.)
+- L9 `class StoredChat`  — Represents a stored chat with metadata.
+  - L10 `StoredChat({ required this.id, List<ChatMessage>? messages, required this.createdAt, required this.isStarred, this.title, this.customName, this.updatedAt, this.keyVersion, this.isLocked = false, this.assistantId, }) : _messages = messages != null ? List<ChatMessage>.unmodifiable(messages) : null`
+  - L26 `factory StoredChat.forSidebar({ required String id, required DateTime createdAt, required bool isStarred, String? title, String? customName, DateTime? updatedAt, int? keyVersion, bool isLocked = false, String? assistantId, })`  — Create a lightweight chat for sidebar (title only, no messages)
+  - L51 `final String id`
+  - L52 `final List<ChatMessage>? _messages`
+  - L53 `final DateTime createdAt`
+  - L54 `final DateTime? updatedAt`
+  - L55 `final bool isStarred`
+  - L56 `final String? customName`
+  - L59 `final String? title`  — Decrypted title for sidebar display (from encrypted_title column)
+  - L63 `final int? keyVersion`  — The encryption key version that was used to encrypt this chat.
+  - L67 `final String? assistantId`  — Optional ID of the assistant this chat belongs to.
+  - L70 `List<ChatMessage> get messages`  — Get messages - throws if not fully loaded
+  - L80 `bool get isFullyLoaded`  — Check if this chat has its messages loaded
+  - L85 `final bool isLocked`  — Whether this chat is locked (encrypted with an old key after password reset).
+  - L88 `List<ChatMessage>? get messagesOrNull`  — Get messages or null if not loaded (safe access)
+  - L93 `String get previewText`  — Get a preview of the chat (first user message or first message text)
+  - L115 `factory StoredChat.fromRow( Map<String, dynamic> row, List<ChatMessage> messages, { String? customName, String? title, int? keyVersion, bool isLocked = false, String? assistantId, })`
+  - L141 `factory StoredChat.fromRowTitleOnly( Map<String, dynamic> row, { String? title, int? keyVersion, bool isLocked = false, String? assistantId, })`  — Create from row with title only (for sidebar)
+  - L162 `StoredChat copyWith({ String? id, List<ChatMessage>? messages, DateTime? createdAt, DateTime? updatedAt, bool? isStarred, String? customName, String? title, int? keyVersion, bool? isLocked, String? assistantId, })`
+  - L189 `StoredChat withMessages(List<ChatMessage> messages, {String? customName})`  — Create a fully loaded version of this chat
 
 ## lib/models/stream_phase.dart  (39 Z.)
 - L13 `enum StreamPhase`  — The phases of one assistant turn, in the order they occur.

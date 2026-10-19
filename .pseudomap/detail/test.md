@@ -61,7 +61,7 @@
 ## test/verify_languages.dart  (19 Z.)
 - L4 `void main()`
 
-## test/widget_test.dart  (318 Z.)
+## test/widget_test.dart  (324 Z.)
 - L27 `class _FailingAuthService extends AuthService`  — Auth service that always fails, so the login test can exercise the error
   - L28 `const _FailingAuthService()`
   - L31 `Future<void> signInWithPassword({ required String email, required String password, })`
@@ -83,25 +83,25 @@
   - L95 `Future<void> reconnect({ required Uri hostUrl, required AgentsStoredPairing pairing, })`
   - L101 `AgentsStoredPairing? get establishedTrust`
   - L104 `Future<void> provisionAccount(AccountSession session)`
-  - L107 `Future<void> sendTask( String prompt, { String sessionKey = 'default', String? modelId, String? providerSlug, String? reasoningEffort, bool debug = false, bool regenerate = false, String? taskId, })`
-  - L119 `Future<void> createRoom( String roomId, String name, List<Map<String, String>> members, { bool agentToAgent = true, })`
-  - L127 `Future<void> setRoomAgentToAgent(String roomId, bool enabled)`
-  - L130 `Future<void> sendRoomTask(String roomId, String message)`
-  - L133 `Future<void> requestRoomHistory(String roomId)`
-  - L136 `Future<void> deleteRoom(String roomId)`
-  - L139 `Future<void> renameRoom(String roomId, String name)`
-  - L142 `Future<void> createAgent(String agentId, String name)`
-  - L145 `Future<void> renameAgent(String agentId, String name)`
-  - L148 `Future<void> requestAgentList()`
-  - L151 `Future<void> addRoomMember(String roomId, String agentId, String handle)`
-  - L154 `Future<void> removeRoomMember(String roomId, String agentId)`
-  - L157 `Future<void> requestStop({String sessionKey = 'default'})`
-  - L160 `Future<void> requestReplay({ String sessionKey = 'default', int afterId = 0, int beforeId = 0, int limit = 0, })`
-  - L168 `Future<void> sendRunAck(String runId)`
-  - L171 `Future<void> startBrowserView({String? sessionKey})`
-  - L174 `Future<void> stopBrowserView()`
-  - L177 `Future<void> sendBrowserData(Uint8List bytes)`
-  - L180 `Future<void> sendApprovalDecision({ required String approvalId, required bool approved, })`
-  - L186 `Future<void> sendSecrets({ required Map<String, String> values, required int revision, String? requestId, })`
-  - L193 `Future<void> dispose()`
-- L199 `void main()`
+  - L107 `Future<void> sendTask( String prompt, { String sessionKey = 'default', String? modelId, String? providerSlug, String? reasoningEffort, bool debug = false, bool regenerate = false, String? taskId, bool budgetOverride = false, })`
+  - L120 `Future<void> createRoom( String roomId, String name, List<Map<String, String>> members, { bool agentToAgent = true, })`
+  - L128 `Future<void> setRoomAgentToAgent(String roomId, bool enabled)`
+  - L131 `Future<void> sendRoomTask(String roomId, String message)`
+  - L134 `Future<void> requestRoomHistory(String roomId)`
+  - L137 `Future<void> deleteRoom(String roomId)`
+  - L140 `Future<void> renameRoom(String roomId, String name)`
+  - L143 `Future<void> createAgent( String agentId, String name, { Map<String, Object?>? template, })`
+  - L150 `Future<void> renameAgent(String agentId, String name)`
+  - L153 `Future<void> requestAgentList()`
+  - L156 `Future<void> addRoomMember(String roomId, String agentId, String handle)`
+  - L159 `Future<void> removeRoomMember(String roomId, String agentId)`
+  - L162 `Future<void> requestStop({String sessionKey = 'default'})`
+  - L165 `Future<void> requestReplay({ String sessionKey = 'default', int afterId = 0, int beforeId = 0, int limit = 0, })`
+  - L173 `Future<void> sendRunAck(String runId)`
+  - L176 `Future<void> startBrowserView({String? sessionKey})`
+  - L179 `Future<void> stopBrowserView()`
+  - L182 `Future<void> sendBrowserData(Uint8List bytes)`
+  - L185 `Future<void> sendApprovalDecision({ required String approvalId, required bool approved, String? scope, })`
+  - L192 `Future<void> sendSecrets({ required Map<String, String> values, required int revision, String? requestId, })`
+  - L199 `Future<void> dispose()`
+- L205 `void main()`

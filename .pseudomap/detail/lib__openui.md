@@ -1,0 +1,246 @@
+# lib/openui · Signaturen
+
+## lib/openui/openui.dart  (19 Z.)
+- reicht weiter: 'package:openui/openui.dart' show ToolExecutor · 'package:openui_core/openui_core.dart' show OpenUIError, ToolResult · 'package:chuk_chat/openui/openui_actions.dart' · 'package:chuk_chat/openui/openui_component.dart' · 'package:chuk_chat/openui/openui_library.dart' · 'package:chuk_chat/openui/openui_props.dart' · 'package:chuk_chat/openui/openui_theme.dart' · 'package:chuk_chat/openui/openui_view.dart'
+
+## lib/openui/openui_actions.dart  (257 Z.)
+- L19 `abstract class OpenUiActionHandler`  — What the host app does when an OpenUI view acts.
+  - L21 `const OpenUiActionHandler()`  — Const constructor for subclasses.
+  - L24 `void sendToAssistant( String text, { String? context, Map<String, Object?>? formValues, })`  — Sends a user message to the assistant.
+  - L31 `void openUrl(String url)`  — Opens [url] outside the view.
+  - L34 `void onStateChanged(Map<String, Object?> state)`  — Called after each `$variable` write. The default does nothing.
+  - L48 `static String composeMessage( String text, { String? context, Map<String, Object?>? formValues, String? formName, })`  — Builds one plain-text chat message from the three parts of
+  - L67 `static String _valueText(Object? v)`
+- L80 `class CallbackOpenUiActionHandler extends OpenUiActionHandler`  — An [OpenUiActionHandler] made from callbacks. Missing callbacks do
+  - L82 `const CallbackOpenUiActionHandler({ this.onSendToAssistant, this.onOpenUrl, this.onState, })`  — Creates a handler from callbacks.
+  - L89 `final void Function( String text, String? context, Map<String, Object?>? formValues, )? onSendToAssistant`  — Receives [sendToAssistant] calls.
+  - L97 `final void Function(String url)? onOpenUrl`  — Receives [openUrl] calls.
+  - L100 `final void Function(Map<String, Object?> state)? onState`  — Receives [onStateChanged] calls.
+  - L103 `void sendToAssistant( String text, { String? context, Map<String, Object?>? formValues, })`
+  - L110 `void openUrl(String url)`
+  - L113 `void onStateChanged(Map<String, Object?> state)`
+- L121 `class OpenUiFormState extends ChangeNotifier`  — The values of one OpenUI `Form`, keyed by field name.
+  - L123 `OpenUiFormState(this.name)`  — Creates the state of the form called [name].
+  - L126 `final String name`  — The form name (first argument of `Form`).
+  - L128 `final Map<String, Object?> _values = <String, Object?>{}`
+  - L131 `Map<String, Object?> get values`  — A copy of the current values.
+  - L134 `Object? value(String field)`  — The value of [field], or `null`.
+  - L137 `bool hasValue(String field)`  — Whether [field] has a value (also a `null` one).
+  - L140 `void setValue(String field, Object? value)`  — Stores the value of [field] and notifies listeners on a change.
+  - L147 `void reset()`  — Clears every value.
+- L155 `class OpenUiForms`  — All forms of one view, by name.
+  - L156 `final Map<String, OpenUiFormState> _forms = <String, OpenUiFormState>{}`
+  - L160 `String? activeFormName`  — The form whose action runs now (see [OpenUiScope.runWithForm]),
+  - L163 `OpenUiFormState form(String name)`  — The state of the form called [name] (created on first use).
+  - L167 `Map<String, Object?>? valuesOf(String? name)`  — The current values of [name], or `null` when there is no such form.
+  - L171 `void dispose()`  — Releases every form state.
+- L183 `class OpenUiFormScope extends InheritedWidget`  — Marks a subtree as the body of the `Form` called [formName].
+  - L185 `const OpenUiFormScope({ required this.formName, required super.child, super.key, })`  — Creates the scope of the form called [formName].
+  - L192 `final String formName`  — The form name.
+  - L195 `static String? maybeNameOf(BuildContext context)`  — The name of the enclosing form, or `null`.
+  - L200 `static OpenUiFormState? formOf(BuildContext context)`  — The state of the enclosing form, or `null` outside a form or an
+  - L207 `bool updateShouldNotify(OpenUiFormScope oldWidget)`
+- L213 `class OpenUiScope extends InheritedWidget`  — Per-view services for components: the host handler, the forms, and
+  - L215 `const OpenUiScope({ required this.forms, required this.isStreaming, required super.child, this.handler, super.key, })`  — Creates the scope. Normally only [OpenUiView] does this.
+  - L224 `final OpenUiActionHandler? handler`  — The host handler, or `null` when the view is read-only.
+  - L227 `final OpenUiForms forms`  — The form states of this view.
+  - L230 `final bool isStreaming`  — Whether the source is still streaming.
+  - L234 `Future<void> runWithForm( String? formName, Future<void> Function() body, )`  — Runs [body] with [formName] as the active form, so a message to
+  - L248 `static OpenUiScope? maybeOf(BuildContext context)`  — The nearest scope, or `null` outside an [OpenUiView].
+  - L252 `bool updateShouldNotify(OpenUiScope oldWidget)`
+
+## lib/openui/openui_component.dart  (157 Z.)
+- L19 `typedef OpenUiBuilder = Widget Function( BuildContext context, OpenUiProps props, )`  — Draws one component from its typed props.
+- L30 `@immutable class OpenUiParam`  — One positional parameter of a component.
+  - L33 `const OpenUiParam(this.name, this.type, {this.optional = false})`  — Creates a parameter. [optional] is the `?` in the signature.
+  - L36 `const OpenUiParam.opt(this.name, this.type) : optional = true`  — Creates an optional parameter (`name?: type`).
+  - L39 `final String name`  — The prop name, as in the upstream signature.
+  - L42 `final String type`  — The type text, as in the upstream signature.
+  - L45 `final bool optional`  — Whether the parameter can be left out.
+  - L49 `List<String> get enumValues`  — The allowed values when [type] is a pure string enum
+  - L63 `bool get isAction`  — Whether the slot takes an action (`Action([...])`, a bare step or
+  - L67 `bool get isBinding`  — Whether the slot takes a two-way `$state` binding. The renderer
+  - L70 `String get signature`  — `name: type` or `name?: type`, as in the upstream signature.
+- L83 `@immutable class OpenUiComponentDef`  — One OpenUI Lang component of the chuk_chat library.
+  - L86 `const OpenUiComponentDef({ required this.name, required this.group, required this.description, required this.params, required OpenUiBuilder this.builder, })`  — Creates a visual component.
+  - L95 `const OpenUiComponentDef.data({ required this.name, required this.group, required this.description, required this.params, }) : builder = null`  — Creates a data-only component. Its parent reads it.
+  - L103 `final String name`  — The component name used in OpenUI Lang (`Card`, `Series`).
+  - L106 `final String group`  — The upstream prompt group (`Content`, `Charts (2D)`, `Forms`).
+  - L109 `final String description`  — One line for the model prompt, normally the upstream description.
+  - L112 `final List<OpenUiParam> params`  — The positional parameters, in upstream order.
+  - L115 `final OpenUiBuilder? builder`  — Draws the component. `null` for a data-only component.
+  - L118 `bool get isData`  — Whether this is a data-only component.
+  - L121 `OpenUiParam? param(String paramName)`  — Returns the parameter called [paramName], or `null`.
+  - L129 `String get signature`  — `Name(a: string, b?: number)`, the upstream signature format.
+  - L134 `ComponentDefinition toCoreDefinition()`  — The vendored core's definition: a JSON schema whose `properties`
+
+## lib/openui/openui_icons.dart  (591 Z.)
+- L22 `kOpenUiLucideIcons = <String, String>{ // Status and ui. 'check': 'tick02', 'check-check': 'tick-double02', 'circle-chec`  — Lucide name to HugeIcons file stem (`assets/icons/hugeicons/<stem>.svg`).
+- L364 `kOpenUiIconCategories = <String, String>{ 'accessibility': 'accessibility', 'account': 'user', 'animals': 'cat', 'arrows`  — Upstream category name to the lucide name of its topical icon. A name
+- L411 `kOpenUiDefaultIcon = 'circle-dot'`  — The lucide name drawn when neither the name nor the category resolves.
+- L415 `_shapeWords = <String>{ 'circle', 'square', 'triangle', 'octagon', 'badge', }`  — The shape words lucide writes as a prefix now and wrote as a suffix
+- L425 `String? openUiIconStem(String? name)`  — The app icon for the lucide [name], or `null` when no step of the
+- L437 `HugeIconData openUiIcon(String? name, [String? category])`  — The app icon for the lucide [name]. When the name does not resolve,
+- L450 `String normaliseOpenUiIconName(String? name)`  — [name] in lucide kebab-case: trimmed, lower case, `CircleCheck` and
+- L471 `Iterable<String> _candidates(String n)`  — The names to try for [n], best first.
+- L507 `class OpenUiIconStyle extends InheritedWidget`  — The size and colour an [OpenUiIcon] takes when its caller does not
+  - L509 `const OpenUiIconStyle({ required super.child, this.size, this.color, super.key, })`  — Sets [size] and [color] for the [OpenUiIcon]s below.
+  - L517 `final double? size`  — The icon box size in logical pixels.
+  - L520 `final Color? color`  — The icon colour.
+  - L523 `static OpenUiIconStyle? maybeOf(BuildContext context)`  — The nearest style, or `null`.
+  - L527 `bool updateShouldNotify(OpenUiIconStyle oldWidget)`
+- L532 `class OpenUiIcon extends StatelessWidget`  — An OpenUI icon: a lucide [name] drawn as the matching app icon.
+  - L534 `const OpenUiIcon( this.name, { this.category, this.size, this.color, this.semanticLabel, super.key, })`  — Draws the app icon for [name], with the [category] fallback.
+  - L544 `final String name`  — The lucide name, for example `circle-check`.
+  - L547 `final String? category`  — The upstream category of the topical fallback, for example `travel`.
+  - L551 `final double? size`  — The size. Default: the [OpenUiIconStyle] above, else an
+  - L555 `final Color? color`  — The colour. Default: the [OpenUiIconStyle] above, else an
+  - L558 `final String? semanticLabel`  — The text a screen reader reads. Default: none (decorative).
+  - L561 `Widget build(BuildContext context)`
+- L586 `IconThemeData? _localIconTheme(BuildContext context)`  — The [IconTheme] a parent set on purpose (`IconTheme.merge` in a
+
+## lib/openui/openui_library.dart  (117 Z.)
+- L24 `class OpenUiLibrary`  — A set of [OpenUiComponentDef]s, ready for the vendored renderer.
+  - L26 `OpenUiLibrary(List<OpenUiComponentDef> components) : _byName = <String, OpenUiComponentDef>{ for (final c in components) c.name: c, }`  — Creates a library from [components].
+  - L31 `final Map<String, OpenUiComponentDef> _byName`
+  - L34 `List<OpenUiComponentDef> get components`  — Every component, in registration order (duplicates removed).
+  - L38 `Set<String> get names`  — The registered component names.
+  - L41 `OpenUiComponentDef? operator [](String name)`  — The component called [name], or `null`.
+  - L44 `bool contains(String name)`  — Whether [name] is registered.
+  - L48 `late final LibraryDefinition definition = LibraryDefinition( components: [for (final c in _byName.values) c.toCoreDefinition()], )`  — The core definition (schemas in positional order) for the parser
+  - L53 `late final ComponentRegistry registry = ComponentRegistry( renderers: <String, ComponentRender>{ for (final c in _byName.values) if (!c.isData) c.name: _renderFor(c), }, dataComponents: <String>{ for (final c in _byName.values) if (c.isData) c.name, }, )`  — The render callbacks for the vendored renderer. Built once.
+  - L64 `ComponentRender _renderFor(OpenUiComponentDef def)`
+- L83 `class _OpenUiComponentHost extends StatelessWidget`  — Calls the builder of one component inside its own build, so the
+  - L84 `const _OpenUiComponentHost({required this.def, required this.props})`
+  - L86 `final OpenUiComponentDef def`
+  - L87 `final OpenUiProps props`
+  - L90 `Widget build(BuildContext context)`
+- L111 `chukOpenUiLibrary = OpenUiLibrary(<OpenUiComponentDef>[ ...contentLayoutComponents, ...tablesChartsComponents, ...formsB`  — The chuk_chat OpenUI library: the chat root `Card` plus every
+
+## lib/openui/openui_license.dart  (49 Z.)
+- L8 `kOpenUiLicensePackage = 'OpenUI Lang (thesysdev/openui)'`  — The package name the licence page shows for OpenUI Lang.
+- L11 `kOpenUiLicenseText = ''' MIT License Copyright (c) 2011-2024 Thesys Inc. Permission is hereby granted, free of charge, t`  — The MIT licence of OpenUI Lang, Copyright (c) 2011-2024 Thesys Inc.
+- L34 `_registered = false`
+- L38 `void registerOpenUiLicense()`  — Adds the OpenUI Lang licence to [LicenseRegistry]. Call it once at
+
+## lib/openui/openui_props.dart  (289 Z.)
+- L17 `typedef OpenUiDefLookup = OpenUiComponentDef? Function(String name)`  — Looks up a component definition by name (used for data children).
+- L27 `@immutable class OpenUiProps`  — The props of one component call, with typed readers.
+  - L31 `const OpenUiProps({ required this.component, required this.values, this.def, this.statementId = '', this.lookup, })`  — Creates props for [component]. [def] gives the enum values for
+  - L40 `final String component`  — The component name (`Button`).
+  - L43 `final Map<String, Object?> values`  — The raw resolved values, keyed by parameter name.
+  - L46 `final OpenUiComponentDef? def`  — The definition of [component], when known.
+  - L49 `final String statementId`  — The OpenUI statement that holds this call (for keys and errors).
+  - L52 `final OpenUiDefLookup? lookup`  — Resolves the definitions of data children (see [data]).
+  - L55 `Object? raw(String name)`  — The raw value of [name], or `null`.
+  - L58 `bool has(String name)`  — Whether [name] has a non-null value.
+  - L62 `String string(String name, {String fallback = ''})`  — A string. Numbers and booleans are converted. Anything else
+  - L66 `String? stringOrNull(String name)`  — A string, or `null` when the value is missing or not text-like.
+  - L76 `double number(String name, {double fallback = 0})`  — A number. Numeric strings are parsed. Anything else gives
+  - L80 `double? numberOrNull(String name)`  — A number, or `null` when the value is missing or not numeric.
+  - L83 `int integer(String name, {int fallback = 0})`  — A whole number (rounded). Anything else gives [fallback].
+  - L88 `bool boolean(String name, {bool fallback = false})`  — A boolean. `"true"`/`"false"` strings are read too. Anything else
+  - L98 `String choice(String name, {required String fallback})`  — An enum value. The result is always one of the allowed values of
+  - L108 `List<Object?> list(String name)`  — A list. `null` gives an empty list; a single non-list value gives
+  - L117 `List<String> stringList(String name)`  — The text-like items of [list] (numbers are converted). Other items
+  - L129 `List<double> numberList(String name)`  — The items of [list] as numbers. An item that is not numeric is
+  - L134 `Map<String, Object?> map(String name)`  — A map (an OpenUI object literal). Anything else gives an empty map.
+  - L145 `List<Map<String, Object?>> mapList(String name)`  — The map items of [list]. Other items are skipped.
+  - L155 `List<Widget> children(String name)`  — The rendered child widgets of [name], flattened. Text and numbers
+  - L173 `Widget? child(String name)`  — The first child widget of [name], or `null`.
+  - L180 `List<OpenUiProps> data(String name, {String? type})`  — The data-only children of [name] (for example the `Series` items
+  - L204 `OpenUiProps? dataOne(String name, {String? type})`  — The first data-only child of [name], or `null`.
+  - L211 `OpenUiAction? action(String name)`  — The action of an action slot, or `null`. It is `null` when the
+  - L219 `OpenUiBinding? binding(String name)`  — The two-way binding of a `$binding` slot, or `null` when the
+  - L225 `static double? _toDouble(Object? v)`
+  - L234 `static String _formatNumber(num v)`
+  - L241 `String toString()`
+- L246 `@immutable class OpenUiAction`  — The action of an action slot (`Action([...])`, a bare step such as
+  - L249 `const OpenUiAction(this.plan)`  — Wraps an action plan from the renderer.
+  - L252 `final ActionPlan plan`  — The steps, in order.
+  - L258 `Future<void> run(BuildContext context, {required String label})`  — Runs the action. [label] is the label of the component that fired
+- L272 `@immutable class OpenUiBinding`  — A two-way binding to a `$variable` of the OpenUI program.
+  - L275 `const OpenUiBinding(this.target, this.value)`  — Creates a binding to [target] (with the `$`) holding [value].
+  - L278 `final String target`  — The state variable, with the leading `$`.
+  - L281 `final Object? value`  — The current value in the store.
+  - L285 `void set(BuildContext context, Object? newValue)`  — Writes [newValue] to the store. Every expression that reads the
+
+## lib/openui/openui_strings.dart  (15 Z.)
+- L9 `_english = AppLocalizations(const Locale('en'))`
+- L13 `AppLocalizations openUiStrings(BuildContext context)`  — The app strings for the current locale. English when the tree has no
+
+## lib/openui/openui_theme.dart  (220 Z.)
+- L16 `abstract final class OpenUiTokens`  — Fixed sizes: spacing, radii, paddings.
+  - L19 `static double gap(String? name)`  — The upstream gap scale (`Stack`/`Card` `gap`): none 0, xs 4,
+  - L31 `static const double gapDefault = 12`  — The default gap between the blocks of a card or stack ("m").
+  - L34 `static const double rootGap = 14`  — The gap between the blocks of the chat root `Card`.
+  - L38 `static const double radiusCard = 16`  — Corner of a card surface (`Card` variant card/sunk, card blocks).
+  - L42 `static const double radiusInner = 12`  — Corner of a tile inside a card (a sunk row, a code block, an
+  - L45 `static const double radiusChip = 8`  — Corner of a small chip or tag that is not a full pill.
+  - L48 `static const double radiusPill = 999`  — Stadium corner for pills (buttons, chips, tags).
+  - L51 `static const EdgeInsets cardPadding = EdgeInsets.all(14)`  — Inner padding of a card surface.
+  - L54 `static const EdgeInsets innerPadding = EdgeInsets.symmetric( horizontal: 12, vertical: 10, )`  — Inner padding of a tile inside a card.
+  - L60 `static const double borderWidth = 1`  — The width of the 1 px hairline border on card surfaces.
+  - L64 `static const double chatColumnWidth = 420`  — The chat column width that the gallery uses (bubble width on a
+- L73 `@immutable class OpenUiTheme`  — Colours and text styles, taken from the app theme.
+  - L75 `const OpenUiTheme._(this._theme)`
+  - L78 `factory OpenUiTheme.of(BuildContext context)`  — The tokens for the current app theme.
+  - L81 `final ThemeData _theme`
+  - L84 `ColorScheme get scheme`  — The color scheme of the app.
+  - L87 `TextTheme get text`  — The text theme of the app.
+  - L90 `bool get isDark`  — Whether the app is in dark mode.
+  - L93 `Color get cardColor`  — Fill of a raised card (`variant: "card"`, the default).
+  - L96 `Color get sunkColor`  — Fill of a recessed card or tile (`variant: "sunk"`).
+  - L101 `Color get borderColor`  — Hairline border of a card surface. In light mode a quiet line, as
+  - L106 `Color get hairline`  — Divider between rows (table rows, list rows, accordion items).
+  - L111 `Color get headerRule`  — The rule under a table header: a little stronger than [hairline].
+  - L119 `Color get segmentStripColor`  — The strip behind a segmented switch (Tabs). In light mode a
+  - L128 `Color get segmentSelectedColor`  — The filled capsule of the selected segment. In light mode the
+  - L137 `Color get onSegmentSelectedColor`  — The label on [segmentSelectedColor].
+  - L143 `String get chatFontFamily`  — The user's chat font family (the AI answer font), as in the
+  - L148 `double get chatFontSize`  — The user's chat font size, as in the message bubble.
+  - L151 `Color get textColor`  — Main text colour.
+  - L154 `Color get mutedColor`  — Quieter text (subtitles, hints, captions).
+  - L157 `Color get accent`  — The accent (links, selected states, the primary button fill).
+  - L160 `Color get success`  — A positive value or state.
+  - L163 `Color get warning`  — A warning.
+  - L166 `Color get danger`  — An error or a negative value.
+  - L169 `Color get info`  — Info (the accent).
+  - L173 `Color statusColor(String? variant)`  — The colour of an upstream status variant name: info, success,
+  - L182 `Color statusFill(String? variant)`  — A soft fill for a status colour (callouts, tags). Never a glow.
+  - L193 `BoxDecoration cardDecoration({String variant = 'card', double? radius})`  — The decoration of a card surface. [variant] is the upstream
+  - L207 `TextStyle get titleStyle`  — Title text inside a card (`CardHeader` title, block headings).
+  - L213 `TextStyle get bodyStyle`  — Body text.
+  - L217 `TextStyle get captionStyle`  — Small, quiet text (subtitles, captions, hints).
+
+## lib/openui/openui_view.dart  (207 Z.)
+- L26 `class OpenUiView extends StatefulWidget`  — Renders an OpenUI Lang program as native widgets.
+  - L28 `const OpenUiView({ required this.source, this.isStreaming = false, this.actionHandler, this.library, this.tools, this.initialState, this.onError, this.forms, super.key, })`  — Creates a view.
+  - L41 `final String source`  — The OpenUI Lang source (complete or partial).
+  - L44 `final bool isStreaming`  — Whether [source] is still growing.
+  - L48 `final OpenUiActionHandler? actionHandler`  — Receives messages to the assistant, URLs to open and state
+  - L51 `final OpenUiLibrary? library`  — The component library. Defaults to [chukOpenUiLibrary].
+  - L55 `final Map<String, ToolExecutor>? tools`  — Executors for `Query`/`Mutation` tools, keyed by tool name.
+  - L59 `final Map<String, Object?>? initialState`  — Initial `$variable` values (keys with the `$`), for example a
+  - L63 `final void Function(List<OpenUIError> errors)? onError`  — Receives the renderer's errors (unknown components, failed
+  - L68 `final OpenUiForms? forms`  — The form states, when the host keeps them outside the view (for
+  - L72 `static const String failureText = 'This view could not be shown.'`  — The English text of the error line. The line shows the app
+  - L75 `State<OpenUiView> createState()`
+- L78 `class _OpenUiViewState extends State<OpenUiView>`
+  - L79 `OpenUiForms? _ownForms`
+  - L80 `Map<String, ToolExecutor>? _toolsSource`
+  - L81 `ToolRegistry _toolRegistry = const ToolRegistry(executors: {})`
+  - L82 `String? _checkedSource`
+  - L83 `OpenUiLibrary? _checkedLibrary`
+  - L84 `bool _checkedFailed = false`
+  - L86 `OpenUiForms get _forms`
+  - L89 `void dispose()`
+  - L94 `ToolRegistry _tools()`
+  - L106 `bool _nothingRenders(OpenUiLibrary library, String source)`  — Whether the finished [source] renders nothing at all.
+  - L116 `static bool _computeNothingRenders(OpenUiLibrary library, String source)`
+  - L138 `void _onAction(ActionEvent event)`
+  - L157 `void _onState(Map<String, Object?> state)`
+  - L162 `Widget build(BuildContext context)`
+- L192 `class _FailureLine extends StatelessWidget`
+  - L193 `const _FailureLine()`
+  - L196 `Widget build(BuildContext context)`

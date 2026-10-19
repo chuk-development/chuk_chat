@@ -1,0 +1,90 @@
+# lib/widgets/agent_roster · Signaturen
+
+## lib/widgets/agent_roster/roster_parts.dart  (577 Z.)
+- L26 `kRosterRowFace = 36`  — The face in front of a list row.
+- L29 `kRosterPinnedFace = 56`  — The face of a pinned tile.
+- L32 `kRosterPinnedPerLine = 3`  — The most pinned tiles on one line.
+- L35 `kRosterRowRadius = 14`  — Corner radius of a row's and a tile's fill.
+- L38 `kRosterInset = 8`  — Horizontal inset of rows and tiles from the pane edge.
+- L42 `Color rosterSelectedFill(ThemeData theme)`  — The fill of a selected row or tile: the accent at 20 % over the card fill,
+- L51 `class RosterSurface extends StatefulWidget`  — The surface under a row or a tile: transparent at rest, a fill on hover,
+  - L52 `const RosterSurface({ super.key, required this.child, this.onTap, this.onSecondaryTap, this.onLongPressAt, this.selected = false, this.padding = const EdgeInsets.symmetric(horizontal: 10, vertical: 8), this.radius = kRosterRowRadius, this.semanticLabel, })`
+  - L64 `final Widget child`
+  - L65 `final VoidCallback? onTap`
+  - L68 `final void Function(Offset globalPosition)? onSecondaryTap`  — Right click, in global coordinates, so a menu opens at the pointer.
+  - L71 `final void Function(Offset globalPosition)? onLongPressAt`  — Long press, in global coordinates (touch screens have no right click).
+  - L72 `final bool selected`
+  - L73 `final EdgeInsets padding`
+  - L74 `final double radius`
+  - L75 `final String? semanticLabel`
+  - L78 `State<RosterSurface> createState()`
+- L81 `class _RosterSurfaceState extends State<RosterSurface>`
+  - L82 `bool _hovered = false`
+  - L83 `bool _pressed = false`
+  - L84 `bool _focused = false`
+  - L85 `Offset? _lastDown`
+  - L88 `Widget build(BuildContext context)`
+- L156 `class RosterHoverScope extends InheritedWidget`  — True while the pointer is over the enclosing [RosterSurface], or while it
+  - L157 `const RosterHoverScope({ super.key, required this.active, required super.child, })`
+  - L163 `final bool active`
+  - L165 `static bool of(BuildContext context)`
+  - L170 `bool updateShouldNotify(RosterHoverScope old)`
+- L176 `class RosterHoverReveal extends StatelessWidget`  — A control that shows only while its row is hovered or focused. It keeps
+  - L177 `const RosterHoverReveal({super.key, required this.child})`
+  - L179 `final Widget child`
+  - L182 `Widget build(BuildContext context)`
+- L199 `class RosterUnreadDot extends StatelessWidget`  — The small flat accent dot that marks something unread. No halo.
+  - L200 `const RosterUnreadDot({super.key, this.size = 8})`
+  - L202 `final double size`
+  - L205 `Widget build(BuildContext context)`
+- L216 `class RosterPinnedTile extends StatelessWidget`  — One pinned coworker: the large face, the name under it.
+  - L217 `const RosterPinnedTile({ super.key, required this.title, required this.face, this.selected = false, this.unread = false, this.working = false, this.onTap, this.onSecondaryTap, this.onLongPressAt, })`
+  - L229 `final String title`
+  - L232 `final Widget face`  — The face, [kRosterPinnedFace] wide.
+  - L233 `final bool selected`
+  - L234 `final bool unread`
+  - L237 `final bool working`  — A run is in flight. The face carries the presence dot for it.
+  - L238 `final VoidCallback? onTap`
+  - L239 `final void Function(Offset globalPosition)? onSecondaryTap`
+  - L240 `final void Function(Offset globalPosition)? onLongPressAt`
+  - L243 `Widget build(BuildContext context)`
+- L298 `class RosterListRow extends StatelessWidget`  — One coworker or room in the list: the face, the name with an optional tag,
+  - L299 `const RosterListRow({ super.key, required this.title, required this.leading, this.preview = '', this.tag, this.selected = false, this.unread = false, this.working = false, this.dimmed = false, this.onTap, this.onSecondaryTap, this.onLongPressAt, this.hoverTrailing, this.trailing, })`
+  - L316 `final String title`
+  - L317 `final Widget leading`
+  - L321 `final String preview`  — The last line that was said, already flat and plain. Empty leaves the
+  - L325 `final String? tag`  — A short label after the name (the coworker's role). Null or empty
+  - L326 `final bool selected`
+  - L327 `final bool unread`
+  - L330 `final bool working`  — A run is in flight: a small accent dot after the text.
+  - L333 `final bool dimmed`  — A hidden coworker: the name is quieter.
+  - L334 `final VoidCallback? onTap`
+  - L335 `final void Function(Offset globalPosition)? onSecondaryTap`
+  - L336 `final void Function(Offset globalPosition)? onLongPressAt`
+  - L339 `final Widget? hoverTrailing`  — Shown only while the row is hovered or focused (the "…" button).
+  - L342 `final Widget? trailing`  — Always shown (Unhide on a hidden row).
+  - L345 `Widget build(BuildContext context)`
+- L429 `class _RosterTag extends StatelessWidget`  — The small tag after a name: the role a user gave a coworker.
+  - L430 `const _RosterTag({required this.label})`
+  - L432 `final String label`
+  - L435 `Widget build(BuildContext context)`
+- L460 `class RosterFooterRow extends StatelessWidget`  — A quiet row at the foot of the pane: a leading mark, a label, and what
+  - L461 `const RosterFooterRow({ super.key, required this.leading, required this.label, this.onTap, this.trailing, this.selected = false, this.bold = false, })`
+  - L471 `final Widget leading`
+  - L472 `final String label`
+  - L473 `final VoidCallback? onTap`
+  - L474 `final Widget? trailing`
+  - L475 `final bool selected`
+  - L476 `final bool bold`
+  - L479 `Widget build(BuildContext context)`
+- L514 `class RosterRingMark extends StatelessWidget`  — A round mark for a footer row: a ring in `outlineVariant` with a glyph or
+  - L515 `const RosterRingMark({super.key, required this.child, this.size = 30})`
+  - L517 `final Widget child`
+  - L518 `final double size`
+  - L521 `Widget build(BuildContext context)`
+- L537 `class RosterInitialsAvatar extends StatelessWidget`  — The user's initials in a ring: "Chuk Finley" → "CF", "Account" → "A".
+  - L538 `const RosterInitialsAvatar({super.key, required this.name, this.size = 30})`
+  - L540 `final String name`
+  - L541 `final double size`
+  - L544 `Widget build(BuildContext context)`
+- L562 `String rosterInitials(String name)`  — Up to two initials of [name]: the first letter of the first two words, or
