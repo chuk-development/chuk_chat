@@ -214,6 +214,7 @@ void main() {
         'delegate_available',
         'voice_id',
         'llm_model',
+        'engine',
         'initiated_by',
         'call_id',
         'call_reason',
@@ -223,8 +224,30 @@ void main() {
       expect(meta['delegate_available'], isTrue);
       expect(meta['voice_id'], isNull);
       expect(meta['llm_model'], isNull);
+      expect(meta['engine'], 'pipeline');
       expect(meta['initiated_by'], 'user');
       expect(meta['call_id'], isNull);
+    });
+
+    test('metadata carries the selected engine under its wire name', () {
+      final Map<String, dynamic> meta = VoiceProtocol.dispatchMetadata(
+        userId: 'u',
+        mode: VoiceCallMode.chat,
+        delegateAvailable: false,
+        engine: VoiceCallEngine.inworldS2S,
+      );
+      expect(meta['engine'], 'inworld_s2s');
+    });
+
+    test('parseEngine falls back to the pipeline for unknown values', () {
+      expect(VoiceProtocol.parseEngine(null), VoiceCallEngine.pipeline);
+      expect(VoiceProtocol.parseEngine(''), VoiceCallEngine.pipeline);
+      expect(VoiceProtocol.parseEngine('gpt-realtime'), VoiceCallEngine.pipeline);
+      expect(VoiceProtocol.parseEngine('pipeline'), VoiceCallEngine.pipeline);
+      expect(
+        VoiceProtocol.parseEngine('inworld_s2s'),
+        VoiceCallEngine.inworldS2S,
+      );
     });
 
     test('an agent-started call carries its id and reason', () {
