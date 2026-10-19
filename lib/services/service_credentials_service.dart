@@ -26,14 +26,18 @@ class ServiceCredentialsService {
   ///
   /// [data] is a plain-text JSON-serialisable map (e.g. access_token,
   /// refresh_token, expiry). It is encrypted before leaving the device.
-  static Future<void> save(
+  ///
+  /// Returns true only when the upsert reached Supabase; a missing user,
+  /// a locked encryption key, or an error returns false so callers can tell
+  /// a silent no-op from a real save.
+  static Future<bool> save(
     String serviceName,
     Map<String, dynamic> data,
   ) async {
     try {
       final user = SupabaseService.auth.currentUser;
-      if (user == null) return;
-      if (!EncryptionService.hasKey) return;
+      if (user == null) return false;
+      if (!EncryptionService.hasKey) return false;
 
       final plaintext = jsonEncode(data);
       final encrypted = await EncryptionService.encrypt(plaintext);
@@ -49,10 +53,12 @@ class ServiceCredentialsService {
       if (kDebugMode) {
         pLog('ServiceCredentials: saved $serviceName');
       }
+      return true;
     } catch (e) {
       if (kDebugMode) {
         pLog('ServiceCredentials: failed to save $serviceName – $e');
       }
+      return false;
     }
   }
 
