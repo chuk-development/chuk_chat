@@ -57,6 +57,11 @@ abstract final class VoiceProtocol {
   /// payload is also held under this byte budget.
   static const int maxRpcPayloadBytes = 15000;
 
+  /// Which engine answers the call. The worker picks the pipeline from this
+  /// field in the dispatch metadata; unknown values fall back to [pipeline].
+  static VoiceCallEngine parseEngine(String? wireName) =>
+      VoiceCallEngine.fromWire(wireName);
+
   /// The metadata JSON the worker reads from its job (`ctx.job.metadata`).
   ///
   /// `initiated_by` / `call_id` / `call_reason` are for the call the agent
@@ -73,6 +78,7 @@ abstract final class VoiceProtocol {
     required bool delegateAvailable,
     String voiceInstructions = '',
     String? voiceId,
+    VoiceCallEngine engine = VoiceCallEngine.pipeline,
     bool initiatedByAgent = false,
     String? callId,
     String? callReason,
@@ -90,6 +96,7 @@ abstract final class VoiceProtocol {
     'delegate_available': delegateAvailable,
     'voice_id': voiceId,
     'llm_model': null,
+    'engine': engine.wireName,
     'initiated_by': initiatedByAgent ? 'agent' : 'user',
     'call_id': callId,
     'call_reason': callReason,
@@ -291,6 +298,30 @@ class VoiceCredentials {
 
   final String serverUrl;
   final String participantToken;
+}
+
+/// Which engine answers a voice call.
+enum VoiceCallEngine {
+  /// The worker's cascaded pipeline: Silero VAD → Inworld STT → RunAnywhere
+  /// LLM (tools) → Inworld TTS, orchestrated by LiveKit Agents.
+  pipeline('pipeline'),
+
+  /// Inworld's official Speech-to-Speech Realtime API: one WebSocket with
+  /// semantic VAD, hosted LLM, and Realtime TTS-2 behind it. Conversation
+  /// only — no app tools, no delegation, no video narration.
+  inworldS2S('inworld_s2s');
+
+  const VoiceCallEngine(this.wireName);
+
+  /// The value in the dispatch metadata; the worker's API.
+  final String wireName;
+
+  static VoiceCallEngine fromWire(String? wireName) {
+    for (final engine in VoiceCallEngine.values) {
+      if (engine.wireName == wireName) return engine;
+    }
+    return VoiceCallEngine.pipeline;
+  }
 }
 
 /// Cuts [text] to at most [maxRunes] Unicode code points, never splitting a
