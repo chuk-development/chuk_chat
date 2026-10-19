@@ -322,12 +322,23 @@ class McpOAuth {
     // list, so the sign-in that follows would redirect to the server's own
     // error page and the app would sit on the callback until it timed out.
     // Catch it here, before any browser opens, and say why.
+    //
+    // But an exact string match would refuse servers that are fine. A loopback
+    // redirect is defined by RFC 8252 §7.3 to carry a VARIABLE port, and the
+    // server is allowed to normalise what it registers: Fastmail answers our
+    // `http://localhost:49152/mcp/callback` with `http://localhost/mcp/callback`
+    // — the port dropped, the host kept. What matters is that the server
+    // registered SOME loopback redirect with the same path, because that is
+    // the shape of URI it will send the browser back to. A registration whose
+    // every entry is a first-party app (a custom scheme, or an https page on
+    // the provider's own domain) really cannot send the sign-in to us.
     final registered = (json['redirect_uris'] as List?)
         ?.map((e) => e.toString())
         .toList();
     if (registered != null &&
         registered.isNotEmpty &&
-        !registered.contains(redirectUri.toString())) {
+        _isLoopbackRedirect(redirectUri) &&
+        !registered.any(_loopbackCompatibleWith(redirectUri))) {
       throw const McpAuthException(
         'This server only signs in a fixed set of apps and will not let this '
         'one receive the sign-in, so it cannot be connected here.',
@@ -335,6 +346,33 @@ class McpOAuth {
     }
 
     return McpClientCredentials.fromJson(Map<String, dynamic>.from(json));
+  }
+
+  /// True for a redirect URI the app can actually receive a sign-in on: plain
+  /// http on a loopback name, any port. That is the whole shape the loopback
+  /// listener serves.
+  static bool _isLoopbackRedirect(Uri uri) =>
+      uri.scheme == 'http' && _isLoopbackHost(uri.host);
+
+  static bool _isLoopbackHost(String host) =>
+      host == 'localhost' ||
+      host == '127.0.0.1' ||
+      host == '[::1]' ||
+      host == '::1';
+
+  /// A closure that says whether one registered redirect URI can carry the
+  /// sign-in meant for [requested]. Loopback entries match on scheme + host
+  /// family + path with the port ignored (RFC 8252 §7.3); anything else must
+  /// match exactly, because a non-loopback URI has no variable part.
+  static bool Function(String) _loopbackCompatibleWith(Uri requested) {
+    final String path = requested.path;
+    return (String registeredRaw) {
+      final Uri? registered = Uri.tryParse(registeredRaw);
+      if (registered == null) return false;
+      if (registered.scheme != 'http') return false;
+      if (!_isLoopbackHost(registered.host)) return false;
+      return registered.path == path;
+    };
   }
 
   // ─── Authorization ─────────────────────────────────────────────────────

@@ -63,7 +63,7 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
 
   void _deskInit() {
     unawaited(_deskLoad());
-    unawaited(DesktopRosterPins.instance.load());
+    unawaited(RosterPins.instance.load());
   }
 
   void _deskDispose() {
@@ -169,7 +169,7 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
   /// The agents in the order the roster shows them: pinned first, then the
   /// rest, each in the roster's own order. Ctrl+1 … Ctrl+9 count this list.
   List<AgentsAgent> get _deskAgentOrder =>
-      desktopRosterOrder(_roster.visibleAgents, DesktopRosterPins.instance.ids);
+      rosterPinOrder(_roster.visibleAgents, RosterPins.instance.ids);
 
   void _deskOpenNth(int n) {
     final List<AgentsAgent> order = _deskAgentOrder;

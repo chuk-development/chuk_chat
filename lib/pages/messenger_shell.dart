@@ -112,6 +112,7 @@ import 'package:chuk_chat/services/agents/agent_read_marks.dart';
 import 'package:chuk_chat/services/agents/media_index.dart';
 import 'package:chuk_chat/services/agents/thread_preview_store.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
+import 'package:chuk_chat/services/agents/roster_pins.dart';
 import 'package:chuk_chat/services/agents/browser_presence.dart';
 import 'package:chuk_chat/services/agents/chat_debug_export.dart';
 import 'package:chuk_chat/services/agents/agents_cloud_relay.dart';

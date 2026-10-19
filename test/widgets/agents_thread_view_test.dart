@@ -933,6 +933,12 @@ void main() {
         AgentsTaskOutbox.read = (key) async => disk[key];
         AgentsTaskOutbox.write = (key, value) async => disk[key] = value;
         AgentsTaskOutbox.delete = (key) async => disk.remove(key);
+        // flushAll finds the queued threads through the key listing; the
+        // real one needs SQLite, which this test has none of.
+        AgentsTaskOutbox.readKeys = (prefix) async => <String>[
+          for (final String key in disk.keys)
+            if (key.startsWith(prefix)) key,
+        ];
         // The queue mark goes to a map, not to the real chat store: this test
         // has no Supabase and no SQLite behind it.
         AgentsQueuedMarks.readRows = (_) => null;
@@ -944,6 +950,7 @@ void main() {
         AgentsTaskOutbox.read = null;
         AgentsTaskOutbox.write = null;
         AgentsTaskOutbox.delete = null;
+        AgentsTaskOutbox.readKeys = null;
         AgentsQueuedMarks.readRows = null;
         AgentsQueuedMarks.writeRows = null;
         OfflineRetryManager.instance.debugReset();

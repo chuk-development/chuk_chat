@@ -332,25 +332,114 @@ class AgentsTaskOutbox {
   /// It also stops at the first entry that is not due yet ([OutboxTask.isDue]).
   /// Stopping rather than skipping keeps the thread in order: the prompt the
   /// user typed second must not reach the host before the first one.
+  ///
+  /// One flush per thread at a time. A flush reads the queue, then removes
+  /// each entry only after its send came back — so two flushes overlapping in
+  /// that window would both see the same prompt and send it twice, and the
+  /// host's dedupe cannot help (each send mints its own task id). The paired
+  /// transition and the Retry button (and [flushAll], which covers every
+  /// thread including the open one) all dial in here, so the guard is what
+  /// keeps a reconnect from delivering a prompt twice.
   static Future<int> flush(
     String sessionKey,
     Future<void> Function(OutboxTask task) send,
   ) async {
-    final List<OutboxTask> tasks = await pendingFor(sessionKey);
-    final DateTime at = now();
-    int sent = 0;
-    for (final OutboxTask task in tasks) {
-      if (!task.isDue(at)) break;
-      try {
-        await send(task);
-      } catch (error) {
-        await markAttempt(sessionKey, task.localId, '$error');
-        break;
+    if (!_flushing.add(sessionKey)) return 0;
+    try {
+      final List<OutboxTask> tasks = await pendingFor(sessionKey);
+      final DateTime at = now();
+      int sent = 0;
+      for (final OutboxTask task in tasks) {
+        if (!task.isDue(at)) break;
+        try {
+          await send(task);
+        } catch (error) {
+          await markAttempt(sessionKey, task.localId, '$error');
+          break;
+        }
+        await remove(sessionKey, task.localId);
+        sent++;
       }
-      await remove(sessionKey, task.localId);
-      sent++;
+      return sent;
+    } finally {
+      _flushing.remove(sessionKey);
+    }
+  }
+
+  /// Session keys with a flush in flight. See [flush] for why one per thread
+  /// is one too many.
+  static final Set<String> _flushing = <String>{};
+
+  /// Sends EVERY thread's queued prompts, oldest first within a thread,
+  /// through [send]. [send] must route by [OutboxTask.sessionKey], not by a
+  /// captured thread key.
+  ///
+  /// The per-thread [flush] is what the open thread's Retry button and its own
+  /// paired transition run. This is the whole-queue counterpart: prompts typed
+  /// while the host was down are typed INTO a thread, but the user expects
+  /// them all to go out when the link returns — not only those of the thread
+  /// that happens to be on screen when the socket comes back. Without this, a
+  /// message queued in a background thread waits there until its thread is
+  /// opened, however long that takes.
+  ///
+  /// The session keys come from the store itself (every `kv_cache` key under
+  /// [kTaskOutboxPrefix]), so a thread whose view was never mounted flushes
+  /// too. One failed thread does not stop the others.
+  static Future<int> flushAll(
+    Future<void> Function(OutboxTask task) send,
+  ) async {
+    final Future<List<String>> Function(String) keys =
+        readKeys ?? LocalChatCacheService.kvKeys;
+    List<String> rows;
+    try {
+      rows = await keys(kTaskOutboxPrefix);
+    } catch (error) {
+      // No store (a widget test, web without prefs yet): nothing to flush.
+      if (kDebugMode) {
+        debugPrint('[agents-outbox] key listing failed: $error');
+      }
+      return 0;
+    }
+    int sent = 0;
+    for (final String row in rows) {
+      final String sessionKey = row.substring(kTaskOutboxPrefix.length);
+      if (sessionKey.isEmpty) continue;
+      sent += await flush(sessionKey, send);
     }
     return sent;
+  }
+
+  /// Test seam for [flushAll]'s key listing. Production leaves it null and
+  /// reads the SQLite `kv_cache` table.
+  @visibleForTesting
+  static Future<List<String>> Function(String prefix)? readKeys;
+
+  /// Whether ANY thread's queue holds an entry that may go out right now.
+  ///
+  /// The paired transition and the Retry button flush immediately, but a send
+  /// that failed earns a wait ([markAttempt]) — and during that wait nothing
+  /// else would look at the queue again: the threads whose views are not
+  /// mounted have no notifier of their own. This is the poll the watchdog
+  /// calls, so a backed-off prompt goes out when it becomes due instead of
+  /// waiting for its thread to be opened.
+  static Future<bool> anyDue() async {
+    final Future<List<String>> Function(String) keys =
+        readKeys ?? LocalChatCacheService.kvKeys;
+    final List<String> rows;
+    try {
+      rows = await keys(kTaskOutboxPrefix);
+    } catch (_) {
+      return false;
+    }
+    final DateTime at = now();
+    for (final String row in rows) {
+      final String sessionKey = row.substring(kTaskOutboxPrefix.length);
+      if (sessionKey.isEmpty) continue;
+      for (final OutboxTask task in await _load(sessionKey)) {
+        if (task.isDue(at)) return true;
+      }
+    }
+    return false;
   }
 
   @visibleForTesting
@@ -366,6 +455,7 @@ class AgentsTaskOutbox {
   @visibleForTesting
   static void resetForTest() {
     _chain = null;
+    _flushing.clear();
   }
 }
 

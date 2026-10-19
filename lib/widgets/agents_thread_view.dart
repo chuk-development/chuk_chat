@@ -32,6 +32,7 @@ import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/agents_replay_loader.dart';
 import 'package:chuk_chat/services/agents/agents_queued_marks.dart';
 import 'package:chuk_chat/services/agents/agents_task_outbox.dart';
+import 'package:chuk_chat/services/mcp/mcp_service.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import 'package:chuk_chat/services/agents/agents_run_cost.dart'; // F1
 import 'package:chuk_chat/services/agents/agents_thread_composer.dart'; // F1
@@ -790,14 +791,31 @@ class AgentsThreadViewState extends State<AgentsThreadView>
         widget.threadKey,
         () => _flushOutbox(controller),
       );
-      unawaited(_flushOutbox(controller));
-      // Last, the tasks that DID go to a socket and were never acknowledged.
-      // Only on the transition into `paired`: the notifier fires for other
-      // reasons while the link stays up, and each of those would be another
-      // copy of the same frame on the wire. The host dedupes by `task_id`, so
-      // a copy costs an extra `duplicate` ack rather than a second run — but
-      // the app must not lean on that to be correct.
-      if (!wasPaired) unawaited(_resendUnacknowledged(controller));
+      // The prompts queued while the link was down — the open thread's and
+      // every other thread's — go out through ONE flushAll. It runs on every
+      // paired notification, not only the transition: a prompt queued in the
+      // window between two notifications has no other ride. The per-thread
+      // flush stays only for the Retry button (a user action): both send
+      // what they see before removing it, so running both at the same moment
+      // would hand the same prompt to the host twice — the claim a flush
+      // holds on its thread is what makes that impossible.
+      unawaited(_flushAllThreads(controller));
+      // Only on the TRANSITION into `paired`: the notifier fires for other
+      // reasons while the link stays up, and each of those would redo this
+      // work.
+      if (!wasPaired) {
+        // The connectors the host last dialled may have failed for want of a
+        // network that has since come back: an outage scars every row with
+        // "not reachable", and nothing else clears the scar until the user
+        // reopens the connector list. Ask the host now, so a link that
+        // returns also returns a truthful connector list.
+        unawaited(McpService.probe());
+        // Last, the tasks that DID go to a socket and were never
+        // acknowledged. The host dedupes by `task_id`, so a copy costs an
+        // extra `duplicate` ack rather than a second run — but the app must
+        // not lean on that to be correct.
+        unawaited(_resendUnacknowledged(controller));
+      }
       return;
     }
     // Not paired any more: Retry falls back to fetching the host.
@@ -848,6 +866,32 @@ class AgentsThreadViewState extends State<AgentsThreadView>
         debugPrint('[agents-outbox] flush failed for $sessionKey: $error');
       }
       return 0;
+    }
+  }
+
+  /// Every thread's queued prompts, each into the conversation it was typed
+  /// in — not only this view's. The paired transition and the watchdog (a
+  /// backed-off send coming due) dial in here; the per-session claim inside
+  /// [AgentsTaskOutbox.flush] makes a double run harmless.
+  Future<void> _flushAllThreads(AgentsRelayController controller) async {
+    try {
+      await AgentsTaskOutbox.flushAll((task) async {
+        await controller.sendTask(
+          task.prompt,
+          sessionKey: task.sessionKey,
+          modelId: task.modelId,
+          providerSlug: task.providerSlug,
+          reasoningEffort: task.reasoningEffort,
+        );
+        await AgentsQueuedMarks.clearMark(
+          sessionKey: task.sessionKey,
+          queueId: task.localId,
+        );
+      });
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('[agents-outbox] flushAll failed: $error');
+      }
     }
   }
 
@@ -933,6 +977,17 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     // produced nothing for minutes is asked about here, and declared lost if
     // nothing answers (bead cowork-gnr8).
     _ledger.sweep();
+    final AgentsRelayController? controller = _controller;
+    if (controller != null && controller.state.value.isPaired) {
+      // A prompt whose send failed is waiting out its backoff in a queue this
+      // view may not belong to. Nothing else re-looks at the other threads'
+      // queues, so the watchdog does: anything due anywhere goes out now.
+      unawaited(() async {
+        if (await AgentsTaskOutbox.anyDue()) {
+          await _flushAllThreads(controller);
+        }
+      }());
+    }
     if (widget.pairingStore == null || _storedPairing == null) return;
     if (_manuallyDisconnected || _busy || _autoReconnectTimer != null) return;
     final phase = _controller?.state.value.phase;
