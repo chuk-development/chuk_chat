@@ -89,11 +89,13 @@ Widget _buildAnswerBlock(
     case AnswerBlockKind.steps:
       return _StepsBlock(spec: parseSteps(block.arg, block.lines), s: s);
     case AnswerBlockKind.timeline:
-      return _TimelineBlock(
-        title: block.arg,
-        entries: parseTimeline(block.lines),
-        s: s,
-      );
+      final List<TimelineEntry> entries = parseTimeline(block.lines);
+      if (!timelineIsDated(entries)) {
+        // Not dates (a list of bold names, nested bullets): plain Markdown,
+        // so a bullet stays a bullet with its bold text inline.
+        return _undatedTimeline(block, s);
+      }
+      return _TimelineBlock(title: block.arg, entries: entries, s: s);
     case AnswerBlockKind.scale:
       final ScaleSpec? spec = parseScale(block.arg, block.lines);
       if (spec == null) {
@@ -150,11 +152,12 @@ class _BlockFrame extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          if (title.isNotEmpty)
+          if (stripLabelEmphasis(title).isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Text(
-                title.toUpperCase(),
+                // Plain text: a `**` the model put round the title would show.
+                stripLabelEmphasis(title).toUpperCase(),
                 style: TextStyle(
                   color: s.muted,
                   fontSize: s.baseFontSize * 0.75,
@@ -392,6 +395,21 @@ class _WarningLine extends StatelessWidget {
 // ---------------------------------------------------------------------------
 // timeline
 
+/// A `::: timeline` without dates, drawn as the Markdown the model wrote.
+Widget _undatedTimeline(AnswerBlockSegment block, _AnswerBlockStyle s) {
+  final List<String> lines = <String>[
+    for (final String l in block.lines)
+      if (l.trim().isNotEmpty) l,
+  ];
+  if (lines.isEmpty) return const SizedBox.shrink();
+  final bool isList = lines.any(
+    (l) => RegExp(r'^\s*(?:[-*+]|\d{1,3}[.)])\s').hasMatch(l),
+  );
+  final String body = lines.join(isList ? '\n' : '\n\n');
+  final String title = stripLabelEmphasis(block.arg);
+  return s.markdown(title.isEmpty ? body : '**$title**\n\n$body');
+}
+
 class _TimelineBlock extends StatelessWidget {
   const _TimelineBlock({
     required this.title,
@@ -408,7 +426,32 @@ class _TimelineBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double labelWidth = MediaQuery.textScalerOf(context).scale(74);
+    // Wide enough for the longest label, so `2021-01-15` does not break in
+    // the middle; capped so the text column keeps most of the width.
+    final TextScaler scaler = MediaQuery.textScalerOf(context);
+    double longest = 0;
+    for (final TimelineEntry e in entries) {
+      if (e.label.isEmpty) continue;
+      final TextPainter tp = TextPainter(
+        text: TextSpan(
+          text: e.label,
+          style: const TextStyle(
+            fontFamily: 'monospace',
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+        textScaler: scaler,
+        maxLines: 1,
+      )..layout();
+      if (tp.width > longest) longest = tp.width;
+      tp.dispose();
+    }
+    final double labelWidth = (longest + 2).clamp(
+      scaler.scale(74),
+      scaler.scale(120),
+    );
     final double lineHeight = s.baseFontSize * 1.45;
     // The nested message puts 4 of padding above the first line.
     final double dotTop = 4 + (lineHeight - _dot) / 2;

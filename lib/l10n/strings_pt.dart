@@ -72,6 +72,12 @@ const Map<String, String> stringsPt = {
   'autoGenerateTitles': 'Gerar títulos automaticamente',
   'autoGenerateTitlesSubtitle':
       'Usar IA para gerar títulos para novas conversas',
+  'notificationsSection': 'Notificações',
+  'settingSaveFailed': 'Não foi possível salvar a configuração',
+  'notificationAnswerPreview':
+      'Mostrar prévia da resposta nas notificações',
+  'notificationAnswerPreviewSubtitle':
+      'Mostra o início da resposta na notificação. Desativado: a notificação só diz quem terminou.',
   'titleGenerationPrompt': 'Prompt de Geração de Título',
   'usingCustomPrompt': 'Usando prompt personalizado',
   'usingDefaultPrompt': 'Usando prompt padrão',
@@ -500,6 +506,9 @@ const Map<String, String> stringsPt = {
   'addMessageOrDocs': 'Adicione uma mensagem ou envie documentos',
   'micAccessFailed': 'Falha no acesso ao microfone',
   'transcriptionFailed': 'Falha na transcrição',
+  'voiceMessage': 'Mensagem de voz',
+  'voiceMessageShowTranscript': 'Mostrar transcrição',
+  'voiceMessageHideTranscript': 'Ocultar transcrição',
   'replyTargetSelected': 'Alvo da resposta selecionado',
   'clearReply': 'Limpar resposta',
   'nothingToResend': 'Nada para reenviar',

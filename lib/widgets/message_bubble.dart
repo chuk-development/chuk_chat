@@ -57,6 +57,7 @@ import 'package:chuk_chat/widgets/messenger_context_menu.dart';
 import 'package:chuk_chat/services/settings/mobile_chat_preferences.dart';
 import 'package:chuk_chat/widgets/messenger_typing_indicator.dart';
 import 'package:chuk_chat/widgets/message_bubble/web_search_sources.dart';
+import 'package:chuk_chat/widgets/message_bubble/voice_message_bubble.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
 import 'package:chuk_chat/widgets/document_viewer.dart';
 import 'package:chuk_chat/widgets/app_notification.dart';
@@ -178,6 +179,8 @@ class MessageBubble extends StatefulWidget {
     this.actions = const <MessageBubbleAction>[],
     this.reasoning,
     this.voicePlayback,
+    this.isVoiceInput = false,
+    this.voiceInputDuration,
     this.isReasoningStreaming = false,
     this.modelLabel,
     this.modelProvider,
@@ -262,6 +265,13 @@ class MessageBubble extends StatefulWidget {
   final List<MessageBubbleAction> actions;
   final String? reasoning;
   final String? voicePlayback;
+
+  /// The user dictated this message: it draws as a voice bubble with the
+  /// transcript folded. No audio exists behind it.
+  final bool isVoiceInput;
+
+  /// Length of the dictation, when it is known.
+  final Duration? voiceInputDuration;
   final bool isReasoningStreaming;
   final String? modelLabel;
   final String? modelProvider;

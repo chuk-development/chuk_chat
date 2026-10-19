@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:chuk_chat/services/storage/chat_origin.dart';
+
 import '../support/icon_finder.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
@@ -640,6 +642,84 @@ void main() {
     );
     expect(roster.byId(other.id)!.threads, hasLength(1));
   });
+
+  testWidgets(
+    'a tap that lands before its thread is listed opens it once it is',
+    (tester) async {
+      // Bead chuk_chat-kl8x: a cold start from the toast reaches the router
+      // before the roster has the coworker. The tap used to be taken and
+      // dropped; now it waits for the roster.
+      final bool wasAgents = ChatOrigin.agentsEnabled;
+      ChatOrigin.agentsEnabled = true;
+      addTearDown(() => ChatOrigin.agentsEnabled = wasAgents);
+      final (controller, roster) = await pumpShell(tester);
+      controller.pair();
+      await tester.pumpAndSettle();
+      const String key = 'host:late-host';
+
+      NotificationRouter.instance.open(
+        const NotificationTarget(sessionKey: key),
+      );
+      await tester.pumpAndSettle();
+      expect(NotificationRouter.instance.pending.value?.sessionKey, key);
+
+      final late = roster.ensureHostAgent('late-host', label: 'Late host');
+      await tester.pumpAndSettle();
+
+      expect(tester.widget<AgentsThreadView>(threadView).threadKey, key);
+      expect(late.threads.single.key, key);
+      expect(NotificationRouter.instance.pending.value, isNull);
+      // The Agents build arms its own timers; let them run out.
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(minutes: 1));
+    },
+  );
+
+  testWidgets(
+    'a tap whose thread is never listed is dropped after the expiry',
+    (tester) async {
+      // A pending tap must not open a thread out of nowhere much later.
+      final bool wasAgents = ChatOrigin.agentsEnabled;
+      ChatOrigin.agentsEnabled = true;
+      addTearDown(() => ChatOrigin.agentsEnabled = wasAgents);
+      final (controller, roster) = await pumpShell(tester);
+      controller.pair();
+      await tester.pumpAndSettle();
+      const String key = 'host:gone-host';
+
+      NotificationRouter.instance.open(
+        const NotificationTarget(sessionKey: key),
+      );
+      await tester.pumpAndSettle();
+      expect(NotificationRouter.instance.pending.value?.sessionKey, key);
+
+      await tester.pump(
+        AgentsShellHost.pendingNotificationTapExpiry -
+            const Duration(seconds: 1),
+      );
+      expect(
+        NotificationRouter.instance.pending.value?.sessionKey,
+        key,
+        reason: 'still waiting inside the window',
+      );
+
+      await tester.pump(const Duration(seconds: 2));
+      expect(NotificationRouter.instance.pending.value, isNull);
+
+      // The thread shows up later: nothing opens it any more.
+      final String threadBefore = tester
+          .widget<AgentsThreadView>(threadView)
+          .threadKey;
+      roster.ensureHostAgent('gone-host', label: 'Gone host');
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<AgentsThreadView>(threadView).threadKey,
+        threadBefore,
+      );
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(minutes: 1));
+    },
+  );
 
   testWidgets('Control Rooms opens in the right pane and closes again', (
     tester,

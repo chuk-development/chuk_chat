@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/services/notifications/local_notifications.dart';
 import 'package:chuk_chat/services/notifications/notification_router.dart';
@@ -54,6 +56,7 @@ void main() {
   late FakeBackend backend;
 
   setUp(() {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
     LocalNotifications.instance.reset();
     NotificationRouter.instance.reset();
     backend = FakeBackend();
@@ -64,7 +67,7 @@ void main() {
     NotificationRouter.instance.reset();
   });
 
-  test('a toast names the coworker and never carries the answer', () async {
+  test('a toast says the coworker is done; no answer, a plain body', () async {
     await LocalNotifications.instance.initialize(backend: backend);
     await LocalNotifications.instance.showAnswerReady(
       sessionKey: 'thread-1',
@@ -73,12 +76,104 @@ void main() {
     );
     expect(backend.shown, hasLength(1));
     final shown = backend.shown.single;
-    expect(shown['title'], 'Chief of Staff');
+    expect(shown['title'], 'Chief of Staff is done');
     expect(shown['body'], 'Your answer is ready.');
     expect(shown['tag'], 'thread-1');
     expect(shown['id'], LocalNotifications.idFor('thread-1'));
     final payload = jsonDecode(shown['payload']! as String) as Map;
-    expect(payload, <String, String>{'session_key': 'thread-1', 'run_id': 'run-9'});
+    expect(payload, <String, String>{
+      'session_key': 'thread-1',
+      'run_id': 'run-9',
+    });
+  });
+
+  test('preview setting off (default): no answer text in the body', () async {
+    expect(await LocalNotifications.answerPreviewEnabled(), isFalse);
+    await LocalNotifications.instance.initialize(backend: backend);
+    await LocalNotifications.instance.showAnswerReady(
+      sessionKey: 'thread-1',
+      threadLabel: 'Research',
+      preview: 'Das Passwort ist hunter2.',
+    );
+    final shown = backend.shown.single;
+    expect(shown['title'], 'Research is done');
+    expect(shown['body'], LocalNotifications.defaultBody);
+    expect(shown['body'], isNot(contains('hunter2')));
+  });
+
+  test(
+    'preview setting off: a stopped run keeps its content-free body',
+    () async {
+      await LocalNotifications.instance.initialize(backend: backend);
+      await LocalNotifications.instance.showAnswerReady(
+        sessionKey: 'thread-1',
+        threadLabel: 'Research',
+        preview: 'partial secret',
+        stopped: true,
+      );
+      expect(
+        backend.shown.single['body'],
+        'Open the chat to see what happened.',
+      );
+    },
+  );
+
+  test('the setting round-trips through SharedPreferences', () async {
+    await LocalNotifications.setAnswerPreviewEnabled(true);
+    expect(await LocalNotifications.answerPreviewEnabled(), isTrue);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getBool(LocalNotifications.showAnswerPreviewKey), isTrue);
+    await LocalNotifications.setAnswerPreviewEnabled(false);
+    expect(await LocalNotifications.answerPreviewEnabled(), isFalse);
+  });
+
+  test('preview setting on: the body is the answer, cut short and free of '
+      'markdown', () async {
+    await LocalNotifications.setAnswerPreviewEnabled(true);
+    await LocalNotifications.instance.initialize(backend: backend);
+    await LocalNotifications.instance.showAnswerReady(
+      sessionKey: 'thread-1',
+      threadLabel: 'Research',
+      preview: '# Report\n\nSee [the source](https://x.y) and `code`.',
+    );
+    expect(backend.shown.single['body'], 'Report See the source and code.');
+  });
+
+  group('notificationPreview', () {
+    test('drops code blocks and render tags', () {
+      expect(
+        notificationPreview(
+          'Hier:\n```dart\nvoid main() {}\n```\n<chart>{"a":1}</chart> fertig',
+        ),
+        'Hier: fertig',
+      );
+    });
+
+    test('cuts at a word and marks the cut', () {
+      final String long = List<String>.filled(100, 'wort').join(' ');
+      final String out = notificationPreview(long, maxChars: 40);
+      expect(out.length, lessThanOrEqualTo(41));
+      expect(out.endsWith('\u2026'), isTrue);
+      expect(out.contains('wor\u2026'), isFalse, reason: 'no cut mid-word');
+    });
+
+    test('nothing readable is empty', () {
+      expect(notificationPreview('   '), '');
+      expect(notificationPreview('```\nonly code\n```'), '');
+    });
+  });
+
+  test('Android details are private; the ticker carries no body', () {
+    final AndroidNotificationDetails details =
+        LocalNotifications.androidDetails(
+          title: 'Research is done',
+          body: 'answer text',
+          tag: 'thread-1',
+        );
+    expect(details.visibility, NotificationVisibility.private);
+    expect(details.ticker, 'Research is done');
+    expect(details.tag, 'thread-1');
+    expect(details.channelId, kAgentsNotificationChannelId);
   });
 
   test('id is stable per thread and non-negative', () {
@@ -93,7 +188,7 @@ void main() {
       sessionKey: 't',
       threadLabel: '   ',
     );
-    expect(backend.shown.single['title'], 'Chuk Chat');
+    expect(backend.shown.single['title'], 'Chuk Chat is done');
   });
 
   test('a tap routes the thread and clears the toast', () async {

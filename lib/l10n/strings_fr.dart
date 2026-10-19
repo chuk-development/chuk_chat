@@ -75,6 +75,12 @@ const Map<String, String> stringsFr = {
   'autoGenerateTitles': 'Générer automatiquement les titres des conversations',
   'autoGenerateTitlesSubtitle':
       'Utiliser l\'IA pour générer des titres pour les nouvelles conversations',
+  'notificationsSection': 'Notifications',
+  'settingSaveFailed': "Impossible d'enregistrer le réglage",
+  'notificationAnswerPreview':
+      'Afficher un aperçu de la réponse dans les notifications',
+  'notificationAnswerPreviewSubtitle':
+      'Affiche le début de la réponse dans la notification. Désactivé : la notification indique seulement qui a terminé.',
   'titleGenerationPrompt': 'Prompt de génération de titre',
   'usingCustomPrompt': 'Utilise un prompt personnalisé',
   'usingDefaultPrompt': 'Utilise le prompt par défaut',
@@ -511,6 +517,9 @@ const Map<String, String> stringsFr = {
   'addMessageOrDocs': 'Ajouter un message ou envoyer des documents',
   'micAccessFailed': 'Échec de l\'accès au microphone',
   'transcriptionFailed': 'Échec de la transcription',
+  'voiceMessage': 'Message vocal',
+  'voiceMessageShowTranscript': 'Afficher la transcription',
+  'voiceMessageHideTranscript': 'Masquer la transcription',
   'replyTargetSelected': 'Cible de réponse sélectionnée',
   'clearReply': 'Effacer la réponse',
   'nothingToResend': 'Rien à renvoyer',

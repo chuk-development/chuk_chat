@@ -615,6 +615,14 @@ class ChatUiHelpers {
     if (message.activeVariant != null) {
       map['activeVariant'] = message.activeVariant!.toString();
     }
+    // A dictated message keeps its voice bubble across reload.
+    if (message.inputMode != null && message.inputMode!.isNotEmpty) {
+      map['inputMode'] = message.inputMode!;
+    }
+    if (message.voiceDurationMs != null &&
+        message.voiceDurationMs!.isNotEmpty) {
+      map['voiceDurationMs'] = message.voiceDurationMs!;
+    }
     return map;
   }
 

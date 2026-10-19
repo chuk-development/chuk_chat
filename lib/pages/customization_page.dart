@@ -7,6 +7,7 @@
 // lib/pages/customization_page.dart
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
@@ -18,6 +19,7 @@ import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/pages/download_settings_page.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
+import 'package:chuk_chat/services/notifications/local_notifications.dart';
 import 'package:chuk_chat/utils/chat_font_resolver.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/services/title_generation_service.dart';
@@ -65,6 +67,14 @@ class _CustomizationPageState extends State<CustomizationPage> {
   bool _hasCustomPrompt = false;
   final TextEditingController _promptController = TextEditingController();
   bool _isPromptExpanded = false;
+  // Answer text in OS notifications. Default off (privacy).
+  bool _notificationAnswerPreview = false;
+  bool _isLoadingNotificationPreview = true;
+
+  /// True while a write is in flight. The switch is locked meanwhile, so two
+  /// quick toggles can never land out of order and leave previews on while
+  /// the switch shows off.
+  bool _isSavingNotificationPreview = false;
 
   @override
   void initState() {
@@ -82,10 +92,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
         kSupportedChatFontFamilies.contains(widget.config.chatFontFamily)
         ? widget.config.chatFontFamily
         : kDefaultChatFontFamily;
-    _selectedUiScale = widget.config.uiScale.clamp(
-      kMinUiScale,
-      kMaxUiScale,
-    );
+    _selectedUiScale = widget.config.uiScale.clamp(kMinUiScale, kMaxUiScale);
     _selectedIncludeRecentImagesInHistory =
         widget.config.includeRecentImagesInHistory;
     _selectedIncludeAllImagesInHistory =
@@ -95,12 +102,60 @@ class _CustomizationPageState extends State<CustomizationPage> {
     _selectedIncludeToolResultsInHistory =
         widget.config.includeToolResultsInHistory;
     // Fall back to English if a previously stored locale is no longer offered.
-    _selectedLocale = AppLocalizations.supportedLocales.any(
-      (l) => l.languageCode == widget.config.uiLocale,
-    )
+    _selectedLocale =
+        AppLocalizations.supportedLocales.any(
+          (l) => l.languageCode == widget.config.uiLocale,
+        )
         ? widget.config.uiLocale
         : 'en';
     _loadAutoTitleSetting();
+    _loadNotificationPreviewSetting();
+  }
+
+  Future<void> _loadNotificationPreviewSetting() async {
+    // A failed read keeps the safe default (off) and still enables the switch.
+    bool enabled = false;
+    try {
+      enabled = await LocalNotifications.answerPreviewEnabled();
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Answer preview setting read failed: ${error.runtimeType}');
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _notificationAnswerPreview = enabled;
+      _isLoadingNotificationPreview = false;
+    });
+  }
+
+  Future<void> _setNotificationPreview(bool value) async {
+    if (_isSavingNotificationPreview) return;
+    final bool previous = _notificationAnswerPreview;
+    setState(() {
+      _notificationAnswerPreview = value;
+      _isSavingNotificationPreview = true;
+    });
+    try {
+      await LocalNotifications.setAnswerPreviewEnabled(value);
+      if (mounted) setState(() => _isSavingNotificationPreview = false);
+    } catch (error) {
+      if (!mounted) return;
+      // Show the stored state again, so the switch never claims a value
+      // that was not saved.
+      setState(() {
+        _notificationAnswerPreview = previous;
+        _isSavingNotificationPreview = false;
+      });
+      if (kDebugMode) {
+        debugPrint('Answer preview setting write failed: ${error.runtimeType}');
+      }
+      AppNotifications.show(
+        context,
+        AppLocalizations.of(context)?.settingSaveFailed ??
+            'Could not save the setting',
+      );
+    }
   }
 
   Future<void> _loadAutoTitleSetting() async {
@@ -209,8 +264,13 @@ class _CustomizationPageState extends State<CustomizationPage> {
     if (mounted) {
       setState(() {
         _hasCustomPrompt = hasCustom;
-      });AppNotifications.show(context, AppLocalizations.of(context)?.systemPromptSaved ??
-              'System prompt saved', duration: Duration(seconds: 2));
+      });
+      AppNotifications.show(
+        context,
+        AppLocalizations.of(context)?.systemPromptSaved ??
+            'System prompt saved',
+        duration: Duration(seconds: 2),
+      );
     }
   }
 
@@ -220,9 +280,13 @@ class _CustomizationPageState extends State<CustomizationPage> {
       setState(() {
         _hasCustomPrompt = false;
         _promptController.text = TitleGenerationService.defaultSystemPrompt;
-      });AppNotifications.show(context, AppLocalizations.of(context)
-                  ?.systemPromptResetToDefault ??
-              'System prompt reset to default', duration: Duration(seconds: 2));
+      });
+      AppNotifications.show(
+        context,
+        AppLocalizations.of(context)?.systemPromptResetToDefault ??
+            'System prompt reset to default',
+        duration: Duration(seconds: 2),
+      );
     }
   }
 
@@ -243,9 +307,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
       backgroundColor: cs.surface,
       // The list runs underneath the floating header.
       extendBodyBehindAppBar: true,
-      appBar: FloatingAppBar(
-        title: Text(l.customization),
-      ),
+      appBar: FloatingAppBar(title: Text(l.customization)),
       body: SettingsListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
@@ -259,9 +321,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
                 subtitle: l.languageSubtitle,
                 trailing: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
-                    icon: const AppIcon(
-                      Icons.keyboard_arrow_down_rounded,
-                    ),
+                    icon: const AppIcon(Icons.keyboard_arrow_down_rounded),
                     value: _selectedLocale,
                     dropdownColor: m3.surfaceContainerHigh,
                     borderRadius: kBorderRadiusMenu,
@@ -372,8 +432,8 @@ class _CustomizationPageState extends State<CustomizationPage> {
                             value: _selectedChatFontSize,
                             min: kMinChatFontSize,
                             max: kMaxChatFontSize,
-                            divisions:
-                                (kMaxChatFontSize - kMinChatFontSize).round(),
+                            divisions: (kMaxChatFontSize - kMinChatFontSize)
+                                .round(),
                             label:
                                 '${_selectedChatFontSize.toStringAsFixed(0)} pt',
                             onChanged: (double value) {
@@ -459,8 +519,9 @@ class _CustomizationPageState extends State<CustomizationPage> {
                           style: TextStyle(
                             color: cs.onSurface,
                             fontSize: _selectedChatFontSize,
-                            fontFamily:
-                                resolveChatFontFamily(_selectedChatFontFamily),
+                            fontFamily: resolveChatFontFamily(
+                              _selectedChatFontFamily,
+                            ),
                             height: 1.38,
                           ),
                         ),
@@ -629,6 +690,24 @@ class _CustomizationPageState extends State<CustomizationPage> {
                 ],
               ),
             ),
+
+          // Notifications: answer text in the OS toast, opt-in.
+          ExpressiveSectionHeader(l.notificationsSection),
+          ExpressiveGroup(
+            children: [
+              ExpressiveSwitchRow(
+                icon: Icons.notifications_outlined,
+                title: l.notificationAnswerPreview,
+                subtitle: l.notificationAnswerPreviewSubtitle,
+                value: _notificationAnswerPreview,
+                onChanged:
+                    _isLoadingNotificationPreview ||
+                        _isSavingNotificationPreview
+                    ? null
+                    : _setNotificationPreview,
+              ),
+            ],
+          ),
 
           // Downloads: nav row into DownloadSettingsPage.
           ExpressiveSectionHeader(l.downloads),

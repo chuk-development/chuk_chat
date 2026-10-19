@@ -11,6 +11,7 @@ import 'package:chuk_chat/utils/permission_handler_stub.dart'
     if (dart.library.io) 'package:permission_handler/permission_handler.dart';
 import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart';
+import 'package:chuk_chat/services/dictation_tracker.dart';
 import 'package:chuk_chat/services/streaming_transcription_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
@@ -48,6 +49,10 @@ class AudioRecordingHandler {
   // PCM capture.
   StreamSubscription<Uint8List>? _pcmStreamSub;
   final BytesBuilder _pcmBuffer = BytesBuilder(copy: false);
+
+  /// Runs from mic press to stop: the length of the dictation, which the
+  /// sent message shows on its voice bubble. No audio is kept for it.
+  final Stopwatch _recordingClock = Stopwatch();
 
   // Streaming (WebSocket) state.
   StreamingTranscriptionService? _streamingService;
@@ -93,6 +98,9 @@ class AudioRecordingHandler {
 
       _pcmStreamSub = pcmStream.listen(_handlePcmChunk);
       _isMicActive = true;
+      _recordingClock
+        ..reset()
+        ..start();
       _isStreamingMode = false;
 
       if (accessToken != null) {
@@ -156,6 +164,7 @@ class AudioRecordingHandler {
     }
 
     _isMicActive = false;
+    _recordingClock.stop();
 
     if (!keepFile) {
       _pcmBuffer.clear();
@@ -224,6 +233,14 @@ class AudioRecordingHandler {
         apiService: apiService,
         accessToken: accessToken,
       );
+      final String? text = result.text;
+      if (result.success && text != null && text.isNotEmpty) {
+        // The composer gets this text next; the send marks it as dictated.
+        DictationTracker.instance.record(
+          text,
+          duration: _recordingClock.elapsed,
+        );
+      }
       onStateChanged?.call();
       return result;
     } finally {

@@ -86,6 +86,81 @@ const String kToolsClosedNote =
 @visibleForTesting
 const int kMaxToolRoundsPerTurn = 16;
 
+/// Sent as the user turn of the forced final pass. When the round limit is
+/// reached (or the tools closed because the model repeated itself), the turn
+/// does not end with an apology: one more pass goes out with no tool
+/// definitions and this instruction, so the model answers from what it has.
+/// The api_server sends the same text (`chat/tool_history.py`).
+@visibleForTesting
+const String kForcedFinalAnswerNote =
+    'The tool limit for this turn is reached. Tools are now closed. '
+    'Write the final answer for the user now, from the tool results you '
+    'already have. Do not call any tool.';
+
+/// Forced final passes one turn may send before it ends with what it has.
+/// The second one only runs when the model ignored the first and asked for
+/// tools again.
+const int _maxForcedFinalPasses = 2;
+
+/// An older tool result longer than this is shortened before the next pass.
+/// Every pass re-sends the whole turn: on 2026-10-19 a research turn re-sent
+/// each ~20k-char crawl on all 17 passes (5.8M chars). The newest round stays
+/// in full. Same numbers as the api_server (`chat/tool_history.py`).
+@visibleForTesting
+const int kCompactToolResultTriggerChars = 4000;
+
+/// Characters an older tool result keeps when it is shortened.
+@visibleForTesting
+const int kCompactToolResultKeepChars = 3000;
+
+/// Shortens one older tool result. A result at or under
+/// [kCompactToolResultTriggerChars] comes back unchanged, which also makes
+/// the cut idempotent: a shortened result is short and is never cut again.
+/// The text is byte-identical to the api_server copy.
+@visibleForTesting
+String compactToolResultForModel(String content) {
+  if (content.length <= kCompactToolResultTriggerChars) return content;
+  return '${content.substring(0, kCompactToolResultKeepChars)}'
+      '\n\n[Shortened: this is an older tool result of ${content.length} '
+      'characters. Only the first $kCompactToolResultKeepChars are kept here '
+      'to save space.]';
+}
+
+/// Shortens, in place, the tool results in [history] that are not part of
+/// the newest round. Classified by protocol only: a native result is a
+/// `role: tool` entry, a prompt-based result is an entry whose index is in
+/// [promptToolResultIndices] (the loop records those when it appends its own
+/// tool-result message). Entries before [turnStart] belong to earlier turns
+/// and are left alone. The native newest round is everything after the last
+/// assistant entry that carries `tool_calls`; a prompt-based newest round is
+/// the pass `message`, which is not in history at all.
+@visibleForTesting
+void compactOlderToolResults(
+  List<Map<String, dynamic>> history, {
+  int turnStart = 0,
+  Set<int> promptToolResultIndices = const <int>{},
+}) {
+  var newestNativeRound = history.length;
+  for (var i = history.length - 1; i >= turnStart && i >= 0; i--) {
+    final entry = history[i];
+    final calls = entry['tool_calls'];
+    if (entry['role'] == 'assistant' && calls is List && calls.isNotEmpty) {
+      newestNativeRound = i;
+      break;
+    }
+  }
+  for (var i = turnStart < 0 ? 0 : turnStart; i < history.length; i++) {
+    final entry = history[i];
+    final isNativeResult = entry['role'] == 'tool' && i < newestNativeRound;
+    final isPromptResult = promptToolResultIndices.contains(i);
+    if (!isNativeResult && !isPromptResult) continue;
+    final content = entry['content'];
+    if (content is! String) continue;
+    final shortened = compactToolResultForModel(content);
+    if (!identical(shortened, content)) entry['content'] = shortened;
+  }
+}
+
 /// A key that is equal for two calls with the same name and the same
 /// arguments, whatever the order of the argument keys.
 @visibleForTesting
@@ -116,9 +191,21 @@ class ToolLoopSession {
     this.modelId,
     this.skipIdentity = false,
     this.nativeToolCalling = false,
-  });
+  }) : turnHistoryStart = history.length;
 
   String latestUserMessage;
+
+  /// Length of [history] when the turn started. Entries from here on were
+  /// added by this turn's tool loop; only those are ever compacted.
+  final int turnHistoryStart;
+
+  /// History indices of prompt-based tool-result messages (see
+  /// [compactOlderToolResults]).
+  final Set<int> promptToolResultIndices = <int>{};
+
+  /// The prompt-based tool-result message last handed to the model, so the
+  /// history append can tell it apart from a real user message by identity.
+  String? pendingPromptToolResult;
   final List<Map<String, dynamic>> history;
   final String accessToken;
   final ToolEnforcer enforcer;
@@ -175,6 +262,17 @@ class ToolLoopSession {
   /// Set when the model kept repeating lookups it already had. The next pass
   /// goes out with no tool definitions, so the model can only answer.
   bool toolsClosed = false;
+
+  /// Set by the stream driver when its own pass budget is nearly used up.
+  /// Acts like [toolsClosed]: the next tool request gets the forced final
+  /// pass instead of running.
+  bool finalAnswerRequested = false;
+
+  /// Forced final passes sent this turn (see [kForcedFinalAnswerNote]).
+  int forcedFinalPasses = 0;
+
+  /// True once the model may not call tools any more this turn.
+  bool get toolsShut => toolsClosed || finalAnswerRequested;
 
   /// The tool-grounded candidate answer captured just before a fact-check
   /// ([VERIFY]) pass, plus its reasoning. The verify pass keeps this as the
@@ -596,7 +694,7 @@ class ToolCallHandler {
   List<Map<String, dynamic>> nativeToolDefinitions(ToolLoopSession session) {
     if (!session.toolCallingEnabled ||
         !session.nativeToolCalling ||
-        session.toolsClosed) {
+        session.toolsShut) {
       return const <Map<String, dynamic>>[];
     }
     return _toolExecutor.allTools
@@ -609,13 +707,59 @@ class ToolCallHandler {
         .toList();
   }
 
-  /// Message shown when the tool-call safety limit trips. If the turn already
-  /// produced deliverables — a compiled PDF, an artifact, a generated image,
-  /// or a delivered file — say the work is done and name what was delivered,
-  /// instead of the defeatist "try again with a simpler prompt". Only fall
-  /// back to the retry message when nothing was produced. Decides structurally
-  /// from completed, non-error tool calls — never from text patterns.
-  String _buildSafetyLimitMessage(ToolLoopSession session) {
+  /// The forced final pass. Sets [ToolLoopSession.toolsClosed] (the next
+  /// request carries no tool definitions) and continues with
+  /// [kForcedFinalAnswerNote] as the user turn. This round's calls are not
+  /// run and, for a native round, not recorded: the history then ends with
+  /// the previous round's complete tool results, which keeps every
+  /// `tool_call_id` paired. After [_maxForcedFinalPasses] the turn ends with
+  /// the text the model wrote (tool-call blocks removed) or, when there is
+  /// none, [_toolLimitFallbackMessage].
+  Future<ToolLoopResult> _forceFinalAnswer(
+    ToolLoopSession session, {
+    required String content,
+    required String reasoning,
+  }) async {
+    session.toolsClosed = true;
+    if (session.forcedFinalPasses >= _maxForcedFinalPasses) {
+      final written = _stripToolCallBlocks(content).trim();
+      return ToolLoopResult.finalAnswer(
+        content: written.isNotEmpty
+            ? written
+            : _toolLimitFallbackMessage(session),
+        reasoning: reasoning,
+        toolCalls: _cloneToolCalls(session.toolCalls),
+      );
+    }
+    session.forcedFinalPasses++;
+    session.latestUserMessage = kForcedFinalAnswerNote;
+    return ToolLoopResult.continueWith(
+      nextStep: ToolLoopStep(
+        message: kForcedFinalAnswerNote,
+        history: _stepHistory(session),
+        systemPrompt: await _buildSystemPrompt(
+          baseSystemPrompt: session.baseSystemPrompt,
+          isToolResult: true,
+          discoveryMode: session.discoveryMode,
+          discoveredTools: session.discoveredTools,
+          activeSkillNames: session.activeSkillNames,
+          skipIdentity: session.skipIdentity,
+          nativeToolCalling: session.nativeToolCalling,
+          modelId: session.modelId,
+        ),
+      ),
+      interimContent: '',
+      toolCalls: _cloneToolCalls(session.toolCalls),
+    );
+  }
+
+  /// Last resort when even the forced final passes produced no text. If the
+  /// turn already produced deliverables (a compiled PDF, an artifact, a
+  /// generated image), say the work is done and name what was delivered.
+  /// Otherwise point at the collected results and offer the summary. Never
+  /// the old "tool-call safety limit, try a simpler prompt" apology. Decides
+  /// structurally from completed, non-error tool calls, never from text.
+  String _toolLimitFallbackMessage(ToolLoopSession session) {
     bool completed(bool Function(ToolCall) test) => session.toolCalls.any(
       (tc) => tc.status == ToolCallStatus.completed && test(tc),
     );
@@ -656,8 +800,9 @@ class ToolCallHandler {
     }
 
     if (delivered.isEmpty) {
-      return 'Sorry, I hit the tool-call safety limit for this request. '
-          'Please try again with a simpler prompt.';
+      return 'I collected the results shown above but could not write the '
+          'answer from them. Ask me to sum them up and I will answer without '
+          'new searches.';
     }
 
     final list = delivered.toList();
@@ -793,6 +938,7 @@ class ToolCallHandler {
       final signaledTruncated = turnSignals?.indicatesTruncated ?? false;
 
       final shouldRetryAfterMalformedToolProtocol =
+          !session.toolsShut &&
           (signaledToolUse || hasToolProtocolMarker) &&
           session.malformedToolProtocolRecoveryAttempts <
               _maxMalformedToolProtocolRecoveryAttempts;
@@ -811,7 +957,7 @@ class ToolCallHandler {
         return ToolLoopResult.continueWith(
           nextStep: ToolLoopStep(
             message: retryMessage,
-            history: _cloneHistory(session.history),
+            history: _stepHistory(session),
             systemPrompt: await _buildSystemPrompt(
               baseSystemPrompt: session.baseSystemPrompt,
               isToolResult: true,
@@ -845,7 +991,7 @@ class ToolCallHandler {
         return ToolLoopResult.continueWith(
           nextStep: ToolLoopStep(
             message: retryMessage,
-            history: _cloneHistory(session.history),
+            history: _stepHistory(session),
             systemPrompt: await _buildSystemPrompt(
               baseSystemPrompt: session.baseSystemPrompt,
               isToolResult: true,
@@ -863,6 +1009,7 @@ class ToolCallHandler {
       }
 
       final shouldRetryAfterDeferredAction =
+          !session.toolsShut &&
           _looksLikeDeferredActionWithoutToolCall(displayContent) &&
           session.deferredActionRecoveryAttempts <
               _maxDeferredActionRecoveryAttempts;
@@ -881,7 +1028,7 @@ class ToolCallHandler {
         return ToolLoopResult.continueWith(
           nextStep: ToolLoopStep(
             message: retryMessage,
-            history: _cloneHistory(session.history),
+            history: _stepHistory(session),
             systemPrompt: await _buildSystemPrompt(
               baseSystemPrompt: session.baseSystemPrompt,
               isToolResult: true,
@@ -916,6 +1063,7 @@ class ToolCallHandler {
           !signaledTruncated &&
           !(turnSignals.indicatesFinalStop);
       final shouldRetryAfterNonFinalTurn =
+          !session.toolsShut &&
           session.toolCalls.isNotEmpty &&
           displayContent.trim().isNotEmpty &&
           isNonFinalSignaledTurn &&
@@ -936,7 +1084,7 @@ class ToolCallHandler {
         return ToolLoopResult.continueWith(
           nextStep: ToolLoopStep(
             message: retryMessage,
-            history: _cloneHistory(session.history),
+            history: _stepHistory(session),
             systemPrompt: await _buildSystemPrompt(
               baseSystemPrompt: session.baseSystemPrompt,
               isToolResult: true,
@@ -975,7 +1123,7 @@ class ToolCallHandler {
         return ToolLoopResult.continueWith(
           nextStep: ToolLoopStep(
             message: retryMessage,
-            history: _cloneHistory(session.history),
+            history: _stepHistory(session),
             systemPrompt: await _buildSystemPrompt(
               baseSystemPrompt: session.baseSystemPrompt,
               isToolResult: true,
@@ -1008,7 +1156,10 @@ class ToolCallHandler {
             tc.status != ToolCallStatus.error &&
             !_nonFactualToolNames.contains(tc.name),
       );
+      // Not after the tools shut: the verify pass invites new tool calls,
+      // and the forced final answer is the end of the turn.
       final shouldRunFactCheck =
+          !session.toolsShut &&
           usedFactBearingTool &&
           displayContent.trim().isNotEmpty &&
           session.factCheckRecoveryAttempts < _maxFactCheckRecoveryAttempts;
@@ -1052,7 +1203,7 @@ class ToolCallHandler {
         return ToolLoopResult.continueWith(
           nextStep: ToolLoopStep(
             message: factCheckMessage,
-            history: _cloneHistory(session.history),
+            history: _stepHistory(session),
             systemPrompt: await _buildSystemPrompt(
               baseSystemPrompt: session.baseSystemPrompt,
               isToolResult: true,
@@ -1123,13 +1274,27 @@ class ToolCallHandler {
     enforcer.discoveryMode = session.discoveryMode;
     enforcer.discoveredToolNames = session.discoveredToolNames;
 
+    // Tools are shut (repeated lookups, or the driver's pass budget is nearly
+    // spent) and the model asks for more anyway: run nothing, force the
+    // answer. Checked before the enforcer so this round is not counted.
+    if (session.toolsShut) {
+      return _forceFinalAnswer(
+        session,
+        content: cleanedContent,
+        reasoning: effectiveReasoning,
+      );
+    }
+
     final enforceResult = enforcer.enforce(parsedCalls);
 
+    // Round limit: the calls of this round are not run. Instead of the old
+    // "safety limit" apology, one more pass goes out with no tools, so the
+    // user gets an answer from the results already collected.
     if (enforceResult.iterationLimitReached) {
-      return ToolLoopResult.finalAnswer(
-        content: _buildSafetyLimitMessage(session),
+      return _forceFinalAnswer(
+        session,
+        content: cleanedContent,
         reasoning: effectiveReasoning,
-        toolCalls: _cloneToolCalls(session.toolCalls),
       );
     }
 
@@ -1162,7 +1327,7 @@ class ToolCallHandler {
       return ToolLoopResult.continueWith(
         nextStep: ToolLoopStep(
           message: nextMessage,
-          history: _cloneHistory(session.history),
+          history: _stepHistory(session),
           systemPrompt: await _buildSystemPrompt(
             baseSystemPrompt: session.baseSystemPrompt,
             isToolResult: true,
@@ -1230,16 +1395,9 @@ class ToolCallHandler {
     // asks yet again, the tools close: the results still go back (a native
     // tool call needs its tool message), but the next pass carries no tool
     // definitions, so the model can only answer. Should it still ask after
-    // that, the turn ends with the safety-limit message instead of looping.
+    // that, the forced final pass runs (see [_forceFinalAnswer]).
     bool closingTools = false;
     if (anyRepeat) {
-      if (session.toolsClosed) {
-        return ToolLoopResult.finalAnswer(
-          content: _buildSafetyLimitMessage(session),
-          reasoning: effectiveReasoning,
-          toolCalls: _cloneToolCalls(session.toolCalls),
-        );
-      }
       session.repeatedLookupRounds++;
       if (session.repeatedLookupRounds >= 2) {
         session.toolsClosed = true;
@@ -1408,6 +1566,7 @@ class ToolCallHandler {
     } else {
       nextMessage = enforcer.buildResultMessage(modelResults);
       session.latestUserMessage = nextMessage;
+      session.pendingPromptToolResult = nextMessage;
     }
 
     final orderedUiCalls = enforceResult.validCalls
@@ -1422,7 +1581,7 @@ class ToolCallHandler {
     return ToolLoopResult.continueWith(
       nextStep: ToolLoopStep(
         message: nextMessage,
-        history: _cloneHistory(session.history),
+        history: _stepHistory(session),
         systemPrompt: await _buildSystemPrompt(
           baseSystemPrompt: session.baseSystemPrompt,
           isToolResult: true,
@@ -1570,8 +1729,13 @@ class ToolCallHandler {
   }) {
     final userText = session.latestUserMessage.trim();
     if (userText.isNotEmpty) {
+      final pending = session.pendingPromptToolResult;
+      if (pending != null && identical(pending, session.latestUserMessage)) {
+        session.promptToolResultIndices.add(session.history.length);
+      }
       session.history.add({'role': 'user', 'content': userText});
     }
+    session.pendingPromptToolResult = null;
 
     final reasoningText = assistantReasoning?.trim() ?? '';
     var assistantText = assistantContent.trim();
@@ -2075,6 +2239,25 @@ class ToolCallHandler {
       // nl
       r'onderzoek|zoeken|opzoeken|nakijken|schrijven|samenvatten)\b',
     ).hasMatch(sentence);
+  }
+
+  /// The history for the next pass: older tool results shortened in place
+  /// (see [compactOlderToolResults]), then cloned.
+  List<Map<String, dynamic>> _stepHistory(ToolLoopSession session) {
+    // When the next message is not a fresh tool result (fact-check, retry,
+    // forced final pass), the newest prompt-based result already sits in the
+    // history and IS the newest round, so it must stay in full.
+    Set<int> indices = session.promptToolResultIndices;
+    if (session.pendingPromptToolResult == null && indices.isNotEmpty) {
+      final int newest = indices.reduce((a, b) => a > b ? a : b);
+      indices = indices.where((i) => i != newest).toSet();
+    }
+    compactOlderToolResults(
+      session.history,
+      turnStart: session.turnHistoryStart,
+      promptToolResultIndices: indices,
+    );
+    return _cloneHistory(session.history);
   }
 
   List<Map<String, dynamic>> _cloneHistory(List<Map<String, dynamic>> history) {

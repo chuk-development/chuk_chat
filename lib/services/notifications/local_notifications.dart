@@ -7,13 +7,20 @@
 ///    target is the Linux desktop, and a run ends while the window is behind
 ///    another one. `flutter_local_notifications_linux` talks to the desktop
 ///    over D-Bus, no daemon of ours.
-///  * **No answer content.** The toast says "Answer ready" and names the
-///    coworker. chuk put a preview of the reply in the body; here the reply
-///    stays end-to-end between the host and the app, like the push does.
-///  * **One toast per thread.** The id is the session key's hash, and on
-///    Android the tag is the session key — the same tag the FCM push uses —
-///    so the newest notification for a thread replaces the older one and one
-///    `cancel` clears both channels.
+///  * **Says who is done; the answer only when the user asks for it.** The
+///    title names the coworker ("Research is done"). By default the body is
+///    content-free ("Your answer is ready."): no answer text reaches the OS
+///    notification store. Only with the user setting "Show answer preview in
+///    notifications" ([showAnswerPreviewKey], default off) is the body a
+///    short preview of the answer. The preview is built on this device from
+///    the answer the app already holds; the host's push (FCM) never carries
+///    content (bead chuk_chat-kl8x). On Android the toast is always
+///    `NotificationVisibility.private`, so a secure lock screen shows the
+///    system's content-free placeholder, not the body.
+///  * **One toast per thread.** On Android the slot is the session key as tag
+///    and id 0 — exactly the slot the FCM push for the thread uses — so the
+///    app's toast and the host's push replace each other instead of stacking,
+///    and one `cancel` clears both. Elsewhere the id is the key's hash.
 ///
 /// The plugin is behind [LocalNotificationsBackend] so the tests drive the
 /// service without a platform channel.
@@ -26,6 +33,7 @@ import 'dart:ui' show Color;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/services/notifications/notification_router.dart';
 
@@ -99,22 +107,57 @@ class LocalNotifications {
   static String payloadFor(String sessionKey, {String? runId}) =>
       jsonEncode(<String, String>{'session_key': sessionKey, 'run_id': ?runId});
 
-  /// "Answer ready" for [sessionKey]. [threadLabel] is the coworker's name
-  /// (or whatever the shell calls the thread) — never the answer.
+  /// The body when there is no answer text to preview.
+  static const String defaultBody = 'Your answer is ready.';
+
+  /// SharedPreferences key of the user setting "Show answer preview in
+  /// notifications". Default off: the toast then carries no answer text.
+  static const String showAnswerPreviewKey =
+      'notifications_show_answer_preview';
+
+  /// Whether the user allowed answer text in the toast. False when the
+  /// setting was never set or cannot be read.
+  static Future<bool> answerPreviewEnabled() async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(showAnswerPreviewKey) ?? false;
+    } catch (error) {
+      if (kDebugMode) debugPrint('[LocalNotifications] pref read: $error');
+      return false;
+    }
+  }
+
+  static Future<void> setAnswerPreviewEnabled(bool enabled) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(showAnswerPreviewKey, enabled);
+  }
+
+  /// "Name is done" for [sessionKey]. [threadLabel] is the coworker's name,
+  /// or whatever the shell calls the thread. [stopped] is a run that ended
+  /// without finishing. [preview] (the answer, made short by
+  /// [notificationPreview]) becomes the body only when the user turned on
+  /// [showAnswerPreviewKey]; otherwise the body is content-free.
   Future<void> showAnswerReady({
     required String sessionKey,
     required String threadLabel,
     String? runId,
-    String body = 'Your answer is ready.',
+    String? preview,
+    bool stopped = false,
   }) async {
     final LocalNotificationsBackend? b = _backend;
     if (b == null) return;
     final String label = threadLabel.trim();
+    final String who = label.isEmpty ? 'Chuk Chat' : label;
+    final String text = await answerPreviewEnabled()
+        ? notificationPreview(preview ?? '')
+        : '';
     try {
       await b.show(
         id: idFor(sessionKey),
-        title: label.isEmpty ? 'Chuk Chat' : label,
-        body: body,
+        title: stopped ? '$who stopped' : '$who is done',
+        body: text.isNotEmpty
+            ? text
+            : (stopped ? 'Open the chat to see what happened.' : defaultBody),
         payload: payloadFor(sessionKey, runId: runId),
         tag: sessionKey,
       );
@@ -171,6 +214,40 @@ class LocalNotifications {
     } catch (error) {
       if (kDebugMode) debugPrint('[LocalNotifications] bad payload: $error');
     }
+  }
+
+  /// The Android half of a toast. Always [NotificationVisibility.private]:
+  /// a secure lock screen shows the system's content-free placeholder
+  /// instead of the body, even with the answer preview on. (The plugin has
+  /// no `publicVersion`; Android's own placeholder is the public version.)
+  @visibleForTesting
+  static AndroidNotificationDetails androidDetails({
+    required String title,
+    required String body,
+    required String tag,
+  }) {
+    const Color brand = Color(brandColorValue);
+    return AndroidNotificationDetails(
+      kAgentsNotificationChannelId,
+      kAgentsNotificationChannelName,
+      channelDescription: kAgentsNotificationChannelDescription,
+      importance: Importance.high,
+      priority: Priority.high,
+      icon: 'ic_notification',
+      color: brand,
+      ledColor: brand,
+      ledOnMs: 1000,
+      ledOffMs: 500,
+      autoCancel: true,
+      // One outstanding notification per thread, shared with the push.
+      tag: tag,
+      // The ticker reaches accessibility services: title only, never body.
+      ticker: title,
+      category: AndroidNotificationCategory.message,
+      visibility: NotificationVisibility.private,
+      // The whole body when the row is expanded.
+      styleInformation: BigTextStyleInformation(body, contentTitle: title),
+    );
   }
 
   /// Test seam.
@@ -253,28 +330,18 @@ class _PluginBackend implements LocalNotificationsBackend {
     required String payload,
     required String tag,
   }) {
-    const Color brand = Color(LocalNotifications.brandColorValue);
     return _plugin.show(
-      id: id,
+      // Android: the FCM push for a thread is (tag, 0). The same slot here
+      // means the app's toast and the push replace each other, never stack.
+      id: Platform.isAndroid ? 0 : id,
       title: title,
       body: body,
       payload: payload,
       notificationDetails: NotificationDetails(
-        android: AndroidNotificationDetails(
-          kAgentsNotificationChannelId,
-          kAgentsNotificationChannelName,
-          channelDescription: kAgentsNotificationChannelDescription,
-          importance: Importance.high,
-          priority: Priority.high,
-          icon: 'ic_notification',
-          color: brand,
-          ledColor: brand,
-          ledOnMs: 1000,
-          ledOffMs: 500,
-          autoCancel: true,
-          // One outstanding notification per thread, shared with the push.
+        android: LocalNotifications.androidDetails(
+          title: title,
+          body: body,
           tag: tag,
-          ticker: 'Answer ready',
         ),
         iOS: const DarwinNotificationDetails(
           presentAlert: true,
@@ -323,4 +390,46 @@ class _PluginBackend implements LocalNotificationsBackend {
     if (android == null) return false;
     return await android.requestNotificationsPermission() ?? false;
   }
+}
+
+/// The answer, made fit for one notification: markdown and the app's own
+/// render tags removed, whitespace folded, cut at a word near [maxChars].
+/// Empty when nothing readable is left.
+String notificationPreview(String raw, {int maxChars = 240}) {
+  if (raw.trim().isEmpty) return '';
+  String text = raw;
+  // Blocks the UI renders as cards or code carry no sentence worth reading.
+  text = text.replaceAll(RegExp(r'```[\s\S]*?(```|$)'), ' ');
+  text = text.replaceAll(
+    RegExp(
+      r'<(chart|map|email|think|thinking|artifact)\b[^>]*>[\s\S]*?(</\1>|$)',
+      caseSensitive: false,
+    ),
+    ' ',
+  );
+  text = text.replaceAll(RegExp(r'<[^>\n]{1,80}>'), ' ');
+  // Links keep their text, images go.
+  text = text.replaceAll(RegExp(r'!\[[^\]]*\]\([^)]*\)'), ' ');
+  text = text.replaceAllMapped(
+    RegExp(r'\[([^\]]+)\]\([^)]*\)'),
+    (m) => m.group(1) ?? '',
+  );
+  // Line markers: headings, quotes, list bullets, table rules.
+  text = text.replaceAll(
+    RegExp(r'^\s{0,3}(#{1,6}|>|[-*+]|\d+[.)])\s+', multiLine: true),
+    '',
+  );
+  text = text.replaceAll(
+    RegExp(r'^\s*\|?[\s:|-]{3,}\|?\s*$', multiLine: true),
+    ' ',
+  );
+  text = text.replaceAll('|', ' ');
+  // Emphasis and inline code marks.
+  text = text.replaceAll(RegExp(r'[*_`~]{1,3}'), '');
+  text = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (text.length <= maxChars) return text;
+  final String cut = text.substring(0, maxChars);
+  final int space = cut.lastIndexOf(' ');
+  final String head = space > maxChars * 0.6 ? cut.substring(0, space) : cut;
+  return '${head.trimRight()}\u2026';
 }

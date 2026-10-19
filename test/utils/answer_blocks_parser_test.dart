@@ -179,6 +179,55 @@ void main() {
     });
   });
 
+  group('parseTimeline bold labels', () {
+    test('a bold label ends at its marker, not at a later colon', () {
+      final List<TimelineEntry> e = parseTimeline(<String>[
+        '- **Goethe:** Faust I & II (Riesengeschichte: Wette), Der Erlkönig',
+        '- **Schiller**: Die Räuber',
+        '- **1808**: Faust I',
+      ]);
+      expect(e[0].label, 'Goethe');
+      expect(e[0].text, startsWith('Faust I & II'));
+      expect(e[1].label, 'Schiller');
+      expect(e[1].text, 'Die Räuber');
+      expect(e[2].label, '1808');
+    });
+
+    test('a bold start without a colon is not a label', () {
+      final List<TimelineEntry> e = parseTimeline(<String>[
+        '- **Big news** on 2021: launch',
+        '- __2022__: second',
+      ]);
+      // Not split at the bold: the line splits at its `: `.
+      expect(e[0].label, '**Big news** on 2021');
+      expect(e[0].text, 'launch');
+      expect(e[1].label, '2022');
+      expect(e[1].text, 'second');
+    });
+
+    test('names are not dates, years are', () {
+      expect(
+        timelineIsDated(
+          parseTimeline(<String>[
+            '- **Goethe:** Faust',
+            '- **Schiller:** Tell',
+          ]),
+        ),
+        isFalse,
+      );
+      expect(
+        timelineIsDated(parseTimeline(<String>['2019: A', '2021-01: B'])),
+        isTrue,
+      );
+    });
+
+    test('stripLabelEmphasis', () {
+      expect(stripLabelEmphasis('**Goethe:**'), 'Goethe');
+      expect(stripLabelEmphasis('__x__'), 'x');
+      expect(stripLabelEmphasis('2021'), '2021');
+    });
+  });
+
   group('parseScale', () {
     test('range, unit, ticks and marker', () {
       final ScaleSpec spec = parseScale('1800–6500 K', <String>[

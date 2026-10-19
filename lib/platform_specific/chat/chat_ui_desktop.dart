@@ -30,6 +30,7 @@ import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/tts_audio_service.dart';
 import 'package:chuk_chat/voice/voice_transcript_migration.dart';
+import 'package:chuk_chat/services/dictation_tracker.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/core/model_selection_events.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
@@ -273,6 +274,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     bool clearMessagesBelow = false,
     List<AttachedFile>? attachedFilesOverride,
     bool isRegenerate = false,
+    bool applyDictation = false,
   }) => _submitEditedMessage(
     index,
     newText,
@@ -280,6 +282,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     clearMessagesBelow: clearMessagesBelow,
     attachedFilesOverride: attachedFilesOverride,
     isRegenerate: isRegenerate,
+    applyDictation: applyDictation,
   );
 
   /// Per-chat send-in-flight flag, backed by the ChatRuntime for the

@@ -6,6 +6,7 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/utils/tool_parser.dart';
 
 /// Handles chat persistence and storage
 /// Whether [stored] holds more than [patch] would write, i.e. the patch
@@ -81,7 +82,12 @@ class ChatPersistenceHandler {
     // the number only into what went to storage, so the answer on screen had
     // no duration until the chat was closed and reopened — which is exactly
     // the "it is counted but never shown" the reader sees.
-    stampWorkedFor(messages);
+    stampWorkedFor(
+      messages,
+      stored: chatId == null
+          ? null
+          : ChatStorageState.chatsById[chatId]?.messagesOrNull,
+    );
 
     // Never persist "Thinking..." placeholders — they are UI-only
     final messagesCopy = messages
@@ -132,8 +138,17 @@ class ChatPersistenceHandler {
   /// runs tools is saved once per round, and each of those saves is a
   /// better estimate than the one before — but an older message must keep
   /// the number it settled on, or every later save would inflate it.
+  ///
+  /// The newest answer has settled too once [stored] (the chat's saved
+  /// messages) holds it unchanged: an old chat that is opened and left again
+  /// is saved, and restamping its last answer then wrote the days since the
+  /// request as its duration. That changed the payload, so the save moved
+  /// `updatedAt` and the chat jumped to the top of the sidebar.
   @visibleForTesting
-  static void stampWorkedFor(List<Map<String, String>> messages) {
+  static void stampWorkedFor(
+    List<Map<String, String>> messages, {
+    List<ChatMessage>? stored,
+  }) {
     final now = DateTime.now();
     // "Thinking..." is a placeholder the UI owns; it is not an answer and it
     // must not count as the newest one, or the answer above it would be
@@ -152,11 +167,45 @@ class ChatPersistenceHandler {
       if (startedAt == null) continue;
 
       final isNewest = i == newest;
-      if (message['generationMs'] != null && !isNewest) continue;
+      if (message['generationMs'] != null &&
+          (!isNewest || _isStoredUnchanged(message, i, stored))) {
+        continue;
+      }
 
       final elapsed = now.difference(startedAt).inMilliseconds;
       if (elapsed >= 0) message['generationMs'] = '$elapsed';
     }
+  }
+
+  /// Whether [stored] holds the answer [message] (at [index] in the live
+  /// list) with the same duration and the same content: matched by its
+  /// message id, else by its position.
+  static bool _isStoredUnchanged(
+    Map<String, String> message,
+    int index,
+    List<ChatMessage>? stored,
+  ) {
+    if (stored == null) return false;
+    final id = message['messageId'];
+    ChatMessage? saved;
+    if (id != null && id.isNotEmpty) {
+      for (final candidate in stored) {
+        if (candidate.messageId == id) {
+          saved = candidate;
+          break;
+        }
+      }
+    } else if (index < stored.length) {
+      saved = stored[index];
+    }
+    if (saved == null || saved.role != 'assistant') return false;
+    String clean(String? value) => value ?? '';
+    return saved.generationMs == message['generationMs'] &&
+        clean(saved.text) ==
+            stripToolCallBlocksForDisplay(clean(message['text'])) &&
+        clean(saved.reasoning) == clean(message['reasoning']) &&
+        clean(saved.toolCalls) == clean(message['toolCalls']) &&
+        clean(saved.contentBlocks) == clean(message['contentBlocks']);
   }
 
   Future<StoredChat?> _persistChatInternal(

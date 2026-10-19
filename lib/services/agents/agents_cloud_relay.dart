@@ -86,6 +86,7 @@ import 'package:web_socket_channel/web_socket_channel.dart'
 import 'package:chuk_chat/services/account_session.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_uri.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/services/agents/agents_resume_trace.dart';
 import 'package:chuk_chat/utils/io_helper.dart' show IOException;
 
 /// The endpoint path on the API server.
@@ -288,7 +289,7 @@ RelaySocketConnector agentsCloudRelayConnector({
 
 /// A [RelaySocket] that speaks the cloud relay downward and the local blind
 /// relay upward.
-class AgentsCloudRelaySocket implements RelaySocket {
+class AgentsCloudRelaySocket implements RelaySocket, RelaySocketProbe {
   AgentsCloudRelaySocket._({
     required RelaySocket transport,
     required String deviceId,
@@ -343,12 +344,14 @@ class AgentsCloudRelaySocket implements RelaySocket {
     _handoffs[key] = socket;
     _handoffTimers[key] = Timer(timeout, () => _dropHandoff(key, socket));
     unawaited(cancel.whenCancelled.then((_) => _dropHandoff(key, socket)));
-    unawaited(socket._transportGone.future.then((_) {
-      if (identical(_handoffs[key], socket)) {
-        _handoffs.remove(key);
-        _handoffTimers.remove(key)?.cancel();
-      }
-    }));
+    unawaited(
+      socket._transportGone.future.then((_) {
+        if (identical(_handoffs[key], socket)) {
+          _handoffs.remove(key);
+          _handoffTimers.remove(key)?.cancel();
+        }
+      }),
+    );
   }
 
   /// Closes and forgets the parked socket of [key]. With [only], only when
@@ -456,6 +459,42 @@ class AgentsCloudRelaySocket implements RelaySocket {
   @visibleForTesting
   static set debugHealInProgress(bool value) => _healInProgress.value = value;
 
+  /// Waiters of [probe]: completed by the next frame from the relay.
+  final List<Completer<bool>> _probes = <Completer<bool>>[];
+
+  /// Any frame proves the socket delivers; resolve every waiting probe.
+  void _answerProbes() {
+    if (_probes.isEmpty) return;
+    final List<Completer<bool>> waiting = List<Completer<bool>>.of(_probes);
+    _probes.clear();
+    for (final Completer<bool> c in waiting) {
+      if (!c.isCompleted) c.complete(true);
+    }
+  }
+
+  /// Sends the relay a `ping` and waits for any frame back (its `pong`, or a
+  /// relayed frame that was already on its way). False when the transport is
+  /// gone, the socket is closed, or nothing arrives within [timeout].
+  @override
+  Future<bool> probe(Duration timeout) async {
+    if (_closed || !_ready || _transportGone.isCompleted) return false;
+    final Completer<bool> answer = Completer<bool>();
+    _probes.add(answer);
+    try {
+      _transport.send(jsonEncode(<String, dynamic>{'type': 'ping'}));
+    } catch (_) {
+      _probes.remove(answer);
+      return false;
+    }
+    final bool alive = await Future.any<bool>(<Future<bool>>[
+      answer.future,
+      _transportGone.future.then((_) => false),
+      Future<bool>.delayed(timeout, () => false),
+    ]);
+    _probes.remove(answer);
+    return alive && !_closed && !_transportGone.isCompleted;
+  }
+
   /// One-shot waiters for a handshake / claim answer.
   Completer<Map<String, dynamic>>? _awaiting;
   bool Function(Map<String, dynamic> frame)? _awaitingMatch;
@@ -478,8 +517,11 @@ class AgentsCloudRelaySocket implements RelaySocket {
       final handed = _takeHandoff('${address.base}|$channel');
       if (handed != null) return handed;
     }
+    AgentsResumeTrace.mark('cloud relay: resolving session');
     final session = await _resolveSession(sessionSource);
+    AgentsResumeTrace.mark('cloud relay: session ready, dialling');
     final transport = await inner(address.dialUri);
+    AgentsResumeTrace.mark('cloud relay: socket open');
     final socket = AgentsCloudRelaySocket._(
       transport: transport,
       deviceId: deviceId,
@@ -536,6 +578,7 @@ class AgentsCloudRelaySocket implements RelaySocket {
       }),
     );
     final authFrame = await auth;
+    AgentsResumeTrace.mark('cloud relay: auth answered');
     if (authFrame['type'] != 'auth_ok') {
       throw AgentsCloudRelayException(
         _authErrorText('${authFrame['detail'] ?? ''}'),
@@ -854,6 +897,9 @@ class AgentsCloudRelaySocket implements RelaySocket {
     } on TimeoutException {
       online = null;
     }
+    AgentsResumeTrace.mark(
+      'cloud relay: presence ${online == null ? 'timed out' : 'known'}',
+    );
     if (online != null && online.contains(target)) return;
     _healInProgress.value = true;
     try {
@@ -984,6 +1030,7 @@ class AgentsCloudRelaySocket implements RelaySocket {
     } catch (_) {
       return; // A malformed relay frame is dropped, never fatal.
     }
+    _answerProbes();
 
     final waiting = _awaiting;
     final match = _awaitingMatch;

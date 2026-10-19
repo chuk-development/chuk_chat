@@ -143,6 +143,12 @@ const Map<String, String> stringsEn = {
   'chatTitles': 'Chat Titles',
   'autoGenerateTitles': 'Auto-generate chat titles',
   'autoGenerateTitlesSubtitle': 'Use AI to generate titles for new chats',
+  'notificationsSection': 'Notifications',
+  'settingSaveFailed': 'Could not save the setting',
+  'notificationAnswerPreview':
+      'Show answer preview in notifications',
+  'notificationAnswerPreviewSubtitle':
+      'Puts the start of the answer in the notification. Off: the notification only says who is done.',
   'titleGenerationPrompt': 'Title Generation Prompt',
   'usingCustomPrompt': 'Using custom prompt',
   'usingDefaultPrompt': 'Using default prompt',
@@ -695,6 +701,9 @@ const Map<String, String> stringsEn = {
   'addMessageOrDocs': 'Add a message or send documents',
   'micAccessFailed': 'Mic access failed',
   'transcriptionFailed': 'Transcription failed',
+  'voiceMessage': 'Voice message',
+  'voiceMessageShowTranscript': 'Show transcript',
+  'voiceMessageHideTranscript': 'Hide transcript',
   'nothingToResend': 'Nothing to resend',
   'freeMessagesUsed': 'Free Messages Used',
   'ok': 'OK',
