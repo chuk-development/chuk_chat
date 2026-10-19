@@ -828,8 +828,9 @@ final List<ClientTool> builtinTools = [
             '9:21',
           ],
           'description':
-              'string (optional, overrides image_size: 1:1, 16:9, 9:16, 3:2, '
-              '2:3, 4:3, 3:4, 5:4, 4:5, 21:9, 9:21)',
+              'string (optional, overrides image_size except for '
+              'model="edit": 1:1, 16:9, 9:16, 3:2, 2:3, 4:3, 3:4, 5:4, 4:5, '
+              '21:9, 9:21)',
         },
         'caption': {
           'type': 'string',
