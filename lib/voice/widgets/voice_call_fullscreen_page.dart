@@ -8,6 +8,7 @@ import 'package:chuk_chat/ui/expressive/huge_icon.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/voice/voice_call_controller.dart';
 import 'package:chuk_chat/voice/voice_call_models.dart';
+import 'package:chuk_chat/voice/voice_protocol.dart';
 import 'package:chuk_chat/voice/widgets/voice_agent_card.dart';
 import 'package:chuk_chat/voice/widgets/voice_call_controls.dart';
 
@@ -531,6 +532,28 @@ class _VoiceCallFullscreenPageState extends State<VoiceCallFullscreenPage> {
                   ),
                   onTap: () => Navigator.pop(context, voice),
                 ),
+              const SizedBox(height: 12),
+              Text('Engine', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 4),
+              Text(
+                'Applies to your next call.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              for (final engine in VoiceCallEngine.values)
+                ListTile(
+                  title: Text(_engineTitle(engine)),
+                  subtitle: Text(_engineSubtitle(engine)),
+                  selected: engine == c.defaultEngine,
+                  trailing: engine == c.defaultEngine
+                      ? const HugeIcon(HugeIcons.tick02, size: 20)
+                      : null,
+                  onTap: engine == c.defaultEngine
+                      ? null
+                      : () => unawaited(
+                          _action(() => c.setDefaultEngine(engine)),
+                        ),
+                ),
             ],
           ),
         ),
@@ -538,6 +561,19 @@ class _VoiceCallFullscreenPageState extends State<VoiceCallFullscreenPage> {
     );
     if (selected != null && mounted) await _action(() => c.setVoice(selected));
   }
+
+  static String _engineTitle(VoiceCallEngine engine) => switch (engine) {
+    VoiceCallEngine.pipeline => 'Pipeline (standard)',
+    VoiceCallEngine.inworldS2S => 'Inworld Speech-to-Speech',
+  };
+
+  static String _engineSubtitle(VoiceCallEngine engine) => switch (engine) {
+    VoiceCallEngine.pipeline =>
+      'Our STT → LLM → TTS stack with tools, cards and delegation.',
+    VoiceCallEngine.inworldS2S =>
+      "Inworld's realtime API with semantic turn detection. Conversation "
+          'only: no tools, cards, or video description.',
+  };
 
   static String _outputLabel(VoiceCallController c) => switch (c.outputRoute) {
     'bluetooth' => 'Bluetooth',
