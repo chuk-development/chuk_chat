@@ -757,44 +757,44 @@ final List<ClientTool> builtinTools = [
     name: 'generate_image',
     description:
         'Generate OR edit an image. ONE tool for all image models — pick the '
-        'generator with the required "model" parameter:\n'
-        '• turbo — Z-Image Turbo: fastest & cheapest (~0.01 EUR). Default for '
-        'everyday images.\n'
-        '• hunyuan — Hunyuan Image 3: high quality (~0.08 EUR).\n'
-        '• flux — FLUX 2 Klein 9B: best photographic quality (~0.02 EUR).\n'
-        '• ideogram — Ideogram v4: best text rendering & structured/JSON '
-        'prompts, 2K output (~0.03–0.10 EUR by tier).\n'
-        '• edit — Qwen Image Edit Plus: modify an EXISTING image; requires '
-        '"image_url" (~0.03 EUR).\n'
-        'Choose the cheapest model that meets the need; use turbo unless the '
-        'user asks for higher quality, a specific model, text-in-image, or an '
-        'edit. The image is displayed inline automatically — do NOT repeat the '
-        'URL, dimensions, seed, or other technical details to the user. '
-        'COST & PRIVACY: always mention the credit cost. turbo and flux run '
-        'under a no-retention policy (inputs/outputs not stored or trained on) '
-        '— no privacy warning needed. For hunyuan, ideogram, and edit, also '
-        'warn the user that the image is processed on an external server, can '
-        'be seen by the operator, and is NOT end-to-end encrypted like chat '
-        'messages.',
+        'generator with the "model" parameter (default krea):\n'
+        '• krea — Krea 2 Large: the main model, high quality text-to-image '
+        '(~0.06 EUR). Default.\n'
+        '• turbo — Krea 2 Medium Turbo: fastest & cheapest (~0.015 EUR).\n'
+        '• hunyuan — Hunyuan Image 3.5: open-weights model, cheap '
+        '(~0.01 EUR).\n'
+        '• seedream — Seedream 5 Lite: best text & typography rendering '
+        '(posters, logos, signs; ~0.04 EUR).\n'
+        '• edit — Krea K3 Edit: modify EXISTING images; requires '
+        '"image_url" (~0.02 EUR per input image plus output).\n'
+        'Use krea unless the user wants it fast/cheap (turbo), text in the '
+        'image (seedream), a specific model, or an edit. The image is '
+        'displayed inline automatically — do NOT repeat the URL, dimensions, '
+        'seed, or other technical details to the user. '
+        'COST: always mention the credit cost. All models run under a '
+        'zero-data-retention policy (inputs/outputs not stored or trained '
+        'on), so no privacy warning is needed.',
     parameters: {
       'type': 'object',
       'properties': {
         'model': {
           'type': 'string',
-          'enum': ['turbo', 'hunyuan', 'flux', 'ideogram', 'edit'],
+          'enum': ['krea', 'turbo', 'hunyuan', 'seedream', 'edit'],
           'description':
-              'string (required: turbo | hunyuan | flux | ideogram | edit)',
+              'string (krea | turbo | hunyuan | seedream | edit — '
+              'default krea)',
         },
         'prompt': {
           'type': 'string',
           'description':
               'string (required: descriptive image prompt, or edit instruction '
-              'when model=edit)',
+              'when editing an image)',
         },
         'image_url': {
           'type': 'string',
           'description':
-              'string (required ONLY when model=edit: URL of the image to edit)',
+              'string (required ONLY when model=edit: URL of the image to '
+              'edit; up to 8 URLs, one per line, as references)',
         },
         'image_size': {
           'type': 'string',
@@ -808,9 +808,9 @@ final List<ClientTool> builtinTools = [
             'auto',
           ],
           'description':
-              'string (optional preset for turbo/hunyuan/flux/edit: square_hd, '
-              'square, portrait_4_3, portrait_16_9, landscape_4_3, '
-              'landscape_16_9; edit also accepts auto)',
+              'string (optional size preset: square_hd, square, portrait_4_3, '
+              'portrait_16_9, landscape_4_3, landscape_16_9; edit also '
+              'accepts auto)',
         },
         'aspect_ratio': {
           'type': 'string',
@@ -828,34 +828,8 @@ final List<ClientTool> builtinTools = [
             '9:21',
           ],
           'description':
-              'string (optional for hunyuan/flux, overrides image_size: 1:1, '
-              '16:9, 9:16, 3:2, 2:3, 4:3, 3:4, 5:4, 4:5, 21:9, 9:21)',
-        },
-        'megapixels': {
-          'type': 'string',
-          'enum': ['0.25', '0.5', '1', '2', '4'],
-          'description':
-              'string (optional for flux: "0.25", "0.5", "1", "2", "4" — '
-              'default "1")',
-        },
-        'tier': {
-          'type': 'string',
-          'enum': ['quality', 'balanced', 'turbo'],
-          'description':
-              'string (optional for ideogram: quality | balanced | turbo — '
-              'default quality)',
-        },
-        'resolution': {
-          'type': 'string',
-          'description':
-              'string (optional for ideogram: a native-2K preset like '
-              '"2048x2048"; omit for auto)',
-        },
-        'json_prompt': {
-          'type': 'string',
-          'description':
-              'string (optional for ideogram: structured JSON prompt for '
-              'explicit layout/text/palette control)',
+              'string (optional, overrides image_size: 1:1, 16:9, 9:16, 3:2, '
+              '2:3, 4:3, 3:4, 5:4, 4:5, 21:9, 9:21)',
         },
         'caption': {
           'type': 'string',
@@ -864,7 +838,7 @@ final List<ClientTool> builtinTools = [
               'subject name, scene — keep it under ~40 chars)',
         },
       },
-      'required': ['model', 'prompt'],
+      'required': ['prompt'],
       'additionalProperties': false,
     },
     type: ToolType.builtin,
@@ -878,9 +852,9 @@ final List<ClientTool> builtinTools = [
       'bild',
       'grafik',
       'ai image',
+      'krea',
       'hunyuan',
-      'flux',
-      'ideogram',
+      'seedream',
     ],
   ),
   ClientTool(

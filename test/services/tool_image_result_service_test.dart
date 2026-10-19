@@ -100,12 +100,12 @@ void main() {
     test('carries generator model label from IMAGE payload', () async {
       final payload = jsonEncode({
         'data_uri': 'data:image/png;base64,xyz',
-        'model': 'FLUX 2 Klein 9B',
+        'model': 'Krea 2 Large',
       });
 
       final call = ToolCall(
         name: 'generate_image',
-        arguments: const {'prompt': 'cat', 'model': 'flux'},
+        arguments: const {'prompt': 'cat', 'model': 'krea'},
         result: 'IMAGE:$payload',
         status: ToolCallStatus.completed,
       );
@@ -113,7 +113,7 @@ void main() {
       final processed = await ToolImageResultService.processToolCalls([call]);
 
       expect(processed.imageMetas, hasLength(1));
-      expect(processed.imageMetas.first['model'], equals('FLUX 2 Klein 9B'));
+      expect(processed.imageMetas.first['model'], equals('Krea 2 Large'));
     });
 
     test('omits model when IMAGE payload lacks it', () async {
