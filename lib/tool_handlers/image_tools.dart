@@ -142,8 +142,8 @@ Future<String> executeGenerateImage({
 
   final fields = <String, String>{'model': model, 'prompt': prompt};
 
-  final imageUrl = (args['image_url'] as String? ?? '').trim();
   if (model == 'edit') {
+    final imageUrl = (args['image_url'] as String? ?? '').trim();
     if (imageUrl.isEmpty) {
       return 'Error: "image_url" parameter required for model "edit" — '
           'provide the URL of the image to edit (up to 8 URLs, one per line)';
