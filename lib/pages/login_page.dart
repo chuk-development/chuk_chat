@@ -227,7 +227,7 @@ class _LoginPageState extends State<LoginPage> {
 
     return Scaffold(
       backgroundColor: scaffoldBg,
-      body: Center(
+      body: _CenteredScroll(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 400),
           child: Card(
@@ -573,5 +573,21 @@ class _LoginPageState extends State<LoginPage> {
         ),
       ),
     );
+  }
+}
+
+/// Centres the sign-in card and scrolls it when it is taller than the screen.
+///
+/// A fixed Column overflows on a 360 dp phone at a large text scale, with the
+/// keyboard open, or when the "not configured" notice and an auth error both
+/// take height.
+class _CenteredScroll extends StatelessWidget {
+  const _CenteredScroll({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(child: SingleChildScrollView(child: child));
   }
 }
