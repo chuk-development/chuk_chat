@@ -38,20 +38,25 @@ Workspaces for organizing chats with custom AI behavior.
 **Flag:** `--dart-define=FEATURE_PROJECTS=true`
 
 ## Image Generation
-AI Image Generation via Z-Image Turbo API (fal.ai).
+AI image generation through the `generate_image` tool. The API server
+(`POST /v1/ai/image/generate`, form field `model`) runs every model on
+OpenRouter with Zero Data Retention.
 
-**Features:**
-- Generate from text prompts in chat
-- Toggle button (sparkle icon) switches modes
-- Size presets or custom dimensions
-- Images encrypted and stored in Supabase
+**Models** (`model` key, ~cost per 1 MP image, server bills the real price):
+| Key | Model | ~Cost EUR | Use |
+|-----|-------|-----------|-----|
+| `krea` (default) | Krea 2 Large | 0.06 | Main model, high quality text-to-image |
+| `turbo` | Krea 2 Medium Turbo | 0.015 | Fast, cheap |
+| `hunyuan` | Hunyuan Image 3.5 | 0.01 | Open weights |
+| `seedream` | Seedream 5 Lite | 0.04 | Best text / typography |
+| `edit` | Krea K3 Edit | 0.02 per input image + output | Image-to-image only; `image_url` required (up to 8 URLs, one per line) |
 
-**Size Presets:**
-| Preset | Dimensions | ~Cost EUR |
-|--------|------------|-----------|
-| square_hd | 1024×1024 | 0.01 |
-| landscape_4_3 | 1024×768 | 0.01 |
-| portrait_4_3 | 768×1024 | 0.01 |
+Old keys still work as aliases: `quality`/`flux` -> `krea`, `ideogram` ->
+`seedream`, `k3` -> `edit` (`normalizeImageModel` in
+`lib/tool_handlers/image_tools.dart`).
+
+**Size:** `aspect_ratio` (1:1, 16:9, ...) or an `image_size` preset
+(square_hd, landscape_4_3, portrait_4_3, ...).
 
 **Files:**
 - `lib/pages/customization_page.dart` - Settings UI
