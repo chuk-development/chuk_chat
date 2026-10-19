@@ -67,7 +67,8 @@ const bool kFeatureArtifacts = bool.fromEnvironment(
   defaultValue: true,
 );
 
-/// Image Generation - AI image creation via Z-Image Turbo
+/// Image Generation - AI image creation via the `generate_image` tool
+/// (server runs Krea 2 and friends on OpenRouter, Zero Data Retention)
 /// Always enabled - no feature flag needed (Image Generation is production-ready)
 const bool kFeatureImageGen = true;
 
