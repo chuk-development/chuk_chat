@@ -257,12 +257,16 @@ void main() {
     await _open(tester, _markdownDocument());
 
     // The document renderer hands its tables to the chat's markdown table,
-    // chuk_chat's own, and that widget draws a table: the column name once,
-    // in the header.
+    // chuk_chat's own. On a phone a table too wide for the screen becomes one
+    // card per row, each value under its column name.
     expect(find.byType(ChukTableClassic), findsOneWidget);
-    expect(find.text('Anteil (%)'), findsOneWidget);
-    expect(find.text('Stand'), findsOneWidget);
-    // Both data rows are on screen, each on one line.
+    expect(
+      find.byKey(const ValueKey<String>('chuk-table-stacked')),
+      findsOneWidget,
+    );
+    expect(find.text('Anteil (%)'), findsNWidgets(2));
+    expect(find.text('Stand'), findsNWidgets(2));
+    // Both data rows are on screen.
     expect(find.textContaining('07.09.2026'), findsNWidgets(2));
   });
 

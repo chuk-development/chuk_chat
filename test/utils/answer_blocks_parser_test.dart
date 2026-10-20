@@ -179,6 +179,43 @@ void main() {
     });
   });
 
+  group('parseTimeline bold labels', () {
+    test('a bold label ends at its marker, not at a later colon', () {
+      final List<TimelineEntry> e = parseTimeline(<String>[
+        '- **Goethe:** Faust I & II (Riesengeschichte: Wette), Der Erlkönig',
+        '- **Schiller**: Die Räuber',
+        '- **1808**: Faust I',
+      ]);
+      expect(e[0].label, 'Goethe');
+      expect(e[0].text, startsWith('Faust I & II'));
+      expect(e[1].label, 'Schiller');
+      expect(e[1].text, 'Die Räuber');
+      expect(e[2].label, '1808');
+    });
+
+    test('names are not dates, years are', () {
+      expect(
+        timelineIsDated(
+          parseTimeline(<String>[
+            '- **Goethe:** Faust',
+            '- **Schiller:** Tell',
+          ]),
+        ),
+        isFalse,
+      );
+      expect(
+        timelineIsDated(parseTimeline(<String>['2019: A', '2021-01: B'])),
+        isTrue,
+      );
+    });
+
+    test('stripLabelEmphasis', () {
+      expect(stripLabelEmphasis('**Goethe:**'), 'Goethe');
+      expect(stripLabelEmphasis('__x__'), 'x');
+      expect(stripLabelEmphasis('2021'), '2021');
+    });
+  });
+
   group('parseScale', () {
     test('range, unit, ticks and marker', () {
       final ScaleSpec spec = parseScale('1800–6500 K', <String>[
@@ -243,7 +280,9 @@ void main() {
 
     test('kpi: value, label, icon, tag', () {
       final AnswerBlockSegment seg = _onlyBlock(
-        splitAnswerBlocks('::: kpi\n82 % | Luftfeuchtigkeit | droplet\n7 km/h | Wind | wind\n:::'),
+        splitAnswerBlocks(
+          '::: kpi\n82 % | Luftfeuchtigkeit | droplet\n7 km/h | Wind | wind\n:::',
+        ),
       );
       final KpiSpec spec = parseKpi(seg.arg, seg.lines);
       expect(spec.tiles, hasLength(2));
@@ -366,7 +405,79 @@ void main() {
       expect(prompt, contains('::: cards'));
       expect(prompt, contains('::: ask'));
       expect(prompt, contains('::: source'));
+      expect(prompt, contains('::: status'));
+      expect(prompt, contains('never bullets'));
       expect(prompt, contains('Never invent a URL'));
+    });
+  });
+
+  group('parseStatus', () {
+    test('header, positional fields, chip label, action, footer', () {
+      final AnswerBlockSegment seg = _onlyBlock(
+        splitAnswerBlocks(
+          '::: status 4 offene Zahlungen · 122,20 € + 50 \$\n'
+          'Hetzner | Karte fehlgeschlagen | 102,20 € | failed | 16.10. | hetzner.com | Bezahlen https://hetzner.com/pay\n'
+          'Mobbin | Abo endet | | due Letzte Chance | 18.10. | https://www.mobbin.com/x\n'
+          'more: Ältere Erinnerungen (Tailscale, Lebara …)\n'
+          'Tailscale | Erinnerung | | ok | 02.09.\n'
+          ':::',
+        ),
+      );
+      expect(seg.kind, AnswerBlockKind.status);
+      final StatusSpec spec = parseStatus(seg.arg, seg.lines);
+      expect(spec.title, '4 offene Zahlungen');
+      expect(spec.summary, '122,20 € + 50 \$');
+      expect(spec.items, hasLength(2));
+      final StatusItem h = spec.items[0];
+      expect(h.title, 'Hetzner');
+      expect(h.detail, 'Karte fehlgeschlagen');
+      expect(h.amount, '102,20 €');
+      expect(h.kind, StatusKind.failed);
+      expect(h.statusLabel, 'Failed');
+      expect(h.date, '16.10.');
+      expect(h.domain, 'hetzner.com');
+      expect(h.actionLabel, 'Bezahlen');
+      expect(h.actionUrl, 'https://hetzner.com/pay');
+      final StatusItem m = spec.items[1];
+      expect(m.amount, '');
+      expect(m.kind, StatusKind.due);
+      expect(m.statusLabel, 'Letzte Chance');
+      expect(m.domain, 'mobbin.com');
+      expect(m.actionUrl, '');
+      expect(spec.moreLabel, startsWith('Ältere Erinnerungen'));
+      expect(spec.moreItems.single.kind, StatusKind.ok);
+    });
+
+    test('status words, aliases and unknown labels', () {
+      StatusItem one(String status) =>
+          parseStatus('', <String>['X | | | $status']).items.single;
+      expect(one('overdue').kind, StatusKind.overdue);
+      expect(one('Überfällig').kind, StatusKind.overdue);
+      expect(one('Überfällig').statusLabel, 'Überfällig');
+      expect(one('status:paid').kind, StatusKind.ok);
+      expect(one('due: Morgen fällig').statusLabel, 'Morgen fällig');
+      expect(one('In Zustellung').kind, StatusKind.neutral);
+      expect(one('In Zustellung').statusLabel, 'In Zustellung');
+      expect(one('').statusLabel, '');
+    });
+
+    test('domain is a plain public host or nothing', () {
+      expect(statusDomain('Hetzner.com'), 'hetzner.com');
+      expect(statusDomain('https://www.x.org/a'), 'x.org');
+      expect(statusDomain('192.168.1.1'), '');
+      expect(statusDomain('localhost'), '');
+      expect(statusDomain('printer.local'), '');
+      expect(statusDomain('not a host'), '');
+    });
+
+    test('a row needs a title; a non-http action is dropped', () {
+      final StatusSpec spec = parseStatus('', <String>[
+        ' | nur Detail',
+        '- **Lebara** | Rechnung | 10 € | ok | | | Öffnen javascript:alert(1)',
+      ]);
+      expect(spec.items.single.title, 'Lebara');
+      expect(spec.items.single.actionUrl, '');
+      expect(spec.moreLabel, '');
     });
   });
 

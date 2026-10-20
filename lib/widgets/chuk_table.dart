@@ -311,7 +311,7 @@ class _ChukTableState extends State<ChukTable> {
   late List<bool> _hostLinkColumns;
 
   /// The column that reads as the subject of the row: the first one that is
-  /// not a column of links. A coworker that writes the reel URL first — and
+  /// not a column of links. An agent that writes the reel URL first — and
   /// it does — must not end up with a table whose strongest column is a row
   /// of hostnames. The subject of that row is the song.
   late int _subjectColumn;
@@ -1157,9 +1157,6 @@ class _CopyButton extends StatelessWidget {
               pressedColor: accent.withValues(alpha: 0.22),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(_height * 0.34),
-              ),
-              pressedShape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(_height * 0.20),
               ),
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: SizedBox(

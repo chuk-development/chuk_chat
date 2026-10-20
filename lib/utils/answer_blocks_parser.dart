@@ -27,6 +27,7 @@ enum AnswerBlockKind {
   cards,
   ask,
   source,
+  status,
 }
 
 /// One slice of a message: Markdown text or a parsed block.
@@ -72,6 +73,7 @@ const Map<String, AnswerBlockKind> _kBlockNames = <String, AnswerBlockKind>{
   'cards': AnswerBlockKind.cards,
   'ask': AnswerBlockKind.ask,
   'source': AnswerBlockKind.source,
+  'status': AnswerBlockKind.status,
 };
 
 final RegExp _openRe = RegExp(r'^ {0,3}:::\s*([A-Za-z][\w-]*)[ \t]*(.*)$');
@@ -352,6 +354,22 @@ class TimelineEntry {
   return (line.substring(0, at).trim(), line.substring(at + 2).trim());
 }
 
+/// A label the model wrapped in bold: `**Goethe:** Faust` or
+/// `**Goethe**: Faust`. Group 1 is the label, group 2 the text after it.
+final RegExp _boldLabelRe = RegExp(
+  r'^(?:\*\*|__)(.+?)(?:\*\*|__)\s*:?\s+(.*)$',
+);
+
+/// Drops a wrapping `**…**` / `__…__` and a trailing colon from a label.
+/// The label is drawn as plain text, so a marker left in it shows literally.
+String stripLabelEmphasis(String label) {
+  String l = label.trim();
+  final RegExpMatch? m = RegExp(r'^(\*\*|__)(.+)\1$').firstMatch(l);
+  if (m != null) l = m.group(2)!.trim();
+  if (l.endsWith(':')) l = l.substring(0, l.length - 1).trimRight();
+  return l;
+}
+
 List<TimelineEntry> parseTimeline(List<String> lines) {
   final List<TimelineEntry> out = <TimelineEntry>[];
   for (final String raw in lines) {
@@ -363,10 +381,45 @@ List<TimelineEntry> parseTimeline(List<String> lines) {
       hi = true;
       line = line.substring(1).trimLeft();
     }
-    final (String label, String text) = splitKeyValue(line);
+    final RegExpMatch? bold = _boldLabelRe.firstMatch(line);
+    final String label;
+    final String text;
+    if (bold != null && !bold.group(1)!.contains('*')) {
+      // A bold label ends at its closing marker, not at the first `: ` of
+      // the sentence after it.
+      label = stripLabelEmphasis(bold.group(1)!);
+      text = bold.group(2)!.trim();
+    } else {
+      final (String k, String v) = splitKeyValue(line);
+      label = stripLabelEmphasis(k);
+      text = v;
+    }
     out.add(TimelineEntry(label: label, text: text, highlight: hi));
   }
   return out;
+}
+
+final RegExp _digitRe = RegExp(r'\d');
+
+/// The longest label the timeline's date column draws, in characters
+/// (`2021-01-15`, `12:30 Uhr`, `um 1800`).
+const int kTimelineLabelMaxChars = 14;
+
+/// True when [entries] is a real timeline: most entries carry a short,
+/// date-like label (it holds a digit). A bullet list with bold names
+/// (`- **Goethe:** Faust`) is not one; it is drawn as plain Markdown, so the
+/// names do not end up in the narrow date column.
+bool timelineIsDated(List<TimelineEntry> entries) {
+  if (entries.isEmpty) return false;
+  int dated = 0;
+  for (final TimelineEntry e in entries) {
+    if (e.label.isNotEmpty &&
+        e.label.length <= kTimelineLabelMaxChars &&
+        _digitRe.hasMatch(e.label)) {
+      dated++;
+    }
+  }
+  return dated * 2 >= entries.length;
 }
 
 // ---------------------------------------------------------------------------
@@ -584,11 +637,7 @@ BarsSpec parseBars(String arg, List<String> lines) {
 // :::
 
 class KpiTile {
-  const KpiTile({
-    required this.value,
-    required this.label,
-    this.icon = '',
-  });
+  const KpiTile({required this.value, required this.label, this.icon = ''});
   final String value;
   final String label;
   final String icon;
@@ -758,8 +807,9 @@ AnswerCard _parseCardRecord(List<String> record) {
     final String line = raw.trim();
     if (line.isEmpty) continue;
     final int colon = line.indexOf(':');
-    final String key =
-        colon > 0 ? line.substring(0, colon).trim().toLowerCase() : '';
+    final String key = colon > 0
+        ? line.substring(0, colon).trim().toLowerCase()
+        : '';
     final String value = colon > 0 ? line.substring(colon + 1).trim() : '';
     // A known key with an empty value (`image:` from a tool that returned
     // nothing) is not content: drop it instead of letting it become the
@@ -792,7 +842,9 @@ AnswerCard _parseCardRecord(List<String> record) {
       }
     }
     if (key == 'chips' && value.isNotEmpty) {
-      chips.addAll(value.split(',').map((c) => c.trim()).where((c) => c.isNotEmpty));
+      chips.addAll(
+        value.split(',').map((c) => c.trim()).where((c) => c.isNotEmpty),
+      );
       continue;
     }
     if (key == 'meta' && value.isNotEmpty) {
@@ -921,4 +973,212 @@ SourceSpec parseSource(String arg, List<String> lines) {
     rows.add(SourceRow(title: pendingTitle));
   }
   return SourceSpec(rows: List<SourceRow>.unmodifiable(rows));
+}
+
+// ---------------------------------------------------------------------------
+// status — a list of items with amount, status and date (open payments,
+// invoices, orders, deliveries, tasks with a deadline)
+//
+// ::: status 4 offene Zahlungen · 122,20 € + 50 $
+// Hetzner | Kartenzahlung fehlgeschlagen | 102,20 € | failed | 16.10. | hetzner.com | Bezahlen https://…
+// Mobbin | Zahlungsmethode aktualisieren | | due Letzte Chance | 18.10. | mobbin.com
+// more: Ältere Erinnerungen (Tailscale, Lebara …)
+// Tailscale | Zahlungserinnerung | | ok | 02.09. | tailscale.com
+// :::
+//
+// One row per line, positional fields: title | detail | amount | status |
+// date | domain | action. Every field after the title may be empty. The
+// status is a kind word, optionally followed by the chip label in the
+// reader's language (`due Letzte Chance`); without a label the word itself
+// is the label. The action is an http(s) URL, optionally with a label in
+// front. A `more:` line starts the collapsed footer; the rows after it are
+// shown only when the reader opens it.
+
+/// The colour family of a status chip.
+enum StatusKind { failed, overdue, due, ok, neutral }
+
+const Map<String, StatusKind> _kStatusWords = <String, StatusKind>{
+  'failed': StatusKind.failed,
+  'fail': StatusKind.failed,
+  'error': StatusKind.failed,
+  'declined': StatusKind.failed,
+  'fehlgeschlagen': StatusKind.failed,
+  'abgelehnt': StatusKind.failed,
+  'overdue': StatusKind.overdue,
+  'late': StatusKind.overdue,
+  'delayed': StatusKind.overdue,
+  'überfällig': StatusKind.overdue,
+  'ueberfaellig': StatusKind.overdue,
+  'verspätet': StatusKind.overdue,
+  'due': StatusKind.due,
+  'pending': StatusKind.due,
+  'open': StatusKind.due,
+  'offen': StatusKind.due,
+  'fällig': StatusKind.due,
+  'soon': StatusKind.due,
+  'warning': StatusKind.due,
+  'ok': StatusKind.ok,
+  'paid': StatusKind.ok,
+  'done': StatusKind.ok,
+  'delivered': StatusKind.ok,
+  'bezahlt': StatusKind.ok,
+  'erledigt': StatusKind.ok,
+  'geliefert': StatusKind.ok,
+};
+
+class StatusItem {
+  const StatusItem({
+    required this.title,
+    this.detail = '',
+    this.amount = '',
+    this.kind = StatusKind.neutral,
+    this.statusLabel = '',
+    this.date = '',
+    this.domain = '',
+    this.actionLabel = '',
+    this.actionUrl = '',
+  });
+
+  final String title;
+  final String detail;
+  final String amount;
+  final StatusKind kind;
+
+  /// The chip text; empty means no chip.
+  final String statusLabel;
+  final String date;
+
+  /// Bare host for the logo (`hetzner.com`), empty when none is usable.
+  final String domain;
+  final String actionLabel;
+
+  /// An http(s) URL, empty when the row has no action.
+  final String actionUrl;
+}
+
+class StatusSpec {
+  const StatusSpec({
+    required this.title,
+    required this.summary,
+    required this.items,
+    this.moreLabel = '',
+    this.moreItems = const <StatusItem>[],
+  });
+
+  /// The bold header line (`4 offene Zahlungen`).
+  final String title;
+
+  /// The muted line under it (`122,20 € + 50 $`).
+  final String summary;
+  final List<StatusItem> items;
+
+  /// The collapsed footer row; empty means no footer.
+  final String moreLabel;
+  final List<StatusItem> moreItems;
+}
+
+final RegExp _hostRe = RegExp(
+  r'^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}$',
+);
+final RegExp _urlTokenRe = RegExp(r'https?://\S+', caseSensitive: false);
+
+/// A host fit for the favicon services, or ''. Accepts `hetzner.com`,
+/// `www.hetzner.com` and a full URL; refuses IPs, `localhost` and anything
+/// that is not a plain public-looking name.
+String statusDomain(String raw) {
+  String h = raw.trim().toLowerCase();
+  if (h.isEmpty) return '';
+  if (h.contains('://')) h = Uri.tryParse(h)?.host ?? '';
+  h = h.split('/').first;
+  if (h.startsWith('www.')) h = h.substring(4);
+  if (!_hostRe.hasMatch(h)) return '';
+  if (h.endsWith('.local') || h.endsWith('.localhost')) return '';
+  return h;
+}
+
+(StatusKind, String) _parseStatus(String raw) {
+  final String s = raw.trim();
+  if (s.isEmpty) return (StatusKind.neutral, '');
+  // `due Letzte Chance`, `due: Letzte Chance`, `status:due`.
+  String body = s;
+  if (body.toLowerCase().startsWith('status:')) body = body.substring(7).trim();
+  final Match? m = RegExp(r'^([^\s:]+)\s*:?\s*(.*)$').firstMatch(body);
+  final String word = (m?.group(1) ?? body).toLowerCase();
+  final String rest = (m?.group(2) ?? '').trim();
+  final StatusKind? kind = _kStatusWords[word];
+  if (kind == null) return (StatusKind.neutral, body);
+  if (rest.isNotEmpty) return (kind, rest);
+  final String w = m?.group(1) ?? body;
+  return (kind, w[0].toUpperCase() + w.substring(1));
+}
+
+StatusItem? _parseStatusRow(String line) {
+  String body = line.startsWith('- ') ? line.substring(2).trim() : line;
+  final List<String> p = body.split('|').map((String x) => x.trim()).toList();
+  String at(int i) => i < p.length ? p[i] : '';
+  final String title = stripLabelEmphasis(at(0));
+  if (title.isEmpty) return null;
+  final (StatusKind kind, String label) = _parseStatus(at(3));
+  final String actionRaw = p.length > 6 ? p.sublist(6).join(' | ') : '';
+  final Match? url = _urlTokenRe.firstMatch(actionRaw);
+  String actionUrl = '';
+  String actionLabel = '';
+  if (url != null) {
+    actionUrl = url.group(0)!;
+    actionLabel = actionRaw.substring(0, url.start).trim();
+    if (actionLabel.endsWith(':')) {
+      actionLabel = actionLabel.substring(0, actionLabel.length - 1).trim();
+    }
+  }
+  String domain = statusDomain(at(5));
+  if (domain.isEmpty && actionUrl.isNotEmpty) domain = statusDomain(actionUrl);
+  return StatusItem(
+    title: title,
+    detail: at(1),
+    amount: at(2),
+    kind: kind,
+    statusLabel: label,
+    date: at(4),
+    domain: domain,
+    actionLabel: actionLabel,
+    actionUrl: actionUrl,
+  );
+}
+
+StatusSpec parseStatus(String arg, List<String> lines) {
+  final List<StatusItem> items = <StatusItem>[];
+  final List<StatusItem> more = <StatusItem>[];
+  String moreLabel = '';
+  bool inMore = false;
+  for (final String raw in lines) {
+    final String line = raw.trim();
+    if (line.isEmpty) continue;
+    final String lower = line.toLowerCase();
+    if (lower.startsWith('more:') || lower.startsWith('mehr:')) {
+      moreLabel = line.substring(5).trim();
+      inMore = true;
+      continue;
+    }
+    final StatusItem? item = _parseStatusRow(line);
+    if (item == null) continue;
+    (inMore ? more : items).add(item);
+  }
+  String title = arg.trim();
+  String summary = '';
+  for (final String sep in const <String>[' · ', ' | ', ' — ', ' - ']) {
+    final int at = title.indexOf(sep);
+    if (at > 0) {
+      summary = title.substring(at + sep.length).trim();
+      title = title.substring(0, at).trim();
+      break;
+    }
+  }
+  if (moreLabel.isEmpty && more.isNotEmpty) moreLabel = '+${more.length}';
+  return StatusSpec(
+    title: title,
+    summary: summary,
+    items: List<StatusItem>.unmodifiable(items),
+    moreLabel: moreLabel,
+    moreItems: List<StatusItem>.unmodifiable(more),
+  );
 }

@@ -9,7 +9,7 @@
 //
 // and then OPEN the files under `test/widgets/goldens/chuk_table/`.
 //
-// The content is real: the Songs document the coworker wrote, with the
+// The content is real: the Songs document the agent wrote, with the
 // Instagram reel it came from, the Spotify search it opens, a Cyrillic title
 // and an artist name long enough to need cutting.
 
@@ -99,7 +99,7 @@ Map<String, dynamic> songs({int rows = 2}) {
   };
 }
 
-/// A table the coworker labelled itself: the cell carries `[label](url)`, so
+/// A table the agent labelled itself: the cell carries `[label](url)`, so
 /// the label survives and the column is NOT collapsed to an action.
 Map<String, dynamic> labelledSongs() {
   final Map<String, dynamic> doc = songs(rows: 3);
@@ -268,7 +268,7 @@ void main() {
     );
   });
 
-  testWidgets('the coworker wrote its own link labels', (
+  testWidgets('the agent wrote its own link labels', (
     WidgetTester tester,
   ) async {
     await _shoot(tester, inline(labelledSongs()), 'table_songs_labelled');

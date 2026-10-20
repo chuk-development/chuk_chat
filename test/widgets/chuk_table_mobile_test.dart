@@ -214,7 +214,7 @@ void main() {
   });
 }
 
-// Bead cowork-94s9: the coworker puts its source links in comparison tables.
+// Bead cowork-94s9: the agent puts its source links in comparison tables.
 // They used to be accent-coloured text with no underline and no recognizer, so
 // they read as links and did nothing.
 void _linkTests() {
@@ -292,7 +292,7 @@ void _linkTests() {
     expect(span!.style?.decoration, isNot(TextDecoration.underline));
   });
 
-  // The coworker writes the reel URL and the Spotify search URL into every
+  // The agent writes the reel URL and the Spotify search URL into every
   // row. Labelled with their host, the whole column reads "open.spotify.com"
   // three times over: the same string in every row, which is no information
   // at all, taking a quarter of a phone's width. It becomes the action it is.
@@ -354,8 +354,8 @@ void _linkTests() {
     );
     await tester.pump();
 
-    // The app collapses what the APP wrote (a bare host). What the coworker
-    // wrote is the coworker talking, and it is kept.
+    // The app collapses what the APP wrote (a bare host). What the agent
+    // wrote is the agent talking, and it is kept.
     expect(find.textContaining('Suche'), findsNWidgets(2));
   });
 }
