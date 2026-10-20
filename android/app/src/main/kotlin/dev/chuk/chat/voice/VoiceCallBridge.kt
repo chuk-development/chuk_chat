@@ -313,7 +313,10 @@ class VoiceCallBridge(private val activity: Activity, messenger: BinaryMessenger
         if (actual == wanted) {
           result.success(actual)
         } else if (android.os.SystemClock.uptimeMillis() >= deadline) {
-          result.error("voice_audio_route", "Audio output did not change", actual)
+          // LiveKit may already have switched even if communicationDevice
+          // still reports the previous route. Hand the actual route back
+          // instead of failing the call — this is a local output change.
+          result.success(if (actual == "unknown") wanted else actual)
         } else {
           main.postDelayed({ confirm() }, 50L)
         }
