@@ -203,4 +203,37 @@ void _repairTests() {
     await loader.load();
     expect(loader.cursorFor('thread-1'), 106);
   });
+  test('repeated identical turns from the cache are not kept twice', () {
+    // The cache hands its rows back in the stored shape: `role`, no
+    // `sender` (bead chuk_chat-kl8x). The overlap check must read both, or
+    // it never matches and the fallback aligns on a later "ok".
+    Map<String, String> cached(String role, String text) => <String, String>{
+      'role': role,
+      'text': text,
+    };
+    final existing = <Map<String, String>>[
+      cached('user', 'ok'),
+      cached('assistant', 'ok'),
+      cached('user', 'ok'),
+      cached('assistant', 'ok'),
+    ];
+    final delta = <Map<String, String>>[
+      user('ok'),
+      ai('ok'),
+      user('ok'),
+      ai('ok'),
+      user('ok'),
+      ai('ok'),
+    ];
+    final merged = AgentsReplayLoader.appendWithoutRepeats(existing, delta);
+    expect(merged, hasLength(6));
+    expect(texts(merged), [
+      'user:ok',
+      'ai:ok',
+      'user:ok',
+      'ai:ok',
+      'user:ok',
+      'ai:ok',
+    ]);
+  });
 }

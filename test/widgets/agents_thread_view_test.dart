@@ -347,6 +347,7 @@ void main() {
       WidgetTester tester, {
       bool hostAway = false,
       bool? linkAnswers,
+      bool probeThrows = false,
     }) async {
       tester.view.physicalSize = const Size(1400, 900);
       tester.view.devicePixelRatio = 1;
@@ -362,7 +363,10 @@ void main() {
               final c =
                   (linkAnswers == null
                         ? FakeRelayController()
-                        : _ProbingRelayController(linkAnswers))
+                        : _ProbingRelayController(
+                            linkAnswers,
+                            throws: probeThrows,
+                          ))
                     ..reconnectFails = hostAway;
               controllers.add(c);
               return c;
@@ -451,6 +455,28 @@ void main() {
       await tester.pump();
       await tester.pump();
 
+      expect(dead.probes, 1);
+      expect(controllers, hasLength(2));
+      expect(controllers.last.reconnectCalls, 1);
+    });
+
+    testWidgets('resume replaces a socket whose probe throws', (tester) async {
+      final (controllers, _) = await pumpPersistent(
+        tester,
+        linkAnswers: true,
+        probeThrows: true,
+      );
+      final dead = controllers.single as _ProbingRelayController;
+      final state = tester.state<AgentsThreadViewState>(
+        find.byType(AgentsThreadView),
+      );
+      state.didChangeAppLifecycleState(AppLifecycleState.paused);
+      state.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump();
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
       expect(dead.probes, 1);
       expect(controllers, hasLength(2));
       expect(controllers.last.reconnectCalls, 1);
@@ -1523,9 +1549,12 @@ Future<void> _flushIdleTimers(WidgetTester tester) async {
 /// A fake whose socket can be asked whether it still answers.
 class _ProbingRelayController extends FakeRelayController
     implements AgentsLinkProbe {
-  _ProbingRelayController(this.answers);
+  _ProbingRelayController(this.answers, {this.throws = false});
 
   final bool answers;
+
+  /// The probe fails with an error, as a send on a closed socket does.
+  final bool throws;
   int probes = 0;
 
   @override
@@ -1533,6 +1562,7 @@ class _ProbingRelayController extends FakeRelayController
     Duration timeout = const Duration(milliseconds: 1500),
   }) async {
     probes++;
+    if (throws) throw StateError('socket closed');
     return answers;
   }
 }

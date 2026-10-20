@@ -1831,8 +1831,10 @@ class _StatusBlockState extends State<_StatusBlock> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    SizedBox(
-                      height: 28,
+                    // At least the logo's height, so the name lines up with
+                    // it; taller when a large text scale needs the room.
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(minHeight: 28),
                       child: Row(
                         children: <Widget>[
                           Expanded(

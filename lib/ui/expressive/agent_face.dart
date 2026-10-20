@@ -89,7 +89,7 @@ Color agentAccent(
   return HSLColor.fromAHSL(1, hue, 0.45, dark ? 0.42 : 0.62).toColor();
 }
 
-/// A stable index into [kAgentAccents] from the agent id. Its own hash, so a
+/// A stable index into [kAgentAccents] from the agent id. Its own hash, so an
 /// agent's colour and its silhouette are not picked by the same number and
 /// two agents that share one do not automatically share the other.
 int _paletteIndex(String agentId) {

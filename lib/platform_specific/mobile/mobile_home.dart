@@ -81,8 +81,8 @@ class _MobileHomeState extends State<MobileHome> {
                   children: <Widget>[
                     widget.chats,
                     // Pictures and files, out of every conversation, without
-                    // opening one. Agents has no artifacts of its own: a
-                    // agent writes a real file and sends it.
+                    // opening one. Agents has no artifacts of its own.
+                    // An agent writes a real file and sends it.
                     MobileMediaPage(
                       threadKeys: <String>[
                         for (final AgentsAgent agent

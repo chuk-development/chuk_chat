@@ -359,7 +359,7 @@ mixin AgentsShellHost on State<MessengerShell> {
       // A roster that cannot be read is an empty one, as it always was.
     }
     if (!mounted) return;
-    // Deletes outlive the launch they were made in: the host still lists a
+    // Deletes outlive the launch they were made in: the host still lists an
     // agent the user removed (delete has no wire frame yet), so the ignore
     // set has to start with what earlier launches deleted.
     _deletedAgentIds.addAll(_roster.deletedIds);

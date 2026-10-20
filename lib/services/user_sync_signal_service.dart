@@ -89,6 +89,8 @@ class UserSyncSignalService {
   /// first.
   Future<void> start(String userId) async {
     if (_userId == userId && (_close != null || _paused)) return;
+    // The same user's open is in flight: join it, do not start a second one.
+    if (_userId == userId && _opening != null) return _open();
     await stop();
     _userId = userId;
     _paused = false;
@@ -135,7 +137,29 @@ class UserSyncSignalService {
     }
   }
 
+  /// The open that is in flight, if any. A second open must not start next
+  /// to it: pause→resume while the opener still waits, or two quick
+  /// [start] calls, would open two channels on the same topic, and closing
+  /// the second one can remove the live one.
+  Future<void>? _opening;
+
+  /// Opens the channel unless one is open or opening. Waits for an open in
+  /// flight first, then checks again: that open may have dropped its channel
+  /// because a pause came in while it was waiting.
   Future<void> _open() async {
+    for (Future<void>? pending = _opening; pending != null; pending = _opening) {
+      await pending;
+    }
+    if (_userId == null || _paused || _close != null) return;
+    late final Future<void> run;
+    run = _openChannel().whenComplete(() {
+      if (identical(_opening, run)) _opening = null;
+    });
+    _opening = run;
+    await run;
+  }
+
+  Future<void> _openChannel() async {
     final String? userId = _userId;
     if (userId == null) return;
     final opener = channelOpenerOverride ?? _openSupabaseChannel;

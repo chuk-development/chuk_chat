@@ -92,6 +92,13 @@ class ComposerSendButton extends StatelessWidget {
   final String semanticsId;
 
   /// The face for a composer state. Loading wins, then stop, then content.
+  /// Whether a busy chat (a response streams, or a send is in flight) makes
+  /// the target the stop target. Not while the microphone is open: then the
+  /// target sends the recording, and the transcription is queued as a
+  /// pending message. The desktop and the phone composer both use this.
+  static bool stopsWhile({required bool busy, required bool micActive}) =>
+      busy && !micActive;
+
   static ComposerSendFace faceFor({
     required bool hasContent,
     required bool voiceAvailable,

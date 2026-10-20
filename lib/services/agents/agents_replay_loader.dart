@@ -36,7 +36,6 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:chuk_chat/models/chat_message.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
@@ -751,7 +750,7 @@ class AgentsReplayLoader extends ChangeNotifier {
 
   /// The identity [_sameRow] compares, as one integer.
   static int _rowKey(Map<String, String> row) =>
-      Object.hash(row['sender'], (row['text'] ?? '').trim()) & 0x3fffffff;
+      Object.hash(_senderOf(row), (row['text'] ?? '').trim()) & 0x3fffffff;
 
   /// Two cache rows that stand for the same turn: same side, same words. The
   /// clocks differ by design (the app stamps its own send, the host stamps the

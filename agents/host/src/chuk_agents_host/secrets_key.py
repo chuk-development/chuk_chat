@@ -39,3 +39,17 @@ def mail_key_at_rest_key(identity: DeviceIdentity) -> bytes:
     return HKDF(
         algorithm=hashes.SHA256(), length=KEY_LEN, salt=None, info=_MAIL_KEY_LABEL
     ).derive(identity.export_private_seed())
+
+
+# The OAuth grants of the forwarded MCP connectors (``mcp-grants.json``, see
+# ``chuk_agents_runtime.mcp_client.OAuthGrantStore``) hold live refresh
+# tokens. They are sealed under a key of their own, from the same seed.
+_MCP_GRANTS_LABEL = b"cowork/host/mcp-grants-at-rest/v1"
+
+
+def mcp_grants_at_rest_key(identity: DeviceIdentity) -> bytes:
+    """32 bytes for AES-256-GCM over ``mcp-grants.json``, derived from the
+    identity's private seed under a label of its own."""
+    return HKDF(
+        algorithm=hashes.SHA256(), length=KEY_LEN, salt=None, info=_MCP_GRANTS_LABEL
+    ).derive(identity.export_private_seed())

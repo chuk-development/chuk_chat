@@ -98,7 +98,7 @@ abstract class AgentRosterSource extends ChangeNotifier {
   void renameAgent(String id, String name);
 
   /// Merges the host's `agent_list` (bead cowork-817, WIRE_CONTRACT "Agent
-  /// names"): a known id takes the listed name; an unknown id is added as a
+  /// names"): a known id takes the listed name; an unknown id is added as an
   /// agent with that name and its one permanent thread; the entry marked
   /// `host` renames the `host:<peerDeviceId>` row (skipped when the host is
   /// not paired). Ids in [ignore] — deleted in this session — are left out.
@@ -516,7 +516,7 @@ List<AgentsAgent> agentsMissingOnHost(
 /// manager's Python generator uses, so a name looks the same wherever it was
 /// minted.
 class AgentNameGenerator {
-  const AgentNameGenerator({Random? random}) : _random = random;
+  const AgentNameGenerator({this._random});
 
   final Random? _random;
 

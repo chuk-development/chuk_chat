@@ -174,12 +174,82 @@ def test_the_grant_survives_a_host_restart(ratchet, tmp_path):
     late = MCPConnection(_forwarded("rt-1", "at-1"), grants=restarted)
 
     assert late.config.oauth["refresh_token"] == "rt-2"
-    assert late.config.auth_token == "at-2"
+    # The access token is never on disk: the stale bearer is dropped, and the
+    # first request mints a new one from the current refresh token.
+    assert late.config.auth_token == ""
+    assert late._http_headers()["Authorization"] == "Bearer at-3"  # noqa: SLF001
     assert path.stat().st_mode & 0o777 == 0o600
-    # The file keeps hashes of earlier refresh tokens, never the tokens.
+    # The file keeps hashes of earlier refresh tokens, never the tokens, and
+    # never an access token.
     raw = json.loads(path.read_text())
     record = next(iter(raw.values()))
     assert "rt-1" not in json.dumps(record["seen"])
+    assert "access_token" not in record
+    assert "at-" not in path.read_text()
+
+
+_KEY = bytes(range(32))
+
+
+def test_a_sealed_grant_file_holds_no_token_in_the_clear(ratchet, tmp_path):
+    path = tmp_path / "mcp-grants.json"
+    mcp_client.GRANTS.set_key(_KEY)
+    mcp_client.GRANTS.set_path(path)
+    host = MCPConnection(_forwarded("rt-1", "at-1"))
+    assert host.refresh_token(force=True) == "at-2"
+
+    text = path.read_text()
+    assert path.stat().st_mode & 0o777 == 0o600
+    assert set(json.loads(text)) == {"version", "nonce", "ciphertext"}
+    for secret in ("rt-1", "rt-2", "at-1", "at-2"):
+        assert secret not in text
+
+    # The restart with the same key: the grant is back, the stale copy loses.
+    restarted = OAuthGrantStore(path, key=_KEY)
+    late = MCPConnection(_forwarded("rt-1", "at-1"), grants=restarted)
+    assert late.config.oauth["refresh_token"] == "rt-2"
+
+    # Another key (a new host identity) opens nothing.
+    foreign = OAuthGrantStore(path, key=bytes(32))
+    assert foreign.current(late.config) is None
+
+
+def test_an_old_plaintext_grant_file_is_read_once_and_sealed(ratchet, tmp_path):
+    path = tmp_path / "mcp-grants.json"
+    # An older build wrote the records in the clear, access token included.
+    old = OAuthGrantStore(path)
+    host = MCPConnection(_forwarded("rt-1", "at-1"), grants=old)
+    assert host.refresh_token(force=True) == "at-2"
+    legacy = json.loads(path.read_text())
+    for record in legacy.values():
+        record["access_token"] = "at-2"
+    path.write_text(json.dumps(legacy))
+
+    store = OAuthGrantStore(path, key=_KEY)
+    late = MCPConnection(_forwarded("rt-1", "at-1"), grants=store)
+
+    # The plaintext grant was taken ...
+    assert late.config.oauth["refresh_token"] == "rt-2"
+    # ... and the file is sealed now, with no token in the clear.
+    text = path.read_text()
+    assert set(json.loads(text)) == {"version", "nonce", "ciphertext"}
+    assert "rt-2" not in text and "at-2" not in text
+    assert OAuthGrantStore(path, key=_KEY).current(late.config)["current"]
+
+
+def test_set_key_seals_a_file_that_is_already_there(ratchet, tmp_path):
+    path = tmp_path / "mcp-grants.json"
+    mcp_client.GRANTS.set_path(path)
+    host = MCPConnection(_forwarded("rt-1", "at-1"))
+    assert host.refresh_token(force=True) == "at-2"
+    assert "rt-2" in path.read_text()
+
+    mcp_client.GRANTS.set_key(_KEY)
+
+    text = path.read_text()
+    assert "rt-2" not in text
+    assert set(json.loads(text)) == {"version", "nonce", "ciphertext"}
+    assert mcp_client.GRANTS.current(host.config)["refresh_token"] == "rt-2"
 
 
 def test_an_entry_without_refresh_material_is_not_shared(ratchet):

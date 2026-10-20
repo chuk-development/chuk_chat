@@ -374,8 +374,8 @@ class BrowserBroker:
         """``handler(session, frame)`` for a ``page_message`` the user typed in
         the add-on's panel. ``session`` is the agent that holds the browser
         or last held it, ``None`` when none did. The handler's dict
-        (``ok``, ``agent``, ``error``) goes back to the add-on as
-        ``page_message_ack``. Called on its own thread."""
+        (``ok``, ``coworker`` with the agent's name, ``error``) goes back
+        to the add-on as ``page_message_ack``. Called on its own thread."""
         with self._lock:
             self._page_handler = handler
 

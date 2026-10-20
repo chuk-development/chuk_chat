@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from chuk_agents_runtime import DEFAULT_MODEL_ID, StateStore, SupabaseSession, fetch_models_info
+from chuk_agents_runtime import mcp_client
 from chuk_agents_runtime.cost import PriceBook
 from chuk_agents_runtime.agent_mail import ORIGIN_MAIL, ORIGIN_MAIL_UNTRUSTED
 from chuk_agents_runtime.hindsight_service import (
@@ -122,7 +123,7 @@ from chuk_agents_config import resolve_state_home
 from .room_service import RoomService, dispatch_room_frame
 from .coworker_names import CoworkerNameStore, handle_agent_frame, host_agent_id
 from .coworker_templates import seed_persona, template_seed
-from .secrets_key import mail_key_at_rest_key, secrets_at_rest_key
+from .secrets_key import mail_key_at_rest_key, mcp_grants_at_rest_key, secrets_at_rest_key
 from .seed_skills import seed_skills_dir, seed_workspace_skills
 from .desktop_notify import DesktopNotifier
 from .automations import AutomationManager
@@ -383,6 +384,10 @@ class LocalHost:
         self._environments: dict[str, BaseEnvironment] = {}
 
         self._identity = load_or_create_identity(self._workspace / "host_device.key")
+        # The OAuth grants of the forwarded connectors (``mcp-grants.json``)
+        # hold live refresh tokens: the store seals them under a key from the
+        # same identity. Set before any executor gives the store its file.
+        mcp_client.GRANTS.set_key(mcp_grants_at_rest_key(self._identity))
         self._device_id = HOST_DEVICE_ID
 
         # The user's secret set (docs/WIRE_CONTRACT.md, "Secrets"): one per
@@ -692,7 +697,7 @@ class LocalHost:
     def _seed_other_workspaces(self, own: Path) -> None:
         """Seed every other agent workspace under the agents directory.
 
-        Once per boot, so a new seed skill or a newer built-in reaches a
+        Once per boot, so a new seed skill or a newer built-in reaches an
         agent that already exists. Non-destructive like the first seed
         (see :mod:`chuk_agents_host.seed_skills`). Never raises.
         """

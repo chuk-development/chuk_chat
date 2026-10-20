@@ -2228,7 +2228,7 @@ Host → app, `voice_call_incoming` — a call rings:
 - Exactly these ten keys. A receiver ignores keys it does not know.
 - `thread_id` is the thread's `session_key`: the agent's thread key in the
   app. Open that thread when the user accepts.
-- `agent_id` is the agent id the app already knows: the `local:…` id of a
+- `agent_id` is the agent id the app already knows: the `local:…` id of an
   agent the user made (`agent_create`), or `host:<host device id>` for the
   host's own agent (see "Agent names").
 - `agent_name` is the name the user gave that agent in the app
@@ -2854,7 +2854,7 @@ Same newline JSON on the unix socket, native-messaging frames to Chrome.
 - `browser_resume` (new): add-on -> host when the user taps "Allow again";
   host -> add-on when the user sends a new task, or taps "Allow again" in
   the app (`user_browser_resume`).
-- `browser_holder` (new, bead chuk_chat-8xsn): the broker sends it when a
+- `browser_holder` (new, bead chuk_chat-8xsn): the broker sends it when an
   agent takes the browser, right before that agent's first command, on
   the same line. `name` is the name the user gave the agent (the host's
   `coworker_name`; "Your agent" for an unnamed host agent), one line, at
