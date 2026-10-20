@@ -188,3 +188,28 @@ flutter {
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
+
+// Flutter's pub-get registrant lists integration_test (a dev plugin).
+// Release compile does not put that package on the classpath, so javac
+// fails. Drop the stale registration just before Java compile.
+fun stripStaleIntegrationTestRegistrant() {
+    val registrant = file("src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java")
+    if (!registrant.exists()) return
+    val original = registrant.readText()
+    val cleaned =
+        original.replace(
+            Regex(
+                """\n    try \{\n      flutterEngine\.getPlugins\(\)\.add\(new dev\.flutter\.plugins\.integration_test\.IntegrationTestPlugin\(\)\);\n    \} catch \(Exception e\) \{\n      Log\.e\(TAG, "Error registering plugin integration_test, dev\.flutter\.plugins\.integration_test\.IntegrationTestPlugin", e\);\n    \}""",
+            ),
+            "",
+        )
+    if (cleaned != original) {
+        registrant.writeText(cleaned)
+    }
+}
+
+tasks.configureEach {
+    if (name.contains("compile") && name.contains("JavaWithJavac")) {
+        doFirst { stripStaleIntegrationTestRegistrant() }
+    }
+}
