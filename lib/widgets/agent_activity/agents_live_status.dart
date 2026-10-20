@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/stream_phase.dart';
+import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
@@ -23,6 +24,8 @@ import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/services/streaming_manager.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/widgets/agent_activity/agent_activity_model.dart';
+import 'package:chuk_chat/widgets/agent_activity/agent_activity_timeline.dart';
+import 'package:chuk_chat/widgets/messenger_typing_indicator.dart';
 
 /// Whether the computer can be reached through [link] right now.
 ///
@@ -93,16 +96,49 @@ class AgentsLiveStatus {
   /// ledger is one object for the whole process.
   Listenable get listenable => _ledger;
 
-  /// The status right now.
-  AgentsTurnStatus? status() {
-    AgentsRun? run = _ledger.runFor(chatId);
+  /// This turn's run in the ledger, or null. A run the ledger still holds
+  /// from an EARLIER turn is not this turn's.
+  AgentsRun? _run() {
+    final AgentsRun? run = _ledger.runFor(chatId);
     final DateTime? started = turnStartedAt;
     if (run != null &&
         !run.running &&
         started != null &&
         run.startedAt.isBefore(started.subtract(const Duration(seconds: 2)))) {
-      run = null;
+      return null;
     }
+    return run;
+  }
+
+  /// Everything this turn did so far, for the open panel under the dots:
+  /// the model's thinking, then every call the host reported, in order.
+  ///
+  /// The host reports its steps to the run ledger and nothing else; the
+  /// message only receives them when the run is over. So the ledger is the
+  /// source while the run is live, and [fallbackReasoning] /
+  /// [fallbackCalls] (what the message itself holds) only stand in when the
+  /// ledger has nothing for this turn.
+  List<AgentActivityStep> steps({
+    String fallbackReasoning = '',
+    List<ToolCall> fallbackCalls = const <ToolCall>[],
+  }) {
+    final AgentsRun? run = _run();
+    final String ledgerReasoning = run?.modelReasoning.trim() ?? '';
+    final String reasoning = ledgerReasoning.isNotEmpty
+        ? ledgerReasoning
+        : fallbackReasoning.trim();
+    final List<ToolCall> calls = (run != null && run.toolCalls.isNotEmpty)
+        ? run.toolCalls
+        : fallbackCalls;
+    return <AgentActivityStep>[
+      if (reasoning.isNotEmpty) AgentActivityStep.reasoning(reasoning),
+      for (final ToolCall call in calls) AgentActivityStep.tool(call),
+    ];
+  }
+
+  /// The status right now.
+  AgentsTurnStatus? status() {
+    final AgentsRun? run = _run();
     final StreamPhase? phase =
         (_streamPhase ?? (id) => StreamingManager().phaseOf(id))(chatId);
     return agentsTurnStatusFor(
@@ -153,11 +189,14 @@ class AgentsRetryButton extends StatelessWidget {
   }
 }
 
-/// The status of a run this screen has no bubble for: a run the host was
-/// already working on when the thread opened (the phone's typing pill).
+/// A run this screen has no bubble for: a run the host was already working
+/// on when the thread opened (the phone's typing pill).
 ///
-/// "Preparing · 41s" under the dots, so a long wait reads as work in
-/// progress and not as a frozen pill.
+/// Only the three typing dots, like any messenger: they say the agent is
+/// still working. A tap opens what it is doing, in detail: the phase with
+/// its clock ("Preparing · 41s"), then every step the host reported. Retry
+/// stays next to the dots while the computer cannot be reached, because it
+/// is an action, not a status.
 class AgentsLiveStatusLine extends StatefulWidget {
   const AgentsLiveStatusLine({
     super.key,
@@ -179,16 +218,12 @@ class AgentsLiveStatusLine extends StatefulWidget {
 }
 
 class _AgentsLiveStatusLineState extends State<AgentsLiveStatusLine> {
-  Timer? _ticker;
-
   AgentsRunLedger get _ledger => widget.ledger ?? AgentsRunLedger.instance;
 
   @override
   void initState() {
     super.initState();
     _ledger.addListener(_repaint);
-    // Whole seconds are printed, so one repaint a second is all it needs.
-    _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _repaint());
   }
 
   @override
@@ -202,7 +237,6 @@ class _AgentsLiveStatusLineState extends State<AgentsLiveStatusLine> {
 
   @override
   void dispose() {
-    _ticker?.cancel();
     _ledger.removeListener(_repaint);
     super.dispose();
   }
@@ -211,42 +245,45 @@ class _AgentsLiveStatusLineState extends State<AgentsLiveStatusLine> {
     if (mounted) setState(() {});
   }
 
+  AgentsTurnStatus? _status() => agentsTurnStatusFor(
+    run: _ledger.runFor(widget.sessionKey),
+    linkUp: agentsLinkUp(widget.link),
+  );
+
   @override
   Widget build(BuildContext context) {
     final AgentsRun? run = _ledger.runFor(widget.sessionKey);
-    final AgentsTurnStatus? status = agentsTurnStatusFor(
-      run: run,
-      linkUp: agentsLinkUp(widget.link),
-    );
-    if (status == null || run == null) return const SizedBox.shrink();
-    final DateTime now = (widget.clock ?? DateTime.now)();
-    final Duration elapsed = now.difference(run.startedAt);
-    final String words = status.label(AppLocalizations.of(context));
-    final String text = elapsed.inSeconds >= 1
-        ? '$words · ${formatAgentDurationLive(elapsed)}'
-        : words;
-    final ThemeData theme = Theme.of(context);
-    final Color muted = theme.colorScheme.onSurface.withValues(alpha: 0.55);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        Flexible(
-          child: Text(
-            text,
-            key: const ValueKey<String>('agents-live-status-line'),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: muted,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
-        if (status.offersRetry) ...<Widget>[
-          const SizedBox(width: 8),
-          const AgentsRetryButton(),
-        ],
-      ],
+    // No run to tell about (it ended, or none was adopted): the plain dots,
+    // with nothing behind them.
+    if (run == null || _status() == null) {
+      return const MessengerTypingIndicator();
+    }
+    return AgentActivityTimeline(
+      key: const ValueKey<String>('agents-live-status-line'),
+      toolCalls: const <ToolCall>[],
+      isRunning: true,
+      liveDots: true,
+      showResultSummaries: true,
+      clock: widget.clock,
+      startedAt: run.startedAt,
+      liveListenable: _ledger,
+      liveSteps: () {
+        final AgentsRun? current = _ledger.runFor(widget.sessionKey);
+        if (current == null) return const <AgentActivityStep>[];
+        final String reasoning = current.modelReasoning.trim();
+        return <AgentActivityStep>[
+          if (reasoning.isNotEmpty) AgentActivityStep.reasoning(reasoning),
+          for (final ToolCall call in current.toolCalls)
+            AgentActivityStep.tool(call),
+        ];
+      },
+      liveVerb: (BuildContext context) =>
+          _status()?.label(AppLocalizations.of(context)),
+      liveTrailing: (BuildContext context) {
+        final AgentsTurnStatus? status = _status();
+        if (status == null || !status.offersRetry) return null;
+        return const AgentsRetryButton();
+      },
     );
   }
 }

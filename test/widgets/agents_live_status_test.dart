@@ -214,7 +214,7 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('the phone typing pill carries the phase of an adopted run', (
+  testWidgets('the phone typing pill is only dots; a tap shows the phase of an adopted run', (
     tester,
   ) async {
     ledger.adoptRunning(
@@ -226,6 +226,15 @@ void main() {
     await tester.pumpWidget(
       _app(AgentsLiveStatusLine(sessionKey: key, ledger: ledger, link: link)),
     );
+    await tester.pump();
+    // Folded, the pill is the dots and nothing else.
+    expect(
+      find.byKey(const ValueKey<String>('agents-live-dots')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Working'), findsNothing);
+    // A tap opens the phase with its clock.
+    await tester.tap(find.byKey(const ValueKey<String>('agents-live-dots')));
     await tester.pump();
     expect(find.textContaining(RegExp(r'^Working · 1\ds$')), findsOneWidget);
     ledger.openTool(key, 'web_search');

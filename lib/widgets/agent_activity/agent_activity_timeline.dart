@@ -16,6 +16,7 @@ import 'package:chuk_chat/utils/favicon.dart';
 import 'package:chuk_chat/widgets/agent_activity/agent_activity_model.dart';
 import 'package:chuk_chat/widgets/agent_activity/turn_status.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
+import 'package:chuk_chat/widgets/messenger_typing_indicator.dart';
 
 class AgentActivityTimeline extends StatefulWidget {
   const AgentActivityTimeline({
@@ -34,7 +35,28 @@ class AgentActivityTimeline extends StatefulWidget {
     this.liveVerb,
     this.liveTrailing,
     this.liveListenable,
+    this.liveDots = false,
+    this.liveSteps,
+    this.showResultSummaries = false,
   });
+
+  /// While the round runs, the header is only the three typing dots: it
+  /// says the agent is still working and nothing more. The words (the
+  /// phase, the clock) and every step sit behind a tap, in the open panel.
+  /// Folded by default. Once the round settles the header is the usual
+  /// "Worked for 13s" line again.
+  final bool liveDots;
+
+  /// The steps of a running round, read again on every repaint, like
+  /// [liveVerb]. An Agents run reports its steps to the run ledger, not to
+  /// the message, so the bubble cannot hand them down as a value. Outranks
+  /// [steps] and [toolCalls] while the round runs.
+  final List<AgentActivityStep> Function()? liveSteps;
+
+  /// Prints a one-line result under every finished call
+  /// ([toolResultSummary]), so the open panel says what each step returned
+  /// without a tap per step.
+  final bool showResultSummaries;
 
   /// The phase an Agents turn reports, read again on every repaint while the
   /// round runs (see [TurnStatus.liveVerb]). A callback rather than a value:
@@ -172,7 +194,11 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
     });
   }
 
-  bool get _isExpanded => _expandedOverride ?? widget.isRunning;
+  bool get _isExpanded =>
+      _expandedOverride ?? (widget.isRunning && !widget.liveDots);
+
+  /// The header is the typing dots right now.
+  bool get _showsDots => widget.liveDots && widget.isRunning;
 
   /// Thinking notes the reader opened, by their position in the list.
   final Set<int> _openBodies = <int>{};
@@ -183,7 +209,8 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final muted = theme.colorScheme.onSurface.withValues(alpha: 0.55);
-    final steps = widget.steps;
+    final liveSteps = widget.isRunning ? widget.liveSteps : null;
+    final steps = liveSteps != null ? liveSteps() : widget.steps;
     final entries = steps == null
         ? buildAgentActivityEntries(widget.toolCalls)
         : buildAgentActivityEntriesFromSteps(steps);
@@ -224,18 +251,40 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (trailing == null)
-            _buildHeader(theme, muted, status)
+            _showsDots
+                ? _buildDotsHeader(status)
+                : _buildHeader(theme, muted, status)
           else
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Flexible(child: _buildHeader(theme, muted, status)),
+                Flexible(
+                  child: _showsDots
+                      ? _buildDotsHeader(status)
+                      : _buildHeader(theme, muted, status),
+                ),
                 const SizedBox(width: 6),
                 trailing,
               ],
             ),
           if (_isExpanded) ...[
             const SizedBox(height: 4),
+            // The dots say nothing but "working". The open panel says what:
+            // the phase and the clock first, then every step.
+            if (_showsDots)
+              Padding(
+                padding: const EdgeInsets.only(left: 2, bottom: 6),
+                child: Text(
+                  status.label,
+                  key: const ValueKey<String>('agents-live-phase'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: muted,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
             for (int i = 0; i < entries.length; i++)
               _buildEntry(
                 theme,
@@ -258,6 +307,22 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
   }
 
   static Duration _nonNegative(Duration d) => d.isNegative ? Duration.zero : d;
+
+  /// The running header as the typing dots alone. A tap opens the panel
+  /// with every step; the label is for screen readers only.
+  Widget _buildDotsHeader(TurnStatus status) {
+    return Semantics(
+      button: true,
+      expanded: _isExpanded,
+      label: status.label,
+      child: InkWell(
+        key: const ValueKey<String>('agents-live-dots'),
+        onTap: () => setState(() => _expandedOverride = !_isExpanded),
+        borderRadius: BorderRadius.circular(22),
+        child: const ExcludeSemantics(child: MessengerTypingIndicator()),
+      ),
+    );
+  }
 
   Widget _buildHeader(ThemeData theme, Color muted, TurnStatus status) {
     // The wording is decided in one place for every platform and every
@@ -338,6 +403,25 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
             child: _buildEntryText(theme, entry, color),
           ),
         ),
+        if (widget.showResultSummaries && entry.toolCall != null)
+          if (toolResultSummary(entry.toolCall!) case final String summary)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: Text(
+                summary,
+                key: const ValueKey<String>('agent-activity-result'),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: entry.hasError
+                      ? theme.colorScheme.error.withValues(alpha: 0.85)
+                      : muted,
+                  fontFamily: 'monospace',
+                  fontSize: 11.5,
+                  height: 1.35,
+                ),
+              ),
+            ),
         if (entry.hasBody && bodyOpen) ...[
           const SizedBox(height: 2),
           Text(

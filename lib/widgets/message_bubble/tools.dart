@@ -47,6 +47,7 @@ extension _MessageBubbleTools on _MessageBubbleState {
     // it took, and the model when the reader asked for it. Only a running
     // turn needs the counting header.
     if (!widget.isStreamingMessage) return _buildMetaFooter();
+    if (_agentsLive != null) return _buildAgentsLivePanel();
     return AgentActivityTimeline(
       toolCalls: const <ToolCall>[],
       steps: const <AgentActivityStep>[],
@@ -112,7 +113,7 @@ extension _MessageBubbleTools on _MessageBubbleState {
     return StreamingManager().phaseOf(chatId);
   }
 
-  /// An Agents thread's live status — the phase the coworker's run is in,
+  /// An Agents thread's live status — the phase the agent's run is in,
   /// read from the host's frames (`agents_live_status.dart`). Null in a plain
   /// chat, and for a message that is not the one running.
   AgentsLiveStatus? get _agentsLive {
@@ -121,6 +122,118 @@ extension _MessageBubbleTools on _MessageBubbleState {
       widget.chatId ?? ArtifactStorageService.activeChatId,
       turnStartedAt: widget.turnStartedAt,
     );
+  }
+
+  /// The running Agents turn: three typing dots and nothing else, until the
+  /// reader taps them. Then the panel says what the agent is doing — the
+  /// phase and the clock, the thinking, every call with its arguments and a
+  /// one-line result — read live from the run ledger, because the host
+  /// reports its steps there and the message only receives them once the
+  /// run is over. It ignores the quiet "Show activity" / "Show thinking"
+  /// switches: opening the panel is the request to see the work.
+  ///
+  /// Once the turn settles the bubble draws its usual folded rounds
+  /// ("Worked for 13s") again.
+  Widget _buildAgentsLivePanel() {
+    final AgentsLiveStatus live = _agentsLive!;
+    List<AgentActivityStep> steps() => live.steps(
+      fallbackReasoning: _agentsFallbackReasoning(),
+      fallbackCalls: _collectAllToolCalls(),
+    );
+    return Column(
+      key: const ValueKey<String>('agents-live-column'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        _buildAgentsLiveTimeline(live, steps),
+        // An approval answered during the run stays in view as its row,
+        // read from the same live source as the panel.
+        ListenableBuilder(
+          listenable: live.listenable,
+          builder: (BuildContext context, _) {
+            final List<Widget> rows = _buildApprovalRows(<ToolCall>[
+              for (final AgentActivityStep step in steps())
+                if (step.toolCall != null) step.toolCall!,
+            ]);
+            if (rows.isEmpty) return const SizedBox.shrink();
+            return Padding(
+              padding: const EdgeInsets.only(top: _kArtifactGap),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: rows,
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAgentsLiveTimeline(
+    AgentsLiveStatus live,
+    List<AgentActivityStep> Function() steps,
+  ) {
+    return AgentActivityTimeline(
+      key: const ValueKey<String>('agents-live-panel'),
+      toolCalls: const <ToolCall>[],
+      isRunning: true,
+      liveDots: true,
+      showResultSummaries: true,
+      liveSteps: steps,
+      phase: _currentPhase(true),
+      startedAt: widget.turnStartedAt,
+      liveVerb: live.verb,
+      liveTrailing: live.trailing,
+      liveListenable: live.listenable,
+      onStepTap: _showToolCallDetails,
+      onSourceTap: _openSourceUrl,
+    );
+  }
+
+  /// The answered approvals among [calls], each as its transcript row
+  /// (`AgentsApprovalRow`): "Approved: …" with Undo for a lasting answer.
+  /// Only in an Agents thread; one row per approval id.
+  List<Widget> _buildApprovalRows(Iterable<ToolCall> calls) {
+    final String? chatId = widget.chatId ?? ArtifactStorageService.activeChatId;
+    if (chatId == null || !ChatOrigin.isAgentsThread(chatId)) {
+      return const <Widget>[];
+    }
+    final List<Widget> rows = <Widget>[];
+    final Set<String> seen = <String>{};
+    for (final ToolCall call in calls) {
+      if (call.name != 'ask_user') continue;
+      final AgentsApprovalGrant? grant = AgentsApprovalGrant.fromArguments(
+        call.arguments,
+      );
+      if (grant == null || !seen.add(grant.approvalId)) continue;
+      rows.add(
+        Padding(
+          padding: EdgeInsets.only(top: rows.isEmpty ? 0 : _kArtifactGap),
+          child: AgentsApprovalRow(
+            key: ValueKey<String>('approval-${grant.approvalId}'),
+            grant: grant,
+            threadKey: chatId,
+          ),
+        ),
+      );
+    }
+    return rows;
+  }
+
+  /// The thinking the message itself holds, for a run the ledger does not
+  /// know (yet): the reasoning blocks in order, else the flat field.
+  String _agentsFallbackReasoning() {
+    final blocks = widget.contentBlocks;
+    if (blocks != null) {
+      final String joined = blocks
+          .where((b) => b.type == ContentBlockType.reasoning)
+          .map((b) => b.text?.trim() ?? '')
+          .where((t) => t.isNotEmpty)
+          .join('\n\n');
+      if (joined.isNotEmpty) return joined;
+    }
+    return widget.reasoning ?? '';
   }
 
   /// The quiet line under an answer.

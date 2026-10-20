@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:chuk_chat/services/settings/mobile_chat_preferences.dart';
 
 import 'package:flutter/foundation.dart'
@@ -30,6 +31,7 @@ import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/agents_replay_loader.dart';
+import 'package:chuk_chat/services/agents/agents_resume_trace.dart';
 import 'package:chuk_chat/services/agents/agents_queued_marks.dart';
 import 'package:chuk_chat/services/agents/agents_task_outbox.dart';
 import 'package:chuk_chat/services/mcp/mcp_service.dart';
@@ -58,6 +60,7 @@ import 'package:chuk_chat/widgets/agents_budget_notice.dart'; // F1
 import 'package:chuk_chat/widgets/agent_control_panel.dart' // F1
     show WeeklyBudgetField;
 import 'package:chuk_chat/services/agents/agents_permissions_service.dart'; // F1
+import 'package:chuk_chat/services/agents/agents_approval_grants.dart';
 import 'package:chuk_chat/widgets/agents_user_browser.dart'; // own browser
 import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/browser_view_page.dart';
@@ -170,7 +173,7 @@ class AgentsThreadView extends StatefulWidget {
   final AgentFileSaver fileSaver;
 
   /// Reports whether a run is in flight, and for which thread, so the roster can
-  /// show "working" against the right coworker. Driven off [AgentsRunLedger].
+  /// show "working" against the right agent. Driven off [AgentsRunLedger].
   final void Function(String threadKey, bool running)? onRunStateChanged;
 
   /// Reports that something happened in [threadKey], for "last active".
@@ -189,21 +192,21 @@ class AgentsThreadView extends StatefulWidget {
   /// test) falls back to the verbose toggle.
   final AppShellConfig? shellConfig;
 
-  /// The coworker this thread belongs to, handed to the desktop chat screen.
+  /// The agent this thread belongs to, handed to the desktop chat screen.
   /// Null before one is selected.
   final String? title;
 
-  /// Opens the live view of the coworker's screen. Null parks the target.
+  /// Opens the live view of the agent's screen. Null parks the target.
   final VoidCallback? onOpenAgentScreen;
 
-  /// The coworker this thread belongs to: its face, name and status sit at
+  /// The agent this thread belongs to: its face, name and status sit at
   /// the left of the desktop header. Null before one is selected.
   final AgentsAgent? agent;
 
-  /// Tap on the coworker in the desktop header: the shell's details pane.
+  /// Tap on the agent in the desktop header: the shell's details pane.
   final VoidCallback? onOpenAgent;
 
-  /// The coworker faces' store, handed to the desktop header's pill.
+  /// The agent faces' store, handed to the desktop header's pill.
   final AgentProfileStore? profiles;
 
   /// The desktop header's "…" menu: the actions the SHELL owns (details,
@@ -308,7 +311,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   /// "Done".
   bool _takeoverVisited = false;
 
-  /// The takeover is answered and the card says the coworker continues. It
+  /// The takeover is answered and the card says the agent continues. It
   /// goes away with the run's next frame, or when the run ends.
   bool _takeoverContinuing = false;
 
@@ -318,14 +321,14 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   /// run moves on.
   String? _approvalScope;
 
-  /// The host refused this thread's last task: the coworker's weekly budget
+  /// The host refused this thread's last task: the agent's weekly budget
   /// is used up. The notice stays at the end of the thread until the next
   /// task or a thread switch.
   ({String message, String? prompt})? _budgetRefusal;
   // ── end F1 ──
 
   // ── own browser ──
-  /// Which browser this thread's coworker drives, from its last `run_state`
+  /// Which browser this thread's agent drives, from its last `run_state`
   /// (`browser_target`): `user_browser`, `sandbox`, or null before a host
   /// said (or an old host). Reset on a thread switch.
   String? _browserTarget;
@@ -352,6 +355,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   void _onSkillProposalsChanged() {
     if (mounted) setState(() {});
   }
+
   // ── end skill proposals ──
   bool _automationsCollapsed = true;
 
@@ -440,6 +444,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     // The embedded chat screen persists under this key; route it to the
     // Agents store and queue whatever the key looks like.
     ChatOrigin.claimAgentsThread(widget.threadKey);
+    _registerApprovalThread();
     WidgetsBinding.instance.addObserver(this);
     _hostController = TextEditingController(text: widget.devHostUrl);
     // The link's fan-out outlives every controller, so this one subscription
@@ -498,6 +503,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   @override
   void didUpdateWidget(AgentsThreadView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    _registerApprovalThread();
     if (oldWidget.threadKey != widget.threadKey) {
       ChatOrigin.claimAgentsThread(widget.threadKey);
       _running = _ledger.isRunning(widget.threadKey);
@@ -592,21 +598,71 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       _wasBackgrounded = true;
     } else if (state == AppLifecycleState.resumed && _wasBackgrounded) {
       _wasBackgrounded = false;
-      // Android may leave a suspended socket marked paired. Replace it on
-      // resume rather than waiting for a heartbeat or an old backoff timer.
-      if (_storedPairing != null && !_manuallyDisconnected) {
-        unawaited(reconnect(force: true));
+      AgentsResumeTrace.start();
+      AgentsResumeTrace.mark(
+        'thread view resume: phase=${_controller?.state.value.phase.name}',
+      );
+      unawaited(_onResumed());
+    }
+  }
+
+  /// How long a resume waits for the old socket to answer before it is
+  /// replaced. The relay answers a ping in one round trip; a socket that does
+  /// not answer in this time is treated as dead.
+  static const Duration resumeProbeTimeout = Duration(milliseconds: 1500);
+
+  /// The app is in front again (bead chuk_chat-kl8x).
+  ///
+  /// The thread stays on screen exactly as the local cache and the last live
+  /// events left it; nothing here blanks it or waits before painting. What
+  /// this decides is only what happens to the socket:
+  ///
+  ///  * **It still answers.** Android keeps the process (and the socket) alive
+  ///    through the foreground service while a run streams, so the events of
+  ///    the run, its final answer included, are already here or arrive the
+  ///    moment the process runs again. The socket is KEPT, and a delta replay
+  ///    reconciles with the host in the background. Replacing it used to throw
+  ///    away the frames still buffered on it and made the reader wait for a new
+  ///    dial, relay sign-in, host handshake and full replay — measured at
+  ///    1.1 s to the relay sign-in alone on the emulator, before the host had
+  ///    said anything.
+  ///  * **It is gone or does not answer.** Replace it at once, as before.
+  Future<void> _onResumed() async {
+    final AgentsRelayController? controller = _controller;
+    if (controller != null &&
+        controller.state.value.isPaired &&
+        controller is AgentsLinkProbe) {
+      final bool alive = await (controller as AgentsLinkProbe).probeLink(
+        timeout: resumeProbeTimeout,
+      );
+      if (!mounted) return;
+      if (alive &&
+          identical(controller, _controller) &&
+          controller.state.value.isPaired) {
+        AgentsResumeTrace.mark('resume: socket answered, kept');
+        // Background reconcile: a delta from the cursor. Rows the live stream
+        // already painted are folded, not repainted.
+        _requestReplay();
+        unawaited(_flushOutbox(controller));
         return;
       }
-      // Still paired and nothing to reconnect: the queue may still hold a
-      // prompt typed while the phone was away. The `paired` transition is not
-      // the only moment a flush is owed — that transition may never come
-      // again on a socket that stayed up (bead cowork-i7sd follow-up). Each
-      // entry has its own backoff, so a resume cannot hammer the host.
-      final controller = _controller;
-      if (controller != null && controller.state.value.isPaired) {
-        unawaited(_flushOutbox(controller));
-      }
+      AgentsResumeTrace.mark('resume: socket did not answer, replacing');
+    }
+    if (!mounted) return;
+    // Android may leave a suspended socket marked paired. Replace it on
+    // resume rather than waiting for a heartbeat or an old backoff timer.
+    if (_storedPairing != null && !_manuallyDisconnected) {
+      unawaited(reconnect(force: true));
+      return;
+    }
+    // Still paired and nothing to reconnect: the queue may still hold a
+    // prompt typed while the phone was away. The `paired` transition is not
+    // the only moment a flush is owed — that transition may never come
+    // again on a socket that stayed up (bead cowork-i7sd follow-up). Each
+    // entry has its own backoff, so a resume cannot hammer the host.
+    final current = _controller;
+    if (current != null && current.state.value.isPaired) {
+      unawaited(_flushOutbox(current));
     }
   }
 
@@ -715,9 +771,8 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   /// Whether the store holds a transcript for this thread right now.
   bool get _threadHasRows {
     if (widget.threadKey.isEmpty) return false;
-    final rows = ChatStorageService.getChatById(
-      widget.threadKey,
-    )?.messagesOrNull;
+    final rows = ChatStorageService.getChatById(widget.threadKey)
+        ?.messagesOrNull;
     return rows != null && rows.isNotEmpty;
   }
 
@@ -767,6 +822,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     final bool wasPaired = _lastPhase == AgentsRelayPhase.paired;
     _lastPhase = phase;
     if (phase == AgentsRelayPhase.paired) {
+      AgentsResumeTrace.mark('transport paired');
       _reconnectAttempts = 0;
       // The link is up, so the failures behind us are history: a single drop
       // months later must not walk straight into the "it is really broken" bar.
@@ -949,6 +1005,19 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     unawaited(_resendUnacknowledged(controller));
   }
 
+  /// The answer text a finish notification previews: the run's own final
+  /// answer, else the last answer row the thread holds. Stays on the device.
+  String? _answerForNotification(String? finalAnswer) {
+    if (finalAnswer != null && finalAnswer.trim().isNotEmpty) {
+      return finalAnswer;
+    }
+    final rows = ChatStorageService.getChatById(widget.threadKey)
+        ?.messagesOrNull;
+    if (rows == null || rows.isEmpty) return null;
+    final last = rows.last;
+    return last.role == 'assistant' ? last.text : null;
+  }
+
   /// Asks the host to re-stream this thread from the replay cursor.
   void _requestReplay() {
     final controller = _controller;
@@ -958,6 +1027,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     // one would mint a cursor namespace for a key nobody ever writes.
     if (sessionKey.isEmpty) return;
     final afterId = _loader.cursorFor(sessionKey);
+    AgentsResumeTrace.mark('replay requested (after_id=$afterId)');
     _loader.expect(sessionKey, afterId: afterId);
     unawaited(
       controller
@@ -1053,10 +1123,13 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       final latest = await widget.pairingStore?.loadPairing() ?? stored;
       if (!mounted) return;
       _storedPairing = latest;
+      AgentsResumeTrace.mark('reconnect: pairing loaded');
       await controller.reconnect(hostUrl: latest.hostUrl, pairing: latest);
+      AgentsResumeTrace.mark('reconnect: relay handshake done');
       final session = widget.sessionSource.current();
       if (session != null) {
         await controller.provisionAccount(session);
+        AgentsResumeTrace.mark('reconnect: account provisioned');
       }
     } catch (error) {
       if (mounted) setState(() => _localError = _connectionFailureText(error));
@@ -1079,8 +1152,11 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     _rebuildingForResume = true;
     if (mounted) setState(() {});
     try {
+      AgentsResumeTrace.mark('forced reconnect: rebuilding controller');
       await _rebuildController();
+      AgentsResumeTrace.mark('forced reconnect: controller built');
       await _reconnect();
+      AgentsResumeTrace.mark('forced reconnect: done');
     } catch (error) {
       if (kDebugMode) {
         debugPrint('[cowork-thread] reconnect failed: ${error.runtimeType}');
@@ -1330,6 +1406,9 @@ class AgentsThreadViewState extends State<AgentsThreadView>
 
   void _onInbound(AgentsRelayInbound event) {
     if (!mounted) return;
+    if (AgentsResumeTrace.active) {
+      AgentsResumeTrace.mark('inbound ${event.runtimeType}');
+    }
     switch (event) {
       case AgentsRelayApprovalRequest():
         // A here.now publish is waiting on the user, and the run is blocked on
@@ -1338,7 +1417,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
         // tappable once the turn is idle — which it will not be while the run
         // waits. So the decision is offered here, above the chat.
         //
-        // Another coworker's run asked: its own view prompts, not this one
+        // Another agent's run asked: its own view prompts, not this one
         // (review F9). A host that does not say which thread means this one.
         final forThread = event.sessionKey;
         if (forThread != null && forThread != widget.threadKey) return;
@@ -1362,7 +1441,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
         _syncWaitingForUser();
       case AgentsRelaySecretRequest():
         // The model asked for keys by name and the run waits on the answer.
-        // Another coworker's run asked: its own view prompts, not this one.
+        // Another agent's run asked: its own view prompts, not this one.
         final forThread = event.sessionKey;
         if (forThread != null && forThread != widget.threadKey) return;
         // Names the user has set are shown as "set", never as a value.
@@ -1436,6 +1515,8 @@ class AgentsThreadViewState extends State<AgentsThreadView>
           AgentsNotifications.instance.onLiveDone(
             widget.threadKey,
             runId: runId,
+            answer: _answerForNotification(event.finalAnswer),
+            stopped: event.wasStopped,
           ),
         );
       case AgentsRelayTaskAck():
@@ -1520,7 +1601,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       case AgentsRelayAgentList():
         // Transcript events belong to the adapter and the replay loader; room
         // and browser frames to the shell's own pages; automation frames to
-        // the automations source; the coworker names (agent_list) to the
+        // the automations source; the agent names (agent_list) to the
         // shell's roster. Nothing to do here.
         break;
     }
@@ -1598,7 +1679,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     );
     setState(() {
       _approvalDecision = approved;
-      // A takeover answered "done" says the coworker continues until the
+      // A takeover answered "done" says the agent continues until the
       // run's next frame; one answered "skip" simply goes.
       if (request.isTakeover) {
         if (approved) {
@@ -1616,7 +1697,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   ///
   /// A fresh, open request shows the card. The SAME request coming back
   /// decided — the host saw the step done by itself, or the wait ran out —
-  /// resolves it: "done" says the coworker continues, anything else closes
+  /// resolves it: "done" says the agent continues, anything else closes
   /// the card. A replayed request is history unless the run still waits.
   void _onTakeoverRequest(AgentsRelayApprovalRequest event) {
     final AgentsRelayApprovalRequest? current = _approval;
@@ -1860,9 +1941,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   /// painted no revision of them yet, which is exactly the mount-on-a-miss
   /// case the remount is for.
   bool get _screenIsEmpty =>
-      !_mountedWithRows &&
-      _revision == _revisionAtMount &&
-      _cacheRevision == 0;
+      !_mountedWithRows && _revision == _revisionAtMount && _cacheRevision == 0;
 
   /// Adopt a new replay revision — but never while a run is in flight: the
   /// remount would throw away the answer streaming into the screen right now.
@@ -1870,7 +1949,11 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   void _syncRevision() {
     final revision = _loader.revisionFor(widget.threadKey);
     if (revision == _revision) return;
-    if (_ledger.isRunning(widget.threadKey)) return;
+    if (_ledger.isRunning(widget.threadKey)) {
+      AgentsResumeTrace.mark('replay revision $revision held: run in flight');
+      return;
+    }
+    AgentsResumeTrace.mark('replay revision $revision painted (remount)');
     setState(() {
       _revision = revision;
       _screenGeneration++;
@@ -1953,7 +2036,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   // --- the header ------------------------------------------------------------
 
   /// The top bar of a desktop thread, the phone's in desktop form: the
-  /// coworker (face, name, status) on the left; Documents, Call and Screen on
+  /// agent (face, name, status) on the left; Documents, Call and Screen on
   /// the right; the shell's other actions behind "…"
   /// ([AgentsThreadView.menuActions]).
   ///
@@ -1969,7 +2052,6 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       agent: threadOpen ? widget.agent : null,
       onOpenAgent: widget.onOpenAgent,
       profiles: widget.profiles,
-      agentName: widget.title,
       showScreenTarget: threadOpen,
       onOpenScreen: widget.onOpenAgentScreen,
       // own browser: that browser has no screen here.
@@ -2001,7 +2083,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
                 setState(() => _automationsCollapsed = !_automationsCollapsed),
       // A thread's documents: none before a thread is open.
       onOpenDocuments: threadOpen ? () => _openDocuments(context) : null,
-      // The shell decides what the menu holds: with no coworker selected it
+      // The shell decides what the menu holds: with no agent selected it
       // is only Copy full chat, whose export still says what the link is
       // doing.
       menuActions: widget.menuActions,
@@ -2361,11 +2443,10 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     required bool dense,
   }) {
     final AgentsRelayController? controller = _controller;
-    final bool canOpen =
-        controller != null && controller.state.value.isPaired;
+    final bool canOpen = controller != null && controller.state.value.isPaired;
     return AgentsTakeoverCard(
       request: request,
-      coworkerName: widget.title ?? widget.agent?.name ?? '',
+      agentName: widget.title ?? widget.agent?.name ?? '',
       stage: _takeoverContinuing
           ? AgentsTakeoverStage.continuing
           : AgentsTakeoverStage.waiting,
@@ -2448,7 +2529,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       if (approval != null && approval.hasOptions && !approval.isTakeover)
         AgentsActionApprovalCard(
           request: approval,
-          coworkerName: widget.title ?? widget.agent?.name ?? '',
+          agentName: widget.title ?? widget.agent?.name ?? '',
           decision: _approvalScope,
           dense: dense,
           onSelect: _decideActionApproval,
@@ -2544,7 +2625,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     _clearActionApproval();
   }
 
-  /// The host refused this thread's task: the coworker's weekly budget is
+  /// The host refused this thread's task: the agent's weekly budget is
   /// used up. The host's sentence becomes a notice at the end of the thread.
   /// "Run anyway" is offered only for the user's own task: a schedule or a
   /// mail that was refused has nothing to send again from here.
@@ -2598,15 +2679,23 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   }
 
   // ── own browser ──
-  /// The coworker the user-browser status is about: its agent id, which is
+  /// The agent the user-browser status is about: its agent id, which is
   /// also its thread key.
   String get _userBrowserAgentId => widget.agent?.id ?? widget.threadKey;
+
+  /// Tells the approval rows in this thread which agent an Undo applies
+  /// to (bead chuk_chat-aupy).
+  void _registerApprovalThread() {
+    final String? agentId = widget.agent?.id;
+    if (agentId == null) return;
+    AgentsApprovalGrants.instance.registerThread(widget.threadKey, agentId);
+  }
 
   void _onUserBrowserChanged() {
     if (mounted) setState(() {});
   }
 
-  /// A `run_state` for this thread says which browser the coworker drives.
+  /// A `run_state` for this thread says which browser the agent drives.
   /// When it is the user's own and the app has no status yet, it asks the
   /// host once (the push keeps it fresh after that).
   void _onBrowserTarget(AgentsRelayRunState event) {
@@ -2637,7 +2726,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   }
   // ── end own browser ──
 
-  /// "Change budget": the coworker's weekly budget field in a sheet, the same
+  /// "Change budget": the agent's weekly budget field in a sheet, the same
   /// field the details pane shows. The host's answer fills it; a new value
   /// applies from the next task.
   Future<void> _openBudgetSheet() async {
@@ -2910,9 +2999,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     final reconnecting = _busy;
     final status =
         banner ??
-        (reconnecting
-            ? 'Reconnecting…'
-            : 'Your computer is not connected.');
+        (reconnecting ? 'Reconnecting…' : 'Your computer is not connected.');
     return SafeArea(
       top: false,
       child: Padding(
