@@ -25,6 +25,7 @@ import 'package:chuk_chat/utils/non_public_ip.dart';
 import 'package:chuk_chat/utils/phone_linkify.dart';
 import 'package:chuk_chat/widgets/chuk_table.dart';
 import 'package:chuk_chat/widgets/chuk_table_classic.dart';
+import 'package:chuk_chat/utils/favicon.dart';
 import 'package:chuk_chat/widgets/icons/huge_icon.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
@@ -828,6 +829,7 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
             textColor: widget.textColor,
             accentColor: accentColor,
             fontFamily: proseFontFamily,
+            onTapLink: _onTapLink,
           ),
         );
         continue;

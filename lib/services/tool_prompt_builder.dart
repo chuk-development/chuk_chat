@@ -1205,28 +1205,28 @@ Never wrap an <artifact> tag inside a markdown code fence (```…```); the parse
   }
 
   /// How an answer starts, and the `:::` blocks `MarkdownMessage` renders
-  /// natively (`lib/utils/answer_blocks_parser.dart`). About 600 tokens.
+  /// natively (`lib/utils/answer_blocks_parser.dart`). About 640 tokens.
   String _answerFormatSection() {
     return '''
 ## ANSWER FORMAT
-- If the question has a short answer (yes/no, a number, a name, fits/does not fit), the FIRST line of your final answer is that answer in plain Markdown **bold**, e.g. "**Yes, warm white.**". Make any needed tool calls first; never state the short answer before the lookup. The explanation follows below it.
-- Optional blocks, only where they help. A line `::: name` opens one, a line `:::` closes it. Blocks do not nest. Inside, Markdown works as usual.
+- If the question has a short answer (yes/no, a number, a name, fits/does not fit), the FIRST line of your final answer is that answer in plain Markdown **bold**, e.g. "**Yes, warm white.**". Make any needed tool calls first; never state the short answer before the lookup. Explain below it.
+- Optional blocks, only where they help: a line `::: name` opens one, a line `:::` closes it. No nesting; Markdown works inside.
 ::: steps
 1. Step title
 Body text.
-\$ command (terminal line with a copy button)
+\$ terminal command (copy button)
 ! warning
 :::
-  Steps fit any ordered path: setup, recipe, process. `::: steps abc` letters them A, B, C.
+  `::: steps abc` letters them A, B, C.
 ::: timeline Optional title
-2021-01: Event (a `*` before the date marks the key entry)
+*2021-01: Key event (`*` marks it)
 :::
   Use timeline ONLY for dates you know for certain or found with a tool. Never invent a date.
 ::: scale 1800-6500 K
 2700: Warm white
 @ 2700: your lamp
 :::
-  Scale is experimental: use it only to place one value on a known range.
+  Scale is experimental: only to place one value on a known range.
 ::: bars Optional title
 Step 5 | ~1.200 GB | 600B total
 GLM Flash | ~640 GB | 320B total
@@ -1237,31 +1237,31 @@ GLM Flash | ~640 GB | 320B total
 82 % | Humidity | droplet
 7 km/h S | Wind | wind
 :::
-  KPI tiles for 2-4 key figures: value | label | icon. Icons: droplet wind temperature sun cloud rain snow star users clock battery cpu speed euro percent download shield mountain hotel cart chart sparkles robot search calendar pin.
+  KPI tiles for 2-4 key figures: value | label | icon. Icons: droplet wind temperature sun cloud rain star users clock euro percent shield cart chart search calendar pin.
 ::: tiles
 Chatbot | chat
 Search crawler | search
 :::
-  Icon tiles for 2-6 options/examples: label | icon | optional subline (same icons as kpi).
+  Icon tiles for 2-6 options: label | icon (as kpi) | optional subline.
 ::: cards Hotels
 Alpenruhe Panorama
 image: https://example.com/a.jpg
-subtitle: Grindelwald, Switzerland
 meta: 4.8 - 128 reviews
 chips: Panorama balcony, Mountain spa
 price: 248 CHF / night
 url: https://example.com/a
 action: Details
---
-Auralis Quiet One
-price: 249 EUR
 :::
-  Card carousel for 2-5 recommendations (stays, products, tools). One record per card, separated by a blank line or `--`; first line = title, then keys: image badge subtitle meta (repeatable) chips price url action. Only real URLs from tool results, else omit image/url.
+  Cards for 2-5 recommendations (stays, products, tools). Blank line or `--` between cards; first line = title, then the keys above (+ badge, subtitle; meta repeats). Only real URLs from tool results, else omit image/url.
 ::: ask Which basis do you want to dive into?
 Active parameters
 BF16 & FP8
 :::
-  Follow-up chips the reader taps to send as their next message. Optional question line, then one short chip per line. Use at the END of an answer when 2-3 concrete directions exist.
+  Follow-up chips, sent as the reader's next message: optional question, one short chip per line. Only at the END, when 2-3 concrete directions exist.
+::: status 2 open · 132 €
+Hetzner | Card declined | 102 € | failed | 16.10. | hetzner.com | Pay https://…
+:::
+  Payments, invoices, orders, deadlines: status, never bullets. Status: failed overdue due ok + optional label. `more:` = footer.
 ::: source
 Article title | https://example.org/article
 :::

@@ -1458,3 +1458,474 @@ class _SourceBlock extends StatelessWidget {
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// status — rows with logo, amount, status chip, date and an action
+// (Figma: "chuk_chat – Status-Block", phone 390 / desktop 720)
+
+/// Below this width a row stacks (amount next to the name, chip and action
+/// under the detail); above it the amount and the action get their own
+/// right-hand column.
+const double _kStatusWideMin = 560;
+
+class _StatusColors {
+  const _StatusColors(this.fg, this.fill);
+  final Color fg;
+  final Color fill;
+}
+
+_StatusColors _statusColors(StatusKind kind, _AnswerBlockStyle s) {
+  final Color fg;
+  switch (kind) {
+    case StatusKind.failed:
+      fg = s.bad;
+    case StatusKind.overdue:
+      fg = s.dark ? const Color(0xFFFFB870) : const Color(0xFF9A4A00);
+    case StatusKind.due:
+      fg = s.dark ? const Color(0xFFE8D27A) : const Color(0xFF6B5A00);
+    case StatusKind.ok:
+    case StatusKind.neutral:
+      return _StatusColors(s.secondary, s.textColor.withValues(alpha: 0.08));
+  }
+  return _StatusColors(fg, fg.withValues(alpha: s.dark ? 0.15 : 0.12));
+}
+
+HugeIconData _statusIcon(StatusKind kind) {
+  switch (kind) {
+    case StatusKind.failed:
+      return HugeIcons.alert02;
+    case StatusKind.overdue:
+      return HugeIcons.clock01;
+    case StatusKind.due:
+      return HugeIcons.hourglass;
+    case StatusKind.ok:
+      return HugeIcons.tick02;
+    case StatusKind.neutral:
+      return HugeIcons.informationCircle;
+  }
+}
+
+String _plainInline(String text) =>
+    text.replaceAll('**', '').replaceAll('__', '').replaceAll('`', '');
+
+class _StatusBlock extends StatefulWidget {
+  const _StatusBlock({required this.spec, required this.s});
+
+  final StatusSpec spec;
+  final _AnswerBlockStyle s;
+
+  @override
+  State<_StatusBlock> createState() => _StatusBlockState();
+}
+
+class _StatusBlockState extends State<_StatusBlock> {
+  bool _expanded = false;
+
+  _AnswerBlockStyle get s => widget.s;
+
+  TextStyle _style(
+    double scale, {
+    FontWeight weight = FontWeight.w400,
+    Color? color,
+  }) {
+    return TextStyle(
+      color: color ?? s.textColor,
+      fontSize: s.baseFontSize * scale,
+      fontWeight: weight,
+      height: 1.3,
+      fontFamily: s.fontFamily,
+    );
+  }
+
+  /// The most urgent kind in the list sets the header icon.
+  StatusKind get _worst {
+    const List<StatusKind> order = <StatusKind>[
+      StatusKind.failed,
+      StatusKind.overdue,
+      StatusKind.due,
+      StatusKind.ok,
+    ];
+    for (final StatusKind k in order) {
+      if (widget.spec.items.any((StatusItem i) => i.kind == k)) return k;
+    }
+    return StatusKind.neutral;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final StatusSpec spec = widget.spec;
+    if (spec.items.isEmpty && spec.title.isEmpty && spec.moreLabel.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints c) {
+        final bool wide = c.maxWidth >= _kStatusWideMin;
+        final bool hasHead = spec.title.isNotEmpty || spec.summary.isNotEmpty;
+        final List<Widget> children = <Widget>[
+          if (hasHead) _header(),
+        ];
+        void addRow(StatusItem item) {
+          if (children.isNotEmpty) children.add(_hairline());
+          children.add(_row(context, item, wide));
+        }
+
+        for (final StatusItem item in spec.items) {
+          addRow(item);
+        }
+        if (spec.moreLabel.isNotEmpty) {
+          if (children.isNotEmpty) children.add(_hairline());
+          children.add(_footer());
+          if (_expanded) {
+            for (final StatusItem item in spec.moreItems) {
+              addRow(item);
+            }
+          }
+        }
+        return _ModuleCard(
+          s: s,
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: children,
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _hairline() => Container(height: 1, color: s.textColor.withValues(alpha: 0.10));
+
+  Widget _iconTile(HugeIconData icon, Color fg, Color fill, double size) {
+    return SelectionContainer.disabled(
+      child: Container(
+        width: size,
+        height: size,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: fill,
+          borderRadius: BorderRadius.circular(size * 0.3),
+        ),
+        child: HugeIcon(icon, size: size * 0.56, color: fg),
+      ),
+    );
+  }
+
+  Widget _header() {
+    final StatusKind worst = _worst;
+    final _StatusColors col = _statusColors(worst, s);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: <Widget>[
+          _iconTile(_statusIcon(worst), col.fg, col.fill, 32),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                if (widget.spec.title.isNotEmpty)
+                  Text(
+                    _plainInline(widget.spec.title),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: _style(1.1, weight: FontWeight.w700),
+                  ),
+                if (widget.spec.summary.isNotEmpty)
+                  Text(
+                    _plainInline(widget.spec.summary),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: _style(0.88, weight: FontWeight.w500, color: s.muted),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _logo(StatusItem item) {
+    if (item.domain.isEmpty) {
+      return _iconTile(HugeIcons.store01, s.muted, s.tileFill, 28);
+    }
+    return SelectionContainer.disabled(
+      child: FaviconImage(
+        host: item.domain,
+        size: 28,
+        borderRadius: 8,
+        fallbackColor: s.muted,
+      ),
+    );
+  }
+
+  Widget _chip(StatusItem item) {
+    final _StatusColors col = _statusColors(item.kind, s);
+    return SelectionContainer.disabled(
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(7, 3, 9, 3),
+        decoration: BoxDecoration(
+          color: col.fill,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            HugeIcon(_statusIcon(item.kind), size: 14, color: col.fg),
+            const SizedBox(width: 5),
+            Flexible(
+              child: Text(
+                item.statusLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _style(0.8, weight: FontWeight.w700, color: col.fg),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _action(BuildContext context, StatusItem item) {
+    final bool iconOnly = item.actionLabel.isEmpty;
+    return Semantics(
+      button: true,
+      label: iconOnly ? 'Open link' : null,
+      child: Material(
+        color: s.accent.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(999),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => _openBlockUrl(context, item.actionUrl),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 34, minWidth: 34),
+            child: Padding(
+              padding: iconOnly
+                  ? const EdgeInsets.all(9)
+                  : const EdgeInsets.fromLTRB(12, 7, 10, 7),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  if (!iconOnly) ...<Widget>[
+                    Flexible(
+                      child: Text(
+                        _plainInline(item.actionLabel),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _style(0.86, weight: FontWeight.w700, color: s.accent),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+                  HugeIcon(HugeIcons.arrowUpRight01, size: 15, color: s.accent),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _name(StatusItem item) => Text(
+    _plainInline(item.title),
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+    style: _style(1.0, weight: FontWeight.w700),
+  );
+
+  Widget _date(StatusItem item) => Text(
+    item.date,
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+    style: _style(0.8, weight: FontWeight.w500, color: s.muted),
+  );
+
+  Widget _amount(StatusItem item, double scale) => Text(
+    _plainInline(item.amount),
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+    textAlign: TextAlign.right,
+    style: _style(scale, weight: FontWeight.w700),
+  );
+
+  Widget? _detail(StatusItem item) => item.detail.isEmpty
+      ? null
+      : Padding(
+          padding: const EdgeInsets.only(top: 3),
+          child: Text(
+            _plainInline(item.detail),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: _style(0.88, color: s.secondary.withValues(alpha: 0.78)),
+          ),
+        );
+
+  Widget _row(BuildContext context, StatusItem item, bool wide) {
+    final bool hasChip = item.statusLabel.isNotEmpty;
+    final bool hasAction = item.actionUrl.isNotEmpty;
+    final Widget? detail = _detail(item);
+    if (wide) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          children: <Widget>[
+            _logo(item),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  _name(item),
+                  ?detail,
+                  if (hasChip || item.date.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 7),
+                      child: Row(
+                        children: <Widget>[
+                          if (hasChip) Flexible(child: _chip(item)),
+                          if (hasChip && item.date.isNotEmpty)
+                            const SizedBox(width: 8),
+                          if (item.date.isNotEmpty) _date(item),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            if (item.amount.isNotEmpty || hasAction) ...<Widget>[
+              const SizedBox(width: 16),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 220),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    if (item.amount.isNotEmpty) _amount(item, 1.3),
+                    if (item.amount.isNotEmpty && hasAction)
+                      const SizedBox(height: 8),
+                    if (hasAction) _action(context, item),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 11),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          _logo(item),
+          const SizedBox(width: 12),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (BuildContext context, BoxConstraints c) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    SizedBox(
+                      height: 28,
+                      child: Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: Row(
+                              children: <Widget>[
+                                Flexible(child: _name(item)),
+                                if (item.date.isNotEmpty) ...<Widget>[
+                                  const SizedBox(width: 6),
+                                  _date(item),
+                                ],
+                              ],
+                            ),
+                          ),
+                          if (item.amount.isNotEmpty) ...<Widget>[
+                            const SizedBox(width: 8),
+                            ConstrainedBox(
+                              constraints: BoxConstraints(
+                                maxWidth: c.maxWidth * 0.45,
+                              ),
+                              child: _amount(item, 1.1),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    ?detail,
+                    if (hasChip || hasAction)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Wrap(
+                          alignment: WrapAlignment.spaceBetween,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 8,
+                          runSpacing: 6,
+                          children: <Widget>[
+                            if (hasChip) _chip(item),
+                            if (hasAction) _action(context, item),
+                          ],
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _footer() {
+    final bool canOpen = widget.spec.moreItems.isNotEmpty;
+    final Widget content = Padding(
+      padding: const EdgeInsets.symmetric(vertical: 11),
+      child: Row(
+        children: <Widget>[
+          _iconTile(HugeIcons.archive02, s.muted, s.tileFill, 28),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              _plainInline(widget.spec.moreLabel),
+              maxLines: _expanded ? 3 : 1,
+              overflow: TextOverflow.ellipsis,
+              style: _style(0.88, weight: FontWeight.w500, color: s.secondary),
+            ),
+          ),
+          if (canOpen) ...<Widget>[
+            const SizedBox(width: 8),
+            Text(
+              '${widget.spec.moreItems.length}',
+              style: _style(0.8, weight: FontWeight.w700, color: s.muted),
+            ),
+            const SizedBox(width: 6),
+            SelectionContainer.disabled(
+              child: AnimatedRotation(
+                turns: _expanded ? 0.5 : 0,
+                duration: const Duration(milliseconds: 180),
+                child: HugeIcon(HugeIcons.arrowDown01, size: 18, color: s.muted),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+    if (!canOpen) return content;
+    return Semantics(
+      button: true,
+      expanded: _expanded,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => setState(() => _expanded = !_expanded),
+        child: content,
+      ),
+    );
+  }
+}
