@@ -94,6 +94,15 @@ const List<String> _subjectKeys = <String>[
   'page',
   'path',
   'prompt',
+  // The host's own tools (Agents): a shell command, a mail's subject, the
+  // file a step wrote. Without them every host step read "Ran bash" with
+  // nothing after it, which tells the reader nothing to check.
+  'command',
+  'cmd',
+  'subject',
+  'title',
+  'file',
+  'filename',
 ];
 
 /// Longest subject shown before it is cut with an ellipsis.
@@ -126,6 +135,33 @@ String? _subjectOf(ToolCall call) {
     if (value is String && value.trim().isNotEmpty) {
       return _clip(value.trim(), _maxDetailChars);
     }
+  }
+  return null;
+}
+
+/// Longest one-line result shown under a step.
+const int _maxResultChars = 140;
+
+/// One line that says what a finished call returned, for the step's second
+/// line: the first non-empty line of its result, clipped. Null while the
+/// call runs, and for a call with no result.
+///
+/// A search or a page already shows what it found as source chips, so it
+/// gets none: the chips are the summary.
+String? toolResultSummary(ToolCall call) {
+  if (call.status == ToolCallStatus.running ||
+      call.status == ToolCallStatus.pending) {
+    return null;
+  }
+  final kind = _kindOf(call);
+  if (kind == AgentActivityKind.search || kind == AgentActivityKind.page) {
+    return null;
+  }
+  final result = call.result;
+  if (result == null) return null;
+  for (final line in result.split('\n')) {
+    final trimmed = line.trim();
+    if (trimmed.isNotEmpty) return _clip(trimmed, _maxResultChars);
   }
   return null;
 }

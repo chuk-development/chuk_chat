@@ -179,7 +179,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
   /// hidden, the thinking is hidden, and the turn said nothing on top of them.
   /// Drawing the bubble around that leaves the unexplained empty block the
   /// reader sees on the phone, and drawing nothing at all drops the fact that
-  /// the coworker worked. So the fact gets a line, and a tap on it turns the
+  /// the agent worked. So the fact gets a line, and a tap on it turns the
   /// details back on. Typography and padding are the wake line's, so the two
   /// system lines read as one family.
   Widget _buildQuietWorkLine(BuildContext context, List<ToolCall> calls) {
@@ -268,31 +268,50 @@ extension _MessageBubbleLayout on _MessageBubbleState {
       border: Border.all(color: iconFgColor.withValues(alpha: .3)),
     );
 
-    final Widget bubbleContent = Container(
-      margin: EdgeInsets.only(top: _runGapAbove, bottom: 2),
-      padding: containerPadding,
-      decoration: decoration,
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: _buildClassicLayout(
-          iconFgColor: bubbleTextColor,
-          accentColor: accentColor,
-          bgColor: bgColor,
-          isUserMessage: isUserMessage,
-          alignRight: alignRight,
-          hasInfoStatusBar: false,
-          hasVisibleToolCalls: false,
-        ),
+    final Widget userText = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: _buildClassicLayout(
+        iconFgColor: bubbleTextColor,
+        accentColor: accentColor,
+        bgColor: bgColor,
+        isUserMessage: isUserMessage,
+        alignRight: alignRight,
+        hasInfoStatusBar: false,
+        hasVisibleToolCalls: false,
       ),
     );
+    final bool hasUserActions = widget.userMessageActions.isNotEmpty;
+    // A dictated message: the voice bubble owns the tap (open / fold the
+    // transcript) and shows the action bar while it is open.
+    final bool asVoice = widget.isVoiceInput && widget.message.trim().isNotEmpty;
+    final Widget bubbleContent = asVoice
+        ? VoiceMessageBubble(
+            text: widget.message,
+            transcript: userText,
+            duration: widget.voiceInputDuration,
+            foregroundColor: bubbleTextColor,
+            decoration: decoration,
+            margin: EdgeInsets.only(top: _runGapAbove, bottom: 2),
+            padding: containerPadding,
+            onExpandedChanged: hasUserActions && !widget.messengerMode
+                ? (bool open) => setState(() => _showUserActions = open)
+                : null,
+          )
+        : Container(
+            margin: EdgeInsets.only(top: _runGapAbove, bottom: 2),
+            padding: containerPadding,
+            decoration: decoration,
+            clipBehavior: Clip.antiAlias,
+            child: userText,
+          );
 
     // The messenger thread keeps its long-press menu (reply, react, copy) in
     // place of the tap-to-open action bar.
-    final bool hasUserActions = widget.userMessageActions.isNotEmpty;
     final Widget userBubble = widget.messengerMode
         ? _withMessengerMenu(bubbleContent)
+        : asVoice
+        ? bubbleContent
         : hasUserActions
         ? GestureDetector(
             onTap: () => setState(() => _showUserActions = !_showUserActions),
@@ -351,8 +370,14 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     final bool useContentBlocks =
         widget.contentBlocks != null && widget.contentBlocks!.isNotEmpty;
 
+    // A running Agents turn draws its work as one panel behind the typing
+    // dots (`_buildAgentsLivePanel`), so neither the tool bar nor the
+    // reasoning bar draws a second header for it.
+    final bool agentsLive = _agentsLive != null;
+
     final bool hasVisibleToolCalls =
         !useContentBlocks &&
+        !agentsLive &&
         widget.showToolCalls &&
         widget.toolCalls != null &&
         widget.toolCalls!.isNotEmpty;
@@ -365,6 +390,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     final bool hasWorkedFor = widget.workedFor != null;
     final bool hasInfoStatusBar =
         !useContentBlocks &&
+        !agentsLive &&
         (_hasReasoning ||
             _hasModelInfo ||
             hasWorkedFor ||
@@ -483,7 +509,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
               widget.messengerMode
                   ? _withMessengerMenu(bubbleContent)
                   : bubbleContent,
-            // A file a coworker hands over (an Agents host delivery) is its
+            // A file an agent hands over (an Agents host delivery) is its
             // own block under the answer. This is the only renderer for those
             // files; the card takes the app's card radius.
             for (int i = 0; i < _artifactPayloads.length; i++)
@@ -638,6 +664,10 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     );
 
     return [
+      if (!isUserMessage && _agentsLive != null) ...[
+        _buildAgentsLivePanel(),
+        const SizedBox(height: _kInfoBarGap),
+      ],
       if (hasInfoStatusBar) ...[
         SizedBox(
           width: double.infinity,
@@ -655,6 +685,15 @@ extension _MessageBubbleLayout on _MessageBubbleState {
       ],
       if (streamingTextBeforeTools && messageBody != null) messageBody,
       if (hasVisibleToolCalls) toolBarSection,
+      if (!isUserMessage && _agentsLive == null)
+        ...() {
+          final List<Widget> rows = _buildApprovalRows(
+            widget.toolCalls ?? const <ToolCall>[],
+          );
+          return rows.isEmpty
+              ? const <Widget>[]
+              : <Widget>[...rows, const SizedBox(height: _kBlockGap)];
+        }(),
       if (widget.messengerMode && !hasVisibleToolCalls && !isUserMessage)
         ..._stackArtifactCards(_buildArtifactCards(_collectAllToolCalls())),
       if (renderImagesInBubble && placeQrImageAboveResponse) ...[
@@ -844,6 +883,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
 
     // Render segments.
     var hasRenderedMainContent = false;
+    final bool agentsLive = _agentsLive != null;
 
     void renderRound(
       _RenderSegment seg, {
@@ -851,6 +891,9 @@ extension _MessageBubbleLayout on _MessageBubbleState {
       bool carriesTurnStatus = false,
     }) {
       if (!seg.hasContent) return;
+      // A running Agents turn shows its rounds in the live panel behind the
+      // typing dots; drawing them here as well would print the work twice.
+      if (agentsLive) return;
       // Reasoning-only round: standalone collapsible reasoning card.
       // _buildBlockReasoning has no margin, so the trailing gap below
       // the card lives here. `_kCardStackGap` matches the legacy baked-
@@ -964,7 +1007,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     // round is pure reasoning showed a bare "Thought" with no time at all,
     // and its counter stopped the moment the round stopped running tools.
     int statusRoundIndex = -1;
-    for (int i = 0; i < segments.length; i++) {
+    for (int i = 0; i < segments.length && !agentsLive; i++) {
       final s = segments[i];
       if (s.isText || s.isSandboxArtifact || !s.hasContent) continue;
       // A round the reader never sees cannot carry the status: with tool
@@ -987,7 +1030,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
         );
         hasRenderedMainContent = true;
       } else if (seg.isSandboxArtifact) {
-        // A file the coworker produced is its own message, hung after the
+        // A file the agent produced is its own message, hung after the
         // text, the way a messenger sends a file: inside the answer bubble it
         // read as a footnote to the prose, and a 20 KB document is not a
         // footnote. Collected here, rendered under the bubble by `build`.
@@ -998,6 +1041,15 @@ extension _MessageBubbleLayout on _MessageBubbleState {
           live: widget.isStreamingMessage && i == statusRoundIndex,
           carriesTurnStatus: i == statusRoundIndex,
         );
+        // An answered approval stays where it happened, as one small row.
+        if (!agentsLive) {
+          final List<Widget> rows = _buildApprovalRows(seg.toolCalls);
+          if (rows.isNotEmpty) {
+            children.addAll(rows);
+            children.add(const SizedBox(height: _kBlockGap));
+            hasRenderedMainContent = true;
+          }
+        }
       }
     }
 

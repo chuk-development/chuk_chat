@@ -32,6 +32,8 @@ import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/widgets/agent_activity/agent_activity_model.dart';
 import 'package:chuk_chat/widgets/agent_activity/agent_activity_timeline.dart';
 import 'package:chuk_chat/widgets/agent_activity/agents_live_status.dart';
+import 'package:chuk_chat/services/agents/agents_approval_grants.dart';
+import 'package:chuk_chat/widgets/agents_approval_row.dart';
 import 'package:chuk_chat/models/artifact.dart';
 import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/services/app_theme_service.dart';
@@ -57,6 +59,7 @@ import 'package:chuk_chat/widgets/messenger_context_menu.dart';
 import 'package:chuk_chat/services/settings/mobile_chat_preferences.dart';
 import 'package:chuk_chat/widgets/messenger_typing_indicator.dart';
 import 'package:chuk_chat/widgets/message_bubble/web_search_sources.dart';
+import 'package:chuk_chat/widgets/message_bubble/voice_message_bubble.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
 import 'package:chuk_chat/widgets/document_viewer.dart';
 import 'package:chuk_chat/widgets/app_notification.dart';
@@ -124,7 +127,7 @@ const double _kCardStackGap = 6;
 /// a block of its own, and at the card gap it read as detached.
 const double _kInfoBarGap = 2;
 
-/// Visible air around a file a coworker hands over: between the answer text
+/// Visible air around a file an agent hands over: between the answer text
 /// and the file card, and between the card and what follows it (the meta
 /// line or the action row). One value, so the card sits evenly between them.
 const double _kFileGap = 12;
@@ -178,6 +181,8 @@ class MessageBubble extends StatefulWidget {
     this.actions = const <MessageBubbleAction>[],
     this.reasoning,
     this.voicePlayback,
+    this.isVoiceInput = false,
+    this.voiceInputDuration,
     this.isReasoningStreaming = false,
     this.modelLabel,
     this.modelProvider,
@@ -244,7 +249,7 @@ class MessageBubble extends StatefulWidget {
   ///
   /// A one-to-one thread leaves this null — there is exactly one other sender,
   /// so naming it over every run is noise. A group room passes it, because a
-  /// run there could be any of several coworkers. The label rides INSIDE the
+  /// run there could be any of several agents. The label rides INSIDE the
   /// run gap (the bubble gives its own top margin up to it), so a named run
   /// and an unnamed one keep the same rhythm.
   final Widget? senderLabel;
@@ -262,6 +267,13 @@ class MessageBubble extends StatefulWidget {
   final List<MessageBubbleAction> actions;
   final String? reasoning;
   final String? voicePlayback;
+
+  /// The user dictated this message: it draws as a voice bubble with the
+  /// transcript folded. No audio exists behind it.
+  final bool isVoiceInput;
+
+  /// Length of the dictation, when it is known.
+  final Duration? voiceInputDuration;
   final bool isReasoningStreaming;
   final String? modelLabel;
   final String? modelProvider;
