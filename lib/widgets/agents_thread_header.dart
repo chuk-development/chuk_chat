@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart'; // own browser
 import 'package:chuk_chat/models/agents_agent.dart';
-import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_binding.dart';
-import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_call_button.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_chat_chrome.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
@@ -45,7 +43,7 @@ class AgentsThreadAction {
 ///
 /// From left to right:
 ///
-///  * the coworker pill — face, name and status line ("Active now", three
+///  * the agent pill — face, name and status line ("Active now", three
 ///    dots while it works, "Offline · Reconnect"). A tap opens the details
 ///    pane. A desktop window has no back chip: the roster is beside it;
 ///  * the running automation, when there is one;
@@ -74,29 +72,24 @@ class AgentsThreadHeader extends StatelessWidget {
     this.onOpenScreen,
     this.connection = AgentsThreadConnection.live,
     this.onReconnect,
-    this.agentName,
     this.usesUserBrowser = false, // own browser
   });
 
   // ── own browser ──
-  /// The coworker drives the user's own browser (`run_state.browser_target`).
+  /// The agent drives the user's own browser (`run_state.browser_target`).
   /// That browser has no screen here: the parked target says so, and is
   /// never lit for it.
   final bool usesUserBrowser;
   // ── end own browser ──
 
-  /// The coworker whose thread this is. Null (no thread open) leaves the
+  /// The agent whose thread this is. Null (no thread open) leaves the
   /// left side empty.
   final AgentsAgent? agent;
 
-  /// Tap on the coworker pill: the details pane. Null renders it flat.
+  /// Tap on the agent pill: the details pane. Null renders it flat.
   final VoidCallback? onOpenAgent;
 
   final AgentProfileStore? profiles;
-
-  /// The coworker's display name, for the voice call's greeting. Falls back
-  /// to [agent]'s name.
-  final String? agentName;
 
   /// The relay. A live socket, and one on its way back, are not news: only a
   /// relay that is down shows, as "Offline · Reconnect" in the pill's status
@@ -127,11 +120,11 @@ class AgentsThreadHeader extends StatelessWidget {
   /// "…"; the chip is hidden when there is nothing to show.
   final List<AgentsThreadAction> menuActions;
 
-  /// Whether the coworker's screen target (and with it the call target) is
+  /// Whether the agent's screen target (and with it the call target) is
   /// shown: only while a thread is open.
   final bool showScreenTarget;
 
-  /// Opens the live view of the coworker's screen (its sandbox VNC). Null
+  /// Opens the live view of the agent's screen (its sandbox VNC). Null
   /// keeps the target in place but parked — there is no screen open.
   final VoidCallback? onOpenScreen;
 
@@ -163,10 +156,11 @@ class AgentsThreadHeader extends StatelessWidget {
   static const double leadingMaxWidth = 280;
 
   /// What the trailing chips take from the right edge of the pane, edge
-  /// included: Documents, Call (when the build offers calls), Screen and
-  /// "…". The desktop shell keeps the switch clear of it.
-  static double trailingExtent({bool? call}) {
-    final int chips = 3 + ((call ?? voiceCallUiEnabled) ? 1 : 0);
+  /// included: Documents, Screen and "…". The desktop shell keeps the switch
+  /// clear of it. The voice call is not up here: it is the composer's send
+  /// target while the field is empty.
+  static double trailingExtent() {
+    const int chips = 3;
     return edge - _reach + chips * chipBox;
   }
 
@@ -180,12 +174,8 @@ class AgentsThreadHeader extends StatelessWidget {
         final double maxWidth = box.maxWidth.isFinite ? box.maxWidth : 1e6;
         final AgentsAgent? who = agent;
         final bool down = connection == AgentsThreadConnection.down;
-        // The call target rides with the screen target: both only while a
-        // thread is open, and the call only when the build offers calls.
-        final bool showCall = showScreenTarget && voiceCallUiEnabled;
         final bool hasDocuments = onOpenDocuments != null;
-        final int fixedChips =
-            (showScreenTarget ? 1 : 0) + (showCall ? 1 : 0) + 1;
+        final int fixedChips = (showScreenTarget ? 1 : 0) + 1;
         // A pane too narrow for the pill and every chip folds Documents into
         // the menu: folded, never dropped.
         final bool foldDocuments =
@@ -246,12 +236,6 @@ class AgentsThreadHeader extends StatelessWidget {
                 semanticsId: 'thread_header_documents',
                 onTap: onOpenDocuments,
               ),
-            if (showCall)
-              ChatVoiceCallButton.agentsThread(
-                style: ChatVoiceCallStyle.chip,
-                agentName: agentName ?? who?.name,
-                semanticsId: 'thread_header_call',
-              ),
             if (showScreenTarget) _screenChip(context),
             if (menu.isNotEmpty) _menuChip(context, menu),
           ],
@@ -260,7 +244,7 @@ class AgentsThreadHeader extends StatelessWidget {
     );
   }
 
-  /// The coworker's screen: lit when there is one to take over, parked when
+  /// The agent's screen: lit when there is one to take over, parked when
   /// there is none — and a parked tap says why, so it is never a dead
   /// button. The phone's screen chip.
   Widget _screenChip(BuildContext context) {
@@ -276,7 +260,7 @@ class AgentsThreadHeader extends StatelessWidget {
         onTap: () => AppNotifications.show(
           context,
           l?.ubScreenExplain ??
-              'This coworker works in your own browser. There is no screen '
+              'This agent works in your own browser. There is no screen '
                   'to show here.',
         ),
       );
@@ -292,7 +276,7 @@ class AgentsThreadHeader extends StatelessWidget {
           onOpenScreen ??
           () => AppNotifications.show(
             context,
-            'The coworker has no screen open right now',
+            'The agent has no screen open right now',
           ),
     );
   }
@@ -451,7 +435,7 @@ class AgentsHeaderBand extends StatelessWidget {
   }
 }
 
-/// The relay is down and there is no coworker pill to say so: a quiet dot
+/// The relay is down and there is no agent pill to say so: a quiet dot
 /// and "Offline", with the way back when there is one.
 class _OfflineChip extends StatelessWidget {
   const _OfflineChip({super.key, this.onReconnect});
@@ -508,7 +492,7 @@ class _OfflineChip extends StatelessWidget {
 
 /// The running automation, as small as it can be and still be read: a state
 /// dot, the name, and the chevron that opens the cards underneath. It floats
-/// on chuk's chrome surface, beside the coworker pill.
+/// on chuk's chrome surface, beside the agent pill.
 class _AutomationChip extends StatelessWidget {
   const _AutomationChip({
     required this.label,

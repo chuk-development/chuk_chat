@@ -713,9 +713,8 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                   // Only use the final pass's text for the text block —
                   // interim text from earlier passes is already in content
                   // blocks.
-                  final finalText = stripToolCallBlocksForDisplay(
-                    rawContent,
-                  ).trim();
+                  final finalText = stripToolCallBlocksForDisplay(rawContent)
+                      .trim();
                   if (finalText.isNotEmpty) {
                     contentBlocks.add(ContentBlock.text(finalText));
                   }
@@ -1480,6 +1479,10 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           'sentAt': DateTime.now().toIso8601String(),
           'startedAt': DateTime.now().toIso8601String(),
         };
+        // A dictated message draws as a voice bubble (no audio is stored).
+        userMessage.addAll(
+          DictationTracker.instance.takeFor(displayMessageText),
+        );
 
         // Store images as JSON-encoded string if present
         if (imageDataUrls != null && imageDataUrls.isNotEmpty) {
@@ -1492,13 +1495,13 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     ? _fileHandler.attachedFiles
                     : const <AttachedFile>[])
                 .where((f) => !f.isImage && f.markdownContent != null)
-            .map(
-              (f) => {
-                'fileName': f.fileName,
-                'markdownContent': f.markdownContent!,
-              },
-            )
-            .toList();
+                .map(
+                  (f) => {
+                    'fileName': f.fileName,
+                    'markdownContent': f.markdownContent!,
+                  },
+                )
+                .toList();
 
         if (documentAttachments.isNotEmpty) {
           userMessage['attachments'] = jsonEncode(documentAttachments);
@@ -1986,9 +1989,8 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     // Only use the final pass's text for the text block —
                     // interim text from earlier passes is already in content
                     // blocks.
-                    final finalText = stripToolCallBlocksForDisplay(
-                      rawContent,
-                    ).trim();
+                    final finalText = stripToolCallBlocksForDisplay(rawContent)
+                        .trim();
                     if (finalText.isNotEmpty) {
                       contentBlocks2.add(ContentBlock.text(finalText));
                     }
@@ -2270,6 +2272,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         );
       });
       _persistChatWithId(chatId, commit: false);
+      _voice?.noteTurnTools(chatId, toolCallsJson);
       return;
     }
 
@@ -2283,6 +2286,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       );
       _streamingManager.setBackgroundMessages(chatId, backgroundMsgs);
       _persistChatWithIdAndMessages(chatId, backgroundMsgs, commit: false);
+      _voice?.noteTurnTools(chatId, toolCallsJson);
     }
   }
 
@@ -2369,6 +2373,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           message['toolCalls'] = updatedToolCallsJson;
           _messages[index] = message;
         });
+        _voice?.noteTurnImages(chatId, _messages[index]);
       } else {
         final backgroundMsgs = _streamingManager.getBackgroundMessages(chatId);
         if (backgroundMsgs != null &&
@@ -2385,6 +2390,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           }
           backgroundMsgs[index]['toolCalls'] = updatedToolCallsJson;
           _persistChatWithIdAndMessages(chatId, backgroundMsgs, commit: false);
+          _voice?.noteTurnImages(chatId, <String, String>{
+            'images': jsonEncode(imageResult.imagePaths),
+            'imageMetas': imageMetasJson,
+            'toolCalls': updatedToolCallsJson,
+          });
         }
       }
     } catch (error) {

@@ -49,6 +49,7 @@ import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/tts_audio_service.dart';
 import 'package:chuk_chat/voice/voice_transcript_migration.dart';
+import 'package:chuk_chat/services/dictation_tracker.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/message_composition_service.dart';
@@ -93,6 +94,7 @@ import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/mobile_workspace_handler.dart';
 import 'package:chuk_chat/widgets/fullscreen_text_editor.dart';
 import 'package:chuk_chat/platform_specific/chat/widgets/chat_message_list_item.dart';
+import 'package:chuk_chat/platform_specific/chat/widgets/composer_send_button.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/workspace_message_service.dart';
 import 'package:chuk_chat/services/artifact_context_service.dart';
@@ -323,7 +325,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   /// loads a chat?
   ///
   /// Not on a phone. The Agents shell keeps this screen mounted BEHIND the
-  /// coworker list, because it owns the relay socket
+  /// agent list, because it owns the relay socket
   /// (`messenger_shell.dart`), so a focus grab on mount opens the soft
   /// keyboard while the list is what the reader is looking at. And a
   /// messenger does not open the keyboard just because a thread was opened
@@ -356,7 +358,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   String? _pendingMessageText;
 
   /// Messenger mode only: messages queued behind [_pendingMessageText],
-  /// oldest first. A burst typed while the coworker works goes out in order;
+  /// oldest first. A burst typed while the agent works goes out in order;
   /// the single slot alone lost the first of two messages.
   final List<String> _queuedFollowUps = <String>[];
 
@@ -1957,10 +1959,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         );
       });
       unawaited(persistChat(commit: false));
+      _voice?.noteTurnTools(chatId, toolCallsJson);
       return;
     }
 
     if (!isActiveChat) {
+      _voice?.noteTurnTools(chatId, toolCallsJson);
       final bool hasInFlightCalls = toolCalls.any(
         (call) =>
             call.status == ToolCallStatus.running ||
@@ -1997,22 +2001,24 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     if (imagePaths.isEmpty) return;
 
     final isActiveChat = _activeChatId == chatId;
+    final Map<String, String> images = <String, String>{
+      'images': jsonEncode(imagePaths),
+      'imageMetas': imageMetasJson,
+      'toolCalls': toolCallsJson,
+    };
+    if (imageCostEur != null) images['imageCostEur'] = imageCostEur;
+    if (imageGeneratedAt != null) images['imageGeneratedAt'] = imageGeneratedAt;
     if (mounted && isActiveChat && index >= 0 && index < _messages.length) {
+      final Map<String, String> message = Map<String, String>.from(
+        _messages[index],
+      )..addAll(images);
       setState(() {
-        final message = Map<String, String>.from(_messages[index]);
-        message['images'] = jsonEncode(imagePaths);
-        message['imageMetas'] = imageMetasJson;
-        if (imageCostEur != null) {
-          message['imageCostEur'] = imageCostEur;
-        }
-        if (imageGeneratedAt != null) {
-          message['imageGeneratedAt'] = imageGeneratedAt;
-        }
-        message['toolCalls'] = toolCallsJson;
         _messages[index] = message;
       });
       unawaited(persistChat(commit: false));
+      _voice?.noteTurnImages(chatId, message);
     } else if (!isActiveChat) {
+      _voice?.noteTurnImages(chatId, images);
       unawaited(
         persistenceHandler
             .updateBackgroundChatMessage(
@@ -2528,6 +2534,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         // the reaction key and the roster's newest-message time read it.
         if (widget.messengerMode) 'sentAt': DateTime.now().toIso8601String(),
       };
+      // A dictated message draws as a voice bubble (no audio is stored).
+      userMessage.addAll(
+        DictationTracker.instance.takeFor(displayMessageText),
+      );
 
       // Store images as JSON-encoded string if present
       if (imageDataUrls != null && imageDataUrls.isNotEmpty) {
@@ -3390,11 +3400,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     }
   }
 
-  void _openComingSoonFeature(String featureName) {
-    if (!mounted) return;
-    ChatUiHelpers.openComingSoonFeature(context, featureName);
-  }
-
   /// [commit] false: a checkpoint inside a running turn, saved on this
   /// device only. See [ChatPersistenceHandler.persistChat].
   @override
@@ -3548,20 +3553,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Align(
             alignment: Alignment.centerLeft,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                const MessengerTypingIndicator(),
-                // What the host's run is doing, with its clock: a pill that
-                // only bounces for minutes reads as frozen.
-                if (hostKey != null && hostKey.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6, left: 4),
-                    child: AgentsLiveStatusLine(sessionKey: hostKey),
-                  ),
-              ],
-            ),
+            // Only the dots. A tap on them opens what the host's run is
+            // doing, step by step, with its clock.
+            child: hostKey != null && hostKey.isNotEmpty
+                ? AgentsLiveStatusLine(sessionKey: hostKey)
+                : const MessengerTypingIndicator(),
           ),
         );
       }
@@ -3721,7 +3717,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   }) {
     final bool hasAttachments = _fileHandler.hasAttachments;
     final bool hasMessages = _messages.isNotEmpty;
-    // Messenger mode: the coworker's run on the host outlives this screen's
+    // Messenger mode: the agent's run on the host outlives this screen's
     // own stream (a remount, a reconnect), so its typing bubble follows
     // [ChukChatUIMobile.hostRunActive] — unless the local stream already
     // shows the answer being written.
@@ -4046,8 +4042,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     final bool showStopAction =
         !widget.messengerMode && (_isCurrentChatStreaming || _isSendingMessage);
     final bool hasTypedText = composerController.text.trim().isNotEmpty;
-    final bool hasText = hasTypedText || hasAttachments;
-    final bool showVoiceModeAction = !hasText && kFeatureVoiceMode;
     final bool isRecording = _audioHandler.isMicActive;
 
     final Color borderColor = isRecording
@@ -4220,17 +4214,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 Flexible(child: _buildWorkspaceChip(iconFg)),
               ],
               const Spacer(),
-              // The call target of a normal chat. The phone top bar belongs
-              // to the root wrapper, so it sits here, beside the mic; the
-              // Agents thread carries it in its own chrome.
-              if (_voice != null && !widget.messengerMode && !isRecording) ...[
-                ChatVoiceCallButton(
-                  binding: _voice!,
-                  style: ChatVoiceCallStyle.composer,
-                  size: ComposerMetrics.targetSize,
-                ),
-                const SizedBox(width: ComposerMetrics.targetGap),
-              ],
               if (isRecording) ...[
                 buildTinyIconButton(
                   icon: Icons.stop_rounded,
@@ -4272,27 +4255,25 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 ),
                 const SizedBox(width: ComposerMetrics.targetGap),
               ],
-              buildTinyActionButton(
-                icon: isRecording
-                    ? Icons.north_rounded
-                    : (showStopAction
-                          ? Icons.stop_rounded
-                          : (showVoiceModeAction
-                                ? Icons.graphic_eq_rounded
-                                : Icons.north_rounded)),
-                buttonSize: ComposerMetrics.targetSize,
+              // Send, stop or voice: the desktop composer draws the same
+              // widget. Empty field and a chat that can call: voice.
+              ComposerSendButton(
+                controller: composerController,
+                hasOtherContent: hasAttachments || isRecording,
+                loading: _audioHandler.isTranscribingAudio,
+                stopping: showStopAction && !isRecording,
+                onStop: _cancelCurrentOperation,
+                onSend: isRecording ? _handleAudioSend : sendOrSubmitEdit,
+                // No call while a message is edited: the field is the edit.
+                onVoice: messageActionsHandler.isEditing
+                    ? null
+                    : composerVoiceAction(context, _voice),
+                width: ComposerMetrics.targetSize,
+                height: ComposerMetrics.targetSize,
+                radius: ComposerMetrics.targetSize / 2,
+                sendIcon: Icons.north_rounded,
                 iconSize: 18,
-                onTap: isRecording
-                    ? _handleAudioSend
-                    : (showStopAction
-                          ? _cancelCurrentOperation
-                          : (showVoiceModeAction
-                                ? () => _openComingSoonFeature('Voice Mode')
-                                : sendOrSubmitEdit)),
-                color: isRecording
-                    ? accent
-                    : (showStopAction ? Colors.red : accent),
-                isLoading: _audioHandler.isTranscribingAudio,
+                spinnerStroke: 2,
                 semanticsId: 'send_button',
               ),
             ],

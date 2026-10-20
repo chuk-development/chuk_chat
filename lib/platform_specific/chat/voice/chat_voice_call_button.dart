@@ -1,9 +1,12 @@
 // lib/platform_specific/chat/voice/chat_voice_call_button.dart
 //
-// The call target of a chat: a call glyph while no call runs for the chat,
-// the hang-up glyph while one does. It reaches the chat screen that owns the
-// chat through its [ChatVoiceBinding], so a header drawn outside the screen
-// (the Agents thread header, the phone chat chrome) needs no plumbing.
+// The voice target of a chat: VoiceIcon in the header and the chip. It
+// reaches the chat screen that owns the chat through its [ChatVoiceBinding],
+// so a header drawn outside the screen needs no plumbing.
+//
+// The composer has no voice target of its own: its send target turns into
+// voice while the field is empty ([composerVoiceAction],
+// `ComposerSendButton`).
 //
 // Build it only when `voiceCallUiEnabled` is true.
 
@@ -25,11 +28,42 @@ enum ChatVoiceCallStyle {
 
   /// A round floating chip: the phone chat chrome (42 px chip, 48 px press).
   chip,
+}
 
-  /// A composer target next to the microphone: 38 px round ink, the glyph
-  /// at the composer's quiet alpha, a tinted fill while on (the phone
-  /// composer's `buildTinyIconButton`).
-  composer,
+/// Whether [binding] can start a call: a binding exists (the build offers
+/// calls) and the chat has an id, or the binding can make one.
+bool chatVoiceReady(ChatVoiceBinding? binding) {
+  if (binding == null) return false;
+  final String? chatId = binding.currentChatId();
+  return (chatId != null && chatId.isNotEmpty) || binding.ensureChatId != null;
+}
+
+/// Starts the call of [binding] (unless one is live for its chat) and opens
+/// the call page. The one tap behaviour of every voice target.
+void openChatVoiceCall(
+  BuildContext context,
+  ChatVoiceBinding binding, {
+  String? agentName,
+}) {
+  final bool live = binding.isLiveFor(binding.currentChatId());
+  if (!live) unawaited(binding.startCall(agentName: agentName));
+  unawaited(
+    VoiceCallFullscreenPage.show(
+      context,
+      controller: VoiceCallController.instance,
+    ),
+  );
+}
+
+/// The composer's voice action for [binding]. Null when the build or the
+/// chat cannot call ([chatVoiceReady]): the composer target stays send.
+VoidCallback? composerVoiceAction(
+  BuildContext context,
+  ChatVoiceBinding? binding, {
+  String? agentName,
+}) {
+  if (binding == null || !chatVoiceReady(binding)) return null;
+  return () => openChatVoiceCall(context, binding, agentName: agentName);
 }
 
 class ChatVoiceCallButton extends StatelessWidget {
@@ -61,7 +95,7 @@ class ChatVoiceCallButton extends StatelessWidget {
   /// The square hit box of the bar style.
   final double size;
 
-  /// The coworker's name, for the worker's greeting.
+  /// The agent's name, for the worker's greeting.
   final String? agentName;
   final String semanticsId;
 
@@ -78,30 +112,17 @@ class ChatVoiceCallButton extends StatelessWidget {
             binding ?? ChatVoiceSessions.instance.forRole(agents: true);
         // A new chat with no id yet can call too, when the binding can give
         // it one.
-        final String? chatId = b?.currentChatId();
-        final bool ready =
-            b != null &&
-            ((chatId != null && chatId.isNotEmpty) || b.ensureChatId != null);
-        final bool live = ready && b.isLiveFor(b.currentChatId());
+        final bool ready = chatVoiceReady(b);
+        final bool live = ready && b!.isLiveFor(b.currentChatId());
         final String tooltip = live ? 'Open voice call' : 'Voice call';
         void onTap() {
           if (b == null) return;
-          if (!live) unawaited(b.startCall(agentName: agentName));
-          unawaited(
-            VoiceCallFullscreenPage.show(context, controller: controller),
-          );
+          openChatVoiceCall(context, b, agentName: agentName);
         }
 
         return switch (style) {
           ChatVoiceCallStyle.bar => _bar(context, live, ready, tooltip, onTap),
           ChatVoiceCallStyle.chip => _chip(
-            context,
-            live,
-            ready,
-            tooltip,
-            onTap,
-          ),
-          ChatVoiceCallStyle.composer => _composer(
             context,
             live,
             ready,
@@ -149,49 +170,7 @@ class ChatVoiceCallButton extends StatelessWidget {
             onTap: onTap,
             child: SizedBox.square(
               dimension: size,
-              child: Center(child: HugeIcon(HugeIcons.call02, color: glyph)),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _composer(
-    BuildContext context,
-    bool live,
-    bool ready,
-    String tooltip,
-    VoidCallback onTap,
-  ) {
-    final ThemeData theme = Theme.of(context);
-    final Color base = live
-        ? theme.colorScheme.primary
-        : theme.resolvedIconColor.withValues(alpha: ready ? 0.6 : 0.3);
-    return Semantics(
-      identifier: semanticsId,
-      button: true,
-      label: tooltip,
-      child: Tooltip(
-        message: tooltip,
-        excludeFromSemantics: true,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(size / 2),
-            child: Container(
-              width: size,
-              height: size,
-              decoration: BoxDecoration(
-                color: live
-                    ? theme.colorScheme.primary.withValues(alpha: 0.15)
-                    : Colors.transparent,
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: HugeIcon(HugeIcons.call02, size: 20, color: base),
-              ),
+              child: Center(child: HugeIcon(HugeIcons.voice, color: glyph)),
             ),
           ),
         ),
@@ -242,7 +221,7 @@ class ChatVoiceCallButton extends StatelessWidget {
                     shape: BoxShape.circle,
                   ),
                   child: Center(
-                    child: HugeIcon(HugeIcons.call02, size: 22, color: glyph),
+                    child: HugeIcon(HugeIcons.voice, size: 22, color: glyph),
                   ),
                 ),
               ),
