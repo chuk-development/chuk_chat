@@ -58,14 +58,21 @@ class RosterPins extends ChangeNotifier {
   static String _keyFor(String? userId) =>
       userId == null ? _kKey : '$_kKey.$userId';
 
-  Future<void> load() async {
+  /// Loads the pins of the signed-in user. A second call for the same user
+  /// is a no-op, unless [force] is set: then the remote is pulled again
+  /// (a sync signal from another device), with the same rule as every pull —
+  /// the remote is the truth, except for the unpushed toggles in [_dirty].
+  Future<void> load({bool force = false}) async {
     String? userId;
     try {
       userId = SupabaseService.auth.currentUser?.id;
     } catch (_) {
       // Supabase not initialised (tests, signed-out web): local only.
     }
-    if (_loadedForUserId == userId && _loadedForUserId != null) return;
+    if (_loadedForUserId == userId && _loadedForUserId != null) {
+      if (force) await _pullRemote();
+      return;
+    }
     final bool firstLoad = _loadedForUserId == null && _ids.isEmpty;
     _loadedForUserId = userId;
     _ids.clear();
@@ -240,21 +247,41 @@ class RosterPins extends ChangeNotifier {
   }
 }
 
-/// The order a roster shows its coworkers in: pinned first, then the rest,
-/// each group keeping the roster's own order. Ctrl+1 … Ctrl+9 on the desktop
-/// count this list, so the roster and the shortcut can never disagree.
+/// The order every roster shows its agents in — the phone's inbox and the
+/// desktop sidebar alike (bead chuk_chat-41k1: the desktop kept creation order
+/// while the phone sorted by activity, so the same chat sat on top of one and
+/// at the bottom of the other). Pinned first, in the roster's own order; then
+/// the rest by last activity, newest first ([compareByLastActivity]), and a
+/// agent that has never been active keeps its roster position among the
+/// undated ones. Ctrl+1 … Ctrl+9 on the desktop count this list, so the
+/// roster and the shortcut can never disagree.
 List<AgentsAgent> rosterPinOrder(
   List<AgentsAgent> agents,
   Set<String> pinned,
-) => <AgentsAgent>[
-  for (final AgentsAgent a in agents)
-    if (pinned.contains(a.id)) a,
-  for (final AgentsAgent a in agents)
-    if (!pinned.contains(a.id)) a,
-];
+) {
+  final List<AgentsAgent> rest = <AgentsAgent>[
+    for (final AgentsAgent a in agents)
+      if (!pinned.contains(a.id)) a,
+  ];
+  // `List.sort` is not stable in Dart; the roster position breaks ties, so
+  // equal (or missing) activity never shuffles rows between rebuilds.
+  final Map<String, int> position = <String, int>{
+    for (var i = 0; i < rest.length; i++) rest[i].id: i,
+  };
+  rest.sort((AgentsAgent a, AgentsAgent b) {
+    final int byActivity = compareByLastActivity(a, b);
+    if (byActivity != 0) return byActivity;
+    return position[a.id]!.compareTo(position[b.id]!);
+  });
+  return <AgentsAgent>[
+    for (final AgentsAgent a in agents)
+      if (pinned.contains(a.id)) a,
+    ...rest,
+  ];
+}
 
-/// Newest activity first; a coworker with no activity yet sinks below every
-/// dated one. `List.sort` is stable, so ties keep the caller's order.
+/// Newest activity first; an agent with no activity yet sinks below every
+/// dated one. Ties return 0; [rosterPinOrder] breaks them by roster position.
 int compareByLastActivity(AgentsAgent a, AgentsAgent b) {
   final DateTime? at = a.lastActivity;
   final DateTime? bt = b.lastActivity;
