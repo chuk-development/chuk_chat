@@ -116,7 +116,8 @@ def test_digest_ignores_case_and_whitespace_only():
 
 def test_decide_changed():
     a, b = summary_digest("a"), summary_digest("b")
-    assert decide_changed(False, a, None) is True  # first result: the baseline is news
+    assert decide_changed(True, a, None) is True  # first result with news: tell the user
+    assert decide_changed(False, a, None) is False  # first result, nothing relevant: stay silent
     assert decide_changed(True, a, a) is False  # same facts, same words: no change
     assert decide_changed(False, b, a) is False  # the model says nothing changed
     assert decide_changed(True, b, a) is True

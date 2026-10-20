@@ -2,7 +2,7 @@
 name: automations
 description: Put work on a clock or watch something 24/7. Load it only when the user explicitly asks to set up, change or remove a schedule, a reminder or a watcher ("richte ... ein", "jeden Tag um 9", "erinnere mich"). "Daily" in a report request is not such a request.
 metadata:
-  version: "1.1"
+  version: "1.2"
 ---
 
 # Automations: schedules, watchers, self-wake
@@ -27,15 +27,34 @@ You have six tools for work that happens later or keeps happening:
 
 | Tool | What it does |
 |---|---|
-| `schedule_task(spec, prompt, name?)` | Start a task with `prompt` in THIS conversation when `spec` is due. |
+| `schedule_task(spec, prompt, name?, notify?)` | Start a task with `prompt` in THIS conversation when `spec` is due. |
 | `start_watcher(script_path, name?, restart?)` | Run a Python script from the workspace 24/7 in the background, supervised. |
 | `list_automations()` | Your own schedules and watchers, with state, next fire, count. |
 | `pause_automation(id)` / `resume_automation(id)` / `cancel_automation(id)` | Manage your own. |
 
 The user sees every automation as a card in the chat and on the Automations
-page in Settings. Every fired task ends with a notification to the user, so
-do not add a "notify the user" step yourself: finish the task with the result
-in your answer and the user is told that an answer is ready.
+page in Settings. With the default `notify="always"`, every fired task ends
+with a notification to the user, so do not add a "notify the user" step
+yourself: finish the task with the result in your answer and the user is
+told that an answer is ready.
+
+## Silent runs: `notify="on_change"`
+
+A check that runs often and usually finds nothing ("check my mail every
+hour", "tell me if ...", "watch for invoices") must NOT ping the user on
+every run. Create it with `notify="on_change"`. Then every fired run ends
+with `automation_result(changed, summary)`:
+
+- something new the user must hear: `changed=true`, the facts in `summary`.
+  The user gets a notification. For a new arrival (a mail, an item), put
+  its id into `summary`: a summary that repeats the previous one word for
+  word counts as no change.
+- nothing new, nothing relevant, or only work done in the background
+  (mails sorted into folders): `changed=false`. The user gets no
+  notification, also on the first run.
+
+Do not write "if nothing is relevant, answer 'Nothing relevant'" into such
+a prompt: that answer would be a notification under `always`.
 
 You only ever see your own automations. Another agent's ids answer
 `not found`. That is by design; do not try to guess ids.

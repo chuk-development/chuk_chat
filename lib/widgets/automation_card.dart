@@ -97,7 +97,7 @@ class _AutomationCardState extends State<AutomationCard> {
         a.fireCount == 1 ? 'fired once' : 'fired ${a.fireCount}×',
       if (a.suppressedCount > 0) '${a.suppressedCount} folded',
       if (a.notifiesOnChange)
-        l10n?.automationNotifyChangeShort ?? 'notifies on change',
+        l10n?.automationNotifyChangeShort ?? 'notifies when relevant',
       if (a.unchangedCount == 1) l10n?.automationQuietOne ?? 'quiet 1 run',
       if (a.unchangedCount > 1)
         l10n?.automationQuietMany('${a.unchangedCount}') ??
