@@ -30,6 +30,7 @@ import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/tts_audio_service.dart';
 import 'package:chuk_chat/voice/voice_transcript_migration.dart';
+import 'package:chuk_chat/services/dictation_tracker.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/core/model_selection_events.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
@@ -82,6 +83,7 @@ import 'package:chuk_chat/platform_specific/chat/handlers/desktop_clipboard_hand
 import 'package:chuk_chat/platform_specific/chat/handlers/desktop_file_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_debug_snapshot.dart';
 import 'package:chuk_chat/platform_specific/chat/widgets/chat_message_list_item.dart';
+import 'package:chuk_chat/platform_specific/chat/widgets/composer_send_button.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_binding.dart';
 import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_call_button.dart';
@@ -132,8 +134,8 @@ class ChukChatUIDesktop extends StatefulWidget {
   /// its pane instead of the window.
   final bool agentsThread;
 
-  /// The coworker's name (agents_thread_view passes it). The composer no
-  /// longer reads it; the voice call uses it as the coworker's name.
+  /// The agent's name (agents_thread_view passes it). The composer no
+  /// longer reads it; the voice call uses it as the agent's name.
   final String? agentsTitle;
 
   /// Room at the top of the message list for a bar that floats over it (the
@@ -499,7 +501,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _voice = ChatVoiceBinding(
         currentChatId: () => _activeChatId,
         isAgentsScreen: widget.agentsThread,
-        // The coworker's name (agents_thread_view hands it in as the title).
+        // The agent's name (agents_thread_view hands it in as the title).
         agentName: () => widget.agentsThread ? widget.agentsTitle : null,
         messages: () => _messages,
         onVoiceTurns: _appendVoiceTurns,
@@ -1303,11 +1305,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     if (kDebugMode) {
       debugPrint('[NEW-CHAT] Starting chat with workspace: $assistantId');
     }
-  }
-
-  void _openComingSoonFeature(String featureName) {
-    if (!mounted) return;
-    ChatUiHelpers.openComingSoonFeature(context, featureName);
   }
 
   Future<void> _loadSystemPrompt() async {
@@ -2276,24 +2273,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                             ),
                           ),
                         ),
-                      // The call target on the chrome line, left of the
-                      // root's "Copy full chat" (12 from the edge, 48 wide).
-                      // The Agents thread has its own header for it.
-                      if (_voice != null && !widget.agentsThread)
-                        Positioned(
-                          key: const ValueKey<String>(
-                            'desktop-chat-voice-call',
-                          ),
-                          top:
-                              kTopInitialSpacing +
-                              (kButtonVisualHeight - kMinInteractiveDimension) /
-                                  2,
-                          right: 12 + kMinInteractiveDimension,
-                          child: ChatVoiceCallButton(
-                            binding: _voice!,
-                            style: ChatVoiceCallStyle.chip,
-                          ),
-                        ),
                       Positioned(
                         key: const ValueKey<String>('desktop-chat-input-area'),
                         left: 0,
@@ -2667,88 +2646,44 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                     isActive: _audioHandler.isMicActive,
                     debugLabel: 'Mic button',
                   ),
-                  // Voice Mode button (only when feature enabled, hidden during recording)
-                  if (!_audioHandler.isMicActive && kFeatureVoiceMode) ...[
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      key: const ValueKey<String>('voice-mode-button'),
-                      onTap: () => _openComingSoonFeature('Voice Mode'),
-                      child: Container(
-                        width: 44,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: accent,
-                          borderRadius: BorderRadius.circular(buttonRadius),
-                        ),
-                        child: const AppIcon(
-                          Icons.graphic_eq,
-                          color: Colors.black,
-                        ),
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ],
           ),
-          // Send / Stop button pinned to top-right of container
+          // Send / Stop / Voice, pinned to the top right of the box. The
+          // phone composer draws the same widget.
           Positioned(
             top: 0,
             right: 0,
-            child: GestureDetector(
-              onTap: _audioHandler.isTranscribingAudio
+            child: ComposerSendButton(
+              controller: composerController,
+              hasOtherContent: hasAttachments || _audioHandler.isMicActive,
+              loading: _audioHandler.isTranscribingAudio,
+              stopping: _isStreaming || _isSending,
+              onStop: _cancelCurrentOperation,
+              onSend: _audioHandler.isMicActive
+                  ? _handleAudioSend
+                  : sendOrSubmitEdit,
+              // No call while a message is edited: the field is the edit.
+              onVoice: messageActionsHandler.isEditing
                   ? null
-                  : () {
-                      if (_isStreaming || _isSending) {
-                        _cancelCurrentOperation();
-                      } else if (_audioHandler.isMicActive) {
-                        _handleAudioSend();
-                      } else {
-                        sendOrSubmitEdit();
-                      }
-                    },
-              child: Builder(
-                builder: (context) {
-                  final Color fill = (_isStreaming || _isSending)
-                      ? Colors.red
-                      : accent;
-                  // The same decision the phone's send button makes, from the
-                  // same place, so the two cannot end up different colours.
-                  final Color on = Theme.of(context)
-                      .accentButtonForeground(fill);
-                  return Container(
-                    width: btnW,
-                    height: btnH,
-                    decoration: BoxDecoration(
-                      color: fill,
-                      borderRadius: BorderRadius.circular(buttonRadius),
+                  : composerVoiceAction(
+                      context,
+                      _voice,
+                      agentName: widget.agentsThread
+                          ? widget.agentsTitle
+                          : null,
                     ),
-                    child: _audioHandler.isTranscribingAudio
-                        ? Center(
-                            child: SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                                valueColor: AlwaysStoppedAnimation<Color>(on),
-                                backgroundColor: on.withValues(alpha: 0.2),
-                              ),
-                            ),
-                          )
-                        : (_isStreaming || _isSending)
-                        ? AppIcon(Icons.stop_rounded, color: on, size: 22)
-                        : Transform(
-                            transform: Matrix4.diagonal3Values(1, 0.95, 1),
-                            alignment: Alignment.center,
-                            child: AppIcon(
-                              Icons.arrow_upward_rounded,
-                              color: on,
-                              size: 26,
-                            ),
-                          ),
-                  );
-                },
-              ),
+              width: btnW,
+              height: btnH,
+              radius: buttonRadius,
+              sendIcon: Icons.arrow_upward_rounded,
+              iconSize: 26,
+              stopIconSize: 22,
+              sendIconScaleY: 0.95,
+              spinnerSize: 20,
+              spinnerStroke: 2.5,
+              semanticsId: 'desktop_send_button',
             ),
           ),
         ],

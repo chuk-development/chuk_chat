@@ -26,7 +26,7 @@ AgentsThreadAction _action(String tooltip, List<String> log) =>
     );
 
 void main() {
-  testWidgets("the header is the phone's top bar: the coworker on the left, "
+  testWidgets("the header is the phone's top bar: the agent on the left, "
       'Documents, Screen and "…" on the right', (tester) async {
     final log = <String>[];
     await tester.pumpWidget(
@@ -40,7 +40,7 @@ void main() {
       ),
     );
 
-    // The coworker pill: its name and its status line.
+    // The agent pill: its name and its status line.
     expect(find.text('Alex'), findsOneWidget);
     expect(find.text('Active now'), findsOneWidget);
     expect(find.byType(AgentChromePill), findsOneWidget);
@@ -111,7 +111,7 @@ void main() {
     );
   });
 
-  testWidgets('a tap on the coworker opens what the caller wired', (
+  testWidgets('a tap on the agent opens what the caller wired', (
     tester,
   ) async {
     var opened = 0;
@@ -261,7 +261,7 @@ void main() {
     await tester.tap(find.byTooltip('No screen open right now'));
     await tester.pump();
     expect(
-      find.text('The coworker has no screen open right now'),
+      find.text('The agent has no screen open right now'),
       findsOneWidget,
     );
 
@@ -308,7 +308,7 @@ void main() {
     await tester.tap(find.text('Offline · Reconnect'));
     expect(reconnects, 1);
 
-    // No coworker to carry it: a chip of its own.
+    // No agent to carry it: a chip of its own.
     await tester.pumpWidget(
       _wrap(const AgentsThreadHeader(connection: AgentsThreadConnection.down)),
     );

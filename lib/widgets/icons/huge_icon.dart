@@ -58,6 +58,11 @@ abstract final class HugeIcons {
   static const HugeIconData bug01 = HugeIconData('bug01');
   static const HugeIconData calendar01 = HugeIconData('calendar01');
   static const HugeIconData call02 = HugeIconData('call02');
+  static const HugeIconData voice = HugeIconData('voice');
+
+  /// [voice] without its ring, the bars filled. Drawn by hand, not
+  /// generated (see tool/generate_hugeicons.py): the composer's voice target.
+  static const HugeIconData voiceSolid = HugeIconData('voice-solid');
   static const HugeIconData cancel01 = HugeIconData('cancel01');
   static const HugeIconData cancel02 = HugeIconData('cancel02');
   static const HugeIconData chatting01 = HugeIconData('chatting01');

@@ -41,6 +41,10 @@ WANTED = [
     "PlayCircleIcon", "Mic02Icon", "SendHorizontalIcon", "ArrowUpRight01Icon",
     "UserGroupIcon", "Settings02Icon", "Call02Icon", "ImageNotFound01Icon",
     "CheckmarkCircle02Icon", "LinkSquare02Icon", "Menu01Icon", "Add01Icon",
+    # voice-solid.svg is NOT generated: it is VoiceIcon's five bars without
+    # the ring, drawn filled by hand (the composer's voice target). This
+    # script never writes it, so a re-run keeps it.
+    "VoiceIcon",
     "Remove01Icon", "Wrench01Icon", "Bug01Icon", "Home01Icon", "StarIcon",
     "Bookmark01Icon", "Tick02Icon", "Cancel02Icon", "Loading03Icon",
     "Album01Icon", "Folder01Icon", "FileEditIcon", "Comment01Icon",
