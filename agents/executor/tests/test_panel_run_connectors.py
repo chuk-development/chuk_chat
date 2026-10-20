@@ -1,6 +1,6 @@
 """A run with no forwarded connectors keeps the session's connectors.
 
-A message from the browser panel (or an automation, a mail, Telegram) carries
+A message from the browser panel (or an automation, a mail) carries
 no ``mcp_servers``. The run path then adds the browser entry to what the
 session's last task forwarded. Before the fix, the run built a manager from the
 browser entry alone: the session's cached manager was replaced by one without
@@ -79,7 +79,7 @@ def test_other_connectorless_origins_keep_them_too(tmp_path):
     executor = _executor(tmp_path)
     try:
         first = _manager_for(executor, _run("app", _servers()))
-        for origin in ("automation", "telegram"):
+        for origin in ("automation", "mail"):
             assert _manager_for(executor, _run(origin, None)) is first
     finally:
         executor._close_mcp_managers()

@@ -140,3 +140,22 @@ def test_section_written_as_a_value_is_named(tmp_path):
         load_config(path=path, environ={})
     assert caught.value.paths() == ("model",)
     assert "must be a table" in caught.value.problems[0].message
+
+
+def test_a_retired_channels_section_still_loads(tmp_path):
+    # Telegram is gone (bead chuk_chat-n7c3). A file an older Agents wrote
+    # with its [channels] keys must not stop the host from starting.
+    path = tmp_path / "config.toml"
+    path.write_text(
+        "version = 1\n"
+        "[channels]\n"
+        "telegram_allowed = false\n"
+        'telegram_api_base = "https://api.telegram.org"\n'
+        "telegram_poll_timeout = 25\n"
+        "telegram_link_ttl = 600\n"
+        "[sandbox]\n"
+        'image = "agents-sandbox:test"\n'
+    )
+    config = load_config(path, environ={"AGENTS_TELEGRAM_ALLOWED": "1"})
+    assert not hasattr(config, "channels")
+    assert config.sandbox.image == "agents-sandbox:test"

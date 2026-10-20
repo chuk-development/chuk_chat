@@ -34,7 +34,7 @@ in `~/.config/chuk-agents/host.env`). Backups of the old wrapper and unit:
 - Per-action approvals (once / always for this agent / per site).
 - Cost per answer, totals, weekly budget with warning and stop.
 - Automations: watch a page, mail filter, notify only on change.
-- Telegram channel per agent (opt-in, not E2E, pairing code).
+- Telegram channel per agent (opt-in, not E2E, pairing code). Removed 2026-10-20 (bead chuk_chat-n7c3): the owner does not want Telegram. App and host no longer have it.
 - 15 agent templates in New agent.
 - Save a successful task as a skill (only on approval).
 - "N files changed · Undo" per answer with conflict handling.
@@ -48,8 +48,8 @@ in `~/.config/chuk-agents/host.env`). Backups of the old wrapper and unit:
   display because the screen was locked).
 - The own-browser add-on is not tested in a real Chrome yet: steps in
   `docs/RUNBOOK_2026-09-08_USER_BROWSER.md`.
-- Telegram is tested only against a fake Bot API; a real bot token test is
-  open.
+- Telegram is tested only against a fake Bot API. (Void: Telegram was
+  removed on 2026-10-20, bead chuk_chat-n7c3.)
 - `chukdoo-web.service` (another project) restarts every 3 s (CHDIR:
   working directory missing). Not touched.
 

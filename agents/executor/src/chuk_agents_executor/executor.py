@@ -232,11 +232,11 @@ UNATTENDED_ORIGINS = ("automation", "job", ORIGIN_MAIL)
 
 #: Origins whose task frame carries no ``mcp_servers`` (no app sent it): they
 #: run with the connectors the session already has.
-CONNECTORLESS_ORIGINS = ("automation", ORIGIN_MAIL, "telegram", _user_browser.PANEL_ORIGIN)
+CONNECTORLESS_ORIGINS = ("automation", ORIGIN_MAIL, _user_browser.PANEL_ORIGIN)
 
 #: Origins a lighter context may serve (docs/WIRE_CONTRACT.md, "Cost per run
 #: and weekly budget"): a fired schedule / watcher and a background job wake.
-#: A mail or Telegram run is a conversation and keeps its full context.
+#: A mail run is a conversation and keeps its full context.
 LIGHT_CONTEXT_ORIGINS = ("automation", "job")
 
 #: The operator's opt-in for that lighter context (no memory recall, no fact
@@ -1411,7 +1411,7 @@ class Executor:
         self._mcp_signatures: dict[str, str] = {}
         # Per session: the connectors the app forwarded with the session's last
         # task that carried a list. A run that comes with none (an automation,
-        # a mail, Telegram, the browser panel) uses it, so the browser entry
+        # a mail, the browser panel) uses it, so the browser entry
         # is added to the session's connectors instead of replacing them.
         self._mcp_forwarded: dict[str, list[dict]] = {}
         # The last tool list of every forwarded server, next to the state db
@@ -1937,11 +1937,6 @@ class Executor:
             # gets this far.
             self._handle_user_browser_resume(request_id, payload)
             return
-        if kind in ("agent_channel_get", "agent_channel_set"):
-            # Messenger channels of one agent (host channels/). The host
-            # keeps them; answered with one terminal ``agent_channel`` frame.
-            self._handle_channel_frame(request_id, payload)
-            return
         if kind == "mcp_probe":
             # The app just connected a server (or opened the connector list) and
             # wants to know what it holds. Answered with one terminal
@@ -2323,31 +2318,6 @@ class Executor:
             answer = failure
         self._terminal(request_id, answer)
 
-    def _handle_channel_frame(self, request_id: str, payload: dict) -> None:
-        """Hand ``agent_channel_get`` / ``_set`` to the host's agent hook (the
-        host runs the channels) and send its answer as the terminal."""
-        agent_id = payload.get("agent_id")
-        failure = {
-            "type": "agent_channel",
-            "agent_id": agent_id if isinstance(agent_id, str) else "",
-            "channel": str(payload.get("channel") or "telegram"),
-            "e2e": False,
-        }
-        hook = self._on_agent_frame
-        if hook is None:
-            self._terminal(request_id, {**failure, "error": "channels not enabled"})
-            return
-        try:
-            answer = hook(payload)
-        except Exception as exc:  # noqa: BLE001 — the serve loop must survive a bad hook
-            self._terminal(
-                request_id, {**failure, "error": f"channel frame failed: {type(exc).__name__}"}
-            )
-            return
-        if not isinstance(answer, dict) or answer.get("type") != "agent_channel":
-            answer = {**failure, "error": "channels not enabled"}
-        self._terminal(request_id, answer)
-
     # -- cost per run and weekly budget (docs/WIRE_CONTRACT.md) -----------
     def _current_price_book(self) -> Any:
         """The price list (``PriceBook``) or ``None`` when there is none. A
@@ -2533,7 +2503,7 @@ class Executor:
                 tokens_spent=0,
                 run_id=run.run_id,
                 run_stamps=stamps,
-                host_notified=run.origin in UNATTENDED_ORIGINS or run.origin == "telegram",
+                host_notified=run.origin in UNATTENDED_ORIGINS,
                 session_key=session_key,
                 automation_result=automation_result,
             ),
@@ -4670,7 +4640,7 @@ class Executor:
                 if broker is not None:
                     # A task the user sent clears an earlier Stop in the browser.
                     broker.begin_run(
-                        str(session_key), by_user=run.origin not in (*UNATTENDED_ORIGINS, "telegram")
+                        str(session_key), by_user=run.origin not in UNATTENDED_ORIGINS
                     )
         mcp_manager = self._session_mcp_manager(session_key, servers or None)
         if mcp_manager is None and run.origin in CONNECTORLESS_ORIGINS and online:
@@ -4945,8 +4915,8 @@ class Executor:
                 run_id=run.run_id,
                 run_stamps=run_stamps,
                 # A fired automation / job / mail run is notified on by the
-                # host itself; a Telegram run is answered in Telegram.
-                host_notified=run.origin in UNATTENDED_ORIGINS or run.origin == "telegram",
+                # host itself.
+                host_notified=run.origin in UNATTENDED_ORIGINS,
                 session_key=session_key,
                 cost=run.cost,
                 automation_result=automation_result,

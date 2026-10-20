@@ -3078,7 +3078,7 @@ agent tool.
    chuk_chat-atm2, follow-up chuk_chat-wuci): the app does not see the
    origin. The replayed `user` frame carries only text, `run_state` has no
    origin, and the run summary with `origin` stays in the host. The only
-   sign is the host's text prefix, and the user (or a Telegram or mail
+   sign is the host's text prefix, and the user (or a mail
    sender) can type the same words. A label drawn from it would classify by
    a text pattern. The fix is an additive `origin` on the replayed `user`
    frame from the host; then the app draws the label from that field.
@@ -3250,13 +3250,12 @@ Host -> app, `agent_permissions` gains:
 The check runs at the start of each run, before a model is built, so a
 refused run spends nothing.
 
-- **Unattended runs** (origin `automation`, `job`, `mail`, `mail_untrusted`,
-  `telegram`) are **refused**: `done` with `reason: "budget_exceeded"`,
+- **Unattended runs** (origin `automation`, `job`, `mail`, `mail_untrusted`)
+  are **refused**: `done` with `reason: "budget_exceeded"`,
   `iterations: 0`, `tokens_spent: 0`, and a `final_answer` that says why
   ("... This run was skipped. Raise the budget ..."). The run row is closed
-  with that reason. The host's run-finished hook gets it like any end (a
-  Telegram run answers with the sentence in Telegram; an automation is
-  announced like any automation end).
+  with that reason. The host's run-finished hook gets it like any end (an
+  automation is announced like any automation end).
 - **A run the user starts** (a `task` frame, origin `app`) is refused the
   same way, with a sentence that offers the way out ("... Choose \"Run
   anyway\" to go over the budget once ..."). The app then sends the same
