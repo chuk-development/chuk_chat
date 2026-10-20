@@ -42,7 +42,7 @@ void main() {
         <String, dynamic>{'role': fromUser ? 'user' : 'assistant', 'text': text},
       ]);
 
-  testWidgets('renders one row per visible coworker with preview and time',
+  testWidgets('renders one row per visible agent with preview and time',
       (tester) async {
     // Thread keys of this test alone: the preview store is a process-wide
     // singleton, so a key shared with another test would make the result
@@ -74,7 +74,7 @@ void main() {
         threads: const <AgentsThreadInfo>[],
       ),
     ];
-    // The working coworker has a stored line too — a live run has to outrank
+    // The working agent has a stored line too — a live run has to outrank
     // it, or the row would report what was said before the run started.
     storeLine('render-chief', 'Digest sent', fromUser: false);
 
@@ -108,7 +108,7 @@ void main() {
         matching: find.text(''),
       ),
       findsOneWidget,
-      reason: 'the preview line of a silent coworker is empty',
+      reason: 'the preview line of a silent agent is empty',
     );
     // No account target up here any more: settings has one way in, the
     // navigation bar.
@@ -126,7 +126,7 @@ void main() {
       reason: 'unread badge counts the threads with something new',
     );
 
-    // A line arrives for the idle coworker: it beats the brief, and the list
+    // A line arrives for the idle agent: it beats the brief, and the list
     // follows the store without being rebuilt by its caller.
     storeLine('render-design', 'Ship the palette', fromUser: true);
     await tester.pump();
@@ -205,7 +205,7 @@ void main() {
     expect(find.byKey(const ValueKey<String>('slot')), findsOneWidget);
     expect(find.text('Design'), findsOneWidget);
 
-    // The filter still filters: a coworker that never did anything has
+    // The filter still filters: an agent that never did anything has
     // nothing unread.
     expect(find.text('Inbox Triage'), findsOneWidget);
     await tester.tap(find.textContaining('Unread'));
@@ -213,7 +213,7 @@ void main() {
     expect(find.text('Inbox Triage'), findsNothing);
   });
 
-  testWidgets('tap opens the first thread; a coworker without threads is inert',
+  testWidgets('tap opens the first thread; an agent without threads is inert',
       (tester) async {
     final List<(String, String)> selected = <(String, String)>[];
     await pumpPhone(

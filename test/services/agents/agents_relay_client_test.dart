@@ -807,7 +807,7 @@ void main() {
   });
 
   test('the agent_list request waits for the account provision too, and the '
-      'coworker frames carry the id and the name', () async {
+      'agent frames carry the id and the name', () async {
     // Sent on pair, the list request used to reach the host before the token
     // ("expected account_authentication, got 'agent_list'") and was dropped;
     // nothing asked again until the next pairing, so the roster stayed
@@ -851,7 +851,7 @@ void main() {
     expect(rename['name'], 'Laptop Bot');
 
     // ── templates ──
-    // A coworker made from a template carries its persona, additively.
+    // An agent made from a template carries its persona, additively.
     await client.createAgent(
       'local:Researcher:2:9',
       'Researcher',
@@ -1556,7 +1556,7 @@ void main() {
   });
 
   // Bead cowork-5eo6: without the key the executor resolves the PRIMARY
-  // environment, which with one container per coworker is almost never the box
+  // environment, which with one container per agent is almost never the box
   // the browser is in — the view then reports no browser while one is running.
   test('browser_start names the thread whose box to look in', () async {
     final (client, host, _) = await paired();

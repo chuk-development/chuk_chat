@@ -95,7 +95,7 @@ class _HangingController extends FakeRelayController {
   }) => Completer<void>().future;
 }
 
-/// A host that lists no agents: pairing does not bring a host coworker.
+/// A host that lists no agents: pairing does not bring a host agent.
 class _EmptyHostRoster extends LocalAgentRosterSource {
   @override
   AgentsAgent ensureHostAgent(
@@ -314,8 +314,8 @@ void main() {
         await tester.tap(add);
         await tester.pumpAndSettle();
         // The New agent picker: templates first, then the name step.
-        expect(find.text('Blank coworker'), findsOneWidget);
-        await tester.tap(find.text('Blank coworker'));
+        expect(find.text('Blank agent'), findsOneWidget);
+        await tester.tap(find.text('Blank agent'));
         await tester.pumpAndSettle();
         expect(find.text('Create'), findsOneWidget);
       });
@@ -324,7 +324,7 @@ void main() {
         tester,
       ) async {
         await pumpShell(tester, size: size, paired: true);
-        // The host coworker is selected on desktop; the phone lists it.
+        // The host agent is selected on desktop; the phone lists it.
         expect(find.byType(AgentsStatusPanel), findsNothing);
       });
     });

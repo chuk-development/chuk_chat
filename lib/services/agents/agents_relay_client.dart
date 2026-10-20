@@ -44,6 +44,7 @@ import 'package:chuk_chat/services/agents/agents_frame_fragments.dart';
 import 'package:chuk_chat/services/agents/agents_pairing.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
 import 'package:chuk_chat/services/agents/agents_reconnect.dart';
+import 'package:chuk_chat/services/agents/agents_resume_trace.dart';
 import 'package:chuk_chat/services/agents/agents_run_cost.dart'; // F1: cost
 import 'package:chuk_chat/services/agents/agents_controller_session.dart';
 import 'package:chuk_chat/services/agents/agents_cloud_relay.dart'
@@ -73,6 +74,28 @@ abstract interface class RelaySocket {
 
   /// Closes the socket.
   Future<void> close();
+}
+
+/// A [RelaySocket] that can say whether it still reaches the other end.
+///
+/// The cloud relay answers a `ping` itself, so one round trip tells a socket
+/// that survived the app's time in the background from one the OS or the
+/// relay cut while the app was away (bead chuk_chat-kl8x).
+abstract interface class RelaySocketProbe {
+  /// True when the far end answered within [timeout]. False at once when the
+  /// socket is already known to be gone. Never throws.
+  Future<bool> probe(Duration timeout);
+}
+
+/// A controller that can check its live socket without replacing it.
+///
+/// On a resume the thread view asks this first: a socket that still answers
+/// keeps delivering what arrived while the app was away, so the thread paints
+/// from it at once instead of waiting for a new dial, a new handshake and a
+/// replay (bead chuk_chat-kl8x).
+abstract interface class AgentsLinkProbe {
+  /// True when the current socket is paired and answered within [timeout].
+  Future<bool> probeLink({Duration timeout});
 }
 
 /// Opens a [RelaySocket] to [url]. Default is [defaultRelaySocketConnector];
@@ -572,7 +595,7 @@ class AgentsRelayDone extends AgentsRelayInbound {
   /// spent no tokens.
   final AgentsRunCost? cost;
 
-  /// The coworker's weekly budget refused the run before it started. Neither
+  /// The agent's weekly budget refused the run before it started. Neither
   /// a stop nor a failure: [wasStopped] stays false.
   bool get isBudgetExceeded => reason == 'budget_exceeded';
   // ── end F1 ──
@@ -966,7 +989,7 @@ class AgentsRelaySkillProposal extends AgentsRelayInbound {
   /// Markdown: title, goal, numbered steps.
   final String body;
 
-  /// The session key of the coworker that proposed it.
+  /// The session key of the agent that proposed it.
   final String? agentId;
 
   /// The thread the card belongs to: `session_key` when the host names it,
@@ -1020,7 +1043,7 @@ class AgentsRelaySkillProposal extends AgentsRelayInbound {
 }
 // ── end skill proposals ──
 
-/// What one coworker runs on, has spent and how long it has worked
+/// What one agent runs on, has spent and how long it has worked
 /// (docs/WIRE_CONTRACT.md, "Agent status"; bead cowork-6ag).
 ///
 /// Every block is nullable on purpose: the host sends a block only for a figure
@@ -1080,8 +1103,8 @@ class AgentsRelayAgentStatus {
   }
 }
 
-/// One coworker name the host keeps for this pairing (bead cowork-817,
-/// WIRE_CONTRACT "Coworker names"). [host] marks the coworker that runs on
+/// One agent name the host keeps for this pairing (bead cowork-817,
+/// WIRE_CONTRACT "Agent names"). [host] marks the agent that runs on
 /// the host itself; its [agentId] is `host:<device_id>`.
 @immutable
 class AgentsHostAgentName {
@@ -1106,7 +1129,7 @@ class AgentsHostAgentName {
   int get hashCode => Object.hash(agentId, name, host);
 }
 
-/// The host's `agent_list`: every coworker name it keeps, sent once per attach
+/// The host's `agent_list`: every agent name it keeps, sent once per attach
 /// and after each `agent_create` / `agent_rename` it applied.
 class AgentsRelayAgentList extends AgentsRelayInbound {
   const AgentsRelayAgentList({required this.agents});
@@ -1292,7 +1315,7 @@ class AgentsRelayApprovalRequest extends AgentsRelayInbound {
   // ── F1: approvals + cost ──
   /// The [action] of a per-action approval (docs/WIRE_CONTRACT.md,
   /// "Per-action approvals"): a mail, a destructive connector tool or a
-  /// page-changing browser step that the coworker's policy says to ask about.
+  /// page-changing browser step that the agent's policy says to ask about.
   static const String actionApprovalAction = 'action_approval';
 
   /// The answers a card may offer, as the host names them in [options].
@@ -1319,7 +1342,7 @@ class AgentsRelayApprovalRequest extends AgentsRelayInbound {
   /// The host's one line for the card.
   final String? summary;
 
-  /// The registry tool the coworker wants to call.
+  /// The registry tool the agent wants to call.
   final String? tool;
 
   /// What the card shows per class (recipients, connector arguments, the
@@ -1585,7 +1608,7 @@ abstract interface class AgentsRelayController {
     bool regenerate,
     String? taskId,
     // ── F1: approvals + cost ──
-    /// "Run anyway": this one task may go over the coworker's weekly budget
+    /// "Run anyway": this one task may go over the agent's weekly budget
     /// (docs/WIRE_CONTRACT.md, "The stop at 100 %"). Sent only when true and
     /// only to a host that names `cost_budget`.
     bool budgetOverride,
@@ -1595,7 +1618,7 @@ abstract interface class AgentsRelayController {
   /// Creates the room on the host so a later [sendRoomTask] can find it (§16.1).
   /// [members] is `[{agent_id, handle}]` in room order.
   ///
-  /// [agentToAgent] is the room's "coworkers may reply to each other" policy.
+  /// [agentToAgent] is the room's "agents may reply to each other" policy.
   /// True is what a room has always done, so the key rides ONLY when it is
   /// false: an old host that does not know the key keeps behaving exactly as
   /// before.
@@ -1619,13 +1642,13 @@ abstract interface class AgentsRelayController {
   /// Renames [roomId] on the host (§16.1).
   Future<void> renameRoom(String roomId, String name);
 
-  /// Registers a coworker the app created on the host's roster, so its name
+  /// Registers an agent the app created on the host's roster, so its name
   /// outlives this install (bead cowork-817; `agent_create`, WIRE_CONTRACT
-  /// "Coworker names").
+  /// "Agent names").
   // ── templates ──
-  /// [template] is the optional `template` object of a coworker made from a
-  /// template (`{"id", "persona"}`, WIRE_CONTRACT "Coworker templates"): the
-  /// host writes the persona into the new coworker's soul.md.
+  /// [template] is the optional `template` object of an agent made from a
+  /// template (`{"id", "persona"}`, WIRE_CONTRACT "Agent templates"): the
+  /// host writes the persona into the new agent's soul.md.
   Future<void> createAgent(
     String agentId,
     String name, {
@@ -1633,10 +1656,10 @@ abstract interface class AgentsRelayController {
   });
   // ── end templates ──
 
-  /// Renames a coworker on the host's roster (bead cowork-817; `agent_rename`).
+  /// Renames an agent on the host's roster (bead cowork-817; `agent_rename`).
   Future<void> renameAgent(String agentId, String name);
 
-  /// Asks the host for every coworker name it keeps (`agent_list` request;
+  /// Asks the host for every agent name it keeps (`agent_list` request;
   /// the answer arrives on [inbound] as [AgentsRelayAgentList]).
   Future<void> requestAgentList();
 
@@ -1706,7 +1729,7 @@ abstract interface class AgentsRelayController {
   /// in). Status comes back as [AgentsRelayBrowserView]; pixels as
   /// [AgentsRelayBrowserData].
   /// Opens the screen view. [sessionKey] names the thread whose box to look
-  /// in: with one container per coworker, a start without it makes the
+  /// in: with one container per agent, a start without it makes the
   /// executor guess, and it guesses the primary environment — almost never
   /// the box the browser is in (bead cowork-5eo6).
   Future<void> startBrowserView({String? sessionKey});
@@ -1758,13 +1781,13 @@ abstract interface class AgentsDocumentsControl {
   Future<void> requestDocuments(String sessionKey, {String? id});
 }
 
-/// Asks the host what a coworker runs on and what it has spent
+/// Asks the host what an agent runs on and what it has spent
 /// (docs/WIRE_CONTRACT.md, "Agent status"). Answered with one
 /// [AgentsRelayAgentStatus] on `inbound`.
 abstract interface class AgentsAgentStatusControl {
   Future<void> requestAgentStatus(String sessionKey);
 
-  /// The host's answers, and the push it sends when a run of that coworker
+  /// The host's answers, and the push it sends when a run of that agent
   /// ends. Its own stream, not `inbound`: [AgentsRelayInbound] is sealed and
   /// every exhaustive switch over it would have to grow a case for a frame
   /// that only the control panel reads.
@@ -1774,6 +1797,7 @@ abstract interface class AgentsAgentStatusControl {
 class AgentsRelayClient
     implements
         AgentsRelayController,
+        AgentsLinkProbe,
         ExecutorTransport,
         AgentsAutomationControl,
         // ── F2: automations + cost totals ──
@@ -1860,12 +1884,6 @@ class AgentsRelayClient
   /// only the permissions section reads this frame.
   static void Function(Map<String, dynamic> payload)? agentPermissionsSink;
 
-  /// Where an `agent_channel` frame goes (a coworker's messenger channel,
-  /// bead chuk_chat-02s5): the answer to `agent_channel_get` / `_set` and the
-  /// host's unprompted pushes. `AgentsChannelsService` sets it; null drops the
-  /// frame. A sink like [agentPermissionsSink], for the same reason.
-  static void Function(Map<String, dynamic> payload)? agentChannelSink;
-
   // ── F2: automations + cost totals ──
   /// Where the host's `automation_saved` answer goes (the reply to an
   /// `automation_create` / `automation_update`). `AutomationsSource` sets it;
@@ -1894,8 +1912,7 @@ class AgentsRelayClient
       ValueNotifier<Set<String>>(const <String>{});
 
   /// Seals and sends one host control frame that has no typed method here
-  /// (`agent_permissions_get` / `agent_permissions_set`, `agent_channel_get` /
-  /// `agent_channel_set`). Throws when not
+  /// (`agent_permissions_get` / `agent_permissions_set`). Throws when not
   /// paired, like every send.
   Future<void> sendControlFrame(Map<String, dynamic> payload) =>
       _sendFramePayload(payload);
@@ -2322,6 +2339,7 @@ class AgentsRelayClient
       _fail('Could not reach host: $e');
       rethrow;
     }
+    AgentsResumeTrace.mark('relay client: transport ready, resuming session');
     _socket = socket;
     // A fresh socket is a fresh transcript budget: let auto-replay fire again.
     _autoReplayed.clear();
@@ -2382,6 +2400,7 @@ class AgentsRelayClient
 
     try {
       await done.future.timeout(_pairingTimeout);
+      AgentsResumeTrace.mark('relay client: host session resumed');
     } catch (e) {
       _fail(_pairingErrorText(e));
       await _closeSocket();
@@ -2761,22 +2780,33 @@ class AgentsRelayClient
     String agentId,
     String name, {
     Map<String, Object?>? template,
-  }) => _sendFramePayload(<String, dynamic>{
-    'type': 'agent_create',
-    'agent_id': agentId,
-    'name': name,
-    // Additive: an older host ignores the key and creates a plain coworker.
-    if (template != null && template.isNotEmpty) 'template': template,
-  });
+  }) async {
+    // Auth first, like [requestAgentList]: an `agent_create` that overtakes
+    // the account authentication is dropped by the host, and the agent
+    // then exists on this device only (bead chuk_chat-41k1).
+    await _awaitProvisionGate();
+    if (_disposed) return;
+    return _sendFramePayload(<String, dynamic>{
+      'type': 'agent_create',
+      'agent_id': agentId,
+      'name': name,
+      // Additive: an older host ignores the key and creates a plain agent.
+      if (template != null && template.isNotEmpty) 'template': template,
+    });
+  }
   // ── end templates ──
 
   @override
-  Future<void> renameAgent(String agentId, String name) =>
-      _sendFramePayload(<String, dynamic>{
-        'type': 'agent_rename',
-        'agent_id': agentId,
-        'name': name,
-      });
+  Future<void> renameAgent(String agentId, String name) async {
+    // Auth first — see [createAgent].
+    await _awaitProvisionGate();
+    if (_disposed) return;
+    return _sendFramePayload(<String, dynamic>{
+      'type': 'agent_rename',
+      'agent_id': agentId,
+      'name': name,
+    });
+  }
 
   @override
   Future<void> requestAgentList() async {
@@ -2810,6 +2840,22 @@ class AgentsRelayClient
   Future<void> requestRoomHistory(String roomId) => _sendFramePayload(
     <String, dynamic>{'type': 'room_history_request', 'room_id': roomId},
   );
+
+  @override
+  Future<bool> probeLink({
+    Duration timeout = const Duration(milliseconds: 1500),
+  }) async {
+    final RelaySocket? socket = _socket;
+    if (_disposed || socket == null || !_state.value.isPaired) return false;
+    // A socket that cannot be asked (the local relay of a desktop host) is
+    // treated as unknown: the caller then replaces it, as before.
+    if (socket is! RelaySocketProbe) return false;
+    try {
+      return await (socket as RelaySocketProbe).probe(timeout);
+    } catch (_) {
+      return false;
+    }
+  }
 
   @override
   Future<void> requestStop({String sessionKey = 'default'}) =>
@@ -3273,14 +3319,14 @@ class AgentsRelayClient
   }
 
   void _enqueueFrame(Map<String, dynamic> env) {
-    _frameQueue = _frameQueue
-        .then((_) => _handleFrame(env))
-        .catchError((Object error) {
-          // One bad frame must never stop the frames after it.
-          if (kDebugMode) {
-            debugPrint('[agents-relay] frame failed: ${error.runtimeType}');
-          }
-        });
+    _frameQueue = _frameQueue.then((_) => _handleFrame(env)).catchError((
+      Object error,
+    ) {
+      // One bad frame must never stop the frames after it.
+      if (kDebugMode) {
+        debugPrint('[agents-relay] frame failed: ${error.runtimeType}');
+      }
+    });
   }
 
   Future<void> _handleFrame(Map<String, dynamic> env) async {
@@ -3483,8 +3529,10 @@ class AgentsRelayClient
       case 'user_browser_status':
         userBrowserStatusSink?.call(payload);
       // ── end own browser ──
+      // The app has no messenger channels (Telegram was removed from the
+      // UI): a host that still pushes `agent_channel` is ignored.
       case 'agent_channel':
-        agentChannelSink?.call(payload);
+        break;
       case 'run_state':
         final runState = AgentsRelayRunState.fromPayload(payload);
         if (runState != null) _inbound.add(runState);
@@ -3528,7 +3576,7 @@ class AgentsRelayClient
       case 'budget_warning':
         // A notice, not a transcript event: [AgentsRelayInbound] is sealed,
         // and the threads read the notices from one place, deduplicated per
-        // coworker, week and level.
+        // agent, week and level.
         final warning = AgentsBudgetWarning.fromPayload(payload);
         if (warning != null) AgentsBudgetNotices.instance.add(warning);
       // ── end F1 ──

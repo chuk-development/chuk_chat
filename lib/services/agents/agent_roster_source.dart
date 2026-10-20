@@ -1,16 +1,16 @@
-/// The roster: who your coworkers are, and the one permanent thread each one
+/// The roster: who your agents are, and the one permanent thread each one
 /// has. Every agent carries exactly one session; there is no way to open a
 /// second (the product decision — one permanent session per bot).
 ///
 /// The host has no roster API over the relay yet, so this source holds what the
 /// app itself knows: the one agent that really runs on the paired host, plus any
-/// agent the user onboarded in the app. It never invents a coworker, and it
+/// agent the user onboarded in the app. It never invents an agent, and it
 /// marks an app-created agent as not installed on the host ([AgentsAgent.onHost]
 /// false) rather than pretending it is live.
 ///
 /// It IS persisted, through [AgentRosterStore] — as a cache of host truth, not
 /// as a second truth. See that file for the rules; the short version is that a
-/// received `agent_list` rewrites the snapshot wholesale and a deleted coworker
+/// received `agent_list` rewrites the snapshot wholesale and a deleted agent
 /// can never come back.
 ///
 /// [AgentRosterSource] is the seam a later milestone points at the host's real
@@ -35,18 +35,18 @@ abstract class AgentRosterSource extends ChangeNotifier {
   List<AgentsAgent> get agents;
 
   /// Reads whatever this device remembers of the roster, so the shell can land
-  /// on the remembered coworker before the socket exists. The default is a
+  /// on the remembered agent before the socket exists. The default is a
   /// no-op: a source that keeps nothing on disk is already loaded.
   Future<void> load() async {}
 
   /// The ids the user deleted on this device, across launches. Fed into
   /// [applyHostNames]' `ignore` set, because delete is not on the wire yet and
-  /// the host keeps listing a coworker the user removed.
+  /// the host keeps listing an agent the user removed.
   Set<String> get deletedIds => const <String>{};
 
   /// The ids the user has hidden from the roster (§16.1). Hiding is a view
   /// preference, not a delete: the agent, its threads and any live run stay
-  /// exactly as they were, so unhiding brings back the same coworker.
+  /// exactly as they were, so unhiding brings back the same agent.
   Set<String> get hiddenIds;
 
   /// The agents that show in the roster — [agents] minus [hiddenIds].
@@ -82,7 +82,7 @@ abstract class AgentRosterSource extends ChangeNotifier {
     Set<String> replaceableLabels = const <String>{},
   });
 
-  /// Adds a coworker the user just onboarded. The returned agent always has its
+  /// Adds an agent the user just onboarded. The returned agent always has its
   /// one permanent thread, so selecting it opens the conversation immediately.
   AgentsAgent addAgent({
     required String name,
@@ -92,14 +92,14 @@ abstract class AgentRosterSource extends ChangeNotifier {
     List<String> attachmentNames,
   });
 
-  /// Renames a coworker (bead cowork-817). The trimmed name replaces the old
+  /// Renames an agent (bead cowork-817). The trimmed name replaces the old
   /// one; an empty name or an unknown id is a no-op. The id and the thread key
   /// never change — a name is a label, not an identity.
   void renameAgent(String id, String name);
 
-  /// Merges the host's `agent_list` (bead cowork-817, WIRE_CONTRACT "Coworker
+  /// Merges the host's `agent_list` (bead cowork-817, WIRE_CONTRACT "Agent
   /// names"): a known id takes the listed name; an unknown id is added as a
-  /// coworker with that name and its one permanent thread; the entry marked
+  /// agent with that name and its one permanent thread; the entry marked
   /// `host` renames the `host:<peerDeviceId>` row (skipped when the host is
   /// not paired). Ids in [ignore] — deleted in this session — are left out.
   /// A list never removes anything.
@@ -135,8 +135,8 @@ abstract class AgentRosterSource extends ChangeNotifier {
 ///
 /// The durable roster lives on the host. What is written here is a CACHE of it
 /// ([AgentRosterStore]): it exists so the first frame of a cold start already
-/// has coworkers, and it is overwritten wholesale the moment the host sends its
-/// `agent_list`. It is never allowed to outvote the host, and a coworker the
+/// has agents, and it is overwritten wholesale the moment the host sends its
+/// `agent_list`. It is never allowed to outvote the host, and an agent the
 /// user deleted is remembered as deleted so a host list cannot bring it back.
 class LocalAgentRosterSource extends AgentRosterSource {
   LocalAgentRosterSource({
@@ -171,7 +171,7 @@ class LocalAgentRosterSource extends AgentRosterSource {
       if (_deleted.contains(agent.id)) continue;
       final index = _indexOf(agent.id, orNull: true);
       if (index >= 0) {
-        // The agent in memory wins, but it cannot know when the coworker was
+        // The agent in memory wins, but it cannot know when the agent was
         // last active before this launch: take the stored time where it has
         // none.
         final merged = _withStoredActivity(_agents[index], agent);
@@ -328,7 +328,7 @@ class LocalAgentRosterSource extends AgentRosterSource {
       attachmentNames: List<String>.unmodifiable(attachmentNames),
       threads: <AgentsThreadInfo>[
         // One permanent session per bot: its key is the agent id, stable for
-        // the life of the coworker.
+        // the life of the agent.
         AgentsThreadInfo(key: id, title: 'General'),
       ],
     );
@@ -469,7 +469,7 @@ class LocalAgentRosterSource extends AgentRosterSource {
     final wasHidden = _hidden.remove(id);
     final existed = _agents.length != before;
     // Remembered for good: delete has no wire frame yet, so the host keeps
-    // listing this coworker and every later `agent_list` has to skip it.
+    // listing this agent and every later `agent_list` has to skip it.
     final newlyDeleted = existed && _deleted.add(id);
     if (!existed && !wasHidden && !newlyDeleted) return;
     _persist();
@@ -485,7 +485,34 @@ class LocalAgentRosterSource extends AgentRosterSource {
   }
 }
 
-/// Auto-assigned coworker names (§4): adjective-noun, the same shape the
+/// The agents this device created that the host's `agent_list` does not
+/// name (bead chuk_chat-41k1). The roster of a second device is built from
+/// that list, so an agent whose `agent_create` never reached the host — the
+/// link was down, or the frame overtook the account authentication and the
+/// host dropped it — exists on the device that made it and nowhere else. The
+/// shell announces each one again. The host's own agent (`host:` ids) is
+/// never announced; ids in [skip] (deleted here, or already re-sent this
+/// session) are left out.
+List<AgentsAgent> agentsMissingOnHost(
+  List<AgentsAgent> roster,
+  List<AgentsHostAgentName> listed, {
+  Set<String> skip = const <String>{},
+}) {
+  final Set<String> named = <String>{
+    for (final AgentsHostAgentName entry in listed)
+      if (!entry.host) entry.agentId,
+  };
+  return <AgentsAgent>[
+    for (final AgentsAgent agent in roster)
+      if (!agent.onHost &&
+          !agent.id.startsWith('host:') &&
+          !named.contains(agent.id) &&
+          !skip.contains(agent.id))
+        agent,
+  ];
+}
+
+/// Auto-assigned agent names (§4): adjective-noun, the same shape the
 /// manager's Python generator uses, so a name looks the same wherever it was
 /// minted.
 class AgentNameGenerator {
