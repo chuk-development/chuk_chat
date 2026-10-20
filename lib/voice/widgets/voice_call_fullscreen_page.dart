@@ -593,7 +593,7 @@ class _VoiceCallFullscreenPageState extends State<VoiceCallFullscreenPage> {
       'Our STT → LLM → TTS stack with tools, cards and delegation.',
     VoiceCallEngine.inworldS2S =>
       "Inworld's realtime API with semantic turn detection. Conversation "
-          'only: no tools, cards, or delegation.',
+          'only: no tools, cards, or video description.',
   };
 }
 

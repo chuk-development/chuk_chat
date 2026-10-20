@@ -263,6 +263,39 @@ void main() {
       expect(users[1], contains('[Shortened'));
     });
 
+    test('the newest prompt-based result stays full when the next pass is '
+        'not a tool result', () async {
+      final handler = ToolCallHandler();
+      final session = newSession(handler, native: false);
+
+      // Round 1: a tool call, whose result we make crawl-sized.
+      await handler.processAssistantResponse(
+        session: session,
+        content:
+            '<tool_call>{"name":"calculate","arguments":'
+            '{"expression":"1+1"}}</tool_call>',
+        reasoning: '',
+      );
+      final bigResult = 'Tool Results:\n${'w' * 20000}';
+      session.latestUserMessage = bigResult;
+      session.pendingPromptToolResult = bigResult;
+
+      // The model then sends an empty reply. The retry pass moves the result
+      // into history; it is still the newest round and must not be cut.
+      final result = await handler.processAssistantResponse(
+        session: session,
+        content: '',
+        reasoning: '',
+      );
+      expect(result.shouldContinue, isTrue);
+      final contents = result.nextStep!.history
+          .map((m) => m['content'])
+          .whereType<String>()
+          .toList();
+      expect(contents, contains(bigResult));
+      expect(contents.any((c) => c.contains('[Shortened')), isFalse);
+    });
+
     test('the driver can shut the tools before its pass budget ends', () async {
       final handler = ToolCallHandler();
       final session = newSession(handler)..finalAnswerRequested = true;

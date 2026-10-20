@@ -25,6 +25,135 @@ List<String> texts(List<Map<String, String>> rows) =>
     rows.map((r) => '${r['sender']}:${r['text']}').toList();
 
 void main() {
+  test('a cached role: assistant tail overlaps a sender: ai delta beyond '
+      'the repeat window', () {
+    // The cache hands rows back in the stored shape (`role`), the replay in
+    // the wire shape (`sender`). The overlap starts further back than
+    // repeatWindow, so only the linear-time tail match can find it, and that
+    // match hashes rows: the hash must read both shapes.
+    final int n = AgentsReplayLoader.repeatWindow + 5;
+    Map<String, String> cached(int i) => <String, String>{
+      'role': i.isEven ? 'user' : 'assistant',
+      'text': 'turn $i',
+    };
+    Map<String, String> wire(int i) =>
+        i.isEven ? user('turn $i') : ai('turn $i');
+    final existing = <Map<String, String>>[
+      for (int i = 0; i < 10; i++)
+        <String, String>{'role': 'user', 'text': 'old $i'},
+      for (int i = 0; i < n; i++) cached(i),
+    ];
+    final delta = <Map<String, String>>[
+      for (int i = 0; i < n; i++) wire(i),
+      ai('new answer'),
+    ];
+    final merged = AgentsReplayLoader.appendWithoutRepeats(existing, delta);
+    expect(merged, hasLength(10 + n + 1));
+    expect(merged.where((r) => r['text'] == 'turn 0'), hasLength(1));
+    // The host's copy wins.
+    expect(merged[10]['sender'], 'user');
+    expect(merged.last['text'], 'new answer');
+  });
+
+  test('a repeated question with a different answer is appended, not '
+      'written over', () {
+    // The cache holds an older turn "ok" -> "A". A new turn asks "ok" again
+    // and gets "B". Aligning on the user row must not replace "A".
+    final existing = <Map<String, String>>[
+      user('erste frage'),
+      ai('erste antwort'),
+      <String, String>{'role': 'user', 'text': 'ok'},
+      <String, String>{'role': 'assistant', 'text': 'Antwort A'},
+    ];
+    final delta = <Map<String, String>>[user('ok'), ai('Antwort B')];
+    final merged = AgentsReplayLoader.appendWithoutRepeats(existing, delta);
+    expect(merged.map((r) => r['text']), [
+      'erste frage',
+      'erste antwort',
+      'ok',
+      'Antwort A',
+      'ok',
+      'Antwort B',
+    ]);
+  });
+
+  test('a cut-off streamed answer is still replaced by the full one', () {
+    final existing = <Map<String, String>>[
+      user('frage'),
+      <String, String>{'role': 'assistant', 'text': 'Die Antwort ist'},
+    ];
+    final delta = <Map<String, String>>[
+      user('frage'),
+      ai('Die Antwort ist vollstaendig.'),
+    ];
+    final merged = AgentsReplayLoader.appendWithoutRepeats(existing, delta);
+    expect(merged.map((r) => r['text']), [
+      'frage',
+      'Die Antwort ist vollstaendig.',
+    ]);
+  });
+
+  test('a replaced local voice row keeps its voice metadata', () {
+    final existing = <Map<String, String>>[
+      user('erste frage'),
+      ai('erste antwort'),
+      <String, String>{
+        'role': 'user',
+        'text': 'Wie wird das Wetter?',
+        'inputMode': 'voice',
+        'voiceDurationMs': '4200',
+      },
+    ];
+    final delta = <Map<String, String>>[
+      user('Wie wird das Wetter?'),
+      ai('Sonnig.'),
+    ];
+    final merged = AgentsReplayLoader.appendWithoutRepeats(existing, delta);
+    expect(merged, hasLength(4));
+    expect(merged[2]['sender'], 'user', reason: 'the host row replaced it');
+    expect(merged[2]['inputMode'], 'voice');
+    expect(merged[2]['voiceDurationMs'], '4200');
+    expect(merged[3].containsKey('inputMode'), isFalse);
+    expect(delta[0].containsKey('inputMode'), isFalse, reason: 'no mutation');
+  });
+
+  test('the streamed case keeps the voice metadata too', () {
+    final existing = <Map<String, String>>[
+      user('erste frage'),
+      <String, String>{
+        'role': 'user',
+        'text': 'Lies die Mail vor',
+        'inputMode': 'voice',
+        'voiceDurationMs': '1800',
+      },
+      ai('Die Mail sa'), // cut off while streaming
+    ];
+    final delta = <Map<String, String>>[
+      user('Lies die Mail vor'),
+      ai('Die Mail sagt: alles gut.'),
+    ];
+    final merged = AgentsReplayLoader.appendWithoutRepeats(existing, delta);
+    expect(texts(merged), [
+      'user:erste frage',
+      'user:Lies die Mail vor',
+      'ai:Die Mail sagt: alles gut.',
+    ]);
+    expect(merged[1]['inputMode'], 'voice');
+    expect(merged[1]['voiceDurationMs'], '1800');
+  });
+
+  test('a host row keeps its own metadata value', () {
+    final existing = <Map<String, String>>[
+      <String, String>{'role': 'user', 'text': 'hallo', 'inputMode': 'voice'},
+    ];
+    final delta = <Map<String, String>>[
+      <String, String>{'sender': 'user', 'text': 'hallo', 'inputMode': 'text'},
+      ai('hi'),
+    ];
+    final merged = AgentsReplayLoader.appendWithoutRepeats(existing, delta);
+    expect(merged.first['inputMode'], 'text');
+  });
+
   test('a turn the app painted itself is not appended twice', () {
     final existing = <Map<String, String>>[
       user('erste frage'),
@@ -107,9 +236,11 @@ void main() {
 
   test('an empty side is left alone', () {
     expect(
-      texts(AgentsReplayLoader.appendWithoutRepeats(<Map<String, String>>[], [
-        user('a'),
-      ])),
+      texts(
+        AgentsReplayLoader.appendWithoutRepeats(<Map<String, String>>[], [
+          user('a'),
+        ]),
+      ),
       ['user:a'],
     );
     expect(

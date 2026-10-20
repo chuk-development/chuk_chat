@@ -76,6 +76,12 @@ const Map<String, String> stringsEs = {
   'autoGenerateTitles': 'Generar títulos de chat automáticamente',
   'autoGenerateTitlesSubtitle':
       'Usar IA para generar títulos para chats nuevos',
+  'notificationsSection': 'Notificaciones',
+  'settingSaveFailed': 'No se pudo guardar el ajuste',
+  'notificationAnswerPreview':
+      'Mostrar vista previa de la respuesta en las notificaciones',
+  'notificationAnswerPreviewSubtitle':
+      'Muestra el comienzo de la respuesta en la notificación. Desactivado: la notificación solo dice quién ha terminado.',
   'titleGenerationPrompt': 'Prompt de generación de títulos',
   'usingCustomPrompt': 'Usando prompt personalizado',
   'usingDefaultPrompt': 'Usando prompt predeterminado',

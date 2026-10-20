@@ -55,10 +55,29 @@ abstract final class VoicePreferences {
     await preferences.setString('voice_engine:$userId', engine);
   }
 
-  static Future<void> saveEngineSynced(String userId, String engine) async {
-    if (CurrentUser.id != userId) return;
-    await ServiceCredentialsService.save(_engineService, {
+  static Future<bool> saveEngineSynced(String userId, String engine) async {
+    if (CurrentUser.id != userId) return false;
+    return ServiceCredentialsService.save(_engineService, {
       _engineKey: engine,
     });
+  }
+
+  /// Marks that this device has an engine choice the cloud has not accepted
+  /// yet (save pending or failed). Survives restarts so a stale remote value
+  /// never overwrites the user's local choice.
+  static const _enginePendingKey = 'voice_engine_pending';
+
+  static Future<void> saveEnginePending(String userId, bool pending) async {
+    final preferences = await SharedPreferences.getInstance();
+    if (pending) {
+      await preferences.setBool('$_enginePendingKey:$userId', true);
+    } else {
+      await preferences.remove('$_enginePendingKey:$userId');
+    }
+  }
+
+  static Future<bool> loadEnginePending(String userId) async {
+    final preferences = await SharedPreferences.getInstance();
+    return preferences.getBool('$_enginePendingKey:$userId') ?? false;
   }
 }

@@ -7,11 +7,16 @@
 ///    target is the Linux desktop, and a run ends while the window is behind
 ///    another one. `flutter_local_notifications_linux` talks to the desktop
 ///    over D-Bus, no daemon of ours.
-///  * **Says who is done, and what came out.** The title names the agent
-///    ("Research is done"), the body is a short preview of the answer. The
-///    preview is built on this device from the answer the app already holds,
-///    so nothing leaves the end-to-end channel; the host's push (FCM) still
-///    carries no content (bead chuk_chat-kl8x).
+///  * **Says who is done; the answer only when the user asks for it.** The
+///    title names the agent ("Research is done"). By default the body is
+///    content-free ("Your answer is ready."): no answer text reaches the OS
+///    notification store. Only with the user setting "Show answer preview in
+///    notifications" ([showAnswerPreviewKey], default off) is the body a
+///    short preview of the answer. The preview is built on this device from
+///    the answer the app already holds; the host's push (FCM) never carries
+///    content (bead chuk_chat-kl8x). On Android the toast is always
+///    `NotificationVisibility.private`, so a secure lock screen shows the
+///    system's content-free placeholder, not the body.
 ///  * **One toast per thread.** On Android the slot is the session key as tag
 ///    and id 0 — exactly the slot the FCM push for the thread uses — so the
 ///    app's toast and the host's push replace each other instead of stacking,
@@ -28,6 +33,7 @@ import 'dart:ui' show Color;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/services/notifications/notification_router.dart';
 
@@ -104,10 +110,33 @@ class LocalNotifications {
   /// The body when there is no answer text to preview.
   static const String defaultBody = 'Your answer is ready.';
 
-  /// "Name is done" for [sessionKey], with [preview] (the answer, made
-  /// short by [notificationPreview]) as the body. [threadLabel] is the
-  /// agent's name, or whatever the shell calls the thread. [stopped] is a
-  /// run that ended without finishing.
+  /// SharedPreferences key of the user setting "Show answer preview in
+  /// notifications". Default off: the toast then carries no answer text.
+  static const String showAnswerPreviewKey =
+      'notifications_show_answer_preview';
+
+  /// Whether the user allowed answer text in the toast. False when the
+  /// setting was never set or cannot be read.
+  static Future<bool> answerPreviewEnabled() async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(showAnswerPreviewKey) ?? false;
+    } catch (error) {
+      if (kDebugMode) debugPrint('[LocalNotifications] pref read: $error');
+      return false;
+    }
+  }
+
+  static Future<void> setAnswerPreviewEnabled(bool enabled) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(showAnswerPreviewKey, enabled);
+  }
+
+  /// "Name is done" for [sessionKey]. [threadLabel] is the agent's name,
+  /// or whatever the shell calls the thread. [stopped] is a run that ended
+  /// without finishing. [preview] (the answer, made short by
+  /// [notificationPreview]) becomes the body only when the user turned on
+  /// [showAnswerPreviewKey]; otherwise the body is content-free.
   Future<void> showAnswerReady({
     required String sessionKey,
     required String threadLabel,
@@ -119,7 +148,9 @@ class LocalNotifications {
     if (b == null) return;
     final String label = threadLabel.trim();
     final String who = label.isEmpty ? 'Chuk Chat' : label;
-    final String text = notificationPreview(preview ?? '');
+    final String text = await answerPreviewEnabled()
+        ? notificationPreview(preview ?? '')
+        : '';
     try {
       await b.show(
         id: idFor(sessionKey),
@@ -183,6 +214,40 @@ class LocalNotifications {
     } catch (error) {
       if (kDebugMode) debugPrint('[LocalNotifications] bad payload: $error');
     }
+  }
+
+  /// The Android half of a toast. Always [NotificationVisibility.private]:
+  /// a secure lock screen shows the system's content-free placeholder
+  /// instead of the body, even with the answer preview on. (The plugin has
+  /// no `publicVersion`; Android's own placeholder is the public version.)
+  @visibleForTesting
+  static AndroidNotificationDetails androidDetails({
+    required String title,
+    required String body,
+    required String tag,
+  }) {
+    const Color brand = Color(brandColorValue);
+    return AndroidNotificationDetails(
+      kAgentsNotificationChannelId,
+      kAgentsNotificationChannelName,
+      channelDescription: kAgentsNotificationChannelDescription,
+      importance: Importance.high,
+      priority: Priority.high,
+      icon: 'ic_notification',
+      color: brand,
+      ledColor: brand,
+      ledOnMs: 1000,
+      ledOffMs: 500,
+      autoCancel: true,
+      // One outstanding notification per thread, shared with the push.
+      tag: tag,
+      // The ticker reaches accessibility services: title only, never body.
+      ticker: title,
+      category: AndroidNotificationCategory.message,
+      visibility: NotificationVisibility.private,
+      // The whole body when the row is expanded.
+      styleInformation: BigTextStyleInformation(body, contentTitle: title),
+    );
   }
 
   /// Test seam.
@@ -265,7 +330,6 @@ class _PluginBackend implements LocalNotificationsBackend {
     required String payload,
     required String tag,
   }) {
-    const Color brand = Color(LocalNotifications.brandColorValue);
     return _plugin.show(
       // Android: the FCM push for a thread is (tag, 0). The same slot here
       // means the app's toast and the push replace each other, never stack.
@@ -274,27 +338,10 @@ class _PluginBackend implements LocalNotificationsBackend {
       body: body,
       payload: payload,
       notificationDetails: NotificationDetails(
-        android: AndroidNotificationDetails(
-          kAgentsNotificationChannelId,
-          kAgentsNotificationChannelName,
-          channelDescription: kAgentsNotificationChannelDescription,
-          importance: Importance.high,
-          priority: Priority.high,
-          icon: 'ic_notification',
-          color: brand,
-          ledColor: brand,
-          ledOnMs: 1000,
-          ledOffMs: 500,
-          autoCancel: true,
-          // One outstanding notification per thread, shared with the push.
+        android: LocalNotifications.androidDetails(
+          title: title,
+          body: body,
           tag: tag,
-          ticker: title,
-          category: AndroidNotificationCategory.message,
-          // The body is decrypted answer text: a secure lock screen shows
-          // only that a notification is there, not what it says.
-          visibility: NotificationVisibility.private,
-          // The whole preview when the row is expanded.
-          styleInformation: BigTextStyleInformation(body, contentTitle: title),
         ),
         iOS: const DarwinNotificationDetails(
           presentAlert: true,

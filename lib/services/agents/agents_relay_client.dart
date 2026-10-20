@@ -81,6 +81,13 @@ abstract interface class RelaySocket {
 /// The cloud relay answers a `ping` itself, so one round trip tells a socket
 /// that survived the app's time in the background from one the OS or the
 /// relay cut while the app was away (bead chuk_chat-kl8x).
+///
+/// It proves the app-to-relay leg ONLY. A host that restarted and signed in
+/// to the relay again under the same device id is not seen here: the relay
+/// then sends no `executor_status` `online: false`, and the new host has no
+/// traffic key for this controller session. The thread view therefore keeps
+/// a probed socket only until the host answers the post-resume replay
+/// (`AgentsThreadViewState._awaitHostAfterResume`).
 abstract interface class RelaySocketProbe {
   /// True when the far end answered within [timeout]. False at once when the
   /// socket is already known to be gone. Never throws.
@@ -95,6 +102,8 @@ abstract interface class RelaySocketProbe {
 /// replay (bead chuk_chat-kl8x).
 abstract interface class AgentsLinkProbe {
   /// True when the current socket is paired and answered within [timeout].
+  /// The answer comes from the relay, not from the host; see
+  /// [RelaySocketProbe].
   Future<bool> probeLink({Duration timeout});
 }
 

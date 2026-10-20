@@ -275,6 +275,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     bool clearMessagesBelow = false,
     List<AttachedFile>? attachedFilesOverride,
     bool isRegenerate = false,
+    bool applyDictation = false,
   }) => _submitEditedMessage(
     index,
     newText,
@@ -282,6 +283,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     clearMessagesBelow: clearMessagesBelow,
     attachedFilesOverride: attachedFilesOverride,
     isRegenerate: isRegenerate,
+    applyDictation: applyDictation,
   );
 
   /// Per-chat send-in-flight flag, backed by the ChatRuntime for the

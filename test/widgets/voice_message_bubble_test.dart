@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -62,6 +63,23 @@ void main() {
     await tester.tap(find.byKey(kVoiceBubbleHeaderKey));
     await tester.pumpAndSettle();
     expect(find.text(_transcript), findsNothing);
+  });
+
+  testWidgets('a screen reader can open the transcript', (tester) async {
+    final SemanticsHandle handle = tester.ensureSemantics();
+    await pumpBubble(tester, voice: true);
+    final SemanticsNode node = tester.getSemantics(
+      find.byKey(kVoiceBubbleHeaderKey),
+    );
+    expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+
+    tester.binding.pipelineOwner.semanticsOwner!.performAction(
+      node.id,
+      SemanticsAction.tap,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text(_transcript), findsOneWidget);
+    handle.dispose();
   });
 
   testWidgets('open bubble shows the user actions (copy/edit)', (tester) async {

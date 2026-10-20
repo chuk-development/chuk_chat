@@ -71,6 +71,12 @@ mixin ChatMessageEditMixin<W extends StatefulWidget>
 
   Future<void> sendMessage();
 
+  /// Store [newText] as the message at [index] and resend from there.
+  ///
+  /// [applyDictation]: update the message's voice keys for the edit
+  /// ([DictationTracker.applyToEdit]). The host does it only once the edit
+  /// passed its guards (no stream, no send in flight), right before the new
+  /// text is stored, so a rejected edit leaves the voice flag as it was.
   Future<void> submitEditedMessage(
     int index,
     String newText, {
@@ -78,6 +84,7 @@ mixin ChatMessageEditMixin<W extends StatefulWidget>
     bool clearMessagesBelow = false,
     List<AttachedFile>? attachedFilesOverride,
     bool isRegenerate = false,
+    bool applyDictation = false,
   });
 
   Future<void> persistChat({
@@ -183,16 +190,15 @@ mixin ChatMessageEditMixin<W extends StatefulWidget>
       cancelEditMessage();
       if (newText.isNotEmpty || attachedSnapshot.isNotEmpty) {
         // A re-dictated edit becomes a voice message; a rewrite by hand
-        // turns a voice message into a typed one.
-        if (isValidMessageIndex(editIndex)) {
-          DictationTracker.instance.applyToEdit(messages[editIndex], newText);
-        }
+        // turns a voice message into a typed one. The host applies it after
+        // its guards, so a rejected edit keeps the old voice flag.
         await submitEditedMessage(
           editIndex,
           newText,
           attachedFilesOverride: attachedSnapshot,
           removeFollowingAssistant: false,
           clearMessagesBelow: true,
+          applyDictation: true,
         );
       }
     } else {

@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/services/notifications/agents_notifications.dart';
 import 'package:chuk_chat/services/notifications/local_notifications.dart';
@@ -12,6 +13,7 @@ void main() {
   late List<Map<String, String?>> consumed;
 
   setUp(() async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
     AgentsNotifications.instance.reset();
     LocalNotifications.instance.reset();
     backend = FakeBackend();
@@ -50,38 +52,56 @@ void main() {
     expect(backend.shown, isEmpty);
   });
 
-  test('attached + background: a live done toasts once, says who is done',
-      () async {
-    AgentsNotifications.instance.lifecycleOverride = AppLifecycleState.paused;
-    await AgentsNotifications.instance.onLiveDone('t1', runId: 'run-1');
-    expect(backend.shown, hasLength(1));
-    expect(backend.shown.single['title'], 'Agent t1 is done');
-    expect(backend.shown.single['body'], 'Your answer is ready.');
-    expect(backend.shown.single['tag'], 't1');
-  });
+  test(
+    'attached + background: a live done toasts once, says who is done',
+    () async {
+      AgentsNotifications.instance.lifecycleOverride = AppLifecycleState.paused;
+      await AgentsNotifications.instance.onLiveDone('t1', runId: 'run-1');
+      expect(backend.shown, hasLength(1));
+      expect(backend.shown.single['title'], 'Agent t1 is done');
+      expect(backend.shown.single['body'], 'Your answer is ready.');
+      expect(backend.shown.single['tag'], 't1');
+    },
+  );
 
-  test('the toast previews the answer, cleaned and short', () async {
-    AgentsNotifications.instance.lifecycleOverride = AppLifecycleState.paused;
-    await AgentsNotifications.instance.onLiveDone(
-      't1',
-      runId: 'run-1',
-      answer: '## Ergebnis\n\n**Drei** Anbieter gefunden:\n- A\n- B',
-    );
-    expect(backend.shown.single['title'], 'Agent t1 is done');
-    expect(
-      backend.shown.single['body'],
-      'Ergebnis Drei Anbieter gefunden: A B',
-    );
-  });
+  test(
+    'preview setting off (default): the answer stays out of the toast',
+    () async {
+      AgentsNotifications.instance.lifecycleOverride = AppLifecycleState.paused;
+      await AgentsNotifications.instance.onLiveDone(
+        't1',
+        runId: 'run-1',
+        answer: 'Geheime Zahl: 4711',
+      );
+      expect(backend.shown.single['title'], 'Agent t1 is done');
+      expect(backend.shown.single['body'], 'Your answer is ready.');
+      expect(backend.shown.single['body'], isNot(contains('4711')));
+    },
+  );
+
+  test(
+    'preview setting on: the toast previews the answer, cleaned and short',
+    () async {
+      await LocalNotifications.setAnswerPreviewEnabled(true);
+      AgentsNotifications.instance.lifecycleOverride = AppLifecycleState.paused;
+      await AgentsNotifications.instance.onLiveDone(
+        't1',
+        runId: 'run-1',
+        answer: '## Ergebnis\n\n**Drei** Anbieter gefunden:\n- A\n- B',
+      );
+      expect(backend.shown.single['title'], 'Agent t1 is done');
+      expect(
+        backend.shown.single['body'],
+        'Ergebnis Drei Anbieter gefunden: A B',
+      );
+    },
+  );
 
   test('a stopped run says so', () async {
     AgentsNotifications.instance.lifecycleOverride = AppLifecycleState.paused;
     await AgentsNotifications.instance.onLiveDone('t1', stopped: true);
     expect(backend.shown.single['title'], 'Agent t1 stopped');
-    expect(
-      backend.shown.single['body'],
-      'Open the chat to see what happened.',
-    );
+    expect(backend.shown.single['body'], 'Open the chat to see what happened.');
   });
 
   test('hidden and inactive count as background', () async {

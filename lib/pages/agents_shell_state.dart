@@ -129,6 +129,16 @@ mixin AgentsShellHost on State<MessengerShell> {
   /// (a deleted room has no later "open" to reconcile it, unlike an edit), so it
   /// would keep an orphan. These flush the moment a transport arrives.
   final Set<String> _pendingHostDeletes = <String>{};
+
+  /// How long a notification tap may wait for its thread to be listed. A tap
+  /// for a thread that never appears (deleted on the host, another account)
+  /// must not open it out of nowhere minutes later.
+  static const Duration pendingNotificationTapExpiry = Duration(seconds: 30);
+
+  /// Drops [_waitingTap] from the router when it is still pending after
+  /// [pendingNotificationTapExpiry].
+  Timer? _waitingTapTimer;
+  NotificationTarget? _waitingTap;
   late final AgentControlSource _controlSource =
       widget.controlSource ?? HostUnavailableControlSource();
 
@@ -552,6 +562,7 @@ mixin AgentsShellHost on State<MessengerShell> {
     }
     _historySub?.cancel();
     NotificationRouter.instance.pending.removeListener(_onNotificationTap);
+    _cancelWaitingTap();
     _hostInboundSub?.cancel();
     AgentMailKeyHandover.instance.stop();
     _pairingStore.changes.removeListener(_onPairingStoreChanged);
@@ -588,18 +599,26 @@ mixin AgentsShellHost on State<MessengerShell> {
   /// A tap whose thread the roster does not list yet (a cold start from the
   /// toast, before the roster is back from disk) is left pending and taken on
   /// the next roster change, instead of being dropped (bead chuk_chat-kl8x).
+  /// It waits [pendingNotificationTapExpiry] at most, then it is dropped.
   void _onNotificationTap() {
     final NotificationTarget? pending =
         NotificationRouter.instance.pending.value;
-    if (pending == null || !mounted) return;
+    if (pending == null || !mounted) {
+      if (pending == null) _cancelWaitingTap();
+      return;
+    }
     final String? agentId = _agentIdForThread(pending.sessionKey);
     if (agentId == null) {
       // Not an agent's thread at all: not this shell's to open.
       if (!ChatOrigin.isAgentsThread(pending.sessionKey)) {
+        _cancelWaitingTap();
         NotificationRouter.instance.take();
+        return;
       }
+      _armWaitingTap(pending);
       return;
     }
+    _cancelWaitingTap();
     final NotificationTarget target = NotificationRouter.instance.take()!;
     _select(agentId, target.sessionKey);
     // Close the host's row and clear the OS toast for this thread.
@@ -609,6 +628,30 @@ mixin AgentsShellHost on State<MessengerShell> {
         runId: target.runId,
       ),
     );
+  }
+
+  /// Starts the expiry for a tap that waits for its thread. A second look at
+  /// the same tap (every roster change) keeps the first deadline.
+  void _armWaitingTap(NotificationTarget target) {
+    if (identical(_waitingTap, target) && _waitingTapTimer != null) return;
+    _waitingTapTimer?.cancel();
+    _waitingTap = target;
+    _waitingTapTimer = Timer(pendingNotificationTapExpiry, () {
+      final NotificationTarget? waited = _waitingTap;
+      _waitingTapTimer = null;
+      _waitingTap = null;
+      // Only the tap this timer was armed for: a newer tap has its own time.
+      if (waited != null &&
+          identical(NotificationRouter.instance.pending.value, waited)) {
+        NotificationRouter.instance.take();
+      }
+    });
+  }
+
+  void _cancelWaitingTap() {
+    _waitingTapTimer?.cancel();
+    _waitingTapTimer = null;
+    _waitingTap = null;
   }
 
   /// Restores this account's pairing from Supabase when the device has none

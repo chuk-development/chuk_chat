@@ -64,8 +64,10 @@ class AgentsNotifications {
   }
 
   /// A live `done` reached the thread view for [sessionKey]. Toast only when
-  /// the app is not in front of the user: "Name is done" with a short
-  /// preview of [answer]. [stopped] is a run that ended without finishing.
+  /// the app is not in front of the user: "Name is done". [answer] becomes
+  /// a short preview in the body only when the user turned the preview
+  /// setting on ([LocalNotifications.showAnswerPreviewKey], default off).
+  /// [stopped] is a run that ended without finishing.
   Future<void> onLiveDone(
     String sessionKey, {
     String? runId,

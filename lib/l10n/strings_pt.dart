@@ -72,6 +72,12 @@ const Map<String, String> stringsPt = {
   'autoGenerateTitles': 'Gerar títulos automaticamente',
   'autoGenerateTitlesSubtitle':
       'Usar IA para gerar títulos para novas conversas',
+  'notificationsSection': 'Notificações',
+  'settingSaveFailed': 'Não foi possível salvar a configuração',
+  'notificationAnswerPreview':
+      'Mostrar prévia da resposta nas notificações',
+  'notificationAnswerPreviewSubtitle':
+      'Mostra o início da resposta na notificação. Desativado: a notificação só diz quem terminou.',
   'titleGenerationPrompt': 'Prompt de Geração de Título',
   'usingCustomPrompt': 'Usando prompt personalizado',
   'usingDefaultPrompt': 'Usando prompt padrão',

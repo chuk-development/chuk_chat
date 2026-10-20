@@ -679,9 +679,10 @@ class AgentsReplayLoader extends ChangeNotifier {
     // cowork-6i0m).
     final int overlap = _longestOverlap(existing, delta);
     if (overlap > 0) {
+      final int start = existing.length - overlap;
       return <Map<String, String>>[
-        ...existing.take(existing.length - overlap),
-        ...delta,
+        ...existing.take(start),
+        ..._keepLocalMeta(existing, start, delta),
       ];
     }
     // 2. The streamed case: the answer the app painted is not byte-identical
@@ -698,9 +699,56 @@ class AgentsReplayLoader extends ChangeNotifier {
       if (existing.length - j > delta.length) {
         break;
       }
-      return <Map<String, String>>[...existing.take(j), ...delta];
+      // Every cached row after the match must be the same turn, only cut
+      // short: same writer, and the host text starts with what the app
+      // painted. A repeated question ("ok") with a different answer is a new
+      // turn and must be appended, or the old answer would be overwritten.
+      if (!_isCutShortCopy(existing, j, delta)) break;
+      return <Map<String, String>>[
+        ...existing.take(j),
+        ..._keepLocalMeta(existing, j, delta),
+      ];
     }
     return <Map<String, String>>[...existing, ...delta];
+  }
+
+  /// Fields only this device knows. The host never stores them, so its copy
+  /// of a turn arrives without them; dropping them would turn a voice message
+  /// back into a plain text bubble the moment the replay lands.
+  static const List<String> _localOnlyKeys = <String>[
+    'inputMode',
+    'voiceDurationMs',
+  ];
+
+  /// [delta] as it replaces `existing[start..]`, with the [_localOnlyKeys]
+  /// of each replaced local row carried into the host row that stands for
+  /// the same turn ([_sameRow]). A host row keeps a value it already has.
+  static List<Map<String, String>> _keepLocalMeta(
+    List<Map<String, String>> existing,
+    int start,
+    List<Map<String, String>> delta,
+  ) {
+    final int tail = existing.length - start;
+    final int pairs = tail < delta.length ? tail : delta.length;
+    List<Map<String, String>>? out;
+    for (int i = 0; i < pairs; i++) {
+      final Map<String, String> local = existing[start + i];
+      final Map<String, String> host = delta[i];
+      if (!_sameRow(local, host)) continue;
+      Map<String, String>? merged;
+      for (final String key in _localOnlyKeys) {
+        final String? value = local[key];
+        if (value == null || value.isEmpty) continue;
+        final String? own = host[key];
+        if (own != null && own.isNotEmpty) continue;
+        merged ??= <String, String>{...host};
+        merged[key] = value;
+      }
+      if (merged == null) continue;
+      out ??= <Map<String, String>>[...delta];
+      out[i] = merged;
+    }
+    return out ?? delta;
   }
 
   /// The length of the longest tail of [existing] that is also a head of
@@ -758,6 +806,24 @@ class AgentsReplayLoader extends ChangeNotifier {
   static bool _sameRow(Map<String, String> a, Map<String, String> b) {
     if (_senderOf(a) != _senderOf(b)) return false;
     return (a['text'] ?? '').trim() == (b['text'] ?? '').trim();
+  }
+
+  /// Whether the cached rows from [start] on are the head of [delta] with
+  /// their text cut short (a stream the app painted before it ended).
+  static bool _isCutShortCopy(
+    List<Map<String, String>> existing,
+    int start,
+    List<Map<String, String>> delta,
+  ) {
+    for (int k = 1; start + k < existing.length; k++) {
+      final Map<String, String> local = existing[start + k];
+      final Map<String, String> host = delta[k];
+      if (_senderOf(local) != _senderOf(host)) return false;
+      final String painted = (local['text'] ?? '').trim();
+      final String stored = (host['text'] ?? '').trim();
+      if (!stored.startsWith(painted)) return false;
+    }
+    return true;
   }
 
   /// Who wrote [row]. A replay builds rows with `sender` (`user` / `ai`); the
