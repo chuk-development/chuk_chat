@@ -1,9 +1,9 @@
 # test/services/notifications · Signaturen
 
-## test/services/notifications/agents_notifications_test.dart  (110 Z.)
+## test/services/notifications/agents_notifications_test.dart  (134 Z.)
 - L10 `void main()`
 
-## test/services/notifications/local_notifications_test.dart  (167 Z.)
+## test/services/notifications/local_notifications_test.dart  (201 Z.)
 - L10 `class FakeBackend implements LocalNotificationsBackend`  — Records every call; the platform plugin never runs in a test.
   - L11 `bool initOk = true`
   - L12 `String? launch`

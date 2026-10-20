@@ -1,0 +1,134 @@
+# tool/agent_driver/src · Signaturen
+
+## tool/agent_driver/src/app_session.dart  (484 Z.)
+- L21 `abstract class AppControl`  — What the tools need from a running app. [AppSession] is the real one;
+  - L22 `bool get running`
+  - L24 `Future<Map<String, Object?>> start({ required bool headless, required bool fresh, String? definesFile, })`
+  - L30 `Future<Map<String, Object?>> stop()`
+  - L32 `Map<String, Object?> status()`
+  - L34 `List<String> logs(int lines)`
+  - L38 `Future<Object?> driver(Map<String, String> params)`  — Sends one Flutter Driver command. Returns the `response` field. Throws
+  - L42 `Future<Map<String, Object?>> extension( String method, [ Map<String, String> args = const <String, String>{}, ])`  — Calls a service extension of the app (for example
+  - L47 `Future<Map<String, Object?>> hotReload({required bool fullRestart})`
+- L50 `class DriverCommandError implements Exception`
+  - L51 `DriverCommandError(this.message)`
+  - L52 `final String message`
+  - L54 `String toString()`
+- L58 `class DriverPaths`  — Paths of the driver, all inside the repository.
+  - L59 `DriverPaths(this.repoRoot)`
+  - L62 `factory DriverPaths.fromScript()`  — Finds the repository root from the location of this script.
+  - L75 `final String repoRoot`
+  - L77 `String get scratch`
+  - L78 `String get home`
+  - L79 `String get shots`
+  - L80 `String get pidFile`
+  - L81 `String get logFile`
+  - L82 `String get defaultDefines`
+  - L83 `String get entry`
+- L86 `class AppSession implements AppControl`
+  - L87 `AppSession(this.paths, {this.startTimeout = const Duration(minutes: 10)})`
+  - L89 `final DriverPaths paths`
+  - L90 `final Duration startTimeout`
+  - L92 `Process? _process`
+  - L93 `VmService? _vm`
+  - L94 `String? _isolateId`
+  - L95 `String? _appId`
+  - L96 `String? _wsUri`
+  - L97 `int _nextId = 1`
+  - L98 `final List<String> _log = <String>[]`
+  - L99 `IOSink? _logSink`
+  - L100 `final Map<int, Completer<Map<String, Object?>>> _pending = <int, Completer<Map<String, Object?>>>{}`
+  - L102 `Completer<void>? _started`
+  - L105 `bool get running`
+  - L108 `Future<Map<String, Object?>> start({ required bool headless, required bool fresh, String? definesFile, })`
+  - L216 `void _onLine(String line)`
+  - L246 `void _onResponse(String t)`
+  - L260 `void _record(String line)`
+  - L266 `Future<void> _connectVm()`
+  - L292 `Future<Object?> driver(Map<String, String> params)`
+  - L306 `Future<Map<String, Object?>> extension( String method, [ Map<String, String> args = const <String, String>{}, ])`
+  - L325 `VmService _vmOrThrow()`
+  - L334 `Future<Map<String, Object?>> hotReload({required bool fullRestart})`
+  - L372 `Future<Map<String, Object?>> stop()`
+  - L407 `void _reset()`
+  - L425 `Future<bool> _killStaleGroup()`  — Kills the process group in the pid file, when it still runs. This is a
+  - L441 `bool _isOurGroup(int pgid)`  — True when a process in group [pgid] runs our entry point. The pid file
+  - L451 `bool _groupAlive(int pgid)`
+  - L456 `void _killGroup(int pgid)`
+  - L460 `void _deletePidFile()`
+  - L466 `Map<String, Object?> status()`
+  - L475 `List<String> logs(int lines)`
+  - L479 `static String _firstLines(String s, int n)`
+
+## tool/agent_driver/src/isolation.dart  (148 Z.)
+- L20 `class IsolationError implements Exception`  — Thrown when a start would break a safety rule.
+  - L21 `IsolationError(this.message)`
+  - L22 `final String message`
+  - L24 `String toString()`
+- L28 `class AppHome`  — The data folders of one isolated app run.
+  - L29 `AppHome(this.root)`
+  - L32 `final String root`  — For example `<repo>/_scratch/agent_home`.
+  - L34 `String get data`
+  - L35 `String get cache`
+  - L36 `String get state`
+  - L40 `void prepare({required bool fresh})`  — Creates the folders. With [fresh], removes the old ones first (this
+- L55 `Map<String, String> isolatedEnvironment({ required Map<String, String> base, required AppHome home, required String scratchDir, })`  — Returns the environment for the app process: [base] plus the isolated
+- L80 `optionalUrlDefines = <String>[ 'PRODUCTION_API_URL', 'LOCAL_API_URL', 'AGENTS_RELAY_URL', 'AGENTS_DEV_HOST', 'ARTIFACTS_`  — URL defines that the app reads. Each one that is set must point to a
+- L91 `bool isLoopbackHost(String host)`  — True for `localhost`, `127.0.0.1` and `::1` (also in brackets).
+- L99 `bool _isLoopbackUrl(Object? value)`
+- L108 `void checkLocalDefines(Map<String, Object?> defines)`  — Throws [IsolationError] unless API_BASE_URL and SUPABASE_URL in
+
+## tool/agent_driver/src/machine_events.dart  (48 Z.)
+- L10 `class MachineEvent`  — One event of the flutter daemon protocol.
+  - L11 `MachineEvent(this.event, this.params)`
+  - L13 `final String event`
+  - L14 `final Map<String, Object?> params`
+  - L16 `String? get appId`
+- L21 `MachineEvent? parseMachineLine(String line)`  — Returns the event in [line], or null when the line is plain text or a
+- L44 `String machineCommand(int id, String method, Map<String, Object?> params)`  — Encodes a daemon command for the stdin of `flutter run --machine`.
+
+## tool/agent_driver/src/mcp_server.dart  (136 Z.)
+- L12 `serverName = 'chuk-agent-driver'`
+- L13 `serverVersion = '1.0.0'`
+- L14 `_defaultProtocol = '2025-06-18'`
+- L16 `class McpServer`
+  - L17 `McpServer(this.tools, {required this.send, this.log})`
+  - L19 `final AgentTools tools`
+  - L22 `final void Function(String line) send`  — Writes one protocol line.
+  - L24 `final void Function(String line)? log`
+  - L28 `Future<void> _queue = Future<void>.value()`  — Calls run one after the other: the app has one UI, and two parallel
+  - L31 `Future<void> handleLine(String line)`  — Handles one input line. Returns when the answer for it is sent.
+  - L50 `Future<void> _handle(String t)`
+  - L115 `Object? _idOf(String line)`  — The request id in [line], or null when there is none.
+  - L124 `void _result(Object? id, Map<String, Object?> result)`
+  - L128 `void _error(Object? id, int code, String message)`
+
+## tool/agent_driver/src/tools.dart  (459 Z.)
+- L12 `class ToolResult`  — Content of a tool result, in MCP form.
+  - L13 `ToolResult(this.content, {this.isError = false})`
+  - L15 `ToolResult.text(String text, {bool isError = false}) : this(<Map<String, Object?>>[ <String, Object?>{'type': 'text', 'text': text}, ], isError: isError)`
+  - L20 `ToolResult.json(Object? value) : this.text(const JsonEncoder.withIndent(' ').convert(value))`
+  - L23 `final List<Map<String, Object?>> content`
+  - L24 `final bool isError`
+  - L26 `Map<String, Object?> toJson()`
+  - L32 `String get text`  — The text parts, joined. For logs and tests.
+- L40 `finderKinds = <String>[ 'text', 'text_contains', 'tooltip', 'semantics_id', 'semantics_label', 'key', 'type', 'icon', ]`  — Names of the finder kinds. Same list as `agentFinderKinds` in
+- L51 `_finderProps = <String, Object?>{ 'by': <String, Object?>{ 'type': 'string', 'enum': finderKinds, 'description': 'How to`
+- L73 `Map<String, Object?> _schema( Map<String, Object?> props, [ List<String> required = const <String>[], ])`
+- L84 `toolDefinitions = <Map<String, Object?>>[ <String, Object?>{ 'name': 'app_start', 'description': 'Build and start the ch`  — The tool definitions, in MCP `tools/list` form.
+- L257 `_shotName = RegExp(r'^[A-Za-z0-9_-]{1,80}$')`  — Valid screenshot names.
+- L259 `class AgentTools`
+  - L260 `AgentTools(this.app, {required this.shotsDir})`
+  - L262 `final AppControl app`
+  - L263 `final String shotsDir`
+  - L264 `int _shotCounter = 0`
+  - L268 `Future<ToolResult> call(String name, Map<String, Object?> args)`  — Runs tool [name]. Errors become a result with `isError: true`, so the
+  - L284 `Future<ToolResult> _call(String name, Map<String, Object?> a)`
+  - L381 `Future<ToolResult> _screenshot(Map<String, Object?> a)`
+  - L401 `String _defaultShotName()`
+- L409 `Map<String, String> finderParams( Map<String, Object?> a, { bool hittable = false, })`  — The driver parameters of the `Agent` finder for tool arguments [a].
+- L432 `String _describe(Map<String, Object?> a)`
+- L437 `Map<String, String> _timeout(Map<String, Object?> a, int fallback)`
+- L440 `bool _bool(Map<String, Object?> a, String key, bool fallback)`
+- L447 `int _int(Map<String, Object?> a, String key, int fallback)`
+- L454 `num _num(Map<String, Object?> a, String key)`

@@ -1,76 +1,185 @@
 # lib/utils · Signaturen
 
-## lib/utils/answer_blocks_parser.dart  (480 Z.)
+## lib/utils/answer_blocks_parser.dart  (1185 Z.)
 - L19 `enum AnswerBlockKind`  — The block kinds the renderer draws natively.
-  - L19 `steps`
-  - L19 `timeline`
-  - L19 `scale`
-  - L19 `alert`
-- L22 `sealed class AnswerSegment`  — One slice of a message: Markdown text or a parsed block.
-  - L23 `const AnswerSegment()`
-- L27 `class AnswerTextSegment extends AnswerSegment`  — Markdown between the blocks, verbatim.
-  - L28 `const AnswerTextSegment(this.text)`
-  - L29 `final String text`
-- L33 `class AnswerBlockSegment extends AnswerSegment`  — A block with its raw body lines.
-  - L34 `const AnswerBlockSegment({ required this.kind, required this.arg, required this.lines, required this.closed, })`
-  - L41 `final AnswerBlockKind kind`
-  - L45 `final String arg`  — Everything after the block name on the opening line. For an alert, the
-  - L48 `final List<String> lines`  — The body lines, without the marker lines.
-  - L51 `final bool closed`  — False while the block is still streaming.
-- L54 `_kBlockNames = <String, AnswerBlockKind>{ 'steps': AnswerBlockKind.steps, 'timeline': AnswerBlockKind.timeline, 'scale':`
-- L60 `_openRe = RegExp(r'^ {0,3}:::\s*([A-Za-z][\w-]*)[ \t]*(.*)$')`
-- L61 `_closeRe = RegExp(r'^ {0,3}:::\s*$')`
-- L64 `_partialCloseRe = RegExp(r'^ {0,3}:{1,2}\s*$')`  — A closing marker that is still being typed (`:` or `::`).
-- L66 `_alertRe = RegExp( r'^ {0,3}>[ \t]?\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][ \t]*(.*)$', caseSensitive: false, )`
-- L71 `bool _isFence(String line)`
-- L79 `List<AnswerSegment> splitAnswerBlocks(String text)`  — Splits [text] into Markdown and block segments.
-- L217 `enum StepPartKind`
-  - L217 `text`
-  - L217 `command`
-  - L217 `warning`
-- L222 `class StepPart`  — One piece of a step body. A [StepPartKind.command] part holds one or more
-  - L223 `const StepPart(this.kind, this.text)`
-  - L224 `final StepPartKind kind`
-  - L225 `final String text`
-- L228 `class StepItem`
-  - L229 `const StepItem({ required this.label, required this.title, required this.parts, })`
-  - L236 `final String label`  — `1`, `2`, ... or `A`, `B`, ... for `::: steps abc`.
-  - L237 `final String title`
-  - L238 `final List<StepPart> parts`
-- L241 `class StepsSpec`
-  - L242 `const StepsSpec({required this.title, required this.steps})`
-  - L243 `final String title`
-  - L244 `final List<StepItem> steps`
-- L247 `_stepNumRe = RegExp(r'^\s{0,3}(\d{1,3})[.)]\s+(.*)$')`
-- L248 `_stepLetterRe = RegExp(r'^\s{0,3}([A-Za-z])[.)]\s+(.*)$')`
-- L249 `_lettersArgRe = RegExp(r'^abc\b\s*', caseSensitive: false)`
-- L251 `String _letter(int index)`
-- L254 `StepsSpec parseSteps(String arg, List<String> lines)`
-- L315 `class TimelineEntry`
-  - L316 `const TimelineEntry({ required this.label, required this.text, required this.highlight, })`
-  - L323 `final String label`  — The date or label before the first `: `. Empty when the line has none.
-  - L324 `final String text`
-  - L327 `final bool highlight`  — The line started with `*`: the key entry.
-- L332 `(String, String) splitKeyValue(String line)`  — Splits at the first `: ` (colon and space), so `12:30: Lunch` keeps its
-- L338 `List<TimelineEntry> parseTimeline(List<String> lines)`
-- L358 `class ScalePoint`
-  - L359 `const ScalePoint({required this.value, required this.raw, this.label = ''})`
-  - L360 `final double value`
-  - L363 `final String raw`  — The number as the model wrote it, shown unchanged.
-  - L364 `final String label`
-- L367 `class ScaleSpec`
-  - L368 `const ScaleSpec({ required this.min, required this.max, required this.unit, required this.ticks, required this.markers, })`
-  - L376 `final double min`
-  - L377 `final double max`
-  - L378 `final String unit`
-  - L379 `final List<ScalePoint> ticks`
-  - L380 `final List<ScalePoint> markers`
-  - L382 `bool get isKelvin`
-  - L386 `double fraction(double value)`  — Where [value] sits on the band, 0..1.
-- L392 `_numRe = RegExp(r"-?\d[\d.,']*")`
-- L396 `double? parseLooseNumber(String s)`  — Reads the first number in [s]. Accepts `2700`, `2.700` and `2,700`
-- L418 `_rangeRe = RegExp( r"^\s*(-?\d[\d.,']*)\s*(?:–|—|-|\.\.|to|bis)\s*(-?\d[\d.,']*)\s*(.*)$", caseSensitive: false, )`
-- L425 `ScaleSpec? parseScale(String arg, List<String> lines)`  — Returns null when the block cannot be drawn (no range and fewer than two
+  - L20 `steps`
+  - L21 `timeline`
+  - L22 `scale`
+  - L23 `alert`
+  - L24 `bars`
+  - L25 `kpi`
+  - L26 `tiles`
+  - L27 `cards`
+  - L28 `ask`
+  - L29 `source`
+  - L30 `status`
+- L34 `sealed class AnswerSegment`  — One slice of a message: Markdown text or a parsed block.
+  - L35 `const AnswerSegment()`
+- L39 `class AnswerTextSegment extends AnswerSegment`  — Markdown between the blocks, verbatim.
+  - L40 `const AnswerTextSegment(this.text)`
+  - L41 `final String text`
+- L45 `class AnswerBlockSegment extends AnswerSegment`  — A block with its raw body lines.
+  - L46 `const AnswerBlockSegment({ required this.kind, required this.arg, required this.lines, required this.closed, })`
+  - L53 `final AnswerBlockKind kind`
+  - L57 `final String arg`  — Everything after the block name on the opening line. For an alert, the
+  - L60 `final List<String> lines`  — The body lines, without the marker lines.
+  - L63 `final bool closed`  — False while the block is still streaming.
+- L66 `_kBlockNames = <String, AnswerBlockKind>{ 'steps': AnswerBlockKind.steps, 'timeline': AnswerBlockKind.timeline, 'scale':`
+- L79 `_openRe = RegExp(r'^ {0,3}:::\s*([A-Za-z][\w-]*)[ \t]*(.*)$')`
+- L80 `_closeRe = RegExp(r'^ {0,3}:::\s*$')`
+- L83 `_partialCloseRe = RegExp(r'^ {0,3}:{1,2}\s*$')`  — A closing marker that is still being typed (`:` or `::`).
+- L85 `_alertRe = RegExp( r'^ {0,3}>[ \t]?\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][ \t]*(.*)$', caseSensitive: false, )`
+- L90 `bool _isFence(String line)`
+- L98 `List<AnswerSegment> splitAnswerBlocks(String text)`  — Splits [text] into Markdown and block segments.
+- L236 `enum StepPartKind`
+  - L236 `text`
+  - L236 `command`
+  - L236 `warning`
+- L241 `class StepPart`  — One piece of a step body. A [StepPartKind.command] part holds one or more
+  - L242 `const StepPart(this.kind, this.text)`
+  - L243 `final StepPartKind kind`
+  - L244 `final String text`
+- L247 `class StepItem`
+  - L248 `const StepItem({ required this.label, required this.title, required this.parts, })`
+  - L255 `final String label`  — `1`, `2`, ... or `A`, `B`, ... for `::: steps abc`.
+  - L256 `final String title`
+  - L257 `final List<StepPart> parts`
+- L260 `class StepsSpec`
+  - L261 `const StepsSpec({required this.title, required this.steps})`
+  - L262 `final String title`
+  - L263 `final List<StepItem> steps`
+- L266 `_stepNumRe = RegExp(r'^\s{0,3}(\d{1,3})[.)]\s+(.*)$')`
+- L267 `_stepLetterRe = RegExp(r'^\s{0,3}([A-Za-z])[.)]\s+(.*)$')`
+- L268 `_lettersArgRe = RegExp(r'^abc\b\s*', caseSensitive: false)`
+- L270 `String _letter(int index)`
+- L273 `StepsSpec parseSteps(String arg, List<String> lines)`
+- L334 `class TimelineEntry`
+  - L335 `const TimelineEntry({ required this.label, required this.text, required this.highlight, })`
+  - L342 `final String label`  — The date or label before the first `: `. Empty when the line has none.
+  - L343 `final String text`
+  - L346 `final bool highlight`  — The line started with `*`: the key entry.
+- L351 `(String, String) splitKeyValue(String line)`  — Splits at the first `: ` (colon and space), so `12:30: Lunch` keeps its
+- L359 `_boldLabelRe = RegExp( r'^(?:\*\*|__)(.+?)(?:\*\*|__)\s*:?\s+(.*)$', )`  — A label the model wrapped in bold: `**Goethe:** Faust` or
+- L365 `String stripLabelEmphasis(String label)`  — Drops a wrapping `**…**` / `__…__` and a trailing colon from a label.
+- L373 `List<TimelineEntry> parseTimeline(List<String> lines)`
+- L402 `_digitRe = RegExp(r'\d')`
+- L406 `kTimelineLabelMaxChars = 14`  — The longest label the timeline's date column draws, in characters
+- L412 `bool timelineIsDated(List<TimelineEntry> entries)`  — True when [entries] is a real timeline: most entries carry a short,
+- L428 `class ScalePoint`
+  - L429 `const ScalePoint({required this.value, required this.raw, this.label = ''})`
+  - L430 `final double value`
+  - L433 `final String raw`  — The number as the model wrote it, shown unchanged.
+  - L434 `final String label`
+- L437 `class ScaleSpec`
+  - L438 `const ScaleSpec({ required this.min, required this.max, required this.unit, required this.ticks, required this.markers, })`
+  - L446 `final double min`
+  - L447 `final double max`
+  - L448 `final String unit`
+  - L449 `final List<ScalePoint> ticks`
+  - L450 `final List<ScalePoint> markers`
+  - L452 `bool get isKelvin`
+  - L456 `double fraction(double value)`  — Where [value] sits on the band, 0..1.
+- L462 `_numRe = RegExp(r"-?\d[\d.,']*")`
+- L466 `double? parseLooseNumber(String s)`  — Reads the first number in [s]. Accepts `2700`, `2.700` and `2,700`
+- L488 `_rangeRe = RegExp( r"^\s*(-?\d[\d.,']*)\s*(?:–|—|-|\.\.|to|bis)\s*(-?\d[\d.,']*)\s*(.*)$", caseSensitive: false, )`
+- L495 `ScaleSpec? parseScale(String arg, List<String> lines)`  — Returns null when the block cannot be drawn (no range and fewer than two
+- L563 `class BarRow`
+  - L564 `const BarRow({ required this.label, required this.valueText, required this.sub, required this.value, })`
+  - L571 `final String label`
+  - L572 `final String valueText`
+  - L573 `final String sub`
+  - L576 `final double? value`  — First number in [valueText], or null (row draws at full length then).
+- L579 `class BarsSpec`
+  - L580 `const BarsSpec({ required this.title, required this.rows, this.note = '', this.tag = '', })`
+  - L586 `final String title`
+  - L587 `final List<BarRow> rows`
+  - L588 `final String note`
+  - L591 `final String tag`  — Optional small label chip above the title (`tag: BF16 · nur Gewichte`).
+- L594 `BarsSpec parseBars(String arg, List<String> lines)`
+- L639 `class KpiTile`
+  - L640 `const KpiTile({required this.value, required this.label, this.icon = ''})`
+  - L641 `final String value`
+  - L642 `final String label`
+  - L643 `final String icon`
+- L646 `class KpiSpec`
+  - L647 `const KpiSpec({required this.title, required this.tiles, this.tag = ''})`
+  - L648 `final String title`
+  - L649 `final List<KpiTile> tiles`
+  - L650 `final String tag`
+- L653 `KpiSpec parseKpi(String arg, List<String> lines)`
+- L690 `class IconTile`
+  - L691 `const IconTile({required this.label, this.icon = '', this.sub = ''})`
+  - L692 `final String label`
+  - L693 `final String icon`
+  - L694 `final String sub`
+- L697 `class TilesSpec`
+  - L698 `const TilesSpec({required this.title, required this.tiles, this.tag = ''})`
+  - L699 `final String title`
+  - L700 `final List<IconTile> tiles`
+  - L701 `final String tag`
+- L704 `TilesSpec parseTiles(String arg, List<String> lines)`
+- L754 `class AnswerCard`
+  - L755 `const AnswerCard({ required this.title, this.subtitle = '', this.image = '', this.badge = '', this.price = '', this.url = '', this.action = '', this.metas = const <String>[], this.chips = const <String>[], })`
+  - L766 `final String title`
+  - L767 `final String subtitle`
+  - L768 `final String image`
+  - L769 `final String badge`
+  - L770 `final String price`
+  - L771 `final String url`
+  - L774 `final String action`  — Label of the action button (default "Open" in the widget).
+  - L775 `final List<String> metas`
+  - L776 `final List<String> chips`
+- L779 `class CardsSpec`
+  - L780 `const CardsSpec({required this.label, required this.cards})`
+  - L781 `final String label`
+  - L782 `final List<AnswerCard> cards`
+- L785 `_kCardKeys = <String>[ 'image', 'badge', 'subtitle', 'price', 'url', 'link', 'action', ]`
+- L795 `AnswerCard _parseCardRecord(List<String> record)`
+- L874 `CardsSpec parseCards(String arg, List<String> lines)`
+- L913 `class AskSpec`
+  - L914 `const AskSpec({required this.question, required this.chips})`
+  - L915 `final String question`
+  - L916 `final List<String> chips`
+- L919 `AskSpec parseAsk(String arg, List<String> lines)`
+- L939 `class SourceRow`
+  - L940 `const SourceRow({required this.title, this.url = ''})`
+  - L941 `final String title`
+  - L942 `final String url`
+- L945 `class SourceSpec`
+  - L946 `const SourceSpec({required this.rows})`
+  - L947 `final List<SourceRow> rows`
+- L950 `SourceSpec parseSource(String arg, List<String> lines)`
+- L998 `enum StatusKind`  — The colour family of a status chip.
+  - L998 `failed`
+  - L998 `overdue`
+  - L998 `due`
+  - L998 `ok`
+  - L998 `neutral`
+- L1000 `_kStatusWords = <String, StatusKind>{ 'failed': StatusKind.failed, 'fail': StatusKind.failed, 'error': StatusKind.failed`
+- L1029 `class StatusItem`
+  - L1030 `const StatusItem({ required this.title, this.detail = '', this.amount = '', this.kind = StatusKind.neutral, this.statusLabel = '', this.date = '', this.domain = '', this.actionLabel = '', this.actionUrl = '', })`
+  - L1042 `final String title`
+  - L1043 `final String detail`
+  - L1044 `final String amount`
+  - L1045 `final StatusKind kind`
+  - L1048 `final String statusLabel`  — The chip text; empty means no chip.
+  - L1049 `final String date`
+  - L1052 `final String domain`  — Bare host for the logo (`hetzner.com`), empty when none is usable.
+  - L1053 `final String actionLabel`
+  - L1056 `final String actionUrl`  — An http(s) URL, empty when the row has no action.
+- L1059 `class StatusSpec`
+  - L1060 `const StatusSpec({ required this.title, required this.summary, required this.items, this.moreLabel = '', this.moreItems = const <StatusItem>[], })`
+  - L1069 `final String title`  — The bold header line (`4 offene Zahlungen`).
+  - L1072 `final String summary`  — The muted line under it (`122,20 € + 50 $`).
+  - L1073 `final List<StatusItem> items`
+  - L1076 `final String moreLabel`  — The collapsed footer row; empty means no footer.
+  - L1077 `final List<StatusItem> moreItems`
+- L1080 `_hostRe = RegExp( r'^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}$', )`
+- L1083 `_urlTokenRe = RegExp(r'https?://\S+', caseSensitive: false)`
+- L1088 `String statusDomain(String raw)`  — A host fit for the favicon services, or ''. Accepts `hetzner.com`,
+- L1099 `(StatusKind, String) _parseStatus(String raw)`
+- L1115 `StatusItem? _parseStatusRow(String line)`
+- L1148 `StatusSpec parseStatus(String arg, List<String> lines)`
 
 ## lib/utils/api_rate_limiter.dart  (248 Z.)
 - L4 `class RateLimitConfig`  — API rate limiting configuration for different endpoint types.
@@ -461,6 +570,9 @@
 - L12 `bool hasPointSpread(List<LatLng> points)`  — True when [points] cover more than one place on the map.
 - L27 `double _shortestLonDelta(double a, double b)`  — Degrees between two longitudes the short way round.
 
+## lib/utils/non_public_ip.dart  (57 Z.)
+- L13 `bool isNonPublicIp(List<int> ip)`  — True when [ip] must not be connected to on behalf of model-supplied URLs.
+
 ## lib/utils/openui_fence.dart  (206 Z.)
 - L11 `class OpenUiTextPart`  — One piece of an assistant answer: markdown text or one OpenUI program.
   - L13 `const OpenUiTextPart.markdown(this.text) : isProgram = false, isClosed = true, ordinal = -1`  — Creates a markdown part.
@@ -627,11 +739,11 @@
 - L9 `String formatDuration(int ms)`  — Format milliseconds duration as mm:ss string.
 - L17 `String truncate(String text, int maxLength)`  — Truncate text with ellipsis if it exceeds maxLength.
 
-## lib/utils/tool_history_formatter.dart  (102 Z.)
-- L8 `_maxResultChars = 4000`
-- L9 `_maxTotalChars = 16000`
-- L16 `String? formatAssistantContent( Map<String, String> message, { bool includeReasoning = false, bool includeToolResults = true, })`  — Builds the assistant `content` string for one stored message, optionally
-- L51 `String _buildPreviousToolResultsBlock(String? toolCallsJson)`
+## lib/utils/tool_history_formatter.dart  (104 Z.)
+- L9 `_maxResultChars = 4000`
+- L10 `_maxTotalChars = 16000`
+- L17 `String? formatAssistantContent( Map<String, String> message, { bool includeReasoning = false, bool includeToolResults = true, })`  — Builds the assistant `content` string for one stored message, optionally
+- L53 `String _buildPreviousToolResultsBlock(String? toolCallsJson)`
 
 ## lib/utils/tool_parser.dart  (775 Z.)
 - L5 `toolCallStart = '<tool_call>'`

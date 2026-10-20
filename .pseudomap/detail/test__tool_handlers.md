@@ -3,6 +3,9 @@
 ## test/tool_handlers/file_fetch_tools_test.dart  (251 Z.)
 - L11 `void main()`
 
+## test/tool_handlers/image_tools_test.dart  (97 Z.)
+- L6 `void main()`
+
 ## test/tool_handlers/map_tools_test.dart  (147 Z.)
 - L8 `void main()`
 

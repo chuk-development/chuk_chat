@@ -33,7 +33,7 @@
 - L79 `kPermissionNotEnforced = 'Not enforced on this host'`  — The subtitle of a switch this host cannot enforce (the local backend).
 - L81 `class AgentPermissionsSection extends StatefulWidget`
   - L82 `const AgentPermissionsSection({ super.key, required this.agentId, this.service, this.answerTimeout = const Duration(seconds: 10), })`
-  - L90 `final String agentId`  — The coworker, which is also its thread's `session_key`.
+  - L90 `final String agentId`  — The agent, which is also its thread's `session_key`.
   - L93 `final AgentsPermissionsService? service`  — Defaults to [AgentsPermissionsService.instance].
   - L97 `final Duration answerTimeout`  — How long to wait for the host (its capability, then its answer) before
   - L100 `State<AgentPermissionsSection> createState()`

@@ -18,9 +18,9 @@
 - L55 `Future<void> _hangUp(VoiceCallController controller)`  — Hangs up the failed call (its panel goes away) and lets the binding
 - L60 `void main()`
 
-## test/voice_integration/chat_voice_binding_test.dart  (193 Z.)
-- L13 `ChatVoiceBinding _binding({ required VoiceCallController controller, required String? Function() chatId, bool agents = false, List<String>? sent, bool Function()? busy, String? Function()? agentName, })`  — A binding over a fake screen. No LiveKit: the test build has no token
-- L36 `void main()`
+## test/voice_integration/chat_voice_binding_test.dart  (282 Z.)
+- L13 `ChatVoiceBinding _binding({ required VoiceCallController controller, required String? Function() chatId, bool agents = false, List<String>? sent, bool Function()? busy, String? Function()? agentName, void Function(List<VoiceTurn>)? onVoiceTurns, })`  — A binding over a fake screen. No LiveKit: the test build has no token
+- L38 `void main()`
 
 ## test/voice_integration/voice_call_context_test.dart  (130 Z.)
 - L5 `Map<String, String> _user(String text)`

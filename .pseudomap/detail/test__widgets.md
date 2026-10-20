@@ -10,23 +10,16 @@
 - L7 `_electionChart = ''' Stand 22:25 Uhr. <chart> {"title":"Zweitstimmen","rows":[{"label":"AfD","value":44.8,"color":"#80cd`
 - L21 `void main()`
 
-## test/widgets/agent_control_panel_cost_test.dart  (394 Z.)
+## test/widgets/agent_control_panel_cost_test.dart  (387 Z.)
 - L12 `AgentsAgent _agent()`
 - L21 `AgentControlSnapshot _withCost(Map<String, dynamic>? cost)`
 - L33 `void main()`
 
-## test/widgets/agent_control_panel_test.dart  (462 Z.)
-- L12 `AgentsAgent _agent({bool onHost = true})`
-- L22 `Future<void> _pump( WidgetTester tester, AgentControlSource source, { AgentsAgent? agent, })`
-- L37 `_fullSnapshot = AgentControlSnapshot( model: ControlAvailable<AgentModelChoice>( AgentModelChoice( id: 'anthropic/claude`
-- L68 `void main()`
-- L443 `class _ThrowingControlSource implements AgentControlSource`  — Wraps a source and refuses the skill toggle, to prove the failure surfaces.
-  - L444 `_ThrowingControlSource(this._inner)`
-  - L445 `final AgentControlSource _inner`
-  - L448 `ValueListenable<AgentControlSnapshot> snapshotFor(String sessionKey)`
-  - L452 `Future<void> refresh(String sessionKey)`
-  - L455 `Future<void> setSkillEnabled(String skillName, {required bool enabled})`
-  - L460 `void dispose()`
+## test/widgets/agent_control_panel_test.dart  (455 Z.)
+- L11 `AgentsAgent _agent({bool onHost = true})`
+- L21 `Future<void> _pump( WidgetTester tester, AgentControlSource source, { AgentsAgent? agent, })`
+- L36 `_fullSnapshot = AgentControlSnapshot( model: ControlAvailable<AgentModelChoice>( AgentModelChoice( id: 'anthropic/claude`
+- L67 `void main()`
 
 ## test/widgets/agent_details_overview_test.dart  (211 Z.)
 - L15 `AgentsAutomation _routine( String id, { String session = 'amber-main', String state = 'active', String kind = 'schedule', Map<String, dynamic> spec = const <String, dynamic>{'cron': '13 8 * * *'}, String? name, })`
@@ -39,8 +32,8 @@
 - L6 `Widget _host(Widget child, {Brightness brightness = Brightness.light})`
 - L13 `void main()`
 
-## test/widgets/agent_roster_view_test.dart  (1021 Z.)
-- L25 `void main()`
+## test/widgets/agent_roster_view_test.dart  (1022 Z.)
+- L26 `void main()`
 
 ## test/widgets/agent_run_views_test.dart  (288 Z.)
 - L14 `_pngBytes = base64.decode( 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842' 'iQAAAABJRU5Er`  — A 1x1 transparent PNG — the smallest real image to prove a preview renders.
@@ -51,8 +44,15 @@
 - L32 `Widget _host(Widget child)`
 - L36 `void main()`
 
-## test/widgets/agent_telegram_section_test.dart  (479 Z.)
-- L18 `void main()`  — Bead chuk_chat-02s5: the app side of a coworker's Telegram channel. The
+## test/widgets/agent_template_picker_test.dart  (253 Z.)
+- L11 `class _Harness`  — Opens the picker from a button and keeps what it returned.
+  - L12 `AgentCreateRequest? result`
+  - L13 `bool closed = false`
+  - L15 `Widget app({String locale = 'en', double textScale = 1})`
+- L49 `void _size(WidgetTester tester, Size size)`
+- L55 `Future<_Harness> _open( WidgetTester tester, { Size size = const Size(360, 800), String locale = 'en', double textScale = 1, })`
+- L70 `Finder _key(String key)`
+- L72 `void main()`
 
 ## test/widgets/agents_action_approval_card_test.dart  (486 Z.)
 - L24 `class _NoopSaver implements AgentFileSaver`
@@ -65,6 +65,9 @@
 - L55 `_allOptions = <String>[ 'once', 'always_this_agent', 'always_this_site', 'deny', ]`
 - L62 `AgentsRelayApprovalRequest _request({ String id = 'ap-1', String actionClass = 'browser_act', List<String> options = _allOptions, String? summary = 'Click "Buy now" on shop.example', String? site = 'shop.example', Map<String, dynamic>? details = const <String, dynamic>{ 'browser_tool': 'browser_click', 'element': 'Buy now', }, })`
 - L89 `void main()`
+
+## test/widgets/agents_approval_row_test.dart  (369 Z.)
+- L22 `void main()`  — bead chuk_chat-aupy: an answered approval stays in the thread as one
 
 ## test/widgets/agents_cold_start_test.dart  (399 Z.)
 - L39 `class _NoopSaver implements AgentFileSaver`
@@ -85,24 +88,27 @@
 - L388 `Future<void> _settle(WidgetTester tester)`  — [WidgetTester.pumpAndSettle] never returns here: the thread view arms an
 - L398 `_guard = Timeout(Duration(seconds: 60))`  — A wall-clock guard on every test in this file. Nothing here should take
 
-## test/widgets/agents_desktop_shell_test.dart  (661 Z.)
-- L33 `class _MemoryStore implements AgentsSecureKeyValueStore`
-  - L34 `final Map<String, String> map = <String, String>{}`
-  - L36 `Future<String?> read(String key)`
-  - L38 `Future<void> write(String key, String value)`
-  - L40 `Future<void> delete(String key)`
-- L44 `class _FailingRefreshSource extends FakeAgentControlSource`  — A host that answers the panel's first look and then fails a refresh.
-  - L45 `bool failNext = false`
-  - L48 `Future<void> refresh(String sessionKey)`
-- L54 `class _Session implements AccountSessionSource`
-  - L55 `const _Session()`
-  - L57 `AccountSession? current()`
-  - L63 `Future<AccountSession?> refresh()`
-- L68 `class _FailingCreateController extends FakeRelayController`  — A host link whose `agent_create` send fails.
-  - L70 `Future<void> createAgent( String agentId, String name, { Map<String, Object?>? template, })`
-- L80 `void main()`
+## test/widgets/agents_desktop_shell_test.dart  (665 Z.)
+- L34 `class _MemoryStore implements AgentsSecureKeyValueStore`
+  - L35 `final Map<String, String> map = <String, String>{}`
+  - L37 `Future<String?> read(String key)`
+  - L39 `Future<void> write(String key, String value)`
+  - L41 `Future<void> delete(String key)`
+- L45 `class _FailingRefreshSource extends FakeAgentControlSource`  — A host that answers the panel's first look and then fails a refresh.
+  - L46 `bool failNext = false`
+  - L49 `Future<void> refresh(String sessionKey)`
+- L55 `class _Session implements AccountSessionSource`
+  - L56 `const _Session()`
+  - L58 `AccountSession? current()`
+  - L64 `Future<AccountSession?> refresh()`
+- L69 `class _FailingCreateController extends FakeRelayController`  — A host link whose `agent_create` send fails.
+  - L71 `Future<void> createAgent( String agentId, String name, { Map<String, Object?>? template, })`
+- L81 `void main()`
 
-## test/widgets/agents_live_status_test.dart  (247 Z.)
+## test/widgets/agents_live_dots_test.dart  (207 Z.)
+- L21 `void main()`  — bead chuk_chat-hfru: while an Agents turn runs, the thread shows the
+
+## test/widgets/agents_live_status_test.dart  (256 Z.)
 - L16 `Widget _app(Widget child, {Locale locale = const Locale('en')})`
 - L31 `void main()`  — The status line above a running Agents answer (research item 4): it says
 
@@ -132,7 +138,7 @@
   - L86 `Future<AccountSession?> refresh()`
 - L90 `class _HangingController extends FakeRelayController`  — A reconnect that never finishes: the link stays "connecting".
   - L92 `Future<void> reconnect({ required Uri hostUrl, required AgentsStoredPairing pairing, })`
-- L99 `class _EmptyHostRoster extends LocalAgentRosterSource`  — A host that lists no agents: pairing does not bring a host coworker.
+- L99 `class _EmptyHostRoster extends LocalAgentRosterSource`  — A host that lists no agents: pairing does not bring a host agent.
   - L101 `AgentsAgent ensureHostAgent( String peerDeviceId, { String? label, Set<String> replaceableLabels = const <String>{}, })`
 - L113 `kDesktop = Size(1340, 818)`
 - L114 `kPhone = Size(412, 915)`
@@ -195,7 +201,7 @@
 - L180 `Widget _plainChat(String text, {double width = 760})`  — chuk_chat's plain desktop transcript around one answer: a selection area,
 - L203 `void main()`
 
-## test/widgets/agents_thread_view_notifications_test.dart  (201 Z.)
+## test/widgets/agents_thread_view_notifications_test.dart  (208 Z.)
 - L35 `class _FakeSessionSource implements AccountSessionSource`
   - L36 `const _FakeSessionSource()`
   - L39 `AccountSession? current()`
@@ -232,7 +238,7 @@
 - L39 `Widget _app(Widget child)`
 - L53 `void main()`  — The visible run must end when the host says the run ended, whatever else the
 
-## test/widgets/agents_thread_view_test.dart  (1457 Z.)
+## test/widgets/agents_thread_view_test.dart  (1539 Z.)
 - L41 `class _MemoryStore implements AgentsSecureKeyValueStore`  — In-memory secure backend so the store round-trips with no platform channel.
   - L42 `final Map<String, String> map = <String, String>{}`
   - L45 `Future<String?> read(String key)`
@@ -246,7 +252,12 @@
   - L71 `Future<AccountSession?> refresh()`
 - L76 `Widget _app(Widget child)`  — The app shell the imported chat screen expects around it: localisations and
 - L87 `void main()`
-- L1453 `Future<void> _flushIdleTimers(WidgetTester tester)`  — The imported chat screen schedules a 60 s idle-close timer for its
+- L1518 `Future<void> _flushIdleTimers(WidgetTester tester)`  — The imported chat screen schedules a 60 s idle-close timer for its
+- L1524 `class _ProbingRelayController extends FakeRelayController implements AgentsLinkProbe`  — A fake whose socket can be asked whether it still answers.
+  - L1526 `_ProbingRelayController(this.answers)`
+  - L1528 `final bool answers`
+  - L1529 `int probes = 0`
+  - L1532 `Future<bool> probeLink({ Duration timeout = const Duration(milliseconds: 1500), })`
 
 ## test/widgets/agents_user_browser_test.dart  (747 Z.)
 - L20 `Map<String, dynamic> _block({ bool installed = true, bool connected = true, bool inUse = false, Map<String, dynamic>? inUseBy, bool stopped = false, })`
@@ -274,12 +285,12 @@
 - L11 `Future<void> _pumpAnchor( WidgetTester tester, { required double keyboardInset, required Alignment anchorAt, int itemCount = 3, bool preferAbove = false, })`
 - L63 `void main()`
 
-## test/widgets/answer_blocks_test.dart  (284 Z.)
-- L10 `_text = Color(0xFF111111)`
-- L11 `_bubble = Color(0xFFFFFFFF)`
-- L13 `Future<void> _pump( WidgetTester tester, String markdown, { double width = 360, double textScale = 1, })`
-- L48 `String _allText(WidgetTester tester)`  — Every RichText's plain text, joined. Finds text inside nested messages.
-- L53 `void main()`
+## test/widgets/answer_blocks_test.dart  (470 Z.)
+- L11 `_text = Color(0xFF111111)`
+- L12 `_bubble = Color(0xFFFFFFFF)`
+- L14 `Future<void> _pump( WidgetTester tester, String markdown, { double width = 360, double textScale = 1, ValueChanged<String>? onFollowUp, })`
+- L51 `String _allText(WidgetTester tester)`  — Every RichText's plain text, joined. Finds text inside nested messages.
+- L56 `void main()`
 
 ## test/widgets/app_lifecycle_observer_test.dart  (43 Z.)
 - L9 `void main()`  — `AppLifecycleService.handleLifecycleState` was called by NOBODY in
@@ -336,14 +347,16 @@
 ## test/widgets/automation_editor_sheet_test.dart  (348 Z.)
 - L17 `void main()`
 
-## test/widgets/browser_view_page_test.dart  (203 Z.)
-- L13 `class _CountingRelay extends FakeRelayController`  — Counts the view start/stop the page sends the executor.
-  - L14 `int starts = 0`
-  - L15 `int stops = 0`
-  - L18 `Future<void> startBrowserView({String? sessionKey})`
-  - L23 `String? lastSessionKey`
-  - L26 `Future<void> stopBrowserView()`
-- L29 `void main()`
+## test/widgets/browser_view_page_test.dart  (279 Z.)
+- L14 `class _CountingRelay extends FakeRelayController`  — Counts the view start/stop the page sends the executor.
+  - L15 `int starts = 0`
+  - L16 `int stops = 0`
+  - L19 `Future<void> startBrowserView({String? sessionKey})`
+  - L24 `String? lastSessionKey`
+  - L27 `Future<void> stopBrowserView()`
+- L30 `void main()`
+- L270 `double _luminance(Color c)`
+- L272 `double _contrast(Color a, Color b)`
 
 ## test/widgets/chart_widget_test.dart  (394 Z.)
 - L6 `Future<void> _pumpChart(WidgetTester tester, Map<String, dynamic> data)`
@@ -397,10 +410,16 @@
 - L24 `Future<void> _pump( WidgetTester tester, { ChatMode mode = ChatMode.thinking, ValueChanged<ChatMode>? onModeChanged, ValueChanged<String>? onModelSelected, String reasoningEffort = 'none', List<String> reasoningLevels = _fireworksLevels, ValueChanged<String>? onReasoningEffortChanged, VoidCallback? onOpenModelScreen, String? selectedModelId, String? modelLabel, List<ChatModelChoice> pickedModels = const <ChatModelChoice>[], })`
 - L59 `void main()`
 
+## test/widgets/chuk_table_classic_stacked_test.dart  (108 Z.)
+- L7 `_shopTable = <String>[ '| Produkt | Preis | Bewertung |', '|---|---|---|', '| [CAMWAY DA-Wandler 192 kHz, optisch auf 3,`
+- L14 `Future<void> _pump( WidgetTester tester, double width, { ValueChanged<String>? onTapLink, })`
+- L42 `bool _tapLink(WidgetTester tester, String needle)`  — Taps the link span whose text contains [needle].
+- L62 `void main()`
+
 ## test/widgets/chuk_table_golden_test.dart  (323 Z.)
 - L28 `_shots = 'goldens/chuk_table'`  — Where the shots land: committed next to this file (relative to
 - L32 `Map<String, dynamic> songs({int rows = 2})`  — The songs table, as the `chat_document` tool stores one: the reel it came
-- L104 `Map<String, dynamic> labelledSongs()`  — A table the coworker labelled itself: the cell carries `[label](url)`, so
+- L104 `Map<String, dynamic> labelledSongs()`  — A table the agent labelled itself: the cell carries `[label](url)`, so
 - L115 `ParsedTable prices()`  — A price comparison — numbers on the right, a highlighted cell, prose in the
 - L134 `ParsedTable wideGrid()`  — Seven columns at phone width: the case that has to pan.
 - L161 `Future<void> _shoot( WidgetTester tester, Widget child, String name, { Brightness brightness = Brightness.dark, double width = 360, double height = 620, double textScale = 1.0, })`
@@ -426,16 +445,6 @@
 
 ## test/widgets/composer_recording_row_test.dart  (96 Z.)
 - L15 `void main()`
-
-## test/widgets/coworker_template_picker_test.dart  (253 Z.)
-- L11 `class _Harness`  — Opens the picker from a button and keeps what it returned.
-  - L12 `CoworkerCreateRequest? result`
-  - L13 `bool closed = false`
-  - L15 `Widget app({String locale = 'en', double textScale = 1})`
-- L49 `void _size(WidgetTester tester, Size size)`
-- L55 `Future<_Harness> _open( WidgetTester tester, { Size size = const Size(360, 800), String locale = 'en', double textScale = 1, })`
-- L70 `Finder _key(String key)`
-- L72 `void main()`
 
 ## test/widgets/diff_widget_test.dart  (62 Z.)
 - L6 `void main()`
@@ -475,6 +484,16 @@
 - L69 `List<TextSpan> _leafSpans(WidgetTester tester)`  — Every leaf `TextSpan` in the widget tree, with its resolved style.
 - L88 `TextSpan _span(WidgetTester tester, String text)`  — The leaf span whose text is exactly [text].
 - L96 `void main()`
+
+## test/widgets/markdown_table_list_bugs_test.dart  (231 Z.)
+- L18 `kWideGermanTable = 'Hier der Vergleich:\n\n' '| Ansatz | Ablauf im Detail | Vor- und Nachteile |\n' '|---|---|---|\n' '|`
+- L31 `kGoetheItem = '- **Goethe:** Faust I & II (Riesengeschichte – Mephisto-Wette, ' 'Gretchentragödie), Der Erlkönig, Die Le`
+- L37 `Future<void> _pump(WidgetTester tester, String text, {double width = 360})`
+- L61 `List<(String, bool)> _runs(WidgetTester tester)`  — Every piece of text on screen, with the bold state of each run.
+- L85 `_tableScroller = find.descendant( of: find.byType(ChukTableClassic), matching: find.byWidgetPredicate( (Widget w) => w i`
+- L93 `RenderParagraph _paragraphWith(WidgetTester tester, String text)`
+- L105 `int _lines(RenderParagraph p)`  — Lines a laid-out paragraph takes, from its height and one line's height.
+- L109 `void main()`
 
 ## test/widgets/measure_size_test.dart  (57 Z.)
 - L5 `void main()`
@@ -544,69 +563,69 @@
 - L19 `Widget wrap(Widget child)`
 - L30 `void main()`
 
-## test/widgets/messenger_shell_test.dart  (2149 Z.)
-- L56 `class _MemoryStore implements AgentsSecureKeyValueStore`
-  - L57 `final Map<String, String> map = <String, String>{}`
-  - L60 `Future<String?> read(String key)`
-  - L63 `Future<void> write(String key, String value)`
-  - L66 `Future<void> delete(String key)`
-- L71 `class _FakeRelayController implements AgentsRelayController`  — A controller the test drives: it can report itself paired, and it records
-  - L72 `final ValueNotifier<AgentsRelayState> _state = ValueNotifier<AgentsRelayState>( const AgentsRelayState(phase: AgentsRelayPhase.idle), )`
-  - L76 `final StreamController<AgentsRelayInbound> _inbound = StreamController<AgentsRelayInbound>.broadcast()`
-  - L79 `final List<String> sessionKeys = <String>[]`
-  - L82 `ValueListenable<AgentsRelayState> get state`
-  - L85 `Stream<AgentsRelayInbound> get inbound`
-  - L88 `Future<void> connect({ required Uri hostUrl, required String pairingCode, })`
-  - L94 `Future<void> reconnect({ required Uri hostUrl, required AgentsStoredPairing pairing, })`
-  - L102 `AgentsStoredPairing? get establishedTrust`
-  - L105 `Future<void> provisionAccount(AccountSession session)`
-  - L108 `Future<void> sendTask( String prompt, { String sessionKey = 'default', String? modelId, String? providerSlug, String? reasoningEffort, bool debug = false, bool regenerate = false, String? taskId, bool budgetOverride = false, })`
-  - L120 `final List<(String, String)> roomTasks = <(String, String)>[]`
-  - L121 `final List<String> createdRooms = <String>[]`
-  - L122 `final List<bool> createdRoomPolicies = <bool>[]`
-  - L123 `final List<(String, bool)> agentToAgentSets = <(String, bool)>[]`
-  - L126 `Future<void> createRoom( String roomId, String name, List<Map<String, String>> members, { bool agentToAgent = true, })`
-  - L137 `Future<void> setRoomAgentToAgent(String roomId, bool enabled)`
-  - L141 `Future<void> sendRoomTask(String roomId, String message)`
-  - L144 `final List<String> historyRequests = <String>[]`
-  - L145 `final List<String> deletedRooms = <String>[]`
-  - L148 `Future<void> requestRoomHistory(String roomId)`
-  - L152 `Future<void> deleteRoom(String roomId)`
-  - L154 `final List<(String, String)> renamedRooms = <(String, String)>[]`
-  - L157 `Future<void> renameRoom(String roomId, String name)`
-  - L160 `final List<(String, String)> createdAgents = <(String, String)>[]`
-  - L161 `final List<(String, String)> renamedAgents = <(String, String)>[]`
-  - L164 `final Map<String, Map<String, Object?>> createdTemplates = <String, Map<String, Object?>>{}`  — The `template` object of each `agent_create`, by agent id.
-  - L168 `Future<void> createAgent( String agentId, String name, { Map<String, Object?>? template, })`
-  - L178 `Future<void> renameAgent(String agentId, String name)`
-  - L181 `int agentListRequests = 0`
-  - L184 `Future<void> requestAgentList()`
-  - L186 `final List<(String, String)> removedMembers = <(String, String)>[]`
-  - L189 `Future<void> addRoomMember( String roomId, String agentId, String handle, )`
-  - L196 `Future<void> removeRoomMember(String roomId, String agentId)`
-  - L200 `Future<void> requestStop({String sessionKey = 'default'})`
-  - L203 `Future<void> requestReplay({ String sessionKey = 'default', int afterId = 0, int beforeId = 0, int limit = 0, })`
-  - L211 `Future<void> sendRunAck(String runId)`
-  - L214 `Future<void> startBrowserView({String? sessionKey})`
-  - L217 `Future<void> stopBrowserView()`
-  - L220 `Future<void> sendBrowserData(Uint8List bytes)`
-  - L223 `Future<void> sendApprovalDecision({ required String approvalId, required bool approved, String? scope, })`
-  - L230 `Future<void> sendSecrets({ required Map<String, String> values, required int revision, String? requestId, })`
-  - L237 `Future<void> dispose()`
-  - L242 `void pair()`
-  - L247 `void emit(AgentsRelayInbound event)`
-- L250 `class _FakeSessionSource implements AccountSessionSource`
-  - L251 `const _FakeSessionSource()`
-  - L254 `AccountSession? current()`
-  - L261 `Future<AccountSession?> refresh()`
-- L270 `Future<void> settle(WidgetTester tester)`  — Pump a few frames without waiting for the tree to go quiet.
-- L276 `void main()`
-- L2130 `class _CountingReadMarks extends AgentReadMarks`
-  - L2131 `int flushes = 0`
-  - L2134 `Future<void> flush()`
-- L2140 `class _CountingRoster extends LocalAgentRosterSource`
-  - L2141 `int flushes = 0`
-  - L2144 `void flushPendingPersist()`
+## test/widgets/messenger_shell_test.dart  (2190 Z.)
+- L58 `class _MemoryStore implements AgentsSecureKeyValueStore`
+  - L59 `final Map<String, String> map = <String, String>{}`
+  - L62 `Future<String?> read(String key)`
+  - L65 `Future<void> write(String key, String value)`
+  - L68 `Future<void> delete(String key)`
+- L73 `class _FakeRelayController implements AgentsRelayController`  — A controller the test drives: it can report itself paired, and it records
+  - L74 `final ValueNotifier<AgentsRelayState> _state = ValueNotifier<AgentsRelayState>( const AgentsRelayState(phase: AgentsRelayPhase.idle), )`
+  - L78 `final StreamController<AgentsRelayInbound> _inbound = StreamController<AgentsRelayInbound>.broadcast()`
+  - L81 `final List<String> sessionKeys = <String>[]`
+  - L84 `ValueListenable<AgentsRelayState> get state`
+  - L87 `Stream<AgentsRelayInbound> get inbound`
+  - L90 `Future<void> connect({ required Uri hostUrl, required String pairingCode, })`
+  - L96 `Future<void> reconnect({ required Uri hostUrl, required AgentsStoredPairing pairing, })`
+  - L104 `AgentsStoredPairing? get establishedTrust`
+  - L107 `Future<void> provisionAccount(AccountSession session)`
+  - L110 `Future<void> sendTask( String prompt, { String sessionKey = 'default', String? modelId, String? providerSlug, String? reasoningEffort, bool debug = false, bool regenerate = false, String? taskId, bool budgetOverride = false, })`
+  - L122 `final List<(String, String)> roomTasks = <(String, String)>[]`
+  - L123 `final List<String> createdRooms = <String>[]`
+  - L124 `final List<bool> createdRoomPolicies = <bool>[]`
+  - L125 `final List<(String, bool)> agentToAgentSets = <(String, bool)>[]`
+  - L128 `Future<void> createRoom( String roomId, String name, List<Map<String, String>> members, { bool agentToAgent = true, })`
+  - L139 `Future<void> setRoomAgentToAgent(String roomId, bool enabled)`
+  - L143 `Future<void> sendRoomTask(String roomId, String message)`
+  - L146 `final List<String> historyRequests = <String>[]`
+  - L147 `final List<String> deletedRooms = <String>[]`
+  - L150 `Future<void> requestRoomHistory(String roomId)`
+  - L154 `Future<void> deleteRoom(String roomId)`
+  - L156 `final List<(String, String)> renamedRooms = <(String, String)>[]`
+  - L159 `Future<void> renameRoom(String roomId, String name)`
+  - L162 `final List<(String, String)> createdAgents = <(String, String)>[]`
+  - L163 `final List<(String, String)> renamedAgents = <(String, String)>[]`
+  - L166 `final Map<String, Map<String, Object?>> createdTemplates = <String, Map<String, Object?>>{}`  — The `template` object of each `agent_create`, by agent id.
+  - L170 `Future<void> createAgent( String agentId, String name, { Map<String, Object?>? template, })`
+  - L180 `Future<void> renameAgent(String agentId, String name)`
+  - L183 `int agentListRequests = 0`
+  - L186 `Future<void> requestAgentList()`
+  - L188 `final List<(String, String)> removedMembers = <(String, String)>[]`
+  - L191 `Future<void> addRoomMember( String roomId, String agentId, String handle, )`
+  - L198 `Future<void> removeRoomMember(String roomId, String agentId)`
+  - L202 `Future<void> requestStop({String sessionKey = 'default'})`
+  - L205 `Future<void> requestReplay({ String sessionKey = 'default', int afterId = 0, int beforeId = 0, int limit = 0, })`
+  - L213 `Future<void> sendRunAck(String runId)`
+  - L216 `Future<void> startBrowserView({String? sessionKey})`
+  - L219 `Future<void> stopBrowserView()`
+  - L222 `Future<void> sendBrowserData(Uint8List bytes)`
+  - L225 `Future<void> sendApprovalDecision({ required String approvalId, required bool approved, String? scope, })`
+  - L232 `Future<void> sendSecrets({ required Map<String, String> values, required int revision, String? requestId, })`
+  - L239 `Future<void> dispose()`
+  - L244 `void pair()`
+  - L249 `void emit(AgentsRelayInbound event)`
+- L252 `class _FakeSessionSource implements AccountSessionSource`
+  - L253 `const _FakeSessionSource()`
+  - L256 `AccountSession? current()`
+  - L263 `Future<AccountSession?> refresh()`
+- L272 `Future<void> settle(WidgetTester tester)`  — Pump a few frames without waiting for the tree to go quiet.
+- L278 `void main()`
+- L2171 `class _CountingReadMarks extends AgentReadMarks`
+  - L2172 `int flushes = 0`
+  - L2175 `Future<void> flush()`
+- L2181 `class _CountingRoster extends LocalAgentRosterSource`
+  - L2182 `int flushes = 0`
+  - L2185 `void flushPendingPersist()`
 
 ## test/widgets/messenger_typing_indicator_test.dart  (48 Z.)
 - L5 `void main()`
@@ -660,8 +679,18 @@
 - L8 `Widget _host({required List<Widget> children})`
 - L14 `void main()`
 
+## test/widgets/status_answer_block_test.dart  (144 Z.)
+- L10 `_payments = ''' Erledigt, Posteingang ist auf 0. ::: status 4 offene Zahlungen · 122,20 € + 50 \$ Hetzner | Kartenzahlun`
+- L24 `Future<void> _pump( WidgetTester tester, String markdown, { required double width, double textScale = 1, bool dark = false, })`
+- L68 `String _allText(WidgetTester tester)`
+- L73 `void main()`
+
 ## test/widgets/turn_status_test.dart  (238 Z.)
 - L16 `void main()`
+
+## test/widgets/voice_message_bubble_test.dart  (135 Z.)
+- L10 `_transcript = 'Okay so I was thinking about the trip next week and I would like to ' 'know what the weather will be like`
+- L14 `void main()`
 
 ## test/widgets/web_search_sources_test.dart  (40 Z.)
 - L4 `void main()`

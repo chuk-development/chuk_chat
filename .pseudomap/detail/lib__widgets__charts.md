@@ -227,7 +227,7 @@
 - L49 `class ChukChart extends StatefulWidget`  — Draws a [ChartSpec]: a card with a title, a plot and a source line.
   - L50 `const ChukChart({ super.key, required this.spec, this.accentColor, this.fontFamily, this.animate = true, })`
   - L58 `final ChartSpec spec`
-  - L62 `final Color? accentColor`  — Overrides the scheme's primary — an open thread passes the coworker's
+  - L62 `final Color? accentColor`  — Overrides the scheme's primary — an open thread passes the agent's
   - L64 `final String? fontFamily`
   - L67 `final bool animate`  — False draws the finished chart at once. Tests and goldens use it.
   - L70 `State<ChukChart> createState()`

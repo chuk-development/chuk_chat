@@ -33,11 +33,11 @@
 - L125 `String renderBuiltinSkillsFile(List<Skill> skills)`  — Renders the generated Dart source for [skills].
 - L182 `String _dartString(String value)`  — Escapes [value] into a single-quoted Dart string literal.
 
-## tool/generate_hugeicons.py  (179 Z.)
+## tool/generate_hugeicons.py  (183 Z.)
 - L23 `WANTED = [ "Message01Icon", "Album02Icon", "Folder03Icon", "Settings01Icon", "UserIcon", "User02Icon", "CheckIcon", "Plu`
-- L115 `CAMEL = re.compile(r"([a-z0-9])([A-Z])")`
-- L118 `def parse(source: str) -> list`  — Read the module's array. Keys are bare identifiers, values are already
-- L126 `def attribute_name(key: str) -> str`  — `strokeLinecap` -> `stroke-linecap`.
-- L131 `def to_svg(nodes: list) -> str`
-- L146 `def file_stem(icon: str) -> str`  — `ArrowLeft02Icon` -> `arrow-left02`.
-- L152 `def main() -> int`
+- L119 `CAMEL = re.compile(r"([a-z0-9])([A-Z])")`
+- L122 `def parse(source: str) -> list`  — Read the module's array. Keys are bare identifiers, values are already
+- L130 `def attribute_name(key: str) -> str`  — `strokeLinecap` -> `stroke-linecap`.
+- L135 `def to_svg(nodes: list) -> str`
+- L150 `def file_stem(icon: str) -> str`  — `ArrowLeft02Icon` -> `arrow-left02`.
+- L156 `def main() -> int`

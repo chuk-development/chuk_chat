@@ -1,6 +1,6 @@
 # pseudomap · chuk_chat · Tests
 
-417 Dateien · 1172 Typen/Funktionen · 1060 Member · Stand 2026-10-17
+448 Dateien · 1240 Typen/Funktionen · 1086 Member · Stand 2026-10-20
 
 Diese Datei ist `.pseudomap/MAP.md` — Stufe 1: was es gibt und wo es liegt.
 
@@ -68,13 +68,35 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
   - connect reconnect provisionAccount setRoomAgentToAgent sendRoomTask requestRoomHistory deleteRoom renameRoom createAgent renameAgent requestAgentList addRoomMember removeRoomMember sendRunAck startBrowserView stopBrowserView sendBrowserData sendApprovalDecision sendSecrets state inbound establishedTrust sessionKey agentToAgent
 - `void main()`
 
+## test/agent_driver
+### agent_extensions_test.dart  (193 Z.)
+- `Widget _app({bool dialog = false})`
+- `void main()`
+
+### fake_app.dart  (79 Z.)
+- const: onePixelPng
+- `class FakeApp implements AppControl`
+  - start stop status logs driver hotReload running driverCalls extensionCalls extensionArgs failDriverWith started args
+
+### isolation_test.dart  (128 Z.)
+- `void main()`
+
+### machine_events_test.dart  (41 Z.)
+- `void main()`
+
+### mcp_server_test.dart  (153 Z.)
+- `void main()`
+
+### tools_test.dart  (207 Z.)
+- `void main()`
+
 ## test/agents_permissions
 ### agent_approvals_section_test.dart  (140 Z.)
 - `Map<String, dynamic> _reply({ Map<String, String> classes = const <String, String>{ 'publish': 'ask', 'send_external': ' …)`
 - `Future<(FakeHost, AgentsPermissionsService)> _open( WidgetTester tester, { bool approvals = true, })`
 - `void main()`
 
-### agent_permissions_section_test.dart  (329 Z.)
+### agent_permissions_section_test.dart  (340 Z.)
 - `Widget _page(AgentsPermissionsService service, {String agentId = 'a'})`
 - `Switch _switch(WidgetTester tester, String key)`
 - `Future<(FakeHost, AgentsPermissionsService)> _open( WidgetTester tester, { bool connected = true, bool supported = true …)`
@@ -120,6 +142,20 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Map<String, String> _assistant({String? startedAt, String? generationMs})`
 - `void main()`
 
+## test/emulator
+### emulator_chat_ws_test.dart  (252 Z.)
+- `class _WireClient`  — A minimal /v2/ws client that collects frames per req_id.
+  - connect send chat closed channel frames
+- `Map<String, Object?> _payload(String message)`
+- `String _joined(List<Map<String, dynamic>> frames, String kind)`
+- `void main()`
+
+### emulator_client_test.dart  (121 Z.)
+- `void main()`
+
+### emulator_http_test.dart  (189 Z.)
+- `void main()`
+
 ## test/helpers
 ### icon_finder.dart  (25 Z.)
 - `Finder findIcon(IconData icon)`  — Finds an icon whichever widget draws it.
@@ -134,7 +170,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Map<String, dynamic> _table(String title)`
 - `void main()`
 
-### every_screen_layout_test.dart  (998 Z.)
+### every_screen_layout_test.dart  (935 Z.)
 - const: _cannotMount _chukSizes
 - `class _Bag`  — Anything a screen made that has to be thrown away afterwards.
   - Function
@@ -148,7 +184,6 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `AgentsRoom _fullRoom()`  — A room at the cap, which is the case the member sheet has to survive.
 - `Widget _mailDetail(String id)`  — The mail page for one of the fake server's mails.
 - `Widget _hosted(Widget child)`  — Wraps a panel that has no scaffold of its own.
-- `Widget _telegram(_Bag bag, Map<String, dynamic> state)`  — The Telegram section with the host's [state] already in, on a host that
 - `Widget _sheetHost(WidgetBuilder builder)`  — Presents [builder] the way `agents_shell_state` presents it: a scroll
 - `Future<void> _openSheet(WidgetTester tester)`
 - `List<_Screen> _screens()`
@@ -193,7 +228,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void main()`
 
 ### table_preview.dart  (207 Z.)
-- `Map<String, dynamic> songs({int rows = 2, bool labelled = false})`  — The Songs document the coworker wrote: the reel it came from, the song,
+- `Map<String, dynamic> songs({int rows = 2, bool labelled = false})`  — The Songs document the agent wrote: the reel it came from, the song,
 - `Map<String, dynamic> prices()`  — A price comparison: a number column, a highlighted cell, and prose in the
 - `void main()`
 - `class TablePreviewApp extends StatefulWidget`
@@ -388,6 +423,12 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### agent_mailbox_page_test.dart  (553 Z.)
 - `void main()`  — Settings > Agents > Mailbox (docs/AGENT_MAIL.md §8): the address with a
 
+### agent_model_page_test.dart  (318 Z.)
+- const: _chat _catalogue
+- `Future<void> _pump( WidgetTester tester, { AgentControlSource? source, Size size = const Size(420, 900), double textScal …)`
+- `Future<void> _tapVisible(WidgetTester tester, Finder finder)`
+- `void main()`
+
 ### agent_profile_edit_page_test.dart  (115 Z.)
 - `void main()`
 
@@ -410,12 +451,6 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `AgentsAutomation _automation( String id, { String session = 'thread-1', String state = 'active', })`
 - `void main()`
 
-### coworker_model_page_test.dart  (318 Z.)
-- const: _chat _catalogue
-- `Future<void> _pump( WidgetTester tester, { AgentControlSource? source, Size size = const Size(420, 900), double textScal …)`
-- `Future<void> _tapVisible(WidgetTester tester, Finder finder)`
-- `void main()`
-
 ### desktop_settings_modal_test.dart  (182 Z.)
 - `void main()`  — The desktop settings modal lists the same destinations as the phone's
 
@@ -433,7 +468,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void _expectInsideWindow(WidgetTester tester)`  — Every text on screen sits inside the 360 px window.
 - `void main()`
 
-### mobile_agents_settings_page_test.dart  (349 Z.)
+### mobile_agents_settings_page_test.dart  (393 Z.)
 - `void main()`
 
 ### model_selector_design_test.dart  (114 Z.)
@@ -556,6 +591,9 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Widget _app(Widget child)`
 - `void main()`
 
+### message_actions_speech_test.dart  (79 Z.)
+- `void main()`
+
 ### message_render_cache_shared_test.dart  (91 Z.)
 - `List<Map<String, String>> _messages()`
 - `void main()`
@@ -580,6 +618,13 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ## test/platform_specific/chat/widgets
 ### chat_message_list_item_test.dart  (145 Z.)
+- `void main()`
+
+### composer_send_button_test.dart  (231 Z.)
+- const: _voiceGlyph _sendGlyph _stopGlyph
+- `Finder _target(ComposerSendFace face)`
+- `class _Taps`
+  - send voice stop
 - `void main()`
 
 ## test/platform_specific/mobile
@@ -620,8 +665,19 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Session _session({required int exp, String refresh = 'r1'})`
 - `void main()`
 
+### agent_composer_model_test.dart  (206 Z.)
+- const: _chat _pro
+- `class _Composer extends StatefulWidget`
+  - agentThread
+- `class _ComposerState extends State<_Composer> with ModelProviderResolutionMixin, ChatModelSelectionMixin`
+  - refreshSelectedModelName refreshCustomModelName refreshPickedModels activeChatId skipRepeatedModelSave
+- `void main()`
+
 ### api_config_base_test.dart  (26 Z.)
 - `void main()`  — The model catalogue (`/v1/models_info`) is fetched from this base URL by
+
+### api_config_relay_test.dart  (133 Z.)
+- `void main()`  — The Agents relay follows the configured API base, so one dart-define points
 
 ### app_mode_service_test.dart  (117 Z.)
 - `void main()`
@@ -679,6 +735,14 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### chat_model_selection_service_test.dart  (147 Z.)
 - `void main()`
 
+### chat_open_keeps_order_test.dart  (253 Z.)
+- const: oldChatId newChatId userId oldUpdatedAt newUpdatedAt
+- `StoredChat storedOldChat({String? customName})`  — An old chat as the cache or the cloud gives it back: several turns, with
+- `StoredChat storedNewChat()`
+- `List<Map<String, dynamic>> openedMaps(StoredChat chat)`  — The maps the chat screen holds for [chat] after opening it, and hands
+- `List<String> sidebarOrder()`
+- `void main()`
+
 ### chat_payload_codec_test.dart  (244 Z.)
 - `Map<String, dynamic> _toolTurn({String result = 'RESULT ', int repeat = 400})`  — A tool turn the way the app stores it in v2: the same tool calls (with
 - `Map<String, dynamic> _v2Payload(List<Map<String, dynamic>> messages)`
@@ -722,12 +786,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### chat_storage_title_sync_test.dart  (56 Z.)
 - `void main()`
 
-### coworker_composer_model_test.dart  (206 Z.)
-- const: _chat _pro
-- `class _Composer extends StatefulWidget`
-  - coworkerThread
-- `class _ComposerState extends State<_Composer> with ModelProviderResolutionMixin, ChatModelSelectionMixin`
-  - refreshSelectedModelName refreshCustomModelName refreshPickedModels activeChatId skipRepeatedModelSave
+### dictation_tracker_test.dart  (105 Z.)
 - `void main()`
 
 ### encryption_service_test.dart  (702 Z.)
@@ -850,10 +909,13 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### tool_call_handler_fact_check_test.dart  (193 Z.)
 - `void main()`
 
-### tool_call_handler_repeated_lookup_test.dart  (393 Z.)
+### tool_call_handler_forced_final_test.dart  (309 Z.)
 - `void main()`
 
-### tool_call_handler_safety_limit_test.dart  (145 Z.)
+### tool_call_handler_repeated_lookup_test.dart  (409 Z.)
+- `void main()`
+
+### tool_call_handler_safety_limit_test.dart  (155 Z.)
 - `void main()`
 
 ### tool_call_handler_stub_test.dart  (204 Z.)
@@ -886,11 +948,17 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### tour_key_registry_test.dart  (62 Z.)
 - `void main()`
 
+### tts_audio_service_test.dart  (235 Z.)
+- `void main()`
+
 ### user_scoped_cache_invalidation_test.dart  (301 Z.)
 - `void main()`  — Guards the cross-user leak fix: the static caches in these services are
 
 ### user_scoped_cache_race_test.dart  (309 Z.)
 - `void main()`  — The sign-out-mid-flight race: an operation starts as user A, A signs out and
+
+### user_sync_signal_service_test.dart  (167 Z.)
+- `void main()`
 
 ### websocket_chat_service_test.dart  (783 Z.)
 - `List<AgentsRelayInbound> _everyVariant()`  — Every inbound variant the relay can produce, so the "never a ToolCallsEvent"
@@ -933,9 +1001,12 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### agent_roster_store_test.dart  (249 Z.)
 - `void main()`
 
-### agents_cloud_relay_test.dart  (754 Z.)
+### agent_templates_test.dart  (166 Z.)
+- `void main()`
+
+### agents_cloud_relay_test.dart  (806 Z.)
 - `class _FakeRelayServer implements RelaySocket`  — A stand-in for `api.chuk.chat/v2/relay/ws`.
-  - send fromHost _deliver close toHost incoming authOk claimReply sent closed hostDeviceId
+  - send fromHost _deliver close toHost incoming authOk answerPing claimReply sent closed hostDeviceId
 - `class _HostSide`  — The §15 initiator, exactly as the host runs it, speaking the LOCAL relay
   - mac start _send _onEnvelope _establishCodec emit answerResume server channelId digits signingKeyPair deviceId connection sessionTranscript sessionKey controllerKey opened paired
 - `class _Session implements AccountSessionSource`
@@ -1049,7 +1120,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### agents_relay_secrets_test.dart  (136 Z.)
 - `void main()`  — The secrets frames over the real sealed channel (docs/WIRE_CONTRACT.md,
 
-### agents_replay_loader_test.dart  (837 Z.)
+### agents_replay_loader_test.dart  (864 Z.)
 - `void main()`
 - `Future<void> _drain()`  — Lets the loader's internal handler chain settle.
 
@@ -1087,7 +1158,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void main()`  — A message sent at 04:49 was gone. The app drew a sent bubble and a typing
 - `Future<void> _drain()`  — Lets the adapter's internal handler chain settle.
 
-### agents_task_outbox_test.dart  (230 Z.)
+### agents_task_outbox_test.dart  (301 Z.)
 - `void main()`  — Bead cowork-i7sd: "ob die Nachrichten im Backend ankommen, ist irgendwie
 
 ### agents_tool_phase_l10n_test.dart  (71 Z.)
@@ -1112,15 +1183,16 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Future<String> _encryptWithKey(String plaintext, SecretKey key)`  — Builds the production ciphertext envelope around [plaintext] with an
 - `void main()`
 
-### coworker_templates_test.dart  (166 Z.)
-- `void main()`
-
 ### offline_retry_manager_test.dart  (150 Z.)
 - `void main()`  — The Retry button in the imported bubble calls
 
 ### room_source_test.dart  (221 Z.)
 - `AgentsRoomMember _m(String id, String handle)`
 - `AgentsRoomDraft _draft( String name, { List<AgentsRoomMember>? members, bool agentToAgent = true, })`
+- `void main()`
+
+### roster_pins_test.dart  (182 Z.)
+- `AgentsAgent _agent(String id, {DateTime? lastActivity})`
 - `void main()`
 
 ### schedule_spec_test.dart  (431 Z.)
@@ -1182,9 +1254,12 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `ChukMcpRow _row(String id)`
 - `void main()`
 
-### mcp_oauth_test.dart  (321 Z.)
+### mcp_oauth_test.dart  (395 Z.)
 - `http.Response _json(Map<String, dynamic> body)`
 - `MockClient _compliantServer({ List<String> scopes = const <String>['read', 'write'], void Function(Map<String, String> b …)`  — A server that publishes protected-resource metadata pointing at its own
+- `void main()`
+
+### mcp_redirect_test.dart  (60 Z.)
 - `void main()`
 
 ### mcp_service_test.dart  (728 Z.)
@@ -1205,10 +1280,10 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void main()`
 
 ## test/services/notifications
-### agents_notifications_test.dart  (110 Z.)
+### agents_notifications_test.dart  (134 Z.)
 - `void main()`
 
-### local_notifications_test.dart  (167 Z.)
+### local_notifications_test.dart  (201 Z.)
 - `class FakeBackend implements LocalNotificationsBackend`  — Records every call; the platform plugin never runs in a test.
   - Function show cancel launchPayload requestPermission initOk launch permission tap shown cancelled
 - `void main()`
@@ -1368,6 +1443,9 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### file_fetch_tools_test.dart  (251 Z.)
 - `void main()`
 
+### image_tools_test.dart  (97 Z.)
+- `void main()`
+
 ### map_tools_test.dart  (147 Z.)
 - `void main()`
 
@@ -1392,7 +1470,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### accent_button_foreground_test.dart  (46 Z.)
 - `void main()`
 
-### answer_blocks_parser_test.dart  (241 Z.)
+### answer_blocks_parser_test.dart  (507 Z.)
 - `AnswerBlockSegment _onlyBlock(List<AnswerSegment> segs)`
 - `void main()`
 
@@ -1431,6 +1509,11 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### lru_byte_cache_test.dart  (168 Z.)
 - `Uint8List _bytes(int size)`  — Helper: create a Uint8List of [size] bytes.
+- `void main()`
+
+### non_public_ip_test.dart  (96 Z.)
+- `List<int> _v4(String a, String b, String c, String d)`
+- `List<int> _v6(List<int> bytes)`
 - `void main()`
 
 ### on_fill_contrast_test.dart  (148 Z.)
@@ -1504,10 +1587,16 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void main()`  — The loopback server behind the noVNC viewer.
 
 ## test/voice
+### voice_audio_output_test.dart  (96 Z.)
+- `void main()`
+
 ### voice_call_controller_test.dart  (231 Z.)
 - `class _FakeDelegate implements VoiceTaskDelegate`
   - startTask results controller
 - `Map<String, dynamic> _json(String s)`
+- `void main()`
+
+### voice_call_fullscreen_test.dart  (304 Z.)
 - `void main()`
 
 ### voice_call_models_test.dart  (147 Z.)
@@ -1520,11 +1609,17 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `VoiceCallRecord _record(String chatId, DateTime start, {String text = 'Hi'})`
 - `void main()`
 
+### voice_image_cards_test.dart  (87 Z.)
+- `void main()`
+
 ### voice_location_test.dart  (116 Z.)
 - `Map<String, dynamic> _json(String s)`
 - `void main()`
 
-### voice_protocol_test.dart  (398 Z.)
+### voice_playback_context_test.dart  (172 Z.)
+- `void main()`
+
+### voice_protocol_test.dart  (422 Z.)
 - `class _FakeDelegate implements VoiceTaskDelegate`
   - startTask results onStart started
 - `Map<String, dynamic> _json(String s)`
@@ -1535,7 +1630,10 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
   - startTask results
 - `void main()`
 
-### voice_transcript_test.dart  (254 Z.)
+### voice_transcript_migration_test.dart  (281 Z.)
+- `void main()`
+
+### voice_transcript_test.dart  (390 Z.)
 - `void main()`
 
 ### voice_widgets_test.dart  (348 Z.)
@@ -1546,11 +1644,11 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void main()`
 
 ## test/voice_incoming
-### fakes.dart  (253 Z.)
+### fakes.dart  (259 Z.)
 - `Map<String, dynamic> incomingFrame({ String callId = '3f2a9c1d0b7e4a55', String threadId = 'local:crypto-desk:1:74112' …)`  — A frame as the host sends it.
 - `Map<String, dynamic> stateFrame(String callId, String state)`
 - `class FakeCallkit implements CallkitPort`
-  - emit showIncoming showMissed startOutgoing setConnected end signals controller shown missed started connected ended echoOnEnd
+  - emit showIncoming showMissed startOutgoing setConnected end signals controller shown missed started connected ended echoOnEnd pendingStart startError
 - `class FakeMic implements MicPermission`  — The microphone permission, as the test sets it. [pending] holds the
   - isGranted request granted grantOnRequest requests pending
 - `class FakeSender implements CallStateSender`
@@ -1568,7 +1666,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### incoming_call_parsing_test.dart  (269 Z.)
 - `void main()`
 
-### incoming_call_service_test.dart  (522 Z.)
+### incoming_call_service_test.dart  (646 Z.)
 - `void main()`
 
 ### incoming_call_starter_test.dart  (115 Z.)
@@ -1599,7 +1697,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Future<void> _hangUp(VoiceCallController controller)`  — Hangs up the failed call (its panel goes away) and lets the binding
 - `void main()`
 
-### chat_voice_binding_test.dart  (193 Z.)
+### chat_voice_binding_test.dart  (282 Z.)
 - `ChatVoiceBinding _binding({ required VoiceCallController controller, required String? Function() chatId, bool agents = f …)`  — A binding over a fake screen. No LiveKit: the test build has no token
 - `void main()`
 
@@ -1634,18 +1732,16 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - const: _electionChart
 - `void main()`
 
-### agent_control_panel_cost_test.dart  (394 Z.)
+### agent_control_panel_cost_test.dart  (387 Z.)
 - `AgentsAgent _agent()`
 - `AgentControlSnapshot _withCost(Map<String, dynamic>? cost)`
 - `void main()`
 
-### agent_control_panel_test.dart  (462 Z.)
+### agent_control_panel_test.dart  (455 Z.)
 - const: _fullSnapshot
 - `AgentsAgent _agent({bool onHost = true})`
 - `Future<void> _pump( WidgetTester tester, AgentControlSource source, { AgentsAgent? agent, })`
 - `void main()`
-- `class _ThrowingControlSource implements AgentControlSource`  — Wraps a source and refuses the skill toggle, to prove the failure surfaces.
-  - snapshotFor refresh setSkillEnabled
 
 ### agent_details_overview_test.dart  (211 Z.)
 - `AgentsAutomation _routine( String id, { String session = 'amber-main', String state = 'active', String kind = 'schedule' …)`
@@ -1658,7 +1754,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Widget _host(Widget child, {Brightness brightness = Brightness.light})`
 - `void main()`
 
-### agent_roster_view_test.dart  (1021 Z.)
+### agent_roster_view_test.dart  (1022 Z.)
 - `void main()`
 
 ### agent_run_views_test.dart  (288 Z.)
@@ -1668,8 +1764,13 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Widget _host(Widget child)`
 - `void main()`
 
-### agent_telegram_section_test.dart  (479 Z.)
-- `void main()`  — Bead chuk_chat-02s5: the app side of a coworker's Telegram channel. The
+### agent_template_picker_test.dart  (253 Z.)
+- `class _Harness`  — Opens the picker from a button and keeps what it returned.
+  - result closed locale
+- `void _size(WidgetTester tester, Size size)`
+- `Future<_Harness> _open( WidgetTester tester, { Size size = const Size(360, 800), String locale = 'en', double textScale …)`
+- `Finder _key(String key)`
+- `void main()`
 
 ### agents_action_approval_card_test.dart  (486 Z.)
 - const: _allOptions
@@ -1680,6 +1781,9 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Widget _app(Widget child, {Locale locale = const Locale('en')})`
 - `AgentsRelayApprovalRequest _request({ String id = 'ap-1', String actionClass = 'browser_act', List<String> options = _al …)`
 - `void main()`
+
+### agents_approval_row_test.dart  (369 Z.)
+- `void main()`  — bead chuk_chat-aupy: an answered approval stays in the thread as one
 
 ### agents_cold_start_test.dart  (399 Z.)
 - const: _guard
@@ -1696,7 +1800,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void _silenceUnrelatedPlugins(WidgetTester tester)`  — The imported screen constructs an [AudioRecorder] on mount, which calls the
 - `Future<void> _settle(WidgetTester tester)`  — [WidgetTester.pumpAndSettle] never returns here: the thread view arms an
 
-### agents_desktop_shell_test.dart  (661 Z.)
+### agents_desktop_shell_test.dart  (665 Z.)
 - `class _MemoryStore implements AgentsSecureKeyValueStore`
   - read write delete map
 - `class _FailingRefreshSource extends FakeAgentControlSource`  — A host that answers the panel's first look and then fails a refresh.
@@ -1707,7 +1811,10 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
   - createAgent
 - `void main()`
 
-### agents_live_status_test.dart  (247 Z.)
+### agents_live_dots_test.dart  (207 Z.)
+- `void main()`  — bead chuk_chat-hfru: while an Agents turn runs, the thread shows the
+
+### agents_live_status_test.dart  (256 Z.)
 - `Widget _app(Widget child, {Locale locale = const Locale('en')})`
 - `void main()`  — The status line above a running Agents answer (research item 4): it says
 
@@ -1727,7 +1834,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
   - current refresh signedIn
 - `class _HangingController extends FakeRelayController`  — A reconnect that never finishes: the link stays "connecting".
   - reconnect
-- `class _EmptyHostRoster extends LocalAgentRosterSource`  — A host that lists no agents: pairing does not bring a host coworker.
+- `class _EmptyHostRoster extends LocalAgentRosterSource`  — A host that lists no agents: pairing does not bring a host agent.
   - replaceableLabels
 - `void main()`
 
@@ -1775,7 +1882,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Widget _plainChat(String text, {double width = 760})`  — chuk_chat's plain desktop transcript around one answer: a selection area,
 - `void main()`
 
-### agents_thread_view_notifications_test.dart  (201 Z.)
+### agents_thread_view_notifications_test.dart  (208 Z.)
 - `class _FakeSessionSource implements AccountSessionSource`
   - current refresh
 - `class _NoopSaver implements AgentFileSaver`
@@ -1803,7 +1910,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Widget _app(Widget child)`
 - `void main()`  — The visible run must end when the host says the run ended, whatever else the
 
-### agents_thread_view_test.dart  (1457 Z.)
+### agents_thread_view_test.dart  (1539 Z.)
 - `class _MemoryStore implements AgentsSecureKeyValueStore`  — In-memory secure backend so the store round-trips with no platform channel.
   - read write delete map
 - `class _NoopSaver implements AgentFileSaver`  — A saver that never touches a filesystem.
@@ -1813,6 +1920,8 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Widget _app(Widget child)`  — The app shell the imported chat screen expects around it: localisations and
 - `void main()`
 - `Future<void> _flushIdleTimers(WidgetTester tester)`  — The imported chat screen schedules a 60 s idle-close timer for its
+- `class _ProbingRelayController extends FakeRelayController implements AgentsLinkProbe`  — A fake whose socket can be asked whether it still answers.
+  - answers probes timeout
 
 ### agents_user_browser_test.dart  (747 Z.)
 - `Map<String, dynamic> _block({ bool installed = true, bool connected = true, bool inUse = false, Map<String, dynamic>? in …)`
@@ -1838,9 +1947,9 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Future<void> _pumpAnchor( WidgetTester tester, { required double keyboardInset, required Alignment anchorAt, int itemCou …)`
 - `void main()`
 
-### answer_blocks_test.dart  (284 Z.)
+### answer_blocks_test.dart  (470 Z.)
 - const: _text _bubble
-- `Future<void> _pump( WidgetTester tester, String markdown, { double width = 360, double textScale = 1, })`
+- `Future<void> _pump( WidgetTester tester, String markdown, { double width = 360, double textScale = 1, ValueChanged<Strin …)`
 - `String _allText(WidgetTester tester)`  — Every RichText's plain text, joined. Finds text inside nested messages.
 - `void main()`
 
@@ -1879,10 +1988,12 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### automation_editor_sheet_test.dart  (348 Z.)
 - `void main()`
 
-### browser_view_page_test.dart  (203 Z.)
+### browser_view_page_test.dart  (279 Z.)
 - `class _CountingRelay extends FakeRelayController`  — Counts the view start/stop the page sends the executor.
   - startBrowserView stopBrowserView starts stops lastSessionKey
 - `void main()`
+- `double _luminance(Color c)`
+- `double _contrast(Color a, Color b)`
 
 ### chart_widget_test.dart  (394 Z.)
 - `Future<void> _pumpChart(WidgetTester tester, Map<String, dynamic> data)`
@@ -1928,10 +2039,16 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Future<void> _pump( WidgetTester tester, { ChatMode mode = ChatMode.thinking, ValueChanged<ChatMode>? onModeChanged, Val …)`
 - `void main()`
 
+### chuk_table_classic_stacked_test.dart  (108 Z.)
+- const: _shopTable
+- `Future<void> _pump( WidgetTester tester, double width, { ValueChanged<String>? onTapLink, })`
+- `bool _tapLink(WidgetTester tester, String needle)`  — Taps the link span whose text contains [needle].
+- `void main()`
+
 ### chuk_table_golden_test.dart  (323 Z.)
 - const: _shots
 - `Map<String, dynamic> songs({int rows = 2})`  — The songs table, as the `chat_document` tool stores one: the reel it came
-- `Map<String, dynamic> labelledSongs()`  — A table the coworker labelled itself: the cell carries `[label](url)`, so
+- `Map<String, dynamic> labelledSongs()`  — A table the agent labelled itself: the cell carries `[label](url)`, so
 - `ParsedTable prices()`  — A price comparison — numbers on the right, a highlighted cell, prose in the
 - `ParsedTable wideGrid()`  — Seven columns at phone width: the case that has to pan.
 - `Future<void> _shoot( WidgetTester tester, Widget child, String name, { Brightness brightness = Brightness.dark, double w …)`
@@ -1956,14 +2073,6 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void main()`
 
 ### composer_recording_row_test.dart  (96 Z.)
-- `void main()`
-
-### coworker_template_picker_test.dart  (253 Z.)
-- `class _Harness`  — Opens the picker from a button and keeps what it returned.
-  - result closed locale
-- `void _size(WidgetTester tester, Size size)`
-- `Future<_Harness> _open( WidgetTester tester, { Size size = const Size(360, 800), String locale = 'en', double textScale …)`
-- `Finder _key(String key)`
 - `void main()`
 
 ### diff_widget_test.dart  (62 Z.)
@@ -2001,6 +2110,14 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Future<void> _settleCodeBlocks(WidgetTester tester)`  — Lets an `_AsyncCodeBlock` finish: the 50 ms highlight debounce and then the
 - `List<TextSpan> _leafSpans(WidgetTester tester)`  — Every leaf `TextSpan` in the widget tree, with its resolved style.
 - `TextSpan _span(WidgetTester tester, String text)`  — The leaf span whose text is exactly [text].
+- `void main()`
+
+### markdown_table_list_bugs_test.dart  (231 Z.)
+- const: kWideGermanTable kGoetheItem _tableScroller
+- `Future<void> _pump(WidgetTester tester, String text, {double width = 360})`
+- `List<(String, bool)> _runs(WidgetTester tester)`  — Every piece of text on screen, with the bold state of each run.
+- `RenderParagraph _paragraphWith(WidgetTester tester, String text)`
+- `int _lines(RenderParagraph p)`  — Lines a laid-out paragraph takes, from its height and one line's height.
 - `void main()`
 
 ### measure_size_test.dart  (57 Z.)
@@ -2065,7 +2182,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Widget wrap(Widget child)`
 - `void main()`
 
-### messenger_shell_test.dart  (2149 Z.)
+### messenger_shell_test.dart  (2190 Z.)
 - `class _MemoryStore implements AgentsSecureKeyValueStore`
   - read write delete map
 - `class _FakeRelayController implements AgentsRelayController`  — A controller the test drives: it can report itself paired, and it records
@@ -2127,7 +2244,17 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Widget _host({required List<Widget> children})`
 - `void main()`
 
+### status_answer_block_test.dart  (144 Z.)
+- const: _payments
+- `Future<void> _pump( WidgetTester tester, String markdown, { required double width, double textScale = 1, bool dark = fal …)`
+- `String _allText(WidgetTester tester)`
+- `void main()`
+
 ### turn_status_test.dart  (238 Z.)
+- `void main()`
+
+### voice_message_bubble_test.dart  (135 Z.)
+- const: _transcript
 - `void main()`
 
 ### web_search_sources_test.dart  (40 Z.)

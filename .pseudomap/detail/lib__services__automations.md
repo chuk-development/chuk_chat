@@ -1,7 +1,7 @@
 # lib/services/automations · Signaturen
 
 ## lib/services/automations/agents_automation.dart  (490 Z.)
-- L13 `@immutable class AgentsAutomation`  — One automation of a coworker: a schedule (cron / every / at) or a watcher
+- L13 `@immutable class AgentsAutomation`  — One automation of an agent: a schedule (cron / every / at) or a watcher
   - L15 `const AgentsAutomation({ required this.id, required this.sessionKey, required this.kind, required this.name, required this.state, this.spec = const <String, dynamic>{}, this.prompt = '', this.nextFireAt, this.lastFiredAt, this.fireCount = 0, this.suppressedCount = 0, this.lastError, this.logPath, this.createdAt, this.notify = 'always', this.lastSummary, this.lastResultAt, this.unchangedCount = 0, })`
   - L37 `final String id`  — The host's short handle (`ab12cd34`).
   - L40 `final String sessionKey`  — The conversation that owns it. An agent only ever sees its own.
@@ -78,7 +78,7 @@
   - L19 `AutomationsSource._()`
   - L21 `static final AutomationsSource instance = AutomationsSource._()`
   - L23 `final Map<String, AgentsAutomation> _byId = <String, AgentsAutomation>{}`
-  - L26 `final Map<String, String> _names = <String, String>{}`  — The host's coworker names, by session key (`agent_list`).
+  - L26 `final Map<String, String> _names = <String, String>{}`  — The host's agent names, by session key (`agent_list`).
   - L27 `StreamSubscription<AgentsRelayInbound>? _sub`
   - L30 `final Set<String> _listed = <String>{}`  — Sessions whose list the host has answered at least once.
   - L31 `bool _listedAll = false`
@@ -88,7 +88,7 @@
   - L68 `static String identityOf(AgentsAutomation a)`  — What makes two rows the same automation: the same thread, the same kind,
   - L71 `static bool _better(AgentsAutomation a, AgentsAutomation b)`
   - L77 `List<AgentsAutomation> forSession(String sessionKey)`  — The automations of one conversation, newest first.
-  - L86 `String coworkerName(String sessionKey)`  — The name to put over a group of rows: what the rest of the app calls that
+  - L86 `String agentName(String sessionKey)`  — The name to put over a group of rows: what the rest of the app calls that
   - L106 `List<AgentsAutomation> liveForSession(String sessionKey)`  — The active and paused ones of one conversation: what a thread's strip
   - L109 `AgentsAutomation? byId(String id)`
   - L113 `bool listed(String? sessionKey)`  — True once the host answered a list request for [sessionKey] (or for the
@@ -104,7 +104,7 @@
   - L209 `final Map<String, String> _quietRuns = <String, String>{}`  — Runs of an `on_change` automation that found nothing new: run id →
   - L214 `String? quietRunSummary(String runId)`  — The summary of a quiet run (an `on_change` run that reported no
   - L217 `bool isQuietRun(String runId)`  — True when [runId] was an `on_change` run that found nothing new.
-  - L221 `Map<String, String> get coworkerNames`  — The coworkers the app knows by name (`agent_list`), session key → name.
+  - L221 `Map<String, String> get agentNames`  — The agents the app knows by name (`agent_list`), session key → name.
   - L226 `Future<AutomationSaveResult> create({ required String sessionKey, required String kind, required Object spec, required String prompt, String? name, bool notifyOnChange = false, })`  — Sends `automation_create`. Completes with the host's answer, or a
   - L249 `Future<AutomationSaveResult> update(Map<String, dynamic> frame)`  — Sends `automation_update` with only the keys of [frame]
   - L258 `Future<AutomationSaveResult> _save( Future<void> Function(AgentsAutomationEditControl control, String requestId) send, )`  — Sends one create or update tagged with a fresh `request_id` (echoed by

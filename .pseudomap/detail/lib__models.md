@@ -1,7 +1,7 @@
 # lib/models · Signaturen
 
 ## lib/models/agents_agent.dart  (144 Z.)
-- L15 `enum AgentActivity`  — What a coworker is doing, as far as the app can actually tell.
+- L15 `enum AgentActivity`  — What an agent is doing, as far as the app can actually tell.
   - L17 `working`
   - L20 `waiting`
   - L23 `scheduled`
@@ -11,17 +11,17 @@
   - L39 `final String title`
   - L40 `final DateTime? lastActivity`
   - L42 `AgentsThreadInfo copyWith({String? title, DateTime? lastActivity})`
-- L51 `@immutable class AgentsAgent`  — One coworker.
+- L51 `@immutable class AgentsAgent`  — One agent.
   - L53 `const AgentsAgent({ required this.id, required this.name, required this.threads, this.role, this.brief, this.schedule, this.attachmentNames = const <String>[], this.onHost = false, this.knownToHost = false, this.running = false, this.lastActivity, })`
   - L67 `final String id`
   - L68 `final String name`
-  - L74 `final String? role`  — An optional short role the user gave the coworker — "researcher",
+  - L74 `final String? role`  — An optional short role the user gave the agent — "researcher",
   - L78 `final String? brief`  — The standing job the user gave it at onboarding (§4). Null when the user
   - L82 `final ScheduleSpec? schedule`  — A schedule the user set in the app. It is not installed on the host yet —
   - L87 `final List<String> attachmentNames`  — Names of files the user attached at onboarding. Only the names: the
   - L91 `final bool onHost`  — True only for the agent that really runs on the paired host. False for an
-  - L98 `final bool knownToHost`  — True once the paired host listed this coworker in its `agent_list`: the
-  - L102 `bool get runsOnHost`  — The coworker runs on the host: it is the host's own, or the host listed
+  - L98 `final bool knownToHost`  — True once the paired host listed this agent in its `agent_list`: the
+  - L102 `bool get runsOnHost`  — The agent runs on the host: it is the host's own, or the host listed
   - L105 `final bool running`  — A run is in flight for this agent right now.
   - L109 `final DateTime? lastActivity`  — The last time anything happened in one of its threads, as observed by this
   - L111 `final List<AgentsThreadInfo> threads`
@@ -29,7 +29,7 @@
   - L119 `AgentsAgent copyWith({ String? name, String? role, String? brief, ScheduleSpec? schedule, List<String>? attachmentNames, bool? onHost, bool? knownToHost, bool? running, DateTime? lastActivity, List<AgentsThreadInfo>? threads, })`
 
 ## lib/models/agents_room.dart  (157 Z.)
-- L15 `@immutable class AgentsRoomMember`  — One coworker in a room: the agent id the app tracks and the handle it is
+- L15 `@immutable class AgentsRoomMember`  — One agent in a room: the agent id the app tracks and the handle it is
   - L17 `const AgentsRoomMember({required this.agentId, required this.handle})`
   - L19 `final String agentId`
   - L20 `final String handle`
@@ -40,7 +40,7 @@
   - L44 `final String id`
   - L45 `final String name`
   - L46 `final List<AgentsRoomMember> members`
-  - L52 `final bool agentToAgent`  — Whether the coworkers may pull each other in by writing `@handle`
+  - L52 `final bool agentToAgent`  — Whether the agents may pull each other in by writing `@handle`
   - L55 `List<String> get handles`  — The members' handles, in room order — the "everyone speaks" sequence.
   - L57 `AgentsRoom copyWith({ String? name, List<AgentsRoomMember>? members, bool? agentToAgent, })`
 - L71 `@immutable class AgentsRoomDraft`  — What the create-room form produces: a name and the chosen members. It is not
@@ -169,7 +169,7 @@
   - L193 `final String newStr`
   - L195 `static ArtifactEdit fromMap(Map<String, dynamic> map)`
 
-## lib/models/chat_message.dart  (277 Z.)
+## lib/models/chat_message.dart  (306 Z.)
 - L12 `enum ChatMessageStatus`  — Delivery status of a chat message in the local queue/UI.
   - L12 `sent`
   - L12 `pending`
@@ -179,36 +179,39 @@
 - L32 `int? parseFlexibleInt(dynamic value)`  — Parse an int that may arrive as an int, a num, or a String — the UI map
 - L39 `String? _statusToString(ChatMessageStatus? status)`
 - L54 `class ChatMessage`  — Represents a single message in a chat.
-  - L55 `ChatMessage({ required this.role, required this.text, this.reasoning, this.replyContext, this.images, this.imageMetas, this.imageCostEur, this.imageGeneratedAt, this.attachments, this.attachedFilesJson, this.toolCalls, this.contentBlocks, this.modelId, this.provider, this.status, this.queueId, this.messageId, this.sentAt, this.startedAt, this.generationMs, this.variants, this.activeVariant, })`
-  - L80 `factory ChatMessage.fromJson(Map<String, dynamic> json)`
-  - L107 `final String role`
-  - L108 `final String text`
-  - L109 `final String? reasoning`
-  - L110 `final String? replyContext`
-  - L111 `final String? images`
-  - L116 `final String? imageMetas`  — JSON-encoded list of per-image metadata objects aligned with [images].
-  - L117 `final String? imageCostEur`
-  - L118 `final String? imageGeneratedAt`
-  - L119 `final String? attachments`
-  - L120 `final String? attachedFilesJson`
-  - L121 `final String? toolCalls`
-  - L126 `final String? contentBlocks`  — JSON-encoded list of [ContentBlock] objects representing the ordered
-  - L128 `final String? modelId`
-  - L129 `final String? provider`
-  - L133 `final ChatMessageStatus? status`  — Local-only delivery status. `null` is treated as [ChatMessageStatus.sent]
-  - L137 `final String? queueId`  — Optional offline-queue id linking this user message to its pending entry
-  - L146 `final String? messageId`  — Stable id assigned to an assistant message at placeholder creation time.
-  - L150 `final String? sentAt`  — Actual message timestamp (ISO-8601), independent of the run-duration
-  - L155 `final String? startedAt`  — When the request for this answer went out, ISO-8601. Stamped on the
-  - L160 `final String? generationMs`  — How long the turn took, in whole milliseconds, written down when the
-  - L170 `final String? variants`  — JSON-encoded `List` of answer-variant snapshots for a regenerated
-  - L174 `final int? activeVariant`  — Index into [variants] of the answer currently shown at top level.
-  - L178 `Duration? get workedFor`  — [generationMs] as a duration, or null when it was never recorded or
-  - L185 `String get sender`
-  - L188 `ChatMessageStatus get effectiveStatus`  — Effective status — defaults to [ChatMessageStatus.sent] for legacy rows.
-  - L193 `String? get statusString`  — Wire string for [status] (`null` when unset), matching the persisted
-  - L195 `ChatMessage copyWith({ String? role, String? text, String? reasoning, String? replyContext, String? images, String? imageMetas, String? imageCostEur, String? imageGeneratedAt, String? attachments, String? attachedFilesJson, String? toolCalls, String? contentBlocks, String? modelId, String? provider, ChatMessageStatus? status, String? queueId, String? messageId, String? sentAt, String? startedAt, String? generationMs, String? variants, int? activeVariant, })`
-  - L245 `Map<String, dynamic> toJson()`
+  - L55 `ChatMessage({ required this.role, required this.text, this.reasoning, this.voicePlayback, this.replyContext, this.images, this.imageMetas, this.imageCostEur, this.imageGeneratedAt, this.attachments, this.attachedFilesJson, this.toolCalls, this.contentBlocks, this.modelId, this.provider, this.status, this.queueId, this.messageId, this.sentAt, this.startedAt, this.generationMs, this.variants, this.activeVariant, this.inputMode, this.voiceDurationMs, })`
+  - L83 `factory ChatMessage.fromJson(Map<String, dynamic> json)`
+  - L113 `final String role`
+  - L114 `final String text`
+  - L115 `final String? reasoning`
+  - L118 `final String? voicePlayback`  — Encrypted voice playback metadata; [text] contains only what was heard.
+  - L119 `final String? replyContext`
+  - L120 `final String? images`
+  - L125 `final String? imageMetas`  — JSON-encoded list of per-image metadata objects aligned with [images].
+  - L126 `final String? imageCostEur`
+  - L127 `final String? imageGeneratedAt`
+  - L128 `final String? attachments`
+  - L129 `final String? attachedFilesJson`
+  - L130 `final String? toolCalls`
+  - L135 `final String? contentBlocks`  — JSON-encoded list of [ContentBlock] objects representing the ordered
+  - L137 `final String? modelId`
+  - L138 `final String? provider`
+  - L142 `final ChatMessageStatus? status`  — Local-only delivery status. `null` is treated as [ChatMessageStatus.sent]
+  - L146 `final String? queueId`  — Optional offline-queue id linking this user message to its pending entry
+  - L155 `final String? messageId`  — Stable id assigned to an assistant message at placeholder creation time.
+  - L159 `final String? sentAt`  — Actual message timestamp (ISO-8601), independent of the run-duration
+  - L164 `final String? startedAt`  — When the request for this answer went out, ISO-8601. Stamped on the
+  - L169 `final String? generationMs`  — How long the turn took, in whole milliseconds, written down when the
+  - L179 `final String? variants`  — JSON-encoded `List` of answer-variant snapshots for a regenerated
+  - L183 `final int? activeVariant`  — Index into [variants] of the answer currently shown at top level.
+  - L189 `final String? inputMode`  — How the user wrote this message: `'voice'` when it was dictated with
+  - L192 `final String? voiceDurationMs`  — Length of the dictation in whole milliseconds, when it is known.
+  - L196 `Duration? get workedFor`  — [generationMs] as a duration, or null when it was never recorded or
+  - L203 `String get sender`
+  - L206 `ChatMessageStatus get effectiveStatus`  — Effective status — defaults to [ChatMessageStatus.sent] for legacy rows.
+  - L211 `String? get statusString`  — Wire string for [status] (`null` when unset), matching the persisted
+  - L213 `ChatMessage copyWith({ String? role, String? text, String? reasoning, String? voicePlayback, String? replyContext, String? images, String? imageMetas, String? imageCostEur, String? imageGeneratedAt, String? attachments, String? attachedFilesJson, String? toolCalls, String? contentBlocks, String? modelId, String? provider, ChatMessageStatus? status, String? queueId, String? messageId, String? sentAt, String? startedAt, String? generationMs, String? variants, int? activeVariant, String? inputMode, String? voiceDurationMs, })`
+  - L269 `Map<String, dynamic> toJson()`
 
 ## lib/models/chat_model.dart  (122 Z.)
 - L3 `class ModelItem`

@@ -9,9 +9,9 @@
   - L58 `Path getInnerPath(Rect rect, {TextDirection? textDirection})`
   - L61 `void paint(Canvas canvas, Rect rect, {TextDirection? textDirection})`
   - L63 `ShapeBorder scale(double t)`
-- L68 `Color agentAccent( BuildContext context, String agentId, { AgentProfileStore? store, })`  — The accent colour of a coworker: the picked colour, else the stable hue from
+- L68 `Color agentAccent( BuildContext context, String agentId, { AgentProfileStore? store, })`  — The accent colour of an agent: the picked colour, else the stable hue from
 - L95 `int _paletteIndex(String agentId)`  — A stable index into [kAgentAccents] from the agent id. Its own hash, so a
-- L105 `kAgentAccents = <Color>[ Color(0xFF2962FF), Color(0xFF7C4DFF), Color(0xFFAA00FF), Color(0xFFFF4081), Color(0xFFFF1744), `  — The palette the profile editor offers for a coworker's colour.
+- L105 `kAgentAccents = <Color>[ Color(0xFF2962FF), Color(0xFF7C4DFF), Color(0xFFAA00FF), Color(0xFFFF4081), Color(0xFFFF1744), `  — The palette the profile editor offers for an agent's colour.
 - L124 `class ExpressiveFace extends StatelessWidget`  — A face for an identity the caller only knows as an id and a label — a room
   - L125 `const ExpressiveFace({ super.key, required this.id, required this.label, this.size = 32, this.store, this.dimmed = false, })`
   - L134 `final String id`
@@ -26,7 +26,7 @@
   - L202 `final double size`
   - L203 `final bool showPresence`
   - L206 `final AgentProfileStore? store`  — Injectable for tests; defaults to the app-wide store.
-  - L209 `final bool dimmed`  — A hidden coworker is shown faded in the "show hidden" list.
+  - L209 `final bool dimmed`  — A hidden agent is shown faded in the "show hidden" list.
   - L212 `final AgentProfile? profileOverride`  — An unsaved editor preview; normal app surfaces always read the store.
   - L215 `static Color? presenceColor(AgentActivity activity)`  — The presence dot colour for an activity, or null for no dot.
   - L227 `Widget build(BuildContext context)`
@@ -34,7 +34,7 @@
 
 ## lib/ui/expressive/agent_status.dart  (256 Z.)
 - L35 `String humanToolLabel(String rawName)`  — What one running tool is called, in words a reader recognises. The host's
-- L53 `String? workInProgressLabel(AgentsAgent agent, AgentsRun? run)`  — The words for the status line, or null while the coworker is simply idle
+- L53 `String? workInProgressLabel(AgentsAgent agent, AgentsRun? run)`  — The words for the status line, or null while the agent is simply idle
 - L80 `kStatusDotSizeFactor = 0.55`  — The dot's diameter as a fraction of the font size it sits next to.
 - L83 `kStatusDotGap = 6`  — The single gap between the dot and its words.
 - L103 `class StatusDot extends StatelessWidget`  — The presence dot of a status line, on ONE optical line with its words.
@@ -58,7 +58,7 @@
   - L172 `final AgentsRelayLink? link`  — The bound transport, for the reachability half of the line. Injectable for
   - L175 `Widget build(BuildContext context)`
   - L199 `Widget _line( BuildContext context, AgentsRunLedger source, { required bool paired, })`
-  - L253 `String _defaultSessionKey()`  — A coworker has one permanent session, and its key is the thread's key.
+  - L253 `String _defaultSessionKey()`  — An agent has one permanent session, and its key is the thread's key.
 
 ## lib/ui/expressive/bubble_kind.dart  (68 Z.)
 - L22 `enum AgentBubbleKind`
@@ -66,7 +66,7 @@
   - L22 `work`
   - L22 `delivery`
   - L22 `problem`
-- L25 `@immutable class AgentBubbleColors`  — The fill and the foreground for a coworker's bubble.
+- L25 `@immutable class AgentBubbleColors`  — The fill and the foreground for an agent's bubble.
   - L27 `const AgentBubbleColors(this.fill, this.onFill)`
   - L29 `final Color fill`
   - L30 `final Color onFill`
@@ -91,7 +91,7 @@
 - L74 `BorderRadius bubbleRadius( bool isMine, BubblePosition pos, { double big = kBubbleRadiusBig, double small = kBubbleRadiusSmall, })`  — The corner radii for a bubble at [pos]. [isMine] flips which side carries
 - L97 `String formatClock(int seconds)`  — Formats seconds as `m:ss` (75 → "1:15"). Used for voice clips.
 
-## lib/ui/expressive/connected_group.dart  (187 Z.)
+## lib/ui/expressive/connected_group.dart  (186 Z.)
 - L21 `class ConnectedGroup extends StatelessWidget`
   - L22 `const ConnectedGroup({ super.key, required this.labels, required this.selected, required this.onSelected, this.badges = const <int, int>{}, this.margin = const EdgeInsets.symmetric(horizontal: 16), this.height, })`
   - L32 `final List<String> labels`
@@ -136,7 +136,7 @@
 ## lib/ui/expressive/face_image_stub.dart  (8 Z.)
 - L7 `ImageProvider<Object>? faceImageProvider(String? path)`
 
-## lib/ui/expressive/feedback.dart  (174 Z.)
+## lib/ui/expressive/feedback.dart  (171 Z.)
 - L12 `void pillToast(BuildContext context, String message, {IconData? icon})`  — A floating pill toast — the expressive replacement for a flat SnackBar.
 - L48 `Future<T?> expressiveSheet<T>( BuildContext context, { required String title, required Widget child, })`  — An expressive modal sheet: 36 px top corners, a drag handle, generous pad.
 - L92 `class SheetAction extends StatelessWidget`  — A big tappable action row for an expressive sheet.
@@ -155,83 +155,81 @@
 ## lib/ui/expressive/icon_map.dart  (14 Z.)
 - reicht weiter: 'package:chuk_chat/widgets/icons/icon_map.dart'
 
-## lib/ui/expressive/motion.dart  (530 Z.)
+## lib/ui/expressive/motion.dart  (511 Z.)
 - L28 `kExpressiveDecelerate = Cubic(0.05, 0.7, 0.1, 1.0)`  — The bouncy spatial spring used for press and selection feedback.
 - L32 `kExpressiveShort = Duration(milliseconds: 180)`  — The matching duration. Long enough to be seen, short enough not to be
 - L34 `kSpatialSpring = SpringDescription( mass: 1, stiffness: 420, damping: 22, )`
 - L41 `kEffectSpring = SpringDescription( mass: 1, stiffness: 600, damping: 26, )`  — A snappier spring for small effects (icons, indicators).
 - L48 `class MorphTap extends StatefulWidget`  — A surface that springs and morphs on press. Wrap ANY tappable element.
-  - L49 `const MorphTap({ super.key, required this.child, this.onTap, this.onLongPress, this.color, this.pressedColor, this.shape = const StadiumBorder(), this.pressedShape, this.pressedOutline, this.pressedOutlineWidth = 1.5, this.padding = EdgeInsets.zero, this.pressedScale = 0.93, this.instant = false, this.hitPadding = EdgeInsets.zero, }) : assert( hitPadding == EdgeInsets.zero || instant, 'hitPadding is the area the Listener covers; only instant taps use it', )`
-  - L69 `final Widget child`
-  - L70 `final VoidCallback? onTap`
-  - L71 `final VoidCallback? onLongPress`
-  - L72 `final Color? color`
-  - L75 `final Color? pressedColor`  — The colour the surface fades toward while held. Null keeps [color].
-  - L76 `final ShapeBorder shape`
-  - L80 `final ShapeBorder? pressedShape`  — The shape the surface morphs toward while held. Defaults to a blockier
-  - L86 `final Color? pressedOutline`  — An outline drawn in the current shape while the surface is held. A
-  - L87 `final double pressedOutlineWidth`
-  - L88 `final EdgeInsetsGeometry padding`
-  - L89 `final double pressedScale`
-  - L105 `final bool instant`  — Commit the tap on pointer DOWN instead of on a recognised tap.
-  - L110 `final EdgeInsets hitPadding`  — Transparent room around the surface that still takes the press. Only an
-  - L113 `State<MorphTap> createState()`
-- L116 `class _MorphTapState extends State<MorphTap> with SingleTickerProviderStateMixin`
-  - L118 `late final AnimationController _c = AnimationController.unbounded( vsync: this, value: 0, )`
-  - L123 `ShapeBorder get _pressed`
-  - L133 `bool _reducedMotion = false`  — Reduced motion: the press still happens, it just does not travel.
-  - L137 `int? _pointer`  — The pointer that owns the press in [MorphTap.instant] mode. A second
-  - L139 `void _instantDown(PointerDownEvent event)`
-  - L150 `void _instantRelease(PointerEvent event)`
-  - L159 `void didChangeDependencies()`
-  - L169 `void dispose()`
-  - L174 `void _press(bool down)`
-  - L191 `Widget build(BuildContext context)`
-- L262 `class _PressOutlinePainter extends CustomPainter`  — Draws [MorphTap.pressedOutline] along the shape the surface currently has.
-  - L263 `const _PressOutlinePainter({ required this.shape, required this.color, required this.width, })`
-  - L269 `final ShapeBorder shape`
-  - L270 `final Color color`
-  - L271 `final double width`
-  - L274 `void paint(Canvas canvas, Size size)`
-  - L289 `bool shouldRepaint(_PressOutlinePainter old)`
-- L294 `class ExpressiveButton extends StatelessWidget`  — A fully rounded button that springs and morphs on press.
-  - L295 `const ExpressiveButton({ super.key, required this.label, required this.onTap, this.icon, this.color, this.onColor, this.tonal = false, this.dense = false, })`
-  - L306 `final IconData? icon`
-  - L307 `final String label`
-  - L308 `final VoidCallback onTap`
-  - L309 `final Color? color`
-  - L310 `final Color? onColor`
-  - L311 `final bool tonal`
-  - L315 `final bool dense`  — The desktop size (docs/DESIGN.md §14.8): a 36 px button for a dialog
-  - L318 `Widget build(BuildContext context)`
-- L358 `class ExpressiveIconButton extends StatelessWidget`  — The expressive icon target: a soft squircle that squashes a touch more
-  - L359 `const ExpressiveIconButton({ super.key, this.icon, this.hugeIcon, required this.onTap, this.color, this.onColor, this.size = 48, this.width, this.tooltip, this.semanticsId, this.parked = false, })`
-  - L375 `final IconData? icon`  — A Material glyph. Kept for the screens that have not been moved over yet;
-  - L378 `final HugeIconData? hugeIcon`  — The app's own set (docs/DESIGN.md). Wins when both are given.
-  - L381 `final VoidCallback? onTap`  — Null disables the button.
-  - L382 `final Color? color`
-  - L383 `final Color? onColor`
-  - L384 `final double size`
-  - L389 `final double? width`  — The painted width. Null keeps the square target; a wider value makes the
-  - L391 `final String? tooltip`
-  - L392 `final String? semanticsId`
-  - L396 `final bool parked`  — A target for a feature that is not available yet: it looks disabled and it
-  - L399 `Widget build(BuildContext context)`
-- L456 `class ExpressiveLoader extends StatefulWidget`  — The expressive spinner: a cookie blob that turns while its scallop depth
-  - L457 `const ExpressiveLoader({super.key, this.size = 48, this.color})`
-  - L459 `final double size`
-  - L460 `final Color? color`
-  - L463 `State<ExpressiveLoader> createState()`
-- L466 `class _ExpressiveLoaderState extends State<ExpressiveLoader> with SingleTickerProviderStateMixin`
-  - L468 `late final AnimationController _c = AnimationController( vsync: this, duration: const Duration(milliseconds: 1400), )..repeat()`
-  - L474 `void dispose()`
-  - L480 `Widget build(BuildContext context)`
-- L495 `class _BlobPainter extends CustomPainter`
-  - L496 `_BlobPainter({required this.t, required this.color})`
-  - L498 `final double t`
-  - L499 `final Color color`
-  - L502 `void paint(Canvas canvas, Size size)`
-  - L528 `bool shouldRepaint(_BlobPainter old)`
+  - L49 `const MorphTap({ super.key, required this.child, this.onTap, this.onLongPress, this.color, this.pressedColor, this.shape = const StadiumBorder(), this.pressedOutline, this.pressedOutlineWidth = 1.5, this.padding = EdgeInsets.zero, this.pressedScale = 0.93, this.instant = false, this.hitPadding = EdgeInsets.zero, }) : assert( hitPadding == EdgeInsets.zero || instant, 'hitPadding is the area the Listener covers; only instant taps use it', )`
+  - L68 `final Widget child`
+  - L69 `final VoidCallback? onTap`
+  - L70 `final VoidCallback? onLongPress`
+  - L71 `final Color? color`
+  - L74 `final Color? pressedColor`  — The colour the surface fades toward while held. Null keeps [color].
+  - L75 `final ShapeBorder shape`
+  - L81 `final Color? pressedOutline`  — An outline drawn in the current shape while the surface is held. A
+  - L82 `final double pressedOutlineWidth`
+  - L83 `final EdgeInsetsGeometry padding`
+  - L84 `final double pressedScale`
+  - L100 `final bool instant`  — Commit the tap on pointer DOWN instead of on a recognised tap.
+  - L105 `final EdgeInsets hitPadding`  — Transparent room around the surface that still takes the press. Only an
+  - L108 `State<MorphTap> createState()`
+- L111 `class _MorphTapState extends State<MorphTap> with SingleTickerProviderStateMixin`
+  - L113 `late final AnimationController _c = AnimationController.unbounded( vsync: this, value: 0, )`
+  - L119 `bool _reducedMotion = false`  — Reduced motion: the press still happens, it just does not travel.
+  - L123 `int? _pointer`  — The pointer that owns the press in [MorphTap.instant] mode. A second
+  - L125 `void _instantDown(PointerDownEvent event)`
+  - L136 `void _instantRelease(PointerEvent event)`
+  - L145 `void didChangeDependencies()`
+  - L155 `void dispose()`
+  - L160 `void _press(bool down)`
+  - L177 `Widget build(BuildContext context)`
+- L250 `class _PressOutlinePainter extends CustomPainter`  — Draws [MorphTap.pressedOutline] along the shape the surface currently has.
+  - L251 `const _PressOutlinePainter({ required this.shape, required this.color, required this.width, })`
+  - L257 `final ShapeBorder shape`
+  - L258 `final Color color`
+  - L259 `final double width`
+  - L262 `void paint(Canvas canvas, Size size)`
+  - L277 `bool shouldRepaint(_PressOutlinePainter old)`
+- L282 `class ExpressiveButton extends StatelessWidget`  — A fully rounded button that springs and morphs on press.
+  - L283 `const ExpressiveButton({ super.key, required this.label, required this.onTap, this.icon, this.color, this.onColor, this.tonal = false, this.dense = false, })`
+  - L294 `final IconData? icon`
+  - L295 `final String label`
+  - L296 `final VoidCallback onTap`
+  - L297 `final Color? color`
+  - L298 `final Color? onColor`
+  - L299 `final bool tonal`
+  - L303 `final bool dense`  — The desktop size (docs/DESIGN.md §14.8): a 36 px button for a dialog
+  - L306 `Widget build(BuildContext context)`
+- L346 `class ExpressiveIconButton extends StatelessWidget`  — The expressive icon target: a soft squircle that squashes a touch more
+  - L347 `const ExpressiveIconButton({ super.key, this.icon, this.hugeIcon, required this.onTap, this.color, this.onColor, this.size = 48, this.width, this.tooltip, this.semanticsId, this.parked = false, })`
+  - L363 `final IconData? icon`  — A Material glyph. Kept for the screens that have not been moved over yet;
+  - L366 `final HugeIconData? hugeIcon`  — The app's own set (docs/DESIGN.md). Wins when both are given.
+  - L369 `final VoidCallback? onTap`  — Null disables the button.
+  - L370 `final Color? color`
+  - L371 `final Color? onColor`
+  - L372 `final double size`
+  - L377 `final double? width`  — The painted width. Null keeps the square target; a wider value makes the
+  - L379 `final String? tooltip`
+  - L380 `final String? semanticsId`
+  - L384 `final bool parked`  — A target for a feature that is not available yet: it looks disabled and it
+  - L387 `Widget build(BuildContext context)`
+- L437 `class ExpressiveLoader extends StatefulWidget`  — The expressive spinner: a cookie blob that turns while its scallop depth
+  - L438 `const ExpressiveLoader({super.key, this.size = 48, this.color})`
+  - L440 `final double size`
+  - L441 `final Color? color`
+  - L444 `State<ExpressiveLoader> createState()`
+- L447 `class _ExpressiveLoaderState extends State<ExpressiveLoader> with SingleTickerProviderStateMixin`
+  - L449 `late final AnimationController _c = AnimationController( vsync: this, duration: const Duration(milliseconds: 1400), )..repeat()`
+  - L455 `void dispose()`
+  - L461 `Widget build(BuildContext context)`
+- L476 `class _BlobPainter extends CustomPainter`
+  - L477 `_BlobPainter({required this.t, required this.color})`
+  - L479 `final double t`
+  - L480 `final Color color`
+  - L483 `void paint(Canvas canvas, Size size)`
+  - L509 `bool shouldRepaint(_BlobPainter old)`
 
 ## lib/ui/expressive/pill_geometry.dart  (102 Z.)
 - L27 `abstract final class PillGeometry`

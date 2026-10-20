@@ -5,8 +5,27 @@
 - L16 `Session _session({required int exp, String refresh = 'r1'})`
 - L31 `void main()`
 
+## test/services/agent_composer_model_test.dart  (206 Z.)
+- L20 `_chat = 'host:alex'`
+- L21 `_pro = 'deepseek/deepseek-v4-pro-0813'`
+- L23 `class _Composer extends StatefulWidget`
+  - L24 `const _Composer({super.key, required this.agentThread})`
+  - L25 `final bool agentThread`
+  - L27 `State<_Composer> createState()`
+- L30 `class _ComposerState extends State<_Composer> with ModelProviderResolutionMixin, ChatModelSelectionMixin`
+  - L33 `String? get activeChatId`
+  - L36 `bool get skipRepeatedModelSave`
+  - L41 `Future<void> refreshSelectedModelName([String? modelId])`
+  - L43 `Future<void> refreshCustomModelName()`
+  - L45 `Future<void> refreshPickedModels()`
+  - L48 `Widget build(BuildContext context)`
+- L51 `void main()`
+
 ## test/services/api_config_base_test.dart  (26 Z.)
 - L10 `void main()`  — The model catalogue (`/v1/models_info`) is fetched from this base URL by
+
+## test/services/api_config_relay_test.dart  (133 Z.)
+- L9 `void main()`  — The Agents relay follows the configured API base, so one dart-define points
 
 ## test/services/app_mode_service_test.dart  (117 Z.)
 - L8 `void main()`
@@ -70,6 +89,18 @@
 ## test/services/chat_model_selection_service_test.dart  (147 Z.)
 - L5 `void main()`
 
+## test/services/chat_open_keeps_order_test.dart  (253 Z.)
+- L25 `oldChatId = '0a1b2c3d-0000-4000-8000-000000000001'`
+- L26 `newChatId = '0a1b2c3d-0000-4000-8000-000000000002'`
+- L27 `userId = 'user-1'`
+- L29 `oldUpdatedAt = DateTime.utc(2026, 3, 1, 12)`
+- L30 `newUpdatedAt = DateTime.utc(2026, 10, 18, 9)`
+- L34 `StoredChat storedOldChat({String? customName})`  — An old chat as the cache or the cloud gives it back: several turns, with
+- L63 `StoredChat storedNewChat()`
+- L73 `List<Map<String, dynamic>> openedMaps(StoredChat chat)`  — The maps the chat screen holds for [chat] after opening it, and hands
+- L77 `List<String> sidebarOrder()`
+- L80 `void main()`
+
 ## test/services/chat_payload_codec_test.dart  (244 Z.)
 - L17 `Map<String, dynamic> _toolTurn({String result = 'RESULT ', int repeat = 400})`  — A tool turn the way the app stores it in v2: the same tool calls (with
 - L94 `Map<String, dynamic> _v2Payload(List<Map<String, dynamic>> messages)`
@@ -131,21 +162,8 @@
 ## test/services/chat_storage_title_sync_test.dart  (56 Z.)
 - L12 `void main()`
 
-## test/services/coworker_composer_model_test.dart  (206 Z.)
-- L20 `_chat = 'host:alex'`
-- L21 `_pro = 'deepseek/deepseek-v4-pro-0813'`
-- L23 `class _Composer extends StatefulWidget`
-  - L24 `const _Composer({super.key, required this.coworkerThread})`
-  - L25 `final bool coworkerThread`
-  - L27 `State<_Composer> createState()`
-- L30 `class _ComposerState extends State<_Composer> with ModelProviderResolutionMixin, ChatModelSelectionMixin`
-  - L33 `String? get activeChatId`
-  - L36 `bool get skipRepeatedModelSave`
-  - L41 `Future<void> refreshSelectedModelName([String? modelId])`
-  - L43 `Future<void> refreshCustomModelName()`
-  - L45 `Future<void> refreshPickedModels()`
-  - L48 `Widget build(BuildContext context)`
-- L51 `void main()`
+## test/services/dictation_tracker_test.dart  (105 Z.)
+- L12 `void main()`
 
 ## test/services/encryption_service_test.dart  (702 Z.)
 - L15 `void main()`  — Tests for the core AES-GCM encryption logic used by EncryptionService.
@@ -318,10 +336,13 @@
 ## test/services/tool_call_handler_fact_check_test.dart  (193 Z.)
 - L6 `void main()`
 
-## test/services/tool_call_handler_repeated_lookup_test.dart  (393 Z.)
+## test/services/tool_call_handler_forced_final_test.dart  (309 Z.)
+- L16 `void main()`
+
+## test/services/tool_call_handler_repeated_lookup_test.dart  (409 Z.)
 - L22 `void main()`
 
-## test/services/tool_call_handler_safety_limit_test.dart  (145 Z.)
+## test/services/tool_call_handler_safety_limit_test.dart  (155 Z.)
 - L6 `void main()`
 
 ## test/services/tool_call_handler_stub_test.dart  (204 Z.)
@@ -356,11 +377,17 @@
 ## test/services/tour_key_registry_test.dart  (62 Z.)
 - L7 `void main()`
 
+## test/services/tts_audio_service_test.dart  (235 Z.)
+- L8 `void main()`
+
 ## test/services/user_scoped_cache_invalidation_test.dart  (301 Z.)
 - L16 `void main()`  — Guards the cross-user leak fix: the static caches in these services are
 
 ## test/services/user_scoped_cache_race_test.dart  (309 Z.)
 - L21 `void main()`  — The sign-out-mid-flight race: an operation starts as user A, A signs out and
+
+## test/services/user_sync_signal_service_test.dart  (167 Z.)
+- L6 `void main()`
 
 ## test/services/websocket_chat_service_test.dart  (783 Z.)
 - L24 `List<AgentsRelayInbound> _everyVariant()`  — Every inbound variant the relay can produce, so the "never a ToolCallsEvent"

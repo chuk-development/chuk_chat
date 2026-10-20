@@ -51,7 +51,7 @@
   - L380 `Widget build(BuildContext context)`
   - L393 `Widget _buildDialog(BuildContext context)`
 
-## lib/openui/components/content_layout/disclosure.dart  (611 Z.)
+## lib/openui/components/content_layout/disclosure.dart  (607 Z.)
 - part of '../content_layout.dart'
 - L15 `Widget _buildTabs(BuildContext context, OpenUiProps props)`
 - L21 `class _Tabs extends StatefulWidget`
@@ -87,46 +87,46 @@
   - L180 `final GlobalKey _selectedKey = GlobalKey()`
   - L183 `void didUpdateWidget(covariant _ScrollingTabStrip oldWidget)`
   - L201 `Widget build(BuildContext context)`
-- L262 `class _FoldHeader extends StatelessWidget`
-  - L263 `const _FoldHeader({ required this.label, required this.open, required this.onTap, required this.style, required this.padding, })`
-  - L271 `final String label`
-  - L272 `final bool open`
-  - L273 `final VoidCallback onTap`
-  - L274 `final TextStyle style`
-  - L275 `final EdgeInsets padding`
-  - L278 `Widget build(BuildContext context)`
-- L314 `Widget _foldBody({ required bool open, required List<Widget> content, required EdgeInsets padding, })`  — The body of a fold: grows and shrinks with the expressive curve.
-- L333 `Widget _buildAccordion(BuildContext context, OpenUiProps props)`
-- L339 `class _Accordion extends StatefulWidget`
-  - L340 `const _Accordion({required this.panels, required this.streaming})`
-  - L342 `final List<_Panel> panels`
-  - L343 `final bool streaming`
-  - L346 `State<_Accordion> createState()`
-- L349 `class _AccordionState extends State<_Accordion>`
-  - L350 `final _FollowStream _follow = _FollowStream()`
-  - L351 `String? _open`
-  - L353 `List<String> get _values`
-  - L356 `void initState()`
-  - L362 `void didUpdateWidget(covariant _Accordion oldWidget)`
-  - L368 `void _toggle(String value)`
-  - L376 `Widget build(BuildContext context)`
-- L425 `Widget _buildSectionBlock(BuildContext context, OpenUiProps props)`
-- L442 `class _SectionBlock extends StatefulWidget`
-  - L443 `const _SectionBlock({required this.panels, required this.streaming})`
-  - L445 `final List<_Panel> panels`
-  - L446 `final bool streaming`
-  - L449 `State<_SectionBlock> createState()`
-- L452 `class _SectionBlockState extends State<_SectionBlock>`
-  - L453 `final _FollowStream _follow = _FollowStream()`
-  - L454 `final Set<String> _open = <String>{}`
-  - L456 `List<String> get _values`
-  - L459 `void initState()`
-  - L466 `void didUpdateWidget(covariant _SectionBlock oldWidget)`
-  - L477 `void _toggle(String value)`
-  - L485 `Widget build(BuildContext context)`
-- L517 `Widget _buildSteps(BuildContext context, OpenUiProps props)`
+- L261 `class _FoldHeader extends StatelessWidget`
+  - L262 `const _FoldHeader({ required this.label, required this.open, required this.onTap, required this.style, required this.padding, })`
+  - L270 `final String label`
+  - L271 `final bool open`
+  - L272 `final VoidCallback onTap`
+  - L273 `final TextStyle style`
+  - L274 `final EdgeInsets padding`
+  - L277 `Widget build(BuildContext context)`
+- L310 `Widget _foldBody({ required bool open, required List<Widget> content, required EdgeInsets padding, })`  — The body of a fold: grows and shrinks with the expressive curve.
+- L329 `Widget _buildAccordion(BuildContext context, OpenUiProps props)`
+- L335 `class _Accordion extends StatefulWidget`
+  - L336 `const _Accordion({required this.panels, required this.streaming})`
+  - L338 `final List<_Panel> panels`
+  - L339 `final bool streaming`
+  - L342 `State<_Accordion> createState()`
+- L345 `class _AccordionState extends State<_Accordion>`
+  - L346 `final _FollowStream _follow = _FollowStream()`
+  - L347 `String? _open`
+  - L349 `List<String> get _values`
+  - L352 `void initState()`
+  - L358 `void didUpdateWidget(covariant _Accordion oldWidget)`
+  - L364 `void _toggle(String value)`
+  - L372 `Widget build(BuildContext context)`
+- L421 `Widget _buildSectionBlock(BuildContext context, OpenUiProps props)`
+- L438 `class _SectionBlock extends StatefulWidget`
+  - L439 `const _SectionBlock({required this.panels, required this.streaming})`
+  - L441 `final List<_Panel> panels`
+  - L442 `final bool streaming`
+  - L445 `State<_SectionBlock> createState()`
+- L448 `class _SectionBlockState extends State<_SectionBlock>`
+  - L449 `final _FollowStream _follow = _FollowStream()`
+  - L450 `final Set<String> _open = <String>{}`
+  - L452 `List<String> get _values`
+  - L455 `void initState()`
+  - L462 `void didUpdateWidget(covariant _SectionBlock oldWidget)`
+  - L473 `void _toggle(String value)`
+  - L481 `Widget build(BuildContext context)`
+- L513 `Widget _buildSteps(BuildContext context, OpenUiProps props)`
 
-## lib/openui/components/content_layout/media.dart  (324 Z.)
+## lib/openui/components/content_layout/media.dart  (318 Z.)
 - part of '../content_layout.dart'
 - L11 `_kImageRadius = OpenUiTokens.radiusInner`  — The corner of an image tile.
 - L14 `_kImageMaxHeight = 360`  — The tallest an Image or a one-image gallery gets.
@@ -142,21 +142,21 @@
   - L81 `final VoidCallback? onTap`
   - L84 `final bool showAlt`  — Whether a failed tile prints the alt text (off for small tiles).
   - L87 `Widget build(BuildContext context)`
-- L137 `class _ImagePlaceholder extends StatelessWidget`  — The sunk tile that stands in for an image: an image icon while it
-  - L138 `const _ImagePlaceholder({ required this.alt, this.broken = false, this.showAlt = true, this.filled = true, })`
-  - L145 `final String alt`
-  - L146 `final bool broken`
-  - L147 `final bool showAlt`
-  - L151 `final bool filled`  — Whether the tile paints its own sunk fill. Off inside an
-  - L154 `Widget build(BuildContext context)`
-- L194 `Widget _buildImageBlock(BuildContext context, OpenUiProps props)`
-- L254 `typedef _GalleryImage = ({String? url, String alt, bool broken})`
-- L256 `Widget _buildImageGallery(BuildContext context, OpenUiProps props)`
-- L270 `class _Gallery extends StatelessWidget`
-  - L271 `const _Gallery({required this.images})`
-  - L273 `final List<_GalleryImage> images`
-  - L275 `static const double _gap = 6`
-  - L278 `Widget build(BuildContext context)`
+- L134 `class _ImagePlaceholder extends StatelessWidget`  — The sunk tile that stands in for an image: an image icon while it
+  - L135 `const _ImagePlaceholder({ required this.alt, this.broken = false, this.showAlt = true, this.filled = true, })`
+  - L142 `final String alt`
+  - L143 `final bool broken`
+  - L144 `final bool showAlt`
+  - L148 `final bool filled`  — Whether the tile paints its own sunk fill. Off inside an
+  - L151 `Widget build(BuildContext context)`
+- L191 `Widget _buildImageBlock(BuildContext context, OpenUiProps props)`
+- L248 `typedef _GalleryImage = ({String? url, String alt, bool broken})`
+- L250 `Widget _buildImageGallery(BuildContext context, OpenUiProps props)`
+- L264 `class _Gallery extends StatelessWidget`
+  - L265 `const _Gallery({required this.images})`
+  - L267 `final List<_GalleryImage> images`
+  - L269 `static const double _gap = 6`
+  - L272 `Widget build(BuildContext context)`
 
 ## lib/openui/components/content_layout/text_blocks.dart  (544 Z.)
 - part of '../content_layout.dart'

@@ -18,51 +18,55 @@
 ## test/services/agents/agent_roster_store_test.dart  (249 Z.)
 - L14 `void main()`
 
-## test/services/agents/agents_cloud_relay_test.dart  (754 Z.)
+## test/services/agents/agent_templates_test.dart  (166 Z.)
+- L12 `void main()`
+
+## test/services/agents/agents_cloud_relay_test.dart  (806 Z.)
 - L25 `class _FakeRelayServer implements RelaySocket`  — A stand-in for `api.chuk.chat/v2/relay/ws`.
   - L26 `_FakeRelayServer({this.authOk = true, this.claimReply})`
   - L28 `final bool authOk`
-  - L32 `final Map<String, dynamic>? claimReply`  — What the relay answers a `cowork_pair_claim` with. Null means the real
-  - L35 `final List<Map<String, dynamic>> sent = <Map<String, dynamic>>[]`  — Every frame the app sent, decoded.
-  - L38 `final StreamController<Map<String, dynamic>> _toHost = StreamController<Map<String, dynamic>>.broadcast()`  — Local-relay envelopes the app addressed to the host, unwrapped.
-  - L40 `Stream<Map<String, dynamic>> get toHost`
-  - L42 `final StreamController<dynamic> _toApp = StreamController<dynamic>.broadcast()`
-  - L44 `bool closed = false`
-  - L46 `static const String hostDeviceId = 'host-device-uuid'`
-  - L49 `Stream<dynamic> get incoming`
-  - L52 `void send(String data)`
-  - L94 `void fromHost(Map<String, dynamic> envelope)`  — The host answers. An executor sends no target_device_id, and its payload
-  - L102 `void _deliver(Map<String, dynamic> frame)`
-  - L107 `Future<void> close()`
-- L117 `class _HostSide`  — The §15 initiator, exactly as the host runs it, speaking the LOCAL relay
-  - L118 `_HostSide({ required this.server, required this.channelId, required this.digits, required this.signingKeyPair, required this.deviceId, this.answerResume = true, })`
-  - L129 `final bool answerResume`  — False plays a host that goes away right after the ceremony: it never
-  - L131 `final _FakeRelayServer server`
-  - L132 `final String channelId`
-  - L133 `final String digits`
-  - L134 `final SimpleKeyPair signingKeyPair`
-  - L135 `final String deviceId`
-  - L137 `late final AgentsPairing _initiator`
-  - L138 `AgentsFrameSealer? _sealer`
-  - L139 `AgentsFrameOpener? _opener`
-  - L140 `String? connection`
-  - L141 `List<int>? sessionTranscript`
-  - L142 `Uint8List? sessionKey`
-  - L143 `SimplePublicKey? controllerKey`
-  - L145 `Future<Uint8List> mac(List<int> key, String label)`
-  - L154 `final List<Map<String, dynamic>> opened = <Map<String, dynamic>>[]`  — Payloads the host opened out of the app's sealed frames.
-  - L155 `final Completer<void> paired = Completer<void>()`
-  - L157 `Future<void> start()`
-  - L168 `void _send(String step, Map<String, dynamic> data)`
-  - L172 `Future<void> _onEnvelope(Map<String, dynamic> env)`
-  - L263 `void _establishCodec()`
-  - L277 `Future<void> emit(Map<String, dynamic> payload)`
-- L287 `class _Session implements AccountSessionSource`
-  - L288 `_Session(this._session)`
-  - L289 `final AccountSession? _session`
-  - L292 `AccountSession? current()`
-  - L295 `Future<AccountSession?> refresh()`
-- L298 `void main()`
+  - L31 `bool answerPing = true`  — False plays a socket whose far end is gone: a `ping` gets no `pong`.
+  - L35 `final Map<String, dynamic>? claimReply`  — What the relay answers a `cowork_pair_claim` with. Null means the real
+  - L38 `final List<Map<String, dynamic>> sent = <Map<String, dynamic>>[]`  — Every frame the app sent, decoded.
+  - L41 `final StreamController<Map<String, dynamic>> _toHost = StreamController<Map<String, dynamic>>.broadcast()`  — Local-relay envelopes the app addressed to the host, unwrapped.
+  - L43 `Stream<Map<String, dynamic>> get toHost`
+  - L45 `final StreamController<dynamic> _toApp = StreamController<dynamic>.broadcast()`
+  - L47 `bool closed = false`
+  - L49 `static const String hostDeviceId = 'host-device-uuid'`
+  - L52 `Stream<dynamic> get incoming`
+  - L55 `void send(String data)`
+  - L99 `void fromHost(Map<String, dynamic> envelope)`  — The host answers. An executor sends no target_device_id, and its payload
+  - L107 `void _deliver(Map<String, dynamic> frame)`
+  - L112 `Future<void> close()`
+- L122 `class _HostSide`  — The §15 initiator, exactly as the host runs it, speaking the LOCAL relay
+  - L123 `_HostSide({ required this.server, required this.channelId, required this.digits, required this.signingKeyPair, required this.deviceId, this.answerResume = true, })`
+  - L134 `final bool answerResume`  — False plays a host that goes away right after the ceremony: it never
+  - L136 `final _FakeRelayServer server`
+  - L137 `final String channelId`
+  - L138 `final String digits`
+  - L139 `final SimpleKeyPair signingKeyPair`
+  - L140 `final String deviceId`
+  - L142 `late final AgentsPairing _initiator`
+  - L143 `AgentsFrameSealer? _sealer`
+  - L144 `AgentsFrameOpener? _opener`
+  - L145 `String? connection`
+  - L146 `List<int>? sessionTranscript`
+  - L147 `Uint8List? sessionKey`
+  - L148 `SimplePublicKey? controllerKey`
+  - L150 `Future<Uint8List> mac(List<int> key, String label)`
+  - L159 `final List<Map<String, dynamic>> opened = <Map<String, dynamic>>[]`  — Payloads the host opened out of the app's sealed frames.
+  - L160 `final Completer<void> paired = Completer<void>()`
+  - L162 `Future<void> start()`
+  - L173 `void _send(String step, Map<String, dynamic> data)`
+  - L177 `Future<void> _onEnvelope(Map<String, dynamic> env)`
+  - L268 `void _establishCodec()`
+  - L282 `Future<void> emit(Map<String, dynamic> payload)`
+- L292 `class _Session implements AccountSessionSource`
+  - L293 `_Session(this._session)`
+  - L294 `final AccountSession? _session`
+  - L297 `AccountSession? current()`
+  - L300 `Future<AccountSession?> refresh()`
+- L303 `void main()`
 
 ## test/services/agents/agents_crypto_vectors_test.dart  (185 Z.)
 - L23 `void main()`  — Cross-language byte-compatibility proof for the Agents frame crypto.
@@ -311,9 +315,9 @@
 ## test/services/agents/agents_relay_secrets_test.dart  (136 Z.)
 - L14 `void main()`  — The secrets frames over the real sealed channel (docs/WIRE_CONTRACT.md,
 
-## test/services/agents/agents_replay_loader_test.dart  (837 Z.)
+## test/services/agents/agents_replay_loader_test.dart  (864 Z.)
 - L20 `void main()`
-- L832 `Future<void> _drain()`  — Lets the loader's internal handler chain settle.
+- L859 `Future<void> _drain()`  — Lets the loader's internal handler chain settle.
 
 ## test/services/agents/agents_replay_paging_test.dart  (154 Z.)
 - L18 `void main()`  — Replay paging in the loader (docs/WIRE_CONTRACT.md "Replay paging", Bead
@@ -349,8 +353,8 @@
 - L26 `void main()`  — A message sent at 04:49 was gone. The app drew a sent bubble and a typing
 - L353 `Future<void> _drain()`  — Lets the adapter's internal handler chain settle.
 
-## test/services/agents/agents_task_outbox_test.dart  (230 Z.)
-- L10 `void main()`  — Bead cowork-i7sd: "ob die Nachrichten im Backend ankommen, ist irgendwie
+## test/services/agents/agents_task_outbox_test.dart  (301 Z.)
+- L12 `void main()`  — Bead cowork-i7sd: "ob die Nachrichten im Backend ankommen, ist irgendwie
 
 ## test/services/agents/agents_tool_phase_l10n_test.dart  (71 Z.)
 - L13 `void main()`  — The running tool and the automation states speak the reader's language
@@ -375,9 +379,6 @@
 - L24 `Future<String> _encryptWithKey(String plaintext, SecretKey key)`  — Builds the production ciphertext envelope around [plaintext] with an
 - L42 `void main()`
 
-## test/services/agents/coworker_templates_test.dart  (166 Z.)
-- L12 `void main()`
-
 ## test/services/agents/offline_retry_manager_test.dart  (150 Z.)
 - L9 `void main()`  — The Retry button in the imported bubble calls
 
@@ -385,6 +386,10 @@
 - L8 `AgentsRoomMember _m(String id, String handle)`
 - L11 `AgentsRoomDraft _draft( String name, { List<AgentsRoomMember>? members, bool agentToAgent = true, })`
 - L22 `void main()`
+
+## test/services/agents/roster_pins_test.dart  (182 Z.)
+- L10 `AgentsAgent _agent(String id, {DateTime? lastActivity})`
+- L17 `void main()`
 
 ## test/services/agents/schedule_spec_test.dart  (431 Z.)
 - L7 `void main()`  — 2026-02-03 is a Tuesday. Every date in this file is built from local

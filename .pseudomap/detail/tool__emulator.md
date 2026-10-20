@@ -1,0 +1,76 @@
+# tool/emulator · Signaturen
+
+## tool/emulator/emulator.dart  (848 Z.)
+- reicht weiter: 'src/script.dart' show ScriptStep, ScriptTurn, parseScript, defaultTurn, splitIntoChunks
+- L29 `Map<String, Object?> defaultUserStatus()`  — Default body of GET /v1/user/status (shape of UserStatusResponse).
+- L42 `Future<ChukEmulator> startEmulator({ int port = 0, Object? address, Duration chunkDelay = Duration.zero, bool quiet = true, })`  — Starts the emulator and returns it once it listens.
+- L59 `class ChukEmulator`  — A running emulator. Created by [startEmulator].
+  - L60 `ChukEmulator._({required this.chunkDelay, required this.quiet})`
+  - L63 `final Duration chunkDelay`  — Pause between two streamed frames of a chat turn.
+  - L66 `final bool quiet`  — When false, each request is printed to stdout.
+  - L68 `late final HttpServer _server`
+  - L71 `HttpServer get server`  — The underlying dart:io server.
+  - L74 `int get port`  — The port the emulator listens on.
+  - L78 `String get baseUrl`  — HTTP base URL, for example `http://127.0.0.1:8787`. Pass it to the app as
+  - L85 `final List<ScriptTurn> _queuedTurns = []`
+  - L86 `final List<Map<String, Object?>> _requests = []`
+  - L87 `final Map<String, Map<String, Object?>> _artifacts = {}`
+  - L88 `final Set<WebSocketChannel> _sockets = {}`
+  - L89 `Map<String, Object?> _userStatus = defaultUserStatus()`
+  - L90 `int _sequence = 0`
+  - L93 `List<Map<String, Object?>> models = _decodeModels()`  — The models served by GET /v1/models_info. Tests may change the list.
+  - L96 `List<Map<String, Object?>> get requests`  — The request log, oldest first. Each entry is a JSON-safe map.
+  - L99 `int get queuedTurns`  — The number of scripted turns that are not used yet.
+  - L102 `void enqueueTurns(List<ScriptTurn> turns)`  — Queues scripted turns. Each chat request uses the next turn.
+  - L105 `void script(List<Map<String, Object?>> steps)`  — Queues one scripted turn given as JSON steps.
+  - L109 `void reset()`  — Clears the script queue, the request log, artifacts and user status.
+  - L119 `Future<void> close()`  — Stops the server and closes open sockets.
+  - L135 `static List<Map<String, Object?>> _decodeModels()`  — The model catalogue. The fixture keeps the real shape, but its icon
+  - L153 `late final Handler _v2Socket = webSocketHandler( (WebSocketChannel ws, String? _) => _MultiplexSocket(this, ws).run(), )`
+  - L156 `late final Handler _v1Socket = webSocketHandler( (WebSocketChannel ws, String? _) => _LegacyChatSocket(this, ws).run(), )`
+  - L161 `Handler get handler`  — The shelf handler. Exposed so a test can mount it elsewhere.
+  - L189 `Future<Response> _route(Request request, String path, Object? body)`
+  - L307 `Map<String, Object?> _saveArtifact( String? id, Map<String, Object?> payload, String base, )`
+  - L322 `Map<String, Object?> _artifactView(String id, String base)`
+  - L331 `Map<String, Object?>? _runTool( String name, Map<String, Object?> payload, String base, )`  — Runs a canned server tool by its mux name. Returns null for an unknown
+  - L361 `ScriptTurn _nextTurn(String message)`
+  - L364 `void _log(Map<String, Object?> entry)`
+  - L379 `String _wsBase(Uri requested)`
+  - L383 `String _requestBase(Request request)`
+  - L385 `static bool _hasBearer(Request request)`
+  - L391 `static Object? _decodeBody(Request request, String text)`
+  - L409 `static Map<String, Object?> _parseMultipart(String contentType, String text)`
+  - L426 `static Response _json(Object? body, {int status = 200})`
+  - L432 `static Response _cors(Response response)`
+- L442 `Object? _trimForLog(Object? value)`  — Shortens long strings (base64 images, big prompts) in a logged value.
+- L460 `typedef _Emit = Future<void> Function(String kind, Object? data, String? code)`
+- L462 `enum _TurnEnd`
+  - L462 `completed`
+  - L462 `failed`
+  - L462 `cancelled`
+  - L462 `disconnected`
+- L466 `Future<_TurnEnd> _playTurn({ required ChukEmulator emulator, required Map<String, Object?> payload, required _Emit emit, required bool Function() isCancelled, required Future<void> Function() disconnect, })`  — Plays one turn and sends its frames through [emit]. Does not send `done`;
+- L575 `class _MultiplexSocket`  — One /v2/ws connection: auth handshake, then multiplexed chat and tool
+  - L576 `_MultiplexSocket(this.emulator, this.ws)`
+  - L578 `final ChukEmulator emulator`
+  - L579 `final WebSocketChannel ws`
+  - L580 `final Set<String> _inflight = {}`
+  - L581 `final Set<String> _cancelled = {}`
+  - L582 `bool _authed = false`
+  - L583 `bool _closed = false`
+  - L585 `String get _base`
+  - L587 `void run()`
+  - L603 `void _send(Map<String, Object?> frame)`
+  - L608 `Future<void> _emit(String reqId, String kind, Object? data, String? code)`
+  - L620 `Future<void> _disconnect()`
+  - L626 `Future<void> _onRaw(dynamic raw)`
+  - L738 `Future<void> _runChat(String reqId, Map<String, Object?> payload)`
+  - L753 `Future<void> _runTool( String reqId, String name, Map<String, Object?> payload, )`
+- L779 `class _LegacyChatSocket`  — One /v1/ai/chat/ws connection: the legacy protocol older app builds use.
+  - L780 `_LegacyChatSocket(this.emulator, this.ws)`
+  - L782 `final ChukEmulator emulator`
+  - L783 `final WebSocketChannel ws`
+  - L784 `bool _closed = false`
+  - L786 `void run()`
+  - L802 `void _send(Map<String, Object?> frame)`
+  - L807 `Future<void> _onRaw(dynamic raw)`

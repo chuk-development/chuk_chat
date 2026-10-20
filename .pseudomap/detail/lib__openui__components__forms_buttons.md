@@ -1,6 +1,6 @@
 # lib/openui/components/forms_buttons · Signaturen
 
-## lib/openui/components/forms_buttons/buttons.dart  (319 Z.)
+## lib/openui/components/forms_buttons/buttons.dart  (313 Z.)
 - L25 `Widget buildOpenUiButtons(BuildContext context, OpenUiProps props)`  — Builds `Buttons(buttons, direction?)`.
 - L53 `Widget buildOpenUiIconButton(BuildContext context, OpenUiProps props)`  — Builds `IconButton(name, icon, action?, variant?, size?, shape?)`.
 - L68 `class OpenUiIconButtonView extends StatelessWidget`  — An icon-only button. [name] is the accessible label, the tooltip
@@ -13,26 +13,26 @@
   - L98 `final bool circle`  — Round instead of the app's rounded square.
   - L101 `final String statementId`  — The statement of the button, to detect a still-streaming one.
   - L104 `Widget build(BuildContext context)`
-  - L170 `void _onTap(BuildContext context)`
-- L181 `Widget buildOpenUiFollowUpBlock(BuildContext context, OpenUiProps props)`  — Builds `FollowUpBlock(items)`.
-- L193 `class OpenUiFollowUpList extends StatelessWidget`  — The follow-up suggestions: one connected run of tiles (the app's
-  - L195 `const OpenUiFollowUpList({ required this.items, this.statementId = '', super.key, })`  — Creates the list.
-  - L202 `final List<({String text, String statementId})> items`  — The suggestions and the statement each came from.
-  - L205 `final String statementId`  — The statement of the block.
-  - L207 `static const double _outer = 18`
-  - L208 `static const double _inner = 6`
-  - L209 `static const double _gap = 3`
-  - L212 `Widget build(BuildContext context)`
-- L245 `class _FollowUpTile extends StatelessWidget`
-  - L246 `const _FollowUpTile({ required this.text, required this.radius, required this.fill, required this.enabled, })`
-  - L253 `final String text`
-  - L254 `final BorderRadius radius`
-  - L255 `final Color fill`
-  - L256 `final bool enabled`
-  - L258 `static const double _fontSize = 14.5`
-  - L259 `static const double _line = 20`
-  - L262 `Widget build(BuildContext context)`
-  - L314 `void _send(BuildContext context)`
+  - L164 `void _onTap(BuildContext context)`
+- L175 `Widget buildOpenUiFollowUpBlock(BuildContext context, OpenUiProps props)`  — Builds `FollowUpBlock(items)`.
+- L187 `class OpenUiFollowUpList extends StatelessWidget`  — The follow-up suggestions: one connected run of tiles (the app's
+  - L189 `const OpenUiFollowUpList({ required this.items, this.statementId = '', super.key, })`  — Creates the list.
+  - L196 `final List<({String text, String statementId})> items`  — The suggestions and the statement each came from.
+  - L199 `final String statementId`  — The statement of the block.
+  - L201 `static const double _outer = 18`
+  - L202 `static const double _inner = 6`
+  - L203 `static const double _gap = 3`
+  - L206 `Widget build(BuildContext context)`
+- L239 `class _FollowUpTile extends StatelessWidget`
+  - L240 `const _FollowUpTile({ required this.text, required this.radius, required this.fill, required this.enabled, })`
+  - L247 `final String text`
+  - L248 `final BorderRadius radius`
+  - L249 `final Color fill`
+  - L250 `final bool enabled`
+  - L252 `static const double _fontSize = 14.5`
+  - L253 `static const double _line = 20`
+  - L256 `Widget build(BuildContext context)`
+  - L308 `void _send(BuildContext context)`
 
 ## lib/openui/components/forms_buttons/choices.dart  (816 Z.)
 - L24 `_kRowLine = 24`  — The height of the first text line of an option row. The control

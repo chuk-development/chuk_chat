@@ -47,10 +47,13 @@
 - L101 `ChukMcpRow _row(String id)`
 - L107 `void main()`
 
-## test/services/mcp/mcp_oauth_test.dart  (321 Z.)
+## test/services/mcp/mcp_oauth_test.dart  (395 Z.)
 - L9 `http.Response _json(Map<String, dynamic> body)`
 - L17 `MockClient _compliantServer({ List<String> scopes = const <String>['read', 'write'], void Function(Map<String, String> body)? onToken, Map<String, dynamic> Function()? tokenResponse, List<String>? registeredRedirectUris, })`  — A server that publishes protected-resource metadata pointing at its own
 - L66 `void main()`
+
+## test/services/mcp/mcp_redirect_test.dart  (60 Z.)
+- L9 `void main()`
 
 ## test/services/mcp/mcp_service_test.dart  (728 Z.)
 - L17 `class _MemorySecrets implements AgentsSecureKeyValueStore`

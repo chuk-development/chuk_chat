@@ -1,56 +1,58 @@
 # lib/services/notifications · Signaturen
 
-## lib/services/notifications/agents_notifications.dart  (106 Z.)
-- L29 `typedef ThreadLabelResolver = String Function(String sessionKey)`  — Resolves the label a toast carries for a thread — the coworker's name.
-- L31 `class AgentsNotifications`
-  - L32 `AgentsNotifications._()`
-  - L34 `static final AgentsNotifications instance = AgentsNotifications._()`
-  - L37 `ThreadLabelResolver threadLabel = (String sessionKey) => 'Chuk Chat'`  — Set by the shell. Default: a neutral label.
-  - L41 `AppLifecycleState? lifecycleOverride`  — Test seam: overrides the lifecycle the rule reads.
-  - L43 `bool _initialized = false`
-  - L47 `Future<void> initialize({ LocalNotificationsBackend? localBackend, bool startPush = true, })`  — Initialises the local plugin and starts push registration. Both are
-  - L58 `bool get _inForeground`
-  - L66 `Future<void> onLiveDone(String sessionKey, {String? runId})`  — A live `done` reached the thread view for [sessionKey]. Toast only when
-  - L78 `Future<void> onAnswerReplayed(String sessionKey, {String? runId})`  — A replayed run terminal with `while_away` landed for [sessionKey]: the
-  - L87 `Future<void> onOpenedFromNotification( String sessionKey, { String? runId, })`  — The user tapped a notification for [sessionKey]; the shell opened the
-  - L100 `void reset()`  — Test seam.
+## lib/services/notifications/agents_notifications.dart  (116 Z.)
+- L31 `typedef ThreadLabelResolver = String Function(String sessionKey)`  — Resolves the label a toast carries for a thread — the agent's name.
+- L33 `class AgentsNotifications`
+  - L34 `AgentsNotifications._()`
+  - L36 `static final AgentsNotifications instance = AgentsNotifications._()`
+  - L39 `ThreadLabelResolver threadLabel = (String sessionKey) => 'Chuk Chat'`  — Set by the shell. Default: a neutral label.
+  - L43 `AppLifecycleState? lifecycleOverride`  — Test seam: overrides the lifecycle the rule reads.
+  - L45 `bool _initialized = false`
+  - L49 `Future<void> initialize({ LocalNotificationsBackend? localBackend, bool startPush = true, })`  — Initialises the local plugin and starts push registration. Both are
+  - L60 `bool get _inForeground`
+  - L69 `Future<void> onLiveDone( String sessionKey, { String? runId, String? answer, bool stopped = false, })`  — A live `done` reached the thread view for [sessionKey]. Toast only when
+  - L88 `Future<void> onAnswerReplayed(String sessionKey, {String? runId})`  — A replayed run terminal with `while_away` landed for [sessionKey]: the
+  - L97 `Future<void> onOpenedFromNotification( String sessionKey, { String? runId, })`  — The user tapped a notification for [sessionKey]; the shell opened the
+  - L110 `void reset()`  — Test seam.
 
-## lib/services/notifications/local_notifications.dart  (327 Z.)
-- L33 `kAgentsNotificationChannelId = 'cowork_answer_ready'`  — The Android channel every Agents toast lands in.
-- L34 `kAgentsNotificationChannelName = 'Answer ready'`
-- L35 `kAgentsNotificationChannelDescription = 'A coworker finished a task or needs your input'`
-- L41 `kAgentsNotificationIconAsset = 'assets/icons/app_icon.png'`  — The logo a Linux toast draws. The same image the Android launcher uses,
-- L45 `abstract class LocalNotificationsBackend`  — What the service needs from the platform. The real one wraps
-  - L46 `Future<bool> initialize({required void Function(String? payload) onTap})`
-  - L48 `Future<void> show({ required int id, required String title, required String body, required String payload, required String tag, })`
-  - L56 `Future<void> cancel({required int id, required String tag})`
-  - L59 `Future<String?> launchPayload()`  — The payload of the notification that launched the app, when one did.
-  - L62 `Future<bool> requestPermission()`  — Android 13+ runtime permission. True where no permission exists.
-- L65 `class LocalNotifications`
-  - L66 `LocalNotifications._()`
-  - L68 `static final LocalNotifications instance = LocalNotifications._()`
-  - L70 `LocalNotificationsBackend? _backend`
-  - L71 `bool _initialized = false`
-  - L73 `bool get isInitialized`
-  - L76 `static const int brandColorValue = 0xFF285DA9`  — Brand accent used to tint the icon and title on Android (chuk's blue).
-  - L81 `Future<void> initialize({LocalNotificationsBackend? backend})`  — Wires the platform plugin. Safe to call twice; a failure (no D-Bus
-  - L97 `static int idFor(String sessionKey)`  — Stable id per thread, so a newer toast replaces the older one.
-  - L99 `static String payloadFor(String sessionKey, {String? runId})`
-  - L104 `Future<void> showAnswerReady({ required String sessionKey, required String threadLabel, String? runId, String body = 'Your answer is ready.', })`  — "Answer ready" for [sessionKey]. [threadLabel] is the coworker's name
-  - L128 `Future<void> cancelForSession(String sessionKey)`  — Clears the thread's toast — ours and, on Android, the FCM one that
-  - L140 `Future<void> checkLaunchNotification()`  — A cold start from a toast: hand the target to the router so the shell
-  - L150 `Future<bool> requestPermission()`
-  - L160 `void _onTap(String? payload)`
-  - L178 `void reset()`  — Test seam.
-- L187 `class _PluginBackend implements LocalNotificationsBackend`  — The real backend: `flutter_local_notifications` on Android, iOS, macOS
-  - L188 `_PluginBackend(this._plugin)`
-  - L190 `final FlutterLocalNotificationsPlugin _plugin`
-  - L192 `static bool get _supported`
-  - L199 `Future<bool> initialize({ required void Function(String? payload) onTap, })`
-  - L249 `Future<void> show({ required int id, required String title, required String body, required String payload, required String tag, })`
-  - L298 `Future<void> cancel({required int id, required String tag})`
-  - L307 `Future<String?> launchPayload()`
-  - L317 `Future<bool> requestPermission()`
+## lib/services/notifications/local_notifications.dart  (386 Z.)
+- L35 `kAgentsNotificationChannelId = 'cowork_answer_ready'`  — The Android channel every Agents toast lands in.
+- L36 `kAgentsNotificationChannelName = 'Answer ready'`
+- L37 `kAgentsNotificationChannelDescription = 'An agent finished a task or needs your input'`
+- L43 `kAgentsNotificationIconAsset = 'assets/icons/app_icon.png'`  — The logo a Linux toast draws. The same image the Android launcher uses,
+- L47 `abstract class LocalNotificationsBackend`  — What the service needs from the platform. The real one wraps
+  - L48 `Future<bool> initialize({required void Function(String? payload) onTap})`
+  - L50 `Future<void> show({ required int id, required String title, required String body, required String payload, required String tag, })`
+  - L58 `Future<void> cancel({required int id, required String tag})`
+  - L61 `Future<String?> launchPayload()`  — The payload of the notification that launched the app, when one did.
+  - L64 `Future<bool> requestPermission()`  — Android 13+ runtime permission. True where no permission exists.
+- L67 `class LocalNotifications`
+  - L68 `LocalNotifications._()`
+  - L70 `static final LocalNotifications instance = LocalNotifications._()`
+  - L72 `LocalNotificationsBackend? _backend`
+  - L73 `bool _initialized = false`
+  - L75 `bool get isInitialized`
+  - L78 `static const int brandColorValue = 0xFF285DA9`  — Brand accent used to tint the icon and title on Android (chuk's blue).
+  - L83 `Future<void> initialize({LocalNotificationsBackend? backend})`  — Wires the platform plugin. Safe to call twice; a failure (no D-Bus
+  - L99 `static int idFor(String sessionKey)`  — Stable id per thread, so a newer toast replaces the older one.
+  - L101 `static String payloadFor(String sessionKey, {String? runId})`
+  - L105 `static const String defaultBody = 'Your answer is ready.'`  — The body when there is no answer text to preview.
+  - L111 `Future<void> showAnswerReady({ required String sessionKey, required String threadLabel, String? runId, String? preview, bool stopped = false, })`  — "Name is done" for [sessionKey], with [preview] (the answer, made
+  - L140 `Future<void> cancelForSession(String sessionKey)`  — Clears the thread's toast — ours and, on Android, the FCM one that
+  - L152 `Future<void> checkLaunchNotification()`  — A cold start from a toast: hand the target to the router so the shell
+  - L162 `Future<bool> requestPermission()`
+  - L172 `void _onTap(String? payload)`
+  - L190 `void reset()`  — Test seam.
+- L199 `class _PluginBackend implements LocalNotificationsBackend`  — The real backend: `flutter_local_notifications` on Android, iOS, macOS
+  - L200 `_PluginBackend(this._plugin)`
+  - L202 `final FlutterLocalNotificationsPlugin _plugin`
+  - L204 `static bool get _supported`
+  - L211 `Future<bool> initialize({ required void Function(String? payload) onTap, })`
+  - L261 `Future<void> show({ required int id, required String title, required String body, required String payload, required String tag, })`
+  - L315 `Future<void> cancel({required int id, required String tag})`
+  - L324 `Future<String?> launchPayload()`
+  - L334 `Future<bool> requestPermission()`
+- L348 `String notificationPreview(String raw, {int maxChars = 240})`  — The answer, made fit for one notification: markdown and the app's own
 
 ## lib/services/notifications/notification_router.dart  (79 Z.)
 - L16 `@immutable class NotificationTarget`

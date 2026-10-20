@@ -1,5 +1,8 @@
 # test/voice · Signaturen
 
+## test/voice/voice_audio_output_test.dart  (96 Z.)
+- L9 `void main()`
+
 ## test/voice/voice_call_controller_test.dart  (231 Z.)
 - L10 `class _FakeDelegate implements VoiceTaskDelegate`
   - L11 `int _next = 0`
@@ -8,6 +11,9 @@
   - L19 `Stream<VoiceTaskResult> get results`
 - L22 `Map<String, dynamic> _json(String s)`
 - L24 `void main()`
+
+## test/voice/voice_call_fullscreen_test.dart  (304 Z.)
+- L9 `void main()`
 
 ## test/voice/voice_call_models_test.dart  (147 Z.)
 - L7 `void main()`
@@ -19,11 +25,17 @@
 - L11 `VoiceCallRecord _record(String chatId, DateTime start, {String text = 'Hi'})`
 - L25 `void main()`
 
+## test/voice/voice_image_cards_test.dart  (87 Z.)
+- L8 `void main()`
+
 ## test/voice/voice_location_test.dart  (116 Z.)
 - L7 `Map<String, dynamic> _json(String s)`
 - L9 `void main()`
 
-## test/voice/voice_protocol_test.dart  (398 Z.)
+## test/voice/voice_playback_context_test.dart  (172 Z.)
+- L16 `void main()`
+
+## test/voice/voice_protocol_test.dart  (422 Z.)
 - L9 `class _FakeDelegate implements VoiceTaskDelegate`
   - L10 `_FakeDelegate({this.onStart})`
   - L12 `final Future<String> Function(String task)? onStart`
@@ -40,7 +52,10 @@
   - L13 `Stream<VoiceTaskResult> get results`
 - L16 `void main()`
 
-## test/voice/voice_transcript_test.dart  (254 Z.)
+## test/voice/voice_transcript_migration_test.dart  (281 Z.)
+- L16 `void main()`
+
+## test/voice/voice_transcript_test.dart  (390 Z.)
 - L6 `void main()`
 
 ## test/voice/voice_widgets_test.dart  (348 Z.)

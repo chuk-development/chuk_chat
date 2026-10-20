@@ -8,7 +8,7 @@
 - L55 `void main()`
 
 ## test/manual/table_preview.dart  (207 Z.)
-- L21 `Map<String, dynamic> songs({int rows = 2, bool labelled = false})`  — The Songs document the coworker wrote: the reel it came from, the song,
+- L21 `Map<String, dynamic> songs({int rows = 2, bool labelled = false})`  — The Songs document the agent wrote: the reel it came from, the song,
 - L93 `Map<String, dynamic> prices()`  — A price comparison: a number column, a highlighted cell, and prose in the
 - L119 `void main()`
 - L121 `class TablePreviewApp extends StatefulWidget`

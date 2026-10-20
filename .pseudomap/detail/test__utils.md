@@ -3,7 +3,7 @@
 ## test/utils/accent_button_foreground_test.dart  (46 Z.)
 - L6 `void main()`
 
-## test/utils/answer_blocks_parser_test.dart  (241 Z.)
+## test/utils/answer_blocks_parser_test.dart  (507 Z.)
 - L7 `AnswerBlockSegment _onlyBlock(List<AnswerSegment> segs)`
 - L10 `void main()`
 
@@ -43,6 +43,11 @@
 ## test/utils/lru_byte_cache_test.dart  (168 Z.)
 - L6 `Uint8List _bytes(int size)`  — Helper: create a Uint8List of [size] bytes.
 - L8 `void main()`
+
+## test/utils/non_public_ip_test.dart  (96 Z.)
+- L9 `List<int> _v4(String a, String b, String c, String d)`
+- L16 `List<int> _v6(List<int> bytes)`
+- L18 `void main()`
 
 ## test/utils/on_fill_contrast_test.dart  (148 Z.)
 - L10 `void main()`

@@ -13,7 +13,7 @@
   - L47 `Widget build(BuildContext context)`
 
 ## lib/pages/settings/herenow_settings_page.dart  (153 Z.)
-- L19 `class HereNowSettingsPage extends StatefulWidget`  — The here.now publishing connector: let a coworker put a file or a folder on
+- L19 `class HereNowSettingsPage extends StatefulWidget`  — The here.now publishing connector: let an agent put a file or a folder on
   - L20 `const HereNowSettingsPage({super.key, HereNowStore? store}) : _injectedStore = store`
   - L23 `final HereNowStore? _injectedStore`
   - L26 `State<HereNowSettingsPage> createState()`

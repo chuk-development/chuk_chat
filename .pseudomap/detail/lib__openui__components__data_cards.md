@@ -37,7 +37,7 @@
   - L519 `Widget build(BuildContext context)`
 - L533 `Widget _buildVisualBlock(BuildContext context, OpenUiProps p)`
 
-## lib/openui/components/data_cards/shared.dart  (649 Z.)
+## lib/openui/components/data_cards/shared.dart  (648 Z.)
 - part of '../data_cards.dart'
 - L15 `_tabular = <FontFeature>[FontFeature.tabularFigures()]`  — Tabular figures, so numbers line up in columns and do not jump.
 - L18 `String _str(Object? v)`  — [v] as display text. Numbers drop a `.0`; maps and lists give ''.
@@ -74,47 +74,47 @@
   - L270 `final double radius`
   - L271 `final String? semanticLabel`
   - L274 `Widget build(BuildContext context)`
-- L294 `class _Chevron extends StatelessWidget`  — The small chevron that marks a clickable card.
-  - L295 `const _Chevron({this.onImage = false, this.size = 16})`
-  - L297 `final bool onImage`
-  - L298 `final double size`
-  - L301 `Widget build(BuildContext context)`
-- L330 `class _EqualRow extends MultiChildRenderObjectWidget`  — A row whose children all get the height of the tallest one, without
-  - L331 `const _EqualRow({required super.children, this.gap = 0, this.itemWidth})`
-  - L333 `final double gap`
-  - L334 `final double? itemWidth`
-  - L337 `RenderObject createRenderObject(BuildContext context)`
-  - L341 `void updateRenderObject(BuildContext context, _RenderEqualRow renderObject)`
-- L348 `class _EqualRowData extends ContainerBoxParentData<RenderBox>`
-- L350 `class _RenderEqualRow extends RenderBox with ContainerRenderObjectMixin<RenderBox, _EqualRowData>, RenderBoxContainerDefaultsMixin<RenderBox, _EqualRowData>`
-  - L354 `_RenderEqualRow(this._gap, this._itemWidth)`
-  - L356 `double _gap`
-  - L357 `set gap(double v)`
-  - L363 `double? _itemWidth`
-  - L364 `set itemWidth(double? v)`
-  - L371 `void setupParentData(RenderBox child)`
-  - L375 `double _childWidth(BoxConstraints c)`
-  - L384 `void performLayout()`
-  - L416 `void paint(PaintingContext context, Offset offset)`
-  - L420 `bool hitTestChildren(BoxHitTestResult result, {required Offset position})`
-  - L424 `double computeMinIntrinsicHeight(double width)`
-  - L427 `double computeMaxIntrinsicHeight(double width)`
-  - L430 `double computeMinIntrinsicWidth(double height)`
-  - L433 `double computeMaxIntrinsicWidth(double height)`
-- L442 `List<int> _rowConfiguration(int n, int maxPerRow)`  — How many cards go in each row: at most [maxPerRow] (2 or 3), and
-- L463 `class _CardBlockLayout extends StatelessWidget`  — The grid or the carousel of a card block.
-  - L464 `const _CardBlockLayout({ required this.cards, required this.maxPerRow, required this.carousel, required this.responsive, required this.gap, required this.carouselWidth, required this.carouselWidthNarrow, })`
-  - L474 `final List<Widget> cards`
-  - L475 `final int maxPerRow`
-  - L476 `final bool carousel`
-  - L477 `final bool responsive`
-  - L478 `final double gap`
-  - L479 `final double carouselWidth`
-  - L480 `final double carouselWidthNarrow`
-  - L483 `Widget build(BuildContext context)`
-- L545 `void _runItemAction( BuildContext context, OpenUiAction action, { required String label, required Map<String, Object?> item, })`  — Runs the shared [action] of a card block for one card.
-- L588 `bool _streamingHere(BuildContext context, String statementId)`  — Whether the statement [statementId] is still being streamed. A card
-- L602 `List<InlineSpan> _inlineMarkdown(String text, TextStyle base, Color link)`  — Inline markdown as text spans: `**bold**`, `*italic*` / `_italic_`,
+- L293 `class _Chevron extends StatelessWidget`  — The small chevron that marks a clickable card.
+  - L294 `const _Chevron({this.onImage = false, this.size = 16})`
+  - L296 `final bool onImage`
+  - L297 `final double size`
+  - L300 `Widget build(BuildContext context)`
+- L329 `class _EqualRow extends MultiChildRenderObjectWidget`  — A row whose children all get the height of the tallest one, without
+  - L330 `const _EqualRow({required super.children, this.gap = 0, this.itemWidth})`
+  - L332 `final double gap`
+  - L333 `final double? itemWidth`
+  - L336 `RenderObject createRenderObject(BuildContext context)`
+  - L340 `void updateRenderObject(BuildContext context, _RenderEqualRow renderObject)`
+- L347 `class _EqualRowData extends ContainerBoxParentData<RenderBox>`
+- L349 `class _RenderEqualRow extends RenderBox with ContainerRenderObjectMixin<RenderBox, _EqualRowData>, RenderBoxContainerDefaultsMixin<RenderBox, _EqualRowData>`
+  - L353 `_RenderEqualRow(this._gap, this._itemWidth)`
+  - L355 `double _gap`
+  - L356 `set gap(double v)`
+  - L362 `double? _itemWidth`
+  - L363 `set itemWidth(double? v)`
+  - L370 `void setupParentData(RenderBox child)`
+  - L374 `double _childWidth(BoxConstraints c)`
+  - L383 `void performLayout()`
+  - L415 `void paint(PaintingContext context, Offset offset)`
+  - L419 `bool hitTestChildren(BoxHitTestResult result, {required Offset position})`
+  - L423 `double computeMinIntrinsicHeight(double width)`
+  - L426 `double computeMaxIntrinsicHeight(double width)`
+  - L429 `double computeMinIntrinsicWidth(double height)`
+  - L432 `double computeMaxIntrinsicWidth(double height)`
+- L441 `List<int> _rowConfiguration(int n, int maxPerRow)`  — How many cards go in each row: at most [maxPerRow] (2 or 3), and
+- L462 `class _CardBlockLayout extends StatelessWidget`  — The grid or the carousel of a card block.
+  - L463 `const _CardBlockLayout({ required this.cards, required this.maxPerRow, required this.carousel, required this.responsive, required this.gap, required this.carouselWidth, required this.carouselWidthNarrow, })`
+  - L473 `final List<Widget> cards`
+  - L474 `final int maxPerRow`
+  - L475 `final bool carousel`
+  - L476 `final bool responsive`
+  - L477 `final double gap`
+  - L478 `final double carouselWidth`
+  - L479 `final double carouselWidthNarrow`
+  - L482 `Widget build(BuildContext context)`
+- L544 `void _runItemAction( BuildContext context, OpenUiAction action, { required String label, required Map<String, Object?> item, })`  — Runs the shared [action] of a card block for one card.
+- L587 `bool _streamingHere(BuildContext context, String statementId)`  — Whether the statement [statementId] is still being streamed. A card
+- L601 `List<InlineSpan> _inlineMarkdown(String text, TextStyle base, Color link)`  — Inline markdown as text spans: `**bold**`, `*italic*` / `_italic_`,
 
 ## lib/openui/components/data_cards/text_blocks.dart  (914 Z.)
 - part of '../data_cards.dart'

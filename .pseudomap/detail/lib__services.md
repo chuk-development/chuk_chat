@@ -28,7 +28,7 @@
   - L149 `AccountSession? current()`
   - L156 `Future<AccountSession?> refresh()`
 
-## lib/services/api_config_base.dart  (130 Z.)
+## lib/services/api_config_base.dart  (206 Z.)
 - L26 `apiConfigEnvApiUrl = String.fromEnvironment('API_BASE_URL')`
 - L27 `apiConfigEnvApiHost = String.fromEnvironment('API_HOST')`
 - L28 `apiConfigEnvApiPort = String.fromEnvironment('API_PORT')`
@@ -39,12 +39,18 @@
 - L41 `apiConfigProductionUrl = String.fromEnvironment( 'PRODUCTION_API_URL', )`
 - L46 `String? getConfiguredUrl()`  — Resolves an explicitly configured URL from environment variables, or null.
 - L69 `String getApiBaseUrl()`  — Gets the appropriate API base URL based on the current environment.
-- L85 `artifactsConfigEnvUrl = String.fromEnvironment( 'ARTIFACTS_BASE_URL', )`
-- L88 `artifactsConfigDefaultProductionUrl = 'https://artifacts.chuk.chat'`
-- L96 `String getArtifactsBaseUrl()`  — Gets the artifacts hosting base URL.
-- L106 `String getEnvironment()`  — Whether the current build is pointing at a local development server.
-- L118 `bool getIsConfigured()`  — Checks whether the API was explicitly configured via environment variables,
-- L123 `String getConfigurationDescription(String platformName)`  — Gets a human-readable description of the current configuration.
+- L87 `apiConfigAgentsRelayUrl = String.fromEnvironment( 'AGENTS_RELAY_URL', )`
+- L94 `agentsRelayDefaultBaseUrl = 'wss://api.chuk.chat'`  — The relay base the production build dials. Kept as the fallback for an
+- L100 `String? normalizeAgentsRelayBase(String raw)`  — Turns an API or relay URL into a websocket base with no path:
+- L132 `String resolveAgentsRelayBase({ required String apiBaseUrl, String override = '', })`  — Resolves the Agents relay base from an API base URL and an optional
+- L143 `String getAgentsRelayBaseUrl()`  — The Agents relay base for this build: [apiConfigAgentsRelayUrl] when set,
+- L150 `String agentsHttpOriginForRelay(String relayBase)`  — The https/http origin that serves the same backend as [relayBase]
+- L161 `artifactsConfigEnvUrl = String.fromEnvironment( 'ARTIFACTS_BASE_URL', )`
+- L164 `artifactsConfigDefaultProductionUrl = 'https://artifacts.chuk.chat'`
+- L172 `String getArtifactsBaseUrl()`  — Gets the artifacts hosting base URL.
+- L182 `String getEnvironment()`  — Whether the current build is pointing at a local development server.
+- L194 `bool getIsConfigured()`  — Checks whether the API was explicitly configured via environment variables,
+- L199 `String getConfigurationDescription(String platformName)`  — Gets a human-readable description of the current configuration.
 
 ## lib/services/api_config_service.dart  (5 Z.)
 - reicht weiter: 'api_config_service_stub.dart' if (dart.library.io) 'api_config_service_io.dart'
@@ -101,23 +107,23 @@
   - L426 `void _startDeferredPreload()`
   - L437 `Future<bool> waitForSupabase({ Duration timeout = const Duration(seconds: 5), })`  — Wait for Supabase to be initialized
 
-## lib/services/app_lifecycle_service.dart  (165 Z.)
-- L17 `class AppLifecycleService extends ChangeNotifier`  — Callback when app state changes
-  - L18 `AppLifecycleService._()`
-  - L20 `static final AppLifecycleService _instance = AppLifecycleService._()`
-  - L21 `static AppLifecycleService get instance`
-  - L24 `final List<VoidCallback> _onResumeCallbacks = []`  — Callbacks for lifecycle events
-  - L25 `final List<VoidCallback> _onPauseCallbacks = []`
-  - L28 `void addOnResumeCallback(VoidCallback callback)`  — Add a callback to be called when app resumes
-  - L33 `void removeOnResumeCallback(VoidCallback callback)`  — Remove a resume callback
-  - L38 `void addOnPauseCallback(VoidCallback callback)`  — Add a callback to be called when app pauses
-  - L43 `void removeOnPauseCallback(VoidCallback callback)`  — Remove a pause callback
-  - L48 `void handleLifecycleState(AppLifecycleState state)`  — Handle app lifecycle state changes
-  - L77 `void _handleResumed()`
-  - L109 `Future<void> _checkNetworkThenResume()`
-  - L126 `void _handlePaused()`
-  - L153 `void dispose()`  — Dispose all resources
-  - L159 `bool get _isDesktopPlatform`
+## lib/services/app_lifecycle_service.dart  (169 Z.)
+- L18 `class AppLifecycleService extends ChangeNotifier`  — Callback when app state changes
+  - L19 `AppLifecycleService._()`
+  - L21 `static final AppLifecycleService _instance = AppLifecycleService._()`
+  - L22 `static AppLifecycleService get instance`
+  - L25 `final List<VoidCallback> _onResumeCallbacks = []`  — Callbacks for lifecycle events
+  - L26 `final List<VoidCallback> _onPauseCallbacks = []`
+  - L29 `void addOnResumeCallback(VoidCallback callback)`  — Add a callback to be called when app resumes
+  - L34 `void removeOnResumeCallback(VoidCallback callback)`  — Remove a resume callback
+  - L39 `void addOnPauseCallback(VoidCallback callback)`  — Add a callback to be called when app pauses
+  - L44 `void removeOnPauseCallback(VoidCallback callback)`  — Remove a pause callback
+  - L49 `void handleLifecycleState(AppLifecycleState state)`  — Handle app lifecycle state changes
+  - L78 `void _handleResumed()`
+  - L111 `Future<void> _checkNetworkThenResume()`
+  - L129 `void _handlePaused()`
+  - L157 `void dispose()`  — Dispose all resources
+  - L163 `bool get _isDesktopPlatform`
 
 ## lib/services/app_mode_service.dart  (108 Z.)
 - L22 `enum AppMode`  — The two halves, in the order the switch shows them: Chat on the left,
@@ -622,11 +628,11 @@
   - L561 `static ChatMode parse(String? raw)`  — Map a stored string back to a mode, tolerating anything unexpected.
 
 ## lib/services/chat_model_selection_service.dart  (185 Z.)
-- L14 `@immutable class ChatModelSelection`  — A coworker's own model: the model, the provider it runs on, and how hard
+- L14 `@immutable class ChatModelSelection`  — An agent's own model: the model, the provider it runs on, and how hard
   - L16 `const ChatModelSelection({ required this.modelId, required this.providerSlug, this.reasoningEffort, })`
   - L21 `final String modelId`
   - L22 `final String providerSlug`
-  - L27 `final String? reasoningEffort`  — The reasoning level the coworker runs at (`none`, `low`, `high`, …).
+  - L27 `final String? reasoningEffort`  — The reasoning level the agent runs at (`none`, `low`, `high`, …).
   - L29 `ChatModelSelection copyWith({ String? modelId, String? providerSlug, String? reasoningEffort, })`
   - L39 `Map<String, String> toJson()`
   - L46 `static ChatModelSelection? fromJson(Object? value)`
@@ -647,7 +653,7 @@
   - L157 `Future<void> clear(String chatId, {String? userId})`  — Drops the chat's own model, so it follows the app default again.
   - L172 `Future<ChatModelSelection> resolveForSend( String chatId, { required String modelId, required String providerSlug, String? userId, })`  — Capture this choice BEFORE awaiting transport setup or switching chats.
 
-## lib/services/chat_payload_codec.dart  (561 Z.)
+## lib/services/chat_payload_codec.dart  (563 Z.)
 - L46 `kChatPayloadVersion = 3`  — The payload version this app writes to `encrypted_chats` and the cache.
 - L50 `kChatPayloadVersionV2 = 2`  — The v2 version number. The Agents store (`cowork_chats`) still writes v2:
 - L53 `_jsonFields = <String>[ 'toolCalls', 'contentBlocks', 'images', 'imageMetas', 'attachments', 'attachedFilesJson', 'varia`  — Message fields that hold JSON in a string in v1/v2.
@@ -671,17 +677,17 @@
 - L196 `bool chatPayloadsEquivalent(DecodedChatPayload a, DecodedChatPayload b)`  — Whether [a] and [b] decode to the same messages and custom name.
 - L210 `Map<String, dynamic> _canonicalMessage(Map<String, dynamic> m)`  — The message map as `ChatMessage.fromJson` followed by `toJson` would
 - L235 `_canonicalStringKeys = <String>[ 'reasoning', 'replyContext', 'images', 'imageMetas', 'imageCostEur', 'imageGeneratedAt'`
-- L259 `Map<String, dynamic> encodeMessageV3(Map<String, dynamic> m)`  — One message (v2 shape) to its v3 form. Never changes [m].
-- L302 `Map<String, dynamic> _plainV2(Map<String, dynamic> m)`  — [m] as it is, with only a stray `_ref` key removed.
-- L307 `Object? _structured(String s)`  — The parsed value of [s] when it is a list or a map that encodes back to
-- L326 `List<dynamic>? _dedupToolCalls(List<dynamic> toolCalls, List<dynamic> blocks)`  — [blocks] with every tool call that equals an entry of [toolCalls] (same
-- L373 `List<dynamic>? _referenceRoundThinking( List<dynamic> toolCalls, List<dynamic> blocks, String? reasoning, )`  — [toolCalls] with each `roundThinking` that repeats reasoning text of the
-- L430 `Map<String, dynamic> decodeMessageV3(Map<dynamic, dynamic> m)`  — One v3 message to the v2 shape.
-- L459 `List<dynamic> _resolveRoundThinking( List<dynamic> toolCalls, List<dynamic> blocks, String? reasoning, )`
-- L486 `bool _isThinkingRef(Object? value)`
-- L488 `Map<dynamic, dynamic> _withThinking( Map<dynamic, dynamic> call, Object? ref, List<dynamic> blocks, String? reasoning, String Function() joinedText, )`
-- L518 `List<dynamic> _resolveToolCalls(List<dynamic> blocks, List<dynamic> toolCalls)`
-- L542 `Map<String, dynamic> _normalizeV1(Map<String, dynamic> msg)`  — A v1 message with its field names normalised; all fields are kept.
+- L261 `Map<String, dynamic> encodeMessageV3(Map<String, dynamic> m)`  — One message (v2 shape) to its v3 form. Never changes [m].
+- L304 `Map<String, dynamic> _plainV2(Map<String, dynamic> m)`  — [m] as it is, with only a stray `_ref` key removed.
+- L309 `Object? _structured(String s)`  — The parsed value of [s] when it is a list or a map that encodes back to
+- L328 `List<dynamic>? _dedupToolCalls(List<dynamic> toolCalls, List<dynamic> blocks)`  — [blocks] with every tool call that equals an entry of [toolCalls] (same
+- L375 `List<dynamic>? _referenceRoundThinking( List<dynamic> toolCalls, List<dynamic> blocks, String? reasoning, )`  — [toolCalls] with each `roundThinking` that repeats reasoning text of the
+- L432 `Map<String, dynamic> decodeMessageV3(Map<dynamic, dynamic> m)`  — One v3 message to the v2 shape.
+- L461 `List<dynamic> _resolveRoundThinking( List<dynamic> toolCalls, List<dynamic> blocks, String? reasoning, )`
+- L488 `bool _isThinkingRef(Object? value)`
+- L490 `Map<dynamic, dynamic> _withThinking( Map<dynamic, dynamic> call, Object? ref, List<dynamic> blocks, String? reasoning, String Function() joinedText, )`
+- L520 `List<dynamic> _resolveToolCalls(List<dynamic> blocks, List<dynamic> toolCalls)`
+- L544 `Map<String, dynamic> _normalizeV1(Map<String, dynamic> msg)`  — A v1 message with its field names normalised; all fields are kept.
 
 ## lib/services/chat_payload_migration_service.dart  (1193 Z.)
 - L72 `String bumpTimestampByOneMicrosecond(String timestamp)`  — `updated_at` + 1 µs, as Postgres wants it. Works on the web too, where a
@@ -896,7 +902,7 @@
   - L73 `void clear()`  — Drop every runtime. Intended for sign-out flows.
   - L81 `void _evictIdleIfNeeded()`  — Evict idle runtimes in LRU order while we are above the cap.
 
-## lib/services/chat_storage_crud.dart  (1644 Z.)
+## lib/services/chat_storage_crud.dart  (1742 Z.)
 - L25 `class ChatStorageCrud`  — Handles CRUD operations for chat storage: save, update, delete, load.
   - L26 `ChatStorageCrud._()`
   - L29 `static String extractTitleFromMessages(List<ChatMessage> messages)`  — Extract title from messages (first user message, truncated)
@@ -912,22 +918,31 @@
   - L794 `static void _buildAndCachePlaintextRows( String userId, List<Map<String, dynamic>> supabaseRows, )`  — Build plaintext cache rows from already-decrypted in-memory chats
   - L852 `static List<String> _extractImagePaths(List<ChatMessage> messages)`  — Extract image storage paths from messages
   - L874 `static List<ChatMessage> _mapToChatMessages( List<Map<String, dynamic>> messagesMaps, )`
-  - L971 `static final Map<String, Future<Map<String, dynamic>>> _pendingLocalRows = <String, Future<Map<String, dynamic>>>{}`  — Chat id -> the newest cache row waiting to be written, and the writer
-  - L973 `static final Map<String, Future<void>> _localRowWriters = <String, Future<void>>{}`
-  - L976 `static Future<void> _writeLocalRow( String userId, String chatId, Future<Map<String, dynamic>> row, )`
-  - L1006 `static String? _customNameOf(StoredChat? chat)`
-  - L1013 `static Future<String> _payloadJson( List<ChatMessage> messages, String? customName, )`  — The plaintext payload of a chat (v3). The one encoding for the cache
-  - L1021 `static String _digest(List<ChatMessage> messages, String? customName)`  — The digest that tells two saves of a chat apart: over the messages as
-  - L1037 `static Future<StoredChat?> saveLocal( List<Map<String, dynamic>> messagesMaps, { String? chatId, })`  — Save [messagesMaps] on this device only: memory (sidebar, search and
-  - L1137 `static Future<void> flushDirty()`  — Write every chat whose local copy is ahead of the cloud, once. A chat
-  - L1150 `static Future<void> _pushLocalCopy(String chatId)`  — Write the local copy of [chatId] to the cloud: memory, else the cache.
-  - L1164 `static Future<StoredChat?> saveChat( List<Map<String, dynamic>> messagesMaps, { String? chatId, })`  — Save a chat to Supabase: INSERT a chat the cloud does not hold yet,
-  - L1232 `static Future<StoredChat?> _doSaveChat( List<Map<String, dynamic>> messagesMaps, String effectiveChatId, int rev, )`
-  - L1326 `static Future<StoredChat> _applyCloudWrite({ required String userId, required String chatId, required int rev, required Map<String, dynamic> row, required List<ChatMessage> messages, required String payloadJson, required String? customName, required String title, })`  — Take a successful cloud write of the messages of local revision [rev]
-  - L1384 `static Future<StoredChat?> updateChat( String chatId, List<Map<String, dynamic>> messagesMaps, )`  — Update an existing chat
-  - L1417 `static Future<StoredChat?> _queueUpdate( String chatId, List<Map<String, dynamic>> messagesMaps, int seq, int rev, )`
-  - L1467 `static Future<StoredChat?> _doUpdateChat( String chatId, List<Map<String, dynamic>> messagesMaps, int rev, )`
-  - L1559 `static Future<void> deleteChat(String chatId)`  — Delete a chat and its associated images from storage
+  - L975 `static final Map<String, Future<Map<String, dynamic>>> _pendingLocalRows = <String, Future<Map<String, dynamic>>>{}`  — Chat id -> the newest cache row waiting to be written, and the writer
+  - L977 `static final Map<String, Future<void>> _localRowWriters = <String, Future<void>>{}`
+  - L980 `static Future<void> _writeLocalRow( String userId, String chatId, Future<Map<String, dynamic>> row, )`
+  - L1010 `static String? _customNameOf(StoredChat? chat)`
+  - L1017 `static Future<String> _payloadJson( List<ChatMessage> messages, String? customName, )`  — The plaintext payload of a chat (v3). The one encoding for the cache
+  - L1025 `static String _digest(List<ChatMessage> messages, String? customName)`  — The digest that tells two saves of a chat apart: over the messages as
+  - L1040 `static String _storedDigest(StoredChat chat)`  — The digest of [chat] as it is stored, run through the same mapping a
+  - L1050 `static ({String digest, DateTime? updatedAt})? _unchangedStoredDigest( String chatId, )`  — The digest of [chatId]'s copy in memory when that copy is exactly what
+  - L1066 `static ({String digest, DateTime? updatedAt})? knownLocalDigest( String chatId, )`  — What a local save of [chatId] compares with: the digest of the last
+  - L1082 `static ({String digest, DateTime? updatedAt})? knownCloudDigest( String chatId, )`  — What a cloud write of [chatId] compares with: the digest of the last
+  - L1096 `static bool _isUnchangedLocally(String chatId, String digest)`  — Whether a save of [digest] to [chatId] changes nothing on this device:
+  - L1107 `static bool _isUnchangedInCloud(String chatId, String digest)`  — Whether a cloud write of [digest] to [chatId] changes nothing: the
+  - L1117 `static String _saveDigest( String chatId, List<Map<String, dynamic>> messagesMaps, )`  — The digest a save of [messagesMaps] to [chatId] carries.
+  - L1127 `static bool isUnchangedSave( String chatId, List<Map<String, dynamic>> messagesMaps, )`  — Test seam over the check [saveLocal] makes.
+  - L1134 `static bool isUnchangedUpload( String chatId, List<Map<String, dynamic>> messagesMaps, )`  — Test seam over the check [updateChat] makes before it uploads.
+  - L1143 `static Future<StoredChat?> saveLocal( List<Map<String, dynamic>> messagesMaps, { String? chatId, })`  — Save [messagesMaps] on this device only: memory (sidebar, search and
+  - L1239 `static Future<void> flushDirty()`  — Write every chat whose local copy is ahead of the cloud, once. A chat
+  - L1252 `static Future<void> _pushLocalCopy(String chatId)`  — Write the local copy of [chatId] to the cloud: memory, else the cache.
+  - L1266 `static Future<StoredChat?> saveChat( List<Map<String, dynamic>> messagesMaps, { String? chatId, })`  — Save a chat to Supabase: INSERT a chat the cloud does not hold yet,
+  - L1334 `static Future<StoredChat?> _doSaveChat( List<Map<String, dynamic>> messagesMaps, String effectiveChatId, int rev, )`
+  - L1428 `static Future<StoredChat> _applyCloudWrite({ required String userId, required String chatId, required int rev, required Map<String, dynamic> row, required List<ChatMessage> messages, required String payloadJson, required String? customName, required String title, })`  — Take a successful cloud write of the messages of local revision [rev]
+  - L1486 `static Future<StoredChat?> updateChat( String chatId, List<Map<String, dynamic>> messagesMaps, )`  — Update an existing chat
+  - L1519 `static Future<StoredChat?> _queueUpdate( String chatId, List<Map<String, dynamic>> messagesMaps, int seq, int rev, )`
+  - L1569 `static Future<StoredChat?> _doUpdateChat( String chatId, List<Map<String, dynamic>> messagesMaps, int rev, )`
+  - L1657 `static Future<void> deleteChat(String chatId)`  — Delete a chat and its associated images from storage
 
 ## lib/services/chat_storage_mutations.dart  (295 Z.)
 - L18 `class ChatStorageMutations`  — Handles chat mutations: star, rename, re-encrypt, export
@@ -1273,6 +1288,29 @@
   - L46 `static Future<String> readModelMenuDebugReport({ int lookbackMinutes = 25, int maxEventsPerSection = 45, })`
   - L51 `static Future<void> clearLogs()`
 
+## lib/services/dictation_tracker.dart  (143 Z.)
+- L11 `abstract final class VoiceInputKeys`  — The keys a dictated message carries in its UI map and in the payload.
+  - L13 `static const String inputMode = 'inputMode'`  — `'voice'` for a dictated message. Absent for a typed one.
+  - L16 `static const String durationMs = 'voiceDurationMs'`  — Length of the recording in whole milliseconds, as a decimal string.
+  - L19 `static const String voice = 'voice'`  — The value of [inputMode] for a dictated message.
+- L23 `bool isVoiceInput(Map<String, dynamic> message)`  — Whether the message map was dictated.
+- L27 `Duration? voiceInputDuration(Map<String, dynamic> message)`  — The recording length of a dictated message, or null when it is unknown.
+- L38 `double dictationCoverage(String transcript, String sent)`  — How much of [sent] is still the text in [transcript], 0..1.
+- L58 `String _normalize(String text)`
+- L61 `kDictationCoverageMin = 0.6`  — Below this share of dictated text, a message counts as typed.
+- L69 `class DictationTracker`  — Remembers the last dictation until the composer sends it.
+  - L70 `DictationTracker({DateTime Function()? clock}) : _clock = clock ?? DateTime.now`
+  - L74 `static final DictationTracker instance = DictationTracker()`  — The one tracker the app uses.
+  - L77 `static const Duration maxAge = Duration(minutes: 30)`  — A dictation older than this is not matched any more.
+  - L79 `final DateTime Function() _clock`
+  - L80 `String? _transcript`
+  - L81 `Duration? _duration`
+  - L82 `DateTime? _recordedAt`
+  - L86 `void record(String transcript, {Duration? duration})`  — Note a transcript the composer received. [duration] is the length of
+  - L94 `void clear()`  — Forget the pending dictation.
+  - L102 `Map<String, String> takeFor(String text)`  — The voice keys for a message with [text], or an empty map when [text]
+  - L127 `void applyToEdit(Map<String, String> message, String newText)`  — Update the voice keys of [message] for an edit to [newText].
+
 ## lib/services/download_preferences_service.dart  (72 Z.)
 - L7 `class DownloadPreferencesService`  — User preferences for how downloaded files are saved across the app.
   - L8 `const DownloadPreferencesService._()`
@@ -1306,7 +1344,7 @@
   - L121 `static bool isRealPlaintext(Object? value)`  — True when [value] is a real plaintext value, not a gap or the
   - L129 `static String? pick(Object? plaintext, Map<String, dynamic>? meta, String key)`  — Reads one field: real plaintext (legacy row, or an old build wrote after
 
-## lib/services/encryption_service.dart  (1237 Z.)
+## lib/services/encryption_service.dart  (1240 Z.)
 - L18 `kPlainEnvelopeVersion = '1'`  — Envelope version of a plain ciphertext: the cleartext is UTF-8 text or
 - L26 `kCompressedEnvelopeVersion = '2'`  — Envelope version of a compressed chat payload: the cleartext is a
 - L29 `String _cleartextToString(List<int> cleartext, Object? version)`  — The text of a decrypted envelope of [version].
@@ -1382,44 +1420,45 @@
   - L388 `static int _currentKeyVersion = 1`
   - L391 `static int get currentKeyVersion`  — The current key version used for encrypting new payloads.
   - L393 `static bool get hasKey`
-  - L398 `static bool get _usePrefsBackend`
-  - L404 `static Future<SharedPreferences> _prefs()`
-  - L409 `static Future<String?> _readLocalSecret(String key)`
-  - L417 `static Future<void> _writeLocalSecret(String key, String value)`
-  - L426 `static Future<void> _deleteLocalSecret(String key)`
-  - L435 `static Future<void> initializeForPassword(String password)`
-  - L514 `static Future<void> initializeForPasswordReset(String newPassword)`  — Initialize encryption after a password reset.
-  - L578 `static Future<bool> tryLoadKey()`
-  - L623 `static Future<void> _syncMetadataInBackground( User user, String saltKey, String versionKey, )`  — Sync encryption metadata to Supabase in background (non-blocking)
-  - L675 `static Future<void> rotateKeyForPasswordChange({ required String currentPassword, required String newPassword, required Future<void> Function() migrateWithNewKey, required Future<void> Function() rollbackWithOldKey, })`
-  - L789 `static Future<void> clearKey()`
-  - L806 `static Future<String> encrypt(String plaintext)`
-  - L824 `static Future<String> decrypt(String encrypted)`
-  - L841 `static const int _backgroundSealMinChars = 4 * 1024`  — Payloads up to this many characters are sealed on the calling isolate.
-  - L845 `static const int _webBzip2MaxChars = 128 * 1024`  — On the web there is no isolate: [compute] runs on the UI thread. bzip2
-  - L850 `static Future<String> encryptChatPayload(String json)`  — Encrypt a chat payload JSON (v3) for `encrypted_chats`: compressed,
-  - L867 `static Future<ChatEnvelopeV3?> convertChatPayloadToV3( String encrypted, )`  — [convertChatEnvelopeToV3] with the current key, off the UI isolate.
-  - L880 `static Future<String> chatPayloadFingerprintOf(String encrypted)`  — [chatEnvelopeFingerprint] with the current key, off the UI isolate.
-  - L891 `static Future<String> encryptBytes(Uint8List bytes)`  — Encrypts binary data (e.g., image files) and returns encrypted JSON
-  - L908 `static const int _backgroundEncryptMinChars = 16 * 1024`  — Inputs up to this size are sealed on the calling isolate: below it the
-  - L915 `static Future<String> encryptInBackground(String plaintext)`  — [encrypt] for a large string, run off the UI isolate.
-  - L932 `static Future<Uint8List> decryptBytes(String encrypted)`  — Decrypts binary data from encrypted JSON format
-  - L948 `static Future<String> decryptInBackground(String encrypted)`  — Decrypt string in background isolate (for chat payloads)
-  - L964 `static Future<List<String?>> decryptBatchInBackground( List<String> encryptedList, )`  — Decrypt multiple strings in a single background isolate
-  - L983 `static Future<String?> tryDecryptWithKey( String encrypted, SecretKey key, )`  — Try to decrypt with a specific key. Returns null on any failure.
-  - L1002 `static Future<List<String?>> tryDecryptBatchWithKey( List<String> encryptedList, SecretKey key, )`  — Try to decrypt a batch with a specific key. Returns null for failed items.
-  - L1023 `static Future<SecretKey> deriveKeyFromPasswordAndSalt( String password, String saltBase64, )`  — Derive a key from a password and a base64-encoded salt.
-  - L1032 `static Future<SecretKey> _ensureKey()`
-  - L1056 `static Future<List<int>> _deriveKey(String password, List<int> salt)`
-  - L1066 `static List<int> _randomNonce(int length)`
-  - L1070 `static Future<T> _runExclusive<T>(Future<T> Function() action)`
-  - L1085 `static bool _constantTimeEquals(List<int> a, List<int> b)`
-  - L1096 `static Future<User> _requireAuthenticatedUser()`
-  - L1113 `static Future<String> _resolveCanonicalSalt({ required String userId, required String password, required String? storedSaltBase64, required String? remoteSaltBase64, required String? storedKeyBase64, required Map<String, dynamic> metadataUpdates, })`
-  - L1181 `static List<int> _decodeBase64OrThrow(String data, String errorMessage)`
-  - L1190 `static int _parseKeyVersion(dynamic raw)`  — Parse key version from metadata value. Returns 1 for legacy/missing values.
-  - L1199 `static int? extractKeyVersion(String encrypted)`  — Extract the key version from an encrypted payload without decrypting it.
-  - L1212 `static Future<User?> _updateUserMetadata( User user, Map<String, dynamic> patch, )`
+  - L396 `static Object? get keyIdentity`  — Opaque identity used to invalidate work when the unlocked key changes.
+  - L401 `static bool get _usePrefsBackend`
+  - L407 `static Future<SharedPreferences> _prefs()`
+  - L412 `static Future<String?> _readLocalSecret(String key)`
+  - L420 `static Future<void> _writeLocalSecret(String key, String value)`
+  - L429 `static Future<void> _deleteLocalSecret(String key)`
+  - L438 `static Future<void> initializeForPassword(String password)`
+  - L517 `static Future<void> initializeForPasswordReset(String newPassword)`  — Initialize encryption after a password reset.
+  - L581 `static Future<bool> tryLoadKey()`
+  - L626 `static Future<void> _syncMetadataInBackground( User user, String saltKey, String versionKey, )`  — Sync encryption metadata to Supabase in background (non-blocking)
+  - L678 `static Future<void> rotateKeyForPasswordChange({ required String currentPassword, required String newPassword, required Future<void> Function() migrateWithNewKey, required Future<void> Function() rollbackWithOldKey, })`
+  - L792 `static Future<void> clearKey()`
+  - L809 `static Future<String> encrypt(String plaintext)`
+  - L827 `static Future<String> decrypt(String encrypted)`
+  - L844 `static const int _backgroundSealMinChars = 4 * 1024`  — Payloads up to this many characters are sealed on the calling isolate.
+  - L848 `static const int _webBzip2MaxChars = 128 * 1024`  — On the web there is no isolate: [compute] runs on the UI thread. bzip2
+  - L853 `static Future<String> encryptChatPayload(String json)`  — Encrypt a chat payload JSON (v3) for `encrypted_chats`: compressed,
+  - L870 `static Future<ChatEnvelopeV3?> convertChatPayloadToV3( String encrypted, )`  — [convertChatEnvelopeToV3] with the current key, off the UI isolate.
+  - L883 `static Future<String> chatPayloadFingerprintOf(String encrypted)`  — [chatEnvelopeFingerprint] with the current key, off the UI isolate.
+  - L894 `static Future<String> encryptBytes(Uint8List bytes)`  — Encrypts binary data (e.g., image files) and returns encrypted JSON
+  - L911 `static const int _backgroundEncryptMinChars = 16 * 1024`  — Inputs up to this size are sealed on the calling isolate: below it the
+  - L918 `static Future<String> encryptInBackground(String plaintext)`  — [encrypt] for a large string, run off the UI isolate.
+  - L935 `static Future<Uint8List> decryptBytes(String encrypted)`  — Decrypts binary data from encrypted JSON format
+  - L951 `static Future<String> decryptInBackground(String encrypted)`  — Decrypt string in background isolate (for chat payloads)
+  - L967 `static Future<List<String?>> decryptBatchInBackground( List<String> encryptedList, )`  — Decrypt multiple strings in a single background isolate
+  - L986 `static Future<String?> tryDecryptWithKey( String encrypted, SecretKey key, )`  — Try to decrypt with a specific key. Returns null on any failure.
+  - L1005 `static Future<List<String?>> tryDecryptBatchWithKey( List<String> encryptedList, SecretKey key, )`  — Try to decrypt a batch with a specific key. Returns null for failed items.
+  - L1026 `static Future<SecretKey> deriveKeyFromPasswordAndSalt( String password, String saltBase64, )`  — Derive a key from a password and a base64-encoded salt.
+  - L1035 `static Future<SecretKey> _ensureKey()`
+  - L1059 `static Future<List<int>> _deriveKey(String password, List<int> salt)`
+  - L1069 `static List<int> _randomNonce(int length)`
+  - L1073 `static Future<T> _runExclusive<T>(Future<T> Function() action)`
+  - L1088 `static bool _constantTimeEquals(List<int> a, List<int> b)`
+  - L1099 `static Future<User> _requireAuthenticatedUser()`
+  - L1116 `static Future<String> _resolveCanonicalSalt({ required String userId, required String password, required String? storedSaltBase64, required String? remoteSaltBase64, required String? storedKeyBase64, required Map<String, dynamic> metadataUpdates, })`
+  - L1184 `static List<int> _decodeBase64OrThrow(String data, String errorMessage)`
+  - L1193 `static int _parseKeyVersion(dynamic raw)`  — Parse key version from metadata value. Returns 1 for legacy/missing values.
+  - L1202 `static int? extractKeyVersion(String encrypted)`  — Extract the key version from an encrypted payload without decrypting it.
+  - L1215 `static Future<User?> _updateUserMetadata( User user, Map<String, dynamic> patch, )`
 
 ## lib/services/executor_provisioning.dart  (111 Z.)
 - L10 `class ExecutorHandle`  — Identifies one executor the app can hand its session to.
@@ -1664,7 +1703,7 @@
   - L118 `static int _parseVersion(dynamic raw)`
   - L125 `static Future<User?> _updateMetadata( User user, Map<String, dynamic> patch, )`
 
-## lib/services/local_chat_cache_native.dart  (1124 Z.)
+## lib/services/local_chat_cache_native.dart  (1137 Z.)
 - L19 `class LocalChatCacheService`
   - L20 `static const String _dbName = 'chat_cache.db'`
   - L21 `static const int _dbVersion = 6`
@@ -1682,54 +1721,55 @@
   - L246 `static Future<void> kvSet(String key, String value)`  — Write a cached value by key.
   - L258 `static Future<bool> kvSetIfAbsent(String key, String value)`  — Write [value] under [key] only when the key holds nothing yet. Returns
   - L274 `static Future<void> kvDelete(String key)`  — Delete a cached value by key.
-  - L287 `static Future<void> _createSkillsTable(Database db)`
-  - L305 `static Future<List<Map<String, dynamic>>> skillRows(String userId)`  — Every stored skill for [userId], newest first.
-  - L317 `static Future<void> upsertSkill(Map<String, dynamic> row)`  — Insert or replace one skill row. [row] must carry id, user_id, source and
-  - L326 `static Future<void> deleteSkill(String userId, String id)`
-  - L337 `static Future<void> replaceSkills( String userId, List<Map<String, dynamic>> rows, )`  — Replace the whole skill set for [userId] in one transaction — used when a
-  - L358 `static Map<String, dynamic> buildPlaintextRow({ required String id, required String payload, required String createdAt, required bool isStarred, String? updatedAt, String? title, })`
-  - L376 `static Future<void> replaceAll( String userId, List<Map<String, dynamic>> rows, )`
-  - L393 `static Future<void> upsert(String userId, Map<String, dynamic> row)`
-  - L409 `static Future<bool> replacePayloadIfUnchanged( String userId, String chatId, { required String payload, required String? expectedUpdatedAt, required int expectedStoredLength, })`  — Replace the payload of one row with [payload], but only while the row
-  - L439 `static const String _backupName = 'chat_cache.backup.db'`
-  - L441 `static Future<String> _dbPath()`
-  - L444 `static Future<String> _backupPath()`
-  - L449 `static Future<List<String>> idsNeedingPayloadUpgrade(String userId)`  — Ids of [userId]'s rows that are not a payload frame yet (plain TEXT or
-  - L462 `static Future<String> backupDatabase()`  — Write a consistent copy of the whole cache next to it
-  - L473 `static Future<void> restoreBackup()`  — Put the backup of [backupDatabase] back in place of the cache. The
-  - L490 `static Future<void> deleteBackup()`  — Remove the backup of [backupDatabase], if there is one.
-  - L496 `static Future<bool> hasBackup()`  — Whether a backup of [backupDatabase] exists.
-  - L501 `static Future<bool> updateUpdatedAtIfEqual( String userId, String chatId, { required String expected, required String value, })`  — Set `updated_at` of one row to [value], but only while it is still
-  - L519 `static Future<({Map<String, dynamic> row, int storedLength, bool framed})?> loadRawById(String userId, String chatId)`  — One row with its payload decoded, plus what
-  - L539 `static Future<List<Map<String, dynamic>>> _toDbRows( String userId, List<Map<String, dynamic>> rows, )`  — Encode rows for the table. Large payloads are compressed (and their
-  - L558 `static Future<void> delete(String userId, String chatId)`
-  - L567 `static Future<void> updateStarred( String userId, String chatId, bool isStarred, )`
-  - L590 `static const int _batchByteBudget = 4 * 1024 * 1024`  — Byte budget for one sqflite result batch.
-  - L593 `static const String _metaColumns = 'id, title, created_at, updated_at, is_starred'`  — Columns of `chat_cache` without the heavy `payload` blob.
-  - L601 `static Future<List<Map<String, dynamic>>> loadMeta(String userId)`  — Load cached chats without their payloads.
-  - L619 `static Future<List<Map<String, dynamic>>> _fetchBatched( Database db, List<Map<String, Object?>> index, { required String orderBy, })`  — Fetch full rows for an index of `{rid, size}` records, splitting the
-  - L657 `static Future<int> count(String userId)`  — Count cached chats for one user.
-  - L672 `static Future<Map<String, dynamic>?> loadById( String userId, String chatId, )`  — Load one cached chat row by chat ID.
-  - L690 `static Future<List<Map<String, dynamic>>> search( String userId, String query, { int limit = 100, })`  — Fast case-insensitive search over title + plaintext payload.
-  - L733 `static Future<void> ensureMigrated(String userId)`  — Run all pending migrations (v1/v2/v3 → SQLite).
-  - L750 `static Future<void> _cleanupOldPrefsData(String userId)`  — Remove old bulky cache data from SharedPreferences.
-  - L794 `static Future<void> clear(String userId)`
-  - L801 `static Future<bool> hasOldEncryptedCache(String userId)`
-  - L806 `static Future<bool> migrateFromEncrypted(String userId)`
-  - L912 `static final Set<String> _migrationChecked = {}`
-  - L914 `static Future<void> _runMigrations(String userId)`
-  - L934 `static Future<bool> _migrateV3File(String userId)`
-  - L972 `static Future<bool> _migrateV2Prefs(String userId)`
-  - L1012 `static Object _encodePayload(String payload)`  — Encode a payload for storage: always a deflate frame (see above).
-  - L1016 `static String _decodePayload(Object? stored)`  — Decode a stored payload. Accepts payload frames, the gzip BLOBs of
-  - L1022 `static Map<String, dynamic> _toDbRow( String userId, Map<String, dynamic> row, _EncodedPayload encoded, )`
-  - L1042 `static Map<String, dynamic> _fromDbMetaRow(Map<String, dynamic> row)`  — Map a payload-less row (see [loadMeta]). The `payload` key is absent
-  - L1052 `static Map<String, dynamic> _fromDbRow(Map<String, dynamic> row)`
-  - L1063 `static Map<String, dynamic>? _sanitizeRow(Map<String, dynamic> row)`
-  - L1066 `static String _escapeLikePattern(String value)`
-- L1077 `typedef _EncodedPayload = ({Object stored, String? searchText})`  — A payload as the table stores it, with its search text.
-- L1079 `List<_EncodedPayload> _encodePayloads(List<String> payloads)`
-- L1088 `List<Map<String, dynamic>> _parseJsonCacheInIsolate(String raw)`  — Parse JSON cache data in a background isolate (for migration reads).
+  - L283 `static Future<List<String>> kvKeys(String prefix)`  — Every stored key that starts with [prefix], unordered. Used to find the
+  - L300 `static Future<void> _createSkillsTable(Database db)`
+  - L318 `static Future<List<Map<String, dynamic>>> skillRows(String userId)`  — Every stored skill for [userId], newest first.
+  - L330 `static Future<void> upsertSkill(Map<String, dynamic> row)`  — Insert or replace one skill row. [row] must carry id, user_id, source and
+  - L339 `static Future<void> deleteSkill(String userId, String id)`
+  - L350 `static Future<void> replaceSkills( String userId, List<Map<String, dynamic>> rows, )`  — Replace the whole skill set for [userId] in one transaction — used when a
+  - L371 `static Map<String, dynamic> buildPlaintextRow({ required String id, required String payload, required String createdAt, required bool isStarred, String? updatedAt, String? title, })`
+  - L389 `static Future<void> replaceAll( String userId, List<Map<String, dynamic>> rows, )`
+  - L406 `static Future<void> upsert(String userId, Map<String, dynamic> row)`
+  - L422 `static Future<bool> replacePayloadIfUnchanged( String userId, String chatId, { required String payload, required String? expectedUpdatedAt, required int expectedStoredLength, })`  — Replace the payload of one row with [payload], but only while the row
+  - L452 `static const String _backupName = 'chat_cache.backup.db'`
+  - L454 `static Future<String> _dbPath()`
+  - L457 `static Future<String> _backupPath()`
+  - L462 `static Future<List<String>> idsNeedingPayloadUpgrade(String userId)`  — Ids of [userId]'s rows that are not a payload frame yet (plain TEXT or
+  - L475 `static Future<String> backupDatabase()`  — Write a consistent copy of the whole cache next to it
+  - L486 `static Future<void> restoreBackup()`  — Put the backup of [backupDatabase] back in place of the cache. The
+  - L503 `static Future<void> deleteBackup()`  — Remove the backup of [backupDatabase], if there is one.
+  - L509 `static Future<bool> hasBackup()`  — Whether a backup of [backupDatabase] exists.
+  - L514 `static Future<bool> updateUpdatedAtIfEqual( String userId, String chatId, { required String expected, required String value, })`  — Set `updated_at` of one row to [value], but only while it is still
+  - L532 `static Future<({Map<String, dynamic> row, int storedLength, bool framed})?> loadRawById(String userId, String chatId)`  — One row with its payload decoded, plus what
+  - L552 `static Future<List<Map<String, dynamic>>> _toDbRows( String userId, List<Map<String, dynamic>> rows, )`  — Encode rows for the table. Large payloads are compressed (and their
+  - L571 `static Future<void> delete(String userId, String chatId)`
+  - L580 `static Future<void> updateStarred( String userId, String chatId, bool isStarred, )`
+  - L603 `static const int _batchByteBudget = 4 * 1024 * 1024`  — Byte budget for one sqflite result batch.
+  - L606 `static const String _metaColumns = 'id, title, created_at, updated_at, is_starred'`  — Columns of `chat_cache` without the heavy `payload` blob.
+  - L614 `static Future<List<Map<String, dynamic>>> loadMeta(String userId)`  — Load cached chats without their payloads.
+  - L632 `static Future<List<Map<String, dynamic>>> _fetchBatched( Database db, List<Map<String, Object?>> index, { required String orderBy, })`  — Fetch full rows for an index of `{rid, size}` records, splitting the
+  - L670 `static Future<int> count(String userId)`  — Count cached chats for one user.
+  - L685 `static Future<Map<String, dynamic>?> loadById( String userId, String chatId, )`  — Load one cached chat row by chat ID.
+  - L703 `static Future<List<Map<String, dynamic>>> search( String userId, String query, { int limit = 100, })`  — Fast case-insensitive search over title + plaintext payload.
+  - L746 `static Future<void> ensureMigrated(String userId)`  — Run all pending migrations (v1/v2/v3 → SQLite).
+  - L763 `static Future<void> _cleanupOldPrefsData(String userId)`  — Remove old bulky cache data from SharedPreferences.
+  - L807 `static Future<void> clear(String userId)`
+  - L814 `static Future<bool> hasOldEncryptedCache(String userId)`
+  - L819 `static Future<bool> migrateFromEncrypted(String userId)`
+  - L925 `static final Set<String> _migrationChecked = {}`
+  - L927 `static Future<void> _runMigrations(String userId)`
+  - L947 `static Future<bool> _migrateV3File(String userId)`
+  - L985 `static Future<bool> _migrateV2Prefs(String userId)`
+  - L1025 `static Object _encodePayload(String payload)`  — Encode a payload for storage: always a deflate frame (see above).
+  - L1029 `static String _decodePayload(Object? stored)`  — Decode a stored payload. Accepts payload frames, the gzip BLOBs of
+  - L1035 `static Map<String, dynamic> _toDbRow( String userId, Map<String, dynamic> row, _EncodedPayload encoded, )`
+  - L1055 `static Map<String, dynamic> _fromDbMetaRow(Map<String, dynamic> row)`  — Map a payload-less row (see [loadMeta]). The `payload` key is absent
+  - L1065 `static Map<String, dynamic> _fromDbRow(Map<String, dynamic> row)`
+  - L1076 `static Map<String, dynamic>? _sanitizeRow(Map<String, dynamic> row)`
+  - L1079 `static String _escapeLikePattern(String value)`
+- L1090 `typedef _EncodedPayload = ({Object stored, String? searchText})`  — A payload as the table stores it, with its search text.
+- L1092 `List<_EncodedPayload> _encodePayloads(List<String> payloads)`
+- L1101 `List<Map<String, dynamic>> _parseJsonCacheInIsolate(String raw)`  — Parse JSON cache data in a background isolate (for migration reads).
 
 ## lib/services/local_chat_cache_rows.dart  (66 Z.)
 - L13 `Map<String, dynamic> buildPlaintextCacheRow({ required String id, required String payload, required String createdAt, required bool isStarred, String? updatedAt, String? title, })`  — Builds a plaintext cache row.
@@ -1738,7 +1778,7 @@
 ## lib/services/local_chat_cache_service.dart  (5 Z.)
 - reicht weiter: 'local_chat_cache_web.dart' if (dart.library.io) 'local_chat_cache_native.dart'
 
-## lib/services/local_chat_cache_web.dart  (346 Z.)
+## lib/services/local_chat_cache_web.dart  (356 Z.)
 - L11 `class LocalChatCacheService`
   - L12 `static const String _storageKeyPrefix = 'cached_chats_v2-'`
   - L14 `const LocalChatCacheService._()`
@@ -1747,37 +1787,38 @@
   - L27 `static Future<void> kvSet(String key, String value)`
   - L32 `static Future<bool> kvSetIfAbsent(String key, String value)`
   - L39 `static Future<void> kvDelete(String key)`
-  - L48 `static const String _skillsKeyPrefix = 'skills_'`
-  - L50 `static Future<List<Map<String, dynamic>>> skillRows(String userId)`
-  - L60 `static Future<void> upsertSkill(Map<String, dynamic> row)`
-  - L74 `static Future<void> deleteSkill(String userId, String id)`
-  - L82 `static Future<void> replaceSkills( String userId, List<Map<String, dynamic>> rows, )`
-  - L92 `static Future<List<Map<String, dynamic>>> _loadSkills(String userId)`
-  - L108 `static Future<void> _persistSkills( String userId, List<Map<String, dynamic>> rows, )`
-  - L118 `static Map<String, dynamic> buildPlaintextRow({ required String id, required String payload, required String createdAt, required bool isStarred, String? updatedAt, String? title, })`
-  - L134 `static Future<void> replaceAll( String userId, List<Map<String, dynamic>> rows, )`
-  - L145 `static Future<void> upsert(String userId, Map<String, dynamic> row)`
-  - L159 `static Future<void> delete(String userId, String chatId)`
-  - L167 `static Future<void> updateStarred( String userId, String chatId, bool isStarred, )`
-  - L186 `static Future<List<Map<String, dynamic>>> loadMeta(String userId)`  — Load cached chats without their payloads.
-  - L198 `static Future<int> count(String userId)`  — Count cached chats for one user.
-  - L204 `static Future<Map<String, dynamic>?> loadById( String userId, String chatId, )`  — Load one cached chat row by chat ID.
-  - L223 `static Future<List<Map<String, dynamic>>> search( String userId, String query, { int limit = 100, })`  — Case-insensitive search over chat title and message text.
-  - L256 `static Future<void> ensureMigrated(String userId)`  — No-op on web (no migration needed).
-  - L260 `static Future<({Map<String, dynamic> row, int storedLength, bool framed})?> loadRawById(String userId, String chatId)`  — Native only (the background upgrade of old rows to v3). The web cache
-  - L265 `static Future<List<String>> idsNeedingPayloadUpgrade(String userId)`  — Native only (the maintenance screen's local part). The web cache is
-  - L269 `static Future<String> backupDatabase()`  — Native only; the web has no database file to back up.
-  - L273 `static Future<void> restoreBackup()`  — Native only, see [backupDatabase].
-  - L277 `static Future<void> deleteBackup()`  — Native only, see [backupDatabase].
-  - L280 `static Future<bool> hasBackup()`  — Native only, see [backupDatabase].
-  - L283 `static Future<bool> updateUpdatedAtIfEqual( String userId, String chatId, { required String expected, required String value, })`  — Native only, see [idsNeedingPayloadUpgrade].
-  - L291 `static Future<bool> replacePayloadIfUnchanged( String userId, String chatId, { required String payload, required String? expectedUpdatedAt, required int expectedStoredLength, })`  — Native only, see [loadRawById].
-  - L299 `static Future<void> clear(String userId)`
-  - L305 `static Future<bool> hasOldEncryptedCache(String userId)`  — No encrypted cache on web.
-  - L308 `static Future<bool> migrateFromEncrypted(String userId)`  — No-op on web.
-  - L312 `static Future<List<Map<String, dynamic>>> _loadChats(String userId)`
-  - L332 `static Future<void> _persist( String userId, List<Map<String, dynamic>> chats, )`
-  - L343 `static Map<String, dynamic>? _sanitizeRow(Map<String, dynamic> row)`
+  - L46 `static Future<List<String>> kvKeys(String prefix)`  — Every stored key that starts with [prefix], unordered. Mirrors the
+  - L58 `static const String _skillsKeyPrefix = 'skills_'`
+  - L60 `static Future<List<Map<String, dynamic>>> skillRows(String userId)`
+  - L70 `static Future<void> upsertSkill(Map<String, dynamic> row)`
+  - L84 `static Future<void> deleteSkill(String userId, String id)`
+  - L92 `static Future<void> replaceSkills( String userId, List<Map<String, dynamic>> rows, )`
+  - L102 `static Future<List<Map<String, dynamic>>> _loadSkills(String userId)`
+  - L118 `static Future<void> _persistSkills( String userId, List<Map<String, dynamic>> rows, )`
+  - L128 `static Map<String, dynamic> buildPlaintextRow({ required String id, required String payload, required String createdAt, required bool isStarred, String? updatedAt, String? title, })`
+  - L144 `static Future<void> replaceAll( String userId, List<Map<String, dynamic>> rows, )`
+  - L155 `static Future<void> upsert(String userId, Map<String, dynamic> row)`
+  - L169 `static Future<void> delete(String userId, String chatId)`
+  - L177 `static Future<void> updateStarred( String userId, String chatId, bool isStarred, )`
+  - L196 `static Future<List<Map<String, dynamic>>> loadMeta(String userId)`  — Load cached chats without their payloads.
+  - L208 `static Future<int> count(String userId)`  — Count cached chats for one user.
+  - L214 `static Future<Map<String, dynamic>?> loadById( String userId, String chatId, )`  — Load one cached chat row by chat ID.
+  - L233 `static Future<List<Map<String, dynamic>>> search( String userId, String query, { int limit = 100, })`  — Case-insensitive search over chat title and message text.
+  - L266 `static Future<void> ensureMigrated(String userId)`  — No-op on web (no migration needed).
+  - L270 `static Future<({Map<String, dynamic> row, int storedLength, bool framed})?> loadRawById(String userId, String chatId)`  — Native only (the background upgrade of old rows to v3). The web cache
+  - L275 `static Future<List<String>> idsNeedingPayloadUpgrade(String userId)`  — Native only (the maintenance screen's local part). The web cache is
+  - L279 `static Future<String> backupDatabase()`  — Native only; the web has no database file to back up.
+  - L283 `static Future<void> restoreBackup()`  — Native only, see [backupDatabase].
+  - L287 `static Future<void> deleteBackup()`  — Native only, see [backupDatabase].
+  - L290 `static Future<bool> hasBackup()`  — Native only, see [backupDatabase].
+  - L293 `static Future<bool> updateUpdatedAtIfEqual( String userId, String chatId, { required String expected, required String value, })`  — Native only, see [idsNeedingPayloadUpgrade].
+  - L301 `static Future<bool> replacePayloadIfUnchanged( String userId, String chatId, { required String payload, required String? expectedUpdatedAt, required int expectedStoredLength, })`  — Native only, see [loadRawById].
+  - L309 `static Future<void> clear(String userId)`
+  - L315 `static Future<bool> hasOldEncryptedCache(String userId)`  — No encrypted cache on web.
+  - L318 `static Future<bool> migrateFromEncrypted(String userId)`  — No-op on web.
+  - L322 `static Future<List<Map<String, dynamic>>> _loadChats(String userId)`
+  - L342 `static Future<void> _persist( String userId, List<Map<String, dynamic>> chats, )`
+  - L353 `static Map<String, dynamic>? _sanitizeRow(Map<String, dynamic> row)`
 
 ## lib/services/message_composition_service.dart  (412 Z.)
 - L11 `class MessageCompositionResult`  — Result of message composition preparation
@@ -2013,15 +2054,15 @@
   - L195 `final Set<int> expectedStatusCodes`
   - L197 `const _ConnectivityProbe({ required this.uri, this.headers, required this.expectedStatusCodes, })`
 
-## lib/services/notification_service.dart  (46 Z.)
-- L16 `class NotificationService`
-  - L17 `static bool get isInitialized`
-  - L21 `static Future<void> initialize([GlobalKey<NavigatorState>? navigatorKey])`  — chuk passes its navigator key; Agents's shell routes taps itself, so
-  - L24 `static Future<bool> requestPermission()`
-  - L28 `static Future<bool> requestPermissions()`  — Older name used by Agents's own code.
-  - L32 `static Future<void> showCompletionNotification({ required String chatId, required String chatTitle, required String contentPreview, })`  — chuk's completion toast. `contentPreview` is deliberately NOT shown:
-  - L41 `static Future<void> checkLaunchNotification()`
-  - L44 `static Future<void> cancelAll()`
+## lib/services/notification_service.dart  (57 Z.)
+- L17 `class NotificationService`
+  - L18 `static bool get isInitialized`
+  - L22 `static Future<void> initialize([GlobalKey<NavigatorState>? navigatorKey])`  — chuk passes its navigator key; Agents's shell routes taps itself, so
+  - L25 `static Future<bool> requestPermission()`
+  - L29 `static Future<bool> requestPermissions()`  — Older name used by Agents's own code.
+  - L39 `static Future<void> showCompletionNotification({ required String chatId, required String chatTitle, required String contentPreview, })`  — chuk's completion toast: the chat's title and a short preview of the
+  - L52 `static Future<void> checkLaunchNotification()`
+  - L55 `static Future<void> cancelAll()`
 
 ## lib/services/notification_service_io.dart  (257 Z.)
 - L13 `class NotificationService`  — Service for handling local notifications (completion notifications with deep linking)
@@ -2482,33 +2523,33 @@
   - L105 `static Future<Map<String, Map<String, dynamic>>> loadAll({ bool throwOnError = false, Set<String>? undecryptable, })`  — Load all stored credentials for the current user.
   - L178 `static Future<int> delete( String serviceName, { bool throwOnError = false, })`  — Delete credentials for [serviceName]. Returns how many rows were removed.
 
-## lib/services/session_manager_service.dart  (275 Z.)
-- L23 `typedef SessionEventCallback = void Function()`  — Callback for session-related events
-- L26 `class SessionManagerService extends ChangeNotifier`  — Service for managing user authentication sessions and security
-  - L27 `SessionManagerService._()`
-  - L29 `static final SessionManagerService _instance = SessionManagerService._()`
-  - L30 `static SessionManagerService get instance`
-  - L33 `final List<SessionEventCallback> _onPasswordMismatchCallbacks = []`  — Callbacks for session events
-  - L35 `StreamSubscription<AuthState>? _authSubscription`
-  - L36 `bool _isInitialized = false`
-  - L37 `String? _sessionInitializedForUser`
-  - L38 `String? _revisionCheckedForUser`
-  - L39 `Future<void>? _revisionCheckInFlight`
-  - L40 `static const Duration _defaultThemeRefreshDelay = Duration(seconds: 4)`
-  - L41 `static const Duration _linuxThemeRefreshDelay = Duration(seconds: 18)`
-  - L43 `bool get isInitialized`
-  - L46 `void initialize({SessionEventCallback? onPasswordMismatch})`  — Initialize session management and listen to auth state changes
-  - L60 `void _handleAuthStateChange(AuthState event)`
-  - L82 `static bool isSignOutEvent(AuthState event, {bool sessionStashed = false})`  — Whether an auth event without a session means the user is signed out.
-  - L86 `Future<void> _handleSessionActive(User user)`
-  - L110 `Future<void> _initializeUserSessionAsync(User user)`  — Runs user session initialization with error handling.
-  - L135 `Future<void> _verifyPasswordRevisionInBackground(User user)`
-  - L177 `Future<void> _handleSessionInactive()`
-  - L201 `Future<void> _handlePasswordRevisionMismatch(User user)`
-  - L218 `Future<bool> _checkNetworkStatus()`
-  - L229 `Future<void> _performLogoutCleanup()`
-  - L250 `Future<void> performFullLogout()`  — Perform a full logout with cleanup
-  - L265 `void dispose()`
+## lib/services/session_manager_service.dart  (280 Z.)
+- L24 `typedef SessionEventCallback = void Function()`  — Callback for session-related events
+- L27 `class SessionManagerService extends ChangeNotifier`  — Service for managing user authentication sessions and security
+  - L28 `SessionManagerService._()`
+  - L30 `static final SessionManagerService _instance = SessionManagerService._()`
+  - L31 `static SessionManagerService get instance`
+  - L34 `final List<SessionEventCallback> _onPasswordMismatchCallbacks = []`  — Callbacks for session events
+  - L36 `StreamSubscription<AuthState>? _authSubscription`
+  - L37 `bool _isInitialized = false`
+  - L38 `String? _sessionInitializedForUser`
+  - L39 `String? _revisionCheckedForUser`
+  - L40 `Future<void>? _revisionCheckInFlight`
+  - L41 `static const Duration _defaultThemeRefreshDelay = Duration(seconds: 4)`
+  - L42 `static const Duration _linuxThemeRefreshDelay = Duration(seconds: 18)`
+  - L44 `bool get isInitialized`
+  - L47 `void initialize({SessionEventCallback? onPasswordMismatch})`  — Initialize session management and listen to auth state changes
+  - L61 `void _handleAuthStateChange(AuthState event)`
+  - L83 `static bool isSignOutEvent(AuthState event, {bool sessionStashed = false})`  — Whether an auth event without a session means the user is signed out.
+  - L87 `Future<void> _handleSessionActive(User user)`
+  - L113 `Future<void> _initializeUserSessionAsync(User user)`  — Runs user session initialization with error handling.
+  - L138 `Future<void> _verifyPasswordRevisionInBackground(User user)`
+  - L180 `Future<void> _handleSessionInactive()`
+  - L205 `Future<void> _handlePasswordRevisionMismatch(User user)`
+  - L222 `Future<bool> _checkNetworkStatus()`
+  - L233 `Future<void> _performLogoutCleanup()`
+  - L255 `Future<void> performFullLogout()`  — Perform a full logout with cleanup
+  - L270 `void dispose()`
 
 ## lib/services/session_recovery.dart  (559 Z.)
 - L47 `@immutable class SessionStash`  — Session recovery through the paired host (bead cowork-2n1).
@@ -3037,138 +3078,152 @@
   - L282 `int tokens = 0`
   - L283 `int requests = 0`
 
-## lib/services/tool_call_handler.dart  (2181 Z.)
+## lib/services/tool_call_handler.dart  (2356 Z.)
 - L33 `_readOnlyToolNames = <String>{ 'web_search', 'web_crawl', 'search_places', 'search_restaurants', 'geocode', 'get_route',`  — Tools that only read. A round made up entirely of these can run its
 - L54 `repeatableLookupToolNames = <String>{ 'web_search', 'web_crawl', 'search_places', 'search_restaurants', 'geocode', 'get_`  — Read-only lookups whose result does not change within one turn: the same
 - L70 `kRepeatedToolCallNote = '[REPEATED CALL] This exact call already ran in this turn. The result ' 'below is the one it ret`  — Prefix of a tool result that was answered from an identical earlier call
 - L77 `kToolsClosedNote = 'Tools are now closed for this turn. Write the final answer for the user ' 'from the results you have`  — Added to [kRepeatedToolCallNote] on the round that closes the tools.
 - L87 `kMaxToolRoundsPerTurn = 16`  — Most tool rounds one user turn may run. Every round re-sends the whole
-- L92 `@visibleForTesting String toolCallIdentityKey(String name, Map<String, dynamic> arguments)`  — A key that is equal for two calls with the same name and the same
-- L95 `Object? _canonicalJson(Object? value)`
-- L106 `class ToolLoopSession`
-  - L107 `ToolLoopSession({ required this.latestUserMessage, required this.history, required this.accessToken, required this.enforcer, required this.toolCallingEnabled, required this.discoveryMode, this.baseSystemPrompt, this.discoveryContextKey, this.modelId, this.skipIdentity = false, this.nativeToolCalling = false, })`
-  - L121 `String latestUserMessage`
-  - L122 `final List<Map<String, dynamic>> history`
-  - L123 `final String accessToken`
-  - L124 `final ToolEnforcer enforcer`
-  - L125 `final bool toolCallingEnabled`
-  - L126 `final bool discoveryMode`
-  - L127 `final String? baseSystemPrompt`
-  - L128 `final String? discoveryContextKey`
-  - L132 `final String? modelId`  — Currently-selected model id. When set, the per-model system prompt
-  - L136 `final bool skipIdentity`  — When true, the identity section (Soul/User/Memory) is not injected
-  - L142 `final bool nativeToolCalling`  — When true, tools are exposed to the model natively (the request carries a
-  - L144 `final List<Map<String, dynamic>> discoveredTools = []`
-  - L145 `final Set<String> discoveredToolNames = {}`
-  - L151 `final List<String> activeSkillNames = []`  — Skills activated via the `skill` tool, oldest first. Their bodies are
-  - L153 `final List<ToolCall> toolCalls = []`
-  - L159 `final List<ContentBlock> producedBlocks = []`  — Content blocks produced as side-effects of tool calls in this loop
-  - L161 `int emptyFinalRecoveryAttempts = 0`
-  - L162 `int malformedToolProtocolRecoveryAttempts = 0`
-  - L163 `int truncatedCompletionRecoveryAttempts = 0`
-  - L164 `int deferredActionRecoveryAttempts = 0`
-  - L165 `int nonFinalTurnRecoveryAttempts = 0`
-  - L166 `int factCheckRecoveryAttempts = 0`
-  - L173 `int repeatedLookupRounds = 0`  — Rounds with at least one call that repeated a lookup this turn already
-  - L177 `bool toolsClosed = false`  — Set when the model kept repeating lookups it already had. The next pass
-  - L185 `String? factCheckCandidate`  — The tool-grounded candidate answer captured just before a fact-check
-  - L186 `String factCheckCandidateReasoning = ''`
-- L189 `class ToolLoopStep`
-  - L190 `const ToolLoopStep({ required this.message, required this.history, required this.systemPrompt, })`
-  - L196 `final String message`
-  - L197 `final List<Map<String, dynamic>> history`
-  - L198 `final String? systemPrompt`
-- L207 `class RoundSegment`  — One segment in the model's interleaved output for a single round.
-  - L208 `const RoundSegment._({this.text, this.toolCall})`
-  - L210 `factory RoundSegment.text(String text)`
-  - L211 `factory RoundSegment.toolCall(ToolCall tc)`
-  - L213 `final String? text`
-  - L214 `final ToolCall? toolCall`
-  - L216 `bool get isText`
-  - L217 `bool get isToolCall`
-- L220 `class ToolLoopResult`
-  - L221 `const ToolLoopResult._({ required this.shouldContinue, this.nextStep, this.finalContent, this.finalReasoning, this.interimContent, this.interimBeforeToolCalls = false, this.toolCalls = const [], this.interleavedSegments = const [], this.producedBlocks = const [], })`
-  - L233 `factory ToolLoopResult.continueWith({ required ToolLoopStep nextStep, String? interimContent, bool interimBeforeToolCalls = false, List<ToolCall> toolCalls = const [], List<RoundSegment> interleavedSegments = const [], List<ContentBlock> producedBlocks = const [], })`
-  - L252 `factory ToolLoopResult.finalAnswer({ required String content, required String reasoning, List<ToolCall> toolCalls = const [], List<ContentBlock> producedBlocks = const [], })`
-  - L267 `final bool shouldContinue`
-  - L268 `final ToolLoopStep? nextStep`
-  - L269 `final String? finalContent`
-  - L270 `final String? finalReasoning`
-  - L271 `final String? interimContent`
-  - L272 `final bool interimBeforeToolCalls`
-  - L273 `final List<ToolCall> toolCalls`
-  - L279 `final List<RoundSegment> interleavedSegments`  — Ordered list of text/tool segments produced this round. Empty when the
-  - L285 `final List<ContentBlock> producedBlocks`  — New content blocks produced as side-effects of tool calls during this
-- L296 `class ToolTurnSignals`  — Provider/tool-loop hints extracted from stream metadata.
-  - L297 `const ToolTurnSignals._({this.stopReason, this.finishReason, this.rawMeta})`
-  - L299 `final String? stopReason`
-  - L300 `final String? finishReason`
-  - L301 `final Map<String, dynamic>? rawMeta`
-  - L303 `static const Set<String> _toolUseReasons = <String>{ 'tool_use', 'tool_calls', 'function_call', 'function_calls', }`
-  - L310 `static const Set<String> _finalReasons = <String>{ 'stop', 'end_turn', 'stop_sequence', 'eos', }`
-  - L317 `static const Set<String> _truncatedReasons = <String>{'max_tokens', 'length'}`
-  - L319 `bool get indicatesToolUse`
-  - L323 `bool get indicatesFinalStop`
-  - L327 `bool get indicatesTruncated`
-  - L331 `static ToolTurnSignals fromMeta(Map<String, dynamic>? meta)`
-  - L358 `static String? _firstLowercasedString( Map<String, dynamic> root, List<List<Object>> paths, )`
-  - L373 `static Object? _readPath(Object? current, List<Object> path)`
-- L395 `_kMalformedArgumentsKey = '__malformed_arguments__'`  — Marks a call whose arguments did not parse, so the executor can report
-- L397 `class ToolCallHandler`
-  - L398 `ToolCallHandler._internal()`
-  - L425 `static final ToolCallHandler _instance = ToolCallHandler._internal()`
-  - L432 `factory ToolCallHandler()`  — Upstream's client-side tool loop below. The first call builds it, which
-  - L439 `static ToolCallHandler forChat(String? chatId)`  — The loop for [chatId]'s turn. An Agents thread
-  - L448 `static void warmUp()`  — Builds upstream's loop now instead of at the first send, so the tool
-  - L450 `final ToolExecutor _toolExecutor = ToolExecutor()`
-  - L451 `static const int _maxEmptyFinalRecoveryAttempts = 3`
-  - L452 `static const int _maxMalformedToolProtocolRecoveryAttempts = 2`
-  - L453 `static const int _maxTruncatedCompletionRecoveryAttempts = 2`
-  - L454 `static const int _maxDeferredActionRecoveryAttempts = 2`
-  - L455 `static const int _maxNonFinalTurnRecoveryAttempts = 1`
-  - L458 `static const int _maxFactCheckRecoveryAttempts = 1`  — One-shot self-verification pass before a tool-grounded answer is shown.
-  - L465 `static const Set<String> _nonFactualToolNames = { 'find_tools', 'notes', 'ask_user', // Returns a Connect-button marker, not a real-world fact. Without this a // turn whose only tool call was request_mcp_server would fire a spurious // [VERIFY] round against nothing. 'request_mcp_server', 'flip_coin', 'roll_dice', 'random_number', 'countdown', 'password_generator', 'uuid_generator', 'generate_qr', 'calculate', 'generate_image', 'fetch_image', // Hands files over; the result is a delivery receipt, not facts. 'fetch_files', // `skill` returns an acknowledgement, not facts. Without this entry a // turn whose only tool call was `skill()` would trigger a full [VERIFY] // round-trip that fact-checks an ack against nothing. 'skill', // Artifact hosting returns a published URL, not verifiable facts. Without // these entries a turn whose only tool call was create/update_artifact // would fire a spurious [VERIFY] fact-check round against nothing. 'create_artifact', 'update_artifact', }`  — Tools whose results carry no verifiable real-world facts. When EVERY
-  - L496 `static const int _maxDiscoveryContexts = 200`
-  - L502 `static const int _maxActiveSkillsPerChat = 3`  — Ceiling on skills active in one chat. Every active skill's body is
-  - L503 `final Map<String, _DiscoveryContextState> _discoveryContextStates = <String, _DiscoveryContextState>{}`
-  - L506 `ToolExecutor get toolExecutor`
-  - L508 `ToolLoopSession createSession({ required String initialUserMessage, required List<Map<String, dynamic>> history, required String accessToken, String? discoveryContextKey, String? baseSystemPrompt, String? modelId, bool toolCallingEnabled = true, bool discoveryMode = true, bool skipIdentity = false, bool nativeToolCalling = false, })`
-  - L565 `Future<String> buildInitialSystemPrompt(ToolLoopSession session)`
-  - L596 `List<Map<String, dynamic>> nativeToolDefinitions(ToolLoopSession session)`  — The enabled tools as native OpenAI function definitions, for the request's
-  - L618 `String _buildSafetyLimitMessage(ToolLoopSession session)`  — Message shown when the tool-call safety limit trips. If the turn already
-  - L679 `Future<ToolLoopResult> processAssistantResponse({ required ToolLoopSession session, required String content, required String reasoning, ToolTurnSignals? turnSignals, void Function(List<ToolCall>)? onToolCallsUpdated, List<NativeToolCall> nativeToolCalls = const <NativeToolCall>[], })`
-  - L1459 `List<RoundSegment> _splitInterleavedSegments( String content, List<ToolCall> uiCalls, )`  — Walks [content] in source order and splits it into text chunks /
-  - L1502 `static int _countToolGroups(List<RoundSegment> segments)`
-  - L1523 `List<Map<String, dynamic>> _nativeCallsToParsed(List<NativeToolCall> calls)`  — Convert native (structured) tool calls into the parsed-call shape the
-  - L1566 `void _appendRoundToHistory( ToolLoopSession session, { required String assistantContent, String? assistantReasoning, })`
-  - L1595 `void _updateDiscoveredTools(ToolLoopSession session, String findToolsResult)`
-  - L1638 `void _updateActiveSkills(ToolLoopSession session, String skillResult)`  — Records a skill activation from the `skill` tool's acknowledgement.
-  - L1684 `Future<String> _buildSystemPrompt({ required String? baseSystemPrompt, required bool isToolResult, required bool discoveryMode, required List<Map<String, dynamic>> discoveredTools, List<String> activeSkillNames = const [], bool skipIdentity = false, bool nativeToolCalling = false, String? modelId, })`
-  - L1857 `Future<String?> _applyPerModelPrompt({ required String? base, required String? modelId, })`  — Merge the per-model prompt for [modelId] into [base] using the saved
-  - L1886 `String _stripToolCallBlocks(String content)`
-  - L1890 `String _extractPreToolText(String content)`
-  - L1900 `String? _extractRoundThinking({ required String content, required String reasoning, })`
-  - L1921 `static String _stripThinkingTags(String text)`  — Some providers (Kimi on Fireworks, DeepSeek) wrap reasoning in
-  - L1935 `static int? trailingToolCallBlockStart(String text)`  — Returns the start index of the contiguous run of tool-call blocks
-  - L1938 `int? _trailingToolCallBlockStart(String text)`
-  - L1941 `static int? _trailingToolCallBlockStartImpl(String text)`
-  - L1959 `int _indexOfFirstToolCallBlock(String content)`
-  - L1972 `bool _hasInterimTextBeforeToolCalls(String content)`
-  - L1996 `static bool looksLikeDeferredActionWithoutToolCall(String content)`  — Detects "I'll search/check/lookup..." style deferred-action text that
-  - L1999 `static bool _looksLikeDeferredActionWithoutToolCall(String content)`
-  - L2029 `static String _lastSentence(String normalized)`  — Last sentence of [normalized], or the whole string when it has only one.
-  - L2038 `static bool _isDeferredIntentSentence(String sentence)`
-  - L2080 `List<Map<String, dynamic>> _cloneHistory(List<Map<String, dynamic>> history)`
-  - L2084 `List<ToolCall> _cloneToolCalls(List<ToolCall> calls)`
-  - L2088 `void _restoreDiscoveryContext(ToolLoopSession session)`
-  - L2112 `void _storeDiscoveryContext(ToolLoopSession session)`
-  - L2137 `void _refreshDiscoveredToolDefinitions(ToolLoopSession session)`
-  - L2152 `void _pruneDiscoveryContextsIfNeeded()`
-- L2174 `class _DiscoveryContextState`  — Per-chat context that survives across user turns (in memory only — it does
-  - L2175 `_DiscoveryContextState()`
-  - L2177 `DateTime lastUsedAt = DateTime.now()`
-  - L2178 `final Set<String> discoveredToolNames = <String>{}`
-  - L2179 `final List<String> activeSkillNames = <String>[]`
+- L95 `kForcedFinalAnswerNote = 'The tool limit for this turn is reached. Tools are now closed. ' 'Write the final answer for t`  — Sent as the user turn of the forced final pass. When the round limit is
+- L103 `_maxForcedFinalPasses = 2`  — Forced final passes one turn may send before it ends with what it has.
+- L110 `kCompactToolResultTriggerChars = 4000`  — An older tool result longer than this is shortened before the next pass.
+- L114 `kCompactToolResultKeepChars = 3000`  — Characters an older tool result keeps when it is shortened.
+- L121 `@visibleForTesting String compactToolResultForModel(String content)`  — Shortens one older tool result. A result at or under
+- L138 `@visibleForTesting void compactOlderToolResults( List<Map<String, dynamic>> history, { int turnStart = 0, Set<int> promptToolResultIndices = const <int>{}, })`  — Shortens, in place, the tool results in [history] that are not part of
+- L167 `@visibleForTesting String toolCallIdentityKey(String name, Map<String, dynamic> arguments)`  — A key that is equal for two calls with the same name and the same
+- L170 `Object? _canonicalJson(Object? value)`
+- L181 `class ToolLoopSession`
+  - L182 `ToolLoopSession({ required this.latestUserMessage, required this.history, required this.accessToken, required this.enforcer, required this.toolCallingEnabled, required this.discoveryMode, this.baseSystemPrompt, this.discoveryContextKey, this.modelId, this.skipIdentity = false, this.nativeToolCalling = false, }) : turnHistoryStart = history.length`
+  - L196 `String latestUserMessage`
+  - L200 `final int turnHistoryStart`  — Length of [history] when the turn started. Entries from here on were
+  - L204 `final Set<int> promptToolResultIndices = <int>{}`  — History indices of prompt-based tool-result messages (see
+  - L208 `String? pendingPromptToolResult`  — The prompt-based tool-result message last handed to the model, so the
+  - L209 `final List<Map<String, dynamic>> history`
+  - L210 `final String accessToken`
+  - L211 `final ToolEnforcer enforcer`
+  - L212 `final bool toolCallingEnabled`
+  - L213 `final bool discoveryMode`
+  - L214 `final String? baseSystemPrompt`
+  - L215 `final String? discoveryContextKey`
+  - L219 `final String? modelId`  — Currently-selected model id. When set, the per-model system prompt
+  - L223 `final bool skipIdentity`  — When true, the identity section (Soul/User/Memory) is not injected
+  - L229 `final bool nativeToolCalling`  — When true, tools are exposed to the model natively (the request carries a
+  - L231 `final List<Map<String, dynamic>> discoveredTools = []`
+  - L232 `final Set<String> discoveredToolNames = {}`
+  - L238 `final List<String> activeSkillNames = []`  — Skills activated via the `skill` tool, oldest first. Their bodies are
+  - L240 `final List<ToolCall> toolCalls = []`
+  - L246 `final List<ContentBlock> producedBlocks = []`  — Content blocks produced as side-effects of tool calls in this loop
+  - L248 `int emptyFinalRecoveryAttempts = 0`
+  - L249 `int malformedToolProtocolRecoveryAttempts = 0`
+  - L250 `int truncatedCompletionRecoveryAttempts = 0`
+  - L251 `int deferredActionRecoveryAttempts = 0`
+  - L252 `int nonFinalTurnRecoveryAttempts = 0`
+  - L253 `int factCheckRecoveryAttempts = 0`
+  - L260 `int repeatedLookupRounds = 0`  — Rounds with at least one call that repeated a lookup this turn already
+  - L264 `bool toolsClosed = false`  — Set when the model kept repeating lookups it already had. The next pass
+  - L269 `bool finalAnswerRequested = false`  — Set by the stream driver when its own pass budget is nearly used up.
+  - L272 `int forcedFinalPasses = 0`  — Forced final passes sent this turn (see [kForcedFinalAnswerNote]).
+  - L275 `bool get toolsShut`  — True once the model may not call tools any more this turn.
+  - L283 `String? factCheckCandidate`  — The tool-grounded candidate answer captured just before a fact-check
+  - L284 `String factCheckCandidateReasoning = ''`
+- L287 `class ToolLoopStep`
+  - L288 `const ToolLoopStep({ required this.message, required this.history, required this.systemPrompt, })`
+  - L294 `final String message`
+  - L295 `final List<Map<String, dynamic>> history`
+  - L296 `final String? systemPrompt`
+- L305 `class RoundSegment`  — One segment in the model's interleaved output for a single round.
+  - L306 `const RoundSegment._({this.text, this.toolCall})`
+  - L308 `factory RoundSegment.text(String text)`
+  - L309 `factory RoundSegment.toolCall(ToolCall tc)`
+  - L311 `final String? text`
+  - L312 `final ToolCall? toolCall`
+  - L314 `bool get isText`
+  - L315 `bool get isToolCall`
+- L318 `class ToolLoopResult`
+  - L319 `const ToolLoopResult._({ required this.shouldContinue, this.nextStep, this.finalContent, this.finalReasoning, this.interimContent, this.interimBeforeToolCalls = false, this.toolCalls = const [], this.interleavedSegments = const [], this.producedBlocks = const [], })`
+  - L331 `factory ToolLoopResult.continueWith({ required ToolLoopStep nextStep, String? interimContent, bool interimBeforeToolCalls = false, List<ToolCall> toolCalls = const [], List<RoundSegment> interleavedSegments = const [], List<ContentBlock> producedBlocks = const [], })`
+  - L350 `factory ToolLoopResult.finalAnswer({ required String content, required String reasoning, List<ToolCall> toolCalls = const [], List<ContentBlock> producedBlocks = const [], })`
+  - L365 `final bool shouldContinue`
+  - L366 `final ToolLoopStep? nextStep`
+  - L367 `final String? finalContent`
+  - L368 `final String? finalReasoning`
+  - L369 `final String? interimContent`
+  - L370 `final bool interimBeforeToolCalls`
+  - L371 `final List<ToolCall> toolCalls`
+  - L377 `final List<RoundSegment> interleavedSegments`  — Ordered list of text/tool segments produced this round. Empty when the
+  - L383 `final List<ContentBlock> producedBlocks`  — New content blocks produced as side-effects of tool calls during this
+- L394 `class ToolTurnSignals`  — Provider/tool-loop hints extracted from stream metadata.
+  - L395 `const ToolTurnSignals._({this.stopReason, this.finishReason, this.rawMeta})`
+  - L397 `final String? stopReason`
+  - L398 `final String? finishReason`
+  - L399 `final Map<String, dynamic>? rawMeta`
+  - L401 `static const Set<String> _toolUseReasons = <String>{ 'tool_use', 'tool_calls', 'function_call', 'function_calls', }`
+  - L408 `static const Set<String> _finalReasons = <String>{ 'stop', 'end_turn', 'stop_sequence', 'eos', }`
+  - L415 `static const Set<String> _truncatedReasons = <String>{'max_tokens', 'length'}`
+  - L417 `bool get indicatesToolUse`
+  - L421 `bool get indicatesFinalStop`
+  - L425 `bool get indicatesTruncated`
+  - L429 `static ToolTurnSignals fromMeta(Map<String, dynamic>? meta)`
+  - L456 `static String? _firstLowercasedString( Map<String, dynamic> root, List<List<Object>> paths, )`
+  - L471 `static Object? _readPath(Object? current, List<Object> path)`
+- L493 `_kMalformedArgumentsKey = '__malformed_arguments__'`  — Marks a call whose arguments did not parse, so the executor can report
+- L495 `class ToolCallHandler`
+  - L496 `ToolCallHandler._internal()`
+  - L523 `static final ToolCallHandler _instance = ToolCallHandler._internal()`
+  - L530 `factory ToolCallHandler()`  — Upstream's client-side tool loop below. The first call builds it, which
+  - L537 `static ToolCallHandler forChat(String? chatId)`  — The loop for [chatId]'s turn. An Agents thread
+  - L546 `static void warmUp()`  — Builds upstream's loop now instead of at the first send, so the tool
+  - L548 `final ToolExecutor _toolExecutor = ToolExecutor()`
+  - L549 `static const int _maxEmptyFinalRecoveryAttempts = 3`
+  - L550 `static const int _maxMalformedToolProtocolRecoveryAttempts = 2`
+  - L551 `static const int _maxTruncatedCompletionRecoveryAttempts = 2`
+  - L552 `static const int _maxDeferredActionRecoveryAttempts = 2`
+  - L553 `static const int _maxNonFinalTurnRecoveryAttempts = 1`
+  - L556 `static const int _maxFactCheckRecoveryAttempts = 1`  — One-shot self-verification pass before a tool-grounded answer is shown.
+  - L563 `static const Set<String> _nonFactualToolNames = { 'find_tools', 'notes', 'ask_user', // Returns a Connect-button marker, not a real-world fact. Without this a // turn whose only tool call was request_mcp_server would fire a spurious // [VERIFY] round against nothing. 'request_mcp_server', 'flip_coin', 'roll_dice', 'random_number', 'countdown', 'password_generator', 'uuid_generator', 'generate_qr', 'calculate', 'generate_image', 'fetch_image', // Hands files over; the result is a delivery receipt, not facts. 'fetch_files', // `skill` returns an acknowledgement, not facts. Without this entry a // turn whose only tool call was `skill()` would trigger a full [VERIFY] // round-trip that fact-checks an ack against nothing. 'skill', // Artifact hosting returns a published URL, not verifiable facts. Without // these entries a turn whose only tool call was create/update_artifact // would fire a spurious [VERIFY] fact-check round against nothing. 'create_artifact', 'update_artifact', }`  — Tools whose results carry no verifiable real-world facts. When EVERY
+  - L594 `static const int _maxDiscoveryContexts = 200`
+  - L600 `static const int _maxActiveSkillsPerChat = 3`  — Ceiling on skills active in one chat. Every active skill's body is
+  - L601 `final Map<String, _DiscoveryContextState> _discoveryContextStates = <String, _DiscoveryContextState>{}`
+  - L604 `ToolExecutor get toolExecutor`
+  - L606 `ToolLoopSession createSession({ required String initialUserMessage, required List<Map<String, dynamic>> history, required String accessToken, String? discoveryContextKey, String? baseSystemPrompt, String? modelId, bool toolCallingEnabled = true, bool discoveryMode = true, bool skipIdentity = false, bool nativeToolCalling = false, })`
+  - L663 `Future<String> buildInitialSystemPrompt(ToolLoopSession session)`
+  - L694 `List<Map<String, dynamic>> nativeToolDefinitions(ToolLoopSession session)`  — The enabled tools as native OpenAI function definitions, for the request's
+  - L718 `Future<ToolLoopResult> _forceFinalAnswer( ToolLoopSession session, { required String content, required String reasoning, })`  — The forced final pass. Sets [ToolLoopSession.toolsClosed] (the next
+  - L762 `String _toolLimitFallbackMessage(ToolLoopSession session)`  — Last resort when even the forced final passes produced no text. If the
+  - L824 `Future<ToolLoopResult> processAssistantResponse({ required ToolLoopSession session, required String content, required String reasoning, ToolTurnSignals? turnSignals, void Function(List<ToolCall>)? onToolCallsUpdated, List<NativeToolCall> nativeToolCalls = const <NativeToolCall>[], })`
+  - L1618 `List<RoundSegment> _splitInterleavedSegments( String content, List<ToolCall> uiCalls, )`  — Walks [content] in source order and splits it into text chunks /
+  - L1661 `static int _countToolGroups(List<RoundSegment> segments)`
+  - L1682 `List<Map<String, dynamic>> _nativeCallsToParsed(List<NativeToolCall> calls)`  — Convert native (structured) tool calls into the parsed-call shape the
+  - L1725 `void _appendRoundToHistory( ToolLoopSession session, { required String assistantContent, String? assistantReasoning, })`
+  - L1759 `void _updateDiscoveredTools(ToolLoopSession session, String findToolsResult)`
+  - L1802 `void _updateActiveSkills(ToolLoopSession session, String skillResult)`  — Records a skill activation from the `skill` tool's acknowledgement.
+  - L1848 `Future<String> _buildSystemPrompt({ required String? baseSystemPrompt, required bool isToolResult, required bool discoveryMode, required List<Map<String, dynamic>> discoveredTools, List<String> activeSkillNames = const [], bool skipIdentity = false, bool nativeToolCalling = false, String? modelId, })`
+  - L2021 `Future<String?> _applyPerModelPrompt({ required String? base, required String? modelId, })`  — Merge the per-model prompt for [modelId] into [base] using the saved
+  - L2050 `String _stripToolCallBlocks(String content)`
+  - L2054 `String _extractPreToolText(String content)`
+  - L2064 `String? _extractRoundThinking({ required String content, required String reasoning, })`
+  - L2085 `static String _stripThinkingTags(String text)`  — Some providers (Kimi on Fireworks, DeepSeek) wrap reasoning in
+  - L2099 `static int? trailingToolCallBlockStart(String text)`  — Returns the start index of the contiguous run of tool-call blocks
+  - L2102 `int? _trailingToolCallBlockStart(String text)`
+  - L2105 `static int? _trailingToolCallBlockStartImpl(String text)`
+  - L2123 `int _indexOfFirstToolCallBlock(String content)`
+  - L2136 `bool _hasInterimTextBeforeToolCalls(String content)`
+  - L2160 `static bool looksLikeDeferredActionWithoutToolCall(String content)`  — Detects "I'll search/check/lookup..." style deferred-action text that
+  - L2163 `static bool _looksLikeDeferredActionWithoutToolCall(String content)`
+  - L2193 `static String _lastSentence(String normalized)`  — Last sentence of [normalized], or the whole string when it has only one.
+  - L2202 `static bool _isDeferredIntentSentence(String sentence)`
+  - L2246 `List<Map<String, dynamic>> _stepHistory(ToolLoopSession session)`  — The history for the next pass: older tool results shortened in place
+  - L2255 `List<Map<String, dynamic>> _cloneHistory(List<Map<String, dynamic>> history)`
+  - L2259 `List<ToolCall> _cloneToolCalls(List<ToolCall> calls)`
+  - L2263 `void _restoreDiscoveryContext(ToolLoopSession session)`
+  - L2287 `void _storeDiscoveryContext(ToolLoopSession session)`
+  - L2312 `void _refreshDiscoveredToolDefinitions(ToolLoopSession session)`
+  - L2327 `void _pruneDiscoveryContextsIfNeeded()`
+- L2349 `class _DiscoveryContextState`  — Per-chat context that survives across user turns (in memory only — it does
+  - L2350 `_DiscoveryContextState()`
+  - L2352 `DateTime lastUsedAt = DateTime.now()`
+  - L2353 `final Set<String> discoveredToolNames = <String>{}`
+  - L2354 `final List<String> activeSkillNames = <String>[]`
 
 ## lib/services/tool_enforcer.dart  (421 Z.)
 - L10 `class ToolEnforcer`  — Client-side Tool Call Enforcer (inspired by Kimi K2's Enforcer).
@@ -3315,7 +3370,7 @@
   - L488 `static double? _coerceDouble(dynamic value)`
   - L498 `static String? _coerceDateTimeIso(dynamic value)`
 
-## lib/services/tool_prompt_builder.dart  (1376 Z.)
+## lib/services/tool_prompt_builder.dart  (1414 Z.)
 - L8 `class ToolPromptBuilder`  — Builds system prompts with tool calling protocol for LLM.
   - L9 `static const String toolCallStart = '<tool_call>'`
   - L10 `static const String toolCallEnd = '</tool_call>'`
@@ -3325,28 +3380,28 @@
   - L28 `bool _migratedToSkill(String skillName)`  — True when [skillName] is available, i.e. the protocol block it replaces
   - L43 `String buildToolProtocolSection({ required List<Map<String, dynamic>> tools, bool isToolResult = false, List<Map<String, dynamic>>? discoveredTools, String? soulText, String? userInfoText, String? memoryText, Map<String, dynamic>? notesToolDef, Map<String, dynamic>? askUserToolDef, Map<String, dynamic>? requestMcpServerToolDef, List<McpCatalogueEntry> unconnectedMcpServers = const [], List<String> connectedMcpServerNames = const [], Map<String, dynamic>? webSearchToolDef, Map<String, dynamic>? searchPlacesToolDef, Map<String, dynamic>? webCrawlToolDef, Map<String, dynamic>? searchChatsToolDef, Map<String, dynamic>? projectToolDef, Map<String, dynamic>? artifactToolDef, Map<String, dynamic>? artifactSchemaToolDef, Map<String, dynamic>? skillToolDef, List<Skill> skillCatalog = const [], List<Skill> activeSkills = const [], List<Map<String, dynamic>> extraAlwaysAvailableTools = const [], bool nativeToolCalling = false, })`  — Build the tool protocol section to append to the existing system prompt.
   - L311 `String _buildNativeToolGuidance({ required List<Map<String, dynamic>> tools, Map<String, dynamic>? artifactToolDef, })`  — Native tool-calling guidance (used when [nativeToolCalling] is set).
-  - L398 `String _buildMcpServersSection( List<McpCatalogueEntry> unconnected, List<String> connectedNames, { bool native = false, })`  — The `## MCP SERVERS` awareness block: which servers are connected and
-  - L439 `String _buildSkillsCatalog(List<Skill> skills, {bool native = false})`  — Level 1 of progressive disclosure: every skill's name + description.
-  - L478 `String _buildActiveSkillSection(Skill skill)`  — Level 2: the body of an activated skill, injected verbatim.
-  - L486 `String _buildIdentitySection( String? soulText, String? userInfoText, String? memoryText, )`  — Build the full identity section: Soul, User, Memory.
-  - L629 `String _buildDiscoveryPrompt( List<Map<String, dynamic>> alwaysAvailableTools, { List<String> allToolNames = const [], })`  — Discovery prompt: shows ALL tool names but requires find_tools
-  - L782 `String _buildAlwaysAvailableSection(List<Map<String, dynamic>> tools)`  — Renders tool definitions that are always available (bypass discovery).
-  - L826 `String _buildToolProtocol( List<Map<String, dynamic>> tools, { List<String> undiscoveredToolNames = const [], })`  — Full tool protocol -- shown AFTER find_tools returns tool definitions.
-  - L978 `String _artifactToolProtocol({bool native = false})`
-  - L1043 `List<Map<String, dynamic>> _dedupeToolsByName( List<Map<String, dynamic>> tools, )`
-  - L1062 `void _appendAlwaysOnVisualTags(StringBuffer buffer)`  — Docs for visual tags that are always available regardless of the
-  - L1146 `void _appendWeatherProtocol(StringBuffer buffer)`
-  - L1177 `void _appendNewsProtocol(StringBuffer buffer)`
-  - L1210 `String _answerFormatSection()`  — How an answer starts, and the `:::` blocks `MarkdownMessage` renders
-  - L1236 `String _visualOutputProtocol()`  — Chart and map rendering protocol — these are output formats, not tools.
+  - L397 `String _buildMcpServersSection( List<McpCatalogueEntry> unconnected, List<String> connectedNames, { bool native = false, })`  — The `## MCP SERVERS` awareness block: which servers are connected and
+  - L438 `String _buildSkillsCatalog(List<Skill> skills, {bool native = false})`  — Level 1 of progressive disclosure: every skill's name + description.
+  - L477 `String _buildActiveSkillSection(Skill skill)`  — Level 2: the body of an activated skill, injected verbatim.
+  - L485 `String _buildIdentitySection( String? soulText, String? userInfoText, String? memoryText, )`  — Build the full identity section: Soul, User, Memory.
+  - L628 `String _buildDiscoveryPrompt( List<Map<String, dynamic>> alwaysAvailableTools, { List<String> allToolNames = const [], })`  — Discovery prompt: shows ALL tool names but requires find_tools
+  - L781 `String _buildAlwaysAvailableSection(List<Map<String, dynamic>> tools)`  — Renders tool definitions that are always available (bypass discovery).
+  - L825 `String _buildToolProtocol( List<Map<String, dynamic>> tools, { List<String> undiscoveredToolNames = const [], })`  — Full tool protocol -- shown AFTER find_tools returns tool definitions.
+  - L977 `String _artifactToolProtocol({bool native = false})`
+  - L1042 `List<Map<String, dynamic>> _dedupeToolsByName( List<Map<String, dynamic>> tools, )`
+  - L1061 `void _appendAlwaysOnVisualTags(StringBuffer buffer)`  — Docs for visual tags that are always available regardless of the
+  - L1145 `void _appendWeatherProtocol(StringBuffer buffer)`
+  - L1176 `void _appendNewsProtocol(StringBuffer buffer)`
+  - L1209 `String _answerFormatSection()`  — How an answer starts, and the `:::` blocks `MarkdownMessage` renders
+  - L1274 `String _visualOutputProtocol()`  — Chart and map rendering protocol — these are output formats, not tools.
 
-## lib/services/tool_registry.dart  (1867 Z.)
+## lib/services/tool_registry.dart  (1842 Z.)
 - L14 `_serverBackedToolNames = { 'github', 'slack', 'google_calendar', 'gmail', }`
 - L22 `toolCategoryMap = { 'find_tools': ToolCategory.basic, 'calculate': ToolCategory.basic, 'get_time': ToolCategory.basic, '`  — Maps tool names to their ToolCategory for enable/disable filtering.
 - L67 `discoveryCatalog = { 'Maps / Karten': 'Find places and restaurants, geocode addresses and calculate routes / ' 'Orte und`  — Discovery catalog: category labels -> human-readable descriptions.
 - L99 `builtinTools = [ // -- Meta-tool: find_tools -- ClientTool( name: 'find_tools', description: 'Discovery tool. Call this `  — All built-in tool definitions with tags for discovery.
-- L1829 `bool _isMobileRuntime()`  — Whether the current platform is a mobile device (Android/iOS).
-- L1837 `void registerBuiltinTools(ToolExecutor executor)`  — Register all built-in tools from [builtinTools] into a [ToolExecutor].
+- L1804 `bool _isMobileRuntime()`  — Whether the current platform is a mobile device (Android/iOS).
+- L1812 `void registerBuiltinTools(ToolExecutor executor)`  — Register all built-in tools from [builtinTools] into a [ToolExecutor].
 
 ## lib/services/tool_result_cache_registry.dart  (139 Z.)
 - L27 `_uuid = Uuid()`
@@ -3404,6 +3459,49 @@
   - L13 `static final TrayActionBus instance = TrayActionBus._()`
   - L17 `final ValueNotifier<int> newChatRequested = ValueNotifier<int>(0)`  — Bumped each time the tray "New Chat" item is clicked. Listeners start a
   - L19 `void requestNewChat()`
+
+## lib/services/tts_audio_service.dart  (331 Z.)
+- L15 `class TtsAudioService`  — Inworld read-aloud audio, cached encrypted in the user's private bucket.
+  - L16 `TtsAudioService._()`
+  - L18 `static const String _bucket = 'tts-audio'`
+  - L19 `static const String _model = 'inworld-tts-2-flash'`
+  - L20 `static const String _voice = 'Bastian'`
+  - L21 `static const int _maxRequestChars = 3800`
+  - L22 `static final ValueNotifier<bool> _isPlaying = ValueNotifier(false)`
+  - L23 `static final ValueNotifier<String?> _activeText = ValueNotifier(null)`
+  - L24 `static bool _hasPlayback = false`
+  - L25 `static final AudioPlayer _player = AudioPlayer()`
+  - L26 `static final TtsPlaybackController _playback = TtsPlaybackController( playAudio: (bytes) => _player.play(BytesSource(bytes, mimeType: 'audio/mpeg')), stopAudio: _player.stop, onComplete: _player.onPlayerComplete, isPlayingNotifier: _isPlaying, activeTextNotifier: _activeText, )`
+  - L34 `static final Map<(String, Object), Future<Uint8List>> _inFlight = {}`
+  - L35 `static _SpeechScope? _activeScope`
+  - L37 `static ValueListenable<bool> get isPlaying`
+  - L40 `static ValueListenable<String?> get activeText`  — The answer being loaded or played; null when read aloud is idle.
+  - L43 `static Future<void> stop()`  — Stop playback and cancel the current answer, including queued chunks.
+  - L50 `static Future<void> speak(String text)`  — Speak [text]. Repeated requests reuse the encrypted Supabase object.
+  - L95 `static Future<Uint8List> _audioForChunk(_SpeechScope scope, String text)`
+  - L113 `static Future<Uint8List> _loadOrGenerate( _SpeechScope scope, String path, String text, )`
+  - L158 `static Future<Uint8List> _generate(_SpeechScope scope, String text)`
+  - L195 `static List<String> _splitText(String text)`
+  - L224 `static List<String> splitTextForTesting(String text)`
+- L227 `class _SpeechScope`
+  - L228 `const _SpeechScope(this.userId, this.keyIdentity)`
+  - L230 `final String userId`
+  - L231 `final Object keyIdentity`
+  - L233 `bool get isCurrent`
+  - L237 `void check()`
+- L246 `@visibleForTesting class TtsPlaybackController`  — Serial answer playback with cancellation independent of player completion.
+  - L248 `TtsPlaybackController({ required this.playAudio, required this.stopAudio, required this.onComplete, ValueNotifier<bool>? isPlayingNotifier, ValueNotifier<String?>? activeTextNotifier, }) : _isPlaying = isPlayingNotifier ?? ValueNotifier(false), _activeText = activeTextNotifier ?? ValueNotifier(null)`
+  - L257 `final Future<void> Function(Uint8List) playAudio`
+  - L258 `final Future<void> Function() stopAudio`
+  - L259 `final Stream<void> onComplete`
+  - L260 `final ValueNotifier<bool> _isPlaying`
+  - L261 `ValueListenable<bool> get isPlaying`
+  - L262 `final ValueNotifier<String?> _activeText`
+  - L263 `ValueListenable<String?> get activeText`
+  - L264 `Completer<void>? _cancel`
+  - L265 `int _generation = 0`
+  - L267 `Future<void> stop()`
+  - L276 `Future<void> speak( List<String> chunks, { String? answerText, required Future<Uint8List> Function(String) loadAudio, required bool Function() isCurrent, })`
 
 ## lib/services/update_check_service.dart  (302 Z.)
 - L17 `class UpdateCheckService`  — Checks for app updates via the GitHub Releases API.
@@ -3595,6 +3693,42 @@
   - L94 `static Future<Map<String, dynamic>?> _fetch()`
   - L152 `static Future<Map<String, dynamic>?> _readCache(String uid)`
   - L165 `static Future<void> _writeCache( String uid, Map<String, dynamic> value, )`
+
+## lib/services/user_sync_signal_service.dart  (279 Z.)
+- L31 `typedef SignalChannelOpener = Future<Future<void> Function()> Function( String userId, { required void Function(Map<Stri`  — Opens the signal channel for [userId] and returns a function that closes
+- L37 `class UserSyncSignalService`
+  - L38 `UserSyncSignalService._()`
+  - L39 `static final UserSyncSignalService instance = UserSyncSignalService._()`
+  - L41 `static const String tableEncryptedChats = 'encrypted_chats'`
+  - L42 `static const String tableCoworkChats = 'cowork_chats'`
+  - L43 `static const String tableAgentsChatPins = 'agents_chat_pins'`
+  - L44 `static const String tableUserBilling = 'user_billing'`
+  - L49 `Duration debounce = const Duration(milliseconds: 750)`  — Signals for one table that arrive within this window collapse into one
+  - L53 `final Map<String, Future<void> Function()> handlerOverrides = <String, Future<void> Function()>{}`  — Test hooks. A non-null entry replaces the default handler of a table.
+  - L58 `bool? agentsEnabledOverride`  — Test hook for the build flag `FEATURE_AGENTS`.
+  - L62 `SignalChannelOpener? channelOpenerOverride`  — Test hook that replaces the Supabase channel.
+  - L64 `final StreamController<void> _billingController = StreamController<void>.broadcast()`
+  - L69 `Stream<void> get billingChanged`  — Fires when the `user_billing` row of the signed-in user changed. The
+  - L71 `String? _userId`
+  - L72 `bool _paused = false`
+  - L73 `Future<void> Function()? _close`
+  - L74 `final Map<String, Timer> _timers = <String, Timer>{}`
+  - L77 `String? get userId`  — The user the service runs for, also while paused.
+  - L80 `bool get isOpen`
+  - L83 `int get pendingTimers`
+  - L85 `bool get _agentsEnabled`
+  - L90 `Future<void> start(String userId)`  — Start listening for [userId]. Idempotent: a second call for the same
+  - L99 `Future<void> stop()`  — Close the channel, cancel the pending pulls and forget the user.
+  - L107 `Future<void> pause()`  — App went to the background: close the channel and cancel the pending
+  - L115 `Future<void> resume()`  — App came back to the foreground: open the channel again for the kept
+  - L121 `Future<void> _closeChannel()`
+  - L138 `Future<void> _open()`
+  - L161 `static Future<Future<void> Function()> _openSupabaseChannel( String userId, { required void Function(Map<String, dynamic> payload) onSignal, required VoidCallback onSubscribed, })`
+  - L199 `void handleSignal(Map<String, dynamic> message)`  — One broadcast from the trigger. The table name is the only field used.
+  - L213 `void handleSubscribed()`  — The channel joined (first time or after a reconnect): run every pull
+  - L229 `void _schedule(String table)`
+  - L251 `Future<void> Function()? _handlerFor(String table)`
+  - L271 `Future<void> resetForTest()`
 
 ## lib/services/websocket_chat_service.dart  (375 Z.)
 - L30 `class WebSocketChatService`  — Service for handling streaming chat responses.

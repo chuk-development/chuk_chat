@@ -12,6 +12,13 @@
 ## test/pages/agent_mailbox_page_test.dart  (553 Z.)
 - L23 `void main()`  — Settings > Agents > Mailbox (docs/AGENT_MAIL.md §8): the address with a
 
+## test/pages/agent_model_page_test.dart  (318 Z.)
+- L18 `_chat = 'host:alex'`
+- L20 `_catalogue = <AgentCatalogueModel>[ AgentCatalogueModel( id: 'z-ai/glm-5.3-flash', name: 'Z.ai: GLM 5.3 Flash', provider`
+- L55 `Future<void> _pump( WidgetTester tester, { AgentControlSource? source, Size size = const Size(420, 900), double textScale = 1, })`
+- L82 `Future<void> _tapVisible(WidgetTester tester, Finder finder)`
+- L93 `void main()`
+
 ## test/pages/agent_profile_edit_page_test.dart  (115 Z.)
 - L11 `void main()`
 
@@ -42,13 +49,6 @@
 - L14 `AgentsAutomation _automation( String id, { String session = 'thread-1', String state = 'active', })`
 - L28 `void main()`
 
-## test/pages/coworker_model_page_test.dart  (318 Z.)
-- L18 `_chat = 'host:alex'`
-- L20 `_catalogue = <CoworkerCatalogueModel>[ CoworkerCatalogueModel( id: 'z-ai/glm-5.3-flash', name: 'Z.ai: GLM 5.3 Flash', pr`
-- L55 `Future<void> _pump( WidgetTester tester, { AgentControlSource? source, Size size = const Size(420, 900), double textScale = 1, })`
-- L82 `Future<void> _tapVisible(WidgetTester tester, Finder finder)`
-- L93 `void main()`
-
 ## test/pages/desktop_settings_modal_test.dart  (182 Z.)
 - L20 `void main()`  — The desktop settings modal lists the same destinations as the phone's
 
@@ -69,7 +69,7 @@
 - L82 `void _expectInsideWindow(WidgetTester tester)`  — Every text on screen sits inside the 360 px window.
 - L92 `void main()`
 
-## test/pages/mobile_agents_settings_page_test.dart  (349 Z.)
+## test/pages/mobile_agents_settings_page_test.dart  (393 Z.)
 - L22 `void main()`
 
 ## test/pages/model_selector_design_test.dart  (114 Z.)

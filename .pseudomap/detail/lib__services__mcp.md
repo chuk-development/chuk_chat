@@ -179,7 +179,7 @@
   - L98 `static Future<Directory?> _openDirectory()`
   - L107 `static Future<void> clear()`  — Forget everything, on disk and in memory.
 
-## lib/services/mcp/mcp_oauth.dart  (511 Z.)
+## lib/services/mcp/mcp_oauth.dart  (549 Z.)
 - L22 `class McpAuthServer`  — What a server's authorization looks like once discovered.
   - L23 `const McpAuthServer({ required this.issuer, required this.authorizationEndpoint, required this.tokenEndpoint, this.registrationEndpoint, this.scopesSupported = const <String>[], })`
   - L31 `final String issuer`
@@ -229,14 +229,17 @@
   - L201 `static List<Uri> authServerMetadataCandidates(Uri issuer)`  — Well-known locations for authorization server metadata, in the order
   - L213 `Future<McpAuthServer> discover( Uri serverUrl, { String? wwwAuthenticate, })`  — Find the authorization server behind an MCP endpoint.
   - L277 `Future<McpClientCredentials> register( McpAuthServer server, Uri redirectUri, { String? scope, })`  — Register this app with the authorization server (RFC 7591), so no
-  - L344 `McpAuthorizationRequest buildAuthorizationRequest({ required McpAuthServer server, required McpClientCredentials credentials, required Uri redirectUri, required String resource, List<String> scopes = const [], })`  — Build the URL to open in the browser, with PKCE and the resource the
-  - L386 `Future<McpTokens> exchange( McpAuthorizationRequest request, Uri callback, )`  — Swap the code from the callback for tokens. Rejects a callback whose
-  - L425 `Future<McpTokens?> refresh({ required McpAuthServer server, required McpClientCredentials credentials, required String refreshToken, required String resource, String? scope, })`  — Trade a refresh token for a fresh access token. Returns null when the
-  - L453 `Future<McpTokens> _token( McpAuthServer server, McpClientCredentials credentials, Map<String, String> body, )`
-  - L483 `Future<Map<String, dynamic>?> _getJson(Uri url)`
-  - L497 `static Uri? _uriOrNull(Object? value)`  — An absolute URI, or null for anything that is not one.
-  - L504 `static final Random _random = Random.secure()`
-  - L506 `static String _randomString(int length)`
+  - L354 `static bool _isLoopbackRedirect(Uri uri)`  — True for a redirect URI the app can actually receive a sign-in on: plain
+  - L357 `static bool _isLoopbackHost(String host)`
+  - L367 `static bool Function(String) _loopbackCompatibleWith(Uri requested)`  — A closure that says whether one registered redirect URI can carry the
+  - L382 `McpAuthorizationRequest buildAuthorizationRequest({ required McpAuthServer server, required McpClientCredentials credentials, required Uri redirectUri, required String resource, List<String> scopes = const [], })`  — Build the URL to open in the browser, with PKCE and the resource the
+  - L424 `Future<McpTokens> exchange( McpAuthorizationRequest request, Uri callback, )`  — Swap the code from the callback for tokens. Rejects a callback whose
+  - L463 `Future<McpTokens?> refresh({ required McpAuthServer server, required McpClientCredentials credentials, required String refreshToken, required String resource, String? scope, })`  — Trade a refresh token for a fresh access token. Returns null when the
+  - L491 `Future<McpTokens> _token( McpAuthServer server, McpClientCredentials credentials, Map<String, String> body, )`
+  - L521 `Future<Map<String, dynamic>?> _getJson(Uri url)`
+  - L535 `static Uri? _uriOrNull(Object? value)`  — An absolute URI, or null for anything that is not one.
+  - L542 `static final Random _random = Random.secure()`
+  - L544 `static String _randomString(int length)`
 
 ## lib/services/mcp/mcp_probe_control.dart  (17 Z.)
 - L12 `abstract interface class McpProbeControl`
@@ -245,17 +248,20 @@
 ## lib/services/mcp/mcp_redirect.dart  (12 Z.)
 - reicht weiter: 'mcp_redirect_stub.dart' if (dart.library.io) 'mcp_redirect_io.dart'
 
-## lib/services/mcp/mcp_redirect_io.dart  (62 Z.)
-- L9 `class McpRedirectListener`  — A one-shot HTTP server on 127.0.0.1 that catches the OAuth redirect.
-  - L10 `McpRedirectListener._(this._server)`
-  - L12 `final HttpServer _server`
-  - L13 `final Completer<Uri> _result = Completer<Uri>()`
-  - L16 `static Future<McpRedirectListener> start()`  — Open a port and start listening.
-  - L24 `Uri get redirectUri`  — The address to hand the authorization server.
-  - L28 `Future<Uri> get callback`  — Completes with the full callback URL, including code and state.
-  - L30 `void _listen()`
-  - L51 `Future<void> close()`
-  - L55 `static String _page(bool ok)`
+## lib/services/mcp/mcp_redirect_io.dart  (147 Z.)
+- L15 `class McpRedirectListener`  — A one-shot HTTP server on the loopback that catches the OAuth redirect.
+  - L16 `McpRedirectListener._(this._servers)`
+  - L18 `final List<HttpServer> _servers`
+  - L19 `final Completer<Uri> _result = Completer<Uri>()`
+  - L22 `static Future<McpRedirectListener> start()`  — Open a port and start listening.
+  - L78 `static bool _isNoIpv6(SocketException e)`  — "No IPv6 on this machine at all" — nothing can be listening on ::1, so
+  - L86 `static Future<int> _freePort()`  — A port the kernel says is free. Racy by nature — the bind right after is
+  - L105 `Uri get redirectUri`  — The address to hand the authorization server.
+  - L108 `int get _port`
+  - L111 `Future<Uri> get callback`  — Completes with the full callback URL, including code and state.
+  - L113 `void _listen(HttpServer server)`
+  - L134 `Future<void> close()`
+  - L140 `static String _page(bool ok)`
 
 ## lib/services/mcp/mcp_redirect_stub.dart  (23 Z.)
 - L7 `class McpRedirectListener`
@@ -265,7 +271,7 @@
   - L18 `Future<Uri> get callback`
   - L21 `Future<void> close()`
 
-## lib/services/mcp/mcp_service.dart  (1312 Z.)
+## lib/services/mcp/mcp_service.dart  (1315 Z.)
 - L65 `kMcpProtocolVersion = '2025-06-18'`  — The MCP revision the challenge probe claims to speak. It only has to be a
 - L68 `enum McpConnectStatus`  — What a connect attempt ended in, for the UI to show.
   - L68 `connected`
@@ -333,17 +339,17 @@
   - L945 `static void _recordReachable(String id, bool alive)`
   - L953 `static Future<bool> _answersInitialize(Uri endpoint)`  — Whether [endpoint] answers an MCP `initialize` at all. The status does
   - L999 `static Future<void> probe({McpProbeControl? control})`  — Ask the paired host to dial every stored connector now.
-  - L1027 `static Future<int> applyToolsFrame(Map<String, dynamic> payload)`  — Take an `mcp_tools` frame from the host and record what each connector
-  - L1081 `static Future<bool> _applyOneCredential(Map<String, dynamic> payload)`  — One connector out of an `mcp_credentials` frame. True when it was written.
-  - L1138 `static Future<McpConnection?> _connectionFromFrame( Map<String, dynamic> payload, )`  — The connection an `mcp_credentials` frame is about, or null when this
-  - L1159 `static McpConnection? connectionFor(String id)`
-  - L1168 `static bool _isAcceptableEndpoint(Uri endpoint)`  — https everywhere, except a server on this machine. A debug build may
-  - L1191 `static ({McpConnection connection, String tool})? resolve(String toolName)`  — The connection and the server-side tool name behind a registered tool.
-  - L1203 `static Future<McpCallResult> call( String toolName, Map<String, dynamic> arguments, )`  — Call [toolName] on the server that offers it, from this device.
-  - L1243 `static Future<McpClient?> _clientFor(McpConnection connection)`  — A client for [connection], with whatever credential it needs. Null when
-  - L1289 `static Future<String?> _appSessionToken()`  — The account's own access token, for a server fronted by our API.
-  - L1299 `static Uri _endpointWithCredentials(Uri base, Map<String, String> creds)`
-  - L1307 `static Uri endpointWithCredentialsForTest( Uri base, Map<String, String> creds, )`  — The credentialed endpoint, exposed for tests: the reader's key must land
+  - L1030 `static Future<int> applyToolsFrame(Map<String, dynamic> payload)`  — Take an `mcp_tools` frame from the host and record what each connector
+  - L1084 `static Future<bool> _applyOneCredential(Map<String, dynamic> payload)`  — One connector out of an `mcp_credentials` frame. True when it was written.
+  - L1141 `static Future<McpConnection?> _connectionFromFrame( Map<String, dynamic> payload, )`  — The connection an `mcp_credentials` frame is about, or null when this
+  - L1162 `static McpConnection? connectionFor(String id)`
+  - L1171 `static bool _isAcceptableEndpoint(Uri endpoint)`  — https everywhere, except a server on this machine. A debug build may
+  - L1194 `static ({McpConnection connection, String tool})? resolve(String toolName)`  — The connection and the server-side tool name behind a registered tool.
+  - L1206 `static Future<McpCallResult> call( String toolName, Map<String, dynamic> arguments, )`  — Call [toolName] on the server that offers it, from this device.
+  - L1246 `static Future<McpClient?> _clientFor(McpConnection connection)`  — A client for [connection], with whatever credential it needs. Null when
+  - L1292 `static Future<String?> _appSessionToken()`  — The account's own access token, for a server fronted by our API.
+  - L1302 `static Uri _endpointWithCredentials(Uri base, Map<String, String> creds)`
+  - L1310 `static Uri endpointWithCredentialsForTest( Uri base, Map<String, String> creds, )`  — The credentialed endpoint, exposed for tests: the reader's key must land
 
 ## lib/services/mcp/mcp_store.dart  (592 Z.)
 - L47 `class McpSecrets`  — Everything secret about one connection: the client this device registered
