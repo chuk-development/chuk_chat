@@ -919,33 +919,30 @@ def test_without_a_browser_server_the_view_says_why(tmp_path, monkeypatch):
         executor._vnc_teardown(notify=False)
 
 
-def test_the_view_follows_the_box_where_the_browser_runs(tmp_path, monkeypatch):
-    """One container per agent, and `browser_start` names none of them. The
-    view is served from the box whose browser server is connected — watching
-    only the executor's own box is how a user with browsers open was told no
-    browser was open."""
+def test_the_view_never_shows_a_peer_agents_browser(tmp_path, monkeypatch):
+    """Every agent has its own browser session. When the only browser that
+    runs belongs to another agent, the asking agent's view must not show it:
+    it stays on its own box (bead chuk_chat-26ge)."""
     executor, events, runs = _vnc_start_with(tmp_path, monkeypatch, windows=1, pages=1)
     manager, _connection = _browser_manager(container="cid-agent-two")
     executor._mcp_managers["peer"] = manager
     try:
-        executor._vnc_start("req-follow", {})
+        executor._vnc_start("req-own", {})
 
-        assert _vnc_up_boxes(runs)[0] == "cid-agent-two"
-        started = next(e for e in events if e.get("status") == "started")
-        assert started["reason"] == ""
-        # ...and the byte pipe is bridged into that same box.
+        assert "cid-agent-two" not in _vnc_up_boxes(runs)
+        assert _vnc_up_boxes(runs) == ["cid-abc123"]
         socat = [a for a in runs if "socat" in a]
-        assert not socat or "cid-agent-two" in socat[0]
+        assert all("cid-agent-two" not in argv for argv in socat)
     finally:
         executor._vnc_teardown(notify=False)
 
 
-def test_a_box_with_no_display_is_skipped_for_one_that_has_a_browser(
+def test_without_an_own_browser_the_view_is_empty_not_a_peers(
     tmp_path, monkeypatch
 ):
-    """`agents-vnc-up` exits 3 when a box has no browser display. That is not
-    an error any more: the next box is tried, and only if none answers does the
-    app get an error — with a reason on it."""
+    """The asking box has no browser display (`agents-vnc-up` exits 3) and a
+    peer's box has one. The peer is not tried: the app gets `no_display` and
+    shows its empty state."""
     import subprocess as sp
 
     from chuk_agents_executor import executor as ex_mod
@@ -975,10 +972,30 @@ def test_a_box_with_no_display_is_skipped_for_one_that_has_a_browser(
     try:
         executor._vnc_start("req-skip", {})
 
-        assert _vnc_up_boxes(runs)[0] == "cid-agent-two"
-        assert any(e.get("status") == "started" for e in events), events
+        assert _vnc_up_boxes(runs) == ["cid-abc123"]
+        assert not any(e.get("status") == "started" for e in events), events
+        error = next(e for e in events if e.get("status") == "error")
+        assert error["reason"] == "no_display"
     finally:
         executor._vnc_teardown(notify=False)
+
+
+def test_a_peer_browser_does_not_light_the_screen_button(tmp_path, monkeypatch):
+    """`vnc_available` is per agent: a peer's open browser does not advertise
+    a screen for an agent that has none."""
+    executor, _events, _runs = _vnc_start_with(tmp_path, monkeypatch, windows=1, pages=0)
+    manager, _connection = _browser_manager(container="cid-agent-two")
+    executor._mcp_managers["peer"] = manager
+    executor._browser_open = True
+    probed: list[str] = []
+    executor._browser_window_present = (  # type: ignore[method-assign]
+        lambda _binary, box: probed.append(box) or box == "cid-agent-two"
+    )
+    try:
+        assert executor._vnc_available(None) is False
+        assert "cid-agent-two" not in probed
+    finally:
+        manager.close()
 
 
 def test_no_box_at_all_is_an_error_that_names_the_cause(tmp_path, monkeypatch):

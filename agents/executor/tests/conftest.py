@@ -14,3 +14,16 @@ os.environ.setdefault("AGENTS_BRIDGE_SOCKET", os.path.join(_BROWSER_SOCKETS, "br
 os.environ.setdefault(
     "AGENTS_BROWSER_BROKER_SOCKET", os.path.join(_BROWSER_SOCKETS, "browser-broker.sock")
 )
+
+import pytest as _pytest
+
+
+@_pytest.fixture(autouse=True)
+def _fresh_mcp_grants():
+    """Each test starts with an empty process-wide OAuth grant store, and no
+    test writes the grant file of a real host (bead chuk_chat-mj2o)."""
+    from chuk_agents_runtime import mcp_client
+
+    mcp_client.GRANTS.reset()
+    yield
+    mcp_client.GRANTS.reset()

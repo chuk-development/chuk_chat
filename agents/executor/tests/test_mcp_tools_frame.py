@@ -163,3 +163,60 @@ def test_a_probe_without_servers_answers_at_once(tmp_path, monkeypatch):
     executor._handle_mcp_probe("req-10", {"type": "mcp_probe"})
 
     assert terminals[0][1] == {"type": "mcp_tools", "session_key": "", "servers": []}
+
+
+def test_a_probe_that_rotated_a_token_sends_it_to_the_app(tmp_path, monkeypatch):
+    """Bead chuk_chat-mj2o: a probe can refresh an OAuth token, and Fastmail
+    makes the old one invalid at once. The probe has no running task, so the
+    ``mcp_credentials`` frame must go out on the probe's own request, before
+    its terminal. Without it the app kept a dead refresh token."""
+    import threading
+
+    executor = _executor(tmp_path)
+    frames: list[tuple[str, str, dict]] = []
+    done = threading.Event()
+    monkeypatch.setattr(
+        executor, "_event", lambda rid, payload: frames.append(("event", rid, payload))
+    )
+
+    def terminal(rid, payload):
+        frames.append(("terminal", rid, payload))
+        done.set()
+
+    monkeypatch.setattr(executor, "_terminal", terminal)
+    config = SimpleNamespace(
+        name="Fastmail",
+        url="https://api.fastmail.example/mcp",
+        auth_token="at-2",
+        oauth={"refresh_token": "rt-2", "client_id": "cid", "token_endpoint": "https://t/"},
+    )
+
+    class _RotatingManager(_FakeManager):
+        def start(self, lazy=True):
+            # What MCPConnection.refresh_token() does after a rotation.
+            executor._mcp_rotation_listener("mcp-probe")("Fastmail", config)
+            return {"Fastmail": True}
+
+    manager = _RotatingManager({"Fastmail": _connection([("search_email", "")])})
+    monkeypatch.setattr(
+        executor, "_session_mcp_manager", lambda session_key, servers: manager
+    )
+    executor._mcp_entry_meta["mcp-probe"] = {
+        "Fastmail": {"id": "conn-fm", "name": "Fastmail", "url": config.url}
+    }
+
+    executor._handle_mcp_probe(
+        "req-11",
+        {
+            "type": "mcp_probe",
+            "mcp_servers": [{"id": "conn-fm", "name": "Fastmail", "url": config.url}],
+        },
+    )
+
+    assert done.wait(5), "the probe never answered"
+    kinds = [(kind, rid, payload.get("type")) for kind, rid, payload in frames]
+    assert ("event", "req-11", "mcp_credentials") in kinds
+    assert kinds[-1] == ("terminal", "req-11", "mcp_tools")
+    credentials = next(p for k, _r, p in frames if p.get("type") == "mcp_credentials")
+    assert credentials["id"] == "conn-fm"
+    assert credentials["oauth"]["refresh_token"] == "rt-2"

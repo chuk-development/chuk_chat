@@ -467,6 +467,246 @@ def refresh_access_token(
     return token, updated
 
 
+#: The OAuth fields that change at each refresh. Everything else in an
+#: ``oauth`` block names the grant and the client, and the device owns it.
+_GRANT_FIELDS = ("refresh_token", "expires_at")
+#: How many earlier refresh tokens a grant remembers (as hashes).
+_GRANT_SEEN_CAP = 64
+
+
+def _token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+class OAuthGrantStore:
+    """The one current state of each forwarded OAuth grant in this process.
+
+    Why it exists (bead chuk_chat-mj2o): the host builds one ``MCPManager``
+    per session, and one more for each ``mcp_probe``. Before this store, each
+    of them held its own copy of the same grant and refreshed it on its own.
+    Fastmail (and every provider that rotates refresh tokens with a ratchet)
+    makes the old refresh token AND the old access token invalid at each
+    refresh. So the first copy that refreshed killed all the other copies.
+    The probe copy was the worst case: its rotated token was never sent to
+    the app, so the app and the next session started from a dead token. The
+    Fastmail answer was "token minted at ratchet 2, row has moved on to 11",
+    and the refresh gave ``invalid_grant``.
+
+    Now every connection of the process reads and writes one record per grant.
+    The key is ``(token_endpoint, client_id)``: a new sign-in registers a new
+    client, so it is a new grant. A refresh token that a device forwards is
+    compared with the hashes of the tokens this grant had before:
+
+    - an earlier token of the grant is a stale copy, and the store wins;
+    - a token the grant never had is a new sign-in, or a refresh that the
+      device did itself, and the device wins.
+
+    With a ``path`` the store survives a host restart. The file is 0600 and
+    holds the current tokens plus hashes of the earlier refresh tokens. That
+    matters: after a restart the host would otherwise take whatever copy the
+    first device forwards, and that copy can be an old one.
+    """
+
+    def __init__(self, path: str | os.PathLike | None = None) -> None:
+        self._path = Path(path) if path else None
+        self._lock = threading.RLock()
+        self._data: dict[str, dict] | None = None
+        self._grant_locks: dict[str, threading.Lock] = {}
+
+    # -- configuration ----------------------------------------------------
+
+    @property
+    def path(self) -> Path | None:
+        return self._path
+
+    def reset(self) -> None:
+        """Forget every grant and the file (tests)."""
+        with self._lock:
+            self._path = None
+            self._data = None
+            self._grant_locks.clear()
+
+    def set_path(self, path: str | os.PathLike | None) -> None:
+        """Persist to ``path`` from now on. Records already in memory merge
+        with the file (the file wins only for grants not in memory)."""
+        with self._lock:
+            self._path = Path(path) if path else None
+            memory = dict(self._data or {})
+            self._data = None
+            data = self._load()
+            data.update(memory)
+            if memory:
+                self._write()
+
+    @staticmethod
+    def key(oauth: dict[str, Any] | None) -> str | None:
+        """The grant id of an ``oauth`` block, or ``None`` when it has no
+        refresh material (then there is nothing to share)."""
+        block = oauth or {}
+        endpoint = str(block.get("token_endpoint") or "")
+        if not endpoint or not block.get("refresh_token"):
+            return None
+        raw = json.dumps([endpoint, str(block.get("client_id") or "")])
+        return _token_hash(raw)
+
+    def grant_lock(self, config: "MCPServerConfig") -> threading.Lock:
+        """The lock that makes one refresh per grant at a time. Two
+        connections of one grant must not both spend the same refresh token:
+        the second one would get ``invalid_grant`` and keep a dead copy."""
+        key = self.key(config.oauth) or f"config:{id(config)}"
+        with self._lock:
+            lock = self._grant_locks.get(key)
+            if lock is None:
+                lock = self._grant_locks[key] = threading.Lock()
+            return lock
+
+    # -- the merge --------------------------------------------------------
+
+    def sync(self, config: "MCPServerConfig") -> bool:
+        """Make ``config`` and the store agree. Returns ``True`` when the
+        store changed ``config`` (the config held a stale copy)."""
+        key = self.key(config.oauth)
+        if key is None:
+            return False
+        with self._lock:
+            data = self._load()
+            record = data.get(key)
+            incoming = str(config.oauth.get("refresh_token") or "")
+            digest = _token_hash(incoming)
+            if record is None or (
+                digest != record.get("current") and digest not in record.get("seen", [])
+            ):
+                # First sight of this grant, or a token it never had.
+                self._adopt_locked(key, config)
+                return False
+            if digest == record.get("current"):
+                # The same grant state. The bearer with the later expiry wins.
+                stored = record.get("access_token") or ""
+                if config.auth_token == stored:
+                    return False
+                if config.auth_token and (not stored or self._newer(config, record)):
+                    self._adopt_locked(key, config)
+                    return False
+                if stored:
+                    self._apply(config, record)
+                    return True
+                return False
+            # An earlier token of this grant: the copy is stale.
+            self._apply(config, record)
+            return True
+
+    def record_refresh(self, config: "MCPServerConfig", previous_refresh_token: str | None) -> None:
+        """Store the result of a successful refresh of ``config``."""
+        key = self.key(config.oauth)
+        if key is None:
+            return
+        with self._lock:
+            self._adopt_locked(key, config, previous=previous_refresh_token)
+
+    def current(self, config: "MCPServerConfig") -> dict | None:
+        """The stored record of the grant of ``config`` (a copy), if any."""
+        key = self.key(config.oauth)
+        if key is None:
+            return None
+        with self._lock:
+            record = self._load().get(key)
+            return dict(record) if record else None
+
+    def is_current(self, oauth: dict[str, Any] | None) -> bool:
+        """Whether ``oauth`` carries the grant's current refresh token.
+        ``True`` when the store does not know the grant (no opinion)."""
+        key = self.key(oauth)
+        if key is None:
+            return True
+        with self._lock:
+            record = self._load().get(key)
+        if not record:
+            return True
+        return _token_hash(str((oauth or {}).get("refresh_token") or "")) == record.get("current")
+
+    # -- internals --------------------------------------------------------
+
+    @staticmethod
+    def _newer(config: "MCPServerConfig", record: dict) -> bool:
+        mine = _parse_expiry(config.oauth.get("expires_at"))
+        theirs = _parse_expiry(record.get("expires_at"))
+        if mine is None or theirs is None:
+            return mine is not None
+        return mine > theirs
+
+    @staticmethod
+    def _apply(config: "MCPServerConfig", record: dict) -> None:
+        oauth = dict(config.oauth)
+        oauth["refresh_token"] = record.get("refresh_token")
+        if record.get("expires_at"):
+            oauth["expires_at"] = record["expires_at"]
+        else:
+            oauth.pop("expires_at", None)
+        config.oauth = oauth
+        if record.get("access_token"):
+            config.auth_token = record["access_token"]
+
+    def _adopt_locked(
+        self, key: str, config: "MCPServerConfig", *, previous: str | None = None
+    ) -> None:
+        data = self._load()
+        old = data.get(key) or {}
+        seen = [h for h in old.get("seen", []) if isinstance(h, str)]
+        for earlier in (old.get("current"), _token_hash(previous) if previous else None):
+            if earlier and earlier not in seen:
+                seen.append(earlier)
+        refresh_token = str(config.oauth.get("refresh_token") or "")
+        current = _token_hash(refresh_token)
+        if current in seen:
+            seen.remove(current)
+        data[key] = {
+            "refresh_token": refresh_token,
+            "access_token": config.auth_token or "",
+            "expires_at": config.oauth.get("expires_at") or "",
+            "current": current,
+            "seen": seen[-_GRANT_SEEN_CAP:],
+            "updated_at": round(time.time()),
+        }
+        self._write()
+
+    def _load(self) -> dict[str, dict]:
+        if self._data is not None:
+            return self._data
+        data: dict[str, dict] = {}
+        if self._path is not None:
+            try:
+                raw = json.loads(self._path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                raw = {}
+            if isinstance(raw, dict):
+                data = {k: v for k, v in raw.items() if isinstance(v, dict) and v.get("current")}
+        self._data = data
+        return data
+
+    def _write(self) -> None:
+        if self._path is None or self._data is None:
+            return
+        tmp = self._path.with_name(
+            f"{self._path.name}.{os.getpid()}.{threading.get_ident()}.tmp"
+        )
+        try:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump(self._data, handle)
+            os.replace(tmp, self._path)
+        except (OSError, TypeError, ValueError):
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+
+
+#: The process-wide grant store. Every :class:`MCPConnection` uses it unless a
+#: test passes its own. The executor gives it a file next to its state db.
+GRANTS = OAuthGrantStore()
+
+
 #: Query parameters are where an API-key connector keeps the user's key: the
 #: app forwards it on the URL rather than as a bearer. Transport errors quote
 #: the URL, and an error string is what ``MCPManager.status`` calls "what the
@@ -527,6 +767,7 @@ class _BearerAuth(httpx2.Auth):
             request.headers["Authorization"] = bearer
         response = yield request
         if not await _refused(response):
+            connection._auth_refused = False
             return
         seen = bearer[len("Bearer "):] if bearer and bearer.startswith("Bearer ") else None
         fresh = await anyio.to_thread.run_sync(
@@ -534,7 +775,12 @@ class _BearerAuth(httpx2.Auth):
         )
         if fresh and f"Bearer {fresh}" != bearer:
             request.headers["Authorization"] = f"Bearer {fresh}"
-            yield request
+            response = yield request
+            connection._auth_refused = await _refused(response)
+            return
+        # Refused, and no new token: the sign-in is gone. The SDK reports this
+        # only as "Server returned an error response"; remember the real cause.
+        connection._auth_refused = True
 
 
 async def _refused(response: Any) -> bool:
@@ -560,6 +806,16 @@ _UNAUTHORIZED = re.compile(
     re.IGNORECASE,
 )
 _TOKEN_REFUSED = re.compile(r"invalid_token|token (?:has )?expired|expired token", re.IGNORECASE)
+
+
+#: The error of a connector whose sign-in the server refused when the host
+#: could not renew it (the grant was revoked, or another copy rotated it). The
+#: app shows it after "The host could not use this connector:". It names the
+#: action, because only a new sign-in helps.
+AUTH_REFUSED_ERROR = (
+    "the server refused the sign-in (HTTP 401) and the host could not renew it. "
+    "Tap Reconnect to sign in again."
+)
 
 
 def _looks_unauthorized(error: str | None) -> bool:
@@ -597,6 +853,7 @@ class MCPConnection:
         *,
         token_provider: TokenProvider | None = None,
         on_credentials_rotated: RotationListener | None = None,
+        grants: "OAuthGrantStore | None" = None,
     ) -> None:
         self.config = config
         self._token_provider = token_provider
@@ -606,6 +863,14 @@ class MCPConnection:
         #: and invalidate the old one, so the loser would be left holding a
         #: dead credential.
         self._refresh_lock = threading.Lock()
+        #: The process-wide record of each OAuth grant (:class:`OAuthGrantStore`).
+        #: Every connection of one grant reads and writes it, so one refresh
+        #: does not kill the copy of another session (bead chuk_chat-mj2o).
+        self._grants = grants if grants is not None else GRANTS
+        #: The server refused the credential and no refresh could fix it.
+        #: Set by :class:`_BearerAuth`; turns an opaque SDK error into
+        #: :data:`AUTH_REFUSED_ERROR`.
+        self._auth_refused = False
         #: When the last successful refresh landed (monotonic). A server that
         #: issues a very short-lived token — ``expires_in`` at or under the skew
         #: — would otherwise be "already expired" the instant it answers, and
@@ -636,6 +901,12 @@ class MCPConnection:
         #: to mark the server in :class:`MCPToolCache`, so the next start does
         #: not wait for it again (bead chuk_chat-l16i).
         self.on_failed: Callable[["MCPConnection"], None] | None = None
+        # A copy that is older than the grant's current state gets the
+        # current tokens before the first request.
+        try:
+            self._grants.sync(self.config)
+        except Exception:  # noqa: BLE001 — a store problem must not stop a connector
+            pass
 
     # -- lifecycle --------------------------------------------------------
 
@@ -786,7 +1057,10 @@ class MCPConnection:
                 self._error = "connect timed out"
                 return
             except Exception as exc:  # noqa: BLE001
-                self._error = _redact(f"{type(exc).__name__}: {_clip(exc, 300)}")
+                if self._auth_refused:
+                    self._error = AUTH_REFUSED_ERROR
+                else:
+                    self._error = _redact(f"{type(exc).__name__}: {_clip(exc, 300)}")
                 return
             self._tools = _tool_infos(listed)
             self._session = toolset
@@ -841,6 +1115,13 @@ class MCPConnection:
         gets a 401 is better than one sent with no credential at all.
         """
         headers = dict(self.config.headers)
+        # Another connection of the same grant may have refreshed it since the
+        # last request. Its token is the only one the server still accepts.
+        with self._refresh_lock:
+            try:
+                self._grants.sync(self.config)
+            except Exception:  # noqa: BLE001 — a store problem is not a failure
+                pass
         token = None
         if self._token_provider is not None:
             try:
@@ -871,7 +1152,13 @@ class MCPConnection:
         stored token is already a different one, another caller renewed it
         meanwhile and that token is returned without a second refresh.
         """
-        with self._refresh_lock:
+        with self._refresh_lock, self._grants.grant_lock(self.config):
+            # Another connection of this grant (another session, a probe) may
+            # have refreshed while this one waited: take its state first.
+            try:
+                self._grants.sync(self.config)
+            except Exception:  # noqa: BLE001
+                pass
             oauth = self.config.oauth
             if not oauth.get("refresh_token"):
                 return None
@@ -889,10 +1176,15 @@ class MCPConnection:
             token, updated = refresh_access_token(oauth)
             if not token:
                 return None
-            rotated = updated.get("refresh_token") != oauth.get("refresh_token")
+            previous = oauth.get("refresh_token")
+            rotated = updated.get("refresh_token") != previous
             self.config.auth_token = token
             self.config.oauth = updated
             self._refreshed_at = time.monotonic()
+            try:
+                self._grants.record_refresh(self.config, previous)
+            except Exception:  # noqa: BLE001 — the token works; the record is a bonus
+                pass
         # Outside the lock: the listener writes a frame, and the executor takes
         # this same lock when it adopts credentials from a task payload.
         if rotated and self._on_rotated is not None:
@@ -945,6 +1237,8 @@ class MCPConnection:
             # parked on _stop. Do not keep advertising that session as alive.
             # The next call/task can reconnect; never replay an arbitrary tool
             # whose side effects may already have happened before disconnection.
+            if self._auth_refused:
+                error = AUTH_REFUSED_ERROR
             closed = str(exc).lower()
             if isinstance(exc, (BrokenPipeError, ConnectionError)) or (
                 type(exc).__name__ in ("McpError", "MCPError", "ClosedResourceError")
