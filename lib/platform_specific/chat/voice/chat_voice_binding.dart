@@ -499,9 +499,12 @@ class ChatVoiceBinding {
         if (card.text('url') != null) card.text('url')!,
     ];
     if (urls.isEmpty) return text;
-    return '$text\n${<String>[
-      for (final String url in urls) 'IMAGE:${jsonEncode(<String, String>{'url': url})}',
-    ].join('\n')}';
+    final String images = urls
+        .map(
+          (String url) => 'IMAGE:${jsonEncode(<String, String>{'url': url})}',
+        )
+        .join('\n');
+    return '$text\n$images';
   }
 
   /// The turn at row [index] of [chatId] was torn down without an answer.

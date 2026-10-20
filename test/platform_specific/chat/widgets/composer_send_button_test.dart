@@ -196,6 +196,31 @@ void main() {
     expect(decoration.boxShadow, isNull);
   });
 
+  test('an open microphone keeps the send face while the chat is busy', () {
+    // Desktop and phone share this rule: the recording is sent (and queued),
+    // the stream is not stopped by the primary target.
+    expect(
+      ComposerSendButton.stopsWhile(busy: true, micActive: false),
+      isTrue,
+    );
+    expect(
+      ComposerSendButton.stopsWhile(busy: true, micActive: true),
+      isFalse,
+    );
+    expect(
+      ComposerSendButton.stopsWhile(busy: false, micActive: false),
+      isFalse,
+    );
+    expect(
+      ComposerSendButton.faceFor(
+        hasContent: true,
+        voiceAvailable: true,
+        stopping: ComposerSendButton.stopsWhile(busy: true, micActive: true),
+      ),
+      ComposerSendFace.send,
+    );
+  });
+
   test('face order: loading, stop, content, voice', () {
     expect(
       ComposerSendButton.faceFor(

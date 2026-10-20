@@ -70,6 +70,11 @@ const double _kStackBelow = 640;
 /// Widest label column in the stacked layout.
 const double _kStackLabelMax = 120;
 
+/// How many rows are measured to plan the column widths, as in `ChukTable`.
+/// The widest cell is almost always in the first screenful; a row past this
+/// still draws and still wraps inside its column.
+const int _kRowsSampled = 200;
+
 /// How the columns of one table are laid out.
 class _ColumnPlan {
   const _ColumnPlan(this.widths, {required this.scrolls});
@@ -180,7 +185,7 @@ class _ChukTableClassicState extends State<ChukTableClassic> {
           LayoutBuilder(
             builder: (context, constraints) {
               final double maxW = constraints.maxWidth;
-              final _ColumnPlan plan = _planColumns(
+              final _ColumnPlan plan = _cachedPlan(
                 t,
                 maxW,
                 MediaQuery.textScalerOf(context),
@@ -413,6 +418,38 @@ class _ChukTableClassicState extends State<ChukTableClassic> {
   ///   [_kMaxColumn] or 60 % of the width, whichever is smaller.
   /// - Those widths fit: flex columns weighted by them (still no panning).
   /// - Still too wide: fixed widths inside a horizontal scroller.
+  _ColumnPlan _cachedPlan(
+    ParsedTable t,
+    double maxW,
+    TextScaler scaler,
+    TextStyle ambient,
+  ) {
+    // The LayoutBuilder asks again on every relayout at the same width (a
+    // streaming bubble above it grew). Same table, width, text scale and
+    // styles: same plan, with no TextPainter run at all.
+    final Object key = (
+      maxW,
+      scaler,
+      ambient,
+      widget.textColor,
+      widget.fontSize,
+      widget.fontFamily,
+    );
+    final _ColumnPlan? last = _lastPlan;
+    if (last != null && identical(_lastPlanTable, t) && _lastPlanKey == key) {
+      return last;
+    }
+    final _ColumnPlan plan = _planColumns(t, maxW, scaler, ambient);
+    _lastPlan = plan;
+    _lastPlanTable = t;
+    _lastPlanKey = key;
+    return plan;
+  }
+
+  _ColumnPlan? _lastPlan;
+  ParsedTable? _lastPlanTable;
+  Object? _lastPlanKey;
+
   _ColumnPlan _planColumns(
     ParsedTable t,
     double maxW,
@@ -459,7 +496,7 @@ class _ChukTableClassicState extends State<ChukTableClassic> {
 
     for (int c = 0; c < n; c++) {
       measure(c, c < t.header.length ? t.header[c] : '', header: true);
-      for (final List<String> row in t.rows) {
+      for (final List<String> row in t.rows.take(_kRowsSampled)) {
         if (c < row.length) measure(c, row[c], header: false);
       }
     }

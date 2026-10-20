@@ -781,7 +781,7 @@ Widget _buildBarRow({
 /// A chip of the inbox bar when it carries the app switch: chuk's floating
 /// chip — the chrome surface, a 22 px glyph in the icon colour — or, with
 /// [accent], chuk's accent-filled one. It paints 42 px and takes a 48 px
-/// press; the ink stays on the chip. The same shape as the chips over a
+/// press; the ink stays on the chip. The same shape as the chips over an
 /// agent's chat (`mobile_chat_chrome.dart`).
 class _BarChip extends StatelessWidget {
   const _BarChip({

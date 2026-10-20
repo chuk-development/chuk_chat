@@ -290,6 +290,9 @@ class _PluginBackend implements LocalNotificationsBackend {
           tag: tag,
           ticker: title,
           category: AndroidNotificationCategory.message,
+          // The body is decrypted answer text: a secure lock screen shows
+          // only that a notification is there, not what it says.
+          visibility: NotificationVisibility.private,
           // The whole preview when the row is expanded.
           styleInformation: BigTextStyleInformation(body, contentTitle: title),
         ),

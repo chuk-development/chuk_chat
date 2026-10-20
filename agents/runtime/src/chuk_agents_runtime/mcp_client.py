@@ -53,6 +53,7 @@ plaintext secret in the workspace, which is exactly what §10 avoids. Prefer
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
 import json
 import os
@@ -472,6 +473,12 @@ def refresh_access_token(
 _GRANT_FIELDS = ("refresh_token", "expires_at")
 #: How many earlier refresh tokens a grant remembers (as hashes).
 _GRANT_SEEN_CAP = 64
+#: The format of the sealed grant file: AES-256-GCM over the JSON records.
+_GRANT_FILE_VERSION = 1
+_GRANT_NONCE_LEN = 12
+_GRANT_KEY_LEN = 32
+#: Additional authenticated data: binds the ciphertext to this file format.
+_GRANT_AAD = b"chuk-agents/mcp-grants-at-rest/v1"
 
 
 def _token_hash(token: str) -> str:
@@ -502,13 +509,25 @@ class OAuthGrantStore:
       device did itself, and the device wins.
 
     With a ``path`` the store survives a host restart. The file is 0600 and
-    holds the current tokens plus hashes of the earlier refresh tokens. That
-    matters: after a restart the host would otherwise take whatever copy the
-    first device forwards, and that copy can be an old one.
+    holds the current refresh token plus hashes of the earlier refresh tokens.
+    That matters: after a restart the host would otherwise take whatever copy
+    the first device forwards, and that copy can be an old one. The access
+    token stays in memory only: a restart mints a new one from the refresh
+    token.
+
+    With a ``key`` (32 bytes, the host derives it from its device identity)
+    the file is sealed with AES-256-GCM, like the host's ``secrets.enc``. A
+    refresh token is a long-lived credential, so a copy of the state directory
+    must not be enough to use it. An old plaintext file is read once and then
+    written sealed.
     """
 
-    def __init__(self, path: str | os.PathLike | None = None) -> None:
+    def __init__(
+        self, path: str | os.PathLike | None = None, *, key: bytes | None = None
+    ) -> None:
+        _check_grant_key(key)
         self._path = Path(path) if path else None
+        self._key = key
         self._lock = threading.RLock()
         self._data: dict[str, dict] | None = None
         self._grant_locks: dict[str, threading.Lock] = {}
@@ -523,8 +542,24 @@ class OAuthGrantStore:
         """Forget every grant and the file (tests)."""
         with self._lock:
             self._path = None
+            self._key = None
             self._data = None
             self._grant_locks.clear()
+
+    def set_key(self, key: bytes | None) -> None:
+        """Seal the file with ``key`` from now on. A file that is already
+        there (plaintext from an older build) is read and written sealed."""
+        _check_grant_key(key)
+        with self._lock:
+            if key == self._key:
+                return
+            memory = dict(self._data or {})
+            self._data = None
+            self._key = key
+            data = self._load()
+            data.update(memory)
+            if self._path is not None and (data or self._path.exists()):
+                self._write()
 
     def set_path(self, path: str | os.PathLike | None) -> None:
         """Persist to ``path`` from now on. Records already in memory merge
@@ -643,8 +678,10 @@ class OAuthGrantStore:
         else:
             oauth.pop("expires_at", None)
         config.oauth = oauth
-        if record.get("access_token"):
-            config.auth_token = record["access_token"]
+        # A record read from disk has no access token. The copy's bearer is
+        # then from an earlier state of the grant and is dead: drop it, so the
+        # next request mints a new one from the current refresh token.
+        config.auth_token = record.get("access_token") or ""
 
     def _adopt_locked(
         self, key: str, config: "MCPServerConfig", *, previous: str | None = None
@@ -669,32 +706,92 @@ class OAuthGrantStore:
         }
         self._write()
 
+    #: Set by :meth:`_load` when the file on disk is plaintext (an older
+    #: build) or still holds access tokens, so the next write replaces it.
+    _needs_seal = False
+    #: Set by :meth:`_load` when the file is sealed and this store has no key
+    #: yet. Then nothing is written, so a key set later still finds the file.
+    _sealed_without_key = False
+
     def _load(self) -> dict[str, dict]:
         if self._data is not None:
             return self._data
         data: dict[str, dict] = {}
+        self._needs_seal = False
+        self._sealed_without_key = False
         if self._path is not None:
             try:
                 raw = json.loads(self._path.read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 raw = {}
+            if isinstance(raw, dict) and "ciphertext" in raw and "nonce" in raw:
+                self._sealed_without_key = self._key is None
+                raw = self._open_sealed(raw)
+            elif isinstance(raw, dict) and raw:
+                # Plaintext from an older build: take it once, and seal it
+                # (and drop its access tokens) at the next write.
+                self._needs_seal = self._key is not None or any(
+                    isinstance(v, dict) and v.get("access_token") for v in raw.values()
+                )
             if isinstance(raw, dict):
                 data = {k: v for k, v in raw.items() if isinstance(v, dict) and v.get("current")}
         self._data = data
+        if self._needs_seal:
+            # The migration: the old plaintext file is replaced at once.
+            self._write()
         return data
 
+    def _open_sealed(self, record: dict) -> dict:
+        """The records of a sealed file, or ``{}`` when it does not open
+        under this store's key (no key, a foreign key, a broken file)."""
+        if self._key is None or record.get("version") != _GRANT_FILE_VERSION:
+            return {}
+        try:
+            from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+            nonce = base64.b64decode(record["nonce"], validate=True)
+            sealed = base64.b64decode(record["ciphertext"], validate=True)
+            plain = AESGCM(self._key).decrypt(nonce, sealed, _GRANT_AAD)
+            data = json.loads(plain.decode("utf-8"))
+        except Exception:  # noqa: BLE001 — an unreadable file is an empty store
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def _disk_records(self) -> dict[str, dict]:
+        """The records as they go to disk: no access token, ever."""
+        return {
+            k: {f: v for f, v in record.items() if f != "access_token"}
+            for k, record in (self._data or {}).items()
+        }
+
     def _write(self) -> None:
-        if self._path is None or self._data is None:
+        if self._path is None or self._data is None or self._sealed_without_key:
             return
         tmp = self._path.with_name(
             f"{self._path.name}.{os.getpid()}.{threading.get_ident()}.tmp"
         )
         try:
+            records = self._disk_records()
+            if self._key is not None:
+                from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+                nonce = os.urandom(_GRANT_NONCE_LEN)
+                plain = json.dumps(records, separators=(",", ":")).encode("utf-8")
+                payload: dict = {
+                    "version": _GRANT_FILE_VERSION,
+                    "nonce": base64.b64encode(nonce).decode("ascii"),
+                    "ciphertext": base64.b64encode(
+                        AESGCM(self._key).encrypt(nonce, plain, _GRANT_AAD)
+                    ).decode("ascii"),
+                }
+            else:
+                payload = records
             self._path.parent.mkdir(parents=True, exist_ok=True)
             fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                json.dump(self._data, handle)
+                json.dump(payload, handle)
             os.replace(tmp, self._path)
+            self._needs_seal = False
         except (OSError, TypeError, ValueError):
             try:
                 os.unlink(tmp)
@@ -702,8 +799,14 @@ class OAuthGrantStore:
                 pass
 
 
+def _check_grant_key(key: bytes | None) -> None:
+    if key is not None and len(key) != _GRANT_KEY_LEN:
+        raise ValueError(f"grant store key must be {_GRANT_KEY_LEN} bytes")
+
+
 #: The process-wide grant store. Every :class:`MCPConnection` uses it unless a
-#: test passes its own. The executor gives it a file next to its state db.
+#: test passes its own. The executor gives it a file next to its state db, and
+#: the host gives it the key that seals that file.
 GRANTS = OAuthGrantStore()
 
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:chuk_chat/services/settings/mobile_chat_preferences.dart';
 
@@ -632,9 +633,21 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     if (controller != null &&
         controller.state.value.isPaired &&
         controller is AgentsLinkProbe) {
-      final bool alive = await (controller as AgentsLinkProbe).probeLink(
-        timeout: resumeProbeTimeout,
-      );
+      bool alive = false;
+      try {
+        alive = await (controller as AgentsLinkProbe).probeLink(
+          timeout: resumeProbeTimeout,
+        );
+      } catch (error) {
+        // A probe that throws (the socket is closed, a send failed on a
+        // half-open one) means a dead socket: replace it below.
+        if (kDebugMode) {
+          debugPrint(
+            '[AgentsThreadView] resume probe failed: ${error.runtimeType}',
+          );
+        }
+        alive = false;
+      }
       if (!mounted) return;
       if (alive &&
           identical(controller, _controller) &&
@@ -1005,17 +1018,64 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     unawaited(_resendUnacknowledged(controller));
   }
 
-  /// The answer text a finish notification previews: the run's own final
-  /// answer, else the last answer row the thread holds. Stays on the device.
-  String? _answerForNotification(String? finalAnswer) {
+  /// The answer text a finish notification previews. Stays on the device.
+  String? _answerForNotification(AgentsRelayDone event) =>
+      answerForNotification(
+        finalAnswer: event.finalAnswer,
+        runId: event.runId,
+        stopped: event.wasStopped,
+        rows: ChatStorageService.getChatById(widget.threadKey)?.messagesOrNull,
+      );
+
+  /// What a finish notification previews: the run's own final answer, else
+  /// the last answer row of the thread, but only when that row belongs to
+  /// this run (its run meta carries [runId]). A stopped run, a run with no
+  /// answer, or a turn that is not saved yet has no row of its own, and the
+  /// last answer row is then an older turn's: no preview at all. A stopped
+  /// run shows no answer.
+  @visibleForTesting
+  static String? answerForNotification({
+    required String? finalAnswer,
+    required String? runId,
+    required bool stopped,
+    required List<ChatMessage>? rows,
+  }) {
+    if (stopped) return null;
     if (finalAnswer != null && finalAnswer.trim().isNotEmpty) {
       return finalAnswer;
     }
-    final rows = ChatStorageService.getChatById(widget.threadKey)
-        ?.messagesOrNull;
+    if (runId == null || runId.isEmpty) return null;
     if (rows == null || rows.isEmpty) return null;
     final last = rows.last;
-    return last.role == 'assistant' ? last.text : null;
+    if (last.role != 'assistant') return null;
+    if (!_rowCarriesRun(last, runId)) return null;
+    return last.text;
+  }
+
+  /// Whether [row]'s run meta call ([kAgentsRunMetaTool]) names [runId]. The
+  /// call rides in the row's tool calls or inside its content blocks.
+  static bool _rowCarriesRun(ChatMessage row, String runId) {
+    bool walk(Object? node) {
+      if (node is Map) {
+        if (node['name'] == kAgentsRunMetaTool) {
+          final Object? args = node['arguments'];
+          if (args is Map && args['run_id'] == runId) return true;
+        }
+        return node.values.any(walk);
+      }
+      if (node is List) return node.any(walk);
+      return false;
+    }
+
+    for (final String? raw in <String?>[row.toolCalls, row.contentBlocks]) {
+      if (raw == null || raw.isEmpty) continue;
+      try {
+        if (walk(jsonDecode(raw))) return true;
+      } catch (_) {
+        // A row with broken JSON is not proof of anything.
+      }
+    }
+    return false;
   }
 
   /// Asks the host to re-stream this thread from the replay cursor.
@@ -1515,7 +1575,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
           AgentsNotifications.instance.onLiveDone(
             widget.threadKey,
             runId: runId,
-            answer: _answerForNotification(event.finalAnswer),
+            answer: _answerForNotification(event),
             stopped: event.wasStopped,
           ),
         );
@@ -2180,6 +2240,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       // Action-required bars remain below the header and own their inset.
       topInset: _hasBarAboveChat ? 0 : widget.topInset,
       transcriptFooter: takeover,
+      agentsTitle: widget.title,
       onToggleSidebar: _noopToggleSidebar,
       selectedChatId: widget.threadKey,
       onChatIdChanged: _onChatIdChanged,

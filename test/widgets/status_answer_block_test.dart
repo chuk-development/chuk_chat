@@ -72,7 +72,7 @@ String _allText(WidgetTester tester) => tester
 
 void main() {
   for (final double width in <double>[390, 900]) {
-    for (final double scale in <double>[1, 1.3]) {
+    for (final double scale in <double>[1, 1.3, 2]) {
       testWidgets('status at $width px, text x$scale: rows, no overflow', (
         WidgetTester tester,
       ) async {
@@ -98,6 +98,19 @@ void main() {
       });
     }
   }
+
+  testWidgets('narrow status row grows at text x2 and keeps name and amount', (
+    WidgetTester tester,
+  ) async {
+    await _pump(tester, _payments, width: 390, textScale: 2);
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(tester.takeException(), isNull);
+    // The name and amount row is taller than its 28 px floor now, so the
+    // text is not clipped.
+    final Size name = tester.getSize(find.text('Hetzner').first);
+    expect(name.height, greaterThan(28));
+    expect(find.text('102,20 €'), findsOneWidget);
+  });
 
   testWidgets('status footer opens and shows the older rows', (
     WidgetTester tester,

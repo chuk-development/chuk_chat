@@ -251,7 +251,7 @@ class RosterPins extends ChangeNotifier {
 /// desktop sidebar alike (bead chuk_chat-41k1: the desktop kept creation order
 /// while the phone sorted by activity, so the same chat sat on top of one and
 /// at the bottom of the other). Pinned first, in the roster's own order; then
-/// the rest by last activity, newest first ([compareByLastActivity]), and a
+/// the rest by last activity, newest first ([compareByLastActivity]), and an
 /// agent that has never been active keeps its roster position among the
 /// undated ones. Ctrl+1 … Ctrl+9 on the desktop count this list, so the
 /// roster and the shortcut can never disagree.

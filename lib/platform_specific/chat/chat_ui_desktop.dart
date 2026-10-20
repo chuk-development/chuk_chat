@@ -2659,7 +2659,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               controller: composerController,
               hasOtherContent: hasAttachments || _audioHandler.isMicActive,
               loading: _audioHandler.isTranscribingAudio,
-              stopping: _isStreaming || _isSending,
+              // An open microphone keeps the send face, as on the phone: the
+              // recording is sent and queued, the stream is not stopped.
+              stopping: ComposerSendButton.stopsWhile(
+                busy: _isStreaming || _isSending,
+                micActive: _audioHandler.isMicActive,
+              ),
               onStop: _cancelCurrentOperation,
               onSend: _audioHandler.isMicActive
                   ? _handleAudioSend

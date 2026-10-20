@@ -187,7 +187,7 @@ void main() {
     });
   });
 
-  // Bead chuk_chat-89vl: the row said "it lives in this app only" for a
+  // Bead chuk_chat-89vl: the row said "it lives in this app only" for an
   // agent created in the app that the host keeps and runs (Wahlradar).
   group('runs on the host', () {
     const String localId = 'local:brisk-heron:2:116636868';

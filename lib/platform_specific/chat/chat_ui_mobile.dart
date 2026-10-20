@@ -174,6 +174,10 @@ class ChukChatUIMobile extends StatefulWidget {
   /// [messengerMode].
   final Widget? transcriptFooter;
 
+  /// The agent's name (agents_thread_view passes it). The voice call uses it
+  /// as the agent's name, as on the desktop. Agents's; see [messengerMode].
+  final String? agentsTitle;
+
   const ChukChatUIMobile({
     super.key,
     required this.onToggleSidebar,
@@ -200,6 +204,7 @@ class ChukChatUIMobile extends StatefulWidget {
     this.messengerMode = false,
     this.hostRunActive = false,
     this.transcriptFooter,
+    this.agentsTitle,
   });
 
   @override
@@ -432,6 +437,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       _voice = ChatVoiceBinding(
         currentChatId: () => _activeChatId,
         isAgentsScreen: widget.messengerMode,
+        // The agent's name (agents_thread_view hands it in as the title).
+        agentName: () => widget.messengerMode ? widget.agentsTitle : null,
         messages: () => _messages,
         onVoiceTurns: _appendVoiceTurns,
         systemPrompt: _resolveSystemPromptForSend,
@@ -4261,13 +4268,22 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 controller: composerController,
                 hasOtherContent: hasAttachments || isRecording,
                 loading: _audioHandler.isTranscribingAudio,
-                stopping: showStopAction && !isRecording,
+                stopping: ComposerSendButton.stopsWhile(
+                  busy: showStopAction,
+                  micActive: isRecording,
+                ),
                 onStop: _cancelCurrentOperation,
                 onSend: isRecording ? _handleAudioSend : sendOrSubmitEdit,
                 // No call while a message is edited: the field is the edit.
                 onVoice: messageActionsHandler.isEditing
                     ? null
-                    : composerVoiceAction(context, _voice),
+                    : composerVoiceAction(
+                        context,
+                        _voice,
+                        agentName: widget.messengerMode
+                            ? widget.agentsTitle
+                            : null,
+                      ),
                 width: ComposerMetrics.targetSize,
                 height: ComposerMetrics.targetSize,
                 radius: ComposerMetrics.targetSize / 2,

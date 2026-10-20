@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -145,6 +147,66 @@ void main() {
     // A second resume (desktop focus) is a no-op.
     await svc.resume();
     expect(opens, 2);
+  });
+
+  group('an open in flight', () {
+    late Completer<void> gate;
+    late int live;
+
+    setUp(() {
+      gate = Completer<void>();
+      live = 0;
+      svc.channelOpenerOverride =
+          (userId, {required onSignal, required onSubscribed}) async {
+            opens++;
+            await gate.future;
+            live++;
+            return () async {
+              closes++;
+              live--;
+            };
+          };
+    });
+
+    test('pause then resume while opening opens one channel', () async {
+      final Future<void> first = svc.start('u1');
+      await Future<void>.delayed(Duration.zero);
+      await svc.pause();
+      final Future<void> back = svc.resume();
+      gate.complete();
+      await Future.wait(<Future<void>>[first, back]);
+
+      expect(svc.isOpen, isTrue);
+      expect(live, 1);
+      expect(opens, 1);
+    });
+
+    test('pause, the open drops its channel, then resume opens again', () async {
+      final Future<void> first = svc.start('u1');
+      await Future<void>.delayed(Duration.zero);
+      await svc.pause();
+      gate.complete();
+      await first;
+      expect(live, 0);
+
+      await svc.resume();
+      expect(svc.isOpen, isTrue);
+      expect(live, 1);
+      expect(opens, 2);
+    });
+
+    test('repeated start for the same user opens one channel', () async {
+      final Future<void> a = svc.start('u1');
+      final Future<void> b = svc.start('u1');
+      final Future<void> c = svc.resume();
+      gate.complete();
+      await Future.wait(<Future<void>>[a, b, c]);
+
+      expect(svc.isOpen, isTrue);
+      expect(opens, 1);
+      expect(live, 1);
+      expect(closes, 0);
+    });
   });
 
   test('resume without a user does nothing', () async {

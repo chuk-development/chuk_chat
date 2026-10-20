@@ -170,3 +170,25 @@ def test_a_device_re_sign_in_replaces_a_host_rotated_token(tmp_path):
     # A stale replay of the ORIGINAL device token must not revert the new one.
     executor._session_mcp_manager("s", copy.deepcopy(servers))
     assert _config(manager, "Notion").oauth["refresh_token"] == "rt-device-new"
+
+
+def test_the_grant_file_is_sealed_with_the_host_key(tmp_path):
+    """The host gives the grant store its at-rest key before any executor.
+    The executor's ``mcp-grants.json`` then holds no token in the clear, and
+    never an access token."""
+    from chuk_agents_runtime import mcp_client
+
+    mcp_client.GRANTS.set_key(bytes(range(32)))
+    executor = _executor(tmp_path)
+    servers = _servers()
+    manager = executor._session_mcp_manager("s", servers)
+    assert manager is not None
+    notion = _config(manager, "Notion")
+    mcp_client.GRANTS.record_refresh(notion, None)
+
+    path = tmp_path / "mcp-grants.json"
+    text = path.read_text(encoding="utf-8")
+    assert set(json.loads(text)) == {"version", "nonce", "ciphertext"}
+    assert notion.oauth["refresh_token"] not in text
+    assert "at-notion" not in text
+    assert path.stat().st_mode & 0o777 == 0o600

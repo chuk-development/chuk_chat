@@ -19,7 +19,7 @@
 ///    roster and the roster is then written here WHOLESALE — the snapshot can
 ///    never outvote the host, it only fills the gap before the host speaks.
 ///  * A deleted agent may not come back. Delete is not on the wire yet
-///    (docs/WIRE_CONTRACT.md, "Agent names"), so the host keeps listing a
+///    (docs/WIRE_CONTRACT.md, "Agent names"), so the host keeps listing an
 ///    agent the user removed. The deleted ids are persisted next to the
 ///    agents and fed back into `applyHostNames`' `ignore` set on the next
 ///    launch, exactly as they are within a session.
@@ -61,8 +61,7 @@ class AgentRosterSnapshot {
 }
 
 class AgentRosterStore {
-  AgentRosterStore({String prefsKey = kAgentRosterPrefsKey})
-    : _prefsKey = prefsKey;
+  AgentRosterStore({this._prefsKey = kAgentRosterPrefsKey});
 
   /// The process-wide store. A test builds its own with its own key.
   static final AgentRosterStore instance = AgentRosterStore();
