@@ -5,6 +5,7 @@ import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
 import 'package:chuk_chat/widgets/browser_view_page.dart';
+import 'package:chuk_chat/widgets/vnc_webview_controls.dart';
 import 'package:flutter_rfb/flutter_rfb.dart';
 
 import '../support/fake_relay_controller.dart';
@@ -199,4 +200,79 @@ void main() {
       expect(controller.stops, 1);
     },
   );
+
+  testWidgets('the view asks for the stream of its own thread only', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: BrowserViewPage(controller: controller, sessionKey: 'mail-1'),
+      ),
+    );
+    await tester.pump();
+    expect(controller.lastSessionKey, 'mail-1');
+  });
+
+  testWidgets(
+    'no browser of its own shows an empty state, never an error banner',
+    (tester) async {
+      await pumpPage(tester);
+      controller.emit(
+        const AgentsRelayBrowserView(
+          status: 'error',
+          message: 'no browser open: no sandbox browser is running to watch',
+          reason: 'no_display',
+        ),
+      );
+      await tester.pump();
+      expect(find.byKey(const Key('browser_view_empty')), findsOneWidget);
+      expect(find.text('No browser open'), findsOneWidget);
+      expect(find.textContaining('no sandbox browser'), findsNothing);
+      expect(find.byType(VncLoadingSteps), findsNothing);
+      // The way out stays.
+      expect(find.byKey(const Key('browser_view_close')), findsOneWidget);
+    },
+  );
+
+  for (final Brightness brightness in Brightness.values) {
+    testWidgets('the loading steps and chips contrast in $brightness', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(brightness: brightness),
+          home: BrowserViewPage(controller: controller),
+        ),
+      );
+      await tester.pump();
+      final ColorScheme cs = Theme.of(
+        tester.element(find.byType(BrowserViewPage)),
+      ).colorScheme;
+      final Text label = tester.widget<Text>(find.text('Getting a machine'));
+      final Color fg = label.style!.color!;
+      final Color bg = VncOverlayColors.chip(cs);
+      expect(bg.a, 1.0, reason: 'the chip is solid, not a see-through scrim');
+      expect(
+        _contrast(fg, bg),
+        greaterThanOrEqualTo(4.5),
+        reason: 'WCAG AA for the step text',
+      );
+      // The waiting step, which is dimmed, still reads.
+      final Text next = tester.widget<Text>(find.text('Opening its screen'));
+      expect(
+        _contrast(Color.alphaBlend(next.style!.color!, bg), bg),
+        greaterThanOrEqualTo(4.5),
+      );
+    });
+  }
+}
+
+double _luminance(Color c) => c.computeLuminance();
+
+double _contrast(Color a, Color b) {
+  final double la = _luminance(a);
+  final double lb = _luminance(b);
+  final double hi = la > lb ? la : lb;
+  final double lo = la > lb ? lb : la;
+  return (hi + 0.05) / (lo + 0.05);
 }
