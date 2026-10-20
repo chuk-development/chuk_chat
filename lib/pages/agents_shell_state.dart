@@ -161,7 +161,7 @@ mixin AgentsShellHost on State<MessengerShell> {
   String _selectedThreadKey = '';
 
   /// Where the last session left off. Written on every pick, read once at
-  /// startup. Two keys, not one: a thread is only meaningful with its coworker.
+  /// startup. Two keys, not one: a thread is only meaningful with its agent.
   static const String _kLastAgentKey = 'cowork.last_agent_id';
   static const String _kLastThreadKey = 'cowork.last_thread_key';
 
@@ -175,13 +175,13 @@ mixin AgentsShellHost on State<MessengerShell> {
   String? _restoredThreadKey;
 
   /// Whether the remembered pick has been read off disk yet. Nothing is
-  /// auto-selected before it has: picking the first coworker and then jumping
+  /// auto-selected before it has: picking the first agent and then jumping
   /// to the remembered one a moment later is worse than opening a beat late.
   bool _restoreLoaded = false;
 
   /// Whether the current selection is the app's own choice rather than the
   /// user's. Only an automatic selection may be replaced when the remembered
-  /// coworker finally arrives in the roster (the host sends its names after the
+  /// agent finally arrives in the roster (the host sends its names after the
   /// pairing, so it is not there on the first frame).
   bool _selectionIsAuto = false;
 
@@ -189,16 +189,16 @@ mixin AgentsShellHost on State<MessengerShell> {
   /// the back chip, and cleared when the selected agent is deleted.
   bool _showThreadOnNarrow = false;
 
-  /// Opens a coworker's profile page. Implemented by the layout, which owns the
+  /// Opens an agent's profile page. Implemented by the layout, which owns the
   /// navigator and the callbacks the page needs.
   void _openAgentProfile(AgentsAgent agent);
 
-  /// Opens the coworker's screen, or null while it has none open — the header
+  /// Opens the agent's screen, or null while it has none open — the header
   /// then parks its target. Implemented by the layout, which follows the live
   /// browser presence.
   VoidCallback? get _openAgentScreenOrNull;
 
-  /// Selects a coworker's thread. Implemented by the layout, which also
+  /// Selects an agent's thread. Implemented by the layout, which also
   /// decides what the selection does to the sidebar on a narrow window.
   void _select(String agentId, String threadKey);
 
@@ -213,7 +213,7 @@ mixin AgentsShellHost on State<MessengerShell> {
   /// What the user has already seen, per thread — the inbox's unread answer.
   AgentReadMarks get _readMarks => widget.readMarks ?? AgentReadMarks.instance;
 
-  /// The coworkers' display profiles (picture, colour, role, brief).
+  /// The agents' display profiles (picture, colour, role, brief).
   AgentProfileStore get _agentProfiles =>
       widget.agentProfiles ?? AgentProfileStore.instance;
 
@@ -243,14 +243,14 @@ mixin AgentsShellHost on State<MessengerShell> {
     unawaited(ThreadPreviewStore.instance.load());
     unawaited(MediaIndex.instance.load());
     // Open where the user left off. The roster fills in stages — nothing at
-    // first, the host coworker on pairing, the rest when the host sends its
+    // first, the host agent on pairing, the rest when the host sends its
     // names — so the restore is not one shot at startup: it watches the roster
     // and lands as soon as its target exists (bead cowork-8yb).
     _roster.addListener(_onRosterChanged);
-    // The window title names the coworker of an Agents thread in view.
+    // The window title names the agent of an Agents thread in view.
     WindowTitleService.nameResolver = _windowTitleNameFor;
     // A thread whose history loads (cache, cloud, host replay) tells the roster
-    // when its coworker was last active, if nothing has yet.
+    // when its agent was last active, if nothing has yet.
     _historySub = ChatStorageState.changes.listen(_seedActivityFromHistory);
     unawaited(_loadLastSelection());
     // Auto-link at startup. Started after the first frame so the app's sign-in
@@ -272,10 +272,10 @@ mixin AgentsShellHost on State<MessengerShell> {
     // router keeps the target until this shell takes it, so a tap that
     // launched the app cold is picked up right after the first frame.
     NotificationRouter.instance.pending.addListener(_onNotificationTap);
-    // The toast carries the coworker's name, never the answer.
+    // The toast carries the agent's name, never the answer.
     AgentsNotifications.instance.threadLabel = _threadLabel;
     WidgetsBinding.instance.addPostFrameCallback((_) => _onNotificationTap());
-    // The host's coworker names (bead cowork-817): the link fans out every
+    // The host's agent names (bead cowork-817): the link fans out every
     // inbound frame of the bound controller, so this sees each `agent_list`
     // without owning the socket.
     _hostInboundSub = AgentsRelayLink.instance.inbound.listen(_onHostInbound);
@@ -287,13 +287,13 @@ mixin AgentsShellHost on State<MessengerShell> {
   StreamSubscription<AgentsRelayInbound>? _hostInboundSub;
 
   /// Ids deleted in this session. The host still lists them (delete is not on
-  /// the wire yet, see WIRE_CONTRACT "Coworker names"); a list must not bring
-  /// a coworker back the user just removed.
+  /// the wire yet, see WIRE_CONTRACT "Agent names"); a list must not bring
+  /// an agent back the user just removed.
   final Set<String> _deletedAgentIds = <String>{};
 
   void _onHostInbound(AgentsRelayInbound event) {
     // A frame that proves the host ran (or is running) a thread's turn also
-    // proves the coworker lives on the host (bead chuk_chat-89vl): a held
+    // proves the agent lives on the host (bead chuk_chat-89vl): a held
     // `task_ack`, a heartbeat, a live run, or a run terminal — a replayed one
     // too, which is a run the host has stored.
     final String? ranOnHost = switch (event) {
@@ -316,6 +316,34 @@ mixin AgentsShellHost on State<MessengerShell> {
       peerDeviceId: _controller.value?.state.value.peerDeviceId,
       ignore: _deletedAgentIds,
     );
+    _reannounceMissingAgents(event.agents);
+  }
+
+  /// Ids re-sent to the host this session, so a host that keeps dropping an
+  /// `agent_create` cannot turn each `agent_list` answer into another send.
+  final Set<String> _reannouncedAgentIds = <String>{};
+
+  /// Sends `agent_create` again for every agent this device made that the
+  /// host does not list (bead chuk_chat-41k1): without it, an agent whose
+  /// first announce was lost stays on this device and never appears on the
+  /// user's other devices. The host upserts by id, so a resend is harmless;
+  /// its `agent_list` answer comes back through [_onHostInbound].
+  void _reannounceMissingAgents(List<AgentsHostAgentName> listed) {
+    final controller = _controller.value;
+    if (controller == null) return;
+    for (final AgentsAgent agent in agentsMissingOnHost(
+      _roster.agents,
+      listed,
+      skip: <String>{..._deletedAgentIds, ..._reannouncedAgentIds},
+    )) {
+      _reannouncedAgentIds.add(agent.id);
+      unawaited(
+        controller.createAgent(agent.id, agent.name).catchError((Object _) {
+          // Not sent (link down): the next agent_list tries again.
+          _reannouncedAgentIds.remove(agent.id);
+        }),
+      );
+    }
   }
 
   /// Reads the persisted roster and the remembered pick, then lands on it.
@@ -332,7 +360,7 @@ mixin AgentsShellHost on State<MessengerShell> {
     }
     if (!mounted) return;
     // Deletes outlive the launch they were made in: the host still lists a
-    // coworker the user removed (delete has no wire frame yet), so the ignore
+    // agent the user removed (delete has no wire frame yet), so the ignore
     // set has to start with what earlier launches deleted.
     _deletedAgentIds.addAll(_roster.deletedIds);
     String? agentId;
@@ -346,7 +374,7 @@ mixin AgentsShellHost on State<MessengerShell> {
       threadKey = pick?.$2 ?? prefs.getString(_kLastThreadKey);
     } catch (_) {
       // No preferences (a test, a locked store): fall back to the first
-      // coworker, which is still better than an empty chat.
+      // agent, which is still better than an empty chat.
     }
     if (!mounted) return;
     _restoredAgentId = agentId;
@@ -420,11 +448,15 @@ mixin AgentsShellHost on State<MessengerShell> {
     if (!mounted) return;
     _seedActivityFromHistory();
     _autoSelect();
-    // A coworker's name can arrive or change after its thread is in view.
+    // A notification tapped before its thread was listed opens now.
+    if (NotificationRouter.instance.pending.value != null) {
+      _onNotificationTap();
+    }
+    // An agent's name can arrive or change after its thread is in view.
     WindowTitleService.refresh();
   }
 
-  /// The coworker's name for an Agents thread, or null for any other chat.
+  /// The agent's name for an Agents thread, or null for any other chat.
   String? _windowTitleNameFor(String chatId) {
     final String? agentId = _agentIdForThread(chatId);
     return agentId == null ? null : _roster.byId(agentId)?.name;
@@ -439,11 +471,11 @@ mixin AgentsShellHost on State<MessengerShell> {
 
   /// Fills in "last active" from the history the app already holds, for every
   /// thread that has no time yet. Before, the roster only learned a time from a
-  /// live event, so after a restart every coworker read "no activity yet" next
+  /// live event, so after a restart every agent read "no activity yet" next
   /// to a full conversation. The time is the newest message's own timestamp,
   /// never an invented one. History that old is not news: a thread the user
   /// never marked read gets its read mark at the same time, so seeding does
-  /// not light up every coworker as unread.
+  /// not light up every agent as unread.
   void _seedActivityFromHistory([String? onlyKey]) {
     if (!mounted || _seedingActivity) return;
     _seedingActivity = true;
@@ -473,7 +505,7 @@ mixin AgentsShellHost on State<MessengerShell> {
   /// you come back to where you were; failing that, to the top of the list.
   /// Never to an empty chat.
   ///
-  /// It runs again on every roster change, because the remembered coworker may
+  /// It runs again on every roster change, because the remembered agent may
   /// only show up once the host has sent its names. A selection this method
   /// made may be replaced by the remembered one when it arrives; a selection
   /// the user made never is.
@@ -538,7 +570,7 @@ mixin AgentsShellHost on State<MessengerShell> {
   String _threadLabel(String threadKey) {
     final String? agentId = _agentIdForThread(threadKey);
     // The product name, not the mode's: this is what a notification says when
-    // no coworker can be resolved for the thread. It comes from the same place
+    // no agent can be resolved for the thread. It comes from the same place
     // the About page shows it — the localized product name, with upstream's own
     // hardcoded fallback for the case where no localization is reachable (the
     // callback can fire after this shell is gone).
@@ -552,11 +584,23 @@ mixin AgentsShellHost on State<MessengerShell> {
   /// Opens the thread a notification named. Selecting it is enough: the
   /// thread view replays from its cursor when its thread changes, and the
   /// "Answer ready" affordance comes from the replayed `while_away` done.
+  ///
+  /// A tap whose thread the roster does not list yet (a cold start from the
+  /// toast, before the roster is back from disk) is left pending and taken on
+  /// the next roster change, instead of being dropped (bead chuk_chat-kl8x).
   void _onNotificationTap() {
-    final NotificationTarget? target = NotificationRouter.instance.take();
-    if (target == null || !mounted) return;
-    final String? agentId = _agentIdForThread(target.sessionKey);
-    if (agentId == null) return;
+    final NotificationTarget? pending =
+        NotificationRouter.instance.pending.value;
+    if (pending == null || !mounted) return;
+    final String? agentId = _agentIdForThread(pending.sessionKey);
+    if (agentId == null) {
+      // Not an agent's thread at all: not this shell's to open.
+      if (!ChatOrigin.isAgentsThread(pending.sessionKey)) {
+        NotificationRouter.instance.take();
+      }
+      return;
+    }
+    final NotificationTarget target = NotificationRouter.instance.take()!;
     _select(agentId, target.sessionKey);
     // Close the host's row and clear the OS toast for this thread.
     unawaited(
@@ -664,7 +708,7 @@ mixin AgentsShellHost on State<MessengerShell> {
   /// Runs the shared invite pairing for the install page.
   ///
   /// It runs on the live thread view's transport, exactly as a scan does, so
-  /// the view takes the new trust, the host coworker lands in the roster and
+  /// the view takes the new trust, the host agent lands in the roster and
   /// the encrypted mirror is written. Without a thread view (it is always
   /// mounted in practice) it pairs on a transport of its own and then remounts
   /// the view, which reconnects from the stored trust.
@@ -774,7 +818,7 @@ mixin AgentsShellHost on State<MessengerShell> {
   /// Keeps trying until this device is linked. Disposed with the shell.
   AgentsPairingRestore? _pairingRestore;
 
-  /// Which coworker owns [threadKey]. A run's events belong to the thread that
+  /// Which agent owns [threadKey]. A run's events belong to the thread that
   /// started it, which is not always the one on screen.
   String? _agentIdForThread(String threadKey) {
     for (final agent in _roster.agents) {
@@ -802,13 +846,13 @@ mixin AgentsShellHost on State<MessengerShell> {
       },
     );
     // The names the host keeps (bead cowork-817): asked on every pair, so a
-    // reinstall and a second device show the same coworkers. The answer
+    // reinstall and a second device show the same agents. The answer
     // lands in [_onHostInbound].
     unawaited(_controller.value?.requestAgentList());
     // `ensureHostAgent` notifies the roster, which lands the restore; this only
     // covers the case where the agent was already listed, so nothing notified.
     if (_selectedAgentId == null) _autoSelect();
-    // A roster that is still empty of the remembered coworker leaves the host
+    // A roster that is still empty of the remembered agent leaves the host
     // one selected; the agent list that follows brings the remembered one and
     // [_autoSelect] moves to it.
     if (_selectedAgentId == null && agent.threads.isNotEmpty) {
@@ -827,7 +871,7 @@ mixin AgentsShellHost on State<MessengerShell> {
   ///
   /// [menuActions] are the shell's own thread actions: on a desktop window
   /// they wait behind the header's "…", next to its Documents, Call and
-  /// Screen chips. [onOpenAgent] is a tap on the coworker in that header.
+  /// Screen chips. [onOpenAgent] is a tap on the agent in that header.
   AgentsThreadView _buildThread({
     double topInset = 0,
     bool phone = false,
@@ -881,17 +925,17 @@ mixin AgentsShellHost on State<MessengerShell> {
   void _openModelScreen();
 
   // ── templates ──
-  /// New coworker (bead cowork-817, templates chuk_chat-dsh0): the template
-  /// picker first ("Blank coworker" or one of [kCoworkerTemplates]), then the
-  /// name. The coworker is created with that name and its thread opens; the
+  /// New agent (bead cowork-817, templates chuk_chat-dsh0): the template
+  /// picker first ("Blank agent" or one of [kAgentTemplates]), then the
+  /// name. The agent is created with that name and its thread opens; the
   /// host is told so the name outlives this install, and a template's persona
-  /// rides along for its soul.md (`agent_create`, WIRE_CONTRACT "Coworker
+  /// rides along for its soul.md (`agent_create`, WIRE_CONTRACT "Agent
   /// templates"). A template's face and role land in this device's profile
   /// store. The starter automation is sent only when the user switched it on.
   Future<void> _openOnboarding() async {
     final taken = _roster.agents.map((agent) => agent.name);
     final suggested = const AgentNameGenerator().next(taken: taken);
-    final request = await showCoworkerTemplatePicker(
+    final request = await showAgentTemplatePicker(
       context,
       suggestedName: suggested,
     );
@@ -915,30 +959,26 @@ mixin AgentsShellHost on State<MessengerShell> {
       );
     }
     unawaited(
-      _createOnHost(
-        agent,
-        template,
-        startAutomation: request.startAutomation,
-      ),
+      _createOnHost(agent, template, startAutomation: request.startAutomation),
     );
     _select(agent.id, agent.threads.first.key);
   }
 
-  /// Tells the host about a new coworker, then — only when the user turned
+  /// Tells the host about a new agent, then — only when the user turned
   /// it on — creates the template's starter automation for it
-  /// ([announceCoworkerToHost]). A failure is said, not swallowed: when
+  /// ([announceAgentToHost]). A failure is said, not swallowed: when
   /// `agent_create` did not go out (no controller, a failed send) the
   /// starter is not sent and the user is told; when only the automation
-  /// failed, the coworker exists and the schedule does not.
+  /// failed, the agent exists and the schedule does not.
   Future<void> _createOnHost(
     AgentsAgent agent,
-    CoworkerTemplate? template, {
+    AgentTemplate? template, {
     required bool startAutomation,
   }) async {
     final controller = _controller.value;
     final starter = template?.starter;
     final l = _l10n;
-    final outcome = await announceCoworkerToHost(
+    final outcome = await announceAgentToHost(
       createAgent: controller == null
           ? null
           : () => controller.createAgent(
@@ -958,13 +998,15 @@ mixin AgentsShellHost on State<MessengerShell> {
     );
     if (outcome.ok || !mounted) return;
     if (outcome.agentFailed && kDebugMode) {
-      debugPrint('agent_create failed: ${outcome.agentError ?? 'no controller'}');
+      debugPrint(
+        'agent_create failed: ${outcome.agentError ?? 'no controller'}',
+      );
     }
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(
       SnackBar(
         content: Text(
           outcome.agentFailed
-              // Names the coworker: it is in the roster, not on the host
+              // Names the agent: it is in the roster, not on the host
               // (bead chuk_chat-az1g).
               ? l.tplAgentCreateFailed(agent.name)
               : l.tplStarterFailed(agent.name, outcome.starterError ?? ''),
@@ -984,7 +1026,7 @@ mixin AgentsShellHost on State<MessengerShell> {
   }
 
   Future<void> _openAgentRename(AgentsAgent agent) async {
-    final name = await showCoworkerNameDialog(
+    final name = await showAgentNameDialog(
       context,
       title: 'Rename agent',
       initialName: agent.name,
@@ -1009,7 +1051,7 @@ mixin AgentsShellHost on State<MessengerShell> {
   );
 
   Future<void> _openRoomCreate() async {
-    // Only coworkers the app can actually name can join a room.
+    // Only agents the app can actually name can join a room.
     final agents = _roster.visibleAgents;
     await showAgentsSheetOrDialog<void>(
       context: context,
@@ -1200,7 +1242,7 @@ mixin AgentsShellHost on State<MessengerShell> {
     _deletedAgentIds.add(agentId);
     final removed = _roster.byId(agentId);
     _roster.removeAgent(agentId);
-    // Nothing of a deleted coworker may survive to be inherited by a later one
+    // Nothing of a deleted agent may survive to be inherited by a later one
     // with the same id: drop its face and its read marks.
     unawaited(_agentProfiles.forget(agentId));
     for (final thread in removed?.threads ?? const <AgentsThreadInfo>[]) {
@@ -1275,7 +1317,6 @@ mixin AgentsShellHost on State<MessengerShell> {
     }
     return controller;
   }
-
 }
 
 /// The newest timestamp among [messages] (`sentAt`, else `startedAt`), or

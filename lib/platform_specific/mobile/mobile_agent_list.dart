@@ -1,4 +1,4 @@
-/// The phone home screen: the coworkers, as a messenger inbox in the expressive
+/// The phone home screen: the agents, as a messenger inbox in the expressive
 /// design language.
 ///
 /// The shape is the one the reference messenger uses for its chat list, and the
@@ -13,15 +13,15 @@
 ///    the middle, the row takes chuk's floating-bar geometry so the switch
 ///    sits where it sits over chuk's chat, and All / Unread moves to a
 ///    compact row under it;
-///  * one row per coworker: its blob face with the presence dot, the name, the
+///  * one row per agent: its blob face with the presence dot, the name, the
 ///    role tag, the time of the last activity, one line of preview, and an
 ///    unread dot. The row springs and morphs on press, and the list cascades in.
 ///
 /// A group ROOM is a conversation too, so it is a row in this same list — same
 /// height, same name line, same preview line, no badge and no second card
 /// style. The one difference is the slot on the left: [RoomFaces] puts the
-/// members' faces in it, overlapping, in exactly the box one coworker face
-/// takes. Rooms come FIRST, above the coworkers: this list has never been
+/// members' faces in it, overlapping, in exactly the box one agent face
+/// takes. Rooms come FIRST, above the agents: this list has never been
 /// sorted by activity (it is roster order), and a room carries no timestamp of
 /// its own, so an activity sort would either fabricate one or bury every room
 /// at the bottom of the list the feature exists to put them in.
@@ -116,7 +116,7 @@ class MobileAgentList extends StatefulWidget {
   /// (no computer, connecting, offline, no agents).
   final Widget? emptyState;
 
-  /// The group rooms, listed above the coworkers in the same list. Null (or an
+  /// The group rooms, listed above the agents in the same list. Null (or an
   /// empty source) leaves the list exactly as it was.
   final RoomSource? rooms;
 
@@ -127,7 +127,7 @@ class MobileAgentList extends StatefulWidget {
   /// asks which of the two the user meant instead of silently picking one.
   final VoidCallback? onCreateRoom;
 
-  /// Opens a coworker's thread — the same callback the desktop sidebar uses.
+  /// Opens an agent's thread — the same callback the desktop sidebar uses.
   final void Function(String agentId, String threadKey) onSelect;
 
   final String? selectedAgentId;
@@ -139,14 +139,14 @@ class MobileAgentList extends StatefulWidget {
   /// The account face on the left. Null hides it.
   final VoidCallback? onOpenAccount;
 
-  /// Opens a coworker's profile page (long-press → Profile).
+  /// Opens an agent's profile page (long-press → Profile).
   final void Function(AgentsAgent agent)? onOpenProfile;
 
-  /// Renames a coworker (long-press → Rename). This is the one profile field
+  /// Renames an agent (long-press → Rename). This is the one profile field
   /// that reaches the host.
   final void Function(AgentsAgent agent)? onRenameAgent;
 
-  /// Deletes a coworker (long-press → Delete).
+  /// Deletes an agent (long-press → Delete).
   final void Function(AgentsAgent agent)? onDeleteAgent;
 
   /// Text the account monogram is taken from (the user's name or e-mail).
@@ -165,7 +165,7 @@ class MobileAgentList extends StatefulWidget {
   /// where the list is only a picker and nothing grows out of it.
   final void Function(ContainerTransformSource source)? onOpenFrom;
 
-  /// The coworker whose row is currently inside the growing container. Its row
+  /// The agent whose row is currently inside the growing container. Its row
   /// keeps its space in the list but is not drawn, so the copy in the container
   /// is the only one on screen — the package's `_Hideable`.
   final String? hiddenAgentId;
@@ -265,7 +265,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
 
   /// What the "+" target does. One action goes straight there; two ask, on the
   /// app's own menu surface, so the target keeps doing what it always did for
-  /// coworkers and rooms simply gain a way in.
+  /// agents and rooms simply gain a way in.
   Future<void> _openAddMenu(BuildContext anchor) async {
     final ColorScheme scheme = Theme.of(anchor).colorScheme;
     final String? choice = await showAnchoredMenu<String>(
@@ -275,7 +275,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
       items: const <PopupMenuEntry<String>>[
         PopupMenuItem<String>(
           value: 'agent',
-          child: _MenuRow(icon: Icons.person_add_alt_1, label: 'New coworker'),
+          child: _MenuRow(icon: Icons.person_add_alt_1, label: 'New agent'),
         ),
         PopupMenuItem<String>(
           value: 'room',
@@ -303,21 +303,13 @@ class _MobileAgentListState extends State<MobileAgentList> {
             ).toLowerCase().contains(q),
       );
     }
-    // Pinned first, then by the last time anything happened in the thread —
-    // the inbox order the user expects: the conversation they just used is at
-    // the top, and the ones they pinned stay where they put them. A coworker
-    // that has never been active keeps its roster position among the
-    // timestampless, rather than jumping under a fabricated epoch.
-    final RosterPins pins = RosterPins.instance;
-    final List<AgentsAgent> all = list.toList(growable: false);
-    return <AgentsAgent>[
-      for (final AgentsAgent agent in all)
-        if (pins.isPinned(agent.id)) agent,
-      ...<AgentsAgent>[
-        for (final AgentsAgent agent in all)
-          if (!pins.isPinned(agent.id)) agent,
-      ]..sort(compareByLastActivity),
-    ];
+    // Pinned first, then by the last time anything happened in the thread:
+    // the conversation the user just used is at the top. The same order as
+    // the desktop sidebar ([rosterPinOrder]).
+    return rosterPinOrder(
+      list.toList(growable: false),
+      RosterPins.instance.ids,
+    );
   }
 
   /// The role line: the one the user set in the profile wins over the one the
@@ -375,7 +367,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
             value: 'delete',
             child: _MenuRow(
               icon: Icons.delete_rounded,
-              label: 'Delete coworker',
+              label: 'Delete agent',
               color: scheme.error,
             ),
           ),
@@ -419,7 +411,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
   Widget _buildList(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
     final List<AgentsAgent> agents = _visible();
-    // Rooms first, then the coworkers — one list, one row grammar. See the
+    // Rooms first, then the agents — one list, one row grammar. See the
     // library doc for why this list does not sort them by activity.
     final List<AgentsRoom> rooms = _visibleRooms();
     // Threads this device already holds but has not previewed yet (a restart,
@@ -460,8 +452,8 @@ class _MobileAgentListState extends State<MobileAgentList> {
     final bool addAsks =
         widget.onAddAgent != null && widget.onCreateRoom != null;
     final String addTooltip = addAsks
-        ? 'Add a coworker or a room'
-        : (widget.onAddAgent != null ? 'Add a coworker' : 'Add a room');
+        ? 'Add an agent or a room'
+        : (widget.onAddAgent != null ? 'Add an agent' : 'Add a room');
     VoidCallback? addAction(BuildContext anchor) => addAsks
         ? () => _openAddMenu(anchor)
         : (widget.onAddAgent ?? widget.onCreateRoom);
@@ -476,7 +468,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
             leading: _BarChip(
               icon: HugeIcons.search01,
               onTap: _openSearch,
-              tooltip: 'Search coworkers',
+              tooltip: 'Search agents',
               semanticsId: 'mobile_home_search',
             ),
             middle: Align(
@@ -504,7 +496,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
           size: _barControlHeight,
           width: _barControlWidth,
           color: scheme.surfaceContainerHighest,
-          tooltip: 'Search coworkers',
+          tooltip: 'Search agents',
           semanticsId: 'mobile_home_search',
         ),
         const SizedBox(width: 10),
@@ -517,7 +509,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
             builder: (BuildContext anchor) => ExpressiveIconButton(
               hugeIcon: HugeIcons.plusSign,
               // One action goes straight there. Both offered: the target asks.
-              // It is not hijacked — "New coworker" is still the first item.
+              // It is not hijacked — "New agent" is still the first item.
               onTap: addAction(anchor),
               size: _barControlHeight,
               width: _barControlWidth,
@@ -790,7 +782,7 @@ Widget _buildBarRow({
 /// chip — the chrome surface, a 22 px glyph in the icon colour — or, with
 /// [accent], chuk's accent-filled one. It paints 42 px and takes a 48 px
 /// press; the ink stays on the chip. The same shape as the chips over a
-/// coworker's chat (`mobile_chat_chrome.dart`).
+/// agent's chat (`mobile_chat_chrome.dart`).
 class _BarChip extends StatelessWidget {
   const _BarChip({
     required this.icon,
@@ -910,7 +902,7 @@ class _SearchField extends StatelessWidget {
                   // The field's height comes from the box around it now, so
                   // the input takes only the room its own line needs.
                   contentPadding: EdgeInsets.zero,
-                  hintText: 'Search coworkers',
+                  hintText: 'Search agents',
                   hintStyle: text.titleMedium?.copyWith(
                     color: scheme.onSurfaceVariant,
                     fontWeight: FontWeight.w500,
@@ -980,14 +972,14 @@ class MobileAgentRow extends StatelessWidget {
   /// beside the time, and the reason the row sits above the dated ones.
   final bool pinned;
 
-  /// How many of this coworker's threads have something new in them. Shown as
+  /// How many of this agent's threads have something new in them. Shown as
   /// the number on the badge.
   final int unreadThreads;
 
   /// The role line to show; null hides the tag.
   final String? role;
 
-  /// Opens the coworker's thread. It is handed the row's own rounded rect, in
+  /// Opens the agent's thread. It is handed the row's own rounded rect, in
   /// global coordinates: the chat grows out of exactly that rect
   /// (`mobile_container_transform.dart`).
   final void Function(Rect globalRect)? onTap;
@@ -1005,7 +997,7 @@ class MobileAgentRow extends StatelessWidget {
   /// loose enough for a 52 px face plus two lines of text.
   static const double height = 64;
 
-  /// The preview line under the name. What the coworker is doing now beats a
+  /// The preview line under the name. What the agent is doing now beats a
   /// stale thread title; a thread title beats the brief; the brief beats
   /// silence.
   static String previewOf(AgentsAgent agent, {AgentProfileStore? profiles}) {
@@ -1074,9 +1066,6 @@ class MobileAgentRow extends StatelessWidget {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(30),
             ),
-            pressedShape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-            ),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             child: ConstrainedBox(
               constraints: const BoxConstraints(minHeight: height - 4),
@@ -1093,7 +1082,7 @@ class MobileAgentRow extends StatelessWidget {
                           children: <Widget>[
                             // The name comes first: the role tag only gets
                             // the room the whole name leaves, and goes when
-                            // there is too little (DESIGN §13.5: a coworker
+                            // there is too little (DESIGN §13.5: an agent
                             // name is not ellipsised for a tag).
                             Expanded(
                               child: _NameWithRole(
@@ -1188,7 +1177,7 @@ class MobileAgentRow extends StatelessWidget {
 /// same [MorphTap] with the same corners, the same [MobileAgentRow.height]
 /// floor, the same title and preview styles. Nothing marks it as a room except
 /// the slot on the left, which holds [RoomFaces] instead of one [AgentFace] —
-/// and that slot is [MobileAgentRow]'s 48 px, so a room row and a coworker row
+/// and that slot is [MobileAgentRow]'s 48 px, so a room row and an agent row
 /// line up to the pixel.
 ///
 /// There is no time on the row and no unread badge: a room carries neither on
@@ -1243,9 +1232,6 @@ class MobileRoomRow extends StatelessWidget {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(30),
             ),
-            pressedShape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-            ),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             child: ConstrainedBox(
               constraints: const BoxConstraints(
@@ -1290,8 +1276,8 @@ class MobileRoomRow extends StatelessWidget {
   }
 }
 
-/// The small grey tag next to the name (the coworker's role).
-/// A coworker's name with its role tag after it. The name keeps its whole
+/// The small grey tag next to the name (the agent's role).
+/// An agent's name with its role tag after it. The name keeps its whole
 /// width; the tag takes what is left (at most 110 px) and is dropped when
 /// less than [_minTagWidth] remains.
 class _NameWithRole extends StatelessWidget {
@@ -1451,7 +1437,7 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            searching ? 'for "$query"' : 'Your coworkers show up here',
+            searching ? 'for "$query"' : 'Your agents show up here',
             style: text.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
             textAlign: TextAlign.center,
           ),
@@ -1497,7 +1483,7 @@ String mobileTimeLabel(DateTime? when, {required DateTime now}) {
   return '${when.day}.${when.month}.';
 }
 
-/// The number of new threads on a coworker, in that coworker's colour.
+/// The number of new threads on an agent, in that agent's colour.
 ///
 /// A bare dot said "something happened" and nothing more; the roster is read at
 /// a glance and the glance should carry the amount.
