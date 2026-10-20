@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/user_sync_signal_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
@@ -57,34 +58,22 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
   CreditBalances creditBalances = const CreditBalances.empty();
   bool creditLoading = true;
 
-  RealtimeChannel? _creditChannel;
+  StreamSubscription<void>? _creditSignalSub;
   bool _hasLoadedOnce = false;
 
   @protected
-  void initCreditListener({String? channelName}) {
-    final String resolvedChannelName =
-        channelName ?? 'credit_updates_${identityHashCode(this)}';
-
+  void initCreditListener() {
     // Load from cache first, then sync from remote
     _loadCreditsFromCacheThenRemote();
 
-    // Ensure previous channel is cleaned up before creating a new one
-    _creditChannel?.unsubscribe();
-    _creditChannel = _supabase.channel(resolvedChannelName)
-      ..onPostgresChanges(
-        event: PostgresChangeEvent.update,
-        schema: 'public',
-        table: 'user_billing',
-        filter: PostgresChangeFilter(
-          type: PostgresChangeFilterType.eq,
-          column: 'user_id',
-          value: _supabase.auth.currentUser?.id,
-        ),
-        callback: (_) {
-          refreshCredits(reloadSilently: true);
-        },
-      )
-      ..subscribe();
+    // A user_billing change on any device arrives as a sync signal
+    // (UserSyncSignalService); the signal carries no data, so reload.
+    unawaited(_creditSignalSub?.cancel());
+    _creditSignalSub = UserSyncSignalService.instance.billingChanged.listen((
+      _,
+    ) {
+      if (mounted) refreshCredits(reloadSilently: true);
+    });
   }
 
   /// Load from cache first for instant UI, then sync from remote in background
@@ -333,10 +322,8 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
 
   @protected
   void disposeCreditListener() {
-    if (_creditChannel != null) {
-      _supabase.removeChannel(_creditChannel!);
-      _creditChannel = null;
-    }
+    unawaited(_creditSignalSub?.cancel());
+    _creditSignalSub = null;
   }
 }
 
@@ -601,7 +588,7 @@ class _BalanceBadgeState extends State<BalanceBadge> {
   int _freeMessagesTotal = 10;
   // Default to assuming paid user - server will correct if free user
   bool _hasSubscription = true;
-  RealtimeChannel? _channel;
+  StreamSubscription<void>? _billingSignalSub;
   VoidCallback? _networkListener;
 
   /// Set while the badge is waiting for the Supabase client to exist.
@@ -639,10 +626,8 @@ class _BalanceBadgeState extends State<BalanceBadge> {
   @override
   void dispose() {
     _dropReadyListener();
-    if (_channel != null) {
-      _supabase.removeChannel(_channel!);
-      _channel = null;
-    }
+    unawaited(_billingSignalSub?.cancel());
+    _billingSignalSub = null;
     if (_networkListener != null) {
       NetworkStatusService.isOnlineListenable.removeListener(_networkListener!);
       _networkListener = null;
@@ -654,20 +639,14 @@ class _BalanceBadgeState extends State<BalanceBadge> {
     final user = _supabase.auth.currentUser;
     if (user == null) return;
 
-    // Listen for profile updates via Supabase Realtime
-    _channel = _supabase.channel('balance_updates_${identityHashCode(this)}')
-      ..onPostgresChanges(
-        event: PostgresChangeEvent.update,
-        schema: 'public',
-        table: 'user_billing',
-        filter: PostgresChangeFilter(
-          type: PostgresChangeFilterType.eq,
-          column: 'user_id',
-          value: user.id,
-        ),
-        callback: (_) => _loadBalance(silent: true),
-      )
-      ..subscribe();
+    // A user_billing change on any device arrives as a sync signal
+    // (UserSyncSignalService); the signal carries no data, so reload.
+    unawaited(_billingSignalSub?.cancel());
+    _billingSignalSub = UserSyncSignalService.instance.billingChanged.listen((
+      _,
+    ) {
+      if (mounted) _loadBalance(silent: true);
+    });
 
     // Listen for network status changes - refresh when back online
     _networkListener = () {

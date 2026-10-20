@@ -222,6 +222,39 @@ DELETE: User can delete from their own folder
 - `get_free_messages_remaining` and `get_credits_remaining` verify `p_user_id = auth.uid()`
 - `increment_free_messages_used` is restricted to `service_role` only
 
+## Realtime
+
+Two mechanisms. Both only tell the client to pull again. The 30 s polls stay
+as the fallback.
+
+**Sync signals (broadcast).** Migration
+`supabase/migrations/20261020000000_realtime_sync_signals.sql`. The trigger
+function `public.notify_user_change()` calls `realtime.send` on the private
+topic `user:<uid>`, event `changed`, payload `{t: table, op, id}`. The signal
+never carries row data: applying rows from realtime caused the races fixed in
+`dee848a8`. An RLS policy on `realtime.messages` lets an authenticated user
+read only their own topic, broadcast only; there is no insert policy.
+The client is `lib/services/user_sync_signal_service.dart`. It debounces per
+table (750 ms), runs every pull once on each (re)subscribe, and keeps the
+channel open only while the app is in the foreground (push notifications
+cover the background).
+
+| Table | Client reaction |
+|-------|-----------------|
+| `encrypted_chats` | `ChatSyncService.syncNow()` |
+| `cowork_chats` | `AgentsChatStorageBootstrap.flushNow()` (Agents build only) |
+| `agents_chat_pins` | `RosterPins.instance.load(force: true)` (Agents build only) |
+| `user_billing` | `UserSyncSignalService.billingChanged` → credit widgets reload |
+
+**postgres_changes.** `user_preferences` and `user_model_providers` keep
+their own subscription (`user_model_prefs_realtime_service.dart`).
+
+**No realtime, on purpose:** `profiles`, `projects` and project files,
+settings, `usage_logs`, the cowork mirror tables, device tokens and run
+notifications. They change rarely, change only on the device that shows them,
+are server-side bookkeeping, or already reach the user by push. A pull on
+open or on the poll is enough.
+
 ## Migrations
 
 Located in `migrations/` folder:

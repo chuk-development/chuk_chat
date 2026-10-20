@@ -11,6 +11,7 @@ import 'package:chuk_chat/services/chat_sync_service.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/streaming_manager.dart';
+import 'package:chuk_chat/services/user_sync_signal_service.dart';
 
 /// Callback when app state changes
 /// Service for managing app lifecycle events and related operations
@@ -90,6 +91,7 @@ class AppLifecycleService extends ChangeNotifier {
     if (_isDesktopPlatform) {
       // On desktop, avoid expensive network probing on every focus change.
       ChatSyncService.resume();
+      unawaited(UserSyncSignalService.instance.resume());
     } else {
       // Check network FIRST, then resume sync once we know the actual status.
       // This prevents ChatSyncService from seeing stale isOnline=false after
@@ -121,6 +123,7 @@ class AppLifecycleService extends ChangeNotifier {
 
     // Now that network status is up-to-date, resume sync
     ChatSyncService.resume();
+    unawaited(UserSyncSignalService.instance.resume());
   }
 
   void _handlePaused() {
@@ -137,6 +140,7 @@ class AppLifecycleService extends ChangeNotifier {
     // alt-tab/focus changes don't stall the app.
     if (!_isDesktopPlatform) {
       ChatSyncService.pause();
+      unawaited(UserSyncSignalService.instance.pause());
     }
 
     // Notify listeners

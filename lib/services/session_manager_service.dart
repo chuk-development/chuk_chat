@@ -18,6 +18,7 @@ import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/session_recovery.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/user_model_prefs_realtime_service.dart';
+import 'package:chuk_chat/services/user_sync_signal_service.dart';
 
 /// Callback for session-related events
 typedef SessionEventCallback = void Function();
@@ -90,6 +91,8 @@ class SessionManagerService extends ChangeNotifier {
 
     // Cross-device sync for model selections / activations. Idempotent.
     unawaited(UserModelPrefsRealtimeService.instance.start(user.id));
+    // Cross-device sync signals (chats, pins, billing). Idempotent.
+    unawaited(UserSyncSignalService.instance.start(user.id));
 
     // Initialize user session (chat loading, sync, theme) — but only once
     // per user. Token refreshes re-trigger onAuthStateChange, so we guard
@@ -183,6 +186,7 @@ class SessionManagerService extends ChangeNotifier {
     ChatSyncService.stop();
     ChatMaintenanceController.instance.reset();
     unawaited(UserModelPrefsRealtimeService.instance.stop());
+    unawaited(UserSyncSignalService.instance.stop());
 
     // Check if this is a real logout or just offline
     final isOnline = await _checkNetworkStatus();
@@ -236,6 +240,7 @@ class SessionManagerService extends ChangeNotifier {
     _revisionCheckedForUser = null;
 
     ChatSyncService.stop();
+    await UserSyncSignalService.instance.stop();
 
     await EncryptionService.clearKey();
     await ChatStorageService.reset();
