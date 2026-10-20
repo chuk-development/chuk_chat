@@ -100,7 +100,7 @@ void main() {
           SingleChildScrollView(
             child: AgentsActionApprovalCard(
               request: request,
-              coworkerName: 'Ada',
+              agentName: 'Ada',
               decision: decision,
               onSelect: onSelect ?? (_) {},
             ),
@@ -223,7 +223,7 @@ void main() {
                 request: _request(
                   site: 'a-very-long-subdomain.shop.example.com',
                 ),
-                coworkerName: 'A coworker with a long name',
+                agentName: 'An agent with a long name',
                 onSelect: (_) {},
               ),
             ),
@@ -397,7 +397,7 @@ void main() {
       controller.emit(
         const AgentsRelayDone(
           reason: 'budget_exceeded',
-          finalAnswer: 'This coworker reached its weekly budget.',
+          finalAnswer: 'This agent reached its weekly budget.',
           sessionKey: 'thread-1',
           iterations: 0,
           tokensSpent: 0,

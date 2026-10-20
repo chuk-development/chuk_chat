@@ -26,8 +26,8 @@ class IncomingCall {
     required this.expiresAt,
   });
 
-  /// The name the host uses when the user gave the coworker none.
-  static const String defaultAgentName = 'Your coworker';
+  /// The name the host uses when the user gave the agent none.
+  static const String defaultAgentName = 'Your agent';
 
   /// The host cuts `reason` at this many characters; a longer one is cut here
   /// too, so a broken host cannot hand the worker a novel.
@@ -106,7 +106,7 @@ class IncomingCall {
   final String threadId;
   final String agentId;
 
-  /// The name the user gave the coworker. Shown on the ring screen.
+  /// The name the user gave the agent. Shown on the ring screen.
   final String agentName;
 
   /// Why the agent calls. Content: the worker gets it, the UI does not.

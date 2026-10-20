@@ -1,7 +1,7 @@
-/// "Active now" — the line under a coworker's name, and what it says here.
+/// "Active now" — the line under an agent's name, and what it says here.
 ///
 /// A messenger writes "Active now" under a person's name when they have the app
-/// open. A coworker does not sleep: it is reachable whenever the host is, so the
+/// open. An agent does not sleep: it is reachable whenever the host is, so the
 /// interesting question is not "is it there" but "what is it doing right now".
 /// So the line is
 ///
@@ -9,7 +9,7 @@
 ///    it is running, or the task the host says it picked up;
 ///  * an amber dot and "Scheduled" when it carries a schedule and waits for it;
 ///  * a green dot and "Active now" when it is idle on a paired host;
-///  * a grey dot and "Not connected" when there is no transport. A coworker is
+///  * a grey dot and "Not connected" when there is no transport. An agent is
 ///    reachable whenever the host is — but if this device cannot reach the
 ///    host, saying "Active now" would send the reader looking for an answer
 ///    that cannot arrive.
@@ -46,17 +46,17 @@ String humanToolLabel(String rawName) {
   return spaced[0].toUpperCase() + spaced.substring(1);
 }
 
-/// The words for the status line, or null while the coworker is simply idle
+/// The words for the status line, or null while the agent is simply idle
 /// (the caller then writes "Active now").
 ///
-/// [run] is the ledger's record for this coworker's thread, if any.
+/// [run] is the ledger's record for this agent's thread, if any.
 String? workInProgressLabel(AgentsAgent agent, AgentsRun? run) {
   if (agent.activity == AgentActivity.scheduled) return 'Scheduled';
   final bool running = agent.running || (run?.running ?? false);
   if (!running) return null;
 
   // The tool that is open right now beats everything else: it is the most
-  // precise true statement about what the coworker is doing.
+  // precise true statement about what the agent is doing.
   if (run != null) {
     for (final ToolCall call in run.toolCalls.reversed) {
       if (call.status == ToolCallStatus.running) {
@@ -159,7 +159,7 @@ class AgentStatusLine extends StatelessWidget {
   final AgentsAgent agent;
 
   /// The thread whose run is read for the work in progress. Null falls back to
-  /// the coworker's own `running` flag.
+  /// the agent's own `running` flag.
   final String? sessionKey;
 
   /// Injectable for tests; defaults to the process-wide ledger.
@@ -217,7 +217,7 @@ class AgentStatusLine extends StatelessWidget {
         : paired
         ? const Color(0xFF34C759)
         : scheme.onSurfaceVariant.withValues(alpha: 0.5);
-    // Idle on a paired host is still "active": a coworker does not go to
+    // Idle on a paired host is still "active": an agent does not go to
     // sleep. Without a transport the line says so instead.
     final String label = work ?? (paired ? 'Active now' : 'Not connected');
 
@@ -249,7 +249,7 @@ class AgentStatusLine extends StatelessWidget {
     );
   }
 
-  /// A coworker has one permanent session, and its key is the thread's key.
+  /// An agent has one permanent session, and its key is the thread's key.
   String _defaultSessionKey() =>
       agent.threads.isEmpty ? '' : agent.threads.first.key;
 }

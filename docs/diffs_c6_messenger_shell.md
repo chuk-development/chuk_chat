@@ -102,7 +102,7 @@ with
 ## New method
 
 ```dart
-  /// The phone layout (docs/MOBILE_GROKBOT_STRUCTURE.md): the coworker list as
+  /// The phone layout (docs/MOBILE_GROKBOT_STRUCTURE.md): the agent list as
   /// an inbox, the chat with the floating chrome on top. Back (chip, system
   /// back, edge swipe) flips the same flag the tablet path uses.
   Widget _buildPhoneBody(

@@ -77,7 +77,7 @@ void main() {
       }
     });
 
-    test('an unnamed coworker is "Your coworker"', () {
+    test('an unnamed agent is "Your agent"', () {
       final IncomingCall call = parse(
         incomingFrame(agentName: '  ', expiresAt: now),
       )!;

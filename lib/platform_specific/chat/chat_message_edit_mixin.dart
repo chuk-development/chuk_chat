@@ -28,6 +28,7 @@ import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/chat_persistence_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/message_actions_handler.dart';
 import 'package:chuk_chat/services/chat_runtime.dart';
+import 'package:chuk_chat/services/dictation_tracker.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
 
 mixin ChatMessageEditMixin<W extends StatefulWidget>
@@ -181,6 +182,11 @@ mixin ChatMessageEditMixin<W extends StatefulWidget>
       final attachedSnapshot = List<AttachedFile>.from(composerAttachedFiles);
       cancelEditMessage();
       if (newText.isNotEmpty || attachedSnapshot.isNotEmpty) {
+        // A re-dictated edit becomes a voice message; a rewrite by hand
+        // turns a voice message into a typed one.
+        if (isValidMessageIndex(editIndex)) {
+          DictationTracker.instance.applyToEdit(messages[editIndex], newText);
+        }
         await submitEditedMessage(
           editIndex,
           newText,

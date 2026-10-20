@@ -1,13 +1,13 @@
 // lib/widgets/agents_action_approval_card.dart
 //
-// "Allow this?" for one outward action of a coworker: a mail, a connector
+// "Allow this?" for one outward action of an agent: a mail, a connector
 // tool the service marks as destructive, a click or a form in the browser,
 // or a publish (docs/WIRE_CONTRACT.md, "Per-action approvals").
 //
 // The run waits on the host until the user answers. The card sits where the
 // run is, at the end of the transcript (like the browser takeover card), and
 // offers the answers the host named, in its order: allow once, always for
-// this coworker, always on this site, deny. A lasting answer is stored on the
+// this agent, always on this site, deny. A lasting answer is stored on the
 // host and applies from the next action.
 
 import 'dart:convert';
@@ -25,7 +25,7 @@ class AgentsActionApprovalCard extends StatelessWidget {
   const AgentsActionApprovalCard({
     super.key,
     required this.request,
-    required this.coworkerName,
+    required this.agentName,
     required this.onSelect,
     this.decision,
     this.dense = false,
@@ -35,9 +35,9 @@ class AgentsActionApprovalCard extends StatelessWidget {
   /// the answers to offer.
   final AgentsRelayApprovalRequest request;
 
-  /// The coworker's name for "Always for (coworker)". Empty falls back to
-  /// "this coworker".
-  final String coworkerName;
+  /// The agent's name for "Always for (agent)". Empty falls back to
+  /// "this agent".
+  final String agentName;
 
   /// Called with the option the user picked (`once`, `always_this_agent`,
   /// `always_this_site` or `deny`).
@@ -55,9 +55,9 @@ class AgentsActionApprovalCard extends StatelessWidget {
     final ThemeData theme = Theme.of(context);
     final ColorScheme scheme = theme.colorScheme;
     final AppLocalizations? l = AppLocalizations.of(context);
-    final String name = coworkerName.trim().isEmpty
-        ? (l?.approvalThisCoworker ?? 'this coworker')
-        : coworkerName.trim();
+    final String name = agentName.trim().isEmpty
+        ? (l?.approvalThisAgent ?? 'this agent')
+        : agentName.trim();
     final String? picked = decision;
 
     return Semantics(

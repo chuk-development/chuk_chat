@@ -1,6 +1,6 @@
 """The host's side of the user's own browser (docs/WIRE_CONTRACT.md, "The
 user's own browser"; bead chuk_chat-8xsn): status pushes to the app, the
-coworker's name for the strip, the panel's messages, and
+agent's name for the strip, the panel's messages, and
 ``in_use_by_this_agent`` for the host's own agent. No relay, no add-on: the
 party, the sealer and the broker are fakes.
 """
@@ -70,7 +70,7 @@ def test_the_hosts_own_agent_holding_the_browser_is_this_agent(tmp_path, monkeyp
         block = reply["user_browser"]
         assert block["in_use"] is True, holder
         assert block["in_use_by_this_agent"] is True, holder
-        assert block["in_use_by"] == {"agent_id": HOST_AGENT, "name": "Your coworker"}
+        assert block["in_use_by"] == {"agent_id": HOST_AGENT, "name": "Your agent"}
         assert "holder" not in block
         other = host._on_permissions_frame({"type": "agent_permissions_get", "agent_id": "local:desk:1:7"})
         assert other["user_browser"]["in_use_by_this_agent"] is False
@@ -108,7 +108,7 @@ def test_a_change_is_pushed_once_and_never_names_a_thread_key(tmp_path, monkeypa
     assert len(pushes) == 3
     first, taken, stopped = (p["user_browser"] for p in pushes)
     assert first["in_use"] is False and first["connected"] is True
-    assert taken["in_use_by"] == {"agent_id": HOST_AGENT, "name": "Your coworker"}
+    assert taken["in_use_by"] == {"agent_id": HOST_AGENT, "name": "Your agent"}
     assert "in_use_by_this_agent" not in taken  # host-wide: the app compares in_use_by
     assert "thread-1" not in str(taken)
     assert stopped["stopped"] is True and stopped["in_use"] is False
@@ -130,9 +130,9 @@ def test_the_host_wires_itself_into_the_broker(tmp_path):
     broker = _FakeBroker()
     host._wire_user_browser(broker)
     assert broker.listeners == [host._on_user_browser_change]
-    # The strip on the page says the name the user gave the coworker.
+    # The strip on the page says the name the user gave the agent.
     assert broker.name_resolver("local:desk:1:7") == "Crypto Desk"
-    assert broker.name_resolver("thread-1") == "Your coworker"
+    assert broker.name_resolver("thread-1") == "Your agent"
     assert broker.page_handler == host._on_browser_page_message
 
 
@@ -163,9 +163,9 @@ def test_a_panel_message_is_a_task_of_the_coworker_in_the_browser(tmp_path, monk
     assert prompt.startswith(PANEL_MARK + "\nIs this a good price?")
     assert "https://shop.example/item/7" in prompt and "Price 12 EUR" in prompt
 
-    # Nobody held the browser: the host's own coworker, in the app's thread.
+    # Nobody held the browser: the host's own agent, in the app's thread.
     ack = host._on_browser_page_message(None, frame)
-    assert ack["ok"] is True and ack["coworker"] == "Your coworker"
+    assert ack["ok"] is True and ack["coworker"] == "Your agent"
     assert submitted[-1][0] == HOST_AGENT
 
     # An empty message starts nothing.
@@ -195,7 +195,7 @@ def test_the_answer_goes_back_to_the_panel_and_replaces_the_toast(tmp_path, monk
     host._on_browser_page_message(None, {"type": "page_message", "text": "hi"})
 
     host._on_run_finished({"run_id": "run-1", "origin": PANEL_ORIGIN, "final_answer": "Hello."})
-    assert broker.sent == [{"type": "page_reply", "coworker": "Your coworker", "text": "Hello."}]
+    assert broker.sent == [{"type": "page_reply", "coworker": "Your agent", "text": "Hello."}]
     assert notified == []
 
     # The add-on went away: the usual toast / push instead.
@@ -223,7 +223,7 @@ def test_the_panel_runs_the_host_waits_on_are_capped(tmp_path, monkeypatch):
     # The oldest went first: its answer is no longer the panel's.
     assert "run-1" not in host._panel_runs
     host._on_run_finished({"run_id": f"run-{total}", "origin": PANEL_ORIGIN, "final_answer": "ok"})
-    assert broker.sent == [{"type": "page_reply", "coworker": "Your coworker", "text": "ok"}]
+    assert broker.sent == [{"type": "page_reply", "coworker": "Your agent", "text": "ok"}]
 
 
 # -- "Allow again" in the app (user_browser_resume) ----------------------------------

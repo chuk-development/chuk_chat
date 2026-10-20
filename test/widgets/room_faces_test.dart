@@ -1,7 +1,7 @@
-/// The room slot on the front page: several faces in one coworker-sized box,
+/// The room slot on the front page: several faces in one agent-sized box,
 /// and the room rows that carry it in both rosters.
 ///
-/// The footprint is the point. A room row sits next to coworker rows, so the
+/// The footprint is the point. A room row sits next to agent rows, so the
 /// slot it draws must be the same box a single [AgentFace] would have taken —
 /// otherwise every name on the list starts on a different x.
 library;
@@ -55,7 +55,7 @@ void main() {
       });
     }
 
-    testWidgets('a single coworker face is the same box', (tester) async {
+    testWidgets('a single agent face is the same box', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -101,7 +101,7 @@ void main() {
       });
     }
 
-    testWidgets('one member fills the slot, like a coworker', (tester) async {
+    testWidgets('one member fills the slot, like an agent', (tester) async {
       await _pumpFaces(tester, 1, 48);
       expect(find.byType(ExpressiveFace), findsOneWidget);
       expect(tester.getSize(find.byType(ExpressiveFace)), const Size(48, 48));
@@ -211,7 +211,7 @@ void main() {
       expect(find.byType(MobileAgentRow), findsOneWidget);
     });
 
-    testWidgets('rooms sit above the coworkers', (tester) async {
+    testWidgets('rooms sit above the agents', (tester) async {
       final LocalAgentRosterSource roster = LocalAgentRosterSource();
       addTearDown(roster.dispose);
       roster.addAgent(name: 'Amber');
@@ -226,7 +226,7 @@ void main() {
       );
     });
 
-    testWidgets('room and coworker rows line up at 360 px and 1.3', (
+    testWidgets('room and agent rows line up at 360 px and 1.3', (
       tester,
     ) async {
       final LocalAgentRosterSource roster = LocalAgentRosterSource();
@@ -256,7 +256,7 @@ void main() {
       expect(roomRow.width, lessThanOrEqualTo(360));
     });
 
-    testWidgets('"+" offers a coworker and a room, coworker first', (
+    testWidgets('"+" offers an agent and a room, agent first', (
       tester,
     ) async {
       final LocalAgentRosterSource roster = LocalAgentRosterSource();
@@ -275,7 +275,7 @@ void main() {
 
       await tester.tap(find.bySemanticsIdentifier('mobile_home_add'));
       await tester.pumpAndSettle();
-      expect(find.text('New coworker'), findsOneWidget);
+      expect(find.text('New agent'), findsOneWidget);
       expect(find.text('New room'), findsOneWidget);
 
       await tester.tap(find.text('New room'));

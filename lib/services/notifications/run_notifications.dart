@@ -35,7 +35,7 @@ class RunNotifications {
   /// Every answer this app already closed since launch — `session/run_id`
   /// when the run is known, the bare session key when it is not — so a replay
   /// that lands twice does not PATCH twice, while a SECOND run's row for the
-  /// same coworker is still closed (review F7).
+  /// same agent is still closed (review F7).
   final Set<String> _consumedSessions = <String>{};
 
   /// Injects the writer and the user-id lookup (tests). Null restores the

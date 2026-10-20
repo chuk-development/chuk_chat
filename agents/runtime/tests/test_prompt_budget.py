@@ -1,7 +1,7 @@
 """The baseline request budget (bead chuk_chat-b3g4).
 
-A plain "hi" to a coworker used to cost ~33k input tokens. For a fresh
-coworker the fixed part was ~12.7k: a 2.7k system prompt plus 64 declared tool
+A plain "hi" to an agent used to cost ~33k input tokens. For a fresh
+agent the fixed part was ~12.7k: a 2.7k system prompt plus 64 declared tool
 schemas (~10k) — the browser's Playwright tools and the rarely used built-ins
 (shell, jobs, workspace undo, documents, ffmpeg) rode on every round of every
 task. Now the deferrable tools are behind ``search_tools`` from the first
@@ -14,7 +14,7 @@ numbers below. The token figure is the
 runtime's own estimate (4 characters per token), the one tool search and the
 context ladder decide on; real tokenizers count about 5-10 % less.
 
-The numbers measured when this was written (fresh default coworker, built-in
+The numbers measured when this was written (fresh default agent, built-in
 skills, seeded memory files, one MCP server):
 
     system prompt   ~2,940   (was ~2,720; +160 for the deferred-tools section)
@@ -50,7 +50,7 @@ from chuk_agents_runtime.skills import MAX_CATALOG_CHARS, SkillLibrary, parse_sk
 from chuk_agents_runtime.tool_search import CORE_TOOLS
 
 BUILTIN_SKILLS = Path(__file__).resolve().parents[2] / "skills" / "builtin"
-DEFAULT_PERSONA = "You are a Agents coworker running on the user's own machine."
+DEFAULT_PERSONA = "You are an Agents agent running on the user's own machine."
 
 #: Ceilings, in estimated tokens. Raise one only on purpose, with the reason in
 #: the commit: every token here is paid on every round of every session.
@@ -73,7 +73,7 @@ ALWAYS_DEFERRED = frozenset(
 )
 
 
-# -- a default coworker, wired like the executor wires one ------------------
+# -- a default agent, wired like the executor wires one ------------------
 
 
 class _Session:

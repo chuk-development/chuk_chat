@@ -45,7 +45,7 @@ class RootWrapperMobile extends StatefulWidget {
 
   /// Reads the chat in view. Null reads `ChatStorageService.selectedChatId`,
   /// the app-wide pointer, as chuk_chat always has. The Agents build shares
-  /// that pointer with its coworker thread, so it hands in a reader that
+  /// that pointer with its agent thread, so it hands in a reader that
   /// always answers with this chat.
   final ValueGetter<String?>? selectedChatIdReader;
 

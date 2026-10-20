@@ -1,6 +1,6 @@
 # here.now publishing connector
 
-A first-class, approval-gated way for a coworker to put a file or a folder on the
+A first-class, approval-gated way for an agent to put a file or a folder on the
 public web and hand the user back a live URL. here.now (https://here.now) does
 the hosting; Agents owns the tool, the two gates, and the consent round-trip.
 

@@ -15,7 +15,7 @@ import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/widgets/chat_document_inline.dart';
 
-/// The Songs document the coworker wrote: the reel it came from, the song,
+/// The Songs document the agent wrote: the reel it came from, the song,
 /// the artist, and the Spotify search that opens it. Real rows, including a
 /// Cyrillic title and an artist name too long for a phone column.
 Map<String, dynamic> songs({int rows = 2, bool labelled = false}) {

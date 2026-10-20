@@ -1,11 +1,11 @@
-/// The "Approvals" part of a coworker's permissions (docs/WIRE_CONTRACT.md,
+/// The "Approvals" part of an agent's permissions (docs/WIRE_CONTRACT.md,
 /// "Per-action approvals").
 ///
 /// One row per action class with a three-way choice, Ask / Allow / Deny, and
 /// the host's default named under it. Under "Act in the browser" the sites
 /// the user allowed with "Always on (site)", each with a remove action. Shown
 /// only for a host that names `action_approvals`, and only once that host
-/// sent the coworker's policy. Every `agent_permissions` frame replaces what
+/// sent the agent's policy. Every `agent_permissions` frame replaces what
 /// is shown, so an "always" given on a card in a run shows up at once.
 library;
 

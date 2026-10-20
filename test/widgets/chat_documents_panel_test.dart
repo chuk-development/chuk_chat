@@ -250,7 +250,7 @@ void main() {
       });
       await tester.pump();
       expect(find.text('Saved in this chat'), findsOneWidget);
-      expect(find.text('this coworker’s container'), findsOneWidget);
+      expect(find.text('this agent’s container'), findsOneWidget);
       await tester.tap(find.text('A'));
       await tester.pump();
       await tester.tap(find.text('B'));
@@ -405,13 +405,13 @@ void main() {
     expect(find.text('Select a document to read it'), findsNothing);
   });
 
-  testWidgets('the roster names the coworker whose container holds the rows', (
+  testWidgets('the roster names the agent whose container holds the rows', (
     tester,
   ) async {
     final relay = await mount(tester);
     // The panel asks for the roster itself; the thread key is the agent id.
     expect(relay.agentListRequests, 1);
-    expect(find.text('this coworker · Documents'), findsOneWidget);
+    expect(find.text('this agent · Documents'), findsOneWidget);
 
     relay.events.add(
       const AgentsRelayAgentList(
@@ -438,14 +438,14 @@ void main() {
     expect(find.text('notes · 42 B · 05.01. 14:03'), findsOneWidget);
   });
 
-  testWidgets('a caller that knows the coworker never says "this coworker"', (
+  testWidgets('a caller that knows the agent never says "this agent"', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(1200, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       const MaterialApp(
-        home: ChatDocumentsPanel(sessionKey: 'panel-test', coworkerName: 'Ada'),
+        home: ChatDocumentsPanel(sessionKey: 'panel-test', agentName: 'Ada'),
       ),
     );
     await tester.pumpAndSettle();

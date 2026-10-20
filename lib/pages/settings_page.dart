@@ -202,10 +202,10 @@ class _SettingsPageState extends State<SettingsPage> {
                 child: _SettingsRow(
                   icon: Icons.smart_toy_outlined,
                   title: l.modelSelection,
-                  // In the Agents build this page is also every coworker's
-                  // default; a coworker's own model is on its profile.
+                  // In the Agents build this page is also every agent's
+                  // default; an agent's own model is on its profile.
                   subtitle: agentsChatCore
-                      ? 'App default for chats and coworkers'
+                      ? 'App default for chats and agents'
                       : l.modelSelectionSubtitle,
                   onTap: () {
                     Navigator.push(
@@ -335,7 +335,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ],
           ),
 
-          // Agents only: about the host the coworkers run on, which a hosted
+          // Agents only: about the host the agents run on, which a hosted
           // chat account has no equivalent for.
           if (agentsChatCore) ...[
             ExpressiveSectionHeader('Agents'),
@@ -344,7 +344,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 _SettingsRow(
                   icon: Icons.place_outlined,
                   title: 'here.now',
-                  subtitle: 'Let a coworker publish a page on your behalf',
+                  subtitle: 'Let an agent publish a page on your behalf',
                   onTap: () {
                     Navigator.push(
                       context,
@@ -397,7 +397,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 _SettingsRow(
                   icon: Icons.schedule_outlined,
                   title: 'Automations',
-                  subtitle: 'Schedules and watchers your coworkers set up',
+                  subtitle: 'Schedules and watchers your agents set up',
                   onTap: () {
                     Navigator.push(
                       context,
@@ -413,7 +413,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 _SettingsRow(
                   icon: Icons.computer,
                   title: 'Host skills',
-                  subtitle: 'Skills on the computer your coworkers run on',
+                  subtitle: 'Skills on the computer your agents run on',
                   onTap: () {
                     Navigator.push(
                       context,

@@ -2,7 +2,7 @@
 
 :class:`~chuk_agents_manager.room_driver.RoomDriver` routes each room turn to a
 ``member_runner`` seam; this is what the host fills that seam with. A room member
-is a coworker with its own executor, and an executor may or may not be connected
+is an agent with its own executor, and an executor may or may not be connected
 at the moment its turn comes up. This registry tracks the ones that are: when a
 member's executor connects the host registers a **task sender** for its agent id,
 and when it drops the host unregisters it. The ``member_runner`` this produces

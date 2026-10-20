@@ -22,11 +22,11 @@ const Duration kBrowserPresenceFreshness = Duration(minutes: 5);
 /// extension browser uses those same names but has no VNC display. Missing
 /// capability (including old hosts) fails closed.
 ///
-/// The state follows the BROWSER, not the run (bead cowork-tf1u). A coworker
+/// The state follows the BROWSER, not the run (bead cowork-tf1u). An agent
 /// that finishes its turn leaves its Chromium open and says so — "the browser
 /// is open, you can take it over" — and that is exactly the moment the user
 /// reaches for the screen target. Treating the run's `done` as "the screen is
-/// gone" made the target die one second after the coworker offered it. Only
+/// gone" made the target die one second after the agent offered it. Only
 /// the host revokes: a completed `browser_close`, a `browser_view: closed`, a
 /// failed view, a header that no longer advertises the browser, the transport
 /// going away, or [kBrowserPresenceFreshness] passing without a word.
@@ -175,11 +175,11 @@ class BrowserPresence extends ValueNotifier<bool> {
   String get parkedBecause => value ? '' : _because;
 
   // ── own browser ──
-  /// The coworker of thread [sessionKey] drives the user's own browser (the
+  /// The agent of thread [sessionKey] drives the user's own browser (the
   /// last `run_state.browser_target` for that thread said `user_browser`).
   /// Then there is never a screen to show, and the parked screen target says
   /// "Works in your browser" instead of "No screen open yet", as the desktop
-  /// header does. Kept per thread, because one host runs many coworkers and
+  /// header does. Kept per thread, because one host runs many agents and
   /// each header names its own thread; the desktop thread view filters the
   /// same way. False for a thread the host never said anything about (an old
   /// host), and after [reset].
@@ -212,7 +212,7 @@ class BrowserPresence extends ValueNotifier<bool> {
       // a run happens to be in flight. Old hosts, which advertise neither
       // field, fail closed.
       AgentsRelayRunState() => event.browserOpen == true && event.vncAvailable,
-      // A finished run says nothing about the browser: the coworker leaves the
+      // A finished run says nothing about the browser: the agent leaves the
       // page open on purpose, so the user can take it over (bead cowork-tf1u).
       AgentsRelayDone() => null,
       _ => null,
@@ -277,7 +277,7 @@ class BrowserPresence extends ValueNotifier<bool> {
     if (!sameSession) reset();
   }
 
-  /// Forget the state (a new pairing, a different coworker).
+  /// Forget the state (a new pairing, a different agent).
   void reset() {
     _revoke();
     // own browser: the next host's headers say again.

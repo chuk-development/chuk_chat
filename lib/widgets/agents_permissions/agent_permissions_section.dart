@@ -1,8 +1,8 @@
-/// The "Permissions" section of a coworker's profile (docs/WIRE_CONTRACT.md,
+/// The "Permissions" section of an agent's profile (docs/WIRE_CONTRACT.md,
 /// "Agent permissions").
 ///
 /// One switch per permission, a one-line explanation under each, and the
-/// rule that matters: a change applies from the coworker's next task. The
+/// rule that matters: a change applies from the agent's next task. The
 /// switches show what the host answered and stay disabled until it has; the
 /// host is the truth, the app never guesses a value.
 library;
@@ -86,7 +86,7 @@ class AgentPermissionsSection extends StatefulWidget {
     this.answerTimeout = const Duration(seconds: 10),
   });
 
-  /// The coworker, which is also its thread's `session_key`.
+  /// The agent, which is also its thread's `session_key`.
   final String agentId;
 
   /// Defaults to [AgentsPermissionsService.instance].
@@ -138,7 +138,7 @@ class _AgentPermissionsSectionState extends State<AgentPermissionsSection> {
   /// Called from [initState] and [didUpdateWidget], which both build next,
   /// so the phase is set without [setState].
   void _bind(AgentsPermissionsService service) {
-    // A timer of the previous coworker or service must not fire into this
+    // A timer of the previous agent or service must not fire into this
     // one, and its noAnswer/unsupported must not carry over.
     _answerTimer?.cancel();
     _answerTimer = null;

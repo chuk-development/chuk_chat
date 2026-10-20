@@ -1,7 +1,7 @@
 """Opt-in live run: real prompts to a scratch session, timed end to end.
 
 This mode spends credits, so the CLI runs it only with ``--yes-spend-credits``.
-It never talks to the owner's coworkers:
+It never talks to the owner's agents:
 
 - The session key is always generated here (``bench:<random>``). A key that
   does not start with ``bench:`` is refused.

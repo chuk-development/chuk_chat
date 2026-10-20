@@ -48,7 +48,7 @@ class SandboxArtifactBlock extends StatefulWidget {
   final SandboxArtifactPayload payload;
 
   /// The corners this block draws. A file that follows an answer from the same
-  /// coworker is one more block of that run, so the thread hands it the run's
+  /// agent is one more block of that run, so the thread hands it the run's
   /// geometry: small radii where it touches the block above, full radii on the
   /// outside. Null keeps the standalone shape.
   final BorderRadius? borderRadius;
@@ -281,7 +281,7 @@ class _SandboxArtifactBlockState extends State<SandboxArtifactBlock> {
   Widget build(BuildContext context) {
     final document = widget.payload.document;
     if (document != null) {
-      // A document the coworker wrote IS the message: the thread draws its
+      // A document the agent wrote IS the message: the thread draws its
       // table, its prose or its bars, not a link to them. A payload that
       // carries only a reference — an older row, a snapshot without its body —
       // keeps the compact row, because a block with nothing in it is worse
@@ -549,7 +549,7 @@ class _ArtifactCard extends StatelessWidget {
     // chat bubble are louder than the message they belong to, and they squeezed
     // the one thing that identifies the file — its name — down to "gesch…".
     if (child == null) {
-      // A file message is a message: it takes the lane a coworker's bubble
+      // A file message is a message: it takes the lane an agent's bubble
       // takes, edge to edge, and it carries the same fill as that bubble. A
       // card that shrank to its content read as an attachment chip stuck under
       // the text instead of as the delivery it is.

@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/models/agents_agent.dart';
-import 'package:chuk_chat/pages/agent_profile_page.dart';
+import 'package:chuk_chat/pages/mobile_agents_settings_page.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
 import 'package:chuk_chat/services/agents/agents_permissions_service.dart';
@@ -202,7 +202,7 @@ void main() {
     expect(_switch(tester, 'sudo').value, isTrue);
   });
 
-  testWidgets('an unknown coworker shows the host reason, nothing editable', (
+  testWidgets('an unknown agent shows the host reason, nothing editable', (
     tester,
   ) async {
     final (_, AgentsPermissionsService service) = await _open(tester);
@@ -287,7 +287,8 @@ void main() {
     }
   });
 
-  testWidgets('the agent profile shows the section for that coworker', (
+  testWidgets('the agent settings link to the Permissions page, which shows '
+      'the section for that agent', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
@@ -312,13 +313,36 @@ void main() {
 
     await tester.pumpWidget(
       testApp(
-        AgentProfilePage(agentId: 'alex', source: source, profiles: store),
+        MobileAgentsSettingsPage(
+          agentId: 'alex',
+          source: source,
+          profiles: store,
+          onEdit: () {},
+          onControls: () {},
+          onModel: () {},
+          onAutomations: () {},
+          onSkills: () {},
+          onConnectors: () {},
+          onSecrets: () {},
+          onRooms: () {},
+          onSettings: () {},
+        ),
       ),
     );
     await tester.pump();
 
+    // One owner: the profile draws a row, not a second copy of the switches.
+    expect(find.byType(AgentPermissionsSection), findsNothing);
+    final Finder row = find.byKey(
+      const ValueKey<String>('settings_Permissions'),
+    );
+    await tester.ensureVisible(row);
+    await tester.pumpAndSettle();
+    await tester.tap(row);
+    await tester.pumpAndSettle();
+
     expect(find.byType(AgentPermissionsSection), findsOneWidget);
-    expect(host.sent.single, <String, dynamic>{
+    expect(host.sent.first, <String, dynamic>{
       'type': 'agent_permissions_get',
       'agent_id': 'alex',
     });

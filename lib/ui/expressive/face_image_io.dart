@@ -1,4 +1,4 @@
-/// Native: paint the coworker's picture straight from the file the profile
+/// Native: paint the agent's picture straight from the file the profile
 /// store copied into the app's support directory.
 library;
 

@@ -259,7 +259,7 @@ void main() {
       await tester.pumpWidget(
         _app(
           AgentsBudgetRefusalCard(
-            message: 'This coworker reached its weekly budget.',
+            message: 'This agent reached its weekly budget.',
             onRunAnyway: () => ran++,
             onChangeBudget: () => changed++,
           ),
@@ -268,7 +268,7 @@ void main() {
       await tester.pump();
       expect(find.text('Weekly budget reached'), findsOneWidget);
       expect(
-        find.text('This coworker reached its weekly budget.'),
+        find.text('This agent reached its weekly budget.'),
         findsOneWidget,
       );
       await tester.tap(find.text('Run anyway'));
@@ -306,7 +306,7 @@ void main() {
                 children: <Widget>[
                   AgentsBudgetRefusalCard(
                     message:
-                        'This coworker reached its weekly budget. Choose '
+                        'This agent reached its weekly budget. Choose '
                         '"Run anyway" to go over the budget once.',
                     onRunAnyway: () {},
                     onChangeBudget: () {},

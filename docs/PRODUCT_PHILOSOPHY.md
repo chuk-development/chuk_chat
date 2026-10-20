@@ -70,7 +70,7 @@ Turning it on never changes what the agent does, only what the user sees.
 
 The chat UI is the familiar chat-app layout the user already knows, matched
 closely. The one deliberate difference is the input box, and the left sidebar: it
-lists **agents (coworkers)**, not chats or sessions. There is one long-lived
+lists **agents**, not chats or sessions. There is one long-lived
 session per agent; the user treats it as infinite.
 
 ## What "done" looks like

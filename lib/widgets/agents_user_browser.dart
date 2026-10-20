@@ -51,7 +51,7 @@ String userBrowserSubtitle(
   if (s.stopped) return l.ubSubtitleStopped;
   if (!s.installed) return l.ubSubtitleNotSetUp;
   if (!s.connected) return l.ubSubtitleNotConnected;
-  if (heldByOther) return l.ubInUseBy(s.inUseByName ?? l.ubAnotherCoworker);
+  if (heldByOther) return l.ubInUseBy(s.inUseByName ?? l.ubAnotherAgent);
   final String? browser = s.browser == null
       ? null
       : userBrowserDisplayName(s.browser!);
@@ -68,7 +68,7 @@ enum UserBrowserNoticeKind {
   /// The user pressed Stop in the browser.
   stopped,
 
-  /// Another coworker holds the user's browser.
+  /// Another agent holds the user's browser.
   inUseByOther,
 
   /// The bridge is not registered with any browser.
@@ -120,7 +120,7 @@ class UserBrowserNotice {
 /// What the end of a thread says about the user's browser, or null for
 /// nothing.
 ///
-/// Only a coworker that has to do with the user's browser gets a notice:
+/// Only an agent that has to do with the user's browser gets a notice:
 /// its run says `browser_target: user_browser`, or its "Your browser" switch
 /// is on. A problem (Stop, another holder, no add-on) shows whether or not a
 /// run is going. The plain label ("Your browser" / "Sandbox browser") shows
@@ -244,7 +244,7 @@ class AgentsUserBrowserNoticeView extends StatelessWidget {
       ),
       UserBrowserNoticeKind.inUseByOther => (
         HugeIcons.userGroup,
-        l.ubInUseBy(notice.name ?? l.ubAnotherCoworker),
+        l.ubInUseBy(notice.name ?? l.ubAnotherAgent),
       ),
       UserBrowserNoticeKind.notSetUp => (HugeIcons.globe02, l.ubNoticeNotSetUp),
       _ => (HugeIcons.unlink01, l.ubSetupTitleNotConnected),

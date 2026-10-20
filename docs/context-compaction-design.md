@@ -16,8 +16,8 @@ disagree, this doc wins — it is the newer decision.
 The decision that makes context management the *whole* memory story:
 
 - **One permanent session per bot. Full stop.** There are no threads, no "new
-  chat", no session list. A bot is a coworker; you do not "start a new
-  conversation" with a coworker. The plan already leaned this way
+  chat", no session list. A bot is an agent; you do not "start a new
+  conversation" with an agent. The plan already leaned this way
   (§16.1: "one canonical, permanent thread per agent", Hermes turns `/new` into
   `/compact`). We harden it: threads are **removed from the product entirely**,
   not hidden.

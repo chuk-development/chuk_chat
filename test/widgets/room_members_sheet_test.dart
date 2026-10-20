@@ -129,11 +129,11 @@ void main() {
       candidates: const [],
       policyFlips: flips,
     );
-    expect(find.text('Coworkers can reply to each other'), findsOneWidget);
+    expect(find.text('Agents can reply to each other'), findsOneWidget);
     expect(find.text('With this off, they only answer you.'), findsOneWidget);
     expect(tester.widget<Switch>(find.byType(Switch)).value, isTrue);
 
-    await tester.tap(find.text('Coworkers can reply to each other'));
+    await tester.tap(find.text('Agents can reply to each other'));
     await tester.pumpAndSettle();
     // The sheet is a pure view: it reports the flip and waits to be rebuilt
     // with the new room rather than flipping its own copy.
@@ -154,7 +154,7 @@ void main() {
       policyFlips: flips,
     );
     expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
-    await tester.tap(find.text('Coworkers can reply to each other'));
+    await tester.tap(find.text('Agents can reply to each other'));
     await tester.pumpAndSettle();
     expect(flips, [true]);
   });
@@ -228,6 +228,6 @@ void main() {
       room: _room([_m('a', 'amber'), _m('b', 'cobalt')]),
       candidates: const [],
     );
-    expect(find.text('No other coworkers to add.'), findsOneWidget);
+    expect(find.text('No other agents to add.'), findsOneWidget);
   });
 }

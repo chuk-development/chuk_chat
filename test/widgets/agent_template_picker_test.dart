@@ -3,13 +3,13 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
-import 'package:chuk_chat/services/agents/coworker_templates.dart';
+import 'package:chuk_chat/services/agents/agent_templates.dart';
 import 'package:chuk_chat/widgets/agents_desktop/desktop_dialog.dart';
-import 'package:chuk_chat/widgets/coworker_template_picker.dart';
+import 'package:chuk_chat/widgets/agent_template_picker.dart';
 
 /// Opens the picker from a button and keeps what it returned.
 class _Harness {
-  CoworkerCreateRequest? result;
+  AgentCreateRequest? result;
   bool closed = false;
 
   Widget app({String locale = 'en', double textScale = 1}) => MaterialApp(
@@ -32,7 +32,7 @@ class _Harness {
         builder: (context) => Center(
           child: TextButton(
             onPressed: () async {
-              result = await showCoworkerTemplatePicker(
+              result = await showAgentTemplatePicker(
                 context,
                 suggestedName: 'amber-otter',
               );
@@ -70,13 +70,13 @@ Future<_Harness> _open(
 Finder _key(String key) => find.byKey(ValueKey<String>(key));
 
 void main() {
-  testWidgets('the list shows the blank coworker first, then the templates', (
+  testWidgets('the list shows the blank agent first, then the templates', (
     tester,
   ) async {
     await _open(tester);
     expect(find.text('New agent'), findsOneWidget);
     expect(_key('tpl-blank'), findsOneWidget);
-    expect(find.text('Blank coworker'), findsOneWidget);
+    expect(find.text('Blank agent'), findsOneWidget);
     expect(_key('tpl-research'), findsOneWidget);
     expect(find.text('Research assistant'), findsOneWidget);
     // The blank row sits above the first template.
@@ -177,7 +177,7 @@ void main() {
     expect(_key('tpl-starter'), findsNothing);
   });
 
-  testWidgets('blank coworker: the suggested name, no template', (
+  testWidgets('blank agent: the suggested name, no template', (
     tester,
   ) async {
     final harness = await _open(tester);
@@ -224,7 +224,7 @@ void main() {
   testWidgets('German strings', (tester) async {
     await _open(tester, locale: 'de');
     expect(find.text('Neuer Agent'), findsOneWidget);
-    expect(find.text('Leerer Coworker'), findsOneWidget);
+    expect(find.text('Leerer Agent'), findsOneWidget);
     expect(find.text('Rechercheassistent'), findsOneWidget);
     await tester.tap(find.text('Rechercheassistent'));
     await tester.pumpAndSettle();
@@ -246,7 +246,7 @@ void main() {
 
   test('every template appears in the list keys', () {
     // The keys the tests above tap are the catalogue ids.
-    expect(coworkerTemplateById('news')?.starter, isNotNull);
-    expect(coworkerTemplateById('research')?.starter, isNull);
+    expect(agentTemplateById('news')?.starter, isNotNull);
+    expect(agentTemplateById('research')?.starter, isNull);
   });
 }

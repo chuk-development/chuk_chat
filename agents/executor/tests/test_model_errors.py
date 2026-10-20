@@ -28,7 +28,7 @@ def test_no_credits_reaches_the_app_as_a_readable_error(tmp_path):
         environment=LocalEnvironment(workdir=str(tmp_path)),
         db_path=str(tmp_path / "state.db"),
         model_factory=_NoCredits,
-        system_prompt="You are a coworker.",
+        system_prompt="You are an agent.",
     )
     controller = ControllerSession(
         endpoint=controller_ep, sealer=channel.controller.sealer, opener=channel.controller.opener

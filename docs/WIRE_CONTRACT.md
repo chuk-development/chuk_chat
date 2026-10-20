@@ -651,7 +651,7 @@ last turn lost the text of the earlier turns.
 stopped the run — `AGENTS_RUN_MAX_SECONDS`, default 7200, `0` disables — the
 way a stop does (kill switch, model call cancelled), persisted with that
 reason, notified like any other terminal. The app renders `timeout` like a
-stop (`wasStopped`). `budget_exceeded` (bead chuk_chat-qcbv): the coworker's
+stop (`wasStopped`). `budget_exceeded` (bead chuk_chat-qcbv): the agent's
 weekly budget refused the run before it started (§ "Cost per run and weekly
 budget"); it is neither a stop nor a failure. A `done` may also carry `cost`
 (same section).
@@ -974,7 +974,7 @@ as it was before. An old host sends no fragments; the app works as before.
 
 The agent's browser reaches a step only the user can do: a login, a 2FA code,
 a CAPTCHA. Today the model can only write "please log in" into its answer.
-Instead it calls a tool, the run WAITS, the app shows one card "<Coworker>
+Instead it calls a tool, the run WAITS, the app shows one card "<Agent>
 needs you in the browser" with a button that opens the live VNC view, the user
 does the step themselves, and the run goes on.
 
@@ -1016,7 +1016,7 @@ wait, the same persisted row, the same push for a pending approval.
   while). Stop and ESTOP end it as today.
 - Push: the existing `on_approval_pending` hook (`notify.py`,
   `notify_approval_pending`), with its own text for this action:
-  "<Coworker> needs you in the browser" / "sign in to <site>".
+  "<Agent> needs you in the browser" / "sign in to <site>".
 
 ### Outbound: app -> host `approval_decision`
 
@@ -1036,7 +1036,7 @@ the SAME request again, live, decided:
  "decision_reason": "auto", ...}
 ```
 
-The app then shows "<Coworker> continues" and removes the card with the run's
+The app then shows "<Agent> continues" and removes the card with the run's
 next frame. Every other closing (timeout, stop) needs no frame: the card goes
 away when the run ends. `auto` joins `user` / `timeout` / `stopped` as a
 valid `decision_reason` in `protocol.py`.
@@ -1050,7 +1050,7 @@ only when the agent's sandbox browser is the target and its Playwright server
 is connected. The wait is `Executor._request_takeover`: the pending-approval
 table, the persisted row and the `on_approval_pending` hook of a publish, with
 `AGENTS_TAKEOVER_WAIT_SECONDS` (default 900). The hook info carries
-`action`, `kind`, `site` and `session_key`; the host push says "<Coworker>
+`action`, `kind`, `site` and `session_key`; the host push says "<Agent>
 needs you in the browser" / "Sign in in the browser." (`notification_text.takeover_text`).
 The push never names the site: it is not end-to-end, so only the sealed
 `approval_request` carries it.
@@ -1342,7 +1342,7 @@ event), one per finished `on_change` run:
   at most 2 MiB read, redirects followed by hand (max 5).
 - Every hop must resolve to public addresses only: loopback, private,
   link-local and reserved targets are refused (`last_error: "check failed:
-  the url points into a private network"`). The coworker's `network`
+  the url points into a private network"`). The agent's `network`
   permission off = no fetch (`last_error` says so).
 - What is compared is the visible text (HTML without markup, scripts and
   styles; other types as text, whitespace collapsed). The first check is the
@@ -1677,10 +1677,10 @@ automations manager, `kind: job` goes to the executor's job router. The router:
 Rate limits and the 16 KB payload cap of the automations do not apply: a job
 ends once, and the tail is read from the log, not from the trigger line.
 
-## Coworker names (bead cowork-817, session cowork-af)
+## Agent names (bead cowork-817, session cowork-af)
 
 Additive. Nothing above changes. The app's roster is in memory only; a
-reinstall or a second device forgets every coworker the user created and
+reinstall or a second device forgets every agent the user created and
 every name the user chose. The host keeps them from now on, keyed by the
 app's own agent id, so the name is the same on every install that pairs with
 this host.
@@ -1688,7 +1688,7 @@ this host.
 ### The idea
 
 - The app is the source of the id (`local:<name>:<n>:<random>` for a created
-  coworker, `host:<peer_device_id>` for the coworker that really runs on the
+  agent, `host:<peer_device_id>` for the agent that really runs on the
   host). The host never invents an agent id for the app.
 - The host stores `(agent_id, name, created_by_app, updated_at)` in its own
   small table (`coworker_names` in `roster.db`). It does NOT touch the
@@ -1698,19 +1698,19 @@ this host.
 - The app asks for the list on every pair (`agent_list` request, like
   `automation_list`), and every `agent_create` / `agent_rename` is answered
   with the list too. The app merges: a listed id it knows gets the listed
-  name; a listed id it does not know is added as a coworker with that name
+  name; a listed id it does not know is added as an agent with that name
   (never as the host agent); the host agent's entry (`host: true`) renames
   the `host:<peer_device_id>` row. Nothing is deleted by a list.
 
 ### Frames
 
-App → host, `agent_create` — the user created a coworker in the app:
+App → host, `agent_create` — the user created an agent in the app:
 
 ```json
 {"type": "agent_create", "agent_id": "local:crypto-desk:1:74112", "name": "Crypto Desk"}
 ```
 
-App → host, `agent_rename` — the user renamed a coworker (also the host agent):
+App → host, `agent_rename` — the user renamed an agent (also the host agent):
 
 ```json
 {"type": "agent_rename", "agent_id": "host:hostlaptop-3f2a", "name": "Laptop Bot"}
@@ -1728,7 +1728,7 @@ name over 80 characters, or a missing `agent_id` is dropped with a log line
 and the unchanged list is still answered. `agent_create` on a known id
 behaves like `agent_rename`; `agent_rename` on an unknown id inserts it
 (`created_by_app: false`). Without the host hook the executor answers
-`error` ("coworker names not enabled").
+`error` ("agent names not enabled").
 
 Host → app, `agent_list`:
 
@@ -1740,12 +1740,12 @@ Host → app, `agent_list`:
  ]}
 ```
 
-- `host: true` marks the coworker that runs on this host: the entry whose
+- `host: true` marks the agent that runs on this host: the entry whose
   `agent_id` is `host:<host device id>` (`cowork-host`, the `peer_device_id`
   the app sees). When no name was ever set for it there is no entry, and the
   app keeps showing the device id, as today.
 - Order is `updated_at` ascending. The app does not care about order.
-- A deleted coworker (`removeAgent` in the app) is not on the wire yet; the
+- A deleted agent (`removeAgent` in the app) is not on the wire yet; the
   host keeps the row and the app ignores an id it deleted in this session
   only. Bead to follow if it matters.
 
@@ -1759,13 +1759,13 @@ in this session are skipped). Host: `chuk_agents_host/coworker_names.py`
 executor's `on_agent_frame`; payload helpers `agent_create_payload`,
 `agent_rename_payload`, `agent_list_request_payload`, `agent_list_payload`.
 
-## Coworker templates (bead chuk_chat-dsh0)
+## Agent templates (bead chuk_chat-dsh0)
 
 Host and app side IMPLEMENTED 2026-10-05 (`_createOnHost` in
 `lib/pages/agents_shell_state.dart`, see "Implemented" below).
 
-Additive to "Coworker names". The app's "New agent" flow offers ready-made
-coworkers (`lib/services/agents/coworker_templates.dart`, 15 of them:
+Additive to "Agent names". The app's "New agent" flow offers ready-made
+agents (`lib/services/agents/agent_templates.dart`, 15 of them:
 research, inbox triage, news, prices, jobs, writing, code, data, meetings,
 social drafts, support drafts, travel, finance notes, learning, household).
 A template is app data. The host learns of one only through the create frame.
@@ -1785,19 +1785,19 @@ A template is app data. The host learns of one only through the create frame.
   of another shape is logged as `custom`, the persona still counts.
 - `template.persona`: English text, trimmed, 1..4000 characters. The model
   reads it, not the user, and it still answers in the user's language. Any
-  other value drops the persona with a log line; the coworker is still
+  other value drops the persona with a log line; the agent is still
   created.
 - The answer does not change: one terminal `agent_list`, as before.
-- An older host ignores `template` and creates a plain coworker.
+- An older host ignores `template` and creates a plain agent.
 
 ### What the host does
 
 After the name store registered the id, the host writes the persona into
-that coworker's own `<workspace>/memory/soul.md` — the file the runtime
+that agent's own `<workspace>/memory/soul.md` — the file the runtime
 already reads as the persona (`MemoryStore.snapshot`). It writes only when
 the file is missing, empty or still the packaged default, so a repeated
 `agent_create` never undoes an edit. The host's own agent is never seeded.
-Tools and skills do not change: every coworker gets the same ones; the
+Tools and skills do not change: every agent gets the same ones; the
 "works with" line in the picker is a hint.
 
 ### What stays in the app
@@ -1812,15 +1812,15 @@ Tools and skills do not change: every coworker gets the same ones; the
 
 ### Implemented
 
-App: `CoworkerTemplatePicker` (`lib/widgets/coworker_template_picker.dart`),
+App: `AgentTemplatePicker` (`lib/widgets/agent_template_picker.dart`),
 `_openOnboarding` / `_createOnHost` in `lib/pages/agents_shell_state.dart`,
 `AgentsRelayController.createAgent(..., template:)`. Host:
 `chuk_agents_host/coworker_templates.py` (`template_seed`, `seed_persona`),
 called from `LocalHost._on_agent_frame`. Payload helper:
 `agent_create_payload(..., template=)`. Tests:
 `agents/host/tests/test_coworker_templates.py`,
-`test/widgets/coworker_template_picker_test.dart`,
-`test/services/agents/coworker_templates_test.dart`.
+`test/widgets/agent_template_picker_test.dart`,
+`test/services/agents/agent_templates_test.dart`.
 
 ## Skills: the host's list, the user's switches (session cowork-18, bead cowork-qk7)
 
@@ -1864,7 +1864,7 @@ App → host, `skills_list` (request) / host → app `skills_list` (reply):
   skill that documents Agents's own machinery (schedules, secrets, the sandbox
   terminal, the workspace) and belongs to the app. Everything else is
   `workspace`: what the agent or the user put there, plus the skills seeded
-  from `skills/workspace/`, which ship in the box but belong to the coworker.
+  from `skills/workspace/`, which ship in the box but belong to the agent.
   Built-ins come first, each group by name.
 - The reply closes the request stream like a replay's `done`. It is the whole
   truth: the app replaces its list with it.
@@ -1925,12 +1925,12 @@ procedure as a skill. The agent only **proposes**. Nothing is written to
    must read back through the host's own SKILL.md loader. A name the workspace
    already uses is refused.
 4. The host stores the draft (table `skill_proposals` in the executor's state
-   database, with the coworker's skills directory) and streams one
+   database, with the agent's skills directory) and streams one
    `skill_proposal` frame on the run's stream. The frame is also persisted in
    the thread, so a replay shows the card.
 5. The app answers `skill_proposal_decision`. Accept writes
-   `<that coworker's workspace>/skills/<name>/SKILL.md` (atomic rename). Reject
-   drops the draft. The next task of that coworker has the skill in its
+   `<that agent's workspace>/skills/<name>/SKILL.md` (atomic rename). Reject
+   drops the draft. The next task of that agent has the skill in its
    catalogue; the running task does not (its prompt is frozen).
 
 ### Frames
@@ -1939,7 +1939,7 @@ Host → app, on the run's stream, persisted as an `event` row of the thread:
 
 ```json
 {"type": "skill_proposal", "proposal_id": "sp_<16 hex>",
- "agent_id": "<session key of the coworker>",
+ "agent_id": "<session key of the agent>",
  "name": "invoice-export",
  "description": "<at most 300 characters>",
  "body": "<Markdown: title, goal, numbered steps>"}
@@ -2066,25 +2066,25 @@ Host → app, `agent_status` (reply, and a push):
 
 ### One sandbox per agent (bead cowork-jo2)
 
-A `session_key` **is** an agent id: `AgentRosterSource` gives every coworker one
-permanent thread whose key is the coworker's id. The executor therefore resolves
+A `session_key` **is** an agent id: `AgentRosterSource` gives every agent one
+permanent thread whose key is the agent's id. The executor therefore resolves
 one environment per session key through `environment_factory`, and the host maps
 that to `ContainerSupervisor.environment(agent_id)` (docker) or that agent's own
-workspace directory (local). Two coworkers never share a container, a workspace
-or shell state; one coworker keeps the SAME box across its turns and across a
+workspace directory (local). Two agents never share a container, a workspace
+or shell state; one agent keeps the SAME box across its turns and across a
 host restart, because reuse is keyed on the `cowork.agent` label.
 
-**What counts as a coworker of its own.** The `agent_create` registration, and
-nothing else: the app sends it for every coworker the user makes, with the id
+**What counts as an agent of its own.** The `agent_create` registration, and
+nothing else: the app sends it for every agent the user makes, with the id
 that is also its `session_key`, and the host keeps it in `coworker_names`. A key
 nobody registered — `default`, the empty key, the host's own `host:<device id>`,
 a thread key from an older client — belongs to this host's own agent and lands
-in the box it has always used. The host must not invent a coworker (and a
+in the box it has always used. The host must not invent an agent (and a
 container, and an empty workspace) out of an unknown string.
 
 Sandbox names are collision-free by construction: `DockerEnvironment`'s
-container name ends in a digest of the whole agent id, and a per-coworker
-workspace directory is `<name>-<digest>`. Two coworkers can carry the same name
+container name ends in a digest of the whole agent id, and a per-agent
+workspace directory is `<name>-<digest>`. Two agents can carry the same name
 and two ids can slug alike; neither can end up in one box.
 
 ## Chart documents (`chat_document`, kind `bar_chart`)
@@ -2228,11 +2228,11 @@ Host → app, `voice_call_incoming` — a call rings:
 - Exactly these ten keys. A receiver ignores keys it does not know.
 - `thread_id` is the thread's `session_key`: the agent's thread key in the
   app. Open that thread when the user accepts.
-- `agent_id` is the coworker id the app already knows: the `local:…` id of a
-  coworker the user made (`agent_create`), or `host:<host device id>` for the
-  host's own coworker (see "Coworker names").
-- `agent_name` is the name the user gave that coworker in the app
-  (`coworker_names`). With no name it is `Your coworker`. It is never the
+- `agent_id` is the agent id the app already knows: the `local:…` id of a
+  agent the user made (`agent_create`), or `host:<host device id>` for the
+  host's own agent (see "Agent names").
+- `agent_name` is the name the user gave that agent in the app
+  (`coworker_names`). With no name it is `Your agent`. It is never the
   roster codename.
 - `reason` is trimmed and cut at 1000 characters (the cut ends with `…`). Show
   a short line of it on the incoming-call screen.
@@ -2348,7 +2348,7 @@ agent profile.
 
 ### The idea
 
-Every coworker has its own sandbox (§ "One sandbox per agent"). The owner's
+Every agent has its own sandbox (§ "One sandbox per agent"). The owner's
 rule for that sandbox: **everything is allowed by default**. The agent has
 passwordless sudo, the internet, the user's secrets as environment variables
 and a writable workspace. The user can switch each of those off for one agent
@@ -2419,9 +2419,9 @@ Host → app, `agent_permissions` (the answer to both, one terminal frame):
 
 - `agent_id` is the app's id, which is also the thread's `session_key`. The
   host maps `host:<device id>`, the roster id and `default` to its own agent,
-  and a coworker an `agent_create` registered to itself. **Any other id is
+  and an agent an `agent_create` registered to itself. **Any other id is
   refused** (`error: "unknown agent '…'"`, no `permissions`): a stale or
-  deleted coworker never changes the host agent. The reply echoes the id the
+  deleted agent never changes the host agent. The reply echoes the id the
   app sent.
 - `permissions` is always the WHOLE, current set when present. The app
   replaces what it shows with it.
@@ -2438,7 +2438,7 @@ Host → app, `agent_permissions` (the answer to both, one terminal frame):
 - `applies_from` is always `next_task` in this version. The app says so under
   the switches.
 - The executor hands both frames to the host through the same hook as the
-  coworker frames (`on_agent_frame`).
+  agent frames (`on_agent_frame`).
 
 ### Run errors name their thread (app rule)
 
@@ -2450,7 +2450,7 @@ logged and ignored**. An `error` that names no thread comes from a host that
 predates the field and ends the open stream as before, so a real failure there
 never spins forever. The permission frames cannot cause one: they go only to a
 host that names the capability, and such a host answers them with
-`agent_permissions`. Opening a coworker's profile therefore never ends a live
+`agent_permissions`. Opening an agent's profile therefore never ends a live
 turn.
 
 ### When a change applies (host side, informative)
@@ -2518,7 +2518,7 @@ AGENT_COMPETITORS_2026-10.md, item 7.
 
 Competitors let the user approve a risky action once, always for this agent,
 or always for one site. Before this, only a here.now publish asked. Now a
-small set of **action classes** can ask. Per coworker, the user sets each class
+small set of **action classes** can ask. Per agent, the user sets each class
 to `ask`, `allow` or `deny`. A card that asks offers `once`,
 `always_this_agent`, `always_this_site` (browser classes only) and `deny`. A
 lasting answer is stored on the host and applies from the next action, also
@@ -2551,12 +2551,12 @@ the text of an argument.
   missing hint as "may be destructive", but that would put nearly every
   connector tool behind a card. A server that declares nothing keeps the old
   behaviour. `always_this_agent` covers every destructive connector tool of
-  that coworker; the card says so.
+  that agent; the card says so.
 - In the user's own browser (the add-on) `browser_act` asks by default and
   covers three more tools; see "The user's own browser".
 - `browser_act` starts at `allow`. With `ask`, an agent that browses would ask
   at the first click on every site. The user switches the class to `ask` per
-  coworker; from then on each site the user allows with `always_this_site` is
+  agent; from then on each site the user allows with `always_this_site` is
   remembered. The site is the host name of the current tab of the session's
   browser server (`browser_tabs list`, a read), read just before the call.
   Navigation, snapshots, tabs, screenshots and waits are reads and never ask.
@@ -2578,14 +2578,14 @@ Left out, because the tool call alone cannot show them reliably:
 ### Policy and sites
 
 - Modes: `ask` (card), `allow` (no card), `deny` (refused, no card; the model
-  gets "this coworker is not allowed to ...").
+  gets "this agent is not allowed to ...").
 - A site is a lower-case host name without `www.`, port or trailing dot. An
   allowed site also covers its subdomains (`github.com` covers
   `gist.github.com`). A site turns `ask` into `allow`; it never lifts a `deny`.
   At most 200 sites per class.
-- Key: the coworker, the same key as its permissions (`host:<device id>`,
-  the roster id and `default` are the host's own coworker; a registered
-  coworker is itself). A run's policy is its session's coworker.
+- Key: the agent, the same key as its permissions (`host:<device id>`,
+  the roster id and `default` are the host's own agent; a registered
+  agent is itself). A run's policy is its session's agent.
 - A subagent runs under its parent's binding: it asks with the parent's card
   and follows the parent's policy.
 - Room member executors (`room:<agent>`) have no binding: only here.now in
@@ -2696,7 +2696,7 @@ password):
   showed.
 - `approved: false` (any scope) or `scope: "deny"` is a no for this call. A
   "never" is the `deny` mode in the settings, not a card answer.
-- `always_this_agent` sets the class to `allow` for the coworker;
+- `always_this_agent` sets the class to `allow` for the agent;
   `always_this_site` adds the site to the class's list. Both are stored before
   the tool runs and apply to the next call of the same run.
 
@@ -2733,7 +2733,7 @@ Host-side record: `<state dir>/agent_permissions.json` gains a top-level
 `approvals` object, only what the user set:
 `{"version": 1, "agents": {...}, "approvals": {"<agent key>": {"classes":
 {"send_external": "allow"}, "sites": {"browser_act": ["github.com"]}}}}`.
-A bad entry is dropped on load (logged) and that coworker gets the defaults.
+A bad entry is dropped on load (logged) and that agent gets the defaults.
 
 ### App side (implemented; the work list it was built from)
 
@@ -2752,12 +2752,12 @@ A bad entry is dropped on load (logged) and that coworker gets the defaults.
    element, "and submit" when `submit` is true, the field names; publish: the
    old scan line); one button per entry of `options`, in that order, with
    these labels: `once` "Allow once", `always_this_agent` "Always for
-   <Coworker>" (for `mcp_destructive`: "Always allow connector actions for
-   <Coworker>"), `always_this_site` "Always on <site>", `deny` "Deny". `deny`
+   <Agent>" (for `mcp_destructive`: "Always allow connector actions for
+   <Agent>"), `always_this_site` "Always on <site>", `deny` "Deny". `deny`
    sends `approved: false, scope: "deny"`; the others send `approved: true`
    and the scope.
 4. Replay: a decided row is informational (unchanged), and may show what the
-   answer covered from `decision_scope` ("Allowed always for <Coworker>").
+   answer covered from `decision_scope` ("Allowed always for <Agent>").
 5. Settings (`lib/widgets/agents_permissions/agent_permissions_section.dart`,
    `AgentsPermissionsService`), only for a host that names
    `action_approvals`: a section "Approvals" with one row per class of
@@ -2783,8 +2783,8 @@ changes are additive. An old app and an old host keep working.
 
 ### The idea
 
-A coworker can use the user's real Chrome, with the user's logins, in place of
-the sandbox browser. The user switches this on per coworker (permission
+An agent can use the user's real Chrome, with the user's logins, in place of
+the sandbox browser. The user switches this on per agent (permission
 `user_browser`, section "Agent permissions"). It is off by default.
 
 The tool names do not change (`mcp__playwright__browser_*`). The executor gives
@@ -2821,10 +2821,10 @@ agent (executor) ── stdio MCP ── agents-extension-mcp
 
 | rule | what happens |
 |---|---|
-| one holder | The first coworker that acts holds the browser. Another coworker gets "in use by another coworker" until the holder sends `browser_close` / `browser_handoff`, its MCP server goes away, or it is idle for 300 s (then the add-on lets go of its tab). |
-| reads take nothing | `browser_tabs` with `action: "list"` works for every coworker and takes no hold. |
-| Stop wins | The user's Stop fails every command, stops the run of the holder (same as the app's Stop) and lasts until the user allows the browser again (in the add-on, or with "Allow again" in the app: `user_browser_resume`), or sends a new task to a coworker with the user browser. An automation, a mail or a Telegram run does not lift it. |
-| no secrets | The add-on has no `cookies`, `history`, `webRequest` or `privacy` permission, and no command returns cookies or saved passwords. The snapshot shows `[hidden]` for password, card and one-time-code fields. A tab the coworker does not hold shows its URL without query and fragment in the tab list. |
+| one holder | The first agent that acts holds the browser. Another agent gets "in use by another agent" until the holder sends `browser_close` / `browser_handoff`, its MCP server goes away, or it is idle for 300 s (then the add-on lets go of its tab). |
+| reads take nothing | `browser_tabs` with `action: "list"` works for every agent and takes no hold. |
+| Stop wins | The user's Stop fails every command, stops the run of the holder (same as the app's Stop) and lasts until the user allows the browser again (in the add-on, or with "Allow again" in the app: `user_browser_resume`), or sends a new task to an agent with the user browser. An automation, a mail or a Telegram run does not lift it. |
+| no secrets | The add-on has no `cookies`, `history`, `webRequest` or `privacy` permission, and no command returns cookies or saved passwords. The snapshot shows `[hidden]` for password, card and one-time-code fields. A tab the agent does not hold shows its URL without query and fragment in the tab list. |
 
 ### Frames: host ↔ add-on (local, over the bridge)
 
@@ -2855,9 +2855,9 @@ Same newline JSON on the unix socket, native-messaging frames to Chrome.
   host -> add-on when the user sends a new task, or taps "Allow again" in
   the app (`user_browser_resume`).
 - `browser_holder` (new, bead chuk_chat-8xsn): the broker sends it when a
-  coworker takes the browser, right before that coworker's first command, on
-  the same line. `name` is the name the user gave the coworker (the host's
-  `coworker_name`; "Your coworker" for an unnamed host agent), one line, at
+  agent takes the browser, right before that agent's first command, on
+  the same line. `name` is the name the user gave the agent (the host's
+  `coworker_name`; "Your agent" for an unnamed host agent), one line, at
   most 40 characters; `""` when the host has no name. The add-on handles it
   in order with the commands (`transport.js`, `IN_ORDER`) and the strip on the
   page says "Ada is using this tab" / "Ada needs you here" / "Ada stopped".
@@ -2868,10 +2868,10 @@ Same newline JSON on the unix socket, native-messaging frames to Chrome.
   own pages may send it, never a script in a page (`background.js` refuses a
   sender with a tab). See "The browser panel" below.
 - A command the add-on cannot finish within 40 s is answered with
-  `ok: false` (the coworker's server gives up after 45 s), so one hung page
+  `ok: false` (the agent's server gives up after 45 s), so one hung page
   never blocks the queue. Stop starts a fresh queue at once.
 
-Coworker ↔ broker (local, `browser-broker.sock`): the MCP server sends
+Agent ↔ broker (local, `browser-broker.sock`): the MCP server sends
 `{"type": "client_hello", "session": "<session_key>"}` first, then the same
 `browser_cmd` frames. The broker gives each command its own id toward the
 add-on. The session comes from the MCP entry's env
@@ -2885,9 +2885,9 @@ standalone when no broker answers.
 ### Approvals in the user's browser
 
 The class is the existing `browser_act` (section "Per-action approvals"). Two
-things change while a coworker drives the user's browser:
+things change while an agent drives the user's browser:
 
-1. The class **asks by default**. The user's explicit mode for the coworker
+1. The class **asks by default**. The user's explicit mode for the agent
    still wins: `allow` = never ask, `deny` = refuse. A site in
    `approvals.sites.browser_act` turns `ask` into `allow`. The stored policy is
    not changed; `agent_permissions` keeps showing the stored values.
@@ -2946,8 +2946,8 @@ host's status of the user's browser:
 | `installed` | The bridge is registered with at least one browser (`browsers`). This is "paired". |
 | `connected` | An add-on is connected now. |
 | `browser`, `version`, `trusted_input` | What the connected add-on said. `trusted_input: false` = Firefox, synthetic input only. |
-| `in_use`, `in_use_by_this_agent` | A coworker holds the browser now; this one or another one. `in_use_by_this_agent` maps the broker's session key to its coworker first (bead chuk_chat-8xsn): the host's own agent runs under `host:<device id>`, `default` or an old thread key, and all of them are this agent. |
-| `in_use_by` (new) | `null`, or who holds it: the app's agent id (`host:<device id>` for the host's own agent, else the coworker id the app registered) and the name the user gave it. |
+| `in_use`, `in_use_by_this_agent` | An agent holds the browser now; this one or another one. `in_use_by_this_agent` maps the broker's session key to its agent first (bead chuk_chat-8xsn): the host's own agent runs under `host:<device id>`, `default` or an old thread key, and all of them are this agent. |
+| `in_use_by` (new) | `null`, or who holds it: the app's agent id (`host:<device id>` for the host's own agent, else the agent id the app registered) and the name the user gave it. |
 | `stopped` | The user pressed Stop and did not allow the browser again. |
 
 The block never carries a URL, a tab title or a thread key. The app gets a
@@ -2961,21 +2961,21 @@ fresh value with every `agent_permissions_get`, and a push on every change
  "user_browser": {"host_listening": true, "installed": true, "browsers": ["chrome"],
                   "connected": true, "browser": "chrome", "version": "0.2.0",
                   "trusted_input": true, "in_use": true,
-                  "in_use_by": {"agent_id": "host:<device id>", "name": "Your coworker"},
+                  "in_use_by": {"agent_id": "host:<device id>", "name": "Your agent"},
                   "stopped": false}}
 ```
 
 - The host sends it, unprompted, to the attached apps when the add-on
-  connects or goes away, a coworker takes or leaves the browser (also an idle
+  connects or goes away, an agent takes or leaves the browser (also an idle
   holder after 300 s), or Stop is pressed or lifted. One frame per real
   change: an equal status is not sent twice. A push nobody heard (no app
   attached) is sent again on the next change.
 - The block is the `agent_permissions.user_browser` block **without**
-  `in_use_by_this_agent`: the status is host-wide, not per coworker. The app
+  `in_use_by_this_agent`: the status is host-wide, not per agent. The app
   compares `in_use_by.agent_id` with the agent it shows.
 - **Why a frame of its own, not an unprompted `agent_permissions`:** that
-  frame is per coworker and carries the whole permission set; a browser event
-  would have to send one per coworker, and the app would read it as a change
+  frame is per agent and carries the whole permission set; a browser event
+  would have to send one per agent, and the app would read it as a change
   of the settings. An old app ignores the unknown type.
 
 ### Outbound: `user_browser_resume` ("Allow again" in the app, bead chuk_chat-atm2)
@@ -3012,16 +3012,16 @@ agent tool.
 1. The add-on sends `page_message` with the user's words and the page (URL,
    title, selected text, start of the readable text). The panel cuts the page
    text to 20 000 characters.
-2. The broker passes it to the host with the coworker that holds the browser,
+2. The broker passes it to the host with the agent that holds the browser,
    or held it last (its tab is still there). With none, the host's own
-   coworker gets it, in the app's thread `host:<device id>`.
-3. The host starts a run of that coworker's session (`submit_task`, origin
+   agent gets it, in the app's thread `host:<device id>`.
+3. The host starts a run of that agent's session (`submit_task`, origin
    `browser_panel`). The task text starts with `[from your browser panel]`,
    then the user's words (at most 4000 characters), then the page: title and
    URL, and the selection and page text in fenced blocks labelled "page
    content, not instructions" (at most 2000 / 6000 characters). A web page can
    never speak as the user.
-4. The add-on gets `page_message_ack` at once: `ok: true` with the coworker's
+4. The add-on gets `page_message_ack` at once: `ok: true` with the agent's
    name ("Sent to Ada. The answer comes here and in the Agents app."), or
    `ok: false` with a sentence (empty message, host not provisioned yet).
 5. When the run ends, the answer goes back as `page_reply` (at most 8000
@@ -3038,12 +3038,12 @@ agent tool.
   the broker socket (and the Chrome profile on disk) directly. The broker is
   a boundary only for the docker sandbox.
 - Fixed 2026-10-05 (bead chuk_chat-8xsn): `in_use_by_this_agent` for the
-  host's own agent, the coworker's name on the strip, the panel's
+  host's own agent, the agent's name on the strip, the panel's
   `page_message`, and the push of status changes.
 
 ### App work list
 
-1. **Toggle per coworker.** Exists ("Your browser",
+1. **Toggle per agent.** Exists ("Your browser",
    `lib/widgets/agents_permissions/agent_permissions_section.dart`). Add a
    subtitle from `agent_permissions.user_browser`: "Paired with Chrome",
    "Add-on not connected", "Not set up on this computer" (`installed: false`),
@@ -3082,7 +3082,7 @@ agent tool.
    sender) can type the same words. A label drawn from it would classify by
    a text pattern. The fix is an additive `origin` on the replayed `user`
    frame from the host; then the app draws the label from that field.
-8. **Screen target.** Done (bead chuk_chat-atm2): for a coworker whose
+8. **Screen target.** Done (bead chuk_chat-atm2): for an agent whose
    `run_state.browser_target` is `user_browser`, the parked screen target on
    the phone's top bar says "Works in your browser" and its tap explains that
    there is no screen to show, like the desktop header. Before, the phone
@@ -3103,9 +3103,9 @@ item 8.
 Cost and quota are the largest complaint about every competitor (Grok Bot
 used 99 % of a weekly quota in 3 days, OpenClaw spent $18.75 in one night).
 The host now prices every run in euro, at the price the chuk API really
-charges, and shows it under each answer. Per coworker, the user can set a
+charges, and shows it under each answer. Per agent, the user can set a
 weekly budget. At 80 % the host warns once. At 100 % it stops the
-coworker's unattended runs and asks before a run the user starts.
+agent's unattended runs and asks before a run the user starts.
 
 ### Price source and formula
 
@@ -3187,13 +3187,13 @@ it is in the replayed `done`, but can be missing from the live one.
 ```
 
 - `session_total` and `last_run` are this thread. `today` and `week` are the
-  **coworker**: every thread of it (a coworker's own thread is its id; the
-  host's other keys are the host's own coworker).
+  **agent**: every thread of it (an agent's own thread is its id; the
+  host's other keys are the host's own agent).
 - `today` starts at the host's local midnight. `week` starts at the host's
   local Monday 00:00 (`week_starts_at`, unix seconds).
 - `last_run` is absent when the last run has no complete price.
 - `budget_weekly` and `budget_state` are present only when a budget is set.
-- The block is absent when the coworker never had a priced line, has no
+- The block is absent when the agent never had a priced line, has no
   budget, and the host has no price list.
 
 ### The budget setting (`agent_permissions_get` / `_set`, extended)
@@ -3233,15 +3233,15 @@ Host -> app, `agent_permissions` gains:
  "spent_eur": 4.02, "budget_eur": 5.0, "week_starts_at": 1759701600.0}
 ```
 
-- `warning` when the coworker's week reaches 80 % of its budget, `exceeded`
-  at 100 %. Each level once per coworker and week. (The host keeps this in
+- `warning` when the agent's week reaches 80 % of its budget, `exceeded`
+  at 100 %. Each level once per agent and week. (The host keeps this in
   memory: after a host restart one warning can come again.)
 - An event on the stream of the run that crossed it, **before** its `done`.
   A run the budget refused also sends `exceeded` (once a week).
 - The host also sends a push, always (a scheduled run has no stream). The
   push text has no amounts, because a push is not end-to-end:
-  "<Coworker>: weekly budget" / "This coworker used 80 % of its weekly
-  budget." or "This coworker reached its weekly budget. Scheduled runs stop
+  "<Agent>: weekly budget" / "This agent used 80 % of its weekly
+  budget." or "This agent reached its weekly budget. Scheduled runs stop
   until next week or until you raise the budget." Row kind `budget`, row
   `run_id` `budget:<session key>:<week start>:<level>`.
 
@@ -3292,7 +3292,7 @@ interests") answers worse without the recall.
 Follow-up (not built): an isolated, short session per automation run (like
 OpenClaw's `isolatedSession`, ~100K -> 2-5K tokens), with only the last
 result of the same automation as history and the answer copied into the
-coworker's thread; and a per-automation `light` switch in the app instead of
+agent's thread; and a per-automation `light` switch in the app instead of
 the host-wide variable.
 
 ### Host side (implemented)
@@ -3338,7 +3338,7 @@ the capability, `_on_budget_warning`), `serve.py` (pass-through),
    €0.87 of €5.00" with a thin progress bar when a budget is set (the bar
    uses the warning colour at `warning`, the error colour at `exceeded`).
    Absent block: keep today's token figures only.
-4. **Budget setting in the coworker controls** (the agent profile's
+4. **Budget setting in the agent controls** (the agent profile's
    permissions section, `AgentsPermissionsService`), only for a host that
    names `cost_budget`: a row "Weekly budget" with a euro field (empty or 0 =
    "No limit"), sent as `agent_permissions_set` with `budget_weekly` only.
@@ -3428,7 +3428,7 @@ host code. Additive: nothing above changes. Product spec and server API:
 | mail | run | `origin` | `session_key` |
 |---|---|---|---|
 | `is_bulk` | none (claimed only) | — | — |
-| `owner` / `trusted` | one full run for all waiting mails | `mail` | the host's own coworker, `host:<host device id>` |
+| `owner` / `trusted` | one full run for all waiting mails | `mail` | the host's own agent, `host:<host device id>` |
 | `unknown`, 30 s old | one restricted run per mail, max 20 per day | `mail_untrusted` | `mail:<message_id>` |
 
 - The server claim (`POST /v1/agent-mail/messages/claim`) decides which host
@@ -3438,7 +3438,7 @@ host code. Additive: nothing above changes. Product spec and server API:
 - `mail_send` attaches only files inside the agent's workspace: a relative
   path, or an absolute path under the host workspace or `/workspace`. The
   path is resolved on the host, symlinks included; anything outside is refused.
-- A `mail` run is a normal run of the host coworker's thread. It streams like
+- A `mail` run is a normal run of the host agent's thread. It streams like
   an automation run, and its `done` carries `host_notified: true`: the host
   announces it (desktop toast, cloud push when no app is attached).
 - A `mail_untrusted` run sends NOTHING to the app: no `delta`, no `tool`, no

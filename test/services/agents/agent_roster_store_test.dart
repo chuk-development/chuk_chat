@@ -1,6 +1,6 @@
 // The cold-start half of the offline cache (bead cowork-91pn): the roster is
 // a CACHE of host truth, so it must survive a restart, it must be overwritten
-// wholesale by an `agent_list`, and a deleted coworker must never come back.
+// wholesale by an `agent_list`, and a deleted agent must never come back.
 
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/services/agents/agent_read_marks.dart';
@@ -38,13 +38,13 @@ void main() {
     expect(host.name, 'peer-1');
     expect(host.onHost, isTrue);
     // The one permanent session per bot rides along, so selecting the
-    // coworker opens the very thread the transcript is cached under.
+    // agent opens the very thread the transcript is cached under.
     expect(host.threads.single.key, 'host:peer-1');
     expect(host.threads.single.title, 'General');
     expect(second.byId(created.id)!.onHost, isFalse);
   });
 
-  test('a hidden coworker is still hidden on the next launch', () async {
+  test('a hidden agent is still hidden on the next launch', () async {
     final first = LocalAgentRosterSource(store: nextLaunch());
     await first.load();
     final agent = first.addAgent(name: 'jade-lynx');
@@ -68,7 +68,7 @@ void main() {
     await second.load();
     expect(second.byId(agent.id)!.name, 'old-name');
 
-    // The host is the truth. Its list renames the coworker and adds one the
+    // The host is the truth. Its list renames the agent and adds one the
     // cache never held; the snapshot is rewritten from the result.
     second.applyHostNames(<AgentsHostAgentName>[
       AgentsHostAgentName(agentId: agent.id, name: 'host-name'),
@@ -83,7 +83,7 @@ void main() {
     expect(third.agents, hasLength(2));
   });
 
-  test('a deleted coworker does not come back', () async {
+  test('a deleted agent does not come back', () async {
     final first = LocalAgentRosterSource(store: nextLaunch());
     await first.load();
     final agent = first.addAgent(name: 'sable-wren');
@@ -95,7 +95,7 @@ void main() {
     await second.load();
     expect(second.byId(agent.id), isNull);
     // The delete outlives the launch it was made in, so the shell's ignore
-    // set starts with it and the host's list cannot resurrect the coworker.
+    // set starts with it and the host's list cannot resurrect the agent.
     expect(second.deletedIds, contains(agent.id));
     second.applyHostNames(<AgentsHostAgentName>[
       AgentsHostAgentName(agentId: agent.id, name: 'sable-wren'),
@@ -143,7 +143,7 @@ void main() {
     );
   });
 
-  test('last activity survives a restart, per coworker and per thread', () async {
+  test('last activity survives a restart, per agent and per thread', () async {
     final store = nextLaunch();
     final first = LocalAgentRosterSource(store: store);
     await first.load();

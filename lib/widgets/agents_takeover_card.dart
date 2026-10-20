@@ -1,6 +1,6 @@
 // lib/widgets/agents_takeover_card.dart
 //
-// "<Coworker> needs you in the browser": the one card a thread shows when the
+// "<Agent> needs you in the browser": the one card a thread shows when the
 // agent's browser reached a step only the user can do — a login, a 2FA code,
 // a CAPTCHA (research item 6, docs/research/AGENT_COMPETITORS_2026-10.md).
 //
@@ -30,7 +30,7 @@ class AgentsTakeoverCard extends StatelessWidget {
   const AgentsTakeoverCard({
     super.key,
     required this.request,
-    required this.coworkerName,
+    required this.agentName,
     required this.stage,
     required this.visited,
     required this.onOpenBrowser,
@@ -42,8 +42,8 @@ class AgentsTakeoverCard extends StatelessWidget {
   /// The host's request: what the agent hit, on which site, and why.
   final AgentsRelayApprovalRequest request;
 
-  /// The coworker's name for the title. Empty falls back to "Your coworker".
-  final String coworkerName;
+  /// The agent's name for the title. Empty falls back to "Your agent".
+  final String agentName;
 
   final AgentsTakeoverStage stage;
 
@@ -70,9 +70,9 @@ class AgentsTakeoverCard extends StatelessWidget {
     final ThemeData theme = Theme.of(context);
     final ColorScheme scheme = theme.colorScheme;
     final AppLocalizations? l = AppLocalizations.of(context);
-    final String name = coworkerName.trim().isEmpty
-        ? (l?.takeoverSomeone ?? 'Your coworker')
-        : coworkerName.trim();
+    final String name = agentName.trim().isEmpty
+        ? (l?.takeoverSomeone ?? 'Your agent')
+        : agentName.trim();
 
     final Widget body = stage == AgentsTakeoverStage.continuing
         ? _continuing(theme, l, name)

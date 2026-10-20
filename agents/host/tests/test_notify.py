@@ -221,8 +221,8 @@ def test_an_automation_run_names_the_automation_never_the_codename(tmp_path):
     try:
         assert notifier.notify_run_finished(summary) is True
     finally:
-        # close() clears the process-wide coworker-name provider; leaving it
-        # installed would let this test name the coworker in the next one.
+        # close() clears the process-wide agent-name provider; leaving it
+        # installed would let this test name the agent in the next one.
         notifier.close()
 
     row = cloud.bodies("/rest/v1/cowork_run_notifications")[0]
@@ -239,14 +239,14 @@ def test_a_run_with_no_names_stays_generic_rather_than_codenamed(tmp_path):
     finally:
         notifier.close()
     row = cloud.bodies("/rest/v1/cowork_run_notifications")[0]
-    assert row["title"] == "Your coworker"
+    assert row["title"] == "Your agent"
     assert "Ada" not in row["title"]
 
 
 def test_the_desktop_path_of_the_host_speaks_the_same_language(tmp_path):
     """``host._announce_run`` composes its own text through
     ``desktop_notify.completion_text`` with only the roster name; the notifier
-    installs the lookup so that path names the coworker too."""
+    installs the lookup so that path names the agent too."""
     cloud = _Cloud()
     _named_coworker(tmp_path, "Nova")
     notifier = _notifier(tmp_path, cloud, _session(cloud))
@@ -257,7 +257,7 @@ def test_the_desktop_path_of_the_host_speaks_the_same_language(tmp_path):
     finally:
         notifier.close()
     # ``close`` clears the provider again: no global left behind.
-    assert desktop_completion_text("ivory-lynx")[0] == "Your coworker"
+    assert desktop_completion_text("ivory-lynx")[0] == "Your agent"
 
 
 def test_an_approval_names_the_coworker(tmp_path):

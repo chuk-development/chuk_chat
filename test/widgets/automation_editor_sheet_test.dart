@@ -46,7 +46,7 @@ void main() {
     WidgetTester tester, {
     AgentsAutomation? existing,
     String? sessionKey = 'thread-1',
-    Map<String, String> coworkers = const <String, String>{},
+    Map<String, String> agents = const <String, String>{},
     Locale locale = const Locale('en'),
   }) async {
     bigView(tester);
@@ -66,7 +66,7 @@ void main() {
               AutomationEditorForm(
                 existing: existing,
                 sessionKey: sessionKey,
-                coworkers: coworkers,
+                agents: agents,
                 source: source,
               ),
             ],
@@ -205,17 +205,17 @@ void main() {
     await answer(tester);
   });
 
-  testWidgets('the global page asks for the coworker first', (tester) async {
+  testWidgets('the global page asks for the agent first', (tester) async {
     await pumpForm(
       tester,
       sessionKey: null,
-      coworkers: const <String, String>{'a': 'Amber', 'b': 'Basil'},
+      agents: const <String, String>{'a': 'Amber', 'b': 'Basil'},
     );
     await tester.enterText(field('schedule'), 'every 1h');
     await tester.enterText(field('prompt'), 'x');
     await tapSave(tester);
     expect(controller.creates, isEmpty);
-    expect(find.text('Choose a coworker.'), findsOneWidget);
+    expect(find.text('Choose an agent.'), findsOneWidget);
   });
 
   testWidgets('fits 360 dp at 1.3 text scale', (tester) async {
@@ -246,8 +246,8 @@ void main() {
               children: <Widget>[
                 AutomationEditorForm(
                   sessionKey: null,
-                  coworkers: const <String, String>{
-                    'a': 'A coworker with a rather long name indeed',
+                  agents: const <String, String>{
+                    'a': 'An agent with a rather long name indeed',
                   },
                   source: source,
                 ),

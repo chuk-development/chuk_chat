@@ -20,9 +20,9 @@ import 'package:flutter/foundation.dart' show kDebugMode, mapEquals;
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/model_selector_page.dart';
-import 'package:chuk_chat/pages/coworker_model_page.dart';
+import 'package:chuk_chat/pages/agent_model_page.dart';
 import 'package:chuk_chat/platform_specific/chat/model_provider_resolution_mixin.dart';
-import 'package:chuk_chat/services/agents/coworker_model.dart';
+import 'package:chuk_chat/services/agents/agent_model.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/services/chat_model_selection_service.dart';
 import 'package:chuk_chat/services/model_cache_service.dart';
@@ -76,22 +76,22 @@ mixin ChatModelSelectionMixin<W extends StatefulWidget>
   /// The chat on screen. Both chat States already provide it.
   String? get activeChatId;
 
-  /// True where the chat on screen is a coworker's thread: its model,
-  /// provider and reasoning level are the coworker's own
+  /// True where the chat on screen is an agent's thread: its model,
+  /// provider and reasoning level are the agent's own
   /// ([ChatModelSelectionService]), not the account-wide mode. Those are
   /// exactly the screens that skip repeated model saves (the Agents thread
   /// on phone and desktop).
-  bool get perCoworkerModel => skipRepeatedModelSave;
+  bool get perAgentModel => skipRepeatedModelSave;
 
-  /// The coworker thread whose own model this composer shows and changes.
+  /// The agent thread whose own model this composer shows and changes.
   /// The phone State overrides this with its own (equivalent) answer.
   @override
-  String? get modelSelectionChatId => perCoworkerModel ? activeChatId : null;
+  String? get modelSelectionChatId => perAgentModel ? activeChatId : null;
 
   /// Present the full model screen (add models, pin providers).
   ///
-  /// The default pushes the standalone page — in a coworker's thread, the
-  /// coworker's own model page, which is the profile's "Model" too. Desktop
+  /// The default pushes the standalone page — in an agent's thread, the
+  /// agent's own model page, which is the profile's "Model" too. Desktop
   /// overrides this to prefer the redesigned settings modal, so "More models"
   /// and the settings menu land in the same place.
   Future<void> presentModelScreen() {
@@ -100,30 +100,30 @@ mixin ChatModelSelectionMixin<W extends StatefulWidget>
       MaterialPageRoute<void>(
         builder: (_) => chatId == null
             ? const ModelSelectorPage()
-            : CoworkerModelPage(chatId: chatId),
+            : AgentModelPage(chatId: chatId),
       ),
     );
   }
 
-  // --- A coworker's own model --------------------------------------------
+  // --- An agent's own model --------------------------------------------
 
   /// The chat [syncChatScopedModel] last looked at.
   String? _syncedChatId;
 
-  /// True while the composer shows a coworker's own model rather than the
+  /// True while the composer shows an agent's own model rather than the
   /// account-wide mode, so dropping that model knows to put the mode back.
   bool _ownModelApplied = false;
 
   @override
   void initState() {
     super.initState();
-    ChatModelSelectionService.instance.addListener(_onCoworkerModelChanged);
+    ChatModelSelectionService.instance.addListener(_onAgentModelChanged);
   }
 
   @override
   void didUpdateWidget(covariant W oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!perCoworkerModel && _syncedChatId == null) return;
+    if (!perAgentModel && _syncedChatId == null) return;
     // The host State moves its chat id in its own didUpdateWidget, after this
     // one; look once the frame is done.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -135,11 +135,11 @@ mixin ChatModelSelectionMixin<W extends StatefulWidget>
 
   @override
   void dispose() {
-    ChatModelSelectionService.instance.removeListener(_onCoworkerModelChanged);
+    ChatModelSelectionService.instance.removeListener(_onAgentModelChanged);
     super.dispose();
   }
 
-  void _onCoworkerModelChanged() {
+  void _onAgentModelChanged() {
     if (!mounted || modelSelectionChatId == null) return;
     unawaited(syncChatScopedModel().catchError((Object _) {}));
   }
@@ -151,7 +151,7 @@ mixin ChatModelSelectionMixin<W extends StatefulWidget>
     });
   }
 
-  /// Puts the coworker's own model, provider and reasoning level into the
+  /// Puts the agent's own model, provider and reasoning level into the
   /// composer, so the pill names what the next send runs on. With no own
   /// model the composer keeps — or gets back — the account-wide mode.
   ///
@@ -193,30 +193,30 @@ mixin ChatModelSelectionMixin<W extends StatefulWidget>
     await refreshSelectedModelName(own.modelId);
   }
 
-  /// The provider the coworker's model runs on now, for a write that keeps
+  /// The provider the agent's model runs on now, for a write that keeps
   /// the model and changes something else.
   Future<String?> _currentProviderFor(String modelId) async {
     final String? shown = selectedProviderSlug;
     if (modelId == selectedModelId && shown != null && shown.isNotEmpty) {
       return ModelSelectionDropdown.resolveProviderSlugForSend(modelId, shown);
     }
-    return CoworkerModel.providerFor(modelId);
+    return AgentModel.providerFor(modelId);
   }
 
-  /// A model picked in a coworker's composer becomes that coworker's own
+  /// A model picked in an agent's composer becomes that agent's own
   /// model, at the level it already runs at.
-  Future<void> _pickCoworkerModel(String chatId, String modelId) async {
+  Future<void> _pickAgentModel(String chatId, String modelId) async {
     final own = await ChatModelSelectionService.instance.load(chatId);
     String? provider = own?.modelId == modelId
         ? own!.providerSlug
-        : await CoworkerModel.providerFor(modelId);
+        : await AgentModel.providerFor(modelId);
     if (provider == null) {
       // A cold catalogue: fetch it once and ask again.
       await ModelPrefetchService.prefetch();
-      provider = await CoworkerModel.providerFor(modelId);
+      provider = await AgentModel.providerFor(modelId);
     }
     if (!mounted || provider == null || provider.isEmpty) return;
-    await CoworkerModel.setOwn(
+    await AgentModel.setOwn(
       chatId,
       modelId: modelId,
       providerSlug: provider,
@@ -342,7 +342,7 @@ mixin ChatModelSelectionMixin<W extends StatefulWidget>
   /// The full model screen: add models, pin providers.
   Future<void> openModelScreen() async {
     if (modelSelectionChatId != null) {
-      // The coworker's model page writes the coworker's own record; read it
+      // The agent's model page writes the agent's own record; read it
       // back rather than the account-wide model.
       await presentModelScreen();
       if (!mounted) return;
@@ -369,13 +369,13 @@ mixin ChatModelSelectionMixin<W extends StatefulWidget>
   /// Switch mode, swapping in that mode's own model, provider and reasoning
   /// level. The next send uses them.
   ///
-  /// In a coworker's thread, Fast and Thinking are the app defaults: picking
-  /// one drops the coworker's own model, so it follows that default.
+  /// In an agent's thread, Fast and Thinking are the app defaults: picking
+  /// one drops the agent's own model, so it follows that default.
   Future<void> setChatMode(ChatMode mode) async {
     final String? chatId = modelSelectionChatId;
     if (chatId != null) {
       _ownModelApplied = false;
-      await CoworkerModel.useDefault(chatId);
+      await AgentModel.useDefault(chatId);
       if (!mounted) return;
     }
     await ChatModeService.save(mode);
@@ -387,8 +387,8 @@ mixin ChatModelSelectionMixin<W extends StatefulWidget>
   /// the mode's stored provider allows and hands back the result, which is
   /// the single source of truth — adopt it rather than a locally clamped copy.
   ///
-  /// In a coworker's thread the level is the coworker's own: it is stored
-  /// with the coworker's model (which the coworker then has, if it followed
+  /// In an agent's thread the level is the agent's own: it is stored
+  /// with the agent's model (which the agent then has, if it followed
   /// the default until now), and the account-wide mode is not touched.
   Future<void> setReasoningEffort(String level) async {
     final String? chatId = modelSelectionChatId;
@@ -399,7 +399,7 @@ mixin ChatModelSelectionMixin<W extends StatefulWidget>
           own?.providerSlug ?? await _currentProviderFor(modelId);
       if (!mounted) return;
       if (modelId.isNotEmpty && provider != null && provider.isNotEmpty) {
-        final saved = await CoworkerModel.setOwn(
+        final saved = await AgentModel.setOwn(
           chatId,
           modelId: modelId,
           providerSlug: provider,
@@ -440,12 +440,12 @@ mixin ChatModelSelectionMixin<W extends StatefulWidget>
   /// it. Reload the pinned provider so model and provider cannot drift apart on
   /// the next send.
   ///
-  /// In a coworker's thread the pick is the coworker's own model instead; the
+  /// In an agent's thread the pick is the agent's own model instead; the
   /// account-wide Custom slot is left alone.
   Future<void> applyModelSelection(String modelId) async {
     final String? chatId = modelSelectionChatId;
     if (chatId != null) {
-      await _pickCoworkerModel(chatId, modelId);
+      await _pickAgentModel(chatId, modelId);
       return;
     }
     setState(() {
@@ -483,7 +483,7 @@ mixin ChatModelSelectionMixin<W extends StatefulWidget>
     final mode = await ChatModeService.load();
     final config = await ChatModeService.loadConfig(mode);
     await applyModeConfig(mode, config);
-    // A coworker's own model sits on top of the mode it just restored.
+    // An agent's own model sits on top of the mode it just restored.
     _ownModelApplied = false;
     if (mounted) await syncChatScopedModel();
   }

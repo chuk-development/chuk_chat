@@ -73,7 +73,7 @@ PRICES = [
 USAGE = {"prompt_tokens": 1000, "completion_tokens": 100, "total_tokens": 1100}
 PW = "mcp__playwright__"
 #: One thread for flow 1 and most browser flows. The box's one browser server
-#: is shared by all threads of the coworker (bead chuk_chat-wrdv); flow 2b
+#: is shared by all threads of the agent (bead chuk_chat-wrdv); flow 2b
 #: checks that with a second thread.
 BROWSER_KEY = "e2e-browser"
 
@@ -658,7 +658,7 @@ def test_flow2_browser_screenshot_fills_the_display(rig: Rig):
 
 
 def test_flow2b_a_second_thread_of_the_coworker_browses_too(rig: Rig):
-    """chuk_chat-wrdv: a second thread of the same coworker (same box, same
+    """chuk_chat-wrdv: a second thread of the same agent (same box, same
     browser profile) gets the browser too; the box runs one browser server."""
     url = rig.site.page("/second.html", PAGE_HTML)
     rig.router.route(

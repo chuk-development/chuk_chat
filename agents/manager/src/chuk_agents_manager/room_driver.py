@@ -2,7 +2,7 @@
 
 :class:`~chuk_agents_manager.room_runner.RoomRunner` drives the turn order behind a
 `turn_fn` seam; this is the layer that fills that seam with **the right agent for
-each speaker**. A room member is a coworker with its own agent id, and each id
+each speaker**. A room member is an agent with its own agent id, and each id
 has its own runtime (its own sandbox, its own model stream). So a room turn is
 not "call the model" — it is "route this turn to *this member's* executor". That
 routing, and what to do when a member's executor is not there, is what lives here.
@@ -29,7 +29,7 @@ MemberRunner = Callable[[RoomMember, str], "str | None"]
 
 #: Shown in the transcript in place of an offline member's reply. It is a real
 #: turn — the exchange advances past it — but it says plainly that nobody
-#: answered, rather than inventing words for a coworker that was not there.
+#: answered, rather than inventing words for an agent that was not there.
 OFFLINE_REPLY = "(offline — no reply)"
 
 
@@ -64,7 +64,7 @@ class RoomDriver:
             # An offline member is not a crash: the room keeps going, its line
             # says nobody answered, and — crucially — an offline member's
             # placeholder carries no @mentions, so it cannot drag a fresh round
-            # out of a coworker that never really spoke.
+            # out of an agent that never really spoke.
             return OFFLINE_REPLY if reply is None else reply
 
         runner = RoomRunner(

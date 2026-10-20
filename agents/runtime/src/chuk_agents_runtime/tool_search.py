@@ -6,7 +6,7 @@ is cheap. Twelve MCP servers with twenty tools each is not: that surface can pas
 fifty thousand tokens, which is spent before the model has read the task.
 
 So the deferrable surface is **hidden from token 0** (bead chuk_chat-b3g4).
-A plain "hi" to a coworker used to declare 64 tools — about 10k tokens on every
+A plain "hi" to an agent used to declare 64 tools — about 10k tokens on every
 round — because the old rule hid tools only once they passed ~10 % of the
 effective input budget, and the browser's 24 Playwright tools plus the
 schedule / call / secrets / shell / document tools never got there. A schema

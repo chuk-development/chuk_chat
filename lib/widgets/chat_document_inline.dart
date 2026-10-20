@@ -1,6 +1,6 @@
 // lib/widgets/chat_document_inline.dart
 //
-// A document the coworker wrote, rendered INSIDE the thread.
+// A document the agent wrote, rendered INSIDE the thread.
 //
 // A saved document used to arrive as a row: a title, "Version 31 · Saved
 // document" and a chevron. The numbers the reader asked for — the election
@@ -10,7 +10,7 @@
 // through the app's markdown renderer, a chart as the app's chart.
 //
 // A real file stays a file: `sandbox_artifact_block.dart` keeps the full-width
-// attachment row for anything the coworker sent as bytes. Only the documents
+// attachment row for anything the agent sent as bytes. Only the documents
 // the `chat_document` tool writes render here.
 //
 // Long documents do not flood the thread. A table shows its first rows, a
@@ -333,7 +333,7 @@ Future<void> openDocumentLink(BuildContext context, String href) async {
   }
 }
 
-/// A document, drawn in the thread in the coworker's bubble.
+/// A document, drawn in the thread in the agent's bubble.
 class InlineChatDocument extends StatefulWidget {
   const InlineChatDocument({
     super.key,
@@ -345,7 +345,7 @@ class InlineChatDocument extends StatefulWidget {
   final Map<String, dynamic> document;
 
   /// The corners this block draws. A document that follows an answer from the
-  /// same coworker is one more block of that run, so the run hands it its
+  /// same agent is one more block of that run, so the run hands it its
   /// geometry — small radii where it touches the answer above it. Null keeps
   /// the standalone shape.
   final BorderRadius? borderRadius;

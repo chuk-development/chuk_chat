@@ -1,12 +1,12 @@
-/// "New agent": pick a template (or the blank coworker), then name it and
+/// "New agent": pick a template (or the blank agent), then name it and
 /// create it (bead chuk_chat-dsh0).
 ///
 /// Two steps in one surface — a bottom sheet on the phone, a centred dialog
 /// on a desktop window (`showAgentsSheetOrDialog`, docs/DESIGN.md §14.6):
 ///
 ///  1. **Pick.** chuk's search pill, the filter pill (All / Work / Watch /
-///     Life) and the templates as expressive rows: the face the coworker
-///     will get, its name and one line about it. "Blank coworker" sits on
+///     Life) and the templates as expressive rows: the face the agent
+///     will get, its name and one line about it. "Blank agent" sits on
 ///     top, so the old way in is one tap away.
 ///  2. **Name.** The name field, pre-filled from the template (the blank one
 ///     gets the suggested adjective-noun name), the starter automation as a
@@ -14,8 +14,8 @@
 ///     is never missed), what the template works with and its instructions
 ///     to read. Back returns to the list.
 ///
-/// The picker decides nothing on the wire. It pops a [CoworkerCreateRequest];
-/// the shell adds the coworker, sends `agent_create` (with the template's
+/// The picker decides nothing on the wire. It pops a [AgentCreateRequest];
+/// the shell adds the agent, sends `agent_create` (with the template's
 /// persona) and, only when the switch is on, the starter `automation_create`.
 library;
 
@@ -23,7 +23,7 @@ import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
-import 'package:chuk_chat/services/agents/coworker_templates.dart';
+import 'package:chuk_chat/services/agents/agent_templates.dart';
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
 import 'package:chuk_chat/ui/expressive/connected_group.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
@@ -33,10 +33,10 @@ import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/widgets/icons/huge_icon.dart';
 import 'package:chuk_chat/widgets/sidebar/sidebar_chrome.dart';
 
-/// What the user asked for. [template] null is the blank coworker.
+/// What the user asked for. [template] null is the blank agent.
 @immutable
-class CoworkerCreateRequest {
-  const CoworkerCreateRequest({
+class AgentCreateRequest {
+  const AgentCreateRequest({
     required this.name,
     this.template,
     this.startAutomation = false,
@@ -44,45 +44,45 @@ class CoworkerCreateRequest {
 
   /// Trimmed, never empty.
   final String name;
-  final CoworkerTemplate? template;
+  final AgentTemplate? template;
 
   /// True only when the template has a starter and the user switched it on.
   final bool startAutomation;
 }
 
 /// Opens the picker. Null when the user cancelled.
-Future<CoworkerCreateRequest?> showCoworkerTemplatePicker(
+Future<AgentCreateRequest?> showAgentTemplatePicker(
   BuildContext context, {
   required String suggestedName,
-}) => showAgentsSheetOrDialog<CoworkerCreateRequest>(
+}) => showAgentsSheetOrDialog<AgentCreateRequest>(
   context: context,
-  builder: (_) => CoworkerTemplatePicker(suggestedName: suggestedName),
+  builder: (_) => AgentTemplatePicker(suggestedName: suggestedName),
 );
 
-class CoworkerTemplatePicker extends StatefulWidget {
-  const CoworkerTemplatePicker({
+class AgentTemplatePicker extends StatefulWidget {
+  const AgentTemplatePicker({
     super.key,
     required this.suggestedName,
-    this.templates = kCoworkerTemplates,
+    this.templates = kAgentTemplates,
   });
 
-  /// The name the blank coworker starts with.
+  /// The name the blank agent starts with.
   final String suggestedName;
-  final List<CoworkerTemplate> templates;
+  final List<AgentTemplate> templates;
 
   @override
-  State<CoworkerTemplatePicker> createState() => _CoworkerTemplatePickerState();
+  State<AgentTemplatePicker> createState() => _AgentTemplatePickerState();
 }
 
 /// The filter segments, in order. Null is "All".
-const List<CoworkerTemplateCategory?> _segments = <CoworkerTemplateCategory?>[
+const List<AgentTemplateCategory?> _segments = <AgentTemplateCategory?>[
   null,
-  CoworkerTemplateCategory.work,
-  CoworkerTemplateCategory.watch,
-  CoworkerTemplateCategory.personal,
+  AgentTemplateCategory.work,
+  AgentTemplateCategory.watch,
+  AgentTemplateCategory.personal,
 ];
 
-class _CoworkerTemplatePickerState extends State<CoworkerTemplatePicker> {
+class _AgentTemplatePickerState extends State<AgentTemplatePicker> {
   final TextEditingController _search = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
   final TextEditingController _name = TextEditingController();
@@ -91,7 +91,7 @@ class _CoworkerTemplatePickerState extends State<CoworkerTemplatePicker> {
 
   /// False on the list, true on the name step.
   bool _naming = false;
-  CoworkerTemplate? _template;
+  AgentTemplate? _template;
   bool _startAutomation = false;
   String? _nameError;
 
@@ -109,11 +109,11 @@ class _CoworkerTemplatePickerState extends State<CoworkerTemplatePicker> {
   /// The templates the filter pill and the search field leave. The search
   /// reads the localized name and description, so a German reader finds
   /// "Reise" and an English one "trip".
-  List<CoworkerTemplate> _visible(AppLocalizations l) {
-    final CoworkerTemplateCategory? category = _segments[_segment];
+  List<AgentTemplate> _visible(AppLocalizations l) {
+    final AgentTemplateCategory? category = _segments[_segment];
     final String query = _search.text.trim().toLowerCase();
-    return <CoworkerTemplate>[
-      for (final CoworkerTemplate template in widget.templates)
+    return <AgentTemplate>[
+      for (final AgentTemplate template in widget.templates)
         if ((category == null || template.category == category) &&
             (query.isEmpty ||
                 l.tpl(template.nameKey).toLowerCase().contains(query) ||
@@ -122,7 +122,7 @@ class _CoworkerTemplatePickerState extends State<CoworkerTemplatePicker> {
     ];
   }
 
-  void _choose(CoworkerTemplate? template) {
+  void _choose(AgentTemplate? template) {
     setState(() {
       _template = template;
       _naming = true;
@@ -146,7 +146,7 @@ class _CoworkerTemplatePickerState extends State<CoworkerTemplatePicker> {
       return;
     }
     Navigator.of(context).pop(
-      CoworkerCreateRequest(
+      AgentCreateRequest(
         name: name,
         template: _template,
         startAutomation: _startAutomation && _template?.starter != null,
@@ -226,19 +226,19 @@ class _CoworkerTemplatePickerState extends State<CoworkerTemplatePicker> {
           child: ListenableBuilder(
             listenable: _search,
             builder: (BuildContext context, _) {
-              final List<CoworkerTemplate> rows = _visible(l);
+              final List<AgentTemplate> rows = _visible(l);
               return ListView(
                 key: const ValueKey<String>('tpl-list'),
                 shrinkWrap: true,
                 children: <Widget>[
-                  // The blank coworker is the old way in. It stays on top
+                  // The blank agent is the old way in. It stays on top
                   // while the user browses, and steps aside for a search.
                   if (_search.text.trim().isEmpty) ...<Widget>[
                     ExpressiveGroup(
                       children: <Widget>[
                         ExpressiveRow(
                           key: const ValueKey<String>('tpl-blank'),
-                          leading: const CoworkerTemplateFace(template: null),
+                          leading: const AgentTemplateFace(template: null),
                           title: l.tplBlankName,
                           subtitle: l.tplBlankDesc,
                           onTap: () => _choose(null),
@@ -261,10 +261,10 @@ class _CoworkerTemplatePickerState extends State<CoworkerTemplatePicker> {
                   else
                     ExpressiveGroup(
                       children: <Widget>[
-                        for (final CoworkerTemplate template in rows)
+                        for (final AgentTemplate template in rows)
                           ExpressiveRow(
                             key: ValueKey<String>('tpl-${template.id}'),
-                            leading: CoworkerTemplateFace(template: template),
+                            leading: AgentTemplateFace(template: template),
                             title: l.tpl(template.nameKey),
                             subtitle: l.tpl(template.descriptionKey),
                             onTap: () => _choose(template),
@@ -300,8 +300,8 @@ class _CoworkerTemplatePickerState extends State<CoworkerTemplatePicker> {
     final ColorScheme scheme = theme.colorScheme;
     final TextTheme text = theme.textTheme;
     final AppLocalizations l = _l;
-    final CoworkerTemplate? template = _template;
-    final CoworkerStarterAutomation? starter = template?.starter;
+    final AgentTemplate? template = _template;
+    final AgentStarterAutomation? starter = template?.starter;
     return Column(
       key: const ValueKey<String>('tpl-step-name'),
       mainAxisSize: MainAxisSize.min,
@@ -317,7 +317,7 @@ class _CoworkerTemplatePickerState extends State<CoworkerTemplatePicker> {
               onTap: _back,
             ),
             const SizedBox(width: 12),
-            CoworkerTemplateFace(template: template, size: 44),
+            AgentTemplateFace(template: template, size: 44),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -409,7 +409,7 @@ class _CoworkerTemplatePickerState extends State<CoworkerTemplatePicker> {
                     spacing: 6,
                     runSpacing: 6,
                     children: <Widget>[
-                      for (final CoworkerTemplateTool tool in template.tools)
+                      for (final AgentTemplateTool tool in template.tools)
                         _ToolChip(label: l.tpl('tpl.tool.${tool.name}')),
                     ],
                   ),
@@ -529,18 +529,18 @@ class _ToolChip extends StatelessWidget {
   }
 }
 
-/// The face a template's coworker gets: its silhouette in its colour, with
-/// the template's icon inside. The blank coworker is a quiet round "+".
-class CoworkerTemplateFace extends StatelessWidget {
-  const CoworkerTemplateFace({super.key, required this.template, this.size = 42});
+/// The face a template's agent gets: its silhouette in its colour, with
+/// the template's icon inside. The blank agent is a quiet round "+".
+class AgentTemplateFace extends StatelessWidget {
+  const AgentTemplateFace({super.key, required this.template, this.size = 42});
 
-  final CoworkerTemplate? template;
+  final AgentTemplate? template;
   final double size;
 
   @override
   Widget build(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
-    final CoworkerTemplate? t = template;
+    final AgentTemplate? t = template;
     final Color fill = t == null
         ? scheme.surfaceContainerHighest
         : Color(t.accent);

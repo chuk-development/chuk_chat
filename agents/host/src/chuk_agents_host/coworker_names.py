@@ -1,7 +1,7 @@
-"""Coworker names the host keeps for the app (docs/WIRE_CONTRACT.md,
-"Coworker names", bead cowork-817).
+"""Agent names the host keeps for the app (docs/WIRE_CONTRACT.md,
+"Agent names", bead cowork-817).
 
-The app's roster is in memory; a reinstall forgets every coworker the user
+The app's roster is in memory; a reinstall forgets every agent the user
 created and every name they chose. This store keeps ``(agent_id, name)`` keyed
 by the APP's agent id, in the roster's SQLite file, in its own table. It never
 touches the ``agents`` row of the running agent: that row's ``name`` is also
@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS coworker_names (
 
 
 def host_agent_id(device_id: str = HOST_DEVICE_ID) -> str:
-    """The app's id for the coworker that runs on this host: ``host:<device id>``
+    """The app's id for the agent that runs on this host: ``host:<device id>``
     (the ``peer_device_id`` the app sees on pairing)."""
     return f"host:{device_id}"
 
@@ -122,8 +122,8 @@ def handle_agent_frame(
         name = clean_name(payload.get("name"))
         if not isinstance(agent_id, str) or not agent_id or name is None:
             if log is not None:
-                log(f"[coworker-names] dropped {kind}: bad agent_id or name")
+                log(f"[agent-names] dropped {kind}: bad agent_id or name")
         elif store.upsert(agent_id, name, created_by_app=(kind == "agent_create")):
             if log is not None:
-                log(f"[coworker-names] {agent_id} -> {name!r}")
+                log(f"[agent-names] {agent_id} -> {name!r}")
     return store.list()

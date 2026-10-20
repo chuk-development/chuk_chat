@@ -1,6 +1,6 @@
 // lib/widgets/agents_skill_proposal_card.dart
 //
-// "Save as skill?" — the coworker offers to keep the procedure of a task that
+// "Save as skill?" — the agent offers to keep the procedure of a task that
 // worked (docs/WIRE_CONTRACT.md, "Skill proposals"; bead chuk_chat-al2u).
 //
 // The card sits at the end of the transcript, like the approval and takeover

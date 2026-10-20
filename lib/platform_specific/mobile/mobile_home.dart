@@ -1,9 +1,9 @@
 /// The home of the phone app: three places, one floating bar.
 ///
-/// Chats is the roster. Media is every picture and file the coworkers have sent,
+/// Chats is the roster. Media is every picture and file the agents have sent,
 /// across all of them. Settings is the settings page itself, not a link to it:
 /// a tab that pushes a route and comes back empty is a worse tab than no tab.
-/// A coworker's workspace files open from inside its chat.
+/// An agent's workspace files open from inside its chat.
 ///
 /// The three tabs are peers, so moving between them is Material's fade-through:
 /// the tab you leave fades (and eases down a hair), the tab you arrive at fades
@@ -82,7 +82,7 @@ class _MobileHomeState extends State<MobileHome> {
                     widget.chats,
                     // Pictures and files, out of every conversation, without
                     // opening one. Agents has no artifacts of its own: a
-                    // coworker writes a real file and sends it.
+                    // agent writes a real file and sends it.
                     MobileMediaPage(
                       threadKeys: <String>[
                         for (final AgentsAgent agent

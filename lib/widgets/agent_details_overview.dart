@@ -1,13 +1,13 @@
-/// The first page of the desktop details pane: the coworker's screen and its
+/// The first page of the desktop details pane: the agent's screen and its
 /// routines.
 ///
-///  * [AgentScreenPreview]: a 16:10 box for the coworker's screen, with the
+///  * [AgentScreenPreview]: a 16:10 box for the agent's screen, with the
 ///    caption "`<name>`'s screen" under it. The app has no picture of the
 ///    screen until the viewer opens, so the box shows the screen state, not a
 ///    thumbnail: lit with "Open screen" while the host offers a screen (a tap
 ///    opens the existing full-screen viewer), quiet while it does not (a tap
 ///    says so, in the words of the thread header's screen target).
-///  * [AgentRoutinesList]: the coworker's scheduled and watching automations
+///  * [AgentRoutinesList]: the agent's scheduled and watching automations
 ///    from [AutomationsSource], one row each, with a plain schedule line. A
 ///    tap opens the existing automation editor (or the Automations page for a
 ///    kind the editor does not take).
@@ -43,7 +43,7 @@ class AgentDetailsOverview extends StatelessWidget {
 
   final String name;
 
-  /// The coworker's thread key: its automations are filed under it.
+  /// The agent's thread key: its automations are filed under it.
   final String sessionKey;
 
   /// Opens the screen viewer. Null while there is no screen on offer.
@@ -68,7 +68,7 @@ class AgentDetailsOverview extends StatelessWidget {
         const SizedBox(height: 24),
         AgentRoutinesList(
           sessionKey: sessionKey,
-          coworkerName: name,
+          agentName: name,
           source: automations,
         ),
       ],
@@ -76,7 +76,7 @@ class AgentDetailsOverview extends StatelessWidget {
   }
 }
 
-/// The coworker's screen as a 16:10 box with a caption.
+/// The agent's screen as a 16:10 box with a caption.
 class AgentScreenPreview extends StatelessWidget {
   const AgentScreenPreview({
     super.key,
@@ -120,7 +120,7 @@ class AgentScreenPreview extends StatelessWidget {
                   onParked ??
                   () => AppNotifications.show(
                     context,
-                    'The coworker has no screen open right now',
+                    'The agent has no screen open right now',
                   ),
               child: AspectRatio(
                 aspectRatio: 16 / 10,
@@ -165,18 +165,18 @@ class AgentScreenPreview extends StatelessWidget {
   }
 }
 
-/// The coworker's routines: its automations that are still running or
+/// The agent's routines: its automations that are still running or
 /// paused, one row each.
 class AgentRoutinesList extends StatefulWidget {
   const AgentRoutinesList({
     super.key,
     required this.sessionKey,
-    required this.coworkerName,
+    required this.agentName,
     this.source,
   });
 
   final String sessionKey;
-  final String coworkerName;
+  final String agentName;
 
   /// Defaults to [AutomationsSource.instance].
   final AutomationsSource? source;
@@ -200,7 +200,7 @@ class _AgentRoutinesListState extends State<AgentRoutinesList> {
     if (old.sessionKey != widget.sessionKey) _ask();
   }
 
-  /// Asks the host once for this coworker's list, unless it answered before.
+  /// Asks the host once for this agent's list, unless it answered before.
   void _ask() {
     _source.attach();
     if (!_source.listed(widget.sessionKey)) {
@@ -225,7 +225,7 @@ class _AgentRoutinesListState extends State<AgentRoutinesList> {
         builder: (BuildContext context) => AutomationsPage(
           source: _source,
           sessionKey: widget.sessionKey,
-          chatName: widget.coworkerName,
+          chatName: widget.agentName,
         ),
       ),
     );

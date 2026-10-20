@@ -10,7 +10,7 @@ getrennte Codebasen ohne gemeinsame Historie**:
 | Branch | Was | Wo |
 |--------|-----|-----|
 | `master` | **Chuk Chat**, das ausgelieferte Produkt | Flutter-App im Wurzelverzeichnis (`lib/`, `pubspec.yaml`) |
-| `agents` | **Agents/CoWork**, die Coworker-Plattform | `app/`, `agent/`, `host/`, `executor/`, `manager/` |
+| `agents` | **Agents/CoWork**, die Agenten-Plattform | `app/`, `agent/`, `host/`, `executor/`, `manager/` |
 
 `origin/master` ist **kein** Vorfahr von `agents`. Ein Push von `agents` nach
 `master` wuerde 1250 Dateien loeschen, darunter das oeffentliche README, alle
@@ -87,7 +87,7 @@ separaten Worktree geprueft. Wer den Refactor landet, muss
 
 Acht Commits, Arbeitsbaum sauber:
 
-- **Raeume ohne Mitgliederlimit** plus Policy *"Coworkers can reply to each
+- **Raeume ohne Mitgliederlimit** plus Policy *"Agents can reply to each
   other"* (Standard an). Wichtig dabei: der Nachrichten-Deckel von 10 haette bei
   30 Mitgliedern 20 Leute stumm geschluckt, deshalb leitet er sich jetzt aus
   Mitgliedern × Runden ab.
@@ -149,7 +149,7 @@ Alles mit Bead-ID; `bd show <id>` hat die Details.
 
 ### Features aus dem Grokbot-Video
 
-- **`cowork-eat1` (P1)** — Coworker ruft benannten Coworker ausserhalb eines
+- **`cowork-eat1` (P1)** — Agent ruft benannten Agenten ausserhalb eines
   Raums. Das ist der starke Fall aus dem Video, nicht der Gruppenchat.
   `delegate_task` spawnt anonyme Kinder und ist **nicht** dasselbe.
 - **`cowork-132u` (P3)** — Review-Agent mit globaler Allow/Deny-Liste als Prosa,

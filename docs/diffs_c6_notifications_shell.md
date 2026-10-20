@@ -5,7 +5,7 @@ decision after cowork-5c closed at its context limit). `messenger_shell_test`
 16/16 green afterwards. Kept here as the record of what changed.
 
 From cowork-c6 (P7 app-side notifications, bead cowork-o3j). The shell is the
-only place that maps a `session_key` to a coworker, so it owns the two
+only place that maps a `session_key` to an agent, so it owns the two
 notification hooks below. Both are small and additive.
 
 ## Imports (add)
@@ -25,7 +25,7 @@ import 'package:chuk_chat/services/notifications/notification_router.dart';
     // WS-7: a tapped "answer ready" toast (local or push) names a thread.
     // Cold start included: the router keeps the target until we take it.
     NotificationRouter.instance.pending.addListener(_onNotificationTap);
-    // The toast carries the coworker's name, never the answer.
+    // The toast carries the agent's name, never the answer.
     AgentsNotifications.instance.threadLabel = (String threadKey) =>
         _agentIdForThread(threadKey) == null
             ? 'Agents'
@@ -65,7 +65,7 @@ Notes for 5c:
 - `_select` already flips `_showThreadOnNarrow`, so on a phone the tap lands
   in the chat, not the inbox.
 - `_agentIdForThread` falls back to `_selectedAgentId` today; for a tap that
-  fallback is fine (a thread we cannot place opens on the selected coworker),
+  fallback is fine (a thread we cannot place opens on the selected agent),
   but if you prefer strictness, guard with `agent.threads.any(...)` first.
 - No new test needed on your side beyond one that pumps the shell, sets
   `NotificationRouter.instance.open(NotificationTarget(sessionKey: ...))`

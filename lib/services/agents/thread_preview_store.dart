@@ -1,6 +1,6 @@
 /// What a thread last said, so the roster can show it.
 ///
-/// The roster line used to read "No activity yet" under every coworker, or a
+/// The roster line used to read "No activity yet" under every agent, or a
 /// thread title, because the list has no messages: `StoredChat.forSidebar`
 /// carries titles only, and decrypting every thread to draw a list would cost a
 /// disk read and a decrypt per row on every frame.
@@ -133,7 +133,7 @@ class ThreadPreviewStore extends ChangeNotifier {
   /// is already on disk.
   ///
   /// The live path ([noteRows]) only fires when a thread is committed, so after
-  /// a restart the roster would sit blank until each coworker says something.
+  /// a restart the roster would sit blank until each agent says something.
   /// This reads the stored thread once per key and then never again: the answer
   /// is kept in the map and persisted.
   Future<void> ensureFor(Iterable<String> threadKeys) async {

@@ -1,5 +1,5 @@
 /// The rooms list (§16.1/4c): your group rooms down the side of the messenger,
-/// beside the coworker roster.
+/// beside the agent roster.
 ///
 /// One row per room: its name, a stack of its members' avatars, and a member
 /// count. Picking a room opens it; the ＋ button starts a new one. Like

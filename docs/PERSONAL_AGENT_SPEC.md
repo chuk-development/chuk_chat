@@ -13,7 +13,7 @@ Sections are numbered so feedback can point at them.
 
 ## 1. What this is
 
-The Agents coworker becomes a personal agent that:
+The Agents agent becomes a personal agent that:
 
 1. **talks** with the user live, full duplex, and the user can interrupt it;
 2. **reaches** the user at the right moment, on the right device — it rings the

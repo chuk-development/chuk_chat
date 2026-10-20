@@ -151,7 +151,7 @@ void main() {
       final List<MentionEntry> e = mentionEntriesFor(members: members);
       expect(e.first.handle, 'all');
       expect(e.first.label, 'Everyone');
-      expect(e.first.trailing, '3 coworkers');
+      expect(e.first.trailing, '3 agents');
       expect(e.first.agentId, isNull);
       expect(e.first.broadcast, isTrue);
     });
@@ -246,7 +246,7 @@ void main() {
       ),
     );
 
-    testWidgets('a row names the coworker, the handle and the role', (
+    testWidgets('a row names the agent, the handle and the role', (
       tester,
     ) async {
       await pumpPicker(
@@ -264,7 +264,7 @@ void main() {
       // The broadcast row is plain: a label, the handle, the count, no face.
       expect(find.text('Everyone'), findsOneWidget);
       expect(find.text('@all'), findsOneWidget);
-      expect(find.text('1 coworker'), findsOneWidget);
+      expect(find.text('1 agent'), findsOneWidget);
     });
 
     testWidgets('a tap reports the row it hit', (tester) async {

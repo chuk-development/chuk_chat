@@ -186,7 +186,7 @@ void main() {
       expect(call.arguments.containsKey('options'), isFalse);
       expect(call.arguments['offered_options'], <String>[
         'Allow once',
-        'Always for this coworker',
+        'Always for this agent',
         'Always on shop.example',
         'Deny',
       ]);
@@ -223,7 +223,7 @@ void main() {
           .runFor('thread-1')!
           .toolCalls
           .singleWhere((c) => c.name == 'ask_user');
-      expect(call.arguments['decision'], 'Allowed always for this coworker');
+      expect(call.arguments['decision'], 'Allowed always for this agent');
       expect(call.arguments['decision_scope'], 'always_this_agent');
       ledger.reset();
     });
@@ -235,7 +235,7 @@ void main() {
       AgentsBudgetOverride.reset();
     });
 
-    test('one notice per coworker, week and level', () {
+    test('one notice per agent, week and level', () {
       AgentsBudgetWarning w(String level) =>
           AgentsBudgetWarning.fromPayload(<String, dynamic>{
             'agent_id': 'host:pc',

@@ -359,7 +359,7 @@ def valid_budget(value: Any) -> float:
 
 
 class BudgetNotices:
-    """Which warning a coworker already got this week, so the host warns once
+    """Which warning an agent already got this week, so the host warns once
     per level and week. In memory: a host restart can repeat one warning."""
 
     def __init__(self) -> None:

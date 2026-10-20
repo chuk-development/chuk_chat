@@ -1,7 +1,7 @@
 """Room task sender — one member's turn over the relay (§16.1/4b).
 
 This is the last mile the manager's ``RoomBinding`` was built around. A room
-member is a coworker with its own executor; running its turn is sending it one
+member is an agent with its own executor; running its turn is sending it one
 task (the rendered room prompt) and reading back its final answer. That is
 exactly what a :class:`ControllerSession` already does — this wraps one into the
 ``TaskSender`` shape the binding registers: ``(prompt) -> reply | None``.

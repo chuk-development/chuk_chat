@@ -62,7 +62,7 @@ from .memory import (
 logger = logging.getLogger(__name__)
 
 BANK_MISSION = (
-    "Long-term memory of an AI coworker that works for one person on that "
+    "Long-term memory of an AI agent that works for one person on that "
     "person's own machine. Keep what stays true after a task: the person's "
     "preferences and how they want things done, project facts, decisions, "
     "names, and open commitments. Skip small talk."
@@ -456,7 +456,7 @@ class HindsightMemoryStore(MemoryStore):
             lines.append("Assistant: " + text)
         return self._item(
             "\n\n".join(lines),
-            context="one finished task between the user and their AI coworker",
+            context="one finished task between the user and their AI agent",
             source="turn",
             document_id=f"turn:{uuid.uuid4().hex}",
             tags=[f"session:{session_key}"] if session_key else None,

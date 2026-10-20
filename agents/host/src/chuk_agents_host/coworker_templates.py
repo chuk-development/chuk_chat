@@ -1,26 +1,26 @@
-"""Coworker templates: the persona a template-made coworker starts with.
+"""Agent templates: the persona a template-made agent starts with.
 
-The app offers ready-made coworkers ("Research assistant", "Inbox triage", ...;
-``lib/services/agents/coworker_templates.dart``). When the user creates one,
+The app offers ready-made agents ("Research assistant", "Inbox triage", ...;
+``lib/services/agents/agent_templates.dart``). When the user creates one,
 ``agent_create`` carries an additive ``template`` object::
 
     {"type": "agent_create", "agent_id": "local:...", "name": "Researcher",
      "template": {"id": "research", "persona": "You are a research assistant. ..."}}
 
-The host writes the persona into the new coworker's ``memory/soul.md``: the
-file the runtime already reads as the coworker's persona (``MemoryStore``
-snapshot, ``chuk_agents_runtime.memory``). Nothing else changes: the coworker
+The host writes the persona into the new agent's ``memory/soul.md``: the
+file the runtime already reads as the agent's persona (``MemoryStore``
+snapshot, ``chuk_agents_runtime.memory``). Nothing else changes: the agent
 gets the same tools and the same seed skills as every other one.
 
-Rules (docs/WIRE_CONTRACT.md, "Coworker templates"):
+Rules (docs/WIRE_CONTRACT.md, "Agent templates"):
 
-- Only a coworker the app registered (``agent_create``) is seeded; the host's
+- Only an agent the app registered (``agent_create``) is seeded; the host's
   own agent never is.
 - A soul.md that is not the packaged default is never overwritten. A repeated
   ``agent_create`` (a re-sent frame, a second phone) therefore cannot undo
-  what the user or the coworker wrote since.
+  what the user or the agent wrote since.
 - A persona that is not a string, is empty, or is longer than
-  :data:`MAX_PERSONA_LEN` is dropped with a log line; the coworker is still
+  :data:`MAX_PERSONA_LEN` is dropped with a log line; the agent is still
   created, plain.
 """
 

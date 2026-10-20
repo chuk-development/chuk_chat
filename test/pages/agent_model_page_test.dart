@@ -5,31 +5,31 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:chuk_chat/pages/coworker_model_page.dart';
+import 'package:chuk_chat/pages/agent_model_page.dart';
 import 'package:chuk_chat/services/agents/agent_control_source.dart';
-import 'package:chuk_chat/services/agents/coworker_model.dart';
+import 'package:chuk_chat/services/agents/agent_model.dart';
 import 'package:chuk_chat/services/chat_model_selection_service.dart';
 import 'package:chuk_chat/services/model_capabilities_service.dart';
 import 'package:chuk_chat/ui/expressive/connected_group.dart';
-import 'package:chuk_chat/widgets/coworker_model_tile.dart';
+import 'package:chuk_chat/widgets/agent_model_tile.dart';
 
 import '../support/kv_cache_test_env.dart';
 
 const String _chat = 'host:alex';
 
-const List<CoworkerCatalogueModel> _catalogue = <CoworkerCatalogueModel>[
-  CoworkerCatalogueModel(
+const List<AgentCatalogueModel> _catalogue = <AgentCatalogueModel>[
+  AgentCatalogueModel(
     id: 'z-ai/glm-5.3-flash',
     name: 'Z.ai: GLM 5.3 Flash',
-    providers: <CoworkerProvider>[
-      CoworkerProvider(
+    providers: <AgentProvider>[
+      AgentProvider(
         slug: 'fireworks/serverless',
         name: 'Fireworks',
         promptPrice: 0.0000002,
         completionPrice: 0.0000008,
         contextLength: 131072,
       ),
-      CoworkerProvider(
+      AgentProvider(
         slug: 'runanywhere/serverless',
         name: 'RunAnywhere',
         promptPrice: 0.0000001,
@@ -38,11 +38,11 @@ const List<CoworkerCatalogueModel> _catalogue = <CoworkerCatalogueModel>[
       ),
     ],
   ),
-  CoworkerCatalogueModel(
+  AgentCatalogueModel(
     id: 'deepseek/deepseek-v4-pro-0813',
     name: 'DeepSeek: V4 Pro',
-    providers: <CoworkerProvider>[
-      CoworkerProvider(
+    providers: <AgentProvider>[
+      AgentProvider(
         slug: 'fireworks/serverless',
         name: 'Fireworks',
         promptPrice: 0.0000005,
@@ -68,9 +68,9 @@ Future<void> _pump(
           size: size,
           textScaler: TextScaler.linear(textScale),
         ),
-        child: CoworkerModelPage(
+        child: AgentModelPage(
           chatId: _chat,
-          coworkerName: 'Alex',
+          agentName: 'Alex',
           controlSource: source,
         ),
       ),
@@ -96,18 +96,18 @@ void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     ChatModelSelectionService.instance.clearMemoryForTesting();
-    CoworkerModel.debugCatalogue = () async => _catalogue;
+    AgentModel.debugCatalogue = () async => _catalogue;
     // The mode store reads the capability cache before it answers. Warm it
     // here, in the real zone: a testWidgets body never drains real disk IO.
     kv = await useTempKvCache();
     await ModelCapabilitiesService.initialize();
   });
   tearDown(() async {
-    CoworkerModel.debugCatalogue = null;
+    AgentModel.debugCatalogue = null;
     await disposeTempKvCache(kv);
   });
 
-  testWidgets('a coworker with no model of its own says it follows the app '
+  testWidgets('an agent with no model of its own says it follows the app '
       'default, and picking a provider gives it its own', (tester) async {
     await _pump(tester);
 
@@ -122,7 +122,7 @@ void main() {
     await _tapVisible(
       tester,
       find.byKey(
-        const ValueKey<String>('coworker_provider_runanywhere/serverless'),
+        const ValueKey<String>('agent_provider_runanywhere/serverless'),
       ),
     );
 
@@ -139,10 +139,10 @@ void main() {
     );
   });
 
-  testWidgets('the reasoning level is the coworker s own', (tester) async {
+  testWidgets('the reasoning level is the agent s own', (tester) async {
     await _pump(tester);
     final Finder group = find.byKey(
-      const ValueKey<String>('coworker_reasoning'),
+      const ValueKey<String>('agent_reasoning'),
     );
     await tester.scrollUntilVisible(
       group,
@@ -171,7 +171,7 @@ void main() {
     await _tapVisible(
       tester,
       find.byKey(
-        const ValueKey<String>('coworker_model_deepseek/deepseek-v4-pro-0813'),
+        const ValueKey<String>('agent_model_deepseek/deepseek-v4-pro-0813'),
       ),
     );
     final own = await ChatModelSelectionService.instance.load(_chat);
@@ -193,7 +193,7 @@ void main() {
 
     await _tapVisible(
       tester,
-      find.byKey(const ValueKey<String>('coworker_model_use_default')),
+      find.byKey(const ValueKey<String>('agent_model_use_default')),
     );
 
     expect(await ChatModelSelectionService.instance.load(_chat), isNull);
@@ -249,7 +249,7 @@ void main() {
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
       await tester.pumpWidget(MaterialApp(home: Scaffold(body: child)));
-      // Past the capped wait (CoworkerModel.loadTimeout).
+      // Past the capped wait (AgentModel.loadTimeout).
       await tester.pump(const Duration(seconds: 9));
       await tester.pump(const Duration(seconds: 9));
       await tester.pump();
@@ -266,16 +266,16 @@ void main() {
           reasoningEffort: 'low',
         ),
       );
-      CoworkerModel.debugCatalogue = () =>
-          Completer<List<CoworkerCatalogueModel>>().future;
+      AgentModel.debugCatalogue = () =>
+          Completer<List<AgentCatalogueModel>>().future;
       await pumpBare(
         tester,
-        const CoworkerModelPage(chatId: _chat, coworkerName: 'Alex'),
+        const AgentModelPage(chatId: _chat, agentName: 'Alex'),
       );
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
       expect(
-        find.byKey(const ValueKey<String>('coworker_model_catalogue_retry')),
+        find.byKey(const ValueKey<String>('agent_model_catalogue_retry')),
         findsOneWidget,
       );
       expect(find.text('Could not load the model list'), findsOneWidget);
@@ -285,31 +285,31 @@ void main() {
     });
 
     testWidgets('Retry loads the list once it is there', (tester) async {
-      CoworkerModel.debugCatalogue = () async =>
+      AgentModel.debugCatalogue = () async =>
           throw StateError('offline');
       await pumpBare(
         tester,
-        const CoworkerModelPage(chatId: _chat, coworkerName: 'Alex'),
+        const AgentModelPage(chatId: _chat, agentName: 'Alex'),
       );
       expect(
-        find.byKey(const ValueKey<String>('coworker_model_catalogue_retry')),
+        find.byKey(const ValueKey<String>('agent_model_catalogue_retry')),
         findsOneWidget,
       );
 
-      CoworkerModel.debugCatalogue = () async => _catalogue;
+      AgentModel.debugCatalogue = () async => _catalogue;
       await tester.tap(find.text('Retry'));
       await tester.pumpAndSettle();
       expect(
-        find.byKey(const ValueKey<String>('coworker_model_catalogue_retry')),
+        find.byKey(const ValueKey<String>('agent_model_catalogue_retry')),
         findsNothing,
       );
       expect(find.text('RunAnywhere'), findsOneWidget);
     });
 
     testWidgets('the model tile never stays on Loading', (tester) async {
-      CoworkerModel.debugCatalogue = () =>
-          Completer<List<CoworkerCatalogueModel>>().future;
-      await pumpBare(tester, const CoworkerModelTile(chatId: _chat));
+      AgentModel.debugCatalogue = () =>
+          Completer<List<AgentCatalogueModel>>().future;
+      await pumpBare(tester, const AgentModelTile(chatId: _chat));
       expect(find.text('Loading…'), findsNothing);
       expect(find.textContaining('App default'), findsOneWidget);
     });

@@ -6,12 +6,12 @@
 /// `agents_shell_state.dart`) and lays it out for the width it is given:
 ///
 /// * **A desktop window** (`agents_desktop_layout.dart`): the roster on the
-///   left is chuk's desktop sidebar with coworkers and rooms in it
+///   left is chuk's desktop sidebar with agents and rooms in it
 ///   ([AgentRosterView]), folding to chuk's mini rail. The thread sits on the
 ///   page under the phone's top bar in desktop form ([AgentsThreadHeader]):
-///   the coworker's face, name and status on the left; Documents, Call and
+///   the agent's face, name and status on the left; Documents, Call and
 ///   Screen on the right, with Details, Copy full chat, Profile and Rename
-///   behind "…". The details pane (a tap on the coworker, or Ctrl+.) and
+///   behind "…". The details pane (a tap on the agent, or Ctrl+.) and
 ///   Control Rooms (from the roster) open on the right, in chuk's artifact
 ///   panel slot, and
 ///   push the thread instead of covering it. A room opens in the centre. The
@@ -77,6 +77,7 @@ import 'package:chuk_chat/model_selector_page.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/models/agents_room.dart';
+import 'package:chuk_chat/pages/agent_host_activity_page.dart';
 import 'package:chuk_chat/pages/desktop_settings_modal.dart';
 import 'package:chuk_chat/pages/settings_page.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_agent_list.dart';
@@ -103,7 +104,6 @@ import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/account_session.dart';
 import 'package:chuk_chat/services/auth_service.dart';
-import 'package:chuk_chat/pages/agent_profile_page.dart';
 import 'package:chuk_chat/pages/agents_install_page.dart';
 import 'package:chuk_chat/services/agents/agent_control_source.dart';
 import 'package:chuk_chat/services/agents/agent_mail_key_handover.dart';
@@ -155,15 +155,15 @@ import 'package:chuk_chat/widgets/room_members_sheet.dart';
 import 'package:chuk_chat/widgets/room_thread_page.dart';
 import 'package:chuk_chat/widgets/room_thread_view.dart';
 // ── templates ──
-import 'package:chuk_chat/services/agents/coworker_templates.dart';
+import 'package:chuk_chat/services/agents/agent_templates.dart';
 import 'package:chuk_chat/services/automations/automations_source.dart';
-import 'package:chuk_chat/widgets/coworker_template_picker.dart';
+import 'package:chuk_chat/widgets/agent_template_picker.dart';
 // ── end templates ──
 
 part 'agents_shell_state.dart';
 part 'agents_desktop_layout.dart';
 
-/// The messenger: coworkers down the left, the selected thread in the middle,
+/// The messenger: agents down the left, the selected thread in the middle,
 /// Control Rooms on the right, the agent's browser as a full-screen route, the
 /// control surface
 /// behind one button (§1, §16). Layout: see the library doc above.
@@ -200,7 +200,7 @@ class MessengerShell extends StatefulWidget {
   /// that drives code-free reconnect. Built by the state when omitted.
   final AgentsPairingStore? pairingStore;
 
-  /// The roster of coworkers. Built by the state when omitted.
+  /// The roster of agents. Built by the state when omitted.
   final AgentRosterSource? rosterSource;
 
   /// The group rooms the user has built. Built by the state when omitted.
@@ -240,7 +240,7 @@ class MessengerShell extends StatefulWidget {
   /// Injectable so a widget test drives it without touching the app-wide store.
   final AgentReadMarks? readMarks;
 
-  /// The coworkers' display profiles (picture, colour, role, brief).
+  /// The agents' display profiles (picture, colour, role, brief).
   final AgentProfileStore? agentProfiles;
 
   /// Builds the cloud-pairing restore supervisor. Null builds the real one.
@@ -319,7 +319,7 @@ class _MessengerShellState extends State<MessengerShell>
   /// notification has no row to grow out of.
   ContainerTransformSource? _openFrom;
 
-  /// Which coworker's row [_openFrom] is a copy of, so the list can hide the
+  /// Which agent's row [_openFrom] is a copy of, so the list can hide the
   /// original while the copy is on screen.
   String? _openFromAgentId;
 
@@ -597,7 +597,7 @@ class _MessengerShellState extends State<MessengerShell>
     setState(() {});
   }
 
-  /// The screen target, tapped while the coworker has no screen. Says what has
+  /// The screen target, tapped while the agent has no screen. Says what has
   /// to happen first instead of leaving the tap unanswered. It replaces
   /// whatever snack is up, because it answers a tap the user just made.
   void _explainNoScreen() {
@@ -607,12 +607,12 @@ class _MessengerShellState extends State<MessengerShell>
     // silent (bead cowork-8ptj). Both beat "no screen yet", which is only the
     // answer when nobody ever said anything about a screen.
     // ── own browser ──
-    // A coworker in the user's own browser never has a screen here.
+    // An agent in the user's own browser never has a screen here.
     if (_browserPresence?.usesUserBrowserIn(_selectedThreadKey) ?? false) {
       AppNotifications.show(
         context,
         AppLocalizations.of(context)?.ubScreenExplain ??
-            'This coworker works in your own browser. There is no screen '
+            'This agent works in your own browser. There is no screen '
                 'to show here.',
         duration: const Duration(seconds: 4),
       );
@@ -620,19 +620,19 @@ class _MessengerShellState extends State<MessengerShell>
     }
     // ── end own browser ──
     final String text = switch (_browserPresence?.parkedBecause ?? '') {
-      'no_browser' => 'The coworker has no page open right now.',
+      'no_browser' => 'The agent has no page open right now.',
       'no_sandbox' =>
-        'This coworker runs without a sandbox, so there is no screen to show.',
-      'no_display' => 'The coworker has no browser screen running.',
+        'This agent runs without a sandbox, so there is no screen to show.',
+      'no_display' => 'The agent has no browser screen running.',
       'vnc_start_failed' =>
-        'The screen server would not start on the coworker\'s machine.',
-      'exec_failed' => 'The coworker\'s machine could not be reached.',
+        'The screen server would not start on the agent\'s machine.',
+      'exec_failed' => 'The agent\'s machine could not be reached.',
       'bridge_failed' => 'The connection to the screen broke.',
       BrowserPresence.staleReason =>
         'No word about the screen for a while, so it is off the table. Ask '
-            'the coworker to open a page again.',
+            'the agent to open a page again.',
       _ =>
-        'No screen yet. Ask the coworker to open a page, then take over '
+        'No screen yet. Ask the agent to open a page, then take over '
             'here.',
     };
     AppNotifications.show(
@@ -685,7 +685,7 @@ class _MessengerShellState extends State<MessengerShell>
   bool get _threadIsOnScreen =>
       _shownMode == AppMode.agents && (!_isPhone || _showThreadOnNarrow);
 
-  /// The screen target's action, or null while the coworker has no screen open.
+  /// The screen target's action, or null while the agent has no screen open.
   /// It sits in the header's video-call slot now, not in the action row.
   @override
   VoidCallback? get _openAgentScreenOrNull =>
@@ -702,6 +702,9 @@ class _MessengerShellState extends State<MessengerShell>
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (context) => Scaffold(
+          // The page runs underneath the floating header; the list reads
+          // the bar's height from the media query.
+          extendBodyBehindAppBar: true,
           appBar: FloatingAppBar(
             title: const Text('Control Rooms'),
             actions: <Widget>[
@@ -739,85 +742,118 @@ class _MessengerShellState extends State<MessengerShell>
     }
   }
 
-  /// A coworker's profile page: the face, the state, the brief, and everything
-  /// the user can set or manage about it. Reached from the chat header pill, the
-  /// inbox row menu and the desktop roster row.
+  /// An agent's settings: the face, the name, the role, and a row for every
+  /// screen that owns something about it. Reached from the chat header pill,
+  /// the inbox row menu and the desktop roster row. Every form factor opens
+  /// the same page (bead chuk_chat-8hz4); the desktop details pane shows the
+  /// same content ([_agentSettings] with `page: false`).
   @override
   void _openAgentProfile(AgentsAgent agent) {
-    if (_isPhone) {
-      final chatKey = agent.id == _selectedAgentId
-          ? _selectedThreadKey
-          : (agent.threads.isEmpty ? null : agent.threads.first.key);
-      void open(Widget page) =>
-          Navigator.of(context)
-              .push<void>(MaterialPageRoute<void>(builder: (_) => page));
-      open(
-        MobileAgentsSettingsPage(
-          agentId: agent.id,
-          chatId: chatKey,
-          source: _roster,
-          profiles: _agentProfiles,
-          onChat: () {
-            if (agent.threads.isNotEmpty) {
-              _select(
-                agent.id,
-                agent.id == _selectedAgentId
-                    ? _selectedThreadKey
-                    : agent.threads.first.key,
-              );
-            }
-          },
-          onEdit: () => AgentProfileEditPage.open(
-            context,
-            agent: _roster.byId(agent.id) ?? agent,
-            source: _roster,
-            profiles: _agentProfiles,
-            onRename: (updated) => _renameAgent(updated.id, updated.name),
-          ),
-          onControls: () => open(
-            Scaffold(
-              appBar: FloatingAppBar(title: const Text('Host & activity')),
-              body: SafeArea(
-                top: false,
-                child: AgentControlPanel(agent: agent, source: _controlSource),
-              ),
-            ),
-          ),
-          onModel: () {
-            if (chatKey != null) _openChatModel(chatKey);
-          },
-          onAutomations: () {
-            if (chatKey == null) return;
-            open(AutomationsPage(sessionKey: chatKey, chatName: agent.name));
-          },
-          onSkills: () => open(const AgentsSkillsSettingsPage()),
-          onConnectors: () => open(const McpConnectorsPage()),
-          onSecrets: () => open(const SecretsSettingsPage()),
-          onRooms: _openRooms,
-          onSettings: _openSettings,
-          onDocuments: chatKey == null
-              ? null
-              : () => _openChatFiles(chatKey, agent.name),
-          onCopyChat: agent.id == _selectedAgentId ? _copyFullChat : null,
-          onBrowser: agent.id == _selectedAgentId && _browserOpen
-              ? _openBrowserView
-              : null,
-          onDelete: () => _deleteAgent(agent.id),
-        ),
-      );
-      return;
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(builder: (_) => _agentSettings(agent)),
+    );
+  }
+
+  /// The one agent settings content. [page] true: the phone-style page with
+  /// the shared transparent header. False: the bare list for the desktop
+  /// details pane, which closes the pane where the page goes back.
+  @override
+  AgentSettingsView _agentSettings(AgentsAgent agent, {bool page = true}) {
+    final String? chatKey = agent.id == _selectedAgentId
+        ? _selectedThreadKey
+        : (agent.threads.isEmpty ? null : agent.threads.first.key);
+    void open(Widget target) => Navigator.of(
+      context,
+    ).push<void>(MaterialPageRoute<void>(builder: (_) => target));
+    void onChat() {
+      if (agent.threads.isNotEmpty) {
+        _select(
+          agent.id,
+          agent.id == _selectedAgentId
+              ? _selectedThreadKey
+              : agent.threads.first.key,
+        );
+      }
     }
-    unawaited(
-      AgentProfilePage.open(
-        context,
+
+    void onEdit() => AgentProfileEditPage.open(
+      context,
+      agent: _roster.byId(agent.id) ?? agent,
+      source: _roster,
+      profiles: _agentProfiles,
+      onRename: (updated) => _renameAgent(updated.id, updated.name),
+    );
+    void onControls() => open(
+      AgentHostActivityPage(
+        agent: _roster.byId(agent.id) ?? agent,
+        source: _controlSource,
+      ),
+    );
+    void onModel() {
+      if (chatKey != null) _openChatModel(chatKey);
+    }
+
+    void onAutomations() {
+      if (chatKey == null) return;
+      open(AutomationsPage(sessionKey: chatKey, chatName: agent.name));
+    }
+
+    void onSkills() => open(const AgentsSkillsSettingsPage());
+    void onConnectors() => open(const McpConnectorsPage());
+    void onSecrets() => open(const SecretsSettingsPage());
+    final VoidCallback? onDocuments = chatKey == null
+        ? null
+        : () => _openChatFiles(chatKey, agent.name);
+    final VoidCallback? onCopyChat = agent.id == _selectedAgentId
+        ? _copyFullChat
+        : null;
+    final VoidCallback? onBrowser = agent.id == _selectedAgentId && _browserOpen
+        ? _openBrowserView
+        : null;
+    void onDelete() => _deleteAgent(agent.id);
+    if (page) {
+      return MobileAgentsSettingsPage(
         agentId: agent.id,
+        chatId: chatKey,
         source: _roster,
         profiles: _agentProfiles,
-        onRename: (AgentsAgent target) => _openAgentRename(target),
-        onDelete: (AgentsAgent target) => _deleteAgent(target.id),
-        onOpenControls: _openControlDrawer,
-        onOpenBrowser: _browserOpen ? _openBrowserView : null,
-      ),
+        onChat: onChat,
+        onEdit: onEdit,
+        onControls: onControls,
+        onModel: onModel,
+        onAutomations: onAutomations,
+        onSkills: onSkills,
+        onConnectors: onConnectors,
+        onSecrets: onSecrets,
+        onRooms: _openRooms,
+        onSettings: _openSettings,
+        onDocuments: onDocuments,
+        onCopyChat: onCopyChat,
+        onBrowser: onBrowser,
+        onDelete: onDelete,
+      );
+    }
+    return AgentSettingsView(
+      key: ValueKey<String>('desk-settings-${agent.id}'),
+      onClose: _deskCloseRightPane,
+      agentId: agent.id,
+      chatId: chatKey,
+      source: _roster,
+      profiles: _agentProfiles,
+      onChat: onChat,
+      onEdit: onEdit,
+      onControls: onControls,
+      onModel: onModel,
+      onAutomations: onAutomations,
+      onSkills: onSkills,
+      onConnectors: onConnectors,
+      onSecrets: onSecrets,
+      onRooms: _openRooms,
+      onSettings: _openSettings,
+      onDocuments: onDocuments,
+      onCopyChat: onCopyChat,
+      onBrowser: onBrowser,
+      onDelete: onDelete,
     );
   }
 
@@ -861,7 +897,7 @@ class _MessengerShellState extends State<MessengerShell>
       MaterialPageRoute<void>(
         builder: (_) => ChatDocumentsPanel(
           sessionKey: chatKey,
-          coworkerName: name,
+          agentName: name,
           controller: _controller.value,
           fullPage: true,
         ),
@@ -913,13 +949,6 @@ class _MessengerShellState extends State<MessengerShell>
     );
   }
 
-  /// The agent controls: the details pane on a desktop window. The phone
-  /// reaches them through the profile page instead.
-  void _openControlDrawer() {
-    if (_isPhone) return;
-    _deskShowRightPane('details');
-  }
-
   /// A room: in the centre pane on a desktop window, a route on a phone.
   @override
   void _openRoom(String roomId) {
@@ -931,7 +960,7 @@ class _MessengerShellState extends State<MessengerShell>
   }
 
   /// The phone layout (docs/MOBILE_GROKBOT_STRUCTURE.md, cowork-c6): the
-  /// coworker list as an inbox, the chat with the floating chrome on top.
+  /// agent list as an inbox, the chat with the floating chrome on top.
   /// Back (chip, system back, edge swipe) flips the same flag [_select] sets.
   ///
   /// Both layers stay in the tree the whole time. The chat area owns the socket
@@ -998,7 +1027,7 @@ class _MessengerShellState extends State<MessengerShell>
               color: surface,
               // Behind the inbox this layer is mounted but not on screen (it
               // owns the socket). Nothing in it may hold the focus then, or
-              // the composer opens the soft keyboard over the coworker list.
+              // the composer opens the soft keyboard over the agent list.
               // Flipping this to true also drops the focus the composer has,
               // so walking back closes the keyboard with the thread.
               child: ExcludeFocus(
@@ -1007,7 +1036,7 @@ class _MessengerShellState extends State<MessengerShell>
                   active: showChat,
                   agent: agent,
                   onBack: () => setState(() => _showThreadOnNarrow = false),
-                  // The pill opens the coworker's profile, like a messenger
+                  // The pill opens the agent's profile, like a messenger
                   // contact header. The controls moved into the profile and the
                   // "more" sheet.
                   onOpenProfile: () => _openAgentProfile(agent),
@@ -1057,7 +1086,7 @@ class _MessengerShellState extends State<MessengerShell>
           selectedThreadKey: _selectedThreadKey,
           onAddAgent: _openOnboarding,
           // A room is a conversation, so it sits in the inbox with the
-          // coworkers. The "+" target asks which of the two to create.
+          // agents. The "+" target asks which of the two to create.
           rooms: _rooms,
           onOpenRoom: _openRoom,
           onCreateRoom: _openRoomCreate,
@@ -1068,7 +1097,7 @@ class _MessengerShellState extends State<MessengerShell>
           readMarks: _readMarks,
           profiles: _agentProfiles,
           accountLabel: null,
-          // With no coworker and no room the inbox says what is going on
+          // With no agent and no room the inbox says what is going on
           // with the computer — never a bare "no agents" while there is no
           // computer to hold one.
           emptyState: _buildStatusPanel(),
@@ -1099,7 +1128,7 @@ class _MessengerShellState extends State<MessengerShell>
             final bool reverse = _push.status == AnimationStatus.reverse;
 
             final Widget chatLayer = agent == null
-                // No coworker selected: the thread view still has to exist, because
+                // No agent selected: the thread view still has to exist, because
                 // it is what builds the transport.
                 ? Offstage(
                     child: ExcludeFocus(child: _buildThread(phone: true)),

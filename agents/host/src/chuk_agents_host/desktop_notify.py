@@ -176,7 +176,7 @@ _labels_provider: Callable[[], RunLabels] | None = None
 
 
 def set_labels_provider(provider: Callable[[], RunLabels] | None) -> None:
-    """Install (or clear) the resolver for the coworker's own name."""
+    """Install (or clear) the resolver for the agent's own name."""
     global _labels_provider
     _labels_provider = provider
 

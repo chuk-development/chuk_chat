@@ -257,7 +257,7 @@ void main() {
     },
   );
 
-  test('the Agents screen names the coworker, not the thread title', () async {
+  test('the Agents screen names the agent, not the thread title', () async {
     final VoiceCallController controller = VoiceCallController.forTesting();
     final List<VoiceCallStartProbe> starts = <VoiceCallStartProbe>[];
     debugOnVoiceCallStart = starts.add;
@@ -274,8 +274,8 @@ void main() {
     expect(starts.single.mode, VoiceCallMode.agents);
     expect(starts.single.agentName, 'Mira');
     // A name handed in by the caller still wins.
-    await binding.startCall(agentName: 'Coworker B');
-    expect(starts.last.agentName, 'Coworker B');
+    await binding.startCall(agentName: 'Agent B');
+    expect(starts.last.agentName, 'Agent B');
     binding.dispose();
   });
 }

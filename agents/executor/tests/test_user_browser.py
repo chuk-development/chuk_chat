@@ -2,7 +2,7 @@
 own browser"; bead chuk_chat-rixw).
 
 A fake add-on dials the broker's bridge socket exactly as
-``tools/agents-browser-bridge`` does, and coworkers dial its client socket, some
+``tools/agents-browser-bridge`` does, and agents dial its client socket, some
 through the real ``agents-extension-mcp`` code. No browser, no network.
 """
 
@@ -187,7 +187,7 @@ def test_one_coworker_holds_the_browser_and_reading_takes_nothing(broker):
     a, b = client(broker, "agent-a"), client(broker, "agent-b")
     assert a.call("browser_navigate", {"url": "https://example.com"}) == {"op": "browser_navigate"}
     assert broker.status()["holder"] == "agent-a"
-    with pytest.raises(RuntimeError, match="in use by another coworker"):
+    with pytest.raises(RuntimeError, match="in use by another agent"):
         b.call("browser_click", {"ref": "e1"})
     # The tab list is a read: it works for anyone and takes nothing.
     b.call("browser_tabs", {"action": "list"})
@@ -208,7 +208,7 @@ def test_after_a_handoff_the_next_coworker_never_works_in_that_tab(broker):
     a.call("browser_snapshot", {})
     a.call("browser_handoff", {"reason": "sign in"})
     assert wait_for(lambda: broker.status()["holder"] is None)
-    a.call("browser_snapshot", {})  # the same coworker carries on in its tab
+    a.call("browser_snapshot", {})  # the same agent carries on in its tab
     a.call("browser_close", {})
     assert wait_for(lambda: broker.status()["holder"] is None)
     b.call("browser_snapshot", {})
@@ -415,7 +415,7 @@ def test_an_idle_holder_that_leaves_is_heard_without_a_command(paths):
         broker.close()
 
 
-# -- what the coworker reads ---------------------------------------------------------
+# -- what the agent reads ---------------------------------------------------------
 
 
 TABS = [
@@ -432,7 +432,7 @@ def test_the_tab_list_reads_like_playwright_and_hides_other_tabs_queries(broker)
         client(broker, "agent-a"),
     )
     text = response["result"]["content"][0]["text"]
-    assert "SECRET" not in text, "a tab the coworker does not hold shows no query"
+    assert "SECRET" not in text, "a tab the agent does not hold shows no query"
     assert "- 41: [Inbox (3)](https://mail.example.org/u/0/)" in text
     assert "- 42: (current) [Pull (#7)](https://github.com/acme/app/pull/7?diff=split)" in text
     # The host's site reader understands it unchanged.
@@ -600,7 +600,7 @@ def test_the_mcp_server_picks_the_broker_when_the_host_runs(broker, monkeypatch)
 
 
 def test_under_a_host_the_mcp_server_never_takes_the_bridge_itself(paths, monkeypatch):
-    """No broker socket yet (the host is restarting): a coworker's server must
+    """No broker socket yet (the host is restarting): an agent's server must
     not bind the add-on's socket and so go around the broker. It fails each
     call until the broker is there, then works without a restart."""
     bridge_path, broker_path = paths
@@ -674,7 +674,7 @@ def test_chrome_bridge_broker_and_mcp_server_as_real_processes(broker):
         server.stdin.write(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
                                        "params": {"name": "browser_snapshot", "arguments": {}}}) + "\n")
         server.stdin.flush()
-        # The coworker's name for the strip comes first, through the bridge.
+        # The agent's name for the strip comes first, through the bridge.
         assert chrome_read() == {"type": "browser_holder", "name": ""}
         command = chrome_read()
         assert command["type"] == "browser_cmd" and command["op"] == "browser_snapshot"

@@ -1,4 +1,4 @@
-"""The opt-in Telegram channel per coworker (bead chuk_chat-02s5).
+"""The opt-in Telegram channel per agent (bead chuk_chat-02s5).
 
 Every test runs against :mod:`fake_telegram`, a Bot API on loopback. Nothing
 leaves the machine.

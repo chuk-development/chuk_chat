@@ -44,21 +44,31 @@ class VoiceAgentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
+    final bool weather = card.kind == 'weather';
     return Container(
       decoration: BoxDecoration(
-        color: fill ?? scheme.surfaceContainerHighest,
+        color: weather
+            ? Colors.transparent
+            : fill ?? scheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(16),
       ),
       clipBehavior: Clip.antiAlias,
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          _Header(card: card, icon: _icons[card.kind] ?? HugeIcons.sparkles),
-          _body(),
-        ],
-      ),
+      padding: weather
+          ? EdgeInsets.zero
+          : const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      child: weather
+          ? _WeatherBody(card: card)
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                _Header(
+                  card: card,
+                  icon: _icons[card.kind] ?? HugeIcons.sparkles,
+                ),
+                _body(),
+              ],
+            ),
     );
   }
 
@@ -284,150 +294,411 @@ class _WeatherBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    final ColorScheme scheme = theme.colorScheme;
+    final int code = _codeOf(card.data['code'] ?? card.data['icon']);
+    final bool isDay = card.data['is_day'] != false;
+    final List<Color> wash = _washFor(code, isDay);
     final double? temp = card.number('temperature');
+    final double? feels = card.number('apparent');
+    final String condition = card.text('condition') ?? '';
+    final String location = <String>[
+      card.title,
+      if ((card.subtitle ?? '').isNotEmpty) card.subtitle!,
+    ].join(', ');
     final List<Map<String, dynamic>> hourly = card.list('hourly');
     final List<Map<String, dynamic>> daily = card.list('daily');
-    final List<String> details = <String>[
-      if (card.number('apparent') != null)
-        'feels ${card.number('apparent')!.round()}°',
-      if (card.number('humidity') != null)
-        '${card.number('humidity')!.round()} % humidity',
-      if (card.number('wind') != null) '${card.number('wind')!.round()} km/h',
-    ];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: ColoredBox(
+        color: wash.first,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: wash,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    if (location.isNotEmpty)
+                      Row(
+                        children: <Widget>[
+                          HugeIcon(
+                            HugeIcons.mapPin,
+                            size: 14,
+                            color: Colors.white.withValues(alpha: 0.75),
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              location,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.8),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: <Widget>[
+                        HugeIcon(_iconFor(code), size: 56, color: Colors.white),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(
+                                temp == null ? '–' : '${temp.round()}°',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 44,
+                                  fontWeight: FontWeight.w300,
+                                  height: 1,
+                                ),
+                              ),
+                              if (condition.isNotEmpty)
+                                Text(
+                                  condition,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              if (feels != null)
+                                Text(
+                                  'Feels like ${feels.round()}°',
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.7),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 16,
+                      runSpacing: 8,
+                      children: <Widget>[
+                        if (card.number('humidity') != null)
+                          _WeatherStat(
+                            icon: HugeIcons.cloudLittleRain,
+                            value: '${card.number('humidity')!.round()}%',
+                            label: 'Humidity',
+                          ),
+                        if (card.number('wind') != null)
+                          _WeatherStat(
+                            icon: HugeIcons.cloud,
+                            value: '${card.number('wind')!.round()} km/h',
+                            label: 'Wind',
+                          ),
+                        if (card.number('precipitation') != null)
+                          _WeatherStat(
+                            icon: HugeIcons.cloudAngledRain,
+                            value: '${_fmt(card.number('precipitation')!)} mm',
+                            label: 'Precip',
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              if (hourly.isNotEmpty)
+                ColoredBox(
+                  color: Colors.black.withValues(alpha: 0.12),
+                  child: SizedBox(
+                    height: 92,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      itemCount: hourly.length,
+                      separatorBuilder: (_, _) => const SizedBox(width: 14),
+                      itemBuilder: (_, int i) => _WeatherHour(entry: hourly[i]),
+                    ),
+                  ),
+                ),
+              if (daily.isNotEmpty)
+                ColoredBox(
+                  color: Colors.black.withValues(alpha: 0.16),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 6, 14, 10),
+                    child: Column(
+                      children: <Widget>[
+                        for (final Map<String, dynamic> d in daily)
+                          _WeatherDay(entry: d),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static String _fmt(double v) =>
+      v == v.roundToDouble() ? '${v.round()}' : v.toStringAsFixed(1);
+}
+
+class _WeatherStat extends StatelessWidget {
+  const _WeatherStat({
+    required this.icon,
+    required this.value,
+    required this.label,
+  });
+
+  final HugeIconData icon;
+  final String value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        Row(
+        HugeIcon(icon, size: 14, color: Colors.white.withValues(alpha: 0.75)),
+        const SizedBox(width: 6),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Text(
-              temp == null ? '–' : '${temp.round()}°',
-              style: theme.textTheme.displaySmall?.copyWith(
-                fontWeight: FontWeight.w300,
-                height: 1,
-                color: scheme.onSurface,
+              value,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  if (card.text('condition') != null)
-                    Text(
-                      card.text('condition')!,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: scheme.onSurface,
-                      ),
-                    ),
-                  if (details.isNotEmpty)
-                    Text(
-                      details.join(' · '),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                ],
+            Text(
+              label,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.7),
+                fontSize: 10,
               ),
             ),
           ],
         ),
-        if (hourly.isNotEmpty) ...<Widget>[
-          const SizedBox(height: 10),
-          // A Row in a horizontal scroll takes its children's height, so
-          // a larger text scale grows the strip instead of clipping it.
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: <Widget>[
-                for (int i = 0; i < hourly.length; i++) ...<Widget>[
-                  if (i > 0) const SizedBox(width: 14),
-                  _HourColumn(entry: hourly[i]),
-                ],
-              ],
-            ),
-          ),
-        ],
-        if (daily.isNotEmpty) ...<Widget>[
-          const SizedBox(height: 6),
-          for (final Map<String, dynamic> d in daily)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Row(
-                children: <Widget>[
-                  Expanded(
-                    child: Text(
-                      <String>[
-                        _day(d['date']),
-                        '${d['condition'] ?? ''}',
-                      ].where((String s) => s.isNotEmpty).join(' · '),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    '${_round(d['min'])}° / ${_round(d['max'])}°',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: scheme.onSurface,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-        ],
       ],
     );
   }
-
-  static String _round(Object? v) => v is num ? '${v.round()}' : '–';
-
-  static const List<String> _weekdays = <String>[
-    'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', //
-  ];
-
-  /// `2026-09-29` -> "Tue"; anything else as it came.
-  static String _day(Object? raw) {
-    if (raw == null) return '';
-    final DateTime? d = DateTime.tryParse('$raw');
-    return d == null ? '$raw' : _weekdays[d.weekday - 1];
-  }
 }
 
-class _HourColumn extends StatelessWidget {
-  const _HourColumn({required this.entry});
+class _WeatherHour extends StatelessWidget {
+  const _WeatherHour({required this.entry});
 
   final Map<String, dynamic> entry;
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    final ColorScheme scheme = theme.colorScheme;
-    final DateTime? t = DateTime.tryParse('${entry['time']}');
+    final DateTime? t = DateTime.tryParse('${entry['time'] ?? ''}');
     final Object? rawTemp = entry['temp'];
+    final int code = _codeOf(entry['code'] ?? entry['icon']);
+    final Object? precip = entry['precip_prob'];
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
         Text(
           t == null ? '' : t.hour.toString().padLeft(2, '0'),
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: scheme.onSurfaceVariant,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.7),
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            height: 1.1,
           ),
         ),
+        const SizedBox(height: 2),
+        HugeIcon(_iconFor(code), size: 18, color: Colors.white),
+        const SizedBox(height: 2),
         Text(
           rawTemp is num ? '${rawTemp.round()}°' : '–',
-          style: theme.textTheme.bodySmall?.copyWith(
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 12,
             fontWeight: FontWeight.w600,
-            color: scheme.onSurface,
+            height: 1.1,
           ),
         ),
+        if (precip is num && precip > 0)
+          Text(
+            '${precip.round()}%',
+            style: const TextStyle(
+              color: Color(0xFFB3E5FC),
+              fontSize: 10,
+              height: 1.1,
+            ),
+          ),
       ],
     );
   }
+}
+
+class _WeatherDay extends StatelessWidget {
+  const _WeatherDay({required this.entry});
+
+  final Map<String, dynamic> entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final int code = _codeOf(entry['code'] ?? entry['icon']);
+    final Object? min = entry['min'] ?? entry['temp_min'];
+    final Object? max = entry['max'] ?? entry['temp_max'];
+    final Object? precip = entry['precip_prob'];
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: <Widget>[
+          SizedBox(
+            width: 72,
+            child: Text(
+              _dayLabel(entry['date']),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          HugeIcon(_iconFor(code), size: 18, color: Colors.white),
+          const SizedBox(width: 8),
+          Expanded(
+            child: precip is num && precip > 0
+                ? Text(
+                    '${precip.round()}%',
+                    style: const TextStyle(
+                      color: Color(0xFFB3E5FC),
+                      fontSize: 11,
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          ),
+          Text(
+            min is num ? '${min.round()}°' : '',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.7),
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            max is num ? '${max.round()}°' : '',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+int _codeOf(Object? raw) {
+  if (raw is num) return raw.toInt();
+  switch ('$raw') {
+    case 'clear':
+    case 'clear_night':
+      return 0;
+    case 'partly_cloudy':
+    case 'partly_cloudy_night':
+      return 2;
+    case 'overcast':
+    case 'cloudy':
+      return 3;
+    case 'fog':
+      return 45;
+    case 'drizzle':
+      return 51;
+    case 'rain':
+    case 'showers':
+    case 'heavy_showers':
+      return 61;
+    case 'snow':
+    case 'heavy_snow':
+    case 'snow_showers':
+      return 71;
+    case 'thunderstorm':
+    case 'thunderstorm_hail':
+      return 95;
+    default:
+      return 3;
+  }
+}
+
+HugeIconData _iconFor(int code) {
+  if (code == 0 || code == 1) return HugeIcons.sun01;
+  if (code == 2) return HugeIcons.sunCloud01;
+  if (code == 45 || code == 48) return HugeIcons.cloudFog;
+  if (code >= 71 && code <= 86) return HugeIcons.cloudSnow;
+  if (code >= 95) return HugeIcons.cloudAngledZap;
+  if (code >= 51) return HugeIcons.cloudAngledRain;
+  return HugeIcons.cloud;
+}
+
+List<Color> _washFor(int code, bool isDay) {
+  if (code >= 95) {
+    return const <Color>[Color(0xFF2C3E50), Color(0xFF1A1A2E)];
+  }
+  if ((code >= 71 && code <= 77) || code == 85 || code == 86) {
+    return const <Color>[Color(0xFF4A6572), Color(0xFF232F34)];
+  }
+  if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) {
+    return const <Color>[Color(0xFF355C7D), Color(0xFF2C3E50)];
+  }
+  if (code == 45 || code == 48) {
+    return const <Color>[Color(0xFF3E4247), Color(0xFF2A2D33)];
+  }
+  if (code == 3) {
+    return const <Color>[Color(0xFF3C4A5E), Color(0xFF253142)];
+  }
+  if (code == 1 || code == 2) {
+    return isDay
+        ? const <Color>[Color(0xFF5A9BD4), Color(0xFF81B7DE)]
+        : const <Color>[Color(0xFF3A5683), Color(0xFF1E3A5F)];
+  }
+  return isDay
+      ? const <Color>[Color(0xFF4A90E2), Color(0xFF7FB3E7)]
+      : const <Color>[Color(0xFF1E3A5F), Color(0xFF0F1E2F)];
+}
+
+String _dayLabel(Object? raw) {
+  final DateTime? parsed = DateTime.tryParse('$raw');
+  if (parsed == null) return raw?.toString() ?? '';
+  const List<String> days = <String>[
+    'Mon',
+    'Tue',
+    'Wed',
+    'Thu',
+    'Fri',
+    'Sat',
+    'Sun',
+  ];
+  final DateTime now = DateTime.now();
+  final DateTime today = DateTime(now.year, now.month, now.day);
+  final DateTime target = DateTime(parsed.year, parsed.month, parsed.day);
+  final int diff = target.difference(today).inDays;
+  if (diff == 0) return 'Today';
+  if (diff == 1) return 'Tomorrow';
+  return days[(parsed.weekday - 1) % 7];
 }
 
 class _SearchBody extends StatelessWidget {

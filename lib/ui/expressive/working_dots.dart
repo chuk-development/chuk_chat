@@ -2,7 +2,7 @@
 /// is in flight.
 ///
 /// In the reference messenger this is the "typing" indicator. Here it says
-/// something the app can actually observe: the coworker has a run open
+/// something the app can actually observe: the agent has a run open
 /// ([AgentsAgent.running]). Nothing pretends to know that it is "typing".
 library;
 

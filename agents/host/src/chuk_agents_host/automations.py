@@ -443,7 +443,7 @@ class AutomationManager:
         self._now = clock
         self._allow_private_urls = allow_private_urls
         self._url_fetcher: UrlFetcher = url_fetcher or self._default_fetch
-        # The coworker's ``network`` permission: off = no URL is fetched for it.
+        # The agent's ``network`` permission: off = no URL is fetched for it.
         self._network_allowed = network_allowed or (lambda: True)
         # ``run_id -> {automation_id, changed, summary, at}``: what an
         # ``on_change`` run reported through ``automation_result``, until the
@@ -1048,7 +1048,7 @@ class AutomationManager:
         except Exception:  # noqa: BLE001 — a broken probe means "not allowed"
             allowed = False
         if not allowed:
-            self.store.update(row["id"], last_error="network is off for this coworker; the page is not checked")
+            self.store.update(row["id"], last_error="network is off for this agent; the page is not checked")
             return False
         state = self.store.url_state(row["id"])
         url = str(spec.get("url") or "")

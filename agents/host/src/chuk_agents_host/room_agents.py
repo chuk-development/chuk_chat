@@ -2,7 +2,7 @@
 
 ``RoomBinding`` knows *which* member is reachable; this is what makes one
 reachable. It is the piece ``docs/ROOMS_GOING_LIVE.md`` calls the multi-agent
-host: for every coworker that is about to speak in a room, start **its own**
+host: for every agent that is about to speak in a room, start **its own**
 :class:`~chuk_agents_executor.Executor` on **its own** loopback link, wrap a
 :class:`~chuk_agents_executor.ControllerSession` around the other end, and register
 that as the member's task sender.
@@ -19,7 +19,7 @@ What a member costs
 -------------------
 A pooled member is one Python thread, one sealed in-process link, and one SQLite
 file. It is **not** a second sandbox: the environment comes from the host's own
-per-agent factory, so a coworker keeps the one box it already had (§6, bead
+per-agent factory, so an agent keeps the one box it already had (§6, bead
 cowork-jo2) whether the app drives it or a room does. Members are started **on
 demand** — when a room task names them — and kept warm after that, so a six-member
 room that nobody opens costs nothing at all.
@@ -73,7 +73,7 @@ KEY_VERSION = 1
 
 #: Returns the model wiring to build one member's executor with, or ``(None, None)``
 #: while the host has not provisioned an account yet. It takes the agent id, so a
-#: host that one day gives a coworker its own model can answer per member — and a
+#: host that one day gives an agent its own model can answer per member — and a
 #: test can script a different model per member.
 ModelWiringProvider = Callable[
     [str], "tuple[ModelFactory | None, ModelSelect | None]"
@@ -156,7 +156,7 @@ class RoomAgentPool:
 
     Thread-safe: rooms run on a party thread while ``shutdown`` may arrive on the
     main one, so the member table is guarded. Starting a member is done inside
-    the lock on purpose — two rooms naming the same coworker at once must not
+    the lock on purpose — two rooms naming the same agent at once must not
     race two executors onto one SQLite file.
     """
 
@@ -298,7 +298,7 @@ class RoomAgentPool:
             environment=environment,
             # Deliberately no ``environment_factory``: this executor serves ONE
             # agent, and its session keys are room ids. A factory here would hand
-            # every room its own box and undo "one coworker, one sandbox".
+            # every room its own box and undo "one agent, one sandbox".
             db_path=str(self._db_dir / f"{_db_name(agent_id)}.db"),
             model_factory=model_factory,
             model_select=model_select,

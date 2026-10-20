@@ -137,7 +137,7 @@ def test_with_no_app_attached_the_call_still_rings_and_the_model_gets_a_hint():
     assert "no app is connected right now, the user may miss it" in result
     [call] = service.registry.ringing()
     assert call.state == STATE_RINGING
-    # The desktop nudge names the coworker and never the reason.
+    # The desktop nudge names the agent and never the reason.
     assert toasts == [("Laptop Bot is calling", "Open the Chuk app to answer.")]
 
 
@@ -430,8 +430,8 @@ def test_the_host_names_the_caller_as_the_user_named_the_coworker(tmp_path):
     host, _party = _host(tmp_path, attached=True)
     host._coworker_names.upsert("local:desk:1:7", "Crypto Desk", created_by_app=True)
     assert host._call_agent("local:desk:1:7") == ("local:desk:1:7", "Crypto Desk")
-    # Any other key is this host's own coworker; unnamed, it is the generic
+    # Any other key is this host's own agent; unnamed, it is the generic
     # label and never the roster codename ("t" here).
-    assert host._call_agent("default") == ("host:cowork-host", "Your coworker")
+    assert host._call_agent("default") == ("host:cowork-host", "Your agent")
     host._coworker_names.upsert("host:cowork-host", "Laptop Bot", created_by_app=False)
     assert host._call_agent("thread-1") == ("host:cowork-host", "Laptop Bot")

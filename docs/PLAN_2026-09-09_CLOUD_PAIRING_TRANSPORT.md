@@ -58,7 +58,7 @@ The relay stays blind — it routes an opaque `payload` it can never read.
 
 Neither client speaks the endpoint above. Both still speak the *local blind
 relay* protocol (`{"type":"join","channel":"<id>","role":"controller"}`) against
-`ws://127.0.0.1:8787`. That is the only reason a phone sees no coworker: the
+`ws://127.0.0.1:8787`. That is the only reason a phone sees no agent: the
 synced trust record faithfully carries a loopback URL the phone cannot route.
 
 And a bootstrap problem: the relay requires a Supabase JWT from **both** sides,
@@ -127,4 +127,4 @@ cloud relay is the acceptance test; the VNC stream follows.
 
 Phone with mobile data only (no shared network), host on this machine:
 sign in, scan the QR once, chat works. Kill the app, reinstall it, sign in — the
-coworker is still there and no code is asked for.
+agent is still there and no code is asked for.

@@ -28,7 +28,7 @@ void main() {
   )!;
 
   group('incomingCallkitParams', () {
-    test('rings with the call id, the coworker name and the time left', () {
+    test('rings with the call id, the agent name and the time left', () {
       final CallKitParams p = incomingCallkitParams(callWith(), now)!;
       expect(p.id, '3f2a9c1d0b7e4a55');
       expect(p.nameCaller, 'Crypto Desk');

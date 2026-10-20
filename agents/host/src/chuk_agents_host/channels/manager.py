@@ -1,8 +1,8 @@
-"""The host's channel manager: one Telegram channel per opted-in coworker.
+"""The host's channel manager: one Telegram channel per opted-in agent.
 
 The host builds one :class:`ChannelManager` at start. It starts a
 :class:`~chuk_agents_host.channels.telegram.TelegramChannel` for every
-coworker whose record says ``enabled`` and stops them all with the host.
+agent whose record says ``enabled`` and stops them all with the host.
 
 The app drives it with two sealed frames, on the same hook as the
 ``agent_permissions_*`` frames:
@@ -175,7 +175,7 @@ def read_run_files(db_path: str, summary: dict) -> list[dict]:
 
 
 class ChannelManager:
-    """Every coworker's channel on this host."""
+    """Every agent's channel on this host."""
 
     def __init__(
         self,
@@ -183,7 +183,7 @@ class ChannelManager:
         store: ChannelStore,
         submit: Callable[[str, str, dict], str | None],
         key_for: Callable[[str], str | None],
-        label_for: Callable[[str], str] = lambda _key: "your coworker",
+        label_for: Callable[[str], str] = lambda _key: "your agent",
         scrub: Callable[[str], str] = lambda text: text,
         db_path: str | None = None,
         send_payload: Callable[[dict], object] = lambda _payload: False,
@@ -208,7 +208,7 @@ class ChannelManager:
     # -- lifecycle ------------------------------------------------------------
 
     def start(self) -> None:
-        """Start the channel of every coworker that has one turned on."""
+        """Start the channel of every agent that has one turned on."""
         if not self._settings.telegram_allowed:
             if self._store.all(KIND):
                 self._log("[channels] telegram is forbidden on this host; no poller started")
@@ -254,7 +254,7 @@ class ChannelManager:
                 return
             self._channels[key] = channel
         channel.start()
-        self._log("[channels] telegram poller started for one coworker")
+        self._log("[channels] telegram poller started for one agent")
 
     def _stop_one(self, key: str) -> None:
         with self._lock:

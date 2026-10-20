@@ -1,4 +1,4 @@
-/// A group-room conversation (§16.1): the user's message, then each coworker's
+/// A group-room conversation (§16.1): the user's message, then each agent's
 /// reply, with a system line saying why the exchange ended.
 ///
 /// A room is a chat, so it is drawn with the chat's own message widgets —
@@ -204,7 +204,7 @@ class RoomThreadView extends StatelessWidget {
     );
   }
 
-  /// One coworker's turn: the chat's coworker bubble, with the member's face
+  /// One agent's turn: the chat's agent bubble, with the member's face
   /// in the gutter and its handle over the run.
   Widget _turn(BuildContext context, int i, double lane) {
     final AgentsRoomTurn turn = turns[i];
@@ -212,7 +212,7 @@ class RoomThreadView extends StatelessWidget {
     final bool endsRun = _endsRun(i);
     final ThemeData theme = Theme.of(context);
 
-    // The coworker's own accent names it, the same colour the roster and the
+    // The agent's own accent names it, the same colour the roster and the
     // one-to-one thread give it.
     final Color accent = agentAccent(context, turn.agentId);
 

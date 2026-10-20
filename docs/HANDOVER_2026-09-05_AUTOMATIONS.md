@@ -148,7 +148,7 @@ the agent workspace afterwards.
   payload. One line in `AutomationManager._fire_row` once the vault exposes
   a text scrubber to the host.
 - The Automations page groups by `session_key` and labels the default
-  thread "Default coworker"; with several agents on one host the label
+  thread "Default agent"; with several agents on one host the label
   should be the agent name (the roster is not on the app side today).
 - `at` specs are stored in UTC ISO; the model writes local time. Fine on one
   machine; a host in another zone than the phone shows the UTC form in

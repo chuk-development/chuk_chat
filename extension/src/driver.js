@@ -20,18 +20,18 @@ const GROUP_TITLE = "Agents";
 
 export class Driver {
   constructor() {
-    /** The tab this coworker drives right now. */
+    /** The tab this agent drives right now. */
     this.tabId = null;
     this.attached = false;
     this.engine = hasDebugger ? "cdp" : "synthetic";
     this.leases = new Leases();
     this.injected = new Set(); // tabIds that already carry the snapshot script
-    /** The coworker that holds the browser, as the host named it. */
+    /** The agent that holds the browser, as the host named it. */
     this.coworker = "";
   }
 
   /**
-   * The host's `browser_holder`: a coworker took the browser. The strip on
+   * The host's `browser_holder`: an agent took the browser. The strip on
    * the driven tab says its name from now on.
    */
   async setCoworker(name) {
@@ -83,7 +83,7 @@ export class Driver {
 
   /**
    * Put the page scripts into a tab, once, and only into a tab under lease.
-   * Nothing is declared in the manifest any more, so a tab the coworker was
+   * Nothing is declared in the manifest any more, so a tab the agent was
    * never given carries no Agents code at all.
    */
   async ensureInjected(tabId) {
@@ -100,13 +100,13 @@ export class Driver {
       });
       this.injected.add(tabId);
     }
-    // The strip shows on the tab the coworker drives, on every page it loads.
+    // The strip shows on the tab the agent drives, on every page it loads.
     if (tabId === this.tabId) await this.mark(this.leases.get(tabId)?.state ?? STATE.ACTIVE);
   }
 
   /**
    * Let go of the tab: detach, take the strip down, drop the lease. A tab the
-   * coworker opened itself stays open as it is; a tab the user handed over is
+   * agent opened itself stays open as it is; a tab the user handed over is
    * the user's again. Returns the tab id it let go of, or null.
    */
   async release() {

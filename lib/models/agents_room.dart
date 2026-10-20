@@ -1,4 +1,4 @@
-/// A group room, app-side (§16.1). Several coworkers in one conversation.
+/// A group room, app-side (§16.1). Several agents in one conversation.
 ///
 /// This mirrors the manager's `GroupRoom`: an ordered set of members, with no
 /// ceiling on how many. The app holds only what it needs to show and to build
@@ -10,7 +10,7 @@ library;
 
 import 'package:flutter/foundation.dart';
 
-/// One coworker in a room: the agent id the app tracks and the handle it is
+/// One agent in a room: the agent id the app tracks and the handle it is
 /// mentioned by.
 @immutable
 class AgentsRoomMember {
@@ -45,10 +45,10 @@ class AgentsRoom {
   final String name;
   final List<AgentsRoomMember> members;
 
-  /// Whether the coworkers may pull each other in by writing `@handle`
+  /// Whether the agents may pull each other in by writing `@handle`
   /// (`agent_to_agent`, WIRE_CONTRACT). True is what a room has always done, so
   /// an old room and an old host both keep behaving exactly as before; false
-  /// means every member answers the user and nobody answers a coworker.
+  /// means every member answers the user and nobody answers an agent.
   final bool agentToAgent;
 
   /// The members' handles, in room order — the "everyone speaks" sequence.
@@ -125,8 +125,8 @@ enum AgentsRoomStop {
   /// the host). The app can re-create it and try again.
   noSuchRoom,
 
-  /// The room's `agent_to_agent` policy is off, so a coworker's @mention of
-  /// another coworker was not followed — the exchange ends after everyone has
+  /// The room's `agent_to_agent` policy is off, so an agent's @mention of
+  /// another agent was not followed — the exchange ends after everyone has
   /// answered the user.
   agentToAgentOff;
 
@@ -148,9 +148,9 @@ enum AgentsRoomStop {
     AgentsRoomStop.roundsExhausted => 'Reached the round limit',
     AgentsRoomStop.messagesExhausted => 'Reached the message limit',
     AgentsRoomStop.stopped => 'Stopped',
-    AgentsRoomStop.turnFailed => 'A coworker\'s turn failed',
+    AgentsRoomStop.turnFailed => 'An agent\'s turn failed',
     AgentsRoomStop.noSuchRoom => 'This room is not on your host yet',
     AgentsRoomStop.agentToAgentOff =>
-      'Coworkers do not reply to each other here',
+      'Agents do not reply to each other here',
   };
 }

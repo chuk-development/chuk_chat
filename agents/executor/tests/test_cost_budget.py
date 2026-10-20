@@ -62,7 +62,7 @@ class _Bridge:
         self.sent: list[dict] = []
 
     def agent_key(self, session_key: str) -> str:
-        # Two threads of one coworker: "amber" and "amber/side".
+        # Two threads of one agent: "amber" and "amber/side".
         return session_key.split("/")[0]
 
     def budget_weekly(self, session_key: str) -> float:
@@ -188,8 +188,8 @@ def test_a_housekeeping_call_is_its_own_line(tmp_path):
 def test_status_reports_today_week_and_the_budget_per_coworker(tmp_path):
     bridge = _Bridge(budget=1.0)
     executor, controller, _ = _build(tmp_path, budget=bridge)
-    _spend(tmp_path, "amber/side", 0.1)  # another thread of the same coworker
-    _spend(tmp_path, "blue", 5.0)  # another coworker: not counted
+    _spend(tmp_path, "amber/side", 0.1)  # another thread of the same agent
+    _spend(tmp_path, "blue", 5.0)  # another agent: not counted
     executor.start()
     try:
         controller.collect(controller.send_task("hi", session_key="amber"), timeout=20.0)
@@ -244,7 +244,7 @@ def test_crossing_80_percent_warns_once(tmp_path):
 
 def test_a_side_thread_warns_with_the_coworker_as_agent_id(tmp_path):
     # chuk_chat-0b7i: the frame named the thread ("amber/side") as agent_id,
-    # but the budget and the spend belong to the coworker ("amber").
+    # but the budget and the spend belong to the agent ("amber").
     bridge = _Bridge(budget=0.01)
     _spend(tmp_path, "amber", 0.0075)
     executor, controller, _ = _build(tmp_path, budget=bridge)

@@ -57,7 +57,7 @@ class ChukChart extends StatefulWidget {
 
   final ChartSpec spec;
 
-  /// Overrides the scheme's primary — an open thread passes the coworker's
+  /// Overrides the scheme's primary — an open thread passes the agent's
   /// colour so a chart carries the same identity the bubbles do.
   final Color? accentColor;
 

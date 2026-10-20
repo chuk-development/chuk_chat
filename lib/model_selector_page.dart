@@ -1,7 +1,7 @@
 // Merge note: upstream's screen is the base — its ApiAvailabilityPolling mixin,
 // NiceSnackBar and FloatingAppBar chrome all stay. A `chatId` (messenger_shell
-// passes the coworker's thread key) turns the page into that coworker's own
-// model page, `CoworkerModelPage`; unscoped it is the app default.
+// passes the agent's thread key) turns the page into that agent's own
+// model page, `AgentModelPage`; unscoped it is the app default.
 // lib/model_selector_page.dart
 import 'dart:async';
 import 'dart:convert';
@@ -35,7 +35,7 @@ import 'package:chuk_chat/widgets/model_selection_dropdown.dart'
 import 'package:chuk_chat/widgets/nice_snackbar.dart';
 import 'package:chuk_chat/widgets/api_availability_polling.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
-import 'package:chuk_chat/pages/coworker_model_page.dart';
+import 'package:chuk_chat/pages/agent_model_page.dart';
 import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/widgets/searchable_picker.dart';
 
@@ -163,8 +163,8 @@ enum _ModelListFilter {
 class ModelSelectorPage extends StatefulWidget {
   const ModelSelectorPage({super.key, this.chatId});
 
-  /// When set, the page is that coworker's own model page
-  /// ([CoworkerModelPage]): one place for a coworker's model, provider and
+  /// When set, the page is that agent's own model page
+  /// ([AgentModelPage]): one place for an agent's model, provider and
   /// reasoning level, whoever opens it. Unscoped, this is the app default —
   /// the Fast / Thinking modes — plus the account-wide catalogue.
   final String? chatId;
@@ -220,7 +220,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
         _searchQuery = _searchController.text.toLowerCase();
       });
     });
-    // A coworker's page loads its own data.
+    // An agent's page loads its own data.
     if (_chatScoped) return;
     _refreshSubscription = ModelSelectionEventBus().refreshStream.listen((_) {
       if (!mounted) return;
@@ -760,7 +760,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
 
   @override
   Widget build(BuildContext context) {
-    if (_chatScoped) return CoworkerModelPage(chatId: widget.chatId!);
+    if (_chatScoped) return AgentModelPage(chatId: widget.chatId!);
     final l = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
@@ -889,7 +889,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
                         ),
                       );
                     // In the Agents build these two modes are also what
-                    // every coworker without a model of its own runs on.
+                    // every agent without a model of its own runs on.
                     if (!agentsChatCore) return panel;
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,

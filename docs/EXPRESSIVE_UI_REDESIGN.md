@@ -12,23 +12,23 @@ relay, the roster or a chat; every screen builds on it.
 
 | File | What it is |
 | --- | --- |
-| `shapes.dart` | `CookieShape` + `expressiveShapeFor(key)` — the scalloped blob silhouettes, picked from an identity key (the agent id), so a coworker keeps one shape on every screen. |
+| `shapes.dart` | `CookieShape` + `expressiveShapeFor(key)` — the scalloped blob silhouettes, picked from an identity key (the agent id), so an agent keeps one shape on every screen. |
 | `motion.dart` | `MorphTap` (spring + shape morph on press), `ExpressiveButton`, `ExpressiveIconButton` (with `parked` for a feature that does not exist yet), `ExpressiveLoader`. |
 | `staggered.dart` | `StaggeredItem` — the cascading list entrance. One controller with an `Interval`, never a `Future.delayed` (a pending timer fails a widget test). |
 | `connected_group.dart` | The connected filter group (All / Unread) with the pill/square morph. |
 | `feedback.dart` | `pillToast`, `expressiveSheet`, `SheetAction`. |
 | `bubble_shape.dart` | `BubblePosition`, `bubbleRadius` — one connected group per run of same-sender messages. |
 | `message_stamp.dart` | `MessageStamp`, `queueMarkFor` — the time in a bubble's corner plus the queue mark. No delivery ticks: see below. |
-| `bubble_kind.dart` | The coworker bubble's colour by what the turn IS: answer / work / delivery / problem. |
+| `bubble_kind.dart` | The agent bubble's colour by what the turn IS: answer / work / delivery / problem. |
 | `agent_face.dart` | `AgentFace` — the blob face with the picture, the accent and the presence dot; `agentAccent`, `kAgentAccents`. |
 | `working_dots.dart` | The "working ●●●" indicator (the messenger's typing indicator, said honestly). |
-| `agent_status.dart` | `AgentStatusLine` — the messenger's "Active now" line: the dot plus what the coworker is working on right now (the running tool, or the task the host says it picked up), "Active now" when it is idle on a paired host, "Not connected" when there is no transport. |
+| `agent_status.dart` | `AgentStatusLine` — the messenger's "Active now" line: the dot plus what the agent is working on right now (the running tool, or the task the host says it picked up), "Active now" when it is idle on a paired host, "Not connected" when there is no transport. |
 | `waveform.dart` | `WaveformPainter` + `LiveWaveform` — rounded voice bars, used for the live microphone level. |
 | `day_divider.dart` | `ChatDayDivider`, `dayLabel`, `sameCalendarDay` — the date chip between two days of a thread. |
 
 Two stores carry the facts the redesign needed:
 
-* `services/agents/agent_profile_store.dart` — a coworker's picture, colour,
+* `services/agents/agent_profile_store.dart` — an agent's picture, colour,
   role and brief. The wire carries ids and NAMES only (`agent_create`,
   `agent_rename`, `agent_list`), so these live in `SharedPreferences` on this
   device, and the profile editor says so.
@@ -42,21 +42,21 @@ Two stores carry the facts the redesign needed:
   bar with the account face and an inline search, the All / Unread group with
   the real unread count, expressive rows (face, name, role tag, time, preview,
   unread dot), staggered entrance, long-press row menu.
-* **Phone chat chrome** (`.../mobile_chat_chrome.dart`): back target, coworker
+* **Phone chat chrome** (`.../mobile_chat_chrome.dart`): back target, agent
   pill with the status line, and the messenger's two call targets with Agents's
   meaning — the voice call is parked, and the VIDEO call's slot is the
-  coworker's screen (the sandbox VNC view, `BrowserViewPage`), parked while it
+  agent's screen (the sandbox VNC view, `BrowserViewPage`), parked while it
   has none open. Then "more".
-* **Coworker profile** (`pages/agent_profile_page.dart` + `_edit_page.dart`):
+* **Agent profile** (`pages/agent_profile_page.dart` + `_edit_page.dart`):
   face, state, brief, schedule, session, manage block; the editor sets picture,
   colour, name (→ host), role and brief.
 * **Day breaks** (`chat_ui_mobile.dart`, `chat_ui_desktop.dart`): one date chip
   where the day changes. A row without a timestamp gets none — an undated
   message is no evidence of a day.
 * **Bubbles** (`widgets/message_bubble/layout.dart`): connected corner
-  geometry, the time in the bubble's own corner, and a coworker bubble with a
+  geometry, the time in the bubble's own corner, and an agent bubble with a
   colour per kind. The stamp sits on the LAST bubble of a run, not under every
-  line of a burst. No delivery ticks anywhere: a coworker reads every task it
+  line of a burst. No delivery ticks anywhere: an agent reads every task it
   is given, so "delivered" and "read" answer nothing. The only mark left is the
   local queue — a clock while a message waits offline, an error glyph when the
   send gave up.
@@ -75,17 +75,17 @@ The reference is a messenger between people. These have no meaning here and
 were left out rather than faked: calls and the whole call UI (only the parked
 button remains, and it says why), contacts and groups, saved messages, starred
 and archived buckets, polls, wallpapers, message-body search across chats, and
-"typing" (a coworker "works", which the app can observe).
+"typing" (an agent "works", which the app can observe).
 
 ## Rules that fell out of it
 
 * No delivery ticks. The user's call: whether a message "arrived" at an agent
   is not a question worth a glyph. What is left is the queue mark, which is
-  about this device, not about the coworker.
-* "Active now" is a statement about the coworker's own state: the dot plus the
+  about this device, not about the agent.
+* "Active now" is a statement about the agent's own state: the dot plus the
   work in progress, read from the roster, the run ledger and the bound
   transport. Without a transport the line says "Not connected" rather than
-  claiming a coworker that cannot be reached is active.
+  claiming an agent that cannot be reached is active.
 * A parked feature keeps its place, looks disabled, and explains itself on tap.
   It is never wired to something fake.
 * Profile fields that cannot reach the host are stored locally and labelled as

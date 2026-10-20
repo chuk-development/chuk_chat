@@ -13,7 +13,7 @@
 //
 // Frames: `browser_cmd` in, `browser_result` out, a `browser_attach` hello so
 // the host knows what this browser can do, `browser_stop` / `browser_resume`
-// both ways, `browser_holder` in (the coworker's name for the strip),
+// both ways, `browser_holder` in (the agent's name for the strip),
 // `page_message` out (the panel) with `page_message_ack` / `page_reply` in. Commands run one after another, never interleaved: two commands
 // on one tab at once would race on the same page.
 
@@ -23,8 +23,8 @@ import { fail } from "./protocol.js";
 export const NATIVE_HOST = "dev.chuk.cowork";
 
 // Host frames that belong between two commands. `browser_holder` names the
-// coworker of the NEXT command; run before the queue drains, it would put the
-// new name on the old coworker's tab for a moment.
+// agent of the NEXT command; run before the queue drains, it would put the
+// new name on the old agent's tab for a moment.
 const IN_ORDER = new Set(["browser_holder"]);
 
 // A command that never settles (a page that never answers, a debugger call

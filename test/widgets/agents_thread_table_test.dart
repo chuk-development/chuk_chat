@@ -1,6 +1,6 @@
 // An Agents answer draws chuk_chat's own markdown table (one widget, one
 // style, one scrollbar), the table pans sideways on a desktop, and a file the
-// coworker hands over sits right under the answer text, above the meta line
+// agent hands over sits right under the answer text, above the meta line
 // and the action row (bead chuk_chat-ac0n).
 
 import 'package:flutter/gestures.dart';

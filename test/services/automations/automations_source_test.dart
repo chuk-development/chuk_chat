@@ -152,15 +152,15 @@ void main() {
     expect(source.distinct.map((a) => a.id), ['newer']);
   });
 
-  test('a group is named the way the rest of the app names the coworker', () {
-    expect(source.coworkerName('local:brisk-heron:2:116636868'), 'brisk-heron');
-    expect(source.coworkerName('host:cowork-host'), 'cowork-host');
-    expect(source.coworkerName('default'), 'Default coworker');
-    expect(source.coworkerName('thread-1'), 'thread-1');
+  test('a group is named the way the rest of the app names the agent', () {
+    expect(source.agentName('local:brisk-heron:2:116636868'), 'brisk-heron');
+    expect(source.agentName('host:cowork-host'), 'cowork-host');
+    expect(source.agentName('default'), 'Default agent');
+    expect(source.agentName('thread-1'), 'thread-1');
     controller.emit(const AgentsRelayAgentList(agents: [
       AgentsHostAgentName(agentId: 'host:cowork-host', name: 'Ivory Lynx', host: true),
     ]));
-    expect(source.coworkerName('host:cowork-host'), 'Ivory Lynx');
+    expect(source.agentName('host:cowork-host'), 'Ivory Lynx');
   });
 }
 

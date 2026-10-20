@@ -1,4 +1,4 @@
-// The composer of a coworker's thread shows and changes the coworker's own
+// The composer of an agent's thread shows and changes the agent's own
 // model — the same record its profile edits — and never the account-wide
 // mode. A plain chat keeps the account-wide behaviour.
 
@@ -10,7 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/platform_specific/chat/chat_model_selection_mixin.dart';
 import 'package:chuk_chat/platform_specific/chat/model_provider_resolution_mixin.dart';
-import 'package:chuk_chat/services/agents/coworker_model.dart';
+import 'package:chuk_chat/services/agents/agent_model.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/services/chat_model_selection_service.dart';
 import 'package:chuk_chat/services/model_capabilities_service.dart';
@@ -21,8 +21,8 @@ const String _chat = 'host:alex';
 const String _pro = 'deepseek/deepseek-v4-pro-0813';
 
 class _Composer extends StatefulWidget {
-  const _Composer({super.key, required this.coworkerThread});
-  final bool coworkerThread;
+  const _Composer({super.key, required this.agentThread});
+  final bool agentThread;
   @override
   State<_Composer> createState() => _ComposerState();
 }
@@ -33,7 +33,7 @@ class _ComposerState extends State<_Composer>
   String? get activeChatId => _chat;
 
   @override
-  bool get skipRepeatedModelSave => widget.coworkerThread;
+  bool get skipRepeatedModelSave => widget.agentThread;
 
   // The catalogue names and the picked-model menu read Supabase and the
   // disk cache; neither is what this test is about.
@@ -54,17 +54,17 @@ void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     ChatModelSelectionService.instance.clearMemoryForTesting();
-    CoworkerModel.debugCatalogue = () async => const <CoworkerCatalogueModel>[
-      CoworkerCatalogueModel(
+    AgentModel.debugCatalogue = () async => const <AgentCatalogueModel>[
+      AgentCatalogueModel(
         id: _pro,
         name: 'DeepSeek: V4 Pro',
-        providers: <CoworkerProvider>[
-          CoworkerProvider(
+        providers: <AgentProvider>[
+          AgentProvider(
             slug: 'expensive/one',
             name: 'Expensive',
             completionPrice: 0.00001,
           ),
-          CoworkerProvider(
+          AgentProvider(
             slug: 'cheap/one',
             name: 'Cheap',
             completionPrice: 0.000001,
@@ -76,18 +76,18 @@ void main() {
     await ModelCapabilitiesService.initialize();
   });
   tearDown(() async {
-    CoworkerModel.debugCatalogue = null;
+    AgentModel.debugCatalogue = null;
     await disposeTempKvCache(kv);
   });
 
   Future<_ComposerState> mount(
     WidgetTester tester, {
-    bool coworkerThread = true,
+    bool agentThread = true,
   }) async {
     final key = GlobalKey<_ComposerState>();
     await tester.pumpWidget(
       MaterialApp(
-        home: _Composer(key: key, coworkerThread: coworkerThread),
+        home: _Composer(key: key, agentThread: agentThread),
       ),
     );
     await key.currentState!.restoreChatMode();
@@ -95,7 +95,7 @@ void main() {
     return key.currentState!;
   }
 
-  testWidgets('the composer shows the coworker s own model, named', (
+  testWidgets('the composer shows the agent s own model, named', (
     tester,
   ) async {
     await ChatModelSelectionService.instance.save(
@@ -115,7 +115,7 @@ void main() {
     expect(await ChatModeService.load(), ChatMode.fast);
   });
 
-  testWidgets('a model picked in the composer becomes the coworker s own', (
+  testWidgets('a model picked in the composer becomes the agent s own', (
     tester,
   ) async {
     final composer = await mount(tester);
@@ -134,7 +134,7 @@ void main() {
     expect(await ChatModeService.hasStoredConfig(ChatMode.custom), isFalse);
   });
 
-  testWidgets('a reasoning level picked in the composer is the coworker s', (
+  testWidgets('a reasoning level picked in the composer is the agent s', (
     tester,
   ) async {
     final composer = await mount(tester);
@@ -154,7 +154,7 @@ void main() {
     );
   });
 
-  testWidgets('Fast in a coworker s composer goes back to the app default', (
+  testWidgets('Fast in an agent s composer goes back to the app default', (
     tester,
   ) async {
     await ChatModelSelectionService.instance.save(
@@ -184,7 +184,7 @@ void main() {
     final composer = await mount(tester);
     expect(composer.selectedModelId, _pro);
 
-    await CoworkerModel.useDefault(_chat);
+    await AgentModel.useDefault(_chat);
     await composer.syncChatScopedModel();
     await tester.pump();
 
@@ -193,7 +193,7 @@ void main() {
   });
 
   testWidgets('a plain chat keeps the account-wide model', (tester) async {
-    final composer = await mount(tester, coworkerThread: false);
+    final composer = await mount(tester, agentThread: false);
     expect(composer.modelSelectionChatId, isNull);
 
     await composer.applyModelSelection(_pro);

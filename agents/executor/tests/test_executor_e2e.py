@@ -63,7 +63,7 @@ def test_encrypted_end_to_end_local(tmp_path):
             environment=LocalEnvironment(workdir=a.workspace_dir),
             db_path=str(tmp_path / "executor-state.db"),
             model_factory=_scripted_model,
-            system_prompt="You are a Agents coworker.",
+            system_prompt="You are an Agents agent.",
         )
 
     supervisor = ExecutorSupervisor(roster, factory)

@@ -1,6 +1,6 @@
 """Room store — the group rooms the Manager owns (§16.1, §5).
 
-A room groups a handful of coworkers into one turn-based conversation. The
+A room groups a handful of agents into one turn-based conversation. The
 orchestration and the caps live in :mod:`chuk_agents_manager.group_room`; this module
 is only their durable home: a `rooms` table and a `room_members` table, CRUD, and
 rehydration into the immutable :class:`~chuk_agents_manager.group_room.GroupRoom` the
@@ -175,7 +175,7 @@ class RoomStore:
         )
 
     def add_member(self, room_id: str, agent_id: str, handle: str) -> GroupRoom:
-        """Add one coworker to the room, or raise :class:`RoomError`.
+        """Add one agent to the room, or raise :class:`RoomError`.
 
         The cap — when the room has one; ``NULL``/``None`` means unlimited — is
         checked here against the room's own ``max_members`` before the insert;

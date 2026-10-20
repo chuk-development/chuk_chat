@@ -1,11 +1,11 @@
 # Agents browser add-on
 
-Your coworker, in the browser you already have open. Two things it does:
+Your agent, in the browser you already have open. Two things it does:
 
 * **Talk about this page.** Right-click, or click the toolbar icon, and a panel
   opens on the right. The page's text, its address and anything you selected go
   along as context.
-* **Let the coworker drive.** It opens its own tab (its own tab group, so your
+* **Let the agent drive.** It opens its own tab (its own tab group, so your
   tabs stay yours), or takes over a tab you point it at, and works the page.
 
 ## How it drives
@@ -15,7 +15,7 @@ add-on the DevTools protocol for one tab. Input goes out as
 `Input.dispatchMouseEvent`, `Input.dispatchKeyEvent` and `Input.insertText`, so
 it is real browser input, indistinguishable from a mouse and a keyboard, and the
 page sees nothing unusual. Chrome shows its "being debugged" bar for as long as
-the coworker holds the tab.
+the agent holds the tab.
 
 Firefox never implemented that API, so there the add-on falls back to DOM events
 from the content script. That works on most pages and fails on a few.
@@ -35,16 +35,16 @@ else, and only you can write that file. No port, no token, nothing on the
 network. (The old "relay" WebSocket is gone: it took commands from whatever
 answered at a configured address.)
 
-The host lets one coworker hold the browser at a time, and every page-changing
-step asks you first unless you allowed the site for that coworker
+The host lets one agent hold the browser at a time, and every page-changing
+step asks you first unless you allowed the site for that agent
 (docs/WIRE_CONTRACT.md, "The user's own browser").
 
 ## Stop
 
-While a coworker holds a tab, a strip runs along the top of the page with a
+While an agent holds a tab, a strip runs along the top of the page with a
 Stop button. Stop (there, in the panel, or "Cancel" on Chrome's debugging bar)
 lets go of every tab at once, refuses every further command, and stops the
-coworker's run on the host. "Allow again" in the panel, or a new task you send,
+agent's run on the host. "Allow again" in the panel, or a new task you send,
 lifts it.
 
 ## What never leaves the page
@@ -70,7 +70,7 @@ one-time-code fields (`src/sensitive.js`).
 `browser_report_wall`, and `browser_cdp`.
 
 The names are the ones the agent's browser tools already carry, so the host, the
-wire contract and the app keep reading one transcript whether the coworker is
+wire contract and the app keep reading one transcript whether the agent is
 driving a sandbox browser or this one.
 
 `browser_cdp` is the escape hatch, and it is how OpenAI's extension is built
@@ -84,9 +84,9 @@ Addressing follows the same extension: a node is named by the `ref` a snapshot
 gave it, by a CSS `selector`, by a viewport `point`, or not at all when the
 command works on whatever has focus.
 
-## Tabs the coworker holds
+## Tabs the agent holds
 
-Every tab it touches carries a lease: `origin` says whether the coworker opened
+Every tab it touches carries a lease: `origin` says whether the agent opened
 the tab itself or the user handed it over, `state` is `active`, `deliverable`
 or `handoff`. Nothing is injected into a tab without a lease — the manifests
 declare no content scripts at all — so a tab it was never given carries no
@@ -107,7 +107,7 @@ everything.
 src/api.js         one name for chrome.* and browser.*
 src/protocol.js    the command vocabulary and its validation
 src/snapshot.js    content script: page -> small tree, ref -> geometry
-src/driver.js      cdp and synthetic engines, the coworker's own tab
+src/driver.js      cdp and synthetic engines, the agent's own tab
 src/commands.js    one command in, one result out
 src/transport.js   native messaging, one command at a time
 src/gate.js        the user's Stop

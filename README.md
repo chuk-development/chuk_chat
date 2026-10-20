@@ -179,12 +179,12 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 ## Agents
 
 The repository also holds the Agents platform: a team of persistent,
-sandboxed AI coworkers you message tasks to. The Flutter app here is the
+sandboxed AI agents you message tasks to. The Flutter app here is the
 controller; the Python side lives in `agents/`. It is built behind the
 `FEATURE_AGENTS` dart-define, so a plain build is the chat app and nothing
 else.
 
-A team of persistent, sandboxed AI coworkers you message tasks to. See the full
+A team of persistent, sandboxed AI agents you message tasks to. See the full
 plan in [`docs/AGENTS_AGENT_PLATFORM_PLAN.md`](docs/AGENTS_AGENT_PLATFORM_PLAN.md).
 
 The Flutter app is the repository root. The Python platform is `agents/`.

@@ -1,4 +1,4 @@
-/// Web: there is no file system to read a coworker's picture from, so the face
+/// Web: there is no file system to read an agent's picture from, so the face
 /// always falls back to the monogram.
 library;
 

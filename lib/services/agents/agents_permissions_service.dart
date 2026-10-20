@@ -1,10 +1,10 @@
-/// What a coworker may do in its sandbox, as the host says
+/// What an agent may do in its sandbox, as the host says
 /// (docs/WIRE_CONTRACT.md, "Agent permissions").
 ///
-/// The host is the truth. This service asks it for one coworker's permissions
+/// The host is the truth. This service asks it for one agent's permissions
 /// (`agent_permissions_get`), sends a changed switch (`agent_permissions_set`
 /// with only that key), and takes every `agent_permissions` reply as the whole
-/// current set. A change applies from the coworker's next task, never in the
+/// current set. A change applies from the agent's next task, never in the
 /// middle of one.
 ///
 /// Everything is allowed by default. The one permission that starts off is the
@@ -27,7 +27,7 @@ enum AgentWorkspaceMount {
   ro,
 }
 
-/// One coworker's permissions. The defaults are the host's defaults.
+/// One agent's permissions. The defaults are the host's defaults.
 @immutable
 class AgentPermissions {
   const AgentPermissions({
@@ -193,7 +193,7 @@ const String kUserBrowserResumeCapability = 'user_browser_resume';
 
 // ── F2: automations + cost totals ──
 /// The capability a host names when it keeps a weekly euro budget per
-/// coworker (docs/WIRE_CONTRACT.md, "The budget setting"). `budget_weekly`
+/// agent (docs/WIRE_CONTRACT.md, "The budget setting"). `budget_weekly`
 /// goes to no other host.
 const String kCostBudgetCapability = 'cost_budget';
 
@@ -217,7 +217,7 @@ double? parseBudgetWeekly(String text) {
 }
 // ── end F2 ──
 
-/// The app's copy of the host's answers, per coworker.
+/// The app's copy of the host's answers, per agent.
 ///
 /// It sends nothing to a host that did not name [kAgentPermissionsCapability]:
 /// an older host answers an unknown frame with an `error`, and that is no
@@ -251,7 +251,7 @@ class AgentsPermissionsService extends ChangeNotifier {
       <String, Map<String, bool>>{};
   final Map<String, String> _errors = <String, String>{};
   final Map<String, String> _appliesFrom = <String, String>{};
-  // F2: cost totals. The host's weekly budget per coworker (0 = none).
+  // F2: cost totals. The host's weekly budget per agent (0 = none).
   final Map<String, double> _budgets = <String, double>{};
 
   /// Routes the relay's `agent_permissions` replies here. Idempotent.
@@ -331,9 +331,9 @@ class AgentsPermissionsService extends ChangeNotifier {
     }
   }
 
-  /// Takes one `agent_permissions` reply for one coworker: the whole set, what
+  /// Takes one `agent_permissions` reply for one agent: the whole set, what
   /// this host enforces, and the reason when a request was refused. A reply
-  /// with no set (an unknown coworker) carries only the reason. It may come
+  /// with no set (an unknown agent) carries only the reason. It may come
   /// from another device's change: the host sends every change to all of them.
   void handleFrame(Map<String, dynamic> payload) {
     if (payload['type'] != 'agent_permissions') return;
@@ -376,11 +376,11 @@ class AgentsPermissionsService extends ChangeNotifier {
   }
 
   // ── F2: automations + cost totals ──
-  /// The connected host keeps a weekly budget per coworker.
+  /// The connected host keeps a weekly budget per agent.
   bool get budgetSupported =>
       _capabilities.value.contains(kCostBudgetCapability);
 
-  /// The coworker's weekly budget as the host last said, in euro; 0 = no
+  /// The agent's weekly budget as the host last said, in euro; 0 = no
   /// limit. Null before the host answered with one.
   double? budgetOf(String agentId) => _budgets[agentId];
 
@@ -413,11 +413,11 @@ class AgentsPermissionsService extends ChangeNotifier {
       <String, AgentApprovals>{};
 
   /// The connected host asks before outward actions and keeps a policy per
-  /// coworker (docs/WIRE_CONTRACT.md, "Per-action approvals").
+  /// agent (docs/WIRE_CONTRACT.md, "Per-action approvals").
   bool get approvalsSupported =>
       _capabilities.value.contains(kActionApprovalsCapability);
 
-  /// The coworker's approval policy as the host last said, with a choice the
+  /// The agent's approval policy as the host last said, with a choice the
   /// user just made shown until the host's reply lands. Null before the host
   /// sent one (an old host never does).
   AgentApprovals? approvalsOf(String agentId) =>
@@ -511,14 +511,14 @@ class AgentsPermissionsService extends ChangeNotifier {
   /// host never sends one).
   UserBrowserStatus? _userBrowser;
 
-  /// `in_use_by_this_agent` per coworker, from the replies. A push carries no
+  /// `in_use_by_this_agent` per agent, from the replies. A push carries no
   /// such flag and clears these: the holder may have changed.
   final Map<String, bool> _userBrowserMine = <String, bool>{};
 
   /// The host's last word on the user's browser, or null.
   UserBrowserStatus? get userBrowserStatus => _userBrowser;
 
-  /// Whether a coworker OTHER than [agentId] holds the user's browser now.
+  /// Whether an agent OTHER than [agentId] holds the user's browser now.
   /// Reads `in_use_by.agent_id` first, then the reply's own flag. Unknown
   /// counts as no: the app never claims a holder the host did not name.
   bool userBrowserHeldByOther(String agentId) {
@@ -742,14 +742,14 @@ class UserBrowserStatus {
   /// False = synthetic input only (Firefox). Null when not said.
   final bool? trustedInput;
 
-  /// A coworker holds the browser now.
+  /// An agent holds the browser now.
   final bool inUse;
 
   /// Who holds it: the app's agent id and the name the user gave it.
   final String? inUseByAgentId;
   final String? inUseByName;
 
-  /// Only in a reply (per coworker); null in a push.
+  /// Only in a reply (per agent); null in a push.
   final bool? inUseByThisAgent;
 
   /// The user pressed Stop and did not allow the browser again.
@@ -849,7 +849,7 @@ String userBrowserDisplayName(String id) {
 /// other host.
 const String kActionApprovalsCapability = 'action_approvals';
 
-/// One coworker's approval policy: per action class `ask`, `allow` or `deny`,
+/// One agent's approval policy: per action class `ask`, `allow` or `deny`,
 /// the sites a class allows without asking, and the host's defaults.
 @immutable
 class AgentApprovals {

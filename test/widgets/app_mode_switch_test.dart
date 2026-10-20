@@ -524,7 +524,7 @@ void main() {
           sw.center.dy,
           AgentsThreadHeader.rowTop + AgentsThreadHeader.chipBox / 2,
         );
-        // Nothing of the thread header's row under it: not the coworker
+        // Nothing of the thread header's row under it: not the agent
         // pill, not a chip.
         final Finder buttons = find.descendant(
           of: find.byType(AgentsThreadHeader),
@@ -561,7 +561,7 @@ void main() {
     testWidgets('the details pane on a narrow window gives the switch a line '
         'of its own', (tester) async {
       await pumpShell(tester, size: const Size(800, 700));
-      // The host's coworker is selected once the fake relay pairs.
+      // The host's agent is selected once the fake relay pairs.
       await tester.tap(find.byTooltip('More actions'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Details (Ctrl+.)'));

@@ -12,7 +12,7 @@ Rules:
 
 - The notification carries NO answer content. Title and body are generic;
   the answer stays in the store and reaches the app over the sealed channel.
-  The names it does carry are the ones the user knows — the coworker they
+  The names it does carry are the ones the user knows — the agent they
   named, the automation they set up — never the roster's generated codename.
   :mod:`chuk_agents_host.notification_text` owns that wording and its lookup.
 - One notification per run. ``runs.notified_at`` is set first, once; a second
@@ -86,7 +86,7 @@ class SupabaseNotifier:
         self._user_id_provider = user_id_provider
         self._agent_provider = agent_provider
         self._db_path = db_path
-        # The coworker's name lives in ``roster.db``, next to the state file.
+        # The agent's name lives in ``roster.db``, next to the state file.
         self._roster_path = roster_path
         self._desktop = desktop
         self._http = http_client
@@ -102,13 +102,13 @@ class SupabaseNotifier:
         self.dropped_duplicates = 0
         # The host's own desktop-only path composes its text through
         # ``desktop_notify.completion_text``, which has no store to read; hand
-        # it this notifier's lookup so it names the coworker, not the codename.
+        # it this notifier's lookup so it names the agent, not the codename.
         set_labels_provider(self.labels)
 
     # -- entry points (called from the executor's hooks, via the host) -------
 
     def labels(self, summary: dict | None = None, *, session_key: str | None = None) -> RunLabels:
-        """The names this notification should carry: the coworker whose thread
+        """The names this notification should carry: the agent whose thread
         the run belongs to and, for a fired automation, the automation's own
         name. Never the roster codename."""
         fields = summary if isinstance(summary, dict) else {}
@@ -173,7 +173,7 @@ class SupabaseNotifier:
         self._fire(title, body, record)
 
     def notify_budget(self, info: dict) -> None:
-        """A coworker's week reached 80 % or 100 % of its budget
+        """An agent's week reached 80 % or 100 % of its budget
         (docs/WIRE_CONTRACT.md, "Cost per run and weekly budget"). The caller
         sends it once per level and week; the row's ``run_id`` names that
         (``budget:<session>:<week>:<level>``), so the table's one-row-per-run

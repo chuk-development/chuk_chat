@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart' show immutable, mapEquals;
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
 
-/// One automation of a coworker: a schedule (cron / every / at) or a watcher
+/// One automation of an agent: a schedule (cron / every / at) or a watcher
 /// (a script that runs 24/7 in the sandbox and wakes the agent through
 /// `agents_hooks.trigger()`). docs/WIRE_CONTRACT.md, section "Automations".
 ///

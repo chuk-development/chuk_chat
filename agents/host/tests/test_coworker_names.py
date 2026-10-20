@@ -1,4 +1,4 @@
-"""Coworker names (docs/WIRE_CONTRACT.md "Coworker names", bead cowork-817):
+"""Agent names (docs/WIRE_CONTRACT.md "Agent names", bead cowork-817):
 the host keeps the names the user chose in the app, keyed by the app's id, and
 answers every frame with the current list."""
 

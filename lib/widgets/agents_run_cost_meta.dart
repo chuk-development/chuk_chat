@@ -1,6 +1,6 @@
 // lib/widgets/agents_run_cost_meta.dart
 //
-// The quiet line under a coworker's answer that says what the run cost:
+// The quiet line under an agent's answer that says what the run cost:
 // "€0.41 · 5.2k tokens", "< €0.01 · 900 tokens", or the tokens alone when
 // the host has no price (docs/WIRE_CONTRACT.md, "Cost per run and weekly
 // budget"). A tap opens a small sheet with one row per kind of model use.

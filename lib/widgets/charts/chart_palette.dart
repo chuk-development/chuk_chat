@@ -2,7 +2,7 @@
 //
 // Every colour a chart paints with, resolved once from the theme and handed
 // to the painter. Nothing below is a hard-coded hex except the series hues,
-// which are the app's own coworker palette — the same thirteen the profile
+// which are the app's own agent palette — the same thirteen the profile
 // editor offers, so a chart sits in the same colour world as the faces.
 
 import 'package:flutter/material.dart';
@@ -28,7 +28,7 @@ class ChartPalette {
   });
 
   /// Reads everything off the theme. [accent] overrides the scheme's primary,
-  /// which is what an open thread does: the chart takes the coworker's colour.
+  /// which is what an open thread does: the chart takes the agent's colour.
   factory ChartPalette.of(BuildContext context, {Color? accent}) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
     final bool dark = scheme.brightness == Brightness.dark;
@@ -46,7 +46,7 @@ class ChartPalette {
       // the theme's error role and the green takes the hue of the app's own
       // green accent; both are then given the app's fixed saturation and a
       // lightness picked for the theme — the same rule `agentAccent` uses, so
-      // a loss bar and a coworker's face carry the same kind of colour. The
+      // a loss bar and an agent's face carry the same kind of colour. The
       // raw roles are unusable as they stand: M3's dark error is a pale pink
       // that reads as "disabled", not as "down 19 points".
       up: _fixed(kAgentAccents[8], dark ? 0.52 : 0.36),

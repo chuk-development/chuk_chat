@@ -1,9 +1,9 @@
 """The Telegram channel on the real host stack (bead chuk_chat-02s5).
 
 The app pairs and provisions the host once (a controller double). Then the
-user turns the channel on for the host's coworker, links a Telegram chat with
+user turns the channel on for the host's agent, links a Telegram chat with
 the code the bot sent, and writes a task from Telegram. The task runs through
-the real executor as a normal run of the coworker's one session; the
+the real executor as a normal run of the agent's one session; the
 (scripted) model writes a file and sends it with ``send_file_to_user``; the
 answer and the file come back to the fake Telegram. Nothing hits a network.
 """
@@ -116,7 +116,7 @@ def test_a_telegram_message_runs_on_the_real_host_and_the_answer_and_file_come_b
             host.stop()
             assert time.monotonic() - started < 10
 
-    # The turn is a normal run of the coworker's one session, marked.
+    # The turn is a normal run of the agent's one session, marked.
     store = StateStore(str(tmp_path / "executor-state.db"))
     try:
         replay = store.replay_events(store.route(agent_id))
@@ -137,7 +137,7 @@ def test_the_host_maps_coworker_ids_and_keeps_telegram_runs_off_the_push_path(tm
     host._coworker_names.upsert("local:amber:1", "amber", created_by_app=True)
     try:
         own = host_agent_id(HOST_DEVICE_ID)
-        # Every name of the host's coworker is the app's thread key.
+        # Every name of the host's agent is the app's thread key.
         assert host._channel_key("default") == own
         assert host._channel_key(host._agent.id) == own
         assert host._channel_key(own) == own

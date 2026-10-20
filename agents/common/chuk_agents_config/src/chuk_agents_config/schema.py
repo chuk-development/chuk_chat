@@ -1010,10 +1010,10 @@ class EmulatorConfig:
 
 @dataclass(frozen=True)
 class ChannelsConfig:
-    """Messenger channels: talk to one coworker from outside the app.
+    """Messenger channels: talk to one agent from outside the app.
 
-    A channel is off for every coworker until the user turns it on for one
-    coworker in the app and gives it a bot token. The token is a secret: it
+    A channel is off for every agent until the user turns it on for one
+    agent in the app and gives it a bot token. The token is a secret: it
     lives in the host's encrypted channel store, never in this file. These
     keys only bound what the app may switch on.
 
@@ -1027,9 +1027,9 @@ class ChannelsConfig:
         True,
         env="AGENTS_TELEGRAM_ALLOWED",
         doc=(
-            "Let the app turn on the Telegram channel for a coworker. Off "
+            "Let the app turn on the Telegram channel for an agent. Off "
             "forbids it on this host: a stored bot token is kept but no "
-            "poller starts. The channel itself is off per coworker until "
+            "poller starts. The channel itself is off per agent until "
             "the user turns it on."
         ),
     )
@@ -1056,7 +1056,7 @@ class ChannelsConfig:
         doc=(
             "Seconds a link code the bot sends to a new chat stays valid. "
             "The user types the code into the app to make that chat the one "
-            "chat the coworker answers."
+            "chat the agent answers."
         ),
     )
 

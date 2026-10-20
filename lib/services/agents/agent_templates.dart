@@ -1,23 +1,23 @@
-/// Coworker templates: ready-made coworkers the "New agent" flow offers
+/// Agent templates: ready-made agents the "New agent" flow offers
 /// before the blank one (bead chuk_chat-dsh0).
 ///
 /// A template is data, compiled into the app. It carries:
 ///
-///  * the face the new coworker gets (silhouette, colour, an icon for the
+///  * the face the new agent gets (silhouette, colour, an icon for the
 ///    picker);
 ///  * its name and one-line description, shown in the picker. Those are
 ///    localized: the catalogue holds l10n KEYS (`tpl.<id>.name`,
 ///    `tpl.<id>.desc`), the strings live in `lib/l10n/strings_*.dart`;
-///  * the persona the host writes into the coworker's `memory/soul.md`
-///    (`agent_create.template`, docs/WIRE_CONTRACT.md "Coworker templates").
+///  * the persona the host writes into the agent's `memory/soul.md`
+///    (`agent_create.template`, docs/WIRE_CONTRACT.md "Agent templates").
 ///    The persona is English on purpose: the model reads it, not the user,
 ///    and every model the app offers follows English instructions and still
 ///    answers in the user's language;
 ///  * the tools it leans on, shown as a hint only. Nothing is switched on or
-///    off by a template — every coworker gets the same tools and skills;
+///    off by a template — every agent gets the same tools and skills;
 ///  * an optional starter automation. It is OFF in the picker; the user turns
 ///    it on, and only then does the app send `automation_create` for the new
-///    coworker.
+///    agent.
 ///
 /// Personas promise only what the tools can do: no template claims to book,
 /// buy, post or send on its own, and each says what it cannot see.
@@ -30,11 +30,11 @@ import 'package:chuk_chat/services/automations/agents_automation.dart';
 import 'package:chuk_chat/widgets/icons/huge_icon.dart';
 
 /// The filter segments of the picker, in their order.
-enum CoworkerTemplateCategory { work, watch, personal }
+enum AgentTemplateCategory { work, watch, personal }
 
-/// What a template's coworker mostly works with. A hint in the picker; the
+/// What a template's agent mostly works with. A hint in the picker; the
 /// label is `tpl.tool.<name>` in the l10n tables.
-enum CoworkerTemplateTool {
+enum AgentTemplateTool {
   web,
   pageWatch,
   agentMail,
@@ -45,12 +45,12 @@ enum CoworkerTemplateTool {
   calendar,
 }
 
-/// A schedule the user may switch on while creating the coworker. Its
-/// `prompt` goes to the coworker as written (English, like the persona); its
+/// A schedule the user may switch on while creating the agent. Its
+/// `prompt` goes to the agent as written (English, like the persona); its
 /// name and its "when" line are l10n keys.
 @immutable
-class CoworkerStarterAutomation {
-  const CoworkerStarterAutomation({
+class AgentStarterAutomation {
+  const AgentStarterAutomation({
     required this.nameKey,
     required this.whenKey,
     required this.cron,
@@ -71,33 +71,33 @@ class CoworkerStarterAutomation {
 }
 
 @immutable
-class CoworkerTemplate {
-  const CoworkerTemplate({
+class AgentTemplate {
+  const AgentTemplate({
     required this.id,
     required this.category,
     required this.icon,
     required this.shape,
     required this.accent,
     required this.persona,
-    this.tools = const <CoworkerTemplateTool>[],
+    this.tools = const <AgentTemplateTool>[],
     this.starter,
   });
 
   /// Stable id: the l10n key stem and the `template.id` on the wire.
   final String id;
-  final CoworkerTemplateCategory category;
+  final AgentTemplateCategory category;
   final HugeIconData icon;
 
-  /// The silhouette and the colour the new coworker's face gets. The colour is
+  /// The silhouette and the colour the new agent's face gets. The colour is
   /// a raw entry of `kAgentAccents`, exactly what the profile editor stores
   /// when the user picks one.
   final AgentAvatarShape shape;
   final int accent;
 
-  /// English, plain, short. Written to the coworker's soul.md by the host.
+  /// English, plain, short. Written to the agent's soul.md by the host.
   final String persona;
-  final List<CoworkerTemplateTool> tools;
-  final CoworkerStarterAutomation? starter;
+  final List<AgentTemplateTool> tools;
+  final AgentStarterAutomation? starter;
 
   String get nameKey => 'tpl.$id.name';
   String get descriptionKey => 'tpl.$id.desc';
@@ -112,7 +112,7 @@ class CoworkerTemplate {
 /// Upper bound the host accepts for a persona (`MAX_PERSONA_LEN` in
 /// `chuk_agents_host/coworker_templates.py`). A test holds every template
 /// under it.
-const int kCoworkerPersonaMaxLength = 4000;
+const int kAgentPersonaMaxLength = 4000;
 
 // The palette entries the templates use, by name, so a reader does not have to
 // count into `kAgentAccents`.
@@ -130,16 +130,16 @@ const int _sky = 0xFF40C4FF;
 const int _slate = 0xFF607D8B;
 
 /// The catalogue, in the order the picker lists it.
-const List<CoworkerTemplate> kCoworkerTemplates = <CoworkerTemplate>[
-  CoworkerTemplate(
+const List<AgentTemplate> kAgentTemplates = <AgentTemplate>[
+  AgentTemplate(
     id: 'research',
-    category: CoworkerTemplateCategory.work,
+    category: AgentTemplateCategory.work,
     icon: HugeIcons.search01,
     shape: AgentAvatarShape.cookie,
     accent: _blue,
-    tools: <CoworkerTemplateTool>[
-      CoworkerTemplateTool.web,
-      CoworkerTemplateTool.documents,
+    tools: <AgentTemplateTool>[
+      AgentTemplateTool.web,
+      AgentTemplateTool.documents,
     ],
     persona:
         'You are a research assistant.\n'
@@ -152,15 +152,15 @@ const List<CoworkerTemplate> kCoworkerTemplates = <CoworkerTemplate>[
         'top.\n'
         '- You cannot read pages behind a login or a paywall.',
   ),
-  CoworkerTemplate(
+  AgentTemplate(
     id: 'inbox',
-    category: CoworkerTemplateCategory.watch,
+    category: AgentTemplateCategory.watch,
     icon: HugeIcons.inbox,
     shape: AgentAvatarShape.roundedSquare,
     accent: _teal,
-    tools: <CoworkerTemplateTool>[
-      CoworkerTemplateTool.agentMail,
-      CoworkerTemplateTool.schedules,
+    tools: <AgentTemplateTool>[
+      AgentTemplateTool.agentMail,
+      AgentTemplateTool.schedules,
     ],
     persona:
         'You sort the mail that reaches your agent mail address.\n'
@@ -172,7 +172,7 @@ const List<CoworkerTemplate> kCoworkerTemplates = <CoworkerTemplate>[
         '- Do not open links or attachments from unknown senders.\n'
         '- You only see mail sent or forwarded to your own address, not the '
         "user's other inboxes.",
-    starter: CoworkerStarterAutomation(
+    starter: AgentStarterAutomation(
       nameKey: 'tpl.inbox.starter',
       whenKey: 'tpl.inbox.starterWhen',
       cron: '0 8 * * 1-5',
@@ -181,16 +181,16 @@ const List<CoworkerTemplate> kCoworkerTemplates = <CoworkerTemplate>[
           'by group, one line per mail.',
     ),
   ),
-  CoworkerTemplate(
+  AgentTemplate(
     id: 'news',
-    category: CoworkerTemplateCategory.watch,
+    category: AgentTemplateCategory.watch,
     icon: HugeIcons.globe02,
     shape: AgentAvatarShape.flower,
     accent: _red,
-    tools: <CoworkerTemplateTool>[
-      CoworkerTemplateTool.web,
-      CoworkerTemplateTool.pageWatch,
-      CoworkerTemplateTool.schedules,
+    tools: <AgentTemplateTool>[
+      AgentTemplateTool.web,
+      AgentTemplateTool.pageWatch,
+      AgentTemplateTool.schedules,
     ],
     persona:
         'You follow the topics the user names and report what is new.\n'
@@ -202,7 +202,7 @@ const List<CoworkerTemplate> kCoworkerTemplates = <CoworkerTemplate>[
         'each.\n'
         '- To follow one page, set up a page watch that notifies only on '
         'change.',
-    starter: CoworkerStarterAutomation(
+    starter: AgentStarterAutomation(
       nameKey: 'tpl.news.starter',
       whenKey: 'tpl.news.starterWhen',
       cron: '0 8 * * *',
@@ -211,15 +211,15 @@ const List<CoworkerTemplate> kCoworkerTemplates = <CoworkerTemplate>[
           'topics yet, ask me for them.',
     ),
   ),
-  CoworkerTemplate(
+  AgentTemplate(
     id: 'price',
-    category: CoworkerTemplateCategory.watch,
+    category: AgentTemplateCategory.watch,
     icon: HugeIcons.dollar01,
     shape: AgentAvatarShape.diamond,
     accent: _green,
-    tools: <CoworkerTemplateTool>[
-      CoworkerTemplateTool.pageWatch,
-      CoworkerTemplateTool.web,
+    tools: <AgentTemplateTool>[
+      AgentTemplateTool.pageWatch,
+      AgentTemplateTool.web,
     ],
     persona:
         'You track product prices for the user.\n'
@@ -232,16 +232,16 @@ const List<CoworkerTemplate> kCoworkerTemplates = <CoworkerTemplate>[
         'when you cannot read a price.\n'
         '- You do not buy anything.',
   ),
-  CoworkerTemplate(
+  AgentTemplate(
     id: 'jobs',
-    category: CoworkerTemplateCategory.watch,
+    category: AgentTemplateCategory.watch,
     icon: HugeIcons.task01,
     shape: AgentAvatarShape.gem,
     accent: _slate,
-    tools: <CoworkerTemplateTool>[
-      CoworkerTemplateTool.web,
-      CoworkerTemplateTool.schedules,
-      CoworkerTemplateTool.documents,
+    tools: <AgentTemplateTool>[
+      AgentTemplateTool.web,
+      AgentTemplateTool.schedules,
+      AgentTemplateTool.documents,
     ],
     persona:
         'You help with a job search.\n'
@@ -252,7 +252,7 @@ const List<CoworkerTemplate> kCoworkerTemplates = <CoworkerTemplate>[
         '- Help tailor a CV or a cover letter to one posting when asked. Do '
         'not invent experience.\n'
         '- You do not apply for jobs.',
-    starter: CoworkerStarterAutomation(
+    starter: AgentStarterAutomation(
       nameKey: 'tpl.jobs.starter',
       whenKey: 'tpl.jobs.starterWhen',
       cron: '0 9 * * 1',
@@ -261,13 +261,13 @@ const List<CoworkerTemplate> kCoworkerTemplates = <CoworkerTemplate>[
           'best matches. If I named no criteria yet, ask me for them.',
     ),
   ),
-  CoworkerTemplate(
+  AgentTemplate(
     id: 'writing',
-    category: CoworkerTemplateCategory.work,
+    category: AgentTemplateCategory.work,
     icon: HugeIcons.pen01,
     shape: AgentAvatarShape.oval,
     accent: _violet,
-    tools: <CoworkerTemplateTool>[CoworkerTemplateTool.documents],
+    tools: <AgentTemplateTool>[AgentTemplateTool.documents],
     persona:
         'You are a writing editor.\n'
         "- Improve the user's text: clearer, shorter, correct. Keep the "
@@ -280,15 +280,15 @@ const List<CoworkerTemplate> kCoworkerTemplates = <CoworkerTemplate>[
         'one.\n'
         '- For a long text, write the result as a document.',
   ),
-  CoworkerTemplate(
+  AgentTemplate(
     id: 'code',
-    category: CoworkerTemplateCategory.work,
+    category: AgentTemplateCategory.work,
     icon: HugeIcons.sourceCode,
     shape: AgentAvatarShape.square,
     accent: _slate,
-    tools: <CoworkerTemplateTool>[
-      CoworkerTemplateTool.terminal,
-      CoworkerTemplateTool.documents,
+    tools: <AgentTemplateTool>[
+      AgentTemplateTool.terminal,
+      AgentTemplateTool.documents,
     ],
     persona:
         'You help with code.\n'
@@ -301,16 +301,16 @@ const List<CoworkerTemplate> kCoworkerTemplates = <CoworkerTemplate>[
         "- You cannot see the user's computer. Work with the code or the "
         'repository link the user gives you.',
   ),
-  CoworkerTemplate(
+  AgentTemplate(
     id: 'data',
-    category: CoworkerTemplateCategory.work,
+    category: AgentTemplateCategory.work,
     icon: HugeIcons.fileSpreadsheet,
     shape: AgentAvatarShape.burst,
     accent: _blue,
-    tools: <CoworkerTemplateTool>[
-      CoworkerTemplateTool.terminal,
-      CoworkerTemplateTool.charts,
-      CoworkerTemplateTool.documents,
+    tools: <AgentTemplateTool>[
+      AgentTemplateTool.terminal,
+      AgentTemplateTool.charts,
+      AgentTemplateTool.documents,
     ],
     persona:
         'You analyse data.\n'
@@ -321,16 +321,16 @@ const List<CoworkerTemplate> kCoworkerTemplates = <CoworkerTemplate>[
         '- Say how you got each number, so the user can check it.\n'
         '- Do not guess missing values. Say what is missing.',
   ),
-  CoworkerTemplate(
+  AgentTemplate(
     id: 'meeting',
-    category: CoworkerTemplateCategory.work,
+    category: AgentTemplateCategory.work,
     icon: HugeIcons.calendar01,
     shape: AgentAvatarShape.clover,
     accent: _purple,
-    tools: <CoworkerTemplateTool>[
-      CoworkerTemplateTool.calendar,
-      CoworkerTemplateTool.web,
-      CoworkerTemplateTool.documents,
+    tools: <AgentTemplateTool>[
+      AgentTemplateTool.calendar,
+      AgentTemplateTool.web,
+      AgentTemplateTool.documents,
     ],
     persona:
         'You prepare the user for meetings.\n'
@@ -343,15 +343,15 @@ const List<CoworkerTemplate> kCoworkerTemplates = <CoworkerTemplate>[
         '- Keep the notes short enough to read in two minutes.\n'
         '- Do not accept, move or cancel meetings unless the user asks.',
   ),
-  CoworkerTemplate(
+  AgentTemplate(
     id: 'social',
-    category: CoworkerTemplateCategory.work,
+    category: AgentTemplateCategory.work,
     icon: HugeIcons.share01,
     shape: AgentAvatarShape.burst,
     accent: _pink,
-    tools: <CoworkerTemplateTool>[
-      CoworkerTemplateTool.web,
-      CoworkerTemplateTool.documents,
+    tools: <AgentTemplateTool>[
+      AgentTemplateTool.web,
+      AgentTemplateTool.documents,
     ],
     persona:
         'You draft social media posts.\n'
@@ -364,15 +364,15 @@ const List<CoworkerTemplate> kCoworkerTemplates = <CoworkerTemplate>[
         '- Check facts and links before you suggest them.\n'
         '- You do not post anything. The user posts.',
   ),
-  CoworkerTemplate(
+  AgentTemplate(
     id: 'support',
-    category: CoworkerTemplateCategory.work,
+    category: AgentTemplateCategory.work,
     icon: HugeIcons.chatting01,
     shape: AgentAvatarShape.round,
     accent: _cyan,
-    tools: <CoworkerTemplateTool>[
-      CoworkerTemplateTool.documents,
-      CoworkerTemplateTool.agentMail,
+    tools: <AgentTemplateTool>[
+      AgentTemplateTool.documents,
+      AgentTemplateTool.agentMail,
     ],
     persona:
         'You draft answers to customer messages.\n'
@@ -384,15 +384,15 @@ const List<CoworkerTemplate> kCoworkerTemplates = <CoworkerTemplate>[
         '- Keep a document with good answers and reuse it.\n'
         '- You do not send replies. The user sends them.',
   ),
-  CoworkerTemplate(
+  AgentTemplate(
     id: 'travel',
-    category: CoworkerTemplateCategory.personal,
+    category: AgentTemplateCategory.personal,
     icon: HugeIcons.mapPin,
     shape: AgentAvatarShape.clover,
     accent: _cyan,
-    tools: <CoworkerTemplateTool>[
-      CoworkerTemplateTool.web,
-      CoworkerTemplateTool.documents,
+    tools: <AgentTemplateTool>[
+      AgentTemplateTool.web,
+      AgentTemplateTool.documents,
     ],
     persona:
         'You help plan trips.\n'
@@ -405,15 +405,15 @@ const List<CoworkerTemplate> kCoworkerTemplates = <CoworkerTemplate>[
         '- Prices and availability change. Say when you saw a price.\n'
         '- You do not book or pay for anything.',
   ),
-  CoworkerTemplate(
+  AgentTemplate(
     id: 'finance',
-    category: CoworkerTemplateCategory.personal,
+    category: AgentTemplateCategory.personal,
     icon: HugeIcons.creditCard,
     shape: AgentAvatarShape.roundedSquare,
     accent: _deepOrange,
-    tools: <CoworkerTemplateTool>[
-      CoworkerTemplateTool.charts,
-      CoworkerTemplateTool.documents,
+    tools: <AgentTemplateTool>[
+      AgentTemplateTool.charts,
+      AgentTemplateTool.documents,
     ],
     persona:
         "You keep the user's personal finance notes.\n"
@@ -427,15 +427,15 @@ const List<CoworkerTemplate> kCoworkerTemplates = <CoworkerTemplate>[
         '- You cannot see bank accounts. Work only with what the user gives '
         'you.',
   ),
-  CoworkerTemplate(
+  AgentTemplate(
     id: 'learning',
-    category: CoworkerTemplateCategory.personal,
+    category: AgentTemplateCategory.personal,
     icon: HugeIcons.mortarboard01,
     shape: AgentAvatarShape.cookie,
     accent: _sky,
-    tools: <CoworkerTemplateTool>[
-      CoworkerTemplateTool.schedules,
-      CoworkerTemplateTool.documents,
+    tools: <AgentTemplateTool>[
+      AgentTemplateTool.schedules,
+      AgentTemplateTool.documents,
     ],
     persona:
         'You are a learning coach.\n'
@@ -447,7 +447,7 @@ const List<CoworkerTemplate> kCoworkerTemplates = <CoworkerTemplate>[
         'answer.\n'
         '- Explain mistakes kindly and give one more example.\n'
         '- Link good free material when it helps.',
-    starter: CoworkerStarterAutomation(
+    starter: AgentStarterAutomation(
       nameKey: 'tpl.learning.starter',
       whenKey: 'tpl.learning.starterWhen',
       cron: '0 18 * * *',
@@ -456,13 +456,13 @@ const List<CoworkerTemplate> kCoworkerTemplates = <CoworkerTemplate>[
           'there is no plan yet, ask me what I want to learn.',
     ),
   ),
-  CoworkerTemplate(
+  AgentTemplate(
     id: 'home',
-    category: CoworkerTemplateCategory.personal,
+    category: AgentTemplateCategory.personal,
     icon: HugeIcons.home01,
     shape: AgentAvatarShape.flower,
     accent: _orange,
-    tools: <CoworkerTemplateTool>[CoworkerTemplateTool.documents],
+    tools: <AgentTemplateTool>[AgentTemplateTool.documents],
     persona:
         'You keep the household lists.\n'
         '- Keep a shopping list, a to-do list and notes in your workspace.\n'
@@ -475,17 +475,17 @@ const List<CoworkerTemplate> kCoworkerTemplates = <CoworkerTemplate>[
 ];
 
 /// The template with [id], or null.
-CoworkerTemplate? coworkerTemplateById(String id) {
-  for (final CoworkerTemplate template in kCoworkerTemplates) {
+AgentTemplate? agentTemplateById(String id) {
+  for (final AgentTemplate template in kAgentTemplates) {
     if (template.id == id) return template;
   }
   return null;
 }
 
-/// What happened when a new coworker was announced to the host.
+/// What happened when a new agent was announced to the host.
 @immutable
-class CoworkerHostOutcome {
-  const CoworkerHostOutcome._({
+class AgentHostOutcome {
+  const AgentHostOutcome._({
     this.notConnected = false,
     this.agentError,
     this.starterError,
@@ -498,34 +498,34 @@ class CoworkerHostOutcome {
   /// either: it names a session key the host would not know.
   final String? agentError;
 
-  /// The coworker was created, the starter automation was not.
+  /// The agent was created, the starter automation was not.
   final String? starterError;
 
-  /// The coworker never reached the host (no controller, or the send failed).
+  /// The agent never reached the host (no controller, or the send failed).
   bool get agentFailed => notConnected || agentError != null;
 
   bool get ok => !agentFailed && starterError == null;
 }
 
-/// Tells the host about a new coworker (`agent_create`), then — only when
+/// Tells the host about a new agent (`agent_create`), then — only when
 /// that went out and [createStarter] is given (the user switched the
 /// template's starter on) — creates the starter automation. The two go in
-/// this order so the host knows the coworker before the automation names its
+/// this order so the host knows the agent before the automation names its
 /// session key. [createAgent] is null when no controller is bound.
-Future<CoworkerHostOutcome> announceCoworkerToHost({
+Future<AgentHostOutcome> announceAgentToHost({
   required Future<void> Function()? createAgent,
   Future<AutomationSaveResult> Function()? createStarter,
 }) async {
   if (createAgent == null) {
-    return const CoworkerHostOutcome._(notConnected: true);
+    return const AgentHostOutcome._(notConnected: true);
   }
   try {
     await createAgent();
   } catch (error) {
-    return CoworkerHostOutcome._(agentError: '$error');
+    return AgentHostOutcome._(agentError: '$error');
   }
-  if (createStarter == null) return const CoworkerHostOutcome._();
+  if (createStarter == null) return const AgentHostOutcome._();
   final result = await createStarter();
-  if (result.ok) return const CoworkerHostOutcome._();
-  return CoworkerHostOutcome._(starterError: result.error ?? '');
+  if (result.ok) return const AgentHostOutcome._();
+  return AgentHostOutcome._(starterError: result.error ?? '');
 }

@@ -1,16 +1,16 @@
-/// A coworker's face, in the expressive shape language.
+/// An agent's face, in the expressive shape language.
 ///
 /// The face is a scalloped blob ([expressiveShapeFor]) cut from the agent id, so
-/// one coworker keeps one silhouette everywhere: the inbox row, the chat header,
+/// one agent keeps one silhouette everywhere: the inbox row, the chat header,
 /// the profile page and the desktop roster. Inside the blob is
 ///
-///  * the picture the user set for this coworker ([AgentProfileStore]), or
+///  * the picture the user set for this agent ([AgentProfileStore]), or
 ///  * the monogram on a colour, which is the accent the user picked, or the
 ///    stable hue derived from the agent id — the same rule [AgentAvatar] used
-///    before, so a coworker without a profile does not change colour.
+///    before, so an agent without a profile does not change colour.
 ///
 /// A presence dot rides at the bottom right: green while a run is in flight,
-/// amber when a schedule is armed, nothing while the coworker waits. That is
+/// amber when a schedule is armed, nothing while the agent waits. That is
 /// read from [AgentsAgent.activity], which the app actually observes.
 library;
 
@@ -63,7 +63,7 @@ class _OvalAvatarBorder extends ShapeBorder {
   ShapeBorder scale(double t) => this;
 }
 
-/// The accent colour of a coworker: the picked colour, else the stable hue from
+/// The accent colour of an agent: the picked colour, else the stable hue from
 /// the agent id.
 Color agentAccent(
   BuildContext context,
@@ -78,7 +78,7 @@ Color agentAccent(
   final bool dark = Theme.of(context).brightness == Brightness.dark;
   // The hue is taken from the offered palette instead of straight from the
   // hash. A raw hash spreads over the full circle, which sounds fair and in
-  // practice put two of three coworkers within a few degrees of each other —
+  // practice put two of three agents within a few degrees of each other —
   // both read as "the teal one". The palette's hues are already spaced apart,
   // so picking one of those keeps the colours tellable. Saturation and
   // lightness stay fixed: the hue does the identifying, and every face keeps
@@ -90,8 +90,8 @@ Color agentAccent(
 }
 
 /// A stable index into [kAgentAccents] from the agent id. Its own hash, so a
-/// coworker's colour and its silhouette are not picked by the same number and
-/// two coworkers that share one do not automatically share the other.
+/// agent's colour and its silhouette are not picked by the same number and
+/// two agents that share one do not automatically share the other.
 int _paletteIndex(String agentId) {
   int hash = 0x811c9dc5;
   for (final int unit in agentId.codeUnits) {
@@ -101,7 +101,7 @@ int _paletteIndex(String agentId) {
   return hash % kAgentAccents.length;
 }
 
-/// The palette the profile editor offers for a coworker's colour.
+/// The palette the profile editor offers for an agent's colour.
 const List<Color> kAgentAccents = <Color>[
   Color(0xFF2962FF),
   Color(0xFF7C4DFF),
@@ -205,7 +205,7 @@ class AgentFace extends StatelessWidget {
   /// Injectable for tests; defaults to the app-wide store.
   final AgentProfileStore? store;
 
-  /// A hidden coworker is shown faded in the "show hidden" list.
+  /// A hidden agent is shown faded in the "show hidden" list.
   final bool dimmed;
 
   /// An unsaved editor preview; normal app surfaces always read the store.

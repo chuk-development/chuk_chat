@@ -37,7 +37,7 @@ page in Settings. Every fired task ends with a notification to the user, so
 do not add a "notify the user" step yourself: finish the task with the result
 in your answer and the user is told that an answer is ready.
 
-You only ever see your own automations. Another coworker's ids answer
+You only ever see your own automations. Another agent's ids answer
 `not found`. That is by design; do not try to guess ids.
 
 ## Schedules

@@ -410,7 +410,7 @@ void main() {
               'browser_tool': 'browser_navigate',
               'url': 'https://github.com/pulls',
             }),
-            coworkerName: 'Ada',
+            agentName: 'Ada',
             onSelect: (_) {},
           ),
         ),
@@ -435,7 +435,7 @@ void main() {
               'browser_tool': 'browser_click',
               'element': 'Save',
             }),
-            coworkerName: 'Ada',
+            agentName: 'Ada',
             onSelect: (_) {},
           ),
         ),
@@ -451,7 +451,7 @@ void main() {
               'browser': 'user_browser',
               'url': 'https://github.com',
             }),
-            coworkerName: 'Ada',
+            agentName: 'Ada',
             onSelect: (_) {},
           ),
           locale: const Locale('de'),
@@ -461,7 +461,7 @@ void main() {
     });
   });
 
-  testWidgets('the screen chip of a coworker in the user browser stays '
+  testWidgets('the screen chip of an agent in the user browser stays '
       'parked and says why', (tester) async {
     await tester.pumpL(
       _localized(
@@ -479,7 +479,7 @@ void main() {
     await tester.pump();
     expect(
       find.text(
-        'This coworker works in your own browser. There is no screen to show '
+        'This agent works in your own browser. There is no screen to show '
         'here.',
       ),
       findsOneWidget,
@@ -521,7 +521,7 @@ void main() {
                   UserBrowserNotice(UserBrowserNoticeKind.stopped),
                   UserBrowserNotice(
                     UserBrowserNoticeKind.inUseByOther,
-                    name: 'A coworker with a long name',
+                    name: 'An agent with a long name',
                   ),
                   UserBrowserNotice(UserBrowserNoticeKind.notSetUp),
                   UserBrowserNotice(UserBrowserNoticeKind.notConnected),
@@ -540,9 +540,9 @@ void main() {
         );
         await tester.pump();
         expect(tester.takeException(), isNull, reason: '$locale');
-        // The coworker's name is never cut.
+        // The agent's name is never cut.
         expect(
-          find.textContaining('A coworker with a long name'),
+          find.textContaining('An agent with a long name'),
           findsOneWidget,
         );
       }

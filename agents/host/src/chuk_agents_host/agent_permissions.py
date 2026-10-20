@@ -2,7 +2,7 @@
 "Agent permissions", bead chuk_chat-voq3).
 
 The host is the truth. The app reads and switches the permissions of one
-coworker with two sealed frames and draws what the host answers. Everything is
+agent with two sealed frames and draws what the host answers. Everything is
 allowed by default; the user switches single permissions off in the app.
 
 Storage: one JSON file in the host's state directory
@@ -59,7 +59,7 @@ from chuk_agents_sandbox import (
 FILE_NAME = "agent_permissions.json"
 _FILE_VERSION = 1
 
-#: App -> host: read one coworker's permissions.
+#: App -> host: read one agent's permissions.
 FRAME_GET = "agent_permissions_get"
 #: App -> host: change some of them (a partial map).
 FRAME_SET = "agent_permissions_set"
@@ -80,7 +80,7 @@ CAPABILITY = "agent_permissions"
 #: The host also keeps per-action approvals (``approvals`` in the same frames,
 #: the ``options`` / ``scope`` of ``approval_request`` / ``approval_decision``).
 APPROVALS_CAPABILITY = "action_approvals"
-#: The host prices every run and keeps a weekly budget per coworker
+#: The host prices every run and keeps a weekly budget per agent
 #: (``cost`` on ``done`` / ``agent_status``, ``budget_weekly`` in these frames,
 #: ``budget_warning``, ``budget_override`` on ``task``).
 BUDGET_CAPABILITY = "cost_budget"
@@ -495,8 +495,8 @@ def handle_permissions_frame(
 class ActionApprovalsBridge:
     """The executor's view of the approval policies (``Executor(action_approvals=)``).
 
-    ``policy_for(session_key)`` maps the run's session key to the coworker it
-    belongs to (``agent_key``) and reads that coworker's policy;
+    ``policy_for(session_key)`` maps the run's session key to the agent it
+    belongs to (``agent_key``) and reads that agent's policy;
     ``remember(...)`` stores a lasting decision and calls ``on_change(key,
     policy)`` when it changed something, so the host can tell the app."""
 
@@ -537,10 +537,10 @@ class BudgetBridge:
     """The executor's view of the weekly budgets (``Executor(budget=)``,
     docs/WIRE_CONTRACT.md, "Cost per run and weekly budget").
 
-    ``agent_key(session_key)`` maps a run's session to its coworker (the same
+    ``agent_key(session_key)`` maps a run's session to its agent (the same
     key as its permissions); ``agent_keys(session_keys)`` maps many at once
     (one roster read, for the spend sums); ``budget_weekly(session_key)`` reads that
-    coworker's budget; ``first_notice`` says whether a warning level is new
+    agent's budget; ``first_notice`` says whether a warning level is new
     this week; ``notify(payload)`` hands a ``budget_warning`` to the host
     (the push)."""
 

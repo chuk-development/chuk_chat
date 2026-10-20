@@ -43,9 +43,9 @@ Still open in P4's neighbourhood:
 Done: `widgets/agent_roster_view.dart` was rebuilt on chuk's own sidebar chrome
 (`widgets/sidebar/sidebar_chrome.dart`). Every colour comes from
 `SidebarTokens.of(context)` — the file defines none of its own — with `SbBrand`,
-`SbRailRow` for "New coworker", `SbSectionLabel` for the Working / Scheduled /
+`SbRailRow` for "New agent", `SbSectionLabel` for the Working / Scheduled /
 Waiting / Hidden buckets and `SbHairline`. The agent row is the one bespoke
-widget (`_AgentTile`): `SbChatTile` is single-line and a coworker needs two
+widget (`_AgentTile`): `SbChatTile` is single-line and an agent needs two
 lines, so the tile reproduces its grammar exactly — 12 px radius, an
 always-reserved 1.5 px border so selection changes only colour and never the
 list's layout, accent @0.18 fill with accent @0.55 edge, iconFg @0.05 hover, the

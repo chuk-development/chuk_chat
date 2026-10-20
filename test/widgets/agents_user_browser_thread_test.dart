@@ -192,7 +192,7 @@ void main() {
     });
   }
 
-  testWidgets('desktop: the screen chip says the coworker works in the user '
+  testWidgets('desktop: the screen chip says the agent works in the user '
       'browser', (tester) async {
     final controller = await pumpPaired(tester);
     expect(find.byTooltip('No screen open right now'), findsOneWidget);

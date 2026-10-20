@@ -211,7 +211,7 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
           icon: Icons.smart_toy_outlined,
           label: l.modelSelection,
           keywords: 'model models ai llm gpt deepseek glm provider selection '
-              'default coworker agent reasoning modell auswahl',
+              'default agent agent reasoning modell auswahl',
           builder: (_) => const ModelSelectorPage(),
         ),
         _SettingsDest(
@@ -255,7 +255,7 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
             builder: (_) => const GitHubConnectionPage(),
           ),
       ]),
-      // Agents only: about the host the coworkers run on, which a hosted
+      // Agents only: about the host the agents run on, which a hosted
       // chat account has no equivalent for.
       if (agentsChatCore)
         _SettingsGroup('Agents', [
@@ -308,7 +308,7 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
             id: 'hostskills',
             icon: Icons.computer,
             label: 'Host skills',
-            keywords: 'host skills coworker agent computer procedures '
+            keywords: 'host skills agent agent computer procedures '
                 'abilities fähigkeiten rechner',
             builder: (_) => const AgentsSkillsSettingsPage(),
           ),

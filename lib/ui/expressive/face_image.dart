@@ -1,4 +1,4 @@
-/// One image provider for a coworker's picture, chosen at compile time.
+/// One image provider for an agent's picture, chosen at compile time.
 ///
 /// A picture lives as a file in the app's support directory, and only a build
 /// with a file system can read it. Both variants answer the same question — "is

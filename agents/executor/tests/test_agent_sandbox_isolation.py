@@ -1,12 +1,12 @@
-"""Two coworkers, two sandboxes — end to end through the executor (cowork-jo2).
+"""Two agents, two sandboxes — end to end through the executor (cowork-jo2).
 
 A ``session_key`` IS an agent id on the app side (``AgentRosterSource`` gives
-every coworker one permanent thread whose key is the coworker's id). So the
-executor must give each session key its own environment, or two coworkers work
+every agent one permanent thread whose key is the agent's id). So the
+executor must give each session key its own environment, or two agents work
 in one box: same files, same shell state, same installed packages.
 
 The test drives the real ``Executor`` over the real sealed-frame path with a
-scripted model, one task per coworker, and asserts that each file landed in its
+scripted model, one task per agent, and asserts that each file landed in its
 own workspace and nowhere else.
 """
 
@@ -54,11 +54,11 @@ def _executor(tmp_path, environment, environment_factory, model_factory=None):
 
 
 def test_two_session_keys_run_in_two_sandboxes(tmp_path):
-    """The regression this bead is about: one box for every coworker.
+    """The regression this bead is about: one box for every agent.
 
-    Both coworkers run the SAME command: write a file, then try to read a file
-    that was planted in the host coworker's workspace. One box would let the
-    second coworker read it. Two boxes means it cannot — which is a stronger
+    Both agents run the SAME command: write a file, then try to read a file
+    that was planted in the host agent's workspace. One box would let the
+    second agent read it. Two boxes means it cannot — which is a stronger
     claim than "both wrote a file", because a shared box satisfies that too.
     """
     home = tmp_path / "agents"
@@ -88,9 +88,9 @@ def test_two_session_keys_run_in_two_sandboxes(tmp_path):
     )
     executor.start()
     try:
-        # The host's own coworker: no factory lookup, its own workspace.
+        # The host's own agent: no factory lookup, its own workspace.
         controller.collect(controller.send_task("do it", session_key=""), timeout=20.0)
-        # A second coworker in the same app, its own session key.
+        # A second agent in the same app, its own session key.
         controller.collect(
             controller.send_task("do it", session_key="amber"), timeout=20.0
         )
@@ -100,16 +100,16 @@ def test_two_session_keys_run_in_two_sandboxes(tmp_path):
     # Each wrote into its own workspace.
     assert (host_dir / "mine.txt").exists()
     assert (amber_dir / "mine.txt").exists()
-    # The host coworker could read what was planted in ITS box...
+    # The host agent could read what was planted in ITS box...
     assert "host-only" in (host_dir / "peek.txt").read_text()
-    # ...and the second coworker could not: it is not in the same box.
+    # ...and the second agent could not: it is not in the same box.
     assert "host-only" not in (amber_dir / "peek.txt").read_text()
     assert not (amber_dir / "planted.txt").exists()
     assert handed_out["amber"].workspace == str(amber_dir)
 
 
 def test_an_agent_keeps_one_environment_across_its_turns(tmp_path):
-    """Isolation must not cost reuse: a coworker's box is built once."""
+    """Isolation must not cost reuse: an agent's box is built once."""
     built: list[str] = []
     envs: dict[str, LocalEnvironment] = {}
 
@@ -126,10 +126,10 @@ def test_an_agent_keeps_one_environment_across_its_turns(tmp_path):
         second = executor._environment_for("amber")
         assert first is second
         assert built == ["amber"]
-        # A different coworker is a different box.
+        # A different agent is a different box.
         assert executor._environment_for("blue") is not first
         assert built == ["amber", "blue"]
-        # The host's own coworker never goes through the factory.
+        # The host's own agent never goes through the factory.
         assert executor._environment_for("") is host_env
         assert executor._environment_for(None) is host_env
     finally:

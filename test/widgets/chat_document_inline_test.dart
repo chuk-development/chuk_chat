@@ -1,4 +1,4 @@
-// A document the coworker posted carries its content in the thread.
+// A document the agent posted carries its content in the thread.
 //
 // The block used to be a row — a title, "Version 31 · Saved document" and a
 // chevron — so the numbers the user asked for were never in the chat. These

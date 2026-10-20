@@ -164,12 +164,12 @@ def test_the_host_stores_a_decision_and_tells_every_device(tmp_path):
         assert APPROVALS_CAPABILITY in route["capabilities"]
         sent.clear()
         bridge = host._action_approvals
-        # A coworker's own thread is its own policy ...
+        # An agent's own thread is its own policy ...
         bridge.remember("local:amber:1", "browser_act", "always_this_site", "shop.example")
         assert sent[-1]["type"] == "agent_permissions"
         assert sent[-1]["agent_id"] == "local:amber:1"
         assert sent[-1]["approvals"]["sites"]["browser_act"] == ["shop.example"]
-        # ... every other session is the host's own coworker, under its app id.
+        # ... every other session is the host's own agent, under its app id.
         bridge.remember("default", "send_external", "always_this_agent")
         assert sent[-1]["agent_id"] == host_agent_id(host._device_id)
         assert sent[-1]["approvals"]["classes"]["send_external"] == "allow"

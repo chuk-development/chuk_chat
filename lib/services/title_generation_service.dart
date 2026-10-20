@@ -1,6 +1,6 @@
 // lib/services/title_generation_service.dart
 // MERGE NOTE: the Agents build stubbed this file to a no-op (its sidebar listed
-// coworkers, not chats, so there was no title to generate). Upstream's real
+// agents, not chats, so there was no title to generate). Upstream's real
 // generator is kept for chuk_chat chats, in both builds. An Agents thread is
 // not titled here (see [TitleGenerationService.generateAndApplyTitle]).
 import 'dart:async';

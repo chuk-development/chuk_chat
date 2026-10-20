@@ -3,7 +3,7 @@
 // The two things the weekly budget says in a thread (docs/WIRE_CONTRACT.md,
 // "Cost per run and weekly budget"):
 //
-//  * [AgentsBudgetWarningNotice] — one line when the coworker's week reached
+//  * [AgentsBudgetWarningNotice] — one line when the agent's week reached
 //    80 % or 100 % of its budget (`budget_warning`).
 //  * [AgentsBudgetRefusalCard] — the host refused a task because the budget
 //    is used up (`done.reason == "budget_exceeded"`). It is not an answer and
@@ -125,7 +125,7 @@ class AgentsBudgetRefusalCard extends StatelessWidget {
   /// to run anyway then.
   final VoidCallback? onRunAnyway;
 
-  /// Opens the coworker's controls, where the budget is set. Null hides it.
+  /// Opens the agent's controls, where the budget is set. Null hides it.
   final VoidCallback? onChangeBudget;
 
   /// Desktop size (docs/DESIGN.md §14.8): the dense buttons.

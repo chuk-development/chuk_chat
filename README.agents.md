@@ -1,6 +1,6 @@
 # Agents
 
-A team of persistent, sandboxed AI coworkers you message tasks to. See the full
+A team of persistent, sandboxed AI agents you message tasks to. See the full
 plan in [`docs/AGENTS_AGENT_PLATFORM_PLAN.md`](docs/AGENTS_AGENT_PLATFORM_PLAN.md).
 
 The Flutter app is the repository root. The Python platform is `agents/`.

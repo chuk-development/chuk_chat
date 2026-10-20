@@ -24,6 +24,13 @@ const double kFloatingAppBarHeight = 62;
 /// Diameter of the round chips: back, and each action. The chat's menu chip.
 const double kFloatingAppBarChip = 42;
 
+/// The press area of a chip: 48 px, the smallest reliable touch target. The
+/// extra 3 px on each side are slop, not paint.
+const double kFloatingAppBarTarget = 48;
+
+/// The slop on each side of a chip.
+const double _kChipSlop = (kFloatingAppBarTarget - kFloatingAppBarChip) / 2;
+
 /// Corner radius of the title pill. The chat's title pill.
 const double _kTitleRadius = 18;
 
@@ -78,23 +85,33 @@ class FloatingHeaderButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-    final Widget chip = FloatingChromeSurface(
-      shape: BoxShape.circle,
-      child: Material(
-        type: MaterialType.transparency,
-        shape: const CircleBorder(),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onPressed,
-          child: SizedBox(
-            width: kFloatingAppBarChip,
-            height: kFloatingAppBarChip,
-            child: Center(
-              child: AppIcon(
-                icon,
-                size: 22,
-                color: color ?? theme.resolvedIconColor,
+    // The chip paints 42 px, the chat's chip; the press covers 48 px, the
+    // smallest target a finger hits reliably. The ink stays on the chip.
+    final Widget chip = Material(
+      type: MaterialType.transparency,
+      child: InkResponse(
+        onTap: onPressed,
+        containedInkWell: false,
+        highlightShape: BoxShape.circle,
+        radius: kFloatingAppBarChip / 2,
+        child: SizedBox.square(
+          dimension: kFloatingAppBarTarget,
+          child: Center(
+            // Ink, not a plain box: the chip's fill is painted on the
+            // Material, so the press ink lands on top of it.
+            child: Ink(
+              width: kFloatingAppBarChip,
+              height: kFloatingAppBarChip,
+              decoration: BoxDecoration(
+                color: FloatingChromeSurface.fillOf(context),
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: AppIcon(
+                  icon,
+                  size: 22,
+                  color: color ?? theme.resolvedIconColor,
+                ),
               ),
             ),
           ),
@@ -219,12 +236,14 @@ class FloatingAppBar extends StatelessWidget implements PreferredSizeWidget {
       scrolledUnderElevation: 0,
       toolbarHeight: kFloatingAppBarHeight,
       automaticallyImplyLeading: false,
-      titleSpacing: back == null ? 10 : 8,
-      leadingWidth: kFloatingAppBarChip + 10,
+      // The chips keep their painted place: the 48 px press area takes its
+      // slop out of the margins around them.
+      titleSpacing: back == null ? 10 : 8 - _kChipSlop,
+      leadingWidth: kFloatingAppBarTarget + 10 - _kChipSlop,
       leading: back == null
           ? null
           : Padding(
-              padding: const EdgeInsets.only(left: 10),
+              padding: const EdgeInsets.only(left: 10 - _kChipSlop),
               child: Center(child: back),
             ),
       title: Align(
@@ -243,9 +262,9 @@ class FloatingAppBar extends StatelessWidget implements PreferredSizeWidget {
           : <Widget>[
               for (final Widget action in actions!) ...[
                 Center(child: action),
-                const SizedBox(width: 8),
+                const SizedBox(width: 8 - 2 * _kChipSlop),
               ],
-              const SizedBox(width: 4),
+              const SizedBox(width: 4 + _kChipSlop),
             ],
       bottom: bottom,
     );

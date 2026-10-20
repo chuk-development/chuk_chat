@@ -80,7 +80,7 @@ AgentsRelayApprovalRequest _takeover({
 );
 
 /// The takeover card (research item 6): a login, 2FA code or CAPTCHA in the
-/// agent's browser becomes ONE card, "Coworker needs you in the browser",
+/// agent's browser becomes ONE card, "Agent needs you in the browser",
 /// whose button opens the live view; the card resolves when the agent
 /// continues.
 void main() {
@@ -164,7 +164,7 @@ void main() {
               width: width,
               child: AgentsTakeoverCard(
                 request: request ?? _takeover(),
-                coworkerName: 'Ada',
+                agentName: 'Ada',
                 stage: stage,
                 visited: visited,
                 onOpenBrowser: onOpen ?? () {},
@@ -179,7 +179,7 @@ void main() {
       await tester.pump();
     }
 
-    testWidgets('names the coworker, the step and the site', (tester) async {
+    testWidgets('names the agent, the step and the site', (tester) async {
       await pumpCard(tester);
       expect(find.text('Ada needs you in the browser'), findsOneWidget);
       expect(
@@ -219,7 +219,7 @@ void main() {
         _app(
           AgentsTakeoverCard(
             request: _takeover(),
-            coworkerName: 'Ada',
+            agentName: 'Ada',
             stage: AgentsTakeoverStage.waiting,
             visited: false,
             onOpenBrowser: null,
@@ -265,7 +265,7 @@ void main() {
       expect(done, 1);
     });
 
-    testWidgets('the continuing stage says the coworker continues', (
+    testWidgets('the continuing stage says the agent continues', (
       tester,
     ) async {
       await pumpCard(tester, stage: AgentsTakeoverStage.continuing);
@@ -291,7 +291,7 @@ void main() {
                 request: _takeover(
                   reason: 'The bank asks for a one-time code by SMS',
                 ),
-                coworkerName: 'A coworker with a long name',
+                agentName: 'An agent with a long name',
                 stage: AgentsTakeoverStage.waiting,
                 visited: true,
                 onOpenBrowser: () {},

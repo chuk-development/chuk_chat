@@ -27,7 +27,7 @@ def _executor(tmp_path, endpoint, channel, model_factory):
         environment=LocalEnvironment(workdir=str(tmp_path)),
         db_path=str(tmp_path / "state.db"),
         model_factory=model_factory,
-        system_prompt="You are a coworker in a room.",
+        system_prompt="You are an agent in a room.",
     )
 
 

@@ -1,6 +1,6 @@
 // lib/widgets/charts/chart_spec.dart
 //
-// The declarative chart the coworker draws with.
+// The declarative chart the agent draws with.
 //
 // The agent does not lay out a chart. It says "these are the categories, these
 // are the values, this is the line at 5" and the app draws it: the value above

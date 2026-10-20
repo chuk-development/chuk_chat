@@ -1,4 +1,4 @@
-/// What a coworker's run cost, and what the weekly budget said about it
+/// What an agent's run cost, and what the weekly budget said about it
 /// (docs/WIRE_CONTRACT.md, "Cost per run and weekly budget").
 ///
 /// The host prices every run in euro at the price the chuk API really charges
@@ -296,7 +296,7 @@ String _numberLocale(String locale) {
 
 // ── the weekly budget ───────────────────────────────────────────────────────
 
-/// A `budget_warning` frame: the coworker's week reached 80 % (`warning`) or
+/// A `budget_warning` frame: the agent's week reached 80 % (`warning`) or
 /// 100 % (`exceeded`) of its budget.
 @immutable
 class AgentsBudgetWarning {
@@ -325,10 +325,10 @@ class AgentsBudgetWarning {
 
   bool get isExceeded => level == levelExceeded;
 
-  /// What makes two frames the same notice: the coworker, its week, the level.
+  /// What makes two frames the same notice: the agent, its week, the level.
   String get dedupKey => '$agentId\u0000${weekStartsAt ?? ''}\u0000$level';
 
-  /// Null when the frame names no coworker or no known level.
+  /// Null when the frame names no agent or no known level.
   static AgentsBudgetWarning? fromPayload(Map<String, dynamic> payload) {
     final String? agentId = _text(payload['agent_id']);
     final String? level = _text(payload['level']);
@@ -347,7 +347,7 @@ class AgentsBudgetWarning {
   }
 }
 
-/// The budget notices the threads show. One per coworker, week and level:
+/// The budget notices the threads show. One per agent, week and level:
 /// the host sends each level once a week, but a host restart can send one
 /// again, and a second socket can deliver the same frame twice.
 class AgentsBudgetNotices extends ChangeNotifier {
@@ -359,10 +359,10 @@ class AgentsBudgetNotices extends ChangeNotifier {
   final Map<String, AgentsBudgetWarning> _byThread =
       <String, AgentsBudgetWarning>{};
 
-  /// Records [warning]. False when this coworker's week already had it.
+  /// Records [warning]. False when this agent's week already had it.
   bool add(AgentsBudgetWarning warning) {
     if (!_seen.add(warning.dedupKey)) return false;
-    // The coworker's own thread is its id, so a frame without a session key
+    // The agent's own thread is its id, so a frame without a session key
     // still finds its thread.
     _byThread[warning.sessionKey ?? warning.agentId] = warning;
     notifyListeners();

@@ -22,7 +22,7 @@ class AutomationsSource extends ChangeNotifier {
 
   final Map<String, AgentsAutomation> _byId = <String, AgentsAutomation>{};
 
-  /// The host's coworker names, by session key (`agent_list`).
+  /// The host's agent names, by session key (`agent_list`).
   final Map<String, String> _names = <String, String>{};
   StreamSubscription<AgentsRelayInbound>? _sub;
 
@@ -78,15 +78,15 @@ class AutomationsSource extends ChangeNotifier {
       all.where((a) => a.sessionKey == sessionKey).toList();
 
   /// The name to put over a group of rows: what the rest of the app calls that
-  /// coworker, never the raw session key.
+  /// agent, never the raw session key.
   ///
   /// The host sends its roster as `agent_list`; a key it has not named is read
   /// the way the app itself built it (`local:<name>:<n>:<random>`,
   /// `host:<device>`), and only a key that is neither shows as it is.
-  String coworkerName(String sessionKey) {
+  String agentName(String sessionKey) {
     final named = _names[sessionKey];
     if (named != null && named.isNotEmpty) return named;
-    if (sessionKey == 'default') return 'Default coworker';
+    if (sessionKey == 'default') return 'Default agent';
     if (sessionKey.startsWith('local:')) {
       final parts = sessionKey.split(':');
       if (parts.length >= 2 && parts[1].trim().isNotEmpty) {
@@ -147,7 +147,7 @@ class AutomationsSource extends ChangeNotifier {
         notifyListeners();
       case AgentsRelayAgentList():
         // The same frame the roster reads. Held here so a group header can
-        // name its coworker without the page having to reach the roster.
+        // name its agent without the page having to reach the roster.
         for (final agent in event.agents) {
           _names[agent.agentId] = agent.name;
         }
@@ -216,9 +216,9 @@ class AutomationsSource extends ChangeNotifier {
   /// True when [runId] was an `on_change` run that found nothing new.
   bool isQuietRun(String runId) => _quietRuns.containsKey(runId);
 
-  /// The coworkers the app knows by name (`agent_list`), session key → name.
+  /// The agents the app knows by name (`agent_list`), session key → name.
   /// The global page offers them when it creates an automation.
-  Map<String, String> get coworkerNames =>
+  Map<String, String> get agentNames =>
       Map<String, String>.unmodifiable(_names);
 
   /// Sends `automation_create`. Completes with the host's answer, or a

@@ -416,7 +416,7 @@ def build_runtime(
     that has a job of its own and none of the file or shell tools.
 
     ``action_approvals`` (docs/WIRE_CONTRACT.md, "Per-action approvals") is
-    the executor's binding for one run: the coworker's approval policy, the
+    the executor's binding for one run: the agent's approval policy, the
     ask, where a lasting decision goes and the browser's site. With it the
     class tools (``herenow_publish``, ``mail_send`` / ``mail_reply``, a
     connector tool marked destructive, a page-changing browser tool) follow

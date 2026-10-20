@@ -1,6 +1,6 @@
 // lib/voice/widgets/voice_call_button.dart
 //
-// The bare call target (`ChatVoiceCallStyle.bar`): a 20 px glyph in the
+// The bare voice target (`ChatVoiceCallStyle.bar`): a 20 px VoiceIcon in the
 // icon colour on round ink, a tooltip, no fill. Draws the HugeIcon
 // directly (docs/DESIGN.md §5: new code names the HugeIcon).
 //
@@ -54,7 +54,7 @@ class VoiceCallButton extends StatelessWidget {
               width: size,
               height: size,
               child: Center(
-                child: HugeIcon(HugeIcons.call02, size: 20, color: glyph),
+                child: HugeIcon(HugeIcons.voice, size: 20, color: glyph),
               ),
             ),
           ),

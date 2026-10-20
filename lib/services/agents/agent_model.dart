@@ -1,18 +1,18 @@
-/// What a coworker runs on, in one answer: its own model when it has one, the
+/// What an agent runs on, in one answer: its own model when it has one, the
 /// app default when it has not.
 ///
 /// ## The one model of "model, provider, reasoning"
 ///
-/// * **A coworker's own model** — model, provider and reasoning level — is
-///   stored per coworker thread in [ChatModelSelectionService]. The coworker
-///   profile (the model page, [CoworkerModelState]) and the composer of that
-///   coworker's thread both read and write this one record. The relay send
+/// * **An agent's own model** — model, provider and reasoning level — is
+///   stored per agent thread in [ChatModelSelectionService]. The agent
+///   profile (the model page, [AgentModelState]) and the composer of that
+///   agent's thread both read and write this one record. The relay send
 ///   resolves it again at send time, so what the profile shows is what runs.
 /// * **The app default** is the composer's mode — Fast, Thinking or Custom —
-///   set in Settings → Model Selection ([ChatModeService]). A coworker with no
+///   set in Settings → Model Selection ([ChatModeService]). An agent with no
 ///   model of its own runs on it, and so does a plain chat.
 ///
-/// Nothing else picks a coworker's model. The host stores none: every task
+/// Nothing else picks an agent's model. The host stores none: every task
 /// names the model it runs on, and the host's status frame reports what the
 /// last run really used (`AgentModelChoice`).
 library;
@@ -30,8 +30,8 @@ import 'package:chuk_chat/widgets/model_selection_dropdown.dart'
 
 /// One provider of a model, as the account's catalogue lists it.
 @immutable
-class CoworkerProvider {
-  const CoworkerProvider({
+class AgentProvider {
+  const AgentProvider({
     required this.slug,
     required this.name,
     this.promptPrice,
@@ -47,7 +47,7 @@ class CoworkerProvider {
   final double? completionPrice;
   final int? contextLength;
 
-  static CoworkerProvider? fromJson(Object? raw) {
+  static AgentProvider? fromJson(Object? raw) {
     if (raw is! Map) return null;
     final slug = raw['slug'];
     if (slug is! String || slug.isEmpty) return null;
@@ -60,7 +60,7 @@ class CoworkerProvider {
     }
 
     final context = raw['context_length'];
-    return CoworkerProvider(
+    return AgentProvider(
       slug: slug,
       name: name is String && name.trim().isNotEmpty
           ? name.trim()
@@ -84,8 +84,8 @@ class CoworkerProvider {
 
 /// One model of the catalogue, with the providers that serve it.
 @immutable
-class CoworkerCatalogueModel {
-  const CoworkerCatalogueModel({
+class AgentCatalogueModel {
+  const AgentCatalogueModel({
     required this.id,
     required this.name,
     required this.providers,
@@ -93,12 +93,12 @@ class CoworkerCatalogueModel {
 
   final String id;
   final String name;
-  final List<CoworkerProvider> providers;
+  final List<AgentProvider> providers;
 
   /// The name without the lab prefix (`DeepSeek: V4 Flash` → `V4 Flash`).
   String get shortName => ChatModeSelector.stripLabPrefix(name);
 
-  CoworkerProvider? provider(String slug) {
+  AgentProvider? provider(String slug) {
     for (final candidate in providers) {
       if (candidate.slug == slug) return candidate;
     }
@@ -106,8 +106,8 @@ class CoworkerCatalogueModel {
   }
 
   /// The provider with the lowest output price, or null with none listed.
-  CoworkerProvider? get cheapest {
-    CoworkerProvider? best;
+  AgentProvider? get cheapest {
+    AgentProvider? best;
     for (final candidate in providers) {
       final price = candidate.completionPrice;
       if (price == null) continue;
@@ -116,16 +116,16 @@ class CoworkerCatalogueModel {
     return best ?? (providers.isEmpty ? null : providers.first);
   }
 
-  static CoworkerCatalogueModel? fromJson(Map<String, dynamic> raw) {
+  static AgentCatalogueModel? fromJson(Map<String, dynamic> raw) {
     final id = raw['id'];
     if (id is! String || id.isEmpty) return null;
     final name = raw['name'];
-    final providers = <CoworkerProvider>[
+    final providers = <AgentProvider>[
       if (raw['providers'] is List)
         for (final entry in raw['providers'] as List)
-          ?CoworkerProvider.fromJson(entry),
+          ?AgentProvider.fromJson(entry),
     ];
-    return CoworkerCatalogueModel(
+    return AgentCatalogueModel(
       id: id,
       name: name is String && name.trim().isNotEmpty
           ? name.trim()
@@ -135,16 +135,16 @@ class CoworkerCatalogueModel {
   }
 }
 
-/// What a coworker runs on right now.
+/// What an agent runs on right now.
 @immutable
-class CoworkerModelState {
-  const CoworkerModelState({
+class AgentModelState {
+  const AgentModelState({
     required this.own,
     required this.defaultMode,
     required this.defaultConfig,
   });
 
-  /// The coworker's own model, or null when it follows the app default.
+  /// The agent's own model, or null when it follows the app default.
   final ChatModelSelection? own;
 
   /// The composer mode the app default comes from.
@@ -173,18 +173,18 @@ class CoworkerModelState {
   };
 }
 
-/// Reads and writes a coworker's model. Static, like the services it sits on.
-class CoworkerModel {
-  CoworkerModel._();
+/// Reads and writes an agent's model. Static, like the services it sits on.
+class AgentModel {
+  AgentModel._();
 
-  /// The coworker behind [chatId] (its thread key): own model or default.
-  static Future<CoworkerModelState> resolve(String chatId) async {
+  /// The agent behind [chatId] (its thread key): own model or default.
+  static Future<AgentModelState> resolve(String chatId) async {
     final own = chatId.isEmpty
         ? null
         : await ChatModelSelectionService.instance.load(chatId);
     final mode = await ChatModeService.load();
     final config = await ChatModeService.loadConfig(mode);
-    return CoworkerModelState(
+    return AgentModelState(
       own: own,
       defaultMode: mode,
       defaultConfig: config,
@@ -200,12 +200,12 @@ class CoworkerModel {
   /// (no own model when the stored choice cannot be read, the built-in
   /// default mode and its model otherwise). A read that hangs is the
   /// caller's watchdog's job ([loadTimeout]).
-  static Future<CoworkerModelState> resolveOrFallback(String chatId) async {
+  static Future<AgentModelState> resolveOrFallback(String chatId) async {
     Future<T> safely<T>(Future<T> Function() read, T fallback) async {
       try {
         return await read();
       } catch (e) {
-        if (kDebugMode) debugPrint('CoworkerModel: read failed: $e');
+        if (kDebugMode) debugPrint('AgentModel: read failed: $e');
         return fallback;
       }
     }
@@ -224,16 +224,16 @@ class CoworkerModel {
       () => ChatModeService.loadConfig(mode),
       ChatModeService.defaultConfig(mode),
     );
-    return CoworkerModelState(
+    return AgentModelState(
       own: own,
       defaultMode: mode,
       defaultConfig: config,
     );
   }
 
-  /// What to show when the coworker's model could not be read in time: the
+  /// What to show when the agent's model could not be read in time: the
   /// built-in default mode and its model.
-  static CoworkerModelState fallbackState() => CoworkerModelState(
+  static AgentModelState fallbackState() => AgentModelState(
     own: null,
     defaultMode: ChatModeService.fallbackMode,
     defaultConfig: ChatModeService.defaultConfig(ChatModeService.fallbackMode),
@@ -241,33 +241,33 @@ class CoworkerModel {
 
   /// The catalogue as this device last cached it. Empty before the first
   /// model fetch of the install.
-  static Future<List<CoworkerCatalogueModel>> catalogue() async {
+  static Future<List<AgentCatalogueModel>> catalogue() async {
     final override = debugCatalogue;
     if (override != null) return override();
     try {
       final raw = await ModelCacheService.loadAvailableModels();
-      return <CoworkerCatalogueModel>[
-        for (final entry in raw) ?CoworkerCatalogueModel.fromJson(entry),
+      return <AgentCatalogueModel>[
+        for (final entry in raw) ?AgentCatalogueModel.fromJson(entry),
       ];
     } catch (_) {
       // An unreadable cache is an empty one: the caller fetches or says so.
-      return const <CoworkerCatalogueModel>[];
+      return const <AgentCatalogueModel>[];
     }
   }
 
   /// Test seam: replaces the device cache as the catalogue.
   @visibleForTesting
-  static Future<List<CoworkerCatalogueModel>> Function()? debugCatalogue;
+  static Future<List<AgentCatalogueModel>> Function()? debugCatalogue;
 
   /// The provider a newly picked model starts on: the one pinned for it on
   /// the model screen, else the cheapest the catalogue lists. Null when the
   /// catalogue does not know the model.
   static Future<String?> providerFor(
     String modelId, {
-    List<CoworkerCatalogueModel>? models,
+    List<AgentCatalogueModel>? models,
   }) async {
     final list = models ?? await catalogue();
-    CoworkerCatalogueModel? model;
+    AgentCatalogueModel? model;
     for (final candidate in list) {
       if (candidate.id == modelId) {
         model = candidate;
@@ -304,7 +304,7 @@ class CoworkerModel {
     }
   }
 
-  /// Gives the coworker its own model. [reasoningEffort] is clamped to what
+  /// Gives the agent its own model. [reasoningEffort] is clamped to what
   /// the model allows before it is stored.
   static Future<ChatModelSelection> setOwn(
     String chatId, {
@@ -325,7 +325,7 @@ class CoworkerModel {
     return selection;
   }
 
-  /// Drops the coworker's own model: it follows the app default again.
+  /// Drops the agent's own model: it follows the app default again.
   static Future<void> useDefault(String chatId) =>
       ChatModelSelectionService.instance.clear(chatId);
 }
@@ -346,7 +346,7 @@ String providerLabelFromSlug(String slug) {
 String providerLabel(
   String slug, {
   String? modelId,
-  List<CoworkerCatalogueModel> models = const <CoworkerCatalogueModel>[],
+  List<AgentCatalogueModel> models = const <AgentCatalogueModel>[],
 }) {
   if (slug.isEmpty) return 'Automatic';
   for (final model in models) {
@@ -360,7 +360,7 @@ String providerLabel(
 /// The model's short name from [models], else a prettified id.
 String modelLabel(
   String modelId, {
-  List<CoworkerCatalogueModel> models = const <CoworkerCatalogueModel>[],
+  List<AgentCatalogueModel> models = const <AgentCatalogueModel>[],
 }) {
   for (final model in models) {
     if (model.id == modelId) return model.shortName;

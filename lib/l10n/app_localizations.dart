@@ -235,7 +235,7 @@ class AppLocalizations {
   String get agentsPhaseWaitingForYou => _get('agentsPhaseWaitingForYou');
   String get agentsPhaseNotDelivered => _get('agentsPhaseNotDelivered');
   String get agentsPhaseRetry => _get('agentsPhaseRetry');
-  // UI audit fixes A: tool phase, automation states, phone coworker page.
+  // UI audit fixes A: tool phase, automation states, phone agent page.
   String get agentsToolSearchingWeb => _get('agentsToolSearchingWeb');
   String get agentsToolSearching => _get('agentsToolSearching');
   String get agentsToolReadingPage => _get('agentsToolReadingPage');
@@ -256,7 +256,7 @@ class AppLocalizations {
       _get('agentsCwRemoveTitle').replaceAll('{name}', name);
   String get agentsCwRemoveBody => _get('agentsCwRemoveBody');
   String get agentsCwRemove => _get('agentsCwRemove');
-  String get agentsCwRemoveCoworker => _get('agentsCwRemoveCoworker');
+  String get agentsCwRemoveAgent => _get('agentsCwRemoveAgent');
   String get agentsCwRoleFallback => _get('agentsCwRoleFallback');
   String get agentsCwModel => _get('agentsCwModel');
   String get agentsCwModelSubtitle => _get('agentsCwModelSubtitle');
@@ -307,56 +307,8 @@ class AppLocalizations {
   String get takeoverSkip => _get('takeoverSkip');
   String takeoverContinues(String name) =>
       _get('takeoverContinues').replaceAll('{name}', name);
-  // Agents: a coworker's Telegram channel.
+  // Agents: the agent's channels section label.
   String get agentsChannels => _get('agentsChannels');
-  String get agentsTelegramTitle => _get('agentsTelegramTitle');
-  String get agentsTelegramNotE2e => _get('agentsTelegramNotE2e');
-  String get agentsTelegramPaste => _get('agentsTelegramPaste');
-  String get agentsTelegramTokenLabel => _get('agentsTelegramTokenLabel');
-  String get agentsTelegramTokenHint => _get('agentsTelegramTokenHint');
-  String get agentsTelegramTurnOn => _get('agentsTelegramTurnOn');
-  String get agentsTelegramCancel => _get('agentsTelegramCancel');
-  String agentsTelegramLinkSteps(String bot) =>
-      _get('agentsTelegramLinkSteps').replaceAll('{bot}', bot);
-  String get agentsTelegramLinkStepsNoBot =>
-      _get('agentsTelegramLinkStepsNoBot');
-  String get agentsTelegramCodeLabel => _get('agentsTelegramCodeLabel');
-  String get agentsTelegramLink => _get('agentsTelegramLink');
-  String agentsTelegramLinkedTo(String name) =>
-      _get('agentsTelegramLinkedTo').replaceAll('{name}', name);
-  String get agentsTelegramLinkedChat => _get('agentsTelegramLinkedChat');
-  String get agentsTelegramUnlink => _get('agentsTelegramUnlink');
-  String get agentsTelegramForget => _get('agentsTelegramForget');
-  String get agentsTelegramStateOff => _get('agentsTelegramStateOff');
-  String get agentsTelegramStateDisallowed =>
-      _get('agentsTelegramStateDisallowed');
-  String get agentsTelegramStateStarting => _get('agentsTelegramStateStarting');
-  String agentsTelegramStatePolling(String bot) =>
-      _get('agentsTelegramStatePolling').replaceAll('{bot}', bot);
-  String get agentsTelegramStateOn => _get('agentsTelegramStateOn');
-  String get agentsTelegramStateBackoff => _get('agentsTelegramStateBackoff');
-  String get agentsTelegramStateConflict => _get('agentsTelegramStateConflict');
-  String get agentsTelegramStateUnauthorized =>
-      _get('agentsTelegramStateUnauthorized');
-  String get agentsTelegramStateStopped => _get('agentsTelegramStateStopped');
-  String get agentsTelegramOffline => _get('agentsTelegramOffline');
-  String get agentsTelegramAsking => _get('agentsTelegramAsking');
-  String get agentsTelegramNoAnswer => _get('agentsTelegramNoAnswer');
-  String get agentsTelegramErrTokenRequired =>
-      _get('agentsTelegramErrTokenRequired');
-  String get agentsTelegramErrTokenInvalid =>
-      _get('agentsTelegramErrTokenInvalid');
-  String get agentsTelegramErrTokenInUse => _get('agentsTelegramErrTokenInUse');
-  String get agentsTelegramErrNotRunning => _get('agentsTelegramErrNotRunning');
-  String get agentsTelegramErrWrongCode => _get('agentsTelegramErrWrongCode');
-  String get agentsTelegramErrTooManyAttempts =>
-      _get('agentsTelegramErrTooManyAttempts');
-  String get agentsTelegramErrNoPendingLink =>
-      _get('agentsTelegramErrNoPendingLink');
-  String get agentsTelegramErrUnknownAgent =>
-      _get('agentsTelegramErrUnknownAgent');
-  String agentsTelegramErrOther(String code) =>
-      _get('agentsTelegramErrOther').replaceAll('{code}', code);
 
   // ── Tool calling page ──────────────────────────────────────
   String get engine => _get('engine');
@@ -729,6 +681,11 @@ class AppLocalizations {
   String get addMessageOrDocs => _get('addMessageOrDocs');
   String get micAccessFailed => _get('micAccessFailed');
   String get transcriptionFailed => _get('transcriptionFailed');
+  String get voiceMessage => _get('voiceMessage');
+  String get voiceMessageShowTranscript =>
+      _get('voiceMessageShowTranscript');
+  String get voiceMessageHideTranscript =>
+      _get('voiceMessageHideTranscript');
   String get nothingToResend => _get('nothingToResend');
   String get freeMessagesUsed => _get('freeMessagesUsed');
   String get ok => _get('ok');
@@ -1053,11 +1010,8 @@ class AppLocalizations {
   String get agentsRoomEmptyHint => _get('agentsRoomEmptyHint');
   String get agentsRoomConnectHostHint => _get('agentsRoomConnectHostHint');
   String get agentsHostYourComputer => _get('agentsHostYourComputer');
-  String get coworkerModelListFailed => _get('coworkerModelListFailed');
+  String get agentModelListFailed => _get('agentModelListFailed');
   String get profileSaveFailedPlain => _get('profileSaveFailedPlain');
-  String get agentsTelegramLinkedHeading => _get('agentsTelegramLinkedHeading');
-  String get agentsTelegramLinkedChatShort =>
-      _get('agentsTelegramLinkedChatShort');
   // ── F2: automations + cost totals ──
   String get automationsTitle => _get('automationsTitle');
   String get automationNew => _get('automationNew');
@@ -1080,7 +1034,7 @@ class AppLocalizations {
   String get automationMailHelp => _get('automationMailHelp');
   String get automationPromptLabel => _get('automationPromptLabel');
   String get automationNameLabel => _get('automationNameLabel');
-  String get automationCoworkerLabel => _get('automationCoworkerLabel');
+  String get automationAgentLabel => _get('automationAgentLabel');
   String get automationNotifyOnChange => _get('automationNotifyOnChange');
   String get automationNotifyOnChangeHelp => _get('automationNotifyOnChangeHelp');
   String get automationCreate => _get('automationCreate');
@@ -1090,7 +1044,7 @@ class AppLocalizations {
   String get automationErrInterval => _get('automationErrInterval');
   String get automationErrMail => _get('automationErrMail');
   String get automationErrTooLong => _get('automationErrTooLong');
-  String get automationErrCoworker => _get('automationErrCoworker');
+  String get automationErrAgent => _get('automationErrAgent');
   String get automationNothingChanged => _get('automationNothingChanged');
   String get automationSaved => _get('automationSaved');
   String get automationNotConnected => _get('automationNotConnected');
@@ -1128,7 +1082,7 @@ class AppLocalizations {
   String approvalAlwaysSite(String site) =>
       _get('approvalAlwaysSite').replaceAll('{site}', site);
   String get approvalDeny => _get('approvalDeny');
-  String get approvalThisCoworker => _get('approvalThisCoworker');
+  String get approvalThisAgent => _get('approvalThisAgent');
   String get approvalThisSite => _get('approvalThisSite');
   String get approvalMailTo => _get('approvalMailTo');
   String get approvalMailCc => _get('approvalMailCc');
@@ -1151,6 +1105,15 @@ class AppLocalizations {
   String approvalDecidedAlwaysSite(String site) =>
       _get('approvalDecidedAlwaysSite').replaceAll('{site}', site);
   String get approvalDecidedDenied => _get('approvalDecidedDenied');
+  String approvalRowApproved(String what) =>
+      _get('approvalRowApproved').replaceAll('{what}', what);
+  String approvalRowDenied(String what) =>
+      _get('approvalRowDenied').replaceAll('{what}', what);
+  String approvalRowRevoked(String what) =>
+      _get('approvalRowRevoked').replaceAll('{what}', what);
+  String get approvalRowAlways => _get('approvalRowAlways');
+  String get approvalRowUndo => _get('approvalRowUndo');
+  String get approvalRowUndoFailed => _get('approvalRowUndoFailed');
   String get approvalNotConnected => _get('approvalNotConnected');
   String get approvalsHeading => _get('approvalsHeading');
   String get approvalsSendExternal => _get('approvalsSendExternal');
@@ -1221,9 +1184,9 @@ class AppLocalizations {
     'tplStarterFailed',
   ).replaceAll('{name}', name).replaceAll('{error}', error);
 
-  /// A coworker template's string by its catalogue key: `tpl.<id>.name`,
+  /// An agent template's string by its catalogue key: `tpl.<id>.name`,
   /// `tpl.<id>.desc`, `tpl.<id>.starter`, `tpl.<id>.starterWhen`,
-  /// `tpl.tool.<tool>` (lib/services/agents/coworker_templates.dart).
+  /// `tpl.tool.<tool>` (lib/services/agents/agent_templates.dart).
   String tpl(String key) => _get(key);
   // ── end templates ──
 
@@ -1263,15 +1226,25 @@ class AppLocalizations {
   // ── end skill proposals ──
 
   // ── polish ──
-  /// The New-agent flow could not send `agent_create`: the coworker exists
+  /// The New-agent flow could not send `agent_create`: the agent exists
   /// in the roster, not on the host.
   String tplAgentCreateFailed(String name) =>
       _get('tplAgentCreateFailed').replaceAll('{name}', name);
 
-  /// The phone coworker page's row to its permissions page.
+  /// The phone agent page's row to its permissions page.
   String get agentsCwPermissions => _get('agentsCwPermissions');
   String get agentsCwPermissionsSubtitle =>
       _get('agentsCwPermissionsSubtitle');
+  String get agentsCwSectionAbilities => _get('agentsCwSectionAbilities');
+  String get agentsCwSectionMachine => _get('agentsCwSectionMachine');
+  String get agentsCwSectionActivity => _get('agentsCwSectionActivity');
+  String get agentsCwSectionDanger => _get('agentsCwSectionDanger');
+  String get agentsCwSkillsSubtitle => _get('agentsCwSkillsSubtitle');
+  String get agentsCwScreenSubtitle => _get('agentsCwScreenSubtitle');
+  String get agentsCwHide => _get('agentsCwHide');
+  String get agentsCwHideSubtitle => _get('agentsCwHideSubtitle');
+  String agentsCwHidden(String name) =>
+      _get('agentsCwHidden').replaceAll('{name}', name);
   // ── end polish ──
   // ── own browser ──
   String ubSubtitlePaired(String browser) =>
@@ -1281,7 +1254,7 @@ class AppLocalizations {
       _get('ubSubtitleInUseHere').replaceAll('{browser}', browser);
   String ubInUseBy(String name) =>
       _get('ubInUseBy').replaceAll('{name}', name);
-  String get ubAnotherCoworker => _get('ubAnotherCoworker');
+  String get ubAnotherAgent => _get('ubAnotherAgent');
   String get ubSubtitleNotConnected => _get('ubSubtitleNotConnected');
   String get ubSubtitleNotSetUp => _get('ubSubtitleNotSetUp');
   String get ubSubtitleStopped => _get('ubSubtitleStopped');

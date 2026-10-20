@@ -437,7 +437,7 @@ create table if not exists public.cowork_run_notifications (
   agent_name   text        not null default '',  -- the name the user chose; '' when unnamed
   session_key  text        not null,    -- which thread to open on tap
   kind         text        not null,    -- 'completed' | 'failed' | 'approval_needed'
-  title        text        not null,    -- names only (coworker, automation), no answer content
+  title        text        not null,    -- names only (agent, automation), no answer content
   body         text        not null default '',
   preview_ciphertext text,              -- reserved (channel-key sealed preview)
   created_at   timestamptz not null default now(),
@@ -481,7 +481,7 @@ channel and the "answer ready" state on reconnect do not depend on it.
 
 ## Security note (business risk)
 
-The push carries a generic title and body only. The title names the coworker
+The push carries a generic title and body only. The title names the agent
 and, when an automation fired the run, that automation — both names the user
 typed themselves, so the reader recognises them and the internal codename
 (`ivory-lynx`, also the workspace directory) never leaves the host. A leaked

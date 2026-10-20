@@ -278,7 +278,7 @@ def test_a_restricted_run_without_a_mailbox_fails_without_a_model_call(tmp_path)
 
 
 class _OverBudget:
-    """A budget bridge whose one coworker owns every session and is over."""
+    """A budget bridge whose one agent owns every session and is over."""
 
     def __init__(self) -> None:
         self.sent: list[dict] = []

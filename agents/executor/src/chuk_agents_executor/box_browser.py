@@ -1,12 +1,12 @@
-"""One sandbox browser per box, shared by every thread of its coworker.
+"""One sandbox browser per box, shared by every thread of its agent.
 
-A coworker's sandbox (its box) has ONE Chromium profile
+An agent's sandbox (its box) has ONE Chromium profile
 (``/workspace/.agents/chrome-profile``), and ``browser-mcp-owner.py`` in the
 image refuses a second Playwright MCP server on it ("browser profile still has
-a live owner"). Every thread (session key) of the coworker runs in that box.
+a live owner"). Every thread (session key) of the agent runs in that box.
 When each thread built its own MCP manager, each one also started its own
 browser server, eagerly, at the start of every task. The first thread kept the
-profile, and every other thread of the coworker ran with no browser at all
+profile, and every other thread of the agent ran with no browser at all
 (bead chuk_chat-wrdv).
 
 :class:`BoxBrowser` is the fix. It is the one connection to the box's browser

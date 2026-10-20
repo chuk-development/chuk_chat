@@ -398,11 +398,11 @@ Speed and UX first, then features. Effort: S = days, M = 1-2 weeks, L = more.
    `lib/widgets/agent_control_panel.dart`, `agents/host/.../automations.py`.
    Status 2026-10-05: host side done (bead chuk_chat-qcbv): euro per run at
    the API's own prices, `aux` line for compaction, weekly budget per
-   coworker with a warning at 80 % and a stop at 100 %, opt-in light context
+   agent with a warning at 80 % and a stop at 100 %, opt-in light context
    for scheduled runs. Spec and app work list in docs/WIRE_CONTRACT.md,
    "Cost per run and weekly budget".
 
-9. **Coworker templates (preset agents) in onboarding.**
+9. **Agent templates (preset agents) in onboarding.**
    Why: Grok Bot ships 42 presets + marketplace; Lindy's G2 praise is templates;
    our roster starts empty. How: 10-15 presets (inbox triage, news digest, price
    watcher, research, video clipper) = name + job + schedule + skills, picked in

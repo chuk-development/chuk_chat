@@ -19,8 +19,8 @@ Two protocols meet here, both JSON-RPC-ish over a pipe:
 
   - **broker** (the normal case under a host): the host owns the add-on's
     socket for its whole life (``chuk_agents_executor.user_browser``), and this
-    server dials the host's client socket and names its coworker
-    (``AGENTS_BROWSER_SESSION``). The host lets one coworker hold the browser
+    server dials the host's client socket and names its agent
+    (``AGENTS_BROWSER_SESSION``). The host lets one agent hold the browser
     at a time and enforces the user's Stop.
   - **standalone** (a socket path on the command line, or no host running):
     this server owns the socket and ``agents-browser-bridge``, which the browser
@@ -81,7 +81,7 @@ _READ_ONLY = {"readOnlyHint": True}
 TOOLS: list[dict[str, Any]] = [
     {
         "name": "browser_navigate",
-        "description": "Open a URL in the tab this coworker drives.",
+        "description": "Open a URL in the tab this agent drives.",
         "inputSchema": {
             "type": "object",
             "properties": {"url": {"type": "string"}},
@@ -303,7 +303,7 @@ class Bridge:
 
 
 class BrokerClient:
-    """Broker mode: this coworker's line to the host's browser broker.
+    """Broker mode: this agent's line to the host's browser broker.
 
     Dials lazily and again after a drop, so a host restart costs one failed
     call, not the session."""
@@ -389,7 +389,7 @@ class BrokerClient:
 
 
 def _short_url(url: str) -> str:
-    """A tab the coworker does not hold shows without query and fragment:
+    """A tab the agent does not hold shows without query and fragment:
     a sign-in link or a reset token in another tab is none of its business."""
     cut = len(url)
     for mark in ("?", "#"):
@@ -406,7 +406,7 @@ def _md(text: Any) -> str:
 def tabs_text(data: dict[str, Any]) -> str:
     """``browser_tabs list`` in the Playwright line form the host already
     reads (``chuk_agents_runtime.takeover.current_tab_url``): one tab a line,
-    ``(current)`` on the tab this coworker drives."""
+    ``(current)`` on the tab this agent drives."""
     driving = data.get("driving")
     lines = ["### Open tabs in the user's browser"]
     for tab in data.get("tabs") or []:

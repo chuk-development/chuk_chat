@@ -19,7 +19,7 @@ chuk_chat gains **two modes**:
 
 1. **Normal chat** — you talk to a model. Unchanged.
 2. **Agent chat (Agents)** — a **messenger, like Slack**, whose contacts are
-   **AI agents that behave like coworkers**. You have a roster of them. You
+   **AI agents that behave like colleagues**. You have a roster of them. You
    message an agent a task (with files, links, context, or a screen recording);
    it goes off and *does the work* on its own machine — shell, browser, APIs —
    and streams its run back into the thread. It works when triggered and on a
@@ -31,7 +31,7 @@ button, files and screenshots delivered as cards. You onboard an agent by
 telling it its standing job ("every week, fetch the crypto news and summarise
 it"); it gets a random name, runs on a weekly trigger, and posts results.
 
-The essence: **you assemble a team of specialised, always-running AI coworkers,
+The essence: **you assemble a team of specialised, always-running AI agents,
 give them tasks and revocable access, and they do the work autonomously on your
 own machine.**
 
@@ -73,7 +73,7 @@ work happens in the sandbox, the file or answer comes back to the thread.
   sets up, running the platform. Single-user.
 - **Manager** — the control-plane process on the host: roster, sandbox
   lifecycle, scheduler, relay bridge.
-- **Agent (coworker)** — a Workspace (persona + files + memory + skills + job +
+- **Agent** — a Workspace (persona + files + memory + skills + job +
   schedule) bound to a sandbox. Identified by an auto-assigned name.
 - **Sandbox** — a per-agent container (Debian-like, isolated FS, sudo,
   installable) where that agent's Python runtime executes.
@@ -115,7 +115,7 @@ work happens in the sandbox, the file or answer comes back to the thread.
 
 ---
 
-## 4. The agent (coworker) = a Workspace
+## 4. The agent = a Workspace
 
 An agent reuses the existing `FEATURE_WORKSPACES` concept (persona + files +
 memory). It carries:
@@ -135,8 +135,8 @@ memory). It carries:
   (§10).
 
 **One permanent session per agent — no threads** (§16.1;
-`docs/context-compaction-design.md` §0). A coworker you have to "start a new
-chat" with is not a coworker. The single session grows past any context window;
+`docs/context-compaction-design.md` §0). An agent you have to "start a new
+chat" with is not an agent. The single session grows past any context window;
 compaction + memory (§12) keep it coherent, not the user. **Multi-agent
 collaboration** stays — several agents in one shared room, talking to each other
 like teammates while you assign targeted tasks (§7.6).
@@ -1069,8 +1069,8 @@ take rather than to re-derive. What to copy into `app/`:
   a session list stops scaling at ~10 agents. Our `agent_roster_view` already
   exists; give it the tab strip.
 - **One canonical, permanent thread per agent.** In Hermes, `/new` on a bot
-  silently becomes `/compact`: a coworker you have to "start a new chat" with
-  is not a coworker. Our §7.3 context ladder is exactly the machinery that
+  silently becomes `/compact`: an agent you have to "start a new chat" with
+  is not an agent. Our §7.3 context ladder is exactly the machinery that
   makes this affordable — wire it to compaction, not to a new thread.
 - **Roster row = avatar + latest-message preview + timestamp + status**, plus
   an "Active now" strip for agents currently working. The run view already
@@ -1121,7 +1121,7 @@ What still differentiates us, hardest-to-copy first:
 1. **The phone is the product, not a bridge.** Hermes has **no native mobile
    app** (verified 2026-08-20). Remote access is `hermes dashboard` in a
    browser, or a Telegram/Discord/Slack bot fronting `hermes serve`. Our whole
-   premise — message your coworkers from your phone, the work runs on your own
+   premise — message your agents from your phone, the work runs on your own
    machine, the run streams into the thread — is the surface they reach through
    someone else's messenger, where the message also crosses that platform's
    servers in the clear.

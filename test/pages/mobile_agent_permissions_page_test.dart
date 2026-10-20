@@ -1,5 +1,5 @@
-// The phone's way to a coworker's permissions: the Permissions row on the
-// coworker page opens the desktop's sections (switches, approvals, weekly
+// The phone's way to an agent's permissions: the Permissions row on the
+// agent page opens the desktop's sections (switches, approvals, weekly
 // budget), each behind the host capability it needs. 360 px at 1.3 text
 // scale, as every screen.
 import 'package:flutter/material.dart';
@@ -100,7 +100,7 @@ void main() {
     return (fake, service);
   }
 
-  testWidgets('the coworker page has a Permissions row that opens the '
+  testWidgets('the agent page has a Permissions row that opens the '
       'switches, the approvals and the weekly budget', (tester) async {
     await _phoneView(tester);
     final (FakeHost fake, AgentsPermissionsService service) = host(<String>{
@@ -149,7 +149,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(MobileAgentPermissionsPage), findsOneWidget);
-    // The page asked the host for this coworker.
+    // The page asked the host for this agent.
     expect(
       fake.sent.where(
         (Map<String, dynamic> f) =>

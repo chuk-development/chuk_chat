@@ -1,6 +1,6 @@
-"""The Telegram channel of one coworker.
+"""The Telegram channel of one agent.
 
-Two threads per enabled coworker:
+Two threads per enabled agent:
 
 * the **poller** long-polls ``getUpdates`` (no webhook, no open port), handles
   each message and keeps the update offset in the channel store. A network
@@ -16,7 +16,7 @@ the user types that code into the app, which proves the chat is the user's
 own. Every other chat gets one short, neutral refusal per hour and never
 starts a run.
 
-An inbound text becomes a normal task in the coworker's one session (the
+An inbound text becomes a normal task in the agent's one session (the
 same ``session_key`` the app uses), so the turn also shows in the app's
 thread, marked with :data:`PROMPT_MARKER`. The run's final answer comes back
 here through the host's ``on_run_finished`` hook.
@@ -80,7 +80,7 @@ SEND_RETRIES = 4
 
 TEXT_LINK_OFFER = (
     "To link this chat to {label}, enter this code in the Chuk app, in the "
-    "coworker's Telegram settings:\n\n{code}\n\nThe code expires in {minutes} "
+    "agent's Telegram settings:\n\n{code}\n\nThe code expires in {minutes} "
     "minutes. Note: Telegram is not end-to-end encrypted."
 )
 TEXT_LINKED = (
@@ -131,7 +131,7 @@ class TelegramTiming:
 
 
 class TelegramChannel:
-    """One coworker's bot: poller + sender + link state."""
+    """One agent's bot: poller + sender + link state."""
 
     def __init__(
         self,

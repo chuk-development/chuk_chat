@@ -1,4 +1,4 @@
-/// The rooms the app knows about (§16.1/4c). A group room is several coworkers
+/// The rooms the app knows about (§16.1/4c). A group room is several agents
 /// in one conversation; this is where the app holds the ones the user built.
 ///
 /// Like [LocalAgentRosterSource], the durable roster lives on the host — the
@@ -6,7 +6,7 @@
 /// not persisted. It exists so the create-room flow has somewhere to put a new
 /// room and the UI has something to list, until the host serves rooms of its
 /// own. It never invents a room. There is no member ceiling — a room takes as
-/// many coworkers as the roster holds — but the floor still holds: a room needs
+/// many agents as the roster holds — but the floor still holds: a room needs
 /// a name and at least two distinct members, and one that drops below two is
 /// deleted.
 library;
@@ -26,7 +26,7 @@ abstract class RoomSource extends ChangeNotifier {
   /// Renames a room. A no-op for an unknown id or an empty/blank name.
   void renameRoom(String id, String name);
 
-  /// Sets the room's "coworkers may reply to each other" policy
+  /// Sets the room's "agents may reply to each other" policy
   /// (`agent_to_agent`). A no-op for an unknown id; notifies on a real change.
   /// The host is told separately — this only moves the app's own copy.
   void setAgentToAgent(String roomId, bool enabled);

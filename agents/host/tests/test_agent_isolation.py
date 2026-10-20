@@ -1,9 +1,9 @@
-"""Every coworker gets its own box on this host (bead cowork-jo2).
+"""Every agent gets its own box on this host (bead cowork-jo2).
 
 The executor asks the host for one environment per ``session_key``, and a
 session key IS an app-side agent id. These tests hold the host to that: two
-coworkers get two workspaces (and, with the docker backend, two containers with
-two ``cowork.agent`` labels), while the host's own coworker keeps the single
+agents get two workspaces (and, with the docker backend, two containers with
+two ``cowork.agent`` labels), while the host's own agent keeps the single
 workspace it always had — under every name it answers to.
 """
 
@@ -17,9 +17,9 @@ from chuk_agents_host.identity import HOST_DEVICE_ID
 
 
 def _register(host: LocalHost, agent_id: str, name: str) -> None:
-    """What the app does with ``agent_create`` when the user makes a coworker.
+    """What the app does with ``agent_create`` when the user makes an agent.
 
-    Registration is what makes a session key a coworker of its own; without it
+    Registration is what makes a session key an agent of its own; without it
     the key belongs to this host's own agent.
     """
     host._coworker_names.upsert(agent_id, name, created_by_app=True)
@@ -54,7 +54,7 @@ def test_two_coworkers_get_two_workspaces(tmp_path):
 
 
 def test_coworkers_whose_names_read_alike_still_get_two_workspaces(tmp_path):
-    """A coworker name is whatever the user typed; ids are what separate them."""
+    """An agent name is whatever the user typed; ids are what separate them."""
     host = _host(tmp_path)
     _register(host, "local:amber:1", "amber")
     _register(host, "local:amber:2", "amber")
@@ -69,7 +69,7 @@ def test_coworkers_whose_names_read_alike_still_get_two_workspaces(tmp_path):
 
 
 def test_the_host_coworker_keeps_one_box_under_every_name_it_answers_to(tmp_path):
-    """``host:<device>``, the roster id and "no session" are ONE coworker."""
+    """``host:<device>``, the roster id and "no session" are ONE agent."""
     host = _host(tmp_path)
     _register(host, "local:amber:1", "amber")
     try:
@@ -77,10 +77,10 @@ def test_the_host_coworker_keeps_one_box_under_every_name_it_answers_to(tmp_path
         assert host._environment_for(host_agent_id(HOST_DEVICE_ID)) is primary
         assert host._environment_for("") is primary
         assert host._environment_for("default") is primary
-        # A key nobody registered as a coworker is this host's own agent, not
+        # A key nobody registered as an agent is this host's own agent, not
         # a new one: a typo must not get a container and an empty workspace.
         assert host._environment_for("thread-1") is primary
-        # A different coworker is a different box.
+        # A different agent is a different box.
         other = host._environment_for("local:amber:1")
         assert other is not primary
         assert other.workspace != primary.workspace
@@ -92,7 +92,7 @@ def test_the_host_coworker_keeps_one_box_under_every_name_it_answers_to(tmp_path
 
 
 def test_the_docker_backend_labels_a_container_per_coworker(tmp_path):
-    """No daemon: the fake CLI proves which container each coworker asks for."""
+    """No daemon: the fake CLI proves which container each agent asks for."""
     cli = _FakeCli()
     host = _host(tmp_path, sandbox_kind="docker")
     host._containers.cli = cli
@@ -111,7 +111,7 @@ def test_the_docker_backend_labels_a_container_per_coworker(tmp_path):
     assert first.container_name != second.container_name
     labels = sorted(c["labels"][LABEL_AGENT] for c in cli.containers)
     assert labels == ["local:amber:1", "local:blue:2"]
-    # The workspace mounted into each is that coworker's own, never a peer's.
+    # The workspace mounted into each is that agent's own, never a peer's.
     mounts = {c["labels"][LABEL_AGENT]: c["labels"]["cowork.workspace"]
               for c in cli.containers}
     assert mounts["local:amber:1"] != mounts["local:blue:2"]
@@ -120,7 +120,7 @@ def test_the_docker_backend_labels_a_container_per_coworker(tmp_path):
 def test_a_host_start_reaps_only_its_own_containers(tmp_path):
     """Bead chuk_chat-6mg: a second host must not kill the first one's boxes.
 
-    Two hosts share one (fake) docker. The first host's coworker has a live
+    Two hosts share one (fake) docker. The first host's agent has a live
     container. Starting the reaper of a second host, as a test run or a second
     instance does, leaves it alone. The first host's own restart does reap its
     leftover, and so does it for an old unlabelled container under its own

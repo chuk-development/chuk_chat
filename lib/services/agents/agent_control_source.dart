@@ -1,6 +1,6 @@
 /// The in-UI control surface (§16, §17: this GUI is the moat).
 ///
-/// What a coworker runs on, what it has spent, how long it has worked, which
+/// What an agent runs on, what it has spent, how long it has worked, which
 /// box it works in and which skills it may load — all of it read from the host,
 /// none of it invented here.
 ///
@@ -71,7 +71,7 @@ class AgentSkill {
   );
 }
 
-/// The model this coworker's last run really used.
+/// The model this agent's last run really used.
 @immutable
 class AgentModelChoice {
   const AgentModelChoice({
@@ -113,7 +113,7 @@ class AgentModelChoice {
   }
 }
 
-/// What this coworker has spent, summed over the runs it really made.
+/// What this agent has spent, summed over the runs it really made.
 ///
 /// The host stores a run's total only, so there is no prompt/completion split
 /// to show — and inventing one would be worse than leaving it out.
@@ -140,7 +140,7 @@ class AgentTokenUsage {
   }
 }
 
-/// The coworker's clock: when it first ran, and how long it has been working.
+/// The agent's clock: when it first ran, and how long it has been working.
 @immutable
 class AgentSessionRuntime {
   const AgentSessionRuntime({
@@ -161,7 +161,7 @@ class AgentSessionRuntime {
   /// True while a run is in flight right now.
   final bool running;
 
-  /// When this coworker first ran.
+  /// When this agent first ran.
   final DateTime? startedAt;
 
   /// How long the run in flight has been going, when one is.
@@ -190,9 +190,9 @@ class AgentSessionRuntime {
   }
 }
 
-/// The box this coworker works in (§6, bead cowork-jo2).
+/// The box this agent works in (§6, bead cowork-jo2).
 ///
-/// Every coworker gets its own container; this is what makes that visible in
+/// Every agent gets its own container; this is what makes that visible in
 /// the app instead of merely claimed in a design document.
 @immutable
 class AgentSandbox {
@@ -233,11 +233,11 @@ class AgentSandbox {
 }
 
 // ── F2: automations + cost totals ──
-/// What this coworker has cost in euro, as the host priced it
+/// What this agent has cost in euro, as the host priced it
 /// (docs/WIRE_CONTRACT.md, "Cost per run and weekly budget").
 ///
 /// [sessionTotal] and [lastRun] are this thread; [today] and [week] are the
-/// whole coworker. The host's figure is what leaves the balance.
+/// whole agent. The host's figure is what leaves the balance.
 @immutable
 class AgentCostTotals {
   const AgentCostTotals({
@@ -351,13 +351,13 @@ class AgentControlSnapshot {
 }
 
 /// The control surface's data source. One instance for the app; every call
-/// names the coworker it is about, because one panel serves them all.
+/// names the agent it is about, because one panel serves them all.
 abstract interface class AgentControlSource {
-  /// The live snapshot of one coworker. Stable for the life of the source, so
+  /// The live snapshot of one agent. Stable for the life of the source, so
   /// a widget may listen to it.
   ValueListenable<AgentControlSnapshot> snapshotFor(String sessionKey);
 
-  /// Re-reads everything for one coworker. Safe to call on every panel open.
+  /// Re-reads everything for one agent. Safe to call on every panel open.
   Future<void> refresh(String sessionKey);
 
   /// Switch one skill on or off on the host.
@@ -369,7 +369,7 @@ abstract interface class AgentControlSource {
 /// The production source: the host's own figures, over the relay.
 ///
 /// Status comes back as [AgentsRelayAgentStatus] — as the answer to a request,
-/// and again by itself whenever a run of that coworker ends, so the panel moves
+/// and again by itself whenever a run of that agent ends, so the panel moves
 /// with the work. Skills come from [SkillsSource], which already owns the
 /// host's skill list and its switches.
 class RelayAgentControlSource implements AgentControlSource {
@@ -473,7 +473,7 @@ class RelayAgentControlSource implements AgentControlSource {
   void _onStatus(AgentsRelayAgentStatus event) {
     if (_disposed) return;
     final notifier = _notifier(event.sessionKey);
-    const nothingYet = 'The host has nothing to report for this coworker yet.';
+    const nothingYet = 'The host has nothing to report for this agent yet.';
     final model = AgentModelChoice.fromPayload(event.model);
     final tokens = AgentTokenUsage.fromPayload(event.tokens);
     final runtime = AgentSessionRuntime.fromPayload(event.runtime);
@@ -509,7 +509,7 @@ class RelayAgentControlSource implements AgentControlSource {
           enabled: skill.enabled,
         ),
     ];
-    // Skills are the host's, not one coworker's: the same list belongs in
+    // Skills are the host's, not one agent's: the same list belongs in
     // every open panel.
     for (final notifier in _snapshots.values) {
       notifier.value = notifier.value.copyWith(

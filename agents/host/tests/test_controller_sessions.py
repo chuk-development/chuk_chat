@@ -192,7 +192,7 @@ def test_real_executor_broadcasts_new_agent_to_both_devices_under_one_second(tmp
         started = time.monotonic()
         send(
             desktop,
-            dict(type="agent_create", agent_id="local:new", name="Shared coworker"),
+            dict(type="agent_create", agent_id="local:new", name="Shared agent"),
         )
         seen = set()
         clients = {

@@ -22,6 +22,12 @@ abstract final class VoiceTranscriptionAttributes {
   static const String segmentId = 'lk.segment_id';
   static const String isFinal = 'lk.transcription_final';
 
+  /// Worker-sent role override for a transcription it relays on the user's
+  /// behalf. The S2S engine sends every transcript from the agent identity,
+  /// so user turns carry `chuk.role: user` to render with the right role.
+  static const String role = 'chuk.role';
+  static const String roleUser = 'user';
+
   /// `'true'` / `'1'` -> true, anything else -> false.
   static bool parseFinal(Map<String, String> attributes) {
     final String? raw = attributes[isFinal]?.toLowerCase();

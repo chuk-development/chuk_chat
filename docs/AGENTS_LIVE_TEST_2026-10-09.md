@@ -2,7 +2,7 @@
 
 The test compares the Agents product with the jobs that the owner gives to
 Grok Bot. The test sends real prompts through the desktop app (Xvfb `:77`)
-to the coworker `steady-kestrel`. The times come from the host `runs` table
+to the agent `steady-kestrel`. The times come from the host `runs` table
 (`agents/bench`, `agents-bench report --fresh --all`).
 
 Model: `z-ai/glm-5.3-flash` on `fireworks/serverless`.
@@ -67,7 +67,7 @@ budget review ("Main"). They need the owner's data.
 ## Rounds 1-4 (2026-10-09/10)
 
 After each round the host was restarted and the same prompts ran in a fresh
-coworker. The Grok answers come from the Grok CLI in headless mode
+agent. The Grok answers come from the Grok CLI in headless mode
 (`grok-4.7-build`), not from the Grok Bot desktop app.
 
 | Prompt | Before | After round 3/4 | Grok CLI |

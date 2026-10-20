@@ -1,6 +1,6 @@
 """Roster store — the agent registry the Manager owns (§5).
 
-A single-user SQLite table of agents. Each row is a coworker: an auto-assigned
+A single-user SQLite table of agents. Each row is an agent: an auto-assigned
 random name, a workspace directory, the persona/job brief, an optional schedule
 string (parsed by :mod:`chuk_agents_manager.scheduler`), and its target platform.
 
@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS agents (
 
 @dataclass(frozen=True, slots=True)
 class Agent:
-    """One coworker row in the roster."""
+    """One agent row in the roster."""
 
     id: str
     name: str

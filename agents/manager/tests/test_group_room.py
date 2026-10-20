@@ -281,7 +281,7 @@ def test_at_all_still_obeys_the_round_cap():
 
 
 def _user_driven_room(handles, caps=None):
-    """A room where a coworker's reply may not pull another coworker in."""
+    """A room where an agent's reply may not pull another agent in."""
     members = tuple(RoomMember(agent_id=f"id-{h}", handle=h) for h in handles)
     return GroupRoom(
         room_id="r1",

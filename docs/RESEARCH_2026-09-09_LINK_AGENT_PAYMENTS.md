@@ -4,7 +4,7 @@ Session cowork-1b, 2026-09-09. Alle Quellen am selben Tag geprüft, Links am End
 
 ## 0. Die Frage, richtig gestellt
 
-Der Coworker fährt einen Browser (browser-use über CDP, `agent/src/chuk_agents_runtime/browser.py`).
+Der Agent fährt einen Browser (browser-use über CDP, `agent/src/chuk_agents_runtime/browser.py`).
 Er landet auf einem Checkout. Der Nutzer soll dort **keine Kartendaten eingeben**
 und wir wollen auch keine Karte im Klartext lagern. Stattdessen: Link ist in der
 App **einmal** verknüpft, und pro Kauf gibt Link eine Zahlungsberechtigung heraus
@@ -25,7 +25,7 @@ Stripe hat den agentischen Zahlungsraum in zwei Hälften geteilt:
 
 Wir sind ausschließlich die **Agenten**-Seite. Alles, was ACP/UCP/„Instant
 Checkout in ChatGPT" heißt, setzt voraus, dass der **Händler** mitspielt. Das ist
-für uns wertlos, weil unser Coworker auf beliebigen fremden Shops landet, die
+für uns wertlos, weil unser Agent auf beliebigen fremden Shops landet, die
 nichts von uns wissen.
 
 Die Link-APIs sind **nicht** die Stripe-API:
@@ -46,7 +46,7 @@ Die Link-APIs sind **nicht** die Stripe-API:
 | Link Pay Token (LPT) | — | Stripe-gehostete Formulare mit Agent-Steering-Blöcken |
 | Shared Payment Token (SPT) | `shared_payment_token` | nur Händler, die SPT/MPP akzeptieren |
 
-**Für uns zählt nur `card`.** Der Coworker füllt ein fremdes Checkout-Formular
+**Für uns zählt nur `card`.** Der Agent füllt ein fremdes Checkout-Formular
 aus; dafür braucht er Nummer, CVC, Ablauf, Rechnungsadresse — also eine echte
 Karte, die nach einer Nutzung tot ist. SPT ist der Weg für kooperierende
 Händler und für Maschinenzahlungen (HTTP 402); interessant später für
@@ -78,7 +78,7 @@ Der Nutzer bestätigt also **zweimal**, und beides ist gewollt:
 
 1. **In Agents**, über die vorhandene Maschinerie
    (`approval_request` / `approval_decision`, `executor/src/chuk_agents_executor/protocol.py`,
-   Muster: here.now-Publish). Das ist unser Gate: „Coworker will 35,00 USD bei
+   Muster: here.now-Publish). Das ist unser Gate: „Agent will 35,00 USD bei
    press.stripe.com ausgeben." Ohne Antwort blockiert der Worker.
 2. **In Link**, über `approval_url`. Das erzwingt Stripe, nicht wir. Ohne diese
    Freigabe gibt Link **keine** Zahlungsdaten heraus. Es gibt aktuell keinen

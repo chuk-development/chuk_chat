@@ -3,7 +3,7 @@
 // Skill proposals, the app side (docs/WIRE_CONTRACT.md, "Skill proposals";
 // bead chuk_chat-al2u). After a task that worked, the agent offers to save the
 // procedure as a skill. The host only stores a draft. Nothing is written to
-// the coworker's `skills/` until the user accepts the card in the thread.
+// the agent's `skills/` until the user accepts the card in the thread.
 //
 // This file holds what the relay client, the source and the card share: the
 // host's answer to a decision, the control the relay client implements, and

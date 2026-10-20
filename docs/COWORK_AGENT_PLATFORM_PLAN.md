@@ -19,7 +19,7 @@ chuk_chat gains **two modes**:
 
 1. **Normal chat** — you talk to a model. Unchanged.
 2. **Agent chat (CoWork)** — a **messenger, like Slack**, whose contacts are
-   **AI agents that behave like coworkers**. You have a roster of them. You
+   **AI agents that behave like colleagues**. You have a roster of them. You
    message an agent a task (with files, links, context, or a screen recording);
    it goes off and *does the work* on its own machine — shell, browser, APIs —
    and streams its run back into the thread. It works when triggered and on a
@@ -31,7 +31,7 @@ button, files and screenshots delivered as cards. You onboard an agent by
 telling it its standing job ("every week, fetch the crypto news and summarise
 it"); it gets a random name, runs on a weekly trigger, and posts results.
 
-The essence: **you assemble a team of specialised, always-running AI coworkers,
+The essence: **you assemble a team of specialised, always-running AI agents,
 give them tasks and revocable access, and they do the work autonomously on your
 own machine.**
 
@@ -43,7 +43,7 @@ own machine.**
   sets up, running the platform. Single-user.
 - **Manager** — the control-plane process on the host: roster, sandbox
   lifecycle, scheduler, relay bridge.
-- **Agent (coworker)** — a Workspace (persona + files + memory + skills + job +
+- **Agent** — a Workspace (persona + files + memory + skills + job +
   schedule) bound to a sandbox. Identified by an auto-assigned name.
 - **Sandbox** — a per-agent container (Debian-like, isolated FS, sudo,
   installable) where that agent's Python runtime executes.
@@ -83,7 +83,7 @@ own machine.**
 
 ---
 
-## 4. The agent (coworker) = a Workspace
+## 4. The agent = a Workspace
 
 An agent reuses the existing `FEATURE_WORKSPACES` concept (persona + files +
 memory). It carries:
