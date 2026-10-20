@@ -5,7 +5,7 @@
 - L34 `Future<(FakeHost, AgentsPermissionsService)> _open( WidgetTester tester, { bool approvals = true, })`
 - L59 `void main()`
 
-## test/agents_permissions/agent_permissions_section_test.dart  (340 Z.)
+## test/agents_permissions/agent_permissions_section_test.dart  (353 Z.)
 - L16 `Widget _page(AgentsPermissionsService service, {String agentId = 'a'})`
 - L26 `Switch _switch(WidgetTester tester, String key)`
 - L33 `Future<(FakeHost, AgentsPermissionsService)> _open( WidgetTester tester, { bool connected = true, bool supported = true, })`

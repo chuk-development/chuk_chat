@@ -1,6 +1,6 @@
 # pseudomap · chuk_chat · Tests
 
-448 Dateien · 1240 Typen/Funktionen · 1086 Member · Stand 2026-10-20
+449 Dateien · 1242 Typen/Funktionen · 1086 Member · Stand 2026-10-20
 
 Diese Datei ist `.pseudomap/MAP.md` — Stufe 1: was es gibt und wo es liegt.
 
@@ -96,7 +96,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Future<(FakeHost, AgentsPermissionsService)> _open( WidgetTester tester, { bool approvals = true, })`
 - `void main()`
 
-### agent_permissions_section_test.dart  (340 Z.)
+### agent_permissions_section_test.dart  (353 Z.)
 - `Widget _page(AgentsPermissionsService service, {String agentId = 'a'})`
 - `Switch _switch(WidgetTester tester, String key)`
 - `Future<(FakeHost, AgentsPermissionsService)> _open( WidgetTester tester, { bool connected = true, bool supported = true …)`
@@ -170,7 +170,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Map<String, dynamic> _table(String title)`
 - `void main()`
 
-### every_screen_layout_test.dart  (935 Z.)
+### every_screen_layout_test.dart  (929 Z.)
 - const: _cannotMount _chukSizes
 - `class _Bag`  — Anything a screen made that has to be thrown away afterwards.
   - Function
@@ -412,6 +412,9 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void main()`
 
 ## test/pages
+### agent_host_activity_page_test.dart  (91 Z.)
+- `void main()`
+
 ### agent_mail_contacts_page_test.dart  (184 Z.)
 - `void main()`  — Mailbox > Contacts (docs/AGENT_MAIL.md §2, §8): trusted and blocked
 
@@ -432,7 +435,8 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### agent_profile_edit_page_test.dart  (115 Z.)
 - `void main()`
 
-### agent_profile_page_test.dart  (291 Z.)
+### agent_settings_view_test.dart  (320 Z.)
+- `Widget _page( String agentId, AgentRosterSource source, AgentProfileStore store, )`  — The one agent settings content, as a page, with every destination a
 - `void main()`
 
 ### agents_install_page_test.dart  (281 Z.)
@@ -1732,12 +1736,12 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - const: _electionChart
 - `void main()`
 
-### agent_control_panel_cost_test.dart  (387 Z.)
+### agent_control_panel_cost_test.dart  (327 Z.)
 - `AgentsAgent _agent()`
 - `AgentControlSnapshot _withCost(Map<String, dynamic>? cost)`
 - `void main()`
 
-### agent_control_panel_test.dart  (455 Z.)
+### agent_control_panel_test.dart  (251 Z.)
 - const: _fullSnapshot
 - `AgentsAgent _agent({bool onHost = true})`
 - `Future<void> _pump( WidgetTester tester, AgentControlSource source, { AgentsAgent? agent, })`
@@ -1800,7 +1804,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void _silenceUnrelatedPlugins(WidgetTester tester)`  — The imported screen constructs an [AudioRecorder] on mount, which calls the
 - `Future<void> _settle(WidgetTester tester)`  — [WidgetTester.pumpAndSettle] never returns here: the thread view arms an
 
-### agents_desktop_shell_test.dart  (665 Z.)
+### agents_desktop_shell_test.dart  (667 Z.)
 - `class _MemoryStore implements AgentsSecureKeyValueStore`
   - read write delete map
 - `class _FailingRefreshSource extends FakeAgentControlSource`  — A host that answers the panel's first look and then fails a refresh.
@@ -2007,7 +2011,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Map<String, dynamic> specChartDocument()`  — A chart document as the tool writes one now: the spec itself, under `chart`.
 - `void main()`
 
-### chat_document_reading_test.dart  (417 Z.)
+### chat_document_reading_test.dart  (421 Z.)
 - const: _briefText
 - `Map<String, dynamic> _markdownDocument()`
 - `Map<String, dynamic> _tableDocument()`
@@ -2182,7 +2186,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Widget wrap(Widget child)`
 - `void main()`
 
-### messenger_shell_test.dart  (2190 Z.)
+### messenger_shell_test.dart  (2200 Z.)
 - `class _MemoryStore implements AgentsSecureKeyValueStore`
   - read write delete map
 - `class _FakeRelayController implements AgentsRelayController`  — A controller the test drives: it can report itself paired, and it records

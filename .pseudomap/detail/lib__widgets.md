@@ -23,105 +23,57 @@
   - L51 `static double hueOf(String seed)`  — A stable hue in [0, 360) from the seed. A plain FNV-1a hash over the code
   - L61 `Widget build(BuildContext context)`
 
-## lib/widgets/agent_control_panel.dart  (861 Z.)
+## lib/widgets/agent_control_panel.dart  (720 Z.)
 - reicht weiter: 'package:chuk_chat/widgets/agent_details_overview.dart' show AgentDetailsOverview
-- L56 `class AgentControlPanel extends StatefulWidget`
-  - L57 `const AgentControlPanel({ super.key, required this.agent, required this.source, this.onScheduleSubmitted, this.showHeader = true, this.showRefresh = true, this.permissions, this.profileLayout = false, this.onRename, this.profiles, this.onOpenSkills, this.onOpenPermissions, })`
-  - L75 `final bool profileLayout`  — The desktop details pane's order: face, name, role and description, one
-  - L79 `final ValueChanged<String>? onRename`  — The shell's rename path, for the name field of [profileLayout]. Null
-  - L83 `final AgentProfileStore? profiles`  — Where [profileLayout] keeps the role and the description. Defaults to
-  - L87 `final AgentsPermissionsService? permissions`  — Passed on to the Permissions page. Defaults to
-  - L90 `final VoidCallback? onOpenSkills`  — Opens the Skills page. Null pushes [AgentsSkillsSettingsPage].
-  - L93 `final VoidCallback? onOpenPermissions`  — Opens the Permissions page. Null pushes [MobileAgentPermissionsPage].
-  - L97 `final bool showHeader`  — Retired. The pane header and the page bar carry the name and Refresh
-  - L98 `final bool showRefresh`
-  - L100 `final AgentsAgent agent`
-  - L101 `final AgentControlSource source`
-  - L106 `final void Function(ScheduleSpec spec)? onScheduleSubmitted`  — Retired. The panel no longer sets schedules: nothing installed them on the
-  - L109 `State<AgentControlPanel> createState()`
-- L112 `class _AgentControlPanelState extends State<AgentControlPanel>`
-  - L115 `bool _technicalOpen = false`  — [AgentControlPanel.profileLayout]: whether the technical details are
-  - L119 `String get _sessionKey`  — The agent's thread key IS its session key on the host, so the panel
-  - L124 `void initState()`
-  - L130 `void didUpdateWidget(AgentControlPanel oldWidget)`
-  - L137 `void _openSkills()`
-  - L149 `void _openPermissions()`
-  - L162 `Widget build(BuildContext context)`
-  - L189 `List<Widget> _notes(BuildContext context, AgentControlSnapshot snapshot)`  — The note over the blocks for an agent the host does not run yet.
-  - L207 `List<Widget> _measured(BuildContext context, AgentControlSnapshot snapshot)`  — What the host measured: the activity group, then the machine group.
-  - L257 `Widget _skillsRow(BuildContext context)`  — The one way to the agent's skills: the Skills page owns them.
-  - L272 `static String? _skillsSummary(ControlValue<List<AgentSkill>> value)`  — `3 of 5 on`, or null before the host listed its skills.
-  - L282 `Widget _chevron(BuildContext context)`
-  - L290 `Widget _buildProfile(BuildContext context, AgentControlSnapshot snapshot)`
-  - L360 `Widget _fact( BuildContext context, IconData icon, String title, Widget value, )`  — One measured fact as a row of the group: the icon tile, the name of the
-  - L403 `Widget _buildModel( BuildContext context, ControlValue<AgentModelChoice> value, )`  — What the last run used. The fact row names it "Last run".
-  - L432 `Widget _buildTokens( BuildContext context, ControlValue<AgentTokenUsage> value, )`
-  - L457 `Widget _buildRuntime( BuildContext context, ControlValue<AgentSessionRuntime> value, )`
-  - L491 `Widget _buildSandbox(BuildContext context, ControlValue<AgentSandbox> value)`
-  - L529 `static AppLocalizations _l10n(BuildContext context)`
-  - L535 `Widget _buildCost(BuildContext context, AgentCostTotals cost)`  — This thread, today and this week in euro, with the week against the
-  - L626 `static String? _runDetail(AgentModelChoice choice)`  — `Fireworks · Reasoning low` for a run's provider and level, or null when
-  - L640 `Widget _notReported(BuildContext context, String reason)`  — The host measured nothing here — said plainly, with the reason, so a
-  - L657 `Widget _loading()`
-- L668 `String formatRuntime(Duration d)`  — `1h 04m` / `4m 12s` / `12s`.
-- L679 `String formatCount(int value)`  — `1 234 567` — grouped, so a six-figure token count is readable at a glance.
-- L690 `String formatTimestamp(DateTime when)`  — `2026-02-03 14:00` — stable and unambiguous, no locale guessing.
-- L701 `class WeeklyBudgetField extends StatefulWidget`  — The agent's weekly budget in euro (docs/WIRE_CONTRACT.md, "The budget
-  - L702 `const WeeklyBudgetField({ super.key, required this.agentId, required this.service, })`
-  - L708 `final String agentId`
-  - L709 `final AgentsPermissionsService service`
-  - L712 `State<WeeklyBudgetField> createState()`
-- L715 `class _WeeklyBudgetFieldState extends State<WeeklyBudgetField>`
-  - L716 `final TextEditingController _controller = TextEditingController()`
-  - L717 `final FocusNode _focus = FocusNode()`
-  - L718 `double? _shown`
-  - L719 `String? _error`
-  - L720 `bool _waiting = false`
-  - L723 `void initState()`
-  - L730 `void didUpdateWidget(WeeklyBudgetField old)`
-  - L745 `void dispose()`
-  - L752 `static String _text(double euro)`
-  - L755 `void _takeHostValue({bool force = false})`  — Shows the host's value, unless the user is typing a new one.
-  - L762 `void _onService()`
-  - L774 `Future<void> _save()`
-  - L800 `Widget build(BuildContext context)`
-
-## lib/widgets/agent_details_identity.dart  (334 Z.)
-- L26 `class AgentDetailsIdentity extends StatefulWidget`
-  - L27 `const AgentDetailsIdentity({ super.key, required this.agent, this.onRename, this.profiles, })`
-  - L34 `final AgentsAgent agent`
-  - L37 `final ValueChanged<String>? onRename`  — The shell's rename path. Null makes the name field read-only.
-  - L41 `final AgentProfileStore? profiles`  — Where the role and the description are kept. Defaults to
-  - L44 `static const double faceSize = 64`  — The size of the face at the top of the pane.
-  - L47 `State<AgentDetailsIdentity> createState()`
-- L50 `class _AgentDetailsIdentityState extends State<AgentDetailsIdentity>`
-  - L51 `final TextEditingController _name = TextEditingController()`
-  - L52 `final TextEditingController _role = TextEditingController()`
-  - L53 `final TextEditingController _brief = TextEditingController()`
-  - L54 `final FocusNode _nameFocus = FocusNode(debugLabel: 'details-name')`
-  - L55 `final FocusNode _roleFocus = FocusNode(debugLabel: 'details-role')`
-  - L56 `final FocusNode _briefFocus = FocusNode(debugLabel: 'details-brief')`
-  - L60 `String _savedRole = ''`  — The values the fields last showed from their store. A field whose text
-  - L61 `String _savedBrief = ''`
-  - L66 `String? _sentName`  — The name last handed to the rename path. Enter and the loss of focus
-  - L68 `AgentProfileStore get _store`
-  - L71 `void initState()`
-  - L81 `void didUpdateWidget(AgentDetailsIdentity old)`
-  - L104 `void dispose()`
-  - L147 `String _storedRole()`  — The stored value first, then what the roster knows. This is the order
-  - L150 `String _storedBrief()`
-  - L153 `void _takeAll()`
-  - L164 `void _onStore()`  — The store changed (it loaded, or the edit page saved). A field the user
-  - L180 `void _onNameFocus()`
-  - L184 `void _onRoleFocus()`
-  - L188 `void _onBriefFocus()`
-  - L192 `void _commitName()`
-  - L206 `void _commitRole()`
-  - L213 `void _commitBrief()`
-  - L223 `static Future<void> _write( AgentProfileStore store, AgentsAgent agent, { required String? role, required String? brief, })`  — Writes the given fields; a null field is left as it is. An emptied
-  - L247 `Widget build(BuildContext context)`
-  - L308 `Widget _label(BuildContext context, String text)`
-  - L323 `static InputDecoration _decoration({required String hint})`  — The app's form field look (the profile edit page uses the same): a
+- L40 `class AgentControlPanel extends StatefulWidget`
+  - L41 `const AgentControlPanel({ super.key, required this.agent, required this.source, this.onOpenSkills, })`
+  - L49 `final VoidCallback? onOpenSkills`  — Opens the Skills page. Null pushes [AgentsSkillsSettingsPage].
+  - L51 `final AgentsAgent agent`
+  - L52 `final AgentControlSource source`
+  - L55 `State<AgentControlPanel> createState()`
+- L58 `class _AgentControlPanelState extends State<AgentControlPanel>`
+  - L61 `String get _sessionKey`  — The agent's thread key IS its session key on the host, so the panel
+  - L66 `void initState()`
+  - L72 `void didUpdateWidget(AgentControlPanel oldWidget)`
+  - L79 `void _openSkills()`
+  - L92 `Widget build(BuildContext context)`
+  - L118 `List<Widget> _notes(BuildContext context, AgentControlSnapshot snapshot)`  — The note over the blocks for an agent the host does not run yet.
+  - L136 `List<Widget> _measured(BuildContext context, AgentControlSnapshot snapshot)`  — What the host measured: the activity group, then the machine group.
+  - L186 `Widget _skillsRow(BuildContext context)`  — The one way to the agent's skills: the Skills page owns them.
+  - L201 `static String? _skillsSummary(ControlValue<List<AgentSkill>> value)`  — `3 of 5 on`, or null before the host listed its skills.
+  - L211 `Widget _chevron(BuildContext context)`
+  - L219 `Widget _fact( BuildContext context, IconData icon, String title, Widget value, )`  — One measured fact as a row of the group: the icon tile, the name of the
+  - L262 `Widget _buildModel( BuildContext context, ControlValue<AgentModelChoice> value, )`  — What the last run used. The fact row names it "Last run".
+  - L291 `Widget _buildTokens( BuildContext context, ControlValue<AgentTokenUsage> value, )`
+  - L316 `Widget _buildRuntime( BuildContext context, ControlValue<AgentSessionRuntime> value, )`
+  - L350 `Widget _buildSandbox(BuildContext context, ControlValue<AgentSandbox> value)`
+  - L388 `static AppLocalizations _l10n(BuildContext context)`
+  - L394 `Widget _buildCost(BuildContext context, AgentCostTotals cost)`  — This thread, today and this week in euro, with the week against the
+  - L485 `static String? _runDetail(AgentModelChoice choice)`  — `Fireworks · Reasoning low` for a run's provider and level, or null when
+  - L499 `Widget _notReported(BuildContext context, String reason)`  — The host measured nothing here — said plainly, with the reason, so a
+  - L516 `Widget _loading()`
+- L527 `String formatRuntime(Duration d)`  — `1h 04m` / `4m 12s` / `12s`.
+- L538 `String formatCount(int value)`  — `1 234 567` — grouped, so a six-figure token count is readable at a glance.
+- L549 `String formatTimestamp(DateTime when)`  — `2026-02-03 14:00` — stable and unambiguous, no locale guessing.
+- L560 `class WeeklyBudgetField extends StatefulWidget`  — The agent's weekly budget in euro (docs/WIRE_CONTRACT.md, "The budget
+  - L561 `const WeeklyBudgetField({ super.key, required this.agentId, required this.service, })`
+  - L567 `final String agentId`
+  - L568 `final AgentsPermissionsService service`
+  - L571 `State<WeeklyBudgetField> createState()`
+- L574 `class _WeeklyBudgetFieldState extends State<WeeklyBudgetField>`
+  - L575 `final TextEditingController _controller = TextEditingController()`
+  - L576 `final FocusNode _focus = FocusNode()`
+  - L577 `double? _shown`
+  - L578 `String? _error`
+  - L579 `bool _waiting = false`
+  - L582 `void initState()`
+  - L589 `void didUpdateWidget(WeeklyBudgetField old)`
+  - L604 `void dispose()`
+  - L611 `static String _text(double euro)`
+  - L614 `void _takeHostValue({bool force = false})`  — Shows the host's value, unless the user is typing a new one.
+  - L621 `void _onService()`
+  - L633 `Future<void> _save()`
+  - L659 `Widget build(BuildContext context)`
 
 ## lib/widgets/agent_details_overview.dart  (363 Z.)
 - L34 `class AgentDetailsOverview extends StatelessWidget`  — The root page: the screen box, then the routines.

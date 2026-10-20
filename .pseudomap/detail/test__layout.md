@@ -15,39 +15,39 @@
 - L73 `_catalog = <Map<String, dynamic>>[ _table('Wahlkreise Sachsen-Anhalt 2026'), _file('skills/youtube-transcript/SKILL.md',`
 - L82 `void main()`
 
-## test/layout/every_screen_layout_test.dart  (935 Z.)
+## test/layout/every_screen_layout_test.dart  (929 Z.)
 - L88 `_cannotMount = <String, String>{ 'model_selector_page': 'its initState reaches SupabaseService.client, which ' 'throws "`  — Screens left out of the sweep, and why. Never delete a line here to make
 - L123 `_chukSizes = <String, String>{ 'theme_page': 'upstream\'s 32 dp colour swatches', 'desktop_settings_modal': 'upstream\'s`  — Screens that draw upstream chuk_chat's settings frame and rows in BOTH
-- L136 `class _Bag`  — Anything a screen made that has to be thrown away afterwards.
-  - L137 `final List<void Function()> _disposers = <void Function()>[]`
-  - L139 `T keep<T>(T value, void Function() dispose)`
-  - L144 `void dispose()`
-- L153 `FakeAgentControlSource _keepControl(_Bag bag, FakeAgentControlSource source)`
-- L159 `typedef ScreenBuilder = Widget Function(_Bag bag)`
-- L161 `class _Screen`
-  - L162 `const _Screen(this.name, this.build, {this.after})`
-  - L164 `final String name`
-  - L165 `final ScreenBuilder build`
-  - L169 `final Future<void> Function(WidgetTester tester)? after`  — Runs after the first frames, for a surface that only exists once it is
-- L176 `AgentsAgent _agent({ String id = 'amber', String name = 'Amber Fitzgerald-Okonkwo', String? role = 'Research and long-form writing', bool running = true, })`
-- L194 `List<AgentsAgent> _roster()`
-- L201 `AgentsRoomMember _member(String id, String handle)`
-- L205 `AgentsRoom _fullRoom()`  — A room at the cap, which is the case the member sheet has to survive.
-- L219 `Widget _mailDetail(String id)`  — The mail page for one of the fake server's mails.
-- L228 `Widget _hosted(Widget child)`  — Wraps a panel that has no scaffold of its own.
-- L234 `Widget _sheetHost(WidgetBuilder builder)`  — Presents [builder] the way `agents_shell_state` presents it: a scroll
-- L249 `Future<void> _openSheet(WidgetTester tester)`
-- L258 `List<_Screen> _screens()`
-- L775 `void main()`
-- L909 `class _InstallMemory implements AgentsSecureKeyValueStore`  — Secure storage for the install page, in memory.
-  - L910 `final Map<String, String> _map = <String, String>{}`
-  - L913 `Future<String?> read(String key)`
-  - L916 `Future<void> write(String key, String value)`
-  - L919 `Future<void> delete(String key)`
-- L922 `class _InstallSession implements AccountSessionSource`
-  - L923 `const _InstallSession()`
-  - L926 `AccountSession? current()`
-  - L933 `Future<AccountSession?> refresh()`
+- L135 `class _Bag`  — Anything a screen made that has to be thrown away afterwards.
+  - L136 `final List<void Function()> _disposers = <void Function()>[]`
+  - L138 `T keep<T>(T value, void Function() dispose)`
+  - L143 `void dispose()`
+- L152 `FakeAgentControlSource _keepControl(_Bag bag, FakeAgentControlSource source)`
+- L158 `typedef ScreenBuilder = Widget Function(_Bag bag)`
+- L160 `class _Screen`
+  - L161 `const _Screen(this.name, this.build, {this.after})`
+  - L163 `final String name`
+  - L164 `final ScreenBuilder build`
+  - L168 `final Future<void> Function(WidgetTester tester)? after`  — Runs after the first frames, for a surface that only exists once it is
+- L175 `AgentsAgent _agent({ String id = 'amber', String name = 'Amber Fitzgerald-Okonkwo', String? role = 'Research and long-form writing', bool running = true, })`
+- L193 `List<AgentsAgent> _roster()`
+- L200 `AgentsRoomMember _member(String id, String handle)`
+- L204 `AgentsRoom _fullRoom()`  — A room at the cap, which is the case the member sheet has to survive.
+- L218 `Widget _mailDetail(String id)`  — The mail page for one of the fake server's mails.
+- L227 `Widget _hosted(Widget child)`  — Wraps a panel that has no scaffold of its own.
+- L233 `Widget _sheetHost(WidgetBuilder builder)`  — Presents [builder] the way `agents_shell_state` presents it: a scroll
+- L248 `Future<void> _openSheet(WidgetTester tester)`
+- L257 `List<_Screen> _screens()`
+- L769 `void main()`
+- L903 `class _InstallMemory implements AgentsSecureKeyValueStore`  — Secure storage for the install page, in memory.
+  - L904 `final Map<String, String> _map = <String, String>{}`
+  - L907 `Future<String?> read(String key)`
+  - L910 `Future<void> write(String key, String value)`
+  - L913 `Future<void> delete(String key)`
+- L916 `class _InstallSession implements AccountSessionSource`
+  - L917 `const _InstallSession()`
+  - L920 `AccountSession? current()`
+  - L927 `Future<AccountSession?> refresh()`
 
 ## test/layout/layout_harness.dart  (431 Z.)
 - L25 `class LayoutSize`  — One window the app has to fit into.

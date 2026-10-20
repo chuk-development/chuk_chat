@@ -1,5 +1,8 @@
 # test/pages · Signaturen
 
+## test/pages/agent_host_activity_page_test.dart  (91 Z.)
+- L9 `void main()`
+
 ## test/pages/agent_mail_contacts_page_test.dart  (184 Z.)
 - L12 `void main()`  — Mailbox > Contacts (docs/AGENT_MAIL.md §2, §8): trusted and blocked
 
@@ -22,8 +25,9 @@
 ## test/pages/agent_profile_edit_page_test.dart  (115 Z.)
 - L11 `void main()`
 
-## test/pages/agent_profile_page_test.dart  (291 Z.)
-- L23 `void main()`
+## test/pages/agent_settings_view_test.dart  (320 Z.)
+- L26 `Widget _page( String agentId, AgentRosterSource source, AgentProfileStore store, )`  — The one agent settings content, as a page, with every destination a
+- L49 `void main()`
 
 ## test/pages/agents_install_page_test.dart  (281 Z.)
 - L19 `class _MemoryStore implements AgentsSecureKeyValueStore`

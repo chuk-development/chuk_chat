@@ -1,6 +1,6 @@
 # pseudomap · chuk_chat
 
-722 Dateien · 3734 Typen/Funktionen · 19054 Member · 1710/2241 öffentliche Symbole mit Zweckzeile · Stand 2026-10-20
+720 Dateien · 3729 Typen/Funktionen · 18981 Member · 1711/2240 öffentliche Symbole mit Zweckzeile · Stand 2026-10-20
 
 Diese Datei ist `.pseudomap/MAP.md` — Stufe 1: was es gibt und wo es liegt.
 
@@ -1071,24 +1071,10 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _ShapeRow extends StatelessWidget`  — The silhouettes an agent can be given, drawn as themselves.
   - agentId colour selected onPick
 
-### agent_profile_page.dart  (757 Z.)
-- `class AgentProfilePage extends StatelessWidget`
-  - Function _startVoiceCall _build _confirmDelete _roleOf _briefOf _store agentId source onRename onDelete onOpenControls onOpenBrowser onMessage profiles link
-- `class _StatePill extends StatelessWidget`  — The live-state pill under the name: what the agent is doing right now.
-  - agent accent
-- `class _ActionRow extends StatelessWidget`  — The row of round targets under the header: talk to the agent. Its
-  - onMessage onCall
-- `class _Action extends StatelessWidget`
-  - icon label onTap color onColor parked
-- `class _HostRow extends StatelessWidget`  — Where the agent runs, told from what the app knows (bead
-  - _card agent link
-- `class _InfoCard extends StatelessWidget`  — One fact as a row of its group: the icon tile, the label, the value and
-  - icon label value note
-
-### agents_desktop_layout.dart  (696 Z.)
+### agents_desktop_layout.dart  (681 Z.)
 - part of 'messenger_shell.dart'
 - `mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost`  — The Agents desktop layout: chuk_chat's desktop with agents in it.
-  - _openSettings _agentsModeSwitch _deskInit _deskDispose _deskLoad _deskSave _deskScheduleSave _deskToggleRoster _deskToggleRightPane _deskShowRightPane _deskCloseRightPane _deskOpenRoom _deskCloseRoom _deskOpenNth _deskOpenQuickSwitcher _deskOnKey _deskMenuActions _buildDesktopBody _buildDeskDetailsPane _deskRefreshDetails _buildDeskRoomsPane _buildDeskRoom _deskAgentOrder
+  - _openSettings _agentsModeSwitch _deskInit _deskDispose _deskLoad _deskSave _deskScheduleSave _deskToggleRoster _deskToggleRightPane _deskCloseRightPane _deskOpenRoom _deskCloseRoom _deskOpenNth _deskOpenQuickSwitcher _deskOnKey _deskMenuActions _buildDesktopBody _buildDeskDetailsPane _deskRefreshDetails _buildDeskRoomsPane _buildDeskRoom _deskAgentOrder page
 
 ### agents_install_page.dart  (360 Z.)
 - `typedef AgentsCodePageOpener = Future<AgentsPairingInvite?> Function( BuildContext context, )`  — Opens the code page and hands back what the user scanned or typed.
@@ -1244,12 +1230,12 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _ArtifactTile extends StatelessWidget`
   - _relative _iconForType artifact onTap
 
-### messenger_shell.dart  (1141 Z.)
+### messenger_shell.dart  (1172 Z.)
 - part 'agents_shell_state.dart' · part 'agents_desktop_layout.dart'
 - `class MessengerShell extends StatefulWidget`  — The messenger: agents down the left, the selected thread in the middle,
   - relayControllerBuilder sessionSource pairingStore rosterSource roomSource controlSource onSignOut themeController shellConfig chatDebugExport readMarks agentProfiles pairingRestoreBuilder appMode chatModeBuilder installClaimWaiter
 - `class _MessengerShellState extends State<MessengerShell> with AgentsShellHost, _AgentsDesktopLayout, SingleTickerProvide …)`
-  - _hasPairing _buildModeSwitch _addComputer _onHasComputerChanged _onModeChanged _handOverChatPointer _readChatModeChatId _isAgentsChatId _onSharedChatPointer _buildChatMode _agentsModeSwitch _onPushStatus _onControllerForBrowser _onBrowserPresenceChanged _explainNoScreen _select _openRooms _openBrowserView _openAgentProfile _openSettings _openModelScreen _openChatModel _openChatFiles _openControlDrawer _openRoom _drivePush _buildPhoneBody _browserOpen _chatModeAvailable _wantedMode _showModeSwitch _addComputerAction _threadIsOnScreen _openAgentScreenOrNull
+  - _hasPairing _buildModeSwitch _addComputer _onHasComputerChanged _onModeChanged _handOverChatPointer _readChatModeChatId _isAgentsChatId _onSharedChatPointer _buildChatMode _agentsModeSwitch _onPushStatus _onControllerForBrowser _onBrowserPresenceChanged _explainNoScreen _select _openRooms _openBrowserView _openAgentProfile _openSettings _openModelScreen _openChatModel _openChatFiles _openRoom _drivePush _buildPhoneBody _browserOpen _chatModeAvailable _wantedMode _showModeSwitch _addComputerAction _threadIsOnScreen _openAgentScreenOrNull page
 
 ### mobile_agent_permissions_page.dart  (116 Z.)
 - `class MobileAgentPermissionsPage extends StatefulWidget`
@@ -1257,11 +1243,16 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _MobileAgentPermissionsPageState extends State<MobileAgentPermissionsPage>`
   - _askBudget _service _l
 
-### mobile_agents_settings_page.dart  (464 Z.)
-- `class MobileAgentsSettingsPage extends StatefulWidget`  — The mobile contact page: everyday choices first, technical details second.
-  - agentId chatId source profiles preferences onSettings onChat permissions
-- `class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage>`
-  - _openModel _remove _openMail _hide _contact _row Function _preferences _l
+### mobile_agents_settings_page.dart  (660 Z.)
+- `class AgentSettingsView extends StatefulWidget`  — An agent's settings: ONE content for every form factor (bead
+  - framed onClose link agentId chatId source profiles preferences onSettings onChat permissions
+- `class MobileAgentsSettingsPage extends AgentSettingsView`  — [AgentSettingsView] as a phone page: the shared transparent header over
+- `class _AgentSettingsViewState extends State<AgentSettingsView>`
+  - _close _openModel _remove _openMail _hide _contact _row Function _preferences _l
+- `class _HostRow extends StatelessWidget`  — Where the agent runs, told from what the app knows (bead
+  - _card agent link
+- `class _InfoCard extends StatelessWidget`  — One fact as a row of its group: the icon tile, the label, the value and
+  - icon label value note
 
 ### otp_verification_page.dart  (291 Z.)
 - `class OtpVerificationPage extends StatefulWidget`  — Reusable page for entering a 6-digit email verification code.
@@ -4885,12 +4876,12 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class AgentAvatar extends StatelessWidget`
   - monogramOf hueOf seed label radius dimmed
 
-### agent_control_panel.dart  (861 Z.)
+### agent_control_panel.dart  (720 Z.)
 - reicht weiter: 'package:chuk_chat/widgets/agent_details_overview.dart' show AgentDetailsOverview
 - `class AgentControlPanel extends StatefulWidget`
-  - profileLayout onRename profiles permissions onOpenSkills onOpenPermissions showHeader showRefresh agent source onScheduleSubmitted
+  - onOpenSkills agent source
 - `class _AgentControlPanelState extends State<AgentControlPanel>`
-  - _openSkills _openPermissions _notes _measured _skillsRow _skillsSummary _chevron _buildProfile _fact _buildModel _buildTokens _buildRuntime _buildSandbox _l10n _buildCost _runDetail _notReported _loading _sessionKey
+  - _openSkills _notes _measured _skillsRow _skillsSummary _chevron _fact _buildModel _buildTokens _buildRuntime _buildSandbox _l10n _buildCost _runDetail _notReported _loading _sessionKey
 - `String formatRuntime(Duration d)`  — `1h 04m` / `4m 12s` / `12s`.
 - `String formatCount(int value)`  — `1 234 567` — grouped, so a six-figure token count is readable at a glance.
 - `String formatTimestamp(DateTime when)`  — `2026-02-03 14:00` — stable and unambiguous, no locale guessing.
@@ -4898,12 +4889,6 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
   - agentId service
 - `class _WeeklyBudgetFieldState extends State<WeeklyBudgetField>`
   - _text _onService _save force
-
-### agent_details_identity.dart  (334 Z.)
-- `class AgentDetailsIdentity extends StatefulWidget`
-  - agent onRename profiles faceSize
-- `class _AgentDetailsIdentityState extends State<AgentDetailsIdentity>`
-  - _storedRole _storedBrief _takeAll _onStore _onNameFocus _onRoleFocus _onBriefFocus _commitName _commitRole _commitBrief _write _label _decoration _store
 
 ### agent_details_overview.dart  (363 Z.)
 - const: _weekdays
@@ -6582,14 +6567,14 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `lib/ui/expressive/waveform.dart` — 9 Zeilen, von keiner Datei benutzt
 - `lib/widgets/chat_theme.dart` — 150 Zeilen, von keiner Datei benutzt
 
-**Importzyklen (21)**
+**Importzyklen (20)**
 - 3 Dateien: lib/services/account_session.dart → lib/services/session_refresh_scheduler.dart → lib/services/supabase_service.dart
 - 2 Dateien: lib/services/agents/agents_pairing_store.dart → lib/services/agents/supabase_pairing_sync.dart
 - 2 Dateien: lib/services/mcp/mcp_catalogue.dart → lib/services/mcp/mcp_connection.dart
 - 5 Dateien: lib/services/agents/agents_cloud_relay.dart → lib/services/agents/agents_relay_client.dart → lib/services/agents/agents_relay_link.dart → lib/services/mcp/mcp_service.dart → lib/services/mcp/mcp_store
 - 9 Dateien: lib/services/agents/agents_queued_marks.dart → lib/services/chat_preload_service.dart → lib/services/chat_storage_crud.dart → lib/services/chat_storage_mutations.dart → lib/services/chat_storage_servi
 
-**Größte Dateien (95 über der Schwelle)**
+**Größte Dateien (94 über der Schwelle)**
 - `lib/platform_specific/chat/chat_ui_mobile.dart` — 4338 Zeilen, 176 Symbole
 - `lib/services/agents/agents_relay_client.dart` — 3947 Zeilen, 483 Symbole
 - `lib/services/artifact_storage_service.dart` — 3209 Zeilen, 133 Symbole
@@ -6598,13 +6583,13 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ## Mehrfach vergebene Namen
 
-359 Namen existieren in mehr als einer Datei. Meist kopierter Code. Bevor du so etwas neu schreibst, eine der Stellen wiederverwenden. Volle Liste: `pseudomap dupes`.
+357 Namen existieren in mehr als einer Datei. Meist kopierter Code. Bevor du so etwas neu schreibst, eine der Stellen wiederverwenden. Volle Liste: `pseudomap dupes`.
 
 - `Function` — lib/openui/components/data_cards/card_blocks.dart:49 · lib/openui/components/tables_charts/round_charts.dart:23 · lib/pages/mcp_connectors_page.dart:1041 · lib/platform_specific/chat/handlers/scanned_pdf_pages.dart:20 +14
 - `_load` — lib/openui/dev/gallery_main.dart:110 · lib/pages/agent_mail_contacts_page.dart:50 · lib/pages/agent_mail_detail_page.dart:98 · lib/pages/agent_model_page.dart:131 +13
 - `_save` — lib/openui/components/tables_charts/editable_table.dart:381 · lib/pages/agent_mail_detail_page.dart:283 · lib/pages/agent_profile_edit_page.dart:143 · lib/pages/skills_settings_page.dart:323 +12
 - `_open` — lib/pages/agent_mailbox_page.dart:263 · lib/pages/assistant_settings_page.dart:153 · lib/pages/mcp_connectors_page.dart:354 · lib/services/agents/agent_mail_crypto.dart:161 +8
-- `_row` — lib/pages/mcp_connectors_page.dart:330 · lib/pages/mobile_agents_settings_page.dart:434 · lib/pages/skills_settings_page.dart:724 · lib/voice/incoming/voice_call_permissions_section.dart:120 +6
+- `_row` — lib/pages/mcp_connectors_page.dart:330 · lib/pages/mobile_agents_settings_page.dart:501 · lib/pages/skills_settings_page.dart:724 · lib/voice/incoming/voice_call_permissions_section.dart:120 +6
 - `_persist` — lib/services/agents/agent_profile_store.dart:291 · lib/services/agents/agent_read_marks.dart:156 · lib/services/agents/agent_roster_source.dart:197 · lib/services/agents/agent_roster_store.dart:169 +5
 - `_key` — lib/platform_specific/chat/voice/voice_turn_queue.dart:156 · lib/services/agents/agents_task_outbox.dart:192 · lib/services/agents/agents_task_outbox.dart:562 · lib/services/chat_dirty_store.dart:50 +4
 - `_send` — lib/openui/components/forms_buttons/buttons.dart:308 · lib/services/agents/agent_mail_service.dart:785 · lib/services/multiplex_connection.dart:896 · lib/voice/incoming/incoming_call_service.dart:351 +4
@@ -6616,13 +6601,13 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `_onInbound` — lib/services/agents/browser_presence.dart:200 · lib/services/automations/automations_source.dart:142 · lib/services/skills/skills_source.dart:104 · lib/widgets/agents_thread_view.dart:1407 +2
 - `_service` — lib/pages/agent_mail_contacts_page.dart:35 · lib/pages/agent_mail_detail_page.dart:64 · lib/pages/agent_mailbox_page.dart:86 · lib/pages/mobile_agent_permissions_page.dart:62 +2
 - `_table` — lib/openui/components/tables_charts/data_table.dart:469 · lib/openui/components/tables_charts/editable_table.dart:461 · lib/services/customization_preferences_service.dart:214 · lib/services/profile_service.dart:44 +2
-- `_build` — lib/pages/agent_profile_page.dart:145 · lib/platform_specific/chat/widgets/composer_send_button.dart:124 · lib/ui/expressive/agent_face.dart:235 · lib/ui/expressive/shapes.dart:29 +1
+- `_close` — lib/assistant/assistant_overlay.dart:58 · lib/openui/components/content_layout/containers.dart:370 · lib/pages/mobile_agents_settings_page.dart:136 · lib/voice/incoming/incoming_call_service.dart:474 +1
 - `_emit` — lib/platform_specific/chat/voice/voice_task_delegates.dart:88 · lib/services/offline_queue_service_native.dart:223 · lib/services/offline_queue_service_web.dart:151 · lib/services/offline_retry_manager.dart:341 +1
 - `_formatDate` — lib/pages/media_manager_page.dart:580 · lib/pages/usage_details_page.dart:920 · lib/pages/workspace_mobile_detail_page.dart:526 · lib/services/workspace_message_service.dart:260 +1
 - `_pick` — lib/openui/components/content_layout/disclosure.dart:50 · lib/openui/components/forms_buttons/pickers.dart:319 · lib/pages/settings/embedding_settings_page.dart:41 · lib/widgets/agent_roster_view.dart:281 +1
-- `_select` — lib/pages/agent_mailbox_page.dart:219 · lib/pages/agents_shell_state.dart:203 · lib/pages/messenger_shell.dart:647 · lib/services/storage/agents_chat_store.dart:904 +1
+- `_select` — lib/pages/agent_mailbox_page.dart:219 · lib/pages/agents_shell_state.dart:203 · lib/pages/messenger_shell.dart:646 · lib/services/storage/agents_chat_store.dart:904 +1
 - `_set` — lib/assistant/assistant_session.dart:467 · lib/openui/components/tables_charts/editable_table.dart:270 · lib/services/agents/agents_install_flow.dart:225 · lib/services/agents/agents_relay_client.dart:3907 +1
 - `_submit` — lib/pages/agent_mail_contacts_page.dart:355 · lib/pages/secrets_settings_page.dart:222 · lib/pages/workspaces_page.dart:619 · lib/widgets/agent_name_dialog.dart:69 +1
-- `_write` — lib/pages/agent_model_page.dart:216 · lib/services/diagnostics_log_service_io.dart:369 · lib/services/offline_queue_service_web.dart:52 · lib/services/window_title_service.dart:71 +1
 - `_actions` — lib/pages/agent_mail_detail_page.dart:598 · lib/widgets/agents_skill_proposal_card.dart:532 · lib/widgets/agents_status_panel.dart:181 · lib/widgets/automation_card.dart:225
-- … +334 weitere
+- `_ask` — lib/voice/incoming/voice_call_permissions.dart:86 · lib/voice/incoming/voice_call_permissions_section.dart:98 · lib/widgets/agent_details_overview.dart:204 · lib/widgets/agents_permissions/agent_permissions_section.dart:182
+- … +332 weitere
