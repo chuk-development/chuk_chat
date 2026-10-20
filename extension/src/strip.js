@@ -1,7 +1,7 @@
 // Words for the strip on the page and for the panel. Pure functions, no
 // browser API, so the node tests can check them.
 //
-// The host sends `browser_holder` with the coworker's name when a coworker
+// The host sends `browser_holder` with the agent's name when an agent
 // takes the browser. The strip then says "Ada is using this tab" instead of
 // "Agents is using this tab". Without a name it falls back to "Agents".
 
@@ -24,7 +24,7 @@ const WORDS = Object.freeze({
   stopped: "stopped",
 });
 
-/** The strip's text for a lease state and a coworker name. */
+/** The strip's text for a lease state and an agent name. */
 export function stripLabel(state, name) {
   const who = coworkerName(name) || FALLBACK_NAME;
   return `${who} ${WORDS[state] ?? WORDS.active}`;
@@ -41,7 +41,7 @@ export function panelControlText({ stopped, coworker } = {}) {
  * What the panel shows for a frame the host sent about a panel message, or
  * null when the frame is not one of those.
  *   page_message_ack  the host took the message (or says why not)
- *   page_reply        the coworker's answer
+ *   page_reply        the agent's answer
  */
 export function panelNote(frame) {
   if (!frame || typeof frame !== "object") return null;

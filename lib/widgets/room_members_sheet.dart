@@ -1,7 +1,7 @@
-/// Manage a room's members (§16.1): remove one, add a coworker from the
-/// roster, and set whether the coworkers may answer each other.
+/// Manage a room's members (§16.1): remove one, add an agent from the
+/// roster, and set whether the agents may answer each other.
 ///
-/// There is no member ceiling — a room takes as many coworkers as the roster
+/// There is no member ceiling — a room takes as many agents as the roster
 /// holds — so Add is never disabled by a count. The one bound left is the floor:
 /// a room of one is not a room, so Remove is disabled at two members.
 ///
@@ -44,7 +44,7 @@ class RoomMembersSheet extends StatelessWidget {
   final void Function(AgentsRoomMember member) onAdd;
   final void Function(String agentId) onRemove;
 
-  /// Reports a flip of the room's "coworkers can reply to each other" policy
+  /// Reports a flip of the room's "agents can reply to each other" policy
   /// (`agent_to_agent`). The caller updates the room source and tells the host;
   /// a null callback leaves the switch visible but inert.
   final ValueChanged<bool>? onAgentToAgentChanged;
@@ -88,7 +88,7 @@ class RoomMembersSheet extends StatelessWidget {
                     children: [
                       ExpressiveSwitchRow(
                         key: const ValueKey<String>('room-agent-to-agent'),
-                        title: 'Coworkers can reply to each other',
+                        title: 'Agents can reply to each other',
                         subtitle: 'With this off, they only answer you.',
                         value: room.agentToAgent,
                         onChanged: onAgentToAgentChanged,
@@ -125,13 +125,13 @@ class RoomMembersSheet extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  Text('Add a coworker', style: theme.textTheme.labelLarge),
+                  Text('Add an agent', style: theme.textTheme.labelLarge),
                   const SizedBox(height: 6),
                   if (candidates.isEmpty)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       child: Text(
-                        'No other coworkers to add.',
+                        'No other agents to add.',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: cs.onSurfaceVariant,
                         ),

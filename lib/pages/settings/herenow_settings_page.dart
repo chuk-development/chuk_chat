@@ -7,7 +7,7 @@ import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 
-/// The here.now publishing connector: let a coworker put a file or a folder on
+/// The here.now publishing connector: let an agent put a file or a folder on
 /// the public web and hand back a live URL. Off by default — while it is off,
 /// the agent has no publish tool at all. When on, the approval mode decides
 /// whether each public publish waits for a tap (`Ask`) or goes straight out
@@ -65,7 +65,7 @@ class _HereNowSettingsPageState extends State<HereNowSettingsPage> {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
               children: [
                 Text(
-                  'Let a coworker publish files to a live public URL.',
+                  'Let an agent publish files to a live public URL.',
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.resolvedIconColor.withValues(alpha: 0.7),
                   ),

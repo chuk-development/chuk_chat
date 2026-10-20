@@ -1,4 +1,4 @@
-"""One sandbox browser per box, shared by the threads of its coworker, started
+"""One sandbox browser per box, shared by the threads of its agent, started
 on first use (bead chuk_chat-wrdv, ``chuk_agents_executor.box_browser``).
 
 The box has one Chromium profile and its owner script refuses a second

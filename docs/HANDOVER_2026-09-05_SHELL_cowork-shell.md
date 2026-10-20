@@ -18,8 +18,8 @@ master (d31526a), slot for slot, with Agents's content:
   the window in compact mode.
 - Hamburger at chuk's anchor (`kTopInitialSpacing`, `kFixedLeftPadding`,
   48×40). Mini rail under it when the sidebar is closed, one
-  `kButtonVisualHeight` per row: New coworker, Control Rooms, Agent's browser
-  (the last once a coworker is selected).
+  `kButtonVisualHeight` per row: New agent, Control Rooms, Agent's browser
+  (the last once an agent is selected).
 - Right panel at chuk's Workspaces/Media/Artifacts slot: `Control Rooms`
   (embedded `RoomListView`, 400 px cap; a room still opens as its own route so
   `rebind` keeps working) and `Agent's browser` (embedded `BrowserViewPage`
@@ -27,9 +27,9 @@ master (d31526a), slot for slot, with Agents's content:
   divider, default half the content width). Same header as chuk (icon,
   title, Close).
 - Floating top-right row at chuk's anchor, FOUR `IconButton`s in chuk's style:
-  Agent controls (`tune`, with a selected coworker), Control Rooms
+  Agent controls (`tune`, with a selected agent), Control Rooms
   (`groups_outlined`), Agent's browser (`desktop_windows_outlined`, with a
-  selected coworker), Copy full chat (`copy_all_rounded` 20 px, chuk's slot,
+  selected agent), Copy full chat (`copy_all_rounded` 20 px, chuk's slot,
   tooltip unchanged — both existing tests find it).
 - Settings is where chuk keeps it: the gear in the sidebar footer pill →
   `showDesktopSettingsModal` (desktop) / `SettingsPage` route (phone). Sign
@@ -44,7 +44,7 @@ master (d31526a), slot for slot, with Agents's content:
 the sidebar starts OPEN (a messenger's roster is its navigation); the compact
 band ends at **720** instead of chuk's 600 (everything under 600 is the phone
 layer, so a tablet-width window keeps chuk's compact behaviour: sidebar covers
-the chat, picking a coworker folds it, the hamburger brings it back); opening
+the chat, picking an agent folds it, the hamburger brings it back); opening
 a panel folds the sidebar when both cannot fit next to a 300 px chat (chuk
 drops the panel silently — at 800 px Control Rooms would look broken);
 opening settings does not fold the sidebar.
@@ -70,7 +70,7 @@ controller builder ran exactly once.
 
 Top spacer `kTopInitialSpacing`; brand row exactly `kMenuButtonHeight` tall,
 text starting right of the hamburger (`kFixedLeftPadding + kMenuButtonHeight +
-4`); rail rows in `IntrinsicWidth` + `Column(stretch)` — New coworker,
+4`); rail rows in `IntrinsicWidth` + `Column(stretch)` — New agent,
 Control Rooms (`onOpenRooms`), Agent's browser (`onOpenBrowser`); the list;
 chuk's footer pill floating over the list's tail with the fade
 (`onOpenSettings`, label `accountLabel ?? 'Account'`, gear with tooltip
@@ -234,7 +234,7 @@ chuk's account page and dropped it for want of the services below.
   bead cowork-zrq set the default); the badge's own service is the source —
   find it with `grep -rn "class BalanceBadge" ~/git/chuk_chat/lib`.
 
-**cowork-817 — rename a coworker, create one with a name, chuk-style input.**
+**cowork-817 — rename an agent, create one with a name, chuk-style input.**
 - Today: create = `widgets/agent_onboarding_sheet.dart` (the "kindergarten"
   form the user rejected), no rename at all. Data: `services/agents/
   agent_roster_source.dart` (`addAgent(name:, role:, brief:, …)`; add a
@@ -242,9 +242,9 @@ chuk's account page and dropped it for want of the services below.
 - chuk's template for the dialog: `sidebar_desktop.dart` `_renameChatDialog`
   (line ~1222, `showDialog<String>` + `AlertDialog` with one `TextField`) and
   the row menu (`_showChatContextMenu`, ~1168). Reuse that dialog shape for
-  Rename (row menu in `_AgentTile`, next to Hide/Delete) and for New coworker
+  Rename (row menu in `_AgentTile`, next to Hide/Delete) and for New agent
   (name first; role/brief can stay optional behind the same dialog or the
   Agent controls drawer).
 - Tests to extend: `agent_roster_view_test` (menu → Rename → source updated),
-  `messenger_shell_test` "onboarding adds a coworker" (now a dialog, not a
+  `messenger_shell_test` "onboarding adds an agent" (now a dialog, not a
   sheet).

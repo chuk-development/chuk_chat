@@ -204,7 +204,7 @@ def test_automation_control_and_list_frames_reach_the_host_hook(tmp_path):
 
 
 def test_agent_frames_reach_the_host_hook_and_answer_with_the_list(tmp_path):
-    """Coworker names (docs/WIRE_CONTRACT.md "Coworker names"): create, rename
+    """Agent names (docs/WIRE_CONTRACT.md "Agent names"): create, rename
     and the list request all reach the host hook and each is answered with one
     ``agent_list`` terminal."""
     from chuk_agents_executor import agent_create_payload, agent_list_request_payload, agent_rename_payload
@@ -253,7 +253,7 @@ def test_agent_frames_without_a_hook_are_refused(tmp_path):
         events = controller.collect(rid, timeout=10.0)
     finally:
         executor.stop()
-    assert events[0]["type"] == "error" and "coworker names" in events[0]["message"]
+    assert events[0]["type"] == "error" and "agent names" in events[0]["message"]
 
 
 def test_automation_frames_without_a_hook_are_refused(tmp_path):

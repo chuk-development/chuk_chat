@@ -28,7 +28,7 @@ void main() {
   });
 
   group('workInProgressLabel', () {
-    test('an idle coworker has no work in progress', () {
+    test('an idle agent has no work in progress', () {
       expect(workInProgressLabel(agentWith(), null), isNull);
     });
 

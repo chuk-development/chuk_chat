@@ -1,4 +1,4 @@
-/// Naming a coworker: the one surface the app uses to create one and to rename
+/// Naming an agent: the one surface the app uses to create one and to rename
 /// one.
 ///
 /// It used to be a Material [AlertDialog] with a labelled, outlined field and
@@ -20,27 +20,27 @@ import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/widgets/agents_desktop/desktop_dialog.dart';
 import 'package:chuk_chat/widgets/agents_desktop/desktop_metrics.dart';
 
-/// Asks for a coworker's name. Returns the trimmed text, or null on Cancel.
+/// Asks for an agent's name. Returns the trimmed text, or null on Cancel.
 ///
 /// The controller belongs to the dialog widget, not to the caller: disposing it
 /// right after `showDialog` returns trips "used after dispose" while the route
 /// is still animating out under a widget test.
-Future<String?> showCoworkerNameDialog(
+Future<String?> showAgentNameDialog(
   BuildContext context, {
   required String title,
   required String submitLabel,
   String initialName = '',
 }) => showDialog<String>(
   context: context,
-  builder: (_) => CoworkerNameDialog(
+  builder: (_) => AgentNameDialog(
     title: title,
     submitLabel: submitLabel,
     initialName: initialName,
   ),
 );
 
-class CoworkerNameDialog extends StatefulWidget {
-  const CoworkerNameDialog({
+class AgentNameDialog extends StatefulWidget {
+  const AgentNameDialog({
     super.key,
     required this.title,
     required this.submitLabel,
@@ -52,10 +52,10 @@ class CoworkerNameDialog extends StatefulWidget {
   final String initialName;
 
   @override
-  State<CoworkerNameDialog> createState() => _CoworkerNameDialogState();
+  State<AgentNameDialog> createState() => _AgentNameDialogState();
 }
 
-class _CoworkerNameDialogState extends State<CoworkerNameDialog> {
+class _AgentNameDialogState extends State<AgentNameDialog> {
   late final TextEditingController _controller = TextEditingController(
     text: widget.initialName,
   );

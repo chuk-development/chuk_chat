@@ -95,7 +95,7 @@ void main() {
             child: SizedBox(
               width: 320,
               child: MobileChatChrome(
-                agent: agent(id: 'alex', name: 'A long coworker name'),
+                agent: agent(id: 'alex', name: 'A long agent name'),
                 onBack: () {},
                 onOpenProfile: () {},
                 onOpenFiles: () => files++,
@@ -379,7 +379,7 @@ void main() {
 
   testWidgets('a parked screen target still answers a tap', (tester) async {
     // Bead cowork-egrg: the target used to be rendered with a null callback
-    // while the coworker had no screen, so a tap did nothing at all and the
+    // while the agent had no screen, so a tap did nothing at all and the
     // user read the button as broken. It is parked now: visibly not ready,
     // and it still calls back so the caller can say why.
     int taps = 0;
@@ -407,11 +407,11 @@ void main() {
     expect(taps, 1);
   });
 
-  testWidgets('a coworker in the user\'s browser: the parked target says so', (
+  testWidgets('an agent in the user\'s browser: the parked target says so', (
     tester,
   ) async {
     // Bead chuk_chat-atm2: like the desktop header, never "No screen open
-    // yet" for a coworker that works in the user's own browser.
+    // yet" for an agent that works in the user's own browser.
     int taps = 0;
     await pumpPhone(
       tester,
@@ -475,7 +475,7 @@ void main() {
       MobileChatChrome(
         agent: agent(
           id: 'a1',
-          name: 'An extraordinarily long coworker name that never ends',
+          name: 'An extraordinarily long agent name that never ends',
         ),
         onBack: () {},
         onOpenBrowser: () {},
@@ -534,7 +534,7 @@ void main() {
             child: MobileChatChrome(
               agent: agent(
                 id: 'a1',
-                name: 'A very long coworker name',
+                name: 'A very long agent name',
                 running: true,
               ),
               onBack: () {},

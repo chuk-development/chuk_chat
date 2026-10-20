@@ -1,5 +1,5 @@
 /// Which half of the Agents build is in front: chuk_chat's own chat ("Chat")
-/// or the coworkers ("Agents").
+/// or the agents ("Agents").
 ///
 /// Only the Agents build (`FEATURE_AGENTS=true`) has two halves. The switch at
 /// the top of both (`widgets/app_mode_switch.dart`) writes here, and the

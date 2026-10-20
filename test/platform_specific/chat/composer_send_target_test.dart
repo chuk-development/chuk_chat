@@ -1,7 +1,7 @@
 // The composer's primary target on the phone (bead cowork-bj88).
 //
 // The send button stays the send button. There is no red stop in the composer,
-// so nothing the user taps there can interrupt the coworker.
+// so nothing the user taps there can interrupt the agent.
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';

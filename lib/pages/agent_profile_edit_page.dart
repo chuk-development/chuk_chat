@@ -1,4 +1,4 @@
-/// Setting a coworker's profile: its picture, its colour, its name, its role
+/// Setting an agent's profile: its picture, its colour, its name, its role
 /// line and its standing brief.
 ///
 /// Where each field goes:
@@ -249,7 +249,7 @@ class _AgentProfileEditPageState extends State<AgentProfileEditPage> {
                 const SizedBox(height: 26),
                 _SectionLabel('Figure'),
                 const SizedBox(height: 8),
-                // Colour and silhouette are one decision — what this coworker
+                // Colour and silhouette are one decision — what this agent
                 // looks like everywhere — so they sit in one card with one reset,
                 // instead of two labelled sections the user has to connect.
                 Container(
@@ -312,7 +312,7 @@ class _AgentProfileEditPageState extends State<AgentProfileEditPage> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  "How this coworker's mark looks everywhere",
+                  "How this agent's mark looks everywhere",
                   style: Theme.of(
                     context,
                   ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
@@ -329,7 +329,7 @@ class _AgentProfileEditPageState extends State<AgentProfileEditPage> {
                         borderRadius: BorderRadius.all(Radius.circular(18)),
                         borderSide: BorderSide.none,
                       ),
-                      hintText: 'Coworker name',
+                      hintText: 'Agent name',
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -367,7 +367,7 @@ class _AgentProfileEditPageState extends State<AgentProfileEditPage> {
                       borderRadius: BorderRadius.all(Radius.circular(18)),
                       borderSide: BorderSide.none,
                     ),
-                    hintText: 'What this coworker takes care of',
+                    hintText: 'What this agent takes care of',
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -527,12 +527,12 @@ class _ColorRow extends StatelessWidget {
   }
 }
 
-/// The silhouettes a coworker can be given, drawn as themselves.
+/// The silhouettes an agent can be given, drawn as themselves.
 ///
 /// A row of shapes says what it offers; a row of chips labelled "Rounded
 /// square" makes the reader translate a word back into a picture. The first
 /// entry is the automatic one — the silhouette derived from the agent id,
-/// which is what a coworker wears until somebody picks.
+/// which is what an agent wears until somebody picks.
 class _ShapeRow extends StatelessWidget {
   const _ShapeRow({
     required this.agentId,

@@ -366,7 +366,7 @@ def test_each_warning_level_is_sent_once_per_week():
     assert notices.first("a", 1.0, BUDGET_EXCEEDED)
     assert not notices.first("a", 1.0, BUDGET_WARNING)
     assert not notices.first("a", 1.0, BUDGET_EXCEEDED)
-    # A new week starts over; another coworker is its own.
+    # A new week starts over; another agent is its own.
     assert notices.first("a", 2.0, BUDGET_WARNING)
     assert notices.first("b", 1.0, BUDGET_EXCEEDED)
     assert not notices.first("a", 2.0, BUDGET_OK)

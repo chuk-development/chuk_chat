@@ -45,23 +45,33 @@ void main() {
     }
   }
 
+  // The limit no longer ends the turn: it forces final passes without tools.
+  // Only a model that keeps asking for tools through all of them gets the
+  // fallback text, which is what these tests check.
   Future<String> tripLimit(
     ToolCallHandler handler,
     ToolLoopSession session,
   ) async {
     exhaustIterations(session);
-    final result = await handler.processAssistantResponse(
+    const call =
+        '<tool_call>{"name":"generate_image","arguments":{}}</tool_call>';
+    var result = await handler.processAssistantResponse(
       session: session,
-      // A parseable tool call so the flow reaches the enforce/limit check.
-      content:
-          '<tool_call>{"name":"generate_image","arguments":{}}</tool_call>',
+      content: call,
       reasoning: '',
     );
-    expect(result.shouldContinue, isFalse);
+    while (result.shouldContinue) {
+      expect(result.nextStep!.message, kForcedFinalAnswerNote);
+      result = await handler.processAssistantResponse(
+        session: session,
+        content: call,
+        reasoning: '',
+      );
+    }
     return result.finalContent ?? '';
   }
 
-  group('safety-limit final message', () {
+  group('tool-limit fallback message', () {
     test('reports the compiled PDF when typst_compile completed', () async {
       final handler = ToolCallHandler();
       final session = newSession(handler)
@@ -94,13 +104,13 @@ void main() {
       expect(msg, contains('image'));
     });
 
-    test('falls back to the retry message when nothing was produced', () async {
+    test('falls back to the summary offer when nothing was produced', () async {
       final handler = ToolCallHandler();
       final session = newSession(handler)
         ..toolCalls.add(completed('web_search'));
 
       final msg = await tripLimit(handler, session);
-      expect(msg, contains('simpler prompt'));
+      expect(msg, contains('sum them up'));
     });
 
     test(
@@ -119,7 +129,7 @@ void main() {
           );
 
         final msg = await tripLimit(handler, session);
-        expect(msg, contains('simpler prompt'));
+        expect(msg, contains('sum them up'));
         expect(msg, isNot(contains('PDF')));
       },
     );
@@ -138,7 +148,7 @@ void main() {
         );
 
       final msg = await tripLimit(handler, session);
-      expect(msg, contains('simpler prompt'));
+      expect(msg, contains('sum them up'));
     });
   });
 }

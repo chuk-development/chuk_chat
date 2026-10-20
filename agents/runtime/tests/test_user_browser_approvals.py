@@ -37,7 +37,7 @@ def test_the_user_browser_asks_unless_the_user_chose_otherwise():
     listed = ActionPolicy(sites={BROWSER_ACT: ("github.com",)})
     assert user_browser_policy(listed).evaluate(BROWSER_ACT, "api.github.com") == "allow"
     assert user_browser_policy(listed).evaluate(BROWSER_ACT, "bank.example") == "ask"
-    # The user's explicit choice for the coworker wins either way.
+    # The user's explicit choice for the agent wins either way.
     assert user_browser_policy(ActionPolicy(modes={BROWSER_ACT: "allow"})).evaluate(BROWSER_ACT) == "allow"
     assert user_browser_policy(ActionPolicy(modes={BROWSER_ACT: "deny"})).evaluate(
         BROWSER_ACT, "github.com"

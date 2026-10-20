@@ -117,7 +117,7 @@ def test_status_counts_the_runs_and_the_clock(tmp_path):
         controller.collect(
             controller.send_task("two", session_key="amber"), timeout=20.0
         )
-        # A second coworker's spend must not land in the first one's figures.
+        # A second agent's spend must not land in the first one's figures.
         controller.collect(
             controller.send_task("hers", session_key="blue"), timeout=20.0
         )

@@ -1,5 +1,5 @@
 /// The room model's `agent_to_agent` policy (bead cowork-h46g) and the stop
-/// reason the host sends when the policy silenced a coworker's @mention.
+/// reason the host sends when the policy silenced an agent's @mention.
 ///
 /// Default ON is the whole point of the contract: a room built by an older
 /// screen, or restored without the key, must behave exactly the way rooms have
@@ -14,7 +14,7 @@ AgentsRoomMember _m(String id, String handle) =>
     AgentsRoomMember(agentId: id, handle: handle);
 
 void main() {
-  test('a room lets the coworkers reply to each other unless told otherwise',
+  test('a room lets the agents reply to each other unless told otherwise',
       () {
     final room = AgentsRoom(
       id: 'r1',
@@ -74,7 +74,7 @@ void main() {
     );
     expect(
       AgentsRoomStop.agentToAgentOff.label,
-      'Coworkers do not reply to each other here',
+      'Agents do not reply to each other here',
     );
   });
 

@@ -2,7 +2,7 @@
 //
 // The placeholder behind `pricing`, `usage` and `workspace_management`. It is
 // three of the app's screens, so it does not get to be a bare icon on a bare
-// background: it uses the same tonal mark the coworker inbox uses for its own
+// background: it uses the same tonal mark the agent inbox uses for its own
 // empty state (`mobile_agent_list.dart`, `_EmptyState`).
 //
 // Merge note: upstream kept the Scaffold + FloatingAppBar chrome and Agents

@@ -4,9 +4,9 @@
 /// ## Why this exists
 ///
 /// The roster used to live in memory only, so every launch started with an
-/// EMPTY list of coworkers. The shell remembers which coworker and which
+/// EMPTY list of agents. The shell remembers which agent and which
 /// thread the user was in (`cowork.last_agent_id` / `cowork.last_thread_key`),
-/// but it can only land on that coworker if the coworker is in the roster —
+/// but it can only land on that agent if the agent is in the roster —
 /// and on a cold start it was not. The user therefore waited for the relay to
 /// pair and for the host's `agent_list` before their conversation appeared,
 /// although the transcript itself was already on disk. This store closes that
@@ -18,9 +18,9 @@
 ///  * The host stays the truth. A received `agent_list` is applied to the
 ///    roster and the roster is then written here WHOLESALE — the snapshot can
 ///    never outvote the host, it only fills the gap before the host speaks.
-///  * A deleted coworker may not come back. Delete is not on the wire yet
-///    (docs/WIRE_CONTRACT.md, "Coworker names"), so the host keeps listing a
-///    coworker the user removed. The deleted ids are persisted next to the
+///  * A deleted agent may not come back. Delete is not on the wire yet
+///    (docs/WIRE_CONTRACT.md, "Agent names"), so the host keeps listing a
+///    agent the user removed. The deleted ids are persisted next to the
 ///    agents and fed back into `applyHostNames`' `ignore` set on the next
 ///    launch, exactly as they are within a session.
 ///  * Only roster facts are stored: id, name, whether the agent runs on the
@@ -54,7 +54,7 @@ class AgentRosterSnapshot {
   final Set<String> hidden;
 
   /// The ids the user deleted. Kept for good, so a host list cannot resurrect
-  /// a coworker the user removed on an earlier launch.
+  /// an agent the user removed on an earlier launch.
   final Set<String> deleted;
 
   bool get isEmpty => agents.isEmpty && deleted.isEmpty;
@@ -181,7 +181,7 @@ class AgentRosterStore {
               'name': agent.name,
               'onHost': agent.onHost,
               if (agent.knownToHost) 'knownToHost': true,
-              // The last time the app saw this coworker do something. Kept so
+              // The last time the app saw this agent do something. Kept so
               // a cold start shows a real time instead of "no activity yet".
               if (agent.lastActivity != null)
                 'lastActivity': agent.lastActivity!.toUtc().toIso8601String(),
@@ -233,7 +233,7 @@ class AgentRosterStore {
     }
     if (threads.isEmpty) {
       // One permanent session per bot: its key is the agent id. A row without
-      // a thread would select a coworker with nothing to open.
+      // a thread would select an agent with nothing to open.
       threads.add(AgentsThreadInfo(key: id, title: 'General'));
     }
     return AgentsAgent(

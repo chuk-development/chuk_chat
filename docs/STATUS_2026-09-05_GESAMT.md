@@ -19,7 +19,7 @@ Quellen: docs/COORDINATION.md (Log), Beads (`bd list`), Handover-Docs (siehe unt
 - Automations (127fb10): Cron / Watcher / Self-Wake; Live-Beweis: Trigger -> Run in 2 s.
 - Terminal + Hintergrund-Jobs (16d9b0a, a951ff4): tmux-Shell-Tools, Jobs mit Weckruf; Live-Beweis in Docker-Sandbox.
 - Workspace-Regeln, Transcript-Export, automatisches Memory (03346e5).
-- Coworker-Namen auf dem Host (13f3ee4), Skills-Sync Frames (9595e23), Browser-Presence auf dem Draht (7e3ecad), run_ack-Timer (2b0fcb7), Wall-Clock-Guard (56d6984), Replay-Paging (503fbdf).
+- Agenten-Namen auf dem Host (13f3ee4), Skills-Sync Frames (9595e23), Browser-Presence auf dem Draht (7e3ecad), run_ack-Timer (2b0fcb7), Wall-Clock-Guard (56d6984), Replay-Paging (503fbdf).
 - Suiten zuletzt: agent 865 passed, executor 167, host 149 (Vollauf unter Last: 14 test_local_run flaky, Bead 02f).
 
 ### Flutter (app)
@@ -30,7 +30,7 @@ Quellen: docs/COORDINATION.md (Log), Beads (`bd list`), Handover-Docs (siehe unt
 - MCP-OAuth auf dem Geraet verbatim (mcp_oauth, Loopback-Redirect), voller Secret-Record, Spiegel; Connector-Status aus chuk_chats Spiegel (268dcf6).
 - Logout-Fix: kein Netz-Refresh solange Access-Token gueltig, Refresh-Fehler loescht nie die Session, auth_gate holt erst das Host-Paar.
 - Agent-Browser nur oben rechts, nur sichtbar bei offenem Browser, Vollbild-Route mit Toggle (cb93b5b).
-- Account-Seite 1:1 mit Credits im Footer, Coworker umbenennen / anlegen mit chuk-Dialog (b21dd18).
+- Account-Seite 1:1 mit Credits im Footer, Agenten umbenennen / anlegen mit chuk-Dialog (b21dd18).
 - Skills-Seite zeigt die Host-Liste mit Schalter (b91746a).
 - Notifications (2790c89): lokale Toasts, FCM-Token-Row, Android-Manifest; Host-Notifier + Edge Function notify-run.
 - Mobile-Layer nach Grok-Bot-Vorbild (platform_specific/mobile/**, docs/MOBILE_GROKBOT_STRUCTURE.md).
@@ -45,7 +45,7 @@ Braucht "Bildschirm frei" vom User (Sessions bedienen die App nur nach Ansage) u
 |---|---|---|
 | cowork-0ia | Reasoning sichtbar gestreamt | b5 |
 | cowork-b45 / al2 | Tool-Karten + "Worked for" live gleich replay | 84 |
-| cowork-4ih / 817 | Account-Seite mit Credits, Coworker umbenennen/anlegen | af |
+| cowork-4ih / 817 | Account-Seite mit Credits, Agenten umbenennen/anlegen | af |
 | cowork-qk7 | Skills-Seite vom Host | 18 |
 | cowork-hza | Connector-Status aus chuk-Spiegel | 18 |
 | cowork-6x2 | Mobile-Ansicht (Grok-Bot) | c6 |
@@ -83,5 +83,5 @@ Braucht "Bildschirm frei" vom User (Sessions bedienen die App nur nach Ansage) u
 - Sessions-Kontext: 1M Fenster, ab 600k keine neuen Aufgaben (`ccmeter list`).
 
 ## 6. Sessions und Handover-Docs
-Fertig: 13 (VNC), 49 (Python-Kern), 98 (Chat-UI-Import), 5c (Shell/Model/Sidebar), f7 (Shell-Rest, P8-Review), 9e (Logout), 94 (Automations), 75 (Terminal), 47 (Adapter/MCP), 84 (Tool-Karten), b5 (Reasoning/Memory). Aktiv bzw. in Bereitschaft: af (Account/Coworker), 18 (Skills/Connector-Sync), f5 (Browser + Backlog), a4 (Storage), 26 (Secrets), c6 (Mobile, haelt App), 76/7b (Koordinator).
+Fertig: 13 (VNC), 49 (Python-Kern), 98 (Chat-UI-Import), 5c (Shell/Model/Sidebar), f7 (Shell-Rest, P8-Review), 9e (Logout), 94 (Automations), 75 (Terminal), 47 (Adapter/MCP), 84 (Tool-Karten), b5 (Reasoning/Memory). Aktiv bzw. in Bereitschaft: af (Account/Agent), 18 (Skills/Connector-Sync), f5 (Browser + Backlog), a4 (Storage), 26 (Secrets), c6 (Mobile, haelt App), 76/7b (Koordinator).
 Docs: docs/COORDINATION.md, docs/WIRE_CONTRACT.md, docs/HANDOVER_2026-09-04_FLUTTER_ALIGN.md, docs/HANDOVER_2026-09-05_PYTHON.md, docs/HANDOVER_2026-09-05_ADAPTER_MCP_cowork-47.md, docs/HANDOVER_2026-09-05_SHELL_SETTINGS_cowork-5c.md, docs/HANDOVER_2026-09-05_SHELL_cowork-shell.md, docs/HANDOVER_2026-09-05_SECRETS.md, docs/HANDOVER_2026-09-05_AUTOMATIONS.md, docs/HANDOVER_2026-09-05_TERMINAL.md, docs/HANDOVER_2026-09-05_WORKSPACE_MEMORY.md, docs/HANDOVER_2026-09-05_SKILLS.md, docs/HANDTEST_MCP_OAUTH.md, docs/SUPABASE_SCHEMA.md, docs/PLAN_2026-09-04_AGENTS_CHUK_ALIGN.md, docs/PRODUCT_PHILOSOPHY.md, docs/MOBILE_GROKBOT_STRUCTURE.md.

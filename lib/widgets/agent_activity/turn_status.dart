@@ -26,7 +26,7 @@ class TurnStatus {
   });
 
   /// The phase as an Agents turn reports it (`agents_turn_phase.dart`): what
-  /// the coworker's run is doing, read from the host's frames rather than
+  /// the agent's run is doing, read from the host's frames rather than
   /// from this client's stream. It outranks everything while the turn runs,
   /// a running tool included — the run ledger already names the tool when
   /// one is open, and it knows things the stream cannot (the host has the

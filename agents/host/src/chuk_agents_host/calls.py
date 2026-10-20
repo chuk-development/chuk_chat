@@ -298,7 +298,7 @@ class CallService:
         timers: bool = True,
     ) -> None:
         self._send = send
-        self._resolve = agent_resolver or (lambda key: (key, "Your coworker"))
+        self._resolve = agent_resolver or (lambda key: (key, "Your agent"))
         self._desktop = desktop
         self._log = logger or (lambda _m: None)
         self._timers_on = timers
@@ -325,11 +325,11 @@ class CallService:
         try:
             agent_id, agent_name = self._resolve(key)
         except Exception:  # noqa: BLE001 — a name lookup must not stop a call
-            agent_id, agent_name = key, "Your coworker"
+            agent_id, agent_name = key, "Your agent"
         call = self.registry.create(
             thread_id=key,
             agent_id=str(agent_id or key),
-            agent_name=str(agent_name or "Your coworker"),
+            agent_name=str(agent_name or "Your agent"),
             reason=text,
             urgency=level,
         )

@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/services/agents/agent_control_source.dart';
-import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agents_permissions_service.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
@@ -65,7 +64,24 @@ void main() {
           body: AgentControlPanel(
             agent: _agent(),
             source: FakeAgentControlSource(initial: snapshot),
-            permissions: permissions,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+  }
+
+  /// The weekly budget field on its own, as the Permissions page draws it,
+  /// after the page's one ask for the agent's settings.
+  Future<void> pumpField(WidgetTester tester) async {
+    permissions.attach();
+    await permissions.refresh('local:amber:1:x');
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: WeeklyBudgetField(
+            agentId: 'local:amber:1:x',
+            service: permissions,
           ),
         ),
       ),
@@ -97,7 +113,7 @@ void main() {
         'budget_state': 'warning',
       }),
     );
-    expect(find.text('Cost'.toUpperCase()), findsOneWidget);
+    expect(find.text('Cost'), findsOneWidget);
     expect(find.text('This thread'), findsOneWidget);
     expect(
       tester.widget<Text>(find.byKey(const ValueKey('cost-thread'))).data,
@@ -164,19 +180,19 @@ void main() {
     expect(find.text('5 200 tokens'), findsOneWidget);
   });
 
-  testWidgets('the budget field is hidden for a host without cost_budget', (
+  testWidgets('the panel draws no budget: the Permissions page owns it', (
     tester,
   ) async {
-    capabilities.value = <String>{'agent_permissions'};
     await pump(tester, _withCost(null));
     expect(find.byKey(const ValueKey('budget-weekly-field')), findsNothing);
+    expect(find.text('Weekly budget'), findsNothing);
     expect(sent, isEmpty);
   });
 
   testWidgets('Save does nothing until the host value is known', (
     tester,
   ) async {
-    await pump(tester, _withCost(null));
+    await pumpField(tester);
     expect(sent.single['type'], 'agent_permissions_get');
     final save = find.byKey(const ValueKey('budget-weekly-save'));
     // The field is still empty: a Save here must not send budget_weekly 0.
@@ -200,10 +216,8 @@ void main() {
   testWidgets('the budget field asks, shows, validates and sends', (
     tester,
   ) async {
-    await pump(tester, _withCost(null));
-    // The panel asked the host for the coworker's settings.
+    await pumpField(tester);
     expect(sent.single['type'], 'agent_permissions_get');
-    expect(find.text('Weekly budget'.toUpperCase()), findsOneWidget);
 
     hostSays(0);
     await tester.pump();
@@ -245,7 +259,7 @@ void main() {
     );
   });
 
-  testWidgets('cost and budget fit 360 dp at 1.3 text scale', (tester) async {
+  testWidgets('the cost fits 360 dp at 1.3 text scale', (tester) async {
     tester.view.physicalSize = const Size(360, 2400);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -270,94 +284,13 @@ void main() {
                 'budget_state': 'ok',
               }),
             ),
-            permissions: permissions,
           ),
         ),
       ),
     );
-    final first = tester.takeException();
-    hostSays(10000);
     await tester.pump();
-    expect(first, isNull);
     expect(tester.takeException(), isNull);
-    expect(find.byKey(const ValueKey('budget-weekly-field')), findsOneWidget);
-  });
-
-  testWidgets('desktop pane: the budget is a row in the settings group, the '
-      'cost is folded', (tester) async {
-    tester.view.physicalSize = const Size(320, 2400);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(
-      MaterialApp(
-        builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(
-            context,
-          ).copyWith(textScaler: const TextScaler.linear(1.3)),
-          child: child!,
-        ),
-        home: Scaffold(
-          body: AgentControlPanel(
-            agent: _agent(),
-            source: FakeAgentControlSource(
-              initial: _withCost(<String, dynamic>{
-                'session_total': 1.5,
-                'today': 0.5,
-                'week': 3.0,
-              }),
-            ),
-            permissions: permissions,
-            profileLayout: true,
-            profiles: AgentProfileStore(),
-          ),
-        ),
-      ),
-    );
-    await tester.pump();
-    expect(sent.single['type'], 'agent_permissions_get');
-
-    final row = find.byKey(const ValueKey('details-budget-row'));
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('details-settings-group')),
-        matching: row,
-      ),
-      findsOneWidget,
-    );
-    expect(find.descendant(of: row, matching: find.text('Loading…')),
-        findsOneWidget);
-    hostSays(0);
-    await tester.pump();
-    expect(find.descendant(of: row, matching: find.text('No limit')),
-        findsOneWidget);
-    // Cost and the field stay out of sight until asked for.
-    expect(find.text('This thread'), findsNothing);
-    final field = find.byKey(const ValueKey('budget-weekly-field'));
-    expect(field, findsNothing);
-
-    await tester.tap(row);
-    await tester.pumpAndSettle();
-    expect(field, findsOneWidget);
-    await tester.enterText(field, '20');
-    await tester.tap(find.byKey(const ValueKey('budget-weekly-save')));
-    await tester.pump();
-    expect(sent.last, <String, dynamic>{
-      'type': 'agent_permissions_set',
-      'agent_id': 'local:amber:1:x',
-      'budget_weekly': 20.0,
-    });
-    hostSays(20);
-    await tester.pump();
-    expect(find.descendant(of: row, matching: find.text('€20.00')),
-        findsOneWidget);
-
-    await tester.tap(
-      find.byKey(const ValueKey('details-technical-toggle')),
-    );
-    await tester.pumpAndSettle();
     expect(find.text('This thread'), findsOneWidget);
-    expect(tester.takeException(), isNull);
   });
 
   test('parseBudgetWeekly', () {

@@ -1,13 +1,9 @@
-import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/services/agents/agent_control_source.dart';
-import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/widgets/agent_control_panel.dart';
-import 'package:chuk_chat/widgets/agent_details_identity.dart';
-import 'package:chuk_chat/widgets/coworker_model_tile.dart';
 
 AgentsAgent _agent({bool onHost = true}) => AgentsAgent(
       id: 'host:cowork-host',
@@ -80,14 +76,16 @@ void main() {
     addTearDown(source.dispose);
     await _pump(tester, source);
 
-    expect(find.text('It has not run yet.'), findsNWidgets(5));
+    // Four measured blocks. Skills are not a block here: the Skills page owns
+    // them, and the panel only links to it.
+    expect(find.text('It has not run yet.'), findsNWidgets(4));
     // Crucially: no invented numbers anywhere.
     expect(find.textContaining('0 tokens'), findsNothing);
     expect(find.textContaining('0s'), findsNothing);
     expect(find.text('No skills.'), findsNothing);
   });
 
-  testWidgets('the panel asks the host about the coworker it shows',
+  testWidgets('the panel asks the host about the agent it shows',
       (tester) async {
     final source = FakeAgentControlSource();
     addTearDown(source.dispose);
@@ -107,10 +105,12 @@ void main() {
     expect(find.text('1 234 567 tokens'), findsOneWidget);
     expect(find.text('4 321 in the last run · 3 runs'), findsOneWidget);
     expect(find.text('4m 02s working'), findsOneWidget);
-    expect(find.text('deep-research'), findsOneWidget);
+    // The skills themselves live on the Skills page; the row counts them.
+    expect(find.text('deep-research'), findsNothing);
+    expect(find.text('1 of 1 on'), findsOneWidget);
   });
 
-  testWidgets('the sandbox block names the coworker s own container',
+  testWidgets('the sandbox block names the agent s own container',
       (tester) async {
     final source = FakeAgentControlSource(initial: _fullSnapshot);
     addTearDown(source.dispose);
@@ -140,27 +140,40 @@ void main() {
     expect(find.text('Running now, 9s into this run.'), findsOneWidget);
   });
 
-  testWidgets('a skill switch reaches the host', (tester) async {
+  testWidgets('the skills row opens the Skills page, no second list', (
+    tester,
+  ) async {
+    final source = FakeAgentControlSource(initial: _fullSnapshot);
+    addTearDown(source.dispose);
+    int opened = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AgentControlPanel(
+            agent: _agent(),
+            source: source,
+            onOpenSkills: () => opened++,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(Switch), findsNothing);
+    final Finder row = find.byKey(const ValueKey<String>('panel-skills-row'));
+    await tester.ensureVisible(row);
+    await tester.pumpAndSettle();
+    await tester.tap(row);
+    await tester.pumpAndSettle();
+    expect(opened, 1);
+  });
+
+  testWidgets('no messenger channel is offered', (tester) async {
     final source = FakeAgentControlSource(initial: _fullSnapshot);
     addTearDown(source.dispose);
     await _pump(tester, source);
-
-    await tester.tap(find.byType(Switch));
-    await tester.pumpAndSettle();
-
-    expect(source.skillSwitches, <String>['deep-research=false']);
-  });
-
-  testWidgets('a refused mutation is reported, not swallowed', (tester) async {
-    final source = FakeAgentControlSource(initial: _fullSnapshot);
-    addTearDown(source.dispose);
-    final failing = _ThrowingControlSource(source);
-    await _pump(tester, failing);
-
-    await tester.tap(find.byType(Switch));
-    await tester.pumpAndSettle();
-
-    expect(find.textContaining('the host said no'), findsOneWidget);
+    expect(find.textContaining('Telegram'), findsNothing);
+    expect(find.text('Channels'), findsNothing);
   });
 
   testWidgets('an agent the host does not know says so', (tester) async {
@@ -188,7 +201,7 @@ void main() {
     );
   });
 
-  testWidgets('the panel shows the agent role', (tester) async {
+  testWidgets('the panel leaves the role to the agent page', (tester) async {
     final source = FakeAgentControlSource();
     addTearDown(source.dispose);
     final agent = AgentsAgent(
@@ -200,225 +213,22 @@ void main() {
       ],
     );
     await _pump(tester, source, agent: agent);
-    expect(find.text('researcher'), findsOneWidget);
+    expect(find.text('researcher'), findsNothing);
     expect(source.refreshed, <String>['local:amber']);
   });
 
-  group('profile layout (the desktop details pane)', () {
-    Future<void> pumpProfile(
-      WidgetTester tester,
-      AgentControlSource source, {
-      AgentsAgent? agent,
-      ValueChanged<String>? onRename,
-      AgentProfileStore? profiles,
-    }) async {
-      tester.view.physicalSize = const Size(380, 2400);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: AgentControlPanel(
-              agent: agent ?? _agent(),
-              source: source,
-              profileLayout: true,
-              onRename: onRename,
-              profiles: profiles ?? AgentProfileStore(),
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-    }
+  testWidgets('the panel is the measured blocks, no profile fields', (
+    tester,
+  ) async {
+    final source = FakeAgentControlSource(initial: _fullSnapshot);
+    addTearDown(source.dispose);
+    await _pump(tester, source);
 
-    final Finder nameField = find.byKey(
-      const ValueKey<String>('details-name-field'),
-    );
-    final Finder roleField = find.byKey(
-      const ValueKey<String>('details-role-field'),
-    );
-    final Finder briefField = find.byKey(
-      const ValueKey<String>('details-brief-field'),
-    );
-
-    testWidgets('face, name, role and description, then one settings group', (
-      tester,
-    ) async {
-      final source = FakeAgentControlSource(initial: _fullSnapshot);
-      addTearDown(source.dispose);
-      final agent = AgentsAgent(
-        id: 'local:amber',
-        name: 'amber-otter',
-        role: 'researcher',
-        brief: 'Reads the news every Monday.',
-        threads: const <AgentsThreadInfo>[
-          AgentsThreadInfo(key: 'local:amber', title: 'General'),
-        ],
-      );
-      await pumpProfile(tester, source, agent: agent, onRename: (_) {});
-
-      final Finder face = find.byKey(const ValueKey<String>('details-face'));
-      expect(face, findsOneWidget);
-      expect(tester.getSize(face).width, AgentDetailsIdentity.faceSize);
-      expect(find.text('Name'), findsOneWidget);
-      expect(find.text('Role (optional)'), findsOneWidget);
-      expect(find.text('Description'), findsOneWidget);
-      expect(
-        tester.widget<TextField>(nameField).controller!.text,
-        'amber-otter',
-      );
-      expect(tester.widget<TextField>(roleField).controller!.text, 'researcher');
-      expect(
-        tester.widget<TextField>(briefField).controller!.text,
-        'Reads the news every Monday.',
-      );
-
-      // The settings group holds the model row (it opens the model page).
-      final Finder group = find.byKey(
-        const ValueKey<String>('details-settings-group'),
-      );
-      expect(group, findsOneWidget);
-      expect(
-        find.descendant(of: group, matching: find.byType(CoworkerModelTile)),
-        findsOneWidget,
-      );
-      // The face and the fields sit above the group.
-      expect(
-        tester.getTopLeft(briefField).dy,
-        lessThan(tester.getTopLeft(group).dy),
-      );
-      // The phone's long list is not drawn.
-      expect(find.text('MODEL'), findsNothing);
-    });
-
-    testWidgets('the technical details are folded until asked for', (
-      tester,
-    ) async {
-      final source = FakeAgentControlSource(initial: _fullSnapshot);
-      addTearDown(source.dispose);
-      await pumpProfile(tester, source);
-
-      expect(find.text('Technical details'), findsOneWidget);
-      expect(find.byKey(const ValueKey<String>('details-technical')),
-          findsNothing);
-      expect(find.text('1 234 567 tokens'), findsNothing);
-      expect(find.text('Its own container'), findsNothing);
-      expect(find.text('deep-research'), findsNothing);
-
-      await tester.tap(
-        find.byKey(const ValueKey<String>('details-technical-toggle')),
-      );
-      await tester.pumpAndSettle();
-      // Unchanged inside: what the phone panel shows, under the same labels.
-      expect(find.text('LAST RUN'), findsOneWidget);
-      expect(find.text('anthropic/claude-sonnet'), findsOneWidget);
-      expect(find.text('1 234 567 tokens'), findsOneWidget);
-      expect(find.text('4m 02s working'), findsOneWidget);
-      expect(find.text('Its own container'), findsOneWidget);
-      expect(find.text('deep-research'), findsOneWidget);
-
-      await tester.tap(
-        find.byKey(const ValueKey<String>('details-technical-toggle')),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('1 234 567 tokens'), findsNothing);
-    });
-
-    testWidgets('the name saves through the rename path', (tester) async {
-      final source = FakeAgentControlSource();
-      addTearDown(source.dispose);
-      final List<String> renamed = <String>[];
-      await pumpProfile(tester, source, onRename: renamed.add);
-
-      await tester.enterText(nameField, '  steady-kestrel ');
-      await tester.testTextInput.receiveAction(TextInputAction.done);
-      await tester.pumpAndSettle();
-      expect(renamed, <String>['steady-kestrel']);
-
-      // An empty name is not sent; the field goes back to the real name.
-      await tester.enterText(nameField, '   ');
-      await tester.testTextInput.receiveAction(TextInputAction.done);
-      await tester.pumpAndSettle();
-      expect(renamed, <String>['steady-kestrel']);
-      expect(
-        tester.widget<TextField>(nameField).controller!.text,
-        'cowork-host',
-      );
-    });
-
-    testWidgets('without a rename path the name is read-only', (tester) async {
-      final source = FakeAgentControlSource();
-      addTearDown(source.dispose);
-      await pumpProfile(tester, source);
-      expect(tester.widget<TextField>(nameField).readOnly, isTrue);
-      expect(tester.widget<TextField>(roleField).readOnly, isFalse);
-    });
-
-    testWidgets('role and description go to the profile store', (
-      tester,
-    ) async {
-      final source = FakeAgentControlSource();
-      addTearDown(source.dispose);
-      final AgentProfileStore store = AgentProfileStore();
-      await pumpProfile(tester, source, profiles: store);
-
-      await tester.enterText(roleField, 'Research');
-      await tester.testTextInput.receiveAction(TextInputAction.done);
-      await tester.pumpAndSettle();
-      expect(store.profileOf('host:cowork-host').role, 'Research');
-
-      // The description is multi-line: it saves when it loses focus.
-      await tester.enterText(briefField, 'Weekly crypto news.');
-      await tester.tap(roleField);
-      await tester.pumpAndSettle();
-      expect(store.profileOf('host:cowork-host').brief, 'Weekly crypto news.');
-
-      // Clearing a field clears the stored value.
-      await tester.enterText(roleField, '');
-      await tester.testTextInput.receiveAction(TextInputAction.done);
-      await tester.pumpAndSettle();
-      expect(store.profileOf('host:cowork-host').role, isNull);
-    });
-
-    testWidgets('an edit still open when the pane closes is saved', (
-      tester,
-    ) async {
-      final source = FakeAgentControlSource();
-      addTearDown(source.dispose);
-      final AgentProfileStore store = AgentProfileStore();
-      final List<String> renamed = <String>[];
-      await pumpProfile(
-        tester,
-        source,
-        profiles: store,
-        onRename: renamed.add,
-      );
-
-      await tester.enterText(briefField, 'Keeps the inbox clean.');
-      await tester.enterText(nameField, 'inbox-keeper');
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pumpAndSettle();
-      expect(renamed, <String>['inbox-keeper']);
-      expect(
-        store.profileOf('host:cowork-host').brief,
-        'Keeps the inbox clean.',
-      );
-    });
-
-    testWidgets('the phone panel keeps its long list', (tester) async {
-      final source = FakeAgentControlSource(initial: _fullSnapshot);
-      addTearDown(source.dispose);
-      await _pump(tester, source);
-
-      expect(find.byKey(const ValueKey<String>('details-profile')),
-          findsNothing);
-      expect(find.byType(AgentDetailsIdentity), findsNothing);
-      expect(find.text('Technical details'), findsNothing);
-      expect(find.text('MODEL'), findsOneWidget);
-      expect(find.text('TOKEN USE'), findsOneWidget);
-      expect(find.text('1 234 567 tokens'), findsOneWidget);
-    });
+    expect(find.byType(TextField), findsNothing);
+    expect(find.text('Technical details'), findsNothing);
+    expect(find.text('Activity'), findsOneWidget);
+    expect(find.text('Token use'), findsOneWidget);
+    expect(find.text('1 234 567 tokens'), findsOneWidget);
   });
 
   group('formatRuntime', () {
@@ -437,25 +247,4 @@ void main() {
       expect(formatCount(1234567), '1 234 567');
     });
   });
-}
-
-/// Wraps a source and refuses the skill toggle, to prove the failure surfaces.
-class _ThrowingControlSource implements AgentControlSource {
-  _ThrowingControlSource(this._inner);
-  final AgentControlSource _inner;
-
-  @override
-  ValueListenable<AgentControlSnapshot> snapshotFor(String sessionKey) =>
-      _inner.snapshotFor(sessionKey);
-
-  @override
-  Future<void> refresh(String sessionKey) => _inner.refresh(sessionKey);
-
-  @override
-  Future<void> setSkillEnabled(String skillName, {required bool enabled}) async {
-    throw StateError('the host said no');
-  }
-
-  @override
-  void dispose() => _inner.dispose();
 }

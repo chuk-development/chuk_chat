@@ -4,9 +4,9 @@
 /// like any other — same height, same name line, same preview line. The only
 /// thing that tells it apart is the slot on the left, and that is what this
 /// widget draws: two or three member faces, offset from each other, inside
-/// exactly the box ONE coworker face would have taken. Rows stay aligned
+/// exactly the box ONE agent face would have taken. Rows stay aligned
 /// because the footprint never changes; the reader still sees at a glance that
-/// several coworkers are in there.
+/// several agents are in there.
 ///
 /// ## Why it stops at two
 ///
@@ -23,7 +23,7 @@
 /// its preview line — the rest belongs in words, not in more circles.
 ///
 /// Nothing here draws new art: each face is an [ExpressiveFace], the same
-/// silhouette, colour and stored picture a coworker carries everywhere else, so
+/// silhouette, colour and stored picture an agent carries everywhere else, so
 /// a member is recognisable in the stack.
 library;
 
@@ -45,13 +45,13 @@ const double _kFaceOfSlot = 0.74;
 /// eat the small slot's monogram to buy nothing on the large one.
 const double _kFaceGap = 1.5;
 
-/// The room slot in the phone inbox — [MobileAgentRow]'s coworker face.
+/// The room slot in the phone inbox — [MobileAgentRow]'s agent face.
 const double kRoomFacesInbox = 48;
 
-/// The room slot in the desktop roster. Bigger than that rail's 34 px coworker
+/// The room slot in the desktop roster. Bigger than that rail's 34 px agent
 /// face on purpose: two faces in 34 px put the monogram at 8.4 px. The row
 /// still lines up, because the roster room row pairs this with a 4 px gap
-/// where the coworker row has 34 + 10 — the NAME starts on the same x, which
+/// where the agent row has 34 + 10 — the NAME starts on the same x, which
 /// is what the eye reads as an aligned list.
 const double kRoomFacesRail = 40;
 
@@ -78,7 +78,7 @@ class RoomFaces extends StatelessWidget {
   /// drawn.
   final List<AgentsRoomMember> members;
 
-  /// The slot's edge length — the size the single coworker face on a sibling
+  /// The slot's edge length — the size the single agent face on a sibling
   /// row is given, so the two rows line up.
   final double size;
 
@@ -91,7 +91,7 @@ class RoomFaces extends StatelessWidget {
   /// The faces' boxes inside a [size] slot, back to front.
   ///
   /// One face fills the slot, so a one-member room (which the app does not
-  /// build, but a stale host frame could) is indistinguishable from a coworker
+  /// build, but a stale host frame could) is indistinguishable from an agent
   /// and nothing jumps. Two sit corner to corner on the diagonal — the offset
   /// the reference messenger uses, and the one that keeps both monograms whole.
   static List<RoomFacePlacement> placements(int count, double size) {

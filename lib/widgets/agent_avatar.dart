@@ -1,10 +1,10 @@
-/// A coworker's face (§16.1). Identity you can pick out of a roster at a
+/// An agent's face (§16.1). Identity you can pick out of a roster at a
 /// glance, built from what the app already knows — no image fetch, no network.
 ///
 /// Hermes Bot Mode leans on avatars because a roster of a dozen same-looking
 /// rows is unreadable; a stable colour plus the name's initials is the cheapest
 /// thing that reads as identity. The colour is **derived from a seed** (the
-/// agent id, which never changes), so the same coworker is the same colour on
+/// agent id, which never changes), so the same agent is the same colour on
 /// every screen and across restarts — it is not random and not re-rolled.
 ///
 /// This is deliberately the "generated blob face" tier only. Uploaded and
@@ -33,7 +33,7 @@ class AgentAvatar extends StatelessWidget {
 
   final double radius;
 
-  /// A hidden coworker is shown faded in the "show hidden" list.
+  /// A hidden agent is shown faded in the "show hidden" list.
   final bool dimmed;
 
   /// The monogram: the first character of the name, upper-cased, or '?' when

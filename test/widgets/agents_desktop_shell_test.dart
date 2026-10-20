@@ -6,6 +6,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:chuk_chat/ui/expressive/agent_face.dart';
+import 'package:chuk_chat/pages/mobile_agents_settings_page.dart'
+    show AgentSettingsView;
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/models/agents_room.dart';
 import 'package:chuk_chat/pages/messenger_shell.dart';
@@ -25,7 +28,7 @@ import 'package:chuk_chat/widgets/agents_desktop/desktop_metrics.dart';
 import 'package:chuk_chat/widgets/agents_desktop/quick_switcher.dart';
 import 'package:chuk_chat/widgets/agents_thread_view.dart';
 import 'package:chuk_chat/widgets/room_create_sheet.dart';
-import 'package:chuk_chat/widgets/coworker_template_picker.dart';
+import 'package:chuk_chat/widgets/agent_template_picker.dart';
 import 'package:chuk_chat/widgets/sidebar/sidebar_chrome.dart';
 
 import '../support/fake_relay_controller.dart';
@@ -92,7 +95,7 @@ void main() {
     RosterPins.instance.reset();
   });
 
-  /// A 1400 × 900 window with [agents] coworkers and [rooms].
+  /// A 1400 × 900 window with [agents] agents and [rooms].
   Future<(LocalAgentRosterSource, LocalRoomSource)> pumpDesktop(
     WidgetTester tester, {
     List<String> agents = const <String>['amber', 'cobalt', 'jade'],
@@ -221,7 +224,7 @@ void main() {
     });
 
     testWidgets('Details in the header\'s "…" menu, and a tap on the '
-        'coworker, open and close the pane', (tester) async {
+        'agent, open and close the pane', (tester) async {
       await pumpDesktop(tester);
 
       Future<void> details() async {
@@ -234,7 +237,7 @@ void main() {
       await details();
       expect(rightPane, findsOneWidget);
       expect(find.text('Details'), findsOneWidget);
-      // The first page: the coworker's screen and its routines.
+      // The first page: the agent's screen and its routines.
       expect(
         find.descendant(
           of: rightPane,
@@ -248,7 +251,7 @@ void main() {
       await details();
       expect(rightPane, findsNothing);
 
-      // The coworker pill at the left of the header is the same toggle.
+      // The agent pill at the left of the header is the same toggle.
       await tester.tap(find.byType(AgentChromePill));
       await tester.pumpAndSettle();
       expect(rightPane, findsOneWidget);
@@ -294,7 +297,7 @@ void main() {
   }
 
   testWidgets('the gear opens the Settings page, the back arrow returns, and '
-      'another coworker starts on the first page', (tester) async {
+      'another agent starts on the first page', (tester) async {
     final (roster, _) = await pumpDesktop(tester);
     await shortcut(tester, LogicalKeyboardKey.period);
     final String shown = tester
@@ -307,15 +310,13 @@ void main() {
     await openDetailsSettings(tester);
     expect(find.text('Settings'), findsOneWidget);
     expect(find.byKey(const ValueKey<String>('details-screen')), findsNothing);
+    // The same agent settings content the phone page shows.
     expect(
-      find.descendant(
-        of: rightPane,
-        matching: find.byKey(const ValueKey<String>('details-face')),
-      ),
+      find.descendant(of: rightPane, matching: find.byType(AgentSettingsView)),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey<String>('details-settings-group')),
+      find.descendant(of: rightPane, matching: find.byType(AgentFace)),
       findsOneWidget,
     );
 
@@ -323,7 +324,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey<String>('details-screen')), findsOneWidget);
 
-    // Settings open, then another coworker: its pane starts on page one.
+    // Settings open, then another agent: its pane starts on page one.
     await openDetailsSettings(tester);
     final String other = roster.agents
         .firstWhere((a) => "${a.name}'s screen" != shown)
@@ -332,7 +333,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey<String>('details-screen')), findsOneWidget);
 
-    // Back to the first coworker: its Settings page is not remembered.
+    // Back to the first agent: its Settings page is not remembered.
     final String first = roster.agents
         .firstWhere((a) => "${a.name}'s screen" == shown)
         .id;
@@ -347,46 +348,50 @@ void main() {
     expect(find.byKey(const ValueKey<String>('details-screen')), findsOneWidget);
   });
 
-  testWidgets('the Settings page is a profile: the name field renames the '
-      'coworker, the technical details are folded', (tester) async {
+  testWidgets('the Settings page draws the phone rows in the phone order, '
+      'and Hide closes the pane', (tester) async {
     final (roster, _) = await pumpDesktop(tester);
     await shortcut(tester, LogicalKeyboardKey.period);
     await openDetailsSettings(tester);
 
-    final Finder name = find.descendant(
+    double last = double.negativeInfinity;
+    for (final String key in <String>[
+      'settings_Profile & preferences',
+      'settings_Model',
+      'settings_Permissions',
+      'settings_Skills',
+      'settings_Connected apps',
+      'settings_Mail',
+      'settings_Host & activity',
+      'settings_Hide',
+    ]) {
+      final Finder row = find.descendant(
+        of: rightPane,
+        matching: find.byKey(ValueKey<String>(key)),
+      );
+      expect(row, findsOneWidget, reason: key);
+      final double top = tester.getTopLeft(row).dy;
+      expect(top, greaterThan(last), reason: key);
+      last = top;
+    }
+    // No name field and no folded technical section: those were the
+    // desktop-only layout the shared content replaced.
+    expect(find.byKey(const ValueKey<String>('details-name-field')),
+        findsNothing);
+    expect(find.text('Technical details'), findsNothing);
+
+    final int visible = roster.visibleAgents.length;
+    final Finder hide = find.descendant(
       of: rightPane,
-      matching: find.byKey(const ValueKey<String>('details-name-field')),
+      matching: find.byKey(const ValueKey<String>('settings_Hide')),
     );
-    expect(name, findsOneWidget);
-    final String shown = tester.widget<TextField>(name).controller!.text;
-    final String id = roster.agents.firstWhere((a) => a.name == shown).id;
-    expect(
-      find.descendant(
-        of: rightPane,
-        matching: find.byKey(const ValueKey<String>('details-role-field')),
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(
-        of: rightPane,
-        matching: find.byKey(const ValueKey<String>('details-brief-field')),
-      ),
-      findsOneWidget,
-    );
-    expect(find.text('Technical details'), findsOneWidget);
-    expect(find.text('SANDBOX'), findsNothing);
-
-    await tester.enterText(name, 'steady-kestrel');
-    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.ensureVisible(hide);
     await tester.pumpAndSettle();
-    expect(roster.byId(id)?.name, 'steady-kestrel');
-
-    await tester.tap(
-      find.byKey(const ValueKey<String>('details-technical-toggle')),
-    );
+    await tester.tap(hide);
     await tester.pumpAndSettle();
-    expect(find.text('SANDBOX'), findsOneWidget);
+    expect(roster.visibleAgents.length, visible - 1);
+    expect(find.byKey(const ValueKey<String>('desk-right-pane')), findsNothing);
+    await tester.pump(const Duration(seconds: 5));
   });
 
   testWidgets('a failing Refresh in the details pane says so, without the '
@@ -558,7 +563,7 @@ void main() {
 
       await shortcut(tester, LogicalKeyboardKey.keyN);
       // ── templates ──: the template picker, in the centred desktop dialog.
-      expect(find.byType(CoworkerTemplatePicker), findsOneWidget);
+      expect(find.byType(AgentTemplatePicker), findsOneWidget);
       expect(find.byType(BottomSheet), findsNothing);
       expect(find.byType(AgentsDesktopDialog), findsOneWidget);
       await tester.tap(find.text('Cancel'));
@@ -574,7 +579,7 @@ void main() {
     });
 
     // ── polish ── bead chuk_chat-az1g
-    testWidgets('a failed agent_create names the coworker in the SnackBar', (
+    testWidgets('a failed agent_create names the agent in the SnackBar', (
       tester,
     ) async {
       await pumpDesktop(tester, relayController: _FailingCreateController.new);

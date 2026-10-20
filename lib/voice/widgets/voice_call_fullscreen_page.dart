@@ -1,17 +1,19 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:livekit_client/livekit_client.dart' as lk;
 
-import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
 import 'package:chuk_chat/ui/expressive/huge_icon.dart';
-import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/voice/voice_call_controller.dart';
 import 'package:chuk_chat/voice/voice_call_models.dart';
-import 'package:chuk_chat/voice/widgets/voice_agent_card.dart';
+import 'package:chuk_chat/voice/voice_protocol.dart';
+import 'package:chuk_chat/voice/widgets/voice_bars.dart';
+import 'package:chuk_chat/voice/widgets/voice_call_buttons.dart';
 import 'package:chuk_chat/voice/widgets/voice_call_controls.dart';
+import 'package:chuk_chat/voice/widgets/voice_call_stage.dart';
+import 'package:chuk_chat/widgets/anchored_menu.dart';
 
-/// Back returns to chat while the call continues. Hang-up ends the call.
+/// Back (and the chat button) return to the chat while the call continues.
+/// The close button ends the call.
 class VoiceCallFullscreenPage extends StatefulWidget {
   const VoiceCallFullscreenPage({super.key, this.controller});
   final VoiceCallController? controller;
@@ -45,15 +47,23 @@ class VoiceCallFullscreenPage extends StatefulWidget {
       _VoiceCallFullscreenPageState();
 }
 
+/// Where the call sound goes, as the route button and its menu show it.
+enum _Route { earpiece, speaker, wired, bluetooth }
+
 class _VoiceCallFullscreenPageState extends State<VoiceCallFullscreenPage> {
   VoiceCallController get c =>
       widget.controller ?? VoiceCallController.instance;
   bool _closing = false;
+  Timer? _clock;
+  final Set<String> _hiddenCards = <String>{};
 
   @override
   void initState() {
     super.initState();
     c.addListener(_onState);
+    _clock = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && c.startedAt != null) setState(() {});
+    });
   }
 
   void _onState() {
@@ -72,6 +82,7 @@ class _VoiceCallFullscreenPageState extends State<VoiceCallFullscreenPage> {
 
   @override
   void dispose() {
+    _clock?.cancel();
     c.removeListener(_onState);
     super.dispose();
   }
@@ -90,303 +101,274 @@ class _VoiceCallFullscreenPageState extends State<VoiceCallFullscreenPage> {
     }
   }
 
+  _Route? get _route {
+    switch (c.outputRoute) {
+      case 'wired':
+        return _Route.wired;
+      case 'bluetooth':
+        return _Route.bluetooth;
+      case 'speaker':
+        return _Route.speaker;
+      case 'earpiece':
+        return _Route.earpiece;
+    }
+    if (!c.canSwitchSpeaker) return null;
+    return c.speakerOn ? _Route.speaker : _Route.earpiece;
+  }
+
+  static HugeIconData _routeGlyph(_Route route) => switch (route) {
+    _Route.earpiece => HugeIcons.smartPhone01,
+    _Route.speaker => HugeIcons.volumeHigh,
+    _Route.wired => HugeIcons.headphones,
+    _Route.bluetooth => HugeIcons.bluetooth,
+  };
+
+  static String _routeLabel(_Route route) => switch (route) {
+    _Route.earpiece => 'Earpiece',
+    _Route.speaker => 'Speaker on',
+    _Route.wired => 'Headphones',
+    _Route.bluetooth => 'Bluetooth',
+  };
+
+  /// The route menu: one framed list over the button. A plugged-in headset
+  /// always wins, so it is listed but cannot be left from here.
+  Future<void> _pickRoute(BuildContext buttonContext, _Route current) async {
+    final ThemeData theme = Theme.of(context);
+    final Color ink = theme.colorScheme.onSurface;
+    final List<_Route> routes = <_Route>[
+      if (current == _Route.wired || current == _Route.bluetooth) current,
+      if (c.canSwitchSpeaker) ...<_Route>[_Route.earpiece, _Route.speaker],
+    ];
+    final _Route? picked = await showAnchoredMenu<_Route>(
+      buttonContext,
+      color: theme.scaffoldBackgroundColor.withValues(alpha: 0.94),
+      borderColor: ink.withValues(alpha: 0.3),
+      outlined: true,
+      borderRadius: 18,
+      preferAbove: true,
+      minWidth: 220,
+      items: <Widget>[
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            for (final _Route route in routes)
+              PopupMenuItem<_Route>(
+                value: route,
+                height: 40,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: <Widget>[
+                    HugeIcon(_routeGlyph(route), size: 18, color: ink),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        route == _Route.speaker
+                            ? 'Speaker'
+                            : _routeLabel(route),
+                        softWrap: false,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: route == current
+                              ? ink
+                              : ink.withValues(alpha: 0.8),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    if (route == current) ...<Widget>[
+                      const SizedBox(width: 12),
+                      HugeIcon(HugeIcons.check, size: 18, color: ink),
+                    ],
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+    if (picked == null || picked == current || !mounted) return;
+    if (picked == _Route.speaker || picked == _Route.earpiece) {
+      await _action(() => c.setSpeakerOn(picked == _Route.speaker));
+    }
+  }
+
+  VoiceBarsState get _barsState {
+    if (c.phase == VoiceCallPhase.connecting) return VoiceBarsState.thinking;
+    if (c.agentSpeaking) return VoiceBarsState.speaking;
+    if (c.agentThinking) return VoiceBarsState.thinking;
+    return VoiceBarsState.listening;
+  }
+
+  VoiceCard? get _stageCard {
+    for (final VoiceCard card in c.cards.reversed) {
+      if (kVoiceSearchCardKinds.contains(card.kind)) continue;
+      if (_hiddenCards.contains(card.id)) return null;
+      return card;
+    }
+    return null;
+  }
+
+  VoiceCard? get _searchCard {
+    for (final VoiceCard card in c.cards.reversed) {
+      if (kVoiceSearchCardKinds.contains(card.kind)) return card;
+    }
+    return null;
+  }
+
+  VoiceToolActivity? get _searchTool {
+    for (final VoiceToolActivity tool in c.runningTools.reversed) {
+      if (kVoiceSearchTools.contains(tool.name)) return tool;
+    }
+    return null;
+  }
+
+  String? _statusLine(bool failed) {
+    if (failed) return c.error ?? 'Call failed';
+    return switch (c.phase) {
+      VoiceCallPhase.connecting => 'Connecting…',
+      VoiceCallPhase.ending => 'Ending call…',
+      _ => null,
+    };
+  }
+
+  String get _semanticStatus {
+    if (c.agentSpeaking) return 'Assistant speaking';
+    if (c.agentThinking) return 'Thinking';
+    if (c.micMuted) return 'Muted';
+    return 'Listening';
+  }
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: c,
     builder: (context, _) {
-      final theme = Theme.of(context);
-      final scheme = theme.colorScheme;
-      final failed = c.phase == VoiceCallPhase.failed;
-      final name = c.agentName?.trim().isNotEmpty == true
+      final ThemeData theme = Theme.of(context);
+      final ColorScheme scheme = theme.colorScheme;
+      final bool failed = c.phase == VoiceCallPhase.failed;
+      final String name = c.agentName?.trim().isNotEmpty == true
           ? c.agentName!.trim()
           : 'Assistant';
-      return ExpressiveScreen(
-        title: name,
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: Text(
-              c.startedAt == null
-                  ? ''
-                  : formatVoiceDuration(
-                      DateTime.now().difference(c.startedAt!),
-                    ),
-            ),
-          ),
-        ],
-        builder: (context) => SafeArea(
+      final VoiceCard? stageCard = c.cameraEnabled ? null : _stageCard;
+      final bool raised = c.cameraEnabled || stageCard != null;
+      final VoiceToolActivity? searchTool = _searchTool;
+      final String? status = _statusLine(failed);
+
+      return Scaffold(
+        backgroundColor: scheme.surface,
+        body: SafeArea(
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final compact = constraints.maxHeight < 520;
-              final content = Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 720),
-                  child: Column(
-                    children: [
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
-                          child: Column(
-                            children: [
-                              Expanded(
-                                child: c.cameraEnabled
-                                    ? _cameraPreview(scheme)
-                                    : Center(
-                                        child: _visualization(compact, scheme),
-                                      ),
-                              ),
-                              const SizedBox(height: 16),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  if (c.cameraEnabled) ...[
-                                    SizedBox(
-                                      width: 24,
-                                      height: 24,
-                                      child: _visualization(true, scheme),
-                                    ),
-                                    const SizedBox(width: 10),
-                                  ],
-                                  Flexible(
-                                    child: Text(
-                                      failed
-                                          ? (c.error ?? 'Call failed')
-                                          : _status(c),
-                                      style: theme.textTheme.titleMedium
-                                          ?.copyWith(
-                                            color: failed
-                                                ? scheme.error
-                                                : scheme.onSurface,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                      textAlign: TextAlign.center,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              if (c.runningTools.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 6),
-                                  child: Text(
-                                    c.runningTools.last.status,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.bodySmall,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      if (c.cards.isNotEmpty && !compact)
-                        SizedBox(
-                          height: 136,
-                          child: ListView.separated(
-                            scrollDirection: Axis.horizontal,
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            itemCount: c.cards.length,
-                            separatorBuilder: (_, _) =>
-                                const SizedBox(width: 10),
-                            itemBuilder: (_, index) => SizedBox(
-                              width:
-                                  constraints.maxWidth
-                                      .clamp(0, 340)
-                                      .toDouble() -
-                                  40,
-                              child: VoiceAgentCard(card: c.cards[index]),
-                            ),
-                          ),
-                        ),
-                      SizedBox(
-                        key: const ValueKey('voice-compact-transcript'),
-                        height: compact ? 62 : 108,
-                        child: c.turns.isEmpty
-                            ? Center(
-                                child: Text(
-                                  failed
-                                      ? 'Return to your chat'
-                                      : 'Say something…',
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: scheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              )
-                            : ListView.builder(
-                                reverse: true,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 24,
-                                  vertical: 8,
-                                ),
-                                itemCount: c.turns.length,
-                                itemBuilder: (_, index) {
-                                  final turn =
-                                      c.turns[c.turns.length - index - 1];
-                                  return Padding(
-                                    padding: const EdgeInsets.only(bottom: 6),
-                                    child: VoiceTurnCaption(
-                                      turn: turn,
-                                      name: name,
-                                    ),
-                                  );
-                                },
-                              ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                        child: Row(
-                          children: [
-                            const HugeIcon(HugeIcons.volumeHigh, size: 18),
-                            Expanded(
-                              child: Slider(
-                                value: c.volume,
-                                label: '${(c.volume * 100).round()}%',
-                                semanticFormatterCallback: (value) =>
-                                    'Playback volume ${(value * 100).round()} percent',
-                                onChanged: failed
-                                    ? null
-                                    : (value) => unawaited(
-                                        _action(() => c.setVolume(value)),
-                                      ),
-                              ),
-                            ),
-                            SizedBox(
-                              width: 112,
-                              child: TextButton.icon(
-                                icon: const HugeIcon(
-                                  HugeIcons.userCircle,
-                                  size: 20,
-                                ),
-                                label: Text(
-                                  c.changingVoice ? 'Changing…' : c.voiceId,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                onPressed: failed || c.changingVoice
-                                    ? null
-                                    : _chooseVoice,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 18),
-                        child: Wrap(
-                          spacing: 12,
-                          runSpacing: 8,
-                          alignment: WrapAlignment.center,
-                          children: [
-                            VoiceCallControl(
-                              semanticsId: 'voice-call-mute',
-                              tooltip: c.micMuted ? 'Unmute' : 'Mute',
-                              label: c.micMuted ? 'Unmute' : 'Mute',
-                              toggled: c.micMuted,
-                              size: 52,
-                              fill: c.micMuted
-                                  ? scheme.inverseSurface
-                                  : scheme.surfaceContainerHighest,
-                              onTap: failed
-                                  ? null
-                                  : () => unawaited(
-                                      _action(() => c.setMicMuted(!c.micMuted)),
-                                    ),
-                              child: VoiceMicGlyph(
-                                muted: c.micMuted,
-                                size: 22,
-                                color: c.micMuted
-                                    ? scheme.onInverseSurface
-                                    : scheme.onSurface,
-                                gapColor: c.micMuted
-                                    ? scheme.inverseSurface
-                                    : scheme.surfaceContainerHighest,
-                              ),
-                            ),
-                            VoiceCallControl(
-                              semanticsId: 'voice-call-video',
-                              tooltip: c.cameraEnabled
-                                  ? 'Turn video off'
-                                  : 'Turn video on',
-                              label: 'Camera',
-                              toggled: c.cameraEnabled,
-                              size: 52,
-                              fill: c.cameraEnabled
-                                  ? scheme.secondaryContainer
-                                  : scheme.surfaceContainerHighest,
-                              onTap: failed
-                                  ? null
-                                  : () => unawaited(
-                                      _action(
-                                        () => c.setCameraEnabled(
-                                          !c.cameraEnabled,
-                                        ),
-                                      ),
-                                    ),
-                              child: HugeIcon(
-                                HugeIcons.video01,
-                                color: scheme.onSurface,
-                              ),
-                            ),
-                            if (c.canSwitchSpeaker)
-                              VoiceCallControl(
-                                semanticsId: 'voice-call-speaker',
-                                tooltip: c.speakerOn
-                                    ? 'Use earpiece'
-                                    : 'Use speaker',
-                                label: c.changingSpeaker
-                                    ? 'Switching…'
-                                    : _outputLabel(c),
-                                toggled: c.speakerOn,
-                                size: 52,
-                                fill: c.speakerOn
-                                    ? scheme.inverseSurface
-                                    : scheme.surfaceContainerHighest,
-                                onTap: failed || c.changingSpeaker
-                                    ? null
-                                    : () => unawaited(
-                                        _action(
-                                          () => c.setSpeakerOn(!c.speakerOn),
-                                        ),
-                                      ),
-                                child: HugeIcon(
-                                  c.speakerOn
-                                      ? HugeIcons.volumeHigh
-                                      : HugeIcons.smartPhone01,
-                                  color: c.speakerOn
-                                      ? scheme.onInverseSurface
-                                      : scheme.onSurface,
-                                ),
-                              ),
-                            VoiceCallControl(
-                              semanticsId: 'voice-call-hang-up',
-                              tooltip: failed ? 'Close' : 'End call',
-                              label: failed ? 'Close' : 'End',
-                              size: 52,
-                              fill: scheme.error,
-                              onTap: () async {
-                                if (!failed) await c.end();
-                                if (context.mounted && !_closing) {
-                                  Navigator.of(context).maybePop();
-                                }
-                              },
-                              child: VoiceHangUpGlyph(
-                                color: scheme.onError,
-                                size: 22,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+              final bool short = constraints.maxHeight < 480;
+              final double topInset = short ? 48 : 64;
+              final double compactBars = short ? 48 : 108;
+              final Widget bars = Semantics(
+                label: _semanticStatus,
+                child: VoiceBars(
+                  key: const ValueKey('voice-visualization'),
+                  state: _barsState,
+                  muted: c.micMuted,
+                  level: c.audioLevel,
+                  compact: raised,
                 ),
               );
-              return constraints.maxHeight < 420
-                  ? SingleChildScrollView(
-                      child: SizedBox(height: 420, child: content),
-                    )
-                  : content;
+              final Widget searchLine = VoiceSearchLine(
+                searching: searchTool != null,
+                label: searchTool?.label ?? '',
+                result: _searchCard,
+              );
+              final Widget statusText = status == null
+                  ? const SizedBox.shrink()
+                  : Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        status,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: failed
+                              ? scheme.error
+                              : scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    );
+
+              final Widget field;
+              if (!raised) {
+                final double barsHeight = (constraints.maxHeight * 0.32).clamp(
+                  56.0,
+                  200.0,
+                );
+                field = Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      SizedBox(height: barsHeight, child: bars),
+                      SizedBox(height: short ? 8 : 28),
+                      searchLine,
+                      statusText,
+                    ],
+                  ),
+                );
+              } else {
+                final Widget stage;
+                if (c.cameraEnabled) {
+                  stage = Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+                    child: VoiceStageFrame(
+                      child: VoiceCameraStage(
+                        track: c.cameraTrack,
+                        mirrored: c.cameraMirrored,
+                        onFlip: () => unawaited(_action(c.switchCamera)),
+                      ),
+                    ),
+                  );
+                } else {
+                  final VoiceCard card = stageCard!;
+                  stage = Padding(
+                    padding: VoiceCardStage.isFrameless(card)
+                        ? const EdgeInsets.only(bottom: 16)
+                        : const EdgeInsets.fromLTRB(20, 4, 20, 16),
+                    child: VoiceCardStage(
+                      card: card,
+                      onClose: () => setState(() => _hiddenCards.add(card.id)),
+                    ),
+                  );
+                }
+                field = Padding(
+                  padding: EdgeInsets.only(top: topInset),
+                  child: Column(
+                    children: <Widget>[
+                      SizedBox(height: compactBars, child: bars),
+                      searchLine,
+                      statusText,
+                      Expanded(child: stage),
+                    ],
+                  ),
+                );
+              }
+
+              return Column(
+                children: <Widget>[
+                  Expanded(
+                    child: Stack(
+                      children: <Widget>[
+                        Positioned.fill(child: field),
+                        Positioned(
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          child: _header(context, name, failed),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(20, 8, 20, short ? 12 : 32),
+                    child: _controls(context, scheme, failed),
+                  ),
+                ],
+              );
             },
           ),
         ),
@@ -394,92 +376,132 @@ class _VoiceCallFullscreenPageState extends State<VoiceCallFullscreenPage> {
     },
   );
 
-  Widget _visualization(bool compact, ColorScheme scheme) => Semantics(
-    label: c.agentSpeaking ? 'Assistant speaking' : _status(c),
-    child: ValueListenableBuilder<double>(
-      valueListenable: c.audioLevel,
-      builder: (context, level, _) => AnimatedContainer(
-        key: const ValueKey('voice-visualization'),
-        duration: kExpressiveShort,
-        width: (compact ? 76.0 : 144.0) * (1 + level.clamp(0, 1) * .1),
-        height: (compact ? 76.0 : 144.0) * (1 + level.clamp(0, 1) * .1),
-        decoration: BoxDecoration(
-          color: c.agentSpeaking
-              ? scheme.primaryContainer
-              : scheme.surfaceContainer,
-          borderRadius: BorderRadius.circular(compact ? 28 : 54),
-        ),
-        child: Center(
-          child: VoiceSpeakingBars(
-            speaking: c.agentSpeaking,
-            color: c.agentSpeaking
-                ? scheme.onPrimaryContainer
-                : scheme.onSurfaceVariant,
-            size: (compact ? 32.0 : 64.0) * (1 + level.clamp(0, 1) * .2),
+  Widget _header(BuildContext context, String name, bool failed) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme scheme = theme.colorScheme;
+    final DateTime? started = c.startedAt;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 4, 16, 0),
+      child: Row(
+        children: <Widget>[
+          IconButton(
+            tooltip: 'Back to chat',
+            onPressed: () => Navigator.of(context).maybePop(),
+            icon: HugeIcon(HugeIcons.arrowLeft01, color: scheme.onSurface),
           ),
-        ),
-      ),
-    ),
-  );
-
-  Widget _cameraPreview(ColorScheme scheme) => ConstrainedBox(
-    constraints: const BoxConstraints(maxWidth: 440),
-    child: ClipRRect(
-      borderRadius: BorderRadius.circular(22),
-      child: Stack(
-        key: const ValueKey('voice-camera-preview'),
-        fit: StackFit.expand,
-        children: [
-          ColoredBox(color: scheme.surfaceContainerHigh),
-          if (c.cameraTrack case final track?)
-            lk.VideoTrackRenderer(
-              track,
-              fit: lk.VideoViewFit.cover,
-              mirrorMode: c.cameraMirrored
-                  ? lk.VideoViewMirrorMode.mirror
-                  : lk.VideoViewMirrorMode.off,
-            )
-          else
-            Center(
+          Flexible(
+            child: TextButton(
+              onPressed: failed || c.changingVoice ? null : _chooseVoice,
+              style: TextButton.styleFrom(
+                foregroundColor: scheme.onSurface,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
               child: Text(
-                'Starting camera…',
-                style: TextStyle(color: scheme.onSurfaceVariant),
-              ),
-            ),
-          Positioned(
-            top: 10,
-            left: 10,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: scheme.surface,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                child: Text('Your camera'),
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: scheme.onSurface,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ),
-          if (c.cameraTrack != null)
-            Positioned(
-              bottom: 10,
-              right: 10,
-              child: VoiceCallControl(
-                semanticsId: 'voice-switch-camera',
-                tooltip: 'Switch camera',
-                fill: scheme.surface,
-                onTap: () => unawaited(_action(c.switchCamera)),
-                child: HugeIcon(
-                  HugeIcons.repeat,
-                  color: scheme.onSurface,
-                  size: 20,
-                ),
+          const Spacer(),
+          IconButton(
+            tooltip: 'Chat',
+            onPressed: () => Navigator.of(context).maybePop(),
+            icon: HugeIcon(HugeIcons.message01, color: scheme.onSurface),
+          ),
+          if (started != null)
+            Text(
+              formatVoiceDuration(DateTime.now().difference(started)),
+              style: TextStyle(
+                color: scheme.onSurface,
+                fontWeight: FontWeight.w600,
+                fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
               ),
             ),
         ],
       ),
-    ),
-  );
+    );
+  }
+
+  Widget _controls(BuildContext context, ColorScheme scheme, bool failed) {
+    final _Route? route = _route;
+    final bool headset = route == _Route.wired || route == _Route.bluetooth;
+    final bool showRoute = c.canSwitchSpeaker || headset;
+    final (Color mutedFill, _) = VoiceButtonGroup.colorsFor(
+      scheme,
+      VoiceButtonTone.muted,
+    );
+    final (Color plainFill, _) = VoiceButtonGroup.colorsFor(
+      scheme,
+      VoiceButtonTone.plain,
+    );
+    return Center(
+      child: VoiceButtonGroup(
+        items: <VoiceButtonItem>[
+          VoiceButtonItem(
+            semanticsId: 'voice-call-video',
+            tooltip: c.cameraEnabled ? 'Turn video off' : 'Turn video on',
+            tone: c.cameraEnabled
+                ? VoiceButtonTone.selected
+                : VoiceButtonTone.plain,
+            opened: c.cameraEnabled,
+            onPressed: failed
+                ? null
+                : (_) => unawaited(
+                    _action(() => c.setCameraEnabled(!c.cameraEnabled)),
+                  ),
+            icon: (Color ink) => HugeIcon(HugeIcons.video01, color: ink),
+          ),
+          VoiceButtonItem(
+            semanticsId: 'voice-call-mute',
+            tooltip: c.micMuted ? 'Unmute' : 'Mute',
+            tone: c.micMuted ? VoiceButtonTone.muted : VoiceButtonTone.plain,
+            opened: c.micMuted,
+            onPressed: failed
+                ? null
+                : (_) => unawaited(_action(() => c.setMicMuted(!c.micMuted))),
+            icon: (Color ink) => VoiceMicGlyph(
+              muted: c.micMuted,
+              size: 24,
+              color: ink,
+              gapColor: c.micMuted ? mutedFill : plainFill,
+            ),
+          ),
+          if (showRoute && route != null)
+            VoiceButtonItem(
+              semanticsId: 'voice-call-speaker',
+              tooltip: c.changingSpeaker ? 'Switching…' : _routeLabel(route),
+              tone: switch (route) {
+                _Route.earpiece => VoiceButtonTone.plain,
+                _Route.speaker => VoiceButtonTone.selected,
+                _Route.wired || _Route.bluetooth => VoiceButtonTone.headset,
+              },
+              opened: route != _Route.earpiece,
+              onPressed: failed || c.changingSpeaker
+                  ? null
+                  : (BuildContext buttonContext) =>
+                        unawaited(_pickRoute(buttonContext, route)),
+              icon: (Color ink) => HugeIcon(_routeGlyph(route), color: ink),
+            ),
+          VoiceButtonItem(
+            semanticsId: 'voice-call-hang-up',
+            tooltip: failed ? 'Close' : 'End call',
+            onPressed: (_) async {
+              if (!failed) await c.end();
+              if (context.mounted && !_closing) {
+                await Navigator.of(context).maybePop();
+              }
+            },
+            icon: (Color ink) => HugeIcon(HugeIcons.cancel01, color: ink),
+          ),
+        ],
+      ),
+    );
+  }
 
   Future<void> _chooseVoice() async {
     final selected = await showModalBottomSheet<String>(
@@ -531,6 +553,28 @@ class _VoiceCallFullscreenPageState extends State<VoiceCallFullscreenPage> {
                   ),
                   onTap: () => Navigator.pop(context, voice),
                 ),
+              const SizedBox(height: 12),
+              Text('Engine', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 4),
+              Text(
+                'Applies to your next call.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              for (final engine in VoiceCallEngine.values)
+                ListTile(
+                  title: Text(_engineTitle(engine)),
+                  subtitle: Text(_engineSubtitle(engine)),
+                  selected: engine == c.defaultEngine,
+                  trailing: engine == c.defaultEngine
+                      ? const HugeIcon(HugeIcons.tick02, size: 20)
+                      : null,
+                  onTap: engine == c.defaultEngine
+                      ? null
+                      : () => unawaited(
+                          _action(() => c.setDefaultEngine(engine)),
+                        ),
+                ),
             ],
           ),
         ),
@@ -539,22 +583,18 @@ class _VoiceCallFullscreenPageState extends State<VoiceCallFullscreenPage> {
     if (selected != null && mounted) await _action(() => c.setVoice(selected));
   }
 
-  static String _outputLabel(VoiceCallController c) => switch (c.outputRoute) {
-    'bluetooth' => 'Bluetooth',
-    'wired' => 'Headphones',
-    'speaker' => 'Speaker on',
-    'earpiece' => 'Earpiece',
-    _ => 'Audio output',
+  static String _engineTitle(VoiceCallEngine engine) => switch (engine) {
+    VoiceCallEngine.pipeline => 'Pipeline (standard)',
+    VoiceCallEngine.inworldS2S => 'Inworld Speech-to-Speech',
   };
 
-  static String _status(VoiceCallController c) {
-    if (c.phase == VoiceCallPhase.connecting) return 'Connecting…';
-    if (c.phase == VoiceCallPhase.ending) return 'Ending call…';
-    if (c.agentSpeaking) return 'Speaking';
-    if (c.agentThinking) return 'Thinking';
-    if (c.micMuted) return 'Muted';
-    return 'Listening';
-  }
+  static String _engineSubtitle(VoiceCallEngine engine) => switch (engine) {
+    VoiceCallEngine.pipeline =>
+      'Our STT → LLM → TTS stack with tools, cards and delegation.',
+    VoiceCallEngine.inworldS2S =>
+      "Inworld's realtime API with semantic turn detection. Conversation "
+          'only: no tools, cards, or delegation.',
+  };
 }
 
 String formatVoiceDuration(Duration value) =>

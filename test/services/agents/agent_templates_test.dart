@@ -5,27 +5,27 @@ import 'package:chuk_chat/l10n/app_localizations.dart';
 
 import 'package:chuk_chat/l10n/strings_de.dart';
 import 'package:chuk_chat/l10n/strings_en.dart';
-import 'package:chuk_chat/services/agents/coworker_templates.dart';
+import 'package:chuk_chat/services/agents/agent_templates.dart';
 import 'package:chuk_chat/services/automations/agents_automation.dart';
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
 
 void main() {
   test('the catalogue holds 12 to 15 templates with unique, wire-safe ids', () {
-    expect(kCoworkerTemplates.length, inInclusiveRange(12, 15));
-    final ids = kCoworkerTemplates.map((t) => t.id).toList();
+    expect(kAgentTemplates.length, inInclusiveRange(12, 15));
+    final ids = kAgentTemplates.map((t) => t.id).toList();
     expect(ids.toSet(), hasLength(ids.length));
     for (final id in ids) {
       // Same shape the host accepts (`_TEMPLATE_ID` in coworker_templates.py).
       expect(RegExp(r'^[a-z0-9][a-z0-9_-]{0,47}$').hasMatch(id), isTrue);
-      expect(coworkerTemplateById(id)?.id, id);
+      expect(agentTemplateById(id)?.id, id);
     }
-    expect(coworkerTemplateById('nope'), isNull);
+    expect(agentTemplateById('nope'), isNull);
   });
 
   test('every category has templates', () {
-    for (final category in CoworkerTemplateCategory.values) {
+    for (final category in AgentTemplateCategory.values) {
       expect(
-        kCoworkerTemplates.where((t) => t.category == category),
+        kAgentTemplates.where((t) => t.category == category),
         isNotEmpty,
         reason: '$category',
       );
@@ -34,12 +34,12 @@ void main() {
 
   test('every string the picker shows exists in English and German', () {
     final keys = <String>[
-      for (final t in kCoworkerTemplates) ...[
+      for (final t in kAgentTemplates) ...[
         t.nameKey,
         t.descriptionKey,
         if (t.starter != null) ...[t.starter!.nameKey, t.starter!.whenKey],
       ],
-      for (final tool in CoworkerTemplateTool.values) 'tpl.tool.${tool.name}',
+      for (final tool in AgentTemplateTool.values) 'tpl.tool.${tool.name}',
     ];
     for (final key in keys) {
       expect(stringsEn[key], isNotNull, reason: 'en $key');
@@ -50,9 +50,9 @@ void main() {
   });
 
   test('personas are short, plain and inside the host limit', () {
-    for (final t in kCoworkerTemplates) {
+    for (final t in kAgentTemplates) {
       expect(t.persona.trim(), isNotEmpty, reason: t.id);
-      expect(t.persona.length, lessThan(kCoworkerPersonaMaxLength));
+      expect(t.persona.length, lessThan(kAgentPersonaMaxLength));
       // Short on purpose: a persona is a few lines, not an essay.
       expect(t.persona.length, lessThan(900), reason: t.id);
       expect(t.toWire(), <String, Object?>{'id': t.id, 'persona': t.persona});
@@ -61,13 +61,13 @@ void main() {
 
   test('faces use the offered palette', () {
     final palette = kAgentAccents.map((c) => c.toARGB32()).toSet();
-    for (final t in kCoworkerTemplates) {
+    for (final t in kAgentTemplates) {
       expect(palette, contains(t.accent), reason: t.id);
     }
   });
 
   test('starter automations are five-field cron schedules with a prompt', () {
-    final starters = kCoworkerTemplates
+    final starters = kAgentTemplates
         .where((t) => t.starter != null)
         .map((t) => t.starter!)
         .toList();
@@ -79,7 +79,7 @@ void main() {
   });
 
   // ── polish ── bead chuk_chat-az1g
-  test('a failed agent_create has its own line that names the coworker, '
+  test('a failed agent_create has its own line that names the agent, '
       'in English and German', () {
     expect(
       AppLocalizations(const Locale('en')).tplAgentCreateFailed('Scout'),
@@ -92,7 +92,7 @@ void main() {
   });
   // ── end polish ──
 
-  group('announceCoworkerToHost', () {
+  group('announceAgentToHost', () {
     AgentsAutomation savedRow() => AgentsAutomation.fromPayload(
       <String, dynamic>{
         'id': 'a1',
@@ -107,7 +107,7 @@ void main() {
 
     test('no controller: nothing is sent, the starter neither', () async {
       var starters = 0;
-      final outcome = await announceCoworkerToHost(
+      final outcome = await announceAgentToHost(
         createAgent: null,
         createStarter: () async {
           starters++;
@@ -122,7 +122,7 @@ void main() {
 
     test('a failed agent_create keeps the starter back', () async {
       var starters = 0;
-      final outcome = await announceCoworkerToHost(
+      final outcome = await announceAgentToHost(
         createAgent: () async => throw StateError('Not paired'),
         createStarter: () async {
           starters++;
@@ -137,7 +137,7 @@ void main() {
     test('agent first, then the starter; a starter failure is reported',
         () async {
       final order = <String>[];
-      final outcome = await announceCoworkerToHost(
+      final outcome = await announceAgentToHost(
         createAgent: () async => order.add('agent'),
         createStarter: () async {
           order.add('starter');
@@ -151,13 +151,13 @@ void main() {
     });
 
     test('everything sent: ok', () async {
-      final outcome = await announceCoworkerToHost(
+      final outcome = await announceAgentToHost(
         createAgent: () async {},
         createStarter: () async => AutomationSaveResult.saved(savedRow()),
       );
       expect(outcome.ok, isTrue);
       expect(
-        (await announceCoworkerToHost(createAgent: () async {})).ok,
+        (await announceAgentToHost(createAgent: () async {})).ok,
         isTrue,
       );
     });

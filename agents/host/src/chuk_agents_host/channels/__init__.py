@@ -1,6 +1,6 @@
-"""Messenger channels: talk to one coworker from outside the app.
+"""Messenger channels: talk to one agent from outside the app.
 
-Opt-in per coworker, off by default. Today there is one channel, Telegram
+Opt-in per agent, off by default. Today there is one channel, Telegram
 (long polling, no open port). Telegram is not end-to-end encrypted; the app's
 own path stays the end-to-end encrypted one.
 """

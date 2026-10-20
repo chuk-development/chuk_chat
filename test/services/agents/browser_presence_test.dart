@@ -46,7 +46,7 @@ void main() {
     expect(presence.value, isFalse);
   });
   test('a finished run leaves the screen there to take over', () {
-    // Bead cowork-tf1u. The coworker ends its turn with "the browser is open,
+    // Bead cowork-tf1u. The agent ends its turn with "the browser is open,
     // you can take it over" — and that is the moment the user reaches for the
     // target. The run ending is not the browser closing.
     controller.emit(available);
@@ -186,7 +186,7 @@ void main() {
     controller.emit(opening);
     expect(presence.value, isTrue);
   });
-  test('the run state says whether the coworker works in the user browser', () {
+  test('the run state says whether the agent works in the user browser', () {
     int changes = 0;
     presence.addListener(() => changes++);
     expect(presence.usesUserBrowserIn('t'), isFalse);
@@ -234,7 +234,7 @@ void main() {
       ),
     );
     expect(presence.usesUserBrowserIn('t'), isTrue);
-    // Another coworker's header, on the sandbox, says nothing about 't'.
+    // Another agent's header, on the sandbox, says nothing about 't'.
     controller.emit(
       const AgentsRelayRunState(
         sessionKey: 'u',
@@ -268,7 +268,7 @@ void main() {
 
   test('a fresh connection never inherits the last one\'s screen', () {
     // The transport can go from paired to paired: a re-pair, or the same app
-    // attaching to a different coworker. A screen belongs to ONE live
+    // attaching to a different agent. A screen belongs to ONE live
     // pairing, so the new host has to say so itself.
     controller.set(
       const AgentsRelayState(

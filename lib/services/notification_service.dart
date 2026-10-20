@@ -6,12 +6,13 @@
 // a stream completes while chuk's root wrapper reported the app as
 // backgrounded. Agents keeps the signatures and routes them into its own
 // notification layer (services/notifications/**, WS-7): one plugin, one
-// channel, one toast per thread, and never any answer content in a toast.
+// channel, one toast per thread. The preview is made on the device.
 
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/services/notifications/agents_notifications.dart';
 import 'package:chuk_chat/services/notifications/local_notifications.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 
 class NotificationService {
   static bool get isInitialized => LocalNotifications.instance.isInitialized;
@@ -27,16 +28,26 @@ class NotificationService {
   /// Older name used by Agents's own code.
   static Future<bool> requestPermissions() => requestPermission();
 
-  /// chuk's completion toast. `contentPreview` is deliberately NOT shown:
-  /// the toast says the answer is ready and names the chat, nothing more.
+  /// chuk's completion toast: the chat's title and a short preview of the
+  /// answer, built on this device.
+  ///
+  /// Not for an Agents thread: its toast comes from the thread view's live
+  /// `done` ([AgentsNotifications.onLiveDone]), which knows the agent's
+  /// name and the run, and the host's push covers a thread nobody had open.
+  /// A second toast from here would land in the same slot and overwrite that
+  /// one with the chat title (bead chuk_chat-kl8x).
   static Future<void> showCompletionNotification({
     required String chatId,
     required String chatTitle,
     required String contentPreview,
-  }) => LocalNotifications.instance.showAnswerReady(
-    sessionKey: chatId,
-    threadLabel: chatTitle,
-  );
+  }) async {
+    if (ChatOrigin.isAgentsThread(chatId)) return;
+    await LocalNotifications.instance.showAnswerReady(
+      sessionKey: chatId,
+      threadLabel: chatTitle,
+      preview: contentPreview,
+    );
+  }
 
   static Future<void> checkLaunchNotification() =>
       LocalNotifications.instance.checkLaunchNotification();

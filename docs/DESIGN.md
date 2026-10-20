@@ -23,16 +23,50 @@ assembled from parts of other apps.
 
 ## 2. The frame: `FloatingAppBar` (settings-style pages) and `ExpressiveScreen`
 
-Settings-style pages (every settings page, the coworker page, the model page,
+Settings-style pages (every settings page, the agent page, the model page,
 Host & activity) use chuk_chat's frame: a `Scaffold` with
 `extendBodyBehindAppBar: true`, `FloatingAppBar` (`lib/widgets/floating_app_bar.dart`)
 and a `SettingsListView` with the `Expressive*` rows. That is what
 AGENTS_UI_UNIFY.md (section 5) decided; there is one settings look for both
 halves.
 
+**One header on every agent sub-page** (bead chuk_chat-8hz4): the agent
+page, Host & activity, Permissions, Skills, connectors, Mail, Files, the
+model page, Control Rooms and the pairing page all use `FloatingAppBar` with
+`extendBodyBehindAppBar: true`. The back target is always the bar's round
+back chip (a page that needs a different back action passes a
+`FloatingHeaderButton` with the same arrow as `leading`), the title is always
+the pill on the left, and the bar draws no fill. Never a second back button
+in a body, never a tinted bar.
+
+**Which screen owns what** (agent settings). Each thing has one owner; every
+other screen links to it with one row, never a copy:
+
+| Thing | Owner |
+|---|---|
+| Name, role, picture, brief | `AgentProfileEditPage` |
+| Model | `AgentModelPage` (the `AgentModelTile` row opens it) |
+| Permissions, approvals, weekly budget | `MobileAgentPermissionsPage` |
+| Skills (host skills, on or off) | `AgentsSkillsSettingsPage` |
+| Connected apps | `McpConnectorsPage` |
+| Mail | `AgentMailboxPage` |
+| Last run, tokens, cost, runtime, sandbox | `AgentHostActivityPage` (`AgentControlPanel`), a page on every form factor |
+| Files | `ChatDocumentsPanel` |
+
+The agent settings are ONE content, `AgentSettingsView`
+(`lib/pages/mobile_agents_settings_page.dart`). A phone, and a wide window
+that opens the agent from the chat pill or the roster, shows it as a page
+(`MobileAgentsSettingsPage`, the shared transparent header). The desktop
+details pane shows the same content under the pane header ("Settings"). The
+rows come in one order: what the agent is (profile, model), what it may do
+(permissions, skills, connectors, API keys, schedules), its channels (mail),
+its computer (runs on the host, host and activity, screen, files), the
+conversation, the app, then hide and remove at the bottom. There is no
+messenger channel: Telegram is not supported.
+
 `ExpressiveScreen` (`lib/ui/expressive/expressive_screen.dart`) stays for the
 full-screen viewers it already frames (document, image, browser view, the
-documents panel, the install page). The rules below apply to it. Never a bare
+install page). The rules below apply to it. Never a bare
 `Scaffold` with a Material `AppBar`.
 
 ```dart
@@ -74,7 +108,7 @@ edge draws a line across the content.
 - Bottom (`BottomVeil`): the mirror, for the floating navigation.
 - Use `topVeilDecoration(scheme)` directly when a surface places its own bar (a
   pinned `SliverAppBar`, for example).
-- The only other translucency in the chrome is the coworker pill in the chat
+- The only other translucency in the chrome is the agent pill in the chat
   header: `surface` at 0.72 with an `outlineVariant` border.
 
 ## 4. Navigation
@@ -143,7 +177,7 @@ presentation, zip, database, image, video, book.
 | Dropdown, overflow menu, long-press action sheet | `MenuTileGroup` (`widgets/menu_tile_group.dart`) — one filled tile per row, outer corners 26, the corners where two rows meet 6, a 3 gap between them and 10 where a divider used to sit. No frame, no outline, no divider line; the anchored dropdown and the message menu share this one surface. |
 | Dialog | `kRadiusDialog` |
 | Chat bubble | chuk_chat's bubble (`lib/widgets/message_bubble/layout.dart`): user bubble 16, the tail corner 5 on the last bubble of a run. The AI answer has no bubble. `ui/expressive/bubble_shape.dart` (22 / 7) is no longer drawn by the thread. |
-| Coworker face | the expressive silhouette family (`ui/expressive/shapes.dart`) |
+| Agent face | the expressive silhouette family (`ui/expressive/shapes.dart`) |
 
 Never a bare `IconButton`, `IconButton.filledTonal` or `CircleAvatar` in a new
 surface: they are the old idiom and they do not match what sits next to them.
@@ -151,11 +185,11 @@ surface: they are the old idiom and they do not match what sits next to them.
 ## 7. Colour
 
 - The app theme owns surfaces and text. A screen never tints a surface.
-- One accent for the whole app: the user's. There is no per-coworker accent
+- One accent for the whole app: the user's. There is no per-agent accent
   inside a thread (`AgentTheme` was deleted, AGENTS_UI_UNIFY.md, Result A).
-- A coworker's own colour is for its face only. It comes from `agentAccent`:
+- An agent's own colour is for its face only. It comes from `agentAccent`:
   the one the user picked, else a hue from `kAgentAccents`. Never a raw
-  hash-to-hue — that put two coworkers in the same teal.
+  hash-to-hue — that put two agents in the same teal.
 - Fixed saturation and lightness, so a white monogram always has contrast.
 - **On an accent fill** (selected pill, filled button, switch thumb, user
   bubble) the text and glyph colour is `colorScheme.onPrimary`, or
@@ -177,7 +211,7 @@ surface: they are the old idiom and they do not match what sits next to them.
   not there.
 - **No gradient on a control.** Buttons are flat fills.
 - Translucency only where content has to stay readable underneath: the veils and
-  the coworker pill. Nothing decorative.
+  the agent pill. Nothing decorative.
 - Motion is the expressive spring the app ships (`ui/expressive/motion.dart`),
   200–350 ms. Nothing pulses forever: an animation says something is happening
   and then stops.
@@ -211,8 +245,8 @@ group. The thread does the same. The bubble itself is chuk_chat's
   of a burst is noise. When a document closes the run, its own version-and-time
   line is the clock.
 
-- A file the coworker produced is **its own message**, hung under the text
-  bubble — not a block inside it. A coworker may send several messages in a turn.
+- A file the agent produced is **its own message**, hung under the text
+  bubble — not a block inside it. An agent may send several messages in a turn.
 - A file message spans the bubble lane and carries the bubble's fill: a typed
   badge, the name with its extension in the quieter colour, the size, a small
   download target. The row itself opens the file.
@@ -221,7 +255,7 @@ group. The thread does the same. The bubble itself is chuk_chat's
 - A document opens **full screen on a phone** (`ChatDocumentView`): the shared
   bar with close, share and save, the document scrolling under it. A wide window
   keeps the dialog.
-- Files are real files: the coworker writes one in its sandbox and sends it
+- Files are real files: the agent writes one in its sandbox and sends it
   (`send_file_to_user`). There is no "artifact" tier with nothing behind it.
 
 ### Chart documents
@@ -299,7 +333,7 @@ Never a picture the agent drew, never a second bar widget.
 3. Any coloured shadow, glow or gradient on a control? Remove it.
 4. Do the corners match the table in §6?
 5. At 360 px and 1.3 text scale: does anything overflow, or ellipsise something
-   that identifies content (a file name, a coworker name)?
+   that identifies content (a file name, an agent name)?
 6. Does content scroll behind the bars, or stop under them?
 7. Is text on an accent fill `onPrimary` / `readableOnFill`, and the accent
    as text `accentForegroundOn` (§7)?
@@ -321,8 +355,9 @@ panes, dense rows, hover states, keyboard control.
 - **Centre pane: the thread.** Floating header chips at the top (the same
   chips as the phone; `kAgentsThreadHeaderInset` keeps the first message
   clear), the transcript in the middle, chuk_chat's composer at the bottom.
-- **Right pane: details.** The agent panel (model, tokens, runtime, sandbox,
-  skills) is a docked, resizable pane (300–420 px), opened and closed from the
+- **Right pane: details.** The agent's screen and routines, and behind the
+  gear the same agent settings the phone page shows (`AgentSettingsView`).
+  It is a docked, resizable pane (300–420 px), opened and closed from the
   title bar. It is not an overlay drawer. It pushes the thread; it does not
   cover it.
 - Panes are divided by a 1 px hairline in `outlineVariant`. The header row
@@ -334,7 +369,7 @@ panes, dense rows, hover states, keyboard control.
 The desktop header uses the phone's chrome (`ChromeChip`, `AgentChromePill`
 in `mobile_chat_chrome.dart`), so both layouts read the same.
 
-- Left: the coworker pill: face, name, status line ("Active now", working
+- Left: the agent pill: face, name, status line ("Active now", working
   dots, "Offline · Reconnect"). A tap toggles the details pane. No back arrow.
 - Right: round chips (42 px painted, 48 px press), in the phone's order:
   documents, call, screen, then one "…" menu with details (Ctrl+.), copy full

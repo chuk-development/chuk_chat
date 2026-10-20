@@ -1,14 +1,14 @@
-"""The channel store: per-coworker channel state, encrypted at rest.
+"""The channel store: per-agent channel state, encrypted at rest.
 
-One record per coworker (keyed by the app's agent id, which is also the
-coworker's ``session_key``) and per channel kind. A record holds the bot
+One record per agent (keyed by the app's agent id, which is also the
+agent's ``session_key``) and per channel kind. A record holds the bot
 token, whether the user turned the channel on, the one linked chat and the
 poll offset.
 
 The bot token is a secret. It is not in the user's secret set
 (:class:`chuk_agents_executor.SecretsVault`) on purpose: that set is replaced
 whole by every ``secrets`` frame of the app, and it is handed to every sandbox
-process as environment. A coworker must not be able to read the token of its
+process as environment. An agent must not be able to read the token of its
 own bot. So this store is a second file, ``channels.enc``, sealed with
 AES-256-GCM under a key that HKDF derives from the host identity under its own
 label. Nothing else on disk names the token; logs never do.

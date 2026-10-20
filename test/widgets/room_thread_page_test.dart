@@ -24,7 +24,7 @@ void main() {
   /// thread. There is no worded status line any more.
   Finder talking() => find.byType(MessengerTypingIndicator);
 
-  /// A coworker's turn goes through the chat's Markdown renderer, so its words
+  /// An agent's turn goes through the chat's Markdown renderer, so its words
   /// live in a RichText.
   Finder said(String text) => find.textContaining(text, findRichText: true);
 
@@ -718,7 +718,7 @@ void main() {
       await tester.enterText(find.byType(TextField), 'so @al');
       await tester.pump();
       expect(inPicker('Everyone'), findsOneWidget);
-      expect(inPicker('3 coworkers'), findsOneWidget);
+      expect(inPicker('3 agents'), findsOneWidget);
 
       await tester.tap(inPicker('Everyone'));
       await tester.pump();

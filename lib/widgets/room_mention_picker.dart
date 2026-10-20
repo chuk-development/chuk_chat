@@ -170,7 +170,7 @@ class MentionEntry {
   /// which has no face.
   final String? agentId;
 
-  /// The role the user gave the coworker, when it has one.
+  /// The role the user gave the agent, when it has one.
   final String? role;
 
   /// A quiet line on the right for a row with no role — the member count on the
@@ -201,8 +201,8 @@ List<MentionEntry> mentionEntriesFor({
       handle: kBroadcastHandle,
       label: 'Everyone',
       trailing: members.length == 1
-          ? '1 coworker'
-          : '${members.length} coworkers',
+          ? '1 agent'
+          : '${members.length} agents',
       aliases: kBroadcastAliases,
       broadcast: true,
     ),

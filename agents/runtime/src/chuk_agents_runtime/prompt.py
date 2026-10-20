@@ -28,7 +28,7 @@ from collections.abc import Sequence
 from .registry import ToolRegistry
 
 BASE_INSTRUCTIONS = """\
-You are Agents, an AI coworker. You run on the user's own computer, in the
+You are Agents, an AI agent. You run on the user's own computer, in the
 user's workspace. The user talks to you from a phone or a desktop app.
 
 The user wants the result, not the process. A problem goes in; a finished result
@@ -233,6 +233,7 @@ def upgrade_research_instructions(prompt: str) -> str:
     prompt = prompt.replace("`tool_search`", "`search_tools`")
     if not prompt.startswith(_BUILT_IN_HEADS):
         return prompt
+    prompt = _rename_old_head(prompt)
     prompt = _add_skill_proposals(_add_takeover(_add_deferred_tools(_add_research(prompt))))
     prompt = _add_clock_and_automations(_add_research_depth(_add_language_and_rounds(prompt)))
     return _add_self_check_and_no_guessing(prompt)
@@ -304,9 +305,22 @@ def _add_clock_and_automations(prompt: str) -> str:
     return prompt.replace("\n# Your workspace\n", "\n" + sections + "# Your workspace\n", 1)
 
 
-#: How a prompt seeded from :data:`BASE_INSTRUCTIONS` starts: today, and before
-#: the product was renamed from CoWork to Agents (those sessions are still live).
-_BUILT_IN_HEADS = ("You are Agents, an AI coworker.", "You are CoWork, an AI coworker.")
+#: How a prompt seeded from :data:`BASE_INSTRUCTIONS` starts today.
+_BUILT_IN_HEAD = BASE_INSTRUCTIONS[: BASE_INSTRUCTIONS.index(".") + 1]
+#: How it started before "coworker" became "agent", and before the product
+#: was renamed from CoWork to Agents (those sessions are still live). These
+#: are match keys for stored prompts: do not change them.
+_OLD_HEADS = ("You are Agents, an AI coworker.", "You are CoWork, an AI coworker.")
+_BUILT_IN_HEADS = (_BUILT_IN_HEAD, *_OLD_HEADS)
+
+
+def _rename_old_head(prompt: str) -> str:
+    """A stored prompt that starts with an old head gets today's head, so the
+    model calls itself an agent, as the app does."""
+    for old in _OLD_HEADS:
+        if prompt.startswith(old):
+            return _BUILT_IN_HEAD + prompt[len(old) :]
+    return prompt
 
 
 def _add_deferred_tools(prompt: str) -> str:

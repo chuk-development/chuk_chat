@@ -1,6 +1,6 @@
 part of 'messenger_shell.dart';
 
-/// The Agents desktop layout: chuk_chat's desktop with coworkers in it.
+/// The Agents desktop layout: chuk_chat's desktop with agents in it.
 ///
 ///  * **Left** — the roster, which is chuk's sidebar ([AgentRosterView]).
 ///    Exactly as wide as chuk's sidebar ([kDeskRosterWidth]), folded to
@@ -8,7 +8,7 @@ part of 'messenger_shell.dart';
 ///    folds it on its own, without changing what the user chose.
 ///  * **Centre** — the thread (or an open room) on the page colour, under
 ///    the phone's top bar in desktop form ([AgentsThreadHeader]): the
-///    coworker on the left, Documents, Call, Screen and "…" on the right, on
+///    agent on the left, Documents, Call, Screen and "…" on the right, on
 ///    a fade the transcript scrolls under. The one thread view stays mounted
 ///    behind a room: it owns the socket.
 ///  * **Right** — the details pane (the agent panel) or Control Rooms, in
@@ -17,7 +17,7 @@ part of 'messenger_shell.dart';
 ///    pushes the thread; it never covers it.
 ///  * **Top centre** — the Chat | Agents switch, where chuk's desktop floats
 ///    it in the Chat half: on the line of the thread header's row, clear of
-///    the roster, the coworker pill and the chips. A centre pane too narrow
+///    the roster, the agent pill and the chips. A centre pane too narrow
 ///    for all of them gives the switch a line of its own above the thread.
 ///
 /// The keyboard reaches everything: the shell's focus node sits above the
@@ -28,6 +28,10 @@ part of 'messenger_shell.dart';
 /// Nothing here runs below the desktop breakpoint: the phone layout is built
 /// by `_buildPhoneBody` and never reads this state.
 mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
+  /// The one agent settings content (the shell builds it); the pane shows
+  /// it with `page: false`.
+  AgentSettingsView _agentSettings(AgentsAgent agent, {bool page = true});
+
   // --- hooks the state implements --------------------------------------------
 
   void _openSettings();
@@ -43,13 +47,13 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
   /// 'details' | 'rooms' | null — what the right pane shows.
   String? _deskRightPane;
 
-  /// The coworker whose details pane shows its Settings page (the gear);
-  /// null shows the first page (screen and routines). Another coworker, or
+  /// The agent whose details pane shows its Settings page (the gear);
+  /// null shows the first page (screen and routines). Another agent, or
   /// closing the pane, goes back to the first page.
   String? _deskDetailsSettingsFor;
 
-  /// The coworker the details pane showed last. A different one resets
-  /// [_deskDetailsSettingsFor], so coming back to a coworker opens its first
+  /// The agent the details pane showed last. A different one resets
+  /// [_deskDetailsSettingsFor], so coming back to an agent opens its first
   /// page again.
   String? _deskDetailsShownFor;
 
@@ -138,12 +142,6 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
       _deskRightPane = _deskRightPane == pane ? null : pane;
       _deskDetailsSettingsFor = null;
     });
-    _deskScheduleSave();
-  }
-
-  void _deskShowRightPane(String pane) {
-    if (_deskRightPane == pane) return;
-    setState(() => _deskRightPane = pane);
     _deskScheduleSave();
   }
 
@@ -262,7 +260,7 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
 
   /// The thread header's "…" menu on the desktop. Documents, Call and Screen
   /// are the header's own chips, as on the phone; Control Rooms lives in the
-  /// roster. The details pane is also a tap on the coworker pill, and
+  /// roster. The details pane is also a tap on the agent pill, and
   /// Ctrl+.
   List<AgentsThreadAction> _deskMenuActions(AgentsAgent? agent) =>
       <AgentsThreadAction>[
@@ -359,7 +357,7 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
     );
 
     // The Chat | Agents switch: at the top centre of the window, on the line
-    // of the thread header's row, kept clear of the roster, of the coworker
+    // of the thread header's row, kept clear of the roster, of the agent
     // pill at the left of the header and of its chips at the right (or a
     // room's two). The header's fade is under it, so the transcript never
     // runs into it. When the centre pane cannot hold all three, the switch
@@ -489,12 +487,11 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
 
   /// The details pane, in two pages under chuk's panel header.
   ///
-  ///  * First page, "Details": the coworker's screen (a tap opens the viewer)
+  ///  * First page, "Details": the agent's screen (a tap opens the viewer)
   ///    and its routines. The gear opens the second page.
-  ///  * Second page, "Settings": the agent panel in its profile layout (face,
-  ///    name, role and description, one settings group, the technical blocks
-  ///    folded). The back arrow returns. The name saves through the roster's
-  ///    rename path; role and description go to the profile store.
+  ///  * Second page, "Settings": the same agent settings content the phone
+  ///    page shows ([AgentSettingsView], bead chuk_chat-8hz4): the same
+  ///    sections, rows, order and words. The back arrow returns.
   Widget _buildDeskDetailsPane(BuildContext context, AgentsAgent agent) {
     final String sessionKey = agent.threads.isEmpty
         ? agent.id
@@ -586,20 +583,8 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
               ],
             ),
           ),
-          Expanded(
-            child: AgentControlPanel(
-              key: ValueKey<String>('desk-details-${agent.id}'),
-              agent: agent,
-              source: _controlSource,
-              showHeader: true,
-              showRefresh: false,
-              profileLayout: true,
-              onRename: (String name) => _renameAgent(agent.id, name),
-              profiles: _agentProfiles,
-              onScheduleSubmitted: (spec) =>
-                  _roster.setSchedule(agent.id, spec),
-            ),
-          ),
+          // The same settings content as the phone page, in the pane.
+          Expanded(child: _agentSettings(agent, page: false)),
         ],
       ),
     );

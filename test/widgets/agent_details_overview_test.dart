@@ -1,4 +1,4 @@
-// The first page of the desktop details pane: the coworker's screen box and
+// The first page of the desktop details pane: the agent's screen box and
 // its routines.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -100,7 +100,7 @@ void main() {
     expect(parked, 1);
   });
 
-  testWidgets('routines: asks the host once, shows this coworker\'s live '
+  testWidgets('routines: asks the host once, shows this agent\'s live '
       'ones, and says so when there are none', (tester) async {
     await pump(tester);
     expect(controller.listRequests, <String?>['amber-main']);
@@ -131,7 +131,7 @@ void main() {
     expect(find.text('Every day at 08:13'), findsOneWidget);
     expect(find.text('Job a2'), findsOneWidget);
     expect(find.text('Every 30 minutes · Paused'), findsOneWidget);
-    // History and other coworkers' routines are not this pane's business.
+    // History and other agents' routines are not this pane's business.
     expect(find.text('Job a3'), findsNothing);
     expect(find.text('Job b1'), findsNothing);
     expect(

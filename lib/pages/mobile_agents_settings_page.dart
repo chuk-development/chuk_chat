@@ -3,29 +3,42 @@ import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/agents_agent.dart';
-import 'package:chuk_chat/pages/coworker_model_page.dart';
+import 'package:chuk_chat/pages/agent_mailbox_page.dart';
+import 'package:chuk_chat/pages/agent_model_page.dart';
 import 'package:chuk_chat/pages/mobile_agent_permissions_page.dart'; // polish
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agents_permissions_service.dart'; // polish
+import 'package:chuk_chat/services/agents/agents_relay_client.dart'
+    show AgentsRelayController, AgentsRelayState;
+import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/settings/mobile_chat_preferences.dart';
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
+import 'package:chuk_chat/ui/expressive/feedback.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
-import 'package:chuk_chat/widgets/coworker_model_tile.dart';
+import 'package:chuk_chat/widgets/agent_model_tile.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 
-/// The mobile contact page: everyday choices first, technical details second.
-/// Every destination is supplied by the shell, so this page never owns or
-/// reconnects a transport and always acts on the coworker whose name was tapped.
+/// An agent's settings: ONE content for every form factor (bead
+/// chuk_chat-8hz4). The phone shows it as a page under the shared
+/// transparent header ([MobileAgentsSettingsPage]); a wide window shows the
+/// same content in the right-hand details pane ([framed] false). The
+/// sections, the rows, their order and their words are the same in both.
 ///
-/// It wears the settings frame and rows every other settings page wears
-/// (FloatingAppBar, SettingsListView, the Expressive rows). The coworker's
-/// face, name and role head the list, where a contact page puts them.
-class MobileAgentsSettingsPage extends StatefulWidget {
-  const MobileAgentsSettingsPage({
+/// Every destination is supplied by the shell, so this view never owns or
+/// reconnects a transport and always acts on the agent whose name was tapped.
+/// It draws the rows every other settings page draws (SettingsListView, the
+/// Expressive rows). The agent's face, name and role head the list, where a
+/// contact page puts them.
+class AgentSettingsView extends StatefulWidget {
+  const AgentSettingsView({
     super.key,
+    this.framed = false,
+    this.onClose,
+    this.link,
     required this.agentId,
     required this.source,
     required this.onEdit,
@@ -48,13 +61,26 @@ class MobileAgentsSettingsPage extends StatefulWidget {
     this.permissions, // polish
   });
 
+  /// True: a full page with the shared header (back chip, title pill, the
+  /// edit action). False: the bare list, for a pane that has a header of its
+  /// own.
+  final bool framed;
+
+  /// Leaves the view after Hide, Remove or Chat. Null pops the route (the
+  /// page); the pane passes its own close.
+  final VoidCallback? onClose;
+
+  /// The host link, for the "Runs on the host" row. Defaults to
+  /// [AgentsRelayLink.instance].
+  final AgentsRelayLink? link;
+
   final String agentId;
   final String? chatId;
   final AgentRosterSource source;
   final AgentProfileStore? profiles;
   final MobileChatPreferences? preferences;
-  /// [onModel] runs only for a coworker with no thread yet; with one, the
-  /// page opens the coworker's model page itself.
+  /// [onModel] runs only for an agent with no thread yet; with one, the
+  /// page opens the agent's model page itself.
   final VoidCallback onEdit,
       onControls,
       onModel,
@@ -73,11 +99,46 @@ class MobileAgentsSettingsPage extends StatefulWidget {
   // ── end polish ──
 
   @override
-  State<MobileAgentsSettingsPage> createState() =>
-      _MobileAgentsSettingsPageState();
+  State<AgentSettingsView> createState() => _AgentSettingsViewState();
 }
 
-class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
+/// [AgentSettingsView] as a phone page: the shared transparent header over
+/// the same content.
+class MobileAgentsSettingsPage extends AgentSettingsView {
+  const MobileAgentsSettingsPage({
+    super.key,
+    required super.agentId,
+    required super.source,
+    required super.onEdit,
+    required super.onControls,
+    required super.onModel,
+    required super.onAutomations,
+    required super.onSkills,
+    required super.onConnectors,
+    required super.onSecrets,
+    required super.onRooms,
+    required super.onSettings,
+    super.onDocuments,
+    super.onCopyChat,
+    super.onBrowser,
+    super.onDelete,
+    super.profiles,
+    super.preferences,
+    super.onChat,
+    super.chatId,
+    super.permissions,
+    super.link,
+  }) : super(framed: true);
+}
+
+class _AgentSettingsViewState extends State<AgentSettingsView> {
+  /// Leaves the view: the pane's close, or back off the page.
+  void _close() {
+    final VoidCallback? close = widget.onClose;
+    if (close != null) return close();
+    Navigator.of(context).maybePop();
+  }
+
   MobileChatPreferences get _preferences =>
       widget.preferences ?? MobileChatPreferences.instance;
 
@@ -91,7 +152,7 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
     unawaited(_preferences.load());
   }
 
-  /// The coworker's model page — the one place its model, provider and
+  /// The agent's model page — the one place its model, provider and
   /// reasoning level are set. Without a thread there is nothing to store the
   /// choice under, and the shell's own action runs instead.
   void _openModel(AgentsAgent agent) {
@@ -101,7 +162,7 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
       return;
     }
     unawaited(
-      CoworkerModelPage.open(context, chatId: chatId, coworkerName: agent.name),
+      AgentModelPage.open(context, chatId: chatId, agentName: agent.name),
     );
   }
 
@@ -125,7 +186,7 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
       ),
     );
     if (!mounted || confirmed != true) return;
-    Navigator.of(context).pop();
+    _close();
     widget.onDelete?.call();
   }
 
@@ -138,6 +199,7 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
         final AppLocalizations l = _l;
         final agent = widget.source.byId(widget.agentId);
         if (agent == null) {
+          if (!widget.framed) return Center(child: Text(l.agentsCwGone));
           return Scaffold(
             // The page runs underneath the floating header.
             extendBodyBehindAppBar: true,
@@ -145,35 +207,48 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
             body: Center(child: Text(l.agentsCwGone)),
           );
         }
-        return Scaffold(
-          // The page runs underneath the floating header.
-          extendBodyBehindAppBar: true,
-          appBar: FloatingAppBar(
-            title: Text(l.agentsCwTitle),
-            actions: <Widget>[
-              FloatingHeaderButton(
-                icon: Icons.edit_rounded,
-                tooltip: l.agentsCwEdit,
-                onPressed: widget.onEdit,
-              ),
-            ],
-          ),
-          body: SettingsListView(
+        final ColorScheme scheme = Theme.of(context).colorScheme;
+        // One screen owns each thing (bead chuk_chat-8hz4). This view only
+        // links to them, in a fixed order: what the agent is, what it may
+        // do, its channels, its computer, the conversation, the app, and the
+        // destructive actions last.
+        final Widget list = SettingsListView(
+            key: const ValueKey('agent-settings'),
+            headerInset: widget.framed,
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
             children: [
               _contact(agent, profiles),
-              const SizedBox(height: 20),
-              _actionRow(agent),
-              // What it runs on: its own model or the app default. One row,
-              // one page — the composer of its chat writes the same choice.
-              ExpressiveSectionHeader(l.agentsCwModel),
+              const SizedBox(height: 16),
+              Center(
+                child: ExpressiveButton(
+                  key: const ValueKey('settings_Chat'),
+                  icon: Icons.chat_rounded,
+                  label: l.agentsCwActionChat,
+                  tonal: true,
+                  onTap: () {
+                    _close();
+                    widget.onChat?.call();
+                  },
+                ),
+              ),
+              // What the agent is: its profile and the model it runs on.
+              ExpressiveSectionHeader(l.agentsCwTitle),
               ExpressiveGroup(
                 children: [
+                  _row(
+                    'Profile & preferences',
+                    l.agentsCwProfile,
+                    Icons.person_outline,
+                    widget.onEdit,
+                    subtitle: l.agentsCwProfileSubtitle,
+                  ),
+                  // One row, one page: the composer of its chat writes the
+                  // same choice.
                   if (widget.chatId != null)
-                    CoworkerModelTile(
+                    AgentModelTile(
                       key: const ValueKey('settings_Model'),
                       chatId: widget.chatId!,
-                      coworkerName: agent.name,
+                      agentName: agent.name,
                     )
                   else
                     _row(
@@ -185,26 +260,10 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
                     ),
                 ],
               ),
-              ExpressiveSectionHeader(l.agentsCwTitle),
+              // What it may do.
+              ExpressiveSectionHeader(l.agentsCwSectionAbilities),
               ExpressiveGroup(
                 children: [
-                  _row(
-                    'Profile & preferences',
-                    l.agentsCwProfile,
-                    Icons.person_outline,
-                    widget.onEdit,
-                    subtitle: l.agentsCwProfileSubtitle,
-                  ),
-                  _row(
-                    'Host & activity',
-                    l.agentsCwHost,
-                    Icons.computer_outlined,
-                    widget.onControls,
-                    subtitle: l.agentsCwHostSubtitle,
-                  ),
-                  // ── polish ── The desktop's permissions, approvals and
-                  // weekly budget; each part shows for the host capability
-                  // it needs, as on the desktop.
                   _row(
                     'Permissions',
                     l.agentsCwPermissions,
@@ -218,13 +277,71 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
                     ),
                     subtitle: l.agentsCwPermissionsSubtitle,
                   ),
-                  // ── end polish ──
+                  _row(
+                    'Skills',
+                    l.skills,
+                    Icons.extension_outlined,
+                    widget.onSkills,
+                    subtitle: l.agentsCwSkillsSubtitle,
+                  ),
+                  _row(
+                    'Connected apps',
+                    l.agentsCwConnectedApps,
+                    Icons.link_rounded,
+                    widget.onConnectors,
+                  ),
+                  _row(
+                    'API keys',
+                    l.agentsCwApiKeys,
+                    Icons.key_outlined,
+                    widget.onSecrets,
+                  ),
+                  _row(
+                    'Schedules & automations',
+                    l.agentsCwSchedules,
+                    Icons.schedule_outlined,
+                    widget.onAutomations,
+                    subtitle: l.agentsCwSchedulesSubtitle,
+                  ),
                 ],
               ),
-              if (widget.onDocuments != null) ...[
-                ExpressiveSectionHeader(l.agentsCwSharedFiles),
-                ExpressiveGroup(
-                  children: [
+              // Its channels: mail. There is no messenger channel.
+              ExpressiveSectionHeader(l.agentsChannels),
+              ExpressiveGroup(
+                children: [
+                  _row(
+                    'Mail',
+                    l.agentMail,
+                    Icons.mail_outline,
+                    _openMail,
+                    subtitle: l.agentMailSubtitle,
+                  ),
+                ],
+              ),
+              // Its computer: the host, what ran there, the screen, files.
+              ExpressiveSectionHeader(l.agentsCwSectionMachine),
+              ExpressiveGroup(
+                children: [
+                  _HostRow(
+                    agent: agent,
+                    link: widget.link ?? AgentsRelayLink.instance,
+                  ),
+                  _row(
+                    'Host & activity',
+                    l.agentsCwHost,
+                    Icons.computer_outlined,
+                    widget.onControls,
+                    subtitle: l.agentsCwHostSubtitle,
+                  ),
+                  if (widget.onBrowser != null)
+                    _row(
+                      'Open screen',
+                      l.agentsCwOpenScreen,
+                      Icons.desktop_windows_outlined,
+                      widget.onBrowser!,
+                      subtitle: l.agentsCwScreenSubtitle,
+                    ),
+                  if (widget.onDocuments != null)
                     _row(
                       'Documents & artifacts',
                       l.agentsCwDocuments,
@@ -232,9 +349,8 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
                       widget.onDocuments!,
                       subtitle: l.agentsCwDocumentsSubtitle,
                     ),
-                  ],
-                ),
-              ],
+                ],
+              ),
               ExpressiveSectionHeader(l.agentsCwConversation),
               ExpressiveGroup(
                 children: [
@@ -263,57 +379,15 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
                     ),
                 ],
               ),
-              ExpressiveSectionHeader(l.agentsCwAgentTools),
+              ExpressiveSectionHeader(l.agentsCwApp),
               ExpressiveGroup(
                 children: [
-                  _row(
-                    'Schedules & automations',
-                    l.agentsCwSchedules,
-                    Icons.schedule_outlined,
-                    widget.onAutomations,
-                    subtitle: l.agentsCwSchedulesSubtitle,
-                  ),
-                  _row(
-                    'Skills',
-                    l.skills,
-                    Icons.extension_outlined,
-                    widget.onSkills,
-                  ),
-                ],
-              ),
-              ExpressiveSectionHeader(l.agentsCwConnections),
-              ExpressiveGroup(
-                children: [
-                  _row(
-                    'Connected apps',
-                    l.agentsCwConnectedApps,
-                    Icons.link_rounded,
-                    widget.onConnectors,
-                  ),
-                  _row(
-                    'API keys',
-                    l.agentsCwApiKeys,
-                    Icons.key_outlined,
-                    widget.onSecrets,
-                  ),
                   _row(
                     'Control rooms',
                     l.agentsCwControlRooms,
                     Icons.group_outlined,
                     widget.onRooms,
                   ),
-                  if (widget.onBrowser != null)
-                    _row(
-                      'Open screen',
-                      l.agentsCwOpenScreen,
-                      Icons.desktop_windows_outlined,
-                      widget.onBrowser!,
-                    ),
-                ],
-              ),
-              ExpressiveSectionHeader(l.agentsCwApp),
-              ExpressiveGroup(
-                children: [
                   _row(
                     'Account & app settings',
                     l.agentsCwAccountSettings,
@@ -323,18 +397,72 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
                   ),
                 ],
               ),
-              if (widget.onDelete != null) ...[
-                const SizedBox(height: 24),
-                _removeButton(agent),
-              ],
+              // The destructive actions, last.
+              ExpressiveSectionHeader(
+                l.agentsCwSectionDanger,
+                color: scheme.error,
+              ),
+              ExpressiveGroup(
+                children: [
+                  _row(
+                    'Hide',
+                    l.agentsCwHide,
+                    Icons.visibility_off_outlined,
+                    () => _hide(agent),
+                    subtitle: l.agentsCwHideSubtitle,
+                  ),
+                  if (widget.onDelete != null)
+                    ExpressiveRow(
+                      key: const ValueKey('settings_Remove'),
+                      icon: Icons.delete_outline,
+                      tone: scheme.errorContainer,
+                      title: l.agentsCwRemoveAgent,
+                      onTap: () => _remove(agent),
+                    ),
+                ],
+              ),
+            ],
+          );
+        if (!widget.framed) return list;
+        return Scaffold(
+          // The page runs underneath the floating header.
+          extendBodyBehindAppBar: true,
+          appBar: FloatingAppBar(
+            title: Text(l.agentsCwTitle),
+            actions: <Widget>[
+              FloatingHeaderButton(
+                icon: Icons.edit_rounded,
+                tooltip: l.agentsCwEdit,
+                onPressed: widget.onEdit,
+              ),
             ],
           ),
+          body: list,
         );
       },
     );
   }
 
-  /// The coworker the page is about: face, name and role, centred over the
+  /// The agent's mailbox. The address belongs to the account, so every
+  /// agent opens the same mailbox.
+  void _openMail() => unawaited(
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(builder: (_) => const AgentMailboxPage()),
+    ),
+  );
+
+  /// Hides the agent from the list. It keeps its session; the page closes.
+  void _hide(AgentsAgent agent) {
+    widget.source.hideAgent(agent.id);
+    pillToast(
+      context,
+      _l.agentsCwHidden(agent.name),
+      icon: Icons.visibility_off_rounded,
+    );
+    _close();
+  }
+
+  /// The agent the page is about: face, name and role, centred over the
   /// list the way a contact page opens.
   Widget _contact(AgentsAgent agent, AgentProfileStore profiles) {
     final theme = Theme.of(context);
@@ -342,7 +470,7 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
       children: [
         AgentFace(agent: agent, size: 96, store: profiles),
         const SizedBox(height: 16),
-        // Two lines: a coworker's name is never cut at a large text size
+        // Two lines: an agent's name is never cut at a large text size
         // (UI audit 2026-10-05, profile item 4).
         Text(
           agent.name,
@@ -365,73 +493,6 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _actionRow(AgentsAgent agent) {
-    final AppLocalizations l = _l;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _action(l.agentsCwActionChat, Icons.chat_rounded, () {
-          Navigator.of(context).pop();
-          widget.onChat?.call();
-        }),
-        _action(
-          l.agentsCwModel,
-          Icons.auto_awesome_rounded,
-          () => _openModel(agent),
-        ),
-        if (widget.onDocuments != null)
-          _action(
-            l.agentsCwActionFiles,
-            Icons.folder_rounded,
-            widget.onDocuments!,
-          ),
-        _action(
-          l.agentsCwActionSchedules,
-          Icons.schedule_rounded,
-          widget.onAutomations,
-        ),
-        _action(
-          l.agentsCwActionSkills,
-          Icons.extension_rounded,
-          widget.onSkills,
-        ),
-      ],
-    );
-  }
-
-  /// One quick action: the settings icon tile over its label, the whole
-  /// column the target.
-  Widget _action(String label, IconData icon, VoidCallback onTap) {
-    final theme = Theme.of(context);
-    return Expanded(
-      child: Tooltip(
-        message: label,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(18),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ExpressiveIconTile(icon: icon, size: 48),
-                const SizedBox(height: 8),
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: theme.m3.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 
@@ -466,27 +527,132 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
     value: value,
     onChanged: (value) => unawaited(changed(value)),
   );
+}
 
-  /// Removing a coworker is the page's one destructive action, drawn the way
-  /// the settings page draws sign-out.
-  Widget _removeButton(AgentsAgent agent) {
-    final theme = Theme.of(context);
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton(
-        style: OutlinedButton.styleFrom(
-          foregroundColor: theme.colorScheme.error,
-          side: BorderSide(color: theme.m3.outline),
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(999),
+/// Where the agent runs, told from what the app knows (bead
+/// chuk_chat-89vl): on the host when the host keeps it (its own agent, one
+/// it listed, or one it ran a turn of); and whether that host is reachable now.
+/// "This app only" is said only while the host is reachable and does not know
+/// the agent. With the host offline and no proof either way, it says that.
+class _HostRow extends StatelessWidget {
+  const _HostRow({required this.agent, required this.link});
+
+  final AgentsAgent agent;
+  final AgentsRelayLink link;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<AgentsRelayController?>(
+      valueListenable: link.controller,
+      builder: (BuildContext context, AgentsRelayController? controller, _) {
+        if (controller == null) return _card(paired: false);
+        return ValueListenableBuilder<AgentsRelayState>(
+          valueListenable: controller.state,
+          builder: (BuildContext context, AgentsRelayState state, _) =>
+              _card(paired: state.isPaired),
+        );
+      },
+    );
+  }
+
+  Widget _card({required bool paired}) {
+    final bool onHost = agent.runsOnHost;
+    final (IconData icon, String value, String? note) = switch ((
+      onHost,
+      paired,
+    )) {
+      (true, true) => (
+        Icons.verified_rounded,
+        'Yes — this agent runs on the paired host',
+        null,
+      ),
+      (true, false) => (
+        Icons.cloud_off_rounded,
+        'Yes — on your host, which is offline right now',
+        'Messages wait and go out when it is back.',
+      ),
+      (false, true) => (
+        Icons.phonelink_off_rounded,
+        'Not yet — it lives in this app only',
+        null,
+      ),
+      (false, false) => (
+        Icons.cloud_off_rounded,
+        'Not confirmed — your host is offline',
+        'The host says which agents it keeps when it is back.',
+      ),
+    };
+    return _InfoCard(
+      key: const ValueKey<String>('agent_profile_host'),
+      icon: icon,
+      label: 'Runs on the host',
+      value: value,
+      note: note,
+    );
+  }
+}
+
+/// One fact as a row of its group: the icon tile, the label, the value and
+/// an optional note. A fact has no target, so the tile takes no tap.
+class _InfoCard extends StatelessWidget {
+  const _InfoCard({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.note,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  /// A second line that qualifies the value — used where the app must say that
+  /// something is local only.
+  final String? note;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    final TextTheme text = Theme.of(context).textTheme;
+    return ExpressiveTile(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          ExpressiveIconTile(icon: icon),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  label,
+                  style: text.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: scheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: text.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+                if (note != null) ...<Widget>[
+                  const SizedBox(height: 2),
+                  Text(
+                    note!,
+                    style: text.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
-        ),
-        onPressed: () => _remove(agent),
-        child: Text(
-          _l.agentsCwRemoveCoworker,
-          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
-        ),
+        ],
       ),
     );
   }

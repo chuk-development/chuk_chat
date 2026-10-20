@@ -5,7 +5,9 @@
 ///  * **attached + foreground** — the user is watching: nothing.
 ///  * **attached + background** — the app itself shows a local toast on the
 ///    live `done` ([onLiveDone]); the host sees a controller and does NOT
-///    push.
+///    push. The toast is the only one for the run: the chat screen's own
+///    completion toast stands down for Agents threads
+///    (`NotificationService.showCompletionNotification`).
 ///  * **not attached** — the host pushes (Supabase → FCM) and toasts on its
 ///    own desktop; the app only learns about it later, when a replay lands
 ///    with `while_away` ([onAnswerReplayed]): then the row is consumed and
@@ -24,7 +26,7 @@ import 'package:chuk_chat/services/notifications/local_notifications.dart';
 import 'package:chuk_chat/services/notifications/push_service.dart';
 import 'package:chuk_chat/services/notifications/run_notifications.dart';
 
-/// Resolves the label a toast carries for a thread — the coworker's name.
+/// Resolves the label a toast carries for a thread — the agent's name.
 /// The shell knows the roster; the services do not.
 typedef ThreadLabelResolver = String Function(String sessionKey);
 
@@ -62,13 +64,21 @@ class AgentsNotifications {
   }
 
   /// A live `done` reached the thread view for [sessionKey]. Toast only when
-  /// the app is not in front of the user.
-  Future<void> onLiveDone(String sessionKey, {String? runId}) async {
+  /// the app is not in front of the user: "Name is done" with a short
+  /// preview of [answer]. [stopped] is a run that ended without finishing.
+  Future<void> onLiveDone(
+    String sessionKey, {
+    String? runId,
+    String? answer,
+    bool stopped = false,
+  }) async {
     if (_inForeground) return;
     await LocalNotifications.instance.showAnswerReady(
       sessionKey: sessionKey,
       threadLabel: threadLabel(sessionKey),
       runId: runId,
+      preview: answer,
+      stopped: stopped,
     );
   }
 

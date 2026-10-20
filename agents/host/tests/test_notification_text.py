@@ -110,7 +110,7 @@ def test_a_run_that_no_automation_fired_has_no_automation_label(tmp_path):
 
 def test_the_thread_names_its_own_coworker(tmp_path):
     """A run's session key IS the app's agent id, so a user with several
-    coworkers gets the name of the one whose thread finished."""
+    agents gets the name of the one whose thread finished."""
     db_path = _automations_db(tmp_path / "executor-state.db", [("a1", AUTOMATION)])
     store = CoworkerNameStore(str(tmp_path / "roster.db"))
     store.upsert("local:brisk-heron:2:116636868", "Wahlradar", created_by_app=True)
@@ -124,7 +124,7 @@ def test_the_thread_names_its_own_coworker(tmp_path):
     )
     assert labels.coworker == "Wahlradar"
     assert completion_text(labels)[0] == AUTOMATION  # the name already carries it
-    # An unknown thread key falls back to this host's own coworker.
+    # An unknown thread key falls back to this host's own agent.
     assert resolve_labels(db_path=db_path, session_key="default").coworker == "Nova"
 
 

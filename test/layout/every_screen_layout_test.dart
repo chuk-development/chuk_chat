@@ -29,7 +29,7 @@ import 'package:chuk_chat/pages/agent_mailbox_page.dart';
 import 'package:chuk_chat/pages/account_settings_page.dart';
 import 'package:chuk_chat/pages/assistant_settings_page.dart';
 import 'package:chuk_chat/pages/agent_profile_edit_page.dart';
-import 'package:chuk_chat/pages/agent_profile_page.dart';
+import 'package:chuk_chat/pages/agent_host_activity_page.dart';
 import 'package:chuk_chat/pages/automations_page.dart';
 import 'package:chuk_chat/pages/coming_soon_page.dart';
 import 'package:chuk_chat/pages/agents_install_page.dart';
@@ -58,7 +58,6 @@ import 'package:chuk_chat/services/agents/agent_control_source.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
 import 'package:chuk_chat/services/account_session.dart';
-import 'package:chuk_chat/services/agents/agents_channels_service.dart';
 import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/agents/agents_cloud_relay.dart';
 import 'package:chuk_chat/services/agents/agents_install_ticket.dart';
@@ -68,7 +67,6 @@ import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/room_source.dart';
 import 'package:chuk_chat/services/settings/mobile_chat_preferences.dart';
 import 'package:chuk_chat/widgets/agent_control_panel.dart';
-import 'package:chuk_chat/widgets/agents_channels/agent_telegram_section.dart';
 import 'package:chuk_chat/widgets/app_mode_switch.dart';
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
 import 'package:chuk_chat/widgets/browser_view_page.dart';
@@ -129,7 +127,6 @@ const Map<String, String> _chukSizes = <String, String>{
   'agents_skills_settings_page': 'the 42 dp refresh chip of the floating '
       'header',
   'mobile_agents_settings_page': 'the 42 dp edit chip of the floating header',
-  'agent_profile_page': 'the 42 dp edit chip of the floating header',
   'system_prompt_page': 'upstream\'s 32 dp "Edit full screen" button inside '
       'the prompt field, the composer\'s glyph in the composer\'s place',
 };
@@ -229,36 +226,6 @@ Widget _mailDetail(String id) {
 /// Wraps a panel that has no scaffold of its own.
 Widget _hosted(Widget child) => Scaffold(body: SafeArea(child: child));
 
-/// The Telegram section with the host's [state] already in, on a host that
-/// runs channels.
-Widget _telegram(_Bag bag, Map<String, dynamic> state) {
-  // The bag disposes in reverse: the service first, then its notifiers.
-  final ValueNotifier<Object?> connection = ValueNotifier<Object?>(Object());
-  bag.keep(connection, connection.dispose);
-  final ValueNotifier<Set<String>> capabilities = ValueNotifier<Set<String>>(
-    <String>{kAgentChannelsCapability},
-  );
-  bag.keep(capabilities, capabilities.dispose);
-  final AgentsChannelsService service = AgentsChannelsService(
-    send: (Map<String, dynamic> _) async {},
-    connection: connection,
-    capabilities: capabilities,
-  );
-  bag.keep(service, service.dispose);
-  service.handleFrame(<String, dynamic>{
-    'type': 'agent_channel',
-    'agent_id': 'amber',
-    'channel': 'telegram',
-    ...state,
-  });
-  return _hosted(
-    SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: AgentTelegramSection(agentId: 'amber', service: service),
-    ),
-  );
-}
-
 /// Presents [builder] the way `agents_shell_state` presents it: a scroll
 /// controlled modal bottom sheet. The sheet's own constraints are what the
 /// content has to live inside, so mounting it flat would test a window the
@@ -354,24 +321,6 @@ List<_Screen> _screens() => <_Screen>[
   _Screen('agent_mail_contacts_page', (_) => AgentMailContactsPage(
         service: FakeAgentMailServer().service(),
       )),
-  _Screen('agent_profile_page', (_Bag bag) {
-    final LocalAgentRosterSource source = LocalAgentRosterSource(
-      seed: _roster(),
-    );
-    bag.keep(source, source.dispose);
-    final AgentProfileStore profiles = AgentProfileStore();
-    bag.keep(profiles, profiles.dispose);
-    return AgentProfilePage(
-      agentId: 'amber',
-      source: source,
-      profiles: profiles,
-      onRename: (_) {},
-      onDelete: (_) {},
-      onOpenControls: () {},
-      onOpenBrowser: () {},
-      onMessage: () {},
-    );
-  }),
   _Screen('agent_profile_edit_page', (_Bag bag) {
     final LocalAgentRosterSource source = LocalAgentRosterSource(
       seed: _roster(),
@@ -425,7 +374,7 @@ List<_Screen> _screens() => <_Screen>[
     bag.keep(source, source.dispose);
     // Rooms are rows in this same list, so the sweep measures them here: one
     // small room and one crowded one, whose stacked faces still have to hold a
-    // single coworker face's footprint.
+    // single agent face's footprint.
     final LocalRoomSource rooms = LocalRoomSource();
     bag.keep(rooms, rooms.dispose);
     rooms.addRoom(AgentsRoomDraft(
@@ -517,7 +466,7 @@ List<_Screen> _screens() => <_Screen>[
           children: const <Widget>[
             Padding(
               padding: EdgeInsets.all(16),
-              child: Text('A message from the coworker'),
+              child: Text('A message from the agent'),
             ),
           ],
         ),
@@ -531,7 +480,7 @@ List<_Screen> _screens() => <_Screen>[
       ChatDocumentsPanel(
         sessionKey: 'amber-main',
         controller: relay,
-        coworkerName: 'Amber',
+        agentName: 'Amber',
       ),
     );
   }),
@@ -585,8 +534,6 @@ List<_Screen> _screens() => <_Screen>[
       AgentControlPanel(agent: _agent(id: 'host:amber'), source: source),
     );
   }),
-  // The desktop details pane draws the same panel in its profile layout:
-  // face, fields, the settings group, and the technical details opened.
   // The desktop details pane's first page: the screen box and the routines.
   _Screen(
     'widgets/agent_details_overview',
@@ -598,85 +545,69 @@ List<_Screen> _screens() => <_Screen>[
       ),
     ),
   ),
-  _Screen(
-    'widgets/agent_control_panel (desktop details pane)',
-    (_Bag bag) {
-      final FakeAgentControlSource source = _keepControl(
-        bag,
-        FakeAgentControlSource(
-          initial: const AgentControlSnapshot(
-            model: ControlAvailable<AgentModelChoice>(
-              AgentModelChoice(
-                id: 'anthropic/claude-sonnet-4-5-20260101',
-                provider: 'anthropic',
-                reasoningEffort: 'medium',
-              ),
+  // The desktop details pane's "Settings" page: the same content as the
+  // phone page (bead chuk_chat-8hz4), bare, under the pane's own header.
+  _Screen('widgets/agent_settings_view (desktop details pane)', (_Bag bag) {
+    final LocalAgentRosterSource source = LocalAgentRosterSource(
+      seed: _roster(),
+    );
+    bag.keep(source, source.dispose);
+    final AgentProfileStore profiles = AgentProfileStore();
+    bag.keep(profiles, profiles.dispose);
+    final MobileChatPreferences prefs = MobileChatPreferences();
+    bag.keep(prefs, prefs.dispose);
+    return _hosted(
+      AgentSettingsView(
+        agentId: 'amber',
+        source: source,
+        profiles: profiles,
+        preferences: prefs,
+        onClose: () {},
+        onEdit: () {},
+        onControls: () {},
+        onModel: () {},
+        onAutomations: () {},
+        onSkills: () {},
+        onConnectors: () {},
+        onSecrets: () {},
+        onRooms: () {},
+        onSettings: () {},
+        onDocuments: () {},
+        onCopyChat: () {},
+        onBrowser: () {},
+        onDelete: () {},
+        onChat: () {},
+      ),
+    );
+  }),
+  _Screen('agent_host_activity_page', (_Bag bag) {
+    final FakeAgentControlSource source = _keepControl(
+      bag,
+      FakeAgentControlSource(
+        initial: const AgentControlSnapshot(
+          model: ControlAvailable<AgentModelChoice>(
+            AgentModelChoice(
+              id: 'anthropic/claude-sonnet-4-5-20260101',
+              provider: 'anthropic',
+              reasoningEffort: 'medium',
             ),
-            tokens: ControlAvailable<AgentTokenUsage>(
-              AgentTokenUsage(total: 12345678, runs: 31, lastRun: 54321),
-            ),
-            sandbox: ControlAvailable<AgentSandbox>(
-              AgentSandbox(
-                kind: 'docker',
-                container: 'agents-amber-0a1b2c3d',
-                containerId: 'deadbeef0011',
-                workspace: '/home/chuk/.agents/agents/amber/workspace',
-              ),
+          ),
+          tokens: ControlAvailable<AgentTokenUsage>(
+            AgentTokenUsage(total: 12345678, runs: 31, lastRun: 54321),
+          ),
+          sandbox: ControlAvailable<AgentSandbox>(
+            AgentSandbox(
+              kind: 'docker',
+              container: 'agents-amber-0a1b2c3d',
+              containerId: 'deadbeef0011',
+              workspace: '/home/chuk/.agents/agents/amber/workspace',
             ),
           ),
         ),
-      );
-      return _hosted(
-        AgentControlPanel(
-          agent: _agent(id: 'host:amber'),
-          source: source,
-          profileLayout: true,
-          onRename: (_) {},
-          profiles: AgentProfileStore(),
-        ),
-      );
-    },
-    after: (WidgetTester tester) async {
-      final Finder toggle = find.byKey(
-        const ValueKey<String>('details-technical-toggle'),
-      );
-      await tester.ensureVisible(toggle);
-      await tester.pumpAndSettle();
-      await tester.tap(toggle);
-      await tester.pumpAndSettle();
-    },
-  ),
-  _Screen(
-    'widgets/agent_telegram_section (token refused, error)',
-    (_Bag bag) => _telegram(bag, <String, dynamic>{
-      'enabled': true,
-      'has_token': true,
-      'state': 'unauthorized',
-      'bot_username': 'wahlradar_research_assistant_bot',
-      'error': 'too_many_attempts',
-    }),
-  ),
-  _Screen(
-    'widgets/agent_telegram_section (waiting for the code)',
-    (_Bag bag) => _telegram(bag, <String, dynamic>{
-      'enabled': true,
-      'has_token': true,
-      'state': 'polling',
-      'bot_username': 'wahlradar_research_assistant_bot',
-      'pending_link': true,
-    }),
-  ),
-  _Screen(
-    'widgets/agent_telegram_section (linked)',
-    (_Bag bag) => _telegram(bag, <String, dynamic>{
-      'enabled': true,
-      'has_token': true,
-      'state': 'polling',
-      'bot_username': 'wahlradar_research_assistant_bot',
-      'linked': true,
-      'linked_name': 'Christopher Fitzgerald-Okonkwo',
-    }),
-  ),
+      ),
+    );
+    return AgentHostActivityPage(agent: _agent(id: 'host:amber'), source: source);
+  }),
   _Screen(
     'widgets/room_members_sheet (full room)',
     (_) => _sheetHost(

@@ -14,7 +14,7 @@ import 'package:chuk_chat/voice/voice_call_controller.dart';
 import 'package:chuk_chat/voice/voice_call_models.dart';
 
 /// How long an accepted call waits for its thread screen to open, so the
-/// call gets the screen's task delegate (the same wait the coworker profile
+/// call gets the screen's task delegate (the same wait the agent profile
 /// uses).
 const Duration kAcceptedCallThreadWait = Duration(seconds: 2);
 

@@ -1,6 +1,6 @@
 """Seeding shipped skills into a fresh agent workspace (§11).
 
-A new coworker starts with an empty ``skills/`` directory. The host copies the
+A new agent starts with an empty ``skills/`` directory. The host copies the
 repository's seed skills in so the agent can, for example, summarize a YouTube
 link with no setup. These tests pin the copy, the non-destructive rule that an
 agent's own skill of the same name is never overwritten, and the no-op when
@@ -36,7 +36,7 @@ def test_the_shipped_seed_tree_classifies_every_skill_by_its_directory():
     ``<chart>`` block the app renders. That set is closed and is pinned here,
     so adding a skill to it is a deliberate act.
     ``youtube-transcript`` only ships in the box — it is an ordinary workspace
-    skill the coworker owns, and it must never drift back into the built-ins.
+    skill the agent owns, and it must never drift back into the built-ins.
     """
     src = seed_skills_dir()
     assert src is not None, "the repository skills/ directory was not found"

@@ -7,7 +7,7 @@ in :mod:`chuk_agents_runtime.action_policy` (docs/WIRE_CONTRACT.md,
 ``send_external`` (mail to an address), ``mcp_destructive`` (a connector tool
 its server marks destructive) and ``browser_act`` (a page-changing browser
 tool, per site; ``allow`` unless the user switches it). The user sets per
-coworker whether each class asks, is allowed or is refused, and a decision can
+agent whether each class asks, is allowed or is refused, and a decision can
 last: "always for this agent" or "always for this site".
 
 The mechanism is Pydantic AI's own:
@@ -95,7 +95,7 @@ class ApprovalRule:
     ask: Callable[[Any], bool] | None
     declined: Callable[[dict, str], dict]
     #: The action class (``chuk_agents_runtime.action_policy``) when the rule
-    #: follows a per-coworker policy; ``None`` is the old rule that always asks.
+    #: follows a per-agent policy; ``None`` is the old rule that always asks.
     action_class: str | None = None
     #: The run's binding: the live policy, where a lasting decision is stored,
     #: and the browser's current site. ``None`` with ``action_class`` set means
@@ -310,7 +310,7 @@ def class_declined(action_class: str) -> Callable[[dict, str], dict]:
             return {"ok": False, "declined": True, "action_class": action_class, "error": error}
         if reason == "denied_by_policy":
             error = (
-                f"this coworker is not allowed to {words}: the user turned it off in the "
+                f"this agent is not allowed to {words}: the user turned it off in the "
                 "approval settings. It did not happen. Do not retry; tell the user."
             )
             return {"ok": False, "declined": True, "action_class": action_class, "error": error}
@@ -408,7 +408,7 @@ def action_rules(registry: Any, manager: Any, approvals: ActionApprovals) -> dic
 
 
 def bind_publish(rule: ApprovalRule, approvals: ActionApprovals, *, asks: bool) -> ApprovalRule:
-    """Put the here.now rule under the ``publish`` class: the coworker's
+    """Put the here.now rule under the ``publish`` class: the agent's
     policy decides first, and the card carries the class and its options.
     ``asks`` is the user's connector setting; ``auto`` (``asks=False``) keeps
     its meaning, "never ask", and only a ``deny`` stops a publish."""
@@ -488,7 +488,7 @@ def herenow_rule(env: Any, config: Any, gate: Callable[[Any], bool] | None) -> A
                 "path": path,
                 "declined": True,
                 "error": (
-                    "this coworker is not allowed to publish: the user turned it off "
+                    "this agent is not allowed to publish: the user turned it off "
                     "in the approval settings. Nothing was published."
                 ),
             }

@@ -307,7 +307,7 @@ Color _chartAccent(ChartPalette palette) {
 ///
 /// Series 0 is the user's accent (one accent for the whole app,
 /// docs/DESIGN.md section 7). The next ones come from the app's chart
-/// palette (`ChartPalette`, the coworker hues), far-apart hues first,
+/// palette (`ChartPalette`, the agent hues), far-apart hues first,
 /// and never a hue too near the accent.
 @immutable
 class OpenUiChartColors {

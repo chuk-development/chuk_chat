@@ -61,7 +61,7 @@ void main() {
   });
 
   testWidgets(
-    'lists what the host answers, grouped by coworker, with actions',
+    'lists what the host answers, grouped by agent, with actions',
     (tester) async {
       await pump(tester);
       controller.emit(
@@ -129,7 +129,7 @@ void main() {
     expect(find.textContaining('No automations'), findsOneWidget);
   });
 
-  testWidgets('names the coworker over each group, never the session key', (
+  testWidgets('names the agent over each group, never the session key', (
     tester,
   ) async {
     await pump(tester);

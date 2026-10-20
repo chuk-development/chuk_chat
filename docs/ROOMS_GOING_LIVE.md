@@ -25,7 +25,7 @@ prod relay. Everything it wires already exists; nothing new needs designing.
 ## Done: the per-member senders are registered
 
 `host/room_agents.py` (`RoomAgentPool`) is the multi-agent host. For every
-coworker a room is about to run, it starts **its own** `Executor` on **its own**
+agent a room is about to run, it starts **its own** `Executor` on **its own**
 sealed loopback, wraps a `ControllerSession` around the other end, and registers
 `make_room_task_sender(...)` in the host's `RoomBinding`. `RoomService` calls it
 through one new seam, `members_ready`, at the top of `handle_room_task`, so
@@ -35,9 +35,9 @@ unregisters every sender.
 
 A member is one thread, one sealed in-process link and one SQLite file. It is
 **not** a second sandbox: the environment comes from `LocalHost._environment_for`,
-so a coworker keeps the one box it already had (§6, bead cowork-jo2) whether the
+so an agent keeps the one box it already had (§6, bead cowork-jo2) whether the
 app drives it or a room does. A six-member room therefore adds six executor
-threads on top of the containers those coworkers already have.
+threads on top of the containers those agents already have.
 
 What is proven, with mock models and no credits, in
 `host/tests/test_room_live.py`: three members all answer through `RoomService`;
@@ -77,8 +77,8 @@ deadlock. So each room member needs **its own executor** (its own loopback +
    member (each its own `BaseEnvironment`/container, §6, and its own
    `ControllerSession` over its own loopback). This spends model credits per
    member, so it is gated. **Done:** `RoomAgentPool`, started on demand per room
-   task; the environment is the coworker's existing one, so two members are two
-   boxes only because they are two coworkers.
+   task; the environment is the agent's existing one, so two members are two
+   boxes only because they are two agents.
 2. Register each with `make_room_task_sender(...) → room_binding.register(...)`.
    **Done:** `RoomAgentPool.ensure_member`, per room, with session key
    `room:<room_id>`.

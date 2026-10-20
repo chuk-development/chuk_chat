@@ -282,7 +282,7 @@ void main() {
       );
       expect(
         _subtitle(s(_block(inUse: true)), heldByOther: true),
-        'Another coworker is using your browser',
+        'Another agent is using your browser',
       );
       expect(
         _subtitle(
@@ -331,7 +331,7 @@ void main() {
       running: running,
     );
 
-    test('a coworker without the user browser gets nothing', () {
+    test('an agent without the user browser gets nothing', () {
       expect(notice(target: kBrowserTargetSandbox, running: true), isNull);
       expect(notice(target: null, permissionOn: false, running: true), isNull);
       expect(

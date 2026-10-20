@@ -1,7 +1,7 @@
-# Handover — account page, credits, coworker names (session cowork-af, 2026-09-05)
+# Handover — account page, credits, agent names (session cowork-af, 2026-09-05)
 
 Beads `cowork-4ih` (credits in the footer, Account settings 1:1 chuk) and
-`cowork-817` (rename a coworker, create one with a name, chuk's input).
+`cowork-817` (rename an agent, create one with a name, chuk's input).
 Both are claimed, both are CODE-COMPLETE and COMMITTED; the live proof after
 an app rebuild and a host restart is the only thing left.
 
@@ -39,12 +39,12 @@ an app rebuild and a host restart is the only thing left.
 ## 817 — what the user sees
 
 - Row menu (`_AgentTile`, `PopupMenuButton`): Rename · Hide · Delete. Rename
-  opens `showCoworkerNameDialog` — chuk's `_renameChatDialog` shape
+  opens `showAgentNameDialog` — chuk's `_renameChatDialog` shape
   (`AlertDialog`, one autofocused `TextField` with label/hint, Cancel + submit;
   Enter submits). The controller lives in the dialog's own `State` (chuk
   disposes it right after `showDialog`, which trips "used after dispose"
   during the route's exit animation under a widget test).
-- New coworker (rail row, top-right, phone list) opens the same dialog with a
+- New agent (rail row, top-right, phone list) opens the same dialog with a
   suggested adjective-noun name pre-filled; the old `AgentOnboardingSheet`
   (role/brief/schedule form) and its test are deleted. Role and brief are
   still fields on `AgentsAgent`, just no longer asked at creation.
@@ -63,7 +63,7 @@ an app rebuild and a host restart is the only thing left.
   `name` is the workspace directory. `host_agent_id()` is
   `host:cowork-host` (`HOST_DEVICE_ID`), which is the `peerDeviceId` the app
   pairs with, so a host-agent rename lands on the right roster row.
-- Contract: `docs/WIRE_CONTRACT.md` "Coworker names".
+- Contract: `docs/WIRE_CONTRACT.md` "Agent names".
 
 ## Tests (all green at commit time)
 
@@ -85,7 +85,7 @@ handover (relay+serve group first).
 2. App rebuild (c6 holds the instance).
 3. Check: footer shows the profile name + credits (compare with chuk_chat
    running on the same account); Settings → Account is chuk's page; row menu
-   → Rename → name changes; New coworker → dialog → name; restart the app →
+   → Rename → name changes; New agent → dialog → name; restart the app →
    names come back from the host. Screenshots → `docs/screenshots/af/`
    (gnome-screenshot + convert crop, see 5c's handover), then `SendUserFile`.
 4. `bd close cowork-4ih cowork-817`.

@@ -81,6 +81,7 @@ class VoiceCallController extends ChangeNotifier {
   int _volumeRevision = 0;
   String _voiceId = 'Bastian';
   String _defaultVoiceId = 'Bastian';
+  VoiceCallEngine _defaultEngine = VoiceCallEngine.pipeline;
   String? _preferencesOwner;
   int _preferenceRevision = 0;
   bool _changingVoice = false;
@@ -171,6 +172,10 @@ class VoiceCallController extends ChangeNotifier {
   double get volume => _volume;
   String get voiceId => _voiceId;
   String get defaultVoiceId => _defaultVoiceId;
+
+  /// The engine for the next call. Switching mid-call is not possible: the
+  /// engine is fixed when the room is dispatched.
+  VoiceCallEngine get defaultEngine => _defaultEngine;
   bool get changingVoice => _changingVoice;
   List<String> get availableVoices => const [
     'Bastian',
@@ -320,6 +325,8 @@ class VoiceCallController extends ChangeNotifier {
       if (gen != _generation) return;
       await _loadVoicePreference(callerId, gen);
       if (gen != _generation) return;
+      await _loadEnginePreference(callerId, gen);
+      if (gen != _generation) return;
       final String identity = '${VoiceProtocol.identityPrefix}$callerId';
       final String roomName = '${VoiceProtocol.roomPrefix}${const Uuid().v4()}';
       final Map<String, dynamic> metadata = VoiceProtocol.dispatchMetadata(
@@ -330,6 +337,7 @@ class VoiceCallController extends ChangeNotifier {
         context: context,
         voiceInstructions: voiceInstructions,
         voiceId: _voiceId,
+        engine: _defaultEngine,
         sttLanguage: VoiceProtocol.resolveSttLanguage(
           sttLanguage,
           PlatformDispatcher.instance.locale.languageCode,
@@ -397,7 +405,11 @@ class VoiceCallController extends ChangeNotifier {
       _audioLevelTimer?.cancel();
       _audioLevelTimer = Timer.periodic(const Duration(milliseconds: 80), (_) {
         if (gen != _generation) return;
-        final level = room.agentParticipant?.audioLevel ?? 0;
+        final double agent = room.agentParticipant?.audioLevel ?? 0;
+        final double local = room.localParticipant?.audioLevel ?? 0;
+        // The bars follow whoever is talking: the agent while it speaks,
+        // otherwise the microphone so listening is not a still picture.
+        final double level = _agentSpeaking ? agent : local;
         if ((_audioLevel.value - level).abs() > 0.015 || level == 0) {
           _audioLevel.value = level.clamp(0.0, 1.0);
         }
@@ -512,6 +524,26 @@ class VoiceCallController extends ChangeNotifier {
     _roomListener = listener;
   }
 
+  /// Puts [card] on the stage. A later card with the same id replaces it.
+  void addCard(VoiceCard card) => _putCard(card);
+
+  void _putCard(VoiceCard card) {
+    _cardList.removeWhere((VoiceCard c) => c.id == card.id);
+    // A finished picture replaces the generating placeholder of the same kind.
+    if (card.kind == 'image' && card.text('url') != null) {
+      _cardList.removeWhere(
+        (VoiceCard c) =>
+            c.id == 'generating-image' && c.data['generating'] == true,
+      );
+    }
+    _cardList.add(card);
+    if (_cardList.length > _maxCards) {
+      _cardList.removeRange(0, _cardList.length - _maxCards);
+    }
+    _cards = List<VoiceCard>.unmodifiable(_cardList);
+    notifyListeners();
+  }
+
   /// `ui.card` and `ui.tool` from the worker (its UI channel).
   void _onData(int gen, lk.DataReceivedEvent event) {
     if (gen != _generation) return;
@@ -535,13 +567,7 @@ class VoiceCallController extends ChangeNotifier {
       case VoiceProtocol.cardTopic:
         final VoiceCard? card = VoiceProtocol.parseCard(event.data);
         if (card == null) return;
-        _cardList.removeWhere((VoiceCard c) => c.id == card.id);
-        _cardList.add(card);
-        if (_cardList.length > _maxCards) {
-          _cardList.removeRange(0, _cardList.length - _maxCards);
-        }
-        _cards = List<VoiceCard>.unmodifiable(_cardList);
-        notifyListeners();
+        _putCard(card);
       case VoiceProtocol.toolTopic:
         final VoiceToolActivity? update = VoiceProtocol.parseToolActivity(
           event.data,
@@ -647,7 +673,13 @@ class VoiceCallController extends ChangeNotifier {
         identity != _agentIdentity) {
       return;
     }
-    final String role = identity == room.localParticipant?.identity
+    // The S2S engine relays user transcripts from the agent identity; the
+    // explicit role attribute wins over the sender-based default.
+    final String role =
+        info.attributes[VoiceTranscriptionAttributes.role] ==
+            VoiceTranscriptionAttributes.roleUser
+        ? VoiceTurn.roleUser
+        : identity == room.localParticipant?.identity
         ? VoiceTurn.roleUser
         : VoiceTurn.roleAssistant;
     final String streamId = info.id;
@@ -965,6 +997,50 @@ class VoiceCallController extends ChangeNotifier {
     }
   }
 
+  /// The saved engine preference, loaded like the voice default: local first
+  /// so the call starts without a settings round-trip, then the cloud value
+  /// refreshes the next call.
+  Future<void> _loadEnginePreference(String userId, int gen) async {
+    try {
+      final saved = await VoicePreferences.loadEngineLocal(userId);
+      if (gen != _generation) return;
+      _defaultEngine = VoiceProtocol.parseEngine(saved);
+      notifyListeners();
+      final preferenceRevision = _preferenceRevision;
+      unawaited(() async {
+        try {
+          final engine = await VoicePreferences.loadEngineSynced(userId);
+          if (_preferencesOwner != userId ||
+              preferenceRevision != _preferenceRevision) {
+            return;
+          }
+          final parsed = VoiceProtocol.parseEngine(engine);
+          if (parsed == _defaultEngine) return;
+          _defaultEngine = parsed;
+          notifyListeners();
+          await VoicePreferences.saveEngineLocal(userId, parsed.wireName);
+        } catch (_) {
+          // An unavailable settings sync must not interrupt a voice call.
+        }
+      }());
+    } catch (_) {
+      if (gen == _generation) _defaultEngine = VoiceCallEngine.pipeline;
+    }
+  }
+
+  Future<void> setDefaultEngine(VoiceCallEngine engine) async {
+    _preferenceRevision++;
+    final owner = await VoiceCallService.callerId();
+    if (isActive && _preferencesOwner != null && _preferencesOwner != owner) {
+      throw StateError('Wait until the call settings have loaded.');
+    }
+    await VoicePreferences.saveEngineLocal(owner, engine.wireName);
+    if (_preferencesOwner != null && _preferencesOwner != owner) return;
+    _defaultEngine = engine;
+    notifyListeners();
+    unawaited(VoicePreferences.saveEngineSynced(owner, engine.wireName));
+  }
+
   Future<void> setDefaultVoice(String voice) async {
     if (!availableVoices.contains(voice)) throw StateError('Unknown voice.');
     _preferenceRevision++;
@@ -1119,8 +1195,7 @@ class VoiceCallController extends ChangeNotifier {
     }
   }
 
-  /// Publishes a low-bandwidth camera feed for the voice video mode.
-  /// The worker still sends only one frame to its vision model every 2 seconds.
+  /// Publishes the camera. The worker compares a few recent frames, not every one.
   Future<void> setCameraEnabled(bool enabled) async {
     if (_cameraEnabled == enabled) return;
     if (enabled && !kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
@@ -1137,8 +1212,10 @@ class VoiceCallController extends ChangeNotifier {
       await room.localParticipant?.setCameraEnabled(
         enabled,
         cameraCaptureOptions: const lk.CameraCaptureOptions(
-          maxFrameRate: 1,
-          params: lk.VideoParametersPresets.h360_169,
+          // 720p at 15 fps: the preview stays sharp on the phone, and the
+          // worker can compare a few of these frames instead of one soft shot.
+          maxFrameRate: 15,
+          params: lk.VideoParametersPresets.h720_169,
         ),
       );
       _cameraEnabled = enabled;
@@ -1170,29 +1247,31 @@ class VoiceCallController extends ChangeNotifier {
       return;
     }
     final gen = _generation;
-    final previous = speakerOn;
     _changingSpeaker = true;
+    _speakerOn = on;
     notifyListeners();
     try {
+      // Local route only: LiveKit owns the session, Android just follows.
+      // A confirm miss must not roll the UI back or toast an error.
       await lk.AudioManager.instance.setSpeakerOutputPreferred(on);
       if (gen != _generation) return;
-      await _applyNativeRoute(on);
-      if (gen != _generation) return;
-      if (!_audioOutput.isAndroid) _speakerOn = on;
-      await _refreshOutputVolume();
-    } catch (_) {
-      if (gen == _generation) {
-        _speakerOn = previous;
+      try {
+        await _applyNativeRoute(on);
+      } catch (_) {
+        if (gen != _generation) return;
         await _quietly(() async {
           final route = await _audioOutput.readRoute();
           if (gen != _generation) return;
           _outputRoute = route;
-          if (route != null && route != 'unknown') {
-            _speakerOn = route == 'speaker';
-          }
         });
       }
-      throw StateError('Could not switch the audio output.');
+      if (gen != _generation) return;
+      if (!_audioOutput.isAndroid) _speakerOn = on;
+      await _refreshOutputVolume();
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[VoiceCall] speaker switch failed: ${e.runtimeType}');
+      }
     } finally {
       if (gen == _generation) {
         _changingSpeaker = false;

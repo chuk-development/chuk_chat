@@ -1,51 +1,51 @@
-/// The one-line answer to "what does this coworker run on?", as a settings
+/// The one-line answer to "what does this agent run on?", as a settings
 /// row: the lab's logo, the model, the provider and the reasoning level, and
-/// whether that is the coworker's own choice or the app default.
+/// whether that is the agent's own choice or the app default.
 ///
-/// It sits on the coworker profile (phone and desktop) and in the desktop
-/// details pane. A tap opens the coworker's model page, the one place where
-/// the choice is changed ([CoworkerModelPage]).
+/// It sits on the agent profile (phone and desktop) and in the desktop
+/// details pane. A tap opens the agent's model page, the one place where
+/// the choice is changed ([AgentModelPage]).
 library;
 
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import 'package:chuk_chat/pages/coworker_model_page.dart';
+import 'package:chuk_chat/pages/agent_model_page.dart';
 import 'package:chuk_chat/services/agents/agent_control_source.dart';
-import 'package:chuk_chat/services/agents/coworker_model.dart';
+import 'package:chuk_chat/services/agents/agent_model.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/services/chat_model_selection_service.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 import 'package:chuk_chat/widgets/icons/model_logo.dart';
 
-class CoworkerModelTile extends StatefulWidget {
-  const CoworkerModelTile({
+class AgentModelTile extends StatefulWidget {
+  const AgentModelTile({
     super.key,
     required this.chatId,
-    this.coworkerName,
+    this.agentName,
     this.controlSource,
     this.onTap,
   });
 
-  /// The coworker's thread key, which its model is stored under.
+  /// The agent's thread key, which its model is stored under.
   final String chatId;
-  final String? coworkerName;
+  final String? agentName;
 
   /// Handed to the model page, so it can show what the last run used.
   final AgentControlSource? controlSource;
 
-  /// Replaces the default tap (opening [CoworkerModelPage]).
+  /// Replaces the default tap (opening [AgentModelPage]).
   final VoidCallback? onTap;
 
   @override
-  State<CoworkerModelTile> createState() => _CoworkerModelTileState();
+  State<AgentModelTile> createState() => _AgentModelTileState();
 }
 
-class _CoworkerModelTileState extends State<CoworkerModelTile> {
-  CoworkerModelState? _state;
-  List<CoworkerCatalogueModel> _models = const <CoworkerCatalogueModel>[];
+class _AgentModelTileState extends State<AgentModelTile> {
+  AgentModelState? _state;
+  List<AgentCatalogueModel> _models = const <AgentCatalogueModel>[];
   Timer? _watchdog;
 
   @override
@@ -56,7 +56,7 @@ class _CoworkerModelTileState extends State<CoworkerModelTile> {
   }
 
   @override
-  void didUpdateWidget(CoworkerModelTile oldWidget) {
+  void didUpdateWidget(AgentModelTile oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.chatId != widget.chatId) unawaited(_load());
   }
@@ -75,17 +75,17 @@ class _CoworkerModelTileState extends State<CoworkerModelTile> {
     // A read that fails falls back (resolveOrFallback); one that hangs is
     // caught by the watchdog, so the row never says "Loading…" for good.
     _watchdog?.cancel();
-    _watchdog = Timer(CoworkerModel.loadTimeout, () {
+    _watchdog = Timer(AgentModel.loadTimeout, () {
       if (!mounted || _state != null) return;
-      setState(() => _state = CoworkerModel.fallbackState());
+      setState(() => _state = AgentModel.fallbackState());
     });
-    final state = await CoworkerModel.resolveOrFallback(chatId);
+    final state = await AgentModel.resolveOrFallback(chatId);
     if (!mounted || widget.chatId != chatId) return;
     _watchdog?.cancel();
     setState(() => _state = state);
     // The catalogue only gives the pretty names; the row does not wait on it.
     try {
-      final models = await CoworkerModel.catalogue();
+      final models = await AgentModel.catalogue();
       if (!mounted || widget.chatId != chatId) return;
       setState(() => _models = models);
     } catch (_) {
@@ -99,10 +99,10 @@ class _CoworkerModelTileState extends State<CoworkerModelTile> {
       return;
     }
     unawaited(
-      CoworkerModelPage.open(
+      AgentModelPage.open(
         context,
         chatId: widget.chatId,
-        coworkerName: widget.coworkerName,
+        agentName: widget.agentName,
         controlSource: widget.controlSource,
       ),
     );
@@ -120,9 +120,9 @@ class _CoworkerModelTileState extends State<CoworkerModelTile> {
       );
     }
     return ExpressiveRow(
-      leading: CoworkerModelLogoTile(modelId: state.modelId),
+      leading: AgentModelLogoTile(modelId: state.modelId),
       title: modelLabel(state.modelId, models: _models),
-      subtitle: coworkerModelSummary(state, models: _models),
+      subtitle: agentModelSummary(state, models: _models),
       trailing: AppIcon(
         Icons.chevron_right,
         size: 20,
@@ -134,10 +134,10 @@ class _CoworkerModelTileState extends State<CoworkerModelTile> {
 }
 
 /// `Fireworks · Reasoning low`, prefixed with `App default (Fast) · ` while the
-/// coworker has no model of its own.
-String coworkerModelSummary(
-  CoworkerModelState state, {
-  List<CoworkerCatalogueModel> models = const <CoworkerCatalogueModel>[],
+/// agent has no model of its own.
+String agentModelSummary(
+  AgentModelState state, {
+  List<AgentCatalogueModel> models = const <AgentCatalogueModel>[],
 }) {
   final String provider = providerLabel(
     state.providerSlug,
@@ -153,8 +153,8 @@ String coworkerModelSummary(
 
 /// The lab's logo in the settings icon tile; the sparkle when the lab has no
 /// logo, so the row never shows an empty tile.
-class CoworkerModelLogoTile extends StatelessWidget {
-  const CoworkerModelLogoTile({
+class AgentModelLogoTile extends StatelessWidget {
+  const AgentModelLogoTile({
     super.key,
     required this.modelId,
     this.size = 42,

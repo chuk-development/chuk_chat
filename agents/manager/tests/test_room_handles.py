@@ -36,7 +36,7 @@ def test_names_are_slugged_to_mentionable_handles():
 
 
 def test_same_name_same_device_still_gets_a_unique_handle():
-    # A same-account squat: two coworkers, same name AND device. name-device
+    # A same-account squat: two agents, same name AND device. name-device
     # would collide, so a numeric suffix breaks the tie rather than producing a
     # room GroupRoom would reject.
     members = assign_room_handles([

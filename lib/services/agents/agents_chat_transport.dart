@@ -642,7 +642,7 @@ class AgentsChatTransport {
       chain = chain.then((_) async {
         try {
           final route = await selectedRoute;
-          // The coworker's own reasoning level rides with its own model; a
+          // The agent's own reasoning level rides with its own model; a
           // chat with none keeps the level the composer sent.
           final String? effort = route.reasoningEffort ?? reasoningEffort;
           // Recorded BEFORE the frame goes out, never after. A fire-and-forget

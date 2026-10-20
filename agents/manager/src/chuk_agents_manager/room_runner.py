@@ -3,7 +3,7 @@
 :class:`~chuk_agents_manager.group_room.RoomSession` owns *who speaks and when*; this
 owns *what a speaker sees and where its reply comes from*. It builds the shared
 context each member reads (the user's message plus every reply so far, so a
-coworker can answer what another just said), calls a **turn function** to produce
+agent can answer what another just said), calls a **turn function** to produce
 that member's reply, feeds it back into the session, and checks a stop seam
 between turns so a room can be cancelled without waiting out the whole exchange.
 

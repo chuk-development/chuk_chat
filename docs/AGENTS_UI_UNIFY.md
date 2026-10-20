@@ -80,7 +80,7 @@ edit notice (3886), expand glyph in the field (3983-3999) instead of chuk's
 button (4065-4083), disclaimer (3688/3738), `agentsMenus` menus (3809,
 1699-1700), send glyph colour (`mobile_chat_widgets.dart:82`), and
 `AgentTheme` (`mobile_chat_screen.dart:159`) which reseeds the accent per
-coworker. UX: no stop button (3849), reply preview (3896), queue count (3903).
+agent. UX: no stop button (3849), reply preview (3896), queue count (3903).
 
 Desktop: a second composer `_buildAgentsComposer`
 (`chat_ui_desktop.dart:2608-2855`, picked at 2089-2112) instead of chuk's
@@ -156,7 +156,7 @@ look settings not synced; wordmark as text instead of SVG.
 
 All four streams landed; the Agents build now draws chuk's components.
 
-* A: one composer (`_buildSearchBar`) on phone and desktop; no per-coworker
+* A: one composer (`_buildSearchBar`) on phone and desktop; no per-agent
   accent (`AgentTheme` deleted); chuk menus; day divider, runs, stamp and
   `MessageHoverActions` gone. The dense menu path and `MenuDensity` are
   deleted.
@@ -239,15 +239,15 @@ This replaces the "Left out in Agents" line under Result, C.
 
 ## Model, provider and reasoning (2026-10-05, `chuk_chat-2wuc`)
 
-One record per coworker, one page to change it, one app default.
+One record per agent, one page to change it, one app default.
 
 | What | Where it is set | Where it is stored |
 |---|---|---|
-| A coworker's own model, provider, reasoning level | `CoworkerModelPage` (`lib/pages/coworker_model_page.dart`), reached from the profile ("Model" row on phone and desktop), the desktop details pane, the phone "Host & activity" page and the composer's "More models". The composer of that coworker's thread writes the same record: a model pick or a reasoning level becomes the coworker's own; Fast / Thinking drop it again. | `ChatModelSelectionService`, keyed by the thread key, on this device. `CoworkerModel` (`lib/services/agents/coworker_model.dart`) resolves own-or-default. |
-| The app default (new chats, and every coworker with no own model) | Settings → Model Selection (`ModelSelectorPage` unscoped): the Fast / Thinking cards. | `ChatModeService`, account-wide mode. |
+| An agent's own model, provider, reasoning level | `AgentModelPage` (`lib/pages/agent_model_page.dart`), reached from the profile ("Model" row on phone and desktop), the desktop details pane, the phone "Host & activity" page and the composer's "More models". The composer of that agent's thread writes the same record: a model pick or a reasoning level becomes the agent's own; Fast / Thinking drop it again. | `ChatModelSelectionService`, keyed by the thread key, on this device. `AgentModel` (`lib/services/agents/agent_model.dart`) resolves own-or-default. |
+| The app default (new chats, and every agent with no own model) | Settings → Model Selection (`ModelSelectorPage` unscoped): the Fast / Thinking cards. | `ChatModeService`, account-wide mode. |
 | What the last run really used | Read only: "Last run" on the model page and in the details pane. | The host's status frame (`AgentModelChoice`). |
 
 The relay send resolves the own record again at send time, reasoning level
 included (`AgentsChatTransport`), so the composer cannot send something the
-profile does not show. `ModelSelectorPage(chatId: …)` is the coworker page.
-The record is per device: the host stores no coworker model.
+profile does not show. `ModelSelectorPage(chatId: …)` is the agent page.
+The record is per device: the host stores no agent model.

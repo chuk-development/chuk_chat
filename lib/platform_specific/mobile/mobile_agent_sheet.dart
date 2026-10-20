@@ -7,11 +7,11 @@
 /// app's one menu surface — `MenuActionRow` on `MenuTileGroup` — so this sheet
 /// reads like every dropdown and every long-press menu.
 ///
-/// The first run is the coworker's blob face, its name and its role — the same
+/// The first run is the agent's blob face, its name and its role — the same
 /// identity the inbox row and the chat pill show.
 ///
 /// Every callback is optional: a null one hides its row, so the sheet only
-/// lists what the shell can actually do for the selected coworker.
+/// lists what the shell can actually do for the selected agent.
 library;
 
 import 'dart:async';
@@ -43,7 +43,7 @@ class MobileAgentSheet extends StatelessWidget {
 
   final AgentsAgent agent;
 
-  /// Opens the coworker's profile page.
+  /// Opens the agent's profile page.
   final VoidCallback? onProfile;
   final VoidCallback? onControls;
   final VoidCallback? onRename;
@@ -52,7 +52,7 @@ class MobileAgentSheet extends StatelessWidget {
   final VoidCallback? onSettings;
   final VoidCallback? onSignOut;
 
-  /// Starts a voice call with the coworker. Null starts it directly (the
+  /// Starts a voice call with the agent. Null starts it directly (the
   /// sheet mounted on its own); [show] passes one that closes the sheet
   /// first. Only read in a build that offers calls.
   final VoidCallback? onVoiceCall;
@@ -95,7 +95,7 @@ class MobileAgentSheet extends StatelessWidget {
     return showMenuSheet<void>(context, groups: sheet.menuGroups(context));
   }
 
-  /// The runs of the menu: identity, the coworker's own actions, the parked
+  /// The runs of the menu: identity, the agent's own actions, the parked
   /// call, the app's settings, and sign out on its own.
   List<List<Widget>> menuGroups(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
@@ -166,7 +166,7 @@ class MobileAgentSheet extends StatelessWidget {
             tone: scheme.onSurface.withValues(alpha: 0.5),
             onTap: () => pillToast(
               context,
-              'Voice calls with a coworker are not available yet',
+              'Voice calls with an agent are not available yet',
               icon: Icons.call_end_rounded,
             ),
           ),

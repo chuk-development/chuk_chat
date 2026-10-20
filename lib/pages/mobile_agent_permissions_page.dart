@@ -1,5 +1,5 @@
-/// A coworker's permissions on a phone: the same sections the desktop shows
-/// on the coworker's profile and in its details pane, on one settings page.
+/// An agent's permissions on a phone: the same sections the desktop shows
+/// on the agent's profile and in its details pane, on one settings page.
 ///
 /// * [AgentPermissionsSection]: the sandbox switches. It draws the per-action
 ///   approvals ([AgentApprovalsSection]) under them for a host that names
@@ -7,8 +7,8 @@
 /// * [WeeklyBudgetField]: only for a host that names `cost_budget`
 ///   (docs/WIRE_CONTRACT.md, "The budget setting").
 ///
-/// Telegram is not here: the phone reaches it through Host & activity
-/// ([AgentControlPanel]), which shows it for a host that runs channels.
+/// This page owns the permissions and the weekly budget. No other agent page
+/// shows them (bead chuk_chat-8hz4).
 library;
 
 import 'dart:async';
@@ -31,7 +31,7 @@ class MobileAgentPermissionsPage extends StatefulWidget {
     this.service,
   });
 
-  /// The coworker, which is also its thread's `session_key`.
+  /// The agent, which is also its thread's `session_key`.
   final String agentId;
 
   /// Defaults to [AgentsPermissionsService.instance].
@@ -55,7 +55,7 @@ class MobileAgentPermissionsPage extends StatefulWidget {
 
 class _MobileAgentPermissionsPageState
     extends State<MobileAgentPermissionsPage> {
-  /// Coworkers whose budget this page already asked for: a host that never
+  /// Agents whose budget this page already asked for: a host that never
   /// answers is not asked again on every rebuild.
   final Set<String> _budgetAsked = <String>{};
 
@@ -66,7 +66,7 @@ class _MobileAgentPermissionsPageState
       AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));
 
   /// The same ask the desktop details pane makes: once the host keeps
-  /// budgets and has not said this coworker's yet.
+  /// budgets and has not said this agent's yet.
   void _askBudget() {
     final AgentsPermissionsService service = _service;
     if (!service.budgetSupported) return;

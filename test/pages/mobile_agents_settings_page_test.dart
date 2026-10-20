@@ -4,15 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chuk_chat/models/agents_agent.dart';
-import 'package:chuk_chat/pages/coworker_model_page.dart';
+import 'package:chuk_chat/pages/agent_model_page.dart';
 import 'package:chuk_chat/pages/mobile_agents_settings_page.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
-import 'package:chuk_chat/services/agents/coworker_model.dart';
+import 'package:chuk_chat/services/agents/agent_model.dart';
 import 'package:chuk_chat/services/chat_model_selection_service.dart';
 import 'package:chuk_chat/services/model_capabilities_service.dart';
 import 'package:chuk_chat/services/settings/mobile_chat_preferences.dart';
-import 'package:chuk_chat/widgets/coworker_model_tile.dart';
+import 'package:chuk_chat/widgets/agent_model_tile.dart';
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 
@@ -143,15 +143,17 @@ void main() {
       await smallPhone(tester, page());
       expect(find.text('Shared files'), findsNothing);
       expect(find.text('Open screen'), findsNothing);
-      expect(find.text('Remove coworker'), findsNothing);
+      expect(find.text('Remove agent'), findsNothing);
+      // In page order: what the agent is, what it may do, its computer,
+      // the app.
       for (final entry in {
         'Profile & preferences': 'profile',
-        'Host & activity': 'host',
         'Model': 'model',
-        'Schedules & automations': 'automations',
         'Skills': 'skills',
         'Connected apps': 'connectors',
         'API keys': 'secrets',
+        'Schedules & automations': 'automations',
+        'Host & activity': 'host',
         'Control rooms': 'rooms',
         'Account & app settings': 'settings',
       }.entries) {
@@ -171,15 +173,15 @@ void main() {
       await smallPhone(tester, pushed(optional: true));
       await tester.tap(find.text('Open settings'));
       await tester.pumpAndSettle();
-      await reveal(tester, 'Remove coworker');
-      await tester.tap(find.text('Remove coworker'));
+      await reveal(tester, 'Remove agent');
+      await tester.tap(find.text('Remove agent'));
       await tester.pumpAndSettle();
       expect(find.text('Remove Alex?'), findsOneWidget);
       expect(taps['delete'], isNull);
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
       expect(taps['delete'], isNull);
-      await tester.tap(find.text('Remove coworker'));
+      await tester.tap(find.text('Remove agent'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Remove'));
       await tester.pumpAndSettle();
@@ -193,13 +195,13 @@ void main() {
     'live roster names refresh and removed agents get a useful state',
     (tester) async {
       await smallPhone(tester, page());
-      source.renameAgent('alex', 'Renamed coworker');
+      source.renameAgent('alex', 'Renamed agent');
       await tester.pumpAndSettle();
-      expect(find.text('Renamed coworker'), findsOneWidget);
+      expect(find.text('Renamed agent'), findsOneWidget);
       source.removeAgent('alex');
       await tester.pumpAndSettle();
       expect(
-        find.text('This coworker is no longer in your list.'),
+        find.text('This agent is no longer in your list.'),
         findsOneWidget,
       );
       expect(find.byType(Switch), findsNothing);
@@ -207,30 +209,74 @@ void main() {
   );
 
   testWidgets(
-    'reference quick actions call real destinations and Chat returns',
+    'every destination is one row, in the fixed order, and Chat returns',
     (tester) async {
       await smallPhone(tester, pushed(optional: true));
       await tester.tap(find.text('Open settings'));
       await tester.pumpAndSettle();
+      // No quick-action strip that repeats the rows below it.
+      for (final label in ['Files', 'Schedules']) {
+        expect(find.byTooltip(label), findsNothing);
+      }
+      // No messenger channel.
+      expect(find.textContaining('Telegram'), findsNothing);
+      final List<String> order = <String>[
+        'settings_Profile & preferences',
+        'settings_Model',
+        'settings_Permissions',
+        'settings_Skills',
+        'settings_Connected apps',
+        'settings_Mail',
+        'settings_Host & activity',
+        'settings_Open screen',
+        'settings_Documents & artifacts',
+        'settings_Hide',
+        'settings_Remove',
+      ];
+      double last = double.negativeInfinity;
+      for (final String key in order) {
+        final Finder row = find.byKey(ValueKey(key));
+        expect(row, findsOneWidget, reason: key);
+        final double top = tester.getTopLeft(row).dy;
+        expect(top, greaterThan(last), reason: key);
+        last = top;
+      }
       for (final entry in {
-        'Model': 'model',
-        'Files': 'files',
-        'Schedules': 'automations',
-        'Skills': 'skills',
+        'settings_Open screen': 'browser',
+        'settings_Documents & artifacts': 'files',
       }.entries) {
-        await tester.tap(find.byTooltip(entry.key));
+        final row = find.byKey(ValueKey(entry.key));
+        await revealControl(tester, row);
+        await tester.tap(row);
         await tester.pumpAndSettle();
         expect(taps[entry.value], 1);
       }
-      await tester.tap(find.byTooltip('Edit coworker'));
+      await tester.tap(find.byTooltip('Edit agent'));
       await tester.pumpAndSettle();
       expect(taps['profile'], 1);
-      await tester.tap(find.byTooltip('Chat'));
+      await tester.drag(find.byType(SettingsListView), const Offset(0, 4000));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('settings_Chat')));
       await tester.pumpAndSettle();
       expect(taps['chat'], 1);
       expect(find.text('Open settings'), findsOneWidget);
     },
   );
+
+  testWidgets('Hide takes the agent off the list and closes the page', (
+    tester,
+  ) async {
+    await smallPhone(tester, pushed());
+    await tester.tap(find.text('Open settings'));
+    await tester.pumpAndSettle();
+    final row = find.byKey(const ValueKey('settings_Hide'));
+    await revealControl(tester, row);
+    await tester.tap(row);
+    await tester.pumpAndSettle();
+    expect(source.visibleAgents.any((a) => a.id == 'alex'), isFalse);
+    expect(find.text('Open settings'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+  });
 
   testWidgets('the settings header keeps back and edit reachable while the '
       'contact scrolls under it', (tester) async {
@@ -242,8 +288,8 @@ void main() {
     await tester.drag(find.byType(SettingsListView), const Offset(0, -420));
     await tester.pumpAndSettle();
     expect(find.byTooltip('Back').hitTestable(), findsOneWidget);
-    expect(find.byTooltip('Edit coworker').hitTestable(), findsOneWidget);
-    await tester.tap(find.byTooltip('Edit coworker'));
+    expect(find.byTooltip('Edit agent').hitTestable(), findsOneWidget);
+    await tester.tap(find.byTooltip('Edit agent'));
     await tester.pumpAndSettle();
     expect(taps['profile'], 1);
   });
@@ -262,29 +308,27 @@ void main() {
       ),
     );
     expect(tester.takeException(), isNull);
-    expect(find.byTooltip('Edit coworker').hitTestable(), findsOneWidget);
-    for (final label in ['Model', 'Files', 'Schedules', 'Skills']) {
-      expect(
-        tester.getSize(find.byTooltip(label)).width,
-        greaterThanOrEqualTo(48),
-      );
-    }
-    await reveal(tester, 'Remove coworker');
-    expect(find.text('Remove coworker').hitTestable(), findsOneWidget);
+    expect(find.byTooltip('Edit agent').hitTestable(), findsOneWidget);
+    expect(
+      tester.getSize(find.byKey(const ValueKey('settings_Chat'))).height,
+      greaterThanOrEqualTo(48),
+    );
+    await reveal(tester, 'Remove agent');
+    expect(find.text('Remove agent').hitTestable(), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  group('a coworker with a thread', () {
+  group('an agent with a thread', () {
     late Directory kv;
     setUp(() async {
       ChatModelSelectionService.instance.clearMemoryForTesting();
-      CoworkerModel.debugCatalogue = () async =>
-          const <CoworkerCatalogueModel>[
-            CoworkerCatalogueModel(
+      AgentModel.debugCatalogue = () async =>
+          const <AgentCatalogueModel>[
+            AgentCatalogueModel(
               id: 'z-ai/glm-5.3-flash',
               name: 'Z.ai: GLM 5.3 Flash',
-              providers: <CoworkerProvider>[
-                CoworkerProvider(
+              providers: <AgentProvider>[
+                AgentProvider(
                   slug: 'fireworks/serverless',
                   name: 'Fireworks',
                 ),
@@ -295,16 +339,16 @@ void main() {
       await ModelCapabilitiesService.initialize();
     });
     tearDown(() async {
-      CoworkerModel.debugCatalogue = null;
+      AgentModel.debugCatalogue = null;
       await disposeTempKvCache(kv);
     });
 
     testWidgets('the model row says it follows the app default and opens the '
-        'coworker s model page, not the shell action', (tester) async {
+        'agent s model page, not the shell action', (tester) async {
       await smallPhone(tester, page(chatId: 'host:alex'));
       final Finder row = find.byKey(const ValueKey('settings_Model'));
       expect(row, findsOneWidget);
-      expect(tester.widget(row), isA<CoworkerModelTile>());
+      expect(tester.widget(row), isA<AgentModelTile>());
       expect(
         find.descendant(
           of: row,
@@ -312,15 +356,15 @@ void main() {
         ),
         findsOneWidget,
       );
-      await tester.tap(find.byTooltip('Model'));
+      await tester.tap(row);
       await tester.pumpAndSettle();
-      expect(find.byType(CoworkerModelPage), findsOneWidget);
+      expect(find.byType(AgentModelPage), findsOneWidget);
       expect(taps['model'], isNull);
     });
   });
 
   // UI audit 2026-10-05, item 6: the page was English inside a German app.
-  testWidgets('German: rows, headers and quick actions are localised; the '
+  testWidgets('German: rows and headers are localised; the '
       'row keys stay the English ids', (tester) async {
     tester.view.physicalSize = const Size(360, 1600);
     tester.view.devicePixelRatio = 1;
@@ -336,13 +380,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Profil & Einstellungen'), findsOneWidget);
     expect(find.text('Host & Aktivität'), findsOneWidget);
-    expect(find.text('Geteilte Dateien'), findsOneWidget);
-    expect(find.text('Pläne'), findsOneWidget);
+    expect(find.text('Sein Rechner'), findsOneWidget);
+    expect(find.text('Was er darf'), findsOneWidget);
     expect(find.text('Profile & preferences'), findsNothing);
     expect(
       find.byKey(const ValueKey('settings_Profile & preferences')),
       findsOneWidget,
     );
-    expect(find.byTooltip('Coworker bearbeiten'), findsOneWidget);
+    expect(find.byTooltip('Agent bearbeiten'), findsOneWidget);
   });
 }

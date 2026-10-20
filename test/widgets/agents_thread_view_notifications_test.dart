@@ -142,17 +142,24 @@ void main() {
     return controller;
   }
 
-  testWidgets('a live done while backgrounded shows one generic toast',
+  testWidgets('a live done while backgrounded shows one toast with a preview',
       (tester) async {
     final controller = await pumpPaired(tester);
     AgentsNotifications.instance.lifecycleOverride = AppLifecycleState.paused;
 
-    controller.emit(const AgentsRelayDone(reason: 'finished', runId: 'run-1'));
+    controller.emit(const AgentsRelayDone(
+      reason: 'finished',
+      runId: 'run-1',
+      finalAnswer: 'Die Recherche ist fertig: drei Quellen.',
+    ));
     await tester.pumpAndSettle();
 
     expect(backend.shown, hasLength(1));
-    expect(backend.shown.single['title'], 'Chief of Staff');
-    expect(backend.shown.single['body'], 'Your answer is ready.');
+    expect(backend.shown.single['title'], 'Chief of Staff is done');
+    expect(
+      backend.shown.single['body'],
+      'Die Recherche ist fertig: drei Quellen.',
+    );
     expect(backend.shown.single['tag'], 'thread-1');
     expect(controller.ackedRunIds, <String>['run-1'], reason: 'ack still sent');
   });

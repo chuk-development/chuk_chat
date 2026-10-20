@@ -1,5 +1,5 @@
 /// The Material 3 Expressive shape family: the scalloped "cookie / clover /
-/// flower" blobs a coworker's face is cut out of.
+/// flower" blobs an agent's face is cut out of.
 ///
 /// The shape is a [ShapeBorder], so it clips, it morphs with
 /// [ShapeBorder.lerp] and it takes an ink splash like any Material shape. The
@@ -7,7 +7,7 @@
 /// t)`, which gives [CookieShape.lobes] soft bumps around the circle.
 ///
 /// The silhouette is picked from an identity key (the agent id), never from a
-/// list position, so one coworker keeps one silhouette on every screen: the
+/// list position, so one agent keeps one silhouette on every screen: the
 /// inbox row, the chat header, the profile page and the desktop roster.
 library;
 
@@ -85,7 +85,7 @@ ShapeBorder expressiveShapeFor(String key) =>
 /// on a 52 px avatar is one too. A scallop below about 0.13 also disappears at
 /// list size. The set is now: cookie, clover, squircle, flower, diamond, gem,
 /// triangle, burst. Eight, not six: with six silhouettes a roster of three
-/// coworkers already showed two of them the same shape.
+/// agents already showed two of them the same shape.
 ShapeBorder expressiveShape(int i) {
   switch (i % 8) {
     case 0:

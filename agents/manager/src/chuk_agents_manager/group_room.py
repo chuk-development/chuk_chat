@@ -1,13 +1,13 @@
-"""Group rooms — several coworkers in one conversation (§16.1, §20).
+"""Group rooms — several agents in one conversation (§16.1, §20).
 
 A room is a small, capped, turn-based conversation between the user and up to a
-handful of coworkers. The shape and the numbers are taken from Hermes Bot Mode,
+handful of agents. The shape and the numbers are taken from Hermes Bot Mode,
 which has already load-tested them in the wild: **at most three serial rounds
 per user message**, and a message ceiling per send. The caps are a cost control
 as much as a UX one — a room with no ceiling is a credit fire — so they are
 enforced here, in one pure module, rather than hoped for at each call site.
 
-Membership itself is **not** capped: a room takes as many coworkers as the user
+Membership itself is **not** capped: a room takes as many agents as the user
 puts in it (a ceiling is still available — ``RoomCaps(max_members=6)`` — but it
 is opt-in). The round cap is the real brake, so the message ceiling follows the
 room: left unset it is derived as ``members x max_rounds``, which is exactly
@@ -110,7 +110,7 @@ class RoomError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class RoomMember:
-    """One coworker in a room: the agent id and the handle it is mentioned by."""
+    """One agent in a room: the agent id and the handle it is mentioned by."""
 
     agent_id: str
     handle: str
@@ -125,7 +125,7 @@ class GroupRoom:
     name: str
     members: tuple[RoomMember, ...] = ()
     caps: RoomCaps = field(default_factory=RoomCaps)
-    #: Room policy (not a cap): may a coworker's own reply pull another coworker
+    #: Room policy (not a cap): may an agent's own reply pull another agent
     #: in? ``True`` is today's behaviour — an agent's `@mention` seeds the next
     #: round. ``False`` makes a room strictly user-driven: the user still
     #: addresses whom they like, agents only answer, never summon.
@@ -203,8 +203,8 @@ def parse_mentions(text: str, known_handles) -> list[str]:
 
 @dataclass(frozen=True, slots=True)
 class AgentIdentity:
-    """A coworker as the roster knows it, before it becomes a room member: its
-    id, its display name, and which device (host) it runs on. Two coworkers on
+    """An agent as the roster knows it, before it becomes a room member: its
+    id, its display name, and which device (host) it runs on. Two agents on
     two machines can share a name — that is what handle disambiguation resolves.
     """
 
@@ -224,10 +224,10 @@ def _slug(value: str) -> str:
 
 
 def assign_room_handles(agents) -> list["RoomMember"]:
-    """Turn coworkers into room members with **unique** mention handles (§16.1).
+    """Turn agents into room members with **unique** mention handles (§16.1).
 
-    A handle is the coworker's name when that name is unique in the set, and
-    ``name-device`` when two coworkers share a name across machines — the exact
+    A handle is the agent's name when that name is unique in the set, and
+    ``name-device`` when two agents share a name across machines — the exact
     cross-machine form ``parse_mentions`` already understands. If even
     ``name-device`` still collides (the same name on the same device — a
     same-account squat), a numeric suffix breaks the tie, because

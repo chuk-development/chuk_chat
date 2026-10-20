@@ -1,8 +1,8 @@
-"""Coworker templates: an ``agent_create`` with a ``template`` seeds soul.md.
+"""Agent templates: an ``agent_create`` with a ``template`` seeds soul.md.
 
 The app sends the template's persona with the create frame
-(docs/WIRE_CONTRACT.md, "Coworker templates"). The host writes it into the new
-coworker's own ``memory/soul.md`` — never into its own agent's, never over a
+(docs/WIRE_CONTRACT.md, "Agent templates"). The host writes it into the new
+agent's own ``memory/soul.md`` — never into its own agent's, never over a
 soul.md somebody already changed.
 """
 
@@ -89,7 +89,7 @@ def test_seed_never_overwrites_a_changed_soul(tmp_path: Path):
 
 
 def test_runtime_reads_the_seeded_persona(tmp_path: Path):
-    """The point of the file: the coworker's prompt snapshot carries it."""
+    """The point of the file: the agent's prompt snapshot carries it."""
     from chuk_agents_runtime.memory import MemoryStore
 
     seed_persona(tmp_path, PERSONA, template_id="research")

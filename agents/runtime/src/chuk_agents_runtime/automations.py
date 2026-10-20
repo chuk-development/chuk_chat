@@ -631,7 +631,7 @@ WATCH_MAIL_SCHEMA = {
         "whose subject contains `subject` (case-insensitive). The task gets "
         "the mail's sender, subject and id as payload; read it with "
         "mail_read. A trusted mail that matches goes to this automation "
-        "instead of the coworker's general mail run."
+        "instead of the agent's general mail run."
     ),
     "properties": {
         "from": {"type": "string", "description": "Part of the sender address or name."},

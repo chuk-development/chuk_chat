@@ -1,4 +1,4 @@
-/// The display profile of a coworker: its picture, its accent colour, its role
+/// The display profile of an agent: its picture, its accent colour, its role
 /// line and its standing brief, as the user set them in this app.
 ///
 /// ## Why this is a store of its own
@@ -11,7 +11,7 @@
 /// this store is where they live — one JSON blob in `SharedPreferences`, keyed
 /// by agent id.
 ///
-/// So: editing a coworker's NAME goes through the roster and reaches the host;
+/// So: editing an agent's NAME goes through the roster and reaches the host;
 /// everything in here stays on this device until a frame exists for it. The
 /// profile page says as much next to the fields it writes.
 library;
@@ -29,10 +29,10 @@ import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:chuk_chat/utils/path_provider_stub.dart'
     if (dart.library.io) 'package:path_provider/path_provider.dart';
 
-/// One coworker's display profile. Every field is optional: an agent with no
+/// One agent's display profile. Every field is optional: an agent with no
 /// entry renders exactly as it did before this store existed.
-/// The silhouette a coworker's face is cut from. `expressive` is the automatic
-/// one: it derives a shape from the agent id, which is what a coworker gets
+/// The silhouette an agent's face is cut from. `expressive` is the automatic
+/// one: it derives a shape from the agent id, which is what an agent gets
 /// until the user picks. The rest are the shapes of the expressive family,
 /// named so the user can choose one on purpose.
 ///
@@ -70,14 +70,14 @@ class AgentProfile {
   /// Null means "use the generated blob face".
   final String? photoPath;
 
-  /// ARGB value of the accent the user picked for this coworker. Null means
+  /// ARGB value of the accent the user picked for this agent. Null means
   /// "derive the colour from the agent id", which is what the roster did before.
   final int? colorValue;
 
   /// A short role line ("researcher", "release manager"). Display only.
   final String? role;
 
-  /// The standing job the user wrote for this coworker. Display only until the
+  /// The standing job the user wrote for this agent. Display only until the
   /// host serves a brief.
   final String? brief;
 
@@ -241,7 +241,7 @@ class AgentProfileStore extends ChangeNotifier {
     await _persist();
   }
 
-  /// Forgets everything stored for [agentId] — called when the coworker is
+  /// Forgets everything stored for [agentId] — called when the agent is
   /// deleted, so a later agent with the same id cannot inherit a stale face.
   Future<void> forget(String agentId) async {
     if (_profiles.remove(agentId) == null) return;

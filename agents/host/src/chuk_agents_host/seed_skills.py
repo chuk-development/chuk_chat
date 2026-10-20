@@ -4,12 +4,12 @@ Skills are workspace-relative: the agent loads ``<workspace>/skills/<name>/
 SKILL.md`` (see ``chuk_agents_runtime.skills``). A brand-new agent therefore starts
 with an empty skill set. This module copies the repository's shipped seed
 skills — the top-level ``skills/`` directory — into a new agent workspace the
-first time it is provisioned, so every coworker can, for example, summarize a
+first time it is provisioned, so every agent can, for example, summarize a
 YouTube video out of the box.
 
 The seed tree is **grouped by source**: ``skills/builtin/<name>/SKILL.md`` for
 the skills that document Agents's own machinery, ``skills/workspace/<name>/
-SKILL.md`` for the ones that merely ship in the box and belong to the coworker.
+SKILL.md`` for the ones that merely ship in the box and belong to the agent.
 That grouping is the single source of truth for the ``source`` field of a
 ``skills_list`` row — see :func:`chuk_agents_runtime.skills.iter_seed_skills`, which
 this module walks so the copy and the classification can never disagree. The

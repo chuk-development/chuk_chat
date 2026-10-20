@@ -27,6 +27,9 @@ class _FakeRelayServer implements RelaySocket {
 
   final bool authOk;
 
+  /// False plays a socket whose far end is gone: a `ping` gets no `pong`.
+  bool answerPing = true;
+
   /// What the relay answers a `cowork_pair_claim` with. Null means the real
   /// success pair: an `executor_status` delta, then `cowork_pair_claimed`.
   final Map<String, dynamic>? claimReply;
@@ -79,6 +82,8 @@ class _FakeRelayServer implements RelaySocket {
           'device_id': hostDeviceId,
           'req_id': frame['req_id'],
         });
+      case 'ping':
+        if (answerPing) _deliver(<String, dynamic>{'type': 'pong'});
       case 'cowork_relay':
         // The host receives a JSON string and decodes it, exactly as it does
         // for a frame off the loopback relay.
@@ -460,6 +465,53 @@ void main() {
       expect(server.sent.map((f) => f['type']), <String>['auth']);
       expect(socket.targetDeviceId, 'host-1');
       await socket.close();
+    });
+
+    group('probe (bead chuk_chat-kl8x)', () {
+      Future<(AgentsCloudRelaySocket, _FakeRelayServer)> dial() async {
+        final server = _FakeRelayServer();
+        final socket = await AgentsCloudRelaySocket.connect(
+          address: AgentsCloudRelayAddress.forHost(
+            base: Uri.parse('wss://api.chuk.chat'),
+            targetDeviceId: 'host-1',
+          ),
+          deviceId: appDeviceId,
+          sessionSource: signedIn,
+          inner: (_) async => server,
+        );
+        return (socket, server);
+      }
+
+      test('a socket the relay still answers is alive', () async {
+        final (socket, server) = await dial();
+        expect(await socket.probe(const Duration(seconds: 1)), isTrue);
+        expect(server.sent.last['type'], 'ping');
+        await socket.close();
+      });
+
+      test(
+        'no answer in time is dead, and the ping never goes upward',
+        () async {
+          final (socket, server) = await dial();
+          server.answerPing = false;
+          final upward = <dynamic>[];
+          final sub = socket.incoming.listen(upward.add);
+          expect(await socket.probe(const Duration(milliseconds: 50)), isFalse);
+          expect(upward, isEmpty);
+          await sub.cancel();
+          await socket.close();
+        },
+      );
+
+      test('a socket whose transport is gone is dead at once', () async {
+        final (socket, server) = await dial();
+        await server.close();
+        await Future<void>.delayed(Duration.zero);
+        final watch = Stopwatch()..start();
+        expect(await socket.probe(const Duration(seconds: 5)), isFalse);
+        expect(watch.elapsed, lessThan(const Duration(seconds: 1)));
+        await socket.close();
+      });
     });
 
     test('a refused sign-in is one plain sentence, not a code', () async {

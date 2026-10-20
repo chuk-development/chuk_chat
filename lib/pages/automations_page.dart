@@ -11,7 +11,7 @@ import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 
-/// Every automation of the host, grouped by the coworker that owns it, with
+/// Every automation of the host, grouped by the agent that owns it, with
 /// Pause / Resume / Cancel. The user manages all of them here; an agent only
 /// ever sees its own through its tools.
 ///
@@ -80,14 +80,14 @@ class _AutomationsPageState extends State<AutomationsPage> {
   }
 
   // ── F2: automations + cost totals ──
-  /// The coworkers a new automation can belong to on the global page: every
+  /// The agents a new automation can belong to on the global page: every
   /// name the host sent, plus every session that already has a row.
-  Map<String, String> _coworkerChoices() {
-    final choices = <String, String>{..._source.coworkerNames};
+  Map<String, String> _agentChoices() {
+    final choices = <String, String>{..._source.agentNames};
     for (final a in _source.all) {
       choices.putIfAbsent(
         a.sessionKey,
-        () => _source.coworkerName(a.sessionKey),
+        () => _source.agentName(a.sessionKey),
       );
     }
     return choices;
@@ -97,8 +97,8 @@ class _AutomationsPageState extends State<AutomationsPage> {
     final saved = await showAutomationEditor(
       context,
       sessionKey: widget.sessionKey,
-      coworkers: widget.sessionKey == null
-          ? _coworkerChoices()
+      agents: widget.sessionKey == null
+          ? _agentChoices()
           : const <String, String>{},
       source: _source,
     );
@@ -173,11 +173,11 @@ class _AutomationsPageState extends State<AutomationsPage> {
               icon: Icons.schedule,
               text: widget.sessionKey != null
                   ? 'Schedules and watchers for ${widget.chatName ?? 'this chat'}. '
-                        'Ask this coworker to schedule a task or watch something. '
+                        'Ask this agent to schedule a task or watch something. '
                         'Automations from other chats are not shown here.'
-                  : 'A schedule starts a task in its coworker\'s thread when '
+                  : 'A schedule starts a task in its agent\'s thread when '
                         'it is due. A watcher is a script that runs in the sandbox '
-                        'and wakes its coworker only when it sees something change. '
+                        'and wakes its agent only when it sees something change. '
                         'Every row below says which of the two it is, and every '
                         'task it starts ends with a notification.',
             ),
@@ -195,7 +195,7 @@ class _AutomationsPageState extends State<AutomationsPage> {
                 padding: const EdgeInsets.symmetric(vertical: 24),
                 child: Text(
                   _source.listed(widget.sessionKey)
-                      ? 'No automations. Ask a coworker to schedule a task '
+                      ? 'No automations. Ask an agent to schedule a task '
                             'or to watch something for you.'
                       : 'Waiting for the host…',
                   textAlign: TextAlign.center,
@@ -205,7 +205,7 @@ class _AutomationsPageState extends State<AutomationsPage> {
                 ),
               ),
             for (final entry in groups.entries) ...[
-              ExpressiveSectionHeader(_source.coworkerName(entry.key)),
+              ExpressiveSectionHeader(_source.agentName(entry.key)),
               ExpressiveGroup(
                 children: [
                   for (final a in entry.value)

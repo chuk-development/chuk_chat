@@ -1,6 +1,6 @@
 // lib/services/skills/skill_proposals_source.dart
 //
-// The app's copy of the skill proposals the coworkers made, per thread
+// The app's copy of the skill proposals the agents made, per thread
 // (docs/WIRE_CONTRACT.md, "Skill proposals"; bead chuk_chat-al2u).
 
 import 'dart:async';

@@ -64,7 +64,7 @@ void main() {
     NotificationRouter.instance.reset();
   });
 
-  test('a toast names the coworker and never carries the answer', () async {
+  test('a toast says the agent is done; no answer, a plain body', () async {
     await LocalNotifications.instance.initialize(backend: backend);
     await LocalNotifications.instance.showAnswerReady(
       sessionKey: 'thread-1',
@@ -73,12 +73,46 @@ void main() {
     );
     expect(backend.shown, hasLength(1));
     final shown = backend.shown.single;
-    expect(shown['title'], 'Chief of Staff');
+    expect(shown['title'], 'Chief of Staff is done');
     expect(shown['body'], 'Your answer is ready.');
     expect(shown['tag'], 'thread-1');
     expect(shown['id'], LocalNotifications.idFor('thread-1'));
     final payload = jsonDecode(shown['payload']! as String) as Map;
     expect(payload, <String, String>{'session_key': 'thread-1', 'run_id': 'run-9'});
+  });
+
+  test('the preview is the answer, cut short and free of markdown', () async {
+    await LocalNotifications.instance.initialize(backend: backend);
+    await LocalNotifications.instance.showAnswerReady(
+      sessionKey: 'thread-1',
+      threadLabel: 'Research',
+      preview: '# Report\n\nSee [the source](https://x.y) and `code`.',
+    );
+    expect(backend.shown.single['body'], 'Report See the source and code.');
+  });
+
+  group('notificationPreview', () {
+    test('drops code blocks and render tags', () {
+      expect(
+        notificationPreview(
+          'Hier:\n```dart\nvoid main() {}\n```\n<chart>{"a":1}</chart> fertig',
+        ),
+        'Hier: fertig',
+      );
+    });
+
+    test('cuts at a word and marks the cut', () {
+      final String long = List<String>.filled(100, 'wort').join(' ');
+      final String out = notificationPreview(long, maxChars: 40);
+      expect(out.length, lessThanOrEqualTo(41));
+      expect(out.endsWith('\u2026'), isTrue);
+      expect(out.contains('wor\u2026'), isFalse, reason: 'no cut mid-word');
+    });
+
+    test('nothing readable is empty', () {
+      expect(notificationPreview('   '), '');
+      expect(notificationPreview('```\nonly code\n```'), '');
+    });
   });
 
   test('id is stable per thread and non-negative', () {
@@ -93,7 +127,7 @@ void main() {
       sessionKey: 't',
       threadLabel: '   ',
     );
-    expect(backend.shown.single['title'], 'Chuk Chat');
+    expect(backend.shown.single['title'], 'Chuk Chat is done');
   });
 
   test('a tap routes the thread and clears the toast', () async {

@@ -1,6 +1,6 @@
 // lib/services/workspace_storage_service.dart
 // MERGE NOTE: the Agents build stubbed this file (empty project list, every
-// mutation a no-op) because its sidebar listed coworkers, not projects.
+// mutation a no-op) because its sidebar listed agents, not projects.
 // Upstream's Supabase-backed workspace store is kept whole.
 import 'dart:async';
 import 'dart:convert';

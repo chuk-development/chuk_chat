@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:chuk_chat/services/storage/chat_origin.dart';
+
 import '../support/icon_finder.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
@@ -15,15 +17,18 @@ import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/widgets/agents_status_panel.dart';
 import 'package:chuk_chat/pages/messenger_shell.dart';
 import 'package:chuk_chat/pages/mobile_agents_settings_page.dart';
+import 'package:chuk_chat/pages/agent_host_activity_page.dart';
 import 'package:chuk_chat/pages/agent_profile_edit_page.dart';
+import 'package:chuk_chat/pages/mobile_agents_settings_page.dart'
+    show AgentSettingsView;
 import 'package:chuk_chat/pages/automations_page.dart';
 import 'package:chuk_chat/widgets/chat_documents_panel.dart';
 import 'package:chuk_chat/models/stored_chat.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/widgets/room_create_sheet.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
-import 'package:chuk_chat/services/agents/coworker_templates.dart';
-import 'package:chuk_chat/widgets/coworker_template_picker.dart';
+import 'package:chuk_chat/services/agents/agent_templates.dart';
+import 'package:chuk_chat/widgets/agent_template_picker.dart';
 import 'package:chuk_chat/widgets/room_list_view.dart';
 import 'package:chuk_chat/services/account_session.dart';
 import 'package:chuk_chat/services/agents/agent_control_source.dart';
@@ -279,7 +284,7 @@ void main() {
   //
   // Preferences are process-wide too, and the roster is cached in them now
   // (`cowork_agent_roster_v1`, bead cowork-91pn): without this reset a shell
-  // would start with the coworkers an earlier test created, which is exactly
+  // would start with the agents an earlier test created, which is exactly
   // the cold start the cache is for — and exactly what a test must not inherit.
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
@@ -399,7 +404,7 @@ void main() {
     (tester) async {
       await pumpShell(tester);
 
-      // chuk's desktop with coworkers in it: the roster is chuk's sidebar,
+      // chuk's desktop with agents in it: the roster is chuk's sidebar,
       // docked from the first frame, with chuk's menu button folding it.
       expect(find.byType(AgentRosterView), findsOneWidget);
       expect(find.byType(AgentsThreadView), findsOneWidget);
@@ -420,7 +425,7 @@ void main() {
     },
   );
 
-  testWidgets("the thread header is the phone's top bar: the coworker on "
+  testWidgets("the thread header is the phone's top bar: the agent on "
       'the left, Documents and Screen on the right, the rest behind "…"', (
     tester,
   ) async {
@@ -429,7 +434,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final Finder header = find.byType(AgentsThreadHeader);
-    // The coworker: face, name and status, at the left of the header.
+    // The agent: face, name and status, at the left of the header.
     final String name = roster.agents.single.name;
     expect(
       find.descendant(of: header, matching: find.byType(AgentChromePill)),
@@ -517,7 +522,7 @@ void main() {
   });
 
   testWidgets(
-    "the coworker's screen unlocks in the header only once it opened one, "
+    "the agent's screen unlocks in the header only once it opened one, "
     'and opens as a full-screen route',
     (tester) async {
       final (controller, _) = await pumpShell(tester);
@@ -563,7 +568,7 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
       expect(find.byType(BrowserViewPage), findsNothing);
 
-      // Finishing the run leaves the screen there: the coworker ends its turn
+      // Finishing the run leaves the screen there: the agent ends its turn
       // with "the browser is open, you can take it over", and that is the
       // moment the user reaches for it (bead cowork-tf1u).
       controller.emit(const AgentsRelayDone());
@@ -607,7 +612,7 @@ void main() {
   testWidgets('a tapped notification selects the thread it names (WS-7)', (
     tester,
   ) async {
-    // Two coworkers; the host's thread is selected on pairing, the other one
+    // Two agents; the host's thread is selected on pairing, the other one
     // is what the toast names.
     final (controller, roster) = await pumpShell(tester);
     controller.pair();
@@ -640,6 +645,38 @@ void main() {
     );
     expect(roster.byId(other.id)!.threads, hasLength(1));
   });
+
+  testWidgets(
+    'a tap that lands before its thread is listed opens it once it is',
+    (tester) async {
+      // Bead chuk_chat-kl8x: a cold start from the toast reaches the router
+      // before the roster has the agent. The tap used to be taken and
+      // dropped; now it waits for the roster.
+      final bool wasAgents = ChatOrigin.agentsEnabled;
+      ChatOrigin.agentsEnabled = true;
+      addTearDown(() => ChatOrigin.agentsEnabled = wasAgents);
+      final (controller, roster) = await pumpShell(tester);
+      controller.pair();
+      await tester.pumpAndSettle();
+      const String key = 'host:late-host';
+
+      NotificationRouter.instance.open(
+        const NotificationTarget(sessionKey: key),
+      );
+      await tester.pumpAndSettle();
+      expect(NotificationRouter.instance.pending.value?.sessionKey, key);
+
+      final late = roster.ensureHostAgent('late-host', label: 'Late host');
+      await tester.pumpAndSettle();
+
+      expect(tester.widget<AgentsThreadView>(threadView).threadKey, key);
+      expect(late.threads.single.key, key);
+      expect(NotificationRouter.instance.pending.value, isNull);
+      // The Agents build arms its own timers; let them run out.
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(minutes: 1));
+    },
+  );
 
   testWidgets('Control Rooms opens in the right pane and closes again', (
     tester,
@@ -733,27 +770,27 @@ void main() {
   });
 
   // ── templates ──
-  testWidgets('New agent opens the template picker; Blank coworker adds the '
-      'coworker, tells the host and opens the thread', (tester) async {
+  testWidgets('New agent opens the template picker; Blank agent adds the '
+      'agent, tells the host and opens the thread', (tester) async {
     final (controller, roster) = await pumpShell(tester);
 
     await sendShortcut(tester, LogicalKeyboardKey.keyN);
-    // First the templates, with the blank coworker on top.
-    expect(find.byType(CoworkerTemplatePicker), findsOneWidget);
+    // First the templates, with the blank agent on top.
+    expect(find.byType(AgentTemplatePicker), findsOneWidget);
     expect(find.byKey(const ValueKey<String>('tpl-blank')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey<String>('tpl-blank')));
     await tester.pumpAndSettle();
 
     final nameField = find.byKey(const ValueKey<String>('tpl-name'));
     expect(nameField, findsOneWidget);
-    // The blank coworker is pre-filled with a suggested adjective-noun name.
+    // The blank agent is pre-filled with a suggested adjective-noun name.
     expect(tester.widget<TextField>(nameField).controller!.text, isNotEmpty);
 
     await tester.enterText(nameField, '  Crypto Desk ');
     await tester.tap(find.byKey(const ValueKey<String>('tpl-create')));
     await tester.pumpAndSettle();
 
-    expect(find.byType(CoworkerTemplatePicker), findsNothing);
+    expect(find.byType(AgentTemplatePicker), findsNothing);
     expect(roster.agents, hasLength(1));
     expect(roster.agents.single.name, 'Crypto Desk');
     // An app-created agent is never claimed to be installed on the host.
@@ -771,7 +808,7 @@ void main() {
     expect(controller.sessionKeys, isEmpty);
   });
 
-  testWidgets('A template creates its coworker with the persona on the wire, '
+  testWidgets('A template creates its agent with the persona on the wire, '
       'its face in the profile store and its name as the default', (
     tester,
   ) async {
@@ -793,7 +830,7 @@ void main() {
     // The name says the job already, so no role line repeats it.
     expect(agent.role, isNull);
     expect(controller.createdAgents, [(agent.id, 'Research assistant')]);
-    final template = coworkerTemplateById('research')!;
+    final template = agentTemplateById('research')!;
     expect(controller.createdTemplates[agent.id], <String, Object?>{
       'id': 'research',
       'persona': template.persona,
@@ -810,7 +847,7 @@ void main() {
     await tester.tap(find.widgetWithText(ExpressiveButton, 'Cancel'));
     await tester.pumpAndSettle();
 
-    expect(find.byType(CoworkerTemplatePicker), findsNothing);
+    expect(find.byType(AgentTemplatePicker), findsNothing);
     expect(roster.agents, isEmpty);
     expect(controller.createdAgents, isEmpty);
   });
@@ -833,7 +870,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final nameField = find.descendant(
-      of: find.byType(CoworkerNameDialog),
+      of: find.byType(AgentNameDialog),
       matching: find.byType(TextField),
     );
     expect(tester.widget<TextField>(nameField).controller!.text, 'amber');
@@ -864,7 +901,7 @@ void main() {
     await tester.tap(findId('mobile_chat_bot_pill'));
     await tester.pumpAndSettle();
     expect(find.byType(MobileAgentsSettingsPage), findsOneWidget);
-    await tester.tap(find.byTooltip('Edit coworker'));
+    await tester.tap(find.byTooltip('Edit agent'));
     await tester.pumpAndSettle();
     final field = find
         .descendant(
@@ -881,7 +918,7 @@ void main() {
     expect(roster.byId(agent.id)!.threads.single.key, agent.threads.single.key);
   });
 
-  testWidgets('the host\'s agent_list names the host row, adds the coworkers '
+  testWidgets('the host\'s agent_list names the host row, adds the agents '
       'it keeps and skips one deleted here', (tester) async {
     final (controller, roster) = await pumpShell(tester);
     controller.pair();
@@ -933,7 +970,7 @@ void main() {
     expect(find.text('From Phone'), findsWidgets);
   });
 
-  testWidgets('a host run of an app-made coworker marks it as running on '
+  testWidgets('a host run of an app-made agent marks it as running on '
       'the host (bead chuk_chat-89vl)', (tester) async {
     final (controller, roster) = await pumpShell(tester);
     controller.pair();
@@ -1087,7 +1124,7 @@ void main() {
       );
       expect(explorer.fullPage, isTrue);
       expect(explorer.sessionKey, agent.threads.single.key);
-      expect(explorer.coworkerName, agent.name);
+      expect(explorer.agentName, agent.name);
     },
   );
 
@@ -1111,7 +1148,7 @@ void main() {
           .usesUserBrowser;
       expect(usesUserBrowser(), isFalse);
 
-      // Another coworker's header says it works in the user's browser: the
+      // Another agent's header says it works in the user's browser: the
       // selected thread's chip does not change.
       controller.emit(
         AgentsRelayRunState(
@@ -1259,31 +1296,45 @@ void main() {
         lessThanOrEqualTo(pane.left),
       );
       // The first page is the screen and the routines; the gear opens the
-      // Settings page, and its technical section holds the host's blocks.
+      // Settings page: the same agent settings the phone page shows. Its
+      // "Host & activity" row opens the host's blocks.
       await tester.tap(
         find.byKey(const ValueKey<String>('desk-details-settings')),
       );
       await tester.pumpAndSettle();
-      await tester.tap(
-        find.byKey(const ValueKey<String>('details-technical-toggle')),
-      );
-      await tester.pumpAndSettle();
-      // Every block the host can fill has a heading; the schedule field and the
-      // integrations list are gone, because nothing ever filled them.
       expect(
-        find.byKey(const ValueKey<String>('details-settings-group')),
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('desk-right-pane')),
+          matching: find.byType(AgentSettingsView),
+        ),
         findsOneWidget,
       );
-      expect(find.text('LAST RUN'), findsOneWidget);
-      expect(find.text('TOKEN USE'), findsOneWidget);
-      expect(find.text('SESSION RUNTIME'), findsOneWidget);
-      expect(find.text('SANDBOX'), findsOneWidget);
-      expect(find.text('SKILLS'), findsOneWidget);
-      expect(find.text('SCHEDULE'), findsNothing);
-      expect(find.text('INTEGRATIONS'), findsNothing);
+      final Finder host = find.byKey(
+        const ValueKey<String>('settings_Host & activity'),
+      );
+      await tester.ensureVisible(host);
+      await tester.pumpAndSettle();
+      await tester.tap(host);
+      await tester.pumpAndSettle();
+      expect(find.byType(AgentHostActivityPage), findsOneWidget);
+      // Every block the host can fill has a heading; the schedule field and the
+      // integrations list are gone, because nothing ever filled them.
+      expect(find.text('Last run'), findsOneWidget);
+      expect(find.text('Token use'), findsOneWidget);
+      expect(find.text('Session runtime'), findsOneWidget);
+      expect(find.text('Sandbox'), findsOneWidget);
+      // Skills are one row that opens the Skills page, not a second list.
+      expect(
+        find.byKey(const ValueKey<String>('panel-skills-row')),
+        findsOneWidget,
+      );
+      expect(find.text('Schedule'), findsNothing);
+      expect(find.text('Integrations'), findsNothing);
       // Nothing is paired in this test, so the panel says so instead of
       // showing a figure it does not have.
-      expect(find.text('Not paired with a host.'), findsNWidgets(5));
+      expect(find.text('Not paired with a host.'), findsNWidgets(4));
+      await tester.tap(find.byTooltip('Back'));
+      await tester.pumpAndSettle();
 
       // Esc closes it again.
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
@@ -1318,7 +1369,7 @@ void main() {
   testWidgets('a phone window shows the inbox, then the chat, and back again', (
     tester,
   ) async {
-    // Under 600 the shell mounts the mobile layer instead: the coworker inbox,
+    // Under 600 the shell mounts the mobile layer instead: the agent inbox,
     // and a chat screen whose chrome floats over the thread with no app bar.
     final (controller, roster) = await pumpShell(
       tester,
@@ -1515,7 +1566,7 @@ void main() {
     );
   });
 
-  testWidgets('the front page lists rooms beside the coworkers', (
+  testWidgets('the front page lists rooms beside the agents', (
     tester,
   ) async {
     // A room is a conversation, so it is a row on the home screen and not only
@@ -1556,7 +1607,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    // The phone inbox: the room is a row in the same list as the coworkers.
+    // The phone inbox: the room is a row in the same list as the agents.
     await pumpAt(const Size(360, 900));
     expect(find.byType(MobileAgentList), findsOneWidget);
     expect(
@@ -1817,7 +1868,7 @@ void main() {
     expect(clipboardText, isNotNull);
     final payload = jsonDecode(clipboardText!) as Map<String, dynamic>;
     expect(payload['kind'], 'cowork_full_chat_debug');
-    // No coworker, so no thread — see the note on the test above.
+    // No agent, so no thread — see the note on the test above.
     expect(payload['thread_key'], '');
     expect(find.text('debug chat copied'), findsOneWidget);
     expect(find.text('could not copy the chat'), findsNothing);
@@ -1938,7 +1989,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
-  testWidgets('with nothing remembered the app opens the top coworker', (
+  testWidgets('with nothing remembered the app opens the top agent', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
@@ -1956,7 +2007,7 @@ void main() {
     );
   });
 
-  testWidgets('a remembered coworker that the host lists late is opened', (
+  testWidgets('a remembered agent that the host lists late is opened', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues(<String, Object>{
@@ -1987,7 +2038,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
-  testWidgets('a coworker the user picked survives the late host list', (
+  testWidgets('an agent the user picked survives the late host list', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues(<String, Object>{
@@ -2014,7 +2065,7 @@ void main() {
 
   testWidgets('nothing in the chat layer takes the focus while it is behind '
       'the inbox', (tester) async {
-    // The shell keeps the thread mounted behind the coworker list, because it
+    // The shell keeps the thread mounted behind the agent list, because it
     // owns the socket. If the composer takes the focus there, the soft
     // keyboard opens over the list at start-up — the bug this pins.
     final (controller, _) = await pumpShell(tester, size: const Size(420, 900));
@@ -2033,7 +2084,7 @@ void main() {
     expect(
       tester.testTextInput.isVisible,
       isFalse,
-      reason: 'no keyboard while the coworker list is what is on screen',
+      reason: 'no keyboard while the agent list is what is on screen',
     );
   });
 

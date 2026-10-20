@@ -1,6 +1,6 @@
 /// The create and edit sheet of an automation (docs/WIRE_CONTRACT.md, "Event
 /// triggers and notify only on change"): what sets it off (a schedule, a
-/// watched page, a mail filter), what the coworker should do then, its name,
+/// watched page, a mail filter), what the agent should do then, its name,
 /// and whether every run notifies or only a run that found a change.
 ///
 /// The sheet sends `automation_create` or `automation_update` through
@@ -20,14 +20,14 @@ import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 
 /// Opens the sheet. [existing] edits that row; otherwise a new automation is
-/// created for [sessionKey], or for the coworker the user picks from
-/// [coworkers] (session key → name) when [sessionKey] is null. Completes with
+/// created for [sessionKey], or for the agent the user picks from
+/// [agents] (session key → name) when [sessionKey] is null. Completes with
 /// the row the host saved, or null when the sheet was closed.
 Future<AgentsAutomation?> showAutomationEditor(
   BuildContext context, {
   AgentsAutomation? existing,
   String? sessionKey,
-  Map<String, String> coworkers = const <String, String>{},
+  Map<String, String> agents = const <String, String>{},
   AutomationsSource? source,
 }) {
   final AppLocalizations l = _l10n(context);
@@ -37,7 +37,7 @@ Future<AgentsAutomation?> showAutomationEditor(
     child: AutomationEditorForm(
       existing: existing,
       sessionKey: sessionKey,
-      coworkers: coworkers,
+      agents: agents,
       source: source,
     ),
   );
@@ -52,13 +52,13 @@ class AutomationEditorForm extends StatefulWidget {
     super.key,
     this.existing,
     this.sessionKey,
-    this.coworkers = const <String, String>{},
+    this.agents = const <String, String>{},
     this.source,
   });
 
   final AgentsAutomation? existing;
   final String? sessionKey;
-  final Map<String, String> coworkers;
+  final Map<String, String> agents;
   final AutomationsSource? source;
 
   @override
@@ -70,7 +70,7 @@ class _AutomationEditorFormState extends State<AutomationEditorForm> {
       widget.source ?? AutomationsSource.instance;
 
   late String _kind;
-  String? _coworker;
+  String? _agent;
   late final TextEditingController _schedule;
   late final TextEditingController _url;
   late final TextEditingController _minutes;
@@ -95,9 +95,9 @@ class _AutomationEditorFormState extends State<AutomationEditorForm> {
     super.initState();
     final AgentsAutomation? a = widget.existing;
     _kind = a?.kind ?? 'schedule';
-    _coworker =
+    _agent =
         widget.sessionKey ??
-        (widget.coworkers.length == 1 ? widget.coworkers.keys.first : null);
+        (widget.agents.length == 1 ? widget.agents.keys.first : null);
     _schedule = TextEditingController(text: a?.scheduleText ?? '');
     _url = TextEditingController(text: a?.watchedUrl ?? '');
     final int seconds =
@@ -139,8 +139,8 @@ class _AutomationEditorFormState extends State<AutomationEditorForm> {
       return null;
     }
 
-    if (!_editing && widget.sessionKey == null && _coworker == null) {
-      return fail('coworker', l.automationErrCoworker);
+    if (!_editing && widget.sessionKey == null && _agent == null) {
+      return fail('agent', l.automationErrAgent);
     }
     switch (_kind) {
       case 'watch_url':
@@ -217,7 +217,7 @@ class _AutomationEditorFormState extends State<AutomationEditorForm> {
     } else {
       setState(() => _saving = true);
       result = await _source.create(
-        sessionKey: widget.sessionKey ?? _coworker!,
+        sessionKey: widget.sessionKey ?? _agent!,
         kind: _kind,
         spec: spec,
         prompt: _prompt.text,
@@ -340,7 +340,7 @@ class _AutomationEditorFormState extends State<AutomationEditorForm> {
         ),
       ],
     };
-    final bool pickCoworker = !_editing && widget.sessionKey == null;
+    final bool pickAgent = !_editing && widget.sessionKey == null;
     return Flexible(
       child: SingleChildScrollView(
         padding: EdgeInsets.only(
@@ -350,25 +350,25 @@ class _AutomationEditorFormState extends State<AutomationEditorForm> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            if (pickCoworker) ...<Widget>[
+            if (pickAgent) ...<Widget>[
               ExpressiveField(
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
-                    key: const ValueKey<String>('automation-coworker'),
+                    key: const ValueKey<String>('automation-agent'),
                     isExpanded: true,
-                    value: _coworker,
-                    hint: Text(l.automationCoworkerLabel),
+                    value: _agent,
+                    hint: Text(l.automationAgentLabel),
                     items: <DropdownMenuItem<String>>[
                       for (final MapEntry<String, String> e
-                          in widget.coworkers.entries)
+                          in widget.agents.entries)
                         DropdownMenuItem<String>(
                           value: e.key,
                           child: Text(e.value, overflow: TextOverflow.ellipsis),
                         ),
                     ],
                     onChanged: (String? v) => setState(() {
-                      _coworker = v;
-                      if (_fieldKey == 'coworker') {
+                      _agent = v;
+                      if (_fieldKey == 'agent') {
                         _fieldKey = null;
                         _fieldError = null;
                       }
@@ -376,7 +376,7 @@ class _AutomationEditorFormState extends State<AutomationEditorForm> {
                   ),
                 ),
               ),
-              if (_fieldKey == 'coworker')
+              if (_fieldKey == 'agent')
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
                   child: Text(

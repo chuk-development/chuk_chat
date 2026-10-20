@@ -2,7 +2,7 @@
 //
 // A fired "notify only on change" automation that found nothing new
 // (docs/WIRE_CONTRACT.md, "Notify only on change") still writes an answer
-// into the coworker's thread. Read in full every time, those answers bury
+// into the agent's thread. Read in full every time, those answers bury
 // the one run that did find something. So such a run folds to one quiet
 // line, "No change · <summary>", in the automation wake line's style; a tap
 // opens the full answer.

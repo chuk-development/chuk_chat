@@ -3,7 +3,7 @@
 // The glue between one chat screen and the app-wide voice call:
 //
 //  * starts and ends a call for the chat on screen, with its title, the
-//    coworker's name and the last messages as context;
+//    agent's name and the last messages as context;
 //  * hands the call a delegate that sends spoken tasks through the screen's
 //    own send path (voice_task_delegates.dart);
 //  * writes finalized voice turns into the chat's ordinary message history.
@@ -28,6 +28,7 @@ import 'package:chuk_chat/tool_handlers/notes_tools.dart';
 import 'package:chuk_chat/voice/voice_call_controller.dart';
 import 'package:chuk_chat/voice/voice_call_models.dart';
 import 'package:chuk_chat/voice/voice_call_service.dart';
+import 'package:chuk_chat/voice/voice_image_cards.dart';
 
 /// Whether this build shows the voice call at all: the build flag and a
 /// configured token server. Everything in this folder is behind it.
@@ -50,7 +51,7 @@ String? storedChatTitle(String chatId) {
 }
 
 /// The stored messages of [chatId] as chat rows, for a call started from a
-/// page that has no chat screen open (the coworker profile).
+/// page that has no chat screen open (the agent profile).
 List<Map<String, String>> storedChatRows(String chatId) {
   final chat = ChatStorageService.getChatById(chatId);
   if (chat == null || !chat.isFullyLoaded) return const <Map<String, String>>[];
@@ -112,8 +113,8 @@ class ChatVoiceBinding {
   /// persistence so voice and typed messages share the same encrypted store.
   final void Function(List<VoiceTurn> turns)? onVoiceTurns;
 
-  /// The coworker this screen talks to, when the screen knows it (the
-  /// desktop Agents thread is handed the coworker's name). A call started
+  /// The agent this screen talks to, when the screen knows it (the
+  /// desktop Agents thread is handed the agent's name). A call started
   /// without a name uses it before it falls back to the thread title.
   final String? Function()? agentName;
 
@@ -460,7 +461,47 @@ class ChatVoiceBinding {
   /// The screen finalized assistant row [index] of [chatId] with [text].
   void completeTurn(String? chatId, int index, String text) {
     if (chatId == null) return;
-    _queue.complete(chatId, index, text);
+    final List<VoiceCard> images = _publishVoiceImages(chatId, index);
+    _queue.complete(chatId, index, _resultWithImages(text, images));
+  }
+
+  /// A streaming turn wrote new [toolCallsJson]. Running `generate_image`
+  /// becomes the loading stage; a finished `IMAGE:` becomes the picture.
+  void noteTurnTools(String? chatId, String? toolCallsJson) {
+    if (chatId == null || !isLiveFor(chatId)) return;
+    _addVoiceCards(voiceCardsFromToolCallsJson(toolCallsJson));
+  }
+
+  /// Tool images landed on the assistant row. Show them in the call.
+  void noteTurnImages(String? chatId, Map<String, String> message) {
+    if (chatId == null || !isLiveFor(chatId)) return;
+    _addVoiceCards(voiceCardsFromChatMessage(message));
+  }
+
+  List<VoiceCard> _publishVoiceImages(String chatId, int index) {
+    if (!isLiveFor(chatId)) return const <VoiceCard>[];
+    final List<Map<String, String>> rows = messages();
+    if (index < 0 || index >= rows.length) return const <VoiceCard>[];
+    return _addVoiceCards(voiceCardsFromChatMessage(rows[index]));
+  }
+
+  List<VoiceCard> _addVoiceCards(List<VoiceCard> cards) {
+    for (final VoiceCard card in cards) {
+      controller.addCard(card);
+    }
+    return cards;
+  }
+
+  /// Spoken answer plus `IMAGE:{…}` so the worker can draw the same card.
+  static String _resultWithImages(String text, List<VoiceCard> cards) {
+    final List<String> urls = <String>[
+      for (final VoiceCard card in cards)
+        if (card.text('url') != null) card.text('url')!,
+    ];
+    if (urls.isEmpty) return text;
+    return '$text\n${<String>[
+      for (final String url in urls) 'IMAGE:${jsonEncode(<String, String>{'url': url})}',
+    ].join('\n')}';
   }
 
   /// The turn at row [index] of [chatId] was torn down without an answer.
@@ -513,7 +554,7 @@ class ChatVoiceBinding {
 }
 
 /// The chat screens that can hold a call, so a header drawn outside a
-/// screen (the Agents thread header, the phone chat chrome, the coworker
+/// screen (the Agents thread header, the phone chat chrome, the agent
 /// profile) can reach the screen that owns the chat.
 class ChatVoiceSessions extends ChangeNotifier {
   ChatVoiceSessions._();
@@ -550,7 +591,7 @@ class ChatVoiceSessions extends ChangeNotifier {
 }
 
 /// The thread a call with [agent] runs in: the one open on the Agents
-/// screen when it is one of the coworker's, else its first (the permanent
+/// screen when it is one of the agent's, else its first (the permanent
 /// session). Null when it has none.
 String? voiceThreadKeyFor(AgentsAgent agent) {
   if (agent.threads.isEmpty) return null;
@@ -564,7 +605,7 @@ String? voiceThreadKeyFor(AgentsAgent agent) {
 }
 
 /// Starts a call with [agent] from a page that is not its thread (the
-/// coworker profile, the phone "more" sheet). See
+/// agent profile, the phone "more" sheet). See
 /// [startAgentsThreadVoiceCall].
 Future<void> startAgentVoiceCall(
   AgentsAgent agent, {

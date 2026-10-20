@@ -10,7 +10,7 @@ here with the commit.
 
 ## Summary for the owner (12:15)
 
-**Speed.** A "hi" to a coworker took 110-185 s and about €0.002. It now
+**Speed.** A "hi" to an agent took 110-185 s and about €0.002. It now
 takes **1.4-2.0 s** warm and **€0.00016** (prompt 20k -> 8k tokens, 99 %
 of it from the provider cache). The causes were: a context summary re-made before every
 turn (100-180 s), a tool list that changed between requests (no cache
@@ -30,12 +30,12 @@ in `~/.config/chuk-agents/host.env`). Backups of the old wrapper and unit:
 - VNC/browser fills the display (no black area); takeover card for
   login/2FA/CAPTCHA with auto-resolve; live turn status (Sending, Preparing,
   Thinking, tool, Writing; offline with Retry).
-- One place for a coworker's model, provider and reasoning, with prices.
+- One place for an agent's model, provider and reasoning, with prices.
 - Per-action approvals (once / always for this agent / per site).
 - Cost per answer, totals, weekly budget with warning and stop.
 - Automations: watch a page, mail filter, notify only on change.
-- Telegram channel per coworker (opt-in, not E2E, pairing code).
-- 15 coworker templates in New agent.
+- Telegram channel per agent (opt-in, not E2E, pairing code).
+- 15 agent templates in New agent.
 - Save a successful task as a skill (only on approval).
 - "N files changed · Undo" per answer with conflict handling.
 - Own browser via the extension (broker, approvals, Stop, secrets hidden).
@@ -170,17 +170,17 @@ Levers in order: (1) summary out of the turn, (2) host on current code,
   settings agent's files) and for CodeRabbit (free quota resets ~04:45).
 - 04:25 research done: "Grogbot" = Grok Bot (xAI). Started: baseline prompt
   cut (item 2), instant status line + takeover card (items 4, 6).
-- 04:30 baseline prompt cut (chuk_chat-b3g4): fresh coworker 12.7k -> 6.6k
+- 04:30 baseline prompt cut (chuk_chat-b3g4): fresh agent 12.7k -> 6.6k
   est. tokens (tools 64 -> 27 declared, Playwright and other non-core tools
   behind search_tools, persona/recall/skills catalogue capped). Long session
   43.7k -> 37.6k; the rest is the ladder tail (~31k). Warning forwarded to the
   z9mo agent: its idle-drop rule raised that history to 48.7k (tier 2 stops);
   it now also drops old recall/automation rows, caps the tail and dispatches
   deferred tools. Commit waits for z9mo (shared memory.py).
-- 04:30 started: opt-in Telegram channel per coworker (research item 11).
+- 04:30 started: opt-in Telegram channel per agent (research item 11).
 - 04:50 Telegram channel host side done (chuk_chat-02s5): channels/ subpackage,
   token in its own AES-GCM file (not the sandbox-visible vault), long polling,
-  6-digit pairing code, strangers refused, runs in the coworker's one session,
+  6-digit pairing code, strangers refused, runs in the agent's one session,
   HTML replies with scrubbing, files as photo/document. Host suite 520 green.
   Pending: executor.py dispatch patch (agent_channel_get/set, MCP for telegram
   origin) after the z9mo agent; app toggle in agent_control_panel.dart after
@@ -195,18 +195,18 @@ Levers in order: (1) summary out of the turn, (2) host on current code,
   56 (after job), 139 (after plan_ahead). Long session input ~54.5k -> 15.2k.
   Executor patch for Telegram frames applied by the coordinator.
 - 05:50 local commits since 04:25: e061cab7 (background summaries + half
-  prompt), 5fbfa300 (Telegram host side), c127c13e (coworker model page),
+  prompt), 5fbfa300 (Telegram host side), c127c13e (agent model page),
   3ce04fab (live status + takeover card, app side), 5a3fa294 (merge
   origin/master: agent mail; conflicts in executor.py/host.py resolved,
   both Telegram and mail kept). Python suites: runtime, executor 278,
   host 550, config 84, sandbox 159, bench green. Verified on screen (Xvfb :77,
   the real screen is locked): desktop header, "+" menu, Chat-half chips,
-  profile Model row, coworker model page with provider list.
+  profile Model row, agent model page with provider list.
 - 05:50 the screen is locked, so the app now runs on a private Xvfb display
   (:77, same single instance and login). A post-merge test run was killed by
   the low-memory reaper (another session's chukphoto worker at 11.5 GB).
 - 05:50 started: host side of takeover + heartbeat.phase. New bug
-  chuk_chat-89vl (profile says the coworker does not run on the host).
+  chuk_chat-89vl (profile says the agent does not run on the host).
 - 06:40 full flutter test on the committed state: green (78 files hit the
   load flake, all 78 pass alone). d0c28ec3 host side of takeover + phases.
   CodeRabbit on the 11 local commits: 10 findings (1 major: Telegram store
@@ -260,7 +260,7 @@ Levers in order: (1) summary out of the turn, (2) host on current code,
   host restart to measure live; waits for the templates agent (host.py is
   mid-edit in the working tree). Unexplained: run 2 at 08:37 had 0 hits
   (bead chuk_chat-h7w6). F2 (automations UI, cost totals, weekly budget)
-  done, commits with F1. Running: F1, E2E on an isolated host, coworker
+  done, commits with F1. Running: F1, E2E on an isolated host, agent
   templates.
 - Side note: chukdoo-web.service (another project) restarts every 3 s,
   35,900+ restarts, CHDIR: working directory missing. Not touched.
@@ -269,7 +269,7 @@ Levers in order: (1) summary out of the turn, (2) host on current code,
   deferred tool refused, 0b7i budget_warning agent_id), 85ea8104 (templates
   host), 1578fc49 (app side: approval card + settings, cost line + sheet,
   budget notices, automations editor, cost totals + weekly budget, 15
-  coworker templates). Pushed 00fba461/efdb3078 earlier (caching, audit doc).
+  agent templates). Pushed 00fba461/efdb3078 earlier (caching, audit doc).
 - 09:45 live (host still on 08:35 code): "hi" 25.9 s wall = prepare 0.8 +
   recall 1.6 + model 4.4 + ~19 s unattributed. The 19 s are the eager
   Playwright connect per task (bug wrdv, fix running: one lazy browser per

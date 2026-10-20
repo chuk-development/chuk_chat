@@ -951,6 +951,9 @@ class ChatStorageCrud {
         // back to an int here.
         variants: m['variants'] as String?,
         activeVariant: parseFlexibleInt(m['activeVariant']),
+        // A dictated message keeps its voice bubble (no audio is stored).
+        inputMode: m['inputMode'] as String?,
+        voiceDurationMs: m['voiceDurationMs']?.toString(),
       );
     }).toList();
   }
@@ -1031,6 +1034,108 @@ class ChatStorageCrud {
           )
           .toString();
 
+  /// The digest of [chat] as it is stored, run through the same mapping a
+  /// save takes ([_mapToChatMessages]), so a save of the unchanged messages
+  /// compares equal to it.
+  static String _storedDigest(StoredChat chat) => _digest(
+    _mapToChatMessages(chat.messages.map((m) => m.toJson()).toList()),
+    _customNameOf(chat),
+  );
+
+  /// The digest of [chatId]'s copy in memory when that copy is exactly what
+  /// the cache and the cloud hold: fully loaded and not dirty. That is a chat
+  /// opened from the cache or the cloud and not changed here since. A dirty
+  /// copy may already carry a change (a rename of a chat in a turn) that the
+  /// next save must write, so it gives nothing.
+  static ({String digest, DateTime? updatedAt})? _unchangedStoredDigest(
+    String chatId,
+  ) {
+    final chat = ChatStorageState.chatsById[chatId];
+    if (chat == null || !chat.isFullyLoaded) return null;
+    if (ChatDirtyStore.isDirty(chatId)) return null;
+    return (digest: _storedDigest(chat), updatedAt: chat.updatedAt);
+  }
+
+  /// What a local save of [chatId] compares with: the digest of the last
+  /// local save or cloud write on this device, else the digest of the chat
+  /// as it was opened. Without the second, the first save after opening a
+  /// chat (leaving it, a stale tool call finalised on load) always wrote,
+  /// stamped `updatedAt` with now and moved a chat that was only read to the
+  /// top of the sidebar.
+  @visibleForTesting
+  static ({String digest, DateTime? updatedAt})? knownLocalDigest(
+    String chatId,
+  ) {
+    final known = ChatStorageState.localDigest[chatId];
+    if (known != null) return known;
+    final opened = _unchangedStoredDigest(chatId);
+    if (opened != null) ChatStorageState.localDigest[chatId] = opened;
+    return opened;
+  }
+
+  /// What a cloud write of [chatId] compares with: the digest of the last
+  /// cloud write from this device, else the digest of the chat as it was
+  /// opened (see [knownLocalDigest]). An equal payload is not uploaded: the
+  /// upload would only move `updated_at`, and with it the chat in the
+  /// sidebar of every device.
+  @visibleForTesting
+  static ({String digest, DateTime? updatedAt})? knownCloudDigest(
+    String chatId,
+  ) {
+    final known = ChatStorageState.lastWrite[chatId];
+    if (known != null) return known;
+    final opened = _unchangedStoredDigest(chatId);
+    if (opened != null) ChatStorageState.lastWrite[chatId] = opened;
+    return opened;
+  }
+
+  /// Whether a save of [digest] to [chatId] changes nothing on this device:
+  /// the same payload as the copy in memory, which still carries the
+  /// `updatedAt` it had then. Such a save keeps `updatedAt`, and so the
+  /// chat's place in the sidebar.
+  static bool _isUnchangedLocally(String chatId, String digest) {
+    final existing = ChatStorageState.chatsById[chatId];
+    if (existing == null || !existing.isFullyLoaded) return false;
+    final known = knownLocalDigest(chatId);
+    return known != null &&
+        known.digest == digest &&
+        known.updatedAt == existing.updatedAt;
+  }
+
+  /// Whether a cloud write of [digest] to [chatId] changes nothing: the
+  /// cloud already holds that payload, and nothing replaced the chat since.
+  static bool _isUnchangedInCloud(String chatId, String digest) {
+    final existing = ChatStorageState.chatsById[chatId];
+    if (existing == null) return false;
+    final known = knownCloudDigest(chatId);
+    return known != null &&
+        known.digest == digest &&
+        known.updatedAt == existing.updatedAt;
+  }
+
+  /// The digest a save of [messagesMaps] to [chatId] carries.
+  static String _saveDigest(
+    String chatId,
+    List<Map<String, dynamic>> messagesMaps,
+  ) => _digest(
+    _mapToChatMessages(messagesMaps),
+    _customNameOf(ChatStorageState.chatsById[chatId]),
+  );
+
+  /// Test seam over the check [saveLocal] makes.
+  @visibleForTesting
+  static bool isUnchangedSave(
+    String chatId,
+    List<Map<String, dynamic>> messagesMaps,
+  ) => _isUnchangedLocally(chatId, _saveDigest(chatId, messagesMaps));
+
+  /// Test seam over the check [updateChat] makes before it uploads.
+  @visibleForTesting
+  static bool isUnchangedUpload(
+    String chatId,
+    List<Map<String, dynamic>> messagesMaps,
+  ) => _isUnchangedInCloud(chatId, _saveDigest(chatId, messagesMaps));
+
   /// Save [messagesMaps] on this device only: memory (sidebar, search and
   /// reopening the chat read it), the SQLite cache and a dirty mark. No
   /// network. A new chat gets its id here; the cloud row is inserted with
@@ -1054,13 +1159,9 @@ class ChatStorageCrud {
     final digest = _digest(messages, customName);
 
     // The same messages as the copy in memory: nothing to save. A stream
-    // checkpoint or an auto-save tick often carries nothing new.
-    final known = ChatStorageState.localDigest[id];
-    if (existing != null &&
-        existing.isFullyLoaded &&
-        known != null &&
-        known.digest == digest &&
-        known.updatedAt == existing.updatedAt) {
+    // checkpoint or an auto-save tick often carries nothing new, and neither
+    // does the save of a chat that was only opened and read.
+    if (existing != null && _isUnchangedLocally(id, digest)) {
       return existing;
     }
 
@@ -1497,11 +1598,7 @@ class ChatStorageCrud {
     // Title and image paths derive from the payload, so an equal payload on
     // an unchanged row means an equal row: skip the write.
     final digest = _digest(messages, normalizedCustomName);
-    final lastWrite = ChatStorageState.lastWrite[chatId];
-    if (existingChat != null &&
-        lastWrite != null &&
-        lastWrite.digest == digest &&
-        lastWrite.updatedAt == existingChat.updatedAt) {
+    if (existingChat != null && _isUnchangedInCloud(chatId, digest)) {
       await ChatDirtyStore.markSynced(user.id, chatId, rev);
       return existingChat;
     }

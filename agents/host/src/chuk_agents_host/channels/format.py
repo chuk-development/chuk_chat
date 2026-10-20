@@ -1,6 +1,6 @@
 """Text shaping for Telegram: split to the message limit, Markdown to HTML.
 
-The coworker answers in Markdown. Telegram's own Markdown modes reject a
+The agent answers in Markdown. Telegram's own Markdown modes reject a
 message over one unescaped character, so the channel sends Telegram's HTML
 mode instead: everything is escaped first, then the few constructs Telegram
 draws (bold, italic, strike, inline code, code blocks, links) are put back as

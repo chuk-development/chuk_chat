@@ -104,7 +104,7 @@ Executor -> controller (a stream, closed by ``done`` or ``error``)::
      "approval_id": "ap-1", "action": "herenow_publish",
      "path": "site", "name": "My Page", "file_count": 2,
      "total_bytes": 1024, "base_url": "https://here.now", "public": true}
-    {"type": "agent_status",                              # what this coworker
+    {"type": "agent_status",                              # what this agent
      "session_key": "...",                                #   runs on and spent
      "model": {"id": "...", "provider": "...", "reasoning_effort": "..."},
      "tokens": {"total": 1234, "runs": 3, "last_run": 456},
@@ -593,7 +593,7 @@ def room_create_payload(
 def room_add_member_payload(
     *, room_id: str, agent_id: str, handle: str
 ) -> dict[str, Any]:
-    """App -> host: add a coworker to an existing room (§16.1)."""
+    """App -> host: add an agent to an existing room (§16.1)."""
     return {
         "type": "room_add_member",
         "room_id": room_id,
@@ -603,7 +603,7 @@ def room_add_member_payload(
 
 
 def room_remove_member_payload(*, room_id: str, agent_id: str) -> dict[str, Any]:
-    """App -> host: remove a coworker from a room (§16.1)."""
+    """App -> host: remove an agent from a room (§16.1)."""
     return {"type": "room_remove_member", "room_id": room_id, "agent_id": agent_id}
 
 
@@ -786,7 +786,7 @@ def budget_warning_payload(
     budget_eur: float,
     week_starts_at: float,
 ) -> dict[str, Any]:
-    """Host -> app: a coworker's spend this week reached 80 % (``warning``)
+    """Host -> app: an agent's spend this week reached 80 % (``warning``)
     or 100 % (``exceeded``) of its ``budget_weekly``. Sent once per level and
     week, as an event on the run's stream that crossed it."""
     return {
@@ -880,10 +880,10 @@ def automation_list_request_payload(session_key: str | None = None) -> dict[str,
 def agent_create_payload(
     *, agent_id: str, name: str, template: dict[str, Any] | None = None
 ) -> dict[str, Any]:
-    """App -> host: the user created a coworker in the app (docs/WIRE_CONTRACT.md,
-    "Coworker names"). The app owns the id; the host keeps the name.
-    ``template`` (``{"id", "persona"}``, "Coworker templates") is additive: the
-    host writes the persona into the new coworker's soul.md."""
+    """App -> host: the user created an agent in the app (docs/WIRE_CONTRACT.md,
+    "Agent names"). The app owns the id; the host keeps the name.
+    ``template`` (``{"id", "persona"}``, "Agent templates") is additive: the
+    host writes the persona into the new agent's soul.md."""
     payload: dict[str, Any] = {"type": "agent_create", "agent_id": agent_id, "name": name}
     if template:
         payload["template"] = dict(template)
@@ -891,18 +891,18 @@ def agent_create_payload(
 
 
 def agent_rename_payload(*, agent_id: str, name: str) -> dict[str, Any]:
-    """App -> host: the user renamed a coworker (the host agent included)."""
+    """App -> host: the user renamed an agent (the host agent included)."""
     return {"type": "agent_rename", "agent_id": agent_id, "name": name}
 
 
 def agent_list_request_payload() -> dict[str, Any]:
-    """App -> host: list every coworker name this host keeps."""
+    """App -> host: list every agent name this host keeps."""
     return {"type": "agent_list"}
 
 
 def agent_list_payload(agents: list[dict[str, Any]]) -> dict[str, Any]:
-    """Host -> app: the coworker names. One entry per id:
-    ``{"agent_id", "name", "host"}`` — ``host`` marks the coworker that runs
+    """Host -> app: the agent names. One entry per id:
+    ``{"agent_id", "name", "host"}`` — ``host`` marks the agent that runs
     on this host. Answers ``agent_list`` and follows every applied
     ``agent_create`` / ``agent_rename``."""
     return {"type": "agent_list", "agents": list(agents)}
@@ -970,7 +970,7 @@ def skill_proposal_result_payload(result: dict[str, Any]) -> dict[str, Any]:
 
 
 def agent_status_request_payload(session_key: str = "default") -> dict[str, Any]:
-    """App -> host: what is this coworker running on, what has it spent, how
+    """App -> host: what is this agent running on, what has it spent, how
     long has it been at it (docs/WIRE_CONTRACT.md, "Agent status")."""
     return {"type": "agent_status", "session_key": session_key}
 
@@ -1534,8 +1534,8 @@ def extension_mcp_entry(session_key: str | None = None) -> dict | None:
     claim about what drives the page — behind it is the add-on, over a unix
     socket, with no Playwright anywhere.
 
-    ``session_key`` names the coworker to the host's browser broker
-    (``user_browser.py``), which lets one coworker hold the browser at a time.
+    ``session_key`` names the agent to the host's browser broker
+    (``user_browser.py``), which lets one agent hold the browser at a time.
     """
     script = extension_mcp_script()
     if script is None:

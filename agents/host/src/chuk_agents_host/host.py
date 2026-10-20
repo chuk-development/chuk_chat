@@ -158,7 +158,7 @@ KEY_VERSION = 1
 #: the CLI passes ``cloud`` unless ``--local-relay`` is given.
 TRANSPORT_LOCAL = "local"
 TRANSPORT_CLOUD = "cloud"
-DEFAULT_SYSTEM_PROMPT = "You are a Agents coworker running on the user's own machine."
+DEFAULT_SYSTEM_PROMPT = "You are an Agents agent running on the user's own machine."
 
 #: While parked on the heal channel, how often the host tries its dead refresh
 #: token once more. A refusal can be a misread network fault; this makes sure a
@@ -180,7 +180,7 @@ def _agent_dirname(agent_id: str, limit: int = 32) -> str:
     """A filesystem-safe, collision-free directory name for one agent id.
 
     The readable part is for the person who opens the folder; the digest is what
-    makes it unique, because two coworkers can carry the same name and an id can
+    makes it unique, because two agents can carry the same name and an id can
     hold characters a path must not.
     """
     kept = [c if (c.isalnum() or c in "-_.") else "-" for c in agent_id]
@@ -307,7 +307,7 @@ class LocalHost:
         # The user's own browser (docs/WIRE_CONTRACT.md, "The user's own
         # browser"): the last ``user_browser_status`` pushed, so an unchanged
         # status is not sent twice, and the runs a message from the add-on's
-        # panel started (run id -> coworker name), answered in the panel.
+        # panel started (run id -> agent name), answered in the panel.
         self._browser_lock = threading.Lock()
         self._browser_last_push: dict | None = None
         self._panel_runs: dict[str, str] = {}
@@ -316,7 +316,7 @@ class LocalHost:
 
         self._roster = RosterStore(self._roster_path)
         self._agent = self._load_or_create_agent(agent_name)
-        # The names the user chose in the app (docs/WIRE_CONTRACT.md, "Coworker
+        # The names the user chose in the app (docs/WIRE_CONTRACT.md, "Agent
         # names"): own table in the roster file, own connection (any thread).
         self._coworker_names = CoworkerNameStore(self._roster_path, device_id=HOST_DEVICE_ID)
 
@@ -373,7 +373,7 @@ class LocalHost:
         if sandbox_kind == "docker":
             # The resolver is keyed by agent id on purpose (bead cowork-jo2):
             # a lambda that ignored it would bind-mount the host agent's
-            # workspace into EVERY coworker's container, so two coworkers would
+            # workspace into EVERY agent's container, so two agents would
             # read and write each other's files even with two containers.
             # Owned by THIS host (its state directory), so the start-up reaper
             # removes only this host's leftovers and never the live containers
@@ -411,10 +411,10 @@ class LocalHost:
         if loaded:
             self._log(f"[cowork-host] loaded {loaded} secret name(s) at rest")
 
-        # Messenger channels (``channels/``): opt-in per coworker, off by
+        # Messenger channels (``channels/``): opt-in per agent, off by
         # default. The bot tokens sit in their own encrypted file, NOT in the
         # secret set: that set is replaced whole by every app frame and handed
-        # to every sandbox process, and a coworker must not read its bot token.
+        # to every sandbox process, and an agent must not read its bot token.
         self._channel_store = ChannelStore(
             path=self._workspace / CHANNELS_FILE,
             key=channels_at_rest_key(self._identity),
@@ -698,13 +698,13 @@ class LocalHost:
         # Each agent owns a real workspace directory under the host.
         workspace = self._agents_dir / agent.name
         workspace.mkdir(parents=True, exist_ok=True)
-        # Drop the shipped seed skills in so a fresh coworker can act on a
+        # Drop the shipped seed skills in so a fresh agent can act on a
         # YouTube link (and future seeds) out of the box. Non-destructive: an
         # agent's own skills are never overwritten.
         seeded = seed_workspace_skills(workspace)
         if seeded:
             self._log(f"[cowork-host] seeded skills for {agent.name}: {', '.join(seeded)}")
-        # The other coworkers' workspaces get new and updated built-in seeds
+        # The other agents' workspaces get new and updated built-in seeds
         # once per boot too; otherwise they are seeded only when created.
         self._seed_other_workspaces(workspace)
         if agent.workspace_dir != str(workspace):
@@ -714,10 +714,10 @@ class LocalHost:
         return agent
 
     def _seed_other_workspaces(self, own: Path) -> None:
-        """Seed every other coworker workspace under the agents directory.
+        """Seed every other agent workspace under the agents directory.
 
         Once per boot, so a new seed skill or a newer built-in reaches a
-        coworker that already exists. Non-destructive like the first seed
+        agent that already exists. Non-destructive like the first seed
         (see :mod:`chuk_agents_host.seed_skills`). Never raises.
         """
         try:
@@ -793,7 +793,7 @@ class LocalHost:
             ),
             estop_path=self._estop_path,
             logger=self._log,
-            # A URL watch fetches from the host: the coworker's ``network``
+            # A URL watch fetches from the host: the agent's ``network``
             # switch decides whether it may (docs/WIRE_CONTRACT.md, "Event
             # triggers").
             network_allowed=lambda: bool(self._permissions.get(self._agent.id).network),
@@ -816,7 +816,7 @@ class LocalHost:
             desktop=self._desktop_notifier.notify,
             logger=self._log,
         )
-        # Messenger channels: one poller per coworker the user turned one on
+        # Messenger channels: one poller per agent the user turned one on
         # for. Before the party, like automations: a message that arrives
         # before the app provisions the host gets a "not ready" reply.
         self._channels = self._build_channels(self._channel_settings)
@@ -1157,7 +1157,7 @@ class LocalHost:
     # -- one sandbox per agent (§6, bead cowork-jo2) ---------------------
 
     def _primary_agent_ids(self) -> tuple[str, ...]:
-        """The keys that mean "this host's own coworker".
+        """The keys that mean "this host's own agent".
 
         The app calls it ``host:<device id>`` (the id it got at pairing), the
         roster calls it by its row id, and a client that names no session at all
@@ -1166,11 +1166,11 @@ class LocalHost:
         return ("", "default", self._agent.id, host_agent_id(self._device_id))
 
     def _is_own_coworker(self, agent_id: str) -> bool:
-        """True when the app registered this id as a coworker of its own.
+        """True when the app registered this id as an agent of its own.
 
-        The app sends ``agent_create`` for every coworker the user makes, with
+        The app sends ``agent_create`` for every agent the user makes, with
         the id that is also its ``session_key``. That registration is what makes
-        a key a coworker; a key nobody registered — an old client's ``default``,
+        a key an agent; a key nobody registered — an old client's ``default``,
         a thread key from a test double — stays on this host's own agent, which
         is what it has always been. Guessing the other way round would hand a
         typo its own container and its own empty workspace.
@@ -1186,7 +1186,7 @@ class LocalHost:
             return False
 
     def _agent_key(self, session_key: str) -> str:
-        """The coworker a session key belongs to: itself, or this host's agent."""
+        """The agent a session key belongs to: itself, or this host's agent."""
         return session_key if self._is_own_coworker(session_key) else self._agent.id
 
     def _agent_keys(self, session_keys: Iterable[str]) -> dict[str, str]:
@@ -1210,9 +1210,9 @@ class LocalHost:
     def _workspace_for_agent(self, agent_id: str) -> str:
         """The host directory an agent works in — one per agent, never shared.
 
-        The host's own coworker keeps the directory it always had. Every other
-        coworker gets ``<agents dir>/<name>-<digest of its id>``: the digest is
-        what makes it collision-free, because a coworker name is whatever the
+        The host's own agent keeps the directory it always had. Every other
+        agent gets ``<agents dir>/<name>-<digest of its id>``: the digest is
+        what makes it collision-free, because an agent name is whatever the
         user typed and two of them can read alike.
         """
         if self._agent_key(agent_id) == self._agent.id:
@@ -1221,7 +1221,7 @@ class LocalHost:
         if not workspace.exists():
             workspace.mkdir(parents=True, exist_ok=True)
             # Only on the first look: the shipped seed skills go in once, so a
-            # new coworker can act out of the box. Re-seeding on every call
+            # new agent can act out of the box. Re-seeding on every call
             # would put a disk walk behind a status request.
             seeded = seed_workspace_skills(workspace)
             if seeded:
@@ -1231,12 +1231,12 @@ class LocalHost:
         return str(workspace)
 
     def _environment_for(self, session_key: str) -> BaseEnvironment:
-        """That coworker's sandbox: its own container, its own workspace.
+        """That agent's sandbox: its own container, its own workspace.
 
-        Cached per coworker, so one coworker talks to the SAME box across its
+        Cached per agent, so one agent talks to the SAME box across its
         turns. With the docker backend the box is a container labelled with that
         agent id (``cowork.agent``); with the local backend it is that agent's
-        own directory. Either way two coworkers never share one.
+        own directory. Either way two agents never share one.
         """
         key = self._agent_key(session_key)
         existing = self._environments.get(key)
@@ -1378,7 +1378,7 @@ class LocalHost:
             sealer=sealer,
             environment=environment,
             # One sandbox per agent (bead cowork-jo2): every session key that is
-            # not this host's own coworker gets its own container/workspace.
+            # not this host's own agent gets its own container/workspace.
             environment_factory=self._environment_for,
             model_factory=model_factory,
             model_select=model_select,
@@ -1420,7 +1420,7 @@ class LocalHost:
             # A finished background job's ``job`` frame, when no run of its
             # session is live to carry it.
             job_frame_sender=self._send_host_payload,
-            # Coworker names (docs/WIRE_CONTRACT.md, "Coworker names").
+            # Agent names (docs/WIRE_CONTRACT.md, "Agent names").
             on_agent_frame=self._on_agent_frame,
             # The agent calls the user (docs/WIRE_CONTRACT.md, "The agent calls
             # the user"): ``call_user`` / ``call_status`` and the app's
@@ -1431,7 +1431,7 @@ class LocalHost:
             # restricted run of an unknown mail.
             agent_mail=getattr(self, "_agent_mail", None),
             # Per-action approvals (docs/WIRE_CONTRACT.md, "Per-action
-            # approvals"): each coworker's policy and the store for "always".
+            # approvals"): each agent's policy and the store for "always".
             action_approvals=getattr(self, "_action_approvals", None),
             # Cost per run and weekly budget (docs/WIRE_CONTRACT.md): read live,
             # so a re-provision's fresh price list applies to the next run.
@@ -2158,15 +2158,15 @@ class LocalHost:
         self._seed_template_persona(payload)
         return names
 
-    # -- coworker templates (lib/services/agents/coworker_templates.dart) -
+    # -- agent templates (lib/services/agents/agent_templates.dart) -
 
     def _seed_template_persona(self, payload: dict) -> None:
         """An ``agent_create`` with a ``template``: write its persona into the
-        new coworker's soul.md (docs/WIRE_CONTRACT.md, "Coworker templates").
+        new agent's soul.md (docs/WIRE_CONTRACT.md, "Agent templates").
 
         Runs after the name store registered the id, so the workspace is the
-        coworker's own and never this host's agent. Best-effort: a failure is
-        logged, and the coworker still exists with the default persona.
+        agent's own and never this host's agent. Best-effort: a failure is
+        logged, and the agent still exists with the default persona.
         """
         seed = template_seed(payload)
         if seed is None:
@@ -2178,9 +2178,9 @@ class LocalHost:
         try:
             workspace = self._workspace_for_agent(agent_id)
             if seed_persona(workspace, persona, template_id=template_id):
-                self._log(f"[coworker-templates] {agent_id}: persona from {template_id!r}")
+                self._log(f"[agent-templates] {agent_id}: persona from {template_id!r}")
         except Exception as exc:  # noqa: BLE001 — a persona must not fail a create
-            self._log(f"[coworker-templates] {agent_id}: persona not written: {exc}")
+            self._log(f"[agent-templates] {agent_id}: persona not written: {exc}")
 
     # -- messenger channels (channels/) ---------------------------------
 
@@ -2201,8 +2201,8 @@ class LocalHost:
 
     def _channel_key(self, agent_id: str) -> str | None:
         """The session key a channel of the app's ``agent_id`` feeds, or
-        ``None`` for an id that is no coworker of this host. Every name of
-        this host's own coworker maps to the app's ``host:<device id>``, the
+        ``None`` for an id that is no agent of this host. Every name of
+        this host's own agent maps to the app's ``host:<device id>``, the
         thread key the app uses, so a Telegram turn lands in the app's thread."""
         if agent_id in self._primary_agent_ids():
             return host_agent_id(self._device_id)
@@ -2210,7 +2210,7 @@ class LocalHost:
 
     def _submit_channel_task(self, session_key: str, prompt: str, meta: dict) -> str | None:
         """Start a task a channel message asks for: a normal run of that
-        coworker's one session. ``None`` while the host has no provisioned
+        agent's one session. ``None`` while the host has no provisioned
         task server (restarted, no app since)."""
         party = self._party
         server = party.task_server if party is not None else None
@@ -2250,14 +2250,14 @@ class LocalHost:
         """The sandbox an app agent id's permissions belong to, or ``None``.
 
         ``host:<device id>``, the roster id and ``default`` are this host's own
-        agent; a registered coworker is itself. Any other id is unknown here —
-        a stale or deleted coworker — and must not change the host agent."""
+        agent; a registered agent is itself. Any other id is unknown here —
+        a stale or deleted agent — and must not change the host agent."""
         if agent_id in self._primary_agent_ids():
             return self._agent.id
         return agent_id if self._is_own_coworker(agent_id) else None
 
     def _on_approvals_changed(self, key: str, approvals) -> None:
-        """A lasting approval decision changed a coworker's policy: send the
+        """A lasting approval decision changed an agent's policy: send the
         whole current set to every attached device, like a ``set``, so the
         app's settings show the new "always"."""
         agent_id = host_agent_id(self._device_id) if key == self._agent.id else key
@@ -2321,9 +2321,9 @@ class LocalHost:
         """The app's ``user_browser`` block from the broker's status.
 
         The broker knows the holder by its session key (a thread key). The
-        app gets ``in_use_by`` with the app's agent id and the coworker's
+        app gets ``in_use_by`` with the app's agent id and the agent's
         name instead, never the thread key. ``in_use_by_this_agent`` (only
-        with ``key``, a permission key) maps the holder to its coworker
+        with ``key``, a permission key) maps the holder to its agent
         first: the host's own agent runs under ``host:<device id>`` or an old
         thread key, while its permission key is the roster id."""
         block = dict(status)
@@ -2344,7 +2344,7 @@ class LocalHost:
 
     def _wire_user_browser(self, broker) -> None:
         """Hook this host into the process's browser broker: status pushes to
-        the app, coworker names for the strip on the page, and the panel's
+        the app, agent names for the strip on the page, and the panel's
         messages."""
         broker.add_change_listener(self._on_user_browser_change)
         broker.set_name_resolver(self._browser_coworker_name)
@@ -2372,7 +2372,7 @@ class LocalHost:
         return self._call_agent(session_key)[1]
 
     def _on_user_browser_change(self, _status: dict | None = None) -> None:
-        """The add-on came or went, a coworker took or left the browser, or
+        """The add-on came or went, an agent took or left the browser, or
         Stop flipped: push ``user_browser_status`` to the attached apps, once
         per real change (docs/WIRE_CONTRACT.md, "The user's own browser")."""
         try:
@@ -2392,8 +2392,8 @@ class LocalHost:
 
     def _on_browser_page_message(self, session: str | None, frame: dict) -> dict:
         """The user typed in the add-on's side panel ("Talk to Agents about
-        this page"). It becomes a normal run of the coworker that holds the
-        browser, or last held it; with none, of this host's own coworker.
+        this page"). It becomes a normal run of the agent that holds the
+        browser, or last held it; with none, of this host's own agent.
         The task starts with ``[from your browser panel]`` and carries the
         page as data. The answer goes back to the panel."""
         prompt = panel_prompt(frame if isinstance(frame, dict) else {})
@@ -2450,8 +2450,8 @@ class LocalHost:
 
     def _call_agent(self, session_key: str) -> tuple[str, str]:
         """The app's agent id and the name the user gave it, for a ringing
-        call. A registered coworker is its own session key; any other key is
-        this host's own coworker (``host:<device id>``). Never the roster
+        call. A registered agent is its own session key; any other key is
+        this host's own agent (``host:<device id>``). Never the roster
         codename: the fallback is the generic label."""
         agent_id = (
             session_key if self._is_own_coworker(session_key) else host_agent_id(self._device_id)
@@ -2495,7 +2495,7 @@ class LocalHost:
             pass
 
     def _on_budget_warning(self, payload: dict) -> None:
-        """A coworker's week reached 80 % or 100 % of its budget
+        """An agent's week reached 80 % or 100 % of its budget
         (docs/WIRE_CONTRACT.md, "Cost per run and weekly budget"). The frame
         went out on the run's stream; the push goes always, once per level
         and week, because a scheduled run has no stream at all."""

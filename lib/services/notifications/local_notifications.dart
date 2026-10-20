@@ -7,13 +7,15 @@
 ///    target is the Linux desktop, and a run ends while the window is behind
 ///    another one. `flutter_local_notifications_linux` talks to the desktop
 ///    over D-Bus, no daemon of ours.
-///  * **No answer content.** The toast says "Answer ready" and names the
-///    coworker. chuk put a preview of the reply in the body; here the reply
-///    stays end-to-end between the host and the app, like the push does.
-///  * **One toast per thread.** The id is the session key's hash, and on
-///    Android the tag is the session key — the same tag the FCM push uses —
-///    so the newest notification for a thread replaces the older one and one
-///    `cancel` clears both channels.
+///  * **Says who is done, and what came out.** The title names the agent
+///    ("Research is done"), the body is a short preview of the answer. The
+///    preview is built on this device from the answer the app already holds,
+///    so nothing leaves the end-to-end channel; the host's push (FCM) still
+///    carries no content (bead chuk_chat-kl8x).
+///  * **One toast per thread.** On Android the slot is the session key as tag
+///    and id 0 — exactly the slot the FCM push for the thread uses — so the
+///    app's toast and the host's push replace each other instead of stacking,
+///    and one `cancel` clears both. Elsewhere the id is the key's hash.
 ///
 /// The plugin is behind [LocalNotificationsBackend] so the tests drive the
 /// service without a platform channel.
@@ -33,7 +35,7 @@ import 'package:chuk_chat/services/notifications/notification_router.dart';
 const String kAgentsNotificationChannelId = 'cowork_answer_ready';
 const String kAgentsNotificationChannelName = 'Answer ready';
 const String kAgentsNotificationChannelDescription =
-    'A coworker finished a task or needs your input';
+    'An agent finished a task or needs your input';
 
 /// The logo a Linux toast draws. The same image the Android launcher uses,
 /// copied into the Flutter assets because a Linux build ships no icon of its
@@ -99,22 +101,32 @@ class LocalNotifications {
   static String payloadFor(String sessionKey, {String? runId}) =>
       jsonEncode(<String, String>{'session_key': sessionKey, 'run_id': ?runId});
 
-  /// "Answer ready" for [sessionKey]. [threadLabel] is the coworker's name
-  /// (or whatever the shell calls the thread) — never the answer.
+  /// The body when there is no answer text to preview.
+  static const String defaultBody = 'Your answer is ready.';
+
+  /// "Name is done" for [sessionKey], with [preview] (the answer, made
+  /// short by [notificationPreview]) as the body. [threadLabel] is the
+  /// agent's name, or whatever the shell calls the thread. [stopped] is a
+  /// run that ended without finishing.
   Future<void> showAnswerReady({
     required String sessionKey,
     required String threadLabel,
     String? runId,
-    String body = 'Your answer is ready.',
+    String? preview,
+    bool stopped = false,
   }) async {
     final LocalNotificationsBackend? b = _backend;
     if (b == null) return;
     final String label = threadLabel.trim();
+    final String who = label.isEmpty ? 'Chuk Chat' : label;
+    final String text = notificationPreview(preview ?? '');
     try {
       await b.show(
         id: idFor(sessionKey),
-        title: label.isEmpty ? 'Chuk Chat' : label,
-        body: body,
+        title: stopped ? '$who stopped' : '$who is done',
+        body: text.isNotEmpty
+            ? text
+            : (stopped ? 'Open the chat to see what happened.' : defaultBody),
         payload: payloadFor(sessionKey, runId: runId),
         tag: sessionKey,
       );
@@ -255,7 +267,9 @@ class _PluginBackend implements LocalNotificationsBackend {
   }) {
     const Color brand = Color(LocalNotifications.brandColorValue);
     return _plugin.show(
-      id: id,
+      // Android: the FCM push for a thread is (tag, 0). The same slot here
+      // means the app's toast and the push replace each other, never stack.
+      id: Platform.isAndroid ? 0 : id,
       title: title,
       body: body,
       payload: payload,
@@ -274,7 +288,10 @@ class _PluginBackend implements LocalNotificationsBackend {
           autoCancel: true,
           // One outstanding notification per thread, shared with the push.
           tag: tag,
-          ticker: 'Answer ready',
+          ticker: title,
+          category: AndroidNotificationCategory.message,
+          // The whole preview when the row is expanded.
+          styleInformation: BigTextStyleInformation(body, contentTitle: title),
         ),
         iOS: const DarwinNotificationDetails(
           presentAlert: true,
@@ -323,4 +340,46 @@ class _PluginBackend implements LocalNotificationsBackend {
     if (android == null) return false;
     return await android.requestNotificationsPermission() ?? false;
   }
+}
+
+/// The answer, made fit for one notification: markdown and the app's own
+/// render tags removed, whitespace folded, cut at a word near [maxChars].
+/// Empty when nothing readable is left.
+String notificationPreview(String raw, {int maxChars = 240}) {
+  if (raw.trim().isEmpty) return '';
+  String text = raw;
+  // Blocks the UI renders as cards or code carry no sentence worth reading.
+  text = text.replaceAll(RegExp(r'```[\s\S]*?(```|$)'), ' ');
+  text = text.replaceAll(
+    RegExp(
+      r'<(chart|map|email|think|thinking|artifact)\b[^>]*>[\s\S]*?(</\1>|$)',
+      caseSensitive: false,
+    ),
+    ' ',
+  );
+  text = text.replaceAll(RegExp(r'<[^>\n]{1,80}>'), ' ');
+  // Links keep their text, images go.
+  text = text.replaceAll(RegExp(r'!\[[^\]]*\]\([^)]*\)'), ' ');
+  text = text.replaceAllMapped(
+    RegExp(r'\[([^\]]+)\]\([^)]*\)'),
+    (m) => m.group(1) ?? '',
+  );
+  // Line markers: headings, quotes, list bullets, table rules.
+  text = text.replaceAll(
+    RegExp(r'^\s{0,3}(#{1,6}|>|[-*+]|\d+[.)])\s+', multiLine: true),
+    '',
+  );
+  text = text.replaceAll(
+    RegExp(r'^\s*\|?[\s:|-]{3,}\|?\s*$', multiLine: true),
+    ' ',
+  );
+  text = text.replaceAll('|', ' ');
+  // Emphasis and inline code marks.
+  text = text.replaceAll(RegExp(r'[*_`~]{1,3}'), '');
+  text = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (text.length <= maxChars) return text;
+  final String cut = text.substring(0, maxChars);
+  final int space = cut.lastIndexOf(' ');
+  final String head = space > maxChars * 0.6 ? cut.substring(0, space) : cut;
+  return '${head.trimRight()}\u2026';
 }

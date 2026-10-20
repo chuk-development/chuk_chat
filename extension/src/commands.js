@@ -63,7 +63,7 @@ async function dispatch(driver, op, args) {
       return { method: args.method, result: await driver.cdp(args.method, args.params) };
 
     case "browser_handoff": {
-      // The coworker cannot get past something — a sign-in, a wall — and gives
+      // The agent cannot get past something — a sign-in, a wall — and gives
       // the tab back rather than hammering at it.
       const lease = await driver.handoff();
       return { handed_off: Boolean(lease), tabId: driver.tabId, reason: args.reason ?? "" };

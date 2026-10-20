@@ -1,9 +1,9 @@
-// A strip along the top edge while the coworker is driving this tab, with a
+// A strip along the top edge while the agent is driving this tab, with a
 // Stop button. The user must never have to guess whether something else is
 // holding the mouse, and must be able to take it back with one click.
 //
 // It lives in a closed shadow root: the page's own styles cannot hide it, and
-// the snapshot (which walks the document) never sees it, so the coworker
+// the snapshot (which walks the document) never sees it, so the agent
 // cannot click its own Stop by reading it as page content.
 
 (() => {
@@ -71,7 +71,7 @@
     parts.bar.style.background = look.color;
     parts.chip.style.background = look.color;
     parts.label.textContent = label || look.text;
-    // Stop is offered while the coworker could still act here.
+    // Stop is offered while the agent could still act here.
     parts.stop.hidden = state === "stopped";
   }
 

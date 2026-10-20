@@ -346,6 +346,7 @@ void main() {
     Future<(List<FakeRelayController>, AgentsPairingStore)> pumpPersistent(
       WidgetTester tester, {
       bool hostAway = false,
+      bool? linkAnswers,
     }) async {
       tester.view.physicalSize = const Size(1400, 900);
       tester.view.devicePixelRatio = 1;
@@ -358,7 +359,11 @@ void main() {
         _app(
           AgentsThreadView(
             controllerBuilder: () async {
-              final c = FakeRelayController()..reconnectFails = hostAway;
+              final c =
+                  (linkAnswers == null
+                        ? FakeRelayController()
+                        : _ProbingRelayController(linkAnswers))
+                    ..reconnectFails = hostAway;
               controllers.add(c);
               return c;
             },
@@ -395,6 +400,59 @@ void main() {
       await tester.pump();
       await tester.pump();
       expect(controllers.length, before + 1);
+      expect(controllers.last.reconnectCalls, 1);
+    });
+
+    // Bead chuk_chat-kl8x: the way back from the background must not throw a
+    // live socket away. The run's final answer is on it (or still buffered on
+    // it); a new dial, sign-in, handshake and replay is what made the reader
+    // wait about five seconds on the old screen.
+    testWidgets(
+      'resume keeps a socket that still answers and only reconciles',
+      (tester) async {
+        final (controllers, _) = await pumpPersistent(
+          tester,
+          linkAnswers: true,
+        );
+        final live = controllers.single as _ProbingRelayController;
+        final reconnectsBefore = live.reconnectCalls;
+        final replaysBefore = live.replayRequests.length;
+        final state = tester.state<AgentsThreadViewState>(
+          find.byType(AgentsThreadView),
+        );
+        state.didChangeAppLifecycleState(AppLifecycleState.paused);
+        state.didChangeAppLifecycleState(AppLifecycleState.resumed);
+        await tester.pump();
+        await tester.pump();
+
+        expect(live.probes, 1);
+        expect(controllers, hasLength(1), reason: 'no second controller');
+        expect(live.reconnectCalls, reconnectsBefore, reason: 'no new dial');
+        expect(
+          live.replayRequests.length,
+          replaysBefore + 1,
+          reason: 'a delta replay reconciles in the background',
+        );
+        expect(AgentsRelayLink.instance.controller.value, same(live));
+      },
+    );
+
+    testWidgets('resume replaces a socket that does not answer', (
+      tester,
+    ) async {
+      final (controllers, _) = await pumpPersistent(tester, linkAnswers: false);
+      final dead = controllers.single as _ProbingRelayController;
+      final state = tester.state<AgentsThreadViewState>(
+        find.byType(AgentsThreadView),
+      );
+      state.didChangeAppLifecycleState(AppLifecycleState.paused);
+      state.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump();
+      await tester.pump();
+
+      expect(dead.probes, 1);
+      expect(controllers, hasLength(2));
       expect(controllers.last.reconnectCalls, 1);
     });
 
@@ -1460,4 +1518,21 @@ void main() {
 Future<void> _flushIdleTimers(WidgetTester tester) async {
   await MultiplexSession.shutdown();
   await tester.pumpAndSettle();
+}
+
+/// A fake whose socket can be asked whether it still answers.
+class _ProbingRelayController extends FakeRelayController
+    implements AgentsLinkProbe {
+  _ProbingRelayController(this.answers);
+
+  final bool answers;
+  int probes = 0;
+
+  @override
+  Future<bool> probeLink({
+    Duration timeout = const Duration(milliseconds: 1500),
+  }) async {
+    probes++;
+    return answers;
+  }
 }

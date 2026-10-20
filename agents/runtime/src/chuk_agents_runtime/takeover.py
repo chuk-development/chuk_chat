@@ -3,7 +3,7 @@
 The agent's sandbox browser reaches a step only the user can do: a login, a
 2FA code, a CAPTCHA. Without this tool the model can only write "please log
 in" into its answer, and the run ends. With it, the model calls
-``request_takeover``, the run WAITS, the app shows one card "<Coworker> needs
+``request_takeover``, the run WAITS, the app shows one card "<Agent> needs
 you in the browser" with a button that opens the live view, the user does the
 step, and the run goes on.
 

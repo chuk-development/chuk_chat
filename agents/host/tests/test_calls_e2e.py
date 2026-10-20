@@ -167,7 +167,7 @@ def test_a_reminder_by_call_rings_the_app_from_a_fired_automation(tmp_path, monk
     assert incoming["reason"] == REASON
     assert incoming["urgency"] == "normal"
     assert incoming["agent_id"] == "host:cowork-host"
-    assert incoming["agent_name"] == "Your coworker"  # never the roster codename
+    assert incoming["agent_name"] == "Your agent"  # never the roster codename
     assert started + 100 < incoming["expires_at"] < time.time() + 121
     assert started - 1 < incoming["created_at"] <= time.time()
     assert isinstance(incoming["ring_seconds"], int) and 100 < incoming["ring_seconds"] <= 120

@@ -1,13 +1,13 @@
 /// The floating top bar of a phone chat: chuk_chat's phone top bar
-/// (`root_wrapper_mobile.dart`, `_buildFloatingTopBar`) with a coworker in it.
+/// (`root_wrapper_mobile.dart`, `_buildFloatingTopBar`) with an agent in it.
 ///
 /// No app bar. Over the messages, on a fade from the page colour, float
 ///
 ///  * a round back chip where chuk has its menu chip;
-///  * chuk's title pill, carrying the coworker's face, its name and its
+///  * chuk's title pill, carrying the agent's face, its name and its
 ///    status line — "Active now", three dots while it works, or "Offline ·
-///    Reconnect". Tapping the pill opens the coworker's profile;
-///  * round chips for the shared files and the coworker's screen. The screen
+///    Reconnect". Tapping the pill opens the agent's profile;
+///  * round chips for the shared files and the agent's screen. The screen
 ///    chip is lit (chuk's accent fill) when there is a screen to take over,
 ///    parked when there is none — and a parked tap says why, so the chip is
 ///    never a dead button;
@@ -23,8 +23,6 @@ import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart'; // own browser
 import 'package:chuk_chat/models/agents_agent.dart';
-import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_binding.dart';
-import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_call_button.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
@@ -50,7 +48,7 @@ const double kMobileChromePillRadius = 18;
 /// padding and gaps take it back, so the chips land where chuk's land.
 const double _kReach = (MobileLayout.minTouchTarget - kMobileChromeChip) / 2;
 
-/// The coworker's face inside the pill. 30 leaves the two text lines their
+/// The agent's face inside the pill. 30 leaves the two text lines their
 /// room and keeps air above and below the face inside the 42 px pill.
 const double _kPillFaceSize = 30;
 
@@ -74,20 +72,20 @@ class MobileChatChrome extends StatelessWidget {
 
   final AgentsAgent agent;
 
-  /// Back to the coworker list.
+  /// Back to the agent list.
   final VoidCallback onBack;
 
-  /// Tap on the coworker pill — its profile page. Null renders the pill flat.
+  /// Tap on the agent pill — its profile page. Null renders the pill flat.
   final VoidCallback? onOpenProfile;
 
   // ── own browser ──
-  /// The coworker works in the user's own browser (`run_state.browser_target`).
+  /// The agent works in the user's own browser (`run_state.browser_target`).
   /// With no screen open, the parked screen target says "Works in your
   /// browser", like the desktop header, not "No screen open yet".
   final bool usesUserBrowser;
   // ── end own browser ──
 
-  /// The "computer" chip: the coworker's screen. Called whether or not a
+  /// The "computer" chip: the agent's screen. Called whether or not a
   /// screen is open — when none is, it is expected to say so, which is why the
   /// chip is never silently dead (bead cowork-egrg).
   final VoidCallback? onOpenBrowser;
@@ -174,16 +172,6 @@ class MobileChatChrome extends StatelessWidget {
                   SizedBox(
                     width: onOpenFiles != null ? 8 - 2 * _kReach : 8 - _kReach,
                   ),
-                  // The messenger's voice call, beside the video call's slot
-                  // (the screen). Only in a build that offers calls.
-                  if (voiceCallUiEnabled) ...<Widget>[
-                    ChatVoiceCallButton.agentsThread(
-                      style: ChatVoiceCallStyle.chip,
-                      agentName: agent.name,
-                      semanticsId: 'mobile_chat_call',
-                    ),
-                    const SizedBox(width: 8 - 2 * _kReach),
-                  ],
                   ChromeChip(
                     icon: Icons.desktop_windows_rounded,
                     accent: browserAvailable,
@@ -298,7 +286,7 @@ class ChromeChip extends StatelessWidget {
   }
 }
 
-/// The coworker pill: chuk's title pill with the face, the name and the live
+/// The agent pill: chuk's title pill with the face, the name and the live
 /// state in it. It paints at the chips' height and takes a 48 px press.
 ///
 /// Public because the desktop thread header draws the same pill.
@@ -395,9 +383,6 @@ class AgentChromePill extends StatelessWidget {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(kMobileChromePillRadius),
           ),
-          pressedShape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(kMobileChromePillRadius),
-          ),
           pressedScale: 0.97,
           child: ConstrainedBox(
             constraints: const BoxConstraints(
@@ -415,7 +400,7 @@ class AgentChromePill extends StatelessWidget {
     );
   }
 
-  /// What the coworker is doing: offline with a way back, working, or here.
+  /// What the agent is doing: offline with a way back, working, or here.
   Widget _status(BuildContext context, {required bool paired}) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
     if (!paired && onReconnect != null) {
@@ -491,7 +476,7 @@ class AgentChromePill extends StatelessWidget {
   }
 
   /// The bottom line of the pill: the presence dot and whatever says what the
-  /// coworker is doing. The dot is the shared [StatusDot], so it is as tall as
+  /// agent is doing. The dot is the shared [StatusDot], so it is as tall as
   /// the x-height of the words and its bottom rides the alphabetic baseline —
   /// one optical line, at every text scale.
   Widget _statusLine(

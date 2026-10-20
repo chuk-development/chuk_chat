@@ -136,7 +136,7 @@ void main() {
                 ChatDocumentsPanel(
                   sessionKey: 'layout-test',
                   controller: relay,
-                  coworkerName: 'Amber',
+                  agentName: 'Amber',
                   fullPage: true,
                 ),
                 size: window.size,

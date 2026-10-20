@@ -1,6 +1,6 @@
 // Who holds a tab.
 //
-// Taken from how OpenAI's extension models it: every tab the coworker touches
+// Taken from how OpenAI's extension models it: every tab the agent touches
 // carries a lease saying where it came from (`agent` — it opened the tab
 // itself; `user` — the user handed one over) and what it is doing (`active`,
 // `deliverable` when there is something to look at, `handoff` when it wants the
@@ -40,7 +40,7 @@ export class Leases {
     return lease;
   }
 
-  /** The user takes the wheel back: the lease stays, but the coworker stops. */
+  /** The user takes the wheel back: the lease stays, but the agent stops. */
   handoff(tabId) {
     return this.setState(tabId, STATE.HANDOFF);
   }

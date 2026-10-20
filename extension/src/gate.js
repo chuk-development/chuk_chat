@@ -1,7 +1,7 @@
 // The user's Stop. One flag, one place that refuses.
 //
 // While it is set, no command from Agents reaches a tab: the add-on answers
-// every one with the same refusal, so a coworker that keeps trying learns the
+// every one with the same refusal, so an agent that keeps trying learns the
 // same thing each time. Only the user lifts it (the panel's "Allow again"), or
 // the host does when the user sends a new task (`browser_resume`).
 

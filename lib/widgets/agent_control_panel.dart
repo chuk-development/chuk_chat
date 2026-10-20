@@ -1,19 +1,16 @@
-/// The in-UI control surface (§16): the model this coworker runs on (its own
-/// or the app default, with the way to change it, and what the last run
-/// really used), what it has spent, how long it has worked, the box it works in, and its skills.
+/// The agent's host and activity (§16): what the last run used, what the
+/// agent has spent, how long it has worked and the box it works in. It is
+/// the body of the "Host & activity" page ([AgentHostActivityPage]) on every
+/// form factor.
 ///
-/// The panel draws only what the host measured. A block the host did not report
-/// says so, with the reason — never a plausible-looking zero. There are no
-/// blocks here that nothing can fill: the schedule field and the integrations
-/// list were removed when it became clear that neither reached the host (the
-/// Automations page and the connector settings own those).
+/// The panel draws only what the host measured. A block the host did not
+/// report says so, with the reason, never a plausible-looking zero.
 ///
-/// The desktop details pane draws the same data in a calmer order
-/// ([AgentControlPanel.profileLayout]): the coworker's face and its name, role
-/// and description as fields, then one settings group (model, weekly budget),
-/// then everything else (last run, usage, cost, runtime, sandbox, skills,
-/// channels) in a "Technical details" section that is closed by default. The
-/// phone keeps the long list.
+/// One screen owns each thing (bead chuk_chat-8hz4). The panel does not
+/// repeat what another screen owns: the model, the permissions and the
+/// budget are rows of the agent settings ([AgentSettingsView]), and the
+/// skills are the Skills page ([AgentsSkillsSettingsPage]), which the panel
+/// opens with one row.
 library;
 
 // The desktop pane's first page sits next to this panel; the messenger shell
@@ -21,24 +18,23 @@ library;
 export 'package:chuk_chat/widgets/agent_details_overview.dart'
     show AgentDetailsOverview;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/pages/skills_settings_page.dart'
+    show AgentsSkillsSettingsPage;
 import 'package:chuk_chat/services/agents/agent_control_source.dart';
-import 'package:chuk_chat/services/agents/agent_profile_store.dart';
-import 'package:chuk_chat/services/agents/agents_channels_service.dart';
 import 'package:chuk_chat/services/agents/agents_permissions_service.dart';
-import 'package:chuk_chat/services/agents/schedule_spec.dart';
-import 'package:chuk_chat/services/agents/coworker_model.dart';
+import 'package:chuk_chat/services/agents/agent_model.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
-import 'package:chuk_chat/widgets/agent_details_identity.dart';
-import 'package:chuk_chat/widgets/agents_channels/agent_telegram_section.dart';
-import 'package:chuk_chat/widgets/coworker_model_tile.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/widgets/settings_list_view.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
 
 class AgentControlPanel extends StatefulWidget {
@@ -46,94 +42,30 @@ class AgentControlPanel extends StatefulWidget {
     super.key,
     required this.agent,
     required this.source,
-    this.onScheduleSubmitted,
-    this.showHeader = true,
-    this.showRefresh = true,
-    this.channels,
-    this.permissions,
-    this.profileLayout = false,
-    this.onRename,
-    this.profiles,
+    this.onOpenSkills,
   });
 
-  /// The desktop details pane's order: face, name, role and description, one
-  /// settings group, and the technical blocks folded away. Only the desktop
-  /// pane sets it; the phone keeps the long list.
-  final bool profileLayout;
-
-  /// The shell's rename path, for the name field of [profileLayout]. Null
-  /// makes the name read-only.
-  final ValueChanged<String>? onRename;
-
-  /// Where [profileLayout] keeps the role and the description. Defaults to
-  /// [AgentProfileStore.instance].
-  final AgentProfileStore? profiles;
-
-  /// Where the weekly budget is read and sent (F2). Defaults to
-  /// [AgentsPermissionsService.instance]; the field shows only for a host
-  /// that names `cost_budget`.
-  final AgentsPermissionsService? permissions;
-
-  /// The coworker's messenger channels. Defaults to
-  /// [AgentsChannelsService.instance]; the section shows only for a host
-  /// that runs channels.
-  final AgentsChannelsService? channels;
-
-  /// The name row at the top. The desktop details pane keeps it; the pane
-  /// header above it already carries Refresh, so it turns [showRefresh] off.
-  final bool showHeader;
-  final bool showRefresh;
+  /// Opens the Skills page. Null pushes [AgentsSkillsSettingsPage].
+  final VoidCallback? onOpenSkills;
 
   final AgentsAgent agent;
   final AgentControlSource source;
-
-  /// Retired. The panel no longer sets schedules: nothing installed them on the
-  /// host, and the Automations page is where a real schedule lives. Kept only
-  /// because `agents_shell_state.dart` still passes it; it is never called.
-  final void Function(ScheduleSpec spec)? onScheduleSubmitted;
 
   @override
   State<AgentControlPanel> createState() => _AgentControlPanelState();
 }
 
 class _AgentControlPanelState extends State<AgentControlPanel> {
-  String? _actionError;
-
-  /// [AgentControlPanel.profileLayout]: whether the weekly budget field and
-  /// the technical details are open. Both start closed.
-  bool _budgetOpen = false;
-  bool _technicalOpen = false;
-
-  /// The coworker's thread key IS its session key on the host, so the panel
-  /// asks about exactly the coworker it is showing.
+  /// The agent's thread key IS its session key on the host, so the panel
+  /// asks about exactly the agent it is showing.
   String get _sessionKey => widget.agent.threads.isEmpty
       ? widget.agent.id
       : widget.agent.threads.first.key;
-
-  // ── F2: automations + cost totals ──
-  final Set<String> _budgetAsked = <String>{};
-
-  AgentsPermissionsService get _permissions =>
-      widget.permissions ?? AgentsPermissionsService.instance;
-
-  /// Asks the host for the budget once it can answer and has not yet.
-  void _askBudget() {
-    final AgentsPermissionsService service = _permissions;
-    if (!service.budgetSupported) return;
-    if (service.budgetOf(widget.agent.id) != null) return;
-    // Once per coworker and panel: a host that never answers is not asked
-    // again on every rebuild.
-    if (!_budgetAsked.add(widget.agent.id)) return;
-    service.attach();
-    service.refresh(widget.agent.id);
-  }
-  // ── end F2 ──
 
   @override
   void initState() {
     super.initState();
     widget.source.refresh(_sessionKey);
-    _askBudget(); // F2
   }
 
   @override
@@ -141,304 +73,196 @@ class _AgentControlPanelState extends State<AgentControlPanel> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.agent.id != widget.agent.id) {
       widget.source.refresh(_sessionKey);
-      _askBudget(); // F2
     }
+  }
+
+  void _openSkills() {
+    final VoidCallback? open = widget.onOpenSkills;
+    if (open != null) return open();
+    unawaited(
+      Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => const AgentsSkillsSettingsPage(),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return ValueListenableBuilder<AgentControlSnapshot>(
       valueListenable: widget.source.snapshotFor(_sessionKey),
       builder: (context, snapshot, _) {
-        if (widget.profileLayout) return _buildProfile(context, snapshot);
-        // The user's own role and brief win, a cleared one included.
-        final AgentProfile profile = (widget.profiles ??
-                AgentProfileStore.instance)
-            .profileOf(widget.agent.id);
-        final String? shownRole = profile.roleOver(widget.agent.role);
-        final String? shownBrief = profile.briefOver(widget.agent.brief);
-        return ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            if (widget.showHeader)
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      widget.agent.name,
-                      style: theme.textTheme.titleMedium,
-                    ),
-                  ),
-                  if (widget.showRefresh)
-                    IconButton(
-                      tooltip: 'Refresh',
-                      // No compact density here: it shrank the only control on
-                      // the panel to 40 dp.
-                      icon: const AppIcon(Icons.refresh, size: 18),
-                      onPressed: () =>
-                          _run(() => widget.source.refresh(_sessionKey)),
-                    ),
-                ],
-              ),
-            if (shownRole != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Text(
-                  shownRole,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-              ),
-            // "Not installed" only while the host reports nothing for this
-            // coworker. A sandbox the host measured is proof it runs there:
-            // the note used to sit next to 44 runs in its own container.
-            if (!widget.agent.runsOnHost &&
-                snapshot.sandbox is! ControlAvailable<AgentSandbox>)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  'Created in the app. It is not installed on the host yet.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.hintColor,
-                  ),
-                ),
-              ),
-            if (shownBrief != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  shownBrief,
-                  style: theme.textTheme.bodySmall,
-                ),
-              ),
-            if (_actionError != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  _actionError!,
-                  style: TextStyle(color: theme.colorScheme.error),
-                ),
-              ),
+        // The settings-page frame: the page's floating header sits over the
+        // list, and the list scrolls up behind it.
+        return SettingsListView(
+          key: const ValueKey<String>('host-activity'),
+          padding: EdgeInsets.fromLTRB(
+            16,
+            8,
+            16,
+            24 + MediaQuery.paddingOf(context).bottom,
+          ),
+          children: <Widget>[
+            ..._notes(context, snapshot),
+            ..._measured(context, snapshot),
             const SizedBox(height: 8),
-            _section(
-              context,
-              'Model',
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  // What the next message runs on, and the way to change it:
-                  // the coworker's model page, the one place for it.
-                  CoworkerModelTile(
-                    chatId: _sessionKey,
-                    coworkerName: widget.agent.name,
-                    controlSource: widget.source,
-                  ),
-                  const SizedBox(height: 8),
-                  _buildModel(context, snapshot.model),
-                ],
-              ),
-            ),
-            _section(
-              context,
-              'Token use',
-              _buildTokens(context, snapshot.tokens),
-            ),
-            // ── F2: automations + cost totals ──
-            if (snapshot.cost case ControlAvailable<AgentCostTotals>(
-              value: final AgentCostTotals cost,
-            ))
-              _section(
-                context,
-                _l10n(context).costHeading,
-                _buildCost(context, cost),
-              ),
-            _buildBudget(context),
-            // ── end F2 ──
-            _section(
-              context,
-              'Session runtime',
-              _buildRuntime(context, snapshot.runtime),
-            ),
-            _section(
-              context,
-              'Sandbox',
-              _buildSandbox(context, snapshot.sandbox),
-            ),
-            _section(context, 'Skills', _buildSkills(context, snapshot.skills)),
-            _buildChannels(context),
+            ExpressiveGroup(children: <Widget>[_skillsRow(context)]),
           ],
         );
       },
     );
   }
 
-  // --- profile layout (desktop details pane) ---------------------------------
+  /// The note over the blocks for an agent the host does not run yet.
+  List<Widget> _notes(BuildContext context, AgentControlSnapshot snapshot) {
+    return <Widget>[
+      // "Not installed" only while the host reports nothing for this agent.
+      // A sandbox the host measured is proof it runs there: the note used to
+      // sit next to 44 runs in its own container.
+      if (!widget.agent.runsOnHost &&
+          snapshot.sandbox is! ControlAvailable<AgentSandbox>)
+        const Padding(
+          padding: EdgeInsets.only(bottom: 8),
+          child: ExpressiveInfoCard(
+            icon: Icons.cloud_off_rounded,
+            text: 'Created in the app. It is not installed on the host yet.',
+          ),
+        ),
+    ];
+  }
 
-  Widget _buildProfile(BuildContext context, AgentControlSnapshot snapshot) {
+  /// What the host measured: the activity group, then the machine group.
+  List<Widget> _measured(BuildContext context, AgentControlSnapshot snapshot) {
+    final AppLocalizations l = _l10n(context);
+    return <Widget>[
+      ExpressiveSectionHeader(l.agentsCwSectionActivity),
+      ExpressiveGroup(
+        children: <Widget>[
+          _fact(
+            context,
+            Icons.auto_awesome_outlined,
+            'Last run',
+            _buildModel(context, snapshot.model),
+          ),
+          _fact(
+            context,
+            Icons.bolt_outlined,
+            'Token use',
+            _buildTokens(context, snapshot.tokens),
+          ),
+          if (snapshot.cost case ControlAvailable<AgentCostTotals>(
+            value: final AgentCostTotals cost,
+          ))
+            _fact(
+              context,
+              Icons.credit_card,
+              l.costHeading,
+              _buildCost(context, cost),
+            ),
+          _fact(
+            context,
+            Icons.timer_outlined,
+            'Session runtime',
+            _buildRuntime(context, snapshot.runtime),
+          ),
+        ],
+      ),
+      ExpressiveSectionHeader(l.agentsCwSectionMachine),
+      ExpressiveGroup(
+        children: <Widget>[
+          _fact(
+            context,
+            Icons.computer_outlined,
+            'Sandbox',
+            _buildSandbox(context, snapshot.sandbox),
+          ),
+        ],
+      ),
+    ];
+  }
+
+  /// The one way to the agent's skills: the Skills page owns them.
+  Widget _skillsRow(BuildContext context) {
+    final AppLocalizations l = _l10n(context);
+    return ExpressiveRow(
+      key: const ValueKey<String>('panel-skills-row'),
+      icon: Icons.extension_outlined,
+      title: l.skills,
+      subtitle:
+          _skillsSummary(widget.source.snapshotFor(_sessionKey).value.skills) ??
+          l.agentsCwSkillsSubtitle,
+      trailing: _chevron(context),
+      onTap: _openSkills,
+    );
+  }
+
+  /// `3 of 5 on`, or null before the host listed its skills.
+  static String? _skillsSummary(ControlValue<List<AgentSkill>> value) =>
+      switch (value) {
+        ControlAvailable<List<AgentSkill>>(value: final skills) =>
+          skills.isEmpty
+              ? 'No skills.'
+              : '${skills.where((s) => s.enabled).length} of '
+                    '${skills.length} on',
+        _ => null,
+      };
+
+  Widget _chevron(BuildContext context) => AppIcon(
+    Icons.chevron_right,
+    size: 20,
+    color: Theme.of(context).colorScheme.onSurfaceVariant,
+  );
+
+  /// One measured fact as a row of the group: the icon tile, the name of the
+  /// fact, and the host's figures under it.
+  Widget _fact(
+    BuildContext context,
+    IconData icon,
+    String title,
+    Widget value,
+  ) {
     final ThemeData theme = Theme.of(context);
-    return ListView(
-      key: const ValueKey<String>('details-profile'),
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
-      children: <Widget>[
-        AgentDetailsIdentity(
-          agent: widget.agent,
-          onRename: widget.onRename,
-          profiles: widget.profiles,
-        ),
-        if (!widget.agent.runsOnHost &&
-            snapshot.sandbox is! ControlAvailable<AgentSandbox>)
-          Padding(
-            padding: const EdgeInsets.only(top: 10, left: 4),
-            child: Text(
-              'Created in the app. It is not installed on the host yet.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.hintColor,
-              ),
-            ),
-          ),
-        if (_actionError != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 10, left: 4),
-            child: Text(
-              _actionError!,
-              style: TextStyle(color: theme.colorScheme.error),
-            ),
-          ),
-        const SizedBox(height: 20),
-        _buildSettingsGroup(context),
-        const SizedBox(height: 16),
-        ExpressiveGroup(
-          children: <Widget>[
-            ExpressiveRow(
-              key: const ValueKey<String>('details-technical-toggle'),
-              icon: Icons.build_outlined,
-              title: 'Technical details',
-              subtitle: 'Last run, usage, cost, sandbox, skills',
-              trailing: AppIcon(
-                _technicalOpen ? Icons.expand_less : Icons.expand_more,
-                size: 20,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-              onTap: () => setState(() => _technicalOpen = !_technicalOpen),
-            ),
-          ],
-        ),
-        if (_technicalOpen)
-          Padding(
-            key: const ValueKey<String>('details-technical'),
-            padding: const EdgeInsets.fromLTRB(4, 16, 4, 0),
+    return ExpressiveTile(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          ExpressiveIconTile(icon: icon),
+          const SizedBox(width: 14),
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                _section(
-                  context,
-                  'Last run',
-                  _buildModel(context, snapshot.model, label: false),
-                ),
-                _section(
-                  context,
-                  'Token use',
-                  _buildTokens(context, snapshot.tokens),
-                ),
-                if (snapshot.cost case ControlAvailable<AgentCostTotals>(
-                  value: final AgentCostTotals cost,
-                ))
-                  _section(
-                    context,
-                    _l10n(context).costHeading,
-                    _buildCost(context, cost),
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.onSurface,
                   ),
-                _section(
-                  context,
-                  'Session runtime',
-                  _buildRuntime(context, snapshot.runtime),
                 ),
-                _section(
-                  context,
-                  'Sandbox',
-                  _buildSandbox(context, snapshot.sandbox),
+                const SizedBox(height: 2),
+                DefaultTextStyle.merge(
+                  style: theme.textTheme.bodyMedium,
+                  child: value,
                 ),
-                _section(
-                  context,
-                  'Skills',
-                  _buildSkills(context, snapshot.skills),
-                ),
-                _buildChannels(context),
               ],
             ),
           ),
-      ],
-    );
-  }
-
-  /// The one settings group: the model the next message runs on and, for a
-  /// host that keeps budgets, the weekly budget. A tap on the budget opens
-  /// the budget field inside the group.
-  Widget _buildSettingsGroup(BuildContext context) {
-    final AgentsPermissionsService service = _permissions;
-    return ListenableBuilder(
-      listenable: service,
-      builder: (BuildContext context, Widget? _) {
-        final bool budget = service.budgetSupported;
-        if (budget && service.budgetOf(widget.agent.id) == null) {
-          // A host that names the capability only after the pane opened.
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) _askBudget();
-          });
-        }
-        final ColorScheme scheme = Theme.of(context).colorScheme;
-        final AppLocalizations l = _l10n(context);
-        final double? value = service.budgetOf(widget.agent.id);
-        return ExpressiveGroup(
-          key: const ValueKey<String>('details-settings-group'),
-          children: <Widget>[
-            CoworkerModelTile(
-              chatId: _sessionKey,
-              coworkerName: widget.agent.name,
-              controlSource: widget.source,
-            ),
-            if (budget)
-              ExpressiveRow(
-                key: const ValueKey<String>('details-budget-row'),
-                icon: Icons.credit_card,
-                title: l.budgetWeeklyLabel,
-                subtitle: value == null
-                    ? 'Loading…'
-                    : value <= 0
-                    ? l.budgetNoLimit
-                    : formatEuro(value),
-                trailing: AppIcon(
-                  _budgetOpen ? Icons.expand_less : Icons.expand_more,
-                  size: 20,
-                  color: scheme.onSurfaceVariant,
-                ),
-                onTap: () => setState(() => _budgetOpen = !_budgetOpen),
-              ),
-            if (budget && _budgetOpen)
-              ExpressiveTile(
-                padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                child: WeeklyBudgetField(
-                  agentId: widget.agent.id,
-                  service: service,
-                ),
-              ),
-          ],
-        );
-      },
+        ],
+      ),
     );
   }
 
   // --- blocks ----------------------------------------------------------------
 
-  /// What the last run used. [label] puts "Last run" above it; the profile
-  /// layout has the label as its section heading instead.
+  /// What the last run used. The fact row names it "Last run".
   Widget _buildModel(
     BuildContext context,
-    ControlValue<AgentModelChoice> value, {
-    bool label = true,
-  }) {
+    ControlValue<AgentModelChoice> value,
+  ) {
     final theme = Theme.of(context);
     return switch (value) {
       ControlUnavailable<AgentModelChoice>(:final reason) => _notReported(
@@ -451,13 +275,6 @@ class _AgentControlPanelState extends State<AgentControlPanel> {
       ControlAvailable<AgentModelChoice>(value: final choice) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (label)
-            Text(
-              'Last run',
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: theme.hintColor,
-              ),
-            ),
           Text(choice.id),
           if (_runDetail(choice) case final String detail)
             Text(
@@ -567,63 +384,6 @@ class _AgentControlPanelState extends State<AgentControlPanel> {
     };
   }
 
-  Widget _buildSkills(
-    BuildContext context,
-    ControlValue<List<AgentSkill>> value,
-  ) {
-    return switch (value) {
-      ControlUnavailable<List<AgentSkill>>(:final reason) => _notReported(
-        context,
-        reason,
-      ),
-      ControlLoading<List<AgentSkill>>() => _loading(),
-      ControlAvailable<List<AgentSkill>>(value: final skills) =>
-        skills.isEmpty
-            ? Text('No skills.', style: Theme.of(context).textTheme.bodySmall)
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  for (final skill in skills)
-                    SwitchListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      value: skill.enabled,
-                      title: Text(skill.name),
-                      subtitle: Text(
-                        skill.description,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      onChanged: (enabled) => _run(
-                        () => widget.source.setSkillEnabled(
-                          skill.name,
-                          enabled: enabled,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-    };
-  }
-
-  /// Telegram, under its own label, only while the host runs channels
-  /// (`host_route.capabilities` has `agent_channels`).
-  Widget _buildChannels(BuildContext context) {
-    final AgentsChannelsService channels =
-        widget.channels ?? AgentsChannelsService.instance;
-    return ListenableBuilder(
-      listenable: channels,
-      builder: (BuildContext context, Widget? _) {
-        if (!channels.supported) return const SizedBox.shrink();
-        return _section(
-          context,
-          AppLocalizations.of(context)?.agentsChannels ?? 'Channels',
-          AgentTelegramSection(agentId: widget.agent.id, service: channels),
-        );
-      },
-    );
-  }
-
   // ── F2: automations + cost totals ──
   static AppLocalizations _l10n(BuildContext context) =>
       AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));
@@ -716,27 +476,6 @@ class _AgentControlPanelState extends State<AgentControlPanel> {
     );
   }
 
-  /// The weekly budget field, only for a host that keeps budgets.
-  Widget _buildBudget(BuildContext context) {
-    final AgentsPermissionsService service = _permissions;
-    return ListenableBuilder(
-      listenable: service,
-      builder: (BuildContext context, Widget? _) {
-        if (!service.budgetSupported) return const SizedBox.shrink();
-        // A host that names the capability only after the panel opened.
-        if (service.budgetOf(widget.agent.id) == null) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) _askBudget();
-          });
-        }
-        return _section(
-          context,
-          _l10n(context).budgetWeeklyLabel,
-          WeeklyBudgetField(agentId: widget.agent.id, service: service),
-        );
-      },
-    );
-  }
   // ── end F2 ──
 
   // --- helpers ---------------------------------------------------------------
@@ -753,34 +492,6 @@ class _AgentControlPanelState extends State<AgentControlPanel> {
         'Reasoning ${ChatModeService.reasoningLabel(effort).toLowerCase()}',
     ];
     return parts.isEmpty ? null : parts.join(' · ');
-  }
-
-  Future<void> _run(Future<void> Function() action) async {
-    try {
-      await action();
-      if (mounted) setState(() => _actionError = null);
-    } catch (error) {
-      if (!mounted) return;
-      setState(() => _actionError = '$error');
-    }
-  }
-
-  Widget _section(BuildContext context, String title, Widget child) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title.toUpperCase(),
-            style: theme.textTheme.labelSmall?.copyWith(color: theme.hintColor),
-          ),
-          const SizedBox(height: 4),
-          child,
-        ],
-      ),
-    );
   }
 
   /// The host measured nothing here — said plainly, with the reason, so a
@@ -842,7 +553,7 @@ String formatTimestamp(DateTime when) {
 }
 
 // ── F2: automations + cost totals ──
-/// The coworker's weekly budget in euro (docs/WIRE_CONTRACT.md, "The budget
+/// The agent's weekly budget in euro (docs/WIRE_CONTRACT.md, "The budget
 /// setting"): empty or 0 = no limit, at most 10000. Sent as
 /// `agent_permissions_set` with `budget_weekly` only; the host's reply
 /// replaces what the field shows.

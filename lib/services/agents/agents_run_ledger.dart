@@ -13,7 +13,7 @@
 /// to the renderer as `ToolLoopResult.toolCalls` / `.producedBlocks` when the
 /// turn completes.
 ///
-/// The ledger is a [ChangeNotifier] so the thread view can drive "this coworker
+/// The ledger is a [ChangeNotifier] so the thread view can drive "this agent
 /// is working" off it instead of re-deriving run state from the raw stream.
 library;
 
@@ -124,7 +124,7 @@ String? agentsRunEndNotice(AgentsRunOutcome outcome) => switch (outcome) {
     'This message did not reach your host. Nothing ran — send it again.',
 };
 
-/// The kind of the newest frame that folded into a run: what the coworker
+/// The kind of the newest frame that folded into a run: what the agent
 /// was doing the last time it said anything. The live status line reads it
 /// (`agents_turn_phase.dart`), so a run that wrote a line and then went into a
 /// long tool does not keep saying "Writing".
@@ -506,10 +506,10 @@ ToolCall actionApprovalCallFromRelay(
 }
 
 /// The transcript's word for one offered answer. The card itself names the
-/// coworker; the stored line does not, so a rename never makes it wrong.
+/// agent; the stored line does not, so a rename never makes it wrong.
 String approvalOptionLabel(String option, {String? site}) => switch (option) {
   AgentsRelayApprovalRequest.scopeOnce => 'Allow once',
-  AgentsRelayApprovalRequest.scopeAlwaysAgent => 'Always for this coworker',
+  AgentsRelayApprovalRequest.scopeAlwaysAgent => 'Always for this agent',
   AgentsRelayApprovalRequest.scopeAlwaysSite =>
     site == null ? 'Always on this site' : 'Always on $site',
   AgentsRelayApprovalRequest.scopeDeny => 'Deny',
@@ -527,7 +527,7 @@ String approvalDecisionLabel({
   }
   return switch (scope) {
     AgentsRelayApprovalRequest.scopeAlwaysAgent =>
-      'Allowed always for this coworker',
+      'Allowed always for this agent',
     AgentsRelayApprovalRequest.scopeAlwaysSite =>
       site == null ? 'Allowed always on this site' : 'Allowed always on $site',
     _ => 'Allowed once',
@@ -747,7 +747,7 @@ class AgentsRunLedger extends ChangeNotifier {
   /// starts again. Every frame that proves the run is alive lands here.
   ///
   /// The adapter calls it for every answer token, so it also records that the
-  /// coworker is writing. A host header that only says "still running" goes
+  /// agent is writing. A host header that only says "still running" goes
   /// through [_keepAlive] instead, which claims no phase.
   void touch(String sessionKey) {
     final run = _runs[sessionKey];

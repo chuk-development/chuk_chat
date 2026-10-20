@@ -1,4 +1,4 @@
-/// Everything the coworkers have handed over, in one place.
+/// Everything the agents have handed over, in one place.
 ///
 /// A thread holds its own files and pictures, and until now that was the only
 /// way to find them: open the conversation, scroll back, hope. The Media tab
@@ -22,7 +22,7 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 /// What kind of thing an entry points at.
 enum MediaKind { image, file }
 
-/// One thing a coworker handed over.
+/// One thing an agent handed over.
 @immutable
 class MediaEntry {
   const MediaEntry({

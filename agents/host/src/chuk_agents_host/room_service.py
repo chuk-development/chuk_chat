@@ -56,7 +56,7 @@ class RoomService:
     executors connect). ``members_ready`` is what registers them: it is called
     with the room and its members just before an exchange runs, so the host can
     start a member's executor on demand instead of holding one open for every
-    coworker that might one day be in a room. ``caps`` overrides the stored
+    agent that might one day be in a room. ``caps`` overrides the stored
     per-room caps for every run — leave it ``None`` to honour each room's own
     caps.
     """
@@ -96,8 +96,8 @@ class RoomService:
         room cannot take (over the cap, a bad row) is skipped; the rest of the
         room stays usable.
 
-        ``agent_to_agent`` is the room's policy — may a coworker's reply pull
-        another coworker in. It defaults to ``True``, so an app that predates the
+        ``agent_to_agent`` is the room's policy — may an agent's reply pull
+        another agent in. It defaults to ``True``, so an app that predates the
         policy keeps creating the rooms it always did, and it is reconciled like
         the name, because the app owns room state."""
         wanted = [
@@ -140,7 +140,7 @@ class RoomService:
     def handle_room_add_member(
         self, room_id: str, agent_id: str, handle: str
     ) -> None:
-        """Add a coworker to a room the host holds (§16.1). Ignored on an unknown
+        """Add an agent to a room the host holds (§16.1). Ignored on an unknown
         room or a member the room cannot take (full, or a duplicate) — the room
         stays valid rather than the call raising into the frame loop."""
         if self._rooms.get(room_id) is None:
@@ -151,7 +151,7 @@ class RoomService:
             return
 
     def handle_room_remove_member(self, room_id: str, agent_id: str) -> None:
-        """Remove a coworker from a room (§16.1). Ignored on an unknown room or a
+        """Remove an agent from a room (§16.1). Ignored on an unknown room or a
         non-member. Removing the transcript is not this call's job — the room
         lives on with fewer members."""
         if self._rooms.get(room_id) is None:
@@ -168,7 +168,7 @@ class RoomService:
             self._rooms.rename_room(room_id, name)
 
     def handle_room_set_agent_to_agent(self, room_id: str, enabled: bool) -> None:
-        """Switch a room between coworkers-may-summon-each-other and
+        """Switch a room between agents-may-summon-each-other and
         user-driven (§16.1). A no-op on an unknown room — the host does not have
         it yet and the next ``room_create`` carries the policy with it."""
         if self._rooms.get(room_id) is None:

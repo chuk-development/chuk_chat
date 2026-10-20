@@ -6,6 +6,7 @@ import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
 import 'package:chuk_chat/services/agents/agents_run_cost.dart';
 import 'package:chuk_chat/services/chat_runtime.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
+import 'package:chuk_chat/services/dictation_tracker.dart';
 import 'package:chuk_chat/services/offline_retry_manager.dart';
 import 'package:chuk_chat/widgets/agents_quiet_run_fold.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
@@ -108,7 +109,7 @@ class ChatMessageListItem extends StatelessWidget {
     final bool forceLive =
         isLastAiMessage && (liveRuntime?.isSending.value ?? false);
 
-    // AGENTS: what a coworker's run cost, and its run id, ride on its answer
+    // AGENTS: what an agent's run cost, and its run id, ride on its answer
     // as one synthetic call (docs/WIRE_CONTRACT.md, "Cost per run and weekly
     // budget"). It is lifted off here, so the bubble never draws it as a tool
     // line. The cost is not shown under the answer (the owner does not want
@@ -125,6 +126,10 @@ class ChatMessageListItem extends StatelessWidget {
       message: text,
       reasoning: reasoning,
       voicePlayback: messages[index]['voicePlayback'],
+      isVoiceInput: data.isUser && isVoiceInput(messages[index]),
+      voiceInputDuration: data.isUser
+          ? voiceInputDuration(messages[index])
+          : null,
       isUser: data.isUser,
       startsNewGroup: startsNewGroup,
       endsGroup: endsGroup,

@@ -1,6 +1,6 @@
-/// The colour of a coworker's bubble, by what the message IS.
+/// The colour of an agent's bubble, by what the message IS.
 ///
-/// A coworker does not only talk: it works (tool runs), it hands over files
+/// An agent does not only talk: it works (tool runs), it hands over files
 /// (artifacts, images), and sometimes it breaks off. In the reference messenger
 /// every message kind — text, voice, media, poll — reads differently at a
 /// glance, and this is the same idea with the kinds Agents actually has:
@@ -21,7 +21,7 @@ import 'package:flutter/material.dart';
 
 enum AgentBubbleKind { answer, work, delivery, problem }
 
-/// The fill and the foreground for a coworker's bubble.
+/// The fill and the foreground for an agent's bubble.
 @immutable
 class AgentBubbleColors {
   const AgentBubbleColors(this.fill, this.onFill);

@@ -1,11 +1,11 @@
-/// Media: everything the coworkers have handed over, without opening a chat.
+/// Media: everything the agents have handed over, without opening a chat.
 ///
 /// Two kinds, and they are read differently, so they are shown differently: a
 /// picture is looked at (a grid of thumbnails, tap for full screen), a file is
 /// opened or saved (the same row the chat draws, so Open and Download behave
 /// exactly as they do there).
 ///
-/// There is no third kind. Agents has no "artifacts" of its own: a coworker
+/// There is no third kind. Agents has no "artifacts" of its own: an agent
 /// writes a real file in its workspace and sends it, and that file is what
 /// arrives here.
 library;
@@ -71,7 +71,7 @@ class _MobileMediaPageState extends State<MobileMediaPage> {
                       message: _filter == 0
                           ? 'No pictures yet'
                           : 'No files yet',
-                      hint: 'What a coworker sends you shows up here.',
+                      hint: 'What an agent sends you shows up here.',
                     )
                   : (_filter == 0
                         ? GridView.builder(

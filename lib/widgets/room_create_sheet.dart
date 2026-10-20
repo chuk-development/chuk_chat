@@ -1,7 +1,7 @@
-/// Create a group room (§16.1): name it, pick the coworkers, choose whether
+/// Create a group room (§16.1): name it, pick the agents, choose whether
 /// they may answer each other.
 ///
-/// There is no member ceiling. A room takes as many coworkers as the roster
+/// There is no member ceiling. A room takes as many agents as the roster
 /// holds, so the picker is built for a long list: the name field, the policy
 /// switch and the actions stay put while only the member list scrolls, and a
 /// search field appears once the roster is longer than the eye can scan.
@@ -29,7 +29,7 @@ class RoomCreateSheet extends StatefulWidget {
     this.onCancel,
   });
 
-  /// The coworkers that can join. Usually the roster's visible agents.
+  /// The agents that can join. Usually the roster's visible agents.
   final List<AgentsAgent> agents;
 
   final void Function(AgentsRoomDraft draft) onSubmit;
@@ -60,7 +60,7 @@ class _RoomCreateSheetState extends State<RoomCreateSheet> {
   bool get _searchable => widget.agents.length > kRoomSearchThreshold;
 
   /// The candidates the search field leaves visible. The selection is kept on
-  /// ids, not on this list, so filtering never drops a chosen coworker.
+  /// ids, not on this list, so filtering never drops a chosen agent.
   List<AgentsAgent> get _visible {
     final query = _searchController.text.trim().toLowerCase();
     if (!_searchable || query.isEmpty) return widget.agents;
@@ -147,7 +147,7 @@ class _RoomCreateSheetState extends State<RoomCreateSheet> {
               TextField(
                 controller: _searchController,
                 decoration: const InputDecoration(
-                  hintText: 'Search coworkers',
+                  hintText: 'Search agents',
                   border: OutlineInputBorder(),
                   isDense: true,
                 ),
@@ -158,7 +158,7 @@ class _RoomCreateSheetState extends State<RoomCreateSheet> {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 child: Text(
-                  'No coworkers to add yet.',
+                  'No agents to add yet.',
                   style: TextStyle(color: theme.hintColor),
                 ),
               )
@@ -166,7 +166,7 @@ class _RoomCreateSheetState extends State<RoomCreateSheet> {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 child: Text(
-                  'No coworker matches that.',
+                  'No agent matches that.',
                   style: TextStyle(color: theme.hintColor),
                 ),
               )
@@ -187,7 +187,7 @@ class _RoomCreateSheetState extends State<RoomCreateSheet> {
               children: [
                 ExpressiveSwitchRow(
                   key: const ValueKey<String>('room-agent-to-agent'),
-                  title: 'Coworkers can reply to each other',
+                  title: 'Agents can reply to each other',
                   subtitle: 'With this off, they only answer you.',
                   value: _agentToAgent,
                   onChanged: (on) => setState(() => _agentToAgent = on),

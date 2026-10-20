@@ -1,4 +1,4 @@
-# Runbook: den Coworker im eigenen Browser fahren lassen
+# Runbook: den Agenten im eigenen Browser fahren lassen
 
 Stand 2026-10-05 (bead chuk_chat-rixw). Ersetzt den Stand vom 2026-09-08, der
 noch auf das alte `~/git/cowork`-Repo zeigte. Alles liegt jetzt in diesem Repo:
@@ -10,20 +10,20 @@ Wire-Spezifikation: `docs/WIRE_CONTRACT.md`, Abschnitt "The user's own browser".
 
 ```
 Agent ── agents-extension-mcp ── Broker im Host ── agents-browser-bridge ── Add-on in Chrome
-         (pro Coworker)          (ein Prozess,     (startet Chrome selbst,
+         (pro Agent)             (ein Prozess,     (startet Chrome selbst,
                                   lebt mit Host)    native messaging)
 ```
 
 * Kein offener Port. Beide Sockets liegen in `$XDG_RUNTIME_DIR/chuk-agents/`
   (`/run/user/1000/chuk-agents/`), Modus 0600.
-* Ein Coworker haelt den Browser, ein zweiter bekommt "in use", bis der erste
+* Ein Agent haelt den Browser, ein zweiter bekommt "in use", bis der erste
   loslaesst oder 5 Minuten nichts tut.
 * Jede Aktion im eigenen Browser fragt (Klick, Tippen, Taste, Seite oeffnen,
-  Tab uebernehmen), ausser die Seite steht auf der Freigabeliste des Coworkers
+  Tab uebernehmen), ausser die Seite steht auf der Freigabeliste des Agenten
   ("Immer fuer diese Seite") oder der Nutzer hat `browser_act` fuer ihn auf
   `allow` gestellt.
 * Stop im Browser (Leiste oben auf der Seite, Panel, oder "Abbrechen" in
-  Chromes gelber Debug-Leiste) haelt den Lauf des Coworkers an und sperrt den
+  Chromes gelber Debug-Leiste) haelt den Lauf des Agenten an und sperrt den
   Browser, bis der Nutzer im Panel oder in der App "Allow again" drueckt
   oder eine neue Aufgabe schickt.
 
@@ -68,12 +68,12 @@ Schreibt `dev.chuk.cowork.json` fuer Chrome, Chromium, Brave und Firefox.
 `allowed_origins` nennt genau diese eine Erweiterung. Danach die Erweiterung
 einmal neu laden.
 
-## 3. Host neu starten und Coworker umstellen
+## 3. Host neu starten und Agenten umstellen
 
 Der Broker startet mit dem Host. Ein Host von vor diesem Stand hat ihn nicht,
 also einmal neu starten (wie ueblich, nicht mitten in einem Lauf).
 
-Dann in der App beim Coworker unter *Permissions* "Your browser" einschalten.
+Dann in der App beim Agenten unter *Permissions* "Your browser" einschalten.
 Gilt ab der naechsten Aufgabe.
 
 Pruefen ohne App:
@@ -89,16 +89,16 @@ to Agents on this computer". Sonst: Host laeuft nicht, oder Schritt 2 fehlt.
 
 1. **Verbindung.** Panel oeffnen (Icon klicken). Oben gruener Punkt,
    `Agents · native · cdp input`.
-2. **Erste Seite fragt.** Dem Coworker schreiben: "Oeffne github.com in meinem
+2. **Erste Seite fragt.** Dem Agenten schreiben: "Oeffne github.com in meinem
    Browser und sag mir, was oben steht." Erwartet: eine Freigabe-Karte "Open
    github.com", Kennzeichen "in your own browser". "Immer fuer diese Seite"
    waehlen. Ein neuer Tab in der lila Gruppe "Agents" oeffnet sich, oben auf
-   der Seite eine farbige Leiste mit "<Name des Coworkers> is using this tab"
+   der Seite eine farbige Leiste mit "<Name des Agenten> is using this tab"
    und "Stop". Das Panel sagt "<Name> is using a tab in this browser."
 3. **Freigabe gilt fuer die Seite.** "Klick dort auf Pull requests." Erwartet:
    keine Karte, der Klick passiert.
 4. **Andere Seite fragt wieder.** "Oeffne jetzt example.org." Erwartet: Karte
-   "Open example.org". Ablehnen. Der Coworker meldet, dass es nicht passiert ist.
+   "Open example.org". Ablehnen. Der Agent meldet, dass es nicht passiert ist.
 5. **Eigenen Tab uebergeben.** Einen Tab mit einer Seite oeffnen, auf der du
    eingeloggt bist. "Schau dir meine Tabs an und uebernimm den mit <Seite>."
    Erwartet: `browser_tabs list` ohne Karte, dann Karte "Take over your tab on
@@ -109,7 +109,7 @@ to Agents on this computer". Sonst: Host laeuft nicht, oder Schritt 2 fehlt.
 7. **Stop auf der Seite.** Waehrend er arbeitet, in der Leiste auf "Stop".
    Erwartet: Leiste wird grau "Agents stopped" und verschwindet, der Lauf in
    der App endet als gestoppt, das Panel zeigt "Stopped" und "Allow again".
-   Ein neuer Versuch des Coworkers bekommt "the user pressed Stop".
+   Ein neuer Versuch des Agenten bekommt "the user pressed Stop".
 8. **Stop aufheben.** Neue Aufgabe in der App schicken -> geht wieder. Oder im
    Panel "Allow again". Oder in der App: der Stop-Hinweis am Ende des Threads
    und der Schalter "Your browser" zeigen "Allow again" (Rahmen
@@ -118,17 +118,17 @@ to Agents on this computer". Sonst: Host laeuft nicht, oder Schritt 2 fehlt.
    wieder "Paired with Chrome", der Knopf verschwindet.
 9. **Chromes eigene Leiste.** Waehrend er klickt, in Chromes gelber Leiste
    "... debuggt diesen Browser" auf "Abbrechen". Erwartet: wie Stop.
-10. **Zwei Coworker.** Zwei Coworker mit "Your browser" gleichzeitig etwas
-    oeffnen lassen. Erwartet: der zweite bekommt "in use by another coworker".
+10. **Zwei Agenten.** Zwei Agenten mit "Your browser" gleichzeitig etwas
+    oeffnen lassen. Erwartet: der zweite bekommt "in use by another agent".
 11. **Panel.** Rechtsklick auf eine Seite -> "Talk to Agents about this
     page", im Panel etwas fragen. Erwartet: sofort "Sent to <Name>. ...", der
-    Lauf erscheint in der App im Thread dieses Coworkers mit der ersten Zeile
+    Lauf erscheint in der App im Thread dieses Agenten mit der ersten Zeile
     `[from your browser panel]`, die Antwort kommt danach ins Panel. Ohne
-    Coworker im Browser geht die Nachricht an den eigenen Coworker des Hosts.
+    Agenten im Browser geht die Nachricht an den eigenen Agenten des Hosts.
 12. **Status live.** App mit offenem "Your browser"-Schalter, dann Chrome
     schliessen und wieder oeffnen. Erwartet: der Status wechselt ohne Neuladen
     (`user_browser_status`).
-13. **Bildschirm-Knopf am Telefon.** Coworker mit "Your browser" im Thread
+13. **Bildschirm-Knopf am Telefon.** Agent mit "Your browser" im Thread
     auf dem Telefon: der Bildschirm-Knopf oben rechts sagt "Works in your
     browser", nicht "No screen open yet"; Tippen erklaert, dass es hier
     keinen Bildschirm gibt.
@@ -175,4 +175,4 @@ Geht, aber schwaecher, und das liegt nicht an uns:
   sieht die Herkunft des Laufs nicht, nur die Textzeile
   `[from your browser panel]` (Nachzug: bead chuk_chat-wuci).
 * Ein Panel-Lauf ist kein `origin: "app"`: ist das Wochenbudget des
-  Coworkers aufgebraucht, wird er abgelehnt wie eine Automation.
+  Agenten aufgebraucht, wird er abgelehnt wie eine Automation.

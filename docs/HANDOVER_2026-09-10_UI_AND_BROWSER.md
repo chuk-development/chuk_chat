@@ -35,7 +35,7 @@ to `:99` —
 ```
 
 When the session ends, `browser-mcp-owner.py` reaps it. Minutes later the
-display holds a single 1x1 window and no chrome process, while the coworker's
+display holds a single 1x1 window and no chrome process, while the agent's
 answer still says "the browser is open, you can take it over". That is what made
 the takeover open a black page.
 
@@ -48,7 +48,7 @@ Two mitigations shipped; the real fix is still open.
 * `BrowserPresence` now follows the BROWSER, not the run: a live `done` no
   longer revokes the screen, only the host does (a `browser_view: closed`, a
   header that stops advertising it, or the transport going away). The target
-  used to die one second after the coworker offered it.
+  used to die one second after the agent offered it.
 
 `cowork-rtak` is the remaining work: the browser has to OUTLIVE the run, which
 means a host-held long-lived Playwright MCP session per agent instead of one
@@ -80,7 +80,7 @@ skips the container probe.
   rendering under a bubble that was already streaming text.
 * **Tables**. Below 560 px a wide table stacks into one card per row with every
   field labelled; the third column used to sit off screen with nothing saying it
-  existed. Links in cells are underlined and open — that is where the coworker
+  existed. Links in cells are underlined and open — that is where the agent
   puts its sources.
 * **Markdown**. Inline code chips, accent underlined links that keep the
   surrounding size and weight, monotonic heading sizes that follow the chat font
@@ -101,7 +101,7 @@ skips the container probe.
 app did not know which thread to open until the socket paired — the thread key
 stayed `default`, which has no cached transcript. The roster is now a
 SharedPreferences cache of host truth (`agent_roster_store.dart`); a received
-`agent_list` overwrites it wholesale and deleted coworkers stay deleted.
+`agent_list` overwrites it wholesale and deleted agents stay deleted.
 `resolveCacheUserId()` is the ONE helper `loadThread`, `hasThread` and the
 replay loader's `_cachedRows` share — they must agree, or the replay splices a
 delta onto the wrong base and `saveChat` REPLACES.

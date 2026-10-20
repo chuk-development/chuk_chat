@@ -1,7 +1,7 @@
 // Content script: turn the visible page into something small enough to put in a
 // prompt, and hand back geometry so the service worker can aim real input at it.
 //
-// Injected only into a tab the coworker holds (after sensitive.js). It stays
+// Injected only into a tab the agent holds (after sensitive.js). It stays
 // passive until the service worker asks; nothing is sent anywhere on its own.
 
 (() => {

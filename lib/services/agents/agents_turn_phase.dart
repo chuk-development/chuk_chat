@@ -1,6 +1,6 @@
 // lib/services/agents/agents_turn_phase.dart
 //
-// What a coworker is doing with the message the user just sent, in one word
+// What an agent is doing with the message the user just sent, in one word
 // the status line above the answer can print.
 //
 // The plain chat reads its phase from the stream (`StreamPhase`). An Agents

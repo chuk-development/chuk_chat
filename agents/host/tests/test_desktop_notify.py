@@ -131,12 +131,12 @@ def test_completion_text_never_shows_the_roster_codename():
     try:
         title, body = completion_text("ivory-lynx")
         assert "ivory-lynx" not in title and "ivory-lynx" not in body
-        assert title == "Your coworker"
+        assert title == "Your agent"
         assert "answer" in body and "hello" not in body
         # The run is over: the body reports, it does not hand the user a task.
         assert "finish your task" not in body.lower()
         title, _ = completion_text("ivory-lynx", failed=True)
-        assert title == "Your coworker"
+        assert title == "Your agent"
     finally:
         set_labels_provider(None)
 
@@ -157,6 +157,6 @@ def test_a_broken_labels_provider_still_yields_a_toast():
     set_labels_provider(boom)
     try:
         title, body = completion_text("ivory-lynx")
-        assert title == "Your coworker" and body
+        assert title == "Your agent" and body
     finally:
         set_labels_provider(None)

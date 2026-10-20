@@ -1,4 +1,4 @@
-/// The roster model: an agent is a coworker, and a coworker has threads (§4).
+/// The roster model: an agent is an agent, and an agent has threads (§4).
 ///
 /// Everything in here is data the app itself knows to be true — a name, a brief
 /// the user typed, a thread the app opened, whether a run is in flight right
@@ -11,7 +11,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:chuk_chat/services/agents/schedule_spec.dart';
 
-/// What a coworker is doing, as far as the app can actually tell.
+/// What an agent is doing, as far as the app can actually tell.
 enum AgentActivity {
   /// A run is in flight right now.
   working,
@@ -47,7 +47,7 @@ class AgentsThreadInfo {
       );
 }
 
-/// One coworker.
+/// One agent.
 @immutable
 class AgentsAgent {
   const AgentsAgent({
@@ -67,7 +67,7 @@ class AgentsAgent {
   final String id;
   final String name;
 
-  /// An optional short role the user gave the coworker — "researcher",
+  /// An optional short role the user gave the agent — "researcher",
   /// "release manager" (§16.1 Bot Mode's "title"). Display only, exactly like
   /// [name]: it labels the agent in the roster, it does not change what the host
   /// runs. Null when the user left it blank.
@@ -90,14 +90,14 @@ class AgentsAgent {
   /// agent the user created in the app, because nothing installs it yet.
   final bool onHost;
 
-  /// True once the paired host listed this coworker in its `agent_list`: the
-  /// host keeps it (WIRE_CONTRACT "Coworker names") and runs its turns. An
-  /// app-created coworker gets this the first time the host answers with it.
-  /// Separate from [onHost], which stays "the host's own coworker" (the one
+  /// True once the paired host listed this agent in its `agent_list`: the
+  /// host keeps it (WIRE_CONTRACT "Agent names") and runs its turns. An
+  /// app-created agent gets this the first time the host answers with it.
+  /// Separate from [onHost], which stays "the host's own agent" (the one
   /// that cannot be deleted).
   final bool knownToHost;
 
-  /// The coworker runs on the host: it is the host's own, or the host listed
+  /// The agent runs on the host: it is the host's own, or the host listed
   /// it.
   bool get runsOnHost => onHost || knownToHost;
 

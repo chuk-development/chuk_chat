@@ -10,11 +10,11 @@ import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/pdf_attachment_service.dart';
 import 'package:chuk_chat/services/storage/agents_chat_store.dart';
 import 'package:chuk_chat/ui/expressive/connected_group.dart';
-import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
 import 'package:chuk_chat/ui/expressive/huge_icon.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/chat_document_view.dart';
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/sandbox_artifact_block.dart';
 
 part 'chat_documents_explorer.dart';
@@ -32,7 +32,7 @@ class ChatDocumentsPanel extends StatefulWidget {
     super.key,
     required this.sessionKey,
     this.controller,
-    this.coworkerName,
+    this.agentName,
     this.fullPage = false,
   });
   final String sessionKey;
@@ -41,11 +41,11 @@ class ChatDocumentsPanel extends StatefulWidget {
   /// Use inside a normal Navigator route on mobile. Dialog callers are unchanged.
   final bool fullPage;
 
-  /// The coworker whose container these documents live in, when the caller
+  /// The agent whose container these documents live in, when the caller
   /// already knows it. Null lets the panel ask the host for the roster and fill
-  /// the name in itself; until an answer arrives the panel says "this coworker"
+  /// the name in itself; until an answer arrives the panel says "this agent"
   /// rather than inventing a name.
-  final String? coworkerName;
+  final String? agentName;
 
   @override
   State<ChatDocumentsPanel> createState() => _ChatDocumentsPanelState();
@@ -56,7 +56,7 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
   Map<String, dynamic>? _selected;
   SandboxArtifactPayload? _file;
   String? _error;
-  String? _coworker;
+  String? _agent;
   bool _loading = true;
   final _explorerOptions = _ExplorerOptions();
   StreamSubscription<AgentsRelayInbound>? _subscription;
@@ -64,7 +64,7 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
   @override
   void initState() {
     super.initState();
-    _coworker = _clean(widget.coworkerName);
+    _agent = _clean(widget.agentName);
     _subscription = widget.controller?.inbound.listen(_receive);
     widget.controller?.state.addListener(_connectionChanged);
     unawaited(_load());
@@ -80,16 +80,16 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
     return trimmed == null || trimmed.isEmpty ? null : trimmed;
   }
 
-  /// The coworker's name, or the honest stand-in. Never a guess: the roster is
+  /// The agent's name, or the honest stand-in. Never a guess: the roster is
   /// the only source, and until it answers the panel says what it does know —
-  /// that one coworker owns this chat.
-  String get _owner => _coworker ?? 'this coworker';
+  /// that one agent owns this chat.
+  String get _owner => _agent ?? 'this agent';
 
   void _connectionChanged() {
     final phase = widget.controller?.state.value.phase;
     if (phase == AgentsRelayPhase.paired && _phase != phase) {
       unawaited(_request());
-      unawaited(_requestCoworkerName());
+      unawaited(_requestAgentName());
       if (_selectedId != null) unawaited(_request(id: _selectedId));
     }
     _phase = phase;
@@ -179,11 +179,11 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
   }
 
   /// Asks the host who this thread belongs to. The thread key *is* the agent
-  /// id, so the roster answer names the coworker whose container holds these
+  /// id, so the roster answer names the agent whose container holds these
   /// documents. A host that cannot answer costs nothing: the panel keeps the
   /// stand-in wording.
-  Future<void> _requestCoworkerName() async {
-    if (_coworker != null) return;
+  Future<void> _requestAgentName() async {
+    if (_agent != null) return;
     final control = widget.controller;
     if (control == null ||
         control.state.value.phase != AgentsRelayPhase.paired) {
@@ -192,7 +192,7 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
     try {
       await control.requestAgentList();
     } catch (_) {
-      /* No roster: the panel says "this coworker" and moves on. */
+      /* No roster: the panel says "this agent" and moves on. */
     }
   }
 
@@ -202,8 +202,8 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
       for (final agent in event.agents) {
         if (agent.agentId != widget.sessionKey) continue;
         final name = _clean(agent.name);
-        if (name != null && name != _coworker) {
-          setState(() => _coworker = name);
+        if (name != null && name != _agent) {
+          setState(() => _agent = name);
         }
         break;
       }
@@ -375,9 +375,9 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
 
   // --- the phone screen ------------------------------------------------------
 
-  /// The full-screen form: the app's own frame ([ExpressiveScreen]), so the
-  /// title, the one back target and the veil are the same ones every other
-  /// screen wears. The list and the reader are the same screen, one behind the
+  /// The full-screen form: the settings-page frame ([FloatingAppBar]), so
+  /// the title, the one back target and the bar are the same ones every
+  /// other agent sub-page wears. The list and the reader are the same screen, one behind the
   /// other: back leaves the reader first and the route second.
   Widget _buildScreen(BuildContext context, List<Map<String, dynamic>> rows) {
     final bool reading = _selectedId != null;
@@ -389,48 +389,73 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop && reading) _deselect();
       },
-      child: ExpressiveScreen(
-        title: reading ? null : 'Files',
-        titleWidget: reading ? _MiddleEllipsis(text: name) : null,
-        onBack: reading ? _deselect : null,
-        actions: reading
-            ? <Widget>[
-                if (readable)
-                  ExpressiveIconButton(
-                    hugeIcon: HugeIcons.share01,
-                    tooltip: 'Share',
-                    semanticsId: 'files_share',
-                    onTap: () => ChatDocumentView.share(open),
+      // The settings-page frame every agent sub-page wears (bead
+      // chuk_chat-8hz4): the floating back chip, the title pill, and a bar
+      // with no fill. The list and the reader read the bar's height from
+      // the media query, so they start below it and scroll up behind it.
+      child: Scaffold(
+        extendBodyBehindAppBar: true,
+        appBar: FloatingAppBar(
+          title: reading ? _MiddleEllipsis(text: name) : const Text('Files'),
+          // In the reader, back leaves the reader first.
+          leading: reading
+              ? FloatingHeaderButton(
+                  icon: Icons.arrow_back_rounded,
+                  tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                  onPressed: _deselect,
+                )
+              : null,
+          actions: reading
+              ? <Widget>[
+                  if (readable)
+                    Semantics(
+                      identifier: 'files_share',
+                      child: FloatingHeaderButton(
+                        icon: Icons.share,
+                        tooltip: 'Share',
+                        onPressed: () => ChatDocumentView.share(open),
+                      ),
+                    ),
+                  if (readable)
+                    Semantics(
+                      identifier: 'files_save',
+                      child: FloatingHeaderButton(
+                        icon: Icons.download,
+                        tooltip: 'Save',
+                        onPressed: () => ChatDocumentView.save(open),
+                      ),
+                    ),
+                ]
+              : <Widget>[
+                  Semantics(
+                    identifier: 'files_view_mode',
+                    child: FloatingHeaderButton(
+                      icon: _explorerOptions.grid
+                          ? Icons.list_rounded
+                          : Icons.grid_view_rounded,
+                      tooltip: _explorerOptions.grid
+                          ? 'List view'
+                          : 'Grid view',
+                      onPressed: () => setState(
+                        () => _explorerOptions.grid = !_explorerOptions.grid,
+                      ),
+                    ),
                   ),
-                if (readable)
-                  ExpressiveIconButton(
-                    hugeIcon: HugeIcons.download01,
-                    tooltip: 'Save',
-                    semanticsId: 'files_save',
-                    onTap: () => ChatDocumentView.save(open),
+                  Semantics(
+                    identifier: 'files_refresh',
+                    child: FloatingHeaderButton(
+                      icon: Icons.refresh,
+                      tooltip: 'Refresh files',
+                      onPressed: _request,
+                    ),
                   ),
-              ]
-            : <Widget>[
-                ExpressiveIconButton(
-                  hugeIcon: _explorerOptions.grid
-                      ? HugeIcons.listView
-                      : HugeIcons.gridView,
-                  tooltip: _explorerOptions.grid ? 'List view' : 'Grid view',
-                  semanticsId: 'files_view_mode',
-                  onTap: () => setState(
-                    () => _explorerOptions.grid = !_explorerOptions.grid,
-                  ),
-                ),
-                ExpressiveIconButton(
-                  hugeIcon: HugeIcons.refresh,
-                  tooltip: 'Refresh files',
-                  semanticsId: 'files_refresh',
-                  onTap: _request,
-                ),
-              ],
-        builder: (BuildContext context) => reading
-            ? _buildScreenReader(context)
-            : _buildScreenList(context, rows),
+                ],
+        ),
+        body: Builder(
+          builder: (BuildContext context) => reading
+              ? _buildScreenReader(context)
+              : _buildScreenList(context, rows),
+        ),
       ),
     );
   }
@@ -526,7 +551,7 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
 
   // --- the dialog form -------------------------------------------------------
 
-  /// The house header: an accent rule on top, the owning coworker in an avatar
+  /// The house header: an accent rule on top, the owning agent in an avatar
   /// tile, and one status line. The status is what the panel actually knows —
   /// whose chat this is, how much it holds and whether the copy on this device
   /// has reached the cloud — never a description of what the feature is for.
@@ -761,7 +786,7 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
 
   /// One scrolling list, two named groups. The group headings carry the counts,
   /// so the reader never has to work out which rows came from the chat and
-  /// which came off the coworker's own disk.
+  /// which came off the agent's own disk.
   Widget _buildList(BuildContext context, List<Map<String, dynamic>> rows) {
     if (rows.isEmpty) {
       return _EmptyBlock(
@@ -927,9 +952,6 @@ class _DocumentRow extends StatelessWidget {
             ? scheme.primary.withValues(alpha: 0.12)
             : Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: kBorderRadiusRow),
-        pressedShape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-        ),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         child: Row(
           children: [

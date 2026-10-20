@@ -123,7 +123,7 @@ anti-duplicate rule). Host side was already done (`host/notify.py`,
   `initialize()`, `onLiveDone(sessionKey)` (toast only when
   `WidgetsBinding.lifecycleState != resumed`; null = foreground),
   `onAnswerReplayed(sessionKey)` (consume + cancel), `onOpenedFromNotification`,
-  `threadLabel` resolver the shell sets to the coworker's name.
+  `threadLabel` resolver the shell sets to the agent's name.
 - `app/lib/services/notification_service.dart` — the chuk-compatible static
   API the verbatim `streaming_manager_io.dart` calls; delegates, drops the
   content preview. (chuk's `_isAppInBackground` flag is never set in Agents,
@@ -144,7 +144,7 @@ anti-duplicate rule). Host side was already done (`host/notify.py`,
   the file; dropping it in turns push on.
 - `app/lib/pages/messenger_shell.dart` — APPLIED by c6 (76's decision, 5c
   had closed): `dart:async` + 2 imports, router listener in `initState`,
-  `threadLabel` resolver (coworker name), post-frame cold-start pick-up,
+  `threadLabel` resolver (agent name), post-frame cold-start pick-up,
   `removeListener` in `dispose`, `_threadLabel`, `_onNotificationTap`
   (take → `_select` → `onOpenedFromNotification`). Record:
   `docs/diffs_c6_notifications_shell.md`.

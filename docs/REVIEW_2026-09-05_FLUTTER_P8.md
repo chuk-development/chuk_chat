@@ -123,7 +123,7 @@ it did not). The cursor for `host:<peer>` is then advanced to `default`'s
 highest `mid`, so the host's next delta for `host:<peer>` starts above rows the
 app never received: the real thread is permanently short.
 
-The same shape happens whenever the user picks another coworker while a replay
+The same shape happens whenever the user picks another agent while a replay
 is still in flight, and a *second* replay of the same thread loses the first
 draft outright (`expect` overwrites `_drafts[key]`) and then commits the
 remainder of stream 1 into a fresh `afterId: 0` draft — a full replace with
@@ -394,7 +394,7 @@ Fix: `if (!mounted || controller == null || stored == null || _busy) return;`.
 
 ### F7 — MEDIUM — a thread's second "answer ready" row is never consumed
 
-**Status: FIXED (f7, with F8).** The loader remembers the `run_id` of the `while_away` done (`answerReadyRunFor`); the thread view passes it to `AgentsNotifications.onAnswerReplayed(sessionKey, runId:)` (additive parameter); `RunNotifications.consumeForSession` dedups per `session/run_id` when the run is known, per session otherwise (old host). Tests: agents_notifications "a second run for the same coworker is consumed too; the same run only once"; loader asserts `answerReadyRunFor`.
+**Status: FIXED (f7, with F8).** The loader remembers the `run_id` of the `while_away` done (`answerReadyRunFor`); the thread view passes it to `AgentsNotifications.onAnswerReplayed(sessionKey, runId:)` (additive parameter); `RunNotifications.consumeForSession` dedups per `session/run_id` when the run is known, per session otherwise (old host). Tests: agents_notifications "a second run for the same agent is consumed too; the same run only once"; loader asserts `answerReadyRunFor`.
 
 `app/lib/services/notifications/run_notifications.dart:36`, `:48-51`.
 
@@ -410,7 +410,7 @@ Future<void> consumeForSession(String sessionKey) async {
 The doc says "Idempotent per launch", but the set is keyed by session only, so
 it is *once* per launch per thread, not once per row. Sequence: run 1 finishes
 while away → row inserted → replay → row PATCHed to `consumed_at`, key added.
-Later in the same app launch, run 2 for the same coworker finishes while away →
+Later in the same app launch, run 2 for the same agent finishes while away →
 a new row → replay → the guard returns early → the row stays open forever. The
 Edge Function then keeps that row as unread for every other device, and the
 host's dedup key (`notified_at` / `consumed_at`, `docs/SUPABASE_SCHEMA.md`)
@@ -488,9 +488,9 @@ case AgentsRelayApprovalRequest():
   setState(() { _approval = event; _approvalDecision = null; });
 ```
 
-With two coworkers running at once (the ledger explicitly supports that:
-`AgentsRunLedger.runningSessions`), a publish approval raised by coworker B
-pops up as a standing bar over coworker A's thread. The decision itself is
+With two agents running at once (the ledger explicitly supports that:
+`AgentsRunLedger.runningSessions`), a publish approval raised by agent B
+pops up as a standing bar over agent A's thread. The decision itself is
 correlated by `approval_id`, so the answer is not wrong — but the user is asked
 about a publish in a conversation that has nothing to do with it, and the guard
 on the replay path (`_ledger.isRunning(widget.threadKey)`) is asking about the
@@ -676,7 +676,7 @@ finding to hand back to chuk_chat master.
 ## Summary for the fixer
 
 - **F1 (HIGH, `agents_replay_loader.dart`)** — one global `_activeSession`: a
-  second replay (first pairing, or switching coworker mid-stream) folds one
+  second replay (first pairing, or switching agent mid-stream) folds one
   thread's rows into another's cache and poisons its cursor.
 - **F2 (HIGH, `agents_replay_loader.dart`)** — a delta replay whose local read
   returns nothing writes only the delta over the thread and still advances the

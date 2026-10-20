@@ -267,7 +267,7 @@ Import verbatim (`package:chuk_chat/` → `package:chuk_chat/`, no other edits):
   footer pill verbatim (minus hosted `BalanceBadge`/`UpdateBanner`) — **its gear is the
   Settings entry**, as in chuk; `SbBrand(label: 'Agents')`. Data: `AgentRosterSource`.
   Same for `sidebar_mobile.dart`.
-- Callback map: `onChatSelected`→select agent; `onNewChatTapped`→New coworker (onboarding);
+- Callback map: `onChatSelected`→select agent; `onNewChatTapped`→New agent (onboarding);
   `onSettingsTapped`→settings modal/page; `onChatDeleted`→delete agent;
   `onWorkspacesTapped`→**Control Rooms**; `onMediaTapped`→**Agent's browser** (reusing all
   three mini-rail slots keeps chuk's alignment math untouched).
@@ -280,7 +280,7 @@ Import verbatim (`package:chuk_chat/` → `package:chuk_chat/`, no other edits):
   full chat** (`copy_all_rounded`, chuk's own slot). Settings stays in the sidebar footer
   pill and Sign out in the settings modal footer — chuk's homes. The `AppBar` in
   `messenger_shell.dart` disappears (chuk has none). Mobile floating bar verbatim; title
-  pill = selected agent name; trailing = Agent controls / New coworker.
+  pill = selected agent name; trailing = Agent controls / New agent.
 - Single socket: new `app/lib/pages/agents_shell_state.dart` mixin `AgentsShellHost`
   holding everything now in `_MessengerShellState` (pairing store, roster, rooms,
   `_controller` notifier, room CRUD, browser, control drawer, `restoreCloudPairing`).
@@ -655,7 +655,7 @@ detachment (P1, blocks notifications; `cowork-c91` linked), notification channel
    FCM notification → tap → thread opens with the answer.
 
 **Definition of done** (from `docs/PRODUCT_PHILOSOPHY.md`): the user typed one thing and
-closed the app. Later, ONE notification: "your answer is ready". Tap → the coworker's
+closed the app. Later, ONE notification: "your answer is ready". Tap → the agent's
 thread with the finished result, replayed from the server. No command, no error, no
 excuse (unless the full-log toggle is on). Delete the app, reinstall on another phone,
 sign in — everything is still there.

@@ -155,7 +155,7 @@ class TaskServer:
                 # Skills (docs/WIRE_CONTRACT.md, "Skills"): which of the
                 # workspace's skills are the shipped seeds.
                 skills_seed_root=skills_seed_root,
-                # Coworker names (docs/WIRE_CONTRACT.md, "Coworker names"):
+                # Agent names (docs/WIRE_CONTRACT.md, "Agent names"):
                 # the host's store answers agent_create / agent_rename /
                 # agent_list with the current list.
                 on_agent_frame=on_agent_frame,
@@ -169,10 +169,10 @@ class TaskServer:
                 # for the mail tools and the restricted mail run.
                 agent_mail=agent_mail,
                 # Per-action approvals (docs/WIRE_CONTRACT.md, "Per-action
-                # approvals"): the host's store of each coworker's policy.
+                # approvals"): the host's store of each agent's policy.
                 action_approvals=action_approvals,
                 # Cost per run and weekly budget (docs/WIRE_CONTRACT.md): the
-                # price list and each coworker's weekly budget.
+                # price list and each agent's weekly budget.
                 price_book=price_book,
                 budget=budget,
             )

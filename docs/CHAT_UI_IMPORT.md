@@ -141,7 +141,7 @@ Agents work — none of it upstreamed, all of it visible to the user:
   the surrounding size and weight.
 * `widgets/chuk_table.dart` — a link in a cell is underlined and opens; a table
   wider than 560 px stacks into one card per row with every field labelled.
-  Upstream has neither, and the coworker puts its sources in tables.
+  Upstream has neither, and the agent puts its sources in tables.
 * `widgets/message_bubble/*` — the bubble is decided by its rendered body, so a
   turn that is only internal work does not leave a blank bar; `rich_blocks.dart`
   fixes a trailing-comma parser that upstream leaves writing a literal `$1` into

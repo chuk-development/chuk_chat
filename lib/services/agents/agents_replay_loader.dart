@@ -36,6 +36,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:chuk_chat/models/chat_message.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
@@ -251,7 +252,7 @@ class AgentsReplayLoader extends ChangeNotifier {
   /// before `requestReplay`, with the same [afterId].
   ///
   /// Requests may overlap: the first pairing asks for `default` and, one frame
-  /// later, for the host agent's thread; the user may pick another coworker
+  /// later, for the host agent's thread; the user may pick another agent
   /// while a replay is still streaming. The host answers them in order, each
   /// answer headed by its `run_state`, so the session a frame belongs to is
   /// decided by that header (or, for a header-less host, by the order of the
@@ -436,9 +437,8 @@ class AgentsReplayLoader extends ChangeNotifier {
         // prompts for it as it does live.
         final draft = _draftFor();
         final decided = event.isDecided || !hostRunning(draft.sessionKey);
-        _openAiRow(
-          draft,
-        ).aiToolCalls.add(approvalCallFromRelay(event, decided: decided));
+        _openAiRow(draft).aiToolCalls
+            .add(approvalCallFromRelay(event, decided: decided));
         _noteMid(draft, event.mid);
 
       case AgentsRelayAutomation(:final replay):
@@ -757,8 +757,19 @@ class AgentsReplayLoader extends ChangeNotifier {
   /// clocks differ by design (the app stamps its own send, the host stamps the
   /// store), so they are not compared.
   static bool _sameRow(Map<String, String> a, Map<String, String> b) {
-    if (a['sender'] != b['sender']) return false;
+    if (_senderOf(a) != _senderOf(b)) return false;
     return (a['text'] ?? '').trim() == (b['text'] ?? '').trim();
+  }
+
+  /// Who wrote [row]. A replay builds rows with `sender` (`user` / `ai`); the
+  /// cache hands its rows back in the stored shape, with `role` instead
+  /// (`ChatMessage.toJson`). Read both, or a cached row never matches a
+  /// replayed one and every repeat check above is silently skipped — the
+  /// delta after a resume then appended a turn the live stream had already
+  /// painted (bead chuk_chat-kl8x).
+  static String? _senderOf(Map<String, String> row) {
+    final String? who = row['sender'] ?? row['role'];
+    return who == 'assistant' ? 'ai' : who;
   }
 
   /// Writes the replayed rows into the local cache and tells the UI.
@@ -848,6 +859,14 @@ class AgentsReplayLoader extends ChangeNotifier {
         return;
       }
       rows = appendWithoutRepeats(existing, draft.rows);
+      if (_sameRows(rows, existing)) {
+        // Every turn of the delta is already on screen, word for word: the
+        // live stream painted it while the app was away (bead
+        // chuk_chat-kl8x). Writing it again would remount the screen for
+        // nothing, so only the cursor moves.
+        _advanceCursor(session, draft.maxMid);
+        return;
+      }
     }
 
     // `saveChat` updates the in-memory cache synchronously and only then goes
@@ -861,7 +880,7 @@ class AgentsReplayLoader extends ChangeNotifier {
     // the one place the rows are already decrypted and in hand, so the last
     // line is taken here and nowhere else.
     ThreadPreviewStore.instance.noteRows(session, committed);
-    // The same rows carry every picture and every file the coworker handed
+    // The same rows carry every picture and every file the agent handed
     // over. The Media tab has no other way to find them (MediaIndex).
     MediaIndex.instance.noteRows(session, committed);
     ChatOrigin.claimAgentsThread(session);
@@ -959,6 +978,26 @@ class AgentsReplayLoader extends ChangeNotifier {
     _revisions[session] = (_revisions[session] ?? 0) + 1;
     notifyListeners();
   }
+
+  /// Whether [a] and [b] store as the same transcript, field for field.
+  /// Both sides go through [ChatMessage] first: the cache hands its rows back
+  /// in the stored shape, the replay builds them in the wire shape.
+  static bool _sameRows(
+    List<Map<String, String>> a,
+    List<Map<String, String>> b,
+  ) {
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (!mapEquals(_stored(a[i]), _stored(b[i]))) return false;
+    }
+    return true;
+  }
+
+  static Map<String, String> _stored(Map<String, String> row) =>
+      <String, String>{
+        for (final entry in ChatMessage.fromJson(row).toJson().entries)
+          entry.key: '${entry.value}',
+      };
 
   Future<List<Map<String, String>>> _cachedRows(String session) async {
     final chat = await ChatStorageService.loadFullChat(session);

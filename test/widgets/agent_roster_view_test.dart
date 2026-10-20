@@ -119,7 +119,7 @@ void main() {
     expect(find.text("Agent's browser"), findsNothing);
     expect(find.byTooltip('Settings'), findsNothing);
     expect(find.text('Account'), findsNothing);
-    // Search is always there, and the list still renders its coworker.
+    // Search is always there, and the list still renders its agent.
     expect(find.text('Search'), findsOneWidget);
     expect(find.text('jade'), findsOneWidget);
   });
@@ -569,7 +569,7 @@ void main() {
     });
 
     testWidgets("folded, the roster is chuk's mini rail with a face per "
-        'coworker', (tester) async {
+        'agent', (tester) async {
       final source = LocalAgentRosterSource(random: Random(9));
       final a = source.addAgent(name: 'amber-otter');
       final picks = <String>[];
@@ -683,9 +683,9 @@ void main() {
 
       // The app's own name dialog: one filled TextField pre-filled with the
       // current name, a quiet Cancel and a filled Rename.
-      expect(find.byType(CoworkerNameDialog), findsOneWidget);
+      expect(find.byType(AgentNameDialog), findsOneWidget);
       final field = find.descendant(
-        of: find.byType(CoworkerNameDialog),
+        of: find.byType(AgentNameDialog),
         matching: find.byType(TextField),
       );
       expect(tester.widget<TextField>(field).controller!.text, host.name);
@@ -693,7 +693,7 @@ void main() {
       await tester.tap(find.widgetWithText(ExpressiveButton, 'Rename'));
       await tester.pumpAndSettle();
 
-      expect(find.byType(CoworkerNameDialog), findsNothing);
+      expect(find.byType(AgentNameDialog), findsNothing);
       expect(renamed, [(host.id, 'Laptop Bot')]);
       // The view reports; the shell persists. The source is untouched here.
       expect(source.byId(host.id)!.name, host.name);
@@ -731,7 +731,7 @@ void main() {
       }
 
       final field = find.descendant(
-        of: find.byType(CoworkerNameDialog),
+        of: find.byType(AgentNameDialog),
         matching: find.byType(TextField),
       );
 
@@ -751,7 +751,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(renamed, isEmpty);
-      expect(find.byType(CoworkerNameDialog), findsNothing);
+      expect(find.byType(AgentNameDialog), findsNothing);
     });
 
     testWidgets('without onRenameAgent the menu has no Rename item', (
@@ -861,7 +861,7 @@ void main() {
       );
 
       // The first listing changes one thing only: the host keeps the
-      // coworker now (bead chuk_chat-89vl).
+      // agent now (bead chuk_chat-89vl).
       list();
       expect(source.agents.map((a) => a.id), [local.id]);
       expect(source.byId(local.id)!.knownToHost, isTrue);

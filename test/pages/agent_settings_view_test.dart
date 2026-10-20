@@ -5,20 +5,46 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/models/agents_agent.dart';
-import 'package:chuk_chat/pages/agent_profile_page.dart';
-import 'package:chuk_chat/pages/coworker_model_page.dart';
+import 'package:chuk_chat/pages/mobile_agents_settings_page.dart';
+import 'package:chuk_chat/pages/agent_model_page.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
-import 'package:chuk_chat/services/agents/coworker_model.dart';
+import 'package:chuk_chat/services/agents/agent_model.dart';
 import 'package:chuk_chat/services/chat_model_selection_service.dart';
 import 'package:chuk_chat/services/model_capabilities_service.dart';
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
+import 'package:chuk_chat/widgets/agent_model_tile.dart';
 
 import '../support/fake_relay_controller.dart';
 import '../support/kv_cache_test_env.dart';
 import '../support/test_app.dart';
+
+/// The one agent settings content, as a page, with every destination a
+/// no-op: these tests read what the page draws.
+Widget _page(
+  String agentId,
+  AgentRosterSource source,
+  AgentProfileStore store,
+) {
+  void none() {}
+  return MobileAgentsSettingsPage(
+    agentId: agentId,
+    chatId: source.byId(agentId)?.threads.firstOrNull?.key,
+    source: source,
+    profiles: store,
+    onEdit: none,
+    onControls: none,
+    onModel: none,
+    onAutomations: none,
+    onSkills: none,
+    onConnectors: none,
+    onSecrets: none,
+    onRooms: none,
+    onSettings: none,
+  );
+}
 
 void main() {
   // The page runs under chuk's floating header. The header band grows by the
@@ -44,7 +70,7 @@ void main() {
 
       await tester.pumpWidget(
         testApp(
-          AgentProfilePage(agentId: 'alex', source: source, profiles: store),
+          _page('alex', source, store),
         ),
       );
       await tester.pumpAndSettle();
@@ -62,13 +88,13 @@ void main() {
     setUp(() async {
       SharedPreferences.setMockInitialValues(<String, Object>{});
       ChatModelSelectionService.instance.clearMemoryForTesting();
-      CoworkerModel.debugCatalogue = () async =>
-          const <CoworkerCatalogueModel>[
-            CoworkerCatalogueModel(
+      AgentModel.debugCatalogue = () async =>
+          const <AgentCatalogueModel>[
+            AgentCatalogueModel(
               id: 'z-ai/glm-5.3-flash',
               name: 'Z.ai: GLM 5.3 Flash',
-              providers: <CoworkerProvider>[
-                CoworkerProvider(
+              providers: <AgentProvider>[
+                AgentProvider(
                   slug: 'runanywhere/serverless',
                   name: 'RunAnywhere',
                 ),
@@ -79,11 +105,11 @@ void main() {
       await ModelCapabilitiesService.initialize();
     });
     tearDown(() async {
-      CoworkerModel.debugCatalogue = null;
+      AgentModel.debugCatalogue = null;
       await disposeTempKvCache(kv);
     });
 
-    testWidgets('the profile names what the coworker runs on and opens its '
+    testWidgets('the settings name what the agent runs on and open its '
         'model page', (tester) async {
       tester.view.physicalSize = const Size(400, 900);
       tester.view.devicePixelRatio = 1;
@@ -113,13 +139,13 @@ void main() {
 
       await tester.pumpWidget(
         testApp(
-          AgentProfilePage(agentId: 'alex', source: source, profiles: store),
+          _page('alex', source, store),
         ),
       );
       await tester.pumpAndSettle();
 
       final Finder tile = find.byKey(
-        const ValueKey<String>('agent_profile_model'),
+        const ValueKey<String>('settings_Model'),
       );
       expect(tile, findsOneWidget);
       expect(
@@ -131,10 +157,10 @@ void main() {
       );
       await tester.tap(tile);
       await tester.pumpAndSettle();
-      expect(find.byType(CoworkerModelPage), findsOneWidget);
+      expect(find.byType(AgentModelPage), findsOneWidget);
     });
 
-    testWidgets('a coworker without a thread shows no model row', (
+    testWidgets('an agent without a thread shows no model tile', (
       tester,
     ) async {
       final store = AgentProfileStore();
@@ -147,19 +173,22 @@ void main() {
       addTearDown(source.dispose);
       await tester.pumpWidget(
         testApp(
-          AgentProfilePage(agentId: 'alex', source: source, profiles: store),
+          _page('alex', source, store),
         ),
       );
       await tester.pumpAndSettle();
+      // A plain row that runs the shell's action, not the model tile: there
+      // is no thread to store a choice under.
       expect(
-        find.byKey(const ValueKey<String>('agent_profile_model')),
-        findsNothing,
+        find.byKey(const ValueKey<String>('settings_Model')),
+        findsOneWidget,
       );
+      expect(find.byType(AgentModelTile), findsNothing);
     });
   });
 
   // Bead chuk_chat-89vl: the row said "it lives in this app only" for a
-  // coworker created in the app that the host keeps and runs (Wahlradar).
+  // agent created in the app that the host keeps and runs (Wahlradar).
   group('runs on the host', () {
     const String localId = 'local:brisk-heron:2:116636868';
     late FakeRelayController controller;
@@ -195,7 +224,7 @@ void main() {
       addTearDown(source.dispose);
       await tester.pumpWidget(
         testApp(
-          AgentProfilePage(agentId: agent.id, source: source, profiles: store),
+          _page(agent.id, source, store),
         ),
       );
       await tester.pumpAndSettle();
@@ -219,7 +248,7 @@ void main() {
       ],
     );
 
-    testWidgets('an app-made coworker the host keeps runs on the host', (
+    testWidgets('an app-made agent the host keeps runs on the host', (
       tester,
     ) async {
       paired();
@@ -260,7 +289,7 @@ void main() {
       expect(find.textContaining('offline right now'), findsOneWidget);
     });
 
-    test('the host listing a coworker marks it as known to the host', () {
+    test('the host listing an agent marks it as known to the host', () {
       final source = LocalAgentRosterSource(seed: <AgentsAgent>[wahlradar()]);
       addTearDown(source.dispose);
       source.applyHostNames(
@@ -272,11 +301,11 @@ void main() {
       final AgentsAgent agent = source.byId(localId)!;
       expect(agent.knownToHost, isTrue);
       expect(agent.runsOnHost, isTrue);
-      // Still not the host's own coworker: delete stays available.
+      // Still not the host's own agent: delete stays available.
       expect(agent.onHost, isFalse);
     });
 
-    test('a host run marks the coworker as known to the host', () {
+    test('a host run marks the agent as known to the host', () {
       final source = LocalAgentRosterSource(seed: <AgentsAgent>[wahlradar()]);
       addTearDown(source.dispose);
       var notified = 0;

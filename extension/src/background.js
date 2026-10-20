@@ -23,9 +23,9 @@ const transport = new Transport({
   onFrame: (frame) => {
     // The host clears a Stop when the user sends a new task.
     if (frame.type === "browser_resume" && gate.resume()) broadcast();
-    // A coworker took the browser: its name goes on the strip.
+    // An agent took the browser: its name goes on the strip.
     if (frame.type === "browser_holder") driver.setCoworker(frame.name).then(broadcast, () => {});
-    // The host's word on a panel message, and later the coworker's answer.
+    // The host's word on a panel message, and later the agent's answer.
     const note = panelNote(frame);
     if (note) api.runtime.sendMessage({ channel: "agents", op: "reply", text: note }).catch(() => {});
   },
@@ -66,7 +66,7 @@ function hello() {
  * The user's Stop, from the strip on the page, the panel, or Chrome's own
  * "Cancel" on its debugging bar. Let go of every tab at once, refuse every
  * command until the user allows the browser again, and tell the host, which
- * stops the coworker's run.
+ * stops the agent's run.
  */
 async function stopAll(reason) {
   const changed = gate.stop(reason);
@@ -168,7 +168,7 @@ api.runtime.onMessage.addListener((msg, sender, reply) => {
     return true;
   }
   if (msg.op === "send") {
-    // The panel's own message to the coworker rides the same transport. Only
+    // The panel's own message to the agent rides the same transport. Only
     // the add-on's own pages may send, never a script in a page, and only a
     // page_message: the panel is no way to forge a result or a Stop.
     if (sender.tab) return undefined;

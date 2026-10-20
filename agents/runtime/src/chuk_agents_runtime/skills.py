@@ -204,7 +204,7 @@ class SkillLibrary:
     def upgrade_catalog(self, prompt: str) -> str:
         """Refresh only the generated catalog in a persisted session prompt.
 
-        A coworker has one permanent session, so its original catalog cannot
+        An agent has one permanent session, so its original catalog cannot
         remain authoritative after skills are installed or disabled. Memory
         and operator instructions stay intact; no stored rows are rewritten.
         """
@@ -428,7 +428,7 @@ def iter_seed_skills(
     the app itself provides (schedules, secrets, the sandbox terminal, the
     workspace). They belong to the app, so the app vouches for them. Everything
     under ``workspace`` is an ordinary skill that merely ships in the box: the
-    coworker owns it, may edit it, and the user may delete it. Reclassifying a
+    agent owns it, may edit it, and the user may delete it. Reclassifying a
     skill is a ``git mv`` between the two directories and nothing else — there
     is no list of names anywhere.
 

@@ -68,6 +68,15 @@ the owner says CoWork, he means Agents. Code, flags and docs use "Agents".
 
 **Do NOT push if tests fail or CodeRabbit finds issues. Fix first.**
 
+**Commit after every finished piece of work, at once.** Owner instruction
+(2026-10-20): when a task or a subagent's result is done and its tests are
+green, the coordinator commits it right away (as chukfinley, one commit per
+topic). Do not let several finished features pile up uncommitted in the
+working tree: with many agents in one tree, that turns into one huge diff that
+cannot be split, reviewed or reverted. If two agents touched the same file,
+commit the file with the topic that finished first and mention it. The push
+still waits for the full `flutter test` + CodeRabbit gate above.
+
 **Always push straight to `master`.** Do the work in one worktree, commit
 everything there (including any files the analyses/tools produce), and push it
 to `master` — no long-lived feature branches, no waiting on a PR. If `master`

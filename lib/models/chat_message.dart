@@ -76,6 +76,8 @@ class ChatMessage {
     this.generationMs,
     this.variants,
     this.activeVariant,
+    this.inputMode,
+    this.voiceDurationMs,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -103,6 +105,8 @@ class ChatMessage {
       generationMs: json['generationMs']?.toString(),
       variants: json['variants'] as String?,
       activeVariant: parseFlexibleInt(json['activeVariant']),
+      inputMode: json['inputMode'] as String?,
+      voiceDurationMs: json['voiceDurationMs']?.toString(),
     );
   }
 
@@ -178,6 +182,15 @@ class ChatMessage {
   /// `null` when there are no variants.
   final int? activeVariant;
 
+  /// How the user wrote this message: `'voice'` when it was dictated with
+  /// the composer microphone, absent (null) for a typed one. Only the look
+  /// of the bubble depends on it; no audio is stored. An older app ignores
+  /// the field and shows the message as typed.
+  final String? inputMode;
+
+  /// Length of the dictation in whole milliseconds, when it is known.
+  final String? voiceDurationMs;
+
   /// [generationMs] as a duration, or null when it was never recorded or
   /// cannot be read.
   Duration? get workedFor {
@@ -221,6 +234,8 @@ class ChatMessage {
     String? generationMs,
     String? variants,
     int? activeVariant,
+    String? inputMode,
+    String? voiceDurationMs,
   }) {
     return ChatMessage(
       role: role ?? this.role,
@@ -246,6 +261,8 @@ class ChatMessage {
       generationMs: generationMs ?? this.generationMs,
       variants: variants ?? this.variants,
       activeVariant: activeVariant ?? this.activeVariant,
+      inputMode: inputMode ?? this.inputMode,
+      voiceDurationMs: voiceDurationMs ?? this.voiceDurationMs,
     );
   }
 
@@ -281,5 +298,8 @@ class ChatMessage {
       'generationMs': generationMs,
     if (variants != null && variants!.isNotEmpty) 'variants': variants,
     if (activeVariant != null) 'activeVariant': activeVariant,
+    if (inputMode != null && inputMode!.isNotEmpty) 'inputMode': inputMode,
+    if (voiceDurationMs != null && voiceDurationMs!.isNotEmpty)
+      'voiceDurationMs': voiceDurationMs,
   };
 }

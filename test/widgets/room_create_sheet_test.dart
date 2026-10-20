@@ -147,10 +147,10 @@ void main() {
   testWidgets('a short roster gets no search field; a long one does',
       (tester) async {
     await pump(tester, roster(kRoomSearchThreshold));
-    expect(find.text('Search coworkers'), findsNothing);
+    expect(find.text('Search agents'), findsNothing);
 
     await pump(tester, roster(kRoomSearchThreshold + 1));
-    expect(find.text('Search coworkers'), findsOneWidget);
+    expect(find.text('Search agents'), findsOneWidget);
   });
 
   testWidgets('the search field filters the list without losing a selection',
@@ -172,7 +172,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Filter amber out of sight; the selection is held on ids, not on the view.
-    final search = find.widgetWithText(TextField, 'Search coworkers');
+    final search = find.widgetWithText(TextField, 'Search agents');
     await tester.enterText(search, 'jade');
     await tester.pumpAndSettle();
     expect(find.widgetWithText(CheckboxListTile, 'amber'), findsNothing);
@@ -191,17 +191,17 @@ void main() {
   testWidgets('a search that matches nothing says so', (tester) async {
     await pump(tester, roster(kRoomSearchThreshold + 1));
     await tester.enterText(
-      find.widgetWithText(TextField, 'Search coworkers'),
+      find.widgetWithText(TextField, 'Search agents'),
       'nobody',
     );
     await tester.pumpAndSettle();
-    expect(find.text('No coworker matches that.'), findsOneWidget);
+    expect(find.text('No agent matches that.'), findsOneWidget);
   });
 
   testWidgets('the agent-to-agent switch is there and defaults on',
       (tester) async {
     await pump(tester, [_agent('a', 'amber'), _agent('b', 'cobalt')]);
-    expect(find.text('Coworkers can reply to each other'), findsOneWidget);
+    expect(find.text('Agents can reply to each other'), findsOneWidget);
     expect(find.text('With this off, they only answer you.'), findsOneWidget);
     expect(tester.widget<Switch>(find.byType(Switch)).value, isTrue);
   });
@@ -218,7 +218,7 @@ void main() {
     await tester.tap(find.text('cobalt'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Coworkers can reply to each other'));
+    await tester.tap(find.text('Agents can reply to each other'));
     await tester.pumpAndSettle();
     expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
 
@@ -230,7 +230,7 @@ void main() {
 
   testWidgets('an empty roster says so and cannot create', (tester) async {
     await pump(tester, const <AgentsAgent>[]);
-    expect(find.text('No coworkers to add yet.'), findsOneWidget);
+    expect(find.text('No agents to add yet.'), findsOneWidget);
     await tester.enterText(find.byType(TextField), 'x');
     await tester.pumpAndSettle();
     expect(

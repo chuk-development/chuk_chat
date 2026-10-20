@@ -88,10 +88,10 @@ void main() {
     expect(notifications, 1);
   });
 
-  test('a coworker keeps its reasoning level with its model', () async {
+  test('an agent keeps its reasoning level with its model', () async {
     final store = ChatModelSelectionService();
     await store.save(
-      'coworker',
+      'agent',
       const ChatModelSelection(
         modelId: 'm',
         providerSlug: 'p',
@@ -100,10 +100,10 @@ void main() {
       userId: 'u',
     );
     final restarted = ChatModelSelectionService();
-    final choice = await restarted.load('coworker', userId: 'u');
+    final choice = await restarted.load('agent', userId: 'u');
     expect(choice!.reasoningEffort, 'high');
     final route = await restarted.resolveForSend(
-      'coworker',
+      'agent',
       modelId: 'composer-model',
       providerSlug: 'composer-provider',
       userId: 'u',
@@ -123,19 +123,19 @@ void main() {
   test('clearing the own model makes the chat follow the default', () async {
     final store = ChatModelSelectionService();
     await store.save(
-      'coworker',
+      'agent',
       const ChatModelSelection(modelId: 'm', providerSlug: 'p'),
       userId: 'u',
     );
     var notifications = 0;
     store.addListener(() => notifications++);
-    await store.clear('coworker', userId: 'u');
+    await store.clear('agent', userId: 'u');
     expect(notifications, 1);
-    expect(store.peek('coworker', userId: 'u'), isNull);
+    expect(store.peek('agent', userId: 'u'), isNull);
     final restarted = ChatModelSelectionService();
-    expect(await restarted.load('coworker', userId: 'u'), isNull);
+    expect(await restarted.load('agent', userId: 'u'), isNull);
     final route = await restarted.resolveForSend(
-      'coworker',
+      'agent',
       modelId: 'default-model',
       providerSlug: 'default-provider',
       userId: 'u',

@@ -4,12 +4,12 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
-/// A coworker's own model: the model, the provider it runs on, and how hard
+/// An agent's own model: the model, the provider it runs on, and how hard
 /// it thinks.
 ///
-/// In the Agents build a coworker has one permanent thread, and its thread key
+/// In the Agents build an agent has one permanent thread, and its thread key
 /// is the chat id this is stored under, so "this chat's model" and "this
-/// coworker's model" are the same record. A chat with no record follows the
+/// agent's model" are the same record. A chat with no record follows the
 /// app default (the composer's Fast / Thinking / Custom mode).
 @immutable
 class ChatModelSelection {
@@ -21,7 +21,7 @@ class ChatModelSelection {
   final String modelId;
   final String providerSlug;
 
-  /// The reasoning level the coworker runs at (`none`, `low`, `high`, …).
+  /// The reasoning level the agent runs at (`none`, `low`, `high`, …).
   /// Null on a record written before the level was part of it: the send then
   /// keeps the composer's level, as it always did.
   final String? reasoningEffort;
@@ -76,7 +76,7 @@ class ChatModelSelection {
 /// Legacy chats have no override and continue using the existing defaults.
 ///
 /// The record lives on this device (SharedPreferences, per account): the host
-/// stores no coworker model, every task names the model it runs on.
+/// stores no agent model, every task names the model it runs on.
 class ChatModelSelectionService extends ChangeNotifier {
   ChatModelSelectionService();
   static final instance = ChatModelSelectionService();

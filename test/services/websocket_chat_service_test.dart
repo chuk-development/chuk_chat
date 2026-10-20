@@ -178,7 +178,7 @@ void main() {
   );
 
   test(
-    'a coworker with its own reasoning level runs at it, one without keeps '
+    'an agent with its own reasoning level runs at it, one without keeps '
     'the composer level',
     () async {
       await ChatModelSelectionService.instance.save(

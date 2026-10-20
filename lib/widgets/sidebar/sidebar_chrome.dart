@@ -910,7 +910,7 @@ class SbChatTile extends StatelessWidget {
   /// would be noise on a list of forty rows (the pin toggle).
   final Widget? hoverTrailing;
 
-  /// A picture in front of the title — the Agents roster puts the coworker's
+  /// A picture in front of the title — the Agents roster puts the agent's
   /// face here. Null keeps the chat row as it always was.
   final Widget? leading;
 
@@ -1217,7 +1217,7 @@ class SbOfflineNotice extends StatelessWidget {
 
 /// One target of the folded rail: the round ink the mini rail's icons take,
 /// around anything that fits the icon tile — a glyph ([SbNavIcon]) or a
-/// picture, such as a coworker's face.
+/// picture, such as an agent's face.
 ///
 /// Placed on the column of the open panel's icons ([kSbNavIconLeft]), so the
 /// panel folds without moving anything the reader aims at. The ink sits in

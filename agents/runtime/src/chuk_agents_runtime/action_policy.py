@@ -1,8 +1,8 @@
-"""Per-action approvals: the risky action classes and the per-coworker policy
+"""Per-action approvals: the risky action classes and the per-agent policy
 (docs/WIRE_CONTRACT.md, "Per-action approvals", bead chuk_chat-mxxm).
 
 The owner's rule stays: **everything is allowed by default.** A small set of
-actions asks first, and the user decides per coworker how each class behaves:
+actions asks first, and the user decides per agent how each class behaves:
 ``ask`` (the card with the options), ``allow`` (no card) or ``deny`` (refused,
 no card). A browser class also keeps an allow-list of sites.
 
@@ -25,7 +25,7 @@ class               tools                                          default
 
 ``browser_act`` starts at ``allow``: an agent that browses would otherwise ask
 at the first click on every site, and the owner's rule is that only a clearly
-outward or dangerous action asks. The user switches it to ``ask`` per coworker;
+outward or dangerous action asks. The user switches it to ``ask`` per agent;
 then every site the user allows with "always for this site" is remembered.
 
 This module is pure data and logic. It does no I/O and imports nothing from the
@@ -120,18 +120,18 @@ def user_browser_tool_acts(tool: str, args: Mapping[str, Any] | None) -> bool:
     """Whether one call of a :data:`USER_BROWSER_ACT_TOOLS` tool acts in the
     user's browser. Structure, not text: ``browser_tabs`` acts only when it
     takes over a tab (``select``); ``list`` reads and ``new`` opens a blank
-    tab of the coworker's own."""
+    tab of the agent's own."""
     if tool == "browser_tabs":
         return isinstance(args, Mapping) and args.get("action") == "select"
     return tool in USER_BROWSER_ACT_TOOLS
 
 
 def user_browser_policy(policy: ActionPolicy) -> ActionPolicy:
-    """The policy that holds while a coworker drives the user's own browser.
+    """The policy that holds while an agent drives the user's own browser.
 
     ``browser_act`` asks by default there: the add-on acts in the user's real
     session with the user's logins. The user's own explicit choice for the
-    class still wins (``allow`` = never ask for this coworker, ``deny`` =
+    class still wins (``allow`` = never ask for this agent, ``deny`` =
     refuse), and every site on the allow-list turns ``ask`` into ``allow``.
     Only the evaluation changes; the stored policy is never rewritten."""
     if BROWSER_ACT in policy.modes:
@@ -194,7 +194,7 @@ class ActionPolicyError(ValueError):
 
 @dataclass(frozen=True)
 class ActionPolicy:
-    """One coworker's approval policy: the modes the user set (only those;
+    """One agent's approval policy: the modes the user set (only those;
     every other class follows :data:`DEFAULT_MODES`) and the allowed sites."""
 
     modes: Mapping[str, str] = field(default_factory=dict)
@@ -382,7 +382,7 @@ def parse_scope(approved: Any, scope: Any, options: tuple[str, ...] | list[str] 
 class ActionApprovals:
     """The executor's binding for one run.
 
-    - ``policy()``: the coworker's current policy (a live read: a decision
+    - ``policy()``: the agent's current policy (a live read: a decision
       with a lasting scope applies to the next call of the same run).
     - ``ask(request)``: blocks until the user answers; returns an
       :class:`ActionDecision` (or a bool from an older gate).

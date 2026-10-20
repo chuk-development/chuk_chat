@@ -537,7 +537,7 @@ class _SkillRow extends StatelessWidget {
 //
 // Both products call their skills screen `SkillsSettingsPage`, but they are two
 // different screens: upstream's (above) authors user skills stored in Supabase,
-// Agents's (below) lists the skills that live on the coworker host and toggles
+// Agents's (below) lists the skills that live on the agent host and toggles
 // them over the relay. Neither replaces the other, so the Agents one keeps its
 // own name and every existing `SkillsSettingsPage` call site is untouched.
 // With FEATURE_AGENTS on, SettingsPage and the desktop settings modal show
@@ -550,14 +550,14 @@ class _SkillRow extends StatelessWidget {
 /// is the truth for which skills exist. The list comes from the host
 /// (`skills_list`) when the page opens and on refresh; a switch sends
 /// `skill_control`, and the host's reply redraws the row. A skill switched
-/// off stays on the host but the coworker does not get it from its next task
+/// off stays on the host but the agent does not get it from its next task
 /// on.
 ///
 /// The two sections are the host's `source` field, never a name this page
 /// knows: `builtin` is a skill that documents Agents's own machinery and ships
 /// with the app (the repository's `skills/builtin/`), `workspace` is any other
-/// file under the coworker's `skills/` — including the ones seeded from
-/// `skills/workspace/`, which belong to the coworker from the first minute.
+/// file under the agent's `skills/` — including the ones seeded from
+/// `skills/workspace/`, which belong to the agent from the first minute.
 class AgentsSkillsSettingsPage extends StatefulWidget {
   const AgentsSkillsSettingsPage({super.key, SkillsSource? source})
     : _injectedSource = source;
@@ -645,7 +645,7 @@ class _AgentsSkillsSettingsPageState extends State<AgentsSkillsSettingsPage> {
             ExpressiveInfoCard(
               text:
                   l?.skillsExplainer ??
-                  'A skill is a procedure the coworker loads when it needs '
+                  'A skill is a procedure the agent loads when it needs '
                       'it. Only its name and description are in every prompt; '
                       'the full instructions load on use.',
             ),
@@ -685,7 +685,7 @@ class _AgentsSkillsSettingsPageState extends State<AgentsSkillsSettingsPage> {
                 icon: Icons.verified_outlined,
                 text:
                     'The Agents host\'s own. Each one explains a part of '
-                    'the app the coworker works with — schedules, the secrets '
+                    'the app the agent works with — schedules, the secrets '
                     'vault, the sandbox terminal, the workspace itself. They '
                     'ship with the host and come back with every update.',
               ),
@@ -699,8 +699,8 @@ class _AgentsSkillsSettingsPageState extends State<AgentsSkillsSettingsPage> {
               const ExpressiveInfoCard(
                 icon: Icons.folder_outlined,
                 text:
-                    'Files in the coworker\'s workspace, under skills/. Your '
-                    'coworker or you put them there, and either of you can '
+                    'Files in the agent\'s workspace, under skills/. Your '
+                    'agent or you put them there, and either of you can '
                     'edit or delete them. A few come with a new workspace to '
                     'start you off — those are yours too.',
               ),
@@ -713,7 +713,7 @@ class _AgentsSkillsSettingsPageState extends State<AgentsSkillsSettingsPage> {
             const ExpressiveInfoCard(
               text:
                   'Switching a skill off keeps the file where it is; the '
-                  'coworker stops getting it from its next task on.',
+                  'agent stops getting it from its next task on.',
             ),
           ],
         ),

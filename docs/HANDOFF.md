@@ -333,7 +333,7 @@ credits.
        each turn goes to *that member's* agent via a `member_runner(member,
        prompt) -> reply|None` seam — and an offline member (None) gets a fixed
        `OFFLINE_REPLY` placeholder that carries no @mention, so a member whose
-       executor is down neither crashes the room nor drags a coworker into a
+       executor is down neither crashes the room nor drags an agent into a
        fresh round. Streams via on_turn, honours stop + caps. 7 tests.
        4b-exec (routing layer): DONE. `manager/room_binding.py` `RoomBinding`
        is the host's registry of reachable members — register/unregister,
@@ -351,7 +351,7 @@ credits.
    4c. **App UI** — create-room flow DONE. `app/lib/models/agents_room.dart`
        (`AgentsRoom`/`AgentsRoomMember`/`AgentsRoomDraft`)
        + `app/lib/widgets/room_create_sheet.dart`: name + a checklist of
-       coworkers, Create gated on a name + ≥2 members. **The six-member cap is
+       agents, Create gated on a name + ≥2 members. **The six-member cap is
        gone** (user, 2026-09-13): a room takes any number of members, the list
        scrolls and a search field appears above `kRoomSearchThreshold` (8). The
        per-send message ceiling is derived from `members × max_rounds` when it
@@ -433,9 +433,9 @@ credits.
 
 
 8. **1b: `SESSIONS | BOTS` tab strip** — DONE. The roster gained a segmented
-   `Bots | Sessions` strip (§16.1). BOTS is the coworker list (default, so all
+   `Bots | Sessions` strip (§16.1). BOTS is the agent list (default, so all
    existing behaviour is unchanged); SESSIONS is a flat, most-recent-first list
-   of every conversation across every visible coworker, built from the roster
+   of every conversation across every visible agent, built from the roster
    the app already holds (agent + thread + the thread's own last-activity — a
    thread with no activity sinks, never gets a fabricated time). Tapping a
    session selects that thread. +2 tests (24 in the roster file).
@@ -444,7 +444,7 @@ credits.
 ### Follow-ups picked from plan §20 (safe, local)
 
 - **Cross-machine handle disambiguation (§16.1)** — DONE. `assign_room_handles`
-  in `manager/group_room.py` turns coworkers (`AgentIdentity`: id, name, device)
+  in `manager/group_room.py` turns agents (`AgentIdentity`: id, name, device)
   into room members with unique mention handles: a plain name when unique,
   `@name-device` when two share a name across machines (the exact form
   `parse_mentions` understands), a numeric suffix on a same-name-same-device
@@ -542,10 +542,10 @@ credits.
   room: `RoomThreadView` renders a compact horizontal strip of member avatars +
   `@handle` under the room name (hidden when empty); `RoomThreadPage` passes the
   members through and the shell supplies `room.members`. So the user sees the
-  coworkers they are addressing, not just the room name. +2 view tests; app 224
+  agents they are addressing, not just the room name. +2 view tests; app 224
   green.
 
-- **Delete a coworker, cascading its rooms (§16.1)** — DONE, closing a real gap:
+- **Delete an agent, cascading its rooms (§16.1)** — DONE, closing a real gap:
   agents could be hidden but never deleted. The roster row menu gains Delete —
   offered only for non-host agents (the paired host is the real device, not a
   bot to delete). The shell removes the agent and cascades:

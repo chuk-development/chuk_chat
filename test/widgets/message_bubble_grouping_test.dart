@@ -123,7 +123,7 @@ void main() {
     expect(nextRun.top - last.bottom, gapBetweenRuns);
   });
 
-  testWidgets('a coworker\'s run draws no bubble at all', (
+  testWidgets('an agent\'s run draws no bubble at all', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(wrap(threeMessageRun(isUser: false)));

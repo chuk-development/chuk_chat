@@ -47,7 +47,7 @@ class _Members:
             model_wiring=self._wiring,
             environment_factory=self._environment,
             db_dir=tmp_path / "room-agents",
-            system_prompt="You are a coworker in a room.",
+            system_prompt="You are an agent in a room.",
             turn_timeout=30.0,
         )
 
@@ -249,7 +249,7 @@ def test_a_member_that_cannot_start_is_offline_and_the_room_runs_on(
         model_wiring=members._wiring,
         environment_factory=environment,
         db_dir=tmp_path / "room-agents",
-        system_prompt="You are a coworker in a room.",
+        system_prompt="You are an agent in a room.",
         turn_timeout=30.0,
     )
 
@@ -288,7 +288,7 @@ def test_no_model_wiring_means_offline_not_a_crash(tmp_path, room_store):
         model_wiring=lambda _agent_id: (None, None),
         environment_factory=members._environment,
         db_dir=tmp_path / "room-agents",
-        system_prompt="You are a coworker in a room.",
+        system_prompt="You are an agent in a room.",
     )
 
     frames: list[dict] = []

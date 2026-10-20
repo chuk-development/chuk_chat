@@ -35,7 +35,7 @@ void main() {
     await tester.pump();
   }
 
-  /// A coworker's turn goes through the chat's Markdown renderer, exactly like
+  /// An agent's turn goes through the chat's Markdown renderer, exactly like
   /// a one-to-one answer, so its words live in a RichText.
   Finder said(String text) => find.textContaining(text, findRichText: true);
 
@@ -253,7 +253,7 @@ void main() {
   testWidgets('the agent-to-agent policy reads as a calm system line', (
     tester,
   ) async {
-    // The room ended because a coworker's @mention was not followed: the policy
+    // The room ended because an agent's @mention was not followed: the policy
     // is off. The line is the only place the user learns that.
     await pump(
       tester,
@@ -262,7 +262,7 @@ void main() {
       ],
       stop: AgentsRoomStop.agentToAgentOff,
     );
-    final Finder line = find.text('Coworkers do not reply to each other here');
+    final Finder line = find.text('Agents do not reply to each other here');
     expect(line, findsOneWidget);
     // Not an error: it is drawn in the quiet colour, like the other reasons.
     final ColorScheme scheme = Theme.of(tester.element(line)).colorScheme;
@@ -277,7 +277,7 @@ void main() {
       ],
       stop: AgentsRoomStop.turnFailed,
     );
-    final Finder line = find.text("A coworker's turn failed");
+    final Finder line = find.text("An agent's turn failed");
     final ColorScheme scheme = Theme.of(tester.element(line)).colorScheme;
     expect(tester.widget<Text>(line).style?.color, scheme.error);
   });

@@ -139,7 +139,7 @@ class VoiceStartRequest {
 }
 
 /// The start of the voice session for an accepted [call]: its Agents thread,
-/// the coworker's name, the call id and the reason, marked as started by the
+/// the agent's name, the call id and the reason, marked as started by the
 /// agent so the worker speaks first (spec §6.3).
 VoiceStartRequest voiceStartRequestFor(
   IncomingCall call, {

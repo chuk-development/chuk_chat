@@ -1,4 +1,4 @@
-"""The user's own browser (the add-on) on the host side: one broker, many coworkers.
+"""The user's own browser (the add-on) on the host side: one broker, many agents.
 
 docs/WIRE_CONTRACT.md, "The user's own browser"; bead chuk_chat-rixw.
 
@@ -7,20 +7,20 @@ The add-on reaches this machine through Chrome's native messaging: Chrome starts
 and the bridge dials a unix socket. Nothing listens on a TCP port, so nothing on
 the network, and no web page, can reach it.
 
-Before this module every coworker's ``agents-extension-mcp`` bound that socket
-itself, so a second coworker took the browser away from the first one, and the
+Before this module every agent's ``agents-extension-mcp`` bound that socket
+itself, so a second agent took the browser away from the first one, and the
 host had no idea whether an add-on was there at all. Now the host owns the
 socket for its whole life:
 
 ``bridge socket``  the add-on's bridge dials in (one browser at a time; the
                    newest connection wins).
-``client socket``  each coworker's ``agents-extension-mcp`` dials in and names
+``client socket``  each agent's ``agents-extension-mcp`` dials in and names
                    its session in a hello.
 
-The broker passes commands through and keeps four rules that no coworker can
+The broker passes commands through and keeps four rules that no agent can
 talk its way around:
 
-* **one holder.** A coworker that acts takes the browser; another coworker gets
+* **one holder.** An agent that acts takes the browser; another agent gets
   "in use" until the holder closes, hands off, goes away or is idle for
   :data:`IDLE_RELEASE_SECONDS`. Reading the tab list takes nothing.
 * **Stop wins.** The user's Stop in the browser (the strip on the page, the
@@ -61,7 +61,7 @@ CLIENT_SOCKET_NAME = "browser-broker.sock"
 #: Overrides, for tests and for a packaged install.
 BRIDGE_SOCKET_ENV = "AGENTS_BRIDGE_SOCKET"
 CLIENT_SOCKET_ENV = "AGENTS_BROWSER_BROKER_SOCKET"
-#: The session a coworker's ``agents-extension-mcp`` speaks for.
+#: The session an agent's ``agents-extension-mcp`` speaks for.
 SESSION_ENV = "AGENTS_BROWSER_SESSION"
 
 #: Chrome's name for the bridge; ``install_host_manifest.py`` writes it.
@@ -86,7 +86,7 @@ STOPPED_ERROR = (
     "task. Tell the user where you stopped and what is left."
 )
 BUSY_ERROR = (
-    "the user's browser is in use by another coworker right now. Do not retry in a "
+    "the user's browser is in use by another agent right now. Do not retry in a "
     "loop: wait, or tell the user."
 )
 NOT_CONNECTED_ERROR = (
@@ -97,12 +97,12 @@ GONE_ERROR = "the user's browser went away before it answered."
 
 #: ``run.origin`` of a task the user typed in the add-on's side panel.
 PANEL_ORIGIN = "browser_panel"
-#: The first line of such a task, so the coworker and the thread know where
+#: The first line of such a task, so the agent and the thread know where
 #: the words came from.
 PANEL_MARK = "[from your browser panel]"
-#: The longest coworker name the strip on the page shows.
+#: The longest agent name the strip on the page shows.
 MAX_NAME_CHARS = 40
-#: What of a panel message reaches the coworker, at most.
+#: What of a panel message reaches the agent, at most.
 MAX_PANEL_TEXT = 4000
 MAX_PANEL_SELECTION = 2000
 MAX_PANEL_PAGE_TEXT = 6000
@@ -362,8 +362,8 @@ class BrowserBroker:
             self._change_listeners.append(_weak(callback))
 
     def set_name_resolver(self, resolver: Callable[[str], str] | None) -> None:
-        """``resolver(session_key)`` gives the coworker's name. The broker sends
-        it to the add-on when a coworker takes the browser, so the strip on
+        """``resolver(session_key)`` gives the agent's name. The broker sends
+        it to the add-on when an agent takes the browser, so the strip on
         the page says who is acting. Held strongly; one per broker."""
         with self._lock:
             self._name_resolver = resolver
@@ -372,9 +372,9 @@ class BrowserBroker:
         self, handler: Callable[[str | None, dict], Mapping[str, Any] | None] | None
     ) -> None:
         """``handler(session, frame)`` for a ``page_message`` the user typed in
-        the add-on's panel. ``session`` is the coworker that holds the browser
+        the add-on's panel. ``session`` is the agent that holds the browser
         or last held it, ``None`` when none did. The handler's dict
-        (``ok``, ``coworker``, ``error``) goes back to the add-on as
+        (``ok``, ``agent``, ``error``) goes back to the add-on as
         ``page_message_ack``. Called on its own thread."""
         with self._lock:
             self._page_handler = handler
@@ -536,7 +536,7 @@ class BrowserBroker:
 
     def _on_page_message(self, frame: dict) -> None:
         """The user typed in the add-on's panel. Hand it to the host, which
-        starts a run of the coworker that holds (or last held) the browser,
+        starts a run of the agent that holds (or last held) the browser,
         and tell the panel who got it."""
         with self._lock:
             self._expire_holder()
@@ -570,7 +570,7 @@ class BrowserBroker:
             self._notify_stop(session)
         self._notify_change()
 
-    # -- the coworker side -----------------------------------------------------
+    # -- the agent side -----------------------------------------------------
 
     def _on_client(self, conn: socket.socket) -> None:
         client = _Client(_Line(conn))
@@ -615,7 +615,7 @@ class BrowserBroker:
             elif self._ext is None:
                 error = NOT_CONNECTED_ERROR
             elif not client.session:
-                error = "this browser client never said which coworker it is."
+                error = "this browser client never said which agent it is."
             else:
                 error = None
                 if not is_read(op, args):
@@ -624,7 +624,7 @@ class BrowserBroker:
                         error = BUSY_ERROR
                     else:
                         changed = self.holder != client.session
-                        # A new hand never works in the last coworker's tab.
+                        # A new hand never works in the last agent's tab.
                         previous_holder_released = self._last_holder not in (None, client.session)
                         self.holder = client.session
                         self._last_holder = client.session
@@ -653,7 +653,7 @@ class BrowserBroker:
 
     def _idle_watch(self) -> None:
         """Tell the listeners when an idle holder lets go on its own, so a
-        pushed status never says "in use" for a coworker that left."""
+        pushed status never says "in use" for an agent that left."""
         interval = max(1.0, min(30.0, self.idle_release / 4))
         while not self._closed.wait(interval):
             with self._lock:
@@ -686,7 +686,7 @@ class BrowserBroker:
 
 
 def clean_name(raw: Any) -> str:
-    """A coworker name fit for the strip: one line, no control characters,
+    """An agent name fit for the strip: one line, no control characters,
     at most :data:`MAX_NAME_CHARS`."""
     if not isinstance(raw, str):
         return ""
@@ -756,7 +756,7 @@ _shared_lock = threading.Lock()
 def shared_broker(*, start: bool = True) -> BrowserBroker | None:
     """The process's broker, started on first use. ``None`` when it cannot
     run here (another process holds the sockets, or the bind failed); the
-    coworker's ``agents-extension-mcp`` then talks to whoever does."""
+    agent's ``agents-extension-mcp`` then talks to whoever does."""
     global _shared
     with _shared_lock:
         if _shared is not None and _shared.running:
@@ -824,7 +824,7 @@ def tab_url_from_list(text: Any, tab_id: Any) -> str | None:
 
 def site_for(tool: str, args: Mapping[str, Any], list_tabs: Callable[[], str | None]) -> str | None:
     """The site a user-browser call acts on, for the approval card and the
-    site allow-list. ``None`` = the page the coworker's tab shows now."""
+    site allow-list. ``None`` = the page the agent's tab shows now."""
     if tool == "browser_navigate":
         return host_of(args.get("url"))
     if tool == "browser_tabs" and args.get("action") == "select":

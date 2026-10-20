@@ -42,7 +42,7 @@ def test_context_shows_the_user_message_and_prior_replies():
 
     RoomRunner(room, turn).run("what's the plan?")
     # amber sees only the user message; cobalt sees the user message + amber's
-    # reply, so a coworker can answer what another just said.
+    # reply, so an agent can answer what another just said.
     assert "User: what's the plan?" in prompts[0]
     assert "@amber:" not in prompts[0]
     assert "@amber: reply from amber" in prompts[1]

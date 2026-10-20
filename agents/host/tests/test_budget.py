@@ -1,4 +1,4 @@
-"""The weekly budget per coworker on the host (docs/WIRE_CONTRACT.md, "Cost
+"""The weekly budget per agent on the host (docs/WIRE_CONTRACT.md, "Cost
 per run and weekly budget", bead chuk_chat-qcbv): stored with the
 permissions, set and read through the same two frames, handed to the
 executor through a bridge, and pushed once per level and week."""
@@ -147,7 +147,7 @@ def test_the_host_names_the_capability_and_wires_the_bridge(tmp_path):
             {"type": "agent_permissions_set", "agent_id": "local:amber:1", "budget_weekly": 3}
         )
         assert reply["budget_weekly"] == 3.0
-        # A coworker's own thread reads its own budget; the host's other
+        # An agent's own thread reads its own budget; the host's other
         # sessions read the host agent's (none set).
         assert host._budget.budget_weekly("local:amber:1") == 3.0
         assert host._budget.budget_weekly("default") == 0.0

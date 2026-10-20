@@ -251,6 +251,8 @@ const List<String> _canonicalStringKeys = <String>[
   'startedAt',
   'generationMs',
   'variants',
+  'inputMode',
+  'voiceDurationMs',
 ];
 
 // ─── v3 message encoding ────────────────────────────────────────────────

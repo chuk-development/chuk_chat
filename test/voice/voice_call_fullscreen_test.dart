@@ -48,7 +48,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(VoiceCallFullscreenPage), findsOneWidget);
     expect(find.byKey(const ValueKey('voice-visualization')), findsOneWidget);
-    expect(find.textContaining('A normal spoken answer'), findsOneWidget);
     Navigator.of(chatContext).pop();
     await tester.pumpAndSettle();
     await first;
@@ -75,12 +74,8 @@ void main() {
     );
     await tester.pump();
     expect(tester.takeException(), isNull);
-    await tester.scrollUntilVisible(
-      find.byTooltip('End call'),
-      120,
-      scrollable: find.byType(Scrollable).first,
-    );
     expect(find.byTooltip('End call').hitTestable(), findsOneWidget);
+    expect(find.byTooltip('Mute').hitTestable(), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
   testWidgets(
@@ -101,7 +96,7 @@ void main() {
         find.byKey(const ValueKey('voice-camera-preview')),
         findsOneWidget,
       );
-      expect(find.text('Your camera'), findsOneWidget);
+      expect(find.bySemanticsLabel('Your camera'), findsOneWidget);
       expect(find.text('Starting camera…'), findsOneWidget);
       expect(find.byTooltip('Turn video off'), findsOneWidget);
       controller.debugSetState(
@@ -114,7 +109,7 @@ void main() {
     },
   );
 
-  testWidgets('speaker route changes both visible label and selected styling', (
+  testWidgets('speaker route changes the button label and its fill', (
     tester,
   ) async {
     final controller = VoiceCallController.forTesting();
@@ -127,16 +122,18 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: VoiceCallFullscreenPage(controller: controller)),
     );
-    expect(find.text('Speaker on'), findsOneWidget);
-    VoiceCallControl control() => tester.widget<VoiceCallControl>(
-      find.byWidgetPredicate(
-        (widget) =>
-            widget is VoiceCallControl &&
-            widget.semanticsId == 'voice-call-speaker',
-      ),
-    );
-    final selectedFill = control().fill;
-    expect(control().toggled, isTrue);
+    Color? fill(String tooltip) {
+      final box = tester.widget<AnimatedContainer>(
+        find.descendant(
+          of: find.byTooltip(tooltip),
+          matching: find.byType(AnimatedContainer),
+        ),
+      );
+      return (box.decoration as BoxDecoration?)?.color;
+    }
+
+    expect(find.byTooltip('Speaker on'), findsOneWidget);
+    final selectedFill = fill('Speaker on');
     controller.debugSetState(
       phase: VoiceCallPhase.live,
       canSwitchSpeaker: true,
@@ -144,9 +141,8 @@ void main() {
       outputRoute: 'earpiece',
     );
     await tester.pump();
-    expect(find.text('Earpiece'), findsOneWidget);
-    expect(control().toggled, isFalse);
-    expect(control().fill, isNot(selectedFill));
+    expect(find.byTooltip('Earpiece'), findsOneWidget);
+    expect(fill('Earpiece'), isNot(selectedFill));
     controller.debugSetState(
       phase: VoiceCallPhase.live,
       canSwitchSpeaker: true,
@@ -155,8 +151,7 @@ void main() {
       changingSpeaker: true,
     );
     await tester.pump();
-    expect(find.text('Switching…'), findsOneWidget);
-    expect(control().onTap, isNull);
+    expect(find.byTooltip('Switching…'), findsOneWidget);
     controller.debugSetState(
       phase: VoiceCallPhase.live,
       canSwitchSpeaker: true,
@@ -164,7 +159,58 @@ void main() {
       outputRoute: 'bluetooth',
     );
     await tester.pump();
-    expect(find.text('Bluetooth'), findsOneWidget);
+    expect(find.byTooltip('Bluetooth'), findsOneWidget);
+  });
+
+  testWidgets('the route menu switches to the speaker', (tester) async {
+    final controller = VoiceCallController.forTesting();
+    controller.debugSetState(
+      phase: VoiceCallPhase.connecting,
+      canSwitchSpeaker: true,
+      speakerOn: false,
+      outputRoute: 'earpiece',
+    );
+    await tester.pumpWidget(
+      MaterialApp(home: VoiceCallFullscreenPage(controller: controller)),
+    );
+    await tester.tap(find.byTooltip('Earpiece'));
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(find.text('Speaker'), findsOneWidget);
+    await tester.tap(find.text('Speaker'));
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(controller.speakerOn, isTrue);
+  });
+
+  testWidgets('a place card lifts the bars; hiding it lowers them', (
+    tester,
+  ) async {
+    final controller = VoiceCallController.forTesting();
+    controller.debugSetState(
+      phase: VoiceCallPhase.live,
+      agentSpeaking: true,
+      cards: [
+        VoiceCard(
+          id: 'c1',
+          kind: 'weather',
+          title: 'Kiel',
+          data: const {'temperature': 12, 'condition': 'Cloudy'},
+          at: DateTime.utc(2026),
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      MaterialApp(home: VoiceCallFullscreenPage(controller: controller)),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    final bars = tester.getRect(
+      find.byKey(const ValueKey('voice-visualization')),
+    );
+    expect(bars.height, lessThanOrEqualTo(108));
+    expect(find.text('Kiel'), findsOneWidget);
+    await tester.tap(find.byTooltip('Hide'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Kiel'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('interrupted caption dims only words that were not spoken', (

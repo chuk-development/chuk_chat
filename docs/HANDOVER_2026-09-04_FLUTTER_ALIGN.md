@@ -450,6 +450,6 @@ handed to cowork-49.
 ## Definition of done (from the philosophy)
 
 The user typed one thing and closed the app. Later, ONE notification: "your answer
-is ready". Tap → the coworker's thread with the finished result, replayed from the
+is ready". Tap → the agent's thread with the finished result, replayed from the
 server. No command, no error, no excuse (unless the full-log toggle is on). Delete
 the app, reinstall on another phone, sign in — everything is still there.

@@ -1,6 +1,6 @@
 /// The roster: the left pane of the Agents desktop layout.
 ///
-/// It is chuk_chat's desktop sidebar (`sidebar_desktop.dart`) with coworkers
+/// It is chuk_chat's desktop sidebar (`sidebar_desktop.dart`) with agents
 /// where the chats are, built from the same chrome (`sidebar_chrome.dart`):
 ///
 ///  * a floating head bar with the wordmark, and the menu button that folds
@@ -9,14 +9,14 @@
 ///    New agent and New room), Control Rooms and Search, whose card turns
 ///    into the filter field;
 ///  * one block per group under its own lid — Pinned, Agents, Rooms and
-///    Hidden — with each coworker and room as a chat tile carrying its face;
+///    Hidden — with each agent and room as a chat tile carrying its face;
 ///  * the floating account line at the foot.
 ///
 /// Folded, the pane is chuk's mini rail: the menu button and the navigation
-/// icons on the rows the open pane gives them, then one face per coworker and
+/// icons on the rows the open pane gives them, then one face per agent and
 /// room. Nothing the reader aims at moves when the pane folds.
 ///
-/// Every coworker has exactly one long-lived thread, so a row is an agent and
+/// Every agent has exactly one long-lived thread, so a row is an agent and
 /// picking it opens that thread. The phone's inbox is `MobileAgentList`; this
 /// widget is only ever built by the desktop layout.
 library;
@@ -40,7 +40,7 @@ import 'package:chuk_chat/ui/expressive/agent_face.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/agents_desktop/desktop_controls.dart';
 import 'package:chuk_chat/widgets/brand_wordmark.dart';
-import 'package:chuk_chat/widgets/coworker_name_dialog.dart';
+import 'package:chuk_chat/widgets/agent_name_dialog.dart';
 import 'package:chuk_chat/widgets/credit_display.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 import 'package:chuk_chat/widgets/room_faces.dart';
@@ -50,9 +50,9 @@ import 'package:chuk_chat/widgets/update_banner.dart';
 
 // The name dialog moved to its own file when it was rebuilt in the app's
 // language; it is exported here so every caller keeps one import.
-export 'package:chuk_chat/widgets/coworker_name_dialog.dart';
+export 'package:chuk_chat/widgets/agent_name_dialog.dart';
 
-/// The face in front of a coworker or a room in the open pane. It fits the
+/// The face in front of an agent or a room in the open pane. It fits the
 /// chat tile's two lines with air above and below.
 const double kRosterTileFace = 32;
 
@@ -88,7 +88,7 @@ class AgentRosterView extends StatefulWidget {
 
   final AgentRosterSource source;
 
-  /// Called with the agent and the thread the user picked. A coworker has one
+  /// Called with the agent and the thread the user picked. An agent has one
   /// permanent thread, so this always reports that single thread's key.
   final void Function(String agentId, String threadKey) onSelect;
 
@@ -101,14 +101,14 @@ class AgentRosterView extends StatefulWidget {
   /// Opens the new-agent dialog. The New agent card is hidden when null.
   final VoidCallback? onAddAgent;
 
-  /// Deletes a coworker, after the user confirmed. A Delete item appears for
+  /// Deletes an agent, after the user confirmed. A Delete item appears for
   /// agents that are not the paired host (the host agent is the real device).
   final void Function(String agentId)? onDeleteAgent;
 
-  /// Renames a coworker; reports the trimmed, non-empty, changed name.
+  /// Renames an agent; reports the trimmed, non-empty, changed name.
   final void Function(String agentId, String name)? onRenameAgent;
 
-  /// Opens a coworker's profile page. Hidden when null.
+  /// Opens an agent's profile page. Hidden when null.
   final void Function(AgentsAgent agent)? onOpenProfile;
 
   /// Control Rooms in the right pane.
@@ -202,7 +202,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
   /// True while the Search card shows the field instead of the card.
   bool _searchActive = false;
 
-  /// The groups the user folded. Hidden starts folded: it is where a coworker
+  /// The groups the user folded. Hidden starts folded: it is where an agent
   /// goes to be out of the way.
   final Set<String> _folded = <String>{_kGroupHidden};
 
@@ -292,7 +292,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
   // --- dialogs -----------------------------------------------------------------
 
   Future<void> _renameAgent(AgentsAgent agent) async {
-    final String? name = await showCoworkerNameDialog(
+    final String? name = await showAgentNameDialog(
       context,
       title: 'Rename agent',
       initialName: agent.name,
@@ -343,7 +343,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
   }
 
   Future<void> _renameRoom(AgentsRoom room) async {
-    final String? name = await showCoworkerNameDialog(
+    final String? name = await showAgentNameDialog(
       context,
       title: 'Rename room',
       initialName: room.name,
@@ -448,7 +448,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
     ]);
   }
 
-  /// The coworker's menu. The tile also carries the pin as a one-click toggle
+  /// The agent's menu. The tile also carries the pin as a one-click toggle
   /// on hover, as chuk's chat tile does; the menu row is the same toggle for
   /// the keyboard's menu key and for touch, where there is no hover.
   List<PopupMenuEntry<VoidCallback>> _agentMenu(AgentsAgent agent) {
@@ -1057,7 +1057,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
     );
   }
 
-  /// A hidden coworker, its face dimmed, with Unhide.
+  /// A hidden agent, its face dimmed, with Unhide.
   Widget _hiddenTile(BuildContext context, AgentsAgent agent) {
     return SbChatTile(
       key: ValueKey<String>('hidden-tile-${agent.id}'),
@@ -1084,7 +1084,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
   // --- rail --------------------------------------------------------------------
 
   /// chuk's mini rail: the menu button, the navigation icons on the rows the
-  /// open pane gives their cards, then one face per coworker and room.
+  /// open pane gives their cards, then one face per agent and room.
   Widget _buildRail(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final List<_NavRow> rows = _navRows(context);

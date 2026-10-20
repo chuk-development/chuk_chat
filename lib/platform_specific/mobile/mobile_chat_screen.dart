@@ -53,7 +53,7 @@ class MobileChatScreen extends StatefulWidget {
   /// Is a screen open to take over? Drives the chrome's screen target.
   final bool browserAvailable;
 
-  /// The coworker works in the user's own browser: the chrome's parked screen
+  /// The agent works in the user's own browser: the chrome's parked screen
   /// target says so (own browser).
   final bool usesUserBrowser;
   final VoidCallback? onOpenFiles;
@@ -61,7 +61,7 @@ class MobileChatScreen extends StatefulWidget {
   final VoidCallback? onMore;
 
   /// Is this page the one in front? The shell keeps the page mounted behind
-  /// the inbox (it owns the socket), so "the coworker changed" means two
+  /// the inbox (it owns the socket), so "the agent changed" means two
   /// different things: while the inbox is in front the shell's own open
   /// transition carries the change, and only a change that happens with the
   /// thread already on screen earns the cross-fade below.
@@ -82,7 +82,7 @@ class _MobileChatScreenState extends State<MobileChatScreen>
     curve: Curves.easeOutCubic,
   );
 
-  /// The coworker swap. There is exactly ONE thread view in the app (it holds
+  /// The agent swap. There is exactly ONE thread view in the app (it holds
   /// the socket), so two threads can never be on screen at the same time and a
   /// true two-layer cross-fade is not on offer. What is on offer is the other
   /// half of Material's fade-through: the page fades up from the chat
@@ -173,7 +173,7 @@ class _MobileChatScreenState extends State<MobileChatScreen>
           // the inbox, and a page that is 65 % opaque while it travels lets
           // the inbox read straight through it: what arrives on screen is a
           // dissolve, not a push, and the two motions cancel each other out.
-          // Only the coworker swap dissolves, and by then the inbox is gone.
+          // Only the agent swap dissolves, and by then the inbox is gone.
           opacity: _swapped.value.clamp(0.0, 1.0),
           child: Transform.scale(
             scale: 0.98 + 0.02 * _swapped.value,

@@ -117,7 +117,7 @@ void main() {
       expect(notified, 1);
     });
 
-    test('an error-only reply (an unknown coworker) carries the reason', () {
+    test('an error-only reply (an unknown agent) carries the reason', () {
       final FakeHost host = FakeHost();
       final AgentsPermissionsService service = host.service();
       addTearDown(service.dispose);

@@ -117,7 +117,7 @@ def loop_setup(
     ``action_approvals`` (docs/WIRE_CONTRACT.md, "Per-action approvals") is the
     executor's binding for the run. With it, the class tools this run has
     (mail sends, destructive connector tools, page-changing browser tools)
-    follow the coworker's policy, and here.now follows it too. Without it
+    follow the agent's policy, and here.now follows it too. Without it
     (a room member, a test) only here.now in ``ask`` mode asks, as before."""
     from .approvals import ApprovalPolicy, action_rules, bind_publish, herenow_rule
 

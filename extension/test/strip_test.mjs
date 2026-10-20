@@ -18,7 +18,7 @@ async function check(what, fn) {
   console.log(`ok  ${what}`);
 }
 
-// -- the strip names the coworker ------------------------------------------------
+// -- the strip names the agent ------------------------------------------------
 
 await check("the strip says who is acting", () => {
   assert.equal(stripLabel("active", "Ada"), "Ada is using this tab");
@@ -93,7 +93,7 @@ await check("only the add-on's own pages may send, and only a page_message", () 
   assert.match(send.slice(0, 600), /pageMessageFrame/);
 });
 
-// -- the coworker's name arrives in order with the commands --------------------------
+// -- the agent's name arrives in order with the commands --------------------------
 
 await check("browser_holder waits for the commands before it", async () => {
   globalThis.chrome = { runtime: {} };
