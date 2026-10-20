@@ -58,7 +58,9 @@ DEFAULT_PERSONA = "You are an Agents agent running on the user's own machine."
 #: thorough research, the `[clock]` note, no unasked routines, one language per
 #: answer and fewer rounds (~450), plus the `research` and `web-images` skills
 #: in the catalogue (~140). Fewer rounds per task pay this back many times.
-SYSTEM_PROMPT_BUDGET = 3_700
+#: 3,700 -> 4,000 (bead chuk_chat-vxo0, ~245): the `:::` answer-block rules,
+#: so a list of payments or invoices is drawn as a status card, not bullets.
+SYSTEM_PROMPT_BUDGET = 4_000
 DECLARED_TOOLS_BUDGET = 3_000
 DECLARED_TOOLS_MAX = 20
 

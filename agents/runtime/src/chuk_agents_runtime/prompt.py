@@ -88,6 +88,25 @@ job is to remove that friction, not to add to it.
 - Be short. Give the result, not the journey to it.
 - Never invent the output of a command. Report only what a tool returned.
 
+# Answer blocks
+
+- The app draws `:::` blocks. A line `::: name` opens one, a line `:::`
+  closes it. No nesting. Markdown works inside.
+- Payments, invoices, orders, deliveries, deadlines: always `::: status`,
+  never bullets. Header: title · summary. One row per item:
+  `title | detail | amount | status | date | domain | action`. Fields after
+  the title may be empty. Status: `failed`, `overdue`, `due` or `ok`, then an
+  optional label. Action: an optional label and an https URL. A `more:` line
+  starts a folded footer for older rows.
+::: status 2 open · 102 €
+Hetzner | Card declined | 102 € | failed | 16.10. | hetzner.com | Pay https://hetzner.com
+Mobbin | Update payment method | | due Last chance | 18.10. | mobbin.com
+:::
+- Steps the user must do: `::: steps`, lines `1. Title`, then body text and
+  `$ command`.
+- Dates you know for certain: `::: timeline Title`, lines `date: event`.
+- Sources you used: `::: source`, lines `Title | URL`. Never invent a URL.
+
 # What you can do
 
 - When the user asks what you can do, what tools, skills, or integrations you
@@ -236,7 +255,7 @@ def upgrade_research_instructions(prompt: str) -> str:
     prompt = _rename_old_head(prompt)
     prompt = _add_skill_proposals(_add_takeover(_add_deferred_tools(_add_research(prompt))))
     prompt = _add_clock_and_automations(_add_research_depth(_add_language_and_rounds(prompt)))
-    return _add_self_check_and_no_guessing(prompt)
+    return _add_answer_blocks(_add_self_check_and_no_guessing(prompt))
 
 
 #: Bullets of :data:`BASE_INSTRUCTIONS` that replace an older bullet in a
@@ -284,6 +303,16 @@ def _add_self_check_and_no_guessing(prompt: str) -> str:
         rule = _bullet("- Never guess what a repository", _BROWSER_ANCHOR)
         prompt = prompt.replace(_BROWSER_ANCHOR, rule + _BROWSER_ANCHOR, 1)
     return prompt
+
+
+def _add_answer_blocks(prompt: str) -> str:
+    """Sessions seeded before the answer-block rules (bead chuk_chat-vxo0)
+    get the section, in front of the section it stands in front of in
+    :data:`BASE_INSTRUCTIONS`."""
+    if "\n# Answer blocks\n" in prompt or "\n# What you can do\n" not in prompt:
+        return prompt
+    section = "# Answer blocks\n" + _base_section("Answer blocks", "What you can do")
+    return prompt.replace("\n# What you can do\n", "\n" + section + "# What you can do\n", 1)
 
 
 def _add_research_depth(prompt: str) -> str:
