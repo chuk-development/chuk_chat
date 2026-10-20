@@ -266,7 +266,7 @@ void main() {
   testWidgets('German strings', (tester) async {
     await pumpForm(tester, locale: const Locale('de'));
     expect(find.text('Seite beobachten'), findsOneWidget);
-    expect(find.text('Nur bei Änderung benachrichtigen'), findsOneWidget);
+    expect(find.text('Nur bei Relevantem benachrichtigen'), findsOneWidget);
     expect(find.text('Anlegen'), findsOneWidget);
   });
 
@@ -312,7 +312,7 @@ void main() {
       expect(facts, findsOneWidget);
       final String text = tester.widget<Text>(facts).data!;
       expect(text, contains('next check in '));
-      expect(text, contains('notifies on change'));
+      expect(text, contains('notifies when relevant'));
       expect(text, contains('quiet 3 runs'));
       expect(find.text('Last result: price 129 EUR'), findsOneWidget);
       expect(find.textContaining('Mail · from bank'), findsOneWidget);
