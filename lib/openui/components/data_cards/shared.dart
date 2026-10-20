@@ -282,7 +282,6 @@ class _Pressable extends StatelessWidget {
       child: MorphTap(
         onTap: onTap,
         shape: shape,
-        pressedShape: shape,
         pressedScale: 0.98,
         child: child,
       ),

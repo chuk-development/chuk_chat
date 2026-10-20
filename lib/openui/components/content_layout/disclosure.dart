@@ -225,7 +225,6 @@ class _ScrollingTabStripState extends State<_ScrollingTabStrip> {
                         ? scheme.primary
                         : Colors.transparent,
                     shape: const StadiumBorder(),
-                    pressedShape: const StadiumBorder(),
                     padding: const EdgeInsets.symmetric(horizontal: 14),
                     child: SizedBox(
                       height: segmentHeight,
@@ -283,9 +282,6 @@ class _FoldHeader extends StatelessWidget {
         onTap: onTap,
         pressedScale: 0.99,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(OpenUiTokens.radiusInner),
-        ),
-        pressedShape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(OpenUiTokens.radiusInner),
         ),
         padding: padding,

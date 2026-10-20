@@ -125,16 +125,10 @@ class OpenUiIconButtonView extends StatelessWidget {
         : RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(box * 0.34),
           );
-    final ShapeBorder pressed = circle
-        ? const CircleBorder()
-        : RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(box * 0.20),
-          );
     Widget button = MorphTap(
       onTap: enabled ? () => _onTap(context) : null,
       color: fill,
       shape: shape,
-      pressedShape: pressed,
       padding: EdgeInsets.all((box - glyph) / 2),
       child: SizedBox.square(
         dimension: glyph,

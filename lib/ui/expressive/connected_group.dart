@@ -159,7 +159,6 @@ class _Segment extends StatelessWidget {
         // A stadium at rest and a stadium while held: the press springs, it
         // does not turn the capsule into a rounded box.
         shape: const StadiumBorder(),
-        pressedShape: const StadiumBorder(),
         padding: const EdgeInsets.symmetric(horizontal: 12),
         child: SizedBox(
           height: height,
