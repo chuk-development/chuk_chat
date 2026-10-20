@@ -142,16 +142,42 @@ void main() {
     return controller;
   }
 
-  testWidgets('a live done while backgrounded shows one toast with a preview',
-      (tester) async {
+  testWidgets(
+    'a live done while backgrounded, preview off: one content-free toast',
+    (tester) async {
+      final controller = await pumpPaired(tester);
+      AgentsNotifications.instance.lifecycleOverride = AppLifecycleState.paused;
+
+      controller.emit(
+        const AgentsRelayDone(
+          reason: 'finished',
+          runId: 'run-1',
+          finalAnswer: 'Die Recherche ist fertig: drei Quellen.',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(backend.shown, hasLength(1));
+      expect(backend.shown.single['title'], 'Chief of Staff is done');
+      expect(backend.shown.single['body'], LocalNotifications.defaultBody);
+    },
+  );
+
+  testWidgets('a live done while backgrounded, preview on: one toast with a '
+      'preview', (tester) async {
+    await tester.runAsync(
+      () => LocalNotifications.setAnswerPreviewEnabled(true),
+    );
     final controller = await pumpPaired(tester);
     AgentsNotifications.instance.lifecycleOverride = AppLifecycleState.paused;
 
-    controller.emit(const AgentsRelayDone(
-      reason: 'finished',
-      runId: 'run-1',
-      finalAnswer: 'Die Recherche ist fertig: drei Quellen.',
-    ));
+    controller.emit(
+      const AgentsRelayDone(
+        reason: 'finished',
+        runId: 'run-1',
+        finalAnswer: 'Die Recherche ist fertig: drei Quellen.',
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(backend.shown, hasLength(1));

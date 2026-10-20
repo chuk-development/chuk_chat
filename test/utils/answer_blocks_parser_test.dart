@@ -193,6 +193,18 @@ void main() {
       expect(e[2].label, '1808');
     });
 
+    test('a bold start without a colon is not a label', () {
+      final List<TimelineEntry> e = parseTimeline(<String>[
+        '- **Big news** on 2021: launch',
+        '- __2022__: second',
+      ]);
+      // Not split at the bold: the line splits at its `: `.
+      expect(e[0].label, '**Big news** on 2021');
+      expect(e[0].text, 'launch');
+      expect(e[1].label, '2022');
+      expect(e[1].text, 'second');
+    });
+
     test('names are not dates, years are', () {
       expect(
         timelineIsDated(

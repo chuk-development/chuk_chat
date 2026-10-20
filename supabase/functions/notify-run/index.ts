@@ -101,7 +101,10 @@ export function buildFcmMessage(token: string, row: Record<string, unknown>): Re
       android: {
         priority: "HIGH",
         notification: {
-          channel_id: "agents_completion",
+          // The channel the app creates (lib/services/notifications/
+          // local_notifications.dart). An unknown id falls back to the
+          // manifest default channel.
+          channel_id: "cowork_answer_ready",
           // One outstanding notification per thread: a newer one replaces it.
           tag: String(row.session_key ?? ""),
           click_action: "FLUTTER_NOTIFICATION_CLICK",

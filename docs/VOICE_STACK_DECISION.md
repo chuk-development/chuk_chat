@@ -6,7 +6,7 @@ Goal: voice mode on LiveKit, in normal chat and in Agents.
 STT = Groq Whisper, LLM = Cerebras Qwen ~27B, TTS with Zero Data Retention (ZDR)
 without an enterprise contract, EU if possible, streamed output, first TTS audio < 500 ms.
 
-Current worker (`/home/user/git/api_server/voice/`, not `new-voicemode`):
+Current worker (api_server: `voice/`, not `new-voicemode`):
 Silero VAD + local turn detector `v1-mini` -> Inworld STT (streaming) ->
 RunAnywhere `glm-5.3-flash` -> Inworld TTS 2 Flash, on a self-hosted
 `livekit-server` v1.13.10 in a Dokploy Compose stack. `docs/PERSONAL_AGENT_SPEC.md`
@@ -125,7 +125,7 @@ or Deepgram Nova-3 EU, Soniox) and use Groq Whisper only as fallback; or accept 
 
 ### What must change in the current worker (no edits made)
 
-`/home/user/git/api_server/voice/`:
+api_server: `voice/`:
 
 - `agent.py:52` imports: add `groq`, `cerebras` (or `inference`) plugins.
 - `agent.py:98-117` RunAnywhere LLM pin and client -> Cerebras `qwen-3.8-27b`, `reasoning_effort="none"`.
@@ -145,10 +145,10 @@ or Deepgram Nova-3 EU, Soniox) and use Groq Whisper only as fallback; or accept 
 - `docker-compose.yml:37-53` env: `INWORLD_API_KEY`, `RUNANYWHERE_API_KEY`, model defaults -> `GROQ_API_KEY`, `CEREBRAS_API_KEY`, TTS key or Cloud inference key; `:1-27` and `livekit.yaml` add TURN.
 - `README.md` sections "Environment" and "Self-host" describe the old stack.
 
-`/home/user/git/api_server/routers/ai/voice_usage.py:26-40` and `:146-165`: price allowlist is
+api_server: `routers/ai/voice_usage.py:26-40` and `:146-165`: price allowlist is
 Inworld STT/TTS and GLM only; add Groq STT ($0.04/h, 10 s minimum), Cerebras tokens, TTS per char.
 
-`/home/user/git/chuk_chat`:
+chuk_chat:
 
 - `lib/voice/voice_call_controller.dart:82-83`, `:180-186`, `:971`, `:994`: hardcoded Inworld voice names (`Bastian` ... `Sabine`).
 - `lib/voice/voice_protocol.dart:305-312`: engine docs and `inworldS2S` engine.

@@ -2542,9 +2542,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         if (widget.messengerMode) 'sentAt': DateTime.now().toIso8601String(),
       };
       // A dictated message draws as a voice bubble (no audio is stored).
-      userMessage.addAll(
-        DictationTracker.instance.takeFor(displayMessageText),
-      );
+      // Only a composer send was dictated: a voice-call task and an OpenUI
+      // message both arrive as [voiceText] and must not take the mark.
+      if (voiceText == null) {
+        userMessage.addAll(
+          DictationTracker.instance.takeFor(displayMessageText),
+        );
+      }
 
       // Store images as JSON-encoded string if present
       if (imageDataUrls != null && imageDataUrls.isNotEmpty) {
@@ -2999,6 +3003,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     bool clearMessagesBelow = false,
     List<AttachedFile>? attachedFilesOverride,
     bool isRegenerate = false,
+    bool applyDictation = false,
   }) async {
     if (index < 0 || index >= _messages.length) return;
     if (_streamingHandler.isStreaming || _streamingHandler.isSending) {
@@ -3008,6 +3013,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     final String? chatIdAtStart = _activeChatId;
 
     setState(() {
+      // Past the guard: the edit goes through. Voice keys first, they
+      // compare against the old text.
+      if (applyDictation) {
+        DictationTracker.instance.applyToEdit(_messages[index], newText);
+      }
       _messages[index]['text'] = newText;
       // Reflect the attachment set chosen during editing (the user may have
       // removed images) so the saved bubble and any future edit match it.

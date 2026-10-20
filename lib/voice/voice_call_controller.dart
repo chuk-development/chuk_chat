@@ -82,6 +82,16 @@ class VoiceCallController extends ChangeNotifier {
   String _voiceId = 'Bastian';
   String _defaultVoiceId = 'Bastian';
   VoiceCallEngine _defaultEngine = VoiceCallEngine.pipeline;
+  // Separate revision from the voice preference so saving one never
+  // invalidates the other's pending cloud refresh. The queue serializes
+  // synced saves so a rapid selection always leaves the latest value remote.
+  int _enginePreferenceRevision = 0;
+  Future<void> _engineSyncQueue = Future<void>.value();
+  /// The engine the user last chose on this device. Authoritative over the
+  /// cloud until its synced save succeeds, so a stale or failed sync can
+  /// never silently revert the user's choice. Null on a fresh device: the
+  /// cloud value applies and other devices stay in sync.
+  String? _lastLocalEngine;
   String? _preferencesOwner;
   int _preferenceRevision = 0;
   bool _changingVoice = false;
@@ -323,10 +333,18 @@ class VoiceCallController extends ChangeNotifier {
 
       final String callerId = await VoiceCallService.callerId();
       if (gen != _generation) return;
+      // An account switch invalidates the previous account's unsynced engine
+      // choice: the cloud value of the new account applies.
+      if (_preferencesOwner != null && _preferencesOwner != callerId) {
+        _lastLocalEngine = null;
+      }
       await _loadVoicePreference(callerId, gen);
       if (gen != _generation) return;
       await _loadEnginePreference(callerId, gen);
       if (gen != _generation) return;
+      // The engine for this call, captured before later awaits can pick up a
+      // "next call" preference change.
+      final VoiceCallEngine engine = _defaultEngine;
       final String identity = '${VoiceProtocol.identityPrefix}$callerId';
       final String roomName = '${VoiceProtocol.roomPrefix}${const Uuid().v4()}';
       final Map<String, dynamic> metadata = VoiceProtocol.dispatchMetadata(
@@ -337,7 +355,7 @@ class VoiceCallController extends ChangeNotifier {
         context: context,
         voiceInstructions: voiceInstructions,
         voiceId: _voiceId,
-        engine: _defaultEngine,
+        engine: engine,
         sttLanguage: VoiceProtocol.resolveSttLanguage(
           sttLanguage,
           PlatformDispatcher.instance.locale.languageCode,
@@ -1001,21 +1019,44 @@ class VoiceCallController extends ChangeNotifier {
   /// so the call starts without a settings round-trip, then the cloud value
   /// refreshes the next call.
   Future<void> _loadEnginePreference(String userId, int gen) async {
+    if (_preferencesOwner != userId) _lastLocalEngine = null;
+    _preferencesOwner = userId;
     try {
       final saved = await VoicePreferences.loadEngineLocal(userId);
       if (gen != _generation) return;
       _defaultEngine = VoiceProtocol.parseEngine(saved);
+      final pending = await VoicePreferences.loadEnginePending(userId);
+      if (pending && saved != null) _lastLocalEngine = saved;
       notifyListeners();
-      final preferenceRevision = _preferenceRevision;
+      final preferenceRevision = _enginePreferenceRevision;
       unawaited(() async {
         try {
-          final engine = await VoicePreferences.loadEngineSynced(userId);
+          final saved = await VoicePreferences.loadEngineSynced(userId);
+          // No synced preference yet (or a stale one): keep the local choice.
           if (_preferencesOwner != userId ||
-              preferenceRevision != _preferenceRevision) {
+              preferenceRevision != _enginePreferenceRevision ||
+              saved == null) {
             return;
           }
-          final parsed = VoiceProtocol.parseEngine(engine);
+          final parsed = VoiceProtocol.parseEngine(saved);
+          if (parsed.wireName != saved) return;
+          if (_lastLocalEngine != null && saved == _lastLocalEngine) {
+            // The cloud already holds the locally chosen value (the save
+            // reached it but the marker write did not happen): settle the
+            // override so other devices' newer choices can arrive.
+            _lastLocalEngine = null;
+            unawaited(_clearEnginePending(userId));
+            return;
+          }
           if (parsed == _defaultEngine) return;
+          if (_lastLocalEngine != null && saved != _lastLocalEngine) {
+            // The user picked an engine on this device that has not reached
+            // the cloud yet (pending or failed save). Keep it and retry the
+            // sync instead of reverting to the older remote value.
+            final owner = _preferencesOwner;
+            if (owner != null) unawaited(_retryEngineSync(owner));
+            return;
+          }
           _defaultEngine = parsed;
           notifyListeners();
           await VoicePreferences.saveEngineLocal(userId, parsed.wireName);
@@ -1029,16 +1070,89 @@ class VoiceCallController extends ChangeNotifier {
   }
 
   Future<void> setDefaultEngine(VoiceCallEngine engine) async {
-    _preferenceRevision++;
+    _enginePreferenceRevision++;
     final owner = await VoiceCallService.callerId();
     if (isActive && _preferencesOwner != null && _preferencesOwner != owner) {
       throw StateError('Wait until the call settings have loaded.');
     }
     await VoicePreferences.saveEngineLocal(owner, engine.wireName);
+    // Mark the choice unsynced immediately (not behind the sync queue): if
+    // the app dies before save() runs, the local value still wins over a
+    // stale remote one.
+    try {
+      await VoicePreferences.saveEnginePending(owner, true);
+    } catch (_) {
+      // A missing marker only weakens the override; never block the call.
+    }
     if (_preferencesOwner != null && _preferencesOwner != owner) return;
+    _lastLocalEngine = engine.wireName;
     _defaultEngine = engine;
     notifyListeners();
-    unawaited(VoicePreferences.saveEngineSynced(owner, engine.wireName));
+    Future<void> save() async {
+      try {
+        await VoicePreferences.saveEnginePending(owner, true);
+        final synced = await VoicePreferences.saveEngineSynced(
+          owner,
+          engine.wireName,
+        );
+        // Only a real cloud write ends the local override; a silent no-op
+        // (signed out, key locked) or a failure keeps it. A newer local
+        // selection since this save keeps its authority.
+        if (synced && _lastLocalEngine == engine.wireName) {
+          _lastLocalEngine = null;
+          await VoicePreferences.saveEnginePending(owner, false);
+        }
+      } catch (_) {
+        // A failed settings sync keeps the local default; the next selection
+        // retries.
+      }
+    }
+
+    unawaited(() async {
+      try {
+        // save() swallows its own errors, so the queue never rejects and the
+        // last queued save is always the final remote write.
+        final next = _engineSyncQueue.then((_) => save());
+        _engineSyncQueue = next;
+        await next;
+      } catch (_) {
+        // The queue itself must never throw into the zone.
+      }
+    }());
+  }
+
+  /// Clears the persisted unsynced marker; best-effort.
+  Future<void> _clearEnginePending(String userId) async {
+    try {
+      await VoicePreferences.saveEnginePending(userId, false);
+    } catch (_) {
+      // A leftover marker only causes one extra sync retry.
+    }
+  }
+
+  /// Re-pushes the locally chosen engine after a refresh found a stale
+  /// remote value. Swallows every error: the next selection retries again.
+  Future<void> _retryEngineSync(String owner) async {
+    final next = _engineSyncQueue.then((_) async {
+      final local = _lastLocalEngine;
+      if (local == null) return;
+      final engine = VoiceProtocol.parseEngine(local);
+      try {
+        final synced = await VoicePreferences.saveEngineSynced(
+          owner,
+          engine.wireName,
+        );
+        if (synced && _lastLocalEngine == engine.wireName) {
+          _lastLocalEngine = null;
+          await VoicePreferences.saveEnginePending(owner, false);
+        }
+      } catch (_) {
+        // A failed retry keeps the local default; the next selection or call
+        // retries again.
+      }
+    });
+    _engineSyncQueue = next;
+    await next;
   }
 
   Future<void> setDefaultVoice(String voice) async {

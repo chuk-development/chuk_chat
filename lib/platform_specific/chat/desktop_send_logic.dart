@@ -40,6 +40,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     bool clearMessagesBelow = false,
     List<AttachedFile>? attachedFilesOverride,
     bool isRegenerate = false,
+    bool applyDictation = false,
   }) async {
     if (!isValidMessageIndex(index)) return;
     final String trimmedText = newText.trim();
@@ -78,6 +79,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     try {
       // Store the edited message
       setState(() {
+        // Past every guard: the edit goes through. Voice keys first, they
+        // compare against the old text.
+        if (applyDictation) {
+          DictationTracker.instance.applyToEdit(_messages[index], trimmedText);
+        }
         _messages[index]['text'] = trimmedText;
         messageActionsHandler.cancelEdit();
       });
@@ -1480,9 +1486,13 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           'startedAt': DateTime.now().toIso8601String(),
         };
         // A dictated message draws as a voice bubble (no audio is stored).
-        userMessage.addAll(
-          DictationTracker.instance.takeFor(displayMessageText),
-        );
+        // Only a composer send was dictated: a voice-call task and an OpenUI
+        // message both arrive as [voiceText] and must not take the mark.
+        if (voiceText == null) {
+          userMessage.addAll(
+            DictationTracker.instance.takeFor(displayMessageText),
+          );
+        }
 
         // Store images as JSON-encoded string if present
         if (imageDataUrls != null && imageDataUrls.isNotEmpty) {

@@ -166,6 +166,11 @@ class AppLocalizations {
   String get autoGenerateTitles => _get('autoGenerateTitles');
   String get autoGenerateTitlesSubtitle => _get('autoGenerateTitlesSubtitle');
   String get titleGenerationPrompt => _get('titleGenerationPrompt');
+  String get notificationsSection => _get('notificationsSection');
+  String get settingSaveFailed => _get('settingSaveFailed');
+  String get notificationAnswerPreview => _get('notificationAnswerPreview');
+  String get notificationAnswerPreviewSubtitle =>
+      _get('notificationAnswerPreviewSubtitle');
   String get usingCustomPrompt => _get('usingCustomPrompt');
   String get usingDefaultPrompt => _get('usingDefaultPrompt');
   String get titleGenInfo => _get('titleGenInfo');
@@ -682,10 +687,8 @@ class AppLocalizations {
   String get micAccessFailed => _get('micAccessFailed');
   String get transcriptionFailed => _get('transcriptionFailed');
   String get voiceMessage => _get('voiceMessage');
-  String get voiceMessageShowTranscript =>
-      _get('voiceMessageShowTranscript');
-  String get voiceMessageHideTranscript =>
-      _get('voiceMessageHideTranscript');
+  String get voiceMessageShowTranscript => _get('voiceMessageShowTranscript');
+  String get voiceMessageHideTranscript => _get('voiceMessageHideTranscript');
   String get nothingToResend => _get('nothingToResend');
   String get freeMessagesUsed => _get('freeMessagesUsed');
   String get ok => _get('ok');

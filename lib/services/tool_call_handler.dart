@@ -2244,10 +2244,18 @@ class ToolCallHandler {
   /// The history for the next pass: older tool results shortened in place
   /// (see [compactOlderToolResults]), then cloned.
   List<Map<String, dynamic>> _stepHistory(ToolLoopSession session) {
+    // When the next message is not a fresh tool result (fact-check, retry,
+    // forced final pass), the newest prompt-based result already sits in the
+    // history and IS the newest round, so it must stay in full.
+    Set<int> indices = session.promptToolResultIndices;
+    if (session.pendingPromptToolResult == null && indices.isNotEmpty) {
+      final int newest = indices.reduce((a, b) => a > b ? a : b);
+      indices = indices.where((i) => i != newest).toSet();
+    }
     compactOlderToolResults(
       session.history,
       turnStart: session.turnHistoryStart,
-      promptToolResultIndices: session.promptToolResultIndices,
+      promptToolResultIndices: indices,
     );
     return _cloneHistory(session.history);
   }

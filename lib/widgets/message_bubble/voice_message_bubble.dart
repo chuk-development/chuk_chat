@@ -114,6 +114,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
           ? '$label. $action'
           : '$label, ${formatVoiceDuration(duration)}. $action',
       excludeSemantics: true,
+      onTap: _toggle,
       child: GestureDetector(
         key: kVoiceBubbleHeaderKey,
         behavior: HitTestBehavior.opaque,

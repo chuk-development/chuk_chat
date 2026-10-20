@@ -355,9 +355,12 @@ class TimelineEntry {
 }
 
 /// A label the model wrapped in bold: `**Goethe:** Faust` or
-/// `**Goethe**: Faust`. Group 1 is the label, group 2 the text after it.
+/// `**Goethe**: Faust`. The colon is required, inside the markers (group 1)
+/// or right after them (group 2); group 3 is the text after it. A bold start
+/// with no colon (`**Big news** on 2021: launch`) is not a label: the line
+/// splits at its `: ` instead.
 final RegExp _boldLabelRe = RegExp(
-  r'^(?:\*\*|__)(.+?)(?:\*\*|__)\s*:?\s+(.*)$',
+  r'^(?:\*\*|__)(?:(.+?:)(?:\*\*|__)|(.+?)(?:\*\*|__)\s*:)\s+(.*)$',
 );
 
 /// Drops a wrapping `**…**` / `__…__` and a trailing colon from a label.
@@ -382,13 +385,16 @@ List<TimelineEntry> parseTimeline(List<String> lines) {
       line = line.substring(1).trimLeft();
     }
     final RegExpMatch? bold = _boldLabelRe.firstMatch(line);
+    final String? boldLabel = bold == null
+        ? null
+        : (bold.group(1) ?? bold.group(2));
     final String label;
     final String text;
-    if (bold != null && !bold.group(1)!.contains('*')) {
+    if (boldLabel != null && !boldLabel.contains('*')) {
       // A bold label ends at its closing marker, not at the first `: ` of
       // the sentence after it.
-      label = stripLabelEmphasis(bold.group(1)!);
-      text = bold.group(2)!.trim();
+      label = stripLabelEmphasis(boldLabel);
+      text = bold!.group(3)!.trim();
     } else {
       final (String k, String v) = splitKeyValue(line);
       label = stripLabelEmphasis(k);

@@ -85,7 +85,7 @@ Map<String, dynamic> songs({int rows = 2}) {
     'title': 'Songs',
     'kind': 'table',
     'version': 7,
-    'updated_at': 1789251300.0,
+    'updated_at': kGoldenDocumentUpdatedAt,
     'columns': <String>['Reel', 'Song', 'Artist', 'Spotify'],
     'rows': <Map<String, dynamic>>[
       for (final List<String> r in all.take(rows))
