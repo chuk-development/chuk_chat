@@ -135,8 +135,8 @@ def test_the_bridge_maps_the_session_and_reports_a_change(tmp_path):
         lambda key: key if key.startswith("local:") else "host-agent",
         on_change=lambda key, policy: changes.append((key, policy.mode("send_external"))),
     )
-    bridge.remember("telegram:123", "send_external", "always_this_agent")
-    bridge.remember("telegram:123", "send_external", "always_this_agent")  # no change
+    bridge.remember("mail:123", "send_external", "always_this_agent")
+    bridge.remember("mail:123", "send_external", "always_this_agent")  # no change
     bridge.remember("local:amber:1", "send_external", "once")
     assert changes == [("host-agent", "allow")]
     assert bridge.policy_for("default").mode("send_external") == "allow"

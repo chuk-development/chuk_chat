@@ -127,16 +127,6 @@ from .seed_skills import seed_skills_dir, seed_workspace_skills
 from .desktop_notify import DesktopNotifier
 from .automations import AutomationManager
 from .calls import CallService
-from .channels import (
-    CAPABILITY as CHANNELS_CAPABILITY,
-    FILE_NAME as CHANNELS_FILE,
-    FRAMES as CHANNEL_FRAMES,
-    ORIGIN as CHANNEL_ORIGIN,
-    ChannelManager,
-    ChannelSettings,
-    ChannelStore,
-    channels_at_rest_key,
-)
 from .notification_text import DEFAULT_COWORKER, coworker_name
 from .notify import SupabaseNotifier
 from .serve import TaskServer
@@ -240,8 +230,6 @@ class LocalHost:
         on_pairing_reset: Callable[[], None] | None = None,
         # Test seam: skip the real Supabase/backend and use this factory.
         model_factory_override: ModelFactory | None = None,
-        # Test seam: the messenger channels' bounds (Bot API base, clocks).
-        channel_settings: ChannelSettings | None = None,
         logger: Callable[[str], None] | None = None,
     ) -> None:
         self._log = logger or (lambda _msg: None)
@@ -410,18 +398,6 @@ class LocalHost:
         loaded = self._secrets_vault.load()
         if loaded:
             self._log(f"[cowork-host] loaded {loaded} secret name(s) at rest")
-
-        # Messenger channels (``channels/``): opt-in per agent, off by
-        # default. The bot tokens sit in their own encrypted file, NOT in the
-        # secret set: that set is replaced whole by every app frame and handed
-        # to every sandbox process, and an agent must not read its bot token.
-        self._channel_store = ChannelStore(
-            path=self._workspace / CHANNELS_FILE,
-            key=channels_at_rest_key(self._identity),
-        )
-        self._channels: ChannelManager | None = None
-        # Test seam: ``None`` reads ``[channels]`` from the configuration.
-        self._channel_settings: ChannelSettings | None = channel_settings
 
         # Built here, after the secret set exists: a room turn is a normal agent
         # run and gets the same secrets every other turn does.
@@ -816,14 +792,6 @@ class LocalHost:
             desktop=self._desktop_notifier.notify,
             logger=self._log,
         )
-        # Messenger channels: one poller per agent the user turned one on
-        # for. Before the party, like automations: a message that arrives
-        # before the app provisions the host gets a "not ready" reply.
-        self._channels = self._build_channels(self._channel_settings)
-        try:
-            self._channels.start()
-        except Exception as exc:  # noqa: BLE001 — a channel must not block startup
-            self._log(f"could not start channels: {type(exc).__name__}: {exc}")
         # Agent mail (docs/AGENT_MAIL.md §7): the mail key, fetch, claim and
         # start the mail runs; the client for the mail tools. It fetches now,
         # on every relay connect, ``agent_mail`` frame and new mail key, and
@@ -985,11 +953,6 @@ class LocalHost:
             party.on_controller_left(token)
 
     def stop(self) -> None:
-        # Channels first: no new Telegram message may start a run while the
-        # rest of the host goes down. The long polls are cut, not waited out.
-        channels = getattr(self, "_channels", None)
-        if channels is not None:
-            channels.stop()
         automations = getattr(self, "_automations", None)
         if automations is not None:
             automations.stop()
@@ -1897,14 +1860,6 @@ class LocalHost:
         timing = summary.get("timing") if isinstance(summary, dict) else None
         if isinstance(timing, str) and timing:
             self._log(timing)
-        # A run a messenger channel started is answered in that messenger.
-        # The reply is the notification there, so no toast and no push here.
-        channels = getattr(self, "_channels", None)
-        if channels is not None:
-            try:
-                channels.on_run_finished(summary)
-            except Exception as exc:  # noqa: BLE001 — a channel must not break the hook
-                self._log(f"channel reply failed: {type(exc).__name__}")
         # A message from the browser panel is answered in the panel. Only
         # when the panel got it: else the usual toast / push.
         if self._answer_browser_panel(summary):
@@ -1917,10 +1872,10 @@ class LocalHost:
             # app shows the run collapsed.
             self._log(f"automation {summary.get('automation_id')}: no change, not notified")
             return
-        if origin in (CHANNEL_ORIGIN, ORIGIN_MAIL_UNTRUSTED):
-            # A Telegram run is answered in Telegram. The restricted run of an
-            # unknown mail (docs/AGENT_MAIL.md §7) ends as the note on the
-            # mail, which the app shows. No toast and no push for either.
+        if origin == ORIGIN_MAIL_UNTRUSTED:
+            # The restricted run of an unknown mail (docs/AGENT_MAIL.md §7)
+            # ends as the note on the mail, which the app shows. No toast and
+            # no push.
             return
         attached = self._controller_attached()
         # ``automation``, ``job`` and ``mail`` runs are unattended by definition.
@@ -2135,8 +2090,6 @@ class LocalHost:
         frames ride the same hook and are answered with one dict."""
         if isinstance(payload, dict) and payload.get("type") in AGENT_PERMISSION_FRAMES:
             return self._on_permissions_frame(payload)
-        if isinstance(payload, dict) and payload.get("type") in CHANNEL_FRAMES:
-            return self._on_channel_frame(payload)
         if isinstance(payload, dict) and payload.get("type") == USER_BROWSER_RESUME_FRAME:
             return self._on_user_browser_resume()
         # Announce the actual API routing UUID through the authenticated
@@ -2150,7 +2103,6 @@ class LocalHost:
                 AGENT_PERMISSIONS_CAPABILITY,
                 APPROVALS_CAPABILITY,
                 BUDGET_CAPABILITY,
-                CHANNELS_CAPABILITY,
                 USER_BROWSER_RESUME_CAPABILITY,
             ],
         })
@@ -2182,36 +2134,10 @@ class LocalHost:
         except Exception as exc:  # noqa: BLE001 — a persona must not fail a create
             self._log(f"[agent-templates] {agent_id}: persona not written: {exc}")
 
-    # -- messenger channels (channels/) ---------------------------------
-
-    def _build_channels(self, settings: ChannelSettings | None = None) -> ChannelManager:
-        """The channel manager over this host's store, run path and relay.
-        ``settings`` ``None`` reads ``[channels]`` from the configuration."""
-        return ChannelManager(
-            store=self._channel_store,
-            submit=self._submit_channel_task,
-            key_for=self._channel_key,
-            label_for=lambda key: self._call_agent(key)[1],
-            scrub=self._secrets_vault.scrubber().scrub_text,
-            db_path=self._db_path,
-            send_payload=self._send_host_payload,
-            settings=settings or ChannelSettings.from_config(),
-            logger_fn=self._log,
-        )
-
-    def _channel_key(self, agent_id: str) -> str | None:
-        """The session key a channel of the app's ``agent_id`` feeds, or
-        ``None`` for an id that is no agent of this host. Every name of
-        this host's own agent maps to the app's ``host:<device id>``, the
-        thread key the app uses, so a Telegram turn lands in the app's thread."""
-        if agent_id in self._primary_agent_ids():
-            return host_agent_id(self._device_id)
-        return agent_id if self._is_own_coworker(agent_id) else None
-
-    def _submit_channel_task(self, session_key: str, prompt: str, meta: dict) -> str | None:
-        """Start a task a channel message asks for: a normal run of that
-        agent's one session. ``None`` while the host has no provisioned
-        task server (restarted, no app since)."""
+    def _submit_session_task(self, session_key: str, prompt: str, meta: dict) -> str | None:
+        """Start a task the host itself was asked for (the browser panel): a
+        normal run of that agent's one session. ``None`` while the host has
+        no provisioned task server (restarted, no app since)."""
         party = self._party
         server = party.task_server if party is not None else None
         if server is None:
@@ -2220,23 +2146,6 @@ class LocalHost:
         if executor is None:
             return None
         return executor.submit_task(session_key, prompt, meta)
-
-    def _on_channel_frame(self, payload: dict) -> dict:
-        """``agent_channel_get`` / ``_set``. A change is also pushed to every
-        attached device, so a second phone shows the new state."""
-        channels = getattr(self, "_channels", None)
-        if channels is None:
-            return {
-                "type": "agent_channel",
-                "agent_id": str(payload.get("agent_id") or ""),
-                "channel": str(payload.get("channel") or "telegram"),
-                "e2e": False,
-                "error": "channels not running",
-            }
-        reply = channels.handle_frame(payload)
-        if payload.get("type") == "agent_channel_set" and "error" not in reply:
-            self._send_host_payload(reply)
-        return reply
 
     def _watcher_env(self) -> dict[str, str]:
         """The secret set for an automation watcher, or nothing when the host
@@ -2402,7 +2311,7 @@ class LocalHost:
         session_key = str(session) if session else host_agent_id(self._device_id)
         _agent_id, name = self._call_agent(session_key)
         try:
-            run_id = self._submit_channel_task(session_key, prompt, {"origin": PANEL_ORIGIN})
+            run_id = self._submit_session_task(session_key, prompt, {"origin": PANEL_ORIGIN})
         except Exception as exc:  # noqa: BLE001 — the panel gets a sentence
             self._log(f"browser panel task failed: {type(exc).__name__}")
             run_id = None

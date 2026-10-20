@@ -419,7 +419,8 @@ Speed and UX first, then features. Effort: S = days, M = 1-2 weeks, L = more.
     `agents/runtime/src/chuk_agents_runtime/automations.py`,
     `lib/pages/automations_page.dart`.
 
-11. **Telegram channel per agent (opt-in), Slack later.**
+11. **Telegram channel per agent (opt-in), Slack later.** Built, then
+    removed on 2026-10-20 (bead chuk_chat-n7c3): the owner does not want it.
     Why: OpenClaw, Hermes, Genspark Claw, Lindy, Poke all live in messengers; Poke
     did 100M messages without an app. Our app stays the main surface; a channel is
     for people who will not install it. Mark clearly that it is not E2E. Effort M.

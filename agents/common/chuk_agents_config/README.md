@@ -125,24 +125,11 @@ variables in the tree (`AGENTS_ACCOUNT_TOKEN`, `AGENTS_VNC_PASSWD`,
 `AGENTS_MEM_EMBED_API_KEY`) are deliberately **not** settings; see the table
 below.
 
-## Channels (Telegram)
+## Retired sections
 
-The `[channels]` keys bound an **opt-in** messenger path to one agent.
-The channel is **off by default** for every agent. The user turns it on
-for one agent in the app and pastes a bot token from @BotFather. The token
-is a secret, so it is not a key here: the host keeps it in its own encrypted
-channel store (`channels.enc`, AES-256-GCM under a key derived from the host
-identity), never in `config.toml` and never in a log.
-
-**Privacy: Telegram is not end-to-end encrypted.** Telegram's servers can read
-every message the user sends to the bot and every reply the agent sends
-back, files included. The app's own path stays end-to-end encrypted. Turn the
-channel on only for an agent whose work may pass through Telegram.
-
-The host dials out with long polling (`getUpdates`); it opens no port and sets
-no webhook. Only one Telegram chat may talk to the agent: the first message
-to the bot gets a one-time link code, and the user types that code into the
-app. Every other chat gets a short refusal and starts no run.
+An older Agents wrote a `[channels]` section (the Telegram keys). Telegram
+support is gone. A file that still holds `[channels]` loads: the loader skips
+the section and all its keys, so the host starts. The next save drops it.
 
 ## Version and the upgrade path
 
@@ -284,10 +271,6 @@ that is in neither list, so this table cannot fall behind the code.
 | `AGENTS_AVD_LOG` | `emulator.log_path` | string | `/tmp/agents-emulator.log` | Where the emulator's own output goes. |
 | `AGENTS_AVD_EXTRA` | `emulator.extra_args` | string | *(empty)* | Extra arguments appended to the emulator command line, unquoted. |
 | `AGENTS_AVD_SOFT_KEYBOARD` | `emulator.soft_keyboard` | boolean | `false` | Show the on-screen keyboard. |
-| `AGENTS_TELEGRAM_ALLOWED` | `channels.telegram_allowed` | boolean | `true` | Let the app turn on the Telegram channel for an agent. The channel is still off per agent until the user turns it on; `false` forbids it on this host. Telegram is **not** end-to-end encrypted. |
-| `AGENTS_TELEGRAM_API_BASE` | `channels.telegram_api_base` | string | `https://api.telegram.org` | The Bot API server the poller dials (long polling, no port, no webhook). Change it only for a self-hosted Bot API server. |
-| `AGENTS_TELEGRAM_POLL_TIMEOUT` | `channels.telegram_poll_timeout` | integer | `25` | Seconds one `getUpdates` long poll waits before it asks again. |
-| `AGENTS_TELEGRAM_LINK_TTL` | `channels.telegram_link_ttl` | integer | `600` | Seconds a link code the bot sends to a new chat stays valid. |
 
 ### Not settings
 

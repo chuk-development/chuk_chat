@@ -303,15 +303,24 @@ def _check_version(
     return table
 
 
+#: Sections an older Agents wrote and this one no longer has. A file that
+#: still holds one loads: the section is skipped, never an error, so an
+#: upgrade does not stop the host. ``channels`` held the Telegram keys
+#: (removed, bead chuk_chat-n7c3).
+RETIRED_SECTIONS = frozenset({"channels"})
+
+
 def _check_shape(
     table: Mapping[str, Any],
     text: str,
     target: Path,
     problems: list[ConfigProblem],
 ) -> None:
-    """Name every unknown section and every unknown key. Never guess."""
+    """Name every unknown section and every unknown key. Never guess.
+
+    A section in :data:`RETIRED_SECTIONS` is skipped with all its keys."""
     for key, value in table.items():
-        if key == "version":
+        if key == "version" or key in RETIRED_SECTIONS:
             continue
         if key not in SECTIONS:
             problems.append(

@@ -148,7 +148,7 @@ def test_a_panel_message_is_a_task_of_the_coworker_in_the_browser(tmp_path, monk
         submitted.append((session_key, prompt, meta))
         return f"run-{len(submitted)}"
 
-    monkeypatch.setattr(host, "_submit_channel_task", submit)
+    monkeypatch.setattr(host, "_submit_session_task", submit)
     frame = {
         "type": "page_message",
         "text": "Is this a good price?",
@@ -175,7 +175,7 @@ def test_a_panel_message_is_a_task_of_the_coworker_in_the_browser(tmp_path, monk
 
 def test_a_panel_message_before_the_host_is_provisioned_says_so(tmp_path, monkeypatch):
     host, _party = _host(tmp_path, attached=True)
-    monkeypatch.setattr(host, "_submit_channel_task", lambda *_a: None)
+    monkeypatch.setattr(host, "_submit_session_task", lambda *_a: None)
     ack = host._on_browser_page_message(None, {"type": "page_message", "text": "hi"})
     assert ack["ok"] is False and "not ready" in ack["error"]
 
@@ -184,7 +184,7 @@ def test_the_answer_goes_back_to_the_panel_and_replaces_the_toast(tmp_path, monk
     host, _party = _host(tmp_path, attached=False)
     broker = _FakeBroker()
     monkeypatch.setattr(host_module, "shared_broker", lambda start=True: broker)
-    monkeypatch.setattr(host, "_submit_channel_task", lambda *_a: "run-1")
+    monkeypatch.setattr(host, "_submit_session_task", lambda *_a: "run-1")
     notified: list[dict] = []
 
     class _Notifier:
@@ -215,7 +215,7 @@ def test_the_panel_runs_the_host_waits_on_are_capped(tmp_path, monkeypatch):
     broker = _FakeBroker()
     monkeypatch.setattr(host_module, "shared_broker", lambda start=True: broker)
     count = iter(range(1, 10_000))
-    monkeypatch.setattr(host, "_submit_channel_task", lambda *_a: f"run-{next(count)}")
+    monkeypatch.setattr(host, "_submit_session_task", lambda *_a: f"run-{next(count)}")
     total = host_module.MAX_PANEL_RUNS + 10
     for _ in range(total):
         host._on_browser_page_message(None, {"type": "page_message", "text": "hi"})

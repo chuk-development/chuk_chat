@@ -43,12 +43,10 @@ from chuk_agents_runtime.model import ModelResponse
 from chuk_agents_executor import task_payload
 from chuk_agents_executor.protocol import approval_decision_payload
 from chuk_agents_host import LocalHost
-from chuk_agents_host.channels import ChannelSettings, PROMPT_MARKER, TelegramTiming
 from chuk_agents_host.coworker_names import host_agent_id
 from chuk_agents_host.identity import HOST_DEVICE_ID
 from chuk_agents_host.protocol import frame_envelope, join_message
 
-from fake_telegram import TOKEN, FakeTelegram
 from test_local_run import ControllerDouble
 
 REPO = Path(__file__).resolve().parents[3]
@@ -422,7 +420,6 @@ class Rig:
     def __init__(self) -> None:
         self.router = Router()
         self.site: Site | None = None
-        self.telegram: FakeTelegram | None = None
         self.host: LocalHost | None = None
         self.app: App | None = None
         self.log_lines: list[str] = []
@@ -484,7 +481,6 @@ def rig():
     for name in ("AGENTS_NTFY_TOPIC", "AGENTS_WEBHOOK_URL", "AGENTS_BROWSER_TARGET"):
         mp.delenv(name, raising=False)
     r = Rig()
-    r.telegram = FakeTelegram().__enter__()
     host = LocalHost(
         port=0,
         workspace_dir=str(HOME),
@@ -493,10 +489,6 @@ def rig():
         digits="271828",
         sandbox_kind="docker",
         model_factory_override=r.router.factory,
-        channel_settings=ChannelSettings(
-            telegram_api_base=r.telegram.base_url,
-            timing=TelegramTiming(poll_timeout=1, backoff_base=0.05, backoff_max=0.2, send_interval=0.0),
-        ),
         logger=r.log,
     )
     r.host = host
@@ -533,7 +525,6 @@ def rig():
                 DockerEnvironment(agent_id=host.agent.id, image=IMAGE).remove()
             except Exception as exc:  # noqa: BLE001
                 r.log(f"container remove: {exc}")
-            r.telegram.__exit__(None, None, None)
             mp.undo()
             leftover = set(_containers()) - before
             evidence("cleanup", new_containers_left=sorted(leftover))
@@ -1068,48 +1059,6 @@ def test_flow7_budget_refuses_the_next_run_and_override_runs(rig: Rig):
         assert done3["final_answer"] == "ran on the override"
     finally:
         rig.app.send({"type": "agent_permissions_set", "agent_id": agent, "budget_weekly": 0})
-
-
-# -- flow 8: Telegram -----------------------------------------------------------------------
-
-
-def test_flow8_telegram_link_inbound_run_reply(rig: Rig):
-    agent = host_agent_id(HOST_DEVICE_ID)
-    fake = rig.telegram
-    rig.router.route(
-        PROMPT_MARKER,
-        lambda: [
-            call(("run_command", {"command": "printf 'a,b\\n1,2\\n' > report.csv"})),
-            call(("send_file_to_user", {"path": "report.csv"})),
-            answer("**Report** attached."),
-        ],
-    )
-    mark = rig.app.mark()
-    rig.app.send({"type": "agent_channel_set", "agent_id": agent, "channel": "telegram",
-                  "action": "enable", "token": TOKEN})
-    reply = rig.app.wait(lambda f: f.get("type") == "agent_channel", since=mark, timeout=30)
-    assert reply.get("enabled") is True and "error" not in reply, reply
-    fake.push_message("/start", chat_id=8150)
-    assert fake.wait_for(lambda: fake.messages(8150), timeout=30)
-    code = re.search(r"\b(\d{6})\b", fake.messages(8150)[-1]["text"]).group(1)
-    mark = rig.app.mark()
-    rig.app.send({"type": "agent_channel_set", "agent_id": agent, "channel": "telegram",
-                  "action": "link", "code": code})
-    linked = rig.app.wait(lambda f: f.get("type") == "agent_channel"
-                          and (f.get("linked") is True or "error" in f), since=mark, timeout=30)
-    assert linked["linked"] is True, linked
-    fake.push_message("make me the report", chat_id=8150)
-    assert fake.wait_for(lambda: any(s["method"] == "sendDocument" for s in fake.sent), timeout=90), fake.sent
-    answers = [m for m in fake.messages(8150) if "attached" in m["text"]]
-    doc = next(s for s in fake.sent if s["method"] == "sendDocument")
-    runs = [r for r in rig.runs(agent) if PROMPT_MARKER in (r["prompt"] or "")]
-    evidence("8", code_sent=True, answer=answers[-1]["text"] if answers else None,
-             document={"filename": doc["filename"], "bytes": len(doc["data"])},
-             run=({k: runs[-1][k] for k in ("state", "reason", "session_key")} if runs else None))
-    assert answers and answers[-1]["text"] == "<b>Report</b> attached."
-    assert doc["filename"] == "report.csv" and doc["data"] == b"a,b\n1,2\n"
-    assert runs and runs[-1]["state"] == "finished"
-    rig.app.send({"type": "agent_channel_set", "agent_id": agent, "channel": "telegram", "action": "disable"})
 
 
 # -- flow 9: a long session: the summary is made off the turn path ----------------------------
