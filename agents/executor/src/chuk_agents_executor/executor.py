@@ -109,6 +109,7 @@ from chuk_agents_runtime.memory_hindsight import bank_id_for_workspace
 from chuk_agents_runtime.telemetry import get_tracer
 from chuk_agents_runtime.telemetry import run_scope as trace_run_scope
 from chuk_agents_runtime.mcp_client import BROWSER_OPEN_TOOL, auto_open_enabled
+from chuk_agents_runtime import mcp_client as _mcp_grants
 from chuk_agents_runtime.action_policy import (
     ActionApprovals,
     ActionDecision,
@@ -247,16 +248,16 @@ LIGHT_CONTEXT_ENV = "AGENTS_AUTOMATION_LIGHT_CONTEXT"
 def budget_refusal_text(*, spent: float, budget: float, interactive: bool) -> str:
     """The sentence a run the weekly budget refused answers with."""
     head = (
-        f"Weekly budget reached: this coworker spent \u20ac{spent:.2f} of its "
+        f"Weekly budget reached: this agent spent \u20ac{spent:.2f} of its "
         f"\u20ac{budget:.2f} budget this week."
     )
     if interactive:
         return (
             head + " Nothing was run. Choose \"Run anyway\" to go over the budget "
-            "once, or raise the budget in the coworker's settings."
+            "once, or raise the budget in the agent's settings."
         )
     return (
-        head + " This run was skipped. Raise the budget in the coworker's settings "
+        head + " This run was skipped. Raise the budget in the agent's settings "
         "to let it run again."
     )
 
@@ -292,6 +293,9 @@ ModelSelect = Callable[[str | None, str | None, str | None], ModelClient]
 #: The file next to the executor's state database that keeps the last tool
 #: list of every forwarded MCP server (:class:`MCPToolCache`).
 MCP_TOOLS_CACHE_FILE = "mcp-tools-cache.json"
+#: The OAuth grants of the forwarded connectors, shared by every session and
+#: probe of this process and kept over a restart (bead chuk_chat-mj2o).
+MCP_GRANTS_FILE = "mcp-grants.json"
 
 # Fields of a forwarded ``mcp_servers`` entry that ROTATE without the connector
 # changing (docs/WIRE_CONTRACT.md, "A rotated token is not a changed connector"):
@@ -522,7 +526,7 @@ class _Run:
     profile: str | None = None
     mail_message_id: str | None = None
     # docs/WIRE_CONTRACT.md, "Cost per run and weekly budget": the user
-    # confirmed in the app to run over the coworker's weekly budget once. Only
+    # confirmed in the app to run over the agent's weekly budget once. Only
     # a task frame (origin ``app``) can carry it.
     budget_override: bool = False
     # The model / provider the run's client really called (what its cost is
@@ -1345,14 +1349,14 @@ class Executor:
         # frames. ``None`` -> no automation tools, those frames are unknown.
         self._automations = automations
         self._on_automation_frame = on_automation_frame
-        # Coworker names (docs/WIRE_CONTRACT.md, "Coworker names"): the host
+        # Agent names (docs/WIRE_CONTRACT.md, "Agent names"): the host
         # keeps the names the user chose in the app. The hook takes an
         # ``agent_create`` / ``agent_rename`` / ``agent_list`` payload and
         # returns the current list (each answered with one ``agent_list``).
         # ``None`` -> those frames are unknown.
         self._on_agent_frame = on_agent_frame
         # Per-action approvals (docs/WIRE_CONTRACT.md, "Per-action
-        # approvals"): the host's store of each coworker's approval policy.
+        # approvals"): the host's store of each agent's approval policy.
         # ``policy_for(session_key)`` reads it, ``remember(session_key,
         # action_class, scope, site)`` stores a lasting decision. ``None``
         # (a room member, the tests): only here.now in ``ask`` mode asks.
@@ -1360,7 +1364,7 @@ class Executor:
         # Cost per run and weekly budget (docs/WIRE_CONTRACT.md, "Cost per run
         # and weekly budget"): ``price_book`` prices the usage
         # (chuk_agents_runtime.cost.PriceBook, or a zero-argument callable that
-        # returns the current one); ``budget`` is the host's per-coworker
+        # returns the current one); ``budget`` is the host's per-agent
         # budget (``agent_key`` / ``budget_weekly`` / ``first_notice`` /
         # ``notify``). Either ``None``: no price, no budget.
         self._price_book = price_book
@@ -1419,6 +1423,14 @@ class Executor:
             if db_path and db_path != ":memory:"
             else None
         )
+        # One record per OAuth grant for the whole process: a refresh by one
+        # session must not kill the copy of another one. Fastmail rotates the
+        # refresh token AND the access token at each refresh, so separate
+        # copies per session (and per probe) killed each other.
+        if db_path and db_path != ":memory:" and _mcp_grants.GRANTS.path is None:
+            _mcp_grants.GRANTS.set_path(
+                os.path.join(os.path.dirname(os.path.abspath(db_path)), MCP_GRANTS_FILE)
+            )
         # Per session, per connector: the refresh token the connector was
         # STARTED with (the device's forward at build time). It is the reference
         # that tells a device re-sign-in (new token ≠ baseline → adopt) apart
@@ -1444,7 +1456,7 @@ class Executor:
         self._mcp_active_request: dict[str, str] = {}
         self._mcp_lock = threading.Lock()
         # One sandbox browser server per box (container), shared by every
-        # session of the coworker that runs there, started on first use
+        # session of the agent that runs there, started on first use
         # (bead chuk_chat-wrdv, :mod:`chuk_agents_executor.box_browser`).
         # Each session's manager holds the box's object in place of its own
         # connection. Guarded by ``_mcp_lock``.
@@ -1901,19 +1913,19 @@ class Executor:
             self._handle_automation_frame(kind, request_id, payload)
             return
         if kind in ("agent_create", "agent_rename", "agent_list"):
-            # The coworker names the host keeps (docs/WIRE_CONTRACT.md,
-            # "Coworker names"). Every one of the three is answered with the
+            # The agent names the host keeps (docs/WIRE_CONTRACT.md,
+            # "Agent names"). Every one of the three is answered with the
             # current list as one terminal frame, like a replay.
             self._handle_agent_frame(request_id, payload)
             return
         if kind == "agent_status":
-            # What this coworker runs on, what it has spent and how long it has
+            # What this agent runs on, what it has spent and how long it has
             # been at it (docs/WIRE_CONTRACT.md, "Agent status"). Answered with
             # one terminal frame, like a skills list: every figure measured.
             self._handle_agent_status(request_id, payload)
             return
         if kind in ("agent_permissions_get", "agent_permissions_set"):
-            # What this coworker may do in its sandbox (docs/WIRE_CONTRACT.md,
+            # What this agent may do in its sandbox (docs/WIRE_CONTRACT.md,
             # "Agent permissions"). The host keeps them; answered with one
             # terminal ``agent_permissions`` frame.
             self._handle_permissions_frame(request_id, payload)
@@ -1926,7 +1938,7 @@ class Executor:
             self._handle_user_browser_resume(request_id, payload)
             return
         if kind in ("agent_channel_get", "agent_channel_set"):
-            # Messenger channels of one coworker (host channels/). The host
+            # Messenger channels of one agent (host channels/). The host
             # keeps them; answered with one terminal ``agent_channel`` frame.
             self._handle_channel_frame(request_id, payload)
             return
@@ -2256,7 +2268,7 @@ class Executor:
     def _handle_agent_frame(self, request_id: str, payload: dict) -> None:
         hook = self._on_agent_frame
         if hook is None:
-            self._terminal(request_id, error_payload("coworker names not enabled"))
+            self._terminal(request_id, error_payload("agent names not enabled"))
             return
         try:
             rows = hook(payload)
@@ -2407,7 +2419,7 @@ class Executor:
         return sink
 
     def _agent_of(self, session_key: str) -> str:
-        """The coworker a session belongs to (the host's key), or the key
+        """The agent a session belongs to (the host's key), or the key
         itself when no budget bridge is wired."""
         key_for = getattr(self._budget, "agent_key", None)
         if callable(key_for):
@@ -2431,7 +2443,7 @@ class Executor:
         return {key: self._agent_of(key) for key in session_keys}
 
     def _budget_of(self, session_key: str) -> float:
-        """The coworker's ``budget_weekly`` in euro; 0 = none."""
+        """The agent's ``budget_weekly`` in euro; 0 = none."""
         get = getattr(self._budget, "budget_weekly", None)
         if not callable(get):
             return 0.0
@@ -2442,8 +2454,8 @@ class Executor:
         return value if value > 0 else 0.0
 
     def _spend_since(self, session_key: str, *since: float) -> list[float]:
-        """Euro the coworker of ``session_key`` spent since each ``since``,
-        over every thread of that coworker."""
+        """Euro the agent of ``session_key`` spent since each ``since``,
+        over every thread of that agent."""
         try:
             store = StateStore(self._db_path)
             try:
@@ -2459,7 +2471,7 @@ class Executor:
         return [sum(eur for key, eur in by.items() if key in owned) for by in maps]
 
     def _budget_refusal(self, run: _Run) -> dict | None:
-        """The facts of a refusal when the coworker is at or over its weekly
+        """The facts of a refusal when the agent is at or over its weekly
         budget and this run may not go over it, else ``None``. Only a task
         the user sent with ``budget_override`` may go over (once)."""
         budget = self._budget_of(run.session_key)
@@ -2574,7 +2586,7 @@ class Executor:
         )
 
     def _check_budget(self, run: _Run, request_id: str) -> None:
-        """After a run: warn once when the coworker's week reached 80 % or
+        """After a run: warn once when the agent's week reached 80 % or
         100 % of its budget. Best effort."""
         try:
             budget = self._budget_of(run.session_key)
@@ -2594,7 +2606,7 @@ class Executor:
             logger.debug("budget check failed", exc_info=True)
 
     def _notify_budget(self, run: _Run, request_id: str, level: str, over: dict) -> None:
-        """One ``budget_warning`` per coworker, level and week: on the run's
+        """One ``budget_warning`` per agent, level and week: on the run's
         stream, and to the host's ``notify`` (the push)."""
         bridge = self._budget
         first = getattr(bridge, "first_notice", None)
@@ -2625,8 +2637,8 @@ class Executor:
 
     def _status_cost(self, session_key: str, rows: list[dict]) -> dict | None:
         """The ``cost`` block of ``agent_status``: this thread's total and
-        last run, the coworker's today and this week, and its budget. Absent
-        when nothing was ever priced for the coworker and it has no budget."""
+        last run, the agent's today and this week, and its budget. Absent
+        when nothing was ever priced for the agent and it has no budget."""
         budget = self._budget_of(session_key)
         today_at, week_at = day_start(), week_start()
         session_total, today, week = self._spend_since(session_key, 0.0, today_at, week_at)
@@ -2821,7 +2833,7 @@ class Executor:
     def _status_sandbox(self, session_key: str) -> dict | None:
         """The box this session runs in — the per-agent container, or the local
         directory (§6, bead cowork-jo2). It is what makes "one container per
-        coworker" visible instead of merely claimed."""
+        agent" visible instead of merely claimed."""
         try:
             env = self._environment_for(session_key)
         except Exception:  # noqa: BLE001 — no box to name
@@ -3116,12 +3128,10 @@ class Executor:
             str(binary), str(container)
         ):
             return True
-        # The asking session's own box has nothing on it. That is not the end of
-        # the answer: with one container per agent, the browser the user means
-        # is usually in the box of whichever agent opened it, and the view
-        # follows it there (see :meth:`_browser_server_targets`). Advertising
-        # the screen only for the asking box is why the button stayed dark
-        # while browsers were open (bead cowork-qp5i).
+        # The asking session's own box has nothing on it under that name. Its
+        # own browser server may still run in a box the session's manager
+        # drives. A peer agent's box never counts: its screen is not this
+        # agent's screen (bead chuk_chat-26ge).
         for prefix, box, _manager in self._browser_server_targets(
             session_key, str(container or "")
         ):
@@ -3282,7 +3292,7 @@ class Executor:
         """
         if self._uses_user_browser(session_key):
             # The host owns the add-on's socket for its whole life and lets one
-            # coworker hold the browser at a time (user_browser.py).
+            # agent hold the browser at a time (user_browser.py).
             broker = _user_browser.shared_broker()
             # Remember WHICH broker heard us: a broker that went away is
             # rebuilt by ``shared_broker``, and the new one needs the listener
@@ -3399,18 +3409,20 @@ class Executor:
     def _browser_server_targets(
         self, session_key: str | None, container: str
     ) -> list[tuple[list[str], str, MCPManager]]:
-        """Every connected sandbox browser server, as ``(prefix, box, manager)``.
+        """The connected sandbox browser servers of THIS session, as
+        ``(prefix, box, manager)``.
 
         A server that is connected has already brought its box's Xvfb up: the
         launcher starts the display before it execs the MCP server. So this list
-        is also the list of boxes that HAVE a display worth serving — which is
-        what makes it the right search order for the view.
+        is also the list of boxes that HAVE a display worth serving.
 
-        Ordered: the box the view asked for, then the asking session's own box,
-        then the rest. ``browser_start`` carries no ``session_key`` today, so
-        the requested box is always this executor's own one, while an agent's
-        browser lives in that agent's container. Watching only the requested box
-        is how a user with browsers open was told no browser was open.
+        Only the asking session's own box counts: the box ``container`` names,
+        or a box that the session's own MCP manager drives. Every agent has its
+        own browser session in its own container, and the live view of one
+        agent must never show the browser of another agent (bead
+        chuk_chat-26ge: the Mail agent's view showed the only browser that was
+        running, which belonged to a different agent). When the session has no
+        browser of its own, the list is empty and the view says so.
 
         Never raises, and never builds anything: two MCP servers on one profile
         is not a thing (``browser-mcp-owner.py`` refuses the second with
@@ -3458,11 +3470,14 @@ class Executor:
                 continue
 
         def rank(target: tuple[list[str], str, MCPManager]) -> int:
-            _prefix, box, manager = target
-            if box == container:
-                return 0
-            return 1 if manager is exact else 2
+            _prefix, box, _manager = target
+            return 0 if box == container else 1
 
+        # A peer's box is never a target, however live its browser is.
+        found = [
+            target for target in found
+            if (container and target[1] == container) or target[2] is exact
+        ]
         found.sort(key=rank)
         seen: set[str] = set()
         unique: list[tuple[list[str], str, MCPManager]] = []
@@ -3538,11 +3553,12 @@ class Executor:
             return
         prefix, cid = prep
 
-        # WHICH box to watch. A box whose browser server is connected has a
-        # display; the box the frame asks for may well not, because the app
-        # sends no session_key and every agent has its own container. So try
-        # the boxes with a live browser first and keep the asked-for one as the
-        # fallback, instead of reporting "no browser" at the first closed door.
+        # WHICH box to watch: only this session's own. A box of the session
+        # whose browser server is connected has a display, so it goes first;
+        # the asked-for box is the fallback. A peer agent's box is never
+        # tried, even when it is the only one with a browser on it (bead
+        # chuk_chat-26ge). No own browser means an error with a reason, and
+        # the app shows an empty state.
         attempts: list[tuple[list[str], str, MCPManager | None]] = [
             (p, box, manager)
             for p, box, manager in self._browser_server_targets(session_key, cid)
@@ -4101,7 +4117,7 @@ class Executor:
         )
 
     def _user_browser_tabs_text(self, session_key: str) -> str | None:
-        """The user browser's tab list, as the coworker's MCP server renders it
+        """The user browser's tab list, as the agent's MCP server renders it
         (one read through the broker; it takes nothing)."""
         with self._mcp_lock:
             manager = self._mcp_managers.get(session_key)
@@ -4114,7 +4130,7 @@ class Executor:
 
     def _on_user_browser_stop(self, session_key: str) -> None:
         """The user pressed Stop in their own browser while ``session_key``
-        held it: stop that coworker's run like the app's Stop does."""
+        held it: stop that agent's run like the app's Stop does."""
         for run in self._live_runs():
             if run.session_key == session_key:
                 logger.info("user browser stop: stopping run %s", run.request_id)
@@ -4327,7 +4343,7 @@ class Executor:
                     self._close_approval(pending, approved=True, reason=APPROVAL_AUTO)
                     pending.event.set()
                     # The same request again, decided, so the card can say
-                    # "<Coworker> continues" (docs/WIRE_CONTRACT.md).
+                    # "<Agent> continues" (docs/WIRE_CONTRACT.md).
                     self._event(
                         request_id,
                         {
@@ -4713,7 +4729,7 @@ class Executor:
         # Children get the same access through the subagent config below.
         secrets_access = self._secrets_access(request_id, run.kill, session_key)
         # Per-action approvals (docs/WIRE_CONTRACT.md, "Per-action approvals"):
-        # the coworker's policy, the same gate as a publish, and the store for
+        # the agent's policy, the same gate as a publish, and the store for
         # a lasting decision. Children get the same binding: a subagent never
         # sends a mail the parent would have had to ask for.
         action_approvals = self._action_approvals_binding(request_id, run.kill, session_key)
@@ -4731,7 +4747,7 @@ class Executor:
             workspace=self._workspace_for(session_key),
             # One memory bank per agent (§12, Hindsight backend): keyed on the
             # agent's own workspace, so the primary executor and a room member
-            # of the same coworker share it. Mem0 ignores it.
+            # of the same agent share it. Mem0 ignores it.
             memory_bank_id=bank_id_for_workspace(self._workspace_for(session_key)),
             subagents=subagents,
             herenow_config=herenow_config,
@@ -4909,7 +4925,7 @@ class Executor:
         # outcome rides the ``done`` (the app collapses a "no change" run) and
         # the run summary (the host skips the toast and the push).
         automation_result = self._finish_automation(run, ok=reason == StopReason.FINISHED.value)
-        # 80 % / 100 % of the coworker's weekly budget: one warning per level
+        # 80 % / 100 % of the agent's weekly budget: one warning per level
         # and week, on this stream and as a push (the host words it).
         self._check_budget(run, request_id)
         # The finished turn lands in <workspace>/transcript/ (read-only, the
@@ -5782,7 +5798,7 @@ class Executor:
         a person), but it never speaks MCP: this host does. Without this frame
         the app could only learn a connector's tools as a side effect of running
         a task, so a freshly connected server sat in the list saying "0 tools"
-        until the user happened to ask the coworker something.
+        until the user happened to ask the agent something.
 
         Answered with one terminal ``mcp_tools`` frame, the way a skills list is.
         The dial runs on its own thread: a server that is down costs a full
@@ -5811,6 +5827,10 @@ class Executor:
                     manager.start(lazy=False)
                 except Exception:  # noqa: BLE001 — report what did answer
                     pass
+                # A probe can refresh a token. The probe has no running task,
+                # so the rotation listener could not send it: send it now, on
+                # the probe's own request, or the app keeps a dead token.
+                self._flush_pending_mcp_credentials(session_key, request_id)
                 self._terminal(
                     request_id,
                     mcp_tools_payload(
@@ -5837,7 +5857,13 @@ class Executor:
         last one wins — and it stops on its own once the device forwards the
         rotated token back (see ``_adopt_rotating_credentials``)."""
         with self._mcp_lock:
-            payloads = list(self._mcp_pending_credentials.get(session_key, {}).values())
+            pending = self._mcp_pending_credentials.get(session_key, {})
+            # A frame of an older rotation (another session or probe moved the
+            # grant on since) would put a dead token back on the device.
+            for name, payload in list(pending.items()):
+                if not _mcp_grants.GRANTS.is_current(payload.get("oauth")):
+                    pending.pop(name, None)
+            payloads = list(pending.values())
         for payload in payloads:
             try:
                 self._event(request_id, payload)
