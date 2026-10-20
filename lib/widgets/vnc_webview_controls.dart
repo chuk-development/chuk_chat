@@ -7,6 +7,20 @@ import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/widgets/vnc_webview_screen.dart';
 
+/// The colours of everything that floats over the agent's live screen.
+///
+/// The pair is `inverseSurface` / `onInverseSurface`, solid. Material 3 makes
+/// that pair contrast in both themes. The old chip was the scrim at 55 % with
+/// `onInverseSurface` on top: in the dark theme that is dark text on a dark
+/// chip, and "Getting a machine" could not be read (bead chuk_chat-d41e).
+abstract final class VncOverlayColors {
+  /// The ground of a chip, a note or a button over the stream.
+  static Color chip(ColorScheme cs) => cs.inverseSurface;
+
+  /// Text and icons on [chip].
+  static Color on(ColorScheme cs) => cs.onInverseSurface;
+}
+
 /// What the view is still waiting for, as named steps rather than a spinner.
 ///
 /// A spinner says "something is happening". These two lines say which thing,
@@ -32,7 +46,7 @@ class VncLoadingSteps extends StatelessWidget {
     return Center(
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: cs.scrim.withValues(alpha: 0.55),
+          color: VncOverlayColors.chip(cs),
           borderRadius: BorderRadius.circular(18),
         ),
         child: Padding(
@@ -74,8 +88,9 @@ class _VncStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ColorScheme cs = Theme.of(context).colorScheme;
-    final Color on = cs.onInverseSurface;
-    final Color color = done || active ? on : on.withValues(alpha: 0.45);
+    final Color on = VncOverlayColors.on(cs);
+    // A step that has not begun is quieter, but still readable.
+    final Color color = done || active ? on : on.withValues(alpha: 0.72);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
@@ -148,7 +163,7 @@ class _VncReconnectingNoteState extends State<VncReconnectingNote> {
         : '${(seconds / 60).floor()} min ago';
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: cs.scrim.withValues(alpha: 0.55),
+        color: VncOverlayColors.chip(cs),
         borderRadius: BorderRadius.circular(18),
       ),
       child: Padding(
@@ -161,14 +176,14 @@ class _VncReconnectingNoteState extends State<VncReconnectingNote> {
               height: 14,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: cs.onInverseSurface,
+                color: VncOverlayColors.on(cs),
               ),
             ),
             const SizedBox(width: 10),
             Flexible(
               child: Text(
                 'Reconnecting — picture from $age',
-                style: TextStyle(color: cs.onInverseSurface, fontSize: 13),
+                style: TextStyle(color: VncOverlayColors.on(cs), fontSize: 13),
               ),
             ),
           ],
@@ -206,7 +221,8 @@ class VncControlBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final ColorScheme cs = Theme.of(context).colorScheme;
     final bool live = controller.phase == VncPhase.connected;
-    final Color chip = cs.scrim.withValues(alpha: 0.55);
+    final Color chip = VncOverlayColors.chip(cs);
+    final Color onChip = VncOverlayColors.on(cs);
     final double size = MobileLayout.controlHeight;
     // The app's icon set has no keyboard, zoom, paste or pointer glyph, so
     // these stay Material — the same exception the full-screen toggle takes.
@@ -220,7 +236,7 @@ class VncControlBar extends StatelessWidget {
           icon: keyboardOpen ? Icons.keyboard_hide : Icons.keyboard_alt_outlined,
           size: size,
           color: chip,
-          onColor: cs.onInverseSurface,
+          onColor: onChip,
           tooltip: keyboardOpen ? 'Hide the keys' : 'Type',
           semanticsId: 'vnc_keyboard',
           onTap: live ? onToggleKeyboard : null,
@@ -232,7 +248,7 @@ class VncControlBar extends StatelessWidget {
           // Lit while there is something to undo, quiet otherwise. The page
           // reports the crossing, so this never flickers per pan frame.
           color: controller.zoomed ? cs.primary : chip,
-          onColor: controller.zoomed ? cs.onPrimary : cs.onInverseSurface,
+          onColor: controller.zoomed ? cs.onPrimary : onChip,
           tooltip: 'Zoom to fit',
           semanticsId: 'vnc_zoom_to_fit',
           onTap: controller.zoomed ? controller.zoomToFit : null,
@@ -242,7 +258,7 @@ class VncControlBar extends StatelessWidget {
           icon: Icons.content_paste_go,
           size: size,
           color: chip,
-          onColor: cs.onInverseSurface,
+          onColor: onChip,
           tooltip: 'Paste into the screen',
           semanticsId: 'vnc_paste',
           onTap: live ? _paste : null,
@@ -254,7 +270,7 @@ class VncControlBar extends StatelessWidget {
               : Icons.touch_app_outlined,
           size: size,
           color: controller.trackpad ? cs.primary : chip,
-          onColor: controller.trackpad ? cs.onPrimary : cs.onInverseSurface,
+          onColor: controller.trackpad ? cs.onPrimary : onChip,
           tooltip: controller.trackpad
               ? 'Back to tapping where you tap'
               : 'Trackpad mode: drive a pointer',
@@ -270,7 +286,7 @@ class VncControlBar extends StatelessWidget {
             icon: Icons.filter_center_focus,
             size: size,
             color: chip,
-            onColor: cs.onInverseSurface,
+            onColor: onChip,
             tooltip: 'Recenter the pointer',
             semanticsId: 'vnc_recenter',
             onTap: live ? controller.recenterPointer : null,

@@ -60,7 +60,7 @@ class BrowserViewPage extends StatefulWidget {
 
   /// The thread whose box holds the browser. Without it the executor has to
   /// guess, and it guesses the primary environment — with one container per
-  /// coworker that is almost never the right one (bead cowork-5eo6).
+  /// agent that is almost never the right one (bead cowork-5eo6).
   final String? sessionKey;
 
   /// The one way into the view (Bead cowork-vzm): a full-screen route on every
@@ -92,6 +92,8 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
   StreamSubscription<AgentsRelayInbound>? _sub;
   String _status = 'connecting';
   String _message = '';
+  // The machine-readable half of `_message` (`browser_view.reason`).
+  String _reason = '';
   // Per-view VNC secret from the executor's `started` event (§9.1 hardening):
   // x11vnc inside the sandbox requires it, so the agent's own code cannot
   // watch or drive the screen. The client is only handed it once it is known,
@@ -333,11 +335,13 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
         :final status,
         :final message,
         :final password,
+        :final reason,
       ):
         if (mounted) {
           setState(() {
             _status = status;
             _message = message;
+            _reason = reason;
             if (status == 'started') {
               // A second `started` is the executor's own recovery: it
               // re-handshakes with the box by itself and rotates the per-view
@@ -429,9 +433,10 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
       const double gap = 8;
       final double controlTop = topInset + gap;
       final double controlSize = MobileLayout.controlHeight;
-      // A chip that has to stay readable over a live web page: the scrim
-      // behind it, the inverse foreground on top.
-      final Color chip = cs.scrim.withValues(alpha: 0.55);
+      // A chip that has to stay readable over a live web page and over the
+      // empty ground, in both themes (bead chuk_chat-d41e).
+      final Color chip = VncOverlayColors.chip(cs);
+      final Color onChip = VncOverlayColors.on(cs);
       return Scaffold(
         // The darkest ground the scheme has, not a hard black: the stream sits
         // on it and the scheme still owns the colour.
@@ -445,7 +450,7 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
           fit: StackFit.expand,
           children: [
             frame,
-            if (_status == 'error')
+            if (_status == 'error' && !_noOwnBrowser)
               Positioned(
                 left: 0,
                 right: 0,
@@ -465,7 +470,7 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
                     hugeIcon: HugeIcons.cancel01,
                     size: controlSize,
                     color: chip,
-                    onColor: cs.onInverseSurface,
+                    onColor: onChip,
                     tooltip: MaterialLocalizations.of(
                       context,
                     ).closeButtonTooltip,
@@ -480,7 +485,7 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
                     icon: Icons.fullscreen_exit,
                     size: controlSize,
                     color: chip,
-                    onColor: cs.onInverseSurface,
+                    onColor: onChip,
                     tooltip: 'Exit full screen',
                     semanticsId: 'browser_view_exit_fullscreen',
                     onTap: _toggleFullscreen,
@@ -524,7 +529,9 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
             // status message can never overflow (was a 30px RenderFlex
             // overflow).
             top: MediaQuery.paddingOf(context).top,
-            child: _StatusBanner(status: _status, message: _message),
+            child: _noOwnBrowser
+                ? const SizedBox.shrink()
+                : _StatusBanner(status: _status, message: _message),
           ),
           if (_useWebView) ..._webViewChrome(context),
         ],
@@ -565,6 +572,15 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
     ];
   }
 
+  /// The executor found no browser of THIS agent to show.
+  ///
+  /// Every agent has its own browser session, and the executor never serves
+  /// a peer's screen (bead chuk_chat-26ge). So "nothing of its own" is a
+  /// normal state, not a failure: the view shows an empty state for it.
+  bool get _noOwnBrowser =>
+      _status == 'error' &&
+      (_reason == 'no_display' || _reason == 'no_sandbox');
+
   /// True once there is a picture on screen, whichever client draws it.
   bool get _hasPicture => _useWebView
       ? _vnc.phase == VncPhase.connected ||
@@ -578,6 +594,7 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
   /// fist that said nothing (Bead cowork-prsd).
   Widget _buildFrame() {
     final bool ready = _useWebView ? _local != null : _port != null;
+    if (_noOwnBrowser) return const BrowserViewEmptyState();
     return Stack(
       fit: StackFit.expand,
       children: <Widget>[
@@ -669,6 +686,53 @@ class _StatusBanner extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         softWrap: false,
         style: TextStyle(color: color, fontSize: 12),
+      ),
+    );
+  }
+}
+
+/// What the view shows when the agent has no browser session of its own.
+///
+/// Never a peer's screen in its place (bead chuk_chat-26ge). Theme colours on
+/// the page ground, so the text has full contrast in both themes.
+class BrowserViewEmptyState extends StatelessWidget {
+  const BrowserViewEmptyState({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme cs = theme.colorScheme;
+    return Center(
+      key: const Key('browser_view_empty'),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(Icons.desktop_access_disabled_outlined,
+                size: 40, color: cs.onSurfaceVariant),
+            const SizedBox(height: 16),
+            Text(
+              'No browser open',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: cs.onSurface,
+              ),
+            ),
+            const SizedBox(height: 8),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 360),
+              child: Text(
+                'This agent has no browser running right now. Its screen '
+                'shows up here when it opens one.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

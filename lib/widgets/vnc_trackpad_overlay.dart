@@ -496,9 +496,10 @@ class _VncTrackpadOverlayState extends State<VncTrackpadOverlay> {
     if (!widget.enabled) return widget.child;
     final ColorScheme scheme = Theme.of(context).colorScheme;
     // The controls have to stay readable over a live web page, so they sit on
-    // the scheme's scrim and carry its inverse foreground — the same chip the
-    // close and full-screen targets use.
-    final Color chip = scheme.scrim.withValues(alpha: 0.55);
+    // the solid inverse surface and carry its foreground. That pair contrasts
+    // in both themes; the old 55 % scrim did not in the dark one (bead
+    // chuk_chat-d41e). The same chip as `VncOverlayColors`.
+    final Color chip = scheme.inverseSurface;
     final Color onChip = scheme.onInverseSurface;
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
