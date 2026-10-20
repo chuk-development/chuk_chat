@@ -54,7 +54,6 @@ class MorphTap extends StatefulWidget {
     this.color,
     this.pressedColor,
     this.shape = const StadiumBorder(),
-    this.pressedShape,
     this.pressedOutline,
     this.pressedOutlineWidth = 1.5,
     this.padding = EdgeInsets.zero,
@@ -74,10 +73,6 @@ class MorphTap extends StatefulWidget {
   /// The colour the surface fades toward while held. Null keeps [color].
   final Color? pressedColor;
   final ShapeBorder shape;
-
-  /// The shape the surface morphs toward while held. Defaults to a blockier
-  /// version of [shape].
-  final ShapeBorder? pressedShape;
 
   /// An outline drawn in the current shape while the surface is held. A
   /// surface with no fill of its own needs it: without it a press on such a
@@ -119,15 +114,6 @@ class _MorphTapState extends State<MorphTap>
     vsync: this,
     value: 0,
   );
-
-  ShapeBorder get _pressed =>
-      widget.pressedShape ??
-      (widget.shape is RoundedRectangleBorder
-          ? RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-              side: (widget.shape as RoundedRectangleBorder).side,
-            )
-          : RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)));
 
   /// Reduced motion: the press still happens, it just does not travel.
   bool _reducedMotion = false;
@@ -193,7 +179,9 @@ class _MorphTapState extends State<MorphTap>
       animation: _c,
       builder: (BuildContext context, Widget? _) {
         final double t = _c.value.clamp(0.0, 1.0);
-        final ShapeBorder shape = ShapeBorder.lerp(widget.shape, _pressed, t)!;
+        // The press keeps the shape and only scales. A press that squared
+        // the corners off read as a square flash on a round target.
+        final ShapeBorder shape = widget.shape;
         final double scale = 1 - (1 - widget.pressedScale) * t;
         final Color resting = widget.color ?? Colors.transparent;
         final Color fill = widget.pressedColor == null
@@ -410,17 +398,10 @@ class ExpressiveIconButton extends StatelessWidget {
       // outright, which turned a transparent target (the header's parked
       // call and screen) into a 50 % black square.
       color: enabled ? fill : fill.withValues(alpha: fill.a * 0.5),
-      // An oval stays an oval while the finger is down, the way the connected
-      // group does; only the square target squares off further.
       shape: oval
           ? const StadiumBorder()
           : RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(size * 0.34),
-            ),
-      pressedShape: oval
-          ? const StadiumBorder()
-          : RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(size * 0.20),
             ),
       padding: EdgeInsets.symmetric(
         horizontal: (boxWidth - 22) / 2,

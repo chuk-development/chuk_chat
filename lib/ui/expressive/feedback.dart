@@ -120,9 +120,6 @@ class SheetAction extends StatelessWidget {
         onTap: enabled ? onTap : null,
         color: scheme.surfaceContainerHigh,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-        pressedShape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-        ),
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         child: Row(
           children: [

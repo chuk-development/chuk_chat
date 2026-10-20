@@ -54,9 +54,6 @@ class VoiceCallControl extends StatelessWidget {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(size * 0.34),
           ),
-          pressedShape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(size * 0.20),
-          ),
           child: SizedBox(
             width: size,
             height: size,

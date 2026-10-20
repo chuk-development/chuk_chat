@@ -124,9 +124,6 @@ class _ImageTile extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(_kImageRadius),
       ),
-      pressedShape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(_kImageRadius),
-      ),
       child: clipped,
     );
   }
@@ -237,9 +234,6 @@ Widget _buildImageBlock(BuildContext context, OpenUiProps props) {
     onTap: () => _openImageViewer(context, [url], 0),
     pressedScale: 0.98,
     shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(OpenUiTokens.radiusCard),
-    ),
-    pressedShape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(OpenUiTokens.radiusCard),
     ),
     child: block,

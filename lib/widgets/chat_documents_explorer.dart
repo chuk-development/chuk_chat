@@ -477,9 +477,6 @@ class _DocumentExplorerState extends State<_DocumentExplorer> {
       shape: RoundedRectangleBorder(
         borderRadius: grid ? kBorderRadiusCard : kBorderRadiusRow,
       ),
-      pressedShape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-      ),
       padding: grid
           ? const EdgeInsets.all(14)
           : const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -672,9 +669,6 @@ class _FileGridTile extends StatelessWidget {
       onTap: onTap,
       color: scheme.surfaceContainerHigh,
       shape: RoundedRectangleBorder(borderRadius: kBorderRadiusCard),
-      pressedShape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-      ),
       padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

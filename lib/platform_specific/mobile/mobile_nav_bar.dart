@@ -123,7 +123,6 @@ class _NavTarget extends StatelessWidget {
           // A stadium at rest and a stadium while held: the press springs, it
           // does not turn the capsule into a rounded box.
           shape: const StadiumBorder(),
-          pressedShape: const StadiumBorder(),
           padding: const EdgeInsets.symmetric(
             horizontal: 20,
             vertical: (PillGeometry.segmentHeight - _iconSize) / 2,
