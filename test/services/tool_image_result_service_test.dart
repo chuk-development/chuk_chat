@@ -7,6 +7,37 @@ import 'package:chuk_chat/services/tool_image_result_service.dart';
 
 void main() {
   group('ToolImageResultService', () {
+    test('resolves the relative vault path against the API base URL', () {
+      final uri = ToolImageResultService.resolveImageUri(
+        '/v1/ai/image/file/tok123',
+      );
+      expect(uri, isNotNull);
+      expect(uri!.hasScheme, isTrue);
+      expect(uri.host, isNotEmpty);
+      expect(uri.path, '/v1/ai/image/file/tok123');
+    });
+
+    test('keeps absolute image URLs as they are', () {
+      expect(
+        ToolImageResultService.resolveImageUri(
+          'https://example.com/a.png',
+        ).toString(),
+        'https://example.com/a.png',
+      );
+      expect(ToolImageResultService.resolveImageUri('a.png'), isNull);
+    });
+
+    test('rejects relative paths outside the image vault', () {
+      expect(
+        ToolImageResultService.resolveImageUri('/v1/agent-mail/messages'),
+        isNull,
+      );
+      expect(
+        ToolImageResultService.resolveImageUri('//evil.example/x.png'),
+        isNull,
+      );
+    });
+
     test('parses IMAGE_DATA result with trailing text', () async {
       final payload = jsonEncode({
         'data_uri': 'data:image/png;base64,not-base64!',
