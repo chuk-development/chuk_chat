@@ -279,9 +279,26 @@ class ToolImageResultService {
     return false;
   }
 
+  /// Resolves the API's relative vault path (`/v1/ai/image/file/<token>`)
+  /// against the API base URL. Absolute URLs pass through unchanged.
+  @visibleForTesting
+  static Uri? resolveImageUri(String url) {
+    final uri = Uri.tryParse(url.trim());
+    if (uri == null || uri.hasScheme) return uri;
+    // Only the vault path: same-origin URLs carry the session token.
+    if (uri.hasAuthority || !uri.path.startsWith('/v1/ai/image/file/')) {
+      return null;
+    }
+    try {
+      return Uri.parse(ApiConfigService.apiBaseUrl).resolveUri(uri);
+    } catch (_) {
+      return null;
+    }
+  }
+
   static Future<String?> _uploadFromUrl(String url) {
     // SSRF validation: only allow http(s) to public hosts.
-    final uri = Uri.tryParse(url);
+    final uri = resolveImageUri(url);
     if (uri == null ||
         !uri.hasScheme ||
         !{'http', 'https'}.contains(uri.scheme.toLowerCase()) ||
