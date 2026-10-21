@@ -299,11 +299,15 @@ class ToolImageResultService {
   static Future<String?> _uploadFromUrl(String url) {
     // SSRF validation: only allow http(s) to public hosts.
     final uri = resolveImageUri(url);
+    // A resolved vault path points at the configured API host, which may be
+    // a local dev server. Only absolute URLs from the model need the check.
+    final isVaultPath =
+        uri != null && !(Uri.tryParse(url.trim())?.hasScheme ?? true);
     if (uri == null ||
         !uri.hasScheme ||
         !{'http', 'https'}.contains(uri.scheme.toLowerCase()) ||
         uri.host.isEmpty ||
-        _isPrivateHost(uri.host)) {
+        (!isVaultPath && _isPrivateHost(uri.host))) {
       if (kDebugMode) {
         debugPrint('Rejected URL with invalid or private host: $url');
       }
