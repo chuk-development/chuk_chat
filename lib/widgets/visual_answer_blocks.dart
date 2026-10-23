@@ -1,7 +1,7 @@
 // lib/widgets/visual_answer_blocks.dart
 //
 // Part of markdown_message.dart: the visual answer modules — `::: bars`,
-// `::: kpi`, `::: tiles`, `::: cards`, `::: ask` and `::: source`. The parse
+// `::: kpi`, `::: tiles`, `::: cards` and `::: ask`. The parse
 // half lives in `lib/utils/answer_blocks_parser.dart`; the look follows the
 // KI-Chat building-block design (soft accent-tinted module cards, flat fills,
 // hairlines — no glow and no coloured shadow, docs/DESIGN.md §8). Like the
@@ -1345,113 +1345,6 @@ class _AskBlock extends StatelessWidget {
                 fontFamily: s.fontFamily,
               ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// source — link rows
-
-class _SourceBlock extends StatelessWidget {
-  const _SourceBlock({required this.spec, required this.s});
-
-  final SourceSpec spec;
-  final _AnswerBlockStyle s;
-
-  @override
-  Widget build(BuildContext context) {
-    if (spec.rows.isEmpty) return const SizedBox.shrink();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        for (int i = 0; i < spec.rows.length; i++) ...<Widget>[
-          if (i > 0) const SizedBox(height: 8),
-          _row(context, spec.rows[i]),
-        ],
-      ],
-    );
-  }
-
-  Widget _row(BuildContext context, SourceRow row) {
-    final bool hasUrl = row.url.startsWith('http://') || row.url.startsWith('https://');
-    final Widget content = Row(
-      children: <Widget>[
-        SelectionContainer.disabled(
-          child: Container(
-            width: 40,
-            height: 40,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: s.tileFill,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: HugeIcon(HugeIcons.link01, size: 18, color: s.accent),
-          ),
-        ),
-        const SizedBox(width: 11),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Text(
-                row.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: hasUrl ? s.accent : s.textColor,
-                  fontSize: s.baseFontSize * 0.98,
-                  fontWeight: FontWeight.w600,
-                  height: 1.3,
-                  fontFamily: s.fontFamily,
-                ),
-              ),
-              if (row.url.isNotEmpty)
-                Text(
-                  row.url.replaceFirst(RegExp(r'^https?://'), ''),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: s.muted,
-                    fontSize: s.baseFontSize * 0.84,
-                    height: 1.3,
-                    fontFamily: s.fontFamily,
-                  ),
-                ),
-            ],
-          ),
-        ),
-        if (hasUrl) ...<Widget>[
-          const SizedBox(width: 8),
-          SelectionContainer.disabled(
-            child: HugeIcon(HugeIcons.arrowUpRight01, size: 16, color: s.muted),
-          ),
-        ],
-      ],
-    );
-    if (!hasUrl) {
-      return _ModuleCard(
-        s: s,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        child: content,
-      );
-    }
-    return _ModuleCard(
-      s: s,
-      padding: EdgeInsets.zero,
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: () => _openBlockUrl(context, row.url),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: content,
           ),
         ),
       ),

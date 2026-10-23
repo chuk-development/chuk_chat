@@ -388,26 +388,6 @@ void main() {
       expect(spec.chips, <String>['Aktive Parameter', 'BF16 & FP8']);
     });
 
-    test('source: rows with and without url', () {
-      final SourceSpec spec = parseSource('', <String>[
-        'Artikel | https://example.org/a',
-        'Nur Titel',
-      ]);
-      expect(spec.rows, hasLength(2));
-      expect(spec.rows[0].title, 'Artikel');
-      expect(spec.rows[0].url, 'https://example.org/a');
-      expect(spec.rows[1].url, isEmpty);
-    });
-
-    test('source: url-only row falls back to the argument as title', () {
-      final SourceSpec spec = parseSource('Quelle', <String>[
-        '| https://example.org/a',
-      ]);
-      expect(spec.rows, hasLength(1));
-      expect(spec.rows[0].title, 'Quelle');
-      expect(spec.rows[0].url, 'https://example.org/a');
-    });
-
     test('prompt documents the visual blocks', () {
       final String prompt = ToolPromptBuilder(discoveryMode: false)
           .buildToolProtocolSection(tools: const <Map<String, dynamic>>[]);
@@ -416,10 +396,10 @@ void main() {
       expect(prompt, contains('::: tiles'));
       expect(prompt, contains('::: cards'));
       expect(prompt, contains('::: ask'));
-      expect(prompt, contains('::: source'));
+      expect(prompt, isNot(contains('::: source')));
       expect(prompt, contains('::: status'));
       expect(prompt, contains('never bullets'));
-      expect(prompt, contains('Never invent a URL'));
+      expect(prompt, contains('Never list sources'));
     });
   });
 
@@ -507,11 +487,9 @@ void main() {
 
     test('stays small', () {
       final int start = prompt.indexOf('## ANSWER FORMAT');
-      final int end = prompt.indexOf('Never invent a URL', start);
-      final String section = prompt.substring(
-        start,
-        end + 'Never invent a URL'.length,
-      );
+      const String last = 'sources of every web lookup on its own.';
+      final int end = prompt.indexOf(last, start);
+      final String section = prompt.substring(start, end + last.length);
       expect(TokenEstimator.estimateTokens(section), lessThan(650));
     });
   });

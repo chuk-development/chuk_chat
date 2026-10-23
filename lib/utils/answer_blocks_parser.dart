@@ -936,52 +936,6 @@ AskSpec parseAsk(String arg, List<String> lines) {
 }
 
 // ---------------------------------------------------------------------------
-// source — link rows ("Quelle & Verweis")
-//
-// ::: source
-// Notizen zur Tagesplanung | https://example.org/notizen
-// :::
-
-class SourceRow {
-  const SourceRow({required this.title, this.url = ''});
-  final String title;
-  final String url;
-}
-
-class SourceSpec {
-  const SourceSpec({required this.rows});
-  final List<SourceRow> rows;
-}
-
-SourceSpec parseSource(String arg, List<String> lines) {
-  final List<SourceRow> rows = <SourceRow>[];
-  String pendingTitle = arg.trim();
-  for (final String raw in lines) {
-    final String line = raw.trim();
-    if (line.isEmpty) continue;
-    final int bar = line.indexOf('|');
-    if (bar < 0) {
-      rows.add(SourceRow(title: line));
-      continue;
-    }
-    // `| https://…` (no title) or `Title | https://…`.
-    final String title = line.substring(0, bar).trim();
-    final String url = line.substring(bar + 1).trim();
-    if (title.isEmpty && url.isEmpty) continue;
-    if (title.isEmpty && pendingTitle.isNotEmpty) {
-      rows.add(SourceRow(title: pendingTitle, url: url));
-      pendingTitle = '';
-      continue;
-    }
-    rows.add(SourceRow(title: title, url: url));
-  }
-  if (rows.isEmpty && pendingTitle.isNotEmpty) {
-    rows.add(SourceRow(title: pendingTitle));
-  }
-  return SourceSpec(rows: List<SourceRow>.unmodifiable(rows));
-}
-
-// ---------------------------------------------------------------------------
 // status — a list of items with amount, status and date (open payments,
 // invoices, orders, deliveries, tasks with a deadline)
 //
