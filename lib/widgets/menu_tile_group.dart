@@ -264,6 +264,9 @@ Future<T?> showMenuSheet<T>(
   if (screen.width >= kCompactModeBreakpoint) {
     return showDialog<T>(
       context: context,
+      // The navigator the bottom sheet uses, so a tile that pops through
+      // its own context closes the same route at both widths.
+      useRootNavigator: false,
       builder: (BuildContext dialogContext) => Dialog(
         backgroundColor: scheme.surfaceContainerLow,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
