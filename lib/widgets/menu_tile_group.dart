@@ -10,6 +10,7 @@
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/constants.dart' show kCompactModeBreakpoint;
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Corner radius at the outer edges of a run.
@@ -220,6 +221,10 @@ class MenuActionRow extends StatelessWidget {
 /// A menu as a bottom sheet: the house sheet chrome, then the same tiles a
 /// dropdown is made of. What a long press opens on a phone and what a click
 /// opens on a pointer are then the same menu in two places.
+///
+/// On a wide window a bottom sheet runs edge to edge under the sidebar and the
+/// chat alike, so there the same content opens as a centred card instead,
+/// the width of a phone sheet.
 Future<T?> showMenuSheet<T>(
   BuildContext context, {
   required List<List<Widget>> groups,
@@ -227,13 +232,61 @@ Future<T?> showMenuSheet<T>(
   Color? color,
 }) {
   final ColorScheme scheme = Theme.of(context).colorScheme;
+  final Size screen = MediaQuery.of(context).size;
+  Widget body({required bool handle}) => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: <Widget>[
+      if (handle) ...<Widget>[
+        Center(
+          child: Container(
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: scheme.outlineVariant,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+      ],
+      if (header != null) ...<Widget>[header, const SizedBox(height: 10)],
+      Flexible(
+        child: SingleChildScrollView(
+          child: MenuTileGroup(
+            groups: groups,
+            color: color ?? scheme.surfaceContainerHigh,
+          ),
+        ),
+      ),
+    ],
+  );
+
+  if (screen.width >= kCompactModeBreakpoint) {
+    return showDialog<T>(
+      context: context,
+      builder: (BuildContext dialogContext) => Dialog(
+        backgroundColor: scheme.surfaceContainerLow,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        insetPadding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 520,
+            maxHeight: screen.height * 0.7,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
+            child: body(handle: false),
+          ),
+        ),
+      ),
+    );
+  }
+
   return showModalBottomSheet<T>(
     context: context,
     // A long list scrolls inside the sheet instead of pushing it to the top
     // of the screen.
-    constraints: BoxConstraints(
-      maxHeight: MediaQuery.of(context).size.height * 0.8,
-    ),
+    constraints: BoxConstraints(maxHeight: screen.height * 0.8),
     backgroundColor: scheme.surfaceContainerLow,
     showDragHandle: false,
     shape: const RoundedRectangleBorder(
@@ -244,31 +297,7 @@ Future<T?> showMenuSheet<T>(
       top: false,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: scheme.outlineVariant,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
-            if (header != null) ...<Widget>[header, const SizedBox(height: 10)],
-            Flexible(
-              child: SingleChildScrollView(
-                child: MenuTileGroup(
-                  groups: groups,
-                  color: color ?? scheme.surfaceContainerHigh,
-                ),
-              ),
-            ),
-          ],
-        ),
+        child: body(handle: true),
       ),
     ),
   );
