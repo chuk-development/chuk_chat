@@ -58,6 +58,7 @@ import 'package:chuk_chat/services/title_generation_service.dart';
 import 'package:chuk_chat/services/tool_call_handler.dart';
 import 'package:chuk_chat/services/app_lifecycle_service.dart';
 import 'package:chuk_chat/core/model_selection_events.dart';
+import 'package:chuk_chat/widgets/composer_caret_follower.dart';
 import 'package:chuk_chat/widgets/composer_recording.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/widgets/measure_size.dart';
@@ -242,6 +243,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   final ScrollController _composerScrollController = ScrollController();
   @override
   final FocusNode composerFocusNode = FocusNode();
+  late final ComposerCaretFollower _composerCaretFollower;
   final FocusNode _rawKeyboardListenerFocusNode = FocusNode();
   final Uuid _uuid = const Uuid();
   bool _lastTextWasEmpty = true;
@@ -849,6 +851,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     // Text controller listener
     composerController.addListener(_onControllerChanged);
+    _composerCaretFollower = ComposerCaretFollower(
+      controller: composerController,
+      focusNode: composerFocusNode,
+      scrollController: _composerScrollController,
+    );
 
     // Request focus if sidebar closed — never on a phone, see
     // [_mayAutoFocusComposer] in the Agents thread. Agents's rule, kept.
@@ -1116,6 +1123,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     scrollController.removeListener(onScrollChanged);
     TtsAudioService.activeText.removeListener(_onSpeechPlaybackChanged);
     composerController.removeListener(_onControllerChanged);
+    _composerCaretFollower.dispose();
     composerController.dispose();
     scrollController.dispose();
     _composerScrollController.dispose();
