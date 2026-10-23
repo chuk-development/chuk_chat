@@ -44,6 +44,7 @@ LEGACY_BASELINE=(
   fix_credits_functions fix_security_linter_errors
   user_preferences_identity_sync user_tool_preferences artifacts
   settings_sync_columns add_ui_locale assistants workspaces_rename
+  agents_chat_pins
 )
 
 # Tables that production has but no SQL file in this repo creates. Columns
@@ -73,6 +74,18 @@ CREATE TABLE IF NOT EXISTS public.usage_logs (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 ALTER TABLE public.usage_logs ENABLE ROW LEVEL SECURITY;
+-- Created by the api_server repo, not this one; read-only for the user.
+CREATE TABLE IF NOT EXISTS public.user_billing (
+  user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  total_credits_allocated numeric(10,4) DEFAULT 0,
+  credits_last_renewed_period timestamptz,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+ALTER TABLE public.user_billing ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "user_billing_select_own" ON public.user_billing;
+CREATE POLICY "user_billing_select_own" ON public.user_billing
+  FOR SELECT USING (auth.uid() = user_id);
 SQL
 )
 
