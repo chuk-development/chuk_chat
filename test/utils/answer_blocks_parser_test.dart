@@ -399,7 +399,7 @@ void main() {
       expect(prompt, isNot(contains('::: source')));
       expect(prompt, contains('::: status'));
       expect(prompt, contains('never bullets'));
-      expect(prompt, contains('Never list sources'));
+      expect(prompt, contains('Never add a separate list of sources'));
     });
   });
 
