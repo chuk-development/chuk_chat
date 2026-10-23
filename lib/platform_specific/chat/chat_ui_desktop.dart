@@ -39,6 +39,7 @@ import 'package:chuk_chat/services/artifact_tag_processor.dart';
 import 'package:chuk_chat/services/message_composition_service.dart';
 import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/tool_call_handler.dart';
+import 'package:chuk_chat/widgets/composer_caret_follower.dart';
 import 'package:chuk_chat/widgets/composer_recording.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart' show MessageBubbleAction;
 import 'package:chuk_chat/widgets/measure_size.dart';
@@ -201,6 +202,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   final List<Map<String, String>> _messages = [];
   String? _activeChatId;
   final ScrollController _composerScrollController = ScrollController();
+  late final ComposerCaretFollower _composerCaretFollower;
   late ChatApiService _chatApiService;
   @override
   late final FocusNode composerFocusNode;
@@ -498,6 +500,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       onProcessFilePaths: _fileHandler.processFilePaths,
     );
     scrollController.addListener(onScrollChanged);
+    _composerCaretFollower = ComposerCaretFollower(
+      controller: composerController,
+      focusNode: composerFocusNode,
+      scrollController: _composerScrollController,
+    );
     TtsAudioService.activeText.addListener(_onSpeechPlaybackChanged);
     if (voiceCallUiEnabled) {
       _voice = ChatVoiceBinding(
@@ -720,6 +727,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     _providerRefreshSubscription?.cancel();
     scrollController.removeListener(onScrollChanged);
     TtsAudioService.activeText.removeListener(_onSpeechPlaybackChanged);
+    _composerCaretFollower.dispose();
     composerController.dispose();
     scrollController.dispose();
     _composerScrollController.dispose();
