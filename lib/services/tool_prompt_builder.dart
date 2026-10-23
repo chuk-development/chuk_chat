@@ -1262,10 +1262,7 @@ BF16 & FP8
 Hetzner | Card declined | 102 € | failed | 16.10. | hetzner.com | Pay https://…
 :::
   Payments, invoices, orders, deadlines: status, never bullets. Status: failed overdue due ok + optional label. `more:` = footer.
-::: source
-Article title | https://example.org/article
-:::
-  One row per source you actually used. Never invent a URL.''';
+- Never list sources or links to them at the end of an answer; the app shows the sources of every web lookup on its own.''';
   }
 
   /// Chart and map rendering protocol — these are output formats, not tools.

@@ -123,7 +123,10 @@ Widget _buildAnswerBlock(
         onFollowUp: onFollowUp,
       );
     case AnswerBlockKind.source:
-      return _SourceBlock(spec: parseSource(block.arg, block.lines), s: s);
+      // Retired: the sources pill under the answer lists them already, and a
+      // second link list in the text was noise. Old answers still carry the
+      // block, so it is recognised and drawn as nothing, not as raw text.
+      return const SizedBox.shrink();
     case AnswerBlockKind.status:
       return _StatusBlock(spec: parseStatus(block.arg, block.lines), s: s);
   }

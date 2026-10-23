@@ -356,30 +356,17 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('source: rows with title and url', (WidgetTester tester) async {
+  testWidgets('source: an old block renders nothing', (
+    WidgetTester tester,
+  ) async {
     await _pump(
       tester,
       '::: source\n'
       'Notizen zur Tagesplanung | https://example.org/notizen\n'
       ':::',
     );
-    expect(_allText(tester), contains('Notizen zur Tagesplanung'));
-    expect(_allText(tester), contains('example.org/notizen'));
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('source: the row is tappable and opens its url', (
-    WidgetTester tester,
-  ) async {
-    await _pump(
-      tester,
-      '::: source\n'
-      'Doku | https://example.org/doku\n'
-      ':::',
-    );
-    // The link-styled row carries an InkWell: the tap target exists (the
-    // launch itself is platform work, not asserted here).
-    expect(find.byType(InkWell), findsOneWidget);
+    expect(_allText(tester), isNot(contains('Notizen zur Tagesplanung')));
+    expect(_allText(tester), isNot(contains(':::')));
     expect(tester.takeException(), isNull);
   });
 
