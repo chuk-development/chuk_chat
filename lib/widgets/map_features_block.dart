@@ -18,6 +18,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'package:chuk_chat/services/map_feature_resolver.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/utils/input_validator.dart';
 import 'package:chuk_chat/utils/map_features.dart';
 import 'package:chuk_chat/utils/map_geometry.dart';
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
@@ -583,6 +584,7 @@ class _FeatureDetails extends StatelessWidget {
   Widget build(BuildContext context) {
     final de = _isDe(context);
     final url = spec.url;
+    final sourceUri = url == null ? null : InputValidator.safeHttpUri(url);
     final where = [
       if (spec.road != null) spec.road!,
       if (spec.from?.street != null && spec.to?.street != null)
@@ -632,7 +634,8 @@ class _FeatureDetails extends StatelessWidget {
                 icon: HugeIcons.route01,
                 text: '${de ? 'Umleitung' : 'Detour'}: ${spec.detour}',
               ),
-            if (url != null && Uri.tryParse(url)?.hasScheme == true)
+            // AI-controlled input — only http(s) may reach the OS launcher.
+            if (sourceUri != null)
               Padding(
                 padding: const EdgeInsets.only(top: 12),
                 child: ExpressiveButton(
@@ -641,7 +644,7 @@ class _FeatureDetails extends StatelessWidget {
                   tonal: true,
                   dense: true,
                   onTap: () => launchUrl(
-                    Uri.parse(url),
+                    sourceUri,
                     mode: LaunchMode.externalApplication,
                   ),
                 ),
