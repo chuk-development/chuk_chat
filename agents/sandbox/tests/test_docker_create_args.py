@@ -50,3 +50,30 @@ def test_no_transcript_folder_no_extra_mount(tmp_path):
     assert mounts == [f"{workspace}:{CONTAINER_WORKSPACE}"]
     assert not any(m.endswith(":ro") for m in mounts)
     assert os.path.isdir(workspace)
+
+
+def test_the_box_gets_the_host_time_zone_and_language(tmp_path, monkeypatch):
+    """The box browser must agree with the user's IP: UTC behind a German IP
+    is a bot signal (docker/browser-mcp.sh)."""
+    monkeypatch.setenv("TZ", "Europe/Berlin")
+    monkeypatch.delenv("LC_ALL", raising=False)
+    monkeypatch.delenv("LC_MESSAGES", raising=False)
+    monkeypatch.setenv("LANG", "de_DE.UTF-8")
+    cli = _FakeCli()
+    env = DockerEnvironment(workdir=str(tmp_path / "ws"), cli=cli, user="1000:1000")
+    env._create()
+    argv = _run_argv(cli)
+    values = [argv[i + 1] for i, a in enumerate(argv) if a == "-e"]
+    assert "TZ=Europe/Berlin" in values
+    assert "AGENTS_BROWSER_LOCALE=de-DE" in values
+
+
+def test_a_strange_host_time_zone_is_not_passed_on(monkeypatch):
+    from chuk_agents_sandbox.docker import host_browser_locale, host_timezone
+
+    monkeypatch.setenv("TZ", "../../etc/passwd")
+    assert host_timezone() is None
+    monkeypatch.setenv("TZ", ":America/New_York")
+    assert host_timezone() == "America/New_York"
+    monkeypatch.setenv("LC_ALL", "C")
+    assert host_browser_locale() == "en-US"
