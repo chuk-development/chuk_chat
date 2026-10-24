@@ -388,7 +388,11 @@ void main() {
       expect(inlined, contains('\n11. WEB SEARCH TUNING'));
 
       // Only news-cards migrated: tuning must slide up to 10, not stay at 11.
-      final partial = toolRules(build(catalog: [kBuiltinSkills[2]]));
+      final partial = toolRules(
+        build(
+          catalog: [kBuiltinSkills.firstWhere((s) => s.name == 'news-cards')],
+        ),
+      );
       expect(partial, isNot(contains('NEWS & TIME-SENSITIVE QUERIES')));
       expect(partial, contains('\n10. WEB SEARCH TUNING'));
       expect(partial, isNot(contains('\n11. ')));

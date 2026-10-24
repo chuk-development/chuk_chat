@@ -19,6 +19,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:chuk_chat/utils/input_validator.dart';
 import 'package:chuk_chat/utils/map_geometry.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
+import 'package:chuk_chat/widgets/map_tiles.dart';
 
 class FullscreenMapPage extends StatefulWidget {
   final LatLng center;
@@ -140,26 +141,26 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
       // The page runs underneath the floating header.
       extendBodyBehindAppBar: true,
       appBar: FloatingAppBar(
+        // The map runs to the top edge; a page-colour fade over it reads as
+        // a smear, not as a header.
+        scrim: false,
         title: Text(widget.title, style: const TextStyle(fontSize: 16)),
-        leading: IconButton(
-          icon: const AppIcon(Icons.close),
+        leading: FloatingHeaderButton(
+          icon: Icons.close,
+          tooltip: 'Close',
           onPressed: () => Navigator.of(context).pop(),
         ),
         actions: [
           FloatingHeaderButton(icon: Icons.open_in_new, onPressed: _openCurrentViewInExternalMaps, tooltip: 'Open in external maps app'),
           if (hasLocationControls)
-            IconButton(
+            FloatingHeaderButton(
+              icon: Icons.my_location,
               tooltip: 'My location',
+              // Disabled while the fix is pending, so a second tap cannot
+              // start a second lookup.
               onPressed: _loadingLocation
                   ? null
                   : () => unawaited(_centerOnCurrentLocation()),
-              icon: _loadingLocation
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const AppIcon(Icons.my_location),
             ),
         ],
       ),
@@ -197,17 +198,7 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
     final routeStart = _routeStart;
     final routeEnd = _routeEnd;
 
-    // Esri World Gray Canvas — keyless, clean light/dark grey ({z}/{y}/{x}
-    // order, single host, no {s}). See map_block_renderer.dart.
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final children = <Widget>[
-      fm.TileLayer(
-        urlTemplate: isDark
-            ? 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'
-            : 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
-        subdomains: const <String>[],
-      ),
-    ];
+    final children = <Widget>[buildBaseTileLayer()];
 
     if (routePoints != null && routePoints.length > 1) {
       children.add(
@@ -348,6 +339,8 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
       );
     }
 
+    children.add(buildOsmAttribution());
+
     return fm.FlutterMap(
       mapController: _fallbackMapController,
       options: _buildFallbackMapOptions(),
@@ -366,6 +359,7 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
 
     if (useFit) {
       return fm.MapOptions(
+        maxZoom: kMapMaxZoom,
         initialCameraFit: fm.CameraFit.bounds(
           bounds: fm.LatLngBounds.fromPoints(fitPoints),
           padding: const EdgeInsets.all(64),
@@ -386,6 +380,7 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
     }
 
     return fm.MapOptions(
+      maxZoom: kMapMaxZoom,
       initialCenter: widget.center,
       initialZoom: widget.zoom,
       onTap: (tapPosition, point) {

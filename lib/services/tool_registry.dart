@@ -45,6 +45,7 @@ const Map<String, ToolCategory> toolCategoryMap = {
   'search_restaurants': ToolCategory.map,
   'geocode': ToolCategory.map,
   'get_route': ToolCategory.map,
+  'road_closures': ToolCategory.map,
   'bash': ToolCategory.bash,
   'github': ToolCategory.github,
   'slack': ToolCategory.slack,
@@ -1081,6 +1082,52 @@ final List<ClientTool> builtinTools = [
     name: 'bash',
     description:
         'Execute bash commands in sandbox folder. Safe: ls, cat, mkdir, cp, '
+  ClientTool(
+    name: 'road_closures',
+    description:
+        'Current and upcoming road closures, roadworks and detours around a '
+        'place from the official feed (Schleswig-Holstein, Hamburg, Lower '
+        'Saxony, Mecklenburg-Vorpommern; federal/state/county roads and '
+        'motorways). Returns ready-made map features with real road '
+        'geometry. Use for Sperrung, Baustelle, Umleitung, closures.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'place': {
+          'type': 'string',
+          'description': 'string (town or address, e.g. "Preetz")',
+        },
+        'lat': {'type': 'number', 'description': 'number (optional)'},
+        'lon': {'type': 'number', 'description': 'number (optional)'},
+        'radius_km': {
+          'type': 'number',
+          'description': 'number (optional, 1-25, default 5)',
+        },
+        'days_ahead': {
+          'type': 'integer',
+          'description':
+              'int (optional, include measures starting within N days, '
+              'default 30)',
+        },
+      },
+      'required': <String>[],
+      'additionalProperties': false,
+    },
+    type: ToolType.builtin,
+    tags: [
+      'sperrung',
+      'sperrungen',
+      'baustelle',
+      'baustellen',
+      'umleitung',
+      'closure',
+      'roadworks',
+      'traffic',
+      'verkehr',
+      'straße',
+      'map',
+    ],
+  ),
         'mv, rm, touch, ffmpeg. Others need approval.',
     parameters: {
       'type': 'object',

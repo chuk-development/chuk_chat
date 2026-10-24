@@ -50,7 +50,9 @@ void main() {
 
       expect(
         TokenEstimator.estimateTokens('x' * catalogChars),
-        lessThan(500),
+        // 500 held eight skills; map-features (closures on the map) is a
+        // ninth with no inline block to replace, so the bound moved to 560.
+        lessThan(560),
         reason: 'the level-1 catalog must stay cheap or it never pays back',
       );
     });
