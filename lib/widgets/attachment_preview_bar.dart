@@ -14,6 +14,7 @@ import 'package:chuk_chat/constants/file_constants.dart';
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/widgets/encrypted_image_widget.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/utils/format_bytes.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
@@ -718,35 +719,27 @@ class _DocumentPreviewDialogState extends State<_DocumentPreviewDialog> {
                   // Edit / Save / Cancel buttons (plain text only)
                   if (_isPlainText && !_isLoading) ...[
                     if (_isEditing) ...[
-                      IconButton(
-                        icon: AppIcon(Icons.check_rounded, color: accent),
+                      FloatingHeaderButton(
+                        icon: Icons.check_rounded,
+                        accent: true,
                         tooltip: AppLocalizations.of(context)!.save,
                         onPressed: _saveEdits,
                       ),
-                      IconButton(
-                        icon: AppIcon(
-                          Icons.close_rounded,
-                          color: textColor.withValues(alpha: 0.5),
-                        ),
+                      FloatingHeaderButton(
+                        icon: Icons.close_rounded,
                         tooltip: AppLocalizations.of(context)!.cancel,
                         onPressed: _cancelEditing,
                       ),
                     ] else
-                      IconButton(
-                        icon: AppIcon(
-                          Icons.edit_rounded,
-                          color: textColor.withValues(alpha: 0.7),
-                        ),
+                      FloatingHeaderButton(
+                        icon: Icons.edit_rounded,
                         tooltip: AppLocalizations.of(context)!.edit,
                         onPressed: _startEditing,
                       ),
                   ],
-                  // Close button
-                  IconButton(
-                    icon: AppIcon(
-                      Icons.close,
-                      color: textColor.withValues(alpha: 0.7),
-                    ),
+                  // Close button: the app's opaque round chip.
+                  FloatingHeaderButton(
+                    icon: Icons.close,
                     tooltip: AppLocalizations.of(context)!.close,
                     onPressed: () => Navigator.of(context).pop(),
                   ),

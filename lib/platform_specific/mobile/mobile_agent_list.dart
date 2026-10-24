@@ -59,7 +59,7 @@ import 'package:chuk_chat/ui/expressive/top_veil.dart';
 import 'package:chuk_chat/ui/expressive/staggered.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/anchored_menu.dart';
-import 'package:chuk_chat/widgets/floating_chrome_surface.dart';
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/room_faces.dart';
 
 /// The account monogram: "alex.smith@…" → "A", "Alex Smith" → "AS".
@@ -799,49 +799,13 @@ class _BarChip extends StatelessWidget {
   final bool accent;
 
   @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    final Color fill = accent
-        ? theme.colorScheme.primary
-        : FloatingChromeSurface.fillOf(context);
-    final Color glyph = accent
-        ? theme.accentButtonForeground(fill)
-        : theme.resolvedIconColor;
-    return Semantics(
-      identifier: semanticsId,
-      button: true,
-      enabled: onTap != null,
-      child: Tooltip(
-        message: tooltip,
-        child: Material(
-          type: MaterialType.transparency,
-          child: InkResponse(
-            onTap: onTap,
-            // Not contained: the press covers 48 px, the ink only the chip.
-            containedInkWell: false,
-            highlightShape: BoxShape.circle,
-            radius: kMobileChromeChip / 2,
-            child: SizedBox.square(
-              dimension: MobileLayout.minTouchTarget,
-              child: Center(
-                child: Ink(
-                  width: kMobileChromeChip,
-                  height: kMobileChromeChip,
-                  decoration: BoxDecoration(
-                    color: fill,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Center(
-                    child: HugeIcon(icon, size: 22, color: glyph),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => FloatingHeaderButton(
+    hugeIcon: icon,
+    tooltip: tooltip,
+    semanticsId: semanticsId,
+    onPressed: onTap,
+    accent: accent,
+  );
 }
 
 /// The roster's search input: one rounded, filled field that carries its own

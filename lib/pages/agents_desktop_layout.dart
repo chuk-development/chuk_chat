@@ -501,8 +501,8 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
       _deskDetailsSettingsFor = null;
     }
     final bool settings = _deskDetailsSettingsFor == agent.id;
-    final Widget closeButton = IconButton(
-      icon: const AppIcon(Icons.close, size: 18),
+    final Widget closeButton = FloatingHeaderButton(
+      icon: Icons.close,
       tooltip: 'Close (Esc)',
       onPressed: _deskCloseRightPane,
     );
@@ -516,9 +516,9 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
               icon: Icons.tune,
               text: 'Details',
               actions: <Widget>[
-                IconButton(
+                FloatingHeaderButton(
                   key: const ValueKey<String>('desk-details-settings'),
-                  icon: const AppIcon(Icons.settings_outlined, size: 18),
+                  icon: Icons.settings_outlined,
                   tooltip: 'Settings',
                   onPressed: () =>
                       setState(() => _deskDetailsSettingsFor = agent.id),
@@ -558,9 +558,9 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
             ),
             child: Row(
               children: <Widget>[
-                IconButton(
+                FloatingHeaderButton(
                   key: const ValueKey<String>('desk-details-back'),
-                  icon: const AppIcon(Icons.arrow_back, size: 18),
+                  icon: Icons.arrow_back_rounded,
                   tooltip: 'Back',
                   onPressed: () =>
                       setState(() => _deskDetailsSettingsFor = null),
@@ -574,8 +574,8 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
                     style: PaneHeader.titleStyle,
                   ),
                 ),
-                IconButton(
-                  icon: const AppIcon(Icons.refresh, size: 18),
+                FloatingHeaderButton(
+                  icon: Icons.refresh,
                   tooltip: 'Refresh',
                   onPressed: () => unawaited(_deskRefreshDetails(sessionKey)),
                 ),
@@ -620,13 +620,13 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
             icon: Icons.groups_outlined,
             text: 'Control Rooms',
             actions: <Widget>[
-              IconButton(
-                icon: const AppIcon(Icons.group_add_outlined, size: 18),
+              FloatingHeaderButton(
+                icon: Icons.group_add_outlined,
                 tooltip: 'New room (${deskShortcutLabel('Ctrl+Shift+N')})',
                 onPressed: () => unawaited(_openRoomCreate()),
               ),
-              IconButton(
-                icon: const AppIcon(Icons.close, size: 18),
+              FloatingHeaderButton(
+                icon: Icons.close,
                 tooltip: 'Close',
                 onPressed: _deskCloseRightPane,
               ),

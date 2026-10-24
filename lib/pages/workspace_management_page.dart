@@ -172,8 +172,9 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
             ),
           ],
         ),
-        leading: IconButton(
-          icon: AppIcon(Icons.arrow_back, color: iconFg),
+        leading: FloatingHeaderButton(
+          icon: Icons.arrow_back_rounded,
+          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
           onPressed: () => Navigator.pop(context),
         ),
         actions: [

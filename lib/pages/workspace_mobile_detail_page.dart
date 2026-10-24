@@ -27,6 +27,7 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class WorkspaceMobileDetailPage extends StatefulWidget {
@@ -222,7 +223,7 @@ class _WorkspaceMobileDetailPageState extends State<WorkspaceMobileDetailPage> {
     if (_loading) {
       return Scaffold(
         backgroundColor: cs.surface,
-        appBar: AppBar(backgroundColor: cs.surface, elevation: 0),
+        appBar: const FloatingAppBar(),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -230,7 +231,7 @@ class _WorkspaceMobileDetailPageState extends State<WorkspaceMobileDetailPage> {
     final ws = _workspace;
     if (ws == null) {
       return Scaffold(
-        appBar: AppBar(),
+        appBar: const FloatingAppBar(),
         body: Center(child: Text(l.projectWorkspaceNotFound)),
       );
     }
@@ -239,10 +240,7 @@ class _WorkspaceMobileDetailPageState extends State<WorkspaceMobileDetailPage> {
 
     return Scaffold(
       backgroundColor: cs.surface,
-      appBar: AppBar(
-        backgroundColor: cs.surface,
-        elevation: 0,
-        scrolledUnderElevation: 0,
+      appBar: FloatingAppBar(
         actions: [
           // Fix D: previously the only way to edit the workspace on mobile
           // was hidden under the 3-dot menu, and instructions had no entry
@@ -252,13 +250,14 @@ class _WorkspaceMobileDetailPageState extends State<WorkspaceMobileDetailPage> {
           // explicit "Edit instructions" item to the menu so all three
           // fields the desktop Settings tab edits (name, description,
           // instructions) are reachable from the AppBar.
-          IconButton(
+          FloatingHeaderButton(
             tooltip: l.projectEditProject,
-            icon: const AppIcon(Icons.edit_outlined),
+            icon: Icons.edit_outlined,
             onPressed: _editNameDescription,
           ),
-          IconButton(
-            icon: const AppIcon(Icons.more_vert),
+          FloatingHeaderButton(
+            icon: Icons.more_vert,
+            tooltip: MaterialLocalizations.of(context).moreButtonTooltip,
             onPressed: () async {
               final theme = Theme.of(context);
               final choice = await showModalBottomSheet<String>(

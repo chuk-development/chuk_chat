@@ -25,6 +25,9 @@ import 'package:chuk_chat/widgets/markdown_message.dart';
 import 'package:chuk_chat/widgets/excalidraw_svg_export.dart';
 import 'package:chuk_chat/widgets/html_artifact_view.dart';
 import 'package:chuk_chat/widgets/pane_header.dart';
+import 'package:chuk_chat/ui/components/components.dart';
+import 'package:chuk_chat/widgets/anchored_menu.dart';
+import 'package:chuk_chat/widgets/menu_tile_group.dart';
 import 'package:chuk_chat/widgets/technical_drawing_svg_export.dart';
 import 'package:chuk_chat/widgets/technical_drawing_widget.dart';
 import 'package:pdfrx/pdfrx.dart';
@@ -514,39 +517,44 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
                   ),
                 ));
 
-    final actionMenu = PopupMenuButton<String>(
-      icon: const AppIcon(Icons.more_vert, size: 20),
-      tooltip: 'More',
-      onSelected: (v) {
-        switch (v) {
-          case 'copy':
-            _copyContent();
-          case 'download':
-            if (!_busy) _showDownloadMenu();
-        }
-      },
-      itemBuilder: (_) => [
-        const PopupMenuItem(
-          value: 'copy',
-          child: Row(
-            children: [
-              AppIcon(Icons.copy_outlined, size: 18),
-              SizedBox(width: 10),
-              Text('Copy source'),
+    // The overflow chip: the header's round chip, opening the app's one
+    // menu surface against itself.
+    final actionMenu = Builder(
+      builder: (BuildContext anchor) => FloatingHeaderButton(
+        icon: Icons.more_vert,
+        tooltip: 'More',
+        onPressed: () async {
+          final String? v = await showAnchoredMenu<String>(
+            anchor,
+            color: Theme.of(anchor).colorScheme.surfaceContainerHigh,
+            items: const <PopupMenuEntry<String>>[
+              PopupMenuItem<String>(
+                value: 'copy',
+                padding: EdgeInsets.zero,
+                child: MenuActionRow(
+                  icon: Icons.copy_outlined,
+                  label: 'Copy source',
+                ),
+              ),
+              PopupMenuItem<String>(
+                value: 'download',
+                padding: EdgeInsets.zero,
+                child: MenuActionRow(
+                  icon: Icons.download_outlined,
+                  label: 'Download',
+                ),
+              ),
             ],
-          ),
-        ),
-        const PopupMenuItem(
-          value: 'download',
-          child: Row(
-            children: [
-              AppIcon(Icons.download_outlined, size: 18),
-              SizedBox(width: 10),
-              Text('Download'),
-            ],
-          ),
-        ),
-      ],
+          );
+          if (!mounted) return;
+          switch (v) {
+            case 'copy':
+              _copyContent();
+            case 'download':
+              if (!_busy) _showDownloadMenu();
+          }
+        },
+      ),
     );
 
     Widget header;
@@ -582,16 +590,16 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
                     ),
                   ),
                   if (widget.onOpenSourceChat != null)
-                    IconButton(
-                      icon: const AppIcon(Icons.forum_outlined, size: 22),
+                    FloatingHeaderButton(
+                      icon: Icons.forum_outlined,
                       onPressed: () =>
                           widget.onOpenSourceChat!(widget.artifact.chatId),
                       tooltip: 'Open source chat',
                     ),
                   actionMenu,
                   if (widget.onClose != null)
-                    IconButton(
-                      icon: const AppIcon(Icons.close, size: 22),
+                    FloatingHeaderButton(
+                      icon: Icons.close,
                       onPressed: widget.onClose,
                       tooltip: 'Close',
                     ),
@@ -645,25 +653,26 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
               ),
             ),
           if (widget.onOpenSourceChat != null)
-            IconButton(
-              icon: const AppIcon(Icons.forum_outlined, size: 18),
+            FloatingHeaderButton(
+              icon: Icons.forum_outlined,
               onPressed: () =>
                   widget.onOpenSourceChat!(widget.artifact.chatId),
               tooltip: 'Open source chat',
             ),
-          IconButton(
-            icon: const AppIcon(Icons.copy_outlined, size: 18),
+          FloatingHeaderButton(
+            icon: Icons.copy_outlined,
             onPressed: _copyContent,
             tooltip: 'Copy source',
           ),
-          IconButton(
-            icon: const AppIcon(Icons.download_outlined, size: 18),
+          FloatingHeaderButton(
+            icon: Icons.download_outlined,
             onPressed: _busy ? null : _showDownloadMenu,
+            busy: _busy,
             tooltip: 'Download',
           ),
           if (widget.onClose != null)
-            IconButton(
-              icon: const AppIcon(Icons.close, size: 18),
+            FloatingHeaderButton(
+              icon: Icons.close,
               onPressed: widget.onClose,
               tooltip: 'Close',
             ),

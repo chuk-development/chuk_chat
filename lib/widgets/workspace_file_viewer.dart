@@ -10,6 +10,7 @@ import 'package:pdfx/pdfx.dart';
 import 'package:chuk_chat/models/workspace_model.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Dialog to view and edit workspace files and their markdown summaries
@@ -234,8 +235,11 @@ class _WorkspaceFileViewerState extends State<WorkspaceFileViewer>
                     ],
                   ),
                 ),
-                IconButton(
-                  icon: AppIcon(Icons.close, color: iconFg),
+                FloatingHeaderButton(
+                  icon: Icons.close,
+                  tooltip: MaterialLocalizations.of(
+                    context,
+                  ).closeButtonTooltip,
                   onPressed: () => Navigator.of(context).pop(),
                 ),
               ],

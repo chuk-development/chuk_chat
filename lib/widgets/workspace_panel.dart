@@ -13,6 +13,7 @@ import 'package:chuk_chat/widgets/workspace/workspace_actions_mixin.dart';
 import 'package:chuk_chat/widgets/workspace_file_viewer.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Right-side panel for workspace settings (Instructions + Files)
@@ -233,8 +234,8 @@ class _WorkspacePanelState extends State<WorkspacePanel>
                   ),
                 ),
                 if (widget.onClose != null)
-                  IconButton(
-                    icon: AppIcon(Icons.close, color: iconFg, size: 20),
+                  FloatingHeaderButton(
+                    icon: Icons.close,
                     onPressed: widget.onClose,
                     tooltip: 'Close workspace panel',
                   ),

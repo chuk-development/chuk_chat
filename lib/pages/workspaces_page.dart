@@ -10,6 +10,8 @@ import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/widgets/anchored_menu.dart';
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Sort options for workspace list
@@ -229,10 +231,10 @@ class _WorkspacesPageState extends State<WorkspacesPage> {
                   });
                 },
               ),
-              IconButton(
+              FloatingHeaderButton(
                 tooltip: l.newWorkspace,
                 onPressed: _createProject,
-                icon: AppIcon(Icons.add, color: iconFg),
+                icon: Icons.add,
               ),
             ],
           ),
@@ -290,9 +292,12 @@ class _WorkspacesPageState extends State<WorkspacesPage> {
           backgroundColor: theme.scaffoldBackgroundColor,
           elevation: 0,
           scrolledUnderElevation: 0,
-          leading: IconButton(
-            icon: AppIcon(Icons.arrow_back, color: iconFg),
-            onPressed: () => Navigator.pop(context),
+          leading: Center(
+            child: FloatingHeaderButton(
+              icon: Icons.arrow_back_rounded,
+              tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+              onPressed: () => Navigator.pop(context),
+            ),
           ),
         ),
         body: body,
@@ -439,26 +444,37 @@ class _SortButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final iconFg = Theme.of(context).resolvedIconColor;
-
-    return SizedBox(
-      height: 42,
-      width: 42,
-      child: PopupMenuButton<ProjectSortMode>(
-        icon: AppIcon(Icons.sort, color: iconFg, size: 20),
+    // The header's round chip, opening the app's one menu surface.
+    return Builder(
+      builder: (BuildContext anchor) => FloatingHeaderButton(
+        icon: Icons.sort,
         tooltip: 'Sort projects',
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        onSelected: onChanged,
-        itemBuilder: (context) => [
-          _sortItem(
-            ProjectSortMode.recentlyUpdated,
-            'Recently Updated',
-            Icons.schedule,
-          ),
-          _sortItem(ProjectSortMode.name, 'Name', Icons.sort_by_alpha),
-          _sortItem(ProjectSortMode.mostFiles, 'Most Files', Icons.folder),
-          _sortItem(ProjectSortMode.mostChats, 'Most Chats', Icons.chat_bubble),
-        ],
+        onPressed: () async {
+          final ProjectSortMode? picked =
+              await showAnchoredMenu<ProjectSortMode>(
+                anchor,
+                color: Theme.of(anchor).colorScheme.surfaceContainerHigh,
+                items: <PopupMenuEntry<ProjectSortMode>>[
+                  _sortItem(
+                    ProjectSortMode.recentlyUpdated,
+                    'Recently Updated',
+                    Icons.schedule,
+                  ),
+                  _sortItem(ProjectSortMode.name, 'Name', Icons.sort_by_alpha),
+                  _sortItem(
+                    ProjectSortMode.mostFiles,
+                    'Most Files',
+                    Icons.folder,
+                  ),
+                  _sortItem(
+                    ProjectSortMode.mostChats,
+                    'Most Chats',
+                    Icons.chat_bubble,
+                  ),
+                ],
+              );
+          if (picked != null) onChanged(picked);
+        },
       ),
     );
   }

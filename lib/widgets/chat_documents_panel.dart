@@ -621,16 +621,16 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
               ],
             ),
           ),
-          ExpressiveIconButton(
+          FloatingHeaderButton(
             hugeIcon: HugeIcons.refresh,
             tooltip: 'Refresh documents',
-            onTap: _request,
+            onPressed: _request,
           ),
-          const SizedBox(width: 8),
-          ExpressiveIconButton(
+          const SizedBox(width: 2),
+          FloatingHeaderButton(
             hugeIcon: HugeIcons.cancel01,
             tooltip: 'Close',
-            onTap: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(context),
           ),
         ],
       ),
@@ -754,10 +754,10 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
           padding: const EdgeInsets.fromLTRB(8, 6, 16, 6),
           child: Row(
             children: [
-              ExpressiveIconButton(
-                hugeIcon: HugeIcons.arrowLeft02,
+              FloatingHeaderButton(
+                icon: Icons.arrow_back_rounded,
                 tooltip: 'Back to the list',
-                onTap: _deselect,
+                onPressed: _deselect,
               ),
               const SizedBox(width: 10),
               Expanded(

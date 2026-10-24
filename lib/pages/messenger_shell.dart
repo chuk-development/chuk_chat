@@ -144,7 +144,6 @@ import 'package:chuk_chat/widgets/agents_desktop/quick_switcher.dart';
 import 'package:chuk_chat/widgets/browser_view_page.dart';
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/pane_header.dart';
-import 'package:chuk_chat/widgets/icons/icon_map.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/agents_status_panel.dart';
 import 'package:chuk_chat/widgets/agents_thread_header.dart';

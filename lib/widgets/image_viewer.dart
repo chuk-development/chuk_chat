@@ -5,9 +5,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/ui/expressive/huge_icon.dart';
-import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
+import 'package:chuk_chat/ui/components/components.dart';
 import 'package:chuk_chat/ui/expressive/icon_map.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -203,22 +202,20 @@ class _ImageViewerState extends State<ImageViewer> {
         titleWidget: _hasMultipleImages
             ? Text(
                 'Image ${_currentIndex + 1} of ${widget.allImages!.length}',
-                style: TextStyle(color: iconColor),
               )
-            : Text('Image', style: TextStyle(color: iconColor)),
+            : const Text('Image'),
         actions: <Widget>[
           if (_currentModel != null)
             Center(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Container(
+                // The model name rides in the same opaque chrome pill as the
+                // title: a translucent white patch vanished on a light image.
+                child: FloatingChromeSurface(
+                  radius: 18,
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(100),
+                    horizontal: 12,
+                    vertical: 8,
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -242,15 +239,15 @@ class _ImageViewerState extends State<ImageViewer> {
                 ),
               ),
             ),
-          ExpressiveIconButton(
+          FloatingHeaderButton(
             hugeIcon: HugeIcons.copy01,
-            onTap: _copyCurrentImage,
+            onPressed: _copyCurrentImage,
             tooltip: 'Copy image',
           ),
           if (!kIsWeb)
-            ExpressiveIconButton(
+            FloatingHeaderButton(
               hugeIcon: HugeIcons.download01,
-              onTap: _downloadCurrentImage,
+              onPressed: _downloadCurrentImage,
               tooltip: 'Download image',
             ),
         ],
@@ -284,19 +281,9 @@ class _ImageViewerState extends State<ImageViewer> {
                     top: 0,
                     bottom: 0,
                     child: Center(
-                      child: IconButton(
-                        icon: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.5),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const AppIcon(
-                            Icons.chevron_left,
-                            color: Colors.white,
-                            size: 32,
-                          ),
-                        ),
+                      child: FloatingHeaderButton(
+                        icon: Icons.chevron_left,
+                        tooltip: 'Previous image',
                         onPressed: () {
                           _pageController.previousPage(
                             duration: const Duration(milliseconds: 300),
@@ -312,19 +299,9 @@ class _ImageViewerState extends State<ImageViewer> {
                     top: 0,
                     bottom: 0,
                     child: Center(
-                      child: IconButton(
-                        icon: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.5),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const AppIcon(
-                            Icons.chevron_right,
-                            color: Colors.white,
-                            size: 32,
-                          ),
-                        ),
+                      child: FloatingHeaderButton(
+                        icon: Icons.chevron_right,
+                        tooltip: 'Next image',
                         onPressed: () {
                           _pageController.nextPage(
                             duration: const Duration(milliseconds: 300),

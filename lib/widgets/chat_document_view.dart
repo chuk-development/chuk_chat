@@ -15,7 +15,7 @@ import 'package:chuk_chat/widgets/agent_markdown.dart';
 import 'package:chuk_chat/widgets/chat_document_inline.dart';
 import 'package:chuk_chat/widgets/charts/chuk_chart.dart';
 import 'package:chuk_chat/ui/expressive/huge_icon.dart';
-import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/ui/components/components.dart';
 import 'package:chuk_chat/ui/expressive/top_veil.dart';
 import 'package:chuk_chat/widgets/chuk_table.dart';
 
@@ -153,10 +153,10 @@ class ChatDocumentView extends StatefulWidget {
                           ),
                         ),
                       ),
-                      IconButton(
+                      FloatingHeaderButton(
                         tooltip: 'Close',
                         onPressed: () => Navigator.pop(context),
-                        icon: const AppIcon(Icons.close),
+                        icon: Icons.close,
                       ),
                     ],
                   ),
@@ -559,7 +559,6 @@ class _DocumentScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-    final ColorScheme scheme = theme.colorScheme;
     // The bar is as tall as its buttons plus the padding around them; the
     // document starts under it and scrolls through the veil.
     const double barHeight = 48 + 12;
@@ -584,37 +583,50 @@ class _DocumentScreen extends StatelessWidget {
             right: 0,
             child: TopVeil(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+                // The header chrome of every page: round opaque chips, the
+                // title in the floating pill.
+                padding: const EdgeInsets.fromLTRB(7, 6, 7, 6),
                 child: Row(
                   children: <Widget>[
-                    ExpressiveIconButton(
+                    FloatingHeaderButton(
                       hugeIcon: HugeIcons.cancel01,
                       tooltip: 'Close',
-                      color: scheme.surfaceContainerHighest,
-                      onTap: () => Navigator.pop(context),
+                      onPressed: () => Navigator.pop(context),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 5),
                     Expanded(
-                      child: _MiddleEllipsis(
-                        text: '${document['title']}',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: FloatingChromeSurface(
+                          radius: 18,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 11,
+                          ),
+                          child: _MiddleEllipsis(
+                            text: '${document['title']}',
+                            style: TextStyle(
+                              color: theme.resolvedIconColor.withValues(
+                                alpha: 0.92,
+                              ),
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    ExpressiveIconButton(
+                    const SizedBox(width: 5),
+                    FloatingHeaderButton(
                       hugeIcon: HugeIcons.share01,
                       tooltip: 'Share',
-                      color: scheme.surfaceContainerHighest,
-                      onTap: () => ChatDocumentView.share(document),
+                      onPressed: () => ChatDocumentView.share(document),
                     ),
-                    const SizedBox(width: 8),
-                    ExpressiveIconButton(
+                    const SizedBox(width: 2),
+                    FloatingHeaderButton(
                       hugeIcon: HugeIcons.download01,
                       tooltip: 'Save',
-                      color: scheme.surfaceContainerHighest,
-                      onTap: () => ChatDocumentView.save(document),
+                      onPressed: () => ChatDocumentView.save(document),
                     ),
                   ],
                 ),
