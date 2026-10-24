@@ -15,6 +15,7 @@ const companions = <String, List<String>>{
   'get_route': ['geocode'],
   'geocode': ['get_route'],
   'weather': ['geocode', 'web_search'],
+  'road_closures': ['web_search', 'web_crawl'],
   'search_chats': ['notes'],
   'notes': ['search_chats'],
 };

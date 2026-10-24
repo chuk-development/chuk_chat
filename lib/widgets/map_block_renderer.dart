@@ -15,8 +15,11 @@ import 'package:chuk_chat/pages/fullscreen_map_page.dart';
 import 'package:chuk_chat/utils/input_validator.dart';
 import 'package:chuk_chat/widgets/route_map_widget.dart';
 import 'package:chuk_chat/utils/json_helpers.dart';
+import 'package:chuk_chat/utils/map_features.dart';
 import 'package:chuk_chat/utils/map_geometry.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
+import 'package:chuk_chat/widgets/map_features_block.dart';
+import 'package:chuk_chat/widgets/map_tiles.dart';
 
 /// Regex to find <map> blocks in message content.
 final RegExp mapBlockRegex = RegExp(r'<map>([\s\S]*?)</map>', multiLine: true);
@@ -51,6 +54,8 @@ class MapBlockWidget extends StatelessWidget {
         );
       }
       final data = parsed;
+      // Lines, areas and named roads (closures, roadworks, detours).
+      if (isFeaturesMap(data)) return MapFeaturesBlock(data: data);
       final type = data['type'] as String? ?? 'markers';
       return switch (type) {
         'markers' => _MarkersMapBlock(data: data),
@@ -83,22 +88,6 @@ class MapBlockWidget extends StatelessWidget {
 // ──────────────────────────────────────────────────────────
 // Shared helpers
 // ──────────────────────────────────────────────────────────
-
-// Esri World Gray Canvas basemaps — keyless, clean light/dark grey styles that
-// match the app's minimal look. Note the {z}/{y}/{x} order (y before x) and the
-// single host (no {s} subdomain). Replaces CARTO, whose anonymous tiles started
-// baking a "get an API key" watermark into the image itself.
-const String _kLightTilesUrl =
-    'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}';
-const String _kDarkTilesUrl =
-    'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}';
-const List<String> _kTileSubdomains = <String>[];
-
-String _tileUrlForBrightness(BuildContext context) {
-  return Theme.of(context).brightness == Brightness.dark
-      ? _kDarkTilesUrl
-      : _kLightTilesUrl;
-}
 
 double _toDouble(dynamic v) {
   if (v is num) {
@@ -247,13 +236,18 @@ MapOptions _buildMapOptions({
 }) {
   if (fitPoints != null && hasPointSpread(fitPoints)) {
     return MapOptions(
+      maxZoom: kMapMaxZoom,
       initialCameraFit: CameraFit.bounds(
         bounds: LatLngBounds.fromPoints(fitPoints),
         padding: const EdgeInsets.all(44),
       ),
     );
   }
-  return MapOptions(initialCenter: center, initialZoom: zoom);
+  return MapOptions(
+    maxZoom: kMapMaxZoom,
+    initialCenter: center,
+    initialZoom: zoom,
+  );
 }
 
 void _openFullscreenMap(
@@ -395,10 +389,7 @@ class _MarkersMapBlock extends StatelessWidget {
     final zoom = _calculateZoom(lats, lons);
 
     final mapLayers = <Widget>[
-      TileLayer(
-        urlTemplate: _tileUrlForBrightness(context),
-        subdomains: _kTileSubdomains,
-      ),
+      buildBaseTileLayer(),
       MarkerLayer(
         markers: markers.map((m) {
           final label = m['label'] as String? ?? '';
@@ -503,10 +494,7 @@ class _PlacesMapBlock extends StatelessWidget {
     final zoom = _calculateZoom(lats, lons);
 
     final mapLayers = <Widget>[
-      TileLayer(
-        urlTemplate: _tileUrlForBrightness(context),
-        subdomains: _kTileSubdomains,
-      ),
+      buildBaseTileLayer(),
       MarkerLayer(markers: _buildLabeledPlaceMarkers(places)),
     ];
 

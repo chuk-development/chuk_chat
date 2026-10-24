@@ -50,6 +50,7 @@ class ToolEnforcer {
     'search_restaurants',
     'geocode',
     'get_route',
+    'road_closures',
     'weather',
     // Artifact tools are core to chuk_chat's UX and their full schemas
     // live in the system prompt already — forcing the model to

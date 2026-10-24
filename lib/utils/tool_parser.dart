@@ -134,6 +134,7 @@ const Set<String> _knownDirectXmlToolNames = <String>{
   'search_places',
   'search_restaurants',
   'get_route',
+  'road_closures',
   'search_chats',
   'google_calendar',
   'random_number',

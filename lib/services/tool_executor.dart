@@ -30,6 +30,8 @@ import 'package:chuk_chat/tool_handlers/platform_tools.dart' as platform_tools;
 import 'package:chuk_chat/tool_handlers/chat_search_tools.dart'
     as chat_search_tools;
 import 'package:chuk_chat/tool_handlers/typst_tools.dart' as typst_tools;
+import 'package:chuk_chat/tool_handlers/road_closures_tools.dart'
+    as road_closures_tools;
 import 'package:chuk_chat/tool_handlers/artifact_tools.dart' as artifact_tools;
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 
@@ -99,6 +101,7 @@ class ToolExecutor {
     'geocode',
     'get_route',
     'bash',
+    'road_closures',
     'github',
     'slack',
     'google_calendar',
@@ -735,6 +738,8 @@ class ToolExecutor {
       case 'get_route':
         return _wrapOutput(await map_tools.executeGetRoute(args));
 
+      case 'road_closures':
+        return _wrapOutput(await road_closures_tools.executeRoadClosures(args));
       // -- Weather --
       case 'weather':
         return _wrapOutput(

@@ -216,6 +216,7 @@ class ToolPromptBuilder {
           'search_restaurants',
           'geocode',
           'get_route',
+          'road_closures',
           // Integrations
           'device',
           'calendar',
@@ -1366,6 +1367,14 @@ Hetzner | Card declined | 102 € | failed | 16.10. | hetzner.com | Pay https://
         'BEFORE emitting the tag. Never write one from memory — a malformed '
         'block renders as nothing.',
       );
+    if (_migratedToSkill('map-features')) {
+      buffer.writeln(
+        'Closures, roadworks, detours, a street or an area: a <map> with a '
+        '"features" list draws real lines and polygons from road names. Load '
+        'the `map-features` skill first; for Sperrungen/Baustellen call '
+        'road_closures.',
+      );
+    }
     }
     buffer.writeln(
       '${ruleNumber++}. Write your FULL text answer FIRST, then $tagLabel at the very END.',

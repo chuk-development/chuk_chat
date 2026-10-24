@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:chuk_chat/utils/map_geometry.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
+import 'package:chuk_chat/widgets/map_tiles.dart';
 
 /// Displays a route map with OSRM polyline, start/end markers,
 /// summary bar, and optional turn-by-turn steps.
@@ -119,16 +120,8 @@ class _RouteMapWidgetState extends State<RouteMapWidget> {
           LatLng(widget.toLat, widget.toLon),
         ];
 
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final mapLayers = <Widget>[
-      // Esri World Gray Canvas — keyless, clean light/dark grey. Note the
-      // {z}/{y}/{x} order and single host (no {s}). See map_block_renderer.dart.
-      TileLayer(
-        urlTemplate: isDark
-            ? 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'
-            : 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
-        subdomains: const <String>[],
-      ),
+      buildBaseTileLayer(),
       PolylineLayer(
         polylines: [
           Polyline(
@@ -170,12 +163,14 @@ class _RouteMapWidgetState extends State<RouteMapWidget> {
     ];
     final mapOptions = hasPointSpread(fitPoints)
         ? MapOptions(
+            maxZoom: kMapMaxZoom,
             initialCameraFit: CameraFit.bounds(
               bounds: LatLngBounds.fromPoints(fitPoints),
               padding: const EdgeInsets.all(44),
             ),
           )
         : MapOptions(
+            maxZoom: kMapMaxZoom,
             initialCenter: LatLng(widget.centerLat, widget.centerLon),
             initialZoom: widget.zoom,
           );
