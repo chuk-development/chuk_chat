@@ -158,6 +158,45 @@ def default_image(cli: DockerCli | None = None) -> str:
     return BASE_IMAGE
 
 
+def host_timezone() -> str | None:
+    """The host's IANA time zone (``Europe/Berlin``), or None if unknown.
+
+    The box browser must use the same time zone as the user's IP. A browser
+    on UTC behind a German IP is a bot signal (see ``docker/browser-mcp.sh``).
+    """
+    value = os.environ.get("TZ", "").lstrip(":")
+    if not value:
+        try:
+            with open("/etc/timezone", encoding="utf-8") as handle:
+                value = handle.read().strip()
+        except OSError:
+            value = ""
+    if not value:
+        try:
+            target = os.readlink("/etc/localtime")
+        except OSError:
+            target = ""
+        if "zoneinfo/" in target:
+            value = target.split("zoneinfo/", 1)[1]
+    if not value or value.startswith("/") or ".." in value:
+        return None
+    if not all(c.isalnum() or c in "/_+-" for c in value):
+        return None
+    return value
+
+
+def host_browser_locale() -> str:
+    """The host's language as a browser locale (``en_US.UTF-8`` -> ``en-US``)."""
+    for name in ("LC_ALL", "LC_MESSAGES", "LANG"):
+        value = os.environ.get(name, "")
+        if value:
+            break
+    tag = value.split(".", 1)[0].split("@", 1)[0].replace("_", "-")
+    if tag in ("", "C", "POSIX") or not all(c.isalnum() or c == "-" for c in tag):
+        return "en-US"
+    return tag
+
+
 def _slug(text: str, limit: int = 24) -> str:
     """Container-name-safe fragment of ``text``."""
     kept = [c if (c.isalnum() or c in "-_.") else "-" for c in text]
@@ -426,6 +465,12 @@ class DockerEnvironment(BaseEnvironment):
                 # The base image's entrypoint aligns its `agents` user with these,
                 # so files the agent writes land on the host owned by the user.
                 argv += ["-e", f"AGENTS_UID={uid}", "-e", f"AGENTS_GID={gid}"]
+        # The host's time zone and language, for the box browser (it must
+        # agree with the user's IP) and for `date` in a command.
+        timezone = host_timezone()
+        if timezone:
+            argv += ["-e", f"TZ={timezone}"]
+        argv += ["-e", f"AGENTS_BROWSER_LOCALE={host_browser_locale()}"]
         # No sudo -> no-new-privileges; no network -> ``--network none``. The
         # default policy adds nothing, so a default box is created as before.
         argv += list(policy.docker_run_args())

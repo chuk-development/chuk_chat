@@ -100,6 +100,27 @@ esac
 WINDOW_W=$((WIDTH + 1))
 WINDOW_H=$((HEIGHT + 1))
 
+# Look like a normal Chrome, not like a test browser. Sites such as PayPal
+# answer an automated browser with endless captchas, and they do not need the
+# IP for that: the browser says it itself. Measured in this image with
+# Playwright's defaults: navigator.webdriver = true, the time zone UTC on a
+# German IP. The fixes:
+# - Playwright passes --enable-automation by default. That flag sets
+#   navigator.webdriver and shows the "controlled by automated test software"
+#   bar. ignoreDefaultArgs drops it. --disable-blink-features=
+#   AutomationControlled keeps navigator.webdriver false also when the
+#   browser is started some other way.
+# - The time zone and the language come from the host (TZ and
+#   AGENTS_BROWSER_LOCALE, set by the sandbox when it creates the container),
+#   so they agree with the user's IP. Chromium ships its own time zone data,
+#   so TZ works without tzdata in the image.
+# - Google Chrome instead of Chrome for Testing: see Dockerfile.browser.
+# Measure again with fingerprint-probe.py (next to this file) after a change.
+LOCALE="${AGENTS_BROWSER_LOCALE:-en-US}"
+case "${LOCALE}" in
+    *[!A-Za-z0-9-]* | "") LOCALE=en-US ;;
+esac
+
 # Playwright MCP has no CLI flag for extra Chromium arguments; its config file
 # carries them (browser.launchOptions.args). One file per uid, rewritten on
 # every launch, so nothing piles up and no other uid's file blocks us.
@@ -108,9 +129,15 @@ cat >"${CONFIG}.tmp" <<JSON
 {
   "browser": {
     "launchOptions": {
-      "args": ["--window-position=0,0", "--window-size=${WINDOW_W},${WINDOW_H}"]
+      "args": [
+        "--window-position=0,0",
+        "--window-size=${WINDOW_W},${WINDOW_H}",
+        "--disable-blink-features=AutomationControlled",
+        "--lang=${LOCALE}"
+      ],
+      "ignoreDefaultArgs": ["--enable-automation"]
     },
-    "contextOptions": { "viewport": null }
+    "contextOptions": { "viewport": null, "locale": "${LOCALE}" }
   }
 }
 JSON

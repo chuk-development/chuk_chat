@@ -154,11 +154,32 @@ def test_the_browser_window_covers_the_display(tmp_path):
     screen-sized X11 window by 1 px), and the page follows the window."""
     argv, config = _run_launcher(tmp_path, "1280x800")
     browser = config["browser"]
-    assert browser["launchOptions"]["args"] == ["--window-position=0,0", "--window-size=1281,801"]
-    assert browser["contextOptions"] == {"viewport": None}
+    assert browser["launchOptions"]["args"][:2] == ["--window-position=0,0", "--window-size=1281,801"]
+    assert browser["contextOptions"]["viewport"] is None
     # A fixed viewport makes Playwright resize the window to viewport + chrome,
     # taller than the screen; none is passed unless somebody asks for one.
     assert "--viewport-size" not in argv
+
+
+def test_the_browser_does_not_say_it_is_automated(tmp_path):
+    """PayPal and similar sites answer an automated browser with endless
+    captchas. Playwright's --enable-automation sets navigator.webdriver; the
+    launcher drops it and turns the Blink automation flag off."""
+    _, config = _run_launcher(tmp_path, "1280x800")
+    launch = config["browser"]["launchOptions"]
+    assert launch["ignoreDefaultArgs"] == ["--enable-automation"]
+    assert "--disable-blink-features=AutomationControlled" in launch["args"]
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"), [(None, "en-US"), ("de-DE", "de-DE"), ("x;rm -rf", "en-US")]
+)
+def test_the_browser_language_comes_from_the_host(tmp_path, value, expected):
+    extra = {} if value is None else {"AGENTS_BROWSER_LOCALE": value}
+    _, config = _run_launcher(tmp_path, "1280x800", extra)
+    browser = config["browser"]
+    assert f"--lang={expected}" in browser["launchOptions"]["args"]
+    assert browser["contextOptions"]["locale"] == expected
 
 
 def test_the_window_follows_a_display_somebody_else_started(tmp_path):

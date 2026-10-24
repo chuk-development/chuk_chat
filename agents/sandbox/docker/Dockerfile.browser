@@ -57,6 +57,13 @@ USER root
 # libraries Chromium links against (fonts, GTK, libnss, libdrm, ...). Without it
 # the binary is present and exits immediately with a missing-library error.
 #
+# On amd64 the symlink points at Google Chrome stable, not at Chrome for
+# Testing. Chrome for Testing names itself "Chromium" in
+# navigator.userAgentData.brands, a real Chrome says "Google Chrome", and bot
+# checks read that list. Google ships no Linux arm64 Chrome, so arm64 keeps
+# Chrome for Testing. Chrome stable is not pinned: Google keeps no old .deb
+# files, and a current version is what a normal user has.
+#
 # `/opt/chromium-path` records which build the symlink points at, so
 # `docker run <image> cat /opt/chromium-path` answers "which Chromium is in
 # here" without repeating the glob. `--version` at the end is the build-time
@@ -68,6 +75,12 @@ RUN set -eux; \
     rm -rf /var/lib/apt/lists/* /root/.cache/uv; \
     chrome="$(find "${PLAYWRIGHT_BROWSERS_PATH}" -type f -name chrome -path '*chrome-linux*' | sort | tail -n 1)"; \
     test -n "${chrome}"; \
+    if [ "$(dpkg --print-architecture)" = amd64 ]; then \
+        uvx --from "playwright==${PLAYWRIGHT_VERSION}" playwright install chrome --with-deps; \
+        rm -rf /var/lib/apt/lists/* /root/.cache/uv; \
+        chrome=/opt/google/chrome/chrome; \
+        test -x "${chrome}"; \
+    fi; \
     ln -sf "${chrome}" /usr/local/bin/chromium; \
     chmod -R a+rX "${PLAYWRIGHT_BROWSERS_PATH}"; \
     printf '%s\n' "${chrome}" > /opt/chromium-path; \
