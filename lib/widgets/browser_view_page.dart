@@ -6,8 +6,7 @@ import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
-import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
-import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/ui/components/components.dart';
 import 'package:chuk_chat/ui/expressive/huge_icon.dart';
 import 'package:flutter_rfb/flutter_rfb.dart';
 
@@ -432,11 +431,10 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
       final double topInset = MediaQuery.paddingOf(context).top;
       const double gap = 8;
       final double controlTop = topInset + gap;
-      final double controlSize = MobileLayout.controlHeight;
-      // A chip that has to stay readable over a live web page and over the
-      // empty ground, in both themes (bead chuk_chat-d41e).
-      final Color chip = VncOverlayColors.chip(cs);
-      final Color onChip = VncOverlayColors.on(cs);
+      // The round header chip's press area (`FloatingHeaderButton`): opaque
+      // in the chrome fill, so it reads over a live web page and over the
+      // empty ground in both themes (bead chuk_chat-d41e).
+      const double controlSize = kFloatingAppBarTarget;
       return Scaffold(
         // The darkest ground the scheme has, not a hard black: the stream sits
         // on it and the scheme still owns the colour.
@@ -465,30 +463,24 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
               right: 12,
               child: Row(
                 children: <Widget>[
-                  ExpressiveIconButton(
+                  FloatingHeaderButton(
                     key: const Key('browser_view_close'),
                     hugeIcon: HugeIcons.cancel01,
-                    size: controlSize,
-                    color: chip,
-                    onColor: onChip,
                     tooltip: MaterialLocalizations.of(
                       context,
                     ).closeButtonTooltip,
                     semanticsId: 'browser_view_close',
-                    onTap: () => Navigator.of(context).maybePop(),
+                    onPressed: () => Navigator.of(context).maybePop(),
                   ),
                   const Spacer(),
-                  ExpressiveIconButton(
+                  FloatingHeaderButton(
                     key: const Key('browser_view_exit_fullscreen'),
                     // The set has no full-screen glyph, so this one stays
                     // Material.
                     icon: Icons.fullscreen_exit,
-                    size: controlSize,
-                    color: chip,
-                    onColor: onChip,
                     tooltip: 'Exit full screen',
                     semanticsId: 'browser_view_exit_fullscreen',
-                    onTap: _toggleFullscreen,
+                    onPressed: _toggleFullscreen,
                   ),
                 ],
               ),
@@ -501,12 +493,12 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
     return ExpressiveScreen(
       title: 'Agent browser',
       actions: <Widget>[
-        ExpressiveIconButton(
+        FloatingHeaderButton(
           key: const Key('browser_view_enter_fullscreen'),
           // The set has no full-screen glyph, so this one stays Material.
           icon: Icons.fullscreen,
           tooltip: 'Full screen',
-          onTap: _toggleFullscreen,
+          onPressed: _toggleFullscreen,
         ),
       ],
       builder: (BuildContext context) => Stack(

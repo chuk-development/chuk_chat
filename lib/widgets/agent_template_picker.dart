@@ -27,6 +27,7 @@ import 'package:chuk_chat/services/agents/agent_templates.dart';
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
 import 'package:chuk_chat/ui/expressive/connected_group.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/agents_desktop/desktop_dialog.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
@@ -309,12 +310,11 @@ class _AgentTemplatePickerState extends State<AgentTemplatePicker> {
       children: <Widget>[
         Row(
           children: <Widget>[
-            ExpressiveIconButton(
+            FloatingHeaderButton(
               key: const ValueKey<String>('tpl-back'),
-              hugeIcon: HugeIcons.arrowLeft02,
-              size: 40,
+              icon: Icons.arrow_back_rounded,
               tooltip: l.tplBack,
-              onTap: _back,
+              onPressed: _back,
             ),
             const SizedBox(width: 12),
             AgentTemplateFace(template: template, size: 44),

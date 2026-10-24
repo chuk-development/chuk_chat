@@ -206,7 +206,6 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
 
   @override
   Widget build(BuildContext context) {
-    final iconFg = Theme.of(context).resolvedIconColor;
 
     if (_isLoading) {
       return Scaffold(
@@ -255,8 +254,9 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
             ),
           ],
         ),
-        leading: IconButton(
-          icon: AppIcon(Icons.arrow_back, color: iconFg),
+        leading: FloatingHeaderButton(
+          icon: Icons.arrow_back_rounded,
+          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
           onPressed: () => Navigator.pop(context),
         ),
         bottom: TabBar(

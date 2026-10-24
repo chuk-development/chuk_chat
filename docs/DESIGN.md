@@ -72,7 +72,7 @@ install page). The rules below apply to it. Never a bare
 ```dart
 ExpressiveScreen(
   title: 'Connectors',
-  actions: <Widget>[ExpressiveIconButton(hugeIcon: HugeIcons.plusSign, onTap: …)],
+  actions: <Widget>[FloatingHeaderButton(hugeIcon: HugeIcons.plusSign, onPressed: …)],
   builder: (BuildContext context) => ListView(
     padding: EdgeInsets.fromLTRB(
       16,
@@ -88,15 +88,42 @@ ExpressiveScreen(
 - **`builder`, not `child`.** The frame grows the media query by the height of
   its bars; a page built outside that builder would read the window's inset and
   its first row would sit under the title.
-- **Back**: left, always the same square `ExpressiveIconButton` with
-  `HugeIcons.arrowLeft02`. There is no second back button in a body, and no page
-  draws its own arrow. `showBack: false` only where there is nowhere to go back
-  to (a tab inside the home).
-- **Title**: left aligned, `headlineSmall`, weight 800, letter spacing −0.5. One
-  line, ellipsised in the MIDDLE when it is a file name, so the extension
-  survives (`_MiddleEllipsis` in `chat_document_view.dart`).
-- **Actions**: right, `ExpressiveIconButton`s, 8 px apart, same size as back.
+- **Back**: left, the settings header's round back chip
+  (`FloatingHeaderButton`, `Icons.arrow_back_rounded`). There is no second back
+  button in a body, and no page draws its own arrow. `showBack: false` only
+  where there is nowhere to go back to (a tab inside the home).
+- **Title**: left aligned, in the floating title pill, 15 px, weight 800 — the
+  same pill as `FloatingAppBar` and the chat. One line, ellipsised in the
+  MIDDLE when it is a file name, so the extension survives (`_MiddleEllipsis`
+  in `chat_document_view.dart`).
+- **Actions**: right, `FloatingHeaderButton`s, same chip as back.
 - Content scrolls UP BEHIND the bar. That is the whole point of the veil.
+
+### 2.1 The component library: `lib/ui/components/components.dart`
+
+One import for the chrome. Every header, close and overlay target in the app
+comes from here, so a button looks the same on every page. The settings
+header is the reference.
+
+| Case | Widget |
+|---|---|
+| Back, close, any header action; any target over an image, map, video, remote screen or canvas; the close of a sheet, dialog or side pane | `FloatingHeaderButton` — 42 px opaque circle in `FloatingChromeSurface.fillOf`, 22 px glyph centred, 48 px press |
+| The one target on a bar that is on or ready (live call, save in an edit) | `FloatingHeaderButton(accent: true)` |
+| A feature that is not ready yet but explains itself on tap | `FloatingHeaderButton(parked: true)` |
+| Work in progress on the target itself (a download running) | `FloatingHeaderButton(busy: true)` — spinner in place of the glyph, tap off |
+| An overflow menu in a header | `FloatingHeaderButton(icon: Icons.more_vert)` + `showAnchoredMenu`, never a `PopupMenuButton` |
+| Settings-style page header | `FloatingAppBar` (title optional: no title, no pill) |
+| Full-screen viewer frame | `ExpressiveScreen` (same chips, same pill) |
+| A label floating over media (model name over an image) | `FloatingChromeSurface` pill |
+| The accent "new chat" button | `AccentIconButton` |
+| A target inside page content (a card or row action) | `ExpressiveIconButton` (squircle) — not in headers or overlays |
+
+`ChromeChip` (Agents chat header) and the inbox bar chip are thin wrappers
+over `FloatingHeaderButton`; do not add a fourth copy. **Never transparent**:
+no bare `IconButton` glyph and no half-alpha fill in a header or over media —
+a bare X over a light map or a photo disappears. In a bar, take the chip's
+3 px slop out of the margins (7 px edge instead of 10, 5 px gap instead of 8)
+so the painted chips keep the settings header's spacing.
 
 ## 3. The veil, top and bottom
 
@@ -169,7 +196,8 @@ presentation, zip, database, image, video, book.
 
 | Element | Shape |
 |---|---|
-| Icon action (back, close, share, save, screen, files) | `ExpressiveIconButton`, 48 px, corner ≈ size × 0.34 |
+| Header / overlay icon action (back, close, share, save, screen, files) | `FloatingHeaderButton`, 42 px circle, 48 px press (§2.1) |
+| Icon action inside page content | `ExpressiveIconButton`, 48 px, corner ≈ size × 0.34 |
 | Labelled action | `ExpressiveButton`, same corner family |
 | Navigation pill / filter pill | `PillGeometry` — outer 30, segment capsule 22, inset 8, segment height 44, whole pill 60. Both controls read those numbers from `lib/ui/expressive/pill_geometry.dart`; the outer radius is half the outer height, so the curves are concentric and the end segments follow the shell. A segment takes 4 of the ring above and below as tap slop, so what a finger hits is 52 even though the capsule paints 44. A pill segment SELECTS ON POINTER DOWN (`MorphTap(instant: true)`) — a recognised tap is lost to the list the pill sits over — so a press springs and fills at once and never draws an outline for a selection that has not happened. |
 | Card, sheet, attachment row, panel | 14–18 |
@@ -328,8 +356,9 @@ Never a picture the agent drew, never a second bar widget.
 
 1. Does the page use the frame of §2 (`FloatingAppBar` for a settings-style
    page, `ExpressiveScreen` with its `builder` for a full-screen viewer)?
-2. Is every icon action an `ExpressiveIconButton`, and every icon from the app's
-   set (or in the map)?
+2. Is every header, close and overlay target a `FloatingHeaderButton` (§2.1),
+   every in-content icon action an `ExpressiveIconButton`, and every icon from
+   the app's set (or in the map)?
 3. Any coloured shadow, glow or gradient on a control? Remove it.
 4. Do the corners match the table in §6?
 5. At 360 px and 1.3 text scale: does anything overflow, or ellipsise something

@@ -23,7 +23,7 @@ import 'package:flutter/material.dart';
 // AppIcon ambiguous; constants.dart went with the old bottom-sheet body.
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
-import 'package:chuk_chat/widgets/icons/icon_map.dart';
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
 
 /// Opens the message being written on a screen of its own.
 ///
@@ -115,9 +115,9 @@ class _FullscreenComposerPageState extends State<_FullscreenComposerPage> {
         if (!didPop) _close();
       },
       child: Scaffold(
-        appBar: AppBar(
-          leading: IconButton(
-            icon: const AppIcon(Icons.close_fullscreen_rounded),
+        appBar: FloatingAppBar(
+          leading: FloatingHeaderButton(
+            icon: Icons.close_fullscreen_rounded,
             tooltip: widget.closeTooltip ?? 'Back to the chat',
             onPressed: _close,
           ),

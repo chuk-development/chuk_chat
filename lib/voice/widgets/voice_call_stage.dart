@@ -10,6 +10,7 @@ import 'package:chuk_chat/utils/favicon.dart';
 import 'package:chuk_chat/voice/voice_call_models.dart';
 import 'package:chuk_chat/voice/voice_image_cards.dart';
 import 'package:chuk_chat/voice/widgets/voice_agent_card.dart';
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
 
 /// Card kinds that never lift the bars: a search stays a line under them.
 const Set<String> kVoiceSearchCardKinds = <String>{'search', 'news'};
@@ -146,20 +147,10 @@ class VoiceCameraStage extends StatelessWidget {
             bottom: 10,
             child: Semantics(
               identifier: 'voice-switch-camera',
-              child: IconButton(
+              child: FloatingHeaderButton(
                 tooltip: 'Switch camera',
                 onPressed: onFlip,
-                style: IconButton.styleFrom(
-                  backgroundColor: scheme.surfaceContainerHigh.withValues(
-                    alpha: 0.85,
-                  ),
-                  foregroundColor: scheme.onSurface,
-                ),
-                icon: HugeIcon(
-                  HugeIcons.repeat,
-                  size: 20,
-                  color: scheme.onSurface,
-                ),
+                hugeIcon: HugeIcons.repeat,
               ),
             ),
           ),
@@ -188,7 +179,7 @@ class VoiceCardStage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Widget close = Positioned(
-      right: 8,
+      right: 5,
       top: 8,
       child: _CloseChip(onTap: onClose),
     );
@@ -227,15 +218,11 @@ class _CloseChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    return IconButton(
+    // The app's close chip: opaque, so it reads over any card image.
+    return FloatingHeaderButton(
       tooltip: 'Hide',
       onPressed: onTap,
-      visualDensity: VisualDensity.compact,
-      style: IconButton.styleFrom(
-        backgroundColor: scheme.surfaceContainerHigh.withValues(alpha: 0.85),
-      ),
-      icon: HugeIcon(HugeIcons.cancel01, size: 16, color: scheme.onSurface),
+      hugeIcon: HugeIcons.cancel01,
     );
   }
 }

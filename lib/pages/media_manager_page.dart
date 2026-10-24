@@ -609,30 +609,33 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
               : l.mediaManager,
         ),
         leading: _isSelectionMode
-            ? IconButton(
-                icon: const AppIcon(Icons.close),
+            ? FloatingHeaderButton(
+                icon: Icons.close,
+                tooltip: l.cancel,
                 onPressed: _exitSelectionMode,
               )
-            : IconButton(
-                icon: AppIcon(Icons.arrow_back, color: iconFg),
+            : FloatingHeaderButton(
+                icon: Icons.arrow_back_rounded,
+                tooltip: MaterialLocalizations.of(context).backButtonTooltip,
                 onPressed: () => Navigator.pop(context),
               ),
         actions: [
           if (_isSelectionMode) ...[
             if (!kIsWeb)
-              IconButton(
-                icon: AppIcon(Icons.download, color: iconFg),
+              FloatingHeaderButton(
+                icon: Icons.download,
                 onPressed: _downloadSelectedImages,
                 tooltip: l.downloadSelected,
               ),
-            IconButton(
-              icon: const AppIcon(Icons.delete, color: Colors.red),
+            FloatingHeaderButton(
+              icon: Icons.delete,
+              color: Theme.of(context).colorScheme.error,
               onPressed: _deleteSelectedImages,
               tooltip: l.deleteSelected,
             ),
           ] else
-            IconButton(
-              icon: AppIcon(Icons.refresh, color: iconFg),
+            FloatingHeaderButton(
+              icon: Icons.refresh,
               onPressed: _loadImages,
               tooltip: l.refresh,
             ),
@@ -650,7 +653,7 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 8, 12, 4),
       child: SizedBox(
-        height: 44,
+        height: kFloatingAppBarTarget,
         child: Row(
           children: [
             if (_isSelectionMode) ...[
@@ -663,21 +666,19 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
               ),
               const Spacer(),
               if (!kIsWeb)
-                IconButton(
-                  icon: AppIcon(Icons.download_rounded, color: iconFg),
+                FloatingHeaderButton(
+                  icon: Icons.download_rounded,
                   onPressed: _downloadSelectedImages,
                   tooltip: l.downloadSelected,
                 ),
-              IconButton(
-                icon: AppIcon(
-                  Icons.delete_outline_rounded,
-                  color: theme.colorScheme.error,
-                ),
+              FloatingHeaderButton(
+                icon: Icons.delete_outline_rounded,
+                color: theme.colorScheme.error,
                 onPressed: _deleteSelectedImages,
                 tooltip: l.deleteSelected,
               ),
-              IconButton(
-                icon: AppIcon(Icons.close_rounded, color: iconFg),
+              FloatingHeaderButton(
+                icon: Icons.close_rounded,
                 onPressed: _exitSelectionMode,
                 tooltip: l.cancel,
               ),
@@ -692,8 +693,8 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
                 ),
               ),
               const Spacer(),
-              IconButton(
-                icon: AppIcon(Icons.refresh_rounded, color: iconFg),
+              FloatingHeaderButton(
+                icon: Icons.refresh_rounded,
                 onPressed: () {
                   _loadImages();
                   _loadArtifacts();

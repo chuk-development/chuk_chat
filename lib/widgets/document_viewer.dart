@@ -2,9 +2,8 @@
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/widgets/app_notification.dart';
-import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/ui/expressive/huge_icon.dart';
-import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
+import 'package:chuk_chat/ui/components/components.dart';
 import 'package:flutter/services.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
 
@@ -60,14 +59,14 @@ class _DocumentViewerState extends State<DocumentViewer> {
       title: widget.fileName,
       actions: <Widget>[
         if (!_isEditing)
-          ExpressiveIconButton(
+          FloatingHeaderButton(
             hugeIcon: HugeIcons.copy01,
-            onTap: _copyToClipboard,
+            onPressed: _copyToClipboard,
             tooltip: 'Copy to clipboard',
           ),
-        ExpressiveIconButton(
+        FloatingHeaderButton(
           hugeIcon: _isEditing ? HugeIcons.view : HugeIcons.edit02,
-          onTap: () {
+          onPressed: () {
             setState(() {
               _isEditing = !_isEditing;
             });

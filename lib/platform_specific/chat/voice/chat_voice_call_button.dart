@@ -16,9 +16,8 @@ import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_binding.dart';
 import 'package:chuk_chat/ui/expressive/huge_icon.dart';
-import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/voice/voice_call.dart';
-import 'package:chuk_chat/widgets/floating_chrome_surface.dart';
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
 
 /// Which surface the target sits on.
 enum ChatVoiceCallStyle {
@@ -187,48 +186,13 @@ class ChatVoiceCallButton extends StatelessWidget {
     String tooltip,
     VoidCallback onTap,
   ) {
-    const double chip = 42;
-    const double press = 48;
-    final ThemeData theme = Theme.of(context);
-    final Color fill = live
-        ? theme.colorScheme.primary
-        : FloatingChromeSurface.fillOf(context);
-    final Color glyph = live
-        ? theme.colorScheme.onPrimary
-        : theme.resolvedIconColor.withValues(alpha: ready ? 1 : 0.45);
-    return Semantics(
-      identifier: semanticsId,
-      button: true,
-      label: tooltip,
-      child: Tooltip(
-        message: tooltip,
-        excludeFromSemantics: true,
-        child: Material(
-          type: MaterialType.transparency,
-          child: InkResponse(
-            onTap: onTap,
-            containedInkWell: false,
-            highlightShape: BoxShape.circle,
-            radius: chip / 2,
-            child: SizedBox.square(
-              dimension: press,
-              child: Center(
-                child: Ink(
-                  width: chip,
-                  height: chip,
-                  decoration: BoxDecoration(
-                    color: fill,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Center(
-                    child: HugeIcon(HugeIcons.voice, size: 22, color: glyph),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
+    return FloatingHeaderButton(
+      hugeIcon: HugeIcons.voice,
+      tooltip: tooltip,
+      semanticsId: semanticsId,
+      onPressed: onTap,
+      accent: live,
+      parked: !live && !ready,
     );
   }
 }

@@ -27,11 +27,11 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:chuk_chat/utils/debug_chat_formatter.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/brand_wordmark.dart';
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/floating_chrome_surface.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_debug_snapshot.dart';
-import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /* ---------- ROOT WRAPPER MOBILE (for Phones) ---------- */
 class RootWrapperMobile extends StatefulWidget {
@@ -496,7 +496,9 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
       child: SafeArea(
       bottom: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+        // The chips take a 48 px press around a 42 px paint; the 3 px of slop
+        // comes out of the margins so the painted chips keep their place.
+        padding: const EdgeInsets.fromLTRB(7, 8, 10, 6),
         child: SizedBox(
           height: 48,
           child: Row(
@@ -511,7 +513,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                   semanticsId: 'menu_button',
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 5),
               // Expanded, not a fixed width + Spacer: the title takes exactly
               // the room left after the two right-hand buttons, so a long
               // title ellipsises with "…" instead of pushing the buttons off
@@ -550,7 +552,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                         ),
                       ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 5),
               _floatIconChip(
                 icon: Icons.copy_all,
                 onTap: _copyDebugChat,
@@ -558,7 +560,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                 tooltip: 'Copy full chat',
                 semanticsId: 'copy_debug_chat_button',
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 5),
               // Accent-filled circle, not a frosted chip: the new-chat button
               // is the primary action and matches the identical button in the
               // sidebar (AccentIconButton) so the two read as the same control.
@@ -576,7 +578,8 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     );
   }
 
-  /// One round, frosted icon chip for the floating top bar.
+  /// One round chip of the floating top bar: the app's header chip
+  /// ([FloatingHeaderButton]), so the chat and the settings pages share it.
   Widget _floatIconChip({
     required IconData icon,
     required VoidCallback onTap,
@@ -584,26 +587,12 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     required String tooltip,
     required String semanticsId,
   }) {
-    return Semantics(
-      identifier: semanticsId,
-      button: true,
-      child: Tooltip(
-        message: tooltip,
-        child: FloatingChromeSurface(
-          shape: BoxShape.circle,
-          child: Material(
-            type: MaterialType.transparency,
-            child: InkWell(
-              customBorder: const CircleBorder(),
-              onTap: onTap,
-              child: Padding(
-                padding: const EdgeInsets.all(10),
-                child: AppIcon(icon, size: 22, color: iconFg),
-              ),
-            ),
-          ),
-        ),
-      ),
+    return FloatingHeaderButton(
+      icon: icon,
+      onPressed: onTap,
+      color: iconFg,
+      tooltip: tooltip,
+      semanticsId: semanticsId,
     );
   }
 

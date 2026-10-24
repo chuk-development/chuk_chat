@@ -32,8 +32,8 @@ import 'package:chuk_chat/ui/expressive/agent_status.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/ui/expressive/working_dots.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/floating_chrome_surface.dart';
-import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Diameter of a round chip: chuk's floating chip.
 const double kMobileChromeChip = 42;
@@ -237,53 +237,14 @@ class ChromeChip extends StatelessWidget {
   final bool parked;
 
   @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    final Color fill = accent
-        ? theme.colorScheme.primary
-        : FloatingChromeSurface.fillOf(context);
-    final Color glyph = accent
-        ? theme.accentButtonForeground(fill)
-        : theme.resolvedIconColor;
-    // A parked chip still answers a tap with the reason, so it stays enabled.
-    final bool enabled = onTap != null;
-    return Semantics(
-      identifier: semanticsId,
-      button: true,
-      enabled: enabled,
-      child: Tooltip(
-        message: tooltip,
-        child: Material(
-          type: MaterialType.transparency,
-          child: InkResponse(
-            onTap: onTap,
-            // Not contained: the press covers 48 px, the ink only the chip.
-            containedInkWell: false,
-            highlightShape: BoxShape.circle,
-            radius: kMobileChromeChip / 2,
-            child: SizedBox.square(
-              dimension: MobileLayout.minTouchTarget,
-              child: Center(
-                // Painted on the Material, so the ink lands on top of it.
-                child: Ink(
-                  width: kMobileChromeChip,
-                  height: kMobileChromeChip,
-                  decoration: BoxDecoration(color: fill, shape: BoxShape.circle),
-                  child: Center(
-                    child: AppIcon(
-                      icon,
-                      size: 22,
-                      color: parked ? glyph.withValues(alpha: 0.45) : glyph,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => FloatingHeaderButton(
+    icon: icon,
+    tooltip: tooltip,
+    semanticsId: semanticsId,
+    onPressed: onTap,
+    accent: accent,
+    parked: parked,
+  );
 }
 
 /// The agent pill: chuk's title pill with the face, the name and the live

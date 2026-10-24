@@ -11,6 +11,7 @@ import 'package:chuk_chat/voice/widgets/voice_call_buttons.dart';
 import 'package:chuk_chat/voice/widgets/voice_call_controls.dart';
 import 'package:chuk_chat/voice/widgets/voice_call_stage.dart';
 import 'package:chuk_chat/widgets/anchored_menu.dart';
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
 
 /// Back (and the chat button) return to the chat while the call continues.
 /// The close button ends the call.
@@ -384,10 +385,10 @@ class _VoiceCallFullscreenPageState extends State<VoiceCallFullscreenPage> {
       padding: const EdgeInsets.fromLTRB(4, 4, 16, 0),
       child: Row(
         children: <Widget>[
-          IconButton(
+          FloatingHeaderButton(
             tooltip: 'Back to chat',
             onPressed: () => Navigator.of(context).maybePop(),
-            icon: HugeIcon(HugeIcons.arrowLeft01, color: scheme.onSurface),
+            icon: Icons.arrow_back_rounded,
           ),
           Flexible(
             child: TextButton(
@@ -408,11 +409,12 @@ class _VoiceCallFullscreenPageState extends State<VoiceCallFullscreenPage> {
             ),
           ),
           const Spacer(),
-          IconButton(
+          FloatingHeaderButton(
             tooltip: 'Chat',
             onPressed: () => Navigator.of(context).maybePop(),
-            icon: HugeIcon(HugeIcons.message01, color: scheme.onSurface),
+            hugeIcon: HugeIcons.message01,
           ),
+          const SizedBox(width: 8),
           if (started != null)
             Text(
               formatVoiceDuration(DateTime.now().difference(started)),

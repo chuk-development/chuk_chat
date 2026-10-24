@@ -6,9 +6,9 @@
 /// back buttons, four ideas of what the top of a screen looks like — and every
 /// new page added a fifth.
 ///
-/// So there is one: a bar that floats on the shared veil (see [TopVeil]), a
-/// square back target from the app's own set, a title, and optional actions on
-/// the right. The content scrolls up behind it. An optional bar at the bottom
+/// So there is one: a bar that floats on the shared veil (see [TopVeil]), the
+/// settings header's round back chip, the title in its floating pill, and
+/// optional round action chips on the right ([FloatingHeaderButton]). The content scrolls up behind it. An optional bar at the bottom
 /// sits on the mirrored veil.
 ///
 /// Scrolling content gets the room it needs through the media query, not through
@@ -20,9 +20,10 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'package:chuk_chat/ui/expressive/huge_icon.dart';
-import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/ui/expressive/top_veil.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
+import 'package:chuk_chat/widgets/floating_chrome_surface.dart';
 
 class ExpressiveScreen extends StatelessWidget {
   const ExpressiveScreen({
@@ -51,7 +52,7 @@ class ExpressiveScreen extends StatelessWidget {
   /// [title].
   final Widget? titleWidget;
 
-  /// Trailing targets. Use [ExpressiveIconButton] so they match the back one.
+  /// Trailing targets. Use [FloatingHeaderButton] so they match the back one.
   final List<Widget> actions;
 
   /// What the back target does. Defaults to popping the route.
@@ -93,40 +94,62 @@ class ExpressiveScreen extends StatelessWidget {
             right: 0,
             child: TopVeil(
               fadeBelow: 14,
+              // The settings header's chrome (`FloatingAppBar`): an opaque
+              // round back chip, the title in the floating pill, the actions
+              // as the same round chips. The 48 px press areas take their
+              // 3 px slop out of the margins, so the painted chips sit where
+              // the settings header paints them.
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+                padding: const EdgeInsets.fromLTRB(7, 4, 7, 4),
                 child: SizedBox(
                   height: 56,
                   child: Row(
                     children: <Widget>[
                       if (showBack) ...<Widget>[
-                        ExpressiveIconButton(
-                          hugeIcon: HugeIcons.arrowLeft02,
+                        FloatingHeaderButton(
+                          icon: Icons.arrow_back_rounded,
                           tooltip: MaterialLocalizations.of(
                             context,
                           ).backButtonTooltip,
-                          color: theme.colorScheme.surfaceContainerHighest,
                           semanticsId: 'screen_back',
-                          onTap:
+                          onPressed:
                               onBack ?? () => Navigator.of(context).maybePop(),
                         ),
-                        const SizedBox(width: 12),
-                      ],
+                        const SizedBox(width: 5),
+                      ] else
+                        const SizedBox(width: 3),
                       Expanded(
-                        child:
-                            titleWidget ??
-                            Text(
-                              title ?? '',
-                              style: theme.textTheme.headlineSmall?.copyWith(
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: FloatingChromeSurface(
+                            radius: 18,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 11,
+                            ),
+                            child: DefaultTextStyle.merge(
+                              style: TextStyle(
+                                color: theme.resolvedIconColor.withValues(
+                                  alpha: 0.92,
+                                ),
+                                fontSize: 15,
                                 fontWeight: FontWeight.w800,
-                                letterSpacing: -0.5,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
+                              child:
+                                  titleWidget ??
+                                  Text(
+                                    title ?? '',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                             ),
+                          ),
+                        ),
                       ),
                       for (final Widget action in actions) ...<Widget>[
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 2),
                         action,
                       ],
                     ],

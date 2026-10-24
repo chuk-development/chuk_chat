@@ -9,6 +9,7 @@ import 'package:chuk_chat/services/token_activity_stats.dart';
 import 'package:chuk_chat/services/usage_logs_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 const List<String> _kMonthNames = <String>[
@@ -268,13 +269,8 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
   }
 
   PreferredSizeWidget _appBar(BuildContext context) {
-    final theme = Theme.of(context);
-    return AppBar(
+    return FloatingAppBar(
       title: Text(AppLocalizations.of(context)!.usageDetails),
-      centerTitle: false,
-      backgroundColor: theme.colorScheme.surface,
-      elevation: 0,
-      scrolledUnderElevation: 0,
     );
   }
 

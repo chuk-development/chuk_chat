@@ -9,7 +9,6 @@ import 'package:chuk_chat/services/tool_executor.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
-import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Full-screen detail page for a single tool, showing enable/disable,
 /// model prompt editor, and parameter details.
@@ -80,8 +79,9 @@ class _ConnectorDetailPageState extends State<ConnectorDetailPage> {
           l.back,
           style: TextStyle(color: iconFg, fontSize: 14),
         ),
-        leading: IconButton(
-          icon: AppIcon(Icons.chevron_left, color: iconFg),
+        leading: FloatingHeaderButton(
+          icon: Icons.arrow_back_rounded,
+          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),

@@ -56,6 +56,7 @@ import 'package:chuk_chat/services/auth_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/developer_options_service.dart';
 import 'package:chuk_chat/services/onboarding_tour_controller.dart';
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 import 'package:chuk_chat/pages/automations_page.dart';
 import 'package:chuk_chat/pages/agent_mailbox_page.dart';
@@ -466,8 +467,6 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
     List<_SettingsGroup> groups,
     _SettingsDest? selectedPage,
   ) {
-    final theme = Theme.of(context);
-    final m3 = theme.m3;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -492,14 +491,10 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
               Positioned(
                 top: 10,
                 right: 10,
-                child: Material(
-                  color: m3.surfaceContainerHigh,
-                  shape: const CircleBorder(),
-                  child: IconButton(
-                    icon: AppIcon(Icons.close, color: theme.resolvedIconColor),
-                    tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
+                child: FloatingHeaderButton(
+                  icon: Icons.close,
+                  tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                  onPressed: () => Navigator.of(context).pop(),
                 ),
               ),
             ],
@@ -537,8 +532,8 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
           ),
           child: Row(
             children: [
-              IconButton(
-                icon: AppIcon(Icons.arrow_back, color: theme.resolvedIconColor),
+              FloatingHeaderButton(
+                icon: Icons.arrow_back_rounded,
                 tooltip: MaterialLocalizations.of(context).backButtonTooltip,
                 onPressed: () => setState(() => _compactPageId = null),
               ),
@@ -553,8 +548,8 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
                   ),
                 ),
               ),
-              IconButton(
-                icon: AppIcon(Icons.close, color: theme.resolvedIconColor),
+              FloatingHeaderButton(
+                icon: Icons.close,
                 tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
                 onPressed: () => Navigator.of(context).pop(),
               ),
@@ -639,8 +634,8 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
                   ),
                 ),
                 if (compact)
-                  IconButton(
-                    icon: AppIcon(Icons.close, color: theme.resolvedIconColor),
+                  FloatingHeaderButton(
+                    icon: Icons.close,
                     tooltip:
                         MaterialLocalizations.of(context).closeButtonTooltip,
                     onPressed: () => Navigator.of(context).pop(),
