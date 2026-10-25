@@ -15,11 +15,11 @@ import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/widgets/encrypted_image_widget.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
+import 'package:chuk_chat/widgets/floating_chrome_surface.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/utils/format_bytes.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
-import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
-import 'package:chuk_chat/ui/expressive/motion.dart';
 
 typedef AttachmentRemoveCallback = void Function(String fileId);
 typedef AttachmentCopyCallback = Future<void> Function(AttachedFile file);
@@ -309,11 +309,10 @@ class _ImageAttachmentCard extends StatelessWidget {
 
 /// The remove target on an attachment card.
 ///
-/// It is a full [MobileLayout.minTouchTarget] box built on
-/// [ExpressiveIconButton], so it springs and morphs like every other button in
-/// the app and it is never smaller than Material's minimum. The glyph stays
-/// small (22 dp, what the expressive button draws) so the thumbnail under the
-/// scrim is still readable.
+/// A small opaque chip in the card's corner: the chrome fill with a hairline
+/// border, so it reads on a dark photo and on a white page alike. It paints
+/// 24 dp and leaves the thumbnail visible; the press area is a 36 dp corner
+/// box, which reaches past the chip into the card's edge.
 class _RemoveButton extends StatelessWidget {
   const _RemoveButton({required this.onTap, this.tooltip});
 
@@ -322,14 +321,40 @@ class _RemoveButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme cs = Theme.of(context).colorScheme;
-    return ExpressiveIconButton(
-      icon: Icons.close,
-      onTap: onTap,
-      size: MobileLayout.minTouchTarget,
-      color: cs.scrim.withValues(alpha: 0.55),
-      onColor: cs.onInverseSurface,
-      tooltip: tooltip ?? 'Remove',
+    final ThemeData theme = Theme.of(context);
+    final bool enabled = onTap != null;
+    final Widget chip = Container(
+      width: 24,
+      height: 24,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: FloatingChromeSurface.fillOf(context, alpha: 1),
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.6),
+        ),
+      ),
+      child: AppIcon(
+        Icons.close_rounded,
+        size: 15,
+        color: theme.resolvedIconColor.withValues(alpha: enabled ? 1 : 0.45),
+      ),
+    );
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: tooltip ?? 'Remove',
+      child: Tooltip(
+        message: tooltip ?? 'Remove',
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: SizedBox.square(
+            dimension: 36,
+            child: Align(alignment: Alignment.topRight, child: chip),
+          ),
+        ),
+      ),
     );
   }
 }
