@@ -20,6 +20,7 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/utils/format_bytes.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
 
 typedef AttachmentRemoveCallback = void Function(String fileId);
 typedef AttachmentCopyCallback = Future<void> Function(AttachedFile file);
@@ -209,8 +210,8 @@ class _ImageAttachmentCard extends StatelessWidget {
 
                   // Remove button (top-right)
                   Positioned(
-                    top: 3,
-                    right: 3,
+                    top: 0,
+                    right: 0,
                     child: _RemoveButton(
                       onTap: isUploading ? null : () => onRemove(file.id),
                       tooltip: AppLocalizations.of(
@@ -311,8 +312,8 @@ class _ImageAttachmentCard extends StatelessWidget {
 ///
 /// A small opaque chip in the card's corner: the chrome fill with a hairline
 /// border, so it reads on a dark photo and on a white page alike. It paints
-/// 24 dp and leaves the thumbnail visible; the press area is a 36 dp corner
-/// box, which reaches past the chip into the card's edge.
+/// 24 dp and leaves the thumbnail visible; the press area is the full 48 dp
+/// corner box, which is transparent around the chip.
 class _RemoveButton extends StatelessWidget {
   const _RemoveButton({required this.onTap, this.tooltip});
 
@@ -340,18 +341,29 @@ class _RemoveButton extends StatelessWidget {
         color: theme.resolvedIconColor.withValues(alpha: enabled ? 1 : 0.45),
       ),
     );
-    return Semantics(
-      button: true,
-      enabled: enabled,
-      label: tooltip ?? 'Remove',
-      child: Tooltip(
-        message: tooltip ?? 'Remove',
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onTap,
-          child: SizedBox.square(
-            dimension: 36,
-            child: Align(alignment: Alignment.topRight, child: chip),
+    // InkResponse, not a bare GestureDetector: it takes keyboard focus and
+    // fires on Enter and Space like every other button.
+    return Tooltip(
+      message: tooltip ?? 'Remove',
+      child: Semantics(
+        button: true,
+        enabled: enabled,
+        label: tooltip ?? 'Remove',
+        excludeSemantics: true,
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkResponse(
+            onTap: onTap,
+            radius: 14,
+            containedInkWell: false,
+            highlightShape: BoxShape.circle,
+            child: SizedBox.square(
+              dimension: MobileLayout.minTouchTarget,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 3, right: 3),
+                child: Align(alignment: Alignment.topRight, child: chip),
+              ),
+            ),
           ),
         ),
       ),
@@ -485,8 +497,8 @@ class _DocumentAttachmentTile extends StatelessWidget {
 
                     // Remove button (top-right)
                     Positioned(
-                      top: 3,
-                      right: 3,
+                      top: 0,
+                      right: 0,
                       child: _RemoveButton(
                         onTap: isUploading ? null : () => onRemove(file.id),
                         tooltip: AppLocalizations.of(

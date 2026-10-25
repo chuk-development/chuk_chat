@@ -604,11 +604,13 @@ class _TilesBlock extends StatelessWidget {
         // Centred icon tiles only work for short labels. Anything with a
         // subline or a long label reads as a list, so it is drawn as one:
         // icon left, text beside it, every row on the same left edge.
+        // Large text needs the same room a longer label does.
+        final double scale = MediaQuery.textScalerOf(context).scale(1);
         final bool asRows =
-            cell < _minGridCell ||
+            cell < _minGridCell * scale ||
             tiles.any(
               (_TileView t) =>
-                  t.sub.isNotEmpty || t.label.length > _maxGridLabel,
+                  t.sub.isNotEmpty || t.label.length * scale > _maxGridLabel,
             );
         return _ModuleCard(
           s: s,
