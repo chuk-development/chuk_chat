@@ -581,20 +581,39 @@ class _TilesBlock extends StatelessWidget {
   final TilesSpec spec;
   final _AnswerBlockStyle s;
 
+  /// A grid cell narrower than this cannot hold a label beside nothing but
+  /// its icon; the block then lays its tiles out as rows.
+  static const double _minGridCell = 96;
+
+  /// Labels longer than this are not tile labels but sentences.
+  static const int _maxGridLabel = 18;
+
   @override
   Widget build(BuildContext context) {
     if (spec.tiles.isEmpty) return const SizedBox.shrink();
-    final int perRow = spec.tiles.length == 1 ? 1 : (spec.tiles.length == 2 ? 2 : 3);
+    final List<_TileView> tiles = spec.tiles.map(_TileView.from).toList();
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints c) {
         const double gap = 10;
         // Inside the module card: its padding takes 28 of the width.
-        final double tileWidth =
-            ((c.maxWidth - 28 - gap * (perRow - 1)) / perRow).clamp(80.0, 240.0);
+        final double inner = c.maxWidth - 28;
+        final int perRow = tiles.length == 1
+            ? 1
+            : (tiles.length == 2 || tiles.length == 4 ? 2 : 3);
+        final double cell = (inner - gap * (perRow - 1)) / perRow;
+        // Centred icon tiles only work for short labels. Anything with a
+        // subline or a long label reads as a list, so it is drawn as one:
+        // icon left, text beside it, every row on the same left edge.
+        final bool asRows =
+            cell < _minGridCell ||
+            tiles.any(
+              (_TileView t) =>
+                  t.sub.isNotEmpty || t.label.length > _maxGridLabel,
+            );
         return _ModuleCard(
           s: s,
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               if (spec.tag.isNotEmpty || spec.title.isNotEmpty)
@@ -602,14 +621,28 @@ class _TilesBlock extends StatelessWidget {
                   padding: const EdgeInsets.only(bottom: 12),
                   child: _moduleHead(spec.tag, spec.title, s),
                 ),
-              Wrap(
-                spacing: gap,
-                runSpacing: gap,
-                children: <Widget>[
-                  for (final IconTile tile in spec.tiles)
-                    SizedBox(width: tileWidth, child: _tile(tile)),
+              if (asRows)
+                for (int i = 0; i < tiles.length; i++) ...<Widget>[
+                  if (i > 0) const SizedBox(height: 12),
+                  _row(tiles[i]),
+                ]
+              else
+                for (int r = 0; r < tiles.length; r += perRow) ...<Widget>[
+                  if (r > 0) const SizedBox(height: gap),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      for (int i = r; i < r + perRow; i++) ...<Widget>[
+                        if (i > r) const SizedBox(width: gap),
+                        Expanded(
+                          child: i < tiles.length
+                              ? _cell(tiles[i])
+                              : const SizedBox.shrink(),
+                        ),
+                      ],
+                    ],
+                  ),
                 ],
-              ),
             ],
           ),
         );
@@ -617,57 +650,116 @@ class _TilesBlock extends StatelessWidget {
     );
   }
 
-  Widget _tile(IconTile tile) {
-    final HugeIconData? icon = _blockIcon(tile.icon);
+  Widget _iconChip(HugeIconData icon, double size) {
+    return SelectionContainer.disabled(
+      child: Container(
+        width: size,
+        height: size,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: s.tileFill,
+          borderRadius: BorderRadius.circular(size * 0.3),
+        ),
+        child: HugeIcon(icon, size: size * 0.46, color: s.accent),
+      ),
+    );
+  }
+
+  TextStyle get _labelStyle => TextStyle(
+    color: s.textColor,
+    fontSize: s.baseFontSize * 0.95,
+    fontWeight: FontWeight.w600,
+    height: 1.3,
+    fontFamily: s.fontFamily,
+  );
+
+  TextStyle get _subStyle => TextStyle(
+    color: s.muted,
+    fontSize: s.baseFontSize * 0.87,
+    height: 1.35,
+    fontFamily: s.fontFamily,
+  );
+
+  /// One tile as a list row: icon chip, then label over subline.
+  Widget _row(_TileView tile) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        if (tile.icon != null) ...<Widget>[
+          _iconChip(tile.icon!, 40),
+          const SizedBox(width: 12),
+        ],
+        Expanded(
+          child: Padding(
+            // Centre a one-line label on the 40 px chip.
+            padding: EdgeInsets.only(top: tile.icon != null ? 2 : 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(tile.label, style: _labelStyle),
+                if (tile.sub.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 2),
+                  Text(tile.sub, style: _subStyle),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// One tile as a grid cell: icon chip over a short centred label.
+  Widget _cell(_TileView tile) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        if (icon != null)
-          SelectionContainer.disabled(
-            child: Container(
-              width: 52,
-              height: 52,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: s.tileFill,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: HugeIcon(icon, size: 24, color: s.accent),
-            ),
-          ),
-        if (icon != null) const SizedBox(height: 8),
+        if (tile.icon != null) ...<Widget>[
+          _iconChip(tile.icon!, 52),
+          const SizedBox(height: 8),
+        ],
         Text(
           tile.label,
           textAlign: TextAlign.center,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: s.textColor,
-            fontSize: s.baseFontSize * 0.95,
-            fontWeight: FontWeight.w600,
-            height: 1.3,
-            fontFamily: s.fontFamily,
-          ),
+          style: _labelStyle,
         ),
-        if (tile.sub.isNotEmpty) ...<Widget>[
-          const SizedBox(height: 2),
-          Text(
-            tile.sub,
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: s.muted,
-              fontSize: s.baseFontSize * 0.85,
-              height: 1.3,
-              fontFamily: s.fontFamily,
-            ),
-          ),
-        ],
       ],
     );
   }
+}
+
+/// A tile as it is drawn. The model sometimes writes the subline where the
+/// icon name belongs (`Name | long text | shield`); a slot that is not a known
+/// icon but reads like text is moved back into the subline.
+class _TileView {
+  const _TileView(this.label, this.icon, this.sub);
+
+  factory _TileView.from(IconTile t) {
+    HugeIconData? icon = _blockIcon(t.icon);
+    final List<String> sub = <String>[];
+    if (icon == null && t.icon.contains(' ')) {
+      sub.add(t.icon);
+    }
+    if (t.sub.isNotEmpty) {
+      // `long text · shield`: the trailing word may be the icon.
+      final List<String> parts = t.sub.split(' · ');
+      final HugeIconData? tail = icon == null ? _blockIcon(parts.last) : null;
+      if (tail != null) {
+        icon = tail;
+        parts.removeLast();
+      }
+      sub.addAll(parts.where((String p) => p.isNotEmpty));
+    }
+    return _TileView(t.label, icon, sub.join(' · '));
+  }
+
+  final String label;
+  final HugeIconData? icon;
+  final String sub;
 }
 
 // ---------------------------------------------------------------------------
