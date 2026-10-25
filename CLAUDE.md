@@ -186,6 +186,14 @@ only hand over the file path or send the file. One command, detached:
 `(DISPLAY=:1 setsid qimgv <file> >/dev/null 2>&1 </dev/null &)`. The arrow keys
 then walk the whole folder, which is what makes a set of screenshots judgeable.
 
+**Desktop testing = full reinstall, not hot reload** (owner instruction,
+2026-10-25, standing). After every change the owner should see, rebuild and
+reinstall the app on his PC: `scripts/install_dev.sh`. It builds a Linux
+release with run.sh's defines, stops the running "Chuk Chat (Dev)", copies
+the bundle to `~/.local/opt/chuk-chat-dev`, refreshes the desktop entry and
+starts the new build (via `user-app`, X11). He opens it from the menu as
+"Chuk Chat (Dev)". Do not leave him on a `flutter-hot` session instead.
+
 **Starting the app for live/hot-reload work: ALWAYS use `./run-hot.sh`**, never
 `flutter-hot start` bare. Bare `flutter-hot` runs `flutter run` with no
 `--dart-define`, so Supabase creds are missing and feature flags fall back to
