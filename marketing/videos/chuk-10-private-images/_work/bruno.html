@@ -1,0 +1,153 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<!-- Episode 10: the "generated" picture. A deterministic watercolour, drawn with SVG
+     filters (seeded turbulence), no paid generation. Rendered by make_assets.py at
+     1536x1152 (4:3, the server default landscape_4_3). -->
+<style>
+  html, body { margin: 0; width: 1536px; height: 1152px; overflow: hidden; background: #FBF7EF; }
+  svg { display: block; }
+</style></head>
+<body>
+<svg width="1536" height="1152" viewBox="0 0 1536 1152" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- wet wash: wobbly edge, blotchy pigment, darker rim where the paint dried -->
+    <filter id="wash" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.011" numOctaves="4" seed="7" result="n1"/>
+      <feDisplacementMap in="SourceGraphic" in2="n1" scale="34" xChannelSelector="R" yChannelSelector="G" result="d"/>
+      <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="3" seed="11" result="n2"/>
+      <feColorMatrix in="n2" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.7 0.45" result="blot"/>
+      <feComposite in="d" in2="blot" operator="in" result="pig"/>
+      <feMorphology in="d" operator="erode" radius="5" result="inner"/>
+      <feComposite in="d" in2="inner" operator="out" result="rim"/>
+      <feGaussianBlur in="rim" stdDeviation="1.6" result="rimb"/>
+      <feColorMatrix in="rimb" type="matrix" values="0.75 0 0 0 0  0 0.75 0 0 0  0 0 0.75 0 0  0 0 0 0.55 0" result="rimd"/>
+      <feMerge><feMergeNode in="pig"/><feMergeNode in="rimd"/></feMerge>
+    </filter>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.008" numOctaves="3" seed="3" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="60" xChannelSelector="R" yChannelSelector="G" result="d"/>
+      <feGaussianBlur in="d" stdDeviation="10"/>
+    </filter>
+    <filter id="fine" x="-20%" y="-20%" width="140%" height="140%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="5" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="7" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <!-- cold-press paper -->
+    <filter id="paper" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" seed="2" result="t"/>
+      <feDiffuseLighting in="t" lighting-color="#ffffff" surfaceScale="1.4" result="l">
+        <feDistantLight azimuth="45" elevation="62"/>
+      </feDiffuseLighting>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.42  0 0 0 0 0.36  0 0 0 0 0.28  -0.9 0 0 0 0.9"/>
+    </filter>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8FB8D6"/>
+      <stop offset="0.55" stop-color="#C7DCE6"/>
+      <stop offset="1" stop-color="#F3E3CC"/>
+    </linearGradient>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3F7F9A"/>
+      <stop offset="1" stop-color="#7FB5BE"/>
+    </linearGradient>
+    <linearGradient id="sand" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#D9B985"/>
+      <stop offset="1" stop-color="#E9CFA2"/>
+    </linearGradient>
+    <linearGradient id="fur" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#B9733A"/>
+      <stop offset="1" stop-color="#8E5226"/>
+    </linearGradient>
+  </defs>
+
+  <!-- sky, sun, clouds -->
+  <g style="mix-blend-mode:multiply">
+    <rect x="-40" y="-40" width="1616" height="640" fill="url(#sky)" opacity="0.85" filter="url(#wash)"/>
+    <circle cx="1210" cy="200" r="78" fill="#F6D58E" opacity="0.75" filter="url(#wash)"/>
+    <ellipse cx="380" cy="190" rx="230" ry="46" fill="#FFFFFF" opacity="0.7" filter="url(#soft)"/>
+    <ellipse cx="560" cy="150" rx="150" ry="34" fill="#FFFFFF" opacity="0.6" filter="url(#soft)"/>
+    <ellipse cx="980" cy="300" rx="190" ry="30" fill="#FFFFFF" opacity="0.5" filter="url(#soft)"/>
+  </g>
+  <!-- distant headland -->
+  <path d="M-40 560 Q 140 470 330 500 Q 520 530 700 556 Q 760 566 800 560 L 800 600 L -40 600 Z" fill="#7E9AA2" opacity="0.55" filter="url(#wash)" style="mix-blend-mode:multiply"/>
+  <!-- sea -->
+  <g style="mix-blend-mode:multiply">
+    <rect x="-40" y="548" width="1616" height="150" fill="url(#sea)" opacity="0.8" filter="url(#wash)"/>
+    <path d="M-40 600 Q 300 590 700 606 T 1576 598" stroke="#2F6A86" stroke-width="10" fill="none" opacity="0.35" filter="url(#fine)"/>
+    <path d="M-40 650 Q 400 640 800 656 T 1576 646" stroke="#2F6A86" stroke-width="8" fill="none" opacity="0.3" filter="url(#fine)"/>
+  </g>
+  <!-- wet sand + foam -->
+  <g style="mix-blend-mode:multiply">
+    <rect x="-40" y="690" width="1616" height="502" fill="url(#sand)" opacity="0.9" filter="url(#wash)"/>
+    <path d="M-40 700 Q 260 760 560 724 T 1100 742 T 1576 716 L 1576 800 Q 1200 820 800 790 T -40 800 Z" fill="#A9C3BE" opacity="0.45" filter="url(#wash)"/>
+  </g>
+  <path d="M-40 706 Q 260 764 560 728 T 1100 746 T 1576 720" stroke="#FFFFFF" stroke-width="14" fill="none" opacity="0.85" filter="url(#fine)"/>
+  <!-- footprints along the shore -->
+  <g fill="#B08A55" opacity="0.5" filter="url(#fine)" style="mix-blend-mode:multiply">
+    <ellipse cx="220" cy="930" rx="16" ry="9"/><ellipse cx="300" cy="905" rx="16" ry="9"/>
+    <ellipse cx="380" cy="935" rx="16" ry="9"/><ellipse cx="460" cy="908" rx="16" ry="9"/>
+    <ellipse cx="540" cy="938" rx="16" ry="9"/><ellipse cx="620" cy="910" rx="16" ry="9"/>
+  </g>
+
+  <!-- Bruno: shadow, body washes, then darker glazes -->
+  <path d="M748 520 Q 770 486 806 478 Q 826 444 870 436 Q 918 432 940 470 Q 958 510 962 548
+             Q 1010 590 1060 640 Q 1130 700 1150 790 Q 1162 880 1100 914 L 1020 918
+             Q 980 920 960 910 L 930 912 Q 900 916 880 912 L 842 914 Q 826 900 846 888
+             Q 852 800 850 720 Q 840 660 832 616 Q 818 580 800 556 Q 772 546 752 538 Q 740 530 748 520 Z" fill="#FBF7EF" filter="url(#fine)"/>
+  <path d="M1132 880 Q 1210 900 1262 870 Q 1290 852 1300 828 Q 1276 870 1220 890 Q 1180 904 1130 904 Z" fill="#FBF7EF" filter="url(#fine)"/>
+  <ellipse cx="1000" cy="922" rx="230" ry="26" fill="#7C8FA6" opacity="0.45" filter="url(#soft)" style="mix-blend-mode:multiply"/>
+  <g style="mix-blend-mode:multiply">
+    <!-- whole silhouette, first light wash -->
+    <path d="M748 520 Q 770 486 806 478 Q 826 444 870 436 Q 918 432 940 470 Q 958 510 962 548
+             Q 1010 590 1060 640 Q 1130 700 1150 790 Q 1162 880 1100 914 L 1020 918
+             Q 980 920 960 910 L 930 912 Q 900 916 880 912 L 842 914 Q 826 900 846 888
+             Q 852 800 850 720 Q 840 660 832 616 Q 818 580 800 556 Q 772 546 752 538 Q 740 530 748 520 Z"
+          fill="#C98446" opacity="0.88" filter="url(#wash)"/>
+    <!-- back, haunch and head glaze -->
+    <path d="M870 440 Q 918 432 940 470 Q 958 510 962 548 Q 1010 590 1060 640 Q 1130 700 1150 790
+             Q 1158 850 1128 890 Q 1100 820 1040 760 Q 990 700 930 620 Q 900 560 880 500 Z"
+          fill="url(#fur)" opacity="0.75" filter="url(#wash)"/>
+    <circle cx="1060" cy="812" r="88" fill="#A8632F" opacity="0.5" filter="url(#wash)"/>
+    <!-- far front leg, in shade -->
+    <path d="M900 700 Q 908 800 906 900 L 940 902 Q 938 800 930 700 Z" fill="#8E5226" opacity="0.32" filter="url(#wash)"/>
+    <!-- ear -->
+    <path d="M892 452 Q 930 456 934 510 Q 938 568 912 600 Q 890 590 884 546 Q 878 496 892 452 Z"
+          fill="#6E3B1C" opacity="0.8" filter="url(#wash)"/>
+    <!-- light chest and muzzle -->
+    <path d="M800 556 Q 822 590 838 640 Q 846 600 862 570 Q 840 552 812 548 Z" fill="#F2D3A6" opacity="0.7" filter="url(#wash)"/>
+    <path d="M752 524 Q 782 506 820 512 Q 812 538 784 546 Q 760 540 752 524 Z" fill="#E7BE88" opacity="0.6" filter="url(#wash)"/>
+    <!-- red collar -->
+    <path d="M928 560 Q 900 590 852 598 L 858 616 Q 912 610 944 578 Z" fill="#C8473B" opacity="0.85" filter="url(#fine)"/>
+    <circle cx="872" cy="624" r="9" fill="#E3B54A" opacity="0.9" filter="url(#fine)"/>
+    <!-- tail on the sand -->
+    <path d="M1132 880 Q 1210 900 1262 870 Q 1290 852 1300 828 Q 1284 880 1226 900 Q 1180 914 1130 912 Z"
+          fill="#B06A33" opacity="0.8" filter="url(#wash)"/>
+  </g>
+  <!-- line work: nose, eye, mouth, a few fur strokes (fine, slightly broken) -->
+  <g filter="url(#fine)">
+    <ellipse cx="752" cy="516" rx="13" ry="10" fill="#2A1F17" opacity="0.92"/>
+    <circle cx="842" cy="478" r="7.5" fill="#2A1F17" opacity="0.9"/>
+    <circle cx="840" cy="476" r="2.2" fill="#FFFFFF" opacity="0.8"/>
+    <path d="M760 534 Q 782 546 806 538" stroke="#5B3216" stroke-width="3.5" fill="none" opacity="0.7"/>
+    <path d="M846 888 Q 864 896 880 890 M 906 900 Q 922 906 936 900" stroke="#5B3216" stroke-width="3" fill="none" opacity="0.55"/>
+    <path d="M990 650 Q 1010 668 1020 690 M1040 700 Q 1060 718 1066 742 M 960 600 Q 976 614 984 630" stroke="#6E3B1C" stroke-width="3" fill="none" opacity="0.45"/>
+  </g>
+  <!-- a red ball by the paws -->
+  <circle cx="712" cy="890" r="30" fill="#D0503F" opacity="0.85" filter="url(#wash)" style="mix-blend-mode:multiply"/>
+  <path d="M690 874 Q 712 862 734 874" stroke="#FFFFFF" stroke-width="4" fill="none" opacity="0.6" filter="url(#fine)"/>
+  <!-- gulls -->
+  <g stroke="#3D4E5C" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.7" filter="url(#fine)">
+    <path d="M300 300 q 14 -14 28 0 q 14 -14 28 0"/>
+    <path d="M400 350 q 10 -10 20 0 q 10 -10 20 0"/>
+    <path d="M1320 360 q 12 -12 24 0 q 12 -12 24 0"/>
+  </g>
+  <!-- splatter, seeded positions -->
+  <g fill="#8E5226" opacity="0.35" style="mix-blend-mode:multiply">
+    <circle cx="1180" cy="1010" r="5"/><circle cx="1214" cy="1032" r="3"/><circle cx="1160" cy="1050" r="2.5"/>
+    <circle cx="420" cy="1040" r="4"/><circle cx="452" cy="1066" r="2.5"/><circle cx="160" cy="120" r="3"/>
+    <circle cx="1400" cy="520" r="3.5" fill="#3F7F9A"/><circle cx="1424" cy="500" r="2" fill="#3F7F9A"/>
+  </g>
+  <!-- paper grain on top, and a soft vignette of unpainted paper at the edges -->
+  <rect width="1536" height="1152" filter="url(#paper)" opacity="0.18"/>
+  <rect x="0" y="0" width="1536" height="1152" fill="none" stroke="#FBF7EF" stroke-width="70" filter="url(#soft)"/>
+</svg>
+</body></html>
