@@ -31,6 +31,7 @@ import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 part 'answer_blocks.dart';
 part 'visual_answer_blocks.dart';
+part 'visual_answer_blocks_more.dart';
 
 /// Lays [overlay] on top of [base] field by field.
 ///
