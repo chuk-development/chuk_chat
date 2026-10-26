@@ -981,7 +981,7 @@ class _CardsBlockState extends State<_CardsBlock> {
   }
 
   int _chipRowCount(List<String> chips, double innerWidth, TextScaler scaler) {
-    final TextStyle style = _styleFor(widget.s.baseFontSize * 0.86, FontWeight.w600, 1.2);
+    final TextStyle style = _styleFor(widget.s.baseFontSize * 0.86, FontWeight.w500, 1.2);
     double x = 0;
     int rows = 1;
     for (final String chip in chips) {
