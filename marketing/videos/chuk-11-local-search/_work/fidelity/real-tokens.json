@@ -1,0 +1,40 @@
+{
+ "onSurface": "#ffe8e4d8",
+ "onSurfaceVariant": "#dce8e4d8",
+ "surfaceContainer": "#ff363634",
+ "surfaceContainerHigh": "#ff41413e",
+ "surfaceContainerHighest": "#ff4c4c48",
+ "scaffold": "#ff262624",
+ "card": "#ff363634",
+ "primary": "#ffd97757",
+ "accentInk": "#ffd97757",
+ "iconFg": "#ffe8e4d8",
+ "bodyLarge": {
+  "size": 16.0,
+  "weight": 400,
+  "ls": 0.5,
+  "height": 1.5,
+  "family": "Ubuntu"
+ },
+ "bodySmall": {
+  "size": 12.0,
+  "weight": 400,
+  "ls": 0.4,
+  "height": 1.33,
+  "family": "Ubuntu"
+ },
+ "labelLarge": {
+  "size": 14.0,
+  "weight": 500,
+  "ls": 0.1,
+  "height": 1.43,
+  "family": "Ubuntu"
+ },
+ "labelMedium": {
+  "size": 12.0,
+  "weight": 500,
+  "ls": 0.5,
+  "height": 1.33,
+  "family": "Ubuntu"
+ }
+}
