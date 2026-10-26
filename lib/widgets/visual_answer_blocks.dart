@@ -179,6 +179,32 @@ const Map<String, HugeIconData> _kBlockIcons = <String, HugeIconData>{
   'quote': HugeIcons.quoteDown,
   'idea': HugeIcons.idea01,
   'idea01': HugeIcons.idea01,
+  'sound': HugeIcons.volumeHigh,
+  'anc': HugeIcons.volumeMute01,
+  'quiet': HugeIcons.volumeMute01,
+  'mic': HugeIcons.mic01,
+  'microphone': HugeIcons.mic01,
+  'computer': HugeIcons.computer,
+  'monitor': HugeIcons.computer,
+  'wellness': HugeIcons.sparkles,
+  'spa': HugeIcons.sparkles,
+  'hike': HugeIcons.mountain,
+  'wandern': HugeIcons.mountain,
+  'bank': HugeIcons.bank,
+  'help': HugeIcons.helpCircle,
+  'info': HugeIcons.informationCircle,
+  'warning': HugeIcons.alert02,
+  'link': HugeIcons.link01,
+  'flag': HugeIcons.flag01,
+  'smoke': HugeIcons.cloudFog,
+  'ruler': HugeIcons.ruler,
+  'scale': HugeIcons.balanceScale,
+  'tag': HugeIcons.tag01,
+  'discount': HugeIcons.discount,
+  'list': HugeIcons.checkList,
+  'globe': HugeIcons.globe02,
+  'video': HugeIcons.video01,
+  'image': HugeIcons.image01,
 };
 
 HugeIconData? _blockIcon(String name) {
@@ -768,10 +794,13 @@ class _TileView {
 // cards — carousel of item cards
 
 class _CardsBlock extends StatefulWidget {
-  const _CardsBlock({required this.spec, required this.s});
+  const _CardsBlock({required this.spec, required this.s, this.onFollowUp});
 
   final CardsSpec spec;
   final _AnswerBlockStyle s;
+
+  /// Sends a card's `ask:` button as the reader's next message.
+  final ValueChanged<String>? onFollowUp;
 
   @override
   State<_CardsBlock> createState() => _CardsBlockState();
@@ -792,11 +821,15 @@ class _CardsBlockState extends State<_CardsBlock> {
   Widget build(BuildContext context) {
     final List<AnswerCard> cards = widget.spec.cards;
     if (cards.isEmpty) return const SizedBox.shrink();
+    _inheritedFamily = DefaultTextStyle.of(context).style.fontFamily;
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints c) {
         final double w = c.maxWidth;
-        final double cardWidth = (w * 0.86).clamp(200.0, 340.0);
+        // Never wider than the column itself: below 233 px the 200 px floor
+        // would make the card wider than its page and the content overflow.
+        final double cardWidth =
+            (w * 0.86).clamp(200.0, 340.0).toDouble().clamp(0.0, w).toDouble();
         if (_controller == null || (w - _controllerWidth).abs() > 24) {
           // The previous frame's PageView still holds this controller; the
           // detach happens after it is replaced, so dispose only then.
@@ -813,7 +846,7 @@ class _CardsBlockState extends State<_CardsBlock> {
         }
         final TextScaler scaler = MediaQuery.textScalerOf(context);
         // What the card content really gets: the page minus the 5 px page
-        // padding on each side, the 12 px card padding, and the 1 px border.
+        // padding on each side and the 12 px card padding (+2 slack).
         final double innerWidth = cardWidth - 10 - 26;
         _page = _page.clamp(0, cards.length - 1);
         final double height = _carouselHeight(cards, innerWidth, scaler);
@@ -878,8 +911,17 @@ class _CardsBlockState extends State<_CardsBlock> {
           ) *
               lh(titleSize, 1.25) +
           6;
+      if (card.image.isEmpty && card.badge.isNotEmpty) {
+        h += lh(s.baseFontSize * 0.84, 1.25) + 8 + 10;
+      }
       if (card.subtitle.isNotEmpty) {
         h += lh(s.baseFontSize * 0.95, 1.3) + 3;
+      }
+      if (card.location.isNotEmpty) {
+        h += lh(s.baseFontSize * 0.92, 1.35) + 4;
+      }
+      if (card.rating.isNotEmpty) {
+        h += lh(s.baseFontSize * 0.9, 1.35) + 4;
       }
       for (int i = 0; i < card.metas.take(3).length; i++) {
         h += lh(s.baseFontSize * 0.9, 1.35) + 2;
@@ -887,14 +929,18 @@ class _CardsBlockState extends State<_CardsBlock> {
       if (card.chips.isNotEmpty) {
         final int rows = _chipRowCount(card.chips, innerWidth, scaler);
         final double chipHeight = lh(s.baseFontSize * 0.86, 1.2) + 14;
-        h += rows * chipHeight + (rows - 1) * 8;
-        h += card.price.isNotEmpty || card.url.isNotEmpty ? 8 : 0;
+        h += rows * chipHeight + (rows - 1) * 8 + 10;
+      }
+      if (card.specs.isNotEmpty) {
+        final int rows = (card.specs.take(4).length + 1) ~/ 2;
+        final double specHeight = lh(s.baseFontSize * 0.86, 1.25) * 2 + 20;
+        h += rows * specHeight + (rows - 1) * 8 + 10;
       }
       if (card.price.isNotEmpty) {
-        h += lh(s.baseFontSize * 1.45, 1.2) + 8;
+        h += lh(s.baseFontSize * 1.5, 1.2) + 10;
       }
-      if (card.url.isNotEmpty) {
-        h += 44 + 10;
+      if (card.url.isNotEmpty || card.ask.isNotEmpty) {
+        h += 46 + 12;
       }
       h += 10; // slack for descender leading and border rounding
       if (h > maxCard) maxCard = h;
@@ -902,11 +948,17 @@ class _CardsBlockState extends State<_CardsBlock> {
     return maxCard;
   }
 
+  /// The family a card's text really renders in. With no prose family the
+  /// Text widgets inherit the theme's; the height estimate must measure with
+  /// that same family, or its TextPainters (engine default font) wrap titles
+  /// and chips that fit on screen and the carousel gets a tall empty band.
+  String? _inheritedFamily;
+
   TextStyle _styleFor(double size, FontWeight weight, double height) => TextStyle(
         fontSize: size,
         fontWeight: weight,
         height: height,
-        fontFamily: widget.s.fontFamily,
+        fontFamily: widget.s.fontFamily ?? _inheritedFamily,
       );
 
   int _lineCount(
@@ -960,45 +1012,51 @@ class _CardsBlockState extends State<_CardsBlock> {
       if (card.image.isNotEmpty) ...<Widget>[
         _cardImage(card, innerWidth),
         const SizedBox(height: 12),
+      ] else if (card.badge.isNotEmpty) ...<Widget>[
+        // No photo to sit on: the badge becomes the card's tag chip
+        // ("Aktionstage": "Termin noch nicht bestätigt").
+        _TagChip(tag: card.badge, s: s),
+        const SizedBox(height: 10),
       ],
-      Text(
-        card.title,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: _styleFor(s.baseFontSize * 1.24, FontWeight.w700, 1.25).copyWith(
-          color: s.textColor,
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: Text(
+          card.title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: _styleFor(s.baseFontSize * 1.24, FontWeight.w700, 1.25).copyWith(
+            color: s.textColor,
+          ),
         ),
       ),
     ];
     if (card.subtitle.isNotEmpty) {
       children.addAll(<Widget>[
         const SizedBox(height: 3),
-        Text(
-          card.subtitle,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: _styleFor(s.baseFontSize * 0.95, FontWeight.w400, 1.3).copyWith(
-            color: s.secondary,
-          ),
-        ),
+        _line(card.subtitle, null, s.baseFontSize * 0.95, 1.3, s.secondary),
+      ]);
+    }
+    if (card.location.isNotEmpty) {
+      children.addAll(<Widget>[
+        const SizedBox(height: 4),
+        _line(card.location, HugeIcons.mapPin, s.baseFontSize * 0.92, 1.35, s.secondary),
+      ]);
+    }
+    if (card.rating.isNotEmpty) {
+      children.addAll(<Widget>[
+        const SizedBox(height: 4),
+        _line(card.rating, HugeIcons.star, s.baseFontSize * 0.9, 1.35, s.muted),
       ]);
     }
     for (final String meta in card.metas.take(3)) {
       children.addAll(<Widget>[
         const SizedBox(height: 2),
-        Text(
-          meta,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: _styleFor(s.baseFontSize * 0.9, FontWeight.w400, 1.35).copyWith(
-            color: s.muted,
-          ),
-        ),
+        _line(meta, null, s.baseFontSize * 0.9, 1.35, s.muted),
       ]);
     }
     if (card.chips.isNotEmpty) {
       children.addAll(<Widget>[
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -1008,25 +1066,38 @@ class _CardsBlockState extends State<_CardsBlock> {
         ),
       ]);
     }
-    if (card.price.isNotEmpty) {
+    if (card.specs.isNotEmpty) {
+      final double specWidth = (innerWidth - 8) / 2;
       children.addAll(<Widget>[
-        const SizedBox(height: 8),
-        SelectionContainer.disabled(
-          child: Text(
-            card.price,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: _styleFor(s.baseFontSize * 1.45, FontWeight.w800, 1.2).copyWith(
-              color: s.textColor,
-            ),
-          ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: <Widget>[
+            for (final CardSpecItem spec in card.specs.take(4))
+              SizedBox(width: specWidth, child: _cardSpec(spec)),
+          ],
         ),
       ]);
     }
-    if (card.url.isNotEmpty) {
+    if (card.price.isNotEmpty) {
       children.addAll(<Widget>[
         const SizedBox(height: 10),
-        _cardButton(card),
+        SelectionContainer.disabled(child: _price(card.price)),
+      ]);
+    }
+    final bool hasOpen = card.url.isNotEmpty;
+    final bool hasAsk = card.ask.isNotEmpty;
+    if (hasOpen || hasAsk) {
+      children.addAll(<Widget>[
+        const SizedBox(height: 12),
+        Row(
+          children: <Widget>[
+            if (hasOpen) Expanded(child: _cardButton(card)),
+            if (hasOpen && hasAsk) const SizedBox(width: 10),
+            if (hasAsk) Expanded(child: _askButton(card)),
+          ],
+        ),
       ]);
     }
 
@@ -1034,14 +1105,120 @@ class _CardsBlockState extends State<_CardsBlock> {
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: s.dark ? s.textColor.withValues(alpha: 0.06) : s.chipFill,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: s.hairline),
+        // A flat tinted surface, no outline (the Figma recommendation card).
+        color: s.dark
+            ? s.textColor.withValues(alpha: 0.07)
+            : s.accent.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(24),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: children,
+      ),
+    );
+  }
+
+  /// One fact line, with an optional leading icon one line high.
+  Widget _line(
+    String text,
+    HugeIconData? icon,
+    double fontSize,
+    double height,
+    Color color,
+  ) {
+    final Widget label = Text(
+      text,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: _styleFor(fontSize, FontWeight.w400, height).copyWith(color: color),
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: icon == null
+          ? label
+          : Row(
+              children: <Widget>[
+                SelectionContainer.disabled(
+                  child: HugeIcon(icon, size: fontSize * 1.05, color: color),
+                ),
+                const SizedBox(width: 6),
+                Expanded(child: label),
+              ],
+            ),
+    );
+  }
+
+  /// `248 CHF / Nacht` → the amount big, the unit after it small and muted.
+  Widget _price(String price) {
+    final _AnswerBlockStyle s = widget.s;
+    String value = price;
+    String unit = '';
+    for (final String sep in const <String>[' / ', ' · ', ' pro ', ' per ']) {
+      final int at = price.indexOf(sep);
+      if (at > 0) {
+        value = price.substring(0, at);
+        unit = price.substring(at);
+        break;
+      }
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: Text.rich(
+        TextSpan(
+          children: <InlineSpan>[
+            TextSpan(
+              text: value,
+              style: _styleFor(s.baseFontSize * 1.5, FontWeight.w800, 1.2)
+                  .copyWith(color: s.textColor),
+            ),
+            if (unit.isNotEmpty)
+              TextSpan(
+                text: unit,
+                style: _styleFor(s.baseFontSize * 0.9, FontWeight.w400, 1.2)
+                    .copyWith(color: s.muted),
+              ),
+          ],
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+
+  Widget _cardSpec(CardSpecItem spec) {
+    final _AnswerBlockStyle s = widget.s;
+    final HugeIconData? icon = _blockIcon(spec.icon);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: s.chipFill,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          if (icon != null) ...<Widget>[
+            SizedBox(
+              height: s.baseFontSize * 0.86 * 1.25,
+              child: Center(
+                child: SelectionContainer.disabled(
+                  child: HugeIcon(icon, size: 16, color: s.accent),
+                ),
+              ),
+            ),
+            const SizedBox(width: 7),
+          ],
+          Expanded(
+            child: Text(
+              spec.label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: _styleFor(s.baseFontSize * 0.86, FontWeight.w500, 1.25)
+                  .copyWith(color: s.textColor),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1059,7 +1236,7 @@ class _CardsBlockState extends State<_CardsBlock> {
     final bool safeUrl = _isPublicImageUrl(url);
     return SelectionContainer.disabled(
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(18),
         child: SizedBox(
           width: double.infinity,
           height: innerWidth * 0.55,
@@ -1078,11 +1255,12 @@ class _CardsBlockState extends State<_CardsBlock> {
                       color: s.backgroundColor,
                       borderRadius: BorderRadius.circular(999),
                     ),
+                    constraints: BoxConstraints(maxWidth: innerWidth - 20),
                     child: Text(
                       card.badge,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: _styleFor(s.baseFontSize * 0.82, FontWeight.w700, 1.2)
+                      style: _styleFor(s.baseFontSize * 0.82, FontWeight.w600, 1.2)
                           .copyWith(color: s.textColor),
                     ),
                   ),
@@ -1097,40 +1275,73 @@ class _CardsBlockState extends State<_CardsBlock> {
   Widget _cardChip(String label, double innerWidth) {
     final _AnswerBlockStyle s = widget.s;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
       constraints: BoxConstraints(maxWidth: innerWidth - 4),
       decoration: BoxDecoration(
-        color: s.tileFill,
-        borderRadius: BorderRadius.circular(999),
+        color: s.chipFill,
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
         label,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: _styleFor(s.baseFontSize * 0.86, FontWeight.w600, 1.2)
-            .copyWith(color: s.secondary),
+        style: _styleFor(s.baseFontSize * 0.86, FontWeight.w500, 1.2)
+            .copyWith(color: s.textColor),
       ),
     );
   }
 
   Widget _cardButton(AnswerCard card) {
     final _AnswerBlockStyle s = widget.s;
+    return _pillButton(
+      label: card.action.isEmpty ? 'Open' : card.action,
+      fill: s.accent,
+      fg: s.onAccent,
+      onTap: () => _openBlockUrl(context, card.url),
+    );
+  }
+
+  /// The tonal second button ("Vergleichen"): sends `ask: title` as the
+  /// reader's next message, so the model knows which card was meant.
+  Widget _askButton(AnswerCard card) {
+    final _AnswerBlockStyle s = widget.s;
+    final ValueChanged<String>? send = widget.onFollowUp;
+    return _pillButton(
+      label: card.ask,
+      fill: s.accent.withValues(alpha: s.dark ? 0.24 : 0.16),
+      fg: s.dark ? s.textColor : s.accent,
+      onTap: send == null ? null : () => send('${card.ask}: ${card.title}'),
+    );
+  }
+
+  Widget _pillButton({
+    required String label,
+    required Color fill,
+    required Color fg,
+    required VoidCallback? onTap,
+  }) {
+    final _AnswerBlockStyle s = widget.s;
     return SizedBox(
-      width: double.infinity,
-      height: 44,
+      height: 46,
       child: Material(
-        color: s.accent,
-        borderRadius: BorderRadius.circular(22),
+        color: fill,
+        borderRadius: BorderRadius.circular(23),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: () => _openBlockUrl(context, card.url),
-          child: Center(
-            child: Text(
-              card.action.isEmpty ? 'Open' : card.action,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: _styleFor(s.baseFontSize * 0.95, FontWeight.w700, 1.2)
-                  .copyWith(color: s.onAccent),
+          onTap: onTap,
+          child: Semantics(
+            button: true,
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _styleFor(s.baseFontSize * 0.95, FontWeight.w700, 1.2)
+                      .copyWith(color: fg),
+                ),
+              ),
             ),
           ),
         ),
@@ -1170,16 +1381,25 @@ class _CardsBlockState extends State<_CardsBlock> {
             ],
           ),
         ),
-        SelectionContainer.disabled(
-          child: Text(
-            widget.spec.label.isEmpty
-                ? '${_page + 1} / $count'
-                : '${_page + 1} / $count ${widget.spec.label}',
-            style: TextStyle(
-              color: s.muted,
-              fontSize: s.baseFontSize * 0.86,
-              height: 1.2,
-              fontFamily: s.fontFamily,
+        // Shrinks before it overflows a narrow column (the dots take a third).
+        Expanded(
+          flex: 2,
+          child: Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: SelectionContainer.disabled(
+              child: Text(
+                widget.spec.label.isEmpty
+                    ? '${_page + 1} / $count'
+                    : '${_page + 1} / $count ${widget.spec.label}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: s.muted,
+                  fontSize: s.baseFontSize * 0.86,
+                  height: 1.2,
+                  fontFamily: s.fontFamily,
+                ),
+              ),
             ),
           ),
         ),
@@ -1392,11 +1612,17 @@ class _AskBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (spec.chips.isEmpty && spec.question.isEmpty) return const SizedBox.shrink();
+    if (spec.chips.isEmpty && spec.question.isEmpty && spec.buttons.isEmpty) {
+      return const SizedBox.shrink();
+    }
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
+        for (final String b in spec.buttons) ...<Widget>[
+          _button(b),
+          const SizedBox(height: 10),
+        ],
         if (spec.question.isNotEmpty) s.markdown(spec.question),
         if (spec.chips.isNotEmpty) ...<Widget>[
           const SizedBox(height: 8),
@@ -1404,7 +1630,8 @@ class _AskBlock extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: <Widget>[
-              for (final String chip in spec.chips) _chip(chip),
+              for (int i = 0; i < spec.chips.length; i++)
+                _chip(spec.chips[i], _blockIcon(spec.iconAt(i))),
             ],
           ),
         ],
@@ -1412,33 +1639,87 @@ class _AskBlock extends StatelessWidget {
     );
   }
 
-  Widget _chip(String label) {
+  /// A filled, full-width action ("Aktuelle Werte abrufen").
+  Widget _button(String label) {
+    return SizedBox(
+      height: 46,
+      child: Material(
+        color: s.accent,
+        borderRadius: BorderRadius.circular(23),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onFollowUp == null ? null : () => onFollowUp!(label),
+          child: Semantics(
+            button: true,
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: s.onAccent,
+                    fontSize: s.baseFontSize * 0.95,
+                    fontWeight: FontWeight.w700,
+                    height: 1.2,
+                    fontFamily: s.fontFamily,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _chip(String label, HugeIconData? icon) {
+    final TextStyle style = TextStyle(
+      color: s.textColor,
+      fontSize: s.baseFontSize * 0.95,
+      fontWeight: FontWeight.w600,
+      height: 1.25,
+      fontFamily: s.fontFamily,
+    );
+    final Widget text = Text(
+      label,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: style,
+    );
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(14),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onFollowUp == null ? null : () => onFollowUp!(label),
         child: Semantics(
           button: true,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            padding: EdgeInsets.fromLTRB(icon == null ? 14 : 12, 9, 14, 9),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: s.textColor.withValues(alpha: 0.28)),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: s.textColor.withValues(alpha: 0.24)),
             ),
-            child: Text(
-              label,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: s.textColor,
-                fontSize: s.baseFontSize * 0.95,
-                fontWeight: FontWeight.w700,
-                height: 1.25,
-                fontFamily: s.fontFamily,
-              ),
-            ),
+            child: icon == null
+                ? text
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      SizedBox(
+                        height: s.baseFontSize * 0.95 * 1.25,
+                        child: Center(
+                          child: SelectionContainer.disabled(
+                            child: HugeIcon(icon, size: 17, color: s.accent),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 7),
+                      Flexible(child: text),
+                    ],
+                  ),
           ),
         ),
       ),

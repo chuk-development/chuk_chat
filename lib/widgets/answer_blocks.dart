@@ -115,7 +115,11 @@ Widget _buildAnswerBlock(
     case AnswerBlockKind.tiles:
       return _TilesBlock(spec: parseTiles(block.arg, block.lines), s: s);
     case AnswerBlockKind.cards:
-      return _CardsBlock(spec: parseCards(block.arg, block.lines), s: s);
+      return _CardsBlock(
+        spec: parseCards(block.arg, block.lines),
+        s: s,
+        onFollowUp: onFollowUp,
+      );
     case AnswerBlockKind.ask:
       return _AskBlock(
         spec: parseAsk(block.arg, block.lines),
@@ -129,6 +133,18 @@ Widget _buildAnswerBlock(
       return const SizedBox.shrink();
     case AnswerBlockKind.status:
       return _StatusBlock(spec: parseStatus(block.arg, block.lines), s: s);
+    case AnswerBlockKind.check:
+      return _CheckBlock(spec: parseCheck(block.arg, block.lines), s: s);
+    case AnswerBlockKind.term:
+      return _TermBlock(spec: parseTerm(block.arg, block.lines), s: s);
+    case AnswerBlockKind.grid:
+      return _GridBlock(spec: parseGrid(block.arg, block.lines), s: s);
+    case AnswerBlockKind.sizes:
+      return _SizesBlock(spec: parseSizes(block.arg, block.lines), s: s);
+    case AnswerBlockKind.quote:
+      return _QuoteBlock(spec: parseQuote(block.arg, block.lines), s: s);
+    case AnswerBlockKind.more:
+      return _MoreBlock(spec: parseMore(block.arg, block.lines), s: s);
   }
 }
 
