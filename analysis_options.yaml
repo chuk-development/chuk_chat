@@ -17,6 +17,9 @@ analyzer:
     # does not try to resolve `package:webview_cef` (absent from the slim
     # pubspec).
     - ci/linux_full/**
+    # Marketing video tooling: widget tests that render real screens as
+    # fidelity references for the videos. Not app code.
+    - marketing/**
     - build/**
     - android/**
     - ios/**
