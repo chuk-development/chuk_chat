@@ -1,0 +1,1679 @@
+{
+  "ok": true,
+  "strict": false,
+  "browserSkipped": false,
+  "lint": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "filesScanned": 10
+  },
+  "runtime": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": []
+  },
+  "layout": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 14,
+    "findings": [
+      {
+        "code": "text_occluded",
+        "severity": "info",
+        "time": 2.5,
+        "selector": "#s01-mt > span:nth-of-type(20)",
+        "message": "Text is hidden beneath an opaque element.",
+        "rect": {
+          "left": 759.82,
+          "top": 1080.39,
+          "right": 784.35,
+          "bottom": 1134.58,
+          "width": 24.54,
+          "height": 54.19
+        },
+        "containerSelector": "#s01-mc",
+        "text": "c",
+        "fixHint": "Give the text its own zone, raise its stacking order above the covering element, or mark intentional layering with data-layout-allow-occlusion.",
+        "coveredFraction": 0.11,
+        "dataAttributes": {},
+        "sourceFile": "compositions/s01.html",
+        "bbox": {
+          "x": 759.82,
+          "y": 1080.39,
+          "width": 24.54,
+          "height": 54.19
+        },
+        "firstSeen": 2.5,
+        "lastSeen": 2.5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          2.5
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 2.5,
+        "selector": "#s01-all",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": -12.1,
+          "top": -19.71,
+          "right": 1092.1,
+          "bottom": 1943.3,
+          "width": 1104.19,
+          "height": 1963.01
+        },
+        "containerSelector": "#s01 > div:nth-of-type(1)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1080,
+          "bottom": 1920,
+          "width": 1080,
+          "height": 1920
+        },
+        "overflow": {
+          "left": 12.1,
+          "right": 12.1,
+          "top": 19.71,
+          "bottom": 23.3
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/s01.html",
+        "bbox": {
+          "x": -12.1,
+          "y": -19.71,
+          "width": 1104.19,
+          "height": 1963.01
+        },
+        "firstSeen": 2.5,
+        "lastSeen": 2.5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          2.5
+        ]
+      },
+      {
+        "code": "canvas_overflow",
+        "severity": "info",
+        "time": 7.5,
+        "selector": "div.w-stat",
+        "message": "Text extends outside the composition canvas.",
+        "rect": {
+          "left": 277.09,
+          "top": -271.58,
+          "right": 518.84,
+          "bottom": -231.13,
+          "width": 241.75,
+          "height": 40.45
+        },
+        "containerSelector": "#root",
+        "text": "4 chats, 2 files",
+        "fixHint": "Move the text inward, reduce its size, or mark intentional off-canvas animation with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1080,
+          "bottom": 1920,
+          "width": 1080,
+          "height": 1920
+        },
+        "overflow": {
+          "top": 271.58
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/s02.html",
+        "bbox": {
+          "x": 277.09,
+          "y": -271.58,
+          "width": 241.75,
+          "height": 40.45
+        },
+        "firstSeen": 7.5,
+        "lastSeen": 7.5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          7.5
+        ]
+      },
+      {
+        "code": "canvas_overflow",
+        "severity": "info",
+        "time": 7.5,
+        "selector": "div.w-upd",
+        "message": "Text extends outside the composition canvas.",
+        "rect": {
+          "left": 277.09,
+          "top": -216.97,
+          "right": 506.76,
+          "bottom": -182.59,
+          "width": 229.67,
+          "height": 34.38
+        },
+        "containerSelector": "#root",
+        "text": "Updated 3m ago",
+        "fixHint": "Move the text inward, reduce its size, or mark intentional off-canvas animation with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1080,
+          "bottom": 1920,
+          "width": 1080,
+          "height": 1920
+        },
+        "overflow": {
+          "top": 216.97
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/s02.html",
+        "bbox": {
+          "x": 277.09,
+          "y": -216.97,
+          "width": 229.67,
+          "height": 34.38
+        },
+        "firstSeen": 7.5,
+        "lastSeen": 7.5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          7.5
+        ]
+      },
+      {
+        "code": "canvas_overflow",
+        "severity": "info",
+        "time": 7.5,
+        "selector": "#s02-w-c > div:nth-of-type(1) > div:nth-of-type(2)",
+        "message": "Text extends outside the composition canvas.",
+        "rect": {
+          "left": 115.3,
+          "top": -110.8,
+          "right": 389.62,
+          "bottom": -74.39,
+          "width": 274.32,
+          "height": 36.41
+        },
+        "containerSelector": "#root",
+        "text": "Workspace Name",
+        "fixHint": "Move the text inward, reduce its size, or mark intentional off-canvas animation with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1080,
+          "bottom": 1920,
+          "width": 1080,
+          "height": 1920
+        },
+        "overflow": {
+          "top": 110.8
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/s02.html",
+        "bbox": {
+          "x": 115.3,
+          "y": -110.8,
+          "width": 274.32,
+          "height": 36.41
+        },
+        "firstSeen": 7.5,
+        "lastSeen": 7.5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          7.5
+        ]
+      },
+      {
+        "code": "text_occluded",
+        "severity": "info",
+        "time": 7.5,
+        "selector": "#s02-w-c > div:nth-of-type(1) > div:nth-of-type(5)",
+        "message": "Text is hidden beneath an opaque element.",
+        "rect": {
+          "left": 165.86,
+          "top": 250.2,
+          "right": 788.09,
+          "bottom": 356.38,
+          "width": 622.24,
+          "height": 106.18
+        },
+        "containerSelector": "#s02-w > div:nth-of-type(2)",
+        "text": "My German tax return: receipts, deadlines, deductions.",
+        "fixHint": "Give the text its own zone, raise its stacking order above the covering element, or mark intentional layering with data-layout-allow-occlusion.",
+        "coveredFraction": 0.78,
+        "dataAttributes": {},
+        "sourceFile": "compositions/s02.html",
+        "bbox": {
+          "x": 165.86,
+          "y": 250.2,
+          "width": 622.24,
+          "height": 106.18
+        },
+        "firstSeen": 7.5,
+        "lastSeen": 7.5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          7.5
+        ]
+      },
+      {
+        "code": "text_occluded",
+        "severity": "info",
+        "time": 7.5,
+        "selector": "#s02-w-typed > span:nth-of-type(36)",
+        "message": "Text is hidden beneath an opaque element.",
+        "rect": {
+          "left": 877.16,
+          "top": 833.16,
+          "right": 904.71,
+          "bottom": 878.66,
+          "width": 27.56,
+          "height": 45.5
+        },
+        "containerSelector": "#s02-w-caret",
+        "text": "A",
+        "fixHint": "Give the text its own zone, raise its stacking order above the covering element, or mark intentional layering with data-layout-allow-occlusion.",
+        "coveredFraction": 0.11,
+        "dataAttributes": {},
+        "sourceFile": "compositions/s02.html",
+        "bbox": {
+          "x": 877.16,
+          "y": 833.16,
+          "width": 27.56,
+          "height": 45.5
+        },
+        "firstSeen": 7.5,
+        "lastSeen": 7.5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          7.5
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 7.5,
+        "selector": "#s02-cam",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": -6.05,
+          "top": -9.68,
+          "right": 1086.05,
+          "bottom": 1931.83,
+          "width": 1092.1,
+          "height": 1941.5
+        },
+        "containerSelector": "#s02 > div:nth-of-type(1)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1080,
+          "bottom": 1920,
+          "width": 1080,
+          "height": 1920
+        },
+        "overflow": {
+          "left": 6.05,
+          "right": 6.05,
+          "top": 9.68,
+          "bottom": 11.83
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/s02.html",
+        "bbox": {
+          "x": -6.05,
+          "y": -9.68,
+          "width": 1092.1,
+          "height": 1941.5
+        },
+        "firstSeen": 7.5,
+        "lastSeen": 7.5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          7.5
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 7.5,
+        "selector": "#s02-w-c",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": 64.74,
+          "top": -338.32,
+          "right": 1015.26,
+          "bottom": 1442.91,
+          "width": 950.53,
+          "height": 1781.23
+        },
+        "containerSelector": "#s02-w",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 24.29,
+          "top": 273.46,
+          "right": 1055.71,
+          "bottom": 1486.9,
+          "width": 1031.42,
+          "height": 1213.44
+        },
+        "overflow": {
+          "top": 611.78
+        },
+        "dataAttributes": {
+          "data-layout-allow-overlap": ""
+        },
+        "sourceFile": "compositions/s02.html",
+        "bbox": {
+          "x": 64.74,
+          "y": -338.32,
+          "width": 950.53,
+          "height": 1781.23
+        },
+        "firstSeen": 7.5,
+        "lastSeen": 7.5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          7.5
+        ]
+      },
+      {
+        "code": "panel_out_of_canvas",
+        "severity": "info",
+        "time": 7.5,
+        "selector": "#s02-w-c > div:nth-of-type(1)",
+        "message": "Painted panel extends outside the composition canvas.",
+        "rect": {
+          "left": 64.74,
+          "top": -338.32,
+          "right": 1015.26,
+          "bottom": 516.15,
+          "width": 950.53,
+          "height": 854.46
+        },
+        "containerSelector": "#root",
+        "text": "4 chats, 2 files Updated 3m ago Workspace Name T",
+        "fixHint": "Move the panel inward, or mark intentional off-canvas animation with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1080,
+          "bottom": 1920,
+          "width": 1080,
+          "height": 1920
+        },
+        "overflow": {
+          "top": 338.32
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/s02.html",
+        "bbox": {
+          "x": 64.74,
+          "y": -338.32,
+          "width": 950.53,
+          "height": 854.46
+        },
+        "firstSeen": 7.5,
+        "lastSeen": 7.5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          7.5
+        ]
+      },
+      {
+        "code": "text_occluded",
+        "severity": "info",
+        "time": 17.5,
+        "selector": "#s03-m-typed > span:nth-of-type(27)",
+        "message": "Text is hidden beneath an opaque element.",
+        "rect": {
+          "left": 667.82,
+          "top": 901.85,
+          "right": 690.23,
+          "bottom": 950.24,
+          "width": 22.41,
+          "height": 48.39
+        },
+        "containerSelector": "#s03-m-caret",
+        "text": "4",
+        "fixHint": "Give the text its own zone, raise its stacking order above the covering element, or mark intentional layering with data-layout-allow-occlusion.",
+        "coveredFraction": 0.11,
+        "dataAttributes": {},
+        "sourceFile": "compositions/s03.html",
+        "bbox": {
+          "x": 667.82,
+          "y": 901.85,
+          "width": 22.41,
+          "height": 48.39
+        },
+        "firstSeen": 17.5,
+        "lastSeen": 17.5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          17.5
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 17.5,
+        "selector": "#s03-cam",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": -15.98,
+          "top": -22.73,
+          "right": 1095.98,
+          "bottom": 1954.1,
+          "width": 1111.97,
+          "height": 1976.83
+        },
+        "containerSelector": "#s03 > div:nth-of-type(1)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1080,
+          "bottom": 1920,
+          "width": 1080,
+          "height": 1920
+        },
+        "overflow": {
+          "left": 15.98,
+          "right": 15.98,
+          "top": 22.73,
+          "bottom": 34.1
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/s03.html",
+        "bbox": {
+          "x": -15.98,
+          "y": -22.73,
+          "width": 1111.97,
+          "height": 1976.83
+        },
+        "firstSeen": 17.5,
+        "lastSeen": 17.5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          17.5
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 32.5,
+        "selector": "#s07-all",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": -20.68,
+          "top": -19.26,
+          "right": 1100.68,
+          "bottom": 1974.27,
+          "width": 1121.36,
+          "height": 1993.54
+        },
+        "containerSelector": "#s07 > div:nth-of-type(1)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1080,
+          "bottom": 1920,
+          "width": 1080,
+          "height": 1920
+        },
+        "overflow": {
+          "left": 20.68,
+          "right": 20.68,
+          "top": 19.26,
+          "bottom": 54.27
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/s07.html",
+        "bbox": {
+          "x": -20.68,
+          "y": -19.26,
+          "width": 1121.36,
+          "height": 1993.54
+        },
+        "firstSeen": 32.5,
+        "lastSeen": 32.5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          32.5
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 37.5,
+        "selector": "#s09-lock",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": -2,
+          "top": -3.26,
+          "right": 1082,
+          "bottom": 1923.85,
+          "width": 1084,
+          "height": 1927.1
+        },
+        "containerSelector": "#s09 > div:nth-of-type(1)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1080,
+          "bottom": 1920,
+          "width": 1080,
+          "height": 1920
+        },
+        "overflow": {
+          "top": 3.26,
+          "bottom": 3.85
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/s09.html",
+        "bbox": {
+          "x": -2,
+          "y": -3.26,
+          "width": 1084,
+          "height": 1927.1
+        },
+        "firstSeen": 37.5,
+        "lastSeen": 42.5,
+        "occurrences": 2,
+        "heldMs": 0,
+        "times": [
+          37.5,
+          42.5
+        ]
+      }
+    ],
+    "duration": 45,
+    "samples": [
+      2.5,
+      7.5,
+      12.5,
+      17.5,
+      22.5,
+      27.5,
+      32.5,
+      37.5,
+      42.5
+    ],
+    "transitionSamples": [],
+    "transitionSamplesDropped": 0,
+    "tolerance": 2,
+    "totalIssueCount": 14,
+    "truncated": false
+  },
+  "motion": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": false,
+    "samples": 0
+  },
+  "contrast": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 1,
+    "infoCount": 0,
+    "findings": [
+      {
+        "code": "contrast_aa_failure",
+        "severity": "warning",
+        "message": "Contrast is 2.61:1; WCAG AA requires 4.5:1.",
+        "text": "Save changes",
+        "fg": "rgb(126,124,118)",
+        "bg": "rgb(61,61,58)",
+        "ratio": 2.61,
+        "requiredRatio": 4.5,
+        "suggestedColor": "rgb(168,167,163)",
+        "large": false,
+        "selector": "div > div:nth-of-type(4) > div > div > div:nth-of-type(1) > div > div > div:nth-of-type(1) > div:nth-of-type(5) > span:nth-of-type(2)",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s03.html",
+        "bbox": {
+          "x": 457.1782531738281,
+          "y": 1394.93798828125,
+          "width": 235.64883422851562,
+          "height": 52.5157470703125
+        },
+        "time": 12.5,
+        "times": [
+          12.5
+        ]
+      }
+    ],
+    "enabled": true,
+    "samples": [
+      2.5,
+      12.5,
+      22.5,
+      32.5,
+      42.5
+    ],
+    "checked": 51,
+    "passed": 50
+  },
+  "craft": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 8,
+    "infoCount": 0,
+    "findings": [
+      {
+        "code": "first_frame_empty",
+        "severity": "warning",
+        "message": "Frame 0 shows only the background, and the first frame is the thumbnail on social players: have the title or key image already on screen at 0 s instead of entering from nothing; see references/review.md.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0
+      },
+      {
+        "code": "line_unread",
+        "severity": "warning",
+        "message": "\"- S e l f - e m p l o y e d s i n c e 2 0 2 4\" (21 words) is on screen 2.50 s (±0.01 s), under its 5.10 s floor: hold it about 0.5 s + 0.3 s a word (6.80 s here) before it leaves or changes; see references/motion.md.",
+        "text": "- S e l f - e m p l o y e d s i n c e 2 0 2 4",
+        "selector": "#s01-m",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s01.html",
+        "bbox": {
+          "x": 514.66,
+          "y": 1078.65,
+          "width": 24.33000000000004,
+          "height": 53.710000000000036
+        },
+        "time": 1.438,
+        "words": 21,
+        "seconds": 2.5,
+        "floorSeconds": 5.1
+      },
+      {
+        "code": "text_below_floor",
+        "severity": "warning",
+        "message": "Type floor is 28 px (2.6% of the 1080 px short side, what a phone can read) and 72 text elements stay under it for 0.5 s or more, the smallest \"2\" at 11 px: set reading text to at least 28 px, or put data-layout-ignore on text that is texture rather than reading; see references/look.md.",
+        "text": "2",
+        "selector": "div.w-tabs > div:nth-of-type(1) > div:nth-of-type(1) > span:nth-of-type(3)",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s02.html",
+        "bbox": {
+          "x": 267,
+          "y": 499.05,
+          "width": 15.52,
+          "height": 31
+        },
+        "time": 4,
+        "times": [
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          5.625,
+          5.625,
+          5.625,
+          5.75,
+          5.75,
+          5.875,
+          5.875,
+          6,
+          6.125,
+          6.125,
+          6.25,
+          6.25,
+          6.375,
+          6.5,
+          6.5,
+          6.625,
+          6.625,
+          6.75,
+          6.75,
+          6.875,
+          6.875,
+          7,
+          7.125,
+          7.125,
+          7.25,
+          7.25,
+          7.25,
+          7.375,
+          7.5,
+          7.625,
+          7.625,
+          7.75,
+          7.75,
+          7.875,
+          7.875,
+          8,
+          8,
+          8.125,
+          8.25,
+          8.25,
+          8.375,
+          8.375,
+          8.5,
+          8.5,
+          8.625,
+          8.625,
+          8.75,
+          8.875,
+          8.875,
+          9,
+          9.125,
+          9.125,
+          9.25,
+          9.25,
+          9.25,
+          9.375,
+          9.375,
+          9.5,
+          9.625,
+          9.625,
+          9.75,
+          9.75
+        ],
+        "fontPx": 11,
+        "floorPx": 28,
+        "seconds": 7.75,
+        "elements": [
+          {
+            "selector": "div.w-tabs > div:nth-of-type(1) > div:nth-of-type(1) > span:nth-of-type(3)",
+            "text": "2",
+            "fontPx": 11,
+            "time": 4,
+            "seconds": 7.75
+          },
+          {
+            "selector": "div.w-tabs > div:nth-of-type(2) > div:nth-of-type(1) > span:nth-of-type(3)",
+            "text": "4",
+            "fontPx": 11,
+            "time": 4,
+            "seconds": 7.75
+          },
+          {
+            "selector": "div.w-csub",
+            "text": "These instructions are sent to the AI at the start of every chat in this workspace.",
+            "fontPx": 12,
+            "time": 4,
+            "seconds": 7.75
+          },
+          {
+            "selector": "#s02-w-save > span:nth-of-type(2)",
+            "text": "Save Changes",
+            "fontPx": 13.98,
+            "time": 5.625,
+            "seconds": 5.25
+          },
+          {
+            "selector": "div.w-tabs > div:nth-of-type(1) > div:nth-of-type(1) > span:nth-of-type(2)",
+            "text": "Files",
+            "fontPx": 14,
+            "time": 4,
+            "seconds": 7.75
+          },
+          {
+            "selector": "div.w-tabs > div:nth-of-type(2) > div:nth-of-type(1) > span:nth-of-type(2)",
+            "text": "Chats",
+            "fontPx": 14,
+            "time": 4,
+            "seconds": 7.75
+          },
+          {
+            "selector": "div.w-tab.on > div:nth-of-type(1) > span:nth-of-type(2)",
+            "text": "Settings",
+            "fontPx": 14,
+            "time": 4,
+            "seconds": 7.75
+          },
+          {
+            "selector": "span.w-ctitle",
+            "text": "Custom System Prompt",
+            "fontPx": 15,
+            "time": 4,
+            "seconds": 7.75
+          },
+          {
+            "selector": "#s02-w-ph",
+            "text": "e.g., You are a senior developer helping with a Flutter workspace. Use Dart best practices...",
+            "fontPx": 15,
+            "time": 4,
+            "seconds": 1.5
+          },
+          {
+            "selector": "div.w-pill > span:nth-of-type(2)",
+            "text": "Tax helper",
+            "fontPx": 15,
+            "time": 4,
+            "seconds": 7.75
+          },
+          {
+            "selector": "#s02-w-c > div:nth-of-type(1) > div:nth-of-type(5)",
+            "text": "My German tax return: receipts, deadlines, deductions.",
+            "fontPx": 16,
+            "time": 4,
+            "seconds": 7.75
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(1)",
+            "text": "H",
+            "fontPx": 16.03,
+            "time": 5.625,
+            "seconds": 6.125
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(2)",
+            "text": "e",
+            "fontPx": 16.03,
+            "time": 5.625,
+            "seconds": 6.125
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(3)",
+            "text": "l",
+            "fontPx": 16.04,
+            "time": 5.75,
+            "seconds": 6
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(4)",
+            "text": "p",
+            "fontPx": 16.04,
+            "time": 5.75,
+            "seconds": 6
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(6)",
+            "text": "m",
+            "fontPx": 16.04,
+            "time": 5.875,
+            "seconds": 5.875
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(7)",
+            "text": "e",
+            "fontPx": 16.04,
+            "time": 5.875,
+            "seconds": 5.875
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(9)",
+            "text": "w",
+            "fontPx": 16.05,
+            "time": 6,
+            "seconds": 5.75
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(10)",
+            "text": "i",
+            "fontPx": 16.06,
+            "time": 6.125,
+            "seconds": 5.625
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(11)",
+            "text": "t",
+            "fontPx": 16.06,
+            "time": 6.125,
+            "seconds": 5.625
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(12)",
+            "text": "h",
+            "fontPx": 16.07,
+            "time": 6.25,
+            "seconds": 5.5
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(14)",
+            "text": "m",
+            "fontPx": 16.07,
+            "time": 6.25,
+            "seconds": 5.5
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(15)",
+            "text": "y",
+            "fontPx": 16.08,
+            "time": 6.375,
+            "seconds": 5.375
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(17)",
+            "text": "G",
+            "fontPx": 16.08,
+            "time": 6.5,
+            "seconds": 5.25
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(18)",
+            "text": "e",
+            "fontPx": 16.08,
+            "time": 6.5,
+            "seconds": 5.25
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(19)",
+            "text": "r",
+            "fontPx": 16.09,
+            "time": 6.625,
+            "seconds": 5.125
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(20)",
+            "text": "m",
+            "fontPx": 16.09,
+            "time": 6.625,
+            "seconds": 5.125
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(21)",
+            "text": "a",
+            "fontPx": 16.1,
+            "time": 6.75,
+            "seconds": 5
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(22)",
+            "text": "n",
+            "fontPx": 16.1,
+            "time": 6.75,
+            "seconds": 5
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(24)",
+            "text": "t",
+            "fontPx": 16.12,
+            "time": 6.875,
+            "seconds": 4.875
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(25)",
+            "text": "a",
+            "fontPx": 16.12,
+            "time": 6.875,
+            "seconds": 4.875
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(26)",
+            "text": "x",
+            "fontPx": 16.13,
+            "time": 7,
+            "seconds": 4.75
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(28)",
+            "text": "r",
+            "fontPx": 16.14,
+            "time": 7.125,
+            "seconds": 4.625
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(29)",
+            "text": "e",
+            "fontPx": 16.14,
+            "time": 7.125,
+            "seconds": 4.625
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(30)",
+            "text": "t",
+            "fontPx": 16.15,
+            "time": 7.25,
+            "seconds": 4.5
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(31)",
+            "text": "u",
+            "fontPx": 16.15,
+            "time": 7.25,
+            "seconds": 4.5
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(32)",
+            "text": "r",
+            "fontPx": 16.15,
+            "time": 7.25,
+            "seconds": 4.5
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(33)",
+            "text": "n",
+            "fontPx": 16.16,
+            "time": 7.375,
+            "seconds": 4.375
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(36)",
+            "text": "A",
+            "fontPx": 16.18,
+            "time": 7.5,
+            "seconds": 4.25
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(37)",
+            "text": "s",
+            "fontPx": 16.19,
+            "time": 7.625,
+            "seconds": 4.125
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(38)",
+            "text": "k",
+            "fontPx": 16.19,
+            "time": 7.625,
+            "seconds": 4.125
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(40)",
+            "text": "b",
+            "fontPx": 16.21,
+            "time": 7.75,
+            "seconds": 4
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(41)",
+            "text": "e",
+            "fontPx": 16.21,
+            "time": 7.75,
+            "seconds": 4
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(42)",
+            "text": "f",
+            "fontPx": 16.22,
+            "time": 7.875,
+            "seconds": 3.875
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(43)",
+            "text": "o",
+            "fontPx": 16.22,
+            "time": 7.875,
+            "seconds": 3.875
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(44)",
+            "text": "r",
+            "fontPx": 16.24,
+            "time": 8,
+            "seconds": 3.75
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(45)",
+            "text": "e",
+            "fontPx": 16.24,
+            "time": 8,
+            "seconds": 3.75
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(47)",
+            "text": "y",
+            "fontPx": 16.25,
+            "time": 8.125,
+            "seconds": 3.625
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(48)",
+            "text": "o",
+            "fontPx": 16.27,
+            "time": 8.25,
+            "seconds": 3.5
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(49)",
+            "text": "u",
+            "fontPx": 16.27,
+            "time": 8.25,
+            "seconds": 3.5
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(51)",
+            "text": "a",
+            "fontPx": 16.28,
+            "time": 8.375,
+            "seconds": 3.375
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(52)",
+            "text": "s",
+            "fontPx": 16.28,
+            "time": 8.375,
+            "seconds": 3.375
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(53)",
+            "text": "s",
+            "fontPx": 16.3,
+            "time": 8.5,
+            "seconds": 3.25
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(54)",
+            "text": "u",
+            "fontPx": 16.3,
+            "time": 8.5,
+            "seconds": 3.25
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(55)",
+            "text": "m",
+            "fontPx": 16.31,
+            "time": 8.625,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(56)",
+            "text": "e",
+            "fontPx": 16.31,
+            "time": 8.625,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(59)",
+            "text": "K",
+            "fontPx": 16.32,
+            "time": 8.75,
+            "seconds": 3
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(60)",
+            "text": "e",
+            "fontPx": 16.34,
+            "time": 8.875,
+            "seconds": 2.875
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(61)",
+            "text": "e",
+            "fontPx": 16.34,
+            "time": 8.875,
+            "seconds": 2.875
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(62)",
+            "text": "p",
+            "fontPx": 16.35,
+            "time": 9,
+            "seconds": 2.75
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(64)",
+            "text": "a",
+            "fontPx": 16.36,
+            "time": 9.125,
+            "seconds": 2.625
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(65)",
+            "text": "n",
+            "fontPx": 16.36,
+            "time": 9.125,
+            "seconds": 2.625
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(66)",
+            "text": "s",
+            "fontPx": 16.37,
+            "time": 9.25,
+            "seconds": 2.5
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(67)",
+            "text": "w",
+            "fontPx": 16.37,
+            "time": 9.25,
+            "seconds": 2.5
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(68)",
+            "text": "e",
+            "fontPx": 16.37,
+            "time": 9.25,
+            "seconds": 2.5
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(69)",
+            "text": "r",
+            "fontPx": 16.38,
+            "time": 9.375,
+            "seconds": 2.375
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(70)",
+            "text": "s",
+            "fontPx": 16.38,
+            "time": 9.375,
+            "seconds": 2.375
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(72)",
+            "text": "s",
+            "fontPx": 16.4,
+            "time": 9.5,
+            "seconds": 2.25
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(73)",
+            "text": "h",
+            "fontPx": 16.4,
+            "time": 9.625,
+            "seconds": 2.125
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(74)",
+            "text": "o",
+            "fontPx": 16.4,
+            "time": 9.625,
+            "seconds": 2.125
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(75)",
+            "text": "r",
+            "fontPx": 16.41,
+            "time": 9.75,
+            "seconds": 2
+          },
+          {
+            "selector": "#s02-w-typed > span:nth-of-type(76)",
+            "text": "t",
+            "fontPx": 16.41,
+            "time": 9.75,
+            "seconds": 2
+          }
+        ]
+      },
+      {
+        "code": "line_unread",
+        "severity": "warning",
+        "message": "\"H e l p m e w i t h m y G e r m a n t a x r e t u r n . A...\" (61 words) is on screen 6.20 s (±0.01 s), under its 14.10 s floor: hold it about 0.5 s + 0.3 s a word (18.80 s here) before it leaves or changes; see references/motion.md.",
+        "text": "H e l p m e w i t h m y G e r m a n t a x r e t u r n . A s k b e f o r e y o u a s s u m e . K e e p a n s w e r s s h o r t .",
+        "selector": "#s02-w-pf",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s02.html",
+        "bbox": {
+          "x": 169.33,
+          "y": 833.45,
+          "width": 52.579999999999984,
+          "height": 45.08000000000004
+        },
+        "time": 5.539,
+        "words": 61,
+        "seconds": 6.195,
+        "floorSeconds": 14.1
+      },
+      {
+        "code": "line_unread",
+        "severity": "warning",
+        "message": "\"- Lives in Hamburg - Files taxes with ELSTER - S e l f - ...\" (28 words) is on screen 6.27 s (±0.01 s), under its 6.68 s floor: hold it about 0.5 s + 0.3 s a word (8.90 s here) before it leaves or changes; see references/motion.md.",
+        "text": "- Lives in Hamburg - Files taxes with ELSTER - S e l f - e m p l o y e d s i n c e 2 0 2 4",
+        "selector": "#s03-m-mf",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s03.html",
+        "bbox": {
+          "x": 120,
+          "y": 800.72,
+          "width": 543.77,
+          "height": 99.5
+        },
+        "time": 11.773,
+        "words": 28,
+        "seconds": 6.266,
+        "floorSeconds": 6.675
+      },
+      {
+        "code": "text_below_floor",
+        "severity": "warning",
+        "message": "Type floor is 28 px (2.6% of the 1080 px short side, what a phone can read) and 29 text elements stay under it for 0.5 s or more, the smallest \"Long-term knowledge the AI remembers ...\" at 12 px: set reading text to at least 28 px, or put data-layout-ignore on text that is texture rather than reading; see references/look.md.",
+        "text": "Long-term knowledge the AI remembers across conversations. The AI can also update this when it learns important facts or decisions.",
+        "selector": "div.w-info > span:nth-of-type(2)",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s03.html",
+        "bbox": {
+          "x": 185,
+          "y": 571.72,
+          "width": 781.45,
+          "height": 118
+        },
+        "time": 11.875,
+        "times": [
+          11.875,
+          11.875,
+          11.875,
+          11.875,
+          11.875,
+          11.875,
+          11.875,
+          13.375,
+          13.5,
+          13.5,
+          13.5,
+          13.75,
+          13.75,
+          13.75,
+          13.875,
+          13.875,
+          14,
+          14,
+          14,
+          14.25,
+          14.25,
+          14.25,
+          14.375,
+          14.375,
+          14.5,
+          14.5,
+          14.625,
+          14.75,
+          14.75
+        ],
+        "fontPx": 12,
+        "floorPx": 28,
+        "seconds": 6.25,
+        "elements": [
+          {
+            "selector": "div.w-info > span:nth-of-type(2)",
+            "text": "Long-term knowledge the AI remembers across conversations. The AI can also update this when it learns important facts or decisions.",
+            "fontPx": 12,
+            "time": 11.875,
+            "seconds": 6.25
+          },
+          {
+            "selector": "#s03-m-cnt44",
+            "text": "44 characters",
+            "fontPx": 12,
+            "time": 11.875,
+            "seconds": 1.375
+          },
+          {
+            "selector": "#s03-m-cnt71",
+            "text": "71 characters",
+            "fontPx": 12.14,
+            "time": 14.75,
+            "seconds": 3.375
+          },
+          {
+            "selector": "#s03-m-mf > span:nth-of-type(2)",
+            "text": "- Lives in Hamburg - Files taxes with ELSTER",
+            "fontPx": 14,
+            "time": 11.875,
+            "seconds": 6.25
+          },
+          {
+            "selector": "span.w-btn.w-out > span:nth-of-type(2)",
+            "text": "Import from another AI",
+            "fontPx": 14,
+            "time": 11.875,
+            "seconds": 6.25
+          },
+          {
+            "selector": "#s03-m-typed > span:nth-of-type(4)",
+            "text": "S",
+            "fontPx": 14.04,
+            "time": 13.375,
+            "seconds": 4.75
+          },
+          {
+            "selector": "#s03-m-typed > span:nth-of-type(5)",
+            "text": "e",
+            "fontPx": 14.05,
+            "time": 13.5,
+            "seconds": 4.625
+          },
+          {
+            "selector": "#s03-m-typed > span:nth-of-type(6)",
+            "text": "l",
+            "fontPx": 14.05,
+            "time": 13.5,
+            "seconds": 4.625
+          },
+          {
+            "selector": "#s03-m-typed > span:nth-of-type(7)",
+            "text": "f",
+            "fontPx": 14.05,
+            "time": 13.5,
+            "seconds": 4.625
+          },
+          {
+            "selector": "#s03-m-typed > span:nth-of-type(9)",
+            "text": "e",
+            "fontPx": 14.06,
+            "time": 13.75,
+            "seconds": 4.375
+          },
+          {
+            "selector": "#s03-m-typed > span:nth-of-type(10)",
+            "text": "m",
+            "fontPx": 14.06,
+            "time": 13.75,
+            "seconds": 4.375
+          },
+          {
+            "selector": "#s03-m-typed > span:nth-of-type(11)",
+            "text": "p",
+            "fontPx": 14.06,
+            "time": 13.75,
+            "seconds": 4.375
+          },
+          {
+            "selector": "#s03-m-typed > span:nth-of-type(12)",
+            "text": "l",
+            "fontPx": 14.07,
+            "time": 13.875,
+            "seconds": 4.25
+          },
+          {
+            "selector": "#s03-m-typed > span:nth-of-type(13)",
+            "text": "o",
+            "fontPx": 14.07,
+            "time": 13.875,
+            "seconds": 4.25
+          },
+          {
+            "selector": "#s03-m-typed > span:nth-of-type(14)",
+            "text": "y",
+            "fontPx": 14.09,
+            "time": 14,
+            "seconds": 4.125
+          },
+          {
+            "selector": "#s03-m-typed > span:nth-of-type(15)",
+            "text": "e",
+            "fontPx": 14.09,
+            "time": 14,
+            "seconds": 4.125
+          },
+          {
+            "selector": "#s03-m-typed > span:nth-of-type(16)",
+            "text": "d",
+            "fontPx": 14.09,
+            "time": 14,
+            "seconds": 4.125
+          },
+          {
+            "selector": "#s03-m-typed > span:nth-of-type(18)",
+            "text": "s",
+            "fontPx": 14.11,
+            "time": 14.25,
+            "seconds": 3.875
+          },
+          {
+            "selector": "#s03-m-typed > span:nth-of-type(19)",
+            "text": "i",
+            "fontPx": 14.11,
+            "time": 14.25,
+            "seconds": 3.875
+          },
+          {
+            "selector": "#s03-m-typed > span:nth-of-type(20)",
+            "text": "n",
+            "fontPx": 14.11,
+            "time": 14.25,
+            "seconds": 3.875
+          },
+          {
+            "selector": "#s03-m-typed > span:nth-of-type(21)",
+            "text": "c",
+            "fontPx": 14.12,
+            "time": 14.375,
+            "seconds": 3.75
+          },
+          {
+            "selector": "#s03-m-typed > span:nth-of-type(22)",
+            "text": "e",
+            "fontPx": 14.12,
+            "time": 14.375,
+            "seconds": 3.75
+          },
+          {
+            "selector": "#s03-m-typed > span:nth-of-type(24)",
+            "text": "2",
+            "fontPx": 14.14,
+            "time": 14.5,
+            "seconds": 3.625
+          },
+          {
+            "selector": "#s03-m-typed > span:nth-of-type(25)",
+            "text": "0",
+            "fontPx": 14.14,
+            "time": 14.5,
+            "seconds": 3.625
+          },
+          {
+            "selector": "#s03-m-typed > span:nth-of-type(26)",
+            "text": "2",
+            "fontPx": 14.15,
+            "time": 14.625,
+            "seconds": 3.5
+          },
+          {
+            "selector": "#s03-m-typed > span:nth-of-type(27)",
+            "text": "4",
+            "fontPx": 14.17,
+            "time": 14.75,
+            "seconds": 3.375
+          },
+          {
+            "selector": "#s03-m-save > span:nth-of-type(2)",
+            "text": "Save changes",
+            "fontPx": 14.83,
+            "time": 11.875,
+            "seconds": 6.25
+          },
+          {
+            "selector": "#s03-m > div:nth-of-type(4) > span:nth-of-type(1)",
+            "text": "AI Identity & Memory",
+            "fontPx": 15,
+            "time": 11.875,
+            "seconds": 6.25
+          },
+          {
+            "selector": "div.w-sec",
+            "text": "Memory",
+            "fontPx": 16,
+            "time": 11.875,
+            "seconds": 6.25
+          }
+        ]
+      },
+      {
+        "code": "line_unread",
+        "severity": "warning",
+        "message": "\"{\"v\":\"1\",\"kv\":1,\"nonce\":\"vL3UzO13ofclAi3F\",\"ciphertext\":\"...\" (11 words) is on screen 1.47 s (±0.01 s), under its 2.85 s floor: hold it about 0.5 s + 0.3 s a word (3.80 s here) before it leaves or changes; see references/motion.md.",
+        "text": "{\"v\":\"1\",\"kv\":1,\"nonce\":\"vL3UzO13ofclAi3F\",\"ciphertext\":\"aetEc3Bn069n3CArX2s1muuz4x/YgDTKqAXEyvFi2Xknf4s/xKL7Aorc/9tk5AabTCxlswyL7m…",
+        "selector": "#s05-rp-v3",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s05.html",
+        "bbox": {
+          "x": 92,
+          "y": 883.03,
+          "width": 877.2,
+          "height": 189
+        },
+        "time": 20.867,
+        "words": 11,
+        "seconds": 1.469,
+        "floorSeconds": 2.85
+      },
+      {
+        "code": "line_unread",
+        "severity": "warning",
+        "message": "\"\"ciphertext\": \"aetEc3Bn069n3CArX2s1muuz4x/YgDTKqAXEyvFi2X...\" (11 words) is on screen 2.66 s (±0.01 s), under its 2.85 s floor: hold it about 0.5 s + 0.3 s a word (3.80 s here) before it leaves or changes; see references/motion.md.",
+        "text": "\"ciphertext\": \"aetEc3Bn069n3CArX2s1muuz4x/YgDTKqAXEyvFi2Xknf4s/xKL7Aorc/9tk5AabTCxlswyL7m1X52uS15xZsJpzJN+hCny+d/hbAniyIfb0GXRA6A3hN05UUcd2RU8ifw…\", + 222 more characters",
+        "selector": "#s05-ex-b > div:nth-of-type(5)",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s05.html",
+        "bbox": {
+          "x": 77,
+          "y": 571,
+          "width": 918.03,
+          "height": 195
+        },
+        "time": 22.641,
+        "words": 11,
+        "seconds": 2.664,
+        "floorSeconds": 2.85
+      }
+    ],
+    "enabled": true,
+    "step": 0.125,
+    "samples": 360
+  },
+  "hdr": {
+    "autoPromotion": null,
+    "inspection": "available"
+  },
+  "snapshots": {
+    "enabled": false,
+    "files": [],
+    "times": [],
+    "findingFiles": []
+  },
+  "saved": {
+    "id": "2239f4c4-1f2b-4f58-b5da-bf18e0388433",
+    "revision": "4d82c936-b3a7-4356-b54b-f33224509f25",
+    "report": "/home/user/git/chuk_chat/marketing/videos/chuk-12-memory-vertical/.hyperframes/artifacts/checks/2239f4c4-1f2b-4f58-b5da-bf18e0388433.json",
+    "attribution": "recorded-revision"
+  },
+  "_meta": {
+    "version": "0.8.202",
+    "latestVersion": "0.8.201",
+    "updateAvailable": false
+  }
+}
