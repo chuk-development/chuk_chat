@@ -9,7 +9,6 @@
    and sizes are shown.
 Run once:  python3 _work/make_assets.py   -> _work/gen/lab-report.jpg, _work/cipher.json
 """
-import glob
 import json
 import os
 import sys
@@ -18,15 +17,14 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / "_lib"))
 from chukvid import cipher  # noqa: E402
+from chukvid.core import launch_chrome  # noqa: E402
 from playwright.sync_api import sync_playwright  # noqa: E402
 
 GEN = HERE / "gen"
 GEN.mkdir(exist_ok=True)
-CHROME = sorted(glob.glob(os.path.expanduser(
-    "~/.cache/hyperframes/chrome/chrome-headless-shell/*/chrome-headless-shell-linux64/chrome-headless-shell")))[-1]
 
 with sync_playwright() as p:
-    b = p.chromium.launch(executable_path=CHROME)
+    b = launch_chrome(p)
     pg = b.new_page(viewport={"width": 1500, "height": 2000})
     pg.goto((HERE / "lab_report.html").as_uri())
     pg.wait_for_timeout(300)

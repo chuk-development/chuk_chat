@@ -181,7 +181,7 @@
 #s09-txt { transform-origin: 960.0px 540.0px; }
   </style>
   <div id="root" data-composition-id="s09" data-width="1920" data-height="1080" data-duration="2.45">
-    <div id="s09-bg" class="fill" style="background:#DCCBB4"></div><div id="s09-txt" class="fill"><div class="card-line serif" id="s09-l0" style="top:415px;font-size:112px;line-height:125px;color:#2A1F17">Made privately.</div><div class="card-line serif" id="s09-l1" style="top:540px;font-size:112px;line-height:125px;color:#2A1F17">Kept privately.</div></div>
+    <div id="s09-bg" class="fill" style="background:#DCCBB4"></div><div id="s09-txt" class="fill"><div class="card-line serif" id="s09-l0" style="top:415px;font-size:112px;line-height:125px;color:#2A1F17">Zero retention.</div><div class="card-line serif" id="s09-l1" style="top:540px;font-size:112px;line-height:125px;color:#2A1F17">Then encrypted.</div></div>
   </div>
   <script>
 
@@ -241,6 +241,7 @@ function hfStream(tl, sel, t, stagger) {
   hfReveal(tl, '#s09-l1', 0.55);
   tl.fromTo('#s09-txt', { scale: 1 }, { scale: 1.035, duration: 2.45, ease: 'none' }, 0);
 
+  window.__timelines = window.__timelines || {};
   window.__timelines["s09"] = tl;
 })();
   </script>

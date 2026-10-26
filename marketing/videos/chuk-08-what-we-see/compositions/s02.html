@@ -167,6 +167,7 @@ function hfReveal(tl, sel, t, stagger) {
   tl.set('#s02-caret2', { opacity: 0 }, end + 1.2);
   tl.set('#s02-caret', { display: 'block', opacity: 1 }, end + 1.2);
 
+  window.__timelines = window.__timelines || {};
   window.__timelines["s02"] = tl;
 })();
   </script>

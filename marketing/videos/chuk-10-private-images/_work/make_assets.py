@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Episode 10 assets: the "generated" watercolour, the real request body, the vault token,
-and the real ciphertext of the stored image.
+"""Episode 10 assets: the "generated" watercolour, the real request body and the real
+ciphertext size of the stored image.
 
 1. _work/bruno.html (SVG watercolour, seeded filters, no paid generation) -> rendered at
    1536x1152 (4:3, the server default image_size landscape_4_3) -> JPEG quality 85, what
@@ -8,16 +8,16 @@ and the real ciphertext of the stored image.
    -> _work/gen/bruno.jpg
 2. The request body exactly as api_server build_openrouter_image_request() builds it
    (routers/ai/images.py:427-442, provider policy :56-60), key order kept.
-3. A vault token like _vault_put(): secrets.token_urlsafe(32) (43 chars).
-4. The JPEG bytes -> EncryptionService.encryptBytes envelope (AES-256-GCM, v "1", random
-   key thrown away). Its JSON is the .enc object at images/<uid>/<uuid>.enc. Neighbours:
-   real ciphertext of random bytes, only names and sizes are shown.
+3. The JPEG bytes -> EncryptionService.encryptBytes envelope (AES-256-GCM, v "1", random
+   key thrown away). Its JSON is the .enc object at images/<uid>/<uuid>.enc; only its size
+   is kept (the film never prints the envelope). Neighbours: real ciphertext of random
+   bytes, only names and sizes are shown.
 Run once:  python3 _work/make_assets.py   -> _work/gen/bruno.jpg, _work/cipher.json
 """
 import io
 import json
 import os
-import secrets
+import subprocess
 import sys
 from pathlib import Path
 
@@ -30,7 +30,8 @@ GEN = HERE / "gen"
 GEN.mkdir(exist_ok=True)
 PROMPT = "a watercolour of our dog Bruno on the beach"
 
-os.system(f"python3 '{HERE / 'shot_html.py'}' '{HERE / 'bruno.html'}' '{GEN / 'bruno.png'}' 1536 1152")
+subprocess.run([sys.executable, str(HERE / "shot_html.py"), str(HERE / "bruno.html"),
+                str(GEN / "bruno.png"), "1536", "1152"], check=True)
 buf = io.BytesIO()
 Image.open(GEN / "bruno.png").convert("RGB").save(buf, "JPEG", quality=85)
 (GEN / "bruno.jpg").write_bytes(buf.getvalue())
@@ -60,7 +61,7 @@ request = {
 }
 
 key = cipher.new_key()
-env, env_text = cipher.encrypt_bytes(jpg, key)
+_, env_text = cipher.encrypt_bytes(jpg, key)
 user = cipher.uid()
 mine = cipher.uid()
 others = []
@@ -72,13 +73,11 @@ for n, when in ((412_331, "2026-10-24 19:02"), (1_604_877, "2026-10-21 10:47"),
 out = {
     "prompt": PROMPT,
     "request": request,
-    "vault_token": secrets.token_urlsafe(32),
     "user_id": user,
     "object": mine + ".enc",
     "jpg_bytes": len(jpg),
     "object_bytes": len(env_text.encode()),
     "modified": "2026-10-26 09:41",
-    "envelope": env,
     "others": others,
 }
 (HERE / "cipher.json").write_text(json.dumps(out, indent=1))

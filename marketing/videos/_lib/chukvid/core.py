@@ -205,7 +205,51 @@ function hfStream(tl, sel, t, stagger) {
 }
 """
 
-GSAP = "https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"
+# GSAP 3.14.2, vendored (no network request at render time). The page loads the
+# project copy that Episode.write() puts in assets/js/.
+GSAP_FILE = LIB / "assets/js/gsap.min.js"
+GSAP = "assets/js/gsap.min.js"
+
+MUSIC_DIR = VIDEOS.parent / "_shared/music"
+
+
+def require_file(path, what, hint):
+    """Stop with a clear message when a local-only input (gitignored media) is missing."""
+    path = Path(path)
+    if not path.is_file():
+        raise SystemExit(f"missing {what}: {path}\n{hint}")
+    return path
+
+
+def require_music(path):
+    return require_file(path, "music", "Music WAVs are gitignored. See marketing/videos/_lib/README.md "
+                        "(section Music) for the Epidemic Sound track and edit id, then put the "
+                        f"file in {MUSIC_DIR}.")
+
+
+def find_chrome():
+    """A headless Chrome for Playwright scripts (asset shots, fidelity harness).
+
+    Order: $CHROME_PATH, the HyperFrames CLI cache (any platform folder), else None,
+    which lets Playwright use its own Chromium. Never a machine-specific path."""
+    import glob
+    import os
+    env = os.environ.get("CHROME_PATH")
+    if env:
+        return require_file(env, "Chrome ($CHROME_PATH)", "Point CHROME_PATH at a Chrome binary.")
+    hits = sorted(glob.glob(str(Path.home() / ".cache/hyperframes/chrome/chrome-headless-shell/*/*/chrome-headless-shell*")))
+    hits = [h for h in hits if os.access(h, os.X_OK)]
+    return hits[-1] if hits else None
+
+
+def launch_chrome(playwright):
+    """playwright.chromium.launch() with find_chrome(); a clear error if no browser exists."""
+    exe = find_chrome()
+    try:
+        return playwright.chromium.launch(**({"executable_path": exe} if exe else {}))
+    except Exception as e:  # noqa: BLE001
+        raise SystemExit("no headless Chrome found. Run `npx hyperframes browser ensure` "
+                         "or `python3 -m playwright install chromium`, or set CHROME_PATH.\n" + str(e))
 
 
 # ------------------------------------------------------------------ the episode / project writer
@@ -221,7 +265,7 @@ class Episode:
         self.dir = Path(folder)
         self.fmt = fmt
         self.duration = duration
-        self.music = Path(music)
+        self.music = require_music(music)
         self.extra_css = extra_css   # CSS added to every scene (ui.APP_CSS etc.)
         self.scenes = []             # (id, start, dur)
         self.assets = {}             # dest (relative to assets/) -> source path
@@ -255,6 +299,7 @@ class Episode:
 (function () {{
   var tl = gsap.timeline({{ paused: true }});
 {T(js)}
+  window.__timelines = window.__timelines || {{}};
   window.__timelines["{cid}"] = tl;
 }})();
   </script>
@@ -281,10 +326,13 @@ class Episode:
         shutil.copy2(REPO / "assets/wordmark.svg", img / "wordmark.svg")
         (d / "assets/audio").mkdir(parents=True, exist_ok=True)
         shutil.copy2(self.music, d / "assets/audio/music.wav")
+        (d / "assets/js").mkdir(parents=True, exist_ok=True)
+        shutil.copy2(GSAP_FILE, d / "assets/js/gsap.min.js")
         for dest, src in self.assets.items():
             p = d / "assets" / dest
             p.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src, p)
+            if not (p.exists() and p.resolve() == Path(src).resolve()):   # source may be this project's own tracked copy
+                shutil.copy2(src, p)
         # project files (same shape as `hyperframes init` writes)
         (d / "hyperframes.json").write_text(json.dumps({
             "$schema": "https://hyperframes.heygen.com/schema/hyperframes.json",
@@ -302,14 +350,14 @@ class Episode:
         if not meta.exists():
             meta.write_text(json.dumps({"id": name, "name": name}, indent=2) + "\n")
         (d / ".gitignore").write_text(".hyperframes/*\n!.hyperframes/caption-skin.html\n.waveform-cache/\n"
-                                      ".thumbnails/\nnode_modules/\n_work/final/\n_work/snap*/\n")
+                                      ".thumbnails/\nnode_modules/\n_work/final/\n_work/snap*/\n__pycache__/\n")
         (d / "index.html").write_text(self.index_html())
         return d
 
     def index_html(self):
         W, H, D = self.W, self.H, self.duration
         hosts = "\n".join(
-            f'      <div id="{cid}" data-composition-id="{cid}" data-composition-src="compositions/{cid}.html" '
+            f'      <div id="{cid}" class="clip" data-composition-id="{cid}" data-composition-src="compositions/{cid}.html" '
             f'data-start="{s}" data-duration="{dur}" data-track-index="1" data-track-kind="graphics" '
             f'data-width="{W}" data-height="{H}" style="z-index:{i + 2}"></div>'
             for i, (cid, s, dur) in enumerate(self.scenes))
@@ -336,6 +384,7 @@ class Episode:
     </div>
     <script>
       const tl = gsap.timeline({{ paused: true }});
+      window.__timelines = window.__timelines || {{}};
       window.__timelines["main"] = tl;
     </script>
   </body>

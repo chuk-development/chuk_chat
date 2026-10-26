@@ -3,7 +3,9 @@
 
 Story (SERIES-PRIVACY.md row 09): a photo of a lab report is dragged into the real
 composer, "what does this say about my thyroid?", the answer. Cut: the Storage bucket
-images/<uid>/<uuid>.enc, one object opened: ciphertext. "Your scans stay yours."
+images/<uid>/<uuid>.enc, one object opened: ciphertext. "Stored as ciphertext. / Only you
+hold the key." (storage + key only: the server and the model get the file in plain text
+to answer, so nothing here says they never see it)
 Claim (PRIVACY_CLAIMS.md, Files and images, may say): your photos, scans and files are
 encrypted on your device before they are stored; Storage only holds .enc ciphertext.
 
@@ -66,7 +68,9 @@ def build(fmt, folder):
     scenes.card(ep, "s04", cut[3], cut[4], ["Now look at", "our storage."] if v else ["Now look at our storage."])
     s05_storage(ep, cut[4], cut[5], v, cs)
     s06_block(ep, cut[5], cut[6], v)
-    scenes.card(ep, "s07", cut[6], cut[7], ["Your scans", "stay yours."] if v else ["Your scans stay yours."], bg="@TAN@")
+    scenes.card(ep, "s07", cut[6], cut[7],
+                ["Stored as", "ciphertext.", "Only you hold", "the key."] if v
+                else ["Stored as ciphertext.", "Only you hold the key."], bg="@TAN@")
     scenes.end_card(ep, "s08", cut[7], DUR)
     ep.write()
     ep.report()

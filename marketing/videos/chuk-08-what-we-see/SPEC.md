@@ -24,14 +24,14 @@ SHOTS:
   s05 20.04-29.00  Supabase-style table encrypted_chats (id, user_id masked,
                    encrypted_payload, updated_at). Base64 slides through the cell, cursor
                    selects and opens it: the real envelope {"v":"2","kv":1,nonce,
-                   ciphertext,mac}. "This is all our server ever sees."
+                   ciphertext,mac}. "This is all our server stores."
   s06 29.00-35.88  brown block: the bubble text scrambles into the same ciphertext,
                    lock lands. "Encrypted on your device. / With a key only you hold."
   s07 35.88-43.77  GitHub file view (dark), chuk-development / chuk_chat,
                    lib/services/encryption_service.dart lines 52-67 verbatim
                    (sealChatPayload). Push-in on AesGcm.with256bits(), then the nonce.
                    "Don't trust us. Read the code."
-  s08 43.77-52.60  "Never used for training." / "No ads. No tracking." (tan) /
+  s08 43.77-52.60  "Your key never leaves your device." (100 px) / "No ads. No tracking." (tan) /
                    "Run from Germany, under EU law."
   s09 52.60-62.00  tan end card: CC mark, "Chuk Chat", "Private and Secure. Always.",
                    chuk.chat. Hold to the end.

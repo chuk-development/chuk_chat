@@ -30,6 +30,18 @@ stereo, `--quality high --gpu -w 4` (NVENC). Audio measured: mean -14.1 dB, max 
   padding box, Fast pill padding 11 px, disclaimer 11.5 px, bubble and answer 16.4 px,
   timeline labels and chips 12.7 px, bubble radius 16 on all corners.
 - No sound effects: the music is final.
+- Claim fixes (2026-10-26, CodeRabbit + coordinator): s05 "This is all our server ever
+  sees." -> "This is all our server stores." (inference is not end-to-end). s08a "Never used
+  for training." -> "Your key never leaves your device." at 100 px (112 px ran to 30 px of
+  the frame edge; 100 px keeps it inside the action-safe box). Timing and look unchanged.
+- Reproducible build: `_work/build.py` reads the code shot from the repo relative to the
+  script, copies the vendored GSAP (`marketing/videos/_lib/assets/js/gsap.min.js`) into
+  `assets/js/` (no CDN at render time), copies the music from
+  `marketing/_shared/music/07-chasing-horizons-62s.wav` (gitignored; source in
+  `marketing/videos/_lib/README.md`, section Music) and stops with a clear message if it
+  is missing. Scene hosts carry `class="clip"`; every timeline registry is initialised.
+- Frame 0 shows only the canvas (check: `first_frame_empty`). Left as is: the owner approved
+  this look and timing; set a thumbnail on the platform instead.
 - End card (owner fix): official lockup only. Mark = `assets/img/logo.svg` (copy of
   repo `assets/logo.svg`), 440 px box, centred. Wordmark = `assets/img/wordmark.svg`
   (copy of repo `assets/wordmark.svg`) inlined as-is at 900 px wide, fills recoloured to

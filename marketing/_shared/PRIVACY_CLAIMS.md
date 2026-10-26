@@ -22,5 +22,6 @@ encrypted conversation", "even we can't read it", "not even the AI".
 | Tracking | No ads, no tracking SDK in the app. Server analytics count tokens and latency, never your words (content fields stripped). | We log nothing about you. | S:services/analytics.py:48-70, 150-200 |
 | Code | The app's source code is public on GitHub. Read it. | Open source (licence is BSL 1.1, see bead chuk_chat-yekx). The server code is public. | C:LICENSE |
 | Germany | Run from Germany, under EU law. (site claim) | — | chuk.chat |
-| Training | Never used for training. (site claim, provider ZDR) | Contractual guarantee. | chuk.chat, S:docs/ZDR_PROVIDER_ANALYSIS.md |
+| Training | — (no route-wide evidence) | "Never used for training." Contractual no-training guarantee. Reason: OrcaRouter and Melious routes carry no ZDR flag (GLM 5.3 Flash goes via OrcaRouter), and no contract with a no-training term was found for them. Only OpenRouter routes are ZDR-filtered. | S:chat/upstream.py:48-107, S:model_info/service.py:954-1062, S:docs/ZDR_PROVIDER_ANALYSIS.md |
+| Key | Your key never leaves your device. (The AES-256 key is derived from your password on the device, PBKDF2-HMAC-SHA256 600 000 rounds, and kept only on the device, in its secure storage.) | "Nobody can ever decrypt it." "The server never sees your messages" (inference gets them in plain text). | C:lib/services/encryption_service.dart:356-367, 372-381 |
 | Voice / Android assistant | — (speech goes to Groq Whisper, no ZDR found) | On-device AI, offline assistant, private voice. | S:routers/ai/transcribe.py |

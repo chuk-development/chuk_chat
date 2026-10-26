@@ -5,3 +5,4 @@
 node_modules/
 _work/final/
 _work/snap*/
+__pycache__/

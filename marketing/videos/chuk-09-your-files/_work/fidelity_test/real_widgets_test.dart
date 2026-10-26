@@ -82,6 +82,7 @@ Future<void> _shoot(WidgetTester tester, Widget child, Size size, String name) a
 
 void main() {
   setUpAll(() async {
+    Directory('$work/fidelity').createSync(recursive: true);
     SharedPreferences.setMockInitialValues(<String, Object>{});
     await _font('Ubuntu', ['$work/../assets/fonts/Ubuntu-wght.ttf']);
     await _font('JetBrains Mono', ['assets/fonts/JetBrainsMono-wght.ttf']);

@@ -208,8 +208,8 @@
 
 #s04-txt { transform-origin: 960.0px 540.0px; }
   </style>
-  <div data-hf-id="hf-cr7k" id="root" data-composition-id="s04" data-width="1920" data-height="1080" data-duration="2.46">
-    <div data-hf-id="hf-ytrz" id="s04-txt" class="fill"><div data-hf-id="hf-muyn" class="card-line serif" id="s04-l0" style="top:478px;font-size:112px;line-height:125px;color:#2A1F17">What reaches our database?</div></div>
+  <div id="root" data-composition-id="s04" data-width="1920" data-height="1080" data-duration="2.46">
+    <div id="s04-txt" class="fill"><div class="card-line serif" id="s04-l0" style="top:478px;font-size:112px;line-height:125px;color:#2A1F17">What reaches our database?</div></div>
   </div>
   <script>
 
@@ -268,6 +268,7 @@ function hfStream(tl, sel, t, stagger) {
   hfReveal(tl, '#s04-l0', 0.10);
   tl.fromTo('#s04-txt', { scale: 1 }, { scale: 1.035, duration: 2.46, ease: 'none' }, 0);
 
+  window.__timelines = window.__timelines || {};
   window.__timelines["s04"] = tl;
 })();
   </script>

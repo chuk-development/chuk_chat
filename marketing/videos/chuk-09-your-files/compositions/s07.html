@@ -140,7 +140,7 @@
 #s07-txt { transform-origin: 960.0px 540.0px; }
   </style>
   <div id="root" data-composition-id="s07" data-width="1920" data-height="1080" data-duration="2.22">
-    <div id="s07-bg" class="fill" style="background:#DCCBB4"></div><div id="s07-txt" class="fill"><div class="card-line serif" id="s07-l0" style="top:478px;font-size:112px;line-height:125px;color:#2A1F17">Your scans stay yours.</div></div>
+    <div id="s07-bg" class="fill" style="background:#DCCBB4"></div><div id="s07-txt" class="fill"><div class="card-line serif" id="s07-l0" style="top:415px;font-size:112px;line-height:125px;color:#2A1F17">Stored as ciphertext.</div><div class="card-line serif" id="s07-l1" style="top:540px;font-size:112px;line-height:125px;color:#2A1F17">Only you hold the key.</div></div>
   </div>
   <script>
 
@@ -197,8 +197,10 @@ function hfStream(tl, sel, t, stagger) {
 (function () {
   var tl = gsap.timeline({ paused: true });
   hfReveal(tl, '#s07-l0', 0.10);
+  hfReveal(tl, '#s07-l1', 0.55);
   tl.fromTo('#s07-txt', { scale: 1 }, { scale: 1.035, duration: 2.22, ease: 'none' }, 0);
 
+  window.__timelines = window.__timelines || {};
   window.__timelines["s07"] = tl;
 })();
   </script>

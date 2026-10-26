@@ -47,6 +47,17 @@ Edit `_work/episode.py`, never `compositions/`.
   date · size line is read only after the push-in (38 px in 16:9, 36 px in 9:16).
 - No sound effects, no new music.
 
+## Claim fix (2026-10-26)
+
+- s09 "Made privately. / Kept privately." -> "Zero retention. / Then encrypted." The old
+  line could read as "the server never sees the prompt or image". The new one says only
+  retention + storage (PRIVACY_CLAIMS.md: Generated images). Other lines checked: "Made with
+  zero data retention.", "Kept in server memory: 15 minutes at most.", "Deleted on the first
+  download.", "Then stored encrypted.", "Opened on your device." stay. Timing and look
+  unchanged.
+- `_work/cipher.json` no longer holds the unused vault token and envelope (secret-scanner
+  noise, never read by episode.py); `make_assets.py` writes only what the film uses.
+
 ## Checks
 
 - `npx hyperframes check`: ok, 0 errors in both. Warnings kept: app-scale UI text under the

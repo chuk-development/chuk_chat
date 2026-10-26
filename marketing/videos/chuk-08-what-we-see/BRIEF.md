@@ -72,7 +72,8 @@ style), never text glyphs.
    the real envelope format, generated for real with AES-256-GCM in
    `_work/make_cipher.py` (Python `cryptography`, random key, 12-byte nonce):
    `{"v":"2","kv":1,"nonce":"…","ciphertext":"…","mac":"…"}`. Long base64
-   that scrolls. Serif line: "This is all our server ever sees."
+   that scrolls. Serif line: "This is all our server stores." (was "ever sees";
+   changed 2026-10-26: the server gets the plain prompt for inference, it only stores ciphertext)
 6. Colour block (dark brown): the bubble text scrambles into the same
    ciphertext. Line: "Encrypted on your device. With a key only you hold."
 7. Code shot: a rebuilt GitHub file view (dark), path
@@ -81,7 +82,9 @@ style), never text glyphs.
    `AesGcm.with256bits()` and `nonce` highlighted by a slow push-in. Serif
    line: "Don't trust us. Read the code."
 8. Three short beats, one per cut, serif on canvas/tan:
-   "Never used for training." / "No ads. No tracking." /
+   "Your key never leaves your device." / "No ads. No tracking." /
+   (was "Never used for training."; changed 2026-10-26, no route-wide evidence, see
+   marketing/_shared/PRIVACY_CLAIMS.md, Training and Key)
    "Run from Germany, under EU law."
 9. End card on tan: CC mark (`assets/logo.svg`) + "Chuk Chat" +
    "Private and Secure. Always." (exact wording, readable size, ink soft) +

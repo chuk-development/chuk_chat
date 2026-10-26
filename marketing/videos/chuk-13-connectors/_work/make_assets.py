@@ -8,8 +8,10 @@
    nonce, ciphertext, mac}; random key, thrown away). That string is what the
    Supabase table cowork_mcp_connectors holds in its `ciphertext` column.
 3. Logos: the app's bundled catalogue icons (assets/mcp_icons/<id>.png) are copied by
-   episode.py; for the big hook tiles the brand favicons at 256 / 180 px were fetched
-   once into gen/ (fav-notion.com.png, fav-linear.app.png) with a neutral agent string.
+   episode.py. For the big hook tiles the brand favicons at 256 / 180 px were fetched
+   once with a neutral agent string and are tracked in git as
+   chuk-13-connectors/assets/img/brand/notion-256.png and linear-180.jpg; episode.py
+   copies them from there into both formats (no fetch at build time).
 Run once:  python3 _work/make_assets.py   -> _work/secrets.json
 """
 import base64

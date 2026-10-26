@@ -39,16 +39,32 @@ def huge(name, size, color="currentColor", cls=""):
 _MAT = {}
 
 
+def _material_font():
+    """MaterialIcons-Regular.otf from the Flutter SDK: $FLUTTER_ROOT, else the SDK of the
+    `flutter` on PATH. A clear error if neither has it."""
+    import os
+    import shutil
+    roots = []
+    if os.environ.get("FLUTTER_ROOT"):
+        roots.append(Path(os.environ["FLUTTER_ROOT"]))
+    exe = shutil.which("flutter")
+    if exe:
+        roots.append(Path(exe).resolve().parent.parent)        # <sdk>/bin/flutter
+    rel = "bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf"
+    for r in roots:
+        if (r / rel).is_file():
+            return r / rel
+    raise SystemExit(f"MaterialIcons-Regular.otf not found under {[str(r) for r in roots] or 'no Flutter SDK'}. "
+                     "Set FLUTTER_ROOT to the Flutter SDK, or run `flutter precache` once.")
+
+
 def material(code, size, color="currentColor", cls=""):
     """A Material Icons glyph (AppIcon falls back to it when the set has no HugeIcon),
     outlined from the Flutter SDK's MaterialIcons-Regular.otf."""
     if code not in _MAT:
         from fontTools.pens.svgPathPen import SVGPathPen
         from fontTools.ttLib import TTFont
-        import glob
-        import os
-        otf = sorted(glob.glob(os.path.expanduser("~/development/flutter/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf")))[0]
-        f = TTFont(otf)
+        f = TTFont(_material_font())
         gs = f.getGlyphSet()
         name = f.getBestCmap()[code]
         pen = SVGPathPen(gs)
@@ -195,11 +211,13 @@ REQS = ["At least 8 characters", "Uppercase letter (A-Z)", "Lowercase letter (a-
 
 def meter(pid):
     bars = "".join(f'<span class="lg-bar" id="{pid}-b{i}"></span>' for i in range(4))
+    levels = "".join(f'<span id="{pid}-l{i}" style="display:none;color:{c}">{t}</span>'
+                     for i, (c, t) in enumerate(LEVELS))
     reqs = "".join(
         f'<div class="lg-req" id="{pid}-q{i}">{material(RADIO_UNCHECKED, 16, "#9E9E9E", "off")}'
         f'{huge("checkmark-circle02", 16, "#4CAF50", "on")}<span>{esc(t)}</span></div>' for i, t in enumerate(REQS))
     return (f'<div class="lg-meter" id="{pid}"><div class="lg-bars">{bars}</div>'
-            f'<div class="lg-strength" id="{pid}-lab">{"".join(f'<span id="{pid}-l{i}" style="display:none;color:{c}">{t}</span>' for i, (c, t) in enumerate(LEVELS))}</div><div class="lg-reqs" id="{pid}-reqs">{reqs}</div></div>')
+            f'<div class="lg-strength" id="{pid}-lab">{levels}</div><div class="lg-reqs" id="{pid}-reqs">{reqs}</div></div>')
 
 
 def meter_js(pid, pw, t0, cps=18):

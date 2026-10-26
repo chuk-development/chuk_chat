@@ -1,6 +1,6 @@
 # SPEC: chuk-09-your-files (privacy series, episode 09)
 
-GOAL:    "Your scans stay yours." A photo of a lab report goes into the real composer;
+GOAL:    "Stored as ciphertext. Only you hold the key." A photo of a lab report goes into the real composer;
          Storage only holds the `.enc` ciphertext of it.
 CLAIM:   PRIVACY_CLAIMS.md, Files and images: encrypted on your device before they are
          stored; Storage only holds `.enc` ciphertext. Not said: "the server never sees
@@ -29,7 +29,8 @@ SHOTS:
                      "Storage only holds ciphertext."
   s06 28.105-32.495  brown block: the photo turns into its own ciphertext row by row, lock
                      lands. "Encrypted on your device, / before it's stored."
-  s07 32.495-34.715  tan: "Your scans stay yours."
+  s07 32.495-34.715  tan: "Stored as ciphertext. / Only you hold the key." (9:16: four lines,
+                     "Stored as / ciphertext. / Only you hold / the key.")
   s08 34.715-45.000  tan end card: logo.svg + wordmark.svg, chuk.chat (Liberation Mono).
 9:16:    same story, re-laid out: stacked, bigger UI zoom, serif lines split, all text
          between y 220 and y 1540, Storage list shows Name + Size with the uuid middle elided.

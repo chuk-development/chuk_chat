@@ -22,14 +22,17 @@ Edit `_work/episode.py` / `_work/sidebar.py`, never `compositions/`.
 - The test font is the variable Ubuntu TTF; Flutter draws its w500 chat titles wider than CSS
   does, so the title uses letter-spacing 0.65 to match the real truncation points.
 - Mobile panel at 360 wide (not 412) so the date lines reach 34 px inside 1080 px.
-- Workspaces off (production default): nav block is New chat, Media, Search (desktop) and
+- Workspaces off (production default, `kFeatureWorkspaces` is false; the desktop widget test
+  also passes `showWorkspacesButton: false`): nav block is New chat, Media, Search (desktop) and
   Media, Search (phone; New chat is the round button in the head bar).
 - Search typing 5.5 keys/s instead of the series' 18 chars/s so every filter step is visible.
   The per-key list states use the app's rule (case-insensitive contains on the title;
   the fictional chats have no message text).
 - The request counter is a visual device, labelled "Requests while you search", and only
   counts what is true: the desktop filter is synchronous in memory, the phone filter runs in
-  a background isolate; neither sends a request.
+  a background isolate; neither sends a request. "Not one request." is scoped to this sidebar
+  search filter (the counter title says "while you search"); it is not a claim that the app
+  sends nothing at all, and the search_chats tool is out of scope.
 - Code shown per format matches the sidebar on screen (desktop vs phone). The search_chats
   tool (SQLite chat_cache.db) is not shown, because its results go to the model.
 - No new music cuts beyond the beat grid, no sound effects.

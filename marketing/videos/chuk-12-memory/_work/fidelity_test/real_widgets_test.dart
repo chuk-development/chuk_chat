@@ -577,6 +577,7 @@ class _MemoryPage extends StatelessWidget {
 
 void main() {
   setUpAll(() async {
+    Directory('$work/fidelity').createSync(recursive: true);
     SharedPreferences.setMockInitialValues(<String, Object>{});
     await _font('Ubuntu', ['$work/../../_lib/assets/fonts/Ubuntu-wght.ttf']);
     // Styles that set no family fall back to Roboto in a test; the desktop app draws

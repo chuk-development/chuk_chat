@@ -226,7 +226,7 @@ Pass via `--dart-define=FLAG=value`. Defined in `lib/platform_config.dart`.
 |------|---------|-------|
 | `PLATFORM_MOBILE` | `false` | Mobile UI layout (set `true` for Android). Leave BOTH platform flags unset to let `kAutoDetectPlatform` pick from the device |
 | `PLATFORM_DESKTOP` | `false` | Desktop UI layout |
-| `FEATURE_WORKSPACES` | **`true`** | Workspaces (custom AI personas + files + memory) |
+| `FEATURE_WORKSPACES` | `false` | Workspaces (custom AI personas + files + memory). `platform_config.dart` and `run.sh` both default it to false |
 | `FEATURE_ARTIFACTS` | **`true`** | Editable code/markdown/HTML/drawing panels |
 | `FEATURE_PAYMENTS_DIRECT` | **`true`** | Stripe. MUST be false for Play Store builds — `fastlane build_aab` forces `false`, see `docs/FASTLANE.md` |
 | `FEATURE_IMAGE_GEN` | **always on** | Hardcoded, no flag needed |
@@ -241,7 +241,7 @@ Pass via `--dart-define=FLAG=value`. Defined in `lib/platform_config.dart`.
 | `FEATURE_SPOTIFY` | `false` | Leave off — the API server no longer exposes the OAuth route, so the tool registers and then fails at call time |
 
 **There is no `FEATURE_PROJECTS`.** Nothing in `lib/` reads it; the flag is
-`FEATURE_WORKSPACES`, and it already defaults to `true`. `build.sh`,
+`FEATURE_WORKSPACES`, and it defaults to `false` (`lib/platform_config.dart`). `build.sh`,
 `codemagic.yaml` and `AGENTS.md` still pass `--dart-define=FEATURE_PROJECTS=…`,
 which does nothing.
 

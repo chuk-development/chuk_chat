@@ -624,6 +624,7 @@ function hfStream(tl, sel, t, stagger) {
   tl.to('#s03-cur', { x: 800, y: 1170, duration: 0.6, ease: 'power2.out' }, 6.88);
   tl.fromTo('#s03-out', { scale: 1 }, { scale: 1.04, duration: 1.55, ease: 'power1.inOut' }, 6.78);
 
+  window.__timelines = window.__timelines || {};
   window.__timelines["s03"] = tl;
 })();
   </script>

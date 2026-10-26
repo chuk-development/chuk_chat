@@ -190,7 +190,7 @@ void main() {
           width: 1000,
           height: 460,
           child: Column(children: [
-            _Toolbar(count: 5),
+            const _Toolbar(count: 5),
             Expanded(
               child: Stack(children: [
                 Positioned.fill(

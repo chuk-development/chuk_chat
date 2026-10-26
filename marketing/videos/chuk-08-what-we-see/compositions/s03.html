@@ -147,6 +147,7 @@ function hfReveal(tl, sel, t, stagger) {
   // push in on the question
   tl.fromTo('#s03-cam', { scale: 1 }, { scale: 1.4, duration: 2.6, ease: 'power2.inOut' }, 5.2);
 
+  window.__timelines = window.__timelines || {};
   window.__timelines["s03"] = tl;
 })();
   </script>

@@ -22,6 +22,9 @@ SHOTS:
                    states from the real filter rule), Keys typed 0 -> 8, Requests sent 0.
                    16:9 pans up to show the third result.
   s03 12.29-15.38  the counter card big, "Not one request."
+                   Scope: the sidebar search filter only (SidebarDesktop _filterDesktopChats,
+                   SidebarMobile compute(_filterChatsIsolate)), which runs in memory and sends
+                   no request. Not a claim about the whole app or the search_chats tool.
   s04 15.38-18.45  canvas card "So where did it search?"
   s05 18.45-25.62  code card: 16:9 sidebar_desktop.dart _filterDesktopChats (verbatim);
                    9:16 sidebar_mobile.dart compute(_filterChatsIsolate) + its loop (verbatim,

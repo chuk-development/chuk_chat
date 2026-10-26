@@ -9,17 +9,12 @@ Two kinds of reference:
 harness() renders a library piece alone, laid out like the widget test, with the
 project's fonts, so the two halves line up pixel for pixel.
 """
-import glob
-import os
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-from .core import COMMON_CSS, LIB, T
+from .core import COMMON_CSS, LIB, T, launch_chrome
 from .ui import ALL_CSS
-
-CHROME = sorted(glob.glob(os.path.expanduser(
-    "~/.cache/hyperframes/chrome/chrome-headless-shell/*/chrome-headless-shell-linux64/chrome-headless-shell")))
 
 
 def harness(project_dir, body, size, out_png, ratio=2.0, bg="#262624", extra_css=""):
@@ -36,7 +31,7 @@ def harness(project_dir, body, size, out_png, ratio=2.0, bg="#262624", extra_css
     tmp = project_dir / "_work" / f".harness-{Path(out_png).stem}.html"
     tmp.write_text(page)
     with sync_playwright() as p:
-        b = p.chromium.launch(executable_path=CHROME[-1])
+        b = launch_chrome(p)
         pg = b.new_page(viewport={"width": w, "height": h}, device_scale_factor=ratio)
         pg.goto(tmp.as_uri())
         pg.wait_for_timeout(500)

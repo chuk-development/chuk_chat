@@ -211,11 +211,11 @@
 #s01-m { top: 668px; font-size: 46px; line-height: 64px; }
 
   </style>
-  <div data-hf-id="hf-lc7m" id="root" data-composition-id="s01" data-width="1920" data-height="1080" data-duration="3.905">
+  <div id="root" data-composition-id="s01" data-width="1920" data-height="1080" data-duration="3.905">
 
-    <div data-hf-id="hf-mz1z" id="s01-all" class="fill">
-      <div data-hf-id="hf-n7cs" class="card-line serif" id="s01-l0" style="top:348px;font-size:112px;line-height:125px">What does your AI</div><div data-hf-id="hf-acrq" class="card-line serif" id="s01-l1" style="top:473px;font-size:112px;line-height:125px">remember about you?</div>
-      <div data-hf-id="hf-wsm8" class="memo" id="s01-m"><span data-hf-id="hf-g80i" id="s01-mt"></span><span data-hf-id="hf-y644" class="a-caret" id="s01-mc" style="opacity:0"></span></div>
+    <div id="s01-all" class="fill">
+      <div class="card-line serif" id="s01-l0" style="top:348px;font-size:112px;line-height:125px">What does your AI</div><div class="card-line serif" id="s01-l1" style="top:473px;font-size:112px;line-height:125px">remember about you?</div>
+      <div class="memo" id="s01-m"><span id="s01-mt"></span><span class="a-caret" id="s01-mc" style="opacity:0"></span></div>
     </div>
 
   </div>
@@ -284,6 +284,7 @@ function hfStream(tl, sel, t, stagger) {
   tl.set('#s01-mc', { opacity: 0 }, e + 0.9);
   tl.fromTo('#s01-all', { scale: 1 }, { scale: 1.035, duration: 3.90, ease: 'none' }, 0);
 
+  window.__timelines = window.__timelines || {};
   window.__timelines["s01"] = tl;
 })();
   </script>
