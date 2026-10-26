@@ -1,0 +1,70 @@
+<!doctype html>
+<!-- A clearly fictional lab report, photographed on a desk. No real person, lab or data.
+     Rendered to assets/img/lab-report.jpg by _work/make_assets.py. -->
+<html><head><meta charset="utf-8">
+<style>
+  html, body { margin: 0; width: 1500px; height: 2000px; overflow: hidden; }
+  body { background:
+      radial-gradient(ellipse 80% 60% at 35% 25%, #d9d2c6 0%, #b9b0a2 55%, #8f8679 100%); }
+  .grain { position: absolute; inset: 0; opacity: .18;
+    background-image: repeating-linear-gradient(97deg, rgba(90,70,50,.25) 0 2px, transparent 2px 9px),
+                      repeating-linear-gradient(7deg, rgba(255,255,255,.12) 0 1px, transparent 1px 13px); }
+  .paper { position: absolute; left: 150px; top: 170px; width: 1210px; height: 1660px; background: #fbfaf6;
+    transform: rotate(-2.4deg) skewX(0.6deg); transform-origin: 50% 50%;
+    box-shadow: 0 30px 60px -20px rgba(40,30,20,.55), 0 2px 6px rgba(40,30,20,.25);
+    font-family: 'DejaVu Sans', sans-serif; color: #23252b; padding: 90px 96px; box-sizing: border-box; }
+  .paper::after { content: ""; position: absolute; inset: 0;
+    background: linear-gradient(115deg, rgba(255,255,255,.0) 40%, rgba(255,255,255,.35) 55%, rgba(0,0,0,.06) 100%); }
+  .hdr { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 4px solid #2f5f8a; padding-bottom: 28px; }
+  .lab { font-size: 46px; font-weight: bold; color: #2f5f8a; letter-spacing: .5px; }
+  .lab small { display: block; font-size: 24px; font-weight: normal; color: #5b6470; margin-top: 8px; letter-spacing: 0; }
+  .logo { width: 92px; height: 92px; border-radius: 50%; border: 6px solid #2f5f8a; position: relative; }
+  .logo::before { content: ""; position: absolute; left: 22px; top: 40px; width: 36px; height: 6px; background: #2f5f8a; }
+  .logo::after { content: ""; position: absolute; left: 37px; top: 25px; width: 6px; height: 36px; background: #2f5f8a; }
+  h1 { font-size: 40px; margin: 46px 0 8px; letter-spacing: 1px; }
+  .sub { font-size: 24px; color: #6b7280; margin-bottom: 36px; }
+  .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 40px; font-size: 26px; padding: 26px 30px; background: #f0f2f4; border-radius: 6px; }
+  .meta b { color: #4b5563; font-weight: normal; display: inline-block; width: 210px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 48px; font-size: 28px; }
+  th { text-align: left; font-size: 22px; color: #6b7280; text-transform: uppercase; letter-spacing: 1px; padding: 0 10px 16px; border-bottom: 2px solid #9aa3ad; }
+  td { padding: 26px 10px; border-bottom: 1px solid #d5d9de; }
+  td.v { font-weight: bold; }
+  td.h { color: #b4232a; font-weight: bold; }
+  .flag { display: inline-block; width: 36px; text-align: center; font-size: 22px; border: 2px solid #b4232a; border-radius: 4px; color: #b4232a; margin-left: 12px; }
+  .note { margin-top: 46px; font-size: 24px; color: #4b5563; line-height: 1.5; }
+  .sign { margin-top: 70px; display: flex; justify-content: space-between; font-size: 22px; color: #6b7280; }
+  .sig { width: 380px; border-top: 2px solid #9aa3ad; padding-top: 10px; }
+  .foot { position: absolute; left: 96px; right: 96px; bottom: 60px; font-size: 20px; color: #8a919a; border-top: 1px solid #d5d9de; padding-top: 18px; display: flex; justify-content: space-between; }
+  .stamp { position: absolute; right: 110px; top: 250px; transform: rotate(-12deg); border: 5px solid rgba(180,35,42,.55); color: rgba(180,35,42,.6);
+    font-size: 40px; font-weight: bold; letter-spacing: 6px; padding: 8px 26px; border-radius: 8px; }
+</style></head>
+<body>
+<div class="grain"></div>
+<div class="paper">
+  <div class="hdr">
+    <div class="lab">Northfield Example Laboratory<small>Fictional sample lab · 12 Sample Road · Demotown</small></div>
+    <div class="logo"></div>
+  </div>
+  <div class="stamp">SAMPLE</div>
+  <h1>LABORATORY REPORT</h1>
+  <div class="sub">Endocrinology · Thyroid panel</div>
+  <div class="meta">
+    <div><b>Patient</b>Alex Sample</div>
+    <div><b>Report no.</b>DEMO-0000-09</div>
+    <div><b>Date of birth</b>01.01.1990</div>
+    <div><b>Collected</b>21.10.2026 08:10</div>
+    <div><b>Requested by</b>Dr. J. Example</div>
+    <div><b>Reported</b>22.10.2026 14:32</div>
+  </div>
+  <table>
+    <tr><th>Test</th><th>Result</th><th>Unit</th><th>Reference range</th></tr>
+    <tr><td>TSH</td><td class="h">6.8<span class="flag">H</span></td><td>mIU/L</td><td>0.4 – 4.0</td></tr>
+    <tr><td>Free T4</td><td class="v">0.9</td><td>ng/dL</td><td>0.8 – 1.8</td></tr>
+    <tr><td>Free T3</td><td class="v">2.9</td><td>pg/mL</td><td>2.3 – 4.2</td></tr>
+    <tr><td>TPO antibodies</td><td class="h">85<span class="flag">H</span></td><td>IU/mL</td><td>&lt; 35</td></tr>
+  </table>
+  <div class="note">Comment: TSH above reference range with free T4 within range. Raised TPO antibodies. Clinical correlation recommended.</div>
+  <div class="sign"><div class="sig">Validated by: J. Example, MD</div><div class="sig">Page 1 of 1</div></div>
+  <div class="foot"><span>Fictional sample report for illustration only. Not a real patient.</span><span>DEMO</span></div>
+</div>
+</body></html>

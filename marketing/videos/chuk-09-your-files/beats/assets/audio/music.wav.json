@@ -1,0 +1,262 @@
+{
+  "version": 1,
+  "audio": "assets/audio/music.wav",
+  "beats": [
+    {
+      "time": 0.285,
+      "strength": 0.299
+    },
+    {
+      "time": 0.855,
+      "strength": 0.392
+    },
+    {
+      "time": 1.385,
+      "strength": 0.343
+    },
+    {
+      "time": 1.935,
+      "strength": 0.381
+    },
+    {
+      "time": 2.495,
+      "strength": 0.32
+    },
+    {
+      "time": 3.055,
+      "strength": 0.492
+    },
+    {
+      "time": 3.585,
+      "strength": 0.486
+    },
+    {
+      "time": 4.145,
+      "strength": 0.84
+    },
+    {
+      "time": 4.565,
+      "strength": 0.646
+    },
+    {
+      "time": 4.985,
+      "strength": 0.504
+    },
+    {
+      "time": 5.515,
+      "strength": 0.567
+    },
+    {
+      "time": 6.085,
+      "strength": 0.692
+    },
+    {
+      "time": 6.635,
+      "strength": 0.842
+    },
+    {
+      "time": 7.185,
+      "strength": 0.474
+    },
+    {
+      "time": 7.715,
+      "strength": 0.562
+    },
+    {
+      "time": 8.285,
+      "strength": 0.675
+    },
+    {
+      "time": 8.835,
+      "strength": 0.595
+    },
+    {
+      "time": 9.385,
+      "strength": 0.51
+    },
+    {
+      "time": 9.925,
+      "strength": 0.531
+    },
+    {
+      "time": 10.485,
+      "strength": 0.515
+    },
+    {
+      "time": 11.035,
+      "strength": 0.645
+    },
+    {
+      "time": 11.585,
+      "strength": 0.414
+    },
+    {
+      "time": 12.125,
+      "strength": 0.514
+    },
+    {
+      "time": 12.685,
+      "strength": 0.642
+    },
+    {
+      "time": 13.235,
+      "strength": 0.724
+    },
+    {
+      "time": 13.775,
+      "strength": 0.496
+    },
+    {
+      "time": 14.325,
+      "strength": 0.525
+    },
+    {
+      "time": 14.885,
+      "strength": 0.393
+    },
+    {
+      "time": 15.425,
+      "strength": 0.755
+    },
+    {
+      "time": 15.985,
+      "strength": 0.551
+    },
+    {
+      "time": 16.545,
+      "strength": 0.369
+    },
+    {
+      "time": 17.095,
+      "strength": 0.583
+    },
+    {
+      "time": 17.635,
+      "strength": 0.831
+    },
+    {
+      "time": 18.195,
+      "strength": 0.612
+    },
+    {
+      "time": 18.745,
+      "strength": 0.624
+    },
+    {
+      "time": 19.285,
+      "strength": 0.4
+    },
+    {
+      "time": 19.835,
+      "strength": 0.843
+    },
+    {
+      "time": 20.375,
+      "strength": 0.628
+    },
+    {
+      "time": 20.945,
+      "strength": 0.605
+    },
+    {
+      "time": 21.495,
+      "strength": 0.485
+    },
+    {
+      "time": 22.055,
+      "strength": 0.775
+    },
+    {
+      "time": 22.605,
+      "strength": 0.523
+    },
+    {
+      "time": 23.155,
+      "strength": 0.606
+    },
+    {
+      "time": 23.685,
+      "strength": 0.449
+    },
+    {
+      "time": 24.255,
+      "strength": 0.761
+    },
+    {
+      "time": 24.795,
+      "strength": 0.603
+    },
+    {
+      "time": 25.355,
+      "strength": 0.505
+    },
+    {
+      "time": 25.895,
+      "strength": 0.56
+    },
+    {
+      "time": 26.455,
+      "strength": 0.426
+    },
+    {
+      "time": 26.995,
+      "strength": 0.579
+    },
+    {
+      "time": 27.515,
+      "strength": 0.79
+    },
+    {
+      "time": 28.105,
+      "strength": 0.857
+    },
+    {
+      "time": 28.655,
+      "strength": 0.551
+    },
+    {
+      "time": 29.205,
+      "strength": 0.764
+    },
+    {
+      "time": 29.765,
+      "strength": 0.511
+    },
+    {
+      "time": 30.315,
+      "strength": 0.344
+    },
+    {
+      "time": 30.855,
+      "strength": 0.419
+    },
+    {
+      "time": 31.395,
+      "strength": 0.446
+    },
+    {
+      "time": 31.925,
+      "strength": 0.412
+    },
+    {
+      "time": 32.495,
+      "strength": 0.894
+    },
+    {
+      "time": 33.045,
+      "strength": 0.353
+    },
+    {
+      "time": 33.605,
+      "strength": 0.449
+    },
+    {
+      "time": 34.135,
+      "strength": 0.434
+    },
+    {
+      "time": 34.715,
+      "strength": 1
+    }
+  ]
+}
