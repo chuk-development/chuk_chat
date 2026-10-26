@@ -1076,12 +1076,6 @@ final List<ClientTool> builtinTools = [
       'anfahrt',
     ],
   ),
-
-  // -- Bash --
-  ClientTool(
-    name: 'bash',
-    description:
-        'Execute bash commands in sandbox folder. Safe: ls, cat, mkdir, cp, '
   ClientTool(
     name: 'road_closures',
     description:
@@ -1129,6 +1123,12 @@ final List<ClientTool> builtinTools = [
       'map',
     ],
   ),
+
+  // -- Bash --
+  ClientTool(
+    name: 'bash',
+    description:
+        'Execute bash commands in sandbox folder. Safe: ls, cat, mkdir, cp, '
         'mv, rm, touch, ffmpeg. Others need approval.',
     parameters: {
       'type': 'object',
