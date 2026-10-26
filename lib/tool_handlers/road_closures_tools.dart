@@ -69,7 +69,10 @@ Future<String> executeRoadClosures(Map<String, dynamic> args) async {
   final northResult = await northFuture;
   final autobahnResult = await autobahnFuture;
 
-  if (northResult == null && autobahnResult == null) {
+  // Only the feeds that were asked count: an unasked one is not a success.
+  final northFailed = !north || northResult == null;
+  final autobahnFailed = !autobahn || autobahnResult == null;
+  if (northFailed && autobahnFailed) {
     return 'Error: roadworks feeds unavailable. Fall back to web_search.';
   }
   if (north && northResult == null) {
