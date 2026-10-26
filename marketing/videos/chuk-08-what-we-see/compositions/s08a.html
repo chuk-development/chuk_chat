@@ -21,7 +21,7 @@
 
   </style>
   <div id="root" data-composition-id="s08a" data-width="1920" data-height="1080" data-duration="2.96">
-    <div id="s08a-txt" style="position:absolute;inset:0"><div class="card-line serif" id="s08a-l0" style="top:478px;font-size:112px;line-height:125px">Never used for training.</div></div>
+    <div id="s08a-txt" style="position:absolute;inset:0"><div class="card-line serif" id="s08a-l0" style="top:484px;font-size:100px;line-height:112px">Your key never leaves your device.</div></div>
   </div>
   <script>
 
@@ -76,6 +76,7 @@ function hfReveal(tl, sel, t, stagger) {
   hfReveal(tl, '#s08a-l0', 0.10);
   tl.fromTo('#s08a-txt', { scale: 1 }, { scale: 1.035, duration: 2.96, ease: 'none' }, 0);
 
+  window.__timelines = window.__timelines || {};
   window.__timelines["s08a"] = tl;
 })();
   </script>

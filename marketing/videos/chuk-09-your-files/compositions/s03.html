@@ -221,6 +221,7 @@ function hfStream(tl, sel, t, stagger) {
   hfStream(tl, '#s03-ai-p1', 4.04);
   tl.fromTo('#s03-cam', { scale: 1 }, { scale: 1.08, duration: 2.2, ease: 'power2.inOut' }, 5.95);
 
+  window.__timelines = window.__timelines || {};
   window.__timelines["s03"] = tl;
 })();
   </script>

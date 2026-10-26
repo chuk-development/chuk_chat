@@ -348,6 +348,7 @@ function hfStream(tl, sel, t, stagger) {
   tl.to('#s02-cur', { x: 954, y: 1499, duration: 0.7, ease: 'power2.out' }, 3.95);
   tl.fromTo('#s02-cam', { scale: 1 }, { scale: 1.05, duration: 3.19, ease: 'power1.inOut' }, 3.7);
 
+  window.__timelines = window.__timelines || {};
   window.__timelines["s02"] = tl;
 })();
   </script>

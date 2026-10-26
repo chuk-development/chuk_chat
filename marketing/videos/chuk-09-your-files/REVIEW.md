@@ -36,6 +36,15 @@ Edit `_work/episode.py` or `marketing/videos/_lib`, never `compositions/`.
 - Server-view mono has ligatures off so `==` in the MAC stays two characters.
 - No new music, no sound effects.
 
+## Claim fix (2026-10-26)
+
+- s07 "Your scans stay yours." -> "Stored as ciphertext. / Only you hold the key." (16:9 two
+  lines, 9:16 four lines). The old line could read as "the server never sees the file";
+  the file and prompt go to the API and the model in plain text to answer. The new line says
+  only storage + key (PRIVACY_CLAIMS.md: Files and images, Key). Other lines checked: "Storage
+  only holds ciphertext." and "Encrypted on your device, before it's stored." stay. Timing
+  and look unchanged.
+
 ## Checks
 
 - `npx hyperframes check`: ok, 0 errors in both. Warnings kept: app-scale UI text under the

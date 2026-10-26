@@ -28,13 +28,14 @@ sys.path.insert(0, str(VIDEOS / "_lib"))
 
 from chukvid import LANDSCAPE, VERTICAL, Episode, beats, scenes, ui  # noqa: E402
 from chukvid.cipher import mask_uuid_short  # noqa: E402
-from chukvid.core import cursor, esc  # noqa: E402
+from chukvid.core import cursor, esc, require_file  # noqa: E402
 
 MUSIC = VIDEOS.parent / "_shared/music/s1-summer-bells-45s.wav"
 DUR = 45.0
 S = json.loads((HERE / "secrets.json").read_text())
 ENV = S["envelope"]
 FID = HERE / "fidelity"
+BRAND = PROJ / "assets/img/brand"     # tracked: notion-256.png, linear-180.jpg
 
 # real catalogue entries (lib/services/mcp/mcp_catalogue.dart), in page order
 CATALOGUE = {
@@ -84,8 +85,11 @@ def build(fmt, folder):
     ep = Episode(folder, fmt, DUR, MUSIC, extra_css=ui.ALL_CSS + EP_CSS)
     for cid in ("excalidraw", "canva", "notion", "stripe", "box", "linear", "atlassian", "asana", "monday", "plane", "todoist"):
         ep.asset(REPO / f"assets/mcp_icons/{cid}.png", f"img/mcp/{cid}.png")
-    ep.asset(HERE / "gen/fav-notion.com.png", "img/brand/notion-256.png")
-    ep.asset(HERE / "gen/fav-linear.app.png", "img/brand/linear-180.jpg")
+    # brand favicons for the big hook tiles: tracked in git in this project's assets/
+    # (fetched once, see make_assets.py); both formats copy them from there
+    for f in ("notion-256.png", "linear-180.jpg"):
+        ep.asset(require_file(BRAND / f, "brand favicon", "It is tracked in git; restore it with "
+                              f"`git checkout -- {BRAND.relative_to(REPO) / f}`."), f"img/brand/{f}")
     ep.write()
     grid = beats.ensure(folder)
     cut = beats.cuts(TARGETS, grid, DUR, strong=0.4)

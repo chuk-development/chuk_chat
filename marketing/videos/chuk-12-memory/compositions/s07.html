@@ -217,13 +217,13 @@
   border-radius: 50%; background: #F4EEE4; color: #5C4033; display: flex; align-items: center; justify-content: center; }
 
   </style>
-  <div data-hf-id="hf-08sk" id="root" data-composition-id="s07" data-width="1920" data-height="1080" data-duration="2.94">
+  <div id="root" data-composition-id="s07" data-width="1920" data-height="1080" data-duration="2.94">
 
-    <div data-hf-id="hf-lrr9" id="s07-bg" class="fill"></div>
-    <div data-hf-id="hf-g8hh" id="s07-all" class="fill">
-      <div data-hf-id="hf-kx1j" id="s07-box"><div data-hf-id="hf-js5u" class="s07-row" id="s07-r0"></div><div data-hf-id="hf-nq9v" class="s07-row" id="s07-r1"></div><div data-hf-id="hf-f2e0" class="s07-row" id="s07-r2"></div><div data-hf-id="hf-fu1t" class="s07-row" id="s07-r3"></div></div>
-      <div data-hf-id="hf-lg61" id="s07-lock"><svg data-hf-id="hf-4ajk" class="hi " viewBox="0 0 24 24" fill="none" style="width:45.89px;height:45.89px;"><path data-hf-id="hf-wq56" fill="currentColor" d="M12 17c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm6-9h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM8.9 6c0-1.71 1.39-3.1 3.1-3.1s3.1 1.39 3.1 3.1v2H8.9V6zM18 20H6V10h12v10z"/></svg></div>
-      <div data-hf-id="hf-z339" class="card-line serif" id="s07-l0" style="top:640px;font-size:96px;line-height:108px;color:#F4EEE4">Encrypted on your device.</div><div data-hf-id="hf-al53" class="card-line serif" id="s07-l1" style="top:748px;font-size:96px;line-height:108px;color:#F4EEE4">Then stored.</div>
+    <div id="s07-bg" class="fill"></div>
+    <div id="s07-all" class="fill">
+      <div id="s07-box"><div class="s07-row" id="s07-r0"></div><div class="s07-row" id="s07-r1"></div><div class="s07-row" id="s07-r2"></div><div class="s07-row" id="s07-r3"></div></div>
+      <div id="s07-lock"><svg class="hi " viewBox="0 0 24 24" fill="none" style="width:45.89px;height:45.89px;"><path fill="currentColor" d="M12 17c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm6-9h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM8.9 6c0-1.71 1.39-3.1 3.1-3.1s3.1 1.39 3.1 3.1v2H8.9V6zM18 20H6V10h12v10z"/></svg></div>
+      <div class="card-line serif" id="s07-l0" style="top:640px;font-size:96px;line-height:108px;color:#F4EEE4">Encrypted on your device.</div><div class="card-line serif" id="s07-l1" style="top:748px;font-size:96px;line-height:108px;color:#F4EEE4">Then stored.</div>
     </div>
 
   </div>
@@ -305,6 +305,7 @@ function hfStream(tl, sel, t, stagger) {
   tl.fromTo('#s07-lock', { opacity: 0, y: 30, scale: 0.7 }, { opacity: 1, y: 0, scale: 1, duration: 0.45, ease: 'back.out(1.5)' }, 1.35);
   hfReveal(tl, '#s07-l0', 1.00);hfReveal(tl, '#s07-l1', 1.35);
 
+  window.__timelines = window.__timelines || {};
   window.__timelines["s07"] = tl;
 })();
   </script>

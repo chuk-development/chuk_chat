@@ -299,6 +299,7 @@ function hfStream(tl, sel, t, stagger) {
   tl.fromTo('#s09-url', { opacity: 0 }, { opacity: 1, duration: 0.5 }, 1.7);
   tl.fromTo('#s09-lock', { scale: 1 }, { scale: 1.015, duration: 9.94, ease: 'none' }, 0);
 
+  window.__timelines = window.__timelines || {};
   window.__timelines["s09"] = tl;
 })();
   </script>

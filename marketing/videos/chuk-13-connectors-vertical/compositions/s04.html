@@ -299,6 +299,7 @@ function hfStream(tl, sel, t, stagger) {
   tl.fromTo('#s04-p-t-notion .cx-badge', { scale: 0.6, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.4, ease: 'back.out(1.8)' }, 0.4);
   tl.fromTo('#s04-cam', { scale: 1 }, { scale: 1.06, duration: 2.20, ease: 'power1.inOut' }, 0);
 
+  window.__timelines = window.__timelines || {};
   window.__timelines["s04"] = tl;
 })();
   </script>

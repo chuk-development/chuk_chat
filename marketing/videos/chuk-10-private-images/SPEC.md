@@ -1,6 +1,6 @@
 # SPEC: chuk-10-private-images (privacy series, episode 10)
 
-GOAL:    "Made privately. Kept privately." A generated watercolour of Bruno comes out of the real
+GOAL:    "Zero retention. Then encrypted." A generated watercolour of Bruno comes out of the real
          image block; the request carried zdr / data_collection deny / allow_fallbacks false, the
          result sat in server RAM until its first download, Storage holds it as `.enc`, and the
          media manager decrypts it on the device.
@@ -40,7 +40,7 @@ SHOTS:
                    ciphertext length) selected above older `.enc` objects. "Then stored encrypted."
   s08 33.84-38.24  the real Media Manager modal: tiles decrypt one by one (spinner -> picture),
                    hover on Bruno: actions + "26/10/2026 · 182.5 KB", push-in. "Opened on your device."
-  s09 38.24-40.70  tan: "Made privately. / Kept privately."
+  s09 38.24-40.70  tan: "Zero retention. / Then encrypted."
   s10 40.70-45.00  tan end card: logo.svg + wordmark.svg, chuk.chat.
 TYPE:    tables/lists/code >= 30 px in 16:9 (Storage 32/30, JSON 32), >= 34 px in 9:16 (36/34, 34).
 BANNED:  invented UI, light chat UI, feature selling, "nobody can see it", "the server never sees

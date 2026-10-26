@@ -6,7 +6,8 @@ the real composer, the real image block generates (activity row, loader tile, th
 with its model pill). Cut: the request the server sends, with "zdr": true,
 "data_collection": "deny", "allow_fallbacks": false; the result waits in server RAM
 (15 min at most) and is deleted on the first download; Storage holds it as .enc; the
-media manager decrypts it on the device. "Made privately. Kept privately."
+media manager decrypts it on the device. "Zero retention. / Then encrypted." (retention +
+storage only: the server and the image provider get the prompt and the image to make it)
 Claim (PRIVACY_CLAIMS.md, Generated images, may say): made with zero data retention
 (zdr, data_collection: deny), kept in server RAM at most 15 min, then stored encrypted.
 
@@ -67,7 +68,7 @@ def build(fmt, folder):
     s06_memory(ep, cut[5], cut[6], v)
     s07_storage(ep, cut[6], cut[7], v)
     s08_media(ep, cut[7], cut[8], v, cs)
-    scenes.card(ep, "s09", cut[8], cut[9], ["Made privately.", "Kept privately."], bg="@TAN@")
+    scenes.card(ep, "s09", cut[8], cut[9], ["Zero retention.", "Then encrypted."], bg="@TAN@")
     scenes.end_card(ep, "s10", cut[9], DUR)
     ep.write()
     ep.report()

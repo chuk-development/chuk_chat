@@ -251,6 +251,7 @@ function hfStream(tl, sel, t, stagger) {
   tl.fromTo('#s05-cardw', { scale: 1 }, { scale: 1.03, duration: 4.89, ease: 'none' }, 0);
   hfReveal(tl, '#s05-l0', 1.70, 0.09);
 
+  window.__timelines = window.__timelines || {};
   window.__timelines["s05"] = tl;
 })();
   </script>

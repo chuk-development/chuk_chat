@@ -275,6 +275,7 @@ function hfStream(tl, sel, t, stagger) {
   tl.fromTo('#s06-gone', { opacity: 0, scale: 0.8 }, { opacity: 1, scale: 1, duration: 0.4, ease: 'back.out(1.6)' }, 2.78);
   hfReveal(tl, '#s06-sub', 2.98, 0.07);
 
+  window.__timelines = window.__timelines || {};
   window.__timelines["s06"] = tl;
 })();
   </script>

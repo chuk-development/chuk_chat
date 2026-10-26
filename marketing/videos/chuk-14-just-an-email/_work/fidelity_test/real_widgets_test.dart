@@ -6,6 +6,7 @@
 //   flutter test --dart-define=SUPABASE_URL=https://example.supabase.co \
 //     --dart-define=SUPABASE_ANON_KEY=example \
 //     marketing/videos/chuk-14-just-an-email/_work/fidelity_test/real_widgets_test.dart
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -107,6 +108,7 @@ Future<void> _save(WidgetTester tester, String name) async {
 
 void main() {
   setUpAll(() async {
+    Directory('$work/fidelity').createSync(recursive: true);
     SharedPreferences.setMockInitialValues(<String, Object>{});
     await _font('Ubuntu', ['$work/../../_lib/assets/fonts/Ubuntu-wght.ttf']);
     final sdk = File(Platform.resolvedExecutable).parent.parent.parent.parent.path;
@@ -199,56 +201,56 @@ void main() {
     final l = AppLocalizations.of(ctx0)!;
     final cs = Theme.of(ctx0).colorScheme;
     // Step 1, verbatim from _deleteAccount
-    showDialog<bool>(
-      context: ctx0,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: Row(
-          children: [
-            AppIcon(Icons.warning_amber_rounded, color: cs.error, size: 28),
-            const SizedBox(width: 10),
-            Expanded(child: Text(l.deleteAccountQuestion)),
+    unawaited(showDialog<bool>(
+        context: ctx0,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: Row(
+            children: [
+              AppIcon(Icons.warning_amber_rounded, color: cs.error, size: 28),
+              const SizedBox(width: 10),
+              Expanded(child: Text(l.deleteAccountQuestion)),
+            ],
+          ),
+          content: Text(l.deleteAccountConfirmBody),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(l.cancel)),
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: cs.error),
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text(l.yesDelete),
+            ),
           ],
         ),
-        content: Text(l.deleteAccountConfirmBody),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(l.cancel)),
-          TextButton(
-            style: TextButton.styleFrom(foregroundColor: cs.error),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(l.yesDelete),
-          ),
-        ],
-      ),
-    );
+      ));
     await _settle(tester);
     await _save(tester, 'delete-1');
     Navigator.of(ctx0).pop();
     await _settle(tester);
 
     // Step 2
-    showDialog<bool>(
-      context: ctx0,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: Row(
-          children: [
-            AppIcon(Icons.delete_forever, color: cs.error, size: 28),
-            const SizedBox(width: 10),
-            Expanded(child: Text(l.thisIsPermanent)),
+    unawaited(showDialog<bool>(
+        context: ctx0,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: Row(
+            children: [
+              AppIcon(Icons.delete_forever, color: cs.error, size: 28),
+              const SizedBox(width: 10),
+              Expanded(child: Text(l.thisIsPermanent)),
+            ],
+          ),
+          content: Text(l.finalDeleteWarning),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(l.noKeepMyAccount)),
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: cs.error),
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text(l.deleteEverything),
+            ),
           ],
         ),
-        content: Text(l.finalDeleteWarning),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(l.noKeepMyAccount)),
-          TextButton(
-            style: TextButton.styleFrom(foregroundColor: cs.error),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(l.deleteEverything),
-          ),
-        ],
-      ),
-    );
+      ));
     await _settle(tester);
     await _save(tester, 'delete-2');
     Navigator.of(ctx0).pop();
@@ -256,38 +258,38 @@ void main() {
 
     // Step 3: password confirmation
     final passwordController = TextEditingController();
-    showDialog<String>(
-      context: ctx0,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: Text(l.confirmYourPassword),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(l.confirmPasswordBody),
-            const SizedBox(height: 16),
-            TextField(
-              controller: passwordController,
-              obscureText: true,
-              autofocus: true,
-              decoration: InputDecoration(
-                labelText: l.password,
-                prefixIcon: const AppIcon(Icons.lock_outline),
+    unawaited(showDialog<String>(
+        context: ctx0,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: Text(l.confirmYourPassword),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(l.confirmPasswordBody),
+              const SizedBox(height: 16),
+              TextField(
+                controller: passwordController,
+                obscureText: true,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: l.password,
+                  prefixIcon: const AppIcon(Icons.lock_outline),
+                ),
               ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(l.cancel)),
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: cs.error),
+              onPressed: () {},
+              child: Text(l.verifyAndDelete),
             ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(l.cancel)),
-          TextButton(
-            style: TextButton.styleFrom(foregroundColor: cs.error),
-            onPressed: () {},
-            child: Text(l.verifyAndDelete),
-          ),
-        ],
-      ),
-    );
+      ));
     await _settle(tester);
     await _save(tester, 'delete-3-empty');
     passwordController.text = pw;

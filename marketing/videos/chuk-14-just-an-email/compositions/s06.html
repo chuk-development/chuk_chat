@@ -288,6 +288,7 @@ function hfStream(tl, sel, t, stagger) {
   hfReveal(tl, '#s06-l0', 0.10);
   tl.fromTo('#s06-txt', { scale: 1 }, { scale: 1.035, duration: 2.24, ease: 'none' }, 0);
 
+  window.__timelines = window.__timelines || {};
   window.__timelines["s06"] = tl;
 })();
   </script>

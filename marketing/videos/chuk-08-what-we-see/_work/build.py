@@ -13,12 +13,29 @@ Run:  python3 _work/make_cipher.py   (once; writes _work/cipher.json)
 import html
 import json
 import re
+import shutil
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 WORK = ROOT / "_work"
 COMP = ROOT / "compositions"
+REPO = ROOT.parents[2]                     # chuk_chat (chuk-08 -> videos -> marketing -> repo)
+LIB = ROOT.parent / "_lib"
 COMP.mkdir(exist_ok=True)
+
+# GSAP 3.14.2, vendored in marketing/videos/_lib (no network request at render time)
+(ROOT / "assets/js").mkdir(parents=True, exist_ok=True)
+shutil.copy2(LIB / "assets/js/gsap.min.js", ROOT / "assets/js/gsap.min.js")
+# Music is gitignored (marketing/**/*.wav): take it from marketing/_shared/music, see
+# marketing/videos/_lib/README.md (section Music) for the Epidemic Sound track and edit id.
+MUSIC_SRC = ROOT.parents[1] / "_shared/music/07-chasing-horizons-62s.wav"
+MUSIC = ROOT / "assets/audio/music.wav"
+if MUSIC_SRC.is_file():
+    MUSIC.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(MUSIC_SRC, MUSIC)
+elif not MUSIC.is_file():
+    raise SystemExit(f"missing music: {MUSIC_SRC}\nMusic WAVs are gitignored. See "
+                     "marketing/videos/_lib/README.md (section Music), then put the file there.")
 
 CIPH = json.loads((WORK / "cipher.json").read_text())
 PROMPT = CIPH["prompt"]
@@ -26,7 +43,7 @@ ANSWER = CIPH["answer"]
 ENV = CIPH["envelope"]
 CT = ENV["ciphertext"]
 
-SRC_FILE = Path("/home/user/git/chuk_chat/lib/services/encryption_service.dart")
+SRC_FILE = REPO / "lib/services/encryption_service.dart"
 CODE_FIRST, CODE_LAST = 52, 67
 CODE = SRC_FILE.read_text().split("\n")[CODE_FIRST - 1:CODE_LAST]
 FILE_LINES = len(SRC_FILE.read_text().rstrip("\n").split("\n"))
@@ -213,6 +230,7 @@ def scene(cid, css, body, js, dur):
 (function () {{
   var tl = gsap.timeline({{ paused: true }});
 {js}
+  window.__timelines = window.__timelines || {{}};
   window.__timelines["{cid}"] = tl;
 }})();
   </script>
@@ -466,7 +484,7 @@ add("s05", CUTS[4], CUTS[5], f"""
       <div class="ex-bar">{KEY_SVG}<b>encrypted_payload</b><span class="sb-tag">text</span><span class="sb-grow"></span><span style="font-size:24px;color:#687076">row {CIPH['row_id'][:8]}…</span></div>
       <div class="ex-body" id="s05-exb">{env_html}</div>
     </div>
-    <div class="card-line serif" id="s05-line">This is all our server ever sees.</div>
+    <div class="card-line serif" id="s05-line">This is all our server stores.</div>
     {cursor('s05-cur')}
 """, f"""
   tl.fromTo('#s05-tbl', {{ opacity: 0, y: 40 }}, {{ opacity: 1, y: 0, duration: 0.55, ease: 'expo.out' }}, 0);
@@ -627,7 +645,7 @@ add("s07", CUTS[6], CUTS[7], f"""
 """)
 
 # =================================================================== 08 three short beats
-card("s08a", CUTS[7], CUTS[8], ["Never used for training."], None, size=112)
+card("s08a", CUTS[7], CUTS[8], ["Your key never leaves your device."], None, size=100)
 card("s08b", CUTS[8], CUTS[9], ["No ads. No tracking."], "@TAN@", size=112)
 card("s08c", CUTS[9], CUTS[10], ["Run from Germany, under EU law."], None, size=104)
 
@@ -666,7 +684,7 @@ add("s09", CUTS[10], CUTS[11], f"""
 
 # =================================================================== index
 hosts = "\n".join(
-    f'      <div id="{cid}" data-composition-id="{cid}" data-composition-src="compositions/{cid}.html" '
+    f'      <div id="{cid}" class="clip" data-composition-id="{cid}" data-composition-src="compositions/{cid}.html" '
     f'data-start="{s}" data-duration="{d}" data-track-index="1" data-track-kind="graphics" '
     f'data-width="1920" data-height="1080" style="z-index:{i + 2}"></div>'
     for i, (cid, s, d) in enumerate(SCENES))
@@ -676,7 +694,7 @@ INDEX = T(f"""<!doctype html>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=1920, height=1080" />
-    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script src="assets/js/gsap.min.js"></script>
     <style>
       * {{ margin: 0; padding: 0; box-sizing: border-box; }}
       html, body {{ margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: @CANVAS@; }}
@@ -694,6 +712,7 @@ INDEX = T(f"""<!doctype html>
     </div>
     <script>
       const tl = gsap.timeline({{ paused: true }});
+      window.__timelines = window.__timelines || {{}};
       window.__timelines["main"] = tl;
     </script>
   </body>

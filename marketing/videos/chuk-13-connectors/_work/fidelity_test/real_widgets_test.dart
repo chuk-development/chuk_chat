@@ -167,6 +167,7 @@ Future<void> _shoot(WidgetTester tester, Widget page, Size size, String name, {b
 
 void main() {
   setUpAll(() async {
+    Directory('$work/fidelity').createSync(recursive: true);
     await _font('Ubuntu', ['$work/../../_lib/assets/fonts/Ubuntu-wght.ttf']);
     // Explicit TextStyles without a family fall back to the default (Roboto): on the
     // Linux desktop that is the system UI font, Ubuntu.

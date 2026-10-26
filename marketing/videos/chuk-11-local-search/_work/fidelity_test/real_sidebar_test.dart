@@ -120,6 +120,7 @@ Widget _app(Widget child) => MaterialApp(
 
 void main() {
   setUpAll(() async {
+    Directory('$work/fidelity').createSync(recursive: true);
     SharedPreferences.setMockInitialValues(<String, Object>{});
     await _font('Ubuntu', ['$work/../../_lib/assets/fonts/Ubuntu-wght.ttf']);
     await _font('JetBrains Mono', ['assets/fonts/JetBrainsMono-wght.ttf']);
@@ -182,7 +183,10 @@ void main() {
               onNewChatTapped: () {},
               selectedChatId: null,
               isCompactMode: false,
-              showWorkspacesButton: true,
+              // The row also needs kFeatureWorkspaces (FEATURE_WORKSPACES, default
+              // false, lib/widgets/sidebar/sidebar_common.dart:105); false here keeps
+              // the reference equal to the production nav even with the define set.
+              showWorkspacesButton: false,
             ),
           ),
           // copied from root_wrapper_desktop.dart (hamburger, never moves)

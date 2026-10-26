@@ -269,6 +269,7 @@ function hfStream(tl, sel, t, stagger) {
   hfReveal(tl, '#s04-l1', 0.55);
   tl.fromTo('#s04-txt', { scale: 1 }, { scale: 1.035, duration: 2.46, ease: 'none' }, 0);
 
+  window.__timelines = window.__timelines || {};
   window.__timelines["s04"] = tl;
 })();
   </script>

@@ -342,6 +342,7 @@ function hfStream(tl, sel, t, stagger) {
   tl.fromTo('#s02-log-zero', { scale: 1 }, { scale: 1.25, duration: 0.18, ease: 'power2.out', yoyo: true, repeat: 1 }, tend + 0.7);
   tl.fromTo('#s02-cam', { scale: 1 }, { scale: 1.035, duration: 8.20, ease: 'none' }, 0);
 
+  window.__timelines = window.__timelines || {};
   window.__timelines["s02"] = tl;
 })();
   </script>

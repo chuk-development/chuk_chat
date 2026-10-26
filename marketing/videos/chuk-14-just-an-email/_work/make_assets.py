@@ -11,16 +11,14 @@ shows, and every rect (app px, relative to the window) goes to _work/layout.json
 Run once (and after any change to pieces.py or the window sizes):
     python3 _work/make_assets.py
 """
-import glob
 import json
-import os
 import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / "_lib"))
 sys.path.insert(0, str(HERE))
-from chukvid.core import COMMON_CSS, T  # noqa: E402
+from chukvid.core import COMMON_CSS, T, launch_chrome  # noqa: E402
 from chukvid.ui import ALL_CSS  # noqa: E402
 import pieces as P  # noqa: E402
 
@@ -30,8 +28,6 @@ EMAIL, PW = "sam@example.com", "Tide-Lantern-48!"
 WINDOWS = {"16x9": {"login": (560, 740), "settings": (640, 460)},
            "9x16": {"login": (440, 780), "settings": (440, 640)}}
 
-CHROME = sorted(glob.glob(os.path.expanduser(
-    "~/.cache/hyperframes/chrome/chrome-headless-shell/*/chrome-headless-shell-linux64/chrome-headless-shell")))[-1]
 
 SETUP = """
 function $(s){return document.querySelector(s);}
@@ -67,7 +63,7 @@ def main():
     from playwright.sync_api import sync_playwright
     result = {}
     with sync_playwright() as p:
-        b = p.chromium.launch(executable_path=CHROME)
+        b = launch_chrome(p)
         pg = b.new_page(viewport={"width": 1200, "height": 1200})
         for fmt in WINDOWS:
             res = {"windows": WINDOWS[fmt]}

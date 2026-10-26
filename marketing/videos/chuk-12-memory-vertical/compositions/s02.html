@@ -319,6 +319,7 @@ function hfStream(tl, sel, t, stagger) {
   tl.set('#s02-w-save', { opacity: 0 }, e + 1.05);
   tl.fromTo('#s02-cam', { scale: 1 }, { scale: 1.03, duration: 7.40, ease: 'power1.inOut' }, 0.4);
 
+  window.__timelines = window.__timelines || {};
   window.__timelines["s02"] = tl;
 })();
   </script>

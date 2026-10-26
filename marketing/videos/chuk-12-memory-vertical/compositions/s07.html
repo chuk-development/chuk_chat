@@ -305,6 +305,7 @@ function hfStream(tl, sel, t, stagger) {
   tl.fromTo('#s07-lock', { opacity: 0, y: 30, scale: 0.7 }, { opacity: 1, y: 0, scale: 1, duration: 0.45, ease: 'back.out(1.5)' }, 1.35);
   hfReveal(tl, '#s07-l0', 1.00);hfReveal(tl, '#s07-l1', 1.35);hfReveal(tl, '#s07-l2', 1.70);
 
+  window.__timelines = window.__timelines || {};
   window.__timelines["s07"] = tl;
 })();
   </script>

@@ -275,6 +275,7 @@ function hfStream(tl, sel, t, stagger) {
   tl.set('#s02-caret', { display: 'block', opacity: 1 }, end + 1.1);
   tl.fromTo('#s02-cam', { scale: 1 }, { scale: 1.06, duration: 4.84, ease: 'power1.inOut' }, 2.6);
 
+  window.__timelines = window.__timelines || {};
   window.__timelines["s02"] = tl;
 })();
   </script>

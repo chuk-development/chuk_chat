@@ -350,8 +350,8 @@
       44.778,
       58.556
     ],
-    "checked": 97,
-    "passed": 93
+    "checked": 99,
+    "passed": 95
   },
   "craft": {
     "ok": true,
@@ -2136,10 +2136,10 @@
     "findingFiles": []
   },
   "saved": {
-    "id": "92390d4e-1b33-4b0e-99a8-8eab35b86f2b",
-    "revision": null,
-    "report": "/home/user/git/chuk_chat/marketing/videos/chuk-08-what-we-see/.hyperframes/artifacts/checks/92390d4e-1b33-4b0e-99a8-8eab35b86f2b.json",
-    "attribution": "inputs-changed"
+    "id": "b985833a-3f26-4199-848f-4c1dab881e8e",
+    "revision": "61a0283e-8882-4291-acf5-7f1629fcfe5e",
+    "report": "/home/user/git/chuk_chat/marketing/videos/chuk-08-what-we-see/.hyperframes/artifacts/checks/b985833a-3f26-4199-848f-4c1dab881e8e.json",
+    "attribution": "recorded-revision"
   },
   "_meta": {
     "version": "0.8.202",
