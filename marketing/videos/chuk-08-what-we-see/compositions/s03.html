@@ -1,0 +1,153 @@
+<template>
+  <style>
+
+@font-face { font-family: 'Newsreader'; src: url('assets/fonts/Newsreader-Disp600.ttf') format('truetype'); font-weight: 600; font-style: normal; }
+@font-face { font-family: 'ChukMono'; src: url('assets/fonts/jetbrains-mono-latin-wght.woff2') format('woff2'); font-weight: 100 800; font-style: normal; }
+@font-face { font-family: 'Ubuntu'; src: url('assets/fonts/Ubuntu-wght.ttf') format('truetype'); font-weight: 100 800; font-style: normal; }
+#root { position: absolute; inset: 0; overflow: hidden; font-family: 'Ubuntu', sans-serif; color: #2A1F17; }
+#root * { box-sizing: border-box; }
+.serif { font-family: 'Newsreader', serif; font-weight: 600; letter-spacing: -0.01em; color: #2A1F17; }
+.mono { font-family: 'ChukMono', monospace; }
+.word { display: inline-block; }
+.hi { display: block; flex: none; }
+.mark { display: block; }
+.cur { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 60; }
+.cur svg { position: absolute; overflow: visible; }
+.cur-arrow { left: -5px; top: -4px; width: 48px; height: 68px; transform-origin: 5px 4px; }
+.cur-hand { left: -21px; top: -5px; width: 56px; height: 62px; opacity: 0; transform-origin: 21px 5px; }
+.cur-ibeam { left: -10px; top: -20px; width: 20px; height: 40px; opacity: 0; transform-origin: 10px 20px; }
+.card-line { position: absolute; left: 0; right: 0; text-align: center; }
+
+
+.appz { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.a-win { position: absolute; background: #262624; border-radius: 18px; box-shadow: 0 0 0 1px rgba(255,255,255,0.07), 0 24px 60px -24px rgba(0,0,0,0.45); overflow: hidden; }
+.a-vars { --fg: #E8E4D8; --fg85: rgba(232,228,216,0.85); --fg70: rgba(232,228,216,0.7); --fg55: rgba(232,228,216,0.55);
+  --fg30: rgba(232,228,216,0.3); --fg15: rgba(232,228,216,0.15); --bg: #262624; --acc: #D97757; --bubble: #B6674D;
+  color: var(--fg); font-family: 'Ubuntu', sans-serif; font-size: 14px; line-height: 1.4; }
+.a-composer { position: absolute; display: flex; flex-direction: column; justify-content: space-between;
+  min-height: 135px; padding: 14px; border: 2px solid #615F5A; border-radius: 30px; background: var(--bg); }
+.a-field { position: relative; min-height: 40px; margin-left: -1px; padding: 4px 58px 0 0; font-size: 17px; font-weight: 600; line-height: 1.4; white-space: nowrap; }
+.a-ph { color: rgba(232,228,216,0.8); }
+.a-typed { color: var(--fg); }
+.a-caret0 { position: absolute; left: -1px; top: 3px; width: 2px; height: 1.3em; background: var(--acc); }
+.a-caret { display: inline-block; width: 2px; height: 1.2em; background: var(--acc); vertical-align: -0.22em; }
+.a-send { position: absolute; top: 14px; right: 14px; width: 44px; height: 36px; border-radius: 20px; background: var(--acc); color: #fff; display: flex; align-items: center; justify-content: center; }
+.a-send svg { transform: scaleY(0.95); }
+.a-row { display: flex; align-items: center; gap: 8px; }
+.a-grow { flex: 1; }
+.a-btn { width: 44px; height: 36px; border: 2px solid #615F5A; border-radius: 18px; display: inline-flex; align-items: center; justify-content: center; color: var(--fg); }
+.a-pill { height: 36px; padding: 0 11px; border: 2px solid #615F5A; border-radius: 18px; display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--fg); white-space: nowrap; }
+.a-dn { margin-left: -3px; color: var(--fg70); }
+.a-disc { position: absolute; left: 0; right: 0; font-size: 11.5px; color: var(--fg70); text-align: center; white-space: nowrap; }
+.a-col { position: absolute; }
+.a-user { display: flex; justify-content: flex-end; }
+.a-bubble { max-width: 80%; padding: 10px 14px; border: 1px solid var(--fg30); border-radius: 16px; background: var(--bubble); color: var(--fg);
+  font-family: 'ChukMono', monospace; font-size: 16.4px; font-weight: 400; line-height: 1.38; white-space: nowrap; }
+.a-ai { margin-top: 8px; font-family: 'ChukMono', monospace; font-size: 16.4px; font-weight: 400; line-height: 1.45; color: var(--fg); }
+.a-ai p { margin: 0 0 8px; }
+.a-tl { margin-top: 14px; font-family: 'Ubuntu', sans-serif; }
+.a-tl-head { display: inline-flex; align-items: center; gap: 4px; margin: 0; padding: 4px 2px; font-size: 12.7px; font-weight: 500; color: var(--fg55); }
+.a-steps { position: relative; padding-top: 4px; }
+.a-steps-line { position: absolute; left: 13px; top: 17px; bottom: 15px; width: 1px; background: var(--fg15); }
+.a-step { position: relative; display: flex; align-items: center; gap: 10px; min-height: 26px; margin-bottom: 8px; font-size: 12.7px; color: var(--fg55); white-space: nowrap; }
+.a-badge { flex: none; width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--fg15); background: var(--bg); display: flex; align-items: center; justify-content: center; color: var(--fg55); }
+.a-step b { margin-left: 0.6em; font-weight: 500; color: var(--fg85); }
+.a-srcs { display: flex; align-items: center; gap: 6px; height: 30px; margin: -4px 0 8px 36px; }
+.a-src { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 8px; border-radius: 15px; background: rgba(232,228,216,0.06); font-size: 12.7px; color: var(--fg70); white-space: nowrap; }
+.a-fav { flex: none; width: 16px; height: 16px; border-radius: 3px; display: block; }
+
+#s03-cam { position: absolute; inset: 0; transform-origin: 1168px 278px; }
+#s03-z { width: 960.00px; height: 540.00px; zoom: 2.0; }
+#s03-win { left: 60.00px; top: 85.00px; width: 840px; height: 370px; }
+#s03-col { left: 116.00px; top: 117.00px; width: 728px; }
+
+  </style>
+  <div id="root" data-composition-id="s03" data-width="1920" data-height="1080" data-duration="7.86">
+
+    <div id="s03-cam" data-layout-allow-overflow>
+      <div id="s03-z" class="appz a-vars">
+        <div id="s03-win" class="a-win"></div>
+        <div id="s03-col" class="a-col">
+          <div class="a-user"><p id="s03-bub" class="a-bubble">my blood test says ferritin 9. should i be worried?</p></div>
+          <div class="a-tl" id="s03-tl">
+            <p class="a-tl-head" id="s03-head"><span>Worked for 2s</span><svg class="hi " viewBox="0 0 24 24" fill="none" style="width:13.76px;height:13.76px"><path d="M18 9.00005C18 9.00005 13.5811 15 12 15C10.4188 15 6 9 6 9" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg></p>
+            <div class="a-steps">
+              <div class="a-steps-line" id="s03-line"></div>
+              <div class="a-step" id="s03-st0"><span class="a-badge"><svg class="hi " viewBox="0 0 24 24" fill="none" style="width:12.04px;height:12.04px"><path fill="currentColor" d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2.85 11.1l-.85.6V16h-4v-2.3l-.85-.6C7.8 12.16 7 10.63 7 9c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.63-.8 3.16-2.15 4.1z"/></svg></span><span>User asks what a ferritin of 9 means.</span></div>
+              <div class="a-step" id="s03-st1"><span class="a-badge"><svg class="hi " viewBox="0 0 24 24" fill="none" style="width:12.04px;height:12.04px"><path d="M17 17L21 21" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /> <path d="M19 11C19 6.58172 15.4183 3 11 3C6.58172 3 3 6.58172 3 11C3 15.4183 6.58172 19 11 19C15.4183 19 19 15.4183 19 11Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg></span><span>Searched<b>ferritin 9 µg/L low</b></span></div>
+              <div class="a-srcs" id="s03-srcs"><span class="a-src" id="s03-src0"><img class="a-fav" src="assets/fav/nhs.uk.png" alt="">nhs.uk</span><span class="a-src" id="s03-src1"><img class="a-fav" src="assets/fav/mayoclinic.org.png" alt="">mayoclinic.org</span><span class="a-src" id="s03-src2"><img class="a-fav" src="assets/fav/aerzteblatt.de.png" alt="">aerzteblatt.de</span></div>
+            </div>
+          </div>
+          <div class="a-ai" id="s03-ai"><p id="s03-p1">A ferritin of 9 µg/L is low. It usually means your iron stores are empty, even before anaemia shows.</p><p id="s03-p2">It is common and treatable. Ask your doctor about an iron panel and the cause.</p></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <script>
+
+function hfWords(sel) {
+  document.querySelectorAll(sel).forEach(function (el) {
+    var words = el.textContent.trim().split(/\s+/);
+    el.textContent = '';
+    words.forEach(function (w, i) {
+      var s = document.createElement('span');
+      s.className = 'word';
+      s.textContent = w;
+      el.appendChild(s);
+      if (i < words.length - 1) el.appendChild(document.createTextNode(' '));
+    });
+  });
+}
+function hfType(tl, el, text, start, cps) {
+  el.textContent = '';
+  var spans = [];
+  Array.from(text).forEach(function (c) {
+    var s = document.createElement('span');
+    s.textContent = c;
+    s.style.display = 'none';
+    el.appendChild(s);
+    spans.push(s);
+  });
+  spans.forEach(function (s, i) { tl.set(s, { display: 'inline' }, start + (i + 1) / cps); });
+  return start + text.length / cps;
+}
+function hfClick(tl, cur, t, part) {
+  var sel = cur + ' .cur-' + (part || 'arrow');
+  tl.to(sel, { scale: 0.86, duration: 0.08, ease: 'power2.out' }, t);
+  tl.to(sel, { scale: 1, duration: 0.14, ease: 'power2.out' }, t + 0.08);
+}
+function hfShape(tl, cur, t, part) {
+  ['arrow', 'hand', 'ibeam'].forEach(function (p) {
+    tl.to(cur + ' .cur-' + p, { opacity: p === part ? 1 : 0, duration: 0.06 }, t);
+  });
+}
+function hfHash(i, j) {
+  var h = (i * 374761393 + j * 668265263) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+}
+function hfReveal(tl, sel, t, stagger) {
+  hfWords(sel);
+  tl.fromTo(sel + ' .word', { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.32, stagger: stagger || 0.08, ease: 'power3.out' }, t);
+}
+
+(function () {
+  var tl = gsap.timeline({ paused: true });
+
+  tl.fromTo('#s03-bub', { opacity: 0, y: 60 }, { opacity: 1, y: 0, duration: 0.5, ease: 'expo.out' }, 0);
+  tl.fromTo('#s03-head', { opacity: 0 }, { opacity: 1, duration: 0.25 }, 0.45);
+  tl.fromTo('#s03-line', { scaleY: 0, transformOrigin: '50% 0%' }, { scaleY: 1, duration: 0.6, ease: 'power2.out' }, 0.6);
+  tl.fromTo('#s03-st0', { opacity: 0, x: -10 }, { opacity: 1, x: 0, duration: 0.35, ease: 'power3.out' }, 0.6);
+  tl.fromTo('#s03-st1', { opacity: 0, x: -10 }, { opacity: 1, x: 0, duration: 0.35, ease: 'power3.out' }, 0.9);
+  tl.fromTo('#s03-srcs .a-src', { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.3, stagger: 0.12, ease: 'power3.out' }, 1.15);
+  // the answer streams in, word by word
+  hfWords('#s03-p1'); hfWords('#s03-p2');
+  tl.fromTo('#s03-ai .word', { opacity: 0 }, { opacity: 1, duration: 0.05, stagger: 0.085, ease: 'none' }, 1.75);
+  // push in on the question
+  tl.fromTo('#s03-cam', { scale: 1 }, { scale: 1.4, duration: 2.6, ease: 'power2.inOut' }, 5.2);
+
+  window.__timelines["s03"] = tl;
+})();
+  </script>
+</template>

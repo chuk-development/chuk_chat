@@ -1,0 +1,2149 @@
+{
+  "ok": true,
+  "strict": false,
+  "browserSkipped": false,
+  "lint": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "filesScanned": 12
+  },
+  "runtime": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": []
+  },
+  "layout": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 4,
+    "findings": [
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 31,
+        "selector": "#s06-all",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": -11.14,
+          "top": -5.57,
+          "right": 1931.14,
+          "bottom": 1086.96,
+          "width": 1942.27,
+          "height": 1092.53
+        },
+        "containerSelector": "#s06 > div:nth-of-type(1)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "left": 11.14,
+          "right": 11.14,
+          "top": 5.57,
+          "bottom": 6.96
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/s06.html",
+        "bbox": {
+          "x": -11.14,
+          "y": -5.57,
+          "width": 1942.27,
+          "height": 1092.53
+        },
+        "firstSeen": 31,
+        "lastSeen": 31,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          31
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 44.778,
+        "selector": "#s08a-txt",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": -11.33,
+          "top": -6.37,
+          "right": 1931.33,
+          "bottom": 1086.37,
+          "width": 1942.66,
+          "height": 1092.74
+        },
+        "containerSelector": "#s08a > div:nth-of-type(1)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "left": 11.33,
+          "right": 11.33,
+          "top": 6.37,
+          "bottom": 6.37
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/s08a.html",
+        "bbox": {
+          "x": -11.33,
+          "y": -6.37,
+          "width": 1942.66,
+          "height": 1092.74
+        },
+        "firstSeen": 44.778,
+        "lastSeen": 44.778,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          44.778
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 51.667,
+        "selector": "#s08c-txt",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": -22.94,
+          "top": -12.91,
+          "right": 1942.94,
+          "bottom": 1092.91,
+          "width": 1965.89,
+          "height": 1105.81
+        },
+        "containerSelector": "#s08c > div:nth-of-type(1)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "left": 22.94,
+          "right": 22.94,
+          "top": 12.91,
+          "bottom": 12.91
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/s08c.html",
+        "bbox": {
+          "x": -22.94,
+          "y": -12.91,
+          "width": 1965.89,
+          "height": 1105.81
+        },
+        "firstSeen": 51.667,
+        "lastSeen": 51.667,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          51.667
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 58.556,
+        "selector": "#s09-lock",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": -9.12,
+          "top": -5.13,
+          "right": 1929.12,
+          "bottom": 1085.13,
+          "width": 1938.24,
+          "height": 1090.26
+        },
+        "containerSelector": "#s09 > div:nth-of-type(1)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "left": 9.12,
+          "right": 9.12,
+          "top": 5.13,
+          "bottom": 5.13
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/s09.html",
+        "bbox": {
+          "x": -9.12,
+          "y": -5.13,
+          "width": 1938.24,
+          "height": 1090.26
+        },
+        "firstSeen": 58.556,
+        "lastSeen": 58.556,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          58.556
+        ]
+      }
+    ],
+    "duration": 62,
+    "samples": [
+      3.444,
+      10.333,
+      17.222,
+      24.111,
+      31,
+      37.889,
+      44.778,
+      51.667,
+      58.556
+    ],
+    "transitionSamples": [],
+    "transitionSamplesDropped": 0,
+    "tolerance": 2,
+    "totalIssueCount": 4,
+    "truncated": false
+  },
+  "motion": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": false,
+    "samples": 0
+  },
+  "contrast": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 4,
+    "infoCount": 0,
+    "findings": [
+      {
+        "code": "contrast_aa_failure",
+        "severity": "warning",
+        "message": "Contrast is 1.2:1; WCAG AA requires 4.5:1.",
+        "text": "Ask me anything !",
+        "fg": "rgb(227,223,212)",
+        "bg": "rgb(209,204,196)",
+        "ratio": 1.2,
+        "requiredRatio": 4.5,
+        "suggestedColor": "rgb(89,87,83)",
+        "large": false,
+        "selector": "#s02-ph",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s02.html",
+        "bbox": {
+          "x": 323.796875,
+          "y": 458.6974182128906,
+          "width": 305.796875,
+          "height": 42
+        },
+        "time": 3.444,
+        "times": [
+          3.444
+        ]
+      },
+      {
+        "code": "contrast_aa_failure",
+        "severity": "warning",
+        "message": "Contrast is 1.26:1; WCAG AA requires 4.5:1.",
+        "text": "Fast",
+        "fg": "rgb(232,228,216)",
+        "bg": "rgb(209,204,196)",
+        "ratio": 1.26,
+        "requiredRatio": 4.5,
+        "suggestedColor": "rgb(88,87,82)",
+        "large": false,
+        "selector": "div > div:nth-of-type(3) > div > div > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(2) > span:nth-of-type(3) > b",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s02.html",
+        "bbox": {
+          "x": 1370.65625,
+          "y": 614.2286987304688,
+          "width": 53.640625,
+          "height": 36.96875
+        },
+        "time": 3.444,
+        "times": [
+          3.444
+        ]
+      },
+      {
+        "code": "contrast_aa_failure",
+        "severity": "warning",
+        "message": "Contrast is 1.18:1; WCAG AA requires 4.5:1.",
+        "text": "You're chatting with an AI/LLM — it can be wrong. ",
+        "fg": "rgb(225,221,210)",
+        "bg": "rgb(209,204,196)",
+        "ratio": 1.18,
+        "requiredRatio": 4.5,
+        "suggestedColor": "rgb(88,87,82)",
+        "large": false,
+        "selector": "#s02-disc",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s02.html",
+        "bbox": {
+          "x": 0,
+          "y": 724.6974487304688,
+          "width": 1920,
+          "height": 35.40625
+        },
+        "time": 3.444,
+        "times": [
+          3.444
+        ]
+      },
+      {
+        "code": "contrast_aa_failure",
+        "severity": "warning",
+        "message": "Contrast is 3.28:1; WCAG AA requires 4.5:1.",
+        "text": "my blood test says ferritin 9. should i be worried",
+        "fg": "rgb(232,228,216)",
+        "bg": "rgb(182,103,77)",
+        "ratio": 3.28,
+        "requiredRatio": 4.5,
+        "suggestedColor": "rgb(17,17,16)",
+        "large": false,
+        "selector": "#s03-bub",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s03.html",
+        "bbox": {
+          "x": 411.20880126953125,
+          "y": 216.74322509765625,
+          "width": 1480.7353515625,
+          "height": 124.25384521484375
+        },
+        "time": 17.222,
+        "times": [
+          17.222
+        ]
+      }
+    ],
+    "enabled": true,
+    "samples": [
+      3.444,
+      17.222,
+      31,
+      44.778,
+      58.556
+    ],
+    "checked": 97,
+    "passed": 93
+  },
+  "craft": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 15,
+    "infoCount": 0,
+    "findings": [
+      {
+        "code": "first_frame_empty",
+        "severity": "warning",
+        "message": "Frame 0 shows only the background, and the first frame is the thumbnail on social players: have the title or key image already on screen at 0 s instead of entering from nothing; see references/review.md.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0
+      },
+      {
+        "code": "text_below_floor",
+        "severity": "warning",
+        "message": "Type floor is 28 px (2.6% of the 1080 px short side, what a phone can read) and 43 text elements stay under it for 0.5 s or more, the smallest \"You're chatting with an AI/LLM — it c...\" at 12 px: set reading text to at least 28 px, or put data-layout-ignore on text that is texture rather than reading; see references/look.md.",
+        "text": "You're chatting with an AI/LLM — it can be wrong. Check key info.",
+        "selector": "#s02-disc",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s02.html",
+        "bbox": {
+          "x": 589.89,
+          "y": 701.38,
+          "width": 740.22,
+          "height": 29
+        },
+        "time": 3.5,
+        "times": [
+          3.5,
+          3.5,
+          3.5,
+          5.625,
+          5.625,
+          5.75,
+          5.875,
+          5.875,
+          5.875,
+          6,
+          6.125,
+          6.125,
+          6.25,
+          6.25,
+          6.375,
+          6.375,
+          6.5,
+          6.5,
+          6.625,
+          6.75,
+          6.75,
+          6.875,
+          6.875,
+          6.875,
+          7,
+          7,
+          7.125,
+          7.375,
+          7.375,
+          7.375,
+          7.5,
+          7.5,
+          7.625,
+          7.75,
+          7.875,
+          7.875,
+          8,
+          8,
+          8.125,
+          8.125,
+          8.25,
+          8.25,
+          8.375
+        ],
+        "fontPx": 11.5,
+        "floorPx": 28,
+        "seconds": 6.375,
+        "elements": [
+          {
+            "selector": "#s02-disc",
+            "text": "You're chatting with an AI/LLM — it can be wrong. Check key info.",
+            "fontPx": 11.5,
+            "time": 3.5,
+            "seconds": 6.375
+          },
+          {
+            "selector": "span.a-pill > b:nth-of-type(1)",
+            "text": "Fast",
+            "fontPx": 12,
+            "time": 3.5,
+            "seconds": 6.375
+          },
+          {
+            "selector": "#s02-ph",
+            "text": "Ask me anything !",
+            "fontPx": 17,
+            "time": 3.5,
+            "seconds": 2
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(1)",
+            "text": "m",
+            "fontPx": 17.01,
+            "time": 5.625,
+            "seconds": 4
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(2)",
+            "text": "y",
+            "fontPx": 17.01,
+            "time": 5.625,
+            "seconds": 4
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(4)",
+            "text": "b",
+            "fontPx": 17.02,
+            "time": 5.75,
+            "seconds": 3.875
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(5)",
+            "text": "l",
+            "fontPx": 17.04,
+            "time": 5.875,
+            "seconds": 3.75
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(6)",
+            "text": "o",
+            "fontPx": 17.04,
+            "time": 5.875,
+            "seconds": 3.75
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(7)",
+            "text": "o",
+            "fontPx": 17.04,
+            "time": 5.875,
+            "seconds": 3.75
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(8)",
+            "text": "d",
+            "fontPx": 17.06,
+            "time": 6,
+            "seconds": 3.625
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(10)",
+            "text": "t",
+            "fontPx": 17.08,
+            "time": 6.125,
+            "seconds": 3.5
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(11)",
+            "text": "e",
+            "fontPx": 17.08,
+            "time": 6.125,
+            "seconds": 3.5
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(12)",
+            "text": "s",
+            "fontPx": 17.12,
+            "time": 6.25,
+            "seconds": 3.375
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(13)",
+            "text": "t",
+            "fontPx": 17.12,
+            "time": 6.25,
+            "seconds": 3.375
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(15)",
+            "text": "s",
+            "fontPx": 17.16,
+            "time": 6.375,
+            "seconds": 3.25
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(16)",
+            "text": "a",
+            "fontPx": 17.16,
+            "time": 6.375,
+            "seconds": 3.25
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(17)",
+            "text": "y",
+            "fontPx": 17.2,
+            "time": 6.5,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(18)",
+            "text": "s",
+            "fontPx": 17.2,
+            "time": 6.5,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(20)",
+            "text": "f",
+            "fontPx": 17.24,
+            "time": 6.625,
+            "seconds": 3
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(21)",
+            "text": "e",
+            "fontPx": 17.3,
+            "time": 6.75,
+            "seconds": 2.875
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(22)",
+            "text": "r",
+            "fontPx": 17.3,
+            "time": 6.75,
+            "seconds": 2.875
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(23)",
+            "text": "r",
+            "fontPx": 17.37,
+            "time": 6.875,
+            "seconds": 2.75
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(24)",
+            "text": "i",
+            "fontPx": 17.37,
+            "time": 6.875,
+            "seconds": 2.75
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(25)",
+            "text": "t",
+            "fontPx": 17.37,
+            "time": 6.875,
+            "seconds": 2.75
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(26)",
+            "text": "i",
+            "fontPx": 17.44,
+            "time": 7,
+            "seconds": 2.625
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(27)",
+            "text": "n",
+            "fontPx": 17.44,
+            "time": 7,
+            "seconds": 2.625
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(29)",
+            "text": "9",
+            "fontPx": 17.5,
+            "time": 7.125,
+            "seconds": 2.5
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(32)",
+            "text": "s",
+            "fontPx": 17.66,
+            "time": 7.375,
+            "seconds": 2.25
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(33)",
+            "text": "h",
+            "fontPx": 17.66,
+            "time": 7.375,
+            "seconds": 2.25
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(34)",
+            "text": "o",
+            "fontPx": 17.66,
+            "time": 7.375,
+            "seconds": 2.25
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(35)",
+            "text": "u",
+            "fontPx": 17.76,
+            "time": 7.5,
+            "seconds": 2.125
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(36)",
+            "text": "l",
+            "fontPx": 17.76,
+            "time": 7.5,
+            "seconds": 2.125
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(37)",
+            "text": "d",
+            "fontPx": 17.83,
+            "time": 7.625,
+            "seconds": 2
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(39)",
+            "text": "i",
+            "fontPx": 17.93,
+            "time": 7.75,
+            "seconds": 1.875
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(41)",
+            "text": "b",
+            "fontPx": 18.03,
+            "time": 7.875,
+            "seconds": 1.75
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(42)",
+            "text": "e",
+            "fontPx": 18.03,
+            "time": 7.875,
+            "seconds": 1.75
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(44)",
+            "text": "w",
+            "fontPx": 18.12,
+            "time": 8,
+            "seconds": 1.625
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(45)",
+            "text": "o",
+            "fontPx": 18.12,
+            "time": 8,
+            "seconds": 1.625
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(46)",
+            "text": "r",
+            "fontPx": 18.18,
+            "time": 8.125,
+            "seconds": 1.5
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(47)",
+            "text": "r",
+            "fontPx": 18.18,
+            "time": 8.125,
+            "seconds": 1.5
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(48)",
+            "text": "i",
+            "fontPx": 18.26,
+            "time": 8.25,
+            "seconds": 1.375
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(49)",
+            "text": "e",
+            "fontPx": 18.26,
+            "time": 8.25,
+            "seconds": 1.375
+          },
+          {
+            "selector": "#s02-typed > span:nth-of-type(50)",
+            "text": "d",
+            "fontPx": 18.33,
+            "time": 8.375,
+            "seconds": 1.25
+          }
+        ]
+      },
+      {
+        "code": "line_unread",
+        "severity": "warning",
+        "message": "\"m y b l o o d t e s t s a y s f e r r i t i n 9 . s h o u...\" (40 words) is on screen 4.33 s (±0.01 s), under its 9.38 s floor: hold it about 0.5 s + 0.3 s a word (12.50 s here) before it leaves or changes; see references/motion.md.",
+        "text": "m y b l o o d t e s t s a y s f e r r i t i n 9 . s h o u l d i b e w o r r i e d ?",
+        "selector": "div.a-field",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s02.html",
+        "bbox": {
+          "x": 323.61,
+          "y": 414.75,
+          "width": 51.59000000000003,
+          "height": 42.00999999999999
+        },
+        "time": 5.539,
+        "words": 40,
+        "seconds": 4.328,
+        "floorSeconds": 9.375
+      },
+      {
+        "code": "line_unread",
+        "severity": "warning",
+        "message": "\"You're chatting with an AI/LLM — it can be wrong. Check k...\" (13 words) is on screen 2.59 s (±0.01 s), under its 3.30 s floor: hold it about 0.5 s + 0.3 s a word (4.40 s here) before it leaves or changes; see references/motion.md.",
+        "text": "You're chatting with an AI/LLM — it can be wrong. Check key info.",
+        "selector": "#s02-disc",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s02.html",
+        "bbox": {
+          "x": 575.42,
+          "y": 690.19,
+          "width": 769.16,
+          "height": 30.129999999999995
+        },
+        "time": 7.273,
+        "words": 13,
+        "seconds": 2.594,
+        "floorSeconds": 3.3
+      },
+      {
+        "code": "text_below_floor",
+        "severity": "warning",
+        "message": "Type floor is 28 px (2.6% of the 1080 px short side, what a phone can read) and 42 text elements stay under it for 0.5 s or more, the smallest \"Worked for 2s\" at 13 px: set reading text to at least 28 px, or put data-layout-ignore on text that is texture rather than reading; see references/look.md.",
+        "text": "Worked for 2s",
+        "selector": "#s03-head > span:nth-of-type(1)",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s03.html",
+        "bbox": {
+          "x": 236,
+          "y": 362.25,
+          "width": 162.83,
+          "height": 29
+        },
+        "time": 10.375,
+        "times": [
+          10,
+          10.375,
+          10.5,
+          10.875,
+          10.875,
+          11.125,
+          11.25,
+          11.375,
+          11.75,
+          11.75,
+          11.875,
+          12,
+          12,
+          12.125,
+          12.25,
+          12.25,
+          12.375,
+          12.5,
+          12.5,
+          12.625,
+          12.75,
+          12.75,
+          12.875,
+          13,
+          13,
+          13.125,
+          13.25,
+          13.25,
+          13.375,
+          13.5,
+          13.5,
+          13.625,
+          13.75,
+          13.875,
+          13.875,
+          14,
+          14,
+          14.125,
+          14.25,
+          14.375,
+          14.375,
+          14.5
+        ],
+        "fontPx": 12.7,
+        "floorPx": 28,
+        "seconds": 7.375,
+        "elements": [
+          {
+            "selector": "#s03-head > span:nth-of-type(1)",
+            "text": "Worked for 2s",
+            "fontPx": 12.7,
+            "time": 10.375,
+            "seconds": 7.375
+          },
+          {
+            "selector": "#s03-st0 > span:nth-of-type(2)",
+            "text": "User asks what a ferritin of 9 means.",
+            "fontPx": 12.7,
+            "time": 10.5,
+            "seconds": 7.25
+          },
+          {
+            "selector": "#s03-st1 > span:nth-of-type(2)",
+            "text": "Searched",
+            "fontPx": 12.7,
+            "time": 10.875,
+            "seconds": 6.875
+          },
+          {
+            "selector": "#s03-st1 > span:nth-of-type(2) > b:nth-of-type(1)",
+            "text": "ferritin 9 µg/L low",
+            "fontPx": 12.7,
+            "time": 10.875,
+            "seconds": 6.875
+          },
+          {
+            "selector": "#s03-src0",
+            "text": "nhs.uk",
+            "fontPx": 12.7,
+            "time": 11.125,
+            "seconds": 6.625
+          },
+          {
+            "selector": "#s03-src1",
+            "text": "mayoclinic.org",
+            "fontPx": 12.7,
+            "time": 11.25,
+            "seconds": 6.5
+          },
+          {
+            "selector": "#s03-src2",
+            "text": "aerzteblatt.de",
+            "fontPx": 12.7,
+            "time": 11.375,
+            "seconds": 6.375
+          },
+          {
+            "selector": "#s03-bub",
+            "text": "my blood test says ferritin 9. should i be worried?",
+            "fontPx": 16.4,
+            "time": 10,
+            "seconds": 7.75
+          },
+          {
+            "selector": "#s03-p1 > span:nth-of-type(1)",
+            "text": "A",
+            "fontPx": 16.4,
+            "time": 11.75,
+            "seconds": 4.875
+          },
+          {
+            "selector": "#s03-p1 > span:nth-of-type(2)",
+            "text": "ferritin",
+            "fontPx": 16.4,
+            "time": 11.75,
+            "seconds": 6
+          },
+          {
+            "selector": "#s03-p1 > span:nth-of-type(3)",
+            "text": "of",
+            "fontPx": 16.4,
+            "time": 11.875,
+            "seconds": 5.875
+          },
+          {
+            "selector": "#s03-p1 > span:nth-of-type(4)",
+            "text": "9",
+            "fontPx": 16.4,
+            "time": 12,
+            "seconds": 5.75
+          },
+          {
+            "selector": "#s03-p1 > span:nth-of-type(5)",
+            "text": "µg/L",
+            "fontPx": 16.4,
+            "time": 12,
+            "seconds": 5.75
+          },
+          {
+            "selector": "#s03-p1 > span:nth-of-type(6)",
+            "text": "is",
+            "fontPx": 16.4,
+            "time": 12.125,
+            "seconds": 5.625
+          },
+          {
+            "selector": "#s03-p1 > span:nth-of-type(7)",
+            "text": "low.",
+            "fontPx": 16.4,
+            "time": 12.25,
+            "seconds": 5.5
+          },
+          {
+            "selector": "#s03-p1 > span:nth-of-type(8)",
+            "text": "It",
+            "fontPx": 16.4,
+            "time": 12.25,
+            "seconds": 5.5
+          },
+          {
+            "selector": "#s03-p1 > span:nth-of-type(9)",
+            "text": "usually",
+            "fontPx": 16.4,
+            "time": 12.375,
+            "seconds": 5.375
+          },
+          {
+            "selector": "#s03-p1 > span:nth-of-type(10)",
+            "text": "means",
+            "fontPx": 16.4,
+            "time": 12.5,
+            "seconds": 5.25
+          },
+          {
+            "selector": "#s03-p1 > span:nth-of-type(11)",
+            "text": "your",
+            "fontPx": 16.4,
+            "time": 12.5,
+            "seconds": 5.25
+          },
+          {
+            "selector": "#s03-p1 > span:nth-of-type(12)",
+            "text": "iron",
+            "fontPx": 16.4,
+            "time": 12.625,
+            "seconds": 5.125
+          },
+          {
+            "selector": "#s03-p1 > span:nth-of-type(13)",
+            "text": "stores",
+            "fontPx": 16.4,
+            "time": 12.75,
+            "seconds": 5
+          },
+          {
+            "selector": "#s03-p1 > span:nth-of-type(14)",
+            "text": "are",
+            "fontPx": 16.4,
+            "time": 12.75,
+            "seconds": 5
+          },
+          {
+            "selector": "#s03-p1 > span:nth-of-type(15)",
+            "text": "empty,",
+            "fontPx": 16.4,
+            "time": 12.875,
+            "seconds": 4.875
+          },
+          {
+            "selector": "#s03-p1 > span:nth-of-type(16)",
+            "text": "even",
+            "fontPx": 16.4,
+            "time": 13,
+            "seconds": 4
+          },
+          {
+            "selector": "#s03-p1 > span:nth-of-type(17)",
+            "text": "before",
+            "fontPx": 16.4,
+            "time": 13,
+            "seconds": 4.75
+          },
+          {
+            "selector": "#s03-p1 > span:nth-of-type(18)",
+            "text": "anaemia",
+            "fontPx": 16.4,
+            "time": 13.125,
+            "seconds": 4.625
+          },
+          {
+            "selector": "#s03-p1 > span:nth-of-type(19)",
+            "text": "shows.",
+            "fontPx": 16.4,
+            "time": 13.25,
+            "seconds": 4.5
+          },
+          {
+            "selector": "#s03-p2 > span:nth-of-type(1)",
+            "text": "It",
+            "fontPx": 16.4,
+            "time": 13.25,
+            "seconds": 3.5
+          },
+          {
+            "selector": "#s03-p2 > span:nth-of-type(2)",
+            "text": "is",
+            "fontPx": 16.4,
+            "time": 13.375,
+            "seconds": 3.875
+          },
+          {
+            "selector": "#s03-p2 > span:nth-of-type(3)",
+            "text": "common",
+            "fontPx": 16.4,
+            "time": 13.5,
+            "seconds": 4.25
+          },
+          {
+            "selector": "#s03-p2 > span:nth-of-type(4)",
+            "text": "and",
+            "fontPx": 16.4,
+            "time": 13.5,
+            "seconds": 4.25
+          },
+          {
+            "selector": "#s03-p2 > span:nth-of-type(5)",
+            "text": "treatable.",
+            "fontPx": 16.4,
+            "time": 13.625,
+            "seconds": 4.125
+          },
+          {
+            "selector": "#s03-p2 > span:nth-of-type(6)",
+            "text": "Ask",
+            "fontPx": 16.4,
+            "time": 13.75,
+            "seconds": 4
+          },
+          {
+            "selector": "#s03-p2 > span:nth-of-type(7)",
+            "text": "your",
+            "fontPx": 16.4,
+            "time": 13.875,
+            "seconds": 3.875
+          },
+          {
+            "selector": "#s03-p2 > span:nth-of-type(8)",
+            "text": "doctor",
+            "fontPx": 16.4,
+            "time": 13.875,
+            "seconds": 3.875
+          },
+          {
+            "selector": "#s03-p2 > span:nth-of-type(9)",
+            "text": "about",
+            "fontPx": 16.4,
+            "time": 14,
+            "seconds": 3.75
+          },
+          {
+            "selector": "#s03-p2 > span:nth-of-type(10)",
+            "text": "an",
+            "fontPx": 16.4,
+            "time": 14,
+            "seconds": 3.75
+          },
+          {
+            "selector": "#s03-p2 > span:nth-of-type(11)",
+            "text": "iron",
+            "fontPx": 16.4,
+            "time": 14.125,
+            "seconds": 3.625
+          },
+          {
+            "selector": "#s03-p2 > span:nth-of-type(12)",
+            "text": "panel",
+            "fontPx": 16.4,
+            "time": 14.25,
+            "seconds": 3.5
+          },
+          {
+            "selector": "#s03-p2 > span:nth-of-type(13)",
+            "text": "and",
+            "fontPx": 16.4,
+            "time": 14.375,
+            "seconds": 3.375
+          },
+          {
+            "selector": "#s03-p2 > span:nth-of-type(14)",
+            "text": "the",
+            "fontPx": 16.4,
+            "time": 14.375,
+            "seconds": 3.375
+          },
+          {
+            "selector": "#s03-p2 > span:nth-of-type(15)",
+            "text": "cause.",
+            "fontPx": 16.4,
+            "time": 14.5,
+            "seconds": 3.25
+          }
+        ]
+      },
+      {
+        "code": "line_unread",
+        "severity": "warning",
+        "message": "\"User asks what a ferritin of 9 means.\" (8 words) is on screen 1.93 s (±0.01 s), under its 2.17 s floor: hold it about 0.5 s + 0.3 s a word (2.90 s here) before it leaves or changes; see references/motion.md.",
+        "text": "User asks what a ferritin of 9 means.",
+        "selector": "#s03-st0 > span:nth-of-type(2)",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s03.html",
+        "bbox": {
+          "x": 259.59,
+          "y": 429.43,
+          "width": 431.3,
+          "height": 30.5
+        },
+        "time": 15.773,
+        "words": 8,
+        "seconds": 1.93,
+        "floorSeconds": 2.175
+      },
+      {
+        "code": "line_unread",
+        "severity": "warning",
+        "message": "\"{\"v\":\"2\",\"kv\":1,\"nonce\":\"7pGTac9vwEmIG4/Y\",\"ciphertext\":\"...\" (13 words) is on screen 2.94 s (±0.01 s), under its 3.30 s floor: hold it about 0.5 s + 0.3 s a word (4.40 s here) before it leaves or changes; see references/motion.md.",
+        "text": "{\"v\":\"2\",\"kv\":1,\"nonce\":\"7pGTac9vwEmIG4/Y\",\"ciphertext\":\"4NnW6aKHnOncPhPOcaLt7PbaTwfndJw5xG4XFg0fhYkdagg7nJTyh90lffbMy6LA9n+4IJpIjqJEmi4OwtaejY8e0xWpmEW60g2y5dPQmHtBX1/GqBI=\",\"mac\":\"6HSEnDHsojJP6m8Q7GjvKw==\"}",
+        "selector": "#s05-r0 > div:nth-of-type(4)",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s05.html",
+        "bbox": {
+          "x": 823,
+          "y": 483.87,
+          "width": 997,
+          "height": 34
+        },
+        "time": 20.367,
+        "words": 13,
+        "seconds": 2.938,
+        "floorSeconds": 3.3
+      },
+      {
+        "code": "text_below_floor",
+        "severity": "warning",
+        "message": "Type floor is 28 px (2.6% of the 1080 px short side, what a phone can read) and 29 text elements stay under it for 0.5 s or more, the smallest \"uuid\" at 23 px: set reading text to at least 28 px, or put data-layout-ignore on text that is texture rather than reading; see references/look.md.",
+        "text": "uuid",
+        "selector": "div.sb-tr.sb-head > div:nth-of-type(2) > span:nth-of-type(1)",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s05.html",
+        "bbox": {
+          "x": 218.31,
+          "y": 412.37,
+          "width": 45.32,
+          "height": 25
+        },
+        "time": 20.375,
+        "times": [
+          20.125,
+          20.125,
+          20.125,
+          20.375,
+          20.375,
+          20.375,
+          20.375,
+          20.375,
+          20.375,
+          20.375,
+          20.375,
+          20.375,
+          20.375,
+          20.375,
+          20.375,
+          20.5,
+          20.5,
+          20.5,
+          20.5,
+          20.5,
+          20.5,
+          20.5,
+          20.5,
+          20.625,
+          20.625,
+          20.625,
+          20.625,
+          23.25,
+          23.25
+        ],
+        "fontPx": 23,
+        "floorPx": 28,
+        "seconds": 3,
+        "elements": [
+          {
+            "selector": "div.sb-tr.sb-head > div:nth-of-type(2) > span:nth-of-type(1)",
+            "text": "uuid",
+            "fontPx": 23,
+            "time": 20.375,
+            "seconds": 3
+          },
+          {
+            "selector": "div.sb-tr.sb-head > div:nth-of-type(3) > span:nth-of-type(1)",
+            "text": "uuid",
+            "fontPx": 23,
+            "time": 20.375,
+            "seconds": 3
+          },
+          {
+            "selector": "div.sb-tr.sb-head > div:nth-of-type(4) > span:nth-of-type(1)",
+            "text": "text",
+            "fontPx": 23,
+            "time": 20.375,
+            "seconds": 3
+          },
+          {
+            "selector": "div.sb-tr.sb-head > div:nth-of-type(5) > span:nth-of-type(1)",
+            "text": "timestamptz",
+            "fontPx": 23,
+            "time": 20.375,
+            "seconds": 3
+          },
+          {
+            "selector": "div.ex-bar > span:nth-of-type(1)",
+            "text": "text",
+            "fontPx": 23.76,
+            "time": 23.25,
+            "seconds": 5.75
+          },
+          {
+            "selector": "div.ex-bar > span:nth-of-type(3)",
+            "text": "row 066c8a74…",
+            "fontPx": 23.76,
+            "time": 23.25,
+            "seconds": 5.75
+          },
+          {
+            "selector": "div.sb-bar > span:nth-of-type(2)",
+            "text": "public",
+            "fontPx": 24,
+            "time": 20.125,
+            "seconds": 3.25
+          },
+          {
+            "selector": "#s05-r0 > div:nth-of-type(2)",
+            "text": "5336a286-03a0-4142-a150-800143763720",
+            "fontPx": 25,
+            "time": 20.375,
+            "seconds": 3
+          },
+          {
+            "selector": "#s05-r0 > div:nth-of-type(3)",
+            "text": "9e3c····-····-····-····5973",
+            "fontPx": 25,
+            "time": 20.375,
+            "seconds": 3
+          },
+          {
+            "selector": "#s05-r0 > div:nth-of-type(4)",
+            "text": "{\"v\":\"2\",\"kv\":1,\"nonce\":\"7pGTac9vwEmIG4/Y\",\"ciphertext\":\"4NnW6aKHnOncPhPOcaLt7PbaTwfndJw5xG4XFg0fhYkdagg7nJTyh90lffbMy6LA9n+4IJpIjqJEmi4OwtaejY8e0xWpmEW60g2y5dPQmHtBX1/GqBI=\",\"mac\":\"6HSEnDHsojJP6m8Q7GjvKw==\"}",
+            "fontPx": 25,
+            "time": 20.375,
+            "seconds": 3
+          },
+          {
+            "selector": "#s05-r0 > div:nth-of-type(5)",
+            "text": "2026-10-26 08:12:44+00",
+            "fontPx": 25,
+            "time": 20.375,
+            "seconds": 3
+          },
+          {
+            "selector": "#s05-r1 > div:nth-of-type(2)",
+            "text": "066c8a74-4d0d-4bc5-b973-b517832a7028",
+            "fontPx": 25,
+            "time": 20.5,
+            "seconds": 2.875
+          },
+          {
+            "selector": "#s05-r1 > div:nth-of-type(3)",
+            "text": "9e3c····-····-····-····5973",
+            "fontPx": 25,
+            "time": 20.5,
+            "seconds": 2.875
+          },
+          {
+            "selector": "#s05-scroll",
+            "text": "{\"v\":\"2\",\"kv\":1,\"nonce\":\"kf+aWr4lYvwA1DoU\",\"ciphertext\":\"mKUL/GAItsu6S1xOqDtD6YQXhFFRnegEykOlPHyEusnbrzLYRk5J6trJ/3Go99frJL5G2fTVShUWI3rK81U+CaCQSUkgQs2zm0nhSCtqBuX2tpsUo8CeYCv7JBu6Sy7cvDbzXonXX7GikVLi0lNAVRhM3VA4FMrOoYkdBNvWaRQWGU8wfFYTXvIpSc3sFKVmAx+19DcIrY7aRvnmxcQk8sUf7sGyS6KkfWiGTT4foXVQlvwi5j8TXbZZpCOhmURRrwxakH/BclI6IYi9TsiKBDKulLBo6o9LHAEb\",\"mac\":\"vF+VcOizgetiAE1IDJQzqQ==\"}",
+            "fontPx": 25,
+            "time": 20.5,
+            "seconds": 2.875
+          },
+          {
+            "selector": "#s05-r1 > div:nth-of-type(5)",
+            "text": "2026-10-26 09:41:07+00",
+            "fontPx": 25,
+            "time": 20.5,
+            "seconds": 2.875
+          },
+          {
+            "selector": "#s05-r2 > div:nth-of-type(2)",
+            "text": "240e4cd8-0c19-4e12-92c8-007f3e93314b",
+            "fontPx": 25,
+            "time": 20.5,
+            "seconds": 2.875
+          },
+          {
+            "selector": "#s05-r2 > div:nth-of-type(3)",
+            "text": "9e3c····-····-····-····5973",
+            "fontPx": 25,
+            "time": 20.5,
+            "seconds": 2.875
+          },
+          {
+            "selector": "#s05-r2 > div:nth-of-type(4)",
+            "text": "{\"v\":\"2\",\"kv\":1,\"nonce\":\"Kx6iO8GI8nvQlZ66\",\"ciphertext\":\"KrYzM2Am6fj5YG9onSsgOTCDX97/L6j65KpViKZIjNrJLeGjeDlg2EF+23MgsGW7O2i5skkZbS3wm/B7BaVpl4isoZeAtP5MRZW51fC+HIwPlDd+tX05\",\"mac\":\"fSE2HJ9aexh7pBqPx8dv3Q==\"}",
+            "fontPx": 25,
+            "time": 20.5,
+            "seconds": 2.875
+          },
+          {
+            "selector": "#s05-r2 > div:nth-of-type(5)",
+            "text": "2026-10-25 21:03:19+00",
+            "fontPx": 25,
+            "time": 20.5,
+            "seconds": 2.875
+          },
+          {
+            "selector": "#s05-r3 > div:nth-of-type(2)",
+            "text": "07e3c8fa-4f0e-426c-a6de-ea7d13b7ac9a",
+            "fontPx": 25,
+            "time": 20.625,
+            "seconds": 2.75
+          },
+          {
+            "selector": "#s05-r3 > div:nth-of-type(3)",
+            "text": "9e3c····-····-····-····5973",
+            "fontPx": 25,
+            "time": 20.625,
+            "seconds": 2.75
+          },
+          {
+            "selector": "#s05-r3 > div:nth-of-type(4)",
+            "text": "{\"v\":\"2\",\"kv\":1,\"nonce\":\"+VfwGsR4/UPbiE7v\",\"ciphertext\":\"+nFYqIjSj/NNOpNUUjeRac6z2FJRKA1q8ZcPggY4kTZb49UubjaVx/eVL4KXH6Eq8vaSagnhxmGHwamfhBcau2omF5rNDmvQc0YUsEMBiqilWRE3\",\"mac\":\"LIa0M+BcW0PScPUtw7ttjA==\"}",
+            "fontPx": 25,
+            "time": 20.625,
+            "seconds": 2.75
+          },
+          {
+            "selector": "#s05-r3 > div:nth-of-type(5)",
+            "text": "2026-10-24 17:56:02+00",
+            "fontPx": 25,
+            "time": 20.625,
+            "seconds": 2.75
+          },
+          {
+            "selector": "div.sb-bar > span:nth-of-type(4)",
+            "text": "Filter",
+            "fontPx": 26,
+            "time": 20.125,
+            "seconds": 3.25
+          },
+          {
+            "selector": "div.sb-bar > span:nth-of-type(5)",
+            "text": "Sort",
+            "fontPx": 26,
+            "time": 20.125,
+            "seconds": 3.25
+          },
+          {
+            "selector": "div.sb-tr.sb-head > div:nth-of-type(2) > b:nth-of-type(1)",
+            "text": "id",
+            "fontPx": 27,
+            "time": 20.375,
+            "seconds": 3
+          },
+          {
+            "selector": "div.sb-tr.sb-head > div:nth-of-type(3) > b:nth-of-type(1)",
+            "text": "user_id",
+            "fontPx": 27,
+            "time": 20.375,
+            "seconds": 3
+          },
+          {
+            "selector": "div.sb-tr.sb-head > div:nth-of-type(4) > b:nth-of-type(1)",
+            "text": "encrypted_payload",
+            "fontPx": 27,
+            "time": 20.375,
+            "seconds": 3
+          },
+          {
+            "selector": "div.sb-tr.sb-head > div:nth-of-type(5) > b:nth-of-type(1)",
+            "text": "updated_at",
+            "fontPx": 27,
+            "time": 20.375,
+            "seconds": 3
+          }
+        ]
+      },
+      {
+        "code": "line_unread",
+        "severity": "warning",
+        "message": "\"{\"v\":\"2\",\"kv\":1,\"nonce\":\"kf+aWr4lYvwA1DoU\",\"ciphertext\":\"...\" (17 words) is on screen 2.90 s (±0.01 s), under its 4.20 s floor: hold it about 0.5 s + 0.3 s a word (5.60 s here) before it leaves or changes; see references/motion.md.",
+        "text": "{\"v\":\"2\",\"kv\":1,\"nonce\":\"kf+aWr4lYvwA1DoU\",\"ciphertext\":\"mKUL/GAItsu6S1xOqDtD6YQXhFFRnegEykOlPHyEusnbrzLYRk5J6trJ/3Go99frJL5G2fTVShUWI3rK81U+CaCQSUkgQs2zm0nhSCtqBuX2tpsUo8CeYCv7JBu6Sy7cvDbzXonXX7GikVLi0lNAVRhM3VA4FMrOoYkdBNvWaRQWGU8wfFYTXvIpSc3sFKVmAx+19DcIrY7aRvnmxcQk8sUf7sGyS6KkfWiGTT4foXVQlvwi5j8TXbZZpCOhmURRrwxakH/BclI6IYi9TsiKBDKulLBo6o9LHAEb\",\"mac\":\"vF+VcOizgetiAE1IDJQzqQ==\"}",
+        "selector": "#s05-scroll",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s05.html",
+        "bbox": {
+          "x": 823,
+          "y": 563.52,
+          "width": 622,
+          "height": 34
+        },
+        "time": 20.406,
+        "words": 17,
+        "seconds": 2.898,
+        "floorSeconds": 4.2
+      },
+      {
+        "code": "line_unread",
+        "severity": "warning",
+        "message": "\"{\"v\":\"2\",\"kv\":1,\"nonce\":\"Kx6iO8GI8nvQlZ66\",\"ciphertext\":\"...\" (15 words) is on screen 2.84 s (±0.01 s), under its 3.75 s floor: hold it about 0.5 s + 0.3 s a word (5.00 s here) before it leaves or changes; see references/motion.md.",
+        "text": "{\"v\":\"2\",\"kv\":1,\"nonce\":\"Kx6iO8GI8nvQlZ66\",\"ciphertext\":\"KrYzM2Am6fj5YG9onSsgOTCDX97/L6j65KpViKZIjNrJLeGjeDlg2EF+23MgsGW7O2i5skkZbS3wm/B7BaVpl4isoZeAtP5MRZW51fC+HIwPlDd+tX05\",\"mac\":\"fSE2HJ9aexh7pBqPx8dv3Q==\"}",
+        "selector": "#s05-r2 > div:nth-of-type(4)",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s05.html",
+        "bbox": {
+          "x": 823,
+          "y": 643.52,
+          "width": 997,
+          "height": 34
+        },
+        "time": 20.469,
+        "words": 15,
+        "seconds": 2.836,
+        "floorSeconds": 3.75
+      },
+      {
+        "code": "line_unread",
+        "severity": "warning",
+        "message": "\"{\"v\":\"2\",\"kv\":1,\"nonce\":\"+VfwGsR4/UPbiE7v\",\"ciphertext\":\"...\" (14 words) is on screen 2.77 s (±0.01 s), under its 3.53 s floor: hold it about 0.5 s + 0.3 s a word (4.70 s here) before it leaves or changes; see references/motion.md.",
+        "text": "{\"v\":\"2\",\"kv\":1,\"nonce\":\"+VfwGsR4/UPbiE7v\",\"ciphertext\":\"+nFYqIjSj/NNOpNUUjeRac6z2FJRKA1q8ZcPggY4kTZb49UubjaVx/eVL4KXH6Eq8vaSagnhxmGHwamfhBcau2omF5rNDmvQc0YUsEMBiqilWRE3\",\"mac\":\"LIa0M+BcW0PScPUtw7ttjA==\"}",
+        "selector": "#s05-r3 > div:nth-of-type(4)",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s05.html",
+        "bbox": {
+          "x": 823,
+          "y": 723.5,
+          "width": 997,
+          "height": 34
+        },
+        "time": 20.539,
+        "words": 14,
+        "seconds": 2.766,
+        "floorSeconds": 3.525
+      },
+      {
+        "code": "line_unread",
+        "severity": "warning",
+        "message": "\"m K U L / G A I t s u 6 S 1 x O q D t D 6 Y Q X h F F R n...\" (50 words) is on screen 6.84 s (±0.01 s), under its 11.63 s floor: hold it about 0.5 s + 0.3 s a word (15.50 s here) before it leaves or changes; see references/motion.md.",
+        "text": "m K U L / G A I t s u 6 S 1 x O q D t D 6 Y Q X h F F R n e g E y k O l P H y E u s n Y L A o 8 z P S",
+        "selector": "#s06-bub",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s06.html",
+        "bbox": {
+          "x": 286.24,
+          "y": 369.03,
+          "width": 1347.52,
+          "height": 58.04000000000002
+        },
+        "time": 29.07,
+        "words": 50,
+        "seconds": 6.836,
+        "floorSeconds": 11.625
+      },
+      {
+        "code": "line_unread",
+        "severity": "warning",
+        "message": "\": (secretBox.cipherText), 'ciphertext' base64Encode\" (4 words) is on screen 1.14 s (±0.01 s), under its 1.27 s floor: hold it about 0.5 s + 0.3 s a word (1.70 s here) before it leaves or changes; see references/motion.md.",
+        "text": ": (secretBox.cipherText), 'ciphertext' base64Encode",
+        "selector": "#s07-ln65 > span:nth-of-type(2)",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s07.html",
+        "bbox": {
+          "x": 261,
+          "y": 914,
+          "width": 954,
+          "height": 40
+        },
+        "time": 36.5,
+        "words": 4,
+        "seconds": 1.141,
+        "floorSeconds": 1.275
+      },
+      {
+        "code": "line_unread",
+        "severity": "warning",
+        "message": "\": (secretBox.mac.bytes), 'mac' base64Encode\" (5 words) is on screen 0.96 s (±0.01 s), under its 1.50 s floor: hold it about 0.5 s + 0.3 s a word (2.00 s here) before it leaves or changes; see references/motion.md.",
+        "text": ": (secretBox.mac.bytes), 'mac' base64Encode",
+        "selector": "#s07-ln66 > span:nth-of-type(2)",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s07.html",
+        "bbox": {
+          "x": 261,
+          "y": 960,
+          "width": 810,
+          "height": 40
+        },
+        "time": 36.539,
+        "words": 5,
+        "seconds": 0.961,
+        "floorSeconds": 1.5
+      },
+      {
+        "code": "text_below_floor",
+        "severity": "warning",
+        "message": "Type floor is 28 px (2.6% of the 1080 px short side, what a phone can read) and 69 text elements stay under it for 0.5 s or more, the smallest \"Code\" at 17 px: set reading text to at least 28 px, or put data-layout-ignore on text that is texture rather than reading; see references/look.md.",
+        "text": "Code",
+        "selector": "span.on",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s07.html",
+        "bbox": {
+          "x": 192,
+          "y": 256.39,
+          "width": 56.03,
+          "height": 27
+        },
+        "time": 40.625,
+        "times": [
+          40.625,
+          40.625,
+          40.625,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75,
+          40.75
+        ],
+        "fontPx": 17.28,
+        "floorPx": 28,
+        "seconds": 3.25,
+        "elements": [
+          {
+            "selector": "span.on",
+            "text": "Code",
+            "fontPx": 17.28,
+            "time": 40.625,
+            "seconds": 3.25
+          },
+          {
+            "selector": "span.gh-seg > span:nth-of-type(2)",
+            "text": "Blame",
+            "fontPx": 17.28,
+            "time": 40.625,
+            "seconds": 3.25
+          },
+          {
+            "selector": "div.gh-tool > span:nth-of-type(2)",
+            "text": "1239 lines",
+            "fontPx": 17.28,
+            "time": 40.625,
+            "seconds": 3.25
+          },
+          {
+            "selector": "span.own",
+            "text": "chuk-development",
+            "fontPx": 20.16,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "div.gh-repo > b:nth-of-type(1)",
+            "text": "chuk_chat",
+            "fontPx": 20.16,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "div.gh-path > span:nth-of-type(1)",
+            "text": "chuk_chat",
+            "fontPx": 20.16,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "div.gh-path > span:nth-of-type(3)",
+            "text": "lib",
+            "fontPx": 20.16,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "div.gh-path > span:nth-of-type(5)",
+            "text": "services",
+            "fontPx": 20.16,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "div.gh-path > b:nth-of-type(1)",
+            "text": "encryption_service.dart",
+            "fontPx": 20.16,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln52 > span:nth-of-type(1)",
+            "text": "52",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln52 > span:nth-of-type(2)",
+            "text": "frame = (json, allowBzip2: allowBzip2);",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln52 > span:nth-of-type(2) > span:nth-of-type(1)",
+            "text": "final",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln52 > span:nth-of-type(2) > span:nth-of-type(2)",
+            "text": "compressPayloadStrong",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln53 > span:nth-of-type(1)",
+            "text": "53",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln53 > span:nth-of-type(2)",
+            "text": "cipher = .();",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln53 > span:nth-of-type(2) > span:nth-of-type(1)",
+            "text": "final",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln53 > span:nth-of-type(2) > span:nth-of-type(2)",
+            "text": "AesGcm",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln53 > span:nth-of-type(2) > span:nth-of-type(3)",
+            "text": "with256bits",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln54 > span:nth-of-type(1)",
+            "text": "54",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln54 > span:nth-of-type(2)",
+            "text": "rng = .();",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln54 > span:nth-of-type(2) > span:nth-of-type(1)",
+            "text": "final",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln54 > span:nth-of-type(2) > span:nth-of-type(2)",
+            "text": "Random",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln54 > span:nth-of-type(2) > span:nth-of-type(3)",
+            "text": "secure",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln55 > span:nth-of-type(1)",
+            "text": "55",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln55 > span:nth-of-type(2)",
+            "text": "nonce = <>.(, (_) => rng.());",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln55 > span:nth-of-type(2) > span:nth-of-type(1)",
+            "text": "final",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln55 > span:nth-of-type(2) > span:nth-of-type(2)",
+            "text": "List",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln55 > span:nth-of-type(2) > span:nth-of-type(3)",
+            "text": "int",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln55 > span:nth-of-type(2) > span:nth-of-type(4)",
+            "text": "generate",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln55 > span:nth-of-type(2) > span:nth-of-type(5)",
+            "text": "12",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln55 > span:nth-of-type(2) > span:nth-of-type(6)",
+            "text": "nextInt",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln55 > span:nth-of-type(2) > span:nth-of-type(7)",
+            "text": "256",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln56 > span:nth-of-type(1)",
+            "text": "56",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln56 > span:nth-of-type(2)",
+            "text": "secretBox = cipher.(",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln56 > span:nth-of-type(2) > span:nth-of-type(1)",
+            "text": "final",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln56 > span:nth-of-type(2) > span:nth-of-type(2)",
+            "text": "await",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln56 > span:nth-of-type(2) > span:nth-of-type(3)",
+            "text": "encrypt",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln57 > span:nth-of-type(1)",
+            "text": "57",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln57 > span:nth-of-type(2)",
+            "text": "frame,",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln58 > span:nth-of-type(1)",
+            "text": "58",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln58 > span:nth-of-type(2)",
+            "text": "secretKey: (keyBytes),",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln58 > span:nth-of-type(2) > span:nth-of-type(1)",
+            "text": "SecretKey",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln59 > span:nth-of-type(1)",
+            "text": "59",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln59 > span:nth-of-type(2)",
+            "text": "nonce: nonce,",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln60 > span:nth-of-type(1)",
+            "text": "60",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln61 > span:nth-of-type(1)",
+            "text": "61",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln61 > span:nth-of-type(2) > span:nth-of-type(1)",
+            "text": "return",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln61 > span:nth-of-type(2) > span:nth-of-type(2)",
+            "text": "jsonEncode",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln61 > span:nth-of-type(2) > span:nth-of-type(3)",
+            "text": "String",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln61 > span:nth-of-type(2) > span:nth-of-type(4)",
+            "text": "dynamic",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln62 > span:nth-of-type(1)",
+            "text": "62",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln62 > span:nth-of-type(2) > span:nth-of-type(1)",
+            "text": "'v'",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln62 > span:nth-of-type(2) > span:nth-of-type(2)",
+            "text": "kCompressedEnvelopeVersion",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln63 > span:nth-of-type(1)",
+            "text": "63",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln63 > span:nth-of-type(2)",
+            "text": ": keyVersion,",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln63 > span:nth-of-type(2) > span:nth-of-type(1)",
+            "text": "'kv'",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln64 > span:nth-of-type(1)",
+            "text": "64",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln64 > span:nth-of-type(2)",
+            "text": ": (secretBox.nonce),",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln64 > span:nth-of-type(2) > span:nth-of-type(1)",
+            "text": "'nonce'",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln64 > span:nth-of-type(2) > span:nth-of-type(2)",
+            "text": "base64Encode",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln65 > span:nth-of-type(1)",
+            "text": "65",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln65 > span:nth-of-type(2)",
+            "text": ": (secretBox.cipherText),",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln65 > span:nth-of-type(2) > span:nth-of-type(1)",
+            "text": "'ciphertext'",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln65 > span:nth-of-type(2) > span:nth-of-type(2)",
+            "text": "base64Encode",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln66 > span:nth-of-type(1)",
+            "text": "66",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln66 > span:nth-of-type(2)",
+            "text": ": (secretBox.mac.bytes),",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln66 > span:nth-of-type(2) > span:nth-of-type(1)",
+            "text": "'mac'",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln66 > span:nth-of-type(2) > span:nth-of-type(2)",
+            "text": "base64Encode",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s07-ln67 > span:nth-of-type(1)",
+            "text": "67",
+            "fontPx": 21.6,
+            "time": 40.75,
+            "seconds": 3.125
+          }
+        ]
+      }
+    ],
+    "enabled": true,
+    "step": 0.125,
+    "samples": 496
+  },
+  "hdr": {
+    "autoPromotion": null,
+    "inspection": "available"
+  },
+  "snapshots": {
+    "enabled": false,
+    "files": [],
+    "times": [],
+    "findingFiles": []
+  },
+  "saved": {
+    "id": "92390d4e-1b33-4b0e-99a8-8eab35b86f2b",
+    "revision": null,
+    "report": "/home/user/git/chuk_chat/marketing/videos/chuk-08-what-we-see/.hyperframes/artifacts/checks/92390d4e-1b33-4b0e-99a8-8eab35b86f2b.json",
+    "attribution": "inputs-changed"
+  },
+  "_meta": {
+    "version": "0.8.202",
+    "latestVersion": "0.8.201",
+    "updateAvailable": false
+  }
+}

@@ -1,0 +1,82 @@
+<template>
+  <style>
+
+@font-face { font-family: 'Newsreader'; src: url('assets/fonts/Newsreader-Disp600.ttf') format('truetype'); font-weight: 600; font-style: normal; }
+@font-face { font-family: 'ChukMono'; src: url('assets/fonts/jetbrains-mono-latin-wght.woff2') format('woff2'); font-weight: 100 800; font-style: normal; }
+@font-face { font-family: 'Ubuntu'; src: url('assets/fonts/Ubuntu-wght.ttf') format('truetype'); font-weight: 100 800; font-style: normal; }
+#root { position: absolute; inset: 0; overflow: hidden; font-family: 'Ubuntu', sans-serif; color: #2A1F17; }
+#root * { box-sizing: border-box; }
+.serif { font-family: 'Newsreader', serif; font-weight: 600; letter-spacing: -0.01em; color: #2A1F17; }
+.mono { font-family: 'ChukMono', monospace; }
+.word { display: inline-block; }
+.hi { display: block; flex: none; }
+.mark { display: block; }
+.cur { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 60; }
+.cur svg { position: absolute; overflow: visible; }
+.cur-arrow { left: -5px; top: -4px; width: 48px; height: 68px; transform-origin: 5px 4px; }
+.cur-hand { left: -21px; top: -5px; width: 56px; height: 62px; opacity: 0; transform-origin: 21px 5px; }
+.cur-ibeam { left: -10px; top: -20px; width: 20px; height: 40px; opacity: 0; transform-origin: 10px 20px; }
+.card-line { position: absolute; left: 0; right: 0; text-align: center; }
+
+
+  </style>
+  <div id="root" data-composition-id="s08a" data-width="1920" data-height="1080" data-duration="2.96">
+    <div id="s08a-txt" style="position:absolute;inset:0"><div class="card-line serif" id="s08a-l0" style="top:478px;font-size:112px;line-height:125px">Never used for training.</div></div>
+  </div>
+  <script>
+
+function hfWords(sel) {
+  document.querySelectorAll(sel).forEach(function (el) {
+    var words = el.textContent.trim().split(/\s+/);
+    el.textContent = '';
+    words.forEach(function (w, i) {
+      var s = document.createElement('span');
+      s.className = 'word';
+      s.textContent = w;
+      el.appendChild(s);
+      if (i < words.length - 1) el.appendChild(document.createTextNode(' '));
+    });
+  });
+}
+function hfType(tl, el, text, start, cps) {
+  el.textContent = '';
+  var spans = [];
+  Array.from(text).forEach(function (c) {
+    var s = document.createElement('span');
+    s.textContent = c;
+    s.style.display = 'none';
+    el.appendChild(s);
+    spans.push(s);
+  });
+  spans.forEach(function (s, i) { tl.set(s, { display: 'inline' }, start + (i + 1) / cps); });
+  return start + text.length / cps;
+}
+function hfClick(tl, cur, t, part) {
+  var sel = cur + ' .cur-' + (part || 'arrow');
+  tl.to(sel, { scale: 0.86, duration: 0.08, ease: 'power2.out' }, t);
+  tl.to(sel, { scale: 1, duration: 0.14, ease: 'power2.out' }, t + 0.08);
+}
+function hfShape(tl, cur, t, part) {
+  ['arrow', 'hand', 'ibeam'].forEach(function (p) {
+    tl.to(cur + ' .cur-' + p, { opacity: p === part ? 1 : 0, duration: 0.06 }, t);
+  });
+}
+function hfHash(i, j) {
+  var h = (i * 374761393 + j * 668265263) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+}
+function hfReveal(tl, sel, t, stagger) {
+  hfWords(sel);
+  tl.fromTo(sel + ' .word', { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.32, stagger: stagger || 0.08, ease: 'power3.out' }, t);
+}
+
+(function () {
+  var tl = gsap.timeline({ paused: true });
+  hfReveal(tl, '#s08a-l0', 0.10);
+  tl.fromTo('#s08a-txt', { scale: 1 }, { scale: 1.035, duration: 2.96, ease: 'none' }, 0);
+
+  window.__timelines["s08a"] = tl;
+})();
+  </script>
+</template>

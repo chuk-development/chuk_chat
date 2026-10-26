@@ -1,0 +1,35 @@
+{
+  "others": [
+    {
+      "id": "5336a286-03a0-4142-a150-800143763720",
+      "payload": "{\"v\":\"2\",\"kv\":1,\"nonce\":\"7pGTac9vwEmIG4/Y\",\"ciphertext\":\"4NnW6aKHnOncPhPOcaLt7PbaTwfndJw5xG4XFg0fhYkdagg7nJTyh90lffbMy6LA9n+4IJpIjqJEmi4OwtaejY8e0xWpmEW60g2y5dPQmHtBX1/GqBI=\",\"mac\":\"6HSEnDHsojJP6m8Q7GjvKw==\"}"
+    },
+    {
+      "id": "240e4cd8-0c19-4e12-92c8-007f3e93314b",
+      "payload": "{\"v\":\"2\",\"kv\":1,\"nonce\":\"Kx6iO8GI8nvQlZ66\",\"ciphertext\":\"KrYzM2Am6fj5YG9onSsgOTCDX97/L6j65KpViKZIjNrJLeGjeDlg2EF+23MgsGW7O2i5skkZbS3wm/B7BaVpl4isoZeAtP5MRZW51fC+HIwPlDd+tX05\",\"mac\":\"fSE2HJ9aexh7pBqPx8dv3Q==\"}"
+    },
+    {
+      "id": "07e3c8fa-4f0e-426c-a6de-ea7d13b7ac9a",
+      "payload": "{\"v\":\"2\",\"kv\":1,\"nonce\":\"+VfwGsR4/UPbiE7v\",\"ciphertext\":\"+nFYqIjSj/NNOpNUUjeRac6z2FJRKA1q8ZcPggY4kTZb49UubjaVx/eVL4KXH6Eq8vaSagnhxmGHwamfhBcau2omF5rNDmvQc0YUsEMBiqilWRE3\",\"mac\":\"LIa0M+BcW0PScPUtw7ttjA==\"}"
+    }
+  ],
+  "prompt": "my blood test says ferritin 9. should i be worried?",
+  "answer": [
+    "A ferritin of 9 µg/L is low.",
+    "It usually means your iron stores are empty, even before anaemia shows.",
+    "It is common and treatable.",
+    "Ask your doctor about an iron panel and the cause."
+  ],
+  "envelope": {
+    "v": "2",
+    "kv": 1,
+    "nonce": "kf+aWr4lYvwA1DoU",
+    "ciphertext": "mKUL/GAItsu6S1xOqDtD6YQXhFFRnegEykOlPHyEusnbrzLYRk5J6trJ/3Go99frJL5G2fTVShUWI3rK81U+CaCQSUkgQs2zm0nhSCtqBuX2tpsUo8CeYCv7JBu6Sy7cvDbzXonXX7GikVLi0lNAVRhM3VA4FMrOoYkdBNvWaRQWGU8wfFYTXvIpSc3sFKVmAx+19DcIrY7aRvnmxcQk8sUf7sGyS6KkfWiGTT4foXVQlvwi5j8TXbZZpCOhmURRrwxakH/BclI6IYi9TsiKBDKulLBo6o9LHAEb",
+    "mac": "vF+VcOizgetiAE1IDJQzqQ=="
+  },
+  "envelope_text": "{\"v\":\"2\",\"kv\":1,\"nonce\":\"kf+aWr4lYvwA1DoU\",\"ciphertext\":\"mKUL/GAItsu6S1xOqDtD6YQXhFFRnegEykOlPHyEusnbrzLYRk5J6trJ/3Go99frJL5G2fTVShUWI3rK81U+CaCQSUkgQs2zm0nhSCtqBuX2tpsUo8CeYCv7JBu6Sy7cvDbzXonXX7GikVLi0lNAVRhM3VA4FMrOoYkdBNvWaRQWGU8wfFYTXvIpSc3sFKVmAx+19DcIrY7aRvnmxcQk8sUf7sGyS6KkfWiGTT4foXVQlvwi5j8TXbZZpCOhmURRrwxakH/BclI6IYi9TsiKBDKulLBo6o9LHAEb\",\"mac\":\"vF+VcOizgetiAE1IDJQzqQ==\"}",
+  "row_id": "066c8a74-4d0d-4bc5-b973-b517832a7028",
+  "user_id": "9e3c68d3-a205-468c-b3f1-f851a53f5973",
+  "plain_len": 308,
+  "frame_len": 219
+}
