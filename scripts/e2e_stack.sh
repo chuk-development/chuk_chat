@@ -78,7 +78,7 @@ ALTER TABLE public.usage_logs ENABLE ROW LEVEL SECURITY;
 CREATE TABLE IF NOT EXISTS public.user_billing (
   user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   total_credits_allocated numeric(10,4) DEFAULT 0,
-  credits_last_renewed_period timestamptz,
+  credits_last_renewed_period text,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
