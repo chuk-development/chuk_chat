@@ -1,0 +1,1168 @@
+{
+  "ok": true,
+  "strict": false,
+  "browserSkipped": false,
+  "lint": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 1,
+    "infoCount": 0,
+    "findings": [
+      {
+        "code": "duplicate_media_discovery_risk",
+        "severity": "warning",
+        "message": "Detected 2 matching img entries with the same source/start/duration.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {},
+        "sourceFile": "/home/user/git/chuk_chat/marketing/videos/chuk-13-connectors/compositions/s02.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Avoid duplicated media nodes that can be discovered twice during compilation."
+      }
+    ],
+    "filesScanned": 10
+  },
+  "runtime": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": []
+  },
+  "layout": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 11,
+    "findings": [
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 2.5,
+        "selector": "#s01-all",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": -20.26,
+          "top": -11.39,
+          "right": 1940.26,
+          "bottom": 1091.39,
+          "width": 1960.51,
+          "height": 1102.79
+        },
+        "containerSelector": "#s01 > div:nth-of-type(1)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "left": 20.26,
+          "right": 20.26,
+          "top": 11.39,
+          "bottom": 11.39
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/s01.html",
+        "bbox": {
+          "x": -20.26,
+          "y": -11.39,
+          "width": 1960.51,
+          "height": 1102.79
+        },
+        "firstSeen": 2.5,
+        "lastSeen": 2.5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          2.5
+        ]
+      },
+      {
+        "code": "content_overlap",
+        "severity": "info",
+        "time": 6.536,
+        "selector": "#s02-list-t-stripe > div:nth-of-type(2) > div:nth-of-type(2)",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 414.25,
+          "top": 992.49,
+          "right": 1420.29,
+          "bottom": 1067.97,
+          "width": 1006.04,
+          "height": 75.48
+        },
+        "containerSelector": "div.cx-card > small:nth-of-type(1)",
+        "text": "Look up customers, payments, subscriptions and products, and create payment links.",
+        "fixHint": "Give each block its own zone, or put data-layout-allow-overlap on the text or on a container inside the scene. A marker on the scene root does not apply.",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s02.html",
+        "bbox": {
+          "x": 414.25,
+          "y": 992.49,
+          "width": 1006.04,
+          "height": 75.48
+        },
+        "firstSeen": 6.536,
+        "lastSeen": 6.536,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          6.536
+        ]
+      },
+      {
+        "code": "canvas_overflow",
+        "severity": "info",
+        "time": 7.5,
+        "selector": "div.cx-lab",
+        "message": "Text extends outside the composition canvas.",
+        "rect": {
+          "left": 250,
+          "top": 1100,
+          "right": 363.63,
+          "bottom": 1140,
+          "width": 113.63,
+          "height": 40
+        },
+        "containerSelector": "#root",
+        "text": "Details",
+        "fixHint": "Move the text inward, reduce its size, or mark intentional off-canvas animation with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "bottom": 60
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/s02.html",
+        "bbox": {
+          "x": 250,
+          "y": 1100,
+          "width": 113.63,
+          "height": 40
+        },
+        "firstSeen": 7.5,
+        "lastSeen": 7.5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          7.5
+        ]
+      },
+      {
+        "code": "canvas_overflow",
+        "severity": "info",
+        "time": 7.5,
+        "selector": "div.cx-card > small:nth-of-type(1)",
+        "message": "Text extends outside the composition canvas.",
+        "rect": {
+          "left": 290,
+          "top": 1208,
+          "right": 448.17,
+          "bottom": 1242,
+          "width": 158.17,
+          "height": 34
+        },
+        "containerSelector": "#root",
+        "text": "Server URL",
+        "fixHint": "Move the text inward, reduce its size, or mark intentional off-canvas animation with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "bottom": 162
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/s02.html",
+        "bbox": {
+          "x": 290,
+          "y": 1208,
+          "width": 158.17,
+          "height": 34
+        },
+        "firstSeen": 7.5,
+        "lastSeen": 7.5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          7.5
+        ]
+      },
+      {
+        "code": "canvas_overflow",
+        "severity": "info",
+        "time": 7.5,
+        "selector": "div.cx-card > div:nth-of-type(1)",
+        "message": "Text extends outside the composition canvas.",
+        "rect": {
+          "left": 290,
+          "top": 1260,
+          "right": 757.63,
+          "bottom": 1300,
+          "width": 467.63,
+          "height": 40
+        },
+        "containerSelector": "#root",
+        "text": "https://mcp.notion.com/mcp",
+        "fixHint": "Move the text inward, reduce its size, or mark intentional off-canvas animation with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "bottom": 220
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/s02.html",
+        "bbox": {
+          "x": 290,
+          "y": 1260,
+          "width": 467.63,
+          "height": 40
+        },
+        "firstSeen": 7.5,
+        "lastSeen": 7.5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          7.5
+        ]
+      },
+      {
+        "code": "clipped_text",
+        "severity": "info",
+        "time": 12.5,
+        "selector": "#s03-u1 > span:nth-of-type(1)",
+        "message": "Text content is clipped by its own box.",
+        "rect": {
+          "left": 452.07,
+          "top": 82.04,
+          "right": 1611.04,
+          "bottom": 116.3,
+          "width": 1158.97,
+          "height": 34.27
+        },
+        "text": "mcp.notion.com/authorize?response_type=code&client_id=3ebd9824410899e0&redirect_uri=http%3A%2F%2Flocalhost%3A51823%2Fmcp%2Fcallback&code_challenge=Xq0v…&code_challenge_method=S256&state=…&resource=https%3A%2F%2Fmcp.notion.com%2Fmcp",
+        "fixHint": "Text is 1159px x 34px inside 1159px x 34px and overflows by up to 2547px; resize the text box to at least ~3706px x 40px, or allow wrapping with max-width/fitTextFontSize.",
+        "overflow": {
+          "right": 2547,
+          "bottom": 6
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/s03.html",
+        "bbox": {
+          "x": 452.07,
+          "y": 82.04,
+          "width": 1158.97,
+          "height": 34.27
+        },
+        "firstSeen": 12.5,
+        "lastSeen": 12.5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          12.5
+        ]
+      },
+      {
+        "code": "canvas_overflow",
+        "severity": "info",
+        "time": 12.5,
+        "selector": "#s03-u1 > span:nth-of-type(1)",
+        "message": "Text extends outside the composition canvas.",
+        "rect": {
+          "left": 674.9,
+          "top": 82.04,
+          "right": 4178.19,
+          "bottom": 116.3,
+          "width": 3503.29,
+          "height": 34.26
+        },
+        "containerSelector": "#root",
+        "text": "/authorize?response_type=code&client_id=3ebd9824410899e0&redirect_uri=http%3A%2F%2Flocalhost%3A51823%2Fmcp%2Fcallback&code_challenge=Xq0v…&code_challenge_method=S256&state=…&resource=https%3A%2F%2Fmcp.notion.com%2Fmcp",
+        "fixHint": "Move the text inward, reduce its size, or mark intentional off-canvas animation with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "right": 2258.19
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/s03.html",
+        "bbox": {
+          "x": 674.9,
+          "y": 82.04,
+          "width": 3503.29,
+          "height": 34.26
+        },
+        "firstSeen": 12.5,
+        "lastSeen": 12.5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          12.5
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 12.5,
+        "selector": "#s03-cam",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": -7.49,
+          "top": -3.12,
+          "right": 1927.49,
+          "bottom": 1085.3,
+          "width": 1934.98,
+          "height": 1088.42
+        },
+        "containerSelector": "#s03 > div:nth-of-type(1)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "left": 7.49,
+          "right": 7.49,
+          "top": 3.12,
+          "bottom": 5.3
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/s03.html",
+        "bbox": {
+          "x": -7.49,
+          "y": -3.12,
+          "width": 1934.98,
+          "height": 1088.42
+        },
+        "firstSeen": 12.5,
+        "lastSeen": 17.5,
+        "occurrences": 2,
+        "heldMs": 0,
+        "times": [
+          12.5,
+          17.5
+        ]
+      },
+      {
+        "code": "clipped_text",
+        "severity": "info",
+        "time": 17.5,
+        "selector": "#s03-u2 > span:nth-of-type(1)",
+        "message": "Text content is clipped by its own box.",
+        "rect": {
+          "left": 438.71,
+          "top": 73.68,
+          "right": 1628.16,
+          "bottom": 108.84,
+          "width": 1189.44,
+          "height": 35.17
+        },
+        "text": "localhost:51823/mcp/callback?code=…&state=…&iss=https%3A%2F%2Fmcp.notion.com",
+        "fixHint": "Text is 1189px x 35px inside 1189px x 35px and overflows by up to 50px; resize the text box to at least ~1239px x 41px, or allow wrapping with max-width/fitTextFontSize.",
+        "overflow": {
+          "right": 50,
+          "bottom": 6
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/s03.html",
+        "bbox": {
+          "x": 438.71,
+          "y": 73.68,
+          "width": 1189.44,
+          "height": 35.17
+        },
+        "firstSeen": 17.5,
+        "lastSeen": 17.5,
+        "occurrences": 1,
+        "heldMs": 0,
+        "times": [
+          17.5
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 22.5,
+        "selector": "#s06-all",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": -2.11,
+          "top": -0.79,
+          "right": 1922.11,
+          "bottom": 1081.58,
+          "width": 1924.22,
+          "height": 1082.38
+        },
+        "containerSelector": "#s06 > div:nth-of-type(1)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "left": 2.11,
+          "right": 2.11
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/s06.html",
+        "bbox": {
+          "x": -2.11,
+          "y": -0.79,
+          "width": 1924.22,
+          "height": 1082.38
+        },
+        "firstSeen": 22.5,
+        "lastSeen": 27.5,
+        "occurrences": 2,
+        "heldMs": 0,
+        "times": [
+          22.5,
+          27.5
+        ]
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 37.5,
+        "selector": "#s09-lock",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": -3.94,
+          "top": -2.21,
+          "right": 1923.94,
+          "bottom": 1082.21,
+          "width": 1927.87,
+          "height": 1084.43
+        },
+        "containerSelector": "#s09 > div:nth-of-type(1)",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "width": 1920,
+          "height": 1080
+        },
+        "overflow": {
+          "left": 3.94,
+          "right": 3.94,
+          "top": 2.21,
+          "bottom": 2.21
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/s09.html",
+        "bbox": {
+          "x": -3.94,
+          "y": -2.21,
+          "width": 1927.87,
+          "height": 1084.43
+        },
+        "firstSeen": 37.5,
+        "lastSeen": 42.5,
+        "occurrences": 2,
+        "heldMs": 0,
+        "times": [
+          37.5,
+          42.5
+        ]
+      }
+    ],
+    "duration": 45,
+    "samples": [
+      2.5,
+      7.5,
+      12.5,
+      17.5,
+      22.5,
+      27.5,
+      32.5,
+      37.5,
+      42.5
+    ],
+    "transitionSamples": [],
+    "transitionSamplesDropped": 0,
+    "tolerance": 2,
+    "totalIssueCount": 11,
+    "truncated": false
+  },
+  "motion": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": false,
+    "samples": 0
+  },
+  "contrast": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": true,
+    "samples": [
+      2.5,
+      12.5,
+      22.5,
+      32.5,
+      42.5
+    ],
+    "checked": 31,
+    "passed": 31
+  },
+  "craft": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 14,
+    "infoCount": 0,
+    "findings": [
+      {
+        "code": "line_unread",
+        "severity": "warning",
+        "message": "\"Connectors let the assistant use tools and data from othe...\" (11 words) is on screen 2.37 s (±0.01 s), under its 2.85 s floor: hold it about 0.5 s + 0.3 s a word (3.80 s here) before it leaves or changes; see references/motion.md.",
+        "text": "Connectors let the assistant use tools and data from other services.",
+        "selector": "#s02-list > div:nth-of-type(3)",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s02.html",
+        "bbox": {
+          "x": 250,
+          "y": 412.27,
+          "width": 1095.06,
+          "height": 40
+        },
+        "time": 4.203,
+        "words": 11,
+        "seconds": 2.367,
+        "floorSeconds": 2.85
+      },
+      {
+        "code": "line_unread",
+        "severity": "warning",
+        "message": "\"Look up customers, payments, subscriptions and products, ...\" (11 words) is on screen 1.34 s (±0.01 s), under its 2.85 s floor: hold it about 0.5 s + 0.3 s a word (3.80 s here) before it leaves or changes; see references/motion.md.",
+        "text": "Look up customers, payments, subscriptions and products, and create payment links.",
+        "selector": "#s02-list-t-stripe > div:nth-of-type(2) > div:nth-of-type(2)",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s02.html",
+        "bbox": {
+          "x": 425,
+          "y": 1037.38,
+          "width": 986.22,
+          "height": 42.61999999999989
+        },
+        "time": 5.234,
+        "words": 11,
+        "seconds": 1.336,
+        "floorSeconds": 2.85
+      },
+      {
+        "code": "line_unread",
+        "severity": "warning",
+        "message": "\"Connecting signs you in to notion.com. What you send thro...\" (23 words) is on screen 4.63 s (±0.01 s), under its 5.55 s floor: hold it about 0.5 s + 0.3 s a word (7.40 s here) before it leaves or changes; see references/motion.md.",
+        "text": "Connecting signs you in to notion.com. What you send through this connector is handled by them, under their terms and privacy policy.",
+        "selector": "div.cx-c.cx-legal",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s02.html",
+        "bbox": {
+          "x": 265.89,
+          "y": 483.28,
+          "width": 1388.2200000000003,
+          "height": 73.16999999999996
+        },
+        "time": 6.438,
+        "words": 23,
+        "seconds": 4.633,
+        "floorSeconds": 5.55
+      },
+      {
+        "code": "line_unread",
+        "severity": "warning",
+        "message": "\"Details\" (1 word) is on screen 0.30 s (±0.01 s), under its 0.40 s floor: hold it about 0.5 s + 0.3 s a word (0.80 s here) before it leaves or changes; see references/motion.md.",
+        "text": "Details",
+        "selector": "div.cx-lab",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s02.html",
+        "bbox": {
+          "x": 258.02,
+          "y": 910.4,
+          "width": 112.34000000000003,
+          "height": 39.549999999999955
+        },
+        "time": 6.438,
+        "words": 1,
+        "seconds": 0.297,
+        "floorSeconds": 0.4
+      },
+      {
+        "code": "line_unread",
+        "severity": "warning",
+        "message": "\"Server URL\" (2 words) is on screen 0.16 s (±0.01 s), under its 0.40 s floor: hold it about 0.5 s + 0.3 s a word (1.10 s here) before it leaves or changes; see references/motion.md.",
+        "text": "Server URL",
+        "selector": "div.cx-card > small:nth-of-type(1)",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s02.html",
+        "bbox": {
+          "x": 297.57,
+          "y": 1017.18,
+          "width": 156.39,
+          "height": 33.620000000000005
+        },
+        "time": 6.438,
+        "words": 2,
+        "seconds": 0.164,
+        "floorSeconds": 0.4
+      },
+      {
+        "code": "text_below_floor",
+        "severity": "warning",
+        "message": "Type floor is 28 px (2.6% of the 1080 px short side, what a phone can read) and 24 text elements stay under it for 0.5 s or more, the smallest \"Connecting signs you in to notion.com...\" at 12 px: set reading text to at least 28 px, or put data-layout-ignore on text that is texture rather than reading; see references/look.md.",
+        "text": "Connecting signs you in to notion.com. What you send through this connector is handled by them, under their terms and privacy policy.",
+        "selector": "div.cx-c.cx-legal",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s02.html",
+        "bbox": {
+          "x": 265.89,
+          "y": 483.28,
+          "width": 1388.22,
+          "height": 73.17
+        },
+        "time": 6.5,
+        "times": [
+          4.25,
+          4.25,
+          4.25,
+          4.25,
+          4.25,
+          4.25,
+          4.25,
+          4.25,
+          4.25,
+          4.25,
+          4.25,
+          4.25,
+          4.25,
+          5.125,
+          5.25,
+          5.25,
+          6.5,
+          6.5,
+          6.5,
+          6.5,
+          6.5,
+          6.5,
+          6.75,
+          8
+        ],
+        "fontPx": 11.86,
+        "floorPx": 28,
+        "seconds": 4.625,
+        "elements": [
+          {
+            "selector": "div.cx-c.cx-legal",
+            "text": "Connecting signs you in to notion.com. What you send through this connector is handled by them, under their terms and privacy policy.",
+            "fontPx": 11.86,
+            "time": 6.5,
+            "seconds": 4.625
+          },
+          {
+            "selector": "#s02-list-t-notion > div:nth-of-type(2) > div:nth-of-type(2)",
+            "text": "Search, read and write pages and databases.",
+            "fontPx": 11.87,
+            "time": 4.25,
+            "seconds": 2.375
+          },
+          {
+            "selector": "#s02-list-t-notion > div:nth-of-type(3)",
+            "text": "Connect",
+            "fontPx": 11.87,
+            "time": 4.25,
+            "seconds": 2.375
+          },
+          {
+            "selector": "#s02-list-t-excalidraw > div:nth-of-type(2) > div:nth-of-type(2)",
+            "text": "Draw diagrams and hand them back as editable scenes.",
+            "fontPx": 12,
+            "time": 4.25,
+            "seconds": 2.375
+          },
+          {
+            "selector": "#s02-list-t-excalidraw > div:nth-of-type(3)",
+            "text": "Connect",
+            "fontPx": 12,
+            "time": 4.25,
+            "seconds": 2.375
+          },
+          {
+            "selector": "#s02-list-t-canva > div:nth-of-type(2) > div:nth-of-type(2)",
+            "text": "Create and edit designs, export them, search your folders.",
+            "fontPx": 12,
+            "time": 4.25,
+            "seconds": 2.375
+          },
+          {
+            "selector": "#s02-list-t-canva > div:nth-of-type(3)",
+            "text": "Connect",
+            "fontPx": 12,
+            "time": 4.25,
+            "seconds": 2.375
+          },
+          {
+            "selector": "#s02-list-t-stripe > div:nth-of-type(2) > div:nth-of-type(2)",
+            "text": "Look up customers, payments, subscriptions and products, and create payment links.",
+            "fontPx": 12,
+            "time": 5.25,
+            "seconds": 1.375
+          },
+          {
+            "selector": "#s02-list-t-stripe > div:nth-of-type(3)",
+            "text": "Connect",
+            "fontPx": 12,
+            "time": 5.25,
+            "seconds": 1.375
+          },
+          {
+            "selector": "#s02-det-btn",
+            "text": "Connect",
+            "fontPx": 13.58,
+            "time": 6.5,
+            "seconds": 1.5
+          },
+          {
+            "selector": "div.cx-c.cx-ddesc",
+            "text": "Search, read and write pages and databases.",
+            "fontPx": 13.84,
+            "time": 6.5,
+            "seconds": 4.625
+          },
+          {
+            "selector": "#s02-det > div:nth-of-type(7)",
+            "text": "Terms",
+            "fontPx": 13.84,
+            "time": 6.5,
+            "seconds": 4.625
+          },
+          {
+            "selector": "#s02-det > div:nth-of-type(8)",
+            "text": "Privacy policy",
+            "fontPx": 13.84,
+            "time": 6.5,
+            "seconds": 4.625
+          },
+          {
+            "selector": "#s02-list > div:nth-of-type(2) > span:nth-of-type(1)",
+            "text": "Search connectors…",
+            "fontPx": 14,
+            "time": 4.25,
+            "seconds": 2.375
+          },
+          {
+            "selector": "#s02-list > div:nth-of-type(3)",
+            "text": "Connectors let the assistant use tools and data from other services.",
+            "fontPx": 14,
+            "time": 4.25,
+            "seconds": 2.375
+          },
+          {
+            "selector": "#s02-det-busy > span:nth-of-type(1)",
+            "text": "Cancel",
+            "fontPx": 14,
+            "time": 8,
+            "seconds": 3.125
+          },
+          {
+            "selector": "#s02-list > div:nth-of-type(1)",
+            "text": "Connectors",
+            "fontPx": 15,
+            "time": 4.25,
+            "seconds": 1
+          },
+          {
+            "selector": "#s02-det > div:nth-of-type(2)",
+            "text": "Notion",
+            "fontPx": 15,
+            "time": 6.75,
+            "seconds": 4.375
+          },
+          {
+            "selector": "#s02-list-t-notion > div:nth-of-type(2) > div:nth-of-type(1)",
+            "text": "Notion",
+            "fontPx": 15.82,
+            "time": 4.25,
+            "seconds": 2.375
+          },
+          {
+            "selector": "#s02-list > div:nth-of-type(4)",
+            "text": "Recommended",
+            "fontPx": 16,
+            "time": 4.25,
+            "seconds": 2.375
+          },
+          {
+            "selector": "#s02-list-t-excalidraw > div:nth-of-type(2) > div:nth-of-type(1)",
+            "text": "Excalidraw",
+            "fontPx": 16,
+            "time": 4.25,
+            "seconds": 2.375
+          },
+          {
+            "selector": "#s02-list-t-canva > div:nth-of-type(2) > div:nth-of-type(1)",
+            "text": "Canva",
+            "fontPx": 16,
+            "time": 4.25,
+            "seconds": 2.375
+          },
+          {
+            "selector": "#s02-list-t-stripe > div:nth-of-type(2) > div:nth-of-type(1)",
+            "text": "Stripe",
+            "fontPx": 16,
+            "time": 5.125,
+            "seconds": 1.5
+          },
+          {
+            "selector": "div.cx-c.cx-dtitle",
+            "text": "Notion",
+            "fontPx": 21.75,
+            "time": 6.5,
+            "seconds": 4.625
+          }
+        ]
+      },
+      {
+        "code": "line_unread",
+        "severity": "warning",
+        "message": "\"/authorize?response_type=code&client_id=3ebd9824410899e0&...\" (35 words) is on screen 3.97 s (±0.01 s), under its 8.25 s floor: hold it about 0.5 s + 0.3 s a word (11.00 s here) before it leaves or changes; see references/motion.md.",
+        "text": "/authorize?response_type=code&client_id=3ebd9824410899e0&redirect_uri=http%3A%2F%2Flocalhost%3A51823%2Fmcp%2Fcallback&code_challenge=Xq0v…&code_challenge_method=S256&state=…&resource=https%3A%2F%2Fmcp.notion.com%2Fmcp mcp.notion.com",
+        "selector": "#s03-u1 > span:nth-of-type(1)",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s03.html",
+        "bbox": {
+          "x": 455.85,
+          "y": 108.99,
+          "width": 1176.35,
+          "height": 34.019999999999996
+        },
+        "time": 11.102,
+        "words": 35,
+        "seconds": 3.969,
+        "floorSeconds": 8.25
+      },
+      {
+        "code": "line_unread",
+        "severity": "warning",
+        "message": "\"/mcp/callback?code=…&state=…&iss=https%3A%2F%2Fmcp.notion...\" (13 words) is on screen 2.60 s (±0.01 s), under its 3.30 s floor: hold it about 0.5 s + 0.3 s a word (4.40 s here) before it leaves or changes; see references/motion.md.",
+        "text": "/mcp/callback?code=…&state=…&iss=https%3A%2F%2Fmcp.notion.com localhost:51823",
+        "selector": "#s03-u2 > span:nth-of-type(1)",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s03.html",
+        "bbox": {
+          "x": 445.11,
+          "y": 77.69,
+          "width": 1201.4099999999999,
+          "height": 34.72999999999999
+        },
+        "time": 15.07,
+        "words": 13,
+        "seconds": 2.602,
+        "floorSeconds": 3.3
+      },
+      {
+        "code": "line_unread",
+        "severity": "warning",
+        "message": "\"Connectors let the assistant use tools and data from othe...\" (11 words) is on screen 2.16 s (±0.01 s), under its 2.85 s floor: hold it about 0.5 s + 0.3 s a word (3.80 s here) before it leaves or changes; see references/motion.md.",
+        "text": "Connectors let the assistant use tools and data from other services.",
+        "selector": "#s04-p > div:nth-of-type(3)",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s04.html",
+        "bbox": {
+          "x": 247.04,
+          "y": 385.71,
+          "width": 1083.78,
+          "height": 39.579999999999984
+        },
+        "time": 17.703,
+        "words": 11,
+        "seconds": 2.164,
+        "floorSeconds": 2.85
+      },
+      {
+        "code": "line_unread",
+        "severity": "warning",
+        "message": "\"Draw diagrams and hand them back as editable scenes.\" (9 words) is on screen 2.16 s (±0.01 s), under its 2.40 s floor: hold it about 0.5 s + 0.3 s a word (3.20 s here) before it leaves or changes; see references/motion.md.",
+        "text": "Draw diagrams and hand them back as editable scenes.",
+        "selector": "#s04-p-t-excalidraw > div:nth-of-type(2) > div:nth-of-type(2)",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s04.html",
+        "bbox": {
+          "x": 420.24,
+          "y": 977.54,
+          "width": 770.1800000000001,
+          "height": 33.64999999999998
+        },
+        "time": 17.703,
+        "words": 9,
+        "seconds": 2.164,
+        "floorSeconds": 2.4
+      },
+      {
+        "code": "text_below_floor",
+        "severity": "warning",
+        "message": "Type floor is 28 px (2.6% of the 1080 px short side, what a phone can read) and 11 text elements stay under it for 0.5 s or more, the smallest \"14 tools\" at 10 px: set reading text to at least 28 px, or put data-layout-ignore on text that is texture rather than reading; see references/look.md.",
+        "text": "14 tools",
+        "selector": "#s04-p-t-notion > div:nth-of-type(3)",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s04.html",
+        "bbox": {
+          "x": 1497.5,
+          "y": 672.97,
+          "width": 103.87,
+          "height": 29.05
+        },
+        "time": 18.125,
+        "times": [
+          17.75,
+          17.75,
+          17.75,
+          17.75,
+          17.75,
+          17.75,
+          17.75,
+          17.75,
+          17.75,
+          17.75,
+          18.125
+        ],
+        "fontPx": 10.26,
+        "floorPx": 28,
+        "seconds": 1.75,
+        "elements": [
+          {
+            "selector": "#s04-p-t-notion > div:nth-of-type(3)",
+            "text": "14 tools",
+            "fontPx": 10.26,
+            "time": 18.125,
+            "seconds": 1.75
+          },
+          {
+            "selector": "#s04-p-t-notion > div:nth-of-type(2) > div:nth-of-type(2)",
+            "text": "Search, read and write pages and databases.",
+            "fontPx": 11.88,
+            "time": 17.75,
+            "seconds": 2.125
+          },
+          {
+            "selector": "#s04-p-t-excalidraw > div:nth-of-type(2) > div:nth-of-type(2)",
+            "text": "Draw diagrams and hand them back as editable scenes.",
+            "fontPx": 11.88,
+            "time": 17.75,
+            "seconds": 2.125
+          },
+          {
+            "selector": "#s04-p-t-excalidraw > div:nth-of-type(3)",
+            "text": "Connect",
+            "fontPx": 11.88,
+            "time": 17.75,
+            "seconds": 2.125
+          },
+          {
+            "selector": "#s04-p > div:nth-of-type(2) > span:nth-of-type(1)",
+            "text": "Search connectors…",
+            "fontPx": 13.86,
+            "time": 17.75,
+            "seconds": 2.125
+          },
+          {
+            "selector": "#s04-p > div:nth-of-type(3)",
+            "text": "Connectors let the assistant use tools and data from other services.",
+            "fontPx": 13.86,
+            "time": 17.75,
+            "seconds": 2.125
+          },
+          {
+            "selector": "#s04-p > div:nth-of-type(1)",
+            "text": "Connectors",
+            "fontPx": 14.85,
+            "time": 17.75,
+            "seconds": 2.125
+          },
+          {
+            "selector": "#s04-p > div:nth-of-type(4)",
+            "text": "Connected",
+            "fontPx": 15.84,
+            "time": 17.75,
+            "seconds": 2.125
+          },
+          {
+            "selector": "#s04-p-t-notion > div:nth-of-type(2) > div:nth-of-type(1)",
+            "text": "Notion",
+            "fontPx": 15.84,
+            "time": 17.75,
+            "seconds": 2.125
+          },
+          {
+            "selector": "#s04-p > div:nth-of-type(6)",
+            "text": "Recommended",
+            "fontPx": 15.84,
+            "time": 17.75,
+            "seconds": 2.125
+          },
+          {
+            "selector": "#s04-p-t-excalidraw > div:nth-of-type(2) > div:nth-of-type(1)",
+            "text": "Excalidraw",
+            "fontPx": 15.84,
+            "time": 17.75,
+            "seconds": 2.125
+          }
+        ]
+      },
+      {
+        "code": "line_unread",
+        "severity": "warning",
+        "message": "\"{\"v\":\"1\",\"kv\":1,\"nonce\":\"JMh5oCch4Xsk5jc+\",\"ciphertext\":\"...\" (8 words) is on screen 1.93 s (±0.01 s), under its 2.17 s floor: hold it about 0.5 s + 0.3 s a word (2.90 s here) before it leaves or changes; see references/motion.md.",
+        "text": "{\"v\":\"1\",\"kv\":1,\"nonce\":\"JMh5oCch4Xsk5jc+\",\"ciphertext\":\"4t7…",
+        "selector": "#s07-t-cell0-1",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s07.html",
+        "bbox": {
+          "x": 472,
+          "y": 572.98,
+          "width": 1098,
+          "height": 40
+        },
+        "time": 28.172,
+        "words": 8,
+        "seconds": 1.93,
+        "floorSeconds": 2.175
+      },
+      {
+        "code": "text_below_floor",
+        "severity": "warning",
+        "message": "Type floor is 28 px (2.6% of the 1080 px short side, what a phone can read) and 3 text elements stay under it for 0.5 s or more, the smallest \"uuid\" at 26 px: set reading text to at least 28 px, or put data-layout-ignore on text that is texture rather than reading; see references/look.md.",
+        "text": "uuid",
+        "selector": "div.sb-tr.sb-head > div:nth-of-type(2) > span:nth-of-type(1)",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s07.html",
+        "bbox": {
+          "x": 285.17,
+          "y": 501.98,
+          "width": 51.24,
+          "height": 29
+        },
+        "time": 28.25,
+        "times": [
+          28.25,
+          28.25,
+          28.25
+        ],
+        "fontPx": 26,
+        "floorPx": 28,
+        "seconds": 1.875,
+        "elements": [
+          {
+            "selector": "div.sb-tr.sb-head > div:nth-of-type(2) > span:nth-of-type(1)",
+            "text": "uuid",
+            "fontPx": 26,
+            "time": 28.25,
+            "seconds": 1.875
+          },
+          {
+            "selector": "div.sb-tr.sb-head > div:nth-of-type(3) > span:nth-of-type(1)",
+            "text": "text",
+            "fontPx": 26,
+            "time": 28.25,
+            "seconds": 1.875
+          },
+          {
+            "selector": "div.sb-tr.sb-head > div:nth-of-type(4) > span:nth-of-type(1)",
+            "text": "timestamptz",
+            "fontPx": 26,
+            "time": 28.25,
+            "seconds": 1.875
+          }
+        ]
+      },
+      {
+        "code": "line_unread",
+        "severity": "warning",
+        "message": "\"\"ciphertext\": \"4t7HAsL3wY/Q09f1MxH4spaX7otRndUc6uDMqpvq7P...\" (15 words) is on screen 2.06 s (±0.01 s), under its 3.75 s floor: hold it about 0.5 s + 0.3 s a word (5.00 s here) before it leaves or changes; see references/motion.md.",
+        "text": "\"ciphertext\": \"4t7HAsL3wY/Q09f1MxH4spaX7otRndUc6uDMqpvq7P09LdBveqrmmJAL9K36bbcalTqTmhYul8wRTOXVMXP4+E4iKzajtM55DWWAQ6miR6cCSoMd2XytGAGMrPvGiPrq5kuOlDna7DIsItXnxcV13OWHGolcSC2CqVYXCF5Bgg3zd3WmBoilU73HnR4diMnSoY1ZzC2wW88DHaXgyN1ZZG19zs+1DfwC5GwUux+xEWz1e+agqTHPMy+Wl9BI+aRV+dwn50m01HDfZRK0Vy+1vfMnJJ8yub3aEmOWkPCb4EDtm6URDVXk2gwJjS3i…\", + 1,764 more characters",
+        "selector": "#s07-ex-b > div:nth-of-type(5)",
+        "dataAttributes": {},
+        "sourceFile": "compositions/s07.html",
+        "bbox": {
+          "x": 201,
+          "y": 400,
+          "width": 1548,
+          "height": 224
+        },
+        "time": 30.438,
+        "words": 15,
+        "seconds": 2.063,
+        "floorSeconds": 3.75
+      }
+    ],
+    "enabled": true,
+    "step": 0.125,
+    "samples": 360
+  },
+  "hdr": {
+    "autoPromotion": null,
+    "inspection": "available"
+  },
+  "snapshots": {
+    "enabled": false,
+    "files": [],
+    "times": [],
+    "findingFiles": []
+  },
+  "saved": {
+    "id": "547d0355-06f5-44dc-ae86-8e36446eea50",
+    "revision": "186dd006-1f5a-41c3-b192-0f2227b0baf3",
+    "report": "/home/user/git/chuk_chat/marketing/videos/chuk-13-connectors/.hyperframes/artifacts/checks/547d0355-06f5-44dc-ae86-8e36446eea50.json",
+    "attribution": "recorded-revision"
+  },
+  "_meta": {
+    "version": "0.8.202",
+    "latestVersion": "0.8.201",
+    "updateAvailable": false
+  }
+}
