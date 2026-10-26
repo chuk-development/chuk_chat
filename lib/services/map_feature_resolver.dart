@@ -4,6 +4,8 @@
 //
 // - `ref: "sh:8:113,117"` → the official roadworks feed, by object id
 //   (instant when the road_closures tool fetched it in this session).
+// - `ref: "ab:A7:1a2b3c4d"` → an Autobahn GmbH item's road geometry
+//   (instant from the same session, else one fetch of that motorway).
 // - `road` + `town` (+ cross streets `from`/`to`) → every OSM segment of
 //   that street from Nominatim (`polygon_geojson`, `dedupe=0`), clipped to
 //   the stretch between the two crossings.
@@ -21,6 +23,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 
+import 'package:chuk_chat/services/autobahn_traffic_service.dart';
 import 'package:chuk_chat/services/road_closures_service.dart';
 import 'package:chuk_chat/utils/map_features.dart';
 
@@ -98,6 +101,9 @@ class MapFeatureResolver {
     if (primed != null) return primed;
     if (ref.startsWith(kRoadworksRefPrefix)) {
       return fetchRoadworksRefGeometry(ref);
+    }
+    if (ref.startsWith(kAutobahnRefPrefix)) {
+      return AutobahnTrafficService.instance.refGeometry(ref);
     }
     return ResolvedGeometry.empty;
   }

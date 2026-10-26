@@ -1,11 +1,13 @@
 // lib/tool_handlers/road_closures_tools.dart
 //
 // `road_closures` tool: current and upcoming roadworks / closures around a
-// place from the official northern-German feed (see
-// services/road_closures_service.dart). The result lists ready-made map
-// features, so the model can draw the closed stretches without writing
-// coordinates.
+// place from the official feeds: the northern-German DANord feed (see
+// services/road_closures_service.dart) and, for all of Germany, the
+// Autobahn GmbH motorway feed (services/autobahn_traffic_service.dart).
+// The result lists ready-made map features, so the model can draw the
+// closed stretches without writing coordinates.
 
+import 'package:chuk_chat/services/autobahn_traffic_service.dart';
 import 'package:chuk_chat/services/map_feature_resolver.dart';
 import 'package:chuk_chat/services/road_closures_service.dart';
 
@@ -38,35 +40,72 @@ Future<String> executeRoadClosures(Map<String, dynamic> args) async {
       ? '${lat.toStringAsFixed(4)}, ${lon.toStringAsFixed(4)}'
       : place;
 
-  if (!roadworksFeedCovers(lat, lon)) {
+  final north = roadworksFeedCovers(lat, lon);
+  final autobahn = autobahnFeedCovers(lat, lon);
+  if (!north && !autobahn) {
     return 'No official roadworks feed for $label in this tool (it covers '
-        'Schleswig-Holstein, Hamburg, Lower Saxony and Mecklenburg-'
-        'Vorpommern). Use web_search for "<town> Sperrung" / "<road> '
-        'closure" instead and draw the result as a features <map> '
-        '(skill map-features) with "road" + "town" + "from"/"to".';
+        'German motorways, and in Schleswig-Holstein, Hamburg, Lower Saxony '
+        'and Mecklenburg-Vorpommern also federal, state and county roads). '
+        'Use web_search for "<town> Sperrung" / "<road> closure" instead and '
+        'draw the result as a features <map> (skill map-features) with '
+        '"road" + "town" + "from"/"to".';
   }
 
-  try {
-    final all = await fetchRoadClosuresAround(
-      lat: lat,
-      lon: lon,
-      radiusKm: radiusKm,
-    );
-    final now = DateTime.now();
-    final current = filterCurrentClosures(all, now: now, daysAhead: daysAhead);
-    for (final c in current) {
-      MapFeatureResolver.instance.primeRef(c.ref, c.geometry);
-    }
-    return formatClosuresForModel(
-      closures: current,
-      placeLabel: label,
-      lat: lat,
-      lon: lon,
-      radiusKm: radiusKm,
-      now: now,
-    );
-  } catch (e) {
-    return 'Error: roadworks feed unavailable (${e.runtimeType}). Fall back '
-        'to web_search.';
+  final warnings = <String>[];
+  final northFuture = north
+      ? fetchRoadClosuresAround(
+          lat: lat,
+          lon: lon,
+          radiusKm: radiusKm,
+        ).then<List<RoadClosure>?>((r) => r).catchError((Object _) => null)
+      : Future<List<RoadClosure>?>.value(const []);
+  final autobahnFuture = autobahn
+      ? AutobahnTrafficService.instance
+            .closuresAround(lat: lat, lon: lon, radiusKm: radiusKm)
+            .then<AutobahnLookup?>((r) => r)
+            .catchError((Object _) => null)
+      : Future<AutobahnLookup?>.value(null);
+
+  final northResult = await northFuture;
+  final autobahnResult = await autobahnFuture;
+
+  if (northResult == null && autobahnResult == null) {
+    return 'Error: roadworks feeds unavailable. Fall back to web_search.';
   }
+  if (north && northResult == null) {
+    warnings.add('the northern feed (LBV.SH / DANord) did not answer.');
+  }
+  if (autobahn && autobahnResult == null) {
+    warnings.add('the Autobahn GmbH feed did not answer; motorways missing.');
+  } else if (autobahnResult != null && autobahnResult.roadsFailed > 0) {
+    warnings.add(
+      'Autobahn GmbH: ${autobahnResult.roadsFailed} of '
+      '${autobahnResult.roadsAsked} motorways did not answer.',
+    );
+  }
+
+  final ab = autobahnResult?.closures ?? const <RoadClosure>[];
+  final all = [...dropDanordAutobahnCopies(northResult ?? const [], ab), ...ab];
+  final now = DateTime.now();
+  final current = filterCurrentClosures(
+    all,
+    now: now,
+    daysAhead: daysAhead,
+    nearLat: lat,
+    nearLon: lon,
+  );
+  for (final c in current) {
+    MapFeatureResolver.instance.primeRef(c.ref, c.geometry);
+  }
+  return formatClosuresForModel(
+    closures: current,
+    placeLabel: label,
+    lat: lat,
+    lon: lon,
+    radiusKm: radiusKm,
+    now: now,
+    northFeed: north && northResult != null,
+    autobahn: autobahn && autobahnResult != null,
+    warnings: warnings,
+  );
 }

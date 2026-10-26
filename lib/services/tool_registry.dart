@@ -1086,10 +1086,11 @@ final List<ClientTool> builtinTools = [
     name: 'road_closures',
     description:
         'Current and upcoming road closures, roadworks and detours around a '
-        'place from the official feed (Schleswig-Holstein, Hamburg, Lower '
-        'Saxony, Mecklenburg-Vorpommern; federal/state/county roads and '
-        'motorways). Returns ready-made map features with real road '
-        'geometry. Use for Sperrung, Baustelle, Umleitung, closures.',
+        'place from official feeds: motorways in all of Germany (Autobahn '
+        'GmbH); in Schleswig-Holstein, Hamburg, Lower Saxony and '
+        'Mecklenburg-Vorpommern also federal/state/county roads. Returns '
+        'ready-made map features with real road geometry. Use for Sperrung, '
+        'Baustelle, Umleitung, closures.',
     parameters: {
       'type': 'object',
       'properties': {
