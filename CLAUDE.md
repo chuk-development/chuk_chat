@@ -525,6 +525,17 @@ actually loads before committing. See `docs/MCP_CONNECTORS.md`.
 | `docs/SCREENSHOTS.md` | **Read before recapturing any screenshot** — the seven gallery shots, the store frames, the painted backdrop, the traps |
 
 
+## Launch videos (HyperFrames, not Remotion)
+
+The light "warm paper" launch/feature films are HyperFrames projects (HTML,
+code-generated) under `marketing/videos/`: `chuk-01-introducing` (60 s launch
+film), `chuk-06-features` (65 s feature list), plus `chuk-02`…`05`,
+`reel-01-introducing`, `reel-ask`. Preview: `npm run dev` in the project
+folder. **Finished renders sit in `marketing/out/`** (reels in `out/reels/`,
+gitignored, local only). Music WAVs live in `marketing/_shared/music/`
+(gitignored), so a fresh worktree cannot render with audio. The Remotion code
+in `~/git/marketing/studio` is an older dark-UI mock, not these films.
+
 ## Fastlane / Play Store / F-Droid
 
 `docs/FASTLANE.md` is the reference. The short version:

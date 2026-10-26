@@ -1,0 +1,158 @@
+<template>
+  <style>
+
+@font-face { font-family: 'Newsreader'; src: url('assets/fonts/Newsreader-Disp600.ttf') format('truetype'); font-weight: 600; font-style: normal; }
+@font-face { font-family: 'ChukMono'; src: url('assets/fonts/jetbrains-mono-latin-wght.woff2') format('woff2'); font-weight: 100 800; font-style: normal; }
+@font-face { font-family: 'Ubuntu'; src: url('assets/fonts/Ubuntu-wght.ttf') format('truetype'); font-weight: 100 800; font-style: normal; }
+#root { position: absolute; inset: 0; overflow: hidden; font-family: 'Ubuntu', sans-serif; color: #2A1F17; }
+#root * { box-sizing: border-box; }
+.serif { font-family: 'Newsreader', serif; font-weight: 600; letter-spacing: -0.01em; color: #2A1F17; }
+.mono { font-family: 'ChukMono', monospace; }
+.word { display: inline-block; }
+.hi { display: block; flex: none; }
+.mark { display: block; }
+.cur { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 60; }
+.cur svg { position: absolute; overflow: visible; }
+.cur-arrow { left: -5px; top: -4px; width: 48px; height: 68px; transform-origin: 5px 4px; }
+.cur-hand { left: -21px; top: -5px; width: 56px; height: 62px; opacity: 0; transform-origin: 21px 5px; }
+.cur-ibeam { left: -10px; top: -20px; width: 20px; height: 40px; opacity: 0; transform-origin: 10px 20px; }
+.card-line { position: absolute; left: 0; right: 0; text-align: center; }
+
+
+.appz { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.a-win { position: absolute; background: #262624; border-radius: 18px; box-shadow: 0 0 0 1px rgba(255,255,255,0.07), 0 24px 60px -24px rgba(0,0,0,0.45); overflow: hidden; }
+.a-vars { --fg: #E8E4D8; --fg85: rgba(232,228,216,0.85); --fg70: rgba(232,228,216,0.7); --fg55: rgba(232,228,216,0.55);
+  --fg30: rgba(232,228,216,0.3); --fg15: rgba(232,228,216,0.15); --bg: #262624; --acc: #D97757; --bubble: #B6674D;
+  color: var(--fg); font-family: 'Ubuntu', sans-serif; font-size: 14px; line-height: 1.4; }
+.a-composer { position: absolute; display: flex; flex-direction: column; justify-content: space-between;
+  min-height: 135px; padding: 14px; border: 2px solid #615F5A; border-radius: 30px; background: var(--bg); }
+.a-field { position: relative; min-height: 40px; margin-left: -1px; padding: 4px 58px 0 0; font-size: 17px; font-weight: 600; line-height: 1.4; white-space: nowrap; }
+.a-ph { color: rgba(232,228,216,0.8); }
+.a-typed { color: var(--fg); }
+.a-caret0 { position: absolute; left: -1px; top: 3px; width: 2px; height: 1.3em; background: var(--acc); }
+.a-caret { display: inline-block; width: 2px; height: 1.2em; background: var(--acc); vertical-align: -0.22em; }
+.a-send { position: absolute; top: 14px; right: 14px; width: 44px; height: 36px; border-radius: 20px; background: var(--acc); color: #fff; display: flex; align-items: center; justify-content: center; }
+.a-send svg { transform: scaleY(0.95); }
+.a-row { display: flex; align-items: center; gap: 8px; }
+.a-grow { flex: 1; }
+.a-btn { width: 44px; height: 36px; border: 2px solid #615F5A; border-radius: 18px; display: inline-flex; align-items: center; justify-content: center; color: var(--fg); }
+.a-pill { height: 36px; padding: 0 11px; border: 2px solid #615F5A; border-radius: 18px; display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--fg); white-space: nowrap; }
+.a-dn { margin-left: -3px; color: var(--fg70); }
+.a-disc { position: absolute; left: 0; right: 0; font-size: 11.5px; color: var(--fg70); text-align: center; white-space: nowrap; }
+.a-col { position: absolute; }
+.a-user { display: flex; justify-content: flex-end; }
+.a-bubble { max-width: 80%; padding: 10px 14px; border: 1px solid var(--fg30); border-radius: 16px; background: var(--bubble); color: var(--fg);
+  font-family: 'ChukMono', monospace; font-size: 16.4px; font-weight: 400; line-height: 1.38; white-space: nowrap; }
+.a-ai { margin-top: 8px; font-family: 'ChukMono', monospace; font-size: 16.4px; font-weight: 400; line-height: 1.45; color: var(--fg); }
+.a-ai p { margin: 0 0 8px; }
+.a-tl { margin-top: 14px; font-family: 'Ubuntu', sans-serif; }
+.a-tl-head { display: inline-flex; align-items: center; gap: 4px; margin: 0; padding: 4px 2px; font-size: 12.7px; font-weight: 500; color: var(--fg55); }
+.a-steps { position: relative; padding-top: 4px; }
+.a-steps-line { position: absolute; left: 13px; top: 17px; bottom: 15px; width: 1px; background: var(--fg15); }
+.a-step { position: relative; display: flex; align-items: center; gap: 10px; min-height: 26px; margin-bottom: 8px; font-size: 12.7px; color: var(--fg55); white-space: nowrap; }
+.a-badge { flex: none; width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--fg15); background: var(--bg); display: flex; align-items: center; justify-content: center; color: var(--fg55); }
+.a-step b { margin-left: 0.6em; font-weight: 500; color: var(--fg85); }
+.a-srcs { display: flex; align-items: center; gap: 6px; height: 30px; margin: -4px 0 8px 36px; }
+.a-src { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 8px; border-radius: 15px; background: rgba(232,228,216,0.06); font-size: 12.7px; color: var(--fg70); white-space: nowrap; }
+.a-fav { flex: none; width: 16px; height: 16px; border-radius: 3px; display: block; }
+
+#s06-bg { position: absolute; inset: 0; background: #5C4033; }
+#s06-all { position: absolute; inset: 0; transform-origin: 960px 480px; }
+#s06-bw { position: absolute; left: 0; right: 0; top: 330px; display: flex; justify-content: center; }
+#s06-bub { font-size: 44px; padding: 26px 36px; border-radius: 42px; border-width: 2px; max-width: none; }
+#s06-lock { position: absolute; left: 912px; top: 180px; width: 96px; height: 96px; border-radius: 50%; background: #F4EEE4; color: #5C4033; display: flex; align-items: center; justify-content: center; }
+#s06-l0 { top: 560px; font-size: 96px; line-height: 110px; color: #F4EEE4; }
+#s06-l1 { top: 680px; font-size: 96px; line-height: 110px; color: #F4EEE4; }
+
+  </style>
+  <div id="root" data-composition-id="s06" data-width="1920" data-height="1080" data-duration="6.88">
+
+    <div id="s06-bg"></div>
+    <div id="s06-all" class="a-vars">
+      <div id="s06-bw"><p id="s06-bub" class="a-bubble"><span id="s06-txt">my blood test says ferritin 9. should i be worried?</span></p></div>
+      <div id="s06-lock"><svg class="hi " viewBox="0 0 24 24" fill="none" style="width:48.16px;height:48.16px"><path fill="currentColor" d="M12 17c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm6-9h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM8.9 6c0-1.71 1.39-3.1 3.1-3.1s3.1 1.39 3.1 3.1v2H8.9V6zM18 20H6V10h12v10z"/></svg></div>
+      <div class="card-line serif" id="s06-l0">Encrypted on your device.</div>
+      <div class="card-line serif" id="s06-l1">With a key only you hold.</div>
+    </div>
+
+  </div>
+  <script>
+
+function hfWords(sel) {
+  document.querySelectorAll(sel).forEach(function (el) {
+    var words = el.textContent.trim().split(/\s+/);
+    el.textContent = '';
+    words.forEach(function (w, i) {
+      var s = document.createElement('span');
+      s.className = 'word';
+      s.textContent = w;
+      el.appendChild(s);
+      if (i < words.length - 1) el.appendChild(document.createTextNode(' '));
+    });
+  });
+}
+function hfType(tl, el, text, start, cps) {
+  el.textContent = '';
+  var spans = [];
+  Array.from(text).forEach(function (c) {
+    var s = document.createElement('span');
+    s.textContent = c;
+    s.style.display = 'none';
+    el.appendChild(s);
+    spans.push(s);
+  });
+  spans.forEach(function (s, i) { tl.set(s, { display: 'inline' }, start + (i + 1) / cps); });
+  return start + text.length / cps;
+}
+function hfClick(tl, cur, t, part) {
+  var sel = cur + ' .cur-' + (part || 'arrow');
+  tl.to(sel, { scale: 0.86, duration: 0.08, ease: 'power2.out' }, t);
+  tl.to(sel, { scale: 1, duration: 0.14, ease: 'power2.out' }, t + 0.08);
+}
+function hfShape(tl, cur, t, part) {
+  ['arrow', 'hand', 'ibeam'].forEach(function (p) {
+    tl.to(cur + ' .cur-' + p, { opacity: p === part ? 1 : 0, duration: 0.06 }, t);
+  });
+}
+function hfHash(i, j) {
+  var h = (i * 374761393 + j * 668265263) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+}
+function hfReveal(tl, sel, t, stagger) {
+  hfWords(sel);
+  tl.fromTo(sel + ' .word', { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.32, stagger: stagger || 0.08, ease: 'power3.out' }, t);
+}
+
+(function () {
+  var tl = gsap.timeline({ paused: true });
+
+  var plain = 'my blood test says ferritin 9. should i be worried?', cipher = 'mKUL/GAItsu6S1xOqDtD6YQXhFFRnegEykOlPHyEusnbrzLYRk5';
+  var pool = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  var el = document.getElementById('s06-txt');
+  el.textContent = '';
+  var spans = Array.from(plain).map(function (c) { var s = document.createElement('span'); s.textContent = c; el.appendChild(s); return s; });
+  function render(t) {
+    spans.forEach(function (s, i) {
+      var ti = i * 0.03;
+      var c;
+      if (t <= 0 || t < ti) c = plain[i];
+      else if (t < ti + 0.25) c = pool[Math.floor(hfHash(i, Math.floor(t * 30)) * pool.length)];
+      else c = cipher[i];
+      if (s.textContent !== c) s.textContent = c;
+    });
+  }
+  var prox = { t: 0 };
+  render(0);
+  tl.fromTo('#s06-all', { scale: 1.0 }, { scale: 1.04, duration: 6.88, ease: 'none' }, 0);
+  tl.fromTo('#s06-bub', { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.5, ease: 'expo.out' }, 0);
+  tl.fromTo(prox, { t: 0 }, { t: 1.9, duration: 1.9, ease: 'none', onUpdate: function () { render(prox.t); } }, 0.7);
+  tl.to('#s06-bub', { backgroundColor: '#46302A', borderColor: 'rgba(244,238,228,0.3)', duration: 1.2, ease: 'power1.inOut' }, 1.2);
+  tl.fromTo('#s06-lock', { opacity: 0, y: 30, scale: 0.7 }, { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: 'back.out(1.5)' }, 2.6);
+  hfReveal(tl, '#s06-l0', 3.0);
+  hfReveal(tl, '#s06-l1', 3.6);
+
+  window.__timelines["s06"] = tl;
+})();
+  </script>
+</template>

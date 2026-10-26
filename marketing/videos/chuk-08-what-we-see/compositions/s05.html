@@ -1,0 +1,144 @@
+<template>
+  <style>
+
+@font-face { font-family: 'Newsreader'; src: url('assets/fonts/Newsreader-Disp600.ttf') format('truetype'); font-weight: 600; font-style: normal; }
+@font-face { font-family: 'ChukMono'; src: url('assets/fonts/jetbrains-mono-latin-wght.woff2') format('woff2'); font-weight: 100 800; font-style: normal; }
+@font-face { font-family: 'Ubuntu'; src: url('assets/fonts/Ubuntu-wght.ttf') format('truetype'); font-weight: 100 800; font-style: normal; }
+#root { position: absolute; inset: 0; overflow: hidden; font-family: 'Ubuntu', sans-serif; color: #2A1F17; }
+#root * { box-sizing: border-box; }
+.serif { font-family: 'Newsreader', serif; font-weight: 600; letter-spacing: -0.01em; color: #2A1F17; }
+.mono { font-family: 'ChukMono', monospace; }
+.word { display: inline-block; }
+.hi { display: block; flex: none; }
+.mark { display: block; }
+.cur { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 60; }
+.cur svg { position: absolute; overflow: visible; }
+.cur-arrow { left: -5px; top: -4px; width: 48px; height: 68px; transform-origin: 5px 4px; }
+.cur-hand { left: -21px; top: -5px; width: 56px; height: 62px; opacity: 0; transform-origin: 21px 5px; }
+.cur-ibeam { left: -10px; top: -20px; width: 20px; height: 40px; opacity: 0; transform-origin: 10px 20px; }
+.card-line { position: absolute; left: 0; right: 0; text-align: center; }
+
+
+#s05-tbl { position: absolute; left: 100px; top: 296px; width: 1720px; background: #FFFFFF; border: 1px solid #DFE3E8; border-radius: 18px; overflow: hidden; box-shadow: 0 20px 50px -24px rgba(0,0,0,0.25); }
+.sb-bar { height: 92px; display: flex; align-items: center; gap: 16px; padding: 0 28px; border-bottom: 1px solid #E6E8EB; color: #11181C; }
+.sb-bar .sb-ic { width: 30px; height: 30px; color: #687076; }
+.sb-name { font-size: 34px; font-weight: 600; }
+.sb-tag { font-size: 24px; color: #687076; padding: 4px 12px; border: 1px solid #E6E8EB; border-radius: 8px; }
+.sb-grow { flex: 1; }
+.sb-btn { display: flex; align-items: center; gap: 10px; font-size: 26px; color: #3E4347; padding: 8px 16px; border: 1px solid #E6E8EB; border-radius: 10px; }
+.sb-btn .sb-ic { width: 24px; height: 24px; color: #3E4347; }
+.sb-tr { display: flex; height: 80px; border-bottom: 1px solid #E6E8EB; background: #FFFFFF; }
+.sb-tr:last-child { border-bottom: none; }
+.sb-head { height: 72px; background: #F8F9FA; }
+.sb-chk { width: 64px; flex: none; display: flex; align-items: center; justify-content: center; border-right: 1px solid #E6E8EB; }
+.sb-box { width: 20px; height: 20px; border: 1.5px solid #C1C8CD; border-radius: 5px; }
+.sb-th { flex: none; display: flex; align-items: center; gap: 12px; padding: 0 18px; border-right: 1px solid #E6E8EB; font-size: 27px; color: #11181C; }
+.sb-th b { font-weight: 600; }
+.sb-th span { font-size: 23px; color: #889096; }
+.sb-td { flex: none; display: flex; align-items: center; padding: 0 18px; border-right: 1px solid #E6E8EB; font-family: 'ChukMono', monospace; font-size: 25px; color: #3E4347; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sb-mine .sb-td { color: #11181C; }
+.sb-pay { position: relative; }
+.sb-scroll { display: inline-block; white-space: nowrap; }
+#s05-sel { position: absolute; left: 704px; top: 244px; width: 640px; height: 80px; border: 3px solid #3ECF8E; border-radius: 3px; opacity: 0; }
+#s05-ex { position: absolute; left: 160px; top: 150px; width: 1600px; background: #FFFFFF; border: 1px solid #DFE3E8; border-radius: 18px; box-shadow: 0 24px 60px -24px rgba(0,0,0,0.3); overflow: hidden; opacity: 0; }
+.ex-bar { height: 76px; display: flex; align-items: center; gap: 16px; padding: 0 32px; border-bottom: 1px solid #E6E8EB; font-size: 28px; color: #11181C; }
+.ex-bar b { font-weight: 600; }
+.ex-bar .sb-ic { width: 28px; height: 28px; color: #687076; }
+.ex-body { padding: 26px 40px 30px; font-family: 'ChukMono', monospace; font-size: 30px; line-height: 46px; color: #11181C; }
+.ex-l { white-space: pre-wrap; word-break: break-all; }
+.ex-k { color: #687076; }
+.ex-v { color: #11181C; }
+#s05-line { top: 862px; font-size: 92px; line-height: 104px; }
+
+  </style>
+  <div id="root" data-composition-id="s05" data-width="1920" data-height="1080" data-duration="8.96">
+
+    <div id="s05-tblw" style="position:absolute;inset:0">
+      <div id="s05-tbl">
+        <div class="sb-bar"><svg class="sb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 10v10"/></svg><span class="sb-name">encrypted_chats</span><span class="sb-tag">public</span><span class="sb-grow"></span><span class="sb-btn"><svg class="sb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>Filter</span><span class="sb-btn"><svg class="sb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4"/></svg>Sort</span></div>
+        <div class="sb-tr sb-head"><div class="sb-chk"><span class="sb-box"></span></div><div class="sb-th" style="width:300px"><b>id</b><span>uuid</span></div><div class="sb-th" style="width:340px"><b>user_id</b><span>uuid</span></div><div class="sb-th" style="width:640px"><b>encrypted_payload</b><span>text</span></div><div class="sb-th" style="width:376px"><b>updated_at</b><span>timestamptz</span></div></div>
+        <div class="sb-tr" id="s05-r0"><div class="sb-chk"><span class="sb-box"></span></div><div class="sb-td" style="width:300px">5336a286-03a0-4142-a150-800143763720</div><div class="sb-td" style="width:340px">9e3c····-····-····-····5973</div><div class="sb-td sb-pay" style="width:640px">{&quot;v&quot;:&quot;2&quot;,&quot;kv&quot;:1,&quot;nonce&quot;:&quot;7pGTac9vwEmIG4/Y&quot;,&quot;ciphertext&quot;:&quot;4NnW6aKHnOncPhPOcaLt7PbaTwfndJw5xG4XFg0fhYkdagg7nJTyh90lffbMy6LA9n+4IJpIjqJEmi4OwtaejY8e0xWpmEW60g2y5dPQmHtBX1/GqBI=&quot;,&quot;mac&quot;:&quot;6HSEnDHsojJP6m8Q7GjvKw==&quot;}</div><div class="sb-td" style="width:376px">2026-10-26 08:12:44+00</div></div><div class="sb-tr sb-mine" id="s05-r1"><div class="sb-chk"><span class="sb-box"></span></div><div class="sb-td" style="width:300px">066c8a74-4d0d-4bc5-b973-b517832a7028</div><div class="sb-td" style="width:340px">9e3c····-····-····-····5973</div><div class="sb-td sb-pay" style="width:640px" id="s05-cell" data-layout-allow-overflow><span id="s05-scroll" class="sb-scroll" data-layout-allow-overlap>{&quot;v&quot;:&quot;2&quot;,&quot;kv&quot;:1,&quot;nonce&quot;:&quot;kf+aWr4lYvwA1DoU&quot;,&quot;ciphertext&quot;:&quot;mKUL/GAItsu6S1xOqDtD6YQXhFFRnegEykOlPHyEusnbrzLYRk5J6trJ/3Go99frJL5G2fTVShUWI3rK81U+CaCQSUkgQs2zm0nhSCtqBuX2tpsUo8CeYCv7JBu6Sy7cvDbzXonXX7GikVLi0lNAVRhM3VA4FMrOoYkdBNvWaRQWGU8wfFYTXvIpSc3sFKVmAx+19DcIrY7aRvnmxcQk8sUf7sGyS6KkfWiGTT4foXVQlvwi5j8TXbZZpCOhmURRrwxakH/BclI6IYi9TsiKBDKulLBo6o9LHAEb&quot;,&quot;mac&quot;:&quot;vF+VcOizgetiAE1IDJQzqQ==&quot;}</span></div><div class="sb-td" style="width:376px">2026-10-26 09:41:07+00</div></div><div class="sb-tr" id="s05-r2"><div class="sb-chk"><span class="sb-box"></span></div><div class="sb-td" style="width:300px">240e4cd8-0c19-4e12-92c8-007f3e93314b</div><div class="sb-td" style="width:340px">9e3c····-····-····-····5973</div><div class="sb-td sb-pay" style="width:640px">{&quot;v&quot;:&quot;2&quot;,&quot;kv&quot;:1,&quot;nonce&quot;:&quot;Kx6iO8GI8nvQlZ66&quot;,&quot;ciphertext&quot;:&quot;KrYzM2Am6fj5YG9onSsgOTCDX97/L6j65KpViKZIjNrJLeGjeDlg2EF+23MgsGW7O2i5skkZbS3wm/B7BaVpl4isoZeAtP5MRZW51fC+HIwPlDd+tX05&quot;,&quot;mac&quot;:&quot;fSE2HJ9aexh7pBqPx8dv3Q==&quot;}</div><div class="sb-td" style="width:376px">2026-10-25 21:03:19+00</div></div><div class="sb-tr" id="s05-r3"><div class="sb-chk"><span class="sb-box"></span></div><div class="sb-td" style="width:300px">07e3c8fa-4f0e-426c-a6de-ea7d13b7ac9a</div><div class="sb-td" style="width:340px">9e3c····-····-····-····5973</div><div class="sb-td sb-pay" style="width:640px">{&quot;v&quot;:&quot;2&quot;,&quot;kv&quot;:1,&quot;nonce&quot;:&quot;+VfwGsR4/UPbiE7v&quot;,&quot;ciphertext&quot;:&quot;+nFYqIjSj/NNOpNUUjeRac6z2FJRKA1q8ZcPggY4kTZb49UubjaVx/eVL4KXH6Eq8vaSagnhxmGHwamfhBcau2omF5rNDmvQc0YUsEMBiqilWRE3&quot;,&quot;mac&quot;:&quot;LIa0M+BcW0PScPUtw7ttjA==&quot;}</div><div class="sb-td" style="width:376px">2026-10-24 17:56:02+00</div></div>
+        <div id="s05-sel"></div>
+      </div>
+    </div>
+    <div id="s05-ex">
+      <div class="ex-bar"><svg class="sb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M16 7l3 3"/></svg><b>encrypted_payload</b><span class="sb-tag">text</span><span class="sb-grow"></span><span style="font-size:24px;color:#687076">row 066c8a74…</span></div>
+      <div class="ex-body" id="s05-exb"><div class="ex-l"><span class="ex-k">{</span></div><div class="ex-l"><span class="ex-k">  &quot;v&quot;: </span><span class="ex-v">&quot;2&quot;,</span></div><div class="ex-l"><span class="ex-k">  &quot;kv&quot;: </span><span class="ex-v">1,</span></div><div class="ex-l"><span class="ex-k">  &quot;nonce&quot;: </span><span class="ex-v">&quot;kf+aWr4lYvwA1DoU&quot;,</span></div><div class="ex-l"><span class="ex-k">  &quot;ciphertext&quot;: </span><span class="ex-v">&quot;mKUL/GAItsu6S1xOqDtD6YQXhFFRnegEykOlPHyEusnbrzLYRk5J6trJ/3Go99frJL5G2fTVShUWI3rK81U+CaCQSUkgQs2zm0nhSCtqBuX2tpsUo8CeYCv7JBu6Sy7cvDbzXonXX7GikVLi0lNAVRhM3VA4FMrOoYkdBNvWaRQWGU8wfFYTXvIpSc3sFKVmAx+19DcIrY7aRvnmxcQk8sUf7sGyS6KkfWiGTT4foXVQlvwi5j8TXbZZpCOhmURRrwxakH/BclI6IYi9TsiKBDKulLBo6o9LHAEb&quot;,</span></div><div class="ex-l"><span class="ex-k">  &quot;mac&quot;: </span><span class="ex-v">&quot;vF+VcOizgetiAE1IDJQzqQ==&quot;</span></div><div class="ex-l"><span class="ex-k">}</span></div></div>
+    </div>
+    <div class="card-line serif" id="s05-line">This is all our server ever sees.</div>
+    <div class="cur" id="s05-cur"><svg class="cur-arrow" viewBox="0 0 28 40"><path d="M2.5 2.5v29.2l7.3-6.9 4.9 11.6 4.6-2-4.8-11.3h9.9z" fill="#14100c" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round"/></svg><svg class="cur-hand" viewBox="0 0 34 38"><path d="M12 4.2a2.6 2.6 0 0 1 5.2 0V15.5h.4v-2.6a2.6 2.6 0 0 1 5.2 0v3.4a2.6 2.6 0 0 1 5.2 0v2.4a2.5 2.5 0 0 1 4.6 1.3v6.4c0 5.6-3.8 9.6-9.6 9.6h-3.3c-3.6 0-5.8-1.6-7.9-4.6L4.9 23.2a2.6 2.6 0 0 1 4-3.3l3.1 3.6z" fill="#ffffff" stroke="#14100c" stroke-width="2" stroke-linejoin="round"/><path d="M17.4 16v6.5M22.6 17v5.5M27.8 19v4" stroke="#14100c" stroke-width="1.6" stroke-linecap="round"/></svg><svg class="cur-ibeam" viewBox="0 0 20 40"><path d="M4 3c3 0 6 1 6 4v26c0 3-3 4-6 4M16 3c-3 0-6 1-6 4v26c0 3 3 4 6 4M6 20h8" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round"/><path d="M4 3c3 0 6 1 6 4v26c0 3-3 4-6 4M16 3c-3 0-6 1-6 4v26c0 3 3 4 6 4M6 20h8" fill="none" stroke="#14100c" stroke-width="2.2" stroke-linecap="round"/></svg></div>
+
+  </div>
+  <script>
+
+function hfWords(sel) {
+  document.querySelectorAll(sel).forEach(function (el) {
+    var words = el.textContent.trim().split(/\s+/);
+    el.textContent = '';
+    words.forEach(function (w, i) {
+      var s = document.createElement('span');
+      s.className = 'word';
+      s.textContent = w;
+      el.appendChild(s);
+      if (i < words.length - 1) el.appendChild(document.createTextNode(' '));
+    });
+  });
+}
+function hfType(tl, el, text, start, cps) {
+  el.textContent = '';
+  var spans = [];
+  Array.from(text).forEach(function (c) {
+    var s = document.createElement('span');
+    s.textContent = c;
+    s.style.display = 'none';
+    el.appendChild(s);
+    spans.push(s);
+  });
+  spans.forEach(function (s, i) { tl.set(s, { display: 'inline' }, start + (i + 1) / cps); });
+  return start + text.length / cps;
+}
+function hfClick(tl, cur, t, part) {
+  var sel = cur + ' .cur-' + (part || 'arrow');
+  tl.to(sel, { scale: 0.86, duration: 0.08, ease: 'power2.out' }, t);
+  tl.to(sel, { scale: 1, duration: 0.14, ease: 'power2.out' }, t + 0.08);
+}
+function hfShape(tl, cur, t, part) {
+  ['arrow', 'hand', 'ibeam'].forEach(function (p) {
+    tl.to(cur + ' .cur-' + p, { opacity: p === part ? 1 : 0, duration: 0.06 }, t);
+  });
+}
+function hfHash(i, j) {
+  var h = (i * 374761393 + j * 668265263) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+}
+function hfReveal(tl, sel, t, stagger) {
+  hfWords(sel);
+  tl.fromTo(sel + ' .word', { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.32, stagger: stagger || 0.08, ease: 'power3.out' }, t);
+}
+
+(function () {
+  var tl = gsap.timeline({ paused: true });
+
+  tl.fromTo('#s05-tbl', { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.55, ease: 'expo.out' }, 0);
+  tl.fromTo('.sb-tr', { opacity: 0 }, { opacity: 1, duration: 0.3, stagger: 0.06 }, 0.15);
+  // the long base64 slides through the cell
+  tl.fromTo('#s05-scroll', { x: 0 }, { x: -2600, duration: 2.2, ease: 'power1.inOut' }, 0.7);
+  // cursor clicks the cell
+  tl.fromTo('#s05-cur', { x: 1560, y: 1160 }, { x: 1134, y: 576, duration: 1.0, ease: 'power2.inOut' }, 1.2);
+  tl.to('#s05-r1', { backgroundColor: '#F1F3F5', duration: 0.15 }, 2.1);
+  hfClick(tl, '#s05-cur', 2.45);
+  tl.to('#s05-sel', { opacity: 1, duration: 0.08 }, 2.5);
+  hfClick(tl, '#s05-cur', 2.75);
+  // the cell opens: the full envelope
+  tl.to('#s05-cur', { x: 1700, y: 1180, duration: 0.6, ease: 'power3.in' }, 2.95);
+  tl.to('#s05-tblw', { opacity: 0, y: -40, duration: 0.35, ease: 'power2.in' }, 2.95);
+  tl.fromTo('#s05-ex', { opacity: 0, scale: 0.94, y: 60 }, { opacity: 1, scale: 1, y: 0, duration: 0.55, ease: 'expo.out' }, 3.05);
+  tl.fromTo('#s05-exb .ex-l', { opacity: 0 }, { opacity: 1, duration: 0.2, stagger: 0.09 }, 3.25);
+  tl.fromTo('#s05-ex', { y: 0 }, { y: -16, duration: 5.4, ease: 'none', immediateRender: false }, 3.6);
+  hfReveal(tl, '#s05-line', 4.6, 0.09);
+
+  window.__timelines["s05"] = tl;
+})();
+  </script>
+</template>

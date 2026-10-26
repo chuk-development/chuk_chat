@@ -52,3 +52,25 @@ round outcome).
   Unsere UI bleibt der Standard; uebernommen wird nur das genannte Element.
 - Regel: Ein grosser Umbau zuerst als ein Bild im echten Target zeigen und
   die Richtung absegnen lassen, nicht alle Flaechen parallel fertig bauen.
+
+## 2026-10-26 Marketing-Video 07: erfundenes UI, Standard-Features
+- Fehler: Fuer den Anthropic-Stil ein helles UI erfunden statt das echte
+  dunkle App-UI nachzubauen, und Web-Suche/Charts/Modelle/Connectors beworben.
+  Besitzer: "sieht nicht aus wie unsere UI", "jeder AI-Chat hat das".
+- Regel: UI in Videos immer 1:1 nach `assets/screenshots/*.webp` und dem
+  Website-Nachbau (`~/git/chuk.chat/layouts/partials/uc/`) nachbauen, mit
+  Vergleichsbild echt vs. Nachbau. Stil (Farbe, Grund) gilt nur fuer die
+  Flaeche um das UI, nie fuer das UI selbst.
+- Regel: Chuk-Chat-Werbung verkauft Privatsphaere (Verschluesselung auf dem
+  Geraet, Server sieht nur Chiffretext, Open Source, kein Training, Germany),
+  keine Funktionen, die jeder AI-Chat hat.
+- Regel: Nie "niemand kann es lesen" behaupten; das Modell bekommt den Prompt
+  im Klartext. Wahr ist: "gespeichert wird nur Chiffretext".
+
+## 2026-10-26 Logo/Wordmark in Videos
+- Fehler: Endkarte von 08 setzte "Chuk Chat" neu in Newsreader (Serif).
+  Besitzer: "Logo muss das richtige Logo mit der richtigen Schrift sein, darf
+  sich niemals aendern."
+- Regel: Marke immer nur als `assets/logo.svg` (Zeichen) + `assets/wordmark.svg`
+  (eingefrorene Pfade, Liberation Mono Bold, Slogan darunter), nur umfaerben,
+  nie neu setzen, nie andere Schrift, Slogan nicht als eigener Text.
