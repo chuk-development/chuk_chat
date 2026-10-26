@@ -112,6 +112,65 @@ void main() {
     });
   });
 
+  group('splitAnswerBlocks <details>', () {
+    AnswerBlockSegment only(List<AnswerSegment> segs) =>
+        segs.whereType<AnswerBlockSegment>().single;
+
+    test('becomes a more block with the summary as title', () {
+      final List<AnswerSegment> segs = splitAnswerBlocks(
+        'Intro\n\n<details>\n<summary>Mehr **Infos**</summary>\n\n'
+        '- **a**: eins\n- b\n</details>\n\nOutro\n',
+      );
+      expect(segs, hasLength(3));
+      final AnswerBlockSegment b = only(segs);
+      expect(b.kind, AnswerBlockKind.more);
+      expect(b.arg, 'Mehr Infos');
+      expect(b.closed, isTrue);
+      expect(parseMore(b.arg, b.lines).body, '- **a**: eins\n- b');
+      expect((segs.last as AnswerTextSegment).text, contains('Outro'));
+    });
+
+    test('without a summary the body keeps every line', () {
+      final AnswerBlockSegment b = only(
+        splitAnswerBlocks('<details>\nHinweis:\n- x\n</details>\n'),
+      );
+      expect(b.arg, '');
+      expect(b.lines, <String>['Hinweis:', '- x']);
+    });
+
+    test('one-line form and text after the closing tag', () {
+      final AnswerBlockSegment b = only(
+        splitAnswerBlocks(
+          '<details open><summary>T</summary>body</details> tail\nnext\n',
+        ),
+      );
+      expect(b.arg, 'T');
+      expect(b.lines, <String>['body', ' tail']);
+    });
+
+    test('streaming: unclosed block, half typed close tag hidden', () {
+      final AnswerBlockSegment b = only(
+        splitAnswerBlocks('<details>\n<summary>S</summary>\nzeile\n</deta'),
+      );
+      expect(b.closed, isFalse);
+      expect(b.lines, <String>['zeile']);
+    });
+
+    test('a closing tag inside fenced code does not close', () {
+      final AnswerBlockSegment b = only(
+        splitAnswerBlocks('<details>\n```\n</details>\n```\n</details>\n'),
+      );
+      expect(b.closed, isTrue);
+      expect(b.lines, <String>['```', '</details>', '```']);
+    });
+
+    test('a <details> inside fenced code stays code', () {
+      const String text = '```html\n<details>x</details>\n```\n';
+      final List<AnswerSegment> segs = splitAnswerBlocks(text);
+      expect(segs.single, isA<AnswerTextSegment>());
+    });
+  });
+
   group('parseSteps', () {
     test('titles, text, commands and warnings, with nested Markdown', () {
       final StepsSpec spec = parseSteps('Unlock', <String>[
@@ -473,6 +532,210 @@ void main() {
     });
   });
 
+  group('Figma visual library blocks', () {
+    test('split: the new names are blocks, `checklist` is an alias', () {
+      for (final String name in <String>[
+        'check',
+        'checklist',
+        'term',
+        'grid',
+        'sizes',
+        'quote',
+        'more',
+      ]) {
+        final List<AnswerSegment> segs = splitAnswerBlocks(
+          '::: $name X\na\n:::\n',
+        );
+        expect(
+          segs.whereType<AnswerBlockSegment>(),
+          hasLength(1),
+          reason: name,
+        );
+      }
+    });
+
+    test('cards: location, rating, specs and ask keys', () {
+      final CardsSpec spec = parseCards('Modelle', <String>[
+        'Auralis Quiet One',
+        'location: Grindelwald, Schweiz',
+        'rating: 4,7 · 216 Bewertungen',
+        'specs: ANC · Adaptiv | sound, 38 Std. Akku | battery, Leicht',
+        'ask: Vergleichen',
+        'specs:',
+      ]);
+      final AnswerCard c = spec.cards.single;
+      expect(c.location, 'Grindelwald, Schweiz');
+      expect(c.rating, '4,7 · 216 Bewertungen');
+      expect(c.ask, 'Vergleichen');
+      expect(c.specs.map((CardSpecItem x) => x.label), <String>[
+        'ANC · Adaptiv',
+        '38 Std. Akku',
+        'Leicht',
+      ]);
+      expect(c.specs[1].icon, 'battery');
+      expect(c.specs[2].icon, '');
+      expect(c.metas, isEmpty);
+    });
+
+    test('ask: icons after a bar, button lines, bullets stripped', () {
+      final AskSpec spec = parseAsk('Lieber Wellness?', <String>[
+        'Mit Wellness | sparkles',
+        '- Nah am Wanderweg | mountain',
+        'Ohne Icon',
+        'Mac | Linux',
+        'button: Aktuelle Werte abrufen',
+        'button:',
+      ]);
+      expect(spec.chips, <String>[
+        'Mit Wellness',
+        'Nah am Wanderweg',
+        'Ohne Icon',
+        'Mac | Linux',
+      ]);
+      expect(spec.iconAt(0), 'sparkles');
+      expect(spec.iconAt(1), 'mountain');
+      expect(spec.iconAt(2), '');
+      expect(spec.iconAt(9), '');
+      expect(spec.buttons, <String>['Aktuelle Werte abrufen']);
+    });
+
+    test('check: [x] and [ ] items, bullets, tag, plain lines are open', () {
+      final CheckSpec spec = parseCheck('Für den Antrag', <String>[
+        'tag: Ausweis',
+        '[x] Alter Ausweis',
+        '- [X] Foto',
+        '* [ ] Zahlungsmittel',
+        'Termin buchen',
+        '[ ]',
+      ]);
+      expect(spec.title, 'Für den Antrag');
+      expect(spec.tag, 'Ausweis');
+      expect(spec.items.map((CheckItem i) => i.label), <String>[
+        'Alter Ausweis',
+        'Foto',
+        'Zahlungsmittel',
+        'Termin buchen',
+      ]);
+      expect(spec.items.map((CheckItem i) => i.done), <bool>[
+        true,
+        true,
+        false,
+        false,
+      ]);
+    });
+
+    test('term: term | meaning, note line, bold term stripped', () {
+      final TermSpec spec = parseTerm('Zwei Namen', <String>[
+        'ARD | Arbeitsgemeinschaft der Rundfunkanstalten',
+        '**Bot ← Robot** | Automatisiertes Programm',
+        'Degeto',
+        'note: ARD → Degeto Film',
+      ]);
+      expect(spec.tag, 'Zwei Namen');
+      expect(spec.entries.map((TermEntry e) => e.term), <String>[
+        'ARD',
+        'Bot ← Robot',
+        'Degeto',
+      ]);
+      expect(
+        spec.entries[0].meaning,
+        'Arbeitsgemeinschaft der Rundfunkanstalten',
+      );
+      expect(spec.entries[2].meaning, '');
+      expect(spec.note, 'ARD → Degeto Film');
+    });
+
+    test('grid: marked and filled cells, legend, widest row sets columns', () {
+      final GridSpec spec = parseGrid('11 von 24', <String>[
+        '1* 2 3+ 4',
+        '5 6*',
+        '* In der Liste',
+        '+ Geprüft',
+        '- Nicht geprüft',
+      ]);
+      expect(spec.rows, hasLength(2));
+      expect(spec.columns, 4);
+      expect(spec.rows[0][0].label, '1');
+      expect(spec.rows[0][0].kind, GridCellKind.marked);
+      expect(spec.rows[0][2].kind, GridCellKind.filled);
+      expect(spec.rows[0][3].kind, GridCellKind.plain);
+      expect(spec.legend.map((GridLegend l) => l.kind), <GridCellKind>[
+        GridCellKind.marked,
+        GridCellKind.filled,
+        GridCellKind.plain,
+      ]);
+      // A lone `*` is a cell label, not a marker.
+      expect(parseGrid('', <String>['* 1']).legend.single.label, '1');
+      expect(parseGrid('', <String>['*']).rows.single.single.label, '*');
+    });
+
+    test('grid: a row is capped at 12 cells', () {
+      final GridSpec spec = parseGrid('', <String>[
+        List<String>.generate(20, (int i) => '${i + 1}').join(' '),
+      ]);
+      expect(spec.columns, 12);
+    });
+
+    test('sizes: numbers drive the diameter, at most four items', () {
+      final SizesSpec spec = parseSizes('', <String>[
+        'Normal | 12 cm | smoke',
+        'Mini | 6 cm',
+        'Ohne Zahl',
+        '! Kleiner heißt nicht sicherer',
+      ]);
+      expect(spec.items, hasLength(3));
+      expect(spec.fraction(0), 1.0);
+      expect(spec.fraction(1), closeTo(0.5, 1e-9));
+      expect(spec.fraction(2), 1.0);
+      expect(spec.items[0].icon, 'smoke');
+      expect(spec.note, 'Kleiner heißt nicht sicherer');
+      final SizesSpec many = parseSizes('', <String>[
+        'a | 1',
+        'b | 2',
+        'c | 3',
+        'd | 4',
+        'e | 5',
+      ]);
+      expect(many.items, hasLength(4));
+      // A tiny item still gets a visible circle.
+      expect(parseSizes('', <String>['a | 100', 'b | 1']).fraction(1), 0.25);
+    });
+
+    test('quote: keys, points with decimal commas, direction', () {
+      final QuoteSpec spec = parseQuote('NASDAQ: PYPL', <String>[
+        'price: 56,70 USD',
+        'change: -0,46 USD (-0,80 %)',
+        'note: Schlusskurs · 16.10.2026',
+        'points: 57,16; 56,9; 57; 56,7',
+        'labels: 12.10, 13.10, 14.10',
+      ]);
+      expect(spec.symbol, 'NASDAQ: PYPL');
+      expect(spec.price, '56,70 USD');
+      expect(spec.points, <double>[57.16, 56.9, 57, 56.7]);
+      expect(spec.labels, <String>['12.10', '13.10', '14.10']);
+      expect(spec.direction, -1);
+      expect(parseQuote('X', <String>['points: 1.5, 2.5 3']).points, <double>[
+        1.5,
+        2.5,
+        3,
+      ]);
+      expect(parseQuote('X', <String>['change: +1,2 %']).direction, 1);
+      expect(parseQuote('X', <String>['change: 0 %']).direction, 0);
+      expect(parseQuote('X', <String>[]).direction, 0);
+    });
+
+    test('more: title from the argument, body keeps its lines', () {
+      final MoreSpec spec = parseMore('Fehlt etwas?', <String>[
+        '',
+        'Zeile 1',
+        'Zeile 2',
+        '',
+      ]);
+      expect(spec.title, 'Fehlt etwas?');
+      expect(spec.body, 'Zeile 1\nZeile 2');
+    });
+  });
+
   group('answer format prompt', () {
     final String prompt = ToolPromptBuilder(discoveryMode: false)
         .buildToolProtocolSection(tools: const <Map<String, dynamic>>[]);
@@ -490,7 +753,9 @@ void main() {
       const String last = 'sources of every web lookup on its own.';
       final int end = prompt.indexOf(last, start);
       final String section = prompt.substring(start, end + last.length);
-      expect(TokenEstimator.estimateTokens(section), lessThan(650));
+      // 18 block kinds incl. the Figma visual library (check, term, grid,
+      // sizes, quote, more); one short example each, nothing more.
+      expect(TokenEstimator.estimateTokens(section), lessThan(800));
     });
   });
 }
