@@ -21,6 +21,8 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import 'package:chuk_chat/services/autobahn_traffic_service.dart'
+    show distanceToGeometryKm;
 import 'package:chuk_chat/utils/map_features.dart';
 
 const String kRoadworksMapServer =
@@ -149,7 +151,13 @@ class RoadClosure {
     this.notes,
     this.limits,
     this.geometry = ResolvedGeometry.empty,
-  });
+    String? ref,
+    String? source,
+    this.direction,
+    this.whenText,
+    this.blocked = false,
+  }) : _ref = ref, // ignore: prefer_initializing_formals
+       _source = source; // ignore: prefer_initializing_formals
 
   final int layer;
   final List<int> ids;
@@ -164,10 +172,45 @@ class RoadClosure {
   final String? limits;
   ResolvedGeometry geometry;
 
-  String get source => _layerById(layer)?.source ?? 'DANord';
+  /// Set by sources other than the DANord MapServer (Autobahn GmbH).
+  final String? _ref;
+  final String? _source;
+
+  /// Direction of travel ("Füssen/Reutte -> Ulm"), when the source says.
+  final String? direction;
+
+  /// The source's own wording of when it applies (hours included), used
+  /// instead of [datesLabel] when set.
+  final String? whenText;
+
+  /// The road is blocked (source flag, Autobahn GmbH only).
+  final bool blocked;
+
+  String get source => _source ?? _layerById(layer)?.source ?? 'DANord';
 
   /// What a map feature writes to point back at this measure.
-  String get ref => '$kRoadworksRefPrefix$layer:${ids.join(',')}';
+  String get ref => _ref ?? '$kRoadworksRefPrefix$layer:${ids.join(',')}';
+
+  /// A copy with its own geometry, optionally with a new ref/direction.
+  RoadClosure copyWithRef({String? ref, String? direction}) => RoadClosure(
+    layer: layer,
+    ids: List.of(ids),
+    kind: kind,
+    title: title,
+    road: road,
+    restriction: restriction,
+    start: start,
+    end: end,
+    detour: detour,
+    notes: notes,
+    limits: limits,
+    geometry: geometry,
+    ref: ref ?? _ref,
+    source: _source,
+    direction: direction ?? this.direction,
+    whenText: whenText,
+    blocked: blocked,
+  );
 
   String get datesLabel {
     final s = start, e = end;
@@ -341,11 +384,14 @@ List<RoadClosure> groupRoadClosures(List<RoadClosure> closures) {
 }
 
 /// Drops finished measures and those starting later than [daysAhead];
-/// active ones first, then by start date.
+/// active ones first, then the nearest to ([nearLat], [nearLon]), then by
+/// kind and start date.
 List<RoadClosure> filterCurrentClosures(
   List<RoadClosure> closures, {
   required DateTime now,
   int daysAhead = 30,
+  double? nearLat,
+  double? nearLon,
 }) {
   final horizon = now.add(Duration(days: daysAhead));
   final kept = closures.where((c) {
@@ -354,9 +400,22 @@ List<RoadClosure> filterCurrentClosures(
     return true;
   }).toList();
   bool active(RoadClosure c) => c.start == null || !c.start!.isAfter(now);
+  // Distance in whole km, so measures at about the same spot still fall
+  // back to kind and date. Without a centre every measure is "0 km".
+  final dist = <RoadClosure, int>{
+    for (final c in kept)
+      c: nearLat == null || nearLon == null
+          ? 0
+          : math.min(
+              distanceToGeometryKm(c.geometry, nearLat, nearLon),
+              9999.0,
+            ).floor(),
+  };
   kept.sort((a, b) {
     final aa = active(a), ba = active(b);
     if (aa != ba) return aa ? -1 : 1;
+    final near = dist[a]!.compareTo(dist[b]!);
+    if (near != 0) return near;
     final kindOrder = a.kind.index.compareTo(b.kind.index);
     if (kindOrder != 0) return kindOrder;
     return (a.start ?? now).compareTo(b.start ?? now);
@@ -379,13 +438,53 @@ Map<String, dynamic> closureMapFeature(RoadClosure c) => {
   'kind': c.kind.name,
   'ref': c.ref,
   'label': _short(c.title, 60),
-  if (c.datesLabel.isNotEmpty) 'dates': c.datesLabel,
-  if (c.restriction != null || c.limits != null)
-    'info': [c.restriction, c.limits].whereType<String>().join(', '),
+  if ((c.whenText ?? c.datesLabel).isNotEmpty)
+    'dates': _short(c.whenText ?? c.datesLabel, 80),
+  if (c.restriction != null || c.limits != null || c.direction != null)
+    'info': _short(
+      [c.direction, c.restriction, c.limits].whereType<String>().join(', '),
+      120,
+    ),
   if (c.detour != null) 'detour': _short(c.detour!, 160),
 };
 
-/// The text the model reads.
+/// The tool result is cut at about 4000 chars; entries stop here.
+const int _modelTextBudget = 3200;
+
+/// One numbered entry of [formatClosuresForModel], with a leading blank
+/// line.
+String _closureEntry(RoadClosure c, int n, DateTime now) {
+  final buf = StringBuffer();
+  final active = c.start == null || !c.start!.isAfter(now);
+  final status = active ? 'active' : 'starts ${formatGermanDate(c.start!)}';
+  buf.writeln();
+  buf.writeln('$n. ${_kindWord(c.kind)} · $status · ${c.title}');
+  if (c.layer < 0) {
+    // Other sources (Autobahn GmbH): direction, dates and limits ride in
+    // the map feature, so they are not repeated here.
+    final details = [if (c.blocked) 'BLOCKED', 'Source: ${c.source}'];
+    buf.writeln('   ${details.join(' · ')}');
+    if (c.notes != null) buf.writeln('   Notes: ${_short(c.notes!, 120)}');
+    buf.writeln('   Map feature: ${jsonEncode(closureMapFeature(c))}');
+    return buf.toString();
+  }
+  final details = [
+    if (c.road != null) 'Road: ${c.road}',
+    if (c.restriction != null) 'Restriction: ${c.restriction}',
+    if (c.limits != null) c.limits!,
+  ];
+  if (details.isNotEmpty) buf.writeln('   ${details.join(' · ')}');
+  if (c.datesLabel.isNotEmpty) buf.writeln('   When: ${c.datesLabel}');
+  if (c.detour != null) buf.writeln('   Detour: ${c.detour}');
+  if (c.notes != null) buf.writeln('   Notes: ${_short(c.notes!, 300)}');
+  buf.writeln('   Source: ${c.source}');
+  buf.writeln('   Map feature: ${jsonEncode(closureMapFeature(c))}');
+  return buf.toString();
+}
+
+/// The text the model reads. [northFeed] says the DANord feed was asked,
+/// [autobahn] that the Autobahn GmbH feed was asked; [warnings] are
+/// printed under the header (e.g. a feed that failed).
 String formatClosuresForModel({
   required List<RoadClosure> closures,
   required String placeLabel,
@@ -394,55 +493,67 @@ String formatClosuresForModel({
   required double radiusKm,
   required DateTime now,
   int maxItems = 15,
+  bool northFeed = true,
+  bool autobahn = false,
+  List<String> warnings = const [],
 }) {
   final buf = StringBuffer();
+  final sources = [
+    if (northFeed)
+      'LBV.SH / Digitaler Atlas Nord (federal, state and some county roads '
+          'and motorways in Schleswig-Holstein, TIC traffic events, plus the '
+          'Hamburg, Lower Saxony, Mecklenburg-Vorpommern and Norderstedt '
+          'feeds)',
+    if (autobahn) 'Autobahn GmbH (closures and roadworks on all motorways)',
+  ];
   buf.writeln(
-    'Official roadworks feed (LBV.SH / Digitaler Atlas Nord: federal, state '
-    'and some county roads and motorways in Schleswig-Holstein, TIC traffic '
-    'events, plus the Hamburg, Lower Saxony, Mecklenburg-Vorpommern and '
-    'Norderstedt feeds). Area: ${radiusKm.toStringAsFixed(0)} km around '
+    'Official roadworks ${sources.length > 1 ? 'feeds' : 'feed'}: '
+    '${sources.join(' + ')}. Area: ${radiusKm.toStringAsFixed(0)} km around '
     '$placeLabel (${lat.toStringAsFixed(4)}, ${lon.toStringAsFixed(4)}). '
     'Today: ${formatGermanDate(now)}.',
   );
+  for (final w in warnings) {
+    buf.writeln('Note: $w');
+  }
   if (closures.isEmpty) {
     buf.writeln('No current or upcoming entries in this area.');
   } else {
     buf.writeln('${closures.length} entries:');
   }
-  var i = 0;
+  var shown = 0;
   for (final c in closures.take(maxItems)) {
-    i++;
-    final active = c.start == null || !c.start!.isAfter(now);
-    final status = active
-        ? 'active'
-        : 'starts ${formatGermanDate(c.start!)}';
-    buf.writeln();
-    buf.writeln('$i. ${_kindWord(c.kind)} · $status · ${c.title}');
-    final details = [
-      if (c.road != null) 'Road: ${c.road}',
-      if (c.restriction != null) 'Restriction: ${c.restriction}',
-      if (c.limits != null) c.limits!,
-    ];
-    if (details.isNotEmpty) buf.writeln('   ${details.join(' · ')}');
-    if (c.datesLabel.isNotEmpty) buf.writeln('   When: ${c.datesLabel}');
-    if (c.detour != null) buf.writeln('   Detour: ${c.detour}');
-    if (c.notes != null) buf.writeln('   Notes: ${_short(c.notes!, 300)}');
-    buf.writeln('   Source: ${c.source}');
-    buf.writeln('   Map feature: ${jsonEncode(closureMapFeature(c))}');
+    final entry = _closureEntry(c, shown + 1, now);
+    // The footer below needs about 700 chars of the ~4000.
+    if (shown > 0 && buf.length + entry.length > _modelTextBudget) break;
+    shown++;
+    buf.write(entry);
   }
-  if (closures.length > maxItems) {
+  if (closures.length > shown) {
     buf.writeln();
-    buf.writeln('… ${closures.length - maxItems} more not shown.');
+    buf.writeln('… ${closures.length - shown} more not shown.');
   }
   buf.writeln();
+  if (northFeed) {
+    buf.writeln(
+      'Municipal streets (Gemeindestraßen) are mostly NOT in this feed. For '
+      'a town, also web_search "<town> Sperrung" / "<town> Vollsperrung" '
+      '(the town website and local news) and draw what you find as '
+      '{"kind":"closure","road":"<street>","town":"<town>","from":"<cross '
+      'street>","to":"<cross street>","dates":"…","detour":"…"}.',
+    );
+  } else {
+    buf.writeln(
+      'Only motorways are covered here: federal, state and municipal roads '
+      '(Bundes-, Landes-, Gemeindestraßen) are NOT. For them, web_search '
+      '"<town> Sperrung" / "<town> Vollsperrung" (town website, local news) '
+      'and draw what you find as {"kind":"closure","road":"<street>",'
+      '"town":"<town>","from":"<cross street>","to":"<cross street>",'
+      '"dates":"…","detour":"…"}.',
+    );
+  }
   buf.writeln(
-    'Municipal streets (Gemeindestraßen) are mostly NOT in this feed. For a '
-    'town, also web_search "<town> Sperrung" / "<town> Vollsperrung" (the '
-    'town website and local news) and draw what you find as '
-    '{"kind":"closure","road":"<street>","town":"<town>","from":"<cross '
-    'street>","to":"<cross street>","dates":"…","detour":"…"}. Copy the '
-    '"Map feature" objects above unchanged into the "features" list of one '
-    '<map> block (format: skill map-features).',
+    'Copy the "Map feature" objects above unchanged into the "features" '
+    'list of one <map> block (format: skill map-features).',
   );
   return buf.toString().trimRight();
 }

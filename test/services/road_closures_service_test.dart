@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:latlong2/latlong.dart';
 
 import 'package:chuk_chat/services/road_closures_service.dart';
 import 'package:chuk_chat/utils/map_features.dart';
@@ -201,6 +202,32 @@ void main() {
         mk(5, null, null, MapFeatureKind.closure),
       ], now: now);
       expect(kept.map((c) => c.ids.single), [5, 4, 1]);
+    });
+
+    test('with a centre, the nearest active measure comes first', () {
+      RoadClosure at(int id, double lat, MapFeatureKind k) => RoadClosure(
+        layer: 8,
+        ids: [id],
+        kind: k,
+        title: 't$id',
+        start: DateTime(2026, 10, 1),
+        geometry: ResolvedGeometry(
+          lines: [
+            [LatLng(lat, 10.0), LatLng(lat + 0.001, 10.0)],
+          ],
+        ),
+      );
+      final kept = filterCurrentClosures(
+        [
+          at(1, 54.5, MapFeatureKind.closure), // ~55 km away
+          at(2, 54.01, MapFeatureKind.roadworks), // ~1 km away
+          at(3, 54.2, MapFeatureKind.closure), // ~22 km away
+        ],
+        now: now,
+        nearLat: 54.0,
+        nearLon: 10.0,
+      );
+      expect(kept.map((c) => c.ids.single), [2, 3, 1]);
     });
   });
 

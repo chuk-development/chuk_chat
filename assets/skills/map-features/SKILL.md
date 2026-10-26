@@ -18,9 +18,11 @@ the app finds its real course.
 ## Workflow for "Sperrungen / Baustellen / closures in <town>"
 
 1. Call `road_closures` with `place` (e.g. `{"place":"Preetz"}`). It
-   returns the official feed (federal, state, county roads, motorways,
-   detour routes) with a ready `Map feature` object per entry.
-2. Municipal streets are mostly NOT in that feed. Also `web_search`
+   returns the official feeds with a ready `Map feature` object per entry:
+   motorways in all of Germany (Autobahn GmbH), and in the north (SH, HH,
+   NI, MV) also federal, state and county roads and detour routes.
+2. Municipal streets are mostly NOT in those feeds, and outside the north
+   no road except the motorway is. Also `web_search`
    "<town> Sperrung" / "<town> Vollsperrung" (town website, local paper),
    and `web_crawl` the best hit for street names, cross streets and dates.
 3. Write one short answer (what is closed today, what starts soon), then
@@ -44,7 +46,8 @@ the app finds its real course.
 - `kind`: `closure` (red), `roadworks` (orange), `detour` (dashed blue),
   `info` (grey pin). German words work too (Sperrung, Baustelle, Umleitung).
 - Geometry, pick ONE:
-  - `ref`: copied from a `road_closures` result. Best: exact official line.
+  - `ref`: copied from a `road_closures` result (`sh:…` or `ab:…`).
+    Best: exact official line.
   - `road` + `town` (+ `from`, `to` = the two cross streets that bound the
     stretch). Without `from`/`to` the whole street is drawn. `from`/`to`
     may also be `[lat,lon]`.
