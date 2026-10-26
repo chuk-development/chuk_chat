@@ -28,6 +28,12 @@ enum AnswerBlockKind {
   ask,
   source,
   status,
+  check,
+  term,
+  grid,
+  sizes,
+  quote,
+  more,
 }
 
 /// One slice of a message: Markdown text or a parsed block.
@@ -74,6 +80,13 @@ const Map<String, AnswerBlockKind> _kBlockNames = <String, AnswerBlockKind>{
   'ask': AnswerBlockKind.ask,
   'source': AnswerBlockKind.source,
   'status': AnswerBlockKind.status,
+  'check': AnswerBlockKind.check,
+  'checklist': AnswerBlockKind.check,
+  'term': AnswerBlockKind.term,
+  'grid': AnswerBlockKind.grid,
+  'sizes': AnswerBlockKind.sizes,
+  'quote': AnswerBlockKind.quote,
+  'more': AnswerBlockKind.more,
 };
 
 final RegExp _openRe = RegExp(r'^ {0,3}:::\s*([A-Za-z][\w-]*)[ \t]*(.*)$');
@@ -87,6 +100,18 @@ final RegExp _alertRe = RegExp(
   caseSensitive: false,
 );
 
+/// An HTML `<details>` opening tag at the start of a line, with whatever
+/// follows it on that line (often the `<summary>`).
+final RegExp _detailsOpenRe = RegExp(
+  r'^ {0,3}<details(?:\s[^>]*)?>(.*)$',
+  caseSensitive: false,
+);
+final RegExp _detailsCloseRe = RegExp(r'</details\s*>', caseSensitive: false);
+final RegExp _summaryRe = RegExp(
+  r'^\s*<summary(?:\s[^>]*)?>(.*?)</summary\s*>(.*)$',
+  caseSensitive: false,
+);
+
 bool _isFence(String line) {
   final String t = line.trimLeft();
   return t.startsWith('```') || t.startsWith('~~~');
@@ -96,7 +121,9 @@ bool _isFence(String line) {
 ///
 /// Never throws. A text with no block keeps its exact characters.
 List<AnswerSegment> splitAnswerBlocks(String text) {
-  if (!text.contains(':::') && !text.contains('[!')) {
+  if (!text.contains(':::') &&
+      !text.contains('[!') &&
+      !text.toLowerCase().contains('<details')) {
     return <AnswerSegment>[AnswerTextSegment(text)];
   }
 
@@ -195,6 +222,20 @@ List<AnswerSegment> splitAnswerBlocks(String text) {
       continue;
     }
 
+    final RegExpMatch? details = _detailsOpenRe.firstMatch(line);
+    if (details != null) {
+      sawBlock = true;
+      final (int next, AnswerBlockSegment block) = _readDetails(
+        lines,
+        i,
+        details.group(1)!,
+      );
+      flush();
+      out.add(block);
+      i = next;
+      continue;
+    }
+
     final RegExpMatch? alert = _alertRe.firstMatch(line);
     if (alert != null) {
       sawBlock = true;
@@ -229,6 +270,97 @@ List<AnswerSegment> splitAnswerBlocks(String text) {
   if (!sawBlock) return <AnswerSegment>[AnswerTextSegment(text)];
   return out;
 }
+
+/// Reads an HTML `<details>` block that opens on `lines[start]` and returns
+/// it as a `more` block: the `<summary>` is the title, the rest is the
+/// Markdown body. markdown_widget draws HTML as raw text, so without this the
+/// reader sees the tags and the unparsed `**` of the body.
+///
+/// [rest] is what follows the opening tag on its line. Returns the index of
+/// the first line after the block. Text after `</details>` on the closing
+/// line stays in the body, so nothing is lost.
+(int, AnswerBlockSegment) _readDetails(
+  List<String> lines,
+  int start,
+  String rest,
+) {
+  final List<String> body = <String>[];
+  String title = '';
+  bool seenContent = false;
+  bool closed = false;
+  bool inFence = false;
+  int depth = 0;
+
+  // Returns true when the block closes on this line.
+  bool take(String line) {
+    if (_isFence(line)) {
+      inFence = !inFence;
+      seenContent = true;
+      body.add(line);
+      return false;
+    }
+    if (inFence) {
+      body.add(line);
+      return false;
+    }
+    if (!seenContent) {
+      final RegExpMatch? summary = _summaryRe.firstMatch(line);
+      if (summary != null) {
+        title = _stripTags(summary.group(1)!);
+        seenContent = true;
+        line = summary.group(2)!;
+        if (line.trim().isEmpty) return false;
+      }
+    }
+    if (line.trim().isNotEmpty) seenContent = true;
+    if (_detailsOpenRe.hasMatch(line)) depth++;
+    final RegExpMatch? close = _detailsCloseRe.firstMatch(line);
+    if (close != null) {
+      if (depth > 0) {
+        depth--;
+      } else {
+        final String before = line.substring(0, close.start);
+        final String after = line.substring(close.end);
+        if (before.trim().isNotEmpty) body.add(before);
+        if (after.trim().isNotEmpty) body.add(after);
+        return true;
+      }
+    }
+    body.add(line);
+    return false;
+  }
+
+  int j = start + 1;
+  if (rest.trim().isNotEmpty && take(rest)) {
+    closed = true;
+  }
+  while (!closed && j < lines.length) {
+    closed = take(lines[j]);
+    j++;
+  }
+
+  if (!closed && body.isNotEmpty) {
+    // Still streaming: hide a closing tag or a summary that is half typed.
+    final String last = body.last.trim().toLowerCase();
+    if (last.startsWith('<') &&
+        ('</details>'.startsWith(last) || last.startsWith('<summary'))) {
+      body.removeLast();
+    }
+  }
+
+  return (
+    j,
+    AnswerBlockSegment(
+      kind: AnswerBlockKind.more,
+      arg: title,
+      lines: List<String>.unmodifiable(body),
+      closed: closed,
+    ),
+  );
+}
+
+String _stripTags(String s) =>
+    s.replaceAll(RegExp(r'<[^>]*>'), '').replaceAll('**', '').trim();
 
 // ---------------------------------------------------------------------------
 // steps
@@ -756,11 +888,28 @@ TilesSpec parseTiles(String arg, List<String> lines) {
 // The first line of a record is the title, the rest are `key: value` pairs.
 // `meta` and `chips` may repeat; chips split on commas. `--` on its own line
 // (or a blank line) starts the next card.
+//
+// From the Figma "Bergmomente" / "Ruhemodus" cards:
+// location: Grindelwald, Schweiz        (line with a pin icon)
+// rating: 4,8 · 128 Bewertungen         (line with a star icon)
+// specs: ANC · Adaptiv | sound, 38 Std. Akku | battery   (icon spec tiles)
+// ask: Vergleichen                      (tonal button, sends a follow-up)
+
+/// One spec tile of a card (`specs: ANC · Adaptiv | sound`).
+class CardSpecItem {
+  const CardSpecItem({required this.label, this.icon = ''});
+  final String label;
+  final String icon;
+}
 
 class AnswerCard {
   const AnswerCard({
     required this.title,
     this.subtitle = '',
+    this.location = '',
+    this.rating = '',
+    this.ask = '',
+    this.specs = const <CardSpecItem>[],
     this.image = '',
     this.badge = '',
     this.price = '',
@@ -771,6 +920,17 @@ class AnswerCard {
   });
   final String title;
   final String subtitle;
+
+  /// Place line, drawn with a pin icon.
+  final String location;
+
+  /// Rating line, drawn with a star icon.
+  final String rating;
+
+  /// Label of the tonal second button; a tap sends `label: title` as the
+  /// reader's next message. Empty means no second button.
+  final String ask;
+  final List<CardSpecItem> specs;
   final String image;
   final String badge;
   final String price;
@@ -792,6 +952,9 @@ const List<String> _kCardKeys = <String>[
   'image',
   'badge',
   'subtitle',
+  'location',
+  'rating',
+  'ask',
   'price',
   'url',
   'link',
@@ -801,6 +964,10 @@ const List<String> _kCardKeys = <String>[
 AnswerCard _parseCardRecord(List<String> record) {
   String title = '';
   String subtitle = '';
+  String location = '';
+  String rating = '';
+  String ask = '';
+  final List<CardSpecItem> specs = <CardSpecItem>[];
   String image = '';
   String badge = '';
   String price = '';
@@ -821,7 +988,10 @@ AnswerCard _parseCardRecord(List<String> record) {
     // nothing) is not content: drop it instead of letting it become the
     // title or a meta line.
     if (value.isEmpty &&
-        (_kCardKeys.contains(key) || key == 'chips' || key == 'meta')) {
+        (_kCardKeys.contains(key) ||
+            key == 'chips' ||
+            key == 'meta' ||
+            key == 'specs')) {
       continue;
     }
     if (value.isNotEmpty && _kCardKeys.contains(key)) {
@@ -834,6 +1004,15 @@ AnswerCard _parseCardRecord(List<String> record) {
           continue;
         case 'subtitle':
           subtitle = value;
+          continue;
+        case 'location':
+          location = value;
+          continue;
+        case 'rating':
+          rating = value;
+          continue;
+        case 'ask':
+          ask = value;
           continue;
         case 'price':
           price = value;
@@ -857,6 +1036,14 @@ AnswerCard _parseCardRecord(List<String> record) {
       metas.add(value);
       continue;
     }
+    if (key == 'specs' && value.isNotEmpty) {
+      for (final String item in value.split(',')) {
+        final List<String> p = item.split('|').map((x) => x.trim()).toList();
+        if (p.first.isEmpty) continue;
+        specs.add(CardSpecItem(label: p.first, icon: p.length > 1 ? p[1] : ''));
+      }
+      continue;
+    }
     if (title.isEmpty) {
       title = line.startsWith('- ') ? line.substring(2).trim() : line;
     } else {
@@ -867,6 +1054,10 @@ AnswerCard _parseCardRecord(List<String> record) {
   return AnswerCard(
     title: title,
     subtitle: subtitle,
+    location: location,
+    rating: rating,
+    ask: ask,
+    specs: List<CardSpecItem>.unmodifiable(specs),
     image: image,
     badge: badge,
     price: price,
@@ -913,25 +1104,68 @@ CardsSpec parseCards(String arg, List<String> lines) {
 //
 // ::: ask Welche Rechenbasis möchtest du verstehen?
 // Aktive Parameter
-// BF16 & FP8
+// Mit Wellness | sparkles
+// button: Aktuelle Werte abrufen
 // :::
+//
+// One chip per line, optionally `| icon`. A `button:` line is a filled,
+// full-width action ("Zutatenfoto hinzufügen"); it sends its label too.
 
 class AskSpec {
-  const AskSpec({required this.question, required this.chips});
+  const AskSpec({
+    required this.question,
+    required this.chips,
+    this.chipIcons = const <String>[],
+    this.buttons = const <String>[],
+  });
   final String question;
+
+  /// The chip labels; what a tap sends.
   final List<String> chips;
+
+  /// Icon alias per chip, '' for none. Same length as [chips].
+  final List<String> chipIcons;
+
+  /// Labels of the filled action buttons, drawn above the chips.
+  final List<String> buttons;
+
+  /// Icon alias of chip [i], '' when it has none.
+  String iconAt(int i) => i < chipIcons.length ? chipIcons[i] : '';
 }
 
 AskSpec parseAsk(String arg, List<String> lines) {
   final List<String> chips = <String>[];
+  final List<String> icons = <String>[];
+  final List<String> buttons = <String>[];
   for (final String raw in lines) {
-    final String line = raw.trim();
+    String line = raw.trim();
     if (line.isEmpty) continue;
-    chips.add(line.startsWith('- ') ? line.substring(2).trim() : line);
+    if (line.startsWith('- ')) line = line.substring(2).trim();
+    if (line.toLowerCase().startsWith('button:')) {
+      final String b = line.substring(7).trim();
+      if (b.isNotEmpty) buttons.add(b);
+      continue;
+    }
+    final int bar = line.lastIndexOf('|');
+    String label = line;
+    String icon = '';
+    // Only a single lower-case word after the bar is an icon alias; a chip
+    // like `Mac | Linux` keeps its whole text.
+    if (bar > 0 &&
+        RegExp(r'^[a-z][a-z0-9_-]*$')
+            .hasMatch(line.substring(bar + 1).trim())) {
+      label = line.substring(0, bar).trim();
+      icon = line.substring(bar + 1).trim();
+    }
+    if (label.isEmpty) continue;
+    chips.add(label);
+    icons.add(icon);
   }
   return AskSpec(
     question: arg.trim(),
-    chips: List<String>.unmodifiable(chips.where((c) => c.isNotEmpty)),
+    chips: List<String>.unmodifiable(chips),
+    chipIcons: List<String>.unmodifiable(icons),
+    buttons: List<String>.unmodifiable(buttons),
   );
 }
 
@@ -1141,4 +1375,403 @@ StatusSpec parseStatus(String arg, List<String> lines) {
     moreLabel: moreLabel,
     moreItems: List<StatusItem>.unmodifiable(more),
   );
+}
+
+// ---------------------------------------------------------------------------
+// The blocks below came in with the Figma "KI-Chat" visual library
+// (Standardbausteine and the example chats). Each one is the parse half; the
+// widgets live in `lib/widgets/visual_answer_blocks_more.dart`.
+
+/// Reads a `tag: …` line, the shared small chip above a module title.
+String? _tagLine(String line) =>
+    line.toLowerCase().startsWith('tag:') ? line.substring(4).trim() : null;
+
+// ---------------------------------------------------------------------------
+// check — checklist ("Checkliste", "Für den Antrag bereitlegen")
+//
+// ::: check Für den Antrag bereitlegen
+// [x] Alter Ausweis
+// [ ] Biometrisches Foto
+// :::
+
+class CheckItem {
+  const CheckItem({required this.label, required this.done});
+  final String label;
+  final bool done;
+}
+
+class CheckSpec {
+  const CheckSpec({required this.title, required this.items, this.tag = ''});
+  final String title;
+  final List<CheckItem> items;
+  final String tag;
+}
+
+final RegExp _checkRe = RegExp(r'^(?:[-*+]\s+)?\[([ xX✓])\]\s*(.*)$');
+
+CheckSpec parseCheck(String arg, List<String> lines) {
+  final List<CheckItem> items = <CheckItem>[];
+  String tag = '';
+  for (final String raw in lines) {
+    final String line = raw.trim();
+    if (line.isEmpty) continue;
+    final String? t = _tagLine(line);
+    if (t != null) {
+      tag = t;
+      continue;
+    }
+    final RegExpMatch? m = _checkRe.firstMatch(line);
+    if (m != null) {
+      final String label = m.group(2)!.trim();
+      if (label.isEmpty) continue;
+      items.add(CheckItem(label: label, done: m.group(1)!.trim().isNotEmpty));
+      continue;
+    }
+    final String label = line.startsWith('- ')
+        ? line.substring(2).trim()
+        : line;
+    if (label.isNotEmpty) items.add(CheckItem(label: label, done: false));
+  }
+  return CheckSpec(
+    title: arg.trim(),
+    items: List<CheckItem>.unmodifiable(items),
+    tag: tag,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// term — a word, acronym or etymology shown big ("ARD & Degeto", "Bot ←
+// Robot")
+//
+// ::: term Zwei Namen, ein Zusammenhang
+// ARD | Arbeitsgemeinschaft der öffentlich-rechtlichen Rundfunkanstalten
+// De·ge·to | **De**utsche **Ge**sellschaft für **To**n und Bild
+// note: ARD → Degeto Film → Filme & Serien
+// :::
+//
+// The argument is the small tag chip. One entry per line: term | meaning
+// (Markdown, so the source letters can be bold). `note:` is the small line
+// under the entries.
+
+class TermEntry {
+  const TermEntry({required this.term, this.meaning = ''});
+  final String term;
+  final String meaning;
+}
+
+class TermSpec {
+  const TermSpec({required this.tag, required this.entries, this.note = ''});
+  final String tag;
+  final List<TermEntry> entries;
+  final String note;
+}
+
+TermSpec parseTerm(String arg, List<String> lines) {
+  final List<TermEntry> entries = <TermEntry>[];
+  String note = '';
+  for (final String raw in lines) {
+    final String line = raw.trim();
+    if (line.isEmpty) continue;
+    if (line.toLowerCase().startsWith('note:')) {
+      note = line.substring(5).trim();
+      continue;
+    }
+    final int bar = line.indexOf('|');
+    final String term = stripLabelEmphasis(
+      bar < 0 ? line : line.substring(0, bar),
+    );
+    final String meaning = bar < 0 ? '' : line.substring(bar + 1).trim();
+    if (term.isEmpty) continue;
+    entries.add(TermEntry(term: term, meaning: meaning));
+  }
+  return TermSpec(
+    tag: arg.trim(),
+    entries: List<TermEntry>.unmodifiable(entries),
+    note: note,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// grid — a grid of small cells, some marked ("Zucker im Kalender": door 1-24,
+// the doors on the list marked; "Dritte Waffe": slots 1-3)
+//
+// ::: grid 11 von 24 laut bisheriger Liste
+// 1* 2 3 4 5* 6*
+// 7 8 9 10 11 12*
+// * In der bisherigen Liste markiert
+// - Nicht geprüft
+// :::
+//
+// One row per line, cells split on spaces. A cell ending in `*` is marked
+// (dashed accent outline), one ending in `+` is filled (accent tint). A line
+// that starts with `* `, `+ ` or `- ` is a legend entry for that kind.
+
+enum GridCellKind { plain, marked, filled }
+
+class GridCell {
+  const GridCell({required this.label, required this.kind});
+  final String label;
+  final GridCellKind kind;
+}
+
+class GridLegend {
+  const GridLegend({required this.kind, required this.label});
+  final GridCellKind kind;
+  final String label;
+}
+
+class GridSpec {
+  const GridSpec({
+    required this.title,
+    required this.rows,
+    this.legend = const <GridLegend>[],
+    this.tag = '',
+  });
+  final String title;
+  final List<List<GridCell>> rows;
+  final List<GridLegend> legend;
+  final String tag;
+
+  /// The widest row; every row is laid out on this many columns.
+  int get columns => rows.fold<int>(
+    0,
+    (int m, List<GridCell> r) => r.length > m ? r.length : m,
+  );
+}
+
+GridCellKind _gridKind(String marker) => switch (marker) {
+  '*' => GridCellKind.marked,
+  '+' => GridCellKind.filled,
+  _ => GridCellKind.plain,
+};
+
+GridSpec parseGrid(String arg, List<String> lines) {
+  final List<List<GridCell>> rows = <List<GridCell>>[];
+  final List<GridLegend> legend = <GridLegend>[];
+  String tag = '';
+  for (final String raw in lines) {
+    final String line = raw.trim();
+    if (line.isEmpty) continue;
+    final String? t = _tagLine(line);
+    if (t != null) {
+      tag = t;
+      continue;
+    }
+    if (line.length > 2 &&
+        (line.startsWith('* ') ||
+            line.startsWith('+ ') ||
+            line.startsWith('- '))) {
+      legend.add(
+        GridLegend(kind: _gridKind(line[0]), label: line.substring(2).trim()),
+      );
+      continue;
+    }
+    final List<GridCell> row = <GridCell>[];
+    for (final String token in line.split(RegExp(r'\s+'))) {
+      if (token.isEmpty) continue;
+      final String last = token[token.length - 1];
+      final bool tagged = (last == '*' || last == '+') && token.length > 1;
+      row.add(
+        GridCell(
+          label: tagged ? token.substring(0, token.length - 1) : token,
+          kind: tagged ? _gridKind(last) : GridCellKind.plain,
+        ),
+      );
+    }
+    // A row wider than a phone can hold is not a grid row; 12 is the cap.
+    if (row.isNotEmpty) rows.add(row.take(12).toList(growable: false));
+  }
+  return GridSpec(
+    title: arg.trim(),
+    rows: List<List<GridCell>>.unmodifiable(rows),
+    legend: List<GridLegend>.unmodifiable(legend),
+    tag: tag,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// sizes — physical sizes side by side as circles ("Kleine Rauchmelder")
+//
+// ::: sizes Optional title
+// Normal | 12 cm | smoke
+// Mini | 7 cm
+// ! Kleiner heißt nicht automatisch gleich sicher.
+// :::
+//
+// label | size (the first number sets the circle diameter, the text is shown
+// under the label) | optional icon. `! ` is the note line.
+
+class SizeItem {
+  const SizeItem({
+    required this.label,
+    required this.valueText,
+    required this.value,
+    this.icon = '',
+  });
+  final String label;
+  final String valueText;
+  final double? value;
+  final String icon;
+}
+
+class SizesSpec {
+  const SizesSpec({
+    required this.title,
+    required this.items,
+    this.note = '',
+    this.tag = '',
+  });
+  final String title;
+  final List<SizeItem> items;
+  final String note;
+  final String tag;
+
+  /// Diameter of item [i] relative to the biggest, 0.25..1.
+  double fraction(int i) {
+    final double max = items.fold<double>(
+      0,
+      (double m, SizeItem it) => (it.value ?? 0) > m ? (it.value ?? 0) : m,
+    );
+    final double? v = items[i].value;
+    if (max <= 0 || v == null || v <= 0) return 1;
+    return (v / max).clamp(0.25, 1.0).toDouble();
+  }
+}
+
+SizesSpec parseSizes(String arg, List<String> lines) {
+  final List<SizeItem> items = <SizeItem>[];
+  String note = '';
+  String tag = '';
+  for (final String raw in lines) {
+    final String line = raw.trim();
+    if (line.isEmpty) continue;
+    if (line.startsWith('! ')) {
+      note = line.substring(2).trim();
+      continue;
+    }
+    final String? t = _tagLine(line);
+    if (t != null) {
+      tag = t;
+      continue;
+    }
+    final List<String> p = line.split('|').map((x) => x.trim()).toList();
+    if (p.first.isEmpty) continue;
+    final String valueText = p.length > 1 ? p[1] : '';
+    items.add(
+      SizeItem(
+        label: p.first,
+        valueText: valueText,
+        value: parseLooseNumber(valueText),
+        icon: p.length > 2 ? p[2] : '',
+      ),
+    );
+  }
+  return SizesSpec(
+    title: arg.trim(),
+    items: List<SizeItem>.unmodifiable(items.take(4)),
+    note: note,
+    tag: tag,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// quote — a price quote with change and a small line chart ("PayPal
+// verstehen": NASDAQ: PYPL)
+//
+// ::: quote NASDAQ: PYPL
+// price: 56,70 USD
+// change: -0,46 USD (-0,80 %)
+// note: Schlusskurs · 16.10.2026
+// points: 57.16, 56.9, 57.0, 56.4, 56.7
+// labels: 12.10, 13.10, 14.10, 15.10, 16.10
+// :::
+
+class QuoteSpec {
+  const QuoteSpec({
+    required this.symbol,
+    this.price = '',
+    this.change = '',
+    this.note = '',
+    this.points = const <double>[],
+    this.labels = const <String>[],
+  });
+  final String symbol;
+  final String price;
+  final String change;
+  final String note;
+  final List<double> points;
+  final List<String> labels;
+
+  /// -1 down, 1 up, 0 flat or unknown, from the sign of [change].
+  int get direction {
+    final String c = change.trim();
+    if (c.isEmpty) return 0;
+    if (c.startsWith('-') || c.startsWith('−') || c.startsWith('–')) return -1;
+    final double? v = parseLooseNumber(c);
+    if (v == null || v == 0) return 0;
+    return 1;
+  }
+}
+
+QuoteSpec parseQuote(String arg, List<String> lines) {
+  String price = '';
+  String change = '';
+  String note = '';
+  final List<double> points = <double>[];
+  final List<String> labels = <String>[];
+  for (final String raw in lines) {
+    final String line = raw.trim();
+    final int colon = line.indexOf(':');
+    if (colon <= 0) continue;
+    final String key = line.substring(0, colon).trim().toLowerCase();
+    final String value = line.substring(colon + 1).trim();
+    switch (key) {
+      case 'price':
+        price = value;
+      case 'change':
+        change = value;
+      case 'note':
+        note = value;
+      case 'points':
+        // Split on `;`, `,` followed by a space, or whitespace — never on a
+        // decimal comma inside a number (`56,7`).
+        for (final String n in value.split(RegExp(r';|,\s+|\s+'))) {
+          final double? v = parseLooseNumber(n);
+          if (v != null) points.add(v);
+        }
+      case 'labels':
+        labels.addAll(
+          value
+              .split(RegExp(r';|,\s*'))
+              .map((x) => x.trim())
+              .where((x) => x.isNotEmpty),
+        );
+    }
+  }
+  return QuoteSpec(
+    symbol: arg.trim(),
+    price: price,
+    change: change,
+    note: note,
+    points: List<double>.unmodifiable(points.take(120)),
+    labels: List<String>.unmodifiable(labels.take(8)),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// more — a collapsed section the reader can open ("Auf dem Handy fehlt
+// etwas?")
+//
+// ::: more Auf dem Handy fehlt etwas?
+// Markdown body, shown when opened.
+// :::
+
+class MoreSpec {
+  const MoreSpec({required this.title, required this.body});
+  final String title;
+  final String body;
+}
+
+MoreSpec parseMore(String arg, List<String> lines) {
+  return MoreSpec(title: arg.trim(), body: lines.join('\n').trim());
 }
