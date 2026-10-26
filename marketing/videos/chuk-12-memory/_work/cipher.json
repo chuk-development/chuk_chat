@@ -1,0 +1,92 @@
+{
+ "user_id": "f7582df9-db4c-4859-80f0-d0f47780fcb1",
+ "workspace": {
+  "name": "Tax helper",
+  "description": "My German tax return: receipts, deadlines, deductions.",
+  "prompt": "Help me with my German tax return. Ask before you assume. Keep answers short."
+ },
+ "memory": {
+  "old": "- Lives in Hamburg\n- Files taxes with ELSTER",
+  "new": "- Self-employed since 2024",
+  "text": "- Lives in Hamburg\n- Files taxes with ELSTER\n- Self-employed since 2024"
+ },
+ "workspaces": [
+  {
+   "id": "8035b46c-5dcf-43be-8231-664a012e0a44",
+   "envelope": {
+    "v": "1",
+    "kv": 1,
+    "nonce": "vL3UzO13ofclAi3F",
+    "ciphertext": "aetEc3Bn069n3CArX2s1muuz4x/YgDTKqAXEyvFi2Xknf4s/xKL7Aorc/9tk5AabTCxlswyL7m1X52uS15xZsJpzJN+hCny+d/hbAniyIfb0GXRA6A3hN05UUcd2RU8ifwqkIMqEzIMjXtX6Sa2emdiFYV5MPVG7Utl/qZRADDSQFOlLI2V1U/hP83acF36fYdQAGyPbDx+cif1LdxjZt+qifpWPBp0puXurZh+JbH9tlnuSq5RVrih5/ZPWbCfnWmUUuSzJYeM9gwt6Ihac3tLZmtYTGFmkA+s92yPvPPZ/WAKMx0Wjxqt23DsBVOc/zWFyyG1Py6MqtLc/LkUzsBcqk+YMjPA=",
+    "mac": "t+6IEh8ULd4suBSPmGGomQ=="
+   },
+   "text": "{\"v\":\"1\",\"kv\":1,\"nonce\":\"vL3UzO13ofclAi3F\",\"ciphertext\":\"aetEc3Bn069n3CArX2s1muuz4x/YgDTKqAXEyvFi2Xknf4s/xKL7Aorc/9tk5AabTCxlswyL7m1X52uS15xZsJpzJN+hCny+d/hbAniyIfb0GXRA6A3hN05UUcd2RU8ifwqkIMqEzIMjXtX6Sa2emdiFYV5MPVG7Utl/qZRADDSQFOlLI2V1U/hP83acF36fYdQAGyPbDx+cif1LdxjZt+qifpWPBp0puXurZh+JbH9tlnuSq5RVrih5/ZPWbCfnWmUUuSzJYeM9gwt6Ihac3tLZmtYTGFmkA+s92yPvPPZ/WAKMx0Wjxqt23DsBVOc/zWFyyG1Py6MqtLc/LkUzsBcqk+YMjPA=\",\"mac\":\"t+6IEh8ULd4suBSPmGGomQ==\"}",
+   "plain_len": 263,
+   "updated_at": "2026-10-26 09:41:12+00"
+  },
+  {
+   "id": "4f221ec5-5e4e-4262-ba24-03e8cd7cf710",
+   "envelope": {
+    "v": "1",
+    "kv": 1,
+    "nonce": "52+J0BZOZNWr1B3G",
+    "ciphertext": "1FwikR3OkbGVl4MRDI0uR3YQpNhD9e5o0AY8C/IDgNnwTLyhcFUTwcbPhI6OkXEBqQGrv6DHATPe73dwSnXXHzJnR4+VQd62FaPgFh3SuuoA94BaDaqcrrGmnJx5UDpCueeKipL12tKh0s/3N8/8xE2g5k/PBLVaDNOlFbM5m3dQuOVOQSBRBtQvodS4yoOxq86hghIRgKRvaIhXiRzjIP2BwUscV7/7EtLDCDNUH/5cbxY7/w==",
+    "mac": "56vQhxdbNCe+q463/cpbhQ=="
+   },
+   "text": "{\"v\":\"1\",\"kv\":1,\"nonce\":\"52+J0BZOZNWr1B3G\",\"ciphertext\":\"1FwikR3OkbGVl4MRDI0uR3YQpNhD9e5o0AY8C/IDgNnwTLyhcFUTwcbPhI6OkXEBqQGrv6DHATPe73dwSnXXHzJnR4+VQd62FaPgFh3SuuoA94BaDaqcrrGmnJx5UDpCueeKipL12tKh0s/3N8/8xE2g5k/PBLVaDNOlFbM5m3dQuOVOQSBRBtQvodS4yoOxq86hghIRgKRvaIhXiRzjIP2BwUscV7/7EtLDCDNUH/5cbxY7/w==\",\"mac\":\"56vQhxdbNCe+q463/cpbhQ==\"}",
+   "plain_len": 181,
+   "updated_at": "2026-10-21 18:07:40+00"
+  },
+  {
+   "id": "ae30cfad-9a43-4f6a-85a7-a96dbc6f4ba0",
+   "envelope": {
+    "v": "1",
+    "kv": 1,
+    "nonce": "iU0mE7oVEbSM6DK4",
+    "ciphertext": "CQmm7KBfyGK/Brdglm6DEVL1qBCEEEXir18irik3+q6C79p6Awpb3U3Qhzoh2bW9kI+hlhLMVwBV38fdiFQ1vzUMWU1RHoDCqUj8sdbPtoI8DDtT4o5xSzk1CvKYerkuHZqk04mvMHJ9/dgzoh81TKLWeElP8fOmeF2GnWsdCtGwc2n1QcM4wQ==",
+    "mac": "pOTzWpm18c89d/J5rv0c4A=="
+   },
+   "text": "{\"v\":\"1\",\"kv\":1,\"nonce\":\"iU0mE7oVEbSM6DK4\",\"ciphertext\":\"CQmm7KBfyGK/Brdglm6DEVL1qBCEEEXir18irik3+q6C79p6Awpb3U3Qhzoh2bW9kI+hlhLMVwBV38fdiFQ1vzUMWU1RHoDCqUj8sdbPtoI8DDtT4o5xSzk1CvKYerkuHZqk04mvMHJ9/dgzoh81TKLWeElP8fOmeF2GnWsdCtGwc2n1QcM4wQ==\",\"mac\":\"pOTzWpm18c89d/J5rv0c4A==\"}",
+   "plain_len": 136,
+   "updated_at": "2026-10-09 11:52:03+00"
+  }
+ ],
+ "prefs": [
+  {
+   "user_id": "f7582df9-db4c-4859-80f0-d0f47780fcb1",
+   "envelope": {
+    "v": "1",
+    "kv": 1,
+    "nonce": "vsRaTeJWzsvdFQzG",
+    "ciphertext": "L4sH6pv9+gGZY2Wbk1hWg1asMzsrOO0TkgyuRJw3OyV8THDA1KHi90OrCSdXpFl/2n0CTiLamXENmFqAr5GCpb1aHQB8S+s=",
+    "mac": "7C0VQTvwLznEFQw6/kfo9w=="
+   },
+   "text": "{\"v\":\"1\",\"kv\":1,\"nonce\":\"vsRaTeJWzsvdFQzG\",\"ciphertext\":\"L4sH6pv9+gGZY2Wbk1hWg1asMzsrOO0TkgyuRJw3OyV8THDA1KHi90OrCSdXpFl/2n0CTiLamXENmFqAr5GCpb1aHQB8S+s=\",\"mac\":\"7C0VQTvwLznEFQw6/kfo9w==\"}",
+   "updated_at": "2026-10-26 09:42:30+00"
+  },
+  {
+   "user_id": "76f950f1-df52-468d-a9fc-62165af67d6d",
+   "envelope": {
+    "v": "1",
+    "kv": 1,
+    "nonce": "ePQ8oBijDguytMFP",
+    "ciphertext": "CieSxzglk3Y2ff/3A23dg/WMYD+MxetRONzxB3BHwnEehJF4ylEfrIOEr3wNCFXg0tI1LD2v5G6YFnGqGeEKw3M1CnGkuoP4bBtrI6qAMWAPSwxy739ikV93NGtDKzjF9zY7VRK/EmkZ28FkomcU/o39+SGqS/srgSpgk2MTgkm/MWJEs4eEZ+c7Eom5JQ==",
+    "mac": "sNCkyGkglfbHfwsOU9dkoA=="
+   },
+   "text": "{\"v\":\"1\",\"kv\":1,\"nonce\":\"ePQ8oBijDguytMFP\",\"ciphertext\":\"CieSxzglk3Y2ff/3A23dg/WMYD+MxetRONzxB3BHwnEehJF4ylEfrIOEr3wNCFXg0tI1LD2v5G6YFnGqGeEKw3M1CnGkuoP4bBtrI6qAMWAPSwxy739ikV93NGtDKzjF9zY7VRK/EmkZ28FkomcU/o39+SGqS/srgSpgk2MTgkm/MWJEs4eEZ+c7Eom5JQ==\",\"mac\":\"sNCkyGkglfbHfwsOU9dkoA==\"}",
+   "updated_at": "2026-10-25 22:14:09+00"
+  },
+  {
+   "user_id": "9ab0d8d3-888a-4003-a8aa-6b9a6fbe77e6",
+   "envelope": {
+    "v": "1",
+    "kv": 1,
+    "nonce": "acljkXGviK0aCOi/",
+    "ciphertext": "bCsCpi3Vi+Fvh+71IZ6L7/kkEhfPuw6r92K8+hdHoB8DwWPXUbzmIPARTKtOxvBRgarfEjHCatmxT2JW",
+    "mac": "YpDYwlLXruz/3FYKnqOSZA=="
+   },
+   "text": "{\"v\":\"1\",\"kv\":1,\"nonce\":\"acljkXGviK0aCOi/\",\"ciphertext\":\"bCsCpi3Vi+Fvh+71IZ6L7/kkEhfPuw6r92K8+hdHoB8DwWPXUbzmIPARTKtOxvBRgarfEjHCatmxT2JW\",\"mac\":\"YpDYwlLXruz/3FYKnqOSZA==\"}",
+   "updated_at": "2026-10-24 07:31:55+00"
+  }
+ ]
+}
