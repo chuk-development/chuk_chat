@@ -109,6 +109,8 @@ class OfflineResult:
     summarizer: str
     context_length: int
     cache_rows_at_start: int
+    fire: bool = False
+    automation_window: str = "auto"
     passes: list[PassResult] = field(default_factory=list)
     profile: str = ""
 
@@ -300,6 +302,8 @@ def replay(
     profile_top: int = 25,
     work_db: str | Path | None = None,
     rt: dict[str, Any] | None = None,
+    fire: bool = False,
+    automation_window: bool | None = None,
 ) -> OfflineResult:
     """Run the prepare pipeline ``passes`` times on a fresh working copy.
 
@@ -311,6 +315,14 @@ def replay(
 
     ``summarizer``: ``stub`` (counts aux calls, answers at once or after
     ``aux_delay_ms``) or ``none`` (tier 1 only, like a mock model).
+
+    ``fire`` simulates the next fired automation run (bead chuk_chat-kq1g):
+    the session's newest fired prompt (or a stand-in) and a clock row are
+    added one hour after the last stored row, and the ladder gets the stored
+    timestamps and the turn start, as the loop passes them (so the idle rule
+    acts as in production). ``automation_window`` is the ladder's switch of
+    the same name: ``None`` decides from the prompt (production), ``False``
+    forces the full ladder (the "before" number).
     """
     if summarizer not in ("stub", "none"):
         raise ValueError("summarizer must be 'stub' or 'none'")
@@ -334,6 +346,10 @@ def replay(
         summarizer="none" if summarizer == "none" else f"stub(delay {aux_delay_ms:g}ms)",
         context_length=int(config.context_length),
         cache_rows_at_start=cache_rows,
+        fire=fire,
+        automation_window=(
+            "auto" if automation_window is None else ("on" if automation_window else "off")
+        ),
     )
 
     profiler = cProfile.Profile() if profile else None
@@ -349,6 +365,8 @@ def replay(
                 skills_root=skills_root,
                 stub=StubSummarizer(aux_delay_ms) if summarizer == "stub" else None,
                 profiler=profiler if index == 1 else None,
+                fire=fire,
+                automation_window=automation_window,
             )
         )
     if profiler is not None:
@@ -357,6 +375,30 @@ def replay(
         stats.sort_stats("cumulative").print_stats(profile_top)
         result.profile = buffer.getvalue()
     return result
+
+
+#: A fired prompt's first line (``automations.fired_prompt``).
+FIRED_HEAD = "[automation "
+
+
+def simulated_fired_turn(messages: list[dict]) -> list[dict]:
+    """The prompt and clock row of the next fired run: the session's newest
+    fired prompt again, or a stand-in when the session has none."""
+    prompt = next(
+        (
+            m["content"]
+            for m in reversed(messages)
+            if m.get("role") == "user"
+            and isinstance(m.get("content"), str)
+            and m["content"].startswith(FIRED_HEAD)
+            and " fired: " in m["content"].split("\n", 1)[0]
+        ),
+        "[automation bench fired: bench]\ncheck inbox",
+    )
+    return [
+        {"role": "user", "content": prompt},
+        {"role": "user", "content": "[clock] Now: (bench) one hour after the last stored row."},
+    ]
 
 
 def _timed(steps: dict[str, float], name: str, fn: Callable[[], Any]) -> Any:
@@ -377,6 +419,8 @@ def _one_pass(
     skills_root: str | Path | None,
     stub: StubSummarizer | None,
     profiler: cProfile.Profile | None,
+    fire: bool = False,
+    automation_window: bool | None = None,
 ) -> PassResult:
     out = PassResult(index=index)
     steps = out.steps
@@ -400,22 +444,37 @@ def _one_pass(
         # runs; an older tree has no such attribute and skips it.
         if hasattr(ladder, "summary_store"):
             ladder.summary_store = store
+        if automation_window is not None and hasattr(ladder, "automation_window"):
+            ladder.automation_window = automation_window
 
         # A tree from before the summary cache takes no session_id.
-        takes_session = "session_id" in inspect.signature(ladder.prepare).parameters
+        params = inspect.signature(ladder.prepare).parameters
+        takes_session = "session_id" in params
+        takes_turn = "turn_start" in params and "timestamps" in params
+        turn: dict[str, Any] = {}
 
         def run_ladder(messages: list[dict]) -> list[dict]:
+            kwargs: dict[str, Any] = {}
             if takes_session:
-                return ladder.prepare(messages, session_id=session_id)
-            return ladder.prepare(messages)
+                kwargs["session_id"] = session_id
+            if fire and takes_turn:
+                kwargs["timestamps"] = turn["timestamps"]
+                kwargs["turn_start"] = turn["start"]
+            return ladder.prepare(messages, **kwargs)
+
+        def load_history() -> list[dict]:
+            rows = store.get_conversation(session_id)
+            messages = [m.content for m in rows]
+            if fire:
+                last = float(rows[-1].created_at) if rows else time.time()
+                turn["start"] = len(messages)
+                turn["timestamps"] = [float(m.created_at) for m in rows] + [last + 3600, last + 3600]
+                messages = messages + simulated_fired_turn(messages)
+            return messages
 
         outbound: list[dict] = []
         for round_no in range(1, rounds + 1):
-            messages = _timed(
-                steps,
-                "history_load",
-                lambda: [m.content for m in store.get_conversation(session_id)],
-            )
+            messages = _timed(steps, "history_load", load_history)
             messages = _timed(
                 steps,
                 "prompt_upgrade",
@@ -449,6 +508,8 @@ def _one_pass(
                     "tokens_before": int(getattr(stats, "tokens_before", 0)),
                     "tokens_after": int(getattr(stats, "tokens_after", 0)),
                     "skipped_reason": getattr(stats, "skipped_reason", None),
+                    "automation_window": bool(getattr(stats, "automation_window", False)),
+                    "automation_runs_omitted": int(getattr(stats, "automation_runs_omitted", 0)),
                 }
             )
         out.prompt_tokens_est = int(
@@ -493,6 +554,10 @@ def render_text(result: OfflineResult, baseline: dict[str, Any] | None = None) -
         f"{result.context_length}  cached summaries at start {result.cache_rows_at_start}"
     )
     out.append(
+        f"simulated fired run {'yes' if result.fire else 'no'}  automation window "
+        f"{result.automation_window}"
+    )
+    out.append(
         f"passes {len(result.passes)} x rounds {len(result.passes[0].rounds) if result.passes else 0}"
         "  (pass = one new run, fresh ladder; times in ms)"
     )
@@ -528,6 +593,11 @@ def render_text(result: OfflineResult, baseline: dict[str, Any] | None = None) -
             f"r{r['round']} tier {r['tier']} pressure {r['pressure']:.2f} "
             f"tokens {r['tokens_before']}->{r['tokens_after']}"
             + (f" ({r['skipped_reason']})" if r.get("skipped_reason") else "")
+            + (
+                f" (automation window, {r.get('automation_runs_omitted', 0)} earlier runs left out)"
+                if r.get("automation_window")
+                else ""
+            )
             for r in p.rounds
         )
         out.append(
@@ -539,6 +609,15 @@ def render_text(result: OfflineResult, baseline: dict[str, Any] | None = None) -
                 else ""
             )
         )
+    if baseline and baseline.get("passes"):
+        base_tok = [int(p.get("prompt_tokens_est") or 0) for p in baseline["passes"]]
+        now_tok = [p.prompt_tokens_est for p in result.passes]
+        base_p50 = percentile(base_tok, 50)
+        now_p50 = percentile(now_tok, 50)
+        line = f"  outbound tokens p50 {now_p50:.0f} vs baseline {base_p50:.0f}"
+        if base_p50:
+            line += f" ({(now_p50 - base_p50) / base_p50 * 100:+.0f}%)"
+        out.append(line)
     if any(p.summarizer_calls for p in result.passes):
         out.append(
             "  note: each aux summarizer call is a real model call in a live turn;"

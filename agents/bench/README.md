@@ -11,6 +11,9 @@ The tool has four modes:
   model. It times each step.
 - `live` sends real prompts to a scratch session. It costs credits. It runs
   only with an explicit flag.
+- `prompt-breakdown` shows where the base prompt of a session goes (system
+  prompt by section, each tool definition, history) and how much of a request
+  the provider prefix cache can reuse on the next task. It calls no model.
 
 ## Safety rules
 
@@ -55,9 +58,18 @@ journalctl --user -u agents-manager --since today | uv run agents-bench report -
 # Replay prepare for one session: 3 runs, one model request each.
 uv run agents-bench offline --session local:brisk-heron:2:116636868
 
+# Base prompt by section and tool, and the identical prefix of 3 tasks.
+# --tool-turns: each task calls list_dir first, so the old tool traffic shows.
+uv run agents-bench prompt-breakdown --session local:Mail:14:138509541 --turns 3 --tool-turns
+
 # Save a result, change the runtime, then compare.
 uv run agents-bench offline --session KEY --out ../../_scratch/bench/before.json
 uv run agents-bench offline --session KEY --baseline ../../_scratch/bench/before.json
+
+# Simulate the next fired automation run (timestamps + turn start as the
+# loop passes them). --automation-window off = the full ladder ("before").
+uv run agents-bench offline --session KEY --fire --automation-window off
+uv run agents-bench offline --session KEY --fire
 
 # Profile the ladder of pass 1.
 uv run agents-bench offline --session KEY --passes 1 --profile
@@ -136,3 +148,27 @@ Session `local:brisk-heron:2:116636868`, 458 model rows (0.88 MB).
 
 The runtime itself needs about 0.1 s. The rest of the 100 to 180 s prepare
 is the aux model summary of the middle of the history.
+
+## Prompt breakdown: how to read it
+
+`prompt-breakdown` builds the real runtime on a scratch database in
+`_scratch/bench/breakdown/`, copies the session rows into it, and runs short
+tasks against a recording client. It serializes each request the way a chat
+template renders it: the `tools` array first, then the messages. Fireworks
+reuses only an identical prefix, so the shared prefix of two requests is the
+most the next request can read from the cache. Token figures are the runtime
+estimate (4 characters per token); `o200k_base` counts within about 10 %.
+
+Results on the 2026-10-27 snapshot (bead chuk_chat-0qlc):
+
+- Base prompt (system prompt + declared tools) is about 6.5k to 7k tokens,
+  not 20k. The 20k figure is from runs before the tools went behind
+  `search_tools`. Mail sessions add about 0.65k for the mail tools and
+  0.36k for `herenow_publish`, which the offline runtime does not wire.
+- Between two tasks the prefix is identical up to the previous task's
+  prompt (99.5 % of the request). The context ladder then drops the tool
+  traffic of the earlier task (`old_task_tools_drop_tokens`), so the cache
+  loses that task's tool rows and answer once. A refreshed summary moves
+  everything after the head.
+- The cache misses between hourly automation runs are the provider cache
+  timing out, not a changed prefix.

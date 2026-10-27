@@ -488,6 +488,15 @@ class LadderConfig:
     browser_keep: int = 3
     browser_fold_step: int = 5
 
+    # A fired automation run (bead chuk_chat-kq1g) does not get the whole
+    # chat: it gets the system prompt, the cached summary (never a new aux
+    # call), the newest conversation turns that fit this many tokens (at most
+    # ``automation_history_turns`` of them, tool traffic left out) and its own
+    # turn. Earlier automation runs are left out (bead chuk_chat-n69s): their
+    # results are out of date and invite a repeat instead of a new check.
+    automation_history_tokens: int = 6_000
+    automation_history_turns: int = 4
+
     enabled: bool = True
 
     @property
@@ -519,6 +528,10 @@ class CompressionStats:
     blocking_aux: bool = False
     #: Messages whose tool traffic the idle rule dropped.
     idle_dropped: int = 0
+    #: The pass built the short window of a fired automation run.
+    automation_window: bool = False
+    #: Earlier automation runs that window left out.
+    automation_runs_omitted: int = 0
 
     @property
     def saved(self) -> int:
@@ -650,6 +663,84 @@ def _stale_marks(
         out[i] = replacement
         changed += 1
     return out, changed
+
+
+#: Rows the runtime injects with ``role: "user"``; none of them starts a turn.
+_INJECTED_MARKS = (RECALL_MARK, CLOCK_MARK, SUMMARY_PREFIX)
+
+
+def automation_runs_note(count: int) -> str:
+    """The line that stands in for the earlier automation runs a fired
+    run's window leaves out."""
+    runs = "run" if count == 1 else "runs"
+    return (
+        f"[{count} earlier automation {runs} of this chat are not shown. "
+        "Their results are out of date. Do not repeat them: get the current "
+        "state now.]"
+    )
+
+
+def _is_injected(message: dict) -> bool:
+    content = message.get("content")
+    return message.get("role") == "user" and isinstance(content, str) and content.startswith(
+        _INJECTED_MARKS
+    )
+
+
+def _is_fired_prompt(message: dict) -> bool:
+    """True for the prompt of a fired automation run
+    (``automations.fired_prompt``: ``[automation <id> fired: <name>]``)."""
+    content = message.get("content")
+    if message.get("role") != "user" or not isinstance(content, str):
+        return False
+    if not content.startswith(AUTOMATION_MARK):
+        return False
+    first = content.split("\n", 1)[0]
+    return " fired: " in first and first.endswith("]")
+
+
+def _is_turn_start(message: dict) -> bool:
+    return message.get("role") == "user" and not _is_injected(message)
+
+
+def _current_turn_start(messages: list[dict]) -> int:
+    """Index of the newest prompt (a ``user`` row that is no injected row);
+    0 when there is none. The loop passes it; a caller without it gets this."""
+    for i in range(len(messages) - 1, -1, -1):
+        if _is_turn_start(messages[i]):
+            return i
+    return 0
+
+
+def _turn_spans(messages: list[dict], start: int, end: int) -> list[list[int]]:
+    """``messages[start:end]`` cut into turns: each begins at a prompt and
+    holds every row up to the next one. Rows before the first prompt form a
+    turn of their own."""
+    spans: list[list[int]] = []
+    for i in range(start, end):
+        if not spans or _is_turn_start(messages[i]):
+            spans.append([i])
+        else:
+            spans[-1].append(i)
+    return spans
+
+
+def _conversation_rows(messages: list[dict], span: list[int]) -> list[dict]:
+    """The conversation of one earlier turn: the prompt and the assistant's
+    text answers. Tool calls, tool results, reasoning and injected rows stay
+    out, so no call can lose its result."""
+    rows: list[dict] = []
+    for i in span:
+        message = messages[i]
+        role = message.get("role")
+        if role == "user":
+            if not _is_injected(message):
+                rows.append(message)
+        elif role == "assistant":
+            content = message.get("content")
+            if isinstance(content, str) and content.strip():
+                rows.append({"role": "assistant", "content": content})
+    return rows
 
 
 def _is_browser_result(message: dict) -> bool:
@@ -918,6 +1009,14 @@ class ContextLadder:
     #: made off the turn path; unset, the ladder blocks on :attr:`summarizer`
     #: exactly as before. The job closes what it built (``close()``).
     summarizer_factory: Callable[[], Summarizer] | None = None
+    #: The short history window of a fired automation run (bead
+    #: chuk_chat-kq1g, :meth:`_automation_window`). ``None`` (the default)
+    #: decides per pass: the window is used when the current turn's prompt
+    #: is a fired automation prompt (``automations.fired_prompt``, which the
+    #: host writes for every fired schedule, watcher and mail trigger). A
+    #: user's chat turn never starts with it. ``False`` forces the full
+    #: ladder, ``True`` the window.
+    automation_window: bool | None = None
 
     _summary: str | None = field(default=None, init=False, repr=False)
     _summarized_upto: int = field(default=0, init=False, repr=False)
@@ -992,9 +1091,115 @@ class ContextLadder:
         if session_id is not None and session_id != self._session_id:
             self._bind_session(session_id)
         scrubbed = scrub_history(messages)
-        cut = idle_cut(scrubbed, timestamps, self.config.idle_drop_seconds)
-        out = self.compress(scrubbed, idle_cut=cut, turn_start=turn_start or 0)
+        current = turn_start if turn_start else _current_turn_start(scrubbed)
+        if self._wants_automation_window(scrubbed, current):
+            out = self._automation_window(scrubbed, current)
+        else:
+            cut = idle_cut(scrubbed, timestamps, self.config.idle_drop_seconds)
+            out = self.compress(scrubbed, idle_cut=cut, turn_start=turn_start or 0)
         self._last_estimate = self._measure(out)
+        return out
+
+    # -- fired automation runs (bead chuk_chat-kq1g / chuk_chat-n69s) ------
+
+    def _wants_automation_window(self, messages: list[dict], turn_start: int) -> bool:
+        if not self.config.enabled or self.automation_window is False:
+            return False
+        if not (0 < turn_start < len(messages)):
+            return False
+        if self.automation_window:
+            return True
+        return _is_fired_prompt(messages[turn_start])
+
+    def _automation_window(self, messages: list[dict], turn_start: int) -> list[dict]:
+        """The payload of a fired automation run: the leading system rows,
+        the cached summary (only when it still covers this history; no aux
+        call is ever made here), the newest conversation turns that fit
+        ``automation_history_tokens`` (user text and assistant answers, no
+        tool traffic, no injected rows), a note on the earlier automation
+        runs left out, and the current turn verbatim.
+
+        Why: an hourly check used to send the whole chat (25-53k tokens after
+        the ladder), growing with every run, and the model often answered
+        from the previous runs' results instead of checking again. A fired
+        run is a fresh observation; it needs the user's instructions, not
+        the earlier answers. Rows are selected by role and by the markers the
+        runtime itself writes, never by what an answer says."""
+        cfg = self.config
+        before = self._measure(messages)
+        stats = CompressionStats(
+            tier=0,
+            pressure=self._pressure(before),
+            tokens_before=before,
+            tokens_after=before,
+            automation_window=True,
+        )
+        head_end = min(_head_end(messages, cfg.head_messages), turn_start)
+        system_end = 0
+        while system_end < turn_start and messages[system_end].get("role") == "system":
+            system_end += 1
+
+        self._refresh_from_background()
+        self._check_summary(messages, head_end)
+        budget = max(0, cfg.automation_history_tokens)
+        prefix: list[dict] = []
+        history_start = system_end
+        summary = self._summary
+        if summary and head_end < self._summarized_upto <= turn_start:
+            message = _summary_message(summary)
+            cost = estimate_message_tokens(message)
+            if cost > budget:
+                message = {
+                    **message,
+                    "content": _truncate_str(message["content"], budget * _CHARS_PER_TOKEN),
+                }
+                cost = estimate_message_tokens(message)
+            prefix.append(message)
+            budget = max(0, budget - cost)
+            history_start = self._summarized_upto
+
+        kept: list[list[dict]] = []
+        omitted = 0
+        stop = False
+        for turn in reversed(_turn_spans(messages, history_start, turn_start)):
+            if not _is_turn_start(messages[turn[0]]):
+                # The rest of a turn whose prompt is in the summary: what it
+                # answered (maybe an earlier run) is unknown here, so it stays
+                # out.
+                continue
+            if _is_fired_prompt(messages[turn[0]]):
+                omitted += 1
+                continue
+            if stop:
+                continue
+            rows = _conversation_rows(messages, turn)
+            if not rows:
+                continue
+            cost = sum(estimate_message_tokens(m) for m in rows)
+            if len(kept) >= cfg.automation_history_turns or cost > budget:
+                # Keep the window contiguous: no older turn past a gap. Go on
+                # only to count the earlier runs for the note.
+                stop = True
+                continue
+            kept.append(rows)
+            budget -= cost
+
+        out = list(messages[:system_end]) + prefix
+        for rows in reversed(kept):
+            out.extend(rows)
+        if omitted:
+            out.append({"role": "user", "content": automation_runs_note(omitted)})
+        current = _fold_browser_results(list(messages), turn_start, cfg)
+        out.extend(current[turn_start:])
+        # Tier 1 only (deterministic, no aux call, no summary state): a run
+        # with many tool rounds still gets its older tool results truncated;
+        # the newest unit stays whole. Never compress() here: that would
+        # persist a summary digest computed against window indices.
+        _, exempt_start = _tail_start(out, cfg.tail_budget)
+        out = self._tier1(out, max(system_end, exempt_start))
+        stats.automation_runs_omitted = omitted
+        stats.tokens_after = self._measure(out)
+        self._last_stats = stats
         return out
 
     def plan_ahead(self, messages: list[dict], *, session_id: int) -> bool:

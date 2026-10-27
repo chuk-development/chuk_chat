@@ -791,10 +791,17 @@ def test_an_earlier_automation_payload_is_collapsed():
         {"role": "assistant", "content": "2519 of 2660 counted"},
         {"role": "user", "content": fired},
     ]
-    out = ContextLadder(config=LadderConfig()).prepare(messages, turn_start=4)
+    # The full ladder (a fired run now gets the short automation window,
+    # which leaves the earlier run out altogether; bead chuk_chat-kq1g).
+    out = ContextLadder(config=LadderConfig(), automation_window=False).prepare(
+        messages, turn_start=4
+    )
     assert out[2]["content"].startswith("[automation a1 fired: Wahlradar]\ncheck the count\n")
     assert "x" * 100 not in out[2]["content"]
     assert out[4]["content"] == fired  # the current run keeps its payload
+    window = ContextLadder(config=LadderConfig()).prepare(messages, turn_start=4)
+    assert window[-1]["content"] == fired
+    assert sum(1 for m in window if m["content"] == fired) == 1
 
 
 def test_the_tail_budget_is_capped():
