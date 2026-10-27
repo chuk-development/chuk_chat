@@ -14,6 +14,7 @@ from chuk_agents_runtime import agents_hooks
 from chuk_agents_runtime.automations import (
     AUTOMATION_TOOL_NAMES,
     MIN_INTERVAL_SECONDS,
+    FRESH_RUN_NOTE,
     PAYLOAD_MARKER,
     AutomationSpecError,
     CronSpec,
@@ -160,13 +161,23 @@ def test_fired_prompt_marks_the_payload_as_data():
     lines = text.split("\n")
     assert lines[0] == "[automation ab12 fired: new video]"
     assert lines[1] == "Summarize it."
-    assert lines[2] == PAYLOAD_MARKER
-    assert json.loads(lines[3]) == {"url": "https://x"}
+    assert lines[2] == FRESH_RUN_NOTE
+    assert lines[3] == PAYLOAD_MARKER
+    assert json.loads(lines[4]) == {"url": "https://x"}
 
 
-def test_fired_prompt_without_prompt_or_payload_is_one_line():
-    assert fired_prompt("ab12", "nightly", None) == "[automation ab12 fired: nightly]"
-    assert fired_prompt("ab12", "nightly", "  ") == "[automation ab12 fired: nightly]"
+def test_fired_prompt_without_prompt_or_payload_is_header_and_fresh_run_note():
+    expected = f"[automation ab12 fired: nightly]\n{FRESH_RUN_NOTE}"
+    assert fired_prompt("ab12", "nightly", None) == expected
+    assert fired_prompt("ab12", "nightly", "  ") == expected
+
+
+def test_every_fired_prompt_says_earlier_results_are_out_of_date():
+    # bead chuk_chat-n69s: a fired run must observe, not repeat history.
+    for notify in ("always", "on_change"):
+        text = fired_prompt("ab12", "inbox", "check inbox", notify=notify)
+        assert FRESH_RUN_NOTE in text.splitlines()
+    assert "tools" in FRESH_RUN_NOTE and "out of date" in FRESH_RUN_NOTE
 
 
 def test_payload_over_16_kb_is_cut_and_marked():

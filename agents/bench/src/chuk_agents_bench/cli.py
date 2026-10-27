@@ -4,6 +4,7 @@
     agents-bench report [--fresh] [--json]     # run timings from the copy
     agents-bench offline --session KEY         # replay prepare, no model call
     agents-bench live --yes-spend-credits      # real prompts, scratch session
+    agents-bench prompt-breakdown --session KEY  # base prompt size, cache prefix
 
 Every mode reads a COPY of the state database. ``report`` and ``offline`` take
 the copy themselves when it is missing (``--fresh`` takes a new one).
@@ -76,6 +77,13 @@ def build_parser() -> argparse.ArgumentParser:
     off.add_argument("--profile", action="store_true",
                      help="cProfile pass 1's ladder_prepare and print the top functions")
     off.add_argument("--profile-top", type=int, default=25)
+    off.add_argument("--fire", action="store_true",
+                     help="simulate the next fired automation run: re-add the session's "
+                     "newest fired prompt one hour after the last row, with timestamps "
+                     "and turn start as the loop passes them")
+    off.add_argument("--automation-window", choices=("auto", "on", "off"), default="auto",
+                     help="the ladder's automation window: auto = decided from the prompt "
+                     "(production), off = full ladder (the 'before'), on = forced")
     off.add_argument("--baseline", help="an earlier --json result to compare against")
     off.add_argument("--json", action="store_true", help="print JSON instead of text")
     off.add_argument("--out", help="also write the JSON result to this file")
@@ -91,7 +99,42 @@ def build_parser() -> argparse.ArgumentParser:
     live.add_argument("--db", help="DB copy to seed from (default: _scratch/bench copy)")
     live.add_argument("--no-aux", action="store_true", help="tier-1 ladder only, no aux model")
     live.add_argument("--json", action="store_true")
+    _add_prompt_breakdown(sub)
     return parser
+
+
+def _add_prompt_breakdown(sub: argparse._SubParsersAction) -> None:
+    pb = sub.add_parser("prompt-breakdown",
+                        help="base prompt by section and tool, cache prefix of two turns")
+    _add_db(pb)
+    pb.add_argument("--session", required=True, help="session key to seed from")
+    pb.add_argument("--turns", type=int, default=2, help="tasks to record (default 2)")
+    pb.add_argument("--prompt", default="hi", help="prompt of each task (default 'hi')")
+    pb.add_argument("--skills-root",
+                    help="the agent's skills dir (default: guessed from the session key)")
+    pb.add_argument("--no-skills", action="store_true", help="use the built-in skills only")
+    pb.add_argument("--tool-turns", action="store_true",
+                    help="each task calls list_dir once before it answers")
+    pb.add_argument("--summarizer", choices=("stub", "none"), default="stub",
+                    help="stub = ladder tiers 2/3 as live (default); none = tier 1 only")
+    pb.add_argument("--top", type=int, default=15, help="tool definitions to list (default 15)")
+    pb.add_argument("--json", action="store_true", help="print JSON instead of text")
+
+
+def _cmd_prompt_breakdown(args: argparse.Namespace) -> int:
+    from . import offline, prompt_breakdown
+
+    db = ensure_copy(args.db, fresh=args.fresh)
+    skills_root = None if args.no_skills else (
+        args.skills_root or offline.guess_skills_root(args.session)
+    )
+    result = prompt_breakdown.run(
+        db, args.session, turns=args.turns, prompt=args.prompt, skills_root=skills_root,
+        tool_turns=args.tool_turns, summarizer=args.summarizer == "stub",
+    )
+    print(prompt_breakdown.render_json(result) if args.json
+          else prompt_breakdown.render_text(result, top=args.top))
+    return 0
 
 
 def _cmd_snapshot(args: argparse.Namespace) -> int:
@@ -157,6 +200,8 @@ def _cmd_offline(args: argparse.Namespace) -> int:
         cold=args.cold,
         profile=args.profile,
         profile_top=args.profile_top,
+        fire=args.fire,
+        automation_window={"auto": None, "on": True, "off": False}[args.automation_window],
     )
     if args.out:
         Path(args.out).parent.mkdir(parents=True, exist_ok=True)
@@ -199,6 +244,7 @@ def main(argv: list[str] | None = None) -> int:
         "report": _cmd_report,
         "offline": _cmd_offline,
         "live": _cmd_live,
+        "prompt-breakdown": _cmd_prompt_breakdown,
     }[args.mode]
     return handler(args)
 
