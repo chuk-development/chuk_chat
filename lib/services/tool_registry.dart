@@ -440,6 +440,12 @@ final List<ClientTool> builtinTools = [
               'list of strings (required: 2-6 short option labels, e.g. '
               '["Option A", "Option B", "Option C"])',
         },
+        'multiple': {
+          'type': 'boolean',
+          'description':
+              'boolean (optional: true lets the user pick several options '
+              'and confirm them together)',
+        },
       },
       'required': ['question', 'options'],
       'additionalProperties': false,

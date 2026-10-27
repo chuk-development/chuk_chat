@@ -34,6 +34,7 @@ import 'package:chuk_chat/tool_handlers/road_closures_tools.dart'
     as road_closures_tools;
 import 'package:chuk_chat/tool_handlers/artifact_tools.dart' as artifact_tools;
 import 'package:chuk_chat/services/workspace_storage_service.dart';
+import 'package:chuk_chat/utils/ask_user_args.dart';
 
 class ToolExecutionResult {
   const ToolExecutionResult({
@@ -100,8 +101,8 @@ class ToolExecutor {
     'search_restaurants',
     'geocode',
     'get_route',
-    'bash',
     'road_closures',
+    'bash',
     'github',
     'slack',
     'google_calendar',
@@ -737,9 +738,9 @@ class ToolExecutor {
         return _wrapOutput(await map_tools.executeGeocode(args));
       case 'get_route':
         return _wrapOutput(await map_tools.executeGetRoute(args));
-
       case 'road_closures':
         return _wrapOutput(await road_closures_tools.executeRoadClosures(args));
+
       // -- Weather --
       case 'weather':
         return _wrapOutput(
@@ -1184,8 +1185,10 @@ class ToolExecutor {
       return 'Error: provide 2-6 options, got ${options.length}';
     }
 
+    final bool multiple = askUserIsMultiple(args['multiple']);
     final buf = StringBuffer();
     buf.writeln('QUESTION_FOR_USER: $question');
+    if (multiple) buf.writeln('(The user may pick several options.)');
     buf.writeln();
     for (var i = 0; i < options.length; i++) {
       buf.writeln('${i + 1}) ${options[i]}');

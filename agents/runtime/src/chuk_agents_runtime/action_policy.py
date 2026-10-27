@@ -451,6 +451,9 @@ def describe_mail(tool: str, args: Mapping[str, Any]) -> ActionRequest:
     }
     if cc:
         details["cc"] = cc
+    from_alias = args.get("from_alias")
+    if isinstance(from_alias, str) and from_alias.strip():
+        details["from_alias"] = _clip(from_alias.strip().lstrip("+"), 80)
     if isinstance(attachments, list) and attachments:
         details["attachments"] = [_clip(a, 120) for a in attachments if isinstance(a, str)][:10]
     who = ", ".join(to[:3]) + (f" and {len(to) - 3} more" if len(to) > 3 else "")

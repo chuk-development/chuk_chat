@@ -97,6 +97,9 @@ void main() {
 
   testWidgets('a new schedule sends automation_create', (tester) async {
     await pumpForm(tester);
+    // A typed line is the picker's custom shape.
+    await tester.tap(find.text('Custom'));
+    await tester.pump();
     await tester.enterText(field('schedule'), 'every 1h');
     await tester.enterText(field('prompt'), 'news on my interests');
     await tester.enterText(field('name'), 'Morning news');
@@ -157,7 +160,7 @@ void main() {
     await answer(tester);
   });
 
-  testWidgets('a mail trigger needs a sender or a subject; host errors show', (
+  testWidgets('a mail trigger needs a sender, a subject or an alias; host errors show', (
     tester,
   ) async {
     await pumpForm(tester);
@@ -165,7 +168,7 @@ void main() {
     await tester.pump();
     await tester.enterText(field('prompt'), 'read it');
     await tapSave(tester);
-    expect(find.text('Enter a sender or a subject.'), findsOneWidget);
+    expect(find.text('Enter a sender, a subject or an alias.'), findsOneWidget);
     await tester.enterText(field('subject'), 'invoice');
     await tapSave(tester);
     expect(controller.creates.single['spec'], <String, dynamic>{
@@ -211,6 +214,9 @@ void main() {
       sessionKey: null,
       agents: const <String, String>{'a': 'Amber', 'b': 'Basil'},
     );
+    // A typed line is the picker's custom shape.
+    await tester.tap(find.text('Custom'));
+    await tester.pump();
     await tester.enterText(field('schedule'), 'every 1h');
     await tester.enterText(field('prompt'), 'x');
     await tapSave(tester);

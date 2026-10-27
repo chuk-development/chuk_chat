@@ -126,6 +126,13 @@ class AgentsAutomation {
     return subject is String && subject.isNotEmpty ? subject : null;
   }
 
+  /// The plus-alias filter of a mail trigger (`receipts` for mail to
+  /// `local+receipts@domain`), or null.
+  String? get mailAlias {
+    final alias = spec['alias'];
+    return alias is String && alias.isNotEmpty ? alias : null;
+  }
+
   /// The schedule as the host's spec grammar writes it (`0 9 * * 1-5`,
   /// `every 30m`, `at 2026-10-06T09:00`), so the edit sheet can show and send
   /// it back unchanged. Null for a kind that is not a schedule.
@@ -188,6 +195,7 @@ class AgentsAutomation {
     }
     if (isMail) {
       final parts = <String>[
+        if (mailAlias != null) 'to +$mailAlias',
         if (mailFrom != null) 'from $mailFrom',
         if (mailSubject != null) 'subject "$mailSubject"',
       ];
@@ -363,6 +371,28 @@ const int kWatchUrlDefaultSeconds = 3600;
 /// The longest mail filter the host accepts, per field.
 const int kMailFilterMaxLength = 200;
 
+/// A plus alias as the host takes it: `receipts`, `+receipts` or a full
+/// `local+receipts@domain` give `receipts`; empty gives ''. Null when the tag
+/// is not one the server delivers (letters, digits, `.`, `_`, `-`; at most
+/// 64; starts and ends with a letter or digit).
+String? normalizeMailAlias(String value) {
+  String text = value.trim().toLowerCase();
+  final int at = text.lastIndexOf('@');
+  if (at >= 0) {
+    final String local = text.substring(0, at);
+    final int plus = local.indexOf('+');
+    text = plus < 0 ? '' : local.substring(plus + 1);
+  }
+  while (text.startsWith('+')) {
+    text = text.substring(1);
+  }
+  if (text.isEmpty) return '';
+  if (text.length > 64) return null;
+  return RegExp(r'^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$').hasMatch(text)
+      ? text
+      : null;
+}
+
 /// The kinds the app can create. A `watcher` needs a script in the workspace,
 /// so only the model makes one.
 const List<String> kCreatableAutomationKinds = <String>[
@@ -418,8 +448,8 @@ class AutomationSaveResult {
 
 /// The spec a create or an update carries for [kind]: the schedule text as
 /// typed (`every 30m`, `0 9 * * 1-5`, `at …`, `in 2h`), `{url, every}` for a
-/// page watch, `{from?, subject?}` for a mail filter. Empty fields are left
-/// out.
+/// page watch, `{from?, subject?, alias?}` for a mail filter. Empty fields
+/// are left out.
 Object automationSpecFor(
   String kind, {
   String schedule = '',
@@ -427,6 +457,7 @@ Object automationSpecFor(
   int? everySeconds,
   String mailFrom = '',
   String mailSubject = '',
+  String mailAlias = '',
 }) {
   switch (kind) {
     case 'watch_url':
@@ -438,6 +469,7 @@ Object automationSpecFor(
       return <String, dynamic>{
         if (mailFrom.trim().isNotEmpty) 'from': mailFrom.trim(),
         if (mailSubject.trim().isNotEmpty) 'subject': mailSubject.trim(),
+        if (mailAlias.trim().isNotEmpty) 'alias': mailAlias.trim(),
       };
     default:
       return schedule.trim();

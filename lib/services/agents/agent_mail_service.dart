@@ -125,6 +125,25 @@ class Mailbox {
   );
 }
 
+/// A plus tag (`receipts` of `local+receipts@domain`) as the server writes
+/// it: lower-case letters, digits, `.`, `_` and `-`, at most 64. Anything
+/// else is null, so a forged value never shows up as a pill.
+String? mailAliasOf(Object? value) {
+  if (value is! String) return null;
+  final String tag = value.trim().toLowerCase();
+  if (tag.isEmpty || tag.length > 64) return null;
+  return RegExp(r'^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$').hasMatch(tag)
+      ? tag
+      : null;
+}
+
+/// `local+alias@domain` for the mailbox [address].
+String mailAliasAddress(String address, String alias) {
+  final int at = address.lastIndexOf('@');
+  if (at <= 0) return address;
+  return '${address.substring(0, at)}+$alias${address.substring(at)}';
+}
+
 /// One row of the message list (`Summary`), its sealed parts opened.
 @immutable
 class MailSummary {
@@ -135,6 +154,7 @@ class MailSummary {
     this.fromAddress = '',
     this.fromName,
     this.toAddresses = const <String>[],
+    this.alias,
     this.subject = '',
     this.snippet,
     this.senderTrust = MailTrust.unknown,
@@ -159,6 +179,10 @@ class MailSummary {
   final String fromAddress;
   final String? fromName;
   final List<String> toAddresses;
+
+  /// The plus tag of the agent address this mail came in on, or went out
+  /// from (`local+alias@domain`). Null for the plain address.
+  final String? alias;
   final String subject;
   final String? snippet;
   final MailTrust senderTrust;
@@ -231,6 +255,7 @@ class MailSummary {
       fromAddress: _text(summary['from_address']) ?? '',
       fromName: _text(summary['from_name']),
       toAddresses: _addresses(summary['to']),
+      alias: mailAliasOf(summary['alias']),
       subject: _raw(summary['subject']) ?? '',
       snippet: _text(summary['snippet']),
       senderTrust: _trust(json['sender_trust']),
@@ -255,6 +280,7 @@ class MailSummary {
     fromAddress: fromAddress,
     fromName: fromName,
     toAddresses: toAddresses,
+    alias: alias,
     subject: subject,
     snippet: snippet,
     senderTrust: senderTrust,
@@ -978,6 +1004,9 @@ class AgentMailService {
         'text': text,
         'in_reply_to': ?draft.inReplyTo,
         'references': ?draft.references,
+        // The server cannot read the sealed draft: it learns the alias the
+        // draft goes out from only here.
+        'from_alias': ?draft.summary.alias,
         if (files.isNotEmpty) 'attachments': files,
       },
     );

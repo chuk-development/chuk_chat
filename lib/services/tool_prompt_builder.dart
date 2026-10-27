@@ -757,7 +757,7 @@ VISUAL OUTPUT NOTE:
 - <chart>, <map>, <email>, <weather>, <news>, and <image> are OUTPUT TAGS, not tools. Write them directly in your response.
 - Never call find_tools for "chart", "graph", "plot", "map", "email", or "weather".
 - If user asks for a chart/map, discover DATA tools first, then emit <chart>/<map> directly in your final response text.
-- To draft an email, emit <email>{"to":"...","subject":"...","body":"..."}</email> in your response. The app renders it as a card with an "Open in Mail App" button.
+- To draft an email, emit <email>{"to":"...","subject":"...","body":"..."}</email> in your response. The app renders it as a draft card; its Send button opens the mail app.
 $weatherNote- For render-only pictures in your final answer, emit an <image> block with a URL (no tool call needed for rendering).
 - For "technische Zeichnung" / "technical drawing" / "engineering drawing" / DIN-style blueprints: use artifact_manager with type="technical_drawing" and JSON content. This is a RENDERED drawing with dimensions, NOT an AI-generated image. Do NOT use generate_image for technical drawings.
 
@@ -1115,7 +1115,7 @@ Never wrap an <artifact> tag inside a markdown code fence (```…```); the parse
     buffer.writeln();
     buffer.writeln('### Emails');
     buffer.writeln(
-      'To draft an email, emit an <email> tag with JSON. The app renders it as a card with an "Open in Mail App" button. Nothing is sent automatically.',
+      'To draft an email, emit an <email> tag with JSON. The app renders it as a draft card; its Send button opens the mail app. Nothing is sent automatically.',
     );
     buffer.writeln('<email>');
     buffer.writeln(
@@ -1131,6 +1131,7 @@ Never wrap an <artifact> tag inside a markdown code fence (```…```); the parse
     );
     buffer.writeln('- "cc": CC addresses, comma-separated (optional)');
     buffer.writeln('- "bcc": BCC addresses, comma-separated (optional)');
+    buffer.writeln('- "from", "status" (e.g. "Needs approval"): optional');
 
     // Weather and News below are migrated to the `weather-cards` /
     // `news-cards` skills. When those are in the catalog, the schemas are
@@ -1206,12 +1207,12 @@ Never wrap an <artifact> tag inside a markdown code fence (```…```); the parse
   }
 
   /// How an answer starts, and the `:::` blocks `MarkdownMessage` renders
-  /// natively (`lib/utils/answer_blocks_parser.dart`). About 640 tokens.
+  /// natively (`lib/utils/answer_blocks_parser.dart`). About 770 tokens.
   String _answerFormatSection() {
     return '''
 ## ANSWER FORMAT
 - If the question has a short answer (yes/no, a number, a name, fits/does not fit), the FIRST line of your final answer is that answer in plain Markdown **bold**, e.g. "**Yes, warm white.**". Make any needed tool calls first; never state the short answer before the lookup. Explain below it.
-- Optional blocks, only where they help: a line `::: name` opens one, a line `:::` closes it. No nesting; Markdown works inside.
+- Optional blocks, only where they help: a line `::: name` opens one, a line `:::` closes it. No nesting. Most blocks take `tag: label` for a small chip.
 ::: steps
 1. Step title
 Body text.
@@ -1230,39 +1231,63 @@ Body text.
   Scale is experimental: only to place one value on a known range.
 ::: bars Optional title
 Step 5 | ~1.200 GB | 600B total
-GLM Flash | ~640 GB | 320B total
-! note line under the bars
+! note line
 :::
-  Bars compare 2-5 sizes/amounts with real numbers: label | value | note.
 ::: kpi
 82 % | Humidity | droplet
-7 km/h S | Wind | wind
 :::
-  KPI tiles for 2-4 key figures: value | label | icon. Icons: droplet wind temperature sun cloud rain star users clock euro percent shield cart chart search calendar pin.
 ::: tiles
-Chatbot | chat
-Search crawler | search
+Chatbot | chat | optional subline
 :::
-  Icon tiles for 2-6 options: label | icon (as kpi) | optional subline.
+  Icons: droplet wind sun cloud rain star users clock euro percent shield cart chart search calendar pin battery sound mic sparkles mountain.
 ::: cards Hotels
 Alpenruhe Panorama
 image: https://example.com/a.jpg
-meta: 4.8 - 128 reviews
-chips: Panorama balcony, Mountain spa
+badge: For your mountain moment
+location: Grindelwald, Switzerland
+rating: 4.8 · 128 reviews
+chips: Panorama balcony, Spa
+specs: ANC adaptive | sound, 38 h | battery
 price: 248 CHF / night
 url: https://example.com/a
 action: Details
+ask: Compare
 :::
-  Cards for 2-5 recommendations (stays, products, tools). Blank line or `--` between cards; first line = title, then the keys above (+ badge, subtitle; meta repeats). Only real URLs from tool results, else omit image/url.
-::: ask Which basis do you want to dive into?
-Active parameters
-BF16 & FP8
+  Cards for 2-5 recommendations (stays, products, events). `--` between cards; all keys optional but the title. Only real URLs from tool results.
+::: check Optional title
+[x] Done item
+[ ] Open item
 :::
-  Follow-up chips, sent as the reader's next message: optional question, one short chip per line. Only at the END, when 2-3 concrete directions exist.
+::: term Optional tag
+De·ge·to | **De**utsche **Ge**sellschaft für **To**n
+:::
+  Term: a word, acronym or etymology shown big.
+::: grid 11 of 24 on the list
+1* 2 3 4+
+* on the list
+:::
+  Grid: cells per row; `*` marks, `+` fills; `* `/`+ ` lines are the legend.
+::: sizes
+Normal | 12 cm | smoke
+Mini | 7 cm
+:::
+::: quote NASDAQ: PYPL
+price: 56.70 USD
+change: -0.46 (-0.80 %)
+points: 57.2, 56.9, 56.7
+:::
+::: more Missing on the phone?
+Hidden details.
+:::
+::: ask Which basis do you want?
+Active parameters | chart
+button: Fetch current values
+:::
+  Follow-up chips (+ optional filled `button:`), sent as the reader's next message. Only at the END.
 ::: status 2 open · 132 €
 Hetzner | Card declined | 102 € | failed | 16.10. | hetzner.com | Pay https://…
 :::
-  Payments, invoices, orders, deadlines: status, never bullets. Status: failed overdue due ok + optional label. `more:` = footer.
+  Payments, invoices, orders, deadlines: status, never bullets. Status: failed overdue due ok. `more:` = footer.
 - Inline links in the text are fine. Never add a separate list of sources or links at the end unless the reader asks for one; the app shows the sources of every web lookup on its own.''';
   }
 
@@ -1342,6 +1367,14 @@ Hetzner | Card declined | 102 € | failed | 16.10. | hetzner.com | Pay https://
       '{"type":"route","from":{"lat":54.32,"lon":10.13,"label":"Kiel"},"to":{"lat":53.55,"lon":9.99,"label":"Hamburg"},"distance_km":"96.5","duration_min":"58"}',
     );
     buffer.writeln('</map>');
+    if (_migratedToSkill('map-features')) {
+      buffer.writeln(
+        'Closures, roadworks, detours, a street or an area: a <map> with a '
+        '"features" list draws real lines and polygons from road names. Load '
+        'the `map-features` skill first; for Sperrungen/Baustellen call '
+        'road_closures.',
+      );
+    }
 
     _appendAlwaysOnVisualTags(buffer);
 
@@ -1367,14 +1400,6 @@ Hetzner | Card declined | 102 € | failed | 16.10. | hetzner.com | Pay https://
         'BEFORE emitting the tag. Never write one from memory — a malformed '
         'block renders as nothing.',
       );
-    if (_migratedToSkill('map-features')) {
-      buffer.writeln(
-        'Closures, roadworks, detours, a street or an area: a <map> with a '
-        '"features" list draws real lines and polygons from road names. Load '
-        'the `map-features` skill first; for Sperrungen/Baustellen call '
-        'road_closures.',
-      );
-    }
     }
     buffer.writeln(
       '${ruleNumber++}. Write your FULL text answer FIRST, then $tagLabel at the very END.',

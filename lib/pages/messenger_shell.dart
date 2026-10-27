@@ -662,8 +662,12 @@ class _MessengerShellState extends State<MessengerShell>
     // Opening a thread is reading it: the unread dot clears here, not when the
     // next frame happens to arrive. A thread with nothing unread keeps its
     // mark: moving it forward changes no dot and costs a preference write.
+    // The old mark is kept for this visit, so the thread can offer a jump
+    // to the first new message (bead chuk_chat-f5wd).
     if (_readMarks.isThreadUnread(agent, agent.threads.first)) {
-      unawaited(_readMarks.markRead(threadKey));
+      unawaited(_readMarks.markOpened(threadKey));
+    } else {
+      _readMarks.clearUnreadSince(threadKey);
     }
     setState(() {
       // The row this selection came from, if it came from one. Claimed here so

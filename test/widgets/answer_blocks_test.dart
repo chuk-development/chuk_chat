@@ -453,4 +453,180 @@ void main() {
       expect(sizes[i], lessThan(sizes[i - 1]), reason: 'h${i + 1}');
     }
   });
+
+  // -------------------------------------------------------------------------
+  // Figma visual library ("Bergmomente", "Ruhemodus" and the example chats)
+
+  const String bergmomente =
+      '::: cards Hotels\n'
+      'Alpenruhe Panorama\n'
+      'badge: Für deinen Bergmoment\n'
+      'location: Grindelwald, Schweiz\n'
+      'rating: 4,8 · 128 Bewertungen\n'
+      'chips: Panoramabalkon, Berg-Spa\n'
+      'specs: ANC · Adaptiv | sound, 38 Std. Akku | battery\n'
+      'price: 248 CHF / Nacht\n'
+      'url: https://example.com/a\n'
+      'action: Details\n'
+      'ask: Vergleichen\n'
+      '--\n'
+      'Felsenblick\n'
+      'badge: Talblick\n'
+      'price: 219 CHF / Nacht\n'
+      ':::';
+
+  testWidgets('cards: location, rating, specs, price unit, two buttons', (
+    WidgetTester tester,
+  ) async {
+    final List<String> sent = <String>[];
+    await _pump(tester, bergmomente, onFollowUp: sent.add, textScale: 1.3);
+    final String all = _allText(tester);
+    expect(all, contains('Grindelwald, Schweiz'));
+    expect(all, contains('4,8 · 128 Bewertungen'));
+    expect(all, contains('ANC · Adaptiv'));
+    expect(all, contains('38 Std. Akku'));
+    expect(all, contains('248 CHF / Nacht'));
+    // A card without an image shows its badge as a chip.
+    expect(all, contains('Talblick'));
+    expect(find.text('Details'), findsWidgets);
+    await tester.tap(find.text('Vergleichen').first);
+    expect(sent, <String>['Vergleichen: Alpenruhe Panorama']);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('cards: no overflow from 200 to 600 px, text scale 1.3', (
+    WidgetTester tester,
+  ) async {
+    for (final double width in <double>[200, 260, 360, 600]) {
+      await _pump(tester, bergmomente, width: width, textScale: 1.3);
+      expect(tester.takeException(), isNull, reason: 'width $width');
+    }
+  });
+
+  testWidgets('ask: icon chips send the label only, button sends too', (
+    WidgetTester tester,
+  ) async {
+    final List<String> sent = <String>[];
+    await _pump(
+      tester,
+      '::: ask Lieber Wellness oder loswandern?\n'
+      'Mit Wellness | sparkles\n'
+      'Nah am Wanderweg | mountain\n'
+      'button: Aktuelle Werte abrufen\n'
+      ':::',
+      onFollowUp: sent.add,
+    );
+    expect(find.byType(HugeIcon), findsNWidgets(2));
+    await tester.tap(find.text('Mit Wellness'));
+    await tester.tap(find.text('Aktuelle Werte abrufen'));
+    expect(sent, <String>['Mit Wellness', 'Aktuelle Werte abrufen']);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('check: items render, a tap toggles the box', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      '::: check Für den Antrag bereitlegen\n'
+      '[x] Alter Ausweis\n'
+      '[ ] Digitales biometrisches Foto / Fotocode; Fotoangebot im Amt prüfen\n'
+      ':::',
+      textScale: 1.3,
+    );
+    expect(_allText(tester), contains('Für den Antrag bereitlegen'));
+    bool? checked(String label) => tester
+        .widget<Semantics>(
+          find.byWidgetPredicate(
+            (Widget w) => w is Semantics && w.properties.label == label,
+          ),
+        )
+        .properties
+        .checked;
+    expect(checked('Alter Ausweis'), isTrue);
+    await tester.tap(find.text('Alter Ausweis'));
+    await tester.pump();
+    expect(checked('Alter Ausweis'), isFalse);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('term, grid, sizes, quote: render without overflow at 360/1.3', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      '::: term Zwei Namen\n'
+      'ARD | Arbeitsgemeinschaft der Rundfunkanstalten\n'
+      'De·ge·to | **De**utsche **Ge**sellschaft für **To**n und Bild\n'
+      'note: ARD - Degeto Film\n'
+      ':::\n'
+      '::: grid 11 von 24\n'
+      '1* 2 3 4 5* 6*\n'
+      '7 8+ 9 10 11 12*\n'
+      '* In der Liste\n'
+      '- Nicht geprüft\n'
+      ':::\n'
+      '::: sizes Rauchmelder\n'
+      'Normal | 12 cm | fire\n'
+      'Mini | 6 cm\n'
+      '! Kleiner heißt nicht sicherer\n'
+      ':::\n'
+      '::: quote NASDAQ: PYPL\n'
+      'price: 56,70 USD\n'
+      'change: -0,46 USD (-0,80 %)\n'
+      'note: Schlusskurs\n'
+      'points: 57.16, 56.4, 57.4, 56.7\n'
+      'labels: 12.10, 13.10, 14.10, 15.10\n'
+      ':::',
+      textScale: 1.3,
+    );
+    final String all = _allText(tester);
+    for (final String t in <String>[
+      'ARD',
+      'De·ge·to',
+      'Arbeitsgemeinschaft der Rundfunkanstalten',
+      'ARD - Degeto Film',
+      '11 von 24',
+      '12',
+      'In der Liste',
+      'Normal',
+      '6 cm',
+      'Kleiner heißt nicht sicherer',
+      'NASDAQ: PYPL',
+      '56,70 USD',
+      '-0,46 USD (-0,80 %)',
+      '15.10',
+    ]) {
+      expect(all, contains(t), reason: t);
+    }
+    expect(all, isNot(contains(':::')));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('grid: 12 columns fit a 260 px column', (WidgetTester tester) async {
+    await _pump(
+      tester,
+      '::: grid\n${List<String>.generate(12, (int i) => '${i + 10}*').join(' ')}\n:::',
+      width: 260,
+      textScale: 1.3,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('more: body is hidden until the header is tapped', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      '::: more Auf dem Handy fehlt etwas?\n'
+      'Lokale Dateien in der mobilen App aktivieren.\n'
+      ':::',
+    );
+    expect(_allText(tester), contains('Auf dem Handy fehlt etwas?'));
+    expect(_allText(tester), isNot(contains('Lokale Dateien')));
+    await tester.tap(find.text('Auf dem Handy fehlt etwas?'));
+    await tester.pumpAndSettle();
+    expect(_allText(tester), contains('Lokale Dateien in der mobilen App aktivieren.'));
+    expect(tester.takeException(), isNull);
+  });
 }

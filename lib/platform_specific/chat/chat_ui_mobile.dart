@@ -64,6 +64,8 @@ import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/widgets/measure_size.dart';
 import 'package:chuk_chat/widgets/selection_copy_area.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_scroll_mixin.dart';
+import 'package:chuk_chat/utils/unread_rows.dart';
+import 'package:chuk_chat/widgets/unread_jump_pill.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_message_edit_mixin.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_model_selection_mixin.dart';
 import 'package:chuk_chat/platform_specific/chat/model_provider_resolution_mixin.dart';
@@ -179,6 +181,14 @@ class ChukChatUIMobile extends StatefulWidget {
   /// as the agent's name, as on the desktop. Agents's; see [messengerMode].
   final String? agentsTitle;
 
+  /// When the reader last had this thread open, before this visit. Rows the
+  /// agent wrote after it are new; a pill jumps to the first one while it is
+  /// off screen (bead chuk_chat-f5wd). Null: no pill.
+  final DateTime? unreadSince;
+
+  /// The first new row was on screen: the pill is done for this visit.
+  final VoidCallback? onUnreadSeen;
+
   const ChukChatUIMobile({
     super.key,
     required this.onToggleSidebar,
@@ -206,6 +216,8 @@ class ChukChatUIMobile extends StatefulWidget {
     this.hostRunActive = false,
     this.transcriptFooter,
     this.agentsTitle,
+    this.unreadSince,
+    this.onUnreadSeen,
   });
 
   @override
@@ -3552,11 +3564,34 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   /// The message list. Upstream: the plain [ListView]. Messenger mode: the
   /// bottom-anchored transcript ([ChatScrollMixin.buildAnchoredTranscript]),
   /// which opens a thread at its bottom without laying out the rows above.
+  // ── unread pill (bead chuk_chat-f5wd) ──
+  final GlobalKey _firstUnreadKey = GlobalKey(debugLabel: 'first unread row');
+
+  /// The [ChukChatUIMobile.unreadSince] whose first new row was on screen.
+  DateTime? _unreadSeenFor;
+
+  bool get _unreadActive =>
+      widget.unreadSince != null && _unreadSeenFor != widget.unreadSince;
+
+  int get _firstUnreadIndex =>
+      _unreadActive ? firstUnreadRowIndex(_messages, widget.unreadSince) : -1;
+
+  int get _unreadPillCount =>
+      _unreadActive ? unreadRowCount(_messages, widget.unreadSince) : 0;
+
+  void _onUnreadSeen() {
+    if (!mounted) return;
+    setState(() => _unreadSeenFor = widget.unreadSince);
+    widget.onUnreadSeen?.call();
+  }
+  // ── end unread pill ──
+
   Widget _buildMessageList({
     required EdgeInsets padding,
     required double expandedInputWidth,
     required bool showHostTyping,
   }) {
+    final int firstUnreadIndex = _firstUnreadIndex;
     // 1000 px built roughly two extra tall bubbles off each end of the
     // viewport, and the viewport resizes while the keyboard animates.
     const ScrollCacheExtent cacheExtent = ScrollCacheExtent.pixels(400.0);
@@ -3617,7 +3652,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           hasTopPin &&
           _pinnedUiKey != null &&
           ChatUiHelpers.stableUiKey(_messages[i], _uuid) == _pinnedUiKey;
-      return ChatMessageListItem(
+      final Widget item = ChatMessageListItem(
         key: isPinned ? pinnedTopKey : null,
         messages: _messages,
         index: i,
@@ -3663,6 +3698,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
             ? () => editMessageAt(i)
             : null,
       );
+      // The first row the reader has not seen carries the unread pill's key.
+      return i == firstUnreadIndex
+          ? KeyedSubtree(key: _firstUnreadKey, child: item)
+          : item;
     }
 
     Widget itemBuilder(BuildContext context, int i) => rowBuilder(context, i);
@@ -3872,6 +3911,26 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                             ),
                           ),
                         ),
+                  // "N new": jumps to the first unread row (bead
+                  // chuk_chat-f5wd).
+                  if (_unreadPillCount > 0)
+                    Positioned(
+                      top: widget.topInset + 8,
+                      left: 0,
+                      right: 0,
+                      child: Center(
+                        child: UnreadJumpPill(
+                          key: ValueKey<String>(
+                            'unread-pill-${widget.selectedChatId}',
+                          ),
+                          controller: scrollController,
+                          targetKey: _firstUnreadKey,
+                          count: _unreadPillCount,
+                          topInset: widget.topInset,
+                          onSeen: _onUnreadSeen,
+                        ),
+                      ),
+                    ),
                   // Scroll-to-bottom button (centered above input)
                   if (showScrollToBottom && hasMessages)
                     Positioned(

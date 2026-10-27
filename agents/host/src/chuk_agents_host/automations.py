@@ -590,7 +590,7 @@ class AutomationManager:
     ) -> dict:
         """A ``mail`` row: fires for each claimed mail that matches."""
         try:
-            parsed = parse_mail_spec(spec.get("from"), spec.get("subject"))
+            parsed = parse_mail_spec(spec.get("from"), spec.get("subject"), spec.get("alias"))
             notify = parse_notify(notify)
         except (AutomationSpecError, AttributeError) as exc:
             return {"ok": False, "error": str(exc)}
@@ -679,7 +679,7 @@ class AutomationManager:
                     reset_url = parsed["url"] != row["spec"].get("url")
                     fields.update(spec=parsed, next_fire_at=self._now())
                 elif row["kind"] == KIND_MAIL and isinstance(spec, dict):
-                    fields["spec"] = parse_mail_spec(spec.get("from"), spec.get("subject"))
+                    fields["spec"] = parse_mail_spec(spec.get("from"), spec.get("subject"), spec.get("alias"))
                 else:
                     return {"ok": False, "error": f"the spec of a {row['kind']} cannot be changed here"}
         except AutomationSpecError as exc:

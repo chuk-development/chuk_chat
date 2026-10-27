@@ -278,139 +278,26 @@ extension _MessageBubbleRichBlocks on _MessageBubbleState {
     );
   }
 
-  /// Renders an `<email>` block as a card with subject, recipients, body
-  /// preview, and an "Open in Mail App" button that launches a mailto: URI.
+  /// Renders an `<email>` block as the mail draft card ([EmailDraftCard]):
+  /// subject, From/To/Cc rows, the body, a status pill, "Copy" and a "Send"
+  /// that opens the mail app with a mailto: URI.
   Widget _buildEmailBlock(Map<String, dynamic> data) {
-    final to = data['to'] as String? ?? '';
-    final subject = data['subject'] as String? ?? '';
-    final body = data['body'] as String? ?? '';
-    final cc = data['cc'] as String?;
-    final bcc = data['bcc'] as String?;
+    String field(String key) => (data[key] as Object? ?? '').toString().trim();
+    final to = field('to');
+    final subject = field('subject');
+    final body = (data['body'] as Object? ?? '').toString();
+    final cc = field('cc');
+    final bcc = field('bcc');
 
-    final colorScheme = Theme.of(context).colorScheme;
-    final bgColor = Theme.of(context).scaffoldBackgroundColor;
-
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        color: bgColor.lighten(0.03),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: colorScheme.primary.withValues(alpha: 0.25),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: colorScheme.primary.withValues(alpha: 0.08),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(11),
-                topRight: Radius.circular(11),
-              ),
-            ),
-            child: Row(
-              children: [
-                AppIcon(
-                  Icons.email_outlined,
-                  size: 18,
-                  color: colorScheme.primary,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    subject.isNotEmpty ? subject : 'No Subject',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                      color: colorScheme.onSurface,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Recipients
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (to.isNotEmpty) _emailField('To', to, colorScheme),
-                if (cc != null && cc.isNotEmpty)
-                  _emailField('CC', cc, colorScheme),
-                if (bcc != null && bcc.isNotEmpty)
-                  _emailField('BCC', bcc, colorScheme),
-              ],
-            ),
-          ),
-          // Body preview
-          if (body.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 8, 14, 4),
-              child: Text(
-                body.length > 300 ? '${body.substring(0, 300)}...' : body,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: colorScheme.onSurface.withValues(alpha: 0.75),
-                  height: 1.4,
-                ),
-                maxLines: 8,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          // Open button
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
-            child: SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: () => _openMailto(to, subject, body, cc, bcc),
-                icon: const AppIcon(Icons.open_in_new, size: 16),
-                label: Text(AppLocalizations.of(context)!.openInMailApp),
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  textStyle: const TextStyle(fontSize: 13),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _emailField(String label, String value, ColorScheme colorScheme) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 32,
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: colorScheme.onSurface.withValues(alpha: 0.5),
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(fontSize: 13, color: colorScheme.onSurface),
-            ),
-          ),
-        ],
-      ),
+    return EmailDraftCard(
+      to: to,
+      subject: subject,
+      body: body,
+      from: field('from'),
+      cc: cc,
+      bcc: bcc,
+      status: field('status'),
+      onSend: () => _openMailto(to, subject, body, cc, bcc),
     );
   }
 
