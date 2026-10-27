@@ -1,6 +1,6 @@
 # lib/utils · Signaturen
 
-## lib/utils/answer_blocks_parser.dart  (1185 Z.)
+## lib/utils/answer_blocks_parser.dart  (1778 Z.)
 - L19 `enum AnswerBlockKind`  — The block kinds the renderer draws natively.
   - L20 `steps`
   - L21 `timeline`
@@ -13,173 +13,259 @@
   - L28 `ask`
   - L29 `source`
   - L30 `status`
-- L34 `sealed class AnswerSegment`  — One slice of a message: Markdown text or a parsed block.
-  - L35 `const AnswerSegment()`
-- L39 `class AnswerTextSegment extends AnswerSegment`  — Markdown between the blocks, verbatim.
-  - L40 `const AnswerTextSegment(this.text)`
-  - L41 `final String text`
-- L45 `class AnswerBlockSegment extends AnswerSegment`  — A block with its raw body lines.
-  - L46 `const AnswerBlockSegment({ required this.kind, required this.arg, required this.lines, required this.closed, })`
-  - L53 `final AnswerBlockKind kind`
-  - L57 `final String arg`  — Everything after the block name on the opening line. For an alert, the
-  - L60 `final List<String> lines`  — The body lines, without the marker lines.
-  - L63 `final bool closed`  — False while the block is still streaming.
-- L66 `_kBlockNames = <String, AnswerBlockKind>{ 'steps': AnswerBlockKind.steps, 'timeline': AnswerBlockKind.timeline, 'scale':`
-- L79 `_openRe = RegExp(r'^ {0,3}:::\s*([A-Za-z][\w-]*)[ \t]*(.*)$')`
-- L80 `_closeRe = RegExp(r'^ {0,3}:::\s*$')`
-- L83 `_partialCloseRe = RegExp(r'^ {0,3}:{1,2}\s*$')`  — A closing marker that is still being typed (`:` or `::`).
-- L85 `_alertRe = RegExp( r'^ {0,3}>[ \t]?\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][ \t]*(.*)$', caseSensitive: false, )`
-- L90 `bool _isFence(String line)`
-- L98 `List<AnswerSegment> splitAnswerBlocks(String text)`  — Splits [text] into Markdown and block segments.
-- L236 `enum StepPartKind`
-  - L236 `text`
-  - L236 `command`
-  - L236 `warning`
-- L241 `class StepPart`  — One piece of a step body. A [StepPartKind.command] part holds one or more
-  - L242 `const StepPart(this.kind, this.text)`
-  - L243 `final StepPartKind kind`
-  - L244 `final String text`
-- L247 `class StepItem`
-  - L248 `const StepItem({ required this.label, required this.title, required this.parts, })`
-  - L255 `final String label`  — `1`, `2`, ... or `A`, `B`, ... for `::: steps abc`.
-  - L256 `final String title`
-  - L257 `final List<StepPart> parts`
-- L260 `class StepsSpec`
-  - L261 `const StepsSpec({required this.title, required this.steps})`
-  - L262 `final String title`
-  - L263 `final List<StepItem> steps`
-- L266 `_stepNumRe = RegExp(r'^\s{0,3}(\d{1,3})[.)]\s+(.*)$')`
-- L267 `_stepLetterRe = RegExp(r'^\s{0,3}([A-Za-z])[.)]\s+(.*)$')`
-- L268 `_lettersArgRe = RegExp(r'^abc\b\s*', caseSensitive: false)`
-- L270 `String _letter(int index)`
-- L273 `StepsSpec parseSteps(String arg, List<String> lines)`
-- L334 `class TimelineEntry`
-  - L335 `const TimelineEntry({ required this.label, required this.text, required this.highlight, })`
-  - L342 `final String label`  — The date or label before the first `: `. Empty when the line has none.
-  - L343 `final String text`
-  - L346 `final bool highlight`  — The line started with `*`: the key entry.
-- L351 `(String, String) splitKeyValue(String line)`  — Splits at the first `: ` (colon and space), so `12:30: Lunch` keeps its
-- L359 `_boldLabelRe = RegExp( r'^(?:\*\*|__)(.+?)(?:\*\*|__)\s*:?\s+(.*)$', )`  — A label the model wrapped in bold: `**Goethe:** Faust` or
-- L365 `String stripLabelEmphasis(String label)`  — Drops a wrapping `**…**` / `__…__` and a trailing colon from a label.
-- L373 `List<TimelineEntry> parseTimeline(List<String> lines)`
-- L402 `_digitRe = RegExp(r'\d')`
-- L406 `kTimelineLabelMaxChars = 14`  — The longest label the timeline's date column draws, in characters
-- L412 `bool timelineIsDated(List<TimelineEntry> entries)`  — True when [entries] is a real timeline: most entries carry a short,
-- L428 `class ScalePoint`
-  - L429 `const ScalePoint({required this.value, required this.raw, this.label = ''})`
-  - L430 `final double value`
-  - L433 `final String raw`  — The number as the model wrote it, shown unchanged.
-  - L434 `final String label`
-- L437 `class ScaleSpec`
-  - L438 `const ScaleSpec({ required this.min, required this.max, required this.unit, required this.ticks, required this.markers, })`
-  - L446 `final double min`
-  - L447 `final double max`
-  - L448 `final String unit`
-  - L449 `final List<ScalePoint> ticks`
-  - L450 `final List<ScalePoint> markers`
-  - L452 `bool get isKelvin`
-  - L456 `double fraction(double value)`  — Where [value] sits on the band, 0..1.
-- L462 `_numRe = RegExp(r"-?\d[\d.,']*")`
-- L466 `double? parseLooseNumber(String s)`  — Reads the first number in [s]. Accepts `2700`, `2.700` and `2,700`
-- L488 `_rangeRe = RegExp( r"^\s*(-?\d[\d.,']*)\s*(?:–|—|-|\.\.|to|bis)\s*(-?\d[\d.,']*)\s*(.*)$", caseSensitive: false, )`
-- L495 `ScaleSpec? parseScale(String arg, List<String> lines)`  — Returns null when the block cannot be drawn (no range and fewer than two
-- L563 `class BarRow`
-  - L564 `const BarRow({ required this.label, required this.valueText, required this.sub, required this.value, })`
-  - L571 `final String label`
-  - L572 `final String valueText`
-  - L573 `final String sub`
-  - L576 `final double? value`  — First number in [valueText], or null (row draws at full length then).
-- L579 `class BarsSpec`
-  - L580 `const BarsSpec({ required this.title, required this.rows, this.note = '', this.tag = '', })`
-  - L586 `final String title`
-  - L587 `final List<BarRow> rows`
-  - L588 `final String note`
-  - L591 `final String tag`  — Optional small label chip above the title (`tag: BF16 · nur Gewichte`).
-- L594 `BarsSpec parseBars(String arg, List<String> lines)`
-- L639 `class KpiTile`
-  - L640 `const KpiTile({required this.value, required this.label, this.icon = ''})`
-  - L641 `final String value`
-  - L642 `final String label`
-  - L643 `final String icon`
-- L646 `class KpiSpec`
-  - L647 `const KpiSpec({required this.title, required this.tiles, this.tag = ''})`
-  - L648 `final String title`
-  - L649 `final List<KpiTile> tiles`
-  - L650 `final String tag`
-- L653 `KpiSpec parseKpi(String arg, List<String> lines)`
-- L690 `class IconTile`
-  - L691 `const IconTile({required this.label, this.icon = '', this.sub = ''})`
-  - L692 `final String label`
-  - L693 `final String icon`
-  - L694 `final String sub`
-- L697 `class TilesSpec`
-  - L698 `const TilesSpec({required this.title, required this.tiles, this.tag = ''})`
-  - L699 `final String title`
-  - L700 `final List<IconTile> tiles`
-  - L701 `final String tag`
-- L704 `TilesSpec parseTiles(String arg, List<String> lines)`
-- L754 `class AnswerCard`
-  - L755 `const AnswerCard({ required this.title, this.subtitle = '', this.image = '', this.badge = '', this.price = '', this.url = '', this.action = '', this.metas = const <String>[], this.chips = const <String>[], })`
-  - L766 `final String title`
-  - L767 `final String subtitle`
-  - L768 `final String image`
-  - L769 `final String badge`
-  - L770 `final String price`
-  - L771 `final String url`
-  - L774 `final String action`  — Label of the action button (default "Open" in the widget).
-  - L775 `final List<String> metas`
-  - L776 `final List<String> chips`
-- L779 `class CardsSpec`
-  - L780 `const CardsSpec({required this.label, required this.cards})`
-  - L781 `final String label`
-  - L782 `final List<AnswerCard> cards`
-- L785 `_kCardKeys = <String>[ 'image', 'badge', 'subtitle', 'price', 'url', 'link', 'action', ]`
-- L795 `AnswerCard _parseCardRecord(List<String> record)`
-- L874 `CardsSpec parseCards(String arg, List<String> lines)`
-- L913 `class AskSpec`
-  - L914 `const AskSpec({required this.question, required this.chips})`
-  - L915 `final String question`
-  - L916 `final List<String> chips`
-- L919 `AskSpec parseAsk(String arg, List<String> lines)`
-- L939 `class SourceRow`
-  - L940 `const SourceRow({required this.title, this.url = ''})`
-  - L941 `final String title`
-  - L942 `final String url`
-- L945 `class SourceSpec`
-  - L946 `const SourceSpec({required this.rows})`
-  - L947 `final List<SourceRow> rows`
-- L950 `SourceSpec parseSource(String arg, List<String> lines)`
-- L998 `enum StatusKind`  — The colour family of a status chip.
-  - L998 `failed`
-  - L998 `overdue`
-  - L998 `due`
-  - L998 `ok`
-  - L998 `neutral`
-- L1000 `_kStatusWords = <String, StatusKind>{ 'failed': StatusKind.failed, 'fail': StatusKind.failed, 'error': StatusKind.failed`
-- L1029 `class StatusItem`
-  - L1030 `const StatusItem({ required this.title, this.detail = '', this.amount = '', this.kind = StatusKind.neutral, this.statusLabel = '', this.date = '', this.domain = '', this.actionLabel = '', this.actionUrl = '', })`
-  - L1042 `final String title`
-  - L1043 `final String detail`
-  - L1044 `final String amount`
-  - L1045 `final StatusKind kind`
-  - L1048 `final String statusLabel`  — The chip text; empty means no chip.
-  - L1049 `final String date`
-  - L1052 `final String domain`  — Bare host for the logo (`hetzner.com`), empty when none is usable.
-  - L1053 `final String actionLabel`
-  - L1056 `final String actionUrl`  — An http(s) URL, empty when the row has no action.
-- L1059 `class StatusSpec`
-  - L1060 `const StatusSpec({ required this.title, required this.summary, required this.items, this.moreLabel = '', this.moreItems = const <StatusItem>[], })`
-  - L1069 `final String title`  — The bold header line (`4 offene Zahlungen`).
-  - L1072 `final String summary`  — The muted line under it (`122,20 € + 50 $`).
-  - L1073 `final List<StatusItem> items`
-  - L1076 `final String moreLabel`  — The collapsed footer row; empty means no footer.
-  - L1077 `final List<StatusItem> moreItems`
-- L1080 `_hostRe = RegExp( r'^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}$', )`
-- L1083 `_urlTokenRe = RegExp(r'https?://\S+', caseSensitive: false)`
-- L1088 `String statusDomain(String raw)`  — A host fit for the favicon services, or ''. Accepts `hetzner.com`,
-- L1099 `(StatusKind, String) _parseStatus(String raw)`
-- L1115 `StatusItem? _parseStatusRow(String line)`
-- L1148 `StatusSpec parseStatus(String arg, List<String> lines)`
+  - L31 `check`
+  - L32 `term`
+  - L33 `grid`
+  - L34 `sizes`
+  - L35 `quote`
+  - L36 `more`
+- L40 `sealed class AnswerSegment`  — One slice of a message: Markdown text or a parsed block.
+  - L41 `const AnswerSegment()`
+- L45 `class AnswerTextSegment extends AnswerSegment`  — Markdown between the blocks, verbatim.
+  - L46 `const AnswerTextSegment(this.text)`
+  - L47 `final String text`
+- L51 `class AnswerBlockSegment extends AnswerSegment`  — A block with its raw body lines.
+  - L52 `const AnswerBlockSegment({ required this.kind, required this.arg, required this.lines, required this.closed, })`
+  - L59 `final AnswerBlockKind kind`
+  - L63 `final String arg`  — Everything after the block name on the opening line. For an alert, the
+  - L66 `final List<String> lines`  — The body lines, without the marker lines.
+  - L69 `final bool closed`  — False while the block is still streaming.
+- L72 `_kBlockNames = <String, AnswerBlockKind>{ 'steps': AnswerBlockKind.steps, 'timeline': AnswerBlockKind.timeline, 'scale':`
+- L92 `_openRe = RegExp(r'^ {0,3}:::\s*([A-Za-z][\w-]*)[ \t]*(.*)$')`
+- L93 `_closeRe = RegExp(r'^ {0,3}:::\s*$')`
+- L96 `_partialCloseRe = RegExp(r'^ {0,3}:{1,2}\s*$')`  — A closing marker that is still being typed (`:` or `::`).
+- L98 `_alertRe = RegExp( r'^ {0,3}>[ \t]?\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][ \t]*(.*)$', caseSensitive: false, )`
+- L105 `_detailsOpenRe = RegExp( r'^ {0,3}<details(?:\s[^>]*)?>(.*)$', caseSensitive: false, )`  — An HTML `<details>` opening tag at the start of a line, with whatever
+- L109 `_detailsCloseRe = RegExp(r'</details\s*>', caseSensitive: false)`
+- L110 `_summaryRe = RegExp( r'^\s*<summary(?:\s[^>]*)?>(.*?)</summary\s*>(.*)$', caseSensitive: false, )`
+- L115 `bool _isFence(String line)`
+- L123 `List<AnswerSegment> splitAnswerBlocks(String text)`  — Splits [text] into Markdown and block segments.
+- L282 `(int, AnswerBlockSegment) _readDetails( List<String> lines, int start, String rest, )`  — Reads an HTML `<details>` block that opens on `lines[start]` and returns
+- L362 `String _stripTags(String s)`
+- L368 `enum StepPartKind`
+  - L368 `text`
+  - L368 `command`
+  - L368 `warning`
+- L373 `class StepPart`  — One piece of a step body. A [StepPartKind.command] part holds one or more
+  - L374 `const StepPart(this.kind, this.text)`
+  - L375 `final StepPartKind kind`
+  - L376 `final String text`
+- L379 `class StepItem`
+  - L380 `const StepItem({ required this.label, required this.title, required this.parts, })`
+  - L387 `final String label`  — `1`, `2`, ... or `A`, `B`, ... for `::: steps abc`.
+  - L388 `final String title`
+  - L389 `final List<StepPart> parts`
+- L392 `class StepsSpec`
+  - L393 `const StepsSpec({required this.title, required this.steps})`
+  - L394 `final String title`
+  - L395 `final List<StepItem> steps`
+- L398 `_stepNumRe = RegExp(r'^\s{0,3}(\d{1,3})[.)]\s+(.*)$')`
+- L399 `_stepLetterRe = RegExp(r'^\s{0,3}([A-Za-z])[.)]\s+(.*)$')`
+- L400 `_lettersArgRe = RegExp(r'^abc\b\s*', caseSensitive: false)`
+- L402 `String _letter(int index)`
+- L405 `StepsSpec parseSteps(String arg, List<String> lines)`
+- L466 `class TimelineEntry`
+  - L467 `const TimelineEntry({ required this.label, required this.text, required this.highlight, })`
+  - L474 `final String label`  — The date or label before the first `: `. Empty when the line has none.
+  - L475 `final String text`
+  - L478 `final bool highlight`  — The line started with `*`: the key entry.
+- L483 `(String, String) splitKeyValue(String line)`  — Splits at the first `: ` (colon and space), so `12:30: Lunch` keeps its
+- L494 `_boldLabelRe = RegExp( r'^(?:\*\*|__)(?:(.+?:)(?:\*\*|__)|(.+?)(?:\*\*|__)\s*:)\s+(.*)$', )`  — A label the model wrapped in bold: `**Goethe:** Faust` or
+- L500 `String stripLabelEmphasis(String label)`  — Drops a wrapping `**…**` / `__…__` and a trailing colon from a label.
+- L508 `List<TimelineEntry> parseTimeline(List<String> lines)`
+- L540 `_digitRe = RegExp(r'\d')`
+- L544 `kTimelineLabelMaxChars = 14`  — The longest label the timeline's date column draws, in characters
+- L550 `bool timelineIsDated(List<TimelineEntry> entries)`  — True when [entries] is a real timeline: most entries carry a short,
+- L566 `class ScalePoint`
+  - L567 `const ScalePoint({required this.value, required this.raw, this.label = ''})`
+  - L568 `final double value`
+  - L571 `final String raw`  — The number as the model wrote it, shown unchanged.
+  - L572 `final String label`
+- L575 `class ScaleSpec`
+  - L576 `const ScaleSpec({ required this.min, required this.max, required this.unit, required this.ticks, required this.markers, })`
+  - L584 `final double min`
+  - L585 `final double max`
+  - L586 `final String unit`
+  - L587 `final List<ScalePoint> ticks`
+  - L588 `final List<ScalePoint> markers`
+  - L590 `bool get isKelvin`
+  - L594 `double fraction(double value)`  — Where [value] sits on the band, 0..1.
+- L600 `_numRe = RegExp(r"-?\d[\d.,']*")`
+- L604 `double? parseLooseNumber(String s)`  — Reads the first number in [s]. Accepts `2700`, `2.700` and `2,700`
+- L626 `_rangeRe = RegExp( r"^\s*(-?\d[\d.,']*)\s*(?:–|—|-|\.\.|to|bis)\s*(-?\d[\d.,']*)\s*(.*)$", caseSensitive: false, )`
+- L633 `ScaleSpec? parseScale(String arg, List<String> lines)`  — Returns null when the block cannot be drawn (no range and fewer than two
+- L701 `class BarRow`
+  - L702 `const BarRow({ required this.label, required this.valueText, required this.sub, required this.value, })`
+  - L709 `final String label`
+  - L710 `final String valueText`
+  - L711 `final String sub`
+  - L714 `final double? value`  — First number in [valueText], or null (row draws at full length then).
+- L717 `class BarsSpec`
+  - L718 `const BarsSpec({ required this.title, required this.rows, this.note = '', this.tag = '', })`
+  - L724 `final String title`
+  - L725 `final List<BarRow> rows`
+  - L726 `final String note`
+  - L729 `final String tag`  — Optional small label chip above the title (`tag: BF16 · nur Gewichte`).
+- L732 `BarsSpec parseBars(String arg, List<String> lines)`
+- L777 `class KpiTile`
+  - L778 `const KpiTile({required this.value, required this.label, this.icon = ''})`
+  - L779 `final String value`
+  - L780 `final String label`
+  - L781 `final String icon`
+- L784 `class KpiSpec`
+  - L785 `const KpiSpec({required this.title, required this.tiles, this.tag = ''})`
+  - L786 `final String title`
+  - L787 `final List<KpiTile> tiles`
+  - L788 `final String tag`
+- L791 `KpiSpec parseKpi(String arg, List<String> lines)`
+- L828 `class IconTile`
+  - L829 `const IconTile({required this.label, this.icon = '', this.sub = ''})`
+  - L830 `final String label`
+  - L831 `final String icon`
+  - L832 `final String sub`
+- L835 `class TilesSpec`
+  - L836 `const TilesSpec({required this.title, required this.tiles, this.tag = ''})`
+  - L837 `final String title`
+  - L838 `final List<IconTile> tiles`
+  - L839 `final String tag`
+- L842 `TilesSpec parseTiles(String arg, List<String> lines)`
+- L899 `class CardSpecItem`  — One spec tile of a card (`specs: ANC · Adaptiv | sound`).
+  - L900 `const CardSpecItem({required this.label, this.icon = ''})`
+  - L901 `final String label`
+  - L902 `final String icon`
+- L905 `class AnswerCard`
+  - L906 `const AnswerCard({ required this.title, this.subtitle = '', this.location = '', this.rating = '', this.ask = '', this.specs = const <CardSpecItem>[], this.image = '', this.badge = '', this.price = '', this.url = '', this.action = '', this.metas = const <String>[], this.chips = const <String>[], })`
+  - L921 `final String title`
+  - L922 `final String subtitle`
+  - L925 `final String location`  — Place line, drawn with a pin icon.
+  - L928 `final String rating`  — Rating line, drawn with a star icon.
+  - L932 `final String ask`  — Label of the tonal second button; a tap sends `label: title` as the
+  - L933 `final List<CardSpecItem> specs`
+  - L934 `final String image`
+  - L935 `final String badge`
+  - L936 `final String price`
+  - L937 `final String url`
+  - L940 `final String action`  — Label of the action button (default "Open" in the widget).
+  - L941 `final List<String> metas`
+  - L942 `final List<String> chips`
+- L945 `class CardsSpec`
+  - L946 `const CardsSpec({required this.label, required this.cards})`
+  - L947 `final String label`
+  - L948 `final List<AnswerCard> cards`
+- L951 `_kCardKeys = <String>[ 'image', 'badge', 'subtitle', 'location', 'rating', 'ask', 'price', 'url', 'link', 'action', ]`
+- L964 `AnswerCard _parseCardRecord(List<String> record)`
+- L1071 `CardsSpec parseCards(String arg, List<String> lines)`
+- L1114 `class AskSpec`
+  - L1115 `const AskSpec({ required this.question, required this.chips, this.chipIcons = const <String>[], this.buttons = const <String>[], })`
+  - L1121 `final String question`
+  - L1124 `final List<String> chips`  — The chip labels; what a tap sends.
+  - L1127 `final List<String> chipIcons`  — Icon alias per chip, '' for none. Same length as [chips].
+  - L1130 `final List<String> buttons`  — Labels of the filled action buttons, drawn above the chips.
+  - L1133 `String iconAt(int i)`  — Icon alias of chip [i], '' when it has none.
+- L1136 `AskSpec parseAsk(String arg, List<String> lines)`
+- L1192 `enum StatusKind`  — The colour family of a status chip.
+  - L1192 `failed`
+  - L1192 `overdue`
+  - L1192 `due`
+  - L1192 `ok`
+  - L1192 `neutral`
+- L1194 `_kStatusWords = <String, StatusKind>{ 'failed': StatusKind.failed, 'fail': StatusKind.failed, 'error': StatusKind.failed`
+- L1223 `class StatusItem`
+  - L1224 `const StatusItem({ required this.title, this.detail = '', this.amount = '', this.kind = StatusKind.neutral, this.statusLabel = '', this.date = '', this.domain = '', this.actionLabel = '', this.actionUrl = '', })`
+  - L1236 `final String title`
+  - L1237 `final String detail`
+  - L1238 `final String amount`
+  - L1239 `final StatusKind kind`
+  - L1242 `final String statusLabel`  — The chip text; empty means no chip.
+  - L1243 `final String date`
+  - L1246 `final String domain`  — Bare host for the logo (`hetzner.com`), empty when none is usable.
+  - L1247 `final String actionLabel`
+  - L1250 `final String actionUrl`  — An http(s) URL, empty when the row has no action.
+- L1253 `class StatusSpec`
+  - L1254 `const StatusSpec({ required this.title, required this.summary, required this.items, this.moreLabel = '', this.moreItems = const <StatusItem>[], })`
+  - L1263 `final String title`  — The bold header line (`4 offene Zahlungen`).
+  - L1266 `final String summary`  — The muted line under it (`122,20 € + 50 $`).
+  - L1267 `final List<StatusItem> items`
+  - L1270 `final String moreLabel`  — The collapsed footer row; empty means no footer.
+  - L1271 `final List<StatusItem> moreItems`
+- L1274 `_hostRe = RegExp( r'^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}$', )`
+- L1277 `_urlTokenRe = RegExp(r'https?://\S+', caseSensitive: false)`
+- L1282 `String statusDomain(String raw)`  — A host fit for the favicon services, or ''. Accepts `hetzner.com`,
+- L1293 `(StatusKind, String) _parseStatus(String raw)`
+- L1309 `StatusItem? _parseStatusRow(String line)`
+- L1342 `StatusSpec parseStatus(String arg, List<String> lines)`
+- L1386 `String? _tagLine(String line)`  — Reads a `tag: …` line, the shared small chip above a module title.
+- L1397 `class CheckItem`
+  - L1398 `const CheckItem({required this.label, required this.done})`
+  - L1399 `final String label`
+  - L1400 `final bool done`
+- L1403 `class CheckSpec`
+  - L1404 `const CheckSpec({required this.title, required this.items, this.tag = ''})`
+  - L1405 `final String title`
+  - L1406 `final List<CheckItem> items`
+  - L1407 `final String tag`
+- L1410 `_checkRe = RegExp(r'^(?:[-*+]\s+)?\[([ xX✓])\]\s*(.*)$')`
+- L1412 `CheckSpec parseCheck(String arg, List<String> lines)`
+- L1456 `class TermEntry`
+  - L1457 `const TermEntry({required this.term, this.meaning = ''})`
+  - L1458 `final String term`
+  - L1459 `final String meaning`
+- L1462 `class TermSpec`
+  - L1463 `const TermSpec({required this.tag, required this.entries, this.note = ''})`
+  - L1464 `final String tag`
+  - L1465 `final List<TermEntry> entries`
+  - L1466 `final String note`
+- L1469 `TermSpec parseTerm(String arg, List<String> lines)`
+- L1509 `enum GridCellKind`
+  - L1509 `plain`
+  - L1509 `marked`
+  - L1509 `filled`
+- L1511 `class GridCell`
+  - L1512 `const GridCell({required this.label, required this.kind})`
+  - L1513 `final String label`
+  - L1514 `final GridCellKind kind`
+- L1517 `class GridLegend`
+  - L1518 `const GridLegend({required this.kind, required this.label})`
+  - L1519 `final GridCellKind kind`
+  - L1520 `final String label`
+- L1523 `class GridSpec`
+  - L1524 `const GridSpec({ required this.title, required this.rows, this.legend = const <GridLegend>[], this.tag = '', })`
+  - L1530 `final String title`
+  - L1531 `final List<List<GridCell>> rows`
+  - L1532 `final List<GridLegend> legend`
+  - L1533 `final String tag`
+  - L1536 `int get columns`  — The widest row; every row is laid out on this many columns.
+- L1542 `GridCellKind _gridKind(String marker)`
+- L1548 `GridSpec parseGrid(String arg, List<String> lines)`
+- L1604 `class SizeItem`
+  - L1605 `const SizeItem({ required this.label, required this.valueText, required this.value, this.icon = '', })`
+  - L1611 `final String label`
+  - L1612 `final String valueText`
+  - L1613 `final double? value`
+  - L1614 `final String icon`
+- L1617 `class SizesSpec`
+  - L1618 `const SizesSpec({ required this.title, required this.items, this.note = '', this.tag = '', })`
+  - L1624 `final String title`
+  - L1625 `final List<SizeItem> items`
+  - L1626 `final String note`
+  - L1627 `final String tag`
+  - L1630 `double fraction(int i)`  — Diameter of item [i] relative to the biggest, 0.25..1.
+- L1641 `SizesSpec parseSizes(String arg, List<String> lines)`
+- L1689 `class QuoteSpec`
+  - L1690 `const QuoteSpec({ required this.symbol, this.price = '', this.change = '', this.note = '', this.points = const <double>[], this.labels = const <String>[], })`
+  - L1698 `final String symbol`
+  - L1699 `final String price`
+  - L1700 `final String change`
+  - L1701 `final String note`
+  - L1702 `final List<double> points`
+  - L1703 `final List<String> labels`
+  - L1706 `int get direction`  — -1 down, 1 up, 0 flat or unknown, from the sign of [change].
+- L1716 `QuoteSpec parseQuote(String arg, List<String> lines)`
+- L1769 `class MoreSpec`
+  - L1770 `const MoreSpec({required this.title, required this.body})`
+  - L1771 `final String title`
+  - L1772 `final String body`
+- L1775 `MoreSpec parseMore(String arg, List<String> lines)`
 
 ## lib/utils/api_rate_limiter.dart  (248 Z.)
 - L4 `class RateLimitConfig`  — API rate limiting configuration for different endpoint types.
@@ -240,6 +326,9 @@
 - L68 `List<ParsedArtifactTag> parseArtifactTags(String text)`  — Returns all complete `<artifact>` blocks found in [text]. Partial
 - L117 `String _stripWrappingFence(String content)`  — Strip a single surrounding "```lang\n … \n```" fence if present. Leaves
 - L127 `String stripArtifactTagsForDisplay( String content, { bool stripIncomplete = true, })`  — Strips complete `<artifact>...</artifact>` blocks from [content]. When
+
+## lib/utils/ask_user_args.dart  (10 Z.)
+- L8 `bool askUserIsMultiple(Object? raw)`  — Reads ask_user's `multiple` flag. Models send it as a bool or as the
 
 ## lib/utils/automation_message.dart  (55 Z.)
 - L17 `class AutomationWake`  — A user turn that a fired automation produced, not a person.
@@ -566,6 +655,79 @@
   - L74 `void clear()`  — Removes all entries.
   - L79 `void _evictOldest()`
 
+## lib/utils/map_features.dart  (742 Z.)
+- L18 `enum MapFeatureKind`  — What a feature means. Decides the colour, the line style and the icon.
+  - L18 `closure`
+  - L18 `roadworks`
+  - L18 `detour`
+  - L18 `info`
+- L21 `class FeatureEndpoint`  — One end of a road stretch: a cross street by name or a coordinate.
+  - L22 `const FeatureEndpoint({this.street, this.point})`
+  - L24 `final String? street`
+  - L25 `final LatLng? point`
+  - L27 `bool get isEmpty`
+- L31 `class MapFeatureSpec`  — One parsed feature, before any network lookup.
+  - L32 `const MapFeatureSpec({ required this.kind, required this.label, this.info, this.dates, this.detour, this.url, this.point, this.lines = const [], this.polygons = const [], this.ref, this.road, this.town, this.from, this.to, this.areaName, })`
+  - L50 `final MapFeatureKind kind`
+  - L51 `final String label`
+  - L52 `final String? info`
+  - L53 `final String? dates`
+  - L54 `final String? detour`
+  - L55 `final String? url`
+  - L58 `final LatLng? point`  — Geometry the model gave directly.
+  - L59 `final List<List<LatLng>> lines`
+  - L60 `final List<List<LatLng>> polygons`
+  - L63 `final String? ref`  — Geometry the client has to look up.
+  - L64 `final String? road`
+  - L65 `final String? town`
+  - L66 `final FeatureEndpoint? from`
+  - L67 `final FeatureEndpoint? to`
+  - L68 `final String? areaName`
+  - L71 `bool get needsResolve`  — True when part of the geometry still has to be fetched.
+  - L77 `ResolvedGeometry get inlineGeometry`  — The geometry known without any lookup.
+  - L81 `String get resolveKey`  — Stable key for caching a lookup of this feature's geometry.
+- L91 `String _pointKey(LatLng? p)`
+- L96 `class ResolvedGeometry`  — Geometry ready to draw.
+  - L97 `const ResolvedGeometry({ this.lines = const [], this.polygons = const [], this.point, })`
+  - L103 `static const ResolvedGeometry empty = ResolvedGeometry()`
+  - L105 `final List<List<LatLng>> lines`
+  - L106 `final List<List<LatLng>> polygons`
+  - L107 `final LatLng? point`
+  - L109 `bool get isEmpty`
+  - L115 `List<LatLng> get allPoints`  — Every coordinate, for fitting the camera.
+  - L123 `LatLng? get labelPoint`  — Where the feature's icon sits: the middle of the longest line, the
+  - L138 `ResolvedGeometry merge(ResolvedGeometry other)`  — This geometry with [other]'s parts added.
+- L146 `class MapFeaturesBlockData`  — A parsed `features` map block.
+  - L147 `const MapFeaturesBlockData({required this.features, this.title})`
+  - L149 `final String? title`
+  - L150 `final List<MapFeatureSpec> features`
+- L154 `bool isFeaturesMap(Map<String, dynamic> data)`  — True when a parsed <map> object uses the features form.
+- L168 `MapFeaturesBlockData parseMapFeatures(Map<String, dynamic> data)`  — Parses a features map. Never throws: an item that cannot be understood is
+- L202 `MapFeatureSpec? parseMapFeature( Map<String, dynamic> m, { String? defaultTown, })`  — Parses one feature object. Returns null when it has no geometry at all,
+- L309 `FeatureEndpoint? _parseEndpoint(dynamic raw)`
+- L318 `MapFeatureKind parseFeatureKind( dynamic raw, { MapFeatureKind fallback = MapFeatureKind.closure, })`  — Maps the many words a model uses for a kind onto [MapFeatureKind].
+- L359 `String _kindLabel(MapFeatureKind kind)`
+- L366 `String? _str(dynamic v)`
+- L373 `double? _num(dynamic v)`
+- L382 `LatLng? _validLatLng(double? a, double? b)`
+- L398 `LatLng? parseLatLng(dynamic raw)`  — Reads one coordinate from `{lat, lon}`, `[lat, lon]` or `"lat,lon"`.
+- L420 `List<LatLng> parseLatLngList(dynamic raw)`  — Reads a coordinate list: `[[lat,lon],...]`, `[{lat,lon},...]`,
+- L441 `List<List<LatLng>> parseLatLngLines(dynamic raw)`  — Reads one or several coordinate lists (a line or a multi-line).
+- L461 `List<LatLng> _lonLatList(dynamic raw)`
+- L475 `ResolvedGeometry geometryFromGeoJson(dynamic geojson)`  — Converts a GeoJSON geometry (as Nominatim's `polygon_geojson` returns
+- L522 `ResolvedGeometry geometryFromArcgis(dynamic geometry)`  — Converts an ArcGIS REST geometry (`paths`, `rings` or `x`/`y`, queried
+- L537 `_distance = Distance()`
+- L539 `double _meters(LatLng a, LatLng b)`
+- L542 `double pathLength(List<LatLng> path)`  — Length of a polyline in metres.
+- L551 `LatLng pointAlongPath(List<LatLng> path, double fraction)`  — The point [fraction] (0..1) of the way along [path].
+- L571 `LatLng centroid(List<LatLng> ring)`  — Plain vertex average; good enough to place an icon inside a small area.
+- L581 `String _vertexKey(LatLng p)`
+- L587 `List<LatLng> intersectionCandidates( List<List<LatLng>> road, List<List<LatLng>> cross, { double maxMeters = 40, })`  — Points where [cross] meets [road]: shared vertices first (OSM ways that
+- L624 `LatLng? nearestVertex(List<List<LatLng>> road, LatLng p)`  — The road vertex closest to [p].
+- L642 `List<LatLng>? shortestPathOnRoad(List<List<LatLng>> road, LatLng a, LatLng b)`  — The shortest way along [road] from [a] to [b] (both snapped to the
+- L704 `List<LatLng>? clipRoadBetween( List<List<LatLng>> road, List<LatLng> fromCandidates, List<LatLng> toCandidates, )`  — Cuts the stretch of [road] between the [fromCandidates] and
+- L726 `double zoomForSpan(List<LatLng> points)`  — Camera zoom for a set of points when no bounds fit is possible.
+
 ## lib/utils/map_geometry.dart  (30 Z.)
 - L12 `bool hasPointSpread(List<LatLng> points)`  — True when [points] cover more than one place on the map.
 - L27 `double _shortestLonDelta(double a, double b)`  — Degrees between two longitudes the short way round.
@@ -745,7 +907,7 @@
 - L17 `String? formatAssistantContent( Map<String, String> message, { bool includeReasoning = false, bool includeToolResults = true, })`  — Builds the assistant `content` string for one stored message, optionally
 - L53 `String _buildPreviousToolResultsBlock(String? toolCallsJson)`
 
-## lib/utils/tool_parser.dart  (775 Z.)
+## lib/utils/tool_parser.dart  (776 Z.)
 - L5 `toolCallStart = '<tool_call>'`
 - L6 `toolCallEnd = '</tool_call>'`
 - L8 `_xmlToolCallBlockPattern = RegExp( r'<tool_call>[\s\S]*?</tool_call>', caseSensitive: false, )`
@@ -762,30 +924,35 @@
 - L106 `_invokeParameterPattern = RegExp( '<\\s*$_foreignToolTagNamespace' r'''parameter\b[^>]*?\bname\s*=\s*["']([^"']+)["'][^>`
 - L118 `_foreignToolProtocolStartPattern = RegExp( '<\\s*$_notCanonicalToolCallTag$_foreignToolTagNamespace' '$_foreignToolTagNa`
 - L126 `_knownDirectXmlToolNames = <String>{ 'ask_user', 'web_search', 'web_crawl', 'generate_image', 'fetch_image', 'fetch_file`
-- L154 `Map<String, dynamic>? tryParseToolJson(String raw)`  — Try to parse JSON from a tool call, with repair for common LLM errors:
-- L187 `Map<String, dynamic>? _parseLegacyToolCallSyntax(String raw)`
-- L235 `Map<String, dynamic>? _extractEmbeddedToolJson(String raw)`
-- L258 `Map<String, dynamic>? _extractInlineArgumentsObject(String s)`
-- L279 `String? _extractBalancedObject(String s, int startIndex)`
-- L320 `int _countUnclosedBracesOutsideStrings(String s)`
-- L359 `Map<String, dynamic> _coerceStringKeyedMap(dynamic rawArgs)`
-- L385 `bool hasToolCallStartMarker(String content)`  — Returns true when a response has started emitting a tool-call marker,
-- L395 `bool hasForeignToolProtocolMarker(String content)`  — True when the text carries a tool-call protocol this app does not parse
-- L409 `List<({int start, int end})> _codeSpanRanges(String content)`  — Start/end offsets of fenced blocks and inline code spans.
-- L438 `bool _isInsideCode(int index, List<({int start, int end})> codeRanges)`
-- L445 `Match? _firstMatchOutsideCode( RegExp pattern, String content, List<({int start, int end})> codeRanges, )`
-- L460 `String _stripForeignToolProtocol( String content, { required bool stripIncomplete, })`  — Removes foreign tool-call protocol text so it never reaches the user.
-- L497 `String stripToolCallBlocksForDisplay( String content, { bool stripIncomplete = true, })`  — Removes tool-call XML blocks from user-visible text.
-- L590 `int _earliestCaseInsensitiveIndex(String haystack, String needle)`
-- L596 `List<Map<String, dynamic>> parseToolCalls(String content)`  — Parse ALL tool calls from LLM response content (supports multiple).
-- L687 `dynamic _decodeInvokeParameterValue(String raw)`  — `<parameter>` bodies are untyped text. Only unambiguous JSON shapes are
-- L707 `bool hasToolCalls(String content)`  — Check if the content contains any tool call tags.
-- L728 `bool _isKnownDirectXmlToolName(String tagName)`
-- L732 `Map<String, dynamic> _parseDirectXmlToolArgs(String inner)`
-- L763 `int _earliestDirectXmlToolStart(String content)`
+- L155 `Map<String, dynamic>? tryParseToolJson(String raw)`  — Try to parse JSON from a tool call, with repair for common LLM errors:
+- L188 `Map<String, dynamic>? _parseLegacyToolCallSyntax(String raw)`
+- L236 `Map<String, dynamic>? _extractEmbeddedToolJson(String raw)`
+- L259 `Map<String, dynamic>? _extractInlineArgumentsObject(String s)`
+- L280 `String? _extractBalancedObject(String s, int startIndex)`
+- L321 `int _countUnclosedBracesOutsideStrings(String s)`
+- L360 `Map<String, dynamic> _coerceStringKeyedMap(dynamic rawArgs)`
+- L386 `bool hasToolCallStartMarker(String content)`  — Returns true when a response has started emitting a tool-call marker,
+- L396 `bool hasForeignToolProtocolMarker(String content)`  — True when the text carries a tool-call protocol this app does not parse
+- L410 `List<({int start, int end})> _codeSpanRanges(String content)`  — Start/end offsets of fenced blocks and inline code spans.
+- L439 `bool _isInsideCode(int index, List<({int start, int end})> codeRanges)`
+- L446 `Match? _firstMatchOutsideCode( RegExp pattern, String content, List<({int start, int end})> codeRanges, )`
+- L461 `String _stripForeignToolProtocol( String content, { required bool stripIncomplete, })`  — Removes foreign tool-call protocol text so it never reaches the user.
+- L498 `String stripToolCallBlocksForDisplay( String content, { bool stripIncomplete = true, })`  — Removes tool-call XML blocks from user-visible text.
+- L591 `int _earliestCaseInsensitiveIndex(String haystack, String needle)`
+- L597 `List<Map<String, dynamic>> parseToolCalls(String content)`  — Parse ALL tool calls from LLM response content (supports multiple).
+- L688 `dynamic _decodeInvokeParameterValue(String raw)`  — `<parameter>` bodies are untyped text. Only unambiguous JSON shapes are
+- L708 `bool hasToolCalls(String content)`  — Check if the content contains any tool call tags.
+- L729 `bool _isKnownDirectXmlToolName(String tagName)`
+- L733 `Map<String, dynamic> _parseDirectXmlToolArgs(String inner)`
+- L764 `int _earliestDirectXmlToolStart(String content)`
 
 ## lib/utils/tool_sanitizer.dart  (45 Z.)
 - L6 `String sanitizeResultForModel(String result)`  — Strip large binary/base64 data from tool results before sending to the
+
+## lib/utils/unread_rows.dart  (38 Z.)
+- L13 `bool _isUnread(Map<String, String> row, DateTime since)`
+- L20 `int firstUnreadRowIndex(List<Map<String, String>> rows, DateTime? since)`  — The index of the first row written after [since], or -1.
+- L30 `int unreadRowCount(List<Map<String, String>> rows, DateTime? since)`  — How many rows were written after [since] by someone other than the
 
 ## lib/utils/upload_rate_limiter.dart  (95 Z.)
 - L2 `class UploadRateLimiter`  — Upload rate limiter to prevent DoS attacks via excessive file uploads.
@@ -804,3 +971,26 @@
 
 ## lib/utils/url_launcher_helper.dart  (22 Z.)
 - L12 `Future<void> launchExternalUrl(String url)`  — Opens [url] in the system browser.
+
+## lib/utils/word_diff.dart  (213 Z.)
+- L13 `enum WordDiffOp`  — What happened to one run of text.
+  - L13 `equal`
+  - L13 `inserted`
+  - L13 `removed`
+- L16 `class WordDiffSegment`  — One run of the result: its text and what happened to it.
+  - L17 `const WordDiffSegment(this.op, this.text)`
+  - L19 `final WordDiffOp op`
+  - L20 `final String text`
+  - L23 `bool operator ==(Object other)`
+  - L27 `int get hashCode`
+  - L30 `String toString()`
+- L35 `kWordDiffMaxCells = 400000`  — Above this many token pairs the table gets too big for a phone; the diff
+- L40 `_token = RegExp( r"\s+|[\p{L}\p{N}_]+(?:['’\-][\p{L}\p{N}_]+)*|[^\s]", unicode: true, )`
+- L47 `List<String> wordDiffTokens(String text)`  — Words, punctuation and the whitespace runs between them, in order. Joining the result
+- L57 `List<WordDiffSegment> wordDiff(String before, String after)`  — The word diff from [before] to [after].
+- L97 `bool wordDiffHasChanges(List<WordDiffSegment> segments)`  — True when [segments] hold a change at all.
+- L100 `void _lcsInto(List<String> a, List<String> b, _Builder out)`
+- L154 `class _Builder`  — Merges runs of the same kind. A lone whitespace run between two changes
+  - L155 `final List<WordDiffSegment> _out = <WordDiffSegment>[]`
+  - L157 `void add(WordDiffOp op, String text)`
+  - L166 `List<WordDiffSegment> result()`

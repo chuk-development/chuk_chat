@@ -56,16 +56,17 @@
 - L572 `kMenuButtonHeight = 48.0`
 - L573 `kButtonVisualHeight = 40.0`
 
-## lib/env_loader.dart  (158 Z.)
+## lib/env_loader.dart  (172 Z.)
 - L13 `class EnvLoader`  — Loads environment variables from .env file at runtime.
   - L14 `static final Map<String, String> _values = {}`
   - L15 `static bool _loaded = false`
   - L19 `static Future<void> load()`  — Load .env file from the current directory or workspace root.
   - L76 `static void loadSync()`  — Synchronous version for cases where async is not possible.
-  - L122 `static void _parseEnvFile(String contents)`
-  - L147 `static String? get(String key)`  — Get a value from the .env file, or null if not found.
-  - L151 `static bool has(String key)`  — Check if a key exists in the loaded .env file.
-  - L153 `static bool get _isDesktop`
+  - L131 `static void skipFileForTests()`  — Marks the loader as done without reading any file.
+  - L136 `static void _parseEnvFile(String contents)`
+  - L161 `static String? get(String key)`  — Get a value from the .env file, or null if not found.
+  - L165 `static bool has(String key)`  — Check if a key exists in the loaded .env file.
+  - L167 `static bool get _isDesktop`
 
 ## lib/main.dart  (824 Z.)
 - L83 `void _installLogDeduper()`  — Collapse consecutive identical debug log lines into a single line with a

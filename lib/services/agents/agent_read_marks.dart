@@ -109,6 +109,31 @@ class AgentReadMarks extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The mark each thread had when the reader last opened it, kept for that
+  /// visit (bead chuk_chat-f5wd): rows written after it are what was new.
+  /// Memory only; the next open replaces it.
+  final Map<String, DateTime> _unreadSince = <String, DateTime>{};
+
+  /// When the reader had [threadKey] open before the current visit, if the
+  /// thread had something unread when it was opened. Null otherwise.
+  DateTime? unreadSince(String threadKey) => _unreadSince[threadKey];
+
+  /// The new rows of this visit were seen; the pill is done.
+  void clearUnreadSince(String threadKey) => _unreadSince.remove(threadKey);
+
+  /// The reader opens [threadKey]: remember the old mark for this visit,
+  /// then mark the thread read. A thread never read before has no "since":
+  /// all of it would be new, and a pill for the whole history says nothing.
+  Future<void> markOpened(String threadKey, {DateTime? when}) {
+    final DateTime? previous = _marks[threadKey];
+    if (previous == null) {
+      _unreadSince.remove(threadKey);
+    } else {
+      _unreadSince[threadKey] = previous;
+    }
+    return markRead(threadKey, when: when);
+  }
+
   /// Marks [threadKey] read as of [when] (now by default). A mark never moves
   /// backwards.
   Future<void> markRead(String threadKey, {DateTime? when}) async {

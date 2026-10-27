@@ -18,6 +18,7 @@ import 'package:chuk_chat/ui/expressive/connected_group.dart';
 import 'package:chuk_chat/ui/expressive/feedback.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/widgets/schedule_picker.dart';
 
 /// Opens the sheet. [existing] edits that row; otherwise a new automation is
 /// created for [sessionKey], or for the agent the user picks from
@@ -76,6 +77,7 @@ class _AutomationEditorFormState extends State<AutomationEditorForm> {
   late final TextEditingController _minutes;
   late final TextEditingController _from;
   late final TextEditingController _subject;
+  late final TextEditingController _alias;
   late final TextEditingController _prompt;
   late final TextEditingController _name;
   late bool _onChange;
@@ -106,6 +108,7 @@ class _AutomationEditorFormState extends State<AutomationEditorForm> {
     _minutes = TextEditingController(text: '${seconds ~/ 60}');
     _from = TextEditingController(text: a?.mailFrom ?? '');
     _subject = TextEditingController(text: a?.mailSubject ?? '');
+    _alias = TextEditingController(text: a?.mailAlias ?? '');
     _prompt = TextEditingController(text: a?.prompt ?? '');
     _name = TextEditingController(text: a?.name ?? '');
     _onChange = a?.notifiesOnChange ?? false;
@@ -119,6 +122,7 @@ class _AutomationEditorFormState extends State<AutomationEditorForm> {
       _minutes,
       _from,
       _subject,
+      _alias,
       _prompt,
       _name,
     ]) {
@@ -165,7 +169,11 @@ class _AutomationEditorFormState extends State<AutomationEditorForm> {
       case 'mail':
         final String from = _from.text.trim();
         final String subject = _subject.text.trim();
-        if (from.isEmpty && subject.isEmpty) {
+        final String? alias = normalizeMailAlias(_alias.text);
+        if (alias == null) {
+          return fail('alias', l.automationErrMailAlias);
+        }
+        if (from.isEmpty && subject.isEmpty && alias.isEmpty) {
           return fail('from', l.automationErrMail);
         }
         if (from.length > kMailFilterMaxLength) {
@@ -177,7 +185,12 @@ class _AutomationEditorFormState extends State<AutomationEditorForm> {
         if (_prompt.text.trim().isEmpty) {
           return fail('prompt', l.automationErrPrompt);
         }
-        return automationSpecFor(_kind, mailFrom: from, mailSubject: subject);
+        return automationSpecFor(
+          _kind,
+          mailFrom: from,
+          mailSubject: subject,
+          mailAlias: alias,
+        );
       default:
         if (_schedule.text.trim().isEmpty) {
           return fail('schedule', l.automationErrSchedule);
@@ -327,16 +340,37 @@ class _AutomationEditorFormState extends State<AutomationEditorForm> {
           key: 'subject',
           controller: _subject,
           label: l.automationMailSubjectLabel,
+        ),
+        _field(
+          key: 'alias',
+          controller: _alias,
+          label: l.automationMailAliasLabel,
+          hint: 'receipts',
           help: l.automationMailHelp,
         ),
       ],
+      // Picked, not typed: daily, weekdays, every N hours; the text field is
+      // the picker's "custom" shape (bead chuk_chat-4p90).
       _ => <Widget>[
-        _field(
-          key: 'schedule',
+        SchedulePicker(
           controller: _schedule,
-          label: l.automationScheduleLabel,
-          hint: 'every 1h',
-          help: l.automationScheduleHelp,
+          errorText: _fieldKey == 'schedule' ? _fieldError : null,
+          onChanged: () {
+            if (_fieldKey != null || _hostError != null) {
+              setState(() {
+                _fieldError = null;
+                _fieldKey = null;
+                _hostError = null;
+              });
+            }
+          },
+          customField: _field(
+            key: 'schedule',
+            controller: _schedule,
+            label: l.automationScheduleLabel,
+            hint: 'every 1h',
+            help: l.automationScheduleHelp,
+          ),
         ),
       ],
     };

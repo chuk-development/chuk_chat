@@ -15,9 +15,13 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/services/agents/agents_draft_history.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/ui/expressive/huge_icon.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/utils/word_diff.dart';
+import 'package:chuk_chat/widgets/draft_diff_text.dart';
 
 typedef _Req = AgentsRelayApprovalRequest;
 
@@ -29,6 +33,7 @@ class AgentsActionApprovalCard extends StatelessWidget {
     required this.onSelect,
     this.decision,
     this.dense = false,
+    this.previousDraft,
   });
 
   /// The host's request: the class, the one-line summary, the details and
@@ -49,6 +54,11 @@ class AgentsActionApprovalCard extends StatelessWidget {
 
   /// Desktop size (docs/DESIGN.md §14.8): the dense buttons.
   final bool dense;
+
+  /// The draft this one revises (bead chuk_chat-gkt9): the previous mail,
+  /// or the previous call of the same connector tool, in this thread. When
+  /// it is set and the text changed, the card marks what changed.
+  final AgentsDraft? previousDraft;
 
   @override
   Widget build(BuildContext context) {
@@ -178,18 +188,42 @@ class AgentsActionApprovalCard extends StatelessWidget {
         }
         field(l?.approvalMailTo ?? 'To', _list(d['to']));
         field(l?.approvalMailCc ?? 'Cc', _list(d['cc']));
-        field(l?.approvalMailSubject ?? 'Subject', _text(d['subject']));
+        final String? subject = _text(d['subject']);
+        final String? oldSubject = previousDraft?.subject?.trim();
+        if (subject != null &&
+            oldSubject != null &&
+            oldSubject.isNotEmpty &&
+            oldSubject != subject) {
+          rows.add(
+            _Field(
+              label: l?.approvalMailSubject ?? 'Subject',
+              value: subject,
+              previous: oldSubject,
+            ),
+          );
+        } else {
+          field(l?.approvalMailSubject ?? 'Subject', subject);
+        }
         field(
           l?.approvalMailAttachments ?? 'Attachments',
           _list(d['attachments'], basename: true),
         );
         final String? preview = _text(d['preview']);
-        if (preview != null) rows.add(_Quote(text: preview));
+        if (preview != null) {
+          rows.add(
+            _diffOrQuote(l, previousDraft?.body.trim(), preview, mono: false),
+          );
+        }
       case 'mcp_destructive':
         field(l?.approvalConnector ?? 'Connector', _text(d['server']));
         field(l?.approvalConnectorTool ?? 'Tool', _text(d['remote_tool']));
         final String? args = _arguments(d['arguments']);
-        if (args != null) rows.add(_Quote(text: args, mono: true));
+        if (args != null) {
+          final String? before = previousDraft == null
+              ? null
+              : _arguments(previousDraft!.body);
+          rows.add(_diffOrQuote(l, before, args, mono: true));
+        }
       case 'browser_act':
         field(l?.approvalBrowserSite ?? 'Site', request.site);
         // own browser: the page `browser_navigate` opens.
@@ -251,6 +285,29 @@ class AgentsActionApprovalCard extends StatelessWidget {
         ),
       ),
     ];
+  }
+
+  /// The draft text: with its changes marked when it revises [before] and
+  /// enough of it stayed to be the same draft, else the plain quote.
+  Widget _diffOrQuote(
+    AppLocalizations? l,
+    String? before,
+    String after, {
+    required bool mono,
+  }) {
+    if (before != null && before.isNotEmpty) {
+      final List<WordDiffSegment> diff = wordDiff(before, after);
+      if (draftDiffWorthShowing(diff)) {
+        return _Quote(
+          text: after,
+          mono: mono,
+          diff: diff,
+          changedLabel:
+              l?.approvalDraftChanged ?? 'Changed since the last draft',
+        );
+      }
+    }
+    return _Quote(text: after, mono: mono);
   }
 
   Widget _buttons(ColorScheme scheme, AppLocalizations? l, String name) {
@@ -406,10 +463,13 @@ String humanApprovalBytes(int bytes) {
 
 /// "Label  value" on one line; the value wraps under itself.
 class _Field extends StatelessWidget {
-  const _Field({required this.label, required this.value});
+  const _Field({required this.label, required this.value, this.previous});
 
   final String label;
   final String value;
+
+  /// The value of the draft this one revises; the changes get marked.
+  final String? previous;
 
   @override
   Widget build(BuildContext context) {
@@ -429,13 +489,22 @@ class _Field extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
               ),
-            if (value.isNotEmpty)
+            if (value.isNotEmpty && previous != null)
+              ...draftDiffSpans(
+                wordDiff(previous!, value),
+                scheme,
+                base?.copyWith(color: scheme.onSurface),
+              )
+            else if (value.isNotEmpty)
               TextSpan(
                 text: value,
                 style: base?.copyWith(color: scheme.onSurface),
               ),
           ],
         ),
+        key: previous == null
+            ? null
+            : const ValueKey<String>('agents-approval-subject-diff'),
         maxLines: 4,
         overflow: TextOverflow.ellipsis,
       ),
@@ -445,15 +514,90 @@ class _Field extends StatelessWidget {
 
 /// The mail preview, or the connector arguments in a monospace block.
 class _Quote extends StatelessWidget {
-  const _Quote({required this.text, this.mono = false});
+  const _Quote({
+    required this.text,
+    this.mono = false,
+    this.diff,
+    this.changedLabel,
+  });
 
   final String text;
   final bool mono;
+
+  /// The word diff against the previous draft; null draws [text] plain.
+  final List<WordDiffSegment>? diff;
+
+  /// The line over a marked draft ("Changed since the last draft").
+  final String? changedLabel;
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final ColorScheme scheme = theme.colorScheme;
+    final List<WordDiffSegment>? segments = diff;
+    final TextStyle? style =
+        (mono
+                ? theme.textTheme.bodySmall?.copyWith(
+                    fontFamily: 'monospace',
+                    fontFamilyFallback: const <String>['Courier'],
+                  )
+                : theme.textTheme.bodySmall)
+            ?.copyWith(color: scheme.onSurfaceVariant);
+    if (segments != null) {
+      return Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(top: 4),
+        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Row(
+              key: const ValueKey<String>('agents-approval-draft-changed'),
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: <Widget>[
+                HugeIcon(
+                  HugeIcons.edit02,
+                  size: 14,
+                  color: theme.accentForegroundOn(
+                    scheme.surfaceContainerHighest,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    changedLabel ?? '',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.accentForegroundOn(
+                        scheme.surfaceContainerHighest,
+                      ),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text.rich(
+              TextSpan(children: draftDiffSpans(segments, scheme, style)),
+              key: ValueKey<String>(
+                mono ? 'agents-approval-args-diff' : 'agents-approval-diff',
+              ),
+              // The changes are the point: more room than a plain preview.
+              maxLines: mono ? 14 : 10,
+              overflow: TextOverflow.ellipsis,
+              style: style,
+            ),
+          ],
+        ),
+      );
+    }
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(top: 4),

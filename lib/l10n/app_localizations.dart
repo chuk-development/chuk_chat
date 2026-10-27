@@ -889,6 +889,7 @@ class AppLocalizations {
   String get agentMailSubtitle => _get('agentMailSubtitle');
   String get agentMailAddressHint => _get('agentMailAddressHint');
   String get agentMailCopyAddress => _get('agentMailCopyAddress');
+  String get agentMailAliasesHint => _get('agentMailAliasesHint');
   String get agentMailAddressCopied => _get('agentMailAddressCopied');
   String get agentMailContacts => _get('agentMailContacts');
   String get agentMailContactsSubtitle => _get('agentMailContactsSubtitle');
@@ -1034,6 +1035,7 @@ class AppLocalizations {
   String get automationIntervalHelp => _get('automationIntervalHelp');
   String get automationMailFromLabel => _get('automationMailFromLabel');
   String get automationMailSubjectLabel => _get('automationMailSubjectLabel');
+  String get automationMailAliasLabel => _get('automationMailAliasLabel');
   String get automationMailHelp => _get('automationMailHelp');
   String get automationPromptLabel => _get('automationPromptLabel');
   String get automationNameLabel => _get('automationNameLabel');
@@ -1046,6 +1048,7 @@ class AppLocalizations {
   String get automationErrUrl => _get('automationErrUrl');
   String get automationErrInterval => _get('automationErrInterval');
   String get automationErrMail => _get('automationErrMail');
+  String get automationErrMailAlias => _get('automationErrMailAlias');
   String get automationErrTooLong => _get('automationErrTooLong');
   String get automationErrAgent => _get('automationErrAgent');
   String get automationNothingChanged => _get('automationNothingChanged');
@@ -1092,6 +1095,22 @@ class AppLocalizations {
   String get approvalMailSubject => _get('approvalMailSubject');
   String get approvalMailReply => _get('approvalMailReply');
   String get approvalMailAttachments => _get('approvalMailAttachments');
+  String get approvalDraftChanged => _get('approvalDraftChanged');
+  String unreadJumpPill(int count) =>
+      _get('unreadJumpPill').replaceAll('{count}', '$count');
+  String get scheduleModeDaily => _get('scheduleModeDaily');
+  String get scheduleModeWeekdays => _get('scheduleModeWeekdays');
+  String get scheduleModeHours => _get('scheduleModeHours');
+  String get scheduleModeCustom => _get('scheduleModeCustom');
+  String get scheduleAtTime => _get('scheduleAtTime');
+  String get scheduleDaysLabel => _get('scheduleDaysLabel');
+  String scheduleEveryHours(int n) => n == 1
+      ? _get('scheduleEveryHour')
+      : _get('scheduleEveryHours').replaceAll('{n}', '$n');
+  String get scheduleFewerHours => _get('scheduleFewerHours');
+  String get scheduleMoreHours => _get('scheduleMoreHours');
+  String scheduleNextRun(String when) =>
+      _get('scheduleNextRun').replaceAll('{when}', when);
   String get approvalConnector => _get('approvalConnector');
   String get approvalConnectorTool => _get('approvalConnectorTool');
   String get approvalBrowserSite => _get('approvalBrowserSite');

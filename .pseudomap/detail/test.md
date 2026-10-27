@@ -18,8 +18,8 @@
 - L38 `({int width, int height}) _pngSize(File file)`  — Width and height out of a PNG's IHDR chunk, which always starts at byte 16.
 - L54 `void main()`
 
-## test/flutter_test_config.dart  (15 Z.)
-- L11 `Future<void> testExecutable(FutureOr<void> Function() testMain)`  — Runs before every test file.
+## test/flutter_test_config.dart  (20 Z.)
+- L15 `Future<void> testExecutable(FutureOr<void> Function() testMain)`  — Runs before every test file.
 
 ## test/interop_smoke_test.dart  (191 Z.)
 - L34 `class _PlainSocket implements RelaySocket`  — A plain web_socket_channel-backed [RelaySocket] — bypasses the cert-pinned

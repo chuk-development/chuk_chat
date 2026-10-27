@@ -334,36 +334,36 @@
 - L384 `String formatBytes(int bytes)`  — Formats a byte count the way a file manager does.
 
 ## lib/widgets/agent_template_picker.dart  (571 Z.)
-- L37 `@immutable class AgentCreateRequest`  — What the user asked for. [template] null is the blank agent.
-  - L39 `const AgentCreateRequest({ required this.name, this.template, this.startAutomation = false, })`
-  - L46 `final String name`  — Trimmed, never empty.
-  - L47 `final AgentTemplate? template`
-  - L50 `final bool startAutomation`  — True only when the template has a starter and the user switched it on.
-- L54 `Future<AgentCreateRequest?> showAgentTemplatePicker( BuildContext context, { required String suggestedName, })`  — Opens the picker. Null when the user cancelled.
-- L62 `class AgentTemplatePicker extends StatefulWidget`
-  - L63 `const AgentTemplatePicker({ super.key, required this.suggestedName, this.templates = kAgentTemplates, })`
-  - L70 `final String suggestedName`  — The name the blank agent starts with.
-  - L71 `final List<AgentTemplate> templates`
-  - L74 `State<AgentTemplatePicker> createState()`
-- L78 `_segments = <AgentTemplateCategory?>[ null, AgentTemplateCategory.work, AgentTemplateCategory.watch, AgentTemplateCatego`  — The filter segments, in order. Null is "All".
-- L85 `class _AgentTemplatePickerState extends State<AgentTemplatePicker>`
-  - L86 `final TextEditingController _search = TextEditingController()`
-  - L87 `final FocusNode _searchFocus = FocusNode()`
-  - L88 `final TextEditingController _name = TextEditingController()`
-  - L90 `int _segment = 0`
-  - L93 `bool _naming = false`  — False on the list, true on the name step.
-  - L94 `AgentTemplate? _template`
-  - L95 `bool _startAutomation = false`
-  - L96 `String? _nameError`
-  - L99 `void dispose()`
-  - L106 `AppLocalizations get _l`
-  - L112 `List<AgentTemplate> _visible(AppLocalizations l)`  — The templates the filter pill and the search field leave. The search
-  - L125 `void _choose(AgentTemplate? template)`
-  - L137 `void _back()`
-  - L142 `void _create()`
-  - L158 `Widget build(BuildContext context)`
-  - L187 `Widget _pickStep(bool desk)`
-  - L298 `Widget _nameStep(bool desk)`
+- L38 `@immutable class AgentCreateRequest`  — What the user asked for. [template] null is the blank agent.
+  - L40 `const AgentCreateRequest({ required this.name, this.template, this.startAutomation = false, })`
+  - L47 `final String name`  — Trimmed, never empty.
+  - L48 `final AgentTemplate? template`
+  - L51 `final bool startAutomation`  — True only when the template has a starter and the user switched it on.
+- L55 `Future<AgentCreateRequest?> showAgentTemplatePicker( BuildContext context, { required String suggestedName, })`  — Opens the picker. Null when the user cancelled.
+- L63 `class AgentTemplatePicker extends StatefulWidget`
+  - L64 `const AgentTemplatePicker({ super.key, required this.suggestedName, this.templates = kAgentTemplates, })`
+  - L71 `final String suggestedName`  — The name the blank agent starts with.
+  - L72 `final List<AgentTemplate> templates`
+  - L75 `State<AgentTemplatePicker> createState()`
+- L79 `_segments = <AgentTemplateCategory?>[ null, AgentTemplateCategory.work, AgentTemplateCategory.watch, AgentTemplateCatego`  — The filter segments, in order. Null is "All".
+- L86 `class _AgentTemplatePickerState extends State<AgentTemplatePicker>`
+  - L87 `final TextEditingController _search = TextEditingController()`
+  - L88 `final FocusNode _searchFocus = FocusNode()`
+  - L89 `final TextEditingController _name = TextEditingController()`
+  - L91 `int _segment = 0`
+  - L94 `bool _naming = false`  — False on the list, true on the name step.
+  - L95 `AgentTemplate? _template`
+  - L96 `bool _startAutomation = false`
+  - L97 `String? _nameError`
+  - L100 `void dispose()`
+  - L107 `AppLocalizations get _l`
+  - L113 `List<AgentTemplate> _visible(AppLocalizations l)`  — The templates the filter pill and the search field leave. The search
+  - L126 `void _choose(AgentTemplate? template)`
+  - L138 `void _back()`
+  - L143 `void _create()`
+  - L159 `Widget build(BuildContext context)`
+  - L188 `Widget _pickStep(bool desk)`
+  - L299 `Widget _nameStep(bool desk)`
   - L474 `Widget _title(String label, bool desk)`
   - L487 `Widget _label(String label)`
 - L502 `_fieldBorder = OutlineInputBorder( borderRadius: BorderRadius.circular(kRadiusField), borderSide: BorderSide.none, )`
@@ -377,38 +377,43 @@
   - L538 `final double size`
   - L541 `Widget build(BuildContext context)`
 
-## lib/widgets/agents_action_approval_card.dart  (484 Z.)
-- L22 `typedef _Req = AgentsRelayApprovalRequest`
-- L24 `class AgentsActionApprovalCard extends StatelessWidget`
-  - L25 `const AgentsActionApprovalCard({ super.key, required this.request, required this.agentName, required this.onSelect, this.decision, this.dense = false, })`
-  - L36 `final AgentsRelayApprovalRequest request`  — The host's request: the class, the one-line summary, the details and
-  - L40 `final String agentName`  — The agent's name for "Always for (agent)". Empty falls back to
-  - L44 `final ValueChanged<String> onSelect`  — Called with the option the user picked (`once`, `always_this_agent`,
-  - L48 `final String? decision`  — The option already sent. The buttons are gone then and the card says
-  - L51 `final bool dense`  — Desktop size (docs/DESIGN.md §14.8): the dense buttons.
-  - L54 `Widget build(BuildContext context)`
-  - L95 `Widget _header(ThemeData theme, AppLocalizations? l)`
-  - L160 `List<Widget> _details( BuildContext context, ThemeData theme, AppLocalizations? l, )`  — One block per class, from `details`. Never a typed text, a form value
-  - L256 `Widget _buttons(ColorScheme scheme, AppLocalizations? l, String name)`
-  - L281 `Widget _decided( ThemeData theme, AppLocalizations? l, String name, String picked, )`
-  - L312 `String optionLabel(AppLocalizations? l, String option, String name)`  — The button text of one option, as the contract words it.
-  - L328 `static String decisionLabel( AppLocalizations? l, String picked, String name, String? site, )`  — What an answer covered, for the decided line.
-  - L348 `bool get inUserBrowser`  — The action runs in the user's own browser (the add-on), not in the
-  - L352 `static HugeIconData _iconFor(String? actionClass)`  — One glyph per class, from the app's own set (docs/DESIGN.md §5).
-  - L360 `static String? _text(Object? value)`
-  - L363 `static String? _list(Object? value, {bool basename = false})`
-  - L375 `static String? _arguments(Object? value)`  — Connector arguments as the host sent them: compact JSON already, or a
-- L395 `String humanApprovalBytes(int bytes)`  — 1024 -> "1.0 KB". A plain binary size, no locale or package dependency.
-- L408 `class _Field extends StatelessWidget`  — "Label  value" on one line; the value wraps under itself.
-  - L409 `const _Field({required this.label, required this.value})`
-  - L411 `final String label`
-  - L412 `final String value`
-  - L415 `Widget build(BuildContext context)`
-- L447 `class _Quote extends StatelessWidget`  — The mail preview, or the connector arguments in a monospace block.
-  - L448 `const _Quote({required this.text, this.mono = false})`
-  - L450 `final String text`
-  - L451 `final bool mono`
-  - L454 `Widget build(BuildContext context)`
+## lib/widgets/agents_action_approval_card.dart  (628 Z.)
+- L26 `typedef _Req = AgentsRelayApprovalRequest`
+- L28 `class AgentsActionApprovalCard extends StatelessWidget`
+  - L29 `const AgentsActionApprovalCard({ super.key, required this.request, required this.agentName, required this.onSelect, this.decision, this.dense = false, this.previousDraft, })`
+  - L41 `final AgentsRelayApprovalRequest request`  — The host's request: the class, the one-line summary, the details and
+  - L45 `final String agentName`  — The agent's name for "Always for (agent)". Empty falls back to
+  - L49 `final ValueChanged<String> onSelect`  — Called with the option the user picked (`once`, `always_this_agent`,
+  - L53 `final String? decision`  — The option already sent. The buttons are gone then and the card says
+  - L56 `final bool dense`  — Desktop size (docs/DESIGN.md §14.8): the dense buttons.
+  - L61 `final AgentsDraft? previousDraft`  — The draft this one revises (bead chuk_chat-gkt9): the previous mail,
+  - L64 `Widget build(BuildContext context)`
+  - L105 `Widget _header(ThemeData theme, AppLocalizations? l)`
+  - L170 `List<Widget> _details( BuildContext context, ThemeData theme, AppLocalizations? l, )`  — One block per class, from `details`. Never a typed text, a form value
+  - L292 `Widget _diffOrQuote( AppLocalizations? l, String? before, String after, { required bool mono, })`  — The draft text: with its changes marked when it revises [before] and
+  - L313 `Widget _buttons(ColorScheme scheme, AppLocalizations? l, String name)`
+  - L338 `Widget _decided( ThemeData theme, AppLocalizations? l, String name, String picked, )`
+  - L369 `String optionLabel(AppLocalizations? l, String option, String name)`  — The button text of one option, as the contract words it.
+  - L385 `static String decisionLabel( AppLocalizations? l, String picked, String name, String? site, )`  — What an answer covered, for the decided line.
+  - L405 `bool get inUserBrowser`  — The action runs in the user's own browser (the add-on), not in the
+  - L409 `static HugeIconData _iconFor(String? actionClass)`  — One glyph per class, from the app's own set (docs/DESIGN.md §5).
+  - L417 `static String? _text(Object? value)`
+  - L420 `static String? _list(Object? value, {bool basename = false})`
+  - L432 `static String? _arguments(Object? value)`  — Connector arguments as the host sent them: compact JSON already, or a
+- L452 `String humanApprovalBytes(int bytes)`  — 1024 -> "1.0 KB". A plain binary size, no locale or package dependency.
+- L465 `class _Field extends StatelessWidget`  — "Label  value" on one line; the value wraps under itself.
+  - L466 `const _Field({required this.label, required this.value, this.previous})`
+  - L468 `final String label`
+  - L469 `final String value`
+  - L472 `final String? previous`  — The value of the draft this one revises; the changes get marked.
+  - L475 `Widget build(BuildContext context)`
+- L516 `class _Quote extends StatelessWidget`  — The mail preview, or the connector arguments in a monospace block.
+  - L517 `const _Quote({ required this.text, this.mono = false, this.diff, this.changedLabel, })`
+  - L524 `final String text`
+  - L525 `final bool mono`
+  - L528 `final List<WordDiffSegment>? diff`  — The word diff against the previous draft; null draws [text] plain.
+  - L531 `final String? changedLabel`  — The line over a marked draft ("Changed since the last draft").
+  - L534 `Widget build(BuildContext context)`
 
 ## lib/widgets/agents_approval_row.dart  (180 Z.)
 - L21 `class AgentsApprovalRow extends StatefulWidget`
@@ -621,183 +626,197 @@
   - L507 `final VoidCallback? onTap`
   - L510 `Widget build(BuildContext context)`
 
-## lib/widgets/agents_thread_view.dart  (3052 Z.)
-- L71 `kAgentsThreadHeaderInset = AgentsThreadHeader.height`  — Room a desktop thread keeps above its first message for the header that
-- L98 `kAgentsDevHostUrl = String.fromEnvironment('AGENTS_DEV_HOST')`  — The Agents chat surface: the imported chuk_chat chat screen, wired to the
-- L100 `class AgentsThreadView extends StatefulWidget`
-  - L101 `const AgentsThreadView({ super.key, required this.controllerBuilder, required this.sessionSource, this.pairingStore, this.devHostUrl = kAgentsDevHostUrl, this.threadKey = 'default', this.fileSaver = const DownloadsAgentFileSaver(), this.onRunStateChanged, this.onActivity, this.onPaired, this.onController, this.onOpenModelScreen, this.shellConfig, this.title, this.onOpenAgentScreen, this.agent, this.onOpenAgent, this.profiles, this.menuActions = const <AgentsThreadAction>[], this.topInset = 0, this.phoneLayout = false, this.linkReport, this.emptyState, this.openBrowserView, })`
-  - L130 `final Future<void> Function( BuildContext context, AgentsRelayController controller, String sessionKey, )? openBrowserView`  — Opens the live browser view for a takeover card. Null opens
-  - L140 `final Future<AgentsRelayController> Function() controllerBuilder`  — Builds the transport controller. Async because a real client generates a
-  - L143 `final AccountSessionSource sessionSource`  — Supplies the account session that gets provisioned once paired.
-  - L149 `final void Function(AgentsRelayController controller)? onController`  — Called with the live transport controller whenever it is built or rebuilt,
-  - L155 `final AgentsPairingStore? pairingStore`  — Persistent trust store. When provided and a pairing is stored, the view
-  - L162 `final String devHostUrl`  — A developer's escape hatch, never the product path: with a non-empty
-  - L166 `final String threadKey`  — The executor-side session this view talks to (§4: many threads per agent),
-  - L173 `final AgentFileSaver fileSaver`  — Where a file card writes when the user saves.
-  - L177 `final void Function(String threadKey, bool running)? onRunStateChanged`  — Reports whether a run is in flight, and for which thread, so the roster can
-  - L180 `final void Function(String threadKey, DateTime when)? onActivity`  — Reports that something happened in [threadKey], for "last active".
-  - L184 `final void Function(String peerDeviceId)? onPaired`  — Reports the host device id the moment the transport is paired, so the
-  - L188 `final VoidCallback? onOpenModelScreen`  — Opens the full model catalogue — the composer's "More models" row calls
-  - L193 `final AppShellConfig? shellConfig`  — chuk_chat's shell config, handed down from the shell (bead cowork-8y2).
-  - L197 `final String? title`  — The agent this thread belongs to, handed to the desktop chat screen.
-  - L200 `final VoidCallback? onOpenAgentScreen`  — Opens the live view of the agent's screen. Null parks the target.
-  - L204 `final AgentsAgent? agent`  — The agent this thread belongs to: its face, name and status sit at
-  - L207 `final VoidCallback? onOpenAgent`  — Tap on the agent in the desktop header: the shell's details pane.
-  - L210 `final AgentProfileStore? profiles`  — The agent faces' store, handed to the desktop header's pill.
-  - L215 `final List<AgentsThreadAction> menuActions`  — The desktop header's "…" menu: the actions the SHELL owns (details,
-  - L219 `final double topInset`  — On a phone: the height of the floating chrome over the chat. The chat
-  - L224 `final bool phoneLayout`  — Force chuk's phone screen. The mobile shell sets it below the phone
-  - L230 `final ValueNotifier<AgentsLinkReport>? linkReport`  — Where this view publishes what it knows about the link: not read yet, no
-  - L236 `final Widget? emptyState`  — Shown in place of the chat while no thread is selected ([threadKey] is
-  - L239 `State<AgentsThreadView> createState()`
-- L242 `class AgentsThreadViewState extends State<AgentsThreadView> with WidgetsBindingObserver`
-  - L244 `bool _wasBackgrounded = false`
-  - L245 `bool _rebuildingForResume = false`
-  - L246 `late final TextEditingController _hostController`
-  - L247 `final TextEditingController _codeController = TextEditingController()`
-  - L249 `AgentsRelayController? _controller`
-  - L250 `StreamSubscription<AgentsRelayInbound>? _inboundSub`
-  - L252 `final AgentsRelayLink _link = AgentsRelayLink.instance`
-  - L253 `final AgentsRunLedger _ledger = AgentsRunLedger.instance`
-  - L254 `final AgentsReplayLoader _loader = AgentsReplayLoader.instance`
-  - L266 `bool _verbose = false`  — Mirrors [VerboseService.instance]: the single source of truth for the two
-  - L271 `int _revision = 0`  — The replay revision this view has painted for [AgentsThreadView.threadKey].
-  - L278 `int _cacheRevision = 0`  — Extra turns of the same key, for rows that arrive from the CACHE rather
-  - L288 `int _screenGeneration = 0`  — The chat screen's identity. It moves ONLY when the screen has to read
-  - L291 `StreamSubscription<String?>? _storeSub`  — Watches the chat store for the late arrival described above.
-  - L297 `bool _mountedWithRows = false`  — Whether this thread already had rows in memory when the screen mounted.
-  - L302 `int _revisionAtMount = 0`  — The loader revision the screen was mounted at for this thread. A thread
-  - L306 `AgentsRelayApprovalRequest? _approval`  — A here.now publish waiting on the user. The run is BLOCKED on the executor
-  - L307 `bool? _approvalDecision`
-  - L312 `bool _takeoverVisited = false`  — A browser takeover (an [_approval] with action `browser_takeover`): the
-  - L316 `bool _takeoverContinuing = false`  — The takeover is answered and the card says the agent continues. It
-  - L322 `String? _approvalScope`  — The option the user picked on a per-action approval card ([_approval]
-  - L327 `({String message, String? prompt})? _budgetRefusal`  — The host refused this thread's last task: the agent's weekly budget
-  - L334 `String? _browserTarget`  — Which browser this thread's agent drives, from its last `run_state`
-  - L339 `late final AgentsPermissionsService _userBrowserService`  — The host's status of the user's browser lives here (host-wide, with
-  - L342 `bool _askedUserBrowser = false`  — A `get` for the user-browser status went out for this thread.
-  - L346 `bool _browserViewOpen = false`  — Guards against opening the browser view twice from one card.
-  - L351 `final AutomationsSource _automations = AutomationsSource.instance`  — This thread's schedules and watchers (docs/WIRE_CONTRACT.md,
-  - L353 `final SkillProposalsSource _skillProposals = SkillProposalsSource.instance`
-  - L355 `void _onSkillProposalsChanged()`
-  - L360 `bool _automationsCollapsed = true`
-  - L366 `AgentsRelaySecretRequest? _secretRequest`  — A `request_secrets` waiting on the user (docs/WIRE_CONTRACT.md,
-  - L367 `final Map<String, TextEditingController> _secretFields = <String, TextEditingController>{}`
-  - L369 `bool _secretsBusy = false`
-  - L372 `final Set<String> _ackedRuns = <String>{}`  — Run ids already acknowledged, so a rebuild cannot ack the same run twice.
-  - L374 `String? _localError`
-  - L375 `bool _busy = false`
-  - L388 `bool _cacheReady = false`  — Whether the local chat cache has been read once.
-  - L389 `final _startupState = ValueNotifier<AgentsRelayState>( const AgentsRelayState(phase: AgentsRelayPhase.connecting), )`
-  - L395 `AgentsStoredPairing? _storedPairing`  — The persisted trust, loaded once at startup. Non-null means "already
-  - L400 `bool _pairingLoaded = false`  — Whether the stored pairing has been read. Before that the link is
-  - L404 `AgentsLinkReport? _publishedLink`  — The last report handed to [AgentsThreadView.linkReport], and whether a
-  - L405 `bool _linkWriteQueued = false`
-  - L408 `bool _manuallyDisconnected = false`  — The user tapped Disconnect: stay down until they act, no auto-reconnect.
-  - L410 `Timer? _autoReconnectTimer`
-  - L411 `int _reconnectAttempts = 0`
-  - L416 `AgentsRelayPhase? _lastPhase`  — The transport phase this view last saw. It is how "we just became paired"
-  - L425 `int _failedReconnects = 0`  — How many reconnects have been tried since the link was last up.
-  - L435 `Timer? _watchdogTimer`  — A safety net that periodically forces a reconnect when the app is down but
-  - L438 `static const Duration _baseBackoff = Duration(seconds: 1)`  — Capped exponential backoff for auto-reconnect after an unexpected drop.
-  - L439 `static const Duration _maxBackoff = Duration(seconds: 30)`
-  - L442 `void initState()`
-  - L504 `void didUpdateWidget(AgentsThreadView oldWidget)`
-  - L547 `Future<void> _readSwitchedThread(String key)`  — A switch to a thread with no rows in memory reads its local copy, the
-  - L560 `void dispose()`
-  - L595 `void didChangeAppLifecycleState(AppLifecycleState state)`
-  - L612 `static const Duration resumeProbeTimeout = Duration(milliseconds: 1500)`  — How long a resume waits for the old socket to answer before it is
-  - L630 `Future<void> _onResumed()`  — The app is in front again (bead chuk_chat-kl8x).
-  - L671 `Future<void> _bootstrap()`  — Load any stored pairing first, then build the controller. If a pairing is
-  - L717 `Future<bool> _tryBuildController()`  — [_buildController], with a failure turned into state the user can see
-  - L741 `Future<void> _warmCache()`  — Reads the local chat cache once and then lets the chat area mount. A
-  - L772 `bool get _threadHasRows`  — Whether the store holds a transcript for this thread right now.
-  - L779 `Future<void> _buildController()`
-  - L793 `Future<void> _rebuildController()`  — Tears down the live controller and spins up a fresh one, without touching
-  - L817 `void _onStateChanged()`  — Watches the transport state for an unexpected drop after being paired, and
-  - L893 `Future<int> _flushOutbox(AgentsRelayController controller)`  — Sends what the user typed while the host was unreachable.
-  - L932 `Future<void> _flushAllThreads(AgentsRelayController controller)`  — Every thread's queued prompts, each into the conversation it was typed
-  - L970 `Future<void> _resendUnacknowledged(AgentsRelayController controller)`  — Sends every task of this thread the host has not acknowledged again.
-  - L1001 `void _onTaskUnacknowledged(String sessionKey)`  — The ledger's pre-run window expired: this task has no `task_ack`, no
-  - L1010 `String? _answerForNotification(String? finalAnswer)`  — The answer text a finish notification previews: the run's own final
-  - L1022 `void _requestReplay()`  — Asks the host to re-stream this thread from the replay cursor.
-  - L1042 `void _watchdogTick()`  — Force a reconnect if we are paired-but-down and nothing is already trying.
-  - L1075 `void _scheduleAutoReconnect()`
-  - L1108 `Future<void> _reconnect()`  — Reconnects the current controller to the stored host with no code, then
-  - L1142 `Future<void> reconnect({bool force = false})`  — Retry stored trust without exposing transport controls in the chat.
-  - L1174 `Future<void> openPairing()`  — Opens the "Add your computer" flow (the QR scan). Public so the shell's
-  - L1182 `Future<void> _connect()`
-  - L1213 `Future<void> _persistTrust( AgentsRelayController controller, { Uri? hostUrl, })`
-  - L1228 `Future<void> _pairFromInvite(AgentsPairingInvite invite)`  — The QR path, and the whole of what a phone ever does to get linked: open
-  - L1253 `Future<void> pairWithInvite(AgentsPairingInvite invite)`  — The install page's way in: the same pairing as [_pairFromInvite], on this
-  - L1290 `Future<void> _runInvitePairing( AgentsRelayController controller, AgentsPairingInvite invite, )`  — The shared sequence ([pairAgentsFromInvite]) plus this view's own record
-  - L1305 `static String _pairingFailureText(Object error)`  — One plain sentence for whatever went wrong. The user is not shown a code,
-  - L1312 `static String _connectionFailureText(Object error)`  — The same for a reconnect of a computer that is already paired.
-  - L1317 `static const String _kComputerAway = 'Your computer is not reachable right now. Make sure it is on and ' 'Agents is running there.'`
-  - L1324 `String? _connectionBanner(AgentsRelayState state)`  — What the connect bar says about the transport. The relay's own detail
-  - L1334 `Future<void> _openPairingScreen()`
-  - L1345 `Future<void> _confirmForget()`  — Deletes the stored trust — the next connection needs a fresh code again —
-  - L1370 `Future<void> _forget()`
-  - L1392 `Future<void> _loadVerbose()`  — Load the persisted verbose flag once at startup. Never throws: a failure
-  - L1397 `void _onVerboseChanged()`
-  - L1401 `void _onThemeChanged()`
-  - L1407 `void _onInbound(AgentsRelayInbound event)`
-  - L1610 `void _clearSecretRequest()`
-  - L1623 `Future<void> _submitSecretRequest()`  — Save what the user typed and answer the host. An empty field for a name
-  - L1650 `Future<void> _skipSecretRequest()`  — The user does not have (or want to give) the keys: tell the host so the
-  - L1667 `void _decideApproval(bool approved, {String? scope})`  — Answer a here.now publish approval. Idempotent: once a decision is sent
-  - L1702 `void _onTakeoverRequest(AgentsRelayApprovalRequest event)`  — A browser takeover from the host (`approval_request` with action
-  - L1733 `void _clearTakeover()`  — Takes a takeover card off the thread, whatever state it was in.
-  - L1748 `void _syncWaitingForUser()`  — Tells the ledger whether this thread's run waits on a card here, so the
-  - L1759 `Future<void> _openTakeoverBrowser()`  — Opens the live browser view for the takeover card, in control: the
-  - L1788 `Future<void> copyFullChat()`  — Copies the WHOLE thread to the clipboard for debugging (bd cowork-338):
-  - L1800 `bool _running = false`  — The ledger is the run's truth: it knows a run is in flight whether this
-  - L1802 `void _onLedgerChanged()`
-  - L1826 `void _onRunClosed()`  — A run just ended and left the thread with nothing to show. Never silence:
-  - L1855 `void _releaseStaleComposer(String key)`  — The composer goes back to the send target when the run is over.
-  - L1868 `void _onRunSilent(String sessionKey)`  — The run for [sessionKey] has produced nothing for the ledger's ceiling.
-  - L1880 `void _reconcileOnOpen()`  — The thread is being opened. A run the ledger still draws as live is
-  - L1891 `void _onLoaderChanged()`
-  - L1924 `void _onChatStoreChanged(String? changedId)`  — The chat cache changed. Remount the screen ONLY when this thread's rows
-  - L1943 `bool get _screenIsEmpty`  — Whether the screen on the tree is showing an empty transcript. The
-  - L1949 `void _syncRevision()`  — Adopt a new replay revision — but never while a run is in flight: the
-  - L1966 `Widget build(BuildContext context)`
-  - L2045 `Widget _buildHeader( BuildContext context, AgentsRelayState state, List<AgentsAutomation>? automations, )`  — The top bar of a desktop thread, the phone's in desktop form: the
-  - L2095 `String _automationLabel(List<AgentsAutomation> automations)`  — One automation reads as itself; several read as a count, because the
-  - L2101 `void _openDocuments(BuildContext context)`
-  - L2120 `Widget _buildChat(BuildContext context, {double desktopTopInset = 0})`  — The imported chuk_chat renderer. Everything Agents-specific about it is in
-  - L2200 `bool get _hasBarAboveChat`  — Whether a bar (an approval or a secret request) sits above the phone
-  - L2207 `void _noopToggleSidebar()`  — The sidebar is the shell's (the Agents roster), not the chat screen's.
-  - L2211 `void _onChatIdChanged(String? id)`  — Agents's chat id is the thread key and never changes under the screen, so
-  - L2217 `bool _useDesktopChat(BuildContext context)`  — Desktop chrome for desktop, web and tablets; the phone layout only for a
-  - L2246 `bool get _showsEmptyState`  — The connection is not something the user manages. Once paired the socket
-  - L2252 `AgentsLinkReport _linkReportFor(AgentsRelayState state)`  — What the link is, in the words the shell's status panel uses. The
-  - L2283 `void _publishLink(AgentsLinkReport report)`  — Hands [report] to the shell after this frame, once per change.
-  - L2297 `bool get _showConnectBar`
-  - L2307 `Widget _buildSecretRequestBar( BuildContext context, AgentsRelaySecretRequest request, )`  — One field per name the model asked for. A name already set shows a
-  - L2406 `void _onAutomationsChanged()`
-  - L2413 `Widget _buildAutomationCards( BuildContext context, List<AgentsAutomation> automations, )`  — The active and paused automations of this thread, with Pause / Resume /
-  - L2440 `Widget _buildTakeoverCard( BuildContext context, AgentsRelayApprovalRequest request, { required bool dense, })`
-  - L2464 `void _decideTakeover(bool approved)`  — Answers the takeover card. With no relay controller, or one that is not
-  - L2485 `Widget? _transcriptCards(BuildContext context, {required bool dense})`  — What sits at the end of the transcript besides a takeover: a per-action
-  - L2581 `void _decideActionApproval(String option)`  — Answers a per-action approval card with one of the host's options.
-  - L2610 `void _clearActionApproval()`  — Takes a per-action approval card off the thread, answered or not: the
-  - L2623 `void _clearAnsweredActionApproval()`  — The agent moved on after an answered card: the card has said what the
-  - L2632 `void _onBudgetRefused(AgentsRelayDone event, {required bool ownTask})`  — The host refused this thread's task: the agent's weekly budget is
-  - L2641 `String? _lastPrompt()`  — The prompt the refused task carried: the newest user message of this
-  - L2660 `void _runAnyway()`  — "Run anyway": the same task once more, over the budget. It goes through
-  - L2677 `void _onBudgetNotices()`
-  - L2684 `String get _userBrowserAgentId`  — The agent the user-browser status is about: its agent id, which is
-  - L2688 `void _registerApprovalThread()`  — Tells the approval rows in this thread which agent an Undo applies
-  - L2694 `void _onUserBrowserChanged()`
-  - L2701 `void _onBrowserTarget(AgentsRelayRunState event)`  — A `run_state` for this thread says which browser the agent drives.
-  - L2717 `UserBrowserNotice? _userBrowserNotice()`  — What the end of the thread says about the user's browser, or null.
-  - L2732 `Future<void> _openBudgetSheet()`  — "Change budget": the agent's weekly budget field in a sheet, the same
-  - L2782 `Widget _buildApprovalBar( BuildContext context, AgentsRelayApprovalRequest request, )`  — A here.now publish the user must answer before the blocked run continues.
-  - L2868 `static String _humanBytes(int bytes)`  — 1024 -> "1.0 KB". A plain binary size, no locale or package dependency.
-  - L2882 `Widget _buildConnectBar(BuildContext context, AgentsRelayState state)`
-  - L2947 `Widget _buildDevConnectRow()`
-  - L2997 `Widget _buildReconnectBar(BuildContext context, String? banner)`  — The bottom bar shown when the app is paired but not currently connected:
+## lib/widgets/agents_thread_view.dart  (3263 Z.)
+- L73 `kAgentsThreadHeaderInset = AgentsThreadHeader.height`  — Room a desktop thread keeps above its first message for the header that
+- L100 `kAgentsDevHostUrl = String.fromEnvironment('AGENTS_DEV_HOST')`  — The Agents chat surface: the imported chuk_chat chat screen, wired to the
+- L102 `class AgentsThreadView extends StatefulWidget`
+  - L103 `const AgentsThreadView({ super.key, required this.controllerBuilder, required this.sessionSource, this.pairingStore, this.devHostUrl = kAgentsDevHostUrl, this.threadKey = 'default', this.fileSaver = const DownloadsAgentFileSaver(), this.onRunStateChanged, this.onActivity, this.onPaired, this.onController, this.onOpenModelScreen, this.shellConfig, this.title, this.onOpenAgentScreen, this.agent, this.onOpenAgent, this.profiles, this.menuActions = const <AgentsThreadAction>[], this.topInset = 0, this.phoneLayout = false, this.linkReport, this.emptyState, this.openBrowserView, this.unreadSince, this.onUnreadSeen, })`
+  - L135 `final DateTime? unreadSince`  — When the reader last had this thread open, before this visit; the chat
+  - L138 `final VoidCallback? onUnreadSeen`  — The first new message was on screen.
+  - L142 `final Future<void> Function( BuildContext context, AgentsRelayController controller, String sessionKey, )? openBrowserView`  — Opens the live browser view for a takeover card. Null opens
+  - L152 `final Future<AgentsRelayController> Function() controllerBuilder`  — Builds the transport controller. Async because a real client generates a
+  - L155 `final AccountSessionSource sessionSource`  — Supplies the account session that gets provisioned once paired.
+  - L161 `final void Function(AgentsRelayController controller)? onController`  — Called with the live transport controller whenever it is built or rebuilt,
+  - L167 `final AgentsPairingStore? pairingStore`  — Persistent trust store. When provided and a pairing is stored, the view
+  - L174 `final String devHostUrl`  — A developer's escape hatch, never the product path: with a non-empty
+  - L178 `final String threadKey`  — The executor-side session this view talks to (§4: many threads per agent),
+  - L185 `final AgentFileSaver fileSaver`  — Where a file card writes when the user saves.
+  - L189 `final void Function(String threadKey, bool running)? onRunStateChanged`  — Reports whether a run is in flight, and for which thread, so the roster can
+  - L192 `final void Function(String threadKey, DateTime when)? onActivity`  — Reports that something happened in [threadKey], for "last active".
+  - L196 `final void Function(String peerDeviceId)? onPaired`  — Reports the host device id the moment the transport is paired, so the
+  - L200 `final VoidCallback? onOpenModelScreen`  — Opens the full model catalogue — the composer's "More models" row calls
+  - L205 `final AppShellConfig? shellConfig`  — chuk_chat's shell config, handed down from the shell (bead cowork-8y2).
+  - L209 `final String? title`  — The agent this thread belongs to, handed to the desktop chat screen.
+  - L212 `final VoidCallback? onOpenAgentScreen`  — Opens the live view of the agent's screen. Null parks the target.
+  - L216 `final AgentsAgent? agent`  — The agent this thread belongs to: its face, name and status sit at
+  - L219 `final VoidCallback? onOpenAgent`  — Tap on the agent in the desktop header: the shell's details pane.
+  - L222 `final AgentProfileStore? profiles`  — The agent faces' store, handed to the desktop header's pill.
+  - L227 `final List<AgentsThreadAction> menuActions`  — The desktop header's "…" menu: the actions the SHELL owns (details,
+  - L231 `final double topInset`  — On a phone: the height of the floating chrome over the chat. The chat
+  - L236 `final bool phoneLayout`  — Force chuk's phone screen. The mobile shell sets it below the phone
+  - L242 `final ValueNotifier<AgentsLinkReport>? linkReport`  — Where this view publishes what it knows about the link: not read yet, no
+  - L248 `final Widget? emptyState`  — Shown in place of the chat while no thread is selected ([threadKey] is
+  - L251 `State<AgentsThreadView> createState()`
+- L254 `class AgentsThreadViewState extends State<AgentsThreadView> with WidgetsBindingObserver`
+  - L256 `bool _wasBackgrounded = false`
+  - L261 `Timer? _resumeHostTimer`  — Armed by a resume that KEPT its socket: fires when the host has not
+  - L265 `AgentsRelayController? _resumeHostController`  — The controller [_resumeHostTimer] watches. A timer that outlives a
+  - L266 `bool _rebuildingForResume = false`
+  - L267 `late final TextEditingController _hostController`
+  - L268 `final TextEditingController _codeController = TextEditingController()`
+  - L270 `AgentsRelayController? _controller`
+  - L271 `StreamSubscription<AgentsRelayInbound>? _inboundSub`
+  - L273 `final AgentsRelayLink _link = AgentsRelayLink.instance`
+  - L274 `final AgentsRunLedger _ledger = AgentsRunLedger.instance`
+  - L275 `final AgentsReplayLoader _loader = AgentsReplayLoader.instance`
+  - L287 `bool _verbose = false`  — Mirrors [VerboseService.instance]: the single source of truth for the two
+  - L292 `int _revision = 0`  — The replay revision this view has painted for [AgentsThreadView.threadKey].
+  - L299 `int _cacheRevision = 0`  — Extra turns of the same key, for rows that arrive from the CACHE rather
+  - L309 `int _screenGeneration = 0`  — The chat screen's identity. It moves ONLY when the screen has to read
+  - L312 `StreamSubscription<String?>? _storeSub`  — Watches the chat store for the late arrival described above.
+  - L318 `bool _mountedWithRows = false`  — Whether this thread already had rows in memory when the screen mounted.
+  - L323 `int _revisionAtMount = 0`  — The loader revision the screen was mounted at for this thread. A thread
+  - L327 `AgentsRelayApprovalRequest? _approval`  — A here.now publish waiting on the user. The run is BLOCKED on the executor
+  - L328 `bool? _approvalDecision`
+  - L333 `bool _takeoverVisited = false`  — A browser takeover (an [_approval] with action `browser_takeover`): the
+  - L337 `bool _takeoverContinuing = false`  — The takeover is answered and the card says the agent continues. It
+  - L343 `String? _approvalScope`  — The option the user picked on a per-action approval card ([_approval]
+  - L346 `AgentsDraft? _approvalPreviousDraft`  — The draft the open approval revises, if any (bead chuk_chat-gkt9).
+  - L351 `({String message, String? prompt})? _budgetRefusal`  — The host refused this thread's last task: the agent's weekly budget
+  - L358 `String? _browserTarget`  — Which browser this thread's agent drives, from its last `run_state`
+  - L363 `late final AgentsPermissionsService _userBrowserService`  — The host's status of the user's browser lives here (host-wide, with
+  - L366 `bool _askedUserBrowser = false`  — A `get` for the user-browser status went out for this thread.
+  - L370 `bool _browserViewOpen = false`  — Guards against opening the browser view twice from one card.
+  - L375 `final AutomationsSource _automations = AutomationsSource.instance`  — This thread's schedules and watchers (docs/WIRE_CONTRACT.md,
+  - L377 `final SkillProposalsSource _skillProposals = SkillProposalsSource.instance`
+  - L379 `void _onSkillProposalsChanged()`
+  - L384 `bool _automationsCollapsed = true`
+  - L390 `AgentsRelaySecretRequest? _secretRequest`  — A `request_secrets` waiting on the user (docs/WIRE_CONTRACT.md,
+  - L391 `final Map<String, TextEditingController> _secretFields = <String, TextEditingController>{}`
+  - L393 `bool _secretsBusy = false`
+  - L396 `final Set<String> _ackedRuns = <String>{}`  — Run ids already acknowledged, so a rebuild cannot ack the same run twice.
+  - L398 `String? _localError`
+  - L399 `bool _busy = false`
+  - L412 `bool _cacheReady = false`  — Whether the local chat cache has been read once.
+  - L413 `final _startupState = ValueNotifier<AgentsRelayState>( const AgentsRelayState(phase: AgentsRelayPhase.connecting), )`
+  - L419 `AgentsStoredPairing? _storedPairing`  — The persisted trust, loaded once at startup. Non-null means "already
+  - L424 `bool _pairingLoaded = false`  — Whether the stored pairing has been read. Before that the link is
+  - L428 `AgentsLinkReport? _publishedLink`  — The last report handed to [AgentsThreadView.linkReport], and whether a
+  - L429 `bool _linkWriteQueued = false`
+  - L432 `bool _manuallyDisconnected = false`  — The user tapped Disconnect: stay down until they act, no auto-reconnect.
+  - L434 `Timer? _autoReconnectTimer`
+  - L435 `int _reconnectAttempts = 0`
+  - L440 `AgentsRelayPhase? _lastPhase`  — The transport phase this view last saw. It is how "we just became paired"
+  - L449 `int _failedReconnects = 0`  — How many reconnects have been tried since the link was last up.
+  - L459 `Timer? _watchdogTimer`  — A safety net that periodically forces a reconnect when the app is down but
+  - L462 `static const Duration _baseBackoff = Duration(seconds: 1)`  — Capped exponential backoff for auto-reconnect after an unexpected drop.
+  - L463 `static const Duration _maxBackoff = Duration(seconds: 30)`
+  - L466 `void initState()`
+  - L528 `void didUpdateWidget(AgentsThreadView oldWidget)`
+  - L571 `Future<void> _readSwitchedThread(String key)`  — A switch to a thread with no rows in memory reads its local copy, the
+  - L584 `void dispose()`
+  - L620 `void didChangeAppLifecycleState(AppLifecycleState state)`
+  - L637 `static const Duration resumeProbeTimeout = Duration(milliseconds: 1500)`  — How long a resume waits for the old socket to answer before it is
+  - L641 `static const Duration resumeHostAnswerTimeout = Duration(seconds: 2)`  — How long a kept socket has for the HOST to answer the post-resume replay
+  - L665 `Future<void> _onResumed()`  — The app is in front again (bead chuk_chat-kl8x).
+  - L745 `void _awaitHostAfterResume(AgentsRelayController controller)`  — Puts a kept socket on probation after a resume.
+  - L760 `void _cancelResumeHostWait()`
+  - L768 `bool _answersReplay(AgentsRelayInbound event)`  — True for a frame that answers this thread's replay: the `run_state`
+  - L778 `void _onHostAnsweredAfterResume()`  — The host answered the post-resume replay: the kept socket reaches it end
+  - L791 `Future<void> _bootstrap()`  — Load any stored pairing first, then build the controller. If a pairing is
+  - L837 `Future<bool> _tryBuildController()`  — [_buildController], with a failure turned into state the user can see
+  - L861 `Future<void> _warmCache()`  — Reads the local chat cache once and then lets the chat area mount. A
+  - L892 `bool get _threadHasRows`  — Whether the store holds a transcript for this thread right now.
+  - L899 `Future<void> _buildController()`
+  - L913 `Future<void> _rebuildController()`  — Tears down the live controller and spins up a fresh one, without touching
+  - L937 `void _onStateChanged()`  — Watches the transport state for an unexpected drop after being paired, and
+  - L1015 `Future<int> _flushOutbox(AgentsRelayController controller)`  — Sends what the user typed while the host was unreachable.
+  - L1050 `Future<void> _sendQueuedTask( AgentsRelayController controller, OutboxTask task, )`  — Sends one queued prompt into the thread it was typed in.
+  - L1081 `static String _taskIdForQueued(OutboxTask task)`  — The wire contract caps `task_id` at 64 characters.
+  - L1090 `Future<void> _flushAllThreads(AgentsRelayController controller)`  — Every thread's queued prompts, each into the conversation it was typed
+  - L1118 `Future<void> _resendUnacknowledged(AgentsRelayController controller)`  — Sends every task of this thread the host has not acknowledged again.
+  - L1149 `void _onTaskUnacknowledged(String sessionKey)`  — The ledger's pre-run window expired: this task has no `task_ack`, no
+  - L1157 `String? _answerForNotification(AgentsRelayDone event)`  — The answer text a finish notification previews. Stays on the device.
+  - L1172 `static String? answerForNotification({ required String? finalAnswer, required String? runId, required bool stopped, required List<ChatMessage>? rows, })`  — What a finish notification previews: the run's own final answer, else
+  - L1192 `static bool _rowCarriesRun(ChatMessage row, String runId)`  — Whether [row]'s run meta call ([kAgentsRunMetaTool]) names [runId]. The
+  - L1217 `void _requestReplay()`  — Asks the host to re-stream this thread from the replay cursor.
+  - L1237 `void _watchdogTick()`  — Force a reconnect if we are paired-but-down and nothing is already trying.
+  - L1270 `void _scheduleAutoReconnect()`
+  - L1303 `Future<void> _reconnect()`  — Reconnects the current controller to the stored host with no code, then
+  - L1337 `Future<void> reconnect({bool force = false})`  — Retry stored trust without exposing transport controls in the chat.
+  - L1369 `Future<void> openPairing()`  — Opens the "Add your computer" flow (the QR scan). Public so the shell's
+  - L1377 `Future<void> _connect()`
+  - L1408 `Future<void> _persistTrust( AgentsRelayController controller, { Uri? hostUrl, })`
+  - L1423 `Future<void> _pairFromInvite(AgentsPairingInvite invite)`  — The QR path, and the whole of what a phone ever does to get linked: open
+  - L1448 `Future<void> pairWithInvite(AgentsPairingInvite invite)`  — The install page's way in: the same pairing as [_pairFromInvite], on this
+  - L1485 `Future<void> _runInvitePairing( AgentsRelayController controller, AgentsPairingInvite invite, )`  — The shared sequence ([pairAgentsFromInvite]) plus this view's own record
+  - L1500 `static String _pairingFailureText(Object error)`  — One plain sentence for whatever went wrong. The user is not shown a code,
+  - L1507 `static String _connectionFailureText(Object error)`  — The same for a reconnect of a computer that is already paired.
+  - L1512 `static const String _kComputerAway = 'Your computer is not reachable right now. Make sure it is on and ' 'Agents is running there.'`
+  - L1519 `String? _connectionBanner(AgentsRelayState state)`  — What the connect bar says about the transport. The relay's own detail
+  - L1529 `Future<void> _openPairingScreen()`
+  - L1540 `Future<void> _confirmForget()`  — Deletes the stored trust — the next connection needs a fresh code again —
+  - L1565 `Future<void> _forget()`
+  - L1587 `Future<void> _loadVerbose()`  — Load the persisted verbose flag once at startup. Never throws: a failure
+  - L1592 `void _onVerboseChanged()`
+  - L1596 `void _onThemeChanged()`
+  - L1602 `void _onInbound(AgentsRelayInbound event)`
+  - L1815 `void _clearSecretRequest()`
+  - L1828 `Future<void> _submitSecretRequest()`  — Save what the user typed and answer the host. An empty field for a name
+  - L1855 `Future<void> _skipSecretRequest()`  — The user does not have (or want to give) the keys: tell the host so the
+  - L1872 `void _decideApproval(bool approved, {String? scope})`  — Answer a here.now publish approval. Idempotent: once a decision is sent
+  - L1907 `void _onTakeoverRequest(AgentsRelayApprovalRequest event)`  — A browser takeover from the host (`approval_request` with action
+  - L1938 `void _clearTakeover()`  — Takes a takeover card off the thread, whatever state it was in.
+  - L1953 `void _syncWaitingForUser()`  — Tells the ledger whether this thread's run waits on a card here, so the
+  - L1964 `Future<void> _openTakeoverBrowser()`  — Opens the live browser view for the takeover card, in control: the
+  - L1993 `Future<void> copyFullChat()`  — Copies the WHOLE thread to the clipboard for debugging (bd cowork-338):
+  - L2005 `bool _running = false`  — The ledger is the run's truth: it knows a run is in flight whether this
+  - L2007 `void _onLedgerChanged()`
+  - L2031 `void _onRunClosed()`  — A run just ended and left the thread with nothing to show. Never silence:
+  - L2060 `void _releaseStaleComposer(String key)`  — The composer goes back to the send target when the run is over.
+  - L2073 `void _onRunSilent(String sessionKey)`  — The run for [sessionKey] has produced nothing for the ledger's ceiling.
+  - L2085 `void _reconcileOnOpen()`  — The thread is being opened. A run the ledger still draws as live is
+  - L2096 `void _onLoaderChanged()`
+  - L2129 `void _onChatStoreChanged(String? changedId)`  — The chat cache changed. Remount the screen ONLY when this thread's rows
+  - L2148 `bool get _screenIsEmpty`  — Whether the screen on the tree is showing an empty transcript. The
+  - L2154 `void _syncRevision()`  — Adopt a new replay revision — but never while a run is in flight: the
+  - L2171 `Widget build(BuildContext context)`
+  - L2250 `Widget _buildHeader( BuildContext context, AgentsRelayState state, List<AgentsAutomation>? automations, )`  — The top bar of a desktop thread, the phone's in desktop form: the
+  - L2300 `String _automationLabel(List<AgentsAutomation> automations)`  — One automation reads as itself; several read as a count, because the
+  - L2306 `void _openDocuments(BuildContext context)`
+  - L2325 `Widget _buildChat(BuildContext context, {double desktopTopInset = 0})`  — The imported chuk_chat renderer. Everything Agents-specific about it is in
+  - L2410 `bool get _hasBarAboveChat`  — Whether a bar (an approval or a secret request) sits above the phone
+  - L2417 `void _noopToggleSidebar()`  — The sidebar is the shell's (the Agents roster), not the chat screen's.
+  - L2421 `void _onChatIdChanged(String? id)`  — Agents's chat id is the thread key and never changes under the screen, so
+  - L2427 `bool _useDesktopChat(BuildContext context)`  — Desktop chrome for desktop, web and tablets; the phone layout only for a
+  - L2456 `bool get _showsEmptyState`  — The connection is not something the user manages. Once paired the socket
+  - L2462 `AgentsLinkReport _linkReportFor(AgentsRelayState state)`  — What the link is, in the words the shell's status panel uses. The
+  - L2493 `void _publishLink(AgentsLinkReport report)`  — Hands [report] to the shell after this frame, once per change.
+  - L2507 `bool get _showConnectBar`
+  - L2517 `Widget _buildSecretRequestBar( BuildContext context, AgentsRelaySecretRequest request, )`  — One field per name the model asked for. A name already set shows a
+  - L2616 `void _onAutomationsChanged()`
+  - L2623 `Widget _buildAutomationCards( BuildContext context, List<AgentsAutomation> automations, )`  — The active and paused automations of this thread, with Pause / Resume /
+  - L2650 `Widget _buildTakeoverCard( BuildContext context, AgentsRelayApprovalRequest request, { required bool dense, })`
+  - L2674 `void _decideTakeover(bool approved)`  — Answers the takeover card. With no relay controller, or one that is not
+  - L2695 `Widget? _transcriptCards(BuildContext context, {required bool dense})`  — What sits at the end of the transcript besides a takeover: a per-action
+  - L2792 `void _decideActionApproval(String option)`  — Answers a per-action approval card with one of the host's options.
+  - L2821 `void _clearActionApproval()`  — Takes a per-action approval card off the thread, answered or not: the
+  - L2834 `void _clearAnsweredActionApproval()`  — The agent moved on after an answered card: the card has said what the
+  - L2843 `void _onBudgetRefused(AgentsRelayDone event, {required bool ownTask})`  — The host refused this thread's task: the agent's weekly budget is
+  - L2852 `String? _lastPrompt()`  — The prompt the refused task carried: the newest user message of this
+  - L2871 `void _runAnyway()`  — "Run anyway": the same task once more, over the budget. It goes through
+  - L2888 `void _onBudgetNotices()`
+  - L2895 `String get _userBrowserAgentId`  — The agent the user-browser status is about: its agent id, which is
+  - L2899 `void _registerApprovalThread()`  — Tells the approval rows in this thread which agent an Undo applies
+  - L2905 `void _onUserBrowserChanged()`
+  - L2912 `void _onBrowserTarget(AgentsRelayRunState event)`  — A `run_state` for this thread says which browser the agent drives.
+  - L2928 `UserBrowserNotice? _userBrowserNotice()`  — What the end of the thread says about the user's browser, or null.
+  - L2943 `Future<void> _openBudgetSheet()`  — "Change budget": the agent's weekly budget field in a sheet, the same
+  - L2993 `Widget _buildApprovalBar( BuildContext context, AgentsRelayApprovalRequest request, )`  — A here.now publish the user must answer before the blocked run continues.
+  - L3079 `static String _humanBytes(int bytes)`  — 1024 -> "1.0 KB". A plain binary size, no locale or package dependency.
+  - L3093 `Widget _buildConnectBar(BuildContext context, AgentsRelayState state)`
+  - L3158 `Widget _buildDevConnectRow()`
+  - L3208 `Widget _buildReconnectBar(BuildContext context, String? banner)`  — The bottom bar shown when the app is paired but not currently connected:
 
 ## lib/widgets/agents_user_browser.dart  (615 Z.)
 - L32 `kUserBrowserSetupCommand = 'cd ~/git/chuk_chat/extension && ./build.sh chrome && ' '../tools/agents-browser-bridge/insta`  — The one command from the runbook (docs/RUNBOOK_2026-09-08_USER_BROWSER.md,
@@ -899,7 +918,7 @@
   - L372 `bool shouldRelayout(_AnchoredMenuLayout old)`
 - L384 `List<List<Widget>> _splitOnDividers(List<Widget> items)`  — Splits a flat item list into runs at every divider, so a divider becomes
 
-## lib/widgets/answer_blocks.dart  (809 Z.)
+## lib/widgets/answer_blocks.dart  (828 Z.)
 - part of 'markdown_message.dart'
 - L12 `class _AnswerBlockStyle`  — Colours and type the blocks share, taken from the surrounding message.
   - L13 `_AnswerBlockStyle({ required this.textColor, required this.backgroundColor, required this.accent, required this.onAccent, required this.fontFamily, required this.baseFontSize, }) : dark = ThemeData.estimateBrightnessForColor(backgroundColor) == Brightness.dark`
@@ -924,58 +943,58 @@
   - L57 `Color get termDim`
   - L61 `Widget markdown( String text, { Color? color, double? fontSize, FontWeight? fontWeight, double? height, })`  — Inline Markdown (bold, code, links) inside a block. Blocks do not nest,
 - L83 `Widget _buildAnswerBlock( AnswerBlockSegment block, _AnswerBlockStyle s, { ValueChanged<String>? onFollowUp, })`  — Builds the widget for one block. Throws only on a programming error; the
-- L133 `class _BlockFrame extends StatelessWidget`  — The frame of a block: a rule on top and an optional small-caps title.
-  - L134 `const _BlockFrame({ required this.title, required this.s, required this.child, })`
-  - L140 `final String title`
-  - L141 `final _AnswerBlockStyle s`
-  - L142 `final Widget child`
-  - L145 `Widget build(BuildContext context)`
-- L183 `class _StepsBlock extends StatelessWidget`
-  - L184 `const _StepsBlock({required this.spec, required this.s})`
-  - L186 `final StepsSpec spec`
-  - L187 `final _AnswerBlockStyle s`
-  - L189 `static const double _circle = 26`
-  - L190 `static const double _gutter = 12`
-  - L193 `Widget build(BuildContext context)`
-  - L209 `Widget _step(StepItem step, {required bool last})`
-  - L272 `Widget _part(StepPart part)`
-- L296 `class _TerminalLines extends StatelessWidget`  — Command lines on a dark terminal card, with the code block's copy button.
-  - L297 `const _TerminalLines({required this.commands, required this.s})`
-  - L299 `final List<String> commands`
-  - L300 `final _AnswerBlockStyle s`
-  - L303 `Widget build(BuildContext context)`
-- L351 `class _WarningLine extends StatelessWidget`
-  - L352 `const _WarningLine({required this.text, required this.s})`
-  - L354 `final String text`
-  - L355 `final _AnswerBlockStyle s`
-  - L358 `Widget build(BuildContext context)`
-- L401 `Widget _undatedTimeline(AnswerBlockSegment block, _AnswerBlockStyle s)`  — A `::: timeline` without dates, drawn as the Markdown the model wrote.
-- L415 `class _TimelineBlock extends StatelessWidget`
-  - L416 `const _TimelineBlock({ required this.title, required this.entries, required this.s, })`
-  - L422 `final String title`
-  - L423 `final List<TimelineEntry> entries`
-  - L424 `final _AnswerBlockStyle s`
-  - L426 `static const double _rail = 22`
-  - L427 `static const double _dot = 9`
-  - L430 `Widget build(BuildContext context)`
-  - L480 `Widget _entry( TimelineEntry e, { required bool last, required double labelWidth, required double dotTop, required double lineHeight, })`
-- L559 `class _ScaleBlock extends StatelessWidget`  — A labelled band with ticks and a marker. Experimental: the prompt offers
-  - L560 `const _ScaleBlock({required this.spec, required this.s})`
-  - L562 `final ScaleSpec spec`
-  - L563 `final _AnswerBlockStyle s`
-  - L565 `static const double _stripHeight = 14`
-  - L566 `static const double _shortLine = 6`
-  - L568 `LinearGradient _gradient()`
-  - L588 `String _withUnit(String raw)`
-  - L591 `Widget build(BuildContext context)`
-  - L661 `List<Widget> _marker(ScalePoint m, double w, double pill, double area)`
-  - L706 `List<Widget> _tick(ScalePoint p, double w, {required double lineHeight})`
-- L768 `class _AlertBlock extends StatelessWidget`
-  - L769 `const _AlertBlock({required this.type, required this.lines, required this.s})`
-  - L771 `final String type`
-  - L772 `final List<String> lines`
-  - L773 `final _AnswerBlockStyle s`
-  - L776 `Widget build(BuildContext context)`
+- L152 `class _BlockFrame extends StatelessWidget`  — The frame of a block: a rule on top and an optional small-caps title.
+  - L153 `const _BlockFrame({ required this.title, required this.s, required this.child, })`
+  - L159 `final String title`
+  - L160 `final _AnswerBlockStyle s`
+  - L161 `final Widget child`
+  - L164 `Widget build(BuildContext context)`
+- L202 `class _StepsBlock extends StatelessWidget`
+  - L203 `const _StepsBlock({required this.spec, required this.s})`
+  - L205 `final StepsSpec spec`
+  - L206 `final _AnswerBlockStyle s`
+  - L208 `static const double _circle = 26`
+  - L209 `static const double _gutter = 12`
+  - L212 `Widget build(BuildContext context)`
+  - L228 `Widget _step(StepItem step, {required bool last})`
+  - L291 `Widget _part(StepPart part)`
+- L315 `class _TerminalLines extends StatelessWidget`  — Command lines on a dark terminal card, with the code block's copy button.
+  - L316 `const _TerminalLines({required this.commands, required this.s})`
+  - L318 `final List<String> commands`
+  - L319 `final _AnswerBlockStyle s`
+  - L322 `Widget build(BuildContext context)`
+- L370 `class _WarningLine extends StatelessWidget`
+  - L371 `const _WarningLine({required this.text, required this.s})`
+  - L373 `final String text`
+  - L374 `final _AnswerBlockStyle s`
+  - L377 `Widget build(BuildContext context)`
+- L420 `Widget _undatedTimeline(AnswerBlockSegment block, _AnswerBlockStyle s)`  — A `::: timeline` without dates, drawn as the Markdown the model wrote.
+- L434 `class _TimelineBlock extends StatelessWidget`
+  - L435 `const _TimelineBlock({ required this.title, required this.entries, required this.s, })`
+  - L441 `final String title`
+  - L442 `final List<TimelineEntry> entries`
+  - L443 `final _AnswerBlockStyle s`
+  - L445 `static const double _rail = 22`
+  - L446 `static const double _dot = 9`
+  - L449 `Widget build(BuildContext context)`
+  - L499 `Widget _entry( TimelineEntry e, { required bool last, required double labelWidth, required double dotTop, required double lineHeight, })`
+- L578 `class _ScaleBlock extends StatelessWidget`  — A labelled band with ticks and a marker. Experimental: the prompt offers
+  - L579 `const _ScaleBlock({required this.spec, required this.s})`
+  - L581 `final ScaleSpec spec`
+  - L582 `final _AnswerBlockStyle s`
+  - L584 `static const double _stripHeight = 14`
+  - L585 `static const double _shortLine = 6`
+  - L587 `LinearGradient _gradient()`
+  - L607 `String _withUnit(String raw)`
+  - L610 `Widget build(BuildContext context)`
+  - L680 `List<Widget> _marker(ScalePoint m, double w, double pill, double area)`
+  - L725 `List<Widget> _tick(ScalePoint p, double w, {required double lineHeight})`
+- L787 `class _AlertBlock extends StatelessWidget`
+  - L788 `const _AlertBlock({required this.type, required this.lines, required this.s})`
+  - L790 `final String type`
+  - L791 `final List<String> lines`
+  - L792 `final _AnswerBlockStyle s`
+  - L795 `Widget build(BuildContext context)`
 
 ## lib/widgets/api_availability_polling.dart  (51 Z.)
 - L13 `mixin ApiAvailabilityPolling<T extends StatefulWidget> on State<T>`  — Retries a failed model fetch once the API answers again.
@@ -1032,263 +1051,284 @@
   - L186 `static ScaffoldFeatureController<SnackBar, SnackBarClosedReason> error( BuildContext context, String message, { Duration duration = const Duration(seconds: 4), String? actionLabel, VoidCallback? onAction, })`  — A failure. Longer on screen, because there is usually something to read.
   - L202 `static ScaffoldFeatureController<SnackBar, SnackBarClosedReason> success( BuildContext context, String message, { Duration duration = const Duration(seconds: 2), })`  — It worked.
 
-## lib/widgets/artifact_panel.dart  (2158 Z.)
-- L33 `class ArtifactPanel extends StatefulWidget`
-  - L34 `const ArtifactPanel({ super.key, required this.artifact, this.onClose, this.onOpenSourceChat, this.showHeader = true, })`
-  - L42 `final ArtifactDocument artifact`
-  - L43 `final VoidCallback? onClose`
-  - L47 `final void Function(String chatId)? onOpenSourceChat`  — Optional jump to the chat this artifact was generated in. When set,
-  - L48 `final bool showHeader`
-  - L51 `State<ArtifactPanel> createState()`
-- L54 `enum _ArtifactViewMode`
-  - L54 `preview`
-  - L54 `code`
-- L56 `class _ArtifactPanelState extends State<ArtifactPanel>`
-  - L57 `bool _loadingVersions = true`
-  - L58 `bool _busy = false`
-  - L59 `List<ArtifactVersionSnapshot> _versions = const []`
-  - L60 `int? _selectedVersion`
-  - L61 `String? _selectedVersionContent`
-  - L62 `_ArtifactViewMode _viewMode = _ArtifactViewMode.preview`
-  - L67 `bool get _isViewingHistory`  — True when the user has picked a snapshot older than the live row.
-  - L74 `List<ArtifactDocument> _chatArtifacts = const []`  — All artifacts currently available in this chat. Used for the
-  - L75 `StreamSubscription<void>? _artifactsChangesSub`
-  - L78 `final GlobalKey _visualCaptureKey = GlobalKey()`  — Captures the visual rendering (SVG / technical drawing) for PNG export.
-  - L81 `static const Set<ArtifactType> _dualViewTypes = { ArtifactType.svg, ArtifactType.technicalDrawing, ArtifactType.typst, ArtifactType.excalidraw, ArtifactType.html, }`  — Artifact types that have both a rendered preview and a source-code view.
-  - L89 `bool get _hasDualView`
-  - L91 `String get _codeLanguageHint`
-  - L101 `void initState()`
-  - L114 `Future<void> _loadChatArtifacts()`
-  - L126 `void didUpdateWidget(covariant ArtifactPanel oldWidget)`
-  - L137 `void dispose()`
-  - L145 `void _switchActiveArtifact(ArtifactDocument target)`
-  - L151 `void _onPendingVersionChanged()`
-  - L160 `Future<void> _loadVersions()`
-  - L185 `void _applyPendingInitialVersion()`
-  - L212 `Future<void> _copyContent()`
-  - L218 `List<_DownloadFormat> _availableFormats()`  — Formats offered for download based on artifact type.
-  - L259 `Future<Uint8List?> _bytesForFormat(String ext)`
-  - L302 `Future<Uint8List?> _captureVisualAsPng()`
-  - L312 `Future<void> _showDownloadMenu()`
-  - L332 `RelativeRect _downloadMenuPosition()`
-  - L346 `Future<void> _downloadAs(String ext)`
-  - L392 `String _fileExtensionForArtifact(ArtifactDocument artifact)`
-  - L430 `Future<void> _selectVersion(int? version)`
-  - L450 `String get _effectiveContent`
-  - L453 `ArtifactType get _effectiveType`
-  - L455 `String? get _effectiveAttachmentPath`
-  - L467 `Widget build(BuildContext context)`
-- L761 `class ArtifactBottomSheet extends StatelessWidget`
-  - L762 `const ArtifactBottomSheet({super.key, this.onOpenSourceChat})`
-  - L767 `final void Function(String chatId)? onOpenSourceChat`  — Mobile equivalent of the desktop side panel's source-chat button:
-  - L770 `Widget build(BuildContext context)`
-- L844 `class _TypeBadge extends StatelessWidget`
-  - L845 `const _TypeBadge({required this.type})`
-  - L847 `final ArtifactType type`
-  - L850 `Widget build(BuildContext context)`
-- L870 `class _ArtifactRenderer extends StatelessWidget`
-  - L871 `const _ArtifactRenderer({ required this.type, required this.content, this.language, this.attachmentPath, this.artifactId, this.title, this.captureKey, this.forceCodeView = false, this.codeLanguageHint = '', this.readOnly = false, })`
-  - L884 `final ArtifactType type`
-  - L885 `final String content`
-  - L886 `final String? language`
-  - L887 `final String? attachmentPath`
-  - L888 `final String? artifactId`
-  - L889 `final String? title`
-  - L890 `final bool forceCodeView`
-  - L891 `final String codeLanguageHint`
-  - L896 `final bool readOnly`  — True when the user has selected a non-current snapshot. Forces
-  - L900 `final GlobalKey? captureKey`  — Attached to visual artifacts (SVG, technical drawings) so parent can
-  - L902 `Widget _buildVisualView(BuildContext context, Color iconFg)`
-  - L962 `Widget _buildCodeView(BuildContext context)`
-  - L980 `Widget build(BuildContext context)`
-- L1111 `class _ExcalidrawMarkdrawEditor extends StatefulWidget`  — Native cross-platform Excalidraw editor backed by the `markdraw`
-  - L1112 `const _ExcalidrawMarkdrawEditor({ super.key, required this.jsonString, this.artifactId, this.title, this.readOnly = false, })`
-  - L1120 `final String jsonString`
-  - L1121 `final String? artifactId`
-  - L1127 `final String? title`  — Forwarded to the markdraw controller via `renameDocument` so the
-  - L1134 `final bool readOnly`  — When true, the editor renders the scene but rejects all edits and
-  - L1137 `State<_ExcalidrawMarkdrawEditor> createState()`
-- L1141 `class _ExcalidrawMarkdrawEditorState extends State<_ExcalidrawMarkdrawEditor>`
-  - L1142 `late final markdraw.MarkdrawController _controller`
-  - L1143 `String _lastPersisted = ''`
-  - L1144 `bool _savingSelfTriggered = false`
-  - L1145 `bool _busy = false`
-  - L1146 `bool _hasUnsavedChanges = false`
-  - L1147 `String? _saveError`
-  - L1152 `Future<void> Function()? _registeredFlush`  — The flush callback we registered with [ArtifactStorageService]. Held
-  - L1155 `void initState()`
-  - L1174 `void _scheduleAutoCenter()`  — Auto-fit the scene to the viewport on first paint. Has to wait
-  - L1195 `void _loadIntoController(String json)`
-  - L1220 `void _applyTitleToController(String? title)`
-  - L1233 `void _registerFlusher()`
-  - L1245 `void didUpdateWidget(covariant _ExcalidrawMarkdrawEditor oldWidget)`
-  - L1288 `void dispose()`
-  - L1309 `void _onSceneChanged(markdraw.Scene _)`
-  - L1326 `String _safeSerialize()`
-  - L1341 `Future<void> _persistAsNewVersion()`  — Commits the current scene as a NEW artifact version. Called only
-  - L1377 `Size _lastKnownCanvasSize = const Size(800, 600)`
-  - L1379 `void _centerCanvas()`
-  - L1388 `Widget build(BuildContext context)`
-  - L1397 `Widget _buildStack(BuildContext context)`
-- L1523 `class _TypstPdfRenderer extends StatefulWidget`  — Renders a Typst artifact's PDF. Prefers the persisted encrypted
-  - L1524 `const _TypstPdfRenderer({ super.key, required this.source, this.attachmentPath, this.artifactId, })`
-  - L1531 `final String source`
-  - L1532 `final String? attachmentPath`
-  - L1537 `final String? artifactId`  — When non-null and [attachmentPath] is null, a successful live compile
-  - L1540 `State<_TypstPdfRenderer> createState()`
-- L1543 `class _TypstPdfRendererState extends State<_TypstPdfRenderer>`
-  - L1544 `String? _error`
-  - L1545 `bool _loading = true`
-  - L1546 `Uint8List? _pdfBytes`
-  - L1549 `final PdfViewerController _pdfController = PdfViewerController()`
-  - L1550 `bool _ctrlHeld = false`
-  - L1553 `void initState()`
-  - L1560 `void dispose()`
-  - L1565 `bool _onHardwareKey(KeyEvent event)`
-  - L1573 `void _zoomUp()`
-  - L1574 `void _zoomDown()`
-  - L1575 `void _zoomReset()`
-  - L1583 `void didUpdateWidget(covariant _TypstPdfRenderer old)`
-  - L1591 `Future<void> _load()`
-  - L1639 `Future<void> _compile()`
-  - L1700 `static void _backfillAttachment(Uint8List bytes, String artifactId)`  — Upload compiled PDF and update the artifact row in the background.
-  - L1723 `Widget build(BuildContext context)`
-- L1825 `class _ViewModeToggle extends StatelessWidget`  — Preview / Code toggle shown in the artifact header for types that support
-  - L1826 `const _ViewModeToggle({ required this.mode, required this.onChanged, this.compact = true, })`
-  - L1832 `final _ArtifactViewMode mode`
-  - L1833 `final ValueChanged<_ArtifactViewMode> onChanged`
-  - L1837 `final bool compact`  — Compact = desktop header (small font, shrink-wrap).
-  - L1840 `Widget build(BuildContext context)`
-- L1877 `IconData _iconForType(ArtifactType type)`
-- L1899 `class _ZoomableVisual extends StatefulWidget`  — Zoomable wrapper with +/- buttons for visual artifacts (SVG, drawings).
-  - L1900 `const _ZoomableVisual({super.key, required this.child})`
-  - L1902 `final Widget child`
-  - L1905 `State<_ZoomableVisual> createState()`
-- L1908 `class _ZoomableVisualState extends State<_ZoomableVisual>`
-  - L1909 `final TransformationController _ctrl = TransformationController()`
-  - L1912 `void dispose()`
-  - L1917 `void _zoom(double factor, {Offset? focal})`
-  - L1930 `void _resetZoom()`
-  - L1935 `Widget build(BuildContext context)`
-- L1976 `class _DownloadFormat`
-  - L1977 `const _DownloadFormat(this.label, this.ext)`
-  - L1978 `final String label`
-  - L1979 `final String ext`
-- L1987 `class _HistoryReadOnlyBanner extends StatelessWidget`  — Thin banner shown above the renderer when the user has selected a
-  - L1988 `const _HistoryReadOnlyBanner({ required this.selectedVersion, required this.latestVersion, required this.onSwitchToLatest, })`
-  - L1994 `final int selectedVersion`
-  - L1995 `final int latestVersion`
-  - L1996 `final VoidCallback onSwitchToLatest`
-  - L1999 `Widget build(BuildContext context)`
-- L2048 `class _ArtifactSwitcher extends StatelessWidget`  — Header title + switcher. When the current chat has more than one artifact,
-  - L2049 `const _ArtifactSwitcher({ required this.current, required this.all, required this.onSelect, this.fontSize = 14, })`
-  - L2056 `final ArtifactDocument current`
-  - L2057 `final List<ArtifactDocument> all`
-  - L2058 `final ValueChanged<ArtifactDocument> onSelect`
-  - L2059 `final double fontSize`
-  - L2062 `Widget build(BuildContext context)`
-- L2136 `class _ZoomButton extends StatelessWidget`
-  - L2137 `const _ZoomButton({required this.icon, required this.onTap})`
-  - L2139 `final IconData icon`
-  - L2140 `final VoidCallback onTap`
-  - L2143 `Widget build(BuildContext context)`
+## lib/widgets/artifact_panel.dart  (2167 Z.)
+- L36 `class ArtifactPanel extends StatefulWidget`
+  - L37 `const ArtifactPanel({ super.key, required this.artifact, this.onClose, this.onOpenSourceChat, this.showHeader = true, })`
+  - L45 `final ArtifactDocument artifact`
+  - L46 `final VoidCallback? onClose`
+  - L50 `final void Function(String chatId)? onOpenSourceChat`  — Optional jump to the chat this artifact was generated in. When set,
+  - L51 `final bool showHeader`
+  - L54 `State<ArtifactPanel> createState()`
+- L57 `enum _ArtifactViewMode`
+  - L57 `preview`
+  - L57 `code`
+- L59 `class _ArtifactPanelState extends State<ArtifactPanel>`
+  - L60 `bool _loadingVersions = true`
+  - L61 `bool _busy = false`
+  - L62 `List<ArtifactVersionSnapshot> _versions = const []`
+  - L63 `int? _selectedVersion`
+  - L64 `String? _selectedVersionContent`
+  - L65 `_ArtifactViewMode _viewMode = _ArtifactViewMode.preview`
+  - L70 `bool get _isViewingHistory`  — True when the user has picked a snapshot older than the live row.
+  - L77 `List<ArtifactDocument> _chatArtifacts = const []`  — All artifacts currently available in this chat. Used for the
+  - L78 `StreamSubscription<void>? _artifactsChangesSub`
+  - L81 `final GlobalKey _visualCaptureKey = GlobalKey()`  — Captures the visual rendering (SVG / technical drawing) for PNG export.
+  - L84 `static const Set<ArtifactType> _dualViewTypes = { ArtifactType.svg, ArtifactType.technicalDrawing, ArtifactType.typst, ArtifactType.excalidraw, ArtifactType.html, }`  — Artifact types that have both a rendered preview and a source-code view.
+  - L92 `bool get _hasDualView`
+  - L94 `String get _codeLanguageHint`
+  - L104 `void initState()`
+  - L117 `Future<void> _loadChatArtifacts()`
+  - L129 `void didUpdateWidget(covariant ArtifactPanel oldWidget)`
+  - L140 `void dispose()`
+  - L148 `void _switchActiveArtifact(ArtifactDocument target)`
+  - L154 `void _onPendingVersionChanged()`
+  - L163 `Future<void> _loadVersions()`
+  - L188 `void _applyPendingInitialVersion()`
+  - L215 `Future<void> _copyContent()`
+  - L221 `List<_DownloadFormat> _availableFormats()`  — Formats offered for download based on artifact type.
+  - L262 `Future<Uint8List?> _bytesForFormat(String ext)`
+  - L305 `Future<Uint8List?> _captureVisualAsPng()`
+  - L315 `Future<void> _showDownloadMenu()`
+  - L335 `RelativeRect _downloadMenuPosition()`
+  - L349 `Future<void> _downloadAs(String ext)`
+  - L395 `String _fileExtensionForArtifact(ArtifactDocument artifact)`
+  - L433 `Future<void> _selectVersion(int? version)`
+  - L453 `String get _effectiveContent`
+  - L456 `ArtifactType get _effectiveType`
+  - L458 `String? get _effectiveAttachmentPath`
+  - L470 `Widget build(BuildContext context)`
+- L770 `class ArtifactBottomSheet extends StatelessWidget`
+  - L771 `const ArtifactBottomSheet({super.key, this.onOpenSourceChat})`
+  - L776 `final void Function(String chatId)? onOpenSourceChat`  — Mobile equivalent of the desktop side panel's source-chat button:
+  - L779 `Widget build(BuildContext context)`
+- L853 `class _TypeBadge extends StatelessWidget`
+  - L854 `const _TypeBadge({required this.type})`
+  - L856 `final ArtifactType type`
+  - L859 `Widget build(BuildContext context)`
+- L879 `class _ArtifactRenderer extends StatelessWidget`
+  - L880 `const _ArtifactRenderer({ required this.type, required this.content, this.language, this.attachmentPath, this.artifactId, this.title, this.captureKey, this.forceCodeView = false, this.codeLanguageHint = '', this.readOnly = false, })`
+  - L893 `final ArtifactType type`
+  - L894 `final String content`
+  - L895 `final String? language`
+  - L896 `final String? attachmentPath`
+  - L897 `final String? artifactId`
+  - L898 `final String? title`
+  - L899 `final bool forceCodeView`
+  - L900 `final String codeLanguageHint`
+  - L905 `final bool readOnly`  — True when the user has selected a non-current snapshot. Forces
+  - L909 `final GlobalKey? captureKey`  — Attached to visual artifacts (SVG, technical drawings) so parent can
+  - L911 `Widget _buildVisualView(BuildContext context, Color iconFg)`
+  - L971 `Widget _buildCodeView(BuildContext context)`
+  - L989 `Widget build(BuildContext context)`
+- L1120 `class _ExcalidrawMarkdrawEditor extends StatefulWidget`  — Native cross-platform Excalidraw editor backed by the `markdraw`
+  - L1121 `const _ExcalidrawMarkdrawEditor({ super.key, required this.jsonString, this.artifactId, this.title, this.readOnly = false, })`
+  - L1129 `final String jsonString`
+  - L1130 `final String? artifactId`
+  - L1136 `final String? title`  — Forwarded to the markdraw controller via `renameDocument` so the
+  - L1143 `final bool readOnly`  — When true, the editor renders the scene but rejects all edits and
+  - L1146 `State<_ExcalidrawMarkdrawEditor> createState()`
+- L1150 `class _ExcalidrawMarkdrawEditorState extends State<_ExcalidrawMarkdrawEditor>`
+  - L1151 `late final markdraw.MarkdrawController _controller`
+  - L1152 `String _lastPersisted = ''`
+  - L1153 `bool _savingSelfTriggered = false`
+  - L1154 `bool _busy = false`
+  - L1155 `bool _hasUnsavedChanges = false`
+  - L1156 `String? _saveError`
+  - L1161 `Future<void> Function()? _registeredFlush`  — The flush callback we registered with [ArtifactStorageService]. Held
+  - L1164 `void initState()`
+  - L1183 `void _scheduleAutoCenter()`  — Auto-fit the scene to the viewport on first paint. Has to wait
+  - L1204 `void _loadIntoController(String json)`
+  - L1229 `void _applyTitleToController(String? title)`
+  - L1242 `void _registerFlusher()`
+  - L1254 `void didUpdateWidget(covariant _ExcalidrawMarkdrawEditor oldWidget)`
+  - L1297 `void dispose()`
+  - L1318 `void _onSceneChanged(markdraw.Scene _)`
+  - L1335 `String _safeSerialize()`
+  - L1350 `Future<void> _persistAsNewVersion()`  — Commits the current scene as a NEW artifact version. Called only
+  - L1386 `Size _lastKnownCanvasSize = const Size(800, 600)`
+  - L1388 `void _centerCanvas()`
+  - L1397 `Widget build(BuildContext context)`
+  - L1406 `Widget _buildStack(BuildContext context)`
+- L1532 `class _TypstPdfRenderer extends StatefulWidget`  — Renders a Typst artifact's PDF. Prefers the persisted encrypted
+  - L1533 `const _TypstPdfRenderer({ super.key, required this.source, this.attachmentPath, this.artifactId, })`
+  - L1540 `final String source`
+  - L1541 `final String? attachmentPath`
+  - L1546 `final String? artifactId`  — When non-null and [attachmentPath] is null, a successful live compile
+  - L1549 `State<_TypstPdfRenderer> createState()`
+- L1552 `class _TypstPdfRendererState extends State<_TypstPdfRenderer>`
+  - L1553 `String? _error`
+  - L1554 `bool _loading = true`
+  - L1555 `Uint8List? _pdfBytes`
+  - L1558 `final PdfViewerController _pdfController = PdfViewerController()`
+  - L1559 `bool _ctrlHeld = false`
+  - L1562 `void initState()`
+  - L1569 `void dispose()`
+  - L1574 `bool _onHardwareKey(KeyEvent event)`
+  - L1582 `void _zoomUp()`
+  - L1583 `void _zoomDown()`
+  - L1584 `void _zoomReset()`
+  - L1592 `void didUpdateWidget(covariant _TypstPdfRenderer old)`
+  - L1600 `Future<void> _load()`
+  - L1648 `Future<void> _compile()`
+  - L1709 `static void _backfillAttachment(Uint8List bytes, String artifactId)`  — Upload compiled PDF and update the artifact row in the background.
+  - L1732 `Widget build(BuildContext context)`
+- L1834 `class _ViewModeToggle extends StatelessWidget`  — Preview / Code toggle shown in the artifact header for types that support
+  - L1835 `const _ViewModeToggle({ required this.mode, required this.onChanged, this.compact = true, })`
+  - L1841 `final _ArtifactViewMode mode`
+  - L1842 `final ValueChanged<_ArtifactViewMode> onChanged`
+  - L1846 `final bool compact`  — Compact = desktop header (small font, shrink-wrap).
+  - L1849 `Widget build(BuildContext context)`
+- L1886 `IconData _iconForType(ArtifactType type)`
+- L1908 `class _ZoomableVisual extends StatefulWidget`  — Zoomable wrapper with +/- buttons for visual artifacts (SVG, drawings).
+  - L1909 `const _ZoomableVisual({super.key, required this.child})`
+  - L1911 `final Widget child`
+  - L1914 `State<_ZoomableVisual> createState()`
+- L1917 `class _ZoomableVisualState extends State<_ZoomableVisual>`
+  - L1918 `final TransformationController _ctrl = TransformationController()`
+  - L1921 `void dispose()`
+  - L1926 `void _zoom(double factor, {Offset? focal})`
+  - L1939 `void _resetZoom()`
+  - L1944 `Widget build(BuildContext context)`
+- L1985 `class _DownloadFormat`
+  - L1986 `const _DownloadFormat(this.label, this.ext)`
+  - L1987 `final String label`
+  - L1988 `final String ext`
+- L1996 `class _HistoryReadOnlyBanner extends StatelessWidget`  — Thin banner shown above the renderer when the user has selected a
+  - L1997 `const _HistoryReadOnlyBanner({ required this.selectedVersion, required this.latestVersion, required this.onSwitchToLatest, })`
+  - L2003 `final int selectedVersion`
+  - L2004 `final int latestVersion`
+  - L2005 `final VoidCallback onSwitchToLatest`
+  - L2008 `Widget build(BuildContext context)`
+- L2057 `class _ArtifactSwitcher extends StatelessWidget`  — Header title + switcher. When the current chat has more than one artifact,
+  - L2058 `const _ArtifactSwitcher({ required this.current, required this.all, required this.onSelect, this.fontSize = 14, })`
+  - L2065 `final ArtifactDocument current`
+  - L2066 `final List<ArtifactDocument> all`
+  - L2067 `final ValueChanged<ArtifactDocument> onSelect`
+  - L2068 `final double fontSize`
+  - L2071 `Widget build(BuildContext context)`
+- L2145 `class _ZoomButton extends StatelessWidget`
+  - L2146 `const _ZoomButton({required this.icon, required this.onTap})`
+  - L2148 `final IconData icon`
+  - L2149 `final VoidCallback onTap`
+  - L2152 `Widget build(BuildContext context)`
 
-## lib/widgets/ask_user_card.dart  (101 Z.)
-- L10 `class AskUserCard extends StatelessWidget`  — Interactive option buttons shown below messages that used the ask_user tool.
-  - L11 `const AskUserCard({super.key, required this.options, required this.onSelect})`
-  - L14 `final List<String> options`  — The option labels extracted from the ask_user tool call arguments.
-  - L17 `final ValueChanged<String> onSelect`  — Called with the selected option label when the user taps a button.
-  - L20 `Widget build(BuildContext context)`
-- L45 `class _OptionChip extends StatefulWidget`
-  - L46 `const _OptionChip({ required this.index, required this.label, required this.accent, required this.onSurface, required this.onTap, })`
-  - L54 `final int index`
-  - L55 `final String label`
-  - L56 `final Color accent`
-  - L57 `final Color onSurface`
-  - L58 `final VoidCallback onTap`
-  - L61 `State<_OptionChip> createState()`
-- L64 `class _OptionChipState extends State<_OptionChip>`
-  - L65 `bool _hovered = false`
-  - L68 `Widget build(BuildContext context)`
+## lib/widgets/ask_user_card.dart  (311 Z.)
+- L13 `class AskUserCard extends StatelessWidget`  — Interactive options shown below messages that used the ask_user tool.
+  - L14 `const AskUserCard({ super.key, required this.options, required this.onSelect, this.question = '', this.multiSelect = false, })`
+  - L23 `final List<String> options`  — The option labels extracted from the ask_user tool call arguments.
+  - L27 `final ValueChanged<String> onSelect`  — Called with the answer: the option label, or for [multiSelect] the
+  - L31 `final String question`  — The question, drawn as the card title in [multiSelect] mode. The
+  - L34 `final bool multiSelect`  — Lets the reader pick several options and confirm them together.
+  - L37 `Widget build(BuildContext context)`
+- L72 `_kMultiStrings = <String, (String, String)>{ 'en': ('Choose all that apply', 'Confirm'), 'de': ('Wähle alles Passende', `  — The two fixed strings of the multi-select card. Kept here rather than in
+- L80 `String _letter(int i)`
+- L82 `class _MultiSelectCard extends StatefulWidget`
+  - L83 `const _MultiSelectCard({ required this.question, required this.options, required this.onSubmit, })`
+  - L89 `final String question`
+  - L90 `final List<String> options`
+  - L91 `final ValueChanged<String> onSubmit`
+  - L94 `State<_MultiSelectCard> createState()`
+- L97 `class _MultiSelectCardState extends State<_MultiSelectCard>`
+  - L98 `final Set<int> _picked = <int>{}`
+  - L100 `void _submit()`
+  - L107 `Widget build(BuildContext context)`
+- L172 `class _MultiRow extends StatelessWidget`
+  - L173 `const _MultiRow({ required this.letter, required this.label, required this.picked, required this.onTap, })`
+  - L180 `final String letter`
+  - L181 `final String label`
+  - L182 `final bool picked`
+  - L183 `final VoidCallback onTap`
+  - L186 `Widget build(BuildContext context)`
+- L255 `class _OptionChip extends StatefulWidget`
+  - L256 `const _OptionChip({ required this.index, required this.label, required this.accent, required this.onSurface, required this.onTap, })`
+  - L264 `final int index`
+  - L265 `final String label`
+  - L266 `final Color accent`
+  - L267 `final Color onSurface`
+  - L268 `final VoidCallback onTap`
+  - L271 `State<_OptionChip> createState()`
+- L274 `class _OptionChipState extends State<_OptionChip>`
+  - L275 `bool _hovered = false`
+  - L278 `Widget build(BuildContext context)`
 
-## lib/widgets/attachment_preview_bar.dart  (1015 Z.)
-- L23 `typedef AttachmentRemoveCallback = void Function(String fileId)`
-- L24 `typedef AttachmentCopyCallback = Future<void> Function(AttachedFile file)`
-- L25 `typedef AttachmentContentChangedCallback = void Function(String fileId, String newContent)`
-- L28 `_kMaxExtensionChars = 3`
-- L31 `_kImageCardSize = 72.0`
-- L32 `_kImageCardBorderWidth = 2.0`
-- L34 `class AttachmentPreviewBar extends StatefulWidget`
-  - L35 `const AttachmentPreviewBar({ super.key, required this.files, required this.onRemove, this.onCopy, this.onContentChanged, })`
-  - L43 `final List<AttachedFile> files`
-  - L44 `final AttachmentRemoveCallback onRemove`
-  - L45 `final AttachmentCopyCallback? onCopy`
-  - L46 `final AttachmentContentChangedCallback? onContentChanged`
-  - L49 `State<AttachmentPreviewBar> createState()`
-- L52 `class _AttachmentPreviewBarState extends State<AttachmentPreviewBar>`
-  - L53 `final ScrollController _scrollController = ScrollController()`
-  - L56 `void dispose()`
-  - L62 `void _onPointerSignal(PointerSignalEvent event)`  — Convert vertical mouse-wheel events into horizontal scrolling.
-  - L74 `Widget build(BuildContext context)`
-- L119 `class _ImageAttachmentCard extends StatelessWidget`
-  - L120 `const _ImageAttachmentCard({required this.file, required this.onRemove})`
-  - L122 `final AttachedFile file`
-  - L123 `final AttachmentRemoveCallback onRemove`
-  - L124 `static final Map<String, Uint8List> _localThumbnailCache = <String, Uint8List>{}`
-  - L126 `static const int _kLocalThumbnailCacheLimit = 24`
-  - L129 `Widget build(BuildContext context)`
-  - L229 `Widget _buildThumbnail(ThemeData theme)`
-  - L278 `void _openImageViewer(BuildContext context)`
-- L316 `class _RemoveButton extends StatelessWidget`  — The remove target on an attachment card.
-  - L317 `const _RemoveButton({required this.onTap, this.tooltip})`
-  - L319 `final VoidCallback? onTap`
-  - L320 `final String? tooltip`
-  - L323 `Widget build(BuildContext context)`
-- L340 `class _DocumentAttachmentTile extends StatelessWidget`
-  - L341 `const _DocumentAttachmentTile({ required this.file, required this.onRemove, required this.onCopy, this.onContentChanged, required this.textColor, required this.accentColor, required this.cardColor, })`
-  - L351 `final AttachedFile file`
-  - L352 `final AttachmentRemoveCallback onRemove`
-  - L353 `final AttachmentCopyCallback? onCopy`
-  - L354 `final AttachmentContentChangedCallback? onContentChanged`
-  - L355 `final Color textColor`
-  - L356 `final Color accentColor`
-  - L357 `final Color cardColor`
-  - L360 `Widget build(BuildContext context)`
-- L486 `void _showDocumentPreview( BuildContext context, AttachedFile file, Color textColor, { AttachmentContentChangedCallback? onContentChanged, })`
-- L500 `class _DocumentPreviewDialog extends StatefulWidget`
-  - L501 `const _DocumentPreviewDialog({required this.file, this.onContentChanged})`
-  - L503 `final AttachedFile file`
-  - L504 `final AttachmentContentChangedCallback? onContentChanged`
-  - L507 `State<_DocumentPreviewDialog> createState()`
-- L510 `class _DocumentPreviewDialogState extends State<_DocumentPreviewDialog>`
-  - L512 `late final bool _isPlainText`
-  - L513 `late final bool _isPdf`
-  - L516 `bool _isEditing = false`
-  - L517 `bool _isLoading = true`
-  - L518 `String? _content`
-  - L519 `late TextEditingController _editController`
-  - L520 `final ScrollController _scrollController = ScrollController()`
-  - L523 `PdfController? _pdfController`
-  - L524 `bool _pdfError = false`
-  - L527 `void initState()`
-  - L544 `void dispose()`
-  - L553 `Future<void> _loadTextContent()`
-  - L564 `Future<void> _loadPdfContent()`
-  - L608 `void _startEditing()`
-  - L615 `Future<void> _saveEdits()`
-  - L638 `void _cancelEditing()`
-  - L645 `Widget build(BuildContext context)`
-  - L765 `Widget _buildContent(Color textColor, Color accent)`
-  - L799 `Widget _buildPdfViewer(Color textColor, Color accent)`
-  - L892 `Widget _buildTextViewer(Color textColor)`
-  - L912 `Widget _buildEditor(Color textColor, Color accent)`
-  - L938 `Widget _buildEmptyState(Color textColor, Color accent, String message)`
-- L962 `Future<String?> _loadPlainTextContent(AttachedFile file)`
-- L987 `bool _isImageFile(String fileName)`
-- L992 `bool _isPdfFile(String fileName)`
-- L996 `bool _isPlainTextFile(String fileName)`
-- L1001 `String _extensionLabel(String fileName)`
-- L1009 `String _extractExtension(String fileName)`
+## lib/widgets/attachment_preview_bar.dart  (1045 Z.)
+- L25 `typedef AttachmentRemoveCallback = void Function(String fileId)`
+- L26 `typedef AttachmentCopyCallback = Future<void> Function(AttachedFile file)`
+- L27 `typedef AttachmentContentChangedCallback = void Function(String fileId, String newContent)`
+- L30 `_kMaxExtensionChars = 3`
+- L33 `_kImageCardSize = 72.0`
+- L34 `_kImageCardBorderWidth = 2.0`
+- L36 `class AttachmentPreviewBar extends StatefulWidget`
+  - L37 `const AttachmentPreviewBar({ super.key, required this.files, required this.onRemove, this.onCopy, this.onContentChanged, })`
+  - L45 `final List<AttachedFile> files`
+  - L46 `final AttachmentRemoveCallback onRemove`
+  - L47 `final AttachmentCopyCallback? onCopy`
+  - L48 `final AttachmentContentChangedCallback? onContentChanged`
+  - L51 `State<AttachmentPreviewBar> createState()`
+- L54 `class _AttachmentPreviewBarState extends State<AttachmentPreviewBar>`
+  - L55 `final ScrollController _scrollController = ScrollController()`
+  - L58 `void dispose()`
+  - L64 `void _onPointerSignal(PointerSignalEvent event)`  — Convert vertical mouse-wheel events into horizontal scrolling.
+  - L76 `Widget build(BuildContext context)`
+- L121 `class _ImageAttachmentCard extends StatelessWidget`
+  - L122 `const _ImageAttachmentCard({required this.file, required this.onRemove})`
+  - L124 `final AttachedFile file`
+  - L125 `final AttachmentRemoveCallback onRemove`
+  - L126 `static final Map<String, Uint8List> _localThumbnailCache = <String, Uint8List>{}`
+  - L128 `static const int _kLocalThumbnailCacheLimit = 24`
+  - L131 `Widget build(BuildContext context)`
+  - L231 `Widget _buildThumbnail(ThemeData theme)`
+  - L280 `void _openImageViewer(BuildContext context)`
+- L317 `class _RemoveButton extends StatelessWidget`  — The remove target on an attachment card.
+  - L318 `const _RemoveButton({required this.onTap, this.tooltip})`
+  - L320 `final VoidCallback? onTap`
+  - L321 `final String? tooltip`
+  - L324 `Widget build(BuildContext context)`
+- L378 `class _DocumentAttachmentTile extends StatelessWidget`
+  - L379 `const _DocumentAttachmentTile({ required this.file, required this.onRemove, required this.onCopy, this.onContentChanged, required this.textColor, required this.accentColor, required this.cardColor, })`
+  - L389 `final AttachedFile file`
+  - L390 `final AttachmentRemoveCallback onRemove`
+  - L391 `final AttachmentCopyCallback? onCopy`
+  - L392 `final AttachmentContentChangedCallback? onContentChanged`
+  - L393 `final Color textColor`
+  - L394 `final Color accentColor`
+  - L395 `final Color cardColor`
+  - L398 `Widget build(BuildContext context)`
+- L524 `void _showDocumentPreview( BuildContext context, AttachedFile file, Color textColor, { AttachmentContentChangedCallback? onContentChanged, })`
+- L538 `class _DocumentPreviewDialog extends StatefulWidget`
+  - L539 `const _DocumentPreviewDialog({required this.file, this.onContentChanged})`
+  - L541 `final AttachedFile file`
+  - L542 `final AttachmentContentChangedCallback? onContentChanged`
+  - L545 `State<_DocumentPreviewDialog> createState()`
+- L548 `class _DocumentPreviewDialogState extends State<_DocumentPreviewDialog>`
+  - L550 `late final bool _isPlainText`
+  - L551 `late final bool _isPdf`
+  - L554 `bool _isEditing = false`
+  - L555 `bool _isLoading = true`
+  - L556 `String? _content`
+  - L557 `late TextEditingController _editController`
+  - L558 `final ScrollController _scrollController = ScrollController()`
+  - L561 `PdfController? _pdfController`
+  - L562 `bool _pdfError = false`
+  - L565 `void initState()`
+  - L582 `void dispose()`
+  - L591 `Future<void> _loadTextContent()`
+  - L602 `Future<void> _loadPdfContent()`
+  - L646 `void _startEditing()`
+  - L653 `Future<void> _saveEdits()`
+  - L676 `void _cancelEditing()`
+  - L683 `Widget build(BuildContext context)`
+  - L795 `Widget _buildContent(Color textColor, Color accent)`
+  - L829 `Widget _buildPdfViewer(Color textColor, Color accent)`
+  - L922 `Widget _buildTextViewer(Color textColor)`
+  - L942 `Widget _buildEditor(Color textColor, Color accent)`
+  - L968 `Widget _buildEmptyState(Color textColor, Color accent, String message)`
+- L992 `Future<String?> _loadPlainTextContent(AttachedFile file)`
+- L1017 `bool _isImageFile(String fileName)`
+- L1022 `bool _isPdfFile(String fileName)`
+- L1026 `bool _isPlainTextFile(String fileName)`
+- L1031 `String _extensionLabel(String fileName)`
+- L1039 `String _extractExtension(String fileName)`
 
 ## lib/widgets/auth_gate.dart  (347 Z.)
 - L25 `class AuthGate extends StatefulWidget`  — The auth gate: swaps between the login screen and the messenger shell on
@@ -1342,39 +1382,40 @@
   - L246 `Widget _action(IconData icon, String tooltip, VoidCallback onPressed)`
   - L259 `static String _relative(DateTime when)`
 
-## lib/widgets/automation_editor_sheet.dart  (472 Z.)
-- L26 `Future<AgentsAutomation?> showAutomationEditor( BuildContext context, { AgentsAutomation? existing, String? sessionKey, Map<String, String> agents = const <String, String>{}, AutomationsSource? source, })`  — Opens the sheet. [existing] edits that row; otherwise a new automation is
-- L46 `AppLocalizations _l10n(BuildContext context)`
-- L50 `class AutomationEditorForm extends StatefulWidget`  — The form inside the sheet. Public so a test can pump it without a sheet.
-  - L51 `const AutomationEditorForm({ super.key, this.existing, this.sessionKey, this.agents = const <String, String>{}, this.source, })`
-  - L59 `final AgentsAutomation? existing`
-  - L60 `final String? sessionKey`
-  - L61 `final Map<String, String> agents`
-  - L62 `final AutomationsSource? source`
-  - L65 `State<AutomationEditorForm> createState()`
-- L68 `class _AutomationEditorFormState extends State<AutomationEditorForm>`
-  - L69 `late final AutomationsSource _source = widget.source ?? AutomationsSource.instance`
-  - L72 `late String _kind`
-  - L73 `String? _agent`
-  - L74 `late final TextEditingController _schedule`
-  - L75 `late final TextEditingController _url`
-  - L76 `late final TextEditingController _minutes`
-  - L77 `late final TextEditingController _from`
-  - L78 `late final TextEditingController _subject`
-  - L79 `late final TextEditingController _prompt`
-  - L80 `late final TextEditingController _name`
-  - L81 `late bool _onChange`
-  - L84 `String? _fieldError`  — The field that failed the local check, and why.
-  - L85 `String? _fieldKey`
-  - L88 `String? _hostError`  — The host's refusal, as it said it.
-  - L89 `bool _saving = false`
-  - L91 `bool get _editing`
-  - L94 `void initState()`
-  - L115 `void dispose()`
-  - L133 `Object? _validSpec(AppLocalizations l)`  — The local checks: the ones the host would refuse anyway, said before
-  - L192 `Future<void> _save()`
-  - L239 `Widget _field({ required String key, required TextEditingController controller, required String label, String? hint, String? help, TextInputType? keyboard, int maxLines = 1, })`
-  - L297 `Widget build(BuildContext context)`
+## lib/widgets/automation_editor_sheet.dart  (506 Z.)
+- L27 `Future<AgentsAutomation?> showAutomationEditor( BuildContext context, { AgentsAutomation? existing, String? sessionKey, Map<String, String> agents = const <String, String>{}, AutomationsSource? source, })`  — Opens the sheet. [existing] edits that row; otherwise a new automation is
+- L47 `AppLocalizations _l10n(BuildContext context)`
+- L51 `class AutomationEditorForm extends StatefulWidget`  — The form inside the sheet. Public so a test can pump it without a sheet.
+  - L52 `const AutomationEditorForm({ super.key, this.existing, this.sessionKey, this.agents = const <String, String>{}, this.source, })`
+  - L60 `final AgentsAutomation? existing`
+  - L61 `final String? sessionKey`
+  - L62 `final Map<String, String> agents`
+  - L63 `final AutomationsSource? source`
+  - L66 `State<AutomationEditorForm> createState()`
+- L69 `class _AutomationEditorFormState extends State<AutomationEditorForm>`
+  - L70 `late final AutomationsSource _source = widget.source ?? AutomationsSource.instance`
+  - L73 `late String _kind`
+  - L74 `String? _agent`
+  - L75 `late final TextEditingController _schedule`
+  - L76 `late final TextEditingController _url`
+  - L77 `late final TextEditingController _minutes`
+  - L78 `late final TextEditingController _from`
+  - L79 `late final TextEditingController _subject`
+  - L80 `late final TextEditingController _alias`
+  - L81 `late final TextEditingController _prompt`
+  - L82 `late final TextEditingController _name`
+  - L83 `late bool _onChange`
+  - L86 `String? _fieldError`  — The field that failed the local check, and why.
+  - L87 `String? _fieldKey`
+  - L90 `String? _hostError`  — The host's refusal, as it said it.
+  - L91 `bool _saving = false`
+  - L93 `bool get _editing`
+  - L96 `void initState()`
+  - L118 `void dispose()`
+  - L137 `Object? _validSpec(AppLocalizations l)`  — The local checks: the ones the host would refuse anyway, said before
+  - L205 `Future<void> _save()`
+  - L252 `Widget _field({ required String key, required TextEditingController controller, required String label, String? hint, String? help, TextInputType? keyboard, int maxLines = 1, })`
+  - L310 `Widget build(BuildContext context)`
 
 ## lib/widgets/brand_wordmark.dart  (36 Z.)
 - L16 `class BrandWordmark extends StatelessWidget`  — Brand lockup rendered from the frozen brand SVG (assets/wordmark.svg,
@@ -1384,69 +1425,69 @@
   - L24 `const BrandWordmark({super.key, required this.color, this.height = 15})`
   - L27 `Widget build(BuildContext context)`
 
-## lib/widgets/browser_view_page.dart  (740 Z.)
-- L52 `class BrowserViewPage extends StatefulWidget`  — The live browser view (§9.1): watch and control the agent's sandbox
-  - L53 `const BrowserViewPage({ super.key, required this.controller, this.sessionKey, })`
-  - L59 `final AgentsRelayController controller`
-  - L64 `final String? sessionKey`  — The thread whose box holds the browser. Without it the executor has to
-  - L69 `static Future<void> open( BuildContext context, AgentsRelayController controller, { String? sessionKey, })`  — The one way into the view (Bead cowork-vzm): a full-screen route on every
-  - L84 `State<BrowserViewPage> createState()`
-- L87 `class _BrowserViewPageState extends State<BrowserViewPage>`
-  - L89 `static final bool _useWebView = !kIsWeb && (Platform.isAndroid || Platform.isIOS)`  — Touch platforms get noVNC in a WebView; desktop keeps the Dart client.
-  - L92 `StreamSubscription<AgentsRelayInbound>? _sub`
-  - L93 `String _status = 'connecting'`
-  - L94 `String _message = ''`
-  - L96 `String _reason = ''`
-  - L101 `String? _password`
-  - L102 `bool _started = false`
-  - L105 `bool _sawBytes = false`
-  - L110 `bool _fullscreen = true`
-  - L113 `VncLocalServer? _local`
-  - L114 `StreamSubscription<Uint8List>? _fromPage`
-  - L115 `final VncWebViewController _vnc = VncWebViewController()`
-  - L116 `final FocusNode _keyFocus = FocusNode(debugLabel: 'vnc remote keyboard')`
-  - L117 `final TextEditingController _keyText = TextEditingController()`
-  - L118 `bool _keyboardOpen = false`
-  - L121 `bool _disposed = false`
-  - L124 `ServerSocket? _server`
-  - L125 `Socket? _rfbSocket`
-  - L126 `int? _port`
-  - L127 `bool _bridgeClosed = false`
-  - L131 `final List<Uint8List> _pending = <Uint8List>[]`
-  - L140 `int _generation = 0`
-  - L144 `final RemoteFrameBufferController _rfbController = RemoteFrameBufferController()`
-  - L158 `final GlobalKey _frameHost = GlobalKey(debugLabel: 'browser view frame')`
-  - L163 `int _meterBytes = 0`
-  - L164 `int _meterChunks = 0`
-  - L165 `Timer? _meter`
-  - L168 `void initState()`
-  - L173 `Future<void> _start()`
-  - L210 `Future<void> _startLocalServer()`
-  - L229 `Future<void> _restartStream()`  — The viewer page lost its socket, so the executor's pipe into x11vnc is
-  - L240 `Future<void> _startLoopbackSocket()`
-  - L249 `void _onRfbClient(Socket socket)`
-  - L289 `void _resetBridge()`  — A fresh RFB session arrived on the tunnel. Let the client dial in again.
-  - L302 `void _safeAdd(Uint8List bytes)`
-  - L316 `void _onStreamStateChanged()`
-  - L320 `void _onInbound(AgentsRelayInbound event)`
-  - L373 `void _teardownBridge(int generation)`
-  - L385 `void dispose()`
-  - L407 `void _toggleFullscreen()`
-  - L409 `void _toggleKeyboard()`
-  - L421 `Widget build(BuildContext context)`
-  - L544 `List<Widget> _webViewChrome(BuildContext context)`  — The controls the WebView path owns: the bar, the reconnect note and the
-  - L580 `bool get _noOwnBrowser`  — The executor found no browser of THIS agent to show.
-  - L585 `bool get _hasPicture`  — True once there is a picture on screen, whichever client draws it.
-  - L595 `Widget _buildFrame()`  — The stream and, over it, the two named steps that say what is missing.
-  - L619 `Widget _buildStream()`  — The live stream. Both the local server and the executor's `started` event
-- L655 `class _StatusBanner extends StatelessWidget`
-  - L656 `const _StatusBanner({required this.status, required this.message})`
-  - L658 `final String status`
-  - L659 `final String message`
-  - L662 `Widget build(BuildContext context)`
-- L698 `class BrowserViewEmptyState extends StatelessWidget`  — What the view shows when the agent has no browser session of its own.
-  - L699 `const BrowserViewEmptyState({super.key})`
-  - L702 `Widget build(BuildContext context)`
+## lib/widgets/browser_view_page.dart  (732 Z.)
+- L51 `class BrowserViewPage extends StatefulWidget`  — The live browser view (§9.1): watch and control the agent's sandbox
+  - L52 `const BrowserViewPage({ super.key, required this.controller, this.sessionKey, })`
+  - L58 `final AgentsRelayController controller`
+  - L63 `final String? sessionKey`  — The thread whose box holds the browser. Without it the executor has to
+  - L68 `static Future<void> open( BuildContext context, AgentsRelayController controller, { String? sessionKey, })`  — The one way into the view (Bead cowork-vzm): a full-screen route on every
+  - L83 `State<BrowserViewPage> createState()`
+- L86 `class _BrowserViewPageState extends State<BrowserViewPage>`
+  - L88 `static final bool _useWebView = !kIsWeb && (Platform.isAndroid || Platform.isIOS)`  — Touch platforms get noVNC in a WebView; desktop keeps the Dart client.
+  - L91 `StreamSubscription<AgentsRelayInbound>? _sub`
+  - L92 `String _status = 'connecting'`
+  - L93 `String _message = ''`
+  - L95 `String _reason = ''`
+  - L100 `String? _password`
+  - L101 `bool _started = false`
+  - L104 `bool _sawBytes = false`
+  - L109 `bool _fullscreen = true`
+  - L112 `VncLocalServer? _local`
+  - L113 `StreamSubscription<Uint8List>? _fromPage`
+  - L114 `final VncWebViewController _vnc = VncWebViewController()`
+  - L115 `final FocusNode _keyFocus = FocusNode(debugLabel: 'vnc remote keyboard')`
+  - L116 `final TextEditingController _keyText = TextEditingController()`
+  - L117 `bool _keyboardOpen = false`
+  - L120 `bool _disposed = false`
+  - L123 `ServerSocket? _server`
+  - L124 `Socket? _rfbSocket`
+  - L125 `int? _port`
+  - L126 `bool _bridgeClosed = false`
+  - L130 `final List<Uint8List> _pending = <Uint8List>[]`
+  - L139 `int _generation = 0`
+  - L143 `final RemoteFrameBufferController _rfbController = RemoteFrameBufferController()`
+  - L157 `final GlobalKey _frameHost = GlobalKey(debugLabel: 'browser view frame')`
+  - L162 `int _meterBytes = 0`
+  - L163 `int _meterChunks = 0`
+  - L164 `Timer? _meter`
+  - L167 `void initState()`
+  - L172 `Future<void> _start()`
+  - L209 `Future<void> _startLocalServer()`
+  - L228 `Future<void> _restartStream()`  — The viewer page lost its socket, so the executor's pipe into x11vnc is
+  - L239 `Future<void> _startLoopbackSocket()`
+  - L248 `void _onRfbClient(Socket socket)`
+  - L288 `void _resetBridge()`  — A fresh RFB session arrived on the tunnel. Let the client dial in again.
+  - L301 `void _safeAdd(Uint8List bytes)`
+  - L315 `void _onStreamStateChanged()`
+  - L319 `void _onInbound(AgentsRelayInbound event)`
+  - L372 `void _teardownBridge(int generation)`
+  - L384 `void dispose()`
+  - L406 `void _toggleFullscreen()`
+  - L408 `void _toggleKeyboard()`
+  - L420 `Widget build(BuildContext context)`
+  - L536 `List<Widget> _webViewChrome(BuildContext context)`  — The controls the WebView path owns: the bar, the reconnect note and the
+  - L572 `bool get _noOwnBrowser`  — The executor found no browser of THIS agent to show.
+  - L577 `bool get _hasPicture`  — True once there is a picture on screen, whichever client draws it.
+  - L587 `Widget _buildFrame()`  — The stream and, over it, the two named steps that say what is missing.
+  - L611 `Widget _buildStream()`  — The live stream. Both the local server and the executor's `started` event
+- L647 `class _StatusBanner extends StatelessWidget`
+  - L648 `const _StatusBanner({required this.status, required this.message})`
+  - L650 `final String status`
+  - L651 `final String message`
+  - L654 `Widget build(BuildContext context)`
+- L690 `class BrowserViewEmptyState extends StatelessWidget`  — What the view shows when the agent has no browser session of its own.
+  - L691 `const BrowserViewEmptyState({super.key})`
+  - L694 `Widget build(BuildContext context)`
 
 ## lib/widgets/chart_widget.dart  (939 Z.)
 - L8 `_defaultColors = [ Color(0xFF2196F3), // blue Color(0xFFF44336), // red Color(0xFF4CAF50), // green Color(0xFFFF9800), /`  — Default color palette for charts when the AI doesn't specify colors.
@@ -1561,7 +1602,7 @@
   - L682 `void performLayout()`
   - L709 `void paint(PaintingContext context, Offset offset)`
 
-## lib/widgets/chat_document_view.dart  (680 Z.)
+## lib/widgets/chat_document_view.dart  (692 Z.)
 - L25 `DateTime? documentUpdatedAt(Map<String, dynamic> document)`  — The agent stamps `updated_at` in epoch seconds — a float for chat documents,
 - L41 `String? documentFreshness(Map<String, dynamic> document, {DateTime? now})`  — How fresh a document is, as one short line: `v17 · 00:06`.
 - L68 `String documentFileStem(Object? title)`  — A file name for a document, from its title.
@@ -1598,11 +1639,11 @@
   - L555 `const _DocumentScreen({required this.document})`
   - L557 `final Map<String, dynamic> document`
   - L560 `Widget build(BuildContext context)`
-- L636 `class _MiddleEllipsis extends StatelessWidget`  — One line that loses its middle, not its end.
-  - L637 `const _MiddleEllipsis({required this.text, this.style})`
-  - L639 `final String text`
-  - L640 `final TextStyle? style`
-  - L643 `Widget build(BuildContext context)`
+- L648 `class _MiddleEllipsis extends StatelessWidget`  — One line that loses its middle, not its end.
+  - L649 `const _MiddleEllipsis({required this.text, this.style})`
+  - L651 `final String text`
+  - L652 `final TextStyle? style`
+  - L655 `Widget build(BuildContext context)`
 
 ## lib/widgets/chat_documents_explorer.dart  (700 Z.)
 - part of 'chat_documents_panel.dart'
@@ -1964,7 +2005,7 @@
   - L1128 `final VoidCallback onTap`
   - L1131 `Widget build(BuildContext context)`
 
-## lib/widgets/chuk_table_classic.dart  (673 Z.)
+## lib/widgets/chuk_table_classic.dart  (710 Z.)
 - L20 `class ChukTableClassic extends StatefulWidget`  — Upstream's rounded-card table: a shaded, bold header row, thin row
   - L21 `const ChukTableClassic({ super.key, required this.table, required this.textColor, required this.accentColor, this.fontFamily, this.fontSize = 13.5, this.onTapLink, })`
   - L31 `final ParsedTable table`
@@ -1982,34 +2023,52 @@
 - L62 `_kMaxWord = 360`  — Widest column a single long word (a file name, a URL) may claim before it
 - L68 `_kStackBelow = 640`  — Below this message width, a table that does not fit is drawn as one card
 - L71 `_kStackLabelMax = 120`  — Widest label column in the stacked layout.
-- L74 `class _ColumnPlan`  — How the columns of one table are laid out.
-  - L75 `const _ColumnPlan(this.widths, {required this.scrolls})`
-  - L76 `final Map<int, TableColumnWidth> widths`
-  - L77 `final bool scrolls`
-- L80 `class _ChukTableClassicState extends State<ChukTableClassic>`
-  - L81 `bool _copied = false`
-  - L85 `final ScrollController _hCtrl = ScrollController()`  — Shared by the horizontal Scrollbar and its SingleChildScrollView so the
-  - L88 `final ValueNotifier<int> _metricsTick = ValueNotifier<int>(0)`  — Bumped when the scroll extent changes, so the edge fades follow it.
-  - L91 `final List<TapGestureRecognizer> _recognizers = <TapGestureRecognizer>[]`  — Tap handlers of the link spans of the last build. Rebuilt every build.
-  - L93 `void _disposeRecognizers()`
-  - L101 `void dispose()`
-  - L108 `String _asMarkdown()`
-  - L120 `Future<void> _copy()`
-  - L130 `Widget build(BuildContext context)`
-  - L236 `Widget _stacked(Color border, double maxW)`  — A table too wide for a narrow message: one section per row. The first
-  - L324 `Widget _scroller(BuildContext context, Widget card)`  — A wide table pans sideways inside its own scroller. The scroller never
-  - L401 `static bool _isTouchPlatform(TargetPlatform p)`
-  - L416 `_ColumnPlan _planColumns( ParsedTable t, double maxW, TextScaler scaler, TextStyle ambient, )`  — Decides the column widths from the measured cell text.
-  - L496 `TextStyle _cellStyle({required bool header, required bool firstCol})`
-  - L505 `Widget _cell( String raw, { required TextAlign align, required bool header, required bool firstCol, })`
-  - L563 `TextSpan _inlineSpans(String text, TextStyle base, {bool tappable = false})`  — Minimal inline markdown for cells: **bold**, *italic*, `code`, [t](url).
-- L641 `class _CopyButton extends StatelessWidget`
-  - L642 `const _CopyButton({ required this.copied, required this.color, required this.accent, required this.onTap, })`
-  - L649 `final bool copied`
-  - L650 `final Color color`
-  - L651 `final Color accent`
-  - L652 `final VoidCallback onTap`
-  - L655 `Widget build(BuildContext context)`
+- L76 `_kRowsSampled = 200`  — How many rows are measured to plan the column widths, as in `ChukTable`.
+- L79 `class _ColumnPlan`  — How the columns of one table are laid out.
+  - L80 `const _ColumnPlan(this.widths, {required this.scrolls})`
+  - L81 `final Map<int, TableColumnWidth> widths`
+  - L82 `final bool scrolls`
+- L85 `class _ChukTableClassicState extends State<ChukTableClassic>`
+  - L86 `bool _copied = false`
+  - L90 `final ScrollController _hCtrl = ScrollController()`  — Shared by the horizontal Scrollbar and its SingleChildScrollView so the
+  - L93 `final ValueNotifier<int> _metricsTick = ValueNotifier<int>(0)`  — Bumped when the scroll extent changes, so the edge fades follow it.
+  - L96 `final List<TapGestureRecognizer> _recognizers = <TapGestureRecognizer>[]`  — Tap handlers of the link spans of the last build. Rebuilt every build.
+  - L98 `void _disposeRecognizers()`
+  - L106 `void dispose()`
+  - L113 `String _asMarkdown()`
+  - L125 `Future<void> _copy()`
+  - L135 `Widget build(BuildContext context)`
+  - L241 `Widget _stacked(Color border, double maxW)`  — A table too wide for a narrow message: one section per row. The first
+  - L329 `Widget _scroller(BuildContext context, Widget card)`  — A wide table pans sideways inside its own scroller. The scroller never
+  - L406 `static bool _isTouchPlatform(TargetPlatform p)`
+  - L421 `_ColumnPlan _cachedPlan( ParsedTable t, double maxW, TextScaler scaler, TextStyle ambient, )`  — Decides the column widths from the measured cell text.
+  - L449 `_ColumnPlan? _lastPlan`
+  - L450 `ParsedTable? _lastPlanTable`
+  - L451 `Object? _lastPlanKey`
+  - L453 `_ColumnPlan _planColumns( ParsedTable t, double maxW, TextScaler scaler, TextStyle ambient, )`
+  - L533 `TextStyle _cellStyle({required bool header, required bool firstCol})`
+  - L542 `Widget _cell( String raw, { required TextAlign align, required bool header, required bool firstCol, })`
+  - L600 `TextSpan _inlineSpans(String text, TextStyle base, {bool tappable = false})`  — Minimal inline markdown for cells: **bold**, *italic*, `code`, [t](url).
+- L678 `class _CopyButton extends StatelessWidget`
+  - L679 `const _CopyButton({ required this.copied, required this.color, required this.accent, required this.onTap, })`
+  - L686 `final bool copied`
+  - L687 `final Color color`
+  - L688 `final Color accent`
+  - L689 `final VoidCallback onTap`
+  - L692 `Widget build(BuildContext context)`
+
+## lib/widgets/composer_caret_follower.dart  (69 Z.)
+- L15 `class ComposerCaretFollower`
+  - L16 `ComposerCaretFollower({ required this.controller, required this.focusNode, required this.scrollController, }) : _lastText = controller.text`
+  - L24 `final TextEditingController controller`
+  - L28 `final FocusNode focusNode`  — The field's focus node. Its context sits inside the field's
+  - L31 `final ScrollController scrollController`  — The field's own scroll controller, the fallback when there is no caret.
+  - L33 `String _lastText`
+  - L34 `bool _scheduled = false`
+  - L35 `bool _disposed = false`
+  - L37 `void _onChanged()`
+  - L51 `void _reveal()`
+  - L64 `void dispose()`
 
 ## lib/widgets/composer_recording.dart  (184 Z.)
 - L25 `class ComposerInputRow extends StatelessWidget`  — Row one of the mobile composer: the text field, and — while the microphone
@@ -2158,22 +2217,58 @@
   - L492 `final Color color`
   - L495 `Widget build(BuildContext context)`
 
-## lib/widgets/document_viewer.dart  (120 Z.)
-- L12 `class DocumentViewer extends StatefulWidget`  — Document viewer for markdown-converted files
-  - L13 `const DocumentViewer({ super.key, required this.fileName, required this.markdownContent, })`
-  - L19 `final String fileName`
-  - L20 `final String markdownContent`
-  - L23 `State<DocumentViewer> createState()`
-- L26 `class _DocumentViewerState extends State<DocumentViewer>`
-  - L27 `bool _isEditing = false`
-  - L28 `late TextEditingController _controller`
-  - L29 `late ScrollController _scrollController`
-  - L32 `void initState()`
-  - L39 `void dispose()`
-  - L45 `void _copyToClipboard()`
-  - L55 `Widget build(BuildContext context)`
-  - L90 `Widget _buildMarkdownView()`
-  - L101 `Widget _buildEditView()`
+## lib/widgets/document_viewer.dart  (119 Z.)
+- L11 `class DocumentViewer extends StatefulWidget`  — Document viewer for markdown-converted files
+  - L12 `const DocumentViewer({ super.key, required this.fileName, required this.markdownContent, })`
+  - L18 `final String fileName`
+  - L19 `final String markdownContent`
+  - L22 `State<DocumentViewer> createState()`
+- L25 `class _DocumentViewerState extends State<DocumentViewer>`
+  - L26 `bool _isEditing = false`
+  - L27 `late TextEditingController _controller`
+  - L28 `late ScrollController _scrollController`
+  - L31 `void initState()`
+  - L38 `void dispose()`
+  - L44 `void _copyToClipboard()`
+  - L54 `Widget build(BuildContext context)`
+  - L89 `Widget _buildMarkdownView()`
+  - L100 `Widget _buildEditView()`
+
+## lib/widgets/draft_diff_text.dart  (96 Z.)
+- L14 `bool draftDiffWorthShowing( List<WordDiffSegment> segments, { double minKept = 0.3, })`  — Whether [before] -> [after] is a revision worth marking: something
+- L36 `List<InlineSpan> draftDiffSpans( List<WordDiffSegment> segments, ColorScheme scheme, TextStyle? base, )`  — The spans for [segments]: equal text in [base], inserted text on the
+- L66 `class DraftDiffText extends StatelessWidget`  — [after] with the changes against [before] marked.
+  - L67 `const DraftDiffText({ super.key, required this.before, required this.after, this.style, this.maxLines, })`
+  - L75 `final String before`
+  - L76 `final String after`
+  - L77 `final TextStyle? style`
+  - L78 `final int? maxLines`
+  - L81 `Widget build(BuildContext context)`
+
+## lib/widgets/email_draft_card.dart  (274 Z.)
+- L20 `class _EmailStrings`  — The fixed strings of the card. Kept here, next to the card, in the app's
+  - L21 `const _EmailStrings( this.mail, this.from, this.to, this.draft, this.copy, this.send, this.copied, this.noSubject, )`
+  - L31 `final String mail`
+  - L32 `final String from`
+  - L33 `final String to`
+  - L34 `final String draft`
+  - L35 `final String copy`
+  - L36 `final String send`
+  - L37 `final String copied`
+  - L38 `final String noSubject`
+- L41 `_kStrings = <String, _EmailStrings>{ 'en': _EmailStrings( 'Mail', 'From', 'To', 'Draft', 'Copy', 'Send', 'Draft copied',`
+- L94 `class EmailDraftCard extends StatelessWidget`
+  - L95 `const EmailDraftCard({ super.key, required this.to, required this.subject, required this.body, required this.onSend, this.from = '', this.cc = '', this.bcc = '', this.status = '', })`
+  - L107 `final String to`
+  - L108 `final String subject`
+  - L109 `final String body`
+  - L110 `final String from`
+  - L111 `final String cc`
+  - L112 `final String bcc`
+  - L116 `final String status`  — The draft's state as the model wrote it ("Needs approval"); empty shows
+  - L119 `final VoidCallback onSend`  — Opens the mail app with the draft.
+  - L122 `String get plainText`  — The whole draft as plain text, what "Copy" puts on the clipboard.
+  - L134 `Widget build(BuildContext context)`
 
 ## lib/widgets/encrypted_image_widget.dart  (211 Z.)
 - L10 `class EncryptedImageWidget extends StatefulWidget`  — Widget that downloads, decrypts, and displays an encrypted image from storage
@@ -2304,30 +2399,36 @@
   - L470 `final IconData? icon`
   - L473 `Widget build(BuildContext context)`
 
-## lib/widgets/floating_app_bar.dart  (273 Z.)
-- L22 `kFloatingAppBarHeight = 62`  — Height of the header band: the chat top bar's 48 row plus its 8/6 of air
-- L25 `kFloatingAppBarChip = 42`  — Diameter of the round chips: back, and each action. The chat's menu chip.
-- L29 `kFloatingAppBarTarget = 48`  — The press area of a chip: 48 px, the smallest reliable touch target. The
-- L32 `_kChipSlop = (kFloatingAppBarTarget - kFloatingAppBarChip) / 2`  — The slop on each side of a chip.
-- L35 `_kTitleRadius = 18`  — Corner radius of the title pill. The chat's title pill.
-- L60 `EdgeInsets floatingHeaderInset(BuildContext context, {double extra = 0})`  — The room a scroll view has to leave above its first item so the floating
-- L71 `class FloatingHeaderButton extends StatelessWidget`  — A round floating chip for the header — the back arrow, and whatever a
-  - L72 `const FloatingHeaderButton({ super.key, required this.icon, required this.onPressed, this.tooltip, this.color, })`
-  - L80 `final IconData icon`
-  - L81 `final VoidCallback? onPressed`
-  - L82 `final String? tooltip`
-  - L83 `final Color? color`
-  - L86 `Widget build(BuildContext context)`
-- L127 `class FloatingAppBar extends StatelessWidget implements PreferredSizeWidget`  — The header of a settings-style page: a floating back chip, a floating
-  - L128 `const FloatingAppBar({ super.key, required this.title, this.actions, this.leading, this.automaticallyImplyLeading = true, this.bottom, })`
-  - L138 `final Widget title`  — Usually a [Text]. It is put inside the floating pill.
-  - L142 `final List<Widget>? actions`  — The right-hand side. Wrap anything tappable in [FloatingHeaderButton] so
-  - L145 `final Widget? leading`  — Replaces the back chip.
-  - L146 `final bool automaticallyImplyLeading`
-  - L149 `final PreferredSizeWidget? bottom`  — A tab bar or search field under the header, as on a normal AppBar.
-  - L152 `Size get preferredSize`
-  - L164 `Widget _styledTitle(BuildContext context, ThemeData theme)`  — The title, in the one size every page uses.
-  - L189 `Widget build(BuildContext context)`
+## lib/widgets/floating_app_bar.dart  (334 Z.)
+- L23 `kFloatingAppBarHeight = 62`  — Height of the header band: the chat top bar's 48 row plus its 8/6 of air
+- L26 `kFloatingAppBarChip = 42`  — Diameter of the round chips: back, and each action. The chat's menu chip.
+- L30 `kFloatingAppBarTarget = 48`  — The press area of a chip: 48 px, the smallest reliable touch target. The
+- L33 `_kChipSlop = (kFloatingAppBarTarget - kFloatingAppBarChip) / 2`  — The slop on each side of a chip.
+- L36 `_kTitleRadius = 18`  — Corner radius of the title pill. The chat's title pill.
+- L61 `EdgeInsets floatingHeaderInset(BuildContext context, {double extra = 0})`  — The room a scroll view has to leave above its first item so the floating
+- L86 `class FloatingHeaderButton extends StatelessWidget`  — The round floating chip: the one icon button of the app's chrome.
+  - L87 `const FloatingHeaderButton({ super.key, this.icon, this.hugeIcon, required this.onPressed, this.tooltip, this.color, this.accent = false, this.parked = false, this.busy = false, this.semanticsId, }) : assert(icon != null || hugeIcon != null, 'Pass icon or hugeIcon.')`
+  - L101 `final IconData? icon`  — A Material glyph, drawn through the app's icon table ([AppIcon]).
+  - L104 `final HugeIconData? hugeIcon`  — A glyph from the app's own set. Wins over [icon].
+  - L106 `final VoidCallback? onPressed`
+  - L107 `final String? tooltip`
+  - L110 `final Color? color`  — Glyph colour override (a destructive action, say). The fill stays.
+  - L112 `final bool accent`
+  - L113 `final bool parked`
+  - L114 `final bool busy`
+  - L115 `final String? semanticsId`
+  - L118 `Widget build(BuildContext context)`
+- L176 `class FloatingAppBar extends StatelessWidget implements PreferredSizeWidget`  — The header of a settings-style page: a floating back chip, a floating
+  - L177 `const FloatingAppBar({ super.key, this.title, this.actions, this.leading, this.automaticallyImplyLeading = true, this.bottom, this.scrim = true, })`
+  - L189 `final Widget? title`  — Usually a [Text]. It is put inside the floating pill. Null draws no
+  - L193 `final List<Widget>? actions`  — The right-hand side. Wrap anything tappable in [FloatingHeaderButton] so
+  - L196 `final Widget? leading`  — Replaces the back chip.
+  - L197 `final bool automaticallyImplyLeading`
+  - L200 `final PreferredSizeWidget? bottom`  — A tab bar or search field under the header, as on a normal AppBar.
+  - L204 `final bool scrim`  — Whether the page-colour fade sits behind the chips. Off for pages whose
+  - L207 `Size get preferredSize`
+  - L219 `Widget _styledTitle(BuildContext context, ThemeData theme, Widget self)`  — The title, in the one size every page uses.
+  - L243 `Widget build(BuildContext context)`
 
 ## lib/widgets/floating_chrome_surface.dart  (84 Z.)
 - L9 `Color floatingChromeBase(BuildContext context)`  — One step off the page background — the colour a floating card takes so it
@@ -2401,38 +2502,38 @@
   - L92 `web.HTMLIFrameElement _buildIframe(String html)`
   - L104 `Widget build(BuildContext context)`
 
-## lib/widgets/image_viewer.dart  (472 Z.)
-- L20 `class ImageViewer extends StatefulWidget`  — Full-screen image viewer with zoom and pan capabilities
-  - L21 `const ImageViewer({ super.key, required this.imageDataUrl, this.initialIndex = 0, this.allImages, this.models, })`
-  - L29 `final String imageDataUrl`
-  - L30 `final int initialIndex`
-  - L31 `final List<String>? allImages`
-  - L36 `final List<String?>? models`  — Per-image generator model labels (aligned with [allImages]). Entries may
-  - L39 `State<ImageViewer> createState()`
-- L42 `class _ImageViewerState extends State<ImageViewer>`
-  - L43 `late PageController _pageController`
-  - L44 `late int _currentIndex`
-  - L45 `final TransformationController _transformationController = TransformationController()`
-  - L47 `final FocusNode _focusNode = FocusNode()`
-  - L48 `final Map<int, GlobalKey> _imageKeys = <int, GlobalKey>{}`
-  - L52 `final Map<String, Uint8List> _imageCache = <String, Uint8List>{}`  — Cache for loaded image bytes (storage path -> bytes).
-  - L53 `static const int _kMaxCachedImages = 8`
-  - L56 `final Map<String, Future<Uint8List>> _loadFutures = <String, Future<Uint8List>>{}`  — Stable per-source futures so FutureBuilder doesn't re-trigger on rebuild.
-  - L60 `void initState()`
-  - L67 `void dispose()`
-  - L74 `void _handleKeyEvent(KeyEvent event)`
-  - L99 `Future<Uint8List> _futureFor(String imageSource)`  — Returns a stable Future for the given source. Re-using the same Future
-  - L107 `Future<Uint8List> _loadImageBytes(String imageSource)`  — Load image bytes from Base64 data URL or storage path.
-  - L144 `bool get _hasMultipleImages`
-  - L148 `String? get _currentModel`  — Generator model label for the currently-shown image, or null when none.
-  - L158 `GlobalKey _imageKeyForIndex(int index)`
-  - L165 `void _handleOutsideImageTap(PointerDownEvent event)`
-  - L194 `Widget build(BuildContext context)`
-  - L345 `Widget _buildImageView(String imageSource, int imageIndex)`
-  - L414 `Future<void> _downloadCurrentImage()`
-  - L435 `Future<void> _copyCurrentImage()`
-  - L454 `void _showSaveSnackBar(SaveResult result)`
-  - L468 `void _resetZoom()`
+## lib/widgets/image_viewer.dart  (449 Z.)
+- L19 `class ImageViewer extends StatefulWidget`  — Full-screen image viewer with zoom and pan capabilities
+  - L20 `const ImageViewer({ super.key, required this.imageDataUrl, this.initialIndex = 0, this.allImages, this.models, })`
+  - L28 `final String imageDataUrl`
+  - L29 `final int initialIndex`
+  - L30 `final List<String>? allImages`
+  - L35 `final List<String?>? models`  — Per-image generator model labels (aligned with [allImages]). Entries may
+  - L38 `State<ImageViewer> createState()`
+- L41 `class _ImageViewerState extends State<ImageViewer>`
+  - L42 `late PageController _pageController`
+  - L43 `late int _currentIndex`
+  - L44 `final TransformationController _transformationController = TransformationController()`
+  - L46 `final FocusNode _focusNode = FocusNode()`
+  - L47 `final Map<int, GlobalKey> _imageKeys = <int, GlobalKey>{}`
+  - L51 `final Map<String, Uint8List> _imageCache = <String, Uint8List>{}`  — Cache for loaded image bytes (storage path -> bytes).
+  - L52 `static const int _kMaxCachedImages = 8`
+  - L55 `final Map<String, Future<Uint8List>> _loadFutures = <String, Future<Uint8List>>{}`  — Stable per-source futures so FutureBuilder doesn't re-trigger on rebuild.
+  - L59 `void initState()`
+  - L66 `void dispose()`
+  - L73 `void _handleKeyEvent(KeyEvent event)`
+  - L98 `Future<Uint8List> _futureFor(String imageSource)`  — Returns a stable Future for the given source. Re-using the same Future
+  - L106 `Future<Uint8List> _loadImageBytes(String imageSource)`  — Load image bytes from Base64 data URL or storage path.
+  - L143 `bool get _hasMultipleImages`
+  - L147 `String? get _currentModel`  — Generator model label for the currently-shown image, or null when none.
+  - L157 `GlobalKey _imageKeyForIndex(int index)`
+  - L164 `void _handleOutsideImageTap(PointerDownEvent event)`
+  - L193 `Widget build(BuildContext context)`
+  - L322 `Widget _buildImageView(String imageSource, int imageIndex)`
+  - L391 `Future<void> _downloadCurrentImage()`
+  - L412 `Future<void> _copyCurrentImage()`
+  - L431 `void _showSaveSnackBar(SaveResult result)`
+  - L445 `void _resetZoom()`
 
 ## lib/widgets/linux_webview.dart  (92 Z.)
 - L25 `class LinuxWebView extends StatelessWidget`
@@ -2443,194 +2544,271 @@
   - L38 `Future<void> _openInBrowser(BuildContext context)`
   - L58 `Widget build(BuildContext context)`
 
-## lib/widgets/map_block_renderer.dart  (992 Z.)
-- L22 `mapBlockRegex = RegExp(r'<map>([\s\S]*?)</map>', multiLine: true)`  — Regex to find <map> blocks in message content.
-- L25 `bool hasMapBlocks(String content)`  — Returns true if [content] contains at least one <map> block.
-- L28 `class MapContentSegment`  — A segment of message content — either plain text or a map block.
-  - L29 `final bool isMap`
-  - L30 `final String content`
-  - L32 `const MapContentSegment._(this.isMap, this.content)`
-  - L33 `factory MapContentSegment.text(String text)`
-  - L35 `factory MapContentSegment.map(String json)`
-- L39 `class MapBlockWidget extends StatelessWidget`  — Renders a single <map> JSON block as a Flutter widget.
-  - L40 `final String jsonString`
-  - L42 `const MapBlockWidget({super.key, required this.jsonString})`
-  - L45 `Widget build(BuildContext context)`
-- L91 `_kLightTilesUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/`
-- L93 `_kDarkTilesUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y`
-- L95 `_kTileSubdomains = <String>[]`
-- L97 `String _tileUrlForBrightness(BuildContext context)`
-- L103 `double _toDouble(dynamic v)`
-- L115 `bool _isValidLatLon(dynamic latRaw, dynamic lonRaw)`
-- L131 `bool _isExplicitNumericZero(dynamic v)`
-- L140 `List<Map<String, dynamic>> _filterValidCoordItems(List<dynamic>? items)`
-- L160 `List<Map<String, dynamic>> _dedupeCoordItems(List<Map<String, dynamic>> items)`  — Drops repeated places / markers from one block. A multi-pass answer often
-- L193 `@visibleForTesting List<Map<String, dynamic>> debugFilterAndDedupeCoordItems( List<dynamic>? items, )`  — Test-only view of [_filterValidCoordItems] + [_dedupeCoordItems].
-- L197 `double _mapPreviewHeight(BuildContext context)`
-- L204 `double _calculateZoom(List<double> lats, List<double> lons)`
-- L221 `double _calculateRouteZoom( double fromLat, double fromLon, double toLat, double toLon, )`
-- L243 `MapOptions _buildMapOptions({ required LatLng center, required double zoom, List<LatLng>? fitPoints, })`
-- L259 `void _openFullscreenMap( BuildContext context, { required LatLng center, required double zoom, String? title, List<Map<String, dynamic>>? places, List<Map<String, dynamic>>? markers, List<LatLng>? fitPoints, double? routeFromLat, double? routeFromLon, double? routeToLat, double? routeToLon, String? routeFromLabel, String? routeToLabel, int? initialSelectedPlaceIndex, })`
-- L296 `Widget _buildMapPreview( BuildContext context, { required LatLng center, required double zoom, required List<Widget> mapChildren, String? title, List<LatLng>? fitPoints, List<Map<String, dynamic>>? places, List<Map<String, dynamic>>? markers, int? initialSelectedPlaceIndex, double? routeFromLat, double? routeFromLon, double? routeToLat, double? routeToLon, String? routeFromLabel, String? routeToLabel, })`
-- L377 `class _MarkersMapBlock extends StatelessWidget`
-  - L378 `final Map<String, dynamic> data`
-  - L380 `const _MarkersMapBlock({required this.data})`
-  - L383 `Widget build(BuildContext context)`
-- L485 `class _PlacesMapBlock extends StatelessWidget`
-  - L486 `final Map<String, dynamic> data`
-  - L488 `const _PlacesMapBlock({required this.data})`
-  - L491 `Widget build(BuildContext context)`
-  - L596 `static List<Marker> _buildLabeledPlaceMarkers( List<Map<String, dynamic>> places, )`
-- L664 `class _PlaceCard extends StatelessWidget`
-  - L665 `final Map<String, dynamic> place`
-  - L666 `final int number`
-  - L667 `final VoidCallback? onShowOnMap`
-  - L669 `const _PlaceCard({ required this.place, required this.number, this.onShowOnMap, })`
-  - L676 `Widget build(BuildContext context)`
-  - L879 `Widget _buildInfoChip(IconData icon, String label, {VoidCallback? onTap})`
-  - L902 `static Widget _buildStarRating(double rating, {double size = 14})`
-- L925 `class _RouteMapBlock extends StatelessWidget`
-  - L926 `final Map<String, dynamic> data`
-  - L928 `const _RouteMapBlock({required this.data})`
-  - L931 `Widget build(BuildContext context)`
+## lib/widgets/map_block_renderer.dart  (980 Z.)
+- L25 `mapBlockRegex = RegExp(r'<map>([\s\S]*?)</map>', multiLine: true)`  — Regex to find <map> blocks in message content.
+- L28 `bool hasMapBlocks(String content)`  — Returns true if [content] contains at least one <map> block.
+- L31 `class MapContentSegment`  — A segment of message content — either plain text or a map block.
+  - L32 `final bool isMap`
+  - L33 `final String content`
+  - L35 `const MapContentSegment._(this.isMap, this.content)`
+  - L36 `factory MapContentSegment.text(String text)`
+  - L38 `factory MapContentSegment.map(String json)`
+- L42 `class MapBlockWidget extends StatelessWidget`  — Renders a single <map> JSON block as a Flutter widget.
+  - L43 `final String jsonString`
+  - L45 `const MapBlockWidget({super.key, required this.jsonString})`
+  - L48 `Widget build(BuildContext context)`
+- L92 `double _toDouble(dynamic v)`
+- L104 `bool _isValidLatLon(dynamic latRaw, dynamic lonRaw)`
+- L120 `bool _isExplicitNumericZero(dynamic v)`
+- L129 `List<Map<String, dynamic>> _filterValidCoordItems(List<dynamic>? items)`
+- L149 `List<Map<String, dynamic>> _dedupeCoordItems(List<Map<String, dynamic>> items)`  — Drops repeated places / markers from one block. A multi-pass answer often
+- L182 `@visibleForTesting List<Map<String, dynamic>> debugFilterAndDedupeCoordItems( List<dynamic>? items, )`  — Test-only view of [_filterValidCoordItems] + [_dedupeCoordItems].
+- L186 `double _mapPreviewHeight(BuildContext context)`
+- L193 `double _calculateZoom(List<double> lats, List<double> lons)`
+- L210 `double _calculateRouteZoom( double fromLat, double fromLon, double toLat, double toLon, )`
+- L232 `MapOptions _buildMapOptions({ required LatLng center, required double zoom, List<LatLng>? fitPoints, })`
+- L253 `void _openFullscreenMap( BuildContext context, { required LatLng center, required double zoom, String? title, List<Map<String, dynamic>>? places, List<Map<String, dynamic>>? markers, List<LatLng>? fitPoints, double? routeFromLat, double? routeFromLon, double? routeToLat, double? routeToLon, String? routeFromLabel, String? routeToLabel, int? initialSelectedPlaceIndex, })`
+- L290 `Widget _buildMapPreview( BuildContext context, { required LatLng center, required double zoom, required List<Widget> mapChildren, String? title, List<LatLng>? fitPoints, List<Map<String, dynamic>>? places, List<Map<String, dynamic>>? markers, int? initialSelectedPlaceIndex, double? routeFromLat, double? routeFromLon, double? routeToLat, double? routeToLon, String? routeFromLabel, String? routeToLabel, })`
+- L371 `class _MarkersMapBlock extends StatelessWidget`
+  - L372 `final Map<String, dynamic> data`
+  - L374 `const _MarkersMapBlock({required this.data})`
+  - L377 `Widget build(BuildContext context)`
+- L476 `class _PlacesMapBlock extends StatelessWidget`
+  - L477 `final Map<String, dynamic> data`
+  - L479 `const _PlacesMapBlock({required this.data})`
+  - L482 `Widget build(BuildContext context)`
+  - L584 `static List<Marker> _buildLabeledPlaceMarkers( List<Map<String, dynamic>> places, )`
+- L652 `class _PlaceCard extends StatelessWidget`
+  - L653 `final Map<String, dynamic> place`
+  - L654 `final int number`
+  - L655 `final VoidCallback? onShowOnMap`
+  - L657 `const _PlaceCard({ required this.place, required this.number, this.onShowOnMap, })`
+  - L664 `Widget build(BuildContext context)`
+  - L867 `Widget _buildInfoChip(IconData icon, String label, {VoidCallback? onTap})`
+  - L890 `static Widget _buildStarRating(double rating, {double size = 14})`
+- L913 `class _RouteMapBlock extends StatelessWidget`
+  - L914 `final Map<String, dynamic> data`
+  - L916 `const _RouteMapBlock({required this.data})`
+  - L919 `Widget build(BuildContext context)`
 
-## lib/widgets/markdown_message.dart  (2186 Z.)
-- part 'answer_blocks.dart' · part 'visual_answer_blocks.dart'
-- L45 `TextStyle _overlayStyle(TextStyle? base, TextStyle overlay)`  — Lays [overlay] on top of [base] field by field.
-- L67 `class InlineCodeNode extends SpanNode`  — Inline `` `code` `` that keeps its monospace font, its own colour and its
-  - L68 `InlineCodeNode(this.text, this.codeStyle)`
-  - L70 `final String text`
-  - L71 `final TextStyle codeStyle`
-  - L74 `InlineSpan build()`
-  - L77 `TextStyle get style`
-- L87 `class AccentLinkNode extends LinkNode`  — A link that reads as a link: the accent colour plus an underline in that
-  - L88 `AccentLinkNode(super.attributes, super.linkConfig, this.accentColor)`
-  - L90 `final Color accentColor`
-  - L93 `TextStyle get style`
-- L106 `class _MdSegment`  — One slice of a message: plain markdown, a GFM table block, or an answer
-  - L107 `const _MdSegment(this.text, {required this.isTable, this.table, this.block})`
-  - L108 `final String text`
-  - L109 `final bool isTable`
-  - L110 `final ParsedTable? table`
-  - L111 `final AnswerBlockSegment? block`
-- L130 `class _MdParseCache`  — Splits raw markdown into alternating plain-markdown and table segments so
-  - L131 `static const int _max = 400`
-  - L132 `static final Map<String, List<_MdSegment>> _segments = <String, List<_MdSegment>>{}`
-  - L134 `static final Map<String, List<m.Node>> _nodes = <String, List<m.Node>>{}`
-  - L135 `static String? _owner`
-  - L137 `static void _syncOwner()`
-  - L147 `static void clear()`  — Drops every kept parse. Sign-out calls this, so the plaintext does not
-  - L153 `static void _put<V>(Map<String, V> map, String key, V value)`
-  - L158 `static List<_MdSegment> segmentsFor(String text, {required bool keep})`
-  - L172 `static List<m.Node> nodesFor( String data, { required bool keep, required MarkdownGenerator generator, })`  — The same parse `MarkdownGenerator.buildWidgets` runs, with the
-- L197 `List<Widget> _buildMarkdownWidgets( MarkdownGenerator generator, String data, MarkdownConfig config, { required bool keepParse, })`  — `MarkdownGenerator.buildWidgets` of markdown_widget 2.3, with the parse
-- L226 `List<_MdSegment> _splitSegments(String text)`  — Answer blocks first, then the tables inside the Markdown between them.
-- L239 `List<_MdSegment> _splitMarkdownTables(String text)`
-- L295 `class MarkdownMessage extends StatefulWidget`
-  - L296 `const MarkdownMessage({ super.key, required this.text, required this.textColor, required this.backgroundColor, this.wrapWithSelectionArea = true, this.paragraphFontSize, this.paragraphHeight, this.paragraphFontWeight, this.fontFamily, this.onFollowUp, })`
-  - L312 `static void clearCaches()`  — Empties the shared parse and highlight caches. They hold one account's
-  - L319 `static int get debugCachedParseCount`  — How many markdown parses are kept, for tests.
-  - L324 `static int get debugCachedHighlightCount`  — How many code highlights are kept, for tests.
-  - L327 `final String text`
-  - L328 `final Color textColor`
-  - L329 `final Color backgroundColor`
-  - L330 `final bool wrapWithSelectionArea`
-  - L331 `final double? paragraphFontSize`
-  - L332 `final double? paragraphHeight`
-  - L335 `final FontWeight? paragraphFontWeight`  — Weight of paragraph text. Answer blocks use it for step titles.
-  - L336 `final String? fontFamily`
-  - L341 `final ValueChanged<String>? onFollowUp`  — Called with the label when the reader taps a follow-up chip of an
-  - L344 `State<MarkdownMessage> createState()`
-- L347 `class _MarkdownMessageState extends State<MarkdownMessage>`
-  - L348 `List<Widget>? _cachedContent`
-  - L349 `Brightness? _lastBrightness`
-  - L353 `Color? _lastAccent`  — Links, inline code chips and the answer blocks paint in the accent, so
-  - L356 `void didChangeDependencies()`
-  - L367 `void didUpdateWidget(covariant MarkdownMessage oldWidget)`
-  - L390 `static const Set<String> _allowedLinkSchemes = { 'http', 'https', 'mailto', 'tel', 'sms', }`  — URL schemes the markdown renderer is allowed to open. Anything else
-  - L398 `Future<void> _onTapLink(String href)`
-  - L492 `Widget build(BuildContext context)`
-  - L509 `void _rebuildCache({bool keepParse = true})`
-  - L882 `ValueChanged<String>? get _followUpForwarder`  — The follow-up callback as the cached blocks hold it: a forwarder that
-  - L886 `Color _codeBackground()`
-  - L901 `Map<String, TextStyle> _getSyntaxTheme(BuildContext context)`
-- L1181 `class _AsyncCodeBlock extends StatefulWidget`  — Widget that handles async code highlighting to prevent UI jank
-  - L1182 `final String code`
-  - L1183 `final String? language`
-  - L1184 `final TextStyle textStyle`
-  - L1185 `final Color backgroundColor`
-  - L1186 `final Color borderColor`
-  - L1187 `final Map<String, TextStyle> theme`
-  - L1188 `final Color textColor`
-  - L1190 `const _AsyncCodeBlock({ required this.code, this.language, required this.textStyle, required this.backgroundColor, required this.borderColor, required this.theme, required this.textColor, })`
-  - L1201 `State<_AsyncCodeBlock> createState()`
-- L1204 `class _AsyncCodeBlockState extends State<_AsyncCodeBlock>`
-  - L1205 `List<InlineSpan>? _highlightedSpans`
-  - L1206 `Timer? _debounceTimer`
-  - L1207 `String? _displayedCode`
-  - L1221 `static final Map<String, List<hi.Node>> _parsedNodes = <String, List<hi.Node>>{}`  — Highlight results by language and code, shared by every code block.
-  - L1223 `static const int _parsedNodesMax = 300`
-  - L1224 `static String? _parsedNodesOwner`
-  - L1229 `static int _parsedGeneration = 0`  — Bumped whenever [_parsedNodes] is emptied. A highlight that started
-  - L1231 `static void _syncParsedOwner()`
-  - L1240 `static void clearParsed()`  — Drops every kept highlight. See [MarkdownMessage.clearCaches].
-  - L1247 `bool _keepHighlight = true`  — False once the code changed under this block (a stream in progress).
-  - L1249 `static String _parsedKey(String code, String? language)`
-  - L1254 `bool _applyParsedFromCache({required bool rebuild})`  — Applies a kept result for the current code, if there is one. Returns
-  - L1273 `static void _keepParsed( String code, String? language, List<hi.Node> nodes, { required int generation, })`
-  - L1291 `String _prettifyIfJson(String code, String? language)`  — Returns a pretty-printed version of [code] if the language is `json`
-  - L1310 `bool _autoDetectJson(String code)`
-  - L1322 `String _codeForDisplay()`
-  - L1326 `void initState()`
-  - L1333 `void didUpdateWidget(covariant _AsyncCodeBlock oldWidget)`
-  - L1347 `void dispose()`
-  - L1352 `void _scheduleHighlight()`
-  - L1361 `Future<void> _highlightCode()`
-  - L1457 `bool _isMostlyNonAscii(String text)`  — Check if text is mostly non-ASCII characters (CJK, Arabic, Cyrillic, etc.)
-  - L1484 `Widget build(BuildContext context)`
-- L1545 `List<hi.Node> _parseCode(Map<String, dynamic> args)`
-- L1615 `bool _isMostlyNonAsciiCode(String text)`  — Top-level helper for checking if text is mostly non-ASCII (for isolate use)
-- L1642 `List<TextSpan> _convertNodesSafely( List<hi.Node>? nodes, Map<String, TextStyle> theme, TextStyle baseStyle, )`
-- L1673 `List<TextSpan> _collectSpans( hi.Node? node, Map<String, TextStyle> theme, TextStyle baseStyle, TextStyle? parentThemeStyle, )`
-- L1759 `_latexTag = 'latex'`  — Tag used to identify LaTeX elements
-- L1766 `class LatexSyntax extends m.InlineSyntax`  — LaTeX inline syntax parser - matches $$...$$ and \(...\) and \[...\].
-  - L1767 `LatexSyntax() : super(r'(\$\$[\s\S]+?\$\$)|(\\\([\s\S]+?\\\))|(\\\[[\s\S]+?\\\])')`
-  - L1771 `bool onMatch(m.InlineParser parser, Match match)`
-- L1799 `class LatexNode extends SpanNode`  — LaTeX node that renders math using flutter_math_fork
-  - L1800 `final Map<String, String> attributes`
-  - L1801 `final Color textColor`
-  - L1803 `LatexNode(this.attributes, {required this.textColor})`
-  - L1806 `InlineSpan build()`
-  - L1816 `Widget _buildMathWidget(String tex, bool isBlock)`
-- L1889 `class _CopyButton extends StatefulWidget`  — Copy button widget for code blocks
-  - L1890 `final String code`
-  - L1891 `final Color textColor`
-  - L1893 `const _CopyButton({required this.code, required this.textColor})`
-  - L1896 `State<_CopyButton> createState()`
-- L1899 `class _CopyButtonState extends State<_CopyButton>`
-  - L1900 `bool _copied = false`
-  - L1902 `Future<void> _copyToClipboard()`
-  - L1919 `Widget build(BuildContext context)`
-- L1955 `class _SafeCodeBlockNode extends ElementNode`  — Replacement for markdown_widget's CodeBlockNode that avoids noisy
-  - L1956 `_SafeCodeBlockNode(this.element, this.preConfig, this.visitor)`
-  - L1958 `final m.Element element`
-  - L1959 `final PreConfig preConfig`
-  - L1960 `final WidgetVisitor visitor`
-  - L1962 `String get content`
-  - L1965 `InlineSpan build()`
-  - L2013 `TextStyle get style`
-  - L2015 `static String _extractLanguage(m.Element element)`
-- L2042 `class _MarkdownImage extends StatelessWidget`  — Polished markdown image: full-width on mobile bubbles (capped at 540px wide
-  - L2043 `const _MarkdownImage({required this.url, required this.alt})`
-  - L2045 `final String url`
-  - L2046 `final String alt`
-  - L2049 `Widget build(BuildContext context)`
-  - L2117 `Widget _errorTile(ColorScheme colorScheme)`
-  - L2131 `void _openFullscreen(BuildContext context)`
-- L2142 `class _NetworkImageViewer extends StatelessWidget`
-  - L2143 `const _NetworkImageViewer({required this.url})`
-  - L2144 `final String url`
-  - L2147 `Widget build(BuildContext context)`
+## lib/widgets/map_features_block.dart  (691 Z.)
+- L29 `Color mapFeatureColor(MapFeatureKind kind)`  — Fixed signal colours: they mean the same on every theme, like road signs.
+- L36 `HugeIconData _kindIcon(MapFeatureKind kind)`
+- L43 `String _kindName(BuildContext context, MapFeatureKind kind)`
+- L53 `bool _isDe(BuildContext context)`
+- L57 `class _FeatureState`  — Holds the specs of one block and their geometry as it resolves.
+  - L58 `_FeatureState(this.spec) : geometry = spec.inlineGeometry`
+  - L60 `final MapFeatureSpec spec`
+  - L61 `ResolvedGeometry geometry`
+  - L62 `bool resolving = false`
+- L65 `class MapFeaturesBlock extends StatefulWidget`
+  - L66 `const MapFeaturesBlock({super.key, required this.data})`
+  - L68 `final Map<String, dynamic> data`
+  - L71 `State<MapFeaturesBlock> createState()`
+- L74 `class _MapFeaturesBlockState extends State<MapFeaturesBlock>`
+  - L75 `late MapFeaturesBlockData _block`
+  - L76 `late List<_FeatureState> _features`
+  - L77 `int _generation = 0`
+  - L80 `void initState()`
+  - L86 `void didUpdateWidget(covariant MapFeaturesBlock oldWidget)`
+  - L91 `void _load()`
+  - L112 `Widget build(BuildContext context)`
+  - L195 `void _openFullscreen(BuildContext context)`
+- L209 `String _fitKey(List<_FeatureState> drawn)`
+- L213 `double _previewHeight(BuildContext context)`
+- L220 `class _EmptyMap extends StatelessWidget`
+  - L221 `const _EmptyMap({required this.resolving})`
+  - L223 `final bool resolving`
+  - L226 `Widget build(BuildContext context)`
+- L259 `class _MapChip extends StatelessWidget`
+  - L260 `const _MapChip({required this.icon, required this.label, this.onTap})`
+  - L262 `final HugeIconData icon`
+  - L263 `final String label`
+  - L264 `final VoidCallback? onTap`
+  - L267 `Widget build(BuildContext context)`
+- L295 `class _KindBadge extends StatelessWidget`  — The round kind badge used on the map and in the legend.
+  - L296 `const _KindBadge({required this.kind, this.size = 28})`
+  - L298 `final MapFeatureKind kind`
+  - L299 `final double size`
+  - L302 `Widget build(BuildContext context)`
+- L317 `class _LegendRow extends StatelessWidget`
+  - L318 `const _LegendRow({required this.state, required this.onTap})`
+  - L320 `final _FeatureState state`
+  - L321 `final VoidCallback onTap`
+  - L324 `Widget build(BuildContext context)`
+- L381 `class _FeaturesMap extends StatefulWidget`  — The map itself, shared by the preview and the full screen page.
+  - L382 `const _FeaturesMap({ super.key, required this.features, required this.interactive, this.onFeatureTap, })`
+  - L389 `final List<_FeatureState> features`
+  - L390 `final bool interactive`
+  - L391 `final void Function(MapFeatureSpec spec)? onFeatureTap`
+  - L394 `State<_FeaturesMap> createState()`
+- L397 `class _FeaturesMapState extends State<_FeaturesMap>`
+  - L398 `final LayerHitNotifier<int> _lineHits = ValueNotifier(null)`
+  - L399 `final LayerHitNotifier<int> _polygonHits = ValueNotifier(null)`
+  - L402 `void dispose()`
+  - L408 `void _onHit(LayerHitNotifier<int> notifier)`
+  - L416 `Widget build(BuildContext context)`
+- L530 `int _paintRank(MapFeatureKind kind)`
+- L537 `class _FeaturesFullscreenPage extends StatelessWidget`
+  - L538 `const _FeaturesFullscreenPage({required this.title, required this.features})`
+  - L540 `final String title`
+  - L541 `final List<_FeatureState> features`
+  - L544 `Widget build(BuildContext context)`
+- L566 `Future<void> showMapFeatureDetails(BuildContext context, MapFeatureSpec spec)`  — The detail sheet of one feature: what, when, detour, source.
+- L578 `class _FeatureDetails extends StatelessWidget`
+  - L579 `const _FeatureDetails({required this.spec})`
+  - L581 `final MapFeatureSpec spec`
+  - L584 `Widget build(BuildContext context)`
+- L659 `class _DetailLine extends StatelessWidget`
+  - L660 `const _DetailLine({required this.icon, required this.text})`
+  - L662 `final HugeIconData icon`
+  - L663 `final String text`
+  - L666 `Widget build(BuildContext context)`
+
+## lib/widgets/map_tiles.dart  (38 Z.)
+- L10 `kOsmTileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'`  — Standard OpenStreetMap tiles — the one base map every map in the app uses.
+- L13 `kOsmMaxNativeZoom = 19`  — Deepest zoom the OSM tile server renders.
+- L17 `kMapMaxZoom = 20`  — Deepest zoom the user may go to; tiles past [kOsmMaxNativeZoom] are
+- L21 `TileLayer buildBaseTileLayer()`  — The base tile layer. OSM's tile policy asks for an identifying user
+- L32 `Widget buildOsmAttribution()`  — The attribution OSM's licence requires: a small info chip in the corner
+
+## lib/widgets/markdown_message.dart  (2187 Z.)
+- part 'answer_blocks.dart' · part 'visual_answer_blocks.dart' · part 'visual_answer_blocks_more.dart'
+- L46 `TextStyle _overlayStyle(TextStyle? base, TextStyle overlay)`  — Lays [overlay] on top of [base] field by field.
+- L68 `class InlineCodeNode extends SpanNode`  — Inline `` `code` `` that keeps its monospace font, its own colour and its
+  - L69 `InlineCodeNode(this.text, this.codeStyle)`
+  - L71 `final String text`
+  - L72 `final TextStyle codeStyle`
+  - L75 `InlineSpan build()`
+  - L78 `TextStyle get style`
+- L88 `class AccentLinkNode extends LinkNode`  — A link that reads as a link: the accent colour plus an underline in that
+  - L89 `AccentLinkNode(super.attributes, super.linkConfig, this.accentColor)`
+  - L91 `final Color accentColor`
+  - L94 `TextStyle get style`
+- L107 `class _MdSegment`  — One slice of a message: plain markdown, a GFM table block, or an answer
+  - L108 `const _MdSegment(this.text, {required this.isTable, this.table, this.block})`
+  - L109 `final String text`
+  - L110 `final bool isTable`
+  - L111 `final ParsedTable? table`
+  - L112 `final AnswerBlockSegment? block`
+- L131 `class _MdParseCache`  — Splits raw markdown into alternating plain-markdown and table segments so
+  - L132 `static const int _max = 400`
+  - L133 `static final Map<String, List<_MdSegment>> _segments = <String, List<_MdSegment>>{}`
+  - L135 `static final Map<String, List<m.Node>> _nodes = <String, List<m.Node>>{}`
+  - L136 `static String? _owner`
+  - L138 `static void _syncOwner()`
+  - L148 `static void clear()`  — Drops every kept parse. Sign-out calls this, so the plaintext does not
+  - L154 `static void _put<V>(Map<String, V> map, String key, V value)`
+  - L159 `static List<_MdSegment> segmentsFor(String text, {required bool keep})`
+  - L173 `static List<m.Node> nodesFor( String data, { required bool keep, required MarkdownGenerator generator, })`  — The same parse `MarkdownGenerator.buildWidgets` runs, with the
+- L198 `List<Widget> _buildMarkdownWidgets( MarkdownGenerator generator, String data, MarkdownConfig config, { required bool keepParse, })`  — `MarkdownGenerator.buildWidgets` of markdown_widget 2.3, with the parse
+- L227 `List<_MdSegment> _splitSegments(String text)`  — Answer blocks first, then the tables inside the Markdown between them.
+- L240 `List<_MdSegment> _splitMarkdownTables(String text)`
+- L296 `class MarkdownMessage extends StatefulWidget`
+  - L297 `const MarkdownMessage({ super.key, required this.text, required this.textColor, required this.backgroundColor, this.wrapWithSelectionArea = true, this.paragraphFontSize, this.paragraphHeight, this.paragraphFontWeight, this.fontFamily, this.onFollowUp, })`
+  - L313 `static void clearCaches()`  — Empties the shared parse and highlight caches. They hold one account's
+  - L320 `static int get debugCachedParseCount`  — How many markdown parses are kept, for tests.
+  - L325 `static int get debugCachedHighlightCount`  — How many code highlights are kept, for tests.
+  - L328 `final String text`
+  - L329 `final Color textColor`
+  - L330 `final Color backgroundColor`
+  - L331 `final bool wrapWithSelectionArea`
+  - L332 `final double? paragraphFontSize`
+  - L333 `final double? paragraphHeight`
+  - L336 `final FontWeight? paragraphFontWeight`  — Weight of paragraph text. Answer blocks use it for step titles.
+  - L337 `final String? fontFamily`
+  - L342 `final ValueChanged<String>? onFollowUp`  — Called with the label when the reader taps a follow-up chip of an
+  - L345 `State<MarkdownMessage> createState()`
+- L348 `class _MarkdownMessageState extends State<MarkdownMessage>`
+  - L349 `List<Widget>? _cachedContent`
+  - L350 `Brightness? _lastBrightness`
+  - L354 `Color? _lastAccent`  — Links, inline code chips and the answer blocks paint in the accent, so
+  - L357 `void didChangeDependencies()`
+  - L368 `void didUpdateWidget(covariant MarkdownMessage oldWidget)`
+  - L391 `static const Set<String> _allowedLinkSchemes = { 'http', 'https', 'mailto', 'tel', 'sms', }`  — URL schemes the markdown renderer is allowed to open. Anything else
+  - L399 `Future<void> _onTapLink(String href)`
+  - L493 `Widget build(BuildContext context)`
+  - L510 `void _rebuildCache({bool keepParse = true})`
+  - L883 `ValueChanged<String>? get _followUpForwarder`  — The follow-up callback as the cached blocks hold it: a forwarder that
+  - L887 `Color _codeBackground()`
+  - L902 `Map<String, TextStyle> _getSyntaxTheme(BuildContext context)`
+- L1182 `class _AsyncCodeBlock extends StatefulWidget`  — Widget that handles async code highlighting to prevent UI jank
+  - L1183 `final String code`
+  - L1184 `final String? language`
+  - L1185 `final TextStyle textStyle`
+  - L1186 `final Color backgroundColor`
+  - L1187 `final Color borderColor`
+  - L1188 `final Map<String, TextStyle> theme`
+  - L1189 `final Color textColor`
+  - L1191 `const _AsyncCodeBlock({ required this.code, this.language, required this.textStyle, required this.backgroundColor, required this.borderColor, required this.theme, required this.textColor, })`
+  - L1202 `State<_AsyncCodeBlock> createState()`
+- L1205 `class _AsyncCodeBlockState extends State<_AsyncCodeBlock>`
+  - L1206 `List<InlineSpan>? _highlightedSpans`
+  - L1207 `Timer? _debounceTimer`
+  - L1208 `String? _displayedCode`
+  - L1222 `static final Map<String, List<hi.Node>> _parsedNodes = <String, List<hi.Node>>{}`  — Highlight results by language and code, shared by every code block.
+  - L1224 `static const int _parsedNodesMax = 300`
+  - L1225 `static String? _parsedNodesOwner`
+  - L1230 `static int _parsedGeneration = 0`  — Bumped whenever [_parsedNodes] is emptied. A highlight that started
+  - L1232 `static void _syncParsedOwner()`
+  - L1241 `static void clearParsed()`  — Drops every kept highlight. See [MarkdownMessage.clearCaches].
+  - L1248 `bool _keepHighlight = true`  — False once the code changed under this block (a stream in progress).
+  - L1250 `static String _parsedKey(String code, String? language)`
+  - L1255 `bool _applyParsedFromCache({required bool rebuild})`  — Applies a kept result for the current code, if there is one. Returns
+  - L1274 `static void _keepParsed( String code, String? language, List<hi.Node> nodes, { required int generation, })`
+  - L1292 `String _prettifyIfJson(String code, String? language)`  — Returns a pretty-printed version of [code] if the language is `json`
+  - L1311 `bool _autoDetectJson(String code)`
+  - L1323 `String _codeForDisplay()`
+  - L1327 `void initState()`
+  - L1334 `void didUpdateWidget(covariant _AsyncCodeBlock oldWidget)`
+  - L1348 `void dispose()`
+  - L1353 `void _scheduleHighlight()`
+  - L1362 `Future<void> _highlightCode()`
+  - L1458 `bool _isMostlyNonAscii(String text)`  — Check if text is mostly non-ASCII characters (CJK, Arabic, Cyrillic, etc.)
+  - L1485 `Widget build(BuildContext context)`
+- L1546 `List<hi.Node> _parseCode(Map<String, dynamic> args)`
+- L1616 `bool _isMostlyNonAsciiCode(String text)`  — Top-level helper for checking if text is mostly non-ASCII (for isolate use)
+- L1643 `List<TextSpan> _convertNodesSafely( List<hi.Node>? nodes, Map<String, TextStyle> theme, TextStyle baseStyle, )`
+- L1674 `List<TextSpan> _collectSpans( hi.Node? node, Map<String, TextStyle> theme, TextStyle baseStyle, TextStyle? parentThemeStyle, )`
+- L1760 `_latexTag = 'latex'`  — Tag used to identify LaTeX elements
+- L1767 `class LatexSyntax extends m.InlineSyntax`  — LaTeX inline syntax parser - matches $$...$$ and \(...\) and \[...\].
+  - L1768 `LatexSyntax() : super(r'(\$\$[\s\S]+?\$\$)|(\\\([\s\S]+?\\\))|(\\\[[\s\S]+?\\\])')`
+  - L1772 `bool onMatch(m.InlineParser parser, Match match)`
+- L1800 `class LatexNode extends SpanNode`  — LaTeX node that renders math using flutter_math_fork
+  - L1801 `final Map<String, String> attributes`
+  - L1802 `final Color textColor`
+  - L1804 `LatexNode(this.attributes, {required this.textColor})`
+  - L1807 `InlineSpan build()`
+  - L1817 `Widget _buildMathWidget(String tex, bool isBlock)`
+- L1890 `class _CopyButton extends StatefulWidget`  — Copy button widget for code blocks
+  - L1891 `final String code`
+  - L1892 `final Color textColor`
+  - L1894 `const _CopyButton({required this.code, required this.textColor})`
+  - L1897 `State<_CopyButton> createState()`
+- L1900 `class _CopyButtonState extends State<_CopyButton>`
+  - L1901 `bool _copied = false`
+  - L1903 `Future<void> _copyToClipboard()`
+  - L1920 `Widget build(BuildContext context)`
+- L1956 `class _SafeCodeBlockNode extends ElementNode`  — Replacement for markdown_widget's CodeBlockNode that avoids noisy
+  - L1957 `_SafeCodeBlockNode(this.element, this.preConfig, this.visitor)`
+  - L1959 `final m.Element element`
+  - L1960 `final PreConfig preConfig`
+  - L1961 `final WidgetVisitor visitor`
+  - L1963 `String get content`
+  - L1966 `InlineSpan build()`
+  - L2014 `TextStyle get style`
+  - L2016 `static String _extractLanguage(m.Element element)`
+- L2043 `class _MarkdownImage extends StatelessWidget`  — Polished markdown image: full-width on mobile bubbles (capped at 540px wide
+  - L2044 `const _MarkdownImage({required this.url, required this.alt})`
+  - L2046 `final String url`
+  - L2047 `final String alt`
+  - L2050 `Widget build(BuildContext context)`
+  - L2118 `Widget _errorTile(ColorScheme colorScheme)`
+  - L2132 `void _openFullscreen(BuildContext context)`
+- L2143 `class _NetworkImageViewer extends StatelessWidget`
+  - L2144 `const _NetworkImageViewer({required this.url})`
+  - L2145 `final String url`
+  - L2148 `Widget build(BuildContext context)`
 
 ## lib/widgets/mcp_connect_card.dart  (207 Z.)
 - L26 `class McpConnectCard extends StatefulWidget`  — A single Connect button for one catalogue server, shown inline under an
@@ -2659,128 +2837,128 @@
   - L36 `Size? _oldSize`
   - L39 `void performLayout()`
 
-## lib/widgets/menu_tile_group.dart  (349 Z.)
-- L18 `kMenuOuterRadius = 26`  — Corner radius at the outer edges of a run.
-- L21 `kMenuInnerRadius = 6`  — Where two tiles of one run meet.
-- L25 `kMenuTileGap = 3`  — Air between two tiles of one run. The gap is left open, so whatever the
-- L28 `kMenuGroupGap = 10`  — Air instead of a divider, between two runs.
-- L41 `class MenuTileGroup extends StatelessWidget`  — A menu drawn as a run of filled tiles instead of one boxed card.
-  - L42 `const MenuTileGroup({ super.key, required this.groups, required this.color, this.outerRadius = kMenuOuterRadius, })`
-  - L50 `MenuTileGroup.single({ Key? key, required List<Widget> children, required Color color, double outerRadius = kMenuOuterRadius, }) : this( key: key, groups: <List<Widget>>[children], color: color, outerRadius: outerRadius, )`  — One run of rows that belong together.
-  - L63 `final List<List<Widget>> groups`  — Each list is one connected run; the gap between runs replaces a divider.
-  - L67 `final Color color`  — Tile fill. It has to be a step above whatever is behind the menu, or the
-  - L69 `final double outerRadius`
-  - L72 `Widget build(BuildContext context)`
-- L111 `class MenuActionRow extends StatelessWidget`  — One row of a menu: an icon, a label, an optional line under it and
-  - L112 `const MenuActionRow({ super.key, required this.label, this.icon, this.leading, this.subtitle, this.trailing, this.onTap, this.tone, this.selected = false, this.enabled = true, this.maxLines, this.shortcut, })`
-  - L127 `final String label`
-  - L131 `final String? shortcut`  — The keyboard shortcut for this row ("Ctrl+N"), printed on the right in
-  - L132 `final IconData? icon`
-  - L135 `final Widget? leading`  — Replaces the icon — for an avatar or a badge.
-  - L136 `final String? subtitle`
-  - L137 `final Widget? trailing`
-  - L138 `final VoidCallback? onTap`
-  - L142 `final Color? tone`  — Colour of the icon and the label. Defaults to the scheme's `onSurface`;
-  - L145 `final bool selected`  — Draws the check on the right, for a row that is a choice.
-  - L148 `final bool enabled`  — A parked row: it still reads, it just does not answer.
-  - L151 `final int? maxLines`  — Cuts a long label after so many lines. Null lets it wrap freely.
-  - L154 `Widget build(BuildContext context)`
-- L223 `Future<T?> showMenuSheet<T>( BuildContext context, { required List<List<Widget>> groups, Widget? header, Color? color, })`  — A menu as a bottom sheet: the house sheet chrome, then the same tiles a
-- L283 `class MenuAnchorButton extends StatelessWidget`  — The control a menu hangs off: the current value, an arrow, and the tap
-  - L284 `const MenuAnchorButton({ super.key, required this.label, required this.onTap, this.leading, this.labelStyle, this.expand = false, })`
-  - L293 `final String label`
-  - L294 `final ValueChanged<BuildContext> onTap`
-  - L297 `final Widget? leading`  — Sits before the label — a swatch, a dot row, an icon.
-  - L300 `final TextStyle? labelStyle`  — Merged over the house style, for a preview in the chosen font.
-  - L303 `final bool expand`  — Fills the width, the way `isExpanded` did.
-  - L306 `Widget build(BuildContext context)`
+## lib/widgets/menu_tile_group.dart  (381 Z.)
+- L19 `kMenuOuterRadius = 26`  — Corner radius at the outer edges of a run.
+- L22 `kMenuInnerRadius = 6`  — Where two tiles of one run meet.
+- L26 `kMenuTileGap = 3`  — Air between two tiles of one run. The gap is left open, so whatever the
+- L29 `kMenuGroupGap = 10`  — Air instead of a divider, between two runs.
+- L42 `class MenuTileGroup extends StatelessWidget`  — A menu drawn as a run of filled tiles instead of one boxed card.
+  - L43 `const MenuTileGroup({ super.key, required this.groups, required this.color, this.outerRadius = kMenuOuterRadius, })`
+  - L51 `MenuTileGroup.single({ Key? key, required List<Widget> children, required Color color, double outerRadius = kMenuOuterRadius, }) : this( key: key, groups: <List<Widget>>[children], color: color, outerRadius: outerRadius, )`  — One run of rows that belong together.
+  - L64 `final List<List<Widget>> groups`  — Each list is one connected run; the gap between runs replaces a divider.
+  - L68 `final Color color`  — Tile fill. It has to be a step above whatever is behind the menu, or the
+  - L70 `final double outerRadius`
+  - L73 `Widget build(BuildContext context)`
+- L112 `class MenuActionRow extends StatelessWidget`  — One row of a menu: an icon, a label, an optional line under it and
+  - L113 `const MenuActionRow({ super.key, required this.label, this.icon, this.leading, this.subtitle, this.trailing, this.onTap, this.tone, this.selected = false, this.enabled = true, this.maxLines, this.shortcut, })`
+  - L128 `final String label`
+  - L132 `final String? shortcut`  — The keyboard shortcut for this row ("Ctrl+N"), printed on the right in
+  - L133 `final IconData? icon`
+  - L136 `final Widget? leading`  — Replaces the icon — for an avatar or a badge.
+  - L137 `final String? subtitle`
+  - L138 `final Widget? trailing`
+  - L139 `final VoidCallback? onTap`
+  - L143 `final Color? tone`  — Colour of the icon and the label. Defaults to the scheme's `onSurface`;
+  - L146 `final bool selected`  — Draws the check on the right, for a row that is a choice.
+  - L149 `final bool enabled`  — A parked row: it still reads, it just does not answer.
+  - L152 `final int? maxLines`  — Cuts a long label after so many lines. Null lets it wrap freely.
+  - L155 `Widget build(BuildContext context)`
+- L228 `Future<T?> showMenuSheet<T>( BuildContext context, { required List<List<Widget>> groups, Widget? header, Color? color, })`  — A menu as a bottom sheet: the house sheet chrome, then the same tiles a
+- L315 `class MenuAnchorButton extends StatelessWidget`  — The control a menu hangs off: the current value, an arrow, and the tap
+  - L316 `const MenuAnchorButton({ super.key, required this.label, required this.onTap, this.leading, this.labelStyle, this.expand = false, })`
+  - L325 `final String label`
+  - L326 `final ValueChanged<BuildContext> onTap`
+  - L329 `final Widget? leading`  — Sits before the label — a swatch, a dot row, an icon.
+  - L332 `final TextStyle? labelStyle`  — Merged over the house style, for a preview in the chosen font.
+  - L335 `final bool expand`  — Fills the width, the way `isExpanded` did.
+  - L338 `Widget build(BuildContext context)`
 
-## lib/widgets/message_bubble.dart  (520 Z.)
+## lib/widgets/message_bubble.dart  (522 Z.)
 - part 'message_bubble/models.dart' · part 'message_bubble/layout.dart' · part 'message_bubble/chrome.dart' · part 'message_bubble/rich_blocks.dart' · part 'message_bubble/tools.dart' · part 'message_bubble/images.dart' · part 'message_bubble/cards.dart'
-- L111 `_kBlockGap = 8`  — Gap between two sibling "block" rounds inside the same assistant
-- L116 `_kArtifactGap = 6`  — Gap between a tool-call bar and its attached artifact cards, and
-- L122 `_kCardStackGap = 6`  — Gap between sibling expandable cards stacked inside the expanded
-- L128 `_kInfoBarGap = 2`  — Air under the "Thought for 4s" bar, before the answer starts.
-- L133 `_kFileGap = 12`  — Visible air around a file an agent hands over: between the answer text
-- L137 `_kMobileBottomBarHeight = 36.0`  — AI action / user long-press action bars share this fixed height on mobile
-- L141 `_richBlockRegex = RegExp( r'<\s*(chart|map|email|weather|news|image|diff)\s*>([\s\S]*?)<\s*/\s*\1\s*>', multiLine: true,`  — Regex to find visual output blocks (`<chart>`, `<map>`, `<email>`,
-- L147 `_visualBlockStartRegex = RegExp( r'<\s*(chart|map|email|weather|news|image|diff)\b', caseSensitive: false, )`
-- L153 `_diffBlockRegex = RegExp( r'<\s*diff\s*>([\s\S]*?)<\s*/\s*diff\s*>', caseSensitive: false, )`  — Matches `<diff>...</diff>` blocks embedded in tool results.
-- L158 `_attachmentHeaderRe = RegExp( r'^\d+ images? attached(?:, Documents: .+)?$', )`
-- L164 `_kAiResponseFontFamilyDefault = kFontFamilyArimo`  — Default chat font family, resolved once. Used when the user has explicitly
-- L169 `_cachedShowReasoningTokens`  — Cross-instance cache of the two display preferences, so a freshly built
-- L170 `_cachedShowModelInfo`
-- L172 `class MessageBubble extends StatefulWidget`
-  - L173 `const MessageBubble({ super.key, required this.message, required this.isUser, this.messengerMode = false, this.startsNewGroup = true, this.endsGroup = true, this.maxWidth, this.actions = const <MessageBubbleAction>[], this.reasoning, this.voicePlayback, this.isVoiceInput = false, this.voiceInputDuration, this.isReasoningStreaming = false, this.modelLabel, this.modelProvider, this.tps, this.isEditing = false, this.initialEditText, this.onSubmitEdit, this.onCancelEdit, this.showReasoningTokens, this.showModelInfo, this.showTps, this.toolCalls, this.showToolCalls = true, this.contentBlocks, this.isStreamingMessage = false, this.chatId, this.turnStartedAt, this.sentAt, this.workedFor, this.images, this.imageMetas, this.attachments, this.imageCostEur, this.imageGeneratedAt, this.onAskUserAnswer, this.onConnectMcpServer, this.userMessageActions = const <MessageBubbleAction>[], this.useSharedSelectionArea = false, this.status, this.lastError, this.onRetryPending, this.onContinueGeneration, this.variantIndex = 0, this.variantCount = 0, this.onPrevVariant, this.onNextVariant, this.onReply, this.onEditRequested, this.reaction, this.onReaction, this.senderLabel, this.messageId, this.onOpenUiMessage, })`
-  - L231 `final String message`
-  - L236 `final String? messageId`  — A stable id of this message. It keys the form values and `$state` of
-  - L242 `final ValueChanged<String>? onOpenUiMessage`  — Sends a user message in the same chat. An OpenUI view in the answer
-  - L243 `final VoidCallback? onReply`
-  - L244 `final VoidCallback? onEditRequested`
-  - L245 `final String? reaction`
-  - L246 `final ValueChanged<String>? onReaction`
-  - L255 `final Widget? senderLabel`  — Who is talking, drawn above the first bubble of the run.
-  - L260 `final bool messengerMode`  — The messenger thread's behaviour: the long-press menu instead of the
-  - L261 `final bool isUser`
-  - L264 `final bool startsNewGroup`
-  - L265 `final bool endsGroup`
-  - L266 `final double? maxWidth`
-  - L267 `final List<MessageBubbleAction> actions`
-  - L268 `final String? reasoning`
-  - L269 `final String? voicePlayback`
-  - L273 `final bool isVoiceInput`  — The user dictated this message: it draws as a voice bubble with the
-  - L276 `final Duration? voiceInputDuration`  — Length of the dictation, when it is known.
-  - L277 `final bool isReasoningStreaming`
-  - L278 `final String? modelLabel`
-  - L279 `final String? modelProvider`
-  - L280 `final double? tps`
-  - L281 `final bool isEditing`
-  - L282 `final String? initialEditText`
-  - L283 `final ValueChanged<String>? onSubmitEdit`
-  - L284 `final VoidCallback? onCancelEdit`
-  - L285 `final bool? showReasoningTokens`
-  - L286 `final bool? showModelInfo`
-  - L287 `final bool? showTps`
-  - L288 `final List<ToolCall>? toolCalls`
-  - L289 `final bool showToolCalls`
-  - L294 `final List<ContentBlock>? contentBlocks`  — Ordered content blocks for interleaved AI responses.
-  - L298 `final bool isStreamingMessage`  — Whether this message is currently being streamed. Used with
-  - L303 `final String? chatId`  — The chat this message belongs to. The status header looks the live
-  - L308 `final DateTime? turnStartedAt`  — When the request behind this answer went out, so the activity header
-  - L314 `final DateTime? sentAt`  — Actual message timestamp, distinct from the generation stopwatch.
-  - L319 `final Duration? workedFor`  — The finished turn's length as it was written down. Once present the
-  - L321 `final List<String>? images`
-  - L325 `final List<ImageMeta>? imageMetas`  — Per-image metadata aligned with [images]. Distinguishes fetched vs
-  - L326 `final List<DocumentAttachment>? attachments`
-  - L327 `final double? imageCostEur`
-  - L328 `final DateTime? imageGeneratedAt`
-  - L333 `final ValueChanged<String>? onAskUserAnswer`  — Called when the user taps an option button on an ask_user tool call.
-  - L339 `final ValueChanged<String>? onConnectMcpServer`  — Called with the catalogue id when the user taps Connect on an inline
-  - L344 `final List<MessageBubbleAction> userMessageActions`  — Actions shown in a popup menu on long-press for user messages.
-  - L345 `final bool useSharedSelectionArea`
-  - L349 `final ChatMessageStatus? status`  — Local offline-delivery status. Only rendered for user messages. `null`
-  - L352 `final String? lastError`  — Last error text shown in the failed-status tooltip.
-  - L355 `final VoidCallback? onRetryPending`  — Called when the user taps the inline retry button on a failed message.
-  - L360 `final VoidCallback? onContinueGeneration`  — Called when the user taps the inline "Continue generation" button on
-  - L364 `final int variantIndex`  — Zero-based index of the answer variant currently shown, for the
-  - L368 `final int variantCount`  — Total number of answer variants. The pager renders only when this is
-  - L372 `final VoidCallback? onPrevVariant`  — Switch to the previous / next answer variant. Null (or when at the
-  - L373 `final VoidCallback? onNextVariant`
-  - L376 `State<MessageBubble> createState()`
-- L379 `class _MessageBubbleState extends State<MessageBubble>`
-  - L385 `final List<SandboxArtifactPayload> _artifactPayloads = <SandboxArtifactPayload>[]`  — Files this answer produced. They are pulled out of the bubble while the
-  - L393 `Widget? _metaBelowFiles`  — The settled "12s · model" line of an answer that hands over files. The
-  - L395 `bool _complexBubbleLogged = false`
-  - L396 `bool _showUserActions = false`
-  - L399 `bool? _showReasoningTokens`
-  - L400 `bool? _showModelInfo`
-  - L406 `String? _strippedMessageCache`
-  - L407 `String? _strippedMessageSource`
-  - L411 `int _openUiProgramCount = 0`  — Counts the OpenUI programs while one build draws the answer. Reset at
-  - L414 `void initState()`
-  - L419 `Future<void> _loadPreferences()`
-  - L438 `void didUpdateWidget(covariant MessageBubble oldWidget)`
-  - L446 `Widget build(BuildContext context)`
+- L113 `_kBlockGap = 8`  — Gap between two sibling "block" rounds inside the same assistant
+- L118 `_kArtifactGap = 6`  — Gap between a tool-call bar and its attached artifact cards, and
+- L124 `_kCardStackGap = 6`  — Gap between sibling expandable cards stacked inside the expanded
+- L130 `_kInfoBarGap = 2`  — Air under the "Thought for 4s" bar, before the answer starts.
+- L135 `_kFileGap = 12`  — Visible air around a file an agent hands over: between the answer text
+- L139 `_kMobileBottomBarHeight = 36.0`  — AI action / user long-press action bars share this fixed height on mobile
+- L143 `_richBlockRegex = RegExp( r'<\s*(chart|map|email|weather|news|image|diff)\s*>([\s\S]*?)<\s*/\s*\1\s*>', multiLine: true,`  — Regex to find visual output blocks (`<chart>`, `<map>`, `<email>`,
+- L149 `_visualBlockStartRegex = RegExp( r'<\s*(chart|map|email|weather|news|image|diff)\b', caseSensitive: false, )`
+- L155 `_diffBlockRegex = RegExp( r'<\s*diff\s*>([\s\S]*?)<\s*/\s*diff\s*>', caseSensitive: false, )`  — Matches `<diff>...</diff>` blocks embedded in tool results.
+- L160 `_attachmentHeaderRe = RegExp( r'^\d+ images? attached(?:, Documents: .+)?$', )`
+- L166 `_kAiResponseFontFamilyDefault = kFontFamilyArimo`  — Default chat font family, resolved once. Used when the user has explicitly
+- L171 `_cachedShowReasoningTokens`  — Cross-instance cache of the two display preferences, so a freshly built
+- L172 `_cachedShowModelInfo`
+- L174 `class MessageBubble extends StatefulWidget`
+  - L175 `const MessageBubble({ super.key, required this.message, required this.isUser, this.messengerMode = false, this.startsNewGroup = true, this.endsGroup = true, this.maxWidth, this.actions = const <MessageBubbleAction>[], this.reasoning, this.voicePlayback, this.isVoiceInput = false, this.voiceInputDuration, this.isReasoningStreaming = false, this.modelLabel, this.modelProvider, this.tps, this.isEditing = false, this.initialEditText, this.onSubmitEdit, this.onCancelEdit, this.showReasoningTokens, this.showModelInfo, this.showTps, this.toolCalls, this.showToolCalls = true, this.contentBlocks, this.isStreamingMessage = false, this.chatId, this.turnStartedAt, this.sentAt, this.workedFor, this.images, this.imageMetas, this.attachments, this.imageCostEur, this.imageGeneratedAt, this.onAskUserAnswer, this.onConnectMcpServer, this.userMessageActions = const <MessageBubbleAction>[], this.useSharedSelectionArea = false, this.status, this.lastError, this.onRetryPending, this.onContinueGeneration, this.variantIndex = 0, this.variantCount = 0, this.onPrevVariant, this.onNextVariant, this.onReply, this.onEditRequested, this.reaction, this.onReaction, this.senderLabel, this.messageId, this.onOpenUiMessage, })`
+  - L233 `final String message`
+  - L238 `final String? messageId`  — A stable id of this message. It keys the form values and `$state` of
+  - L244 `final ValueChanged<String>? onOpenUiMessage`  — Sends a user message in the same chat. An OpenUI view in the answer
+  - L245 `final VoidCallback? onReply`
+  - L246 `final VoidCallback? onEditRequested`
+  - L247 `final String? reaction`
+  - L248 `final ValueChanged<String>? onReaction`
+  - L257 `final Widget? senderLabel`  — Who is talking, drawn above the first bubble of the run.
+  - L262 `final bool messengerMode`  — The messenger thread's behaviour: the long-press menu instead of the
+  - L263 `final bool isUser`
+  - L266 `final bool startsNewGroup`
+  - L267 `final bool endsGroup`
+  - L268 `final double? maxWidth`
+  - L269 `final List<MessageBubbleAction> actions`
+  - L270 `final String? reasoning`
+  - L271 `final String? voicePlayback`
+  - L275 `final bool isVoiceInput`  — The user dictated this message: it draws as a voice bubble with the
+  - L278 `final Duration? voiceInputDuration`  — Length of the dictation, when it is known.
+  - L279 `final bool isReasoningStreaming`
+  - L280 `final String? modelLabel`
+  - L281 `final String? modelProvider`
+  - L282 `final double? tps`
+  - L283 `final bool isEditing`
+  - L284 `final String? initialEditText`
+  - L285 `final ValueChanged<String>? onSubmitEdit`
+  - L286 `final VoidCallback? onCancelEdit`
+  - L287 `final bool? showReasoningTokens`
+  - L288 `final bool? showModelInfo`
+  - L289 `final bool? showTps`
+  - L290 `final List<ToolCall>? toolCalls`
+  - L291 `final bool showToolCalls`
+  - L296 `final List<ContentBlock>? contentBlocks`  — Ordered content blocks for interleaved AI responses.
+  - L300 `final bool isStreamingMessage`  — Whether this message is currently being streamed. Used with
+  - L305 `final String? chatId`  — The chat this message belongs to. The status header looks the live
+  - L310 `final DateTime? turnStartedAt`  — When the request behind this answer went out, so the activity header
+  - L316 `final DateTime? sentAt`  — Actual message timestamp, distinct from the generation stopwatch.
+  - L321 `final Duration? workedFor`  — The finished turn's length as it was written down. Once present the
+  - L323 `final List<String>? images`
+  - L327 `final List<ImageMeta>? imageMetas`  — Per-image metadata aligned with [images]. Distinguishes fetched vs
+  - L328 `final List<DocumentAttachment>? attachments`
+  - L329 `final double? imageCostEur`
+  - L330 `final DateTime? imageGeneratedAt`
+  - L335 `final ValueChanged<String>? onAskUserAnswer`  — Called when the user taps an option button on an ask_user tool call.
+  - L341 `final ValueChanged<String>? onConnectMcpServer`  — Called with the catalogue id when the user taps Connect on an inline
+  - L346 `final List<MessageBubbleAction> userMessageActions`  — Actions shown in a popup menu on long-press for user messages.
+  - L347 `final bool useSharedSelectionArea`
+  - L351 `final ChatMessageStatus? status`  — Local offline-delivery status. Only rendered for user messages. `null`
+  - L354 `final String? lastError`  — Last error text shown in the failed-status tooltip.
+  - L357 `final VoidCallback? onRetryPending`  — Called when the user taps the inline retry button on a failed message.
+  - L362 `final VoidCallback? onContinueGeneration`  — Called when the user taps the inline "Continue generation" button on
+  - L366 `final int variantIndex`  — Zero-based index of the answer variant currently shown, for the
+  - L370 `final int variantCount`  — Total number of answer variants. The pager renders only when this is
+  - L374 `final VoidCallback? onPrevVariant`  — Switch to the previous / next answer variant. Null (or when at the
+  - L375 `final VoidCallback? onNextVariant`
+  - L378 `State<MessageBubble> createState()`
+- L381 `class _MessageBubbleState extends State<MessageBubble>`
+  - L387 `final List<SandboxArtifactPayload> _artifactPayloads = <SandboxArtifactPayload>[]`  — Files this answer produced. They are pulled out of the bubble while the
+  - L395 `Widget? _metaBelowFiles`  — The settled "12s · model" line of an answer that hands over files. The
+  - L397 `bool _complexBubbleLogged = false`
+  - L398 `bool _showUserActions = false`
+  - L401 `bool? _showReasoningTokens`
+  - L402 `bool? _showModelInfo`
+  - L408 `String? _strippedMessageCache`
+  - L409 `String? _strippedMessageSource`
+  - L413 `int _openUiProgramCount = 0`  — Counts the OpenUI programs while one build draws the answer. Reset at
+  - L416 `void initState()`
+  - L421 `Future<void> _loadPreferences()`
+  - L440 `void didUpdateWidget(covariant MessageBubble oldWidget)`
+  - L448 `Widget build(BuildContext context)`
 
 ## lib/widgets/message_fly_in.dart  (70 Z.)
 - L12 `class MessageFlyIn extends StatefulWidget`  — A one-shot entrance for a just-sent message: the bubble starts a little
@@ -3219,22 +3397,22 @@
   - L266 `Widget _runningRow(BuildContext context)`  — The room is still talking: the chat's own typing pill, in the bubble lane
   - L281 `Widget _stopLine(BuildContext context, AgentsRoomStop stop)`  — Why the exchange ended: one quiet centred line, in the same voice the
 
-## lib/widgets/route_map_widget.dart  (345 Z.)
-- L15 `class RouteMapWidget extends StatefulWidget`  — Displays a route map with OSRM polyline, start/end markers,
-  - L16 `final double fromLat, fromLon, toLat, toLon`
-  - L17 `final double centerLat, centerLon, zoom`
-  - L18 `final String fromLabel, toLabel, distKm, durMin, routeTitle`
-  - L19 `final List<Map<String, dynamic>> steps`
-  - L20 `final double mapHeight`
-  - L21 `final VoidCallback? onTapFullscreen`
-  - L23 `const RouteMapWidget({ super.key, required this.fromLat, required this.fromLon, required this.toLat, required this.toLon, required this.fromLabel, required this.toLabel, required this.distKm, required this.durMin, required this.routeTitle, required this.centerLat, required this.centerLon, required this.zoom, required this.steps, required this.mapHeight, this.onTapFullscreen, })`
-  - L43 `State<RouteMapWidget> createState()`
-- L46 `class _RouteMapWidgetState extends State<RouteMapWidget>`
-  - L47 `List<LatLng>? _routePoints`
-  - L48 `bool _loading = true`
-  - L51 `void initState()`
-  - L56 `Future<void> _fetchRouteGeometry()`
-  - L114 `Widget build(BuildContext context)`
+## lib/widgets/route_map_widget.dart  (340 Z.)
+- L16 `class RouteMapWidget extends StatefulWidget`  — Displays a route map with OSRM polyline, start/end markers,
+  - L17 `final double fromLat, fromLon, toLat, toLon`
+  - L18 `final double centerLat, centerLon, zoom`
+  - L19 `final String fromLabel, toLabel, distKm, durMin, routeTitle`
+  - L20 `final List<Map<String, dynamic>> steps`
+  - L21 `final double mapHeight`
+  - L22 `final VoidCallback? onTapFullscreen`
+  - L24 `const RouteMapWidget({ super.key, required this.fromLat, required this.fromLon, required this.toLat, required this.toLon, required this.fromLabel, required this.toLabel, required this.distKm, required this.durMin, required this.routeTitle, required this.centerLat, required this.centerLon, required this.zoom, required this.steps, required this.mapHeight, this.onTapFullscreen, })`
+  - L44 `State<RouteMapWidget> createState()`
+- L47 `class _RouteMapWidgetState extends State<RouteMapWidget>`
+  - L48 `List<LatLng>? _routePoints`
+  - L49 `bool _loading = true`
+  - L52 `void initState()`
+  - L57 `Future<void> _fetchRouteGeometry()`
+  - L115 `Widget build(BuildContext context)`
 
 ## lib/widgets/sandbox_artifact_block.dart  (765 Z.)
 - L41 `class SandboxArtifactBlock extends StatefulWidget`
@@ -3283,6 +3461,38 @@
   - L747 `final String message`
   - L748 `final Future<void> Function() onSave`
   - L751 `Widget build(BuildContext context)`
+
+## lib/widgets/schedule_picker.dart  (363 Z.)
+- L22 `_modes = <SimpleScheduleMode>[ SimpleScheduleMode.daily, SimpleScheduleMode.weekdays, SimpleScheduleMode.everyHours, Sim`
+- L29 `class SchedulePicker extends StatefulWidget`
+  - L30 `const SchedulePicker({ super.key, required this.controller, required this.customField, this.onChanged, this.errorText, this.now, })`
+  - L41 `final String? errorText`  — The editor's refusal of the schedule (no day picked). The custom field
+  - L44 `final TextEditingController controller`  — Holds the spec. Read once for the start state, written on every change.
+  - L48 `final Widget customField`  — The text field for a custom schedule (the editor's own field, with its
+  - L51 `final VoidCallback? onChanged`  — Called after every change the picker made.
+  - L54 `final DateTime Function()? now`  — "Now" for the next-run line; tests pin it.
+  - L57 `State<SchedulePicker> createState()`
+- L60 `class _SchedulePickerState extends State<SchedulePicker>`
+  - L61 `late SimpleSchedule _value`
+  - L64 `SimpleSchedule _lastPicked = SimpleSchedule.initial`  — The shape the picker had before custom, so a switch back keeps it.
+  - L67 `void initState()`
+  - L77 `void _write(SimpleSchedule next, {bool notify = true})`
+  - L90 `void _selectMode(int index)`
+  - L108 `Future<void> _pickTime()`
+  - L118 `void _toggleDay(int day)`
+  - L124 `void _stepHours(int delta)`
+  - L133 `Widget build(BuildContext context)`
+  - L197 `String? _nextRun(BuildContext context, AppLocalizations l)`  — "Next: Tue, Oct 21, 09:00", from the app's own schedule maths.
+  - L211 `Widget _timeRow(BuildContext context, AppLocalizations l)`
+  - L252 `Widget _dayRow(BuildContext context, AppLocalizations l)`
+  - L286 `Widget _hoursRow(BuildContext context, AppLocalizations l)`
+- L325 `class _DayToggle extends StatelessWidget`  — One weekday: a round toggle, filled with the accent when on.
+  - L326 `const _DayToggle({ super.key, required this.label, required this.selected, required this.scheme, required this.onTap, })`
+  - L334 `final String label`
+  - L335 `final bool selected`
+  - L336 `final ColorScheme scheme`
+  - L337 `final VoidCallback onTap`
+  - L340 `Widget build(BuildContext context)`
 
 ## lib/widgets/searchable_picker.dart  (311 Z.)
 - L24 `class PickerOption<T>`  — One row of a picker.
@@ -3473,133 +3683,241 @@
   - L55 `Offset getPositionForChild(Size size, Size childSize)`
   - L66 `bool shouldRelayout(_TopCentreDelegate oldDelegate)`
 
+## lib/widgets/unread_jump_pill.dart  (209 Z.)
+- L21 `class UnreadJumpPill extends StatefulWidget`
+  - L22 `const UnreadJumpPill({ super.key, required this.controller, required this.targetKey, required this.count, required this.onSeen, this.topInset = 0, this.dense = true, })`
+  - L33 `final ScrollController controller`  — The transcript's scroll controller.
+  - L36 `final GlobalKey targetKey`  — The key on the first unread row.
+  - L39 `final int count`  — How many rows are new.
+  - L42 `final VoidCallback onSeen`  — Called once, when the first unread row was on screen.
+  - L46 `final double topInset`  — Height of the chrome that floats over the top of the list; a row under
+  - L50 `final bool dense`  — The small button size; a pill over the thread is not a thumb target
+  - L53 `State<UnreadJumpPill> createState()`
+- L56 `class _UnreadJumpPillState extends State<UnreadJumpPill>`
+  - L57 `bool _visible = false`
+  - L58 `bool _seen = false`
+  - L59 `bool _jumping = false`
+  - L64 `bool _armed = false`  — The thread settles at its bottom over a few frames after it opens. The
+  - L65 `Timer? _armTimer`
+  - L68 `void initState()`
+  - L79 `void didUpdateWidget(UnreadJumpPill oldWidget)`
+  - L89 `void dispose()`
+  - L95 `bool _checkScheduled = false`
+  - L99 `void _checkAfterFrame()`  — Checks once the next frame is laid out. A scroll notifies before the
+  - L110 `bool _targetOnScreen()`  — Whether the first unread row is (partly) on screen, below the chrome.
+  - L125 `void _check()`
+  - L136 `void _markSeen()`
+  - L143 `Future<void> _jump()`
+  - L178 `Widget build(BuildContext context)`
+
 ## lib/widgets/update_banner.dart  (97 Z.)
 - L10 `class UpdateBanner extends StatelessWidget`  — A compact banner shown in the sidebar when a new app version is available.
   - L11 `const UpdateBanner({super.key})`
   - L14 `Widget build(BuildContext context)`
   - L24 `Widget _buildBanner(BuildContext context, UpdateInfo info)`
 
-## lib/widgets/visual_answer_blocks.dart  (1932 Z.)
+## lib/widgets/visual_answer_blocks.dart  (2202 Z.)
 - part of 'markdown_message.dart'
 - L19 `_kBlockIcons = <String, HugeIconData>{ 'droplet': HugeIcons.droplet, 'water': HugeIcons.droplet, 'tropfen': HugeIcons.dr`  — Icon aliases a model may write in a block (`| droplet`, `| wind`, ...).
-- L184 `HugeIconData? _blockIcon(String name)`
-- L191 `class _ModuleCard extends StatelessWidget`  — The soft module card every visual block sits in.
-  - L192 `const _ModuleCard({required this.s, required this.child, this.padding})`
-  - L194 `final _AnswerBlockStyle s`
-  - L195 `final Widget child`
-  - L196 `final EdgeInsetsGeometry? padding`
-  - L199 `Widget build(BuildContext context)`
-- L213 `class _TagChip extends StatelessWidget`  — The small label chip above a module title (`tag: …`).
-  - L214 `const _TagChip({required this.tag, required this.s})`
-  - L216 `final String tag`
-  - L217 `final _AnswerBlockStyle s`
-  - L220 `Widget build(BuildContext context)`
-- L246 `Widget _moduleHead(String tag, String title, _AnswerBlockStyle s)`  — Title + optional tag, the shared head of a module card.
-- L267 `Future<void> _openBlockUrl(BuildContext context, String url)`  — Opens an https(s) URL from a block, behind the same confirmation the
-- L313 `bool _isPublicImageUrl(String url)`  — Whether a card may load an image from [url] at all. HTTPS only, and hosts
-- L349 `class _BarsBlock extends StatelessWidget`
-  - L350 `const _BarsBlock({required this.spec, required this.s})`
-  - L352 `final BarsSpec spec`
-  - L353 `final _AnswerBlockStyle s`
-  - L356 `Widget build(BuildContext context)`
-  - L391 `Widget _row(BarRow row, double max)`
-  - L464 `Widget _notePill()`
-- L480 `class _KpiBlock extends StatelessWidget`
-  - L481 `const _KpiBlock({required this.spec, required this.s})`
-  - L483 `final KpiSpec spec`
-  - L484 `final _AnswerBlockStyle s`
-  - L487 `Widget build(BuildContext context)`
-  - L523 `Widget _tile(KpiTile tile)`
-- L578 `class _TilesBlock extends StatelessWidget`
-  - L579 `const _TilesBlock({required this.spec, required this.s})`
-  - L581 `final TilesSpec spec`
-  - L582 `final _AnswerBlockStyle s`
-  - L585 `Widget build(BuildContext context)`
-  - L620 `Widget _tile(IconTile tile)`
-- L676 `class _CardsBlock extends StatefulWidget`
-  - L677 `const _CardsBlock({required this.spec, required this.s})`
-  - L679 `final CardsSpec spec`
-  - L680 `final _AnswerBlockStyle s`
-  - L683 `State<_CardsBlock> createState()`
-- L686 `class _CardsBlockState extends State<_CardsBlock>`
-  - L687 `PageController? _controller`
-  - L688 `double _controllerWidth = 0`
-  - L689 `int _page = 0`
-  - L692 `void dispose()`
-  - L698 `Widget build(BuildContext context)`
-  - L764 `double _carouselHeight(List<AnswerCard> cards, double innerWidth, TextScaler scaler)`  — Every part of a card is ellipsised to a fixed line count, so the height
-  - L811 `TextStyle _styleFor(double size, FontWeight weight, double height)`
-  - L818 `int _lineCount( String text, TextStyle style, double maxWidth, TextScaler scaler, { required int cap, })`
-  - L837 `int _chipRowCount(List<String> chips, double innerWidth, TextScaler scaler)`
-  - L862 `Widget _card(AnswerCard card, double innerWidth)`
-  - L955 `Widget _cardImage(AnswerCard card, double innerWidth)`
-  - L1003 `Widget _cardChip(String label, double innerWidth)`
-  - L1022 `Widget _cardButton(AnswerCard card)`
-  - L1047 `Widget _indicator(int count)`
-- L1115 `class _CardImage extends StatefulWidget`  — Width of one rendered text line, for the carousel's height estimate.
-  - L1116 `const _CardImage({ required this.url, required this.fillColor, required this.iconColor, })`
-  - L1122 `final String url`
-  - L1123 `final Color fillColor`
-  - L1124 `final Color iconColor`
-  - L1127 `State<_CardImage> createState()`
-- L1130 `class _CardImageState extends State<_CardImage>`
-  - L1131 `static final LruByteCache _cache = LruByteCache( maxSizeBytes: 20 * 1024 * 1024, )`
-  - L1135 `static const int _maxBytes = 8 * 1024 * 1024`
-  - L1137 `Uint8List? _bytes`
-  - L1138 `bool _failed = false`
-  - L1142 `static const _ImageTooLarge _imageTooLarge = _ImageTooLarge()`  — Thrown when the streamed body runs past [_maxBytes]; the catch in
-  - L1144 `void initState()`
-  - L1150 `void didUpdateWidget(covariant _CardImage oldWidget)`
-  - L1159 `Future<void> _load()`
-  - L1215 `bool _looksLikeImage(Uint8List bytes, String? contentType)`  — Image bodies only: the declared type wins; else the magic bytes of the
-  - L1254 `Widget build(BuildContext context)`
-  - L1269 `Widget _placeholder()`
-- L1281 `class _ImageTooLarge implements Exception`  — Thrown when a card image body runs past the size cap mid-stream.
-  - L1282 `const _ImageTooLarge()`
-- L1288 `class _AskBlock extends StatelessWidget`
-  - L1289 `const _AskBlock({ required this.spec, required this.s, required this.onFollowUp, })`
-  - L1295 `final AskSpec spec`
-  - L1296 `final _AnswerBlockStyle s`
-  - L1297 `final ValueChanged<String>? onFollowUp`
-  - L1300 `Widget build(BuildContext context)`
-  - L1321 `Widget _chip(String label)`
-- L1358 `class _SourceBlock extends StatelessWidget`
-  - L1359 `const _SourceBlock({required this.spec, required this.s})`
-  - L1361 `final SourceSpec spec`
-  - L1362 `final _AnswerBlockStyle s`
-  - L1365 `Widget build(BuildContext context)`
-  - L1379 `Widget _row(BuildContext context, SourceRow row)`
-- L1469 `_kStatusWideMin = 560`  — Below this width a row stacks (amount next to the name, chip and action
-- L1471 `class _StatusColors`
-  - L1472 `const _StatusColors(this.fg, this.fill)`
-  - L1473 `final Color fg`
-  - L1474 `final Color fill`
-- L1477 `_StatusColors _statusColors(StatusKind kind, _AnswerBlockStyle s)`
-- L1493 `HugeIconData _statusIcon(StatusKind kind)`
-- L1508 `String _plainInline(String text)`
-- L1511 `class _StatusBlock extends StatefulWidget`
-  - L1512 `const _StatusBlock({required this.spec, required this.s})`
-  - L1514 `final StatusSpec spec`
-  - L1515 `final _AnswerBlockStyle s`
-  - L1518 `State<_StatusBlock> createState()`
-- L1521 `class _StatusBlockState extends State<_StatusBlock>`
-  - L1522 `bool _expanded = false`
-  - L1524 `_AnswerBlockStyle get s`
-  - L1526 `TextStyle _style( double scale, { FontWeight weight = FontWeight.w400, Color? color, })`
-  - L1541 `StatusKind get _worst`  — The most urgent kind in the list sets the header icon.
-  - L1555 `Widget build(BuildContext context)`
-  - L1597 `Widget _hairline()`
-  - L1599 `Widget _iconTile(HugeIconData icon, Color fg, Color fill, double size)`
-  - L1614 `Widget _header()`
-  - L1650 `Widget _logo(StatusItem item)`
-  - L1664 `Widget _chip(StatusItem item)`
-  - L1692 `Widget _action(BuildContext context, StatusItem item)`
-  - L1733 `Widget _name(StatusItem item)`
-  - L1740 `Widget _date(StatusItem item)`
-  - L1747 `Widget _amount(StatusItem item, double scale)`
-  - L1755 `Widget? _detail(StatusItem item)`
-  - L1767 `Widget _row(BuildContext context, StatusItem item, bool wide)`
-  - L1886 `Widget _footer()`
+- L210 `HugeIconData? _blockIcon(String name)`
+- L217 `class _ModuleCard extends StatelessWidget`  — The soft module card every visual block sits in.
+  - L218 `const _ModuleCard({required this.s, required this.child, this.padding})`
+  - L220 `final _AnswerBlockStyle s`
+  - L221 `final Widget child`
+  - L222 `final EdgeInsetsGeometry? padding`
+  - L225 `Widget build(BuildContext context)`
+- L239 `class _TagChip extends StatelessWidget`  — The small label chip above a module title (`tag: …`).
+  - L240 `const _TagChip({required this.tag, required this.s})`
+  - L242 `final String tag`
+  - L243 `final _AnswerBlockStyle s`
+  - L246 `Widget build(BuildContext context)`
+- L272 `Widget _moduleHead(String tag, String title, _AnswerBlockStyle s)`  — Title + optional tag, the shared head of a module card.
+- L293 `Future<void> _openBlockUrl(BuildContext context, String url)`  — Opens an https(s) URL from a block, behind the same confirmation the
+- L339 `bool _isPublicImageUrl(String url)`  — Whether a card may load an image from [url] at all. HTTPS only, and hosts
+- L375 `class _BarsBlock extends StatelessWidget`
+  - L376 `const _BarsBlock({required this.spec, required this.s})`
+  - L378 `final BarsSpec spec`
+  - L379 `final _AnswerBlockStyle s`
+  - L382 `Widget build(BuildContext context)`
+  - L417 `Widget _row(BarRow row, double max)`
+  - L490 `Widget _notePill()`
+- L506 `class _KpiBlock extends StatelessWidget`
+  - L507 `const _KpiBlock({required this.spec, required this.s})`
+  - L509 `final KpiSpec spec`
+  - L510 `final _AnswerBlockStyle s`
+  - L513 `Widget build(BuildContext context)`
+  - L549 `Widget _tile(KpiTile tile)`
+- L604 `class _TilesBlock extends StatelessWidget`
+  - L605 `const _TilesBlock({required this.spec, required this.s})`
+  - L607 `final TilesSpec spec`
+  - L608 `final _AnswerBlockStyle s`
+  - L612 `static const double _minGridCell = 96`  — A grid cell narrower than this cannot hold a label beside nothing but
+  - L615 `static const int _maxGridLabel = 18`  — Labels longer than this are not tile labels but sentences.
+  - L618 `Widget build(BuildContext context)`
+  - L681 `Widget _iconChip(HugeIconData icon, double size)`
+  - L696 `TextStyle get _labelStyle`
+  - L704 `TextStyle get _subStyle`
+  - L712 `Widget _row(_TileView tile)`  — One tile as a list row: icon chip, then label over subline.
+  - L742 `Widget _cell(_TileView tile)`  — One tile as a grid cell: icon chip over a short centred label.
+- L766 `class _TileView`  — A tile as it is drawn. The model sometimes writes the subline where the
+  - L767 `const _TileView(this.label, this.icon, this.sub)`
+  - L769 `factory _TileView.from(IconTile t)`
+  - L788 `final String label`
+  - L789 `final HugeIconData? icon`
+  - L790 `final String sub`
+- L796 `class _CardsBlock extends StatefulWidget`
+  - L797 `const _CardsBlock({required this.spec, required this.s, this.onFollowUp})`
+  - L799 `final CardsSpec spec`
+  - L800 `final _AnswerBlockStyle s`
+  - L803 `final ValueChanged<String>? onFollowUp`  — Sends a card's `ask:` button as the reader's next message.
+  - L806 `State<_CardsBlock> createState()`
+- L809 `class _CardsBlockState extends State<_CardsBlock>`
+  - L810 `PageController? _controller`
+  - L811 `double _controllerWidth = 0`
+  - L812 `int _page = 0`
+  - L815 `void dispose()`
+  - L821 `Widget build(BuildContext context)`
+  - L891 `double _carouselHeight(List<AnswerCard> cards, double innerWidth, TextScaler scaler)`  — Every part of a card is ellipsised to a fixed line count, so the height
+  - L955 `String? _inheritedFamily`  — The family a card's text really renders in. With no prose family the
+  - L957 `TextStyle _styleFor(double size, FontWeight weight, double height)`
+  - L964 `int _lineCount( String text, TextStyle style, double maxWidth, TextScaler scaler, { required int cap, })`
+  - L983 `int _chipRowCount(List<String> chips, double innerWidth, TextScaler scaler)`
+  - L1008 `Widget _card(AnswerCard card, double innerWidth)`
+  - L1123 `Widget _line( String text, HugeIconData? icon, double fontSize, double height, Color color, )`  — One fact line, with an optional leading icon one line high.
+  - L1153 `Widget _price(String price)`  — `248 CHF / Nacht` → the amount big, the unit after it small and muted.
+  - L1189 `Widget _cardSpec(CardSpecItem spec)`
+  - L1226 `Widget _cardImage(AnswerCard card, double innerWidth)`
+  - L1275 `Widget _cardChip(String label, double innerWidth)`
+  - L1294 `Widget _cardButton(AnswerCard card)`
+  - L1306 `Widget _askButton(AnswerCard card)`  — The tonal second button ("Vergleichen"): sends `ask: title` as the
+  - L1317 `Widget _pillButton({ required String label, required Color fill, required Color fg, required VoidCallback? onTap, })`
+  - L1352 `Widget _indicator(int count)`
+- L1429 `class _CardImage extends StatefulWidget`  — Width of one rendered text line, for the carousel's height estimate.
+  - L1430 `const _CardImage({ required this.url, required this.fillColor, required this.iconColor, })`
+  - L1436 `final String url`
+  - L1437 `final Color fillColor`
+  - L1438 `final Color iconColor`
+  - L1441 `State<_CardImage> createState()`
+- L1444 `class _CardImageState extends State<_CardImage>`
+  - L1445 `static final LruByteCache _cache = LruByteCache( maxSizeBytes: 20 * 1024 * 1024, )`
+  - L1449 `static const int _maxBytes = 8 * 1024 * 1024`
+  - L1451 `Uint8List? _bytes`
+  - L1452 `bool _failed = false`
+  - L1456 `static const _ImageTooLarge _imageTooLarge = _ImageTooLarge()`  — Thrown when the streamed body runs past [_maxBytes]; the catch in
+  - L1458 `void initState()`
+  - L1464 `void didUpdateWidget(covariant _CardImage oldWidget)`
+  - L1473 `Future<void> _load()`
+  - L1529 `bool _looksLikeImage(Uint8List bytes, String? contentType)`  — Image bodies only: the declared type wins; else the magic bytes of the
+  - L1568 `Widget build(BuildContext context)`
+  - L1583 `Widget _placeholder()`
+- L1595 `class _ImageTooLarge implements Exception`  — Thrown when a card image body runs past the size cap mid-stream.
+  - L1596 `const _ImageTooLarge()`
+- L1602 `class _AskBlock extends StatelessWidget`
+  - L1603 `const _AskBlock({ required this.spec, required this.s, required this.onFollowUp, })`
+  - L1609 `final AskSpec spec`
+  - L1610 `final _AnswerBlockStyle s`
+  - L1611 `final ValueChanged<String>? onFollowUp`
+  - L1614 `Widget build(BuildContext context)`
+  - L1643 `Widget _button(String label)`  — A filled, full-width action ("Aktuelle Werte abrufen").
+  - L1677 `Widget _chip(String label, HugeIconData? icon)`
+- L1737 `_kStatusWideMin = 560`  — Below this width a row stacks (amount next to the name, chip and action
+- L1739 `class _StatusColors`
+  - L1740 `const _StatusColors(this.fg, this.fill)`
+  - L1741 `final Color fg`
+  - L1742 `final Color fill`
+- L1745 `_StatusColors _statusColors(StatusKind kind, _AnswerBlockStyle s)`
+- L1761 `HugeIconData _statusIcon(StatusKind kind)`
+- L1776 `String _plainInline(String text)`
+- L1779 `class _StatusBlock extends StatefulWidget`
+  - L1780 `const _StatusBlock({required this.spec, required this.s})`
+  - L1782 `final StatusSpec spec`
+  - L1783 `final _AnswerBlockStyle s`
+  - L1786 `State<_StatusBlock> createState()`
+- L1789 `class _StatusBlockState extends State<_StatusBlock>`
+  - L1790 `bool _expanded = false`
+  - L1792 `_AnswerBlockStyle get s`
+  - L1794 `TextStyle _style( double scale, { FontWeight weight = FontWeight.w400, Color? color, })`
+  - L1809 `StatusKind get _worst`  — The most urgent kind in the list sets the header icon.
+  - L1823 `Widget build(BuildContext context)`
+  - L1865 `Widget _hairline()`
+  - L1867 `Widget _iconTile(HugeIconData icon, Color fg, Color fill, double size)`
+  - L1882 `Widget _header()`
+  - L1918 `Widget _logo(StatusItem item)`
+  - L1932 `Widget _chip(StatusItem item)`
+  - L1960 `Widget _action(BuildContext context, StatusItem item)`
+  - L2001 `Widget _name(StatusItem item)`
+  - L2008 `Widget _date(StatusItem item)`
+  - L2015 `Widget _amount(StatusItem item, double scale)`
+  - L2023 `Widget? _detail(StatusItem item)`
+  - L2035 `Widget _row(BuildContext context, StatusItem item, bool wide)`
+  - L2156 `Widget _footer()`
+
+## lib/widgets/visual_answer_blocks_more.dart  (869 Z.)
+- part of 'markdown_message.dart'
+- L16 `class _CheckBlock extends StatefulWidget`
+  - L17 `const _CheckBlock({required this.spec, required this.s})`
+  - L19 `final CheckSpec spec`
+  - L20 `final _AnswerBlockStyle s`
+  - L23 `State<_CheckBlock> createState()`
+- L26 `class _CheckBlockState extends State<_CheckBlock>`
+  - L29 `final Map<int, bool> _override = <int, bool>{}`  — Ticks the reader set or cleared, by index. Local only: the list is a
+  - L32 `void didUpdateWidget(covariant _CheckBlock oldWidget)`
+  - L47 `Widget build(BuildContext context)`
+  - L71 `Widget _row(int i, CheckItem item)`
+- L118 `class _CheckBox extends StatelessWidget`
+  - L119 `const _CheckBox({required this.done, required this.s})`
+  - L121 `final bool done`
+  - L122 `final _AnswerBlockStyle s`
+  - L125 `Widget build(BuildContext context)`
+- L154 `class _TermBlock extends StatelessWidget`
+  - L155 `const _TermBlock({required this.spec, required this.s})`
+  - L157 `final TermSpec spec`
+  - L158 `final _AnswerBlockStyle s`
+  - L161 `Widget build(BuildContext context)`
+  - L200 `Widget _entry(TermEntry e, {required bool first})`
+- L236 `class _GridBlock extends StatelessWidget`
+  - L237 `const _GridBlock({required this.spec, required this.s})`
+  - L239 `final GridSpec spec`
+  - L240 `final _AnswerBlockStyle s`
+  - L243 `Widget build(BuildContext context)`
+  - L315 `Widget _cell(GridCell cell, double size)`
+  - L355 `Widget _swatch(GridCellKind kind)`
+- L392 `class _DashedRRectPainter extends CustomPainter`  — A dashed rounded-rectangle outline, the "marked" state of a grid cell.
+  - L393 `_DashedRRectPainter({ required this.color, required this.radius, this.dash = 4, this.gap = 3, this.stroke = 1.6, })`
+  - L401 `final Color color`
+  - L402 `final double radius`
+  - L403 `final double dash`
+  - L404 `final double gap`
+  - L405 `final double stroke`
+  - L408 `void paint(Canvas canvas, Size size)`
+  - L426 `bool shouldRepaint(covariant _DashedRRectPainter old)`
+- L437 `class _SizesBlock extends StatelessWidget`
+  - L438 `const _SizesBlock({required this.spec, required this.s})`
+  - L440 `final SizesSpec spec`
+  - L441 `final _AnswerBlockStyle s`
+  - L444 `Widget build(BuildContext context)`
+  - L496 `Widget _item(SizeItem item, double d)`
+- L558 `class _QuoteBlock extends StatelessWidget`
+  - L559 `const _QuoteBlock({required this.spec, required this.s})`
+  - L561 `final QuoteSpec spec`
+  - L562 `final _AnswerBlockStyle s`
+  - L564 `Color get _up`
+  - L567 `Widget build(BuildContext context)`
+- L712 `class _SparklinePainter extends CustomPainter`
+  - L713 `_SparklinePainter({ required this.points, required this.line, required this.grid, })`
+  - L719 `final List<double> points`
+  - L720 `final Color line`
+  - L721 `final Color grid`
+  - L724 `void paint(Canvas canvas, Size size)`
+  - L762 `bool shouldRepaint(covariant _SparklinePainter old)`
+- L769 `class _MoreBlock extends StatefulWidget`
+  - L770 `const _MoreBlock({required this.spec, required this.s})`
+  - L772 `final MoreSpec spec`
+  - L773 `final _AnswerBlockStyle s`
+  - L776 `State<_MoreBlock> createState()`
+- L779 `class _MoreBlockState extends State<_MoreBlock>`
+  - L780 `bool _open = false`
+  - L783 `Widget build(BuildContext context)`
 
 ## lib/widgets/vnc_local_server.dart  (353 Z.)
 - L10 `typedef VncAssetReader = Future<Uint8List> Function(String assetKey)`  — Reads one app asset. Injected so the server can be tested without a bundle.
@@ -3928,62 +4246,62 @@
   - L430 `IconData _iconForCode(int code)`  — Map WMO weather code -> Material icon.
   - L446 `LinearGradient _gradientForCode(int code, Brightness brightness)`  — Gradient background keyed on WMO code & light/dark mode.
 
-## lib/widgets/workspace_file_viewer.dart  (666 Z.)
-- L16 `class WorkspaceFileViewer extends StatefulWidget`  — Dialog to view and edit workspace files and their markdown summaries
-  - L17 `final WorkspaceFile file`
-  - L18 `final String workspaceId`
-  - L20 `const WorkspaceFileViewer({ super.key, required this.file, required this.workspaceId, })`
-  - L26 `static Future<void> show( BuildContext context, WorkspaceFile file, String workspaceId, )`
-  - L38 `State<WorkspaceFileViewer> createState()`
-- L41 `class _WorkspaceFileViewerState extends State<WorkspaceFileViewer> with SingleTickerProviderStateMixin`
-  - L43 `late TabController _tabController`
-  - L45 `bool _isLoading = true`
-  - L46 `String? _error`
-  - L49 `String? _textContent`
-  - L50 `Uint8List? _imageBytes`
-  - L51 `PdfControllerPinch? _pdfController`
-  - L52 `bool _pdfNotSupported = false`
-  - L55 `String? _markdownSummary`
-  - L58 `bool _isEditingContent = false`
-  - L59 `bool _isEditingMarkdown = false`
-  - L60 `final TextEditingController _contentController = TextEditingController()`
-  - L61 `final TextEditingController _markdownController = TextEditingController()`
-  - L63 `bool _isSaving = false`
-  - L66 `void initState()`
-  - L75 `void dispose()`
-  - L83 `Future<void> _loadFileContent()`
-  - L129 `Future<void> _saveContent()`
-  - L159 `Future<void> _saveMarkdown()`
-  - L189 `Widget build(BuildContext context)`
-  - L301 `Widget _buildOriginalContent(Color iconFg, Color accentColor)`
-  - L525 `Widget _buildMarkdownContent(Color iconFg, Color accentColor)`
+## lib/widgets/workspace_file_viewer.dart  (670 Z.)
+- L17 `class WorkspaceFileViewer extends StatefulWidget`  — Dialog to view and edit workspace files and their markdown summaries
+  - L18 `final WorkspaceFile file`
+  - L19 `final String workspaceId`
+  - L21 `const WorkspaceFileViewer({ super.key, required this.file, required this.workspaceId, })`
+  - L27 `static Future<void> show( BuildContext context, WorkspaceFile file, String workspaceId, )`
+  - L39 `State<WorkspaceFileViewer> createState()`
+- L42 `class _WorkspaceFileViewerState extends State<WorkspaceFileViewer> with SingleTickerProviderStateMixin`
+  - L44 `late TabController _tabController`
+  - L46 `bool _isLoading = true`
+  - L47 `String? _error`
+  - L50 `String? _textContent`
+  - L51 `Uint8List? _imageBytes`
+  - L52 `PdfControllerPinch? _pdfController`
+  - L53 `bool _pdfNotSupported = false`
+  - L56 `String? _markdownSummary`
+  - L59 `bool _isEditingContent = false`
+  - L60 `bool _isEditingMarkdown = false`
+  - L61 `final TextEditingController _contentController = TextEditingController()`
+  - L62 `final TextEditingController _markdownController = TextEditingController()`
+  - L64 `bool _isSaving = false`
+  - L67 `void initState()`
+  - L76 `void dispose()`
+  - L84 `Future<void> _loadFileContent()`
+  - L130 `Future<void> _saveContent()`
+  - L160 `Future<void> _saveMarkdown()`
+  - L190 `Widget build(BuildContext context)`
+  - L305 `Widget _buildOriginalContent(Color iconFg, Color accentColor)`
+  - L529 `Widget _buildMarkdownContent(Color iconFg, Color accentColor)`
 
-## lib/widgets/workspace_panel.dart  (706 Z.)
-- L19 `class WorkspacePanel extends StatefulWidget`  — Right-side panel for workspace settings (Instructions + Files)
-  - L20 `final String workspaceId`
-  - L21 `final VoidCallback? onClose`
-  - L23 `const WorkspacePanel({super.key, required this.workspaceId, this.onClose})`
-  - L26 `State<WorkspacePanel> createState()`
-- L29 `class _WorkspacePanelState extends State<WorkspacePanel> with WorkspaceActionsMixin<WorkspacePanel>`
-  - L31 `Workspace? _project`
-  - L32 `bool _isInstructionsExpanded = false`
-  - L33 `bool _isFilesExpanded = true`
-  - L34 `bool _isEditingInstructions = false`
-  - L35 `final TextEditingController _instructionsController = TextEditingController()`
-  - L38 `Future<Uint8List>? _avatarImageFuture`
-  - L39 `bool _isUploadingAvatar = false`
-  - L42 `String get workspaceId`
-  - L45 `void initState()`
-  - L52 `void dispose()`
-  - L58 `Future<void> _pickAvatarImage()`
-  - L80 `void _loadProject()`
-  - L97 `Future<void> _saveInstructions()`
-  - L104 `Widget build(BuildContext context)`
-  - L320 `Widget _buildSection({ required String title, required String subtitle, required bool isExpanded, required VoidCallback onToggle, required VoidCallback? onAdd, required bool hasContent, required Widget child, required Color accentColor, String? badge, })`
-  - L430 `Widget _buildInstructionsContent()`
-  - L500 `Widget _buildFilesContent()`
-  - L636 `void _openFileViewer(WorkspaceFile file)`
-  - L640 `Widget _buildFileItem(WorkspaceFile file, bool isDark)`
+## lib/widgets/workspace_panel.dart  (707 Z.)
+- L20 `class WorkspacePanel extends StatefulWidget`  — Right-side panel for workspace settings (Instructions + Files)
+  - L21 `final String workspaceId`
+  - L22 `final VoidCallback? onClose`
+  - L24 `const WorkspacePanel({super.key, required this.workspaceId, this.onClose})`
+  - L27 `State<WorkspacePanel> createState()`
+- L30 `class _WorkspacePanelState extends State<WorkspacePanel> with WorkspaceActionsMixin<WorkspacePanel>`
+  - L32 `Workspace? _project`
+  - L33 `bool _isInstructionsExpanded = false`
+  - L34 `bool _isFilesExpanded = true`
+  - L35 `bool _isEditingInstructions = false`
+  - L36 `final TextEditingController _instructionsController = TextEditingController()`
+  - L39 `Future<Uint8List>? _avatarImageFuture`
+  - L40 `bool _isUploadingAvatar = false`
+  - L43 `String get workspaceId`
+  - L46 `void initState()`
+  - L53 `void dispose()`
+  - L59 `Future<void> _pickAvatarImage()`
+  - L81 `void _loadProject()`
+  - L98 `Future<void> _saveInstructions()`
+  - L105 `Widget build(BuildContext context)`
+  - L321 `Widget _buildSection({ required String title, required String subtitle, required bool isExpanded, required VoidCallback onToggle, required VoidCallback? onAdd, required bool hasContent, required Widget child, required Color accentColor, String? badge, })`
+  - L431 `Widget _buildInstructionsContent()`
+  - L501 `Widget _buildFilesContent()`
+  - L637 `void _openFileViewer(WorkspaceFile file)`
+  - L641 `Widget _buildFileItem(WorkspaceFile file, bool isDark)`
 
 ## lib/widgets/workspace_selection_dropdown.dart  (283 Z.)
 - L11 `class WorkspaceSelectionDropdown extends StatefulWidget`

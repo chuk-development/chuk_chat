@@ -3,7 +3,7 @@
 ## test/utils/accent_button_foreground_test.dart  (46 Z.)
 - L6 `void main()`
 
-## test/utils/answer_blocks_parser_test.dart  (507 Z.)
+## test/utils/answer_blocks_parser_test.dart  (762 Z.)
 - L7 `AnswerBlockSegment _onlyBlock(List<AnswerSegment> segs)`
 - L10 `void main()`
 
@@ -44,6 +44,9 @@
 - L6 `Uint8List _bytes(int size)`  — Helper: create a Uint8List of [size] bytes.
 - L8 `void main()`
 
+## test/utils/map_features_test.dart  (285 Z.)
+- L6 `void main()`
+
 ## test/utils/non_public_ip_test.dart  (96 Z.)
 - L9 `List<int> _v4(String a, String b, String c, String d)`
 - L16 `List<int> _v6(List<int> bytes)`
@@ -82,3 +85,7 @@
 
 ## test/utils/upload_rate_limiter_test.dart  (135 Z.)
 - L4 `void main()`
+
+## test/utils/word_diff_test.dart  (99 Z.)
+- L5 `String _side(List<WordDiffSegment> s, WordDiffOp skip)`
+- L10 `void main()`

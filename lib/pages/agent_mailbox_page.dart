@@ -92,6 +92,11 @@ class _AgentMailboxPageState extends State<AgentMailboxPage> {
   int _filter = 0;
   bool _loadingList = false;
   List<MailSummary> _messages = const <MailSummary>[];
+
+  /// The plus aliases seen on any list loaded on this page (received at or
+  /// sent from), shown as pills under the address. Any alias works without
+  /// set-up, so these are only the ones in use.
+  final Set<String> _aliases = <String>{};
   String? _nextBefore;
   Object? _listError;
 
@@ -167,6 +172,7 @@ class _AgentMailboxPageState extends State<AgentMailboxPage> {
         _messages = page.messages;
         _nextBefore = page.nextBefore;
         _loadingList = false;
+        _noteAliases(page.messages);
       });
     } catch (error) {
       if (!mounted || generation != _listGeneration) return;
@@ -199,6 +205,7 @@ class _AgentMailboxPageState extends State<AgentMailboxPage> {
         if (generation != _listGeneration) return;
         _messages = <MailSummary>[..._messages, ...page.messages];
         _nextBefore = page.nextBefore;
+        _noteAliases(page.messages);
       });
     } catch (error) {
       if (!mounted) return;
@@ -250,6 +257,13 @@ class _AgentMailboxPageState extends State<AgentMailboxPage> {
         context,
         agentMailErrorText(AppLocalizations.of(context)!, error),
       );
+    }
+  }
+
+  void _noteAliases(List<MailSummary> messages) {
+    for (final MailSummary mail in messages) {
+      final String? alias = mail.alias;
+      if (alias != null) _aliases.add(alias);
     }
   }
 
@@ -362,7 +376,8 @@ class _AgentMailboxPageState extends State<AgentMailboxPage> {
     return <Widget>[
       _AddressTile(
         address: mailbox.address,
-        onCopy: () => _copyAddress(mailbox.address),
+        aliases: (_aliases.toList()..sort()),
+        onCopy: _copyAddress,
       ),
       // §1: what the storage does and does not protect.
       const SizedBox(height: 12),
@@ -569,10 +584,17 @@ class _AgentMailboxPageState extends State<AgentMailboxPage> {
 /// The agent's address on a line of its own, so it is never cut: at a narrow
 /// width and a large text size it scales down instead.
 class _AddressTile extends StatelessWidget {
-  const _AddressTile({required this.address, required this.onCopy});
+  const _AddressTile({
+    required this.address,
+    required this.onCopy,
+    this.aliases = const <String>[],
+  });
 
   final String address;
-  final VoidCallback onCopy;
+
+  /// Plus aliases in use, as small pills; a tap copies that address.
+  final List<String> aliases;
+  final ValueChanged<String> onCopy;
 
   @override
   Widget build(BuildContext context) {
@@ -600,7 +622,7 @@ class _AddressTile extends StatelessWidget {
                   ExpressiveIconButton(
                     hugeIcon: HugeIcons.copy01,
                     tooltip: l.agentMailCopyAddress,
-                    onTap: onCopy,
+                    onTap: () => onCopy(address),
                   ),
                 ],
               ),
@@ -618,10 +640,64 @@ class _AddressTile extends StatelessWidget {
                   ),
                 ),
               ),
+              if (aliases.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 10),
+                Text(
+                  l.agentMailAliasesHint,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.m3.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: <Widget>[
+                    for (final String alias in aliases)
+                      _AliasPill(
+                        alias: alias,
+                        onTap: () => onCopy(mailAliasAddress(address, alias)),
+                      ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
       ],
+    );
+  }
+}
+
+/// One plus alias as a small pill in theme colours (no shadow). A tap copies
+/// `local+alias@domain`.
+class _AliasPill extends StatelessWidget {
+  const _AliasPill({required this.alias, required this.onTap});
+
+  final String alias;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    return Semantics(
+      button: true,
+      label: '+$alias',
+      excludeSemantics: true,
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          key: ValueKey<String>('agent-mail-alias-$alias'),
+          customBorder: const StadiumBorder(),
+          onTap: onTap,
+          child: MailTag(
+            '+$alias',
+            icon: Icons.alternate_email,
+            background: theme.colorScheme.secondaryContainer,
+            foreground: theme.colorScheme.onSecondaryContainer,
+          ),
+        ),
+      ),
     );
   }
 }

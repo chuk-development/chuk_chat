@@ -152,7 +152,7 @@
   - L131 `final ToolCall? toolCall`
   - L133 `bool get isReasoning`
 
-## lib/widgets/message_bubble/rich_blocks.dart  (661 Z.)
+## lib/widgets/message_bubble/rich_blocks.dart  (548 Z.)
 - part of '../message_bubble.dart'
 - L13 `extension _MessageBubbleRichBlocks on _MessageBubbleState`
   - L14 `bool _hasVisualBlocks(String content)`
@@ -161,15 +161,14 @@
   - L112 `dynamic _tryParseJson(String raw)`  — Lenient JSON for a block a model wrote.
   - L127 `Widget _buildVisualContent({ required String content, required Color textColor, required Color bgColor, bool openUi = true, })`  — Renders interleaved markdown + rich `<chart>` / `<map>` / `<email>`
   - L272 `Widget _buildDiffBlock(Map<String, dynamic> data)`
-  - L283 `Widget _buildEmailBlock(Map<String, dynamic> data)`  — Renders an `<email>` block as a card with subject, recipients, body
-  - L389 `Widget _emailField(String label, String value, ColorScheme colorScheme)`
-  - L417 `Future<void> _openMailto( String to, String subject, String body, String? cc, String? bcc, )`
-  - L450 `Widget _buildNewsBlock(Map<String, dynamic> data)`  — Renders a `<news>` block as a list of news cards (thumbnail, title,
-  - L486 `Widget _buildImageBlock(Map<String, dynamic> data)`  — Renders an `<image>` block as a display-only image card.
-  - L614 `Widget _buildBlockText(String text, Color textColor, Color bgColor)`  — Renders a text content block as a MarkdownMessage.
-  - L638 `List<Widget> _buildTextParagraphs({ required String text, required Color textColor, required Color bgColor, })`
+  - L284 `Widget _buildEmailBlock(Map<String, dynamic> data)`  — Renders an `<email>` block as the mail draft card ([EmailDraftCard]):
+  - L304 `Future<void> _openMailto( String to, String subject, String body, String? cc, String? bcc, )`
+  - L337 `Widget _buildNewsBlock(Map<String, dynamic> data)`  — Renders a `<news>` block as a list of news cards (thumbnail, title,
+  - L373 `Widget _buildImageBlock(Map<String, dynamic> data)`  — Renders an `<image>` block as a display-only image card.
+  - L501 `Widget _buildBlockText(String text, Color textColor, Color bgColor)`  — Renders a text content block as a MarkdownMessage.
+  - L525 `List<Widget> _buildTextParagraphs({ required String text, required Color textColor, required Color bgColor, })`
 
-## lib/widgets/message_bubble/tools.dart  (969 Z.)
+## lib/widgets/message_bubble/tools.dart  (978 Z.)
 - part of '../message_bubble.dart'
 - L11 `extension _MessageBubbleTools on _MessageBubbleState`
   - L15 `Widget _buildBlockReasoning( String text, Color accentColor, { bool live = false, bool carriesTurnStatus = false, })`  — Renders a reasoning content block as an expandable card. Renders
@@ -194,10 +193,10 @@
   - L727 `List<Widget> _buildToolResultSections(ToolCall toolCall, String result)`
   - L818 `ToolCall? _findAskUserToolCall()`  — Find the last completed ask_user tool call across all tool call sources.
   - L852 `List<Widget> _buildAskUserOptions()`  — Build ask_user interactive option buttons if applicable. Returns
-  - L895 `ToolCall? _findRequestMcpToolCall()`  — Find the last completed request_mcp_server tool call across all sources.
-  - L930 `List<Widget> _buildMcpConnectOptions()`  — Build the inline MCP Connect card if the last turn asked for a server.
+  - L904 `ToolCall? _findRequestMcpToolCall()`  — Find the last completed request_mcp_server tool call across all sources.
+  - L939 `List<Widget> _buildMcpConnectOptions()`  — Build the inline MCP Connect card if the last turn asked for a server.
 
-## lib/widgets/message_bubble/voice_message_bubble.dart  (278 Z.)
+## lib/widgets/message_bubble/voice_message_bubble.dart  (279 Z.)
 - L21 `kVoiceBubbleHeaderKey = ValueKey<String>( 'voice-bubble-header', )`  — Key of the tappable header row (tests and the tour find it by this).
 - L26 `kVoiceBubbleTranscriptKey = ValueKey<String>( 'voice-bubble-transcript', )`  — Key of the transcript while it is open.
 - L30 `_kBarWidth = 3`
@@ -223,14 +222,14 @@
   - L84 `void didUpdateWidget(covariant VoiceMessageBubble oldWidget)`
   - L89 `void _toggle()`
   - L95 `Widget build(BuildContext context)`
-- L194 `class _StaticWaveform extends StatelessWidget`  — The static waveform: as many bars as fit, from the seeded heights.
-  - L195 `const _StaticWaveform({required this.bars, required this.color})`
-  - L197 `final List<double> bars`
-  - L198 `final Color color`
-  - L201 `Widget build(BuildContext context)`
-- L234 `String formatVoiceDuration(Duration duration)`  — `m:ss`, or `h:mm:ss` from one hour on.
-- L246 `kVoiceBubbleBarCount = 22`  — Number of bars the waveform is seeded with (more than ever fit).
-- L251 `List<double> voiceBubbleBars(String text, {int count = kVoiceBubbleBarCount})`  — Bar heights (0.25..1) for [text]: the same text always gives the same
+- L195 `class _StaticWaveform extends StatelessWidget`  — The static waveform: as many bars as fit, from the seeded heights.
+  - L196 `const _StaticWaveform({required this.bars, required this.color})`
+  - L198 `final List<double> bars`
+  - L199 `final Color color`
+  - L202 `Widget build(BuildContext context)`
+- L235 `String formatVoiceDuration(Duration duration)`  — `m:ss`, or `h:mm:ss` from one hour on.
+- L247 `kVoiceBubbleBarCount = 22`  — Number of bars the waveform is seeded with (more than ever fit).
+- L252 `List<double> voiceBubbleBars(String text, {int count = kVoiceBubbleBarCount})`  — Bar heights (0.25..1) for [text]: the same text always gives the same
 
 ## lib/widgets/message_bubble/web_search_sources.dart  (289 Z.)
 - L16 `class WebSearchSource`  — One parsed hit from a web_search result.

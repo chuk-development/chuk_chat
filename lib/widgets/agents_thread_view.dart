@@ -62,6 +62,7 @@ import 'package:chuk_chat/widgets/agent_control_panel.dart' // F1
     show WeeklyBudgetField;
 import 'package:chuk_chat/services/agents/agents_permissions_service.dart'; // F1
 import 'package:chuk_chat/services/agents/agents_approval_grants.dart';
+import 'package:chuk_chat/services/agents/agents_draft_history.dart';
 import 'package:chuk_chat/widgets/agents_user_browser.dart'; // own browser
 import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/browser_view_page.dart';
@@ -124,7 +125,17 @@ class AgentsThreadView extends StatefulWidget {
     this.linkReport,
     this.emptyState,
     this.openBrowserView,
+    this.unreadSince,
+    this.onUnreadSeen,
   });
+
+  /// When the reader last had this thread open, before this visit; the chat
+  /// offers a jump to the first message written after it (bead
+  /// chuk_chat-f5wd). Null: nothing was new.
+  final DateTime? unreadSince;
+
+  /// The first new message was on screen.
+  final VoidCallback? onUnreadSeen;
 
   /// Opens the live browser view for a takeover card. Null opens
   /// [BrowserViewPage]; tests pass a fake so no VNC bridge starts.
@@ -330,6 +341,9 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   /// with `options`). The card then says what the answer covered until the
   /// run moves on.
   String? _approvalScope;
+
+  /// The draft the open approval revises, if any (bead chuk_chat-gkt9).
+  AgentsDraft? _approvalPreviousDraft;
 
   /// The host refused this thread's last task: the agent's weekly budget
   /// is used up. The notice stays at the end of the thread until the next
@@ -1611,12 +1625,19 @@ class AgentsThreadViewState extends State<AgentsThreadView>
         }
         // A replayed request that is already decided, or whose run is over,
         // is history: never prompt for it (bead cowork-266).
+        // Drafts (a mail, a connector call) are kept per thread, replays
+        // included, so a revised draft can mark what changed (bead
+        // chuk_chat-gkt9).
+        final AgentsDraft? previousDraft = AgentsDraftHistory.instance
+            .previousFor(widget.threadKey, event);
+        AgentsDraftHistory.instance.record(widget.threadKey, event);
         if (event.replay &&
             (event.isDecided || !_ledger.isRunning(widget.threadKey))) {
           return;
         }
         setState(() {
           _approval = event;
+          _approvalPreviousDraft = previousDraft;
           _approvalDecision = null;
           _approvalScope = null; // F1
           _takeoverVisited = false;
@@ -2353,6 +2374,8 @@ class AgentsThreadViewState extends State<AgentsThreadView>
         agentsTitle: widget.title,
         topInset: desktopTopInset,
         transcriptFooter: takeover,
+        unreadSince: widget.unreadSince,
+        onUnreadSeen: widget.onUnreadSeen,
       );
     }
     return ChukChatUIMobile(
@@ -2365,6 +2388,8 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       topInset: _hasBarAboveChat ? 0 : widget.topInset,
       transcriptFooter: takeover,
       agentsTitle: widget.title,
+      unreadSince: widget.unreadSince,
+      onUnreadSeen: widget.onUnreadSeen,
       onToggleSidebar: _noopToggleSidebar,
       selectedChatId: widget.threadKey,
       onChatIdChanged: _onChatIdChanged,
@@ -2717,6 +2742,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
           agentName: widget.title ?? widget.agent?.name ?? '',
           decision: _approvalScope,
           dense: dense,
+          previousDraft: _approvalPreviousDraft,
           onSelect: _decideActionApproval,
         ),
       // ── skill proposals ──

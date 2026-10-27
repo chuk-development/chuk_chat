@@ -1,6 +1,6 @@
 # lib/platform_specific/mobile · Signaturen
 
-## lib/platform_specific/mobile/mobile_agent_list.dart  (1517 Z.)
+## lib/platform_specific/mobile/mobile_agent_list.dart  (1481 Z.)
 - L66 `String accountMonogram(String? label)`  — The account monogram: "alex.smith@…" → "A", "Alex Smith" → "AS".
 - L80 `class MobileAgentList extends StatefulWidget`
   - L81 `const MobileAgentList({ super.key, required this.source, required this.onSelect, this.selectedAgentId, this.selectedThreadKey, this.onAddAgent, this.onOpenAccount, this.onOpenProfile, this.onRenameAgent, this.onDeleteAgent, this.accountLabel, this.now, this.readMarks, this.profiles, this.onOpenFrom, this.hiddenAgentId, this.rooms, this.onOpenRoom, this.onCreateRoom, this.emptyState, this.headerCenter, })`
@@ -60,68 +60,68 @@
   - L798 `final VoidCallback? onTap`
   - L799 `final bool accent`
   - L802 `Widget build(BuildContext context)`
-- L856 `class _SearchField extends StatelessWidget`  — The roster's search input: one rounded, filled field that carries its own
-  - L857 `const _SearchField({ required this.controller, required this.focusNode, required this.height, required this.onClear, })`
-  - L864 `final TextEditingController controller`
-  - L865 `final FocusNode focusNode`
-  - L868 `final double height`  — The height of the row's other controls, so the field is their sibling.
-  - L870 `final VoidCallback onClear`
-  - L873 `Widget build(BuildContext context)`
-- L950 `class MobileAgentRow extends StatelessWidget`
-  - L951 `const MobileAgentRow({ super.key, required this.agent, required this.now, this.selected = false, this.unread = false, this.unreadThreads = 1, this.role, this.onTap, this.onLongPress, this.profiles, this.pinned = false, this.padded = true, })`
-  - L966 `final AgentsAgent agent`
-  - L967 `final DateTime now`
-  - L968 `final bool selected`
-  - L969 `final bool unread`
-  - L973 `final bool pinned`  — The user pinned this chat to the top of the list. Shown as a small glyph
-  - L977 `final int unreadThreads`  — How many of this agent's threads have something new in them. Shown as
-  - L980 `final String? role`  — The role line to show; null hides the tag.
-  - L985 `final void Function(Rect globalRect)? onTap`  — Opens the agent's thread. It is handed the row's own rounded rect, in
-  - L988 `final void Function(BuildContext rowContext)? onLongPress`  — Long press, with the row's own context so a menu can anchor to it.
-  - L990 `final AgentProfileStore? profiles`
-  - L994 `final bool padded`  — False builds the row without the list's outer padding, so it fills the
-  - L998 `static const double height = 64`  — One row's minimum height. Tight enough that a screen holds the roster,
-  - L1003 `static String previewOf(AgentsAgent agent, {AgentProfileStore? profiles})`  — The preview line under the name. What the agent is doing now beats a
-  - L1032 `Widget build(BuildContext context)`
-- L1186 `class MobileRoomRow extends StatelessWidget`  — One ROOM, in the inbox's own row grammar.
-  - L1187 `const MobileRoomRow({ super.key, required this.room, this.onTap, this.onLongPress, this.profiles, this.padded = true, })`
-  - L1196 `final AgentsRoom room`
-  - L1199 `final VoidCallback? onTap`  — Opens the room. Null makes the row inert.
-  - L1202 `final void Function(BuildContext rowContext)? onLongPress`  — Long press, with the row's own context so a menu can anchor to it.
-  - L1204 `final AgentProfileStore? profiles`
-  - L1207 `final bool padded`  — False drops the list's outer padding, matching [MobileAgentRow.padded].
-  - L1211 `static String previewOf(AgentsRoom room)`  — The line under the name: who is in the room, by the handle they are
-  - L1214 `Widget build(BuildContext context)`
-- L1283 `class _NameWithRole extends StatelessWidget`  — The small grey tag next to the name (the agent's role).
-  - L1284 `const _NameWithRole({required this.name, required this.role, this.style})`
-  - L1286 `final String name`
-  - L1287 `final String? role`
-  - L1288 `final TextStyle? style`
-  - L1290 `static const double _gap = 8`
-  - L1291 `static const double _minTagWidth = 48`
-  - L1294 `Widget build(BuildContext context)`
-- L1332 `class _RoleTag extends StatelessWidget`
-  - L1333 `const _RoleTag({required this.role})`
-  - L1335 `final String role`
-  - L1338 `Widget build(BuildContext context)`
-- L1365 `class _MenuRow extends StatelessWidget`
-  - L1366 `const _MenuRow({required this.icon, required this.label, this.color})`
-  - L1368 `final IconData icon`
-  - L1369 `final String label`
-  - L1370 `final Color? color`
-  - L1373 `Widget build(BuildContext context)`
-- L1388 `class _EmptyState extends StatelessWidget`
-  - L1389 `const _EmptyState({ required this.filter, required this.query, this.onAddAgent, })`
-  - L1395 `final String filter`
-  - L1396 `final String query`
-  - L1397 `final VoidCallback? onAddAgent`
-  - L1400 `Widget build(BuildContext context)`
-- L1460 `String mobileTimeLabel(DateTime? when, {required DateTime now})`  — The time column of an inbox row, like a messenger: a clock time today,
-- L1490 `class _UnreadBadge extends StatelessWidget`  — The number of new threads on an agent, in that agent's colour.
-  - L1491 `const _UnreadBadge({required this.count, required this.colour})`
-  - L1493 `final int count`
-  - L1494 `final Color colour`
-  - L1497 `Widget build(BuildContext context)`
+- L820 `class _SearchField extends StatelessWidget`  — The roster's search input: one rounded, filled field that carries its own
+  - L821 `const _SearchField({ required this.controller, required this.focusNode, required this.height, required this.onClear, })`
+  - L828 `final TextEditingController controller`
+  - L829 `final FocusNode focusNode`
+  - L832 `final double height`  — The height of the row's other controls, so the field is their sibling.
+  - L834 `final VoidCallback onClear`
+  - L837 `Widget build(BuildContext context)`
+- L914 `class MobileAgentRow extends StatelessWidget`
+  - L915 `const MobileAgentRow({ super.key, required this.agent, required this.now, this.selected = false, this.unread = false, this.unreadThreads = 1, this.role, this.onTap, this.onLongPress, this.profiles, this.pinned = false, this.padded = true, })`
+  - L930 `final AgentsAgent agent`
+  - L931 `final DateTime now`
+  - L932 `final bool selected`
+  - L933 `final bool unread`
+  - L937 `final bool pinned`  — The user pinned this chat to the top of the list. Shown as a small glyph
+  - L941 `final int unreadThreads`  — How many of this agent's threads have something new in them. Shown as
+  - L944 `final String? role`  — The role line to show; null hides the tag.
+  - L949 `final void Function(Rect globalRect)? onTap`  — Opens the agent's thread. It is handed the row's own rounded rect, in
+  - L952 `final void Function(BuildContext rowContext)? onLongPress`  — Long press, with the row's own context so a menu can anchor to it.
+  - L954 `final AgentProfileStore? profiles`
+  - L958 `final bool padded`  — False builds the row without the list's outer padding, so it fills the
+  - L962 `static const double height = 64`  — One row's minimum height. Tight enough that a screen holds the roster,
+  - L967 `static String previewOf(AgentsAgent agent, {AgentProfileStore? profiles})`  — The preview line under the name. What the agent is doing now beats a
+  - L996 `Widget build(BuildContext context)`
+- L1150 `class MobileRoomRow extends StatelessWidget`  — One ROOM, in the inbox's own row grammar.
+  - L1151 `const MobileRoomRow({ super.key, required this.room, this.onTap, this.onLongPress, this.profiles, this.padded = true, })`
+  - L1160 `final AgentsRoom room`
+  - L1163 `final VoidCallback? onTap`  — Opens the room. Null makes the row inert.
+  - L1166 `final void Function(BuildContext rowContext)? onLongPress`  — Long press, with the row's own context so a menu can anchor to it.
+  - L1168 `final AgentProfileStore? profiles`
+  - L1171 `final bool padded`  — False drops the list's outer padding, matching [MobileAgentRow.padded].
+  - L1175 `static String previewOf(AgentsRoom room)`  — The line under the name: who is in the room, by the handle they are
+  - L1178 `Widget build(BuildContext context)`
+- L1247 `class _NameWithRole extends StatelessWidget`  — The small grey tag next to the name (the agent's role).
+  - L1248 `const _NameWithRole({required this.name, required this.role, this.style})`
+  - L1250 `final String name`
+  - L1251 `final String? role`
+  - L1252 `final TextStyle? style`
+  - L1254 `static const double _gap = 8`
+  - L1255 `static const double _minTagWidth = 48`
+  - L1258 `Widget build(BuildContext context)`
+- L1296 `class _RoleTag extends StatelessWidget`
+  - L1297 `const _RoleTag({required this.role})`
+  - L1299 `final String role`
+  - L1302 `Widget build(BuildContext context)`
+- L1329 `class _MenuRow extends StatelessWidget`
+  - L1330 `const _MenuRow({required this.icon, required this.label, this.color})`
+  - L1332 `final IconData icon`
+  - L1333 `final String label`
+  - L1334 `final Color? color`
+  - L1337 `Widget build(BuildContext context)`
+- L1352 `class _EmptyState extends StatelessWidget`
+  - L1353 `const _EmptyState({ required this.filter, required this.query, this.onAddAgent, })`
+  - L1359 `final String filter`
+  - L1360 `final String query`
+  - L1361 `final VoidCallback? onAddAgent`
+  - L1364 `Widget build(BuildContext context)`
+- L1424 `String mobileTimeLabel(DateTime? when, {required DateTime now})`  — The time column of an inbox row, like a messenger: a clock time today,
+- L1454 `class _UnreadBadge extends StatelessWidget`  — The number of new threads on an agent, in that agent's colour.
+  - L1455 `const _UnreadBadge({required this.count, required this.colour})`
+  - L1457 `final int count`
+  - L1458 `final Color colour`
+  - L1461 `Widget build(BuildContext context)`
 
 ## lib/platform_specific/mobile/mobile_agent_sheet.dart  (208 Z.)
 - L30 `class MobileAgentSheet extends StatelessWidget`
@@ -139,7 +139,7 @@
   - L100 `List<List<Widget>> menuGroups(BuildContext context)`  — The runs of the menu: identity, the agent's own actions, the parked
   - L195 `Widget build(BuildContext context)`
 
-## lib/platform_specific/mobile/mobile_chat_chrome.dart  (509 Z.)
+## lib/platform_specific/mobile/mobile_chat_chrome.dart  (470 Z.)
 - L39 `kMobileChromeChip = 42`  — Diameter of a round chip: chuk's floating chip.
 - L42 `kMobileChromeRow = 48`  — Height of the bar's row: chuk's top bar row.
 - L45 `kMobileChromePillRadius = 18`  — Corner radius of the title pill: chuk's title pill.
@@ -168,19 +168,19 @@
   - L233 `final bool accent`  — chuk's accent-filled chip: the one thing on the bar that is ready.
   - L237 `final bool parked`  — Not ready yet: a quieter glyph, and a tap still reaches [onTap], which
   - L240 `Widget build(BuildContext context)`
-- L293 `class AgentChromePill extends StatelessWidget`  — The agent pill: chuk's title pill with the face, the name and the live
-  - L294 `const AgentChromePill({ super.key, required this.agent, required this.onTap, this.profiles, this.onReconnect, this.paired, this.semanticsId = 'mobile_chat_bot_pill', })`
-  - L304 `final AgentsAgent agent`
-  - L305 `final VoidCallback? onTap`
-  - L306 `final VoidCallback? onReconnect`
-  - L307 `final AgentProfileStore? profiles`
-  - L311 `final bool? paired`  — The link state when the caller already knows it (the desktop thread
-  - L313 `final String semanticsId`
-  - L316 `Widget build(BuildContext context)`
-  - L331 `Widget _surface(BuildContext context, {required bool paired})`
-  - L404 `Widget _status(BuildContext context, {required bool paired})`  — What the agent is doing: offline with a way back, working, or here.
-  - L482 `Widget _statusLine( BuildContext context, { required bool paired, required Widget child, })`  — The bottom line of the pill: the presence dot and whatever says what the
-  - L505 `String? _roleOf(AgentProfileStore store)`
+- L254 `class AgentChromePill extends StatelessWidget`  — The agent pill: chuk's title pill with the face, the name and the live
+  - L255 `const AgentChromePill({ super.key, required this.agent, required this.onTap, this.profiles, this.onReconnect, this.paired, this.semanticsId = 'mobile_chat_bot_pill', })`
+  - L265 `final AgentsAgent agent`
+  - L266 `final VoidCallback? onTap`
+  - L267 `final VoidCallback? onReconnect`
+  - L268 `final AgentProfileStore? profiles`
+  - L272 `final bool? paired`  — The link state when the caller already knows it (the desktop thread
+  - L274 `final String semanticsId`
+  - L277 `Widget build(BuildContext context)`
+  - L292 `Widget _surface(BuildContext context, {required bool paired})`
+  - L365 `Widget _status(BuildContext context, {required bool paired})`  — What the agent is doing: offline with a way back, working, or here.
+  - L443 `Widget _statusLine( BuildContext context, { required bool paired, required Widget child, })`  — The bottom line of the pill: the presence dot and whatever says what the
+  - L466 `String? _roleOf(AgentProfileStore store)`
 
 ## lib/platform_specific/mobile/mobile_chat_screen.dart  (226 Z.)
 - L28 `typedef MobileChatBodyBuilder = Widget Function(BuildContext context, double topInset)`  — Builds the chat body. [topInset] is the space the body must leave at the

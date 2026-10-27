@@ -3,7 +3,7 @@
 ## test/services/skills/builtin_skills_freshness_test.dart  (49 Z.)
 - L16 `void main()`  — The gate that makes build-time codegen safe.
 
-## test/services/skills/builtin_skills_validity_test.dart  (132 Z.)
+## test/services/skills/builtin_skills_validity_test.dart  (134 Z.)
 - L12 `_kMaxBodyTokens = 5000`  — Budget for one skill body (level 2). The spec's best practices put the
 - L14 `void main()`
 

@@ -159,11 +159,11 @@
 - L542 `String? _extensionFor(String mime)`
 - L550 `String _shortError(Object e)`
 
-## lib/tool_handlers/find_tools_handler.dart  (344 Z.)
+## lib/tool_handlers/find_tools_handler.dart  (345 Z.)
 - L6 `companions = <String, List<String>>{ 'web_search': ['web_crawl'], 'web_crawl': ['web_search'], 'generate_image': ['web_s`  — Companion tools that are always bundled together.
-- L22 `void _appendToolDefinition( StringBuffer buf, ClientTool tool, String Function(String) getDescription, )`
-- L54 `String executeFindTools({ required Map<String, dynamic> args, required Map<String, ClientTool> tools, required String Function(String) getDescription, required bool Function(String) isAvailable, List<McpCatalogueEntry> unconnectedMcpServers = const [], })`  — Find tools by keyword/query. Returns full tool definitions for matching
-- L317 `String _mcpConnectHints( List<String> queryWords, List<McpCatalogueEntry> unconnected, )`  — Lines describing not-connected catalogue servers whose id / name / category
+- L23 `void _appendToolDefinition( StringBuffer buf, ClientTool tool, String Function(String) getDescription, )`
+- L55 `String executeFindTools({ required Map<String, dynamic> args, required Map<String, ClientTool> tools, required String Function(String) getDescription, required bool Function(String) isAvailable, List<McpCatalogueEntry> unconnectedMcpServers = const [], })`  — Find tools by keyword/query. Returns full tool definitions for matching
+- L318 `String _mcpConnectHints( List<String> queryWords, List<McpCatalogueEntry> unconnected, )`  — Lines describing not-connected catalogue servers whose id / name / category
 
 ## lib/tool_handlers/image_tools.dart  (249 Z.)
 - L11 `Future<String> _generateImageRequest({ required String? serverHttpUrl, required String? accessToken, required String endpoint, required Map<String, String> fields, required String muxTool, required String modelName, })`  — Shared helper: send a multipart POST to an image generation endpoint
@@ -311,6 +311,10 @@
 
 ## lib/tool_handlers/qr_tools.dart  (61 Z.)
 - L9 `Future<String> executeGenerateQr(Map<String, dynamic> args)`  — Generate a QR code locally using pretty_qr_code — no network call, fully
+
+## lib/tool_handlers/road_closures_tools.dart  (115 Z.)
+- L14 `double? _coerce(dynamic v)`
+- L20 `Future<String> executeRoadClosures(Map<String, dynamic> args)`
 
 ## lib/tool_handlers/typst_tools.dart  (281 Z.)
 - L14 `class TypstCompileResult`  — Result of a Typst compile: the rendered bytes plus optional layout

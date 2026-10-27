@@ -1,6 +1,6 @@
 # pseudomap · chuk_chat · Tests
 
-449 Dateien · 1242 Typen/Funktionen · 1086 Member · Stand 2026-10-20
+464 Dateien · 1278 Typen/Funktionen · 1102 Member · Stand 2026-10-27
 
 Diese Datei ist `.pseudomap/MAP.md` — Stufe 1: was es gibt und wo es liegt.
 
@@ -22,7 +22,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `({int width, int height}) _pngSize(File file)`  — Width and height out of a PNG's IHDR chunk, which always starts at byte 16.
 - `void main()`
 
-### flutter_test_config.dart  (15 Z.)
+### flutter_test_config.dart  (20 Z.)
 - `Future<void> testExecutable(FutureOr<void> Function() testMain)`  — Runs before every test file.
 
 ### interop_smoke_test.dart  (191 Z.)
@@ -624,7 +624,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### chat_message_list_item_test.dart  (145 Z.)
 - `void main()`
 
-### composer_send_button_test.dart  (231 Z.)
+### composer_send_button_test.dart  (256 Z.)
 - const: _voiceGlyph _sendGlyph _stopGlyph
 - `Finder _target(ComposerSendFace face)`
 - `class _Taps`
@@ -718,6 +718,12 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void main()`
 
 ### auth_trace_test.dart  (43 Z.)
+- `void main()`
+
+### autobahn_traffic_service_test.dart  (472 Z.)
+- `Map<String, dynamic> _item({ required String id, String title = 'A7 | Füssen - Nesselwang', String subtitle = ' Füssen/R …)`
+- `class _FakeApi`  — Fake API: road list plus per-road closure/roadworks lists. Counts
+  - total roads hits failing headers client
 - `void main()`
 
 ### bash_sandbox_folder_test.dart  (105 Z.)
@@ -831,6 +837,9 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### model_cache_memo_test.dart  (51 Z.)
 - `void main()`
 
+### model_cache_unavailable_test.dart  (31 Z.)
+- `void main()`
+
 ### multiplex_auth_refresh_test.dart  (569 Z.)
 - `class _FakeMultiplexServer`  — Minimal stand-in for the `/v2/ws` endpoint.
   - _send start _accept _onFrame push acceptPendingRefresh stop baseUrl refreshTokens handshakeToken onAuthRefresh
@@ -864,6 +873,10 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### reasoning_supported_efforts_test.dart  (198 Z.)
 - `Future<void> _seedCatalog(List<Map<String, dynamic>> models)`  — Seed the on-disk catalog cache with [models] and hydrate the capability
+- `void main()`
+
+### road_closures_service_test.dart  (297 Z.)
+- `Map<String, dynamic> _shLine(int id, {String header = 'B76 Plön - Trent'})`
 - `void main()`
 
 ### round_content_block_service_test.dart  (519 Z.)
@@ -913,7 +926,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### tool_call_handler_fact_check_test.dart  (193 Z.)
 - `void main()`
 
-### tool_call_handler_forced_final_test.dart  (309 Z.)
+### tool_call_handler_forced_final_test.dart  (342 Z.)
 - `void main()`
 
 ### tool_call_handler_repeated_lookup_test.dart  (409 Z.)
@@ -936,10 +949,10 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### tool_failure_detection_test.dart  (129 Z.)
 - `void main()`  — A tool result's failure flag drives the icon the user sees AND whether the
 
-### tool_image_result_service_test.dart  (178 Z.)
+### tool_image_result_service_test.dart  (209 Z.)
 - `void main()`
 
-### tool_prompt_builder_test.dart  (453 Z.)
+### tool_prompt_builder_test.dart  (457 Z.)
 - const: _skillToolDef _tools _testSkill
 - `void main()`
 
@@ -961,7 +974,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### user_scoped_cache_race_test.dart  (309 Z.)
 - `void main()`  — The sign-out-mid-flight race: an operation starts as user A, A signs out and
 
-### user_sync_signal_service_test.dart  (167 Z.)
+### user_sync_signal_service_test.dart  (229 Z.)
 - `void main()`
 
 ### websocket_chat_service_test.dart  (783 Z.)
@@ -987,6 +1000,9 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void main()`
 
 ## test/services/agents
+### agent_mail_alias_test.dart  (201 Z.)
+- `void main()`  — Plus aliases of the agent address (docs/AGENT_MAIL.md §1, §8): the tag
+
 ### agent_mail_crypto_test.dart  (142 Z.)
 - `void main()`  — The seal format `chuk-agent-mail-v1` against the test vector of
 
@@ -1131,7 +1147,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### agents_replay_paging_test.dart  (154 Z.)
 - `void main()`  — Replay paging in the loader (docs/WIRE_CONTRACT.md "Replay paging", Bead
 
-### agents_replay_repeat_test.dart  (207 Z.)
+### agents_replay_repeat_test.dart  (371 Z.)
 - `Map<String, String> user(String text)`  — Bead cowork-4rpt: the same message, twice.
 - `Map<String, String> ai(String text)`
 - `List<String> texts(List<Map<String, String>> rows)`
@@ -1284,10 +1300,10 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void main()`
 
 ## test/services/notifications
-### agents_notifications_test.dart  (134 Z.)
+### agents_notifications_test.dart  (154 Z.)
 - `void main()`
 
-### local_notifications_test.dart  (201 Z.)
+### local_notifications_test.dart  (262 Z.)
 - `class FakeBackend implements LocalNotificationsBackend`  — Records every call; the platform plugin never runs in a test.
   - Function show cancel launchPayload requestPermission initOk launch permission tap shown cancelled
 - `void main()`
@@ -1325,7 +1341,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### builtin_skills_freshness_test.dart  (49 Z.)
 - `void main()`  — The gate that makes build-time codegen safe.
 
-### builtin_skills_validity_test.dart  (132 Z.)
+### builtin_skills_validity_test.dart  (134 Z.)
 - const: _kMaxBodyTokens
 - `void main()`
 
@@ -1398,7 +1414,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void main()`
 
 ## test/support
-### agent_mail_fake.dart  (639 Z.)
+### agent_mail_fake.dart  (643 Z.)
 - const: kFakeMailBase kFakeMailToken kFakeMailUser kFakeMailPrivateKey
 - `class FakeChukSecretBox implements AgentMailSecretBox`  — A stand-in for `EncryptionService`: reversible, marked, and lockable. It
   - sealSync seal open prefix locked seals opens
@@ -1474,7 +1490,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### accent_button_foreground_test.dart  (46 Z.)
 - `void main()`
 
-### answer_blocks_parser_test.dart  (507 Z.)
+### answer_blocks_parser_test.dart  (762 Z.)
 - `AnswerBlockSegment _onlyBlock(List<AnswerSegment> segs)`
 - `void main()`
 
@@ -1515,6 +1531,9 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Uint8List _bytes(int size)`  — Helper: create a Uint8List of [size] bytes.
 - `void main()`
 
+### map_features_test.dart  (285 Z.)
+- `void main()`
+
 ### non_public_ip_test.dart  (96 Z.)
 - `List<int> _v4(String a, String b, String c, String d)`
 - `List<int> _v6(List<int> bytes)`
@@ -1552,6 +1571,10 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void main()`
 
 ### upload_rate_limiter_test.dart  (135 Z.)
+- `void main()`
+
+### word_diff_test.dart  (99 Z.)
+- `String _side(List<WordDiffSegment> s, WordDiffOp skip)`
 - `void main()`
 
 ## test/vnc
@@ -1815,6 +1838,18 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
   - createAgent
 - `void main()`
 
+### agents_done_notification_answer_test.dart  (71 Z.)
+- `ChatMessage _answer(String text, {String? runId})`
+- `String? _pick({ String? finalAnswer, String? runId = 'run-2', bool stopped = false, required List<ChatMessage> rows, })`
+- `void main()`
+
+### agents_draft_diff_test.dart  (318 Z.)
+- `Widget _app(Widget child, {Locale locale = const Locale('en')})`
+- `AgentsRelayApprovalRequest _mail( String id, { String subject = 'Meeting', String preview = 'Hi Bob, can we meet on Mond …)`
+- `AgentsRelayApprovalRequest _slack(String id, String text)`
+- `List<TextSpan> _spans(WidgetTester tester, Key key)`
+- `void main()`
+
 ### agents_live_dots_test.dart  (207 Z.)
 - `void main()`  — bead chuk_chat-hfru: while an Agents turn runs, the thread shows the
 
@@ -1886,7 +1921,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Widget _plainChat(String text, {double width = 760})`  — chuk_chat's plain desktop transcript around one answer: a selection area,
 - `void main()`
 
-### agents_thread_view_notifications_test.dart  (208 Z.)
+### agents_thread_view_notifications_test.dart  (234 Z.)
 - `class _FakeSessionSource implements AccountSessionSource`
   - current refresh
 - `class _NoopSaver implements AgentFileSaver`
@@ -1914,7 +1949,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Widget _app(Widget child)`
 - `void main()`  — The visible run must end when the host says the run ended, whatever else the
 
-### agents_thread_view_test.dart  (1539 Z.)
+### agents_thread_view_test.dart  (1708 Z.)
 - `class _MemoryStore implements AgentsSecureKeyValueStore`  — In-memory secure backend so the store round-trips with no platform channel.
   - read write delete map
 - `class _NoopSaver implements AgentFileSaver`  — A saver that never touches a filesystem.
@@ -1925,7 +1960,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void main()`
 - `Future<void> _flushIdleTimers(WidgetTester tester)`  — The imported chat screen schedules a 60 s idle-close timer for its
 - `class _ProbingRelayController extends FakeRelayController implements AgentsLinkProbe`  — A fake whose socket can be asked whether it still answers.
-  - answers probes timeout
+  - answers throws probes timeout
 
 ### agents_user_browser_test.dart  (747 Z.)
 - `Map<String, dynamic> _block({ bool installed = true, bool connected = true, bool inUse = false, Map<String, dynamic>? in …)`
@@ -1951,7 +1986,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Future<void> _pumpAnchor( WidgetTester tester, { required double keyboardInset, required Alignment anchorAt, int itemCou …)`
 - `void main()`
 
-### answer_blocks_test.dart  (470 Z.)
+### answer_blocks_test.dart  (633 Z.)
 - const: _text _bubble
 - `Future<void> _pump( WidgetTester tester, String markdown, { double width = 360, double textScale = 1, ValueChanged<Strin …)`
 - `String _allText(WidgetTester tester)`  — Every RichText's plain text, joined. Finds text inside nested messages.
@@ -1979,6 +2014,10 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### app_notification_test.dart  (87 Z.)
 - `void main()`
 
+### ask_user_card_test.dart  (103 Z.)
+- `Future<void> _pump(WidgetTester tester, Widget child)`
+- `void main()`
+
 ### auth_gate_test.dart  (297 Z.)
 - `String _jwt({required int exp})`
 - `Session _session({String refresh = 'r1'})`
@@ -1989,7 +2028,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Widget _wrap(Widget child)`
 - `void main()`
 
-### automation_editor_sheet_test.dart  (348 Z.)
+### automation_editor_sheet_test.dart  (354 Z.)
 - `void main()`
 
 ### browser_view_page_test.dart  (279 Z.)
@@ -2076,10 +2115,16 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### chuk_table_test.dart  (71 Z.)
 - `void main()`
 
+### composer_caret_follower_test.dart  (121 Z.)
+- `void main()`
+
 ### composer_recording_row_test.dart  (96 Z.)
 - `void main()`
 
 ### diff_widget_test.dart  (62 Z.)
+- `void main()`
+
+### email_draft_card_test.dart  (109 Z.)
 - `void main()`
 
 ### excalidraw_svg_export_test.dart  (62 Z.)
@@ -2097,7 +2142,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Iterable<BoxDecoration> _decorations(WidgetTester tester)`  — Every decorated box the bubbles draw, by fill colour.
 - `void main()`
 
-### floating_app_bar_test.dart  (66 Z.)
+### floating_app_bar_test.dart  (170 Z.)
 - `void main()`
 
 ### html_artifact_view_test.dart  (113 Z.)
@@ -2105,6 +2150,10 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void main()`
 
 ### map_block_dedupe_test.dart  (72 Z.)
+- `void main()`
+
+### map_features_block_test.dart  (46 Z.)
+- `Widget _host(String json)`
 - `void main()`
 
 ### markdown_message_test.dart  (541 Z.)
@@ -2186,7 +2235,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Widget wrap(Widget child)`
 - `void main()`
 
-### messenger_shell_test.dart  (2200 Z.)
+### messenger_shell_test.dart  (2246 Z.)
 - `class _MemoryStore implements AgentsSecureKeyValueStore`
   - read write delete map
 - `class _FakeRelayController implements AgentsRelayController`  — A controller the test drives: it can report itself paired, and it records
@@ -2241,6 +2290,11 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### room_thread_view_test.dart  (373 Z.)
 - `void main()`
 
+### schedule_picker_test.dart  (293 Z.)
+- `Widget _app(Widget child, {Locale locale = const Locale('en')})`
+- `Future<TextEditingController> _pump( WidgetTester tester, String spec, { Locale locale = const Locale('en'), })`
+- `void main()`
+
 ### selection_copy_area_test.dart  (284 Z.)
 - `void main()`
 
@@ -2248,16 +2302,30 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Widget _host({required List<Widget> children})`
 - `void main()`
 
-### status_answer_block_test.dart  (144 Z.)
+### status_answer_block_test.dart  (157 Z.)
 - const: _payments
 - `Future<void> _pump( WidgetTester tester, String markdown, { required double width, double textScale = 1, bool dark = fal …)`
 - `String _allText(WidgetTester tester)`
 - `void main()`
 
+### tiles_block_test.dart  (93 Z.)
+- `Future<void> _pump(WidgetTester tester, String markdown, double width)`
+- `void main()`
+
 ### turn_status_test.dart  (238 Z.)
 - `void main()`
 
-### voice_message_bubble_test.dart  (135 Z.)
+### unread_jump_pill_test.dart  (210 Z.)
+- `Map<String, String> _row(String sender, DateTime at)`
+- `class _Harness extends StatefulWidget`
+  - target onSeen
+- `class _HarnessState extends State<_Harness>`
+  - controller targetKey
+- `Widget _app(Widget child, {Locale locale = const Locale('en')})`
+- `double _opacity(WidgetTester tester)`
+- `void main()`
+
+### voice_message_bubble_test.dart  (153 Z.)
 - const: _transcript
 - `void main()`
 
@@ -2271,8 +2339,8 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### chart_spec_test.dart  (228 Z.)
 - `void main()`
 
-### chart_test_support.dart  (150 Z.)
-- const: kChartGoldenDir
+### chart_test_support.dart  (161 Z.)
+- const: kGoldenDocumentUpdatedAt kChartGoldenDir
 - `Future<void> loadChartFonts()`  — Loads Roboto from the SDK so a golden shows real glyphs instead of the
 - `Directory? _findMaterialFonts()`
 - `ThemeData chartTheme(Brightness brightness)`  — The app's own scheme shape: a neutral seed, so the chart's colours come

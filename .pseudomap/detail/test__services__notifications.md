@@ -1,22 +1,22 @@
 # test/services/notifications · Signaturen
 
-## test/services/notifications/agents_notifications_test.dart  (134 Z.)
-- L10 `void main()`
+## test/services/notifications/agents_notifications_test.dart  (154 Z.)
+- L11 `void main()`
 
-## test/services/notifications/local_notifications_test.dart  (201 Z.)
-- L10 `class FakeBackend implements LocalNotificationsBackend`  — Records every call; the platform plugin never runs in a test.
-  - L11 `bool initOk = true`
-  - L12 `String? launch`
-  - L13 `bool permission = true`
-  - L14 `void Function(String? payload)? tap`
-  - L15 `final List<Map<String, Object>> shown = <Map<String, Object>>[]`
-  - L16 `final List<(int, String)> cancelled = <(int, String)>[]`
-  - L19 `Future<bool> initialize({required void Function(String? payload) onTap})`
-  - L25 `Future<void> show({ required int id, required String title, required String body, required String payload, required String tag, })`
-  - L42 `Future<void> cancel({required int id, required String tag})`
-  - L47 `Future<String?> launchPayload()`
-  - L50 `Future<bool> requestPermission()`
-- L53 `void main()`
+## test/services/notifications/local_notifications_test.dart  (262 Z.)
+- L12 `class FakeBackend implements LocalNotificationsBackend`  — Records every call; the platform plugin never runs in a test.
+  - L13 `bool initOk = true`
+  - L14 `String? launch`
+  - L15 `bool permission = true`
+  - L16 `void Function(String? payload)? tap`
+  - L17 `final List<Map<String, Object>> shown = <Map<String, Object>>[]`
+  - L18 `final List<(int, String)> cancelled = <(int, String)>[]`
+  - L21 `Future<bool> initialize({required void Function(String? payload) onTap})`
+  - L27 `Future<void> show({ required int id, required String title, required String body, required String payload, required String tag, })`
+  - L44 `Future<void> cancel({required int id, required String tag})`
+  - L49 `Future<String?> launchPayload()`
+  - L52 `Future<bool> requestPermission()`
+- L55 `void main()`
 
 ## test/services/notifications/push_service_test.dart  (221 Z.)
 - L10 `class FakeTransport implements PushTransport`  — Firebase, faked: the tests drive tokens and taps by hand.

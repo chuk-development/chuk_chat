@@ -56,6 +56,7 @@ from typing import Any
 
 import httpx
 
+from .automations import AutomationSpecError, parse_mail_alias
 from .environment import ProcessResult
 from .files_out import guess_mime, sanitize_name
 from .mail_seal import MailKey, MailSealError, open_binary, open_json
@@ -299,6 +300,16 @@ def _attachment_items(value: Any) -> list[dict]:
     return out
 
 
+def _alias(value: Any) -> str | None:
+    """The plus tag of a sealed summary (``alias``): received at or sent from
+    ``local+alias@domain``. Anything the server would not have written is
+    dropped."""
+    try:
+        return parse_mail_alias(value)
+    except AutomationSpecError:
+        return None
+
+
 def open_row(row: dict, key: MailKey) -> dict:
     """One ``Summary`` or ``Message`` of the server, opened with the mail key.
 
@@ -307,7 +318,9 @@ def open_row(row: dict, key: MailKey) -> dict:
     ``sealed_summary``), ``text``, ``cc``, ``rfc_message_id``,
     ``in_reply_to``, ``references``, ``codes``, ``links``, ``attachments``,
     ``auth`` (from ``sealed_body``) and ``agent_note`` (from
-    ``agent_note_sealed``). Only the parts the row carries are opened.
+    ``agent_note_sealed``). ``alias`` (from ``sealed_summary``) is the plus
+    tag of the agent address the mail came in on or went out from. Only the
+    parts the row carries are opened.
 
     When a part does not open, the result keeps only the plain columns and
     says ``unreadable: True``. No half-open mail leaves this function.
@@ -325,6 +338,9 @@ def open_row(row: dict, key: MailKey) -> dict:
             if text is not None:
                 out[name] = text
         out["to"] = _str_list(summary.get("to"))
+        alias = _alias(summary.get("alias"))
+        if alias:
+            out["alias"] = alias
     if isinstance(body, dict):
         out["text"] = _str(body.get("text")) or ""
         out["cc"] = _str_list(body.get("cc"))
@@ -705,6 +721,10 @@ def summary_view(mail: dict) -> dict:
         view["from_address"] = mail["from_address"]
     if mail.get("subject") is not None:
         view["subject"] = _text(mail.get("subject"), MAX_SUBJECT_CHARS)
+    if mail.get("alias"):
+        # A plain tag the server checked ([a-z0-9._-]); the mail automations
+        # filter on it, for unknown senders too.
+        view["alias"] = mail["alias"]
     if trust in READABLE_TRUST:
         for key in ("from_name", "to"):
             if mail.get(key):
@@ -731,6 +751,7 @@ def host_view(mail: dict) -> dict:
             "id": mail.get("id"),
             "from_address": mail.get("from_address"),
             "subject": _text(mail.get("subject"), MAX_SUBJECT_CHARS),
+            **({"alias": mail["alias"]} if mail.get("alias") else {}),
             "sender_trust": TRUST_UNKNOWN,
             "codes": _codes(mail),
             "links": _links(mail),
@@ -747,6 +768,7 @@ def host_view(mail: dict) -> dict:
             "to",
             "cc",
             "subject",
+            "alias",
             "folder",
             "created_at",
         )
@@ -838,6 +860,13 @@ def _reply_subject(subject: Any) -> str:
     return text[:MAX_SUBJECT_CHARS]
 
 
+def _reply_alias(parent: dict) -> dict[str, str]:
+    """A reply goes out from the alias its parent came in on (or went out
+    from), so the thread keeps one address."""
+    alias = _alias(parent.get("alias"))
+    return {"from_alias": alias} if alias else {}
+
+
 def _thread_headers(parent: dict) -> dict[str, str]:
     """``in_reply_to`` and ``references`` of a reply, read from the opened
     parent (§3.3: the client sends them, the server cannot read them)."""
@@ -877,7 +906,12 @@ def _send_result(data: dict) -> dict:
 
 MAIL_ADDRESS_SCHEMA = {
     "type": "object",
-    "description": "Your own email address and the mailbox status.",
+    "description": (
+        "Your own email address and the mailbox status. Plus aliases need no "
+        "set-up: mail to <local>+<tag>@<domain> (for example +receipts, "
+        "+newsletters, +signups) reaches you too, and each mail shows the "
+        "`alias` it came in on."
+    ),
     "properties": {},
 }
 
@@ -922,6 +956,13 @@ MAIL_SEND_SCHEMA = {
     ),
     "properties": {
         "to": {"type": "array", "items": {"type": "string"}},
+        "from_alias": {
+            "type": "string",
+            "description": (
+                "Send from a plus alias of your address: 'receipts' sends from "
+                "<local>+receipts@<domain>. Leave out for the plain address."
+            ),
+        },
         "subject": {"type": "string"},
         "text": {"type": "string"},
         "cc": {"type": "array", "items": {"type": "string"}},
@@ -936,7 +977,10 @@ MAIL_SEND_SCHEMA = {
 
 MAIL_REPLY_SCHEMA = {
     "type": "object",
-    "description": "Reply to a mail, in the same thread, to its sender.",
+    "description": (
+        "Reply to a mail, in the same thread, to its sender. The reply goes "
+        "out from the alias the mail came in on."
+    ),
     "properties": {
         "id": {"type": "string", "description": "The mail id."},
         "text": {"type": "string"},
@@ -1199,12 +1243,17 @@ def _register_full(
             box = client.mailbox()
         except AgentMailError as exc:
             return _mail_error(exc)
-        return {
+        address = box.get("address")
+        result = {
             "ok": True,
-            "address": box.get("address"),
+            "address": address,
             "status": box.get("status"),
             "send_suspended": bool(box.get("send_suspended")),
         }
+        if isinstance(address, str) and "@" in address:
+            local, domain = address.rsplit("@", 1)
+            result["alias_example"] = f"{local}+receipts@{domain}"
+        return result
 
     def mail_list(folder: str = "inbox", unread_only: bool = False, limit: int = LIST_DEFAULT) -> dict:
         name = folder if folder in FOLDERS else "inbox"
@@ -1270,9 +1319,14 @@ def _register_full(
         text: str,
         cc: Any = None,
         attachments: Any = None,
+        from_alias: Any = None,
     ) -> dict:
         if client.mail_key() is None:
             return _needs_key()
+        try:
+            alias = parse_mail_alias(from_alias)
+        except AutomationSpecError as exc:
+            return _error(f"from_alias: {exc}")
         recipients = _addresses(to)
         copies = _addresses(cc)
         if not recipients:
@@ -1291,6 +1345,8 @@ def _register_full(
         if problem:
             return _error(problem)
         extra: dict[str, Any] = {"attachments": files} if files else {}
+        if alias:
+            extra["from_alias"] = alias
         return _send(recipients, copies, title, body, **extra)
 
     def mail_reply(id: str, text: str) -> dict:  # noqa: A002
@@ -1315,7 +1371,8 @@ def _register_full(
         if problem:
             return _error(problem)
         return _send(
-            recipients, [], subject, body, reply_to_message_id=ident, **_thread_headers(parent)
+            recipients, [], subject, body, reply_to_message_id=ident,
+            **_thread_headers(parent), **_reply_alias(parent),
         )
 
     def mail_archive(id: str) -> dict:  # noqa: A002
@@ -1514,6 +1571,7 @@ def _register_restricted(registry: ToolRegistry, binding: MailBinding) -> None:
             "text": body,
             "reply_to_message_id": ident,
             **_thread_headers(mail),
+            **_reply_alias(mail),
             "force_draft": True,
         }
         try:

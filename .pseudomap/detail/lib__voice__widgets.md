@@ -214,50 +214,50 @@
   - L241 `void paint(Canvas canvas, Size size)`
   - L260 `bool shouldRepaint(_BarsPainter old)`
 
-## lib/voice/widgets/voice_call_fullscreen_page.dart  (649 Z.)
-- L17 `class VoiceCallFullscreenPage extends StatefulWidget`  — Back (and the chat button) return to the chat while the call continues.
-  - L18 `const VoiceCallFullscreenPage({super.key, this.controller})`
-  - L19 `final VoiceCallController? controller`
-  - L21 `static const String routeName = '/voice-call'`
-  - L22 `static final Map<NavigatorState, Future<void>> _open = {}`
-  - L25 `static Future<void> show( BuildContext context, { VoiceCallController? controller, })`  — One fullscreen call route per app navigator, including incoming calls.
-  - L46 `State<VoiceCallFullscreenPage> createState()`
-- L51 `enum _Route`  — Where the call sound goes, as the route button and its menu show it.
-  - L51 `earpiece`
-  - L51 `speaker`
-  - L51 `wired`
-  - L51 `bluetooth`
-- L53 `class _VoiceCallFullscreenPageState extends State<VoiceCallFullscreenPage>`
-  - L54 `VoiceCallController get c`
-  - L56 `bool _closing = false`
-  - L57 `Timer? _clock`
-  - L58 `final Set<String> _hiddenCards = <String>{}`
-  - L61 `void initState()`
-  - L69 `void _onState()`
-  - L84 `void dispose()`
-  - L90 `Future<void> _action(Future<void> Function() action)`
-  - L104 `_Route? get _route`
-  - L119 `static HugeIconData _routeGlyph(_Route route)`
-  - L126 `static String _routeLabel(_Route route)`
-  - L135 `Future<void> _pickRoute(BuildContext buttonContext, _Route current)`  — The route menu: one framed list over the button. A plugged-in headset
-  - L195 `VoiceBarsState get _barsState`
-  - L202 `VoiceCard? get _stageCard`
-  - L211 `VoiceCard? get _searchCard`
-  - L218 `VoiceToolActivity? get _searchTool`
-  - L225 `String? _statusLine(bool failed)`
-  - L234 `String get _semanticStatus`
-  - L242 `Widget build(BuildContext context)`
-  - L379 `Widget _header(BuildContext context, String name, bool failed)`
-  - L430 `Widget _controls(BuildContext context, ColorScheme scheme, bool failed)`
-  - L506 `Future<void> _chooseVoice()`
-  - L586 `static String _engineTitle(VoiceCallEngine engine)`
-  - L591 `static String _engineSubtitle(VoiceCallEngine engine)`
-- L600 `String formatVoiceDuration(Duration value)`
-- L604 `class VoiceTurnCaption extends StatelessWidget`  — Keep the words that reached playback distinct from an interrupted draft.
-  - L605 `const VoiceTurnCaption({super.key, required this.turn, required this.name})`
-  - L606 `final VoiceTurn turn`
-  - L607 `final String name`
-  - L610 `Widget build(BuildContext context)`
+## lib/voice/widgets/voice_call_fullscreen_page.dart  (651 Z.)
+- L18 `class VoiceCallFullscreenPage extends StatefulWidget`  — Back (and the chat button) return to the chat while the call continues.
+  - L19 `const VoiceCallFullscreenPage({super.key, this.controller})`
+  - L20 `final VoiceCallController? controller`
+  - L22 `static const String routeName = '/voice-call'`
+  - L23 `static final Map<NavigatorState, Future<void>> _open = {}`
+  - L26 `static Future<void> show( BuildContext context, { VoiceCallController? controller, })`  — One fullscreen call route per app navigator, including incoming calls.
+  - L47 `State<VoiceCallFullscreenPage> createState()`
+- L52 `enum _Route`  — Where the call sound goes, as the route button and its menu show it.
+  - L52 `earpiece`
+  - L52 `speaker`
+  - L52 `wired`
+  - L52 `bluetooth`
+- L54 `class _VoiceCallFullscreenPageState extends State<VoiceCallFullscreenPage>`
+  - L55 `VoiceCallController get c`
+  - L57 `bool _closing = false`
+  - L58 `Timer? _clock`
+  - L59 `final Set<String> _hiddenCards = <String>{}`
+  - L62 `void initState()`
+  - L70 `void _onState()`
+  - L85 `void dispose()`
+  - L91 `Future<void> _action(Future<void> Function() action)`
+  - L105 `_Route? get _route`
+  - L120 `static HugeIconData _routeGlyph(_Route route)`
+  - L127 `static String _routeLabel(_Route route)`
+  - L136 `Future<void> _pickRoute(BuildContext buttonContext, _Route current)`  — The route menu: one framed list over the button. A plugged-in headset
+  - L196 `VoiceBarsState get _barsState`
+  - L203 `VoiceCard? get _stageCard`
+  - L212 `VoiceCard? get _searchCard`
+  - L219 `VoiceToolActivity? get _searchTool`
+  - L226 `String? _statusLine(bool failed)`
+  - L235 `String get _semanticStatus`
+  - L243 `Widget build(BuildContext context)`
+  - L380 `Widget _header(BuildContext context, String name, bool failed)`
+  - L432 `Widget _controls(BuildContext context, ColorScheme scheme, bool failed)`
+  - L508 `Future<void> _chooseVoice()`
+  - L588 `static String _engineTitle(VoiceCallEngine engine)`
+  - L593 `static String _engineSubtitle(VoiceCallEngine engine)`
+- L602 `String formatVoiceDuration(Duration value)`
+- L606 `class VoiceTurnCaption extends StatelessWidget`  — Keep the words that reached playback distinct from an interrupted draft.
+  - L607 `const VoiceTurnCaption({super.key, required this.turn, required this.name})`
+  - L608 `final VoiceTurn turn`
+  - L609 `final String name`
+  - L612 `Widget build(BuildContext context)`
 
 ## lib/voice/widgets/voice_call_panel.dart  (505 Z.)
 - L22 `class VoiceCallPanel extends StatelessWidget`
@@ -330,86 +330,86 @@
 - L146 `List<Object> voiceCallTimeline(VoiceCallRecord record)`  — The record's turns and cards in one list, by time. A card sorts after a
 - L167 `String describeVoiceCall(VoiceCallRecord record)`  — "Voice call · 3 min · 12 turns" — the collapsed line of a record.
 
-## lib/voice/widgets/voice_call_stage.dart  (896 Z.)
-- L15 `kVoiceSearchCardKinds = <String>{'search', 'news'}`  — Card kinds that never lift the bars: a search stays a line under them.
-- L18 `kVoiceSearchTools = <String>{ 'search_web', 'read_page', 'get_news', }`  — Tools that show the search line while they run.
-- L24 `kVoiceStageRadius = 28`
-- L27 `class VoiceStageFrame extends StatelessWidget`  — The rounded sheet under the bars.
-  - L28 `const VoiceStageFrame({super.key, required this.child})`
-  - L30 `final Widget child`
-  - L33 `Widget build(BuildContext context)`
-- L50 `class VoiceStageChip extends StatelessWidget`  — A small pill laid over a picture: an icon and an optional word.
-  - L51 `const VoiceStageChip({super.key, required this.icon, this.label, this.dot})`
-  - L53 `final HugeIconData icon`
-  - L54 `final String? label`
-  - L57 `final Color? dot`  — A coloured dot before the icon (the live camera).
-  - L60 `Widget build(BuildContext context)`
-- L100 `class VoiceCameraStage extends StatelessWidget`  — The live camera: the local track, a live mark and the flip control.
-  - L101 `const VoiceCameraStage({ super.key, required this.track, required this.mirrored, required this.onFlip, })`
-  - L108 `final lk.VideoTrack? track`
-  - L109 `final bool mirrored`
-  - L110 `final VoidCallback onFlip`
-  - L113 `Widget build(BuildContext context)`
-- L173 `class VoiceCardStage extends StatelessWidget`  — What the agent put on screen: a picture, found pictures, a set of
-  - L174 `const VoiceCardStage({super.key, required this.card, required this.onClose})`
-  - L176 `final VoiceCard card`
-  - L177 `final VoidCallback onClose`
-  - L180 `static bool isFrameless(VoiceCard card)`  — Places draw as their own floating cards, without the frame.
-  - L183 `static const Set<String> _placeKinds = <String>{'places', 'hotels', 'stays'}`
-  - L185 `static List<Map<String, dynamic>> _places(VoiceCard card)`
-  - L189 `Widget build(BuildContext context)`
-- L223 `class _CloseChip extends StatelessWidget`
-  - L224 `const _CloseChip({required this.onTap})`
-  - L226 `final VoidCallback onTap`
-  - L229 `Widget build(BuildContext context)`
-- L243 `String? _hostOf(Object? url)`
-- L250 `void _openLink(Object? url)`
-- L262 `String? _imageUrl(VoiceCard card)`
-- L264 `class _GeneratingImage extends StatelessWidget`
-  - L265 `const _GeneratingImage()`
-  - L268 `Widget build(BuildContext context)`
-- L296 `Widget _networkImage(BuildContext context, String url)`
-- L319 `class _GeneratedImage extends StatelessWidget`
-  - L320 `const _GeneratedImage({required this.card})`
-  - L322 `final VoiceCard card`
-  - L325 `Widget build(BuildContext context)`
-- L345 `class _FoundImages extends StatelessWidget`
-  - L346 `const _FoundImages({required this.card})`
-  - L348 `final VoiceCard card`
-  - L351 `Widget build(BuildContext context)`
-- L416 `class VoicePlaceCarousel extends StatefulWidget`  — Places as separate cards floating on the page. The next one peeks in;
-  - L417 `const VoicePlaceCarousel({super.key, required this.places})`
-  - L419 `final List<Map<String, dynamic>> places`
-  - L422 `State<VoicePlaceCarousel> createState()`
-- L425 `class _VoicePlaceCarouselState extends State<VoicePlaceCarousel>`
-  - L426 `static const double _fraction = 0.86`
-  - L427 `final PageController _pages = PageController(viewportFraction: _fraction)`
-  - L428 `int _index = 0`
-  - L431 `void dispose()`
-  - L436 `void _go(int index)`
-  - L447 `Widget build(BuildContext context)`
-- L528 `class _PlaceCard extends StatelessWidget`
-  - L529 `const _PlaceCard({required this.place})`
-  - L531 `final Map<String, dynamic> place`
-  - L533 `String? _text(String key)`
-  - L541 `Widget build(BuildContext context)`
-- L767 `class VoiceSearchLine extends StatefulWidget`  — One small line under the bars while the agent searches. Then it walks
-  - L768 `const VoiceSearchLine({ super.key, required this.searching, required this.label, this.result, })`
-  - L776 `final bool searching`  — A search tool is running.
-  - L779 `final String label`  — What the running tool says it does.
-  - L782 `final VoiceCard? result`  — The newest search card; its hosts are walked once when it arrives.
-  - L785 `State<VoiceSearchLine> createState()`
-- L788 `class _VoiceSearchLineState extends State<VoiceSearchLine>`
-  - L789 `static const Duration _step = Duration(milliseconds: 900)`
-  - L791 `Timer? _timer`
-  - L792 `List<String> _hosts = const <String>[]`
-  - L793 `int _tick = 0`
-  - L794 `String? _shownId`
-  - L797 `void initState()`
-  - L803 `void didUpdateWidget(covariant VoiceSearchLine oldWidget)`
-  - L812 `void _walk(VoiceCard card)`
-  - L839 `void dispose()`
-  - L845 `Widget build(BuildContext context)`
+## lib/voice/widgets/voice_call_stage.dart  (883 Z.)
+- L16 `kVoiceSearchCardKinds = <String>{'search', 'news'}`  — Card kinds that never lift the bars: a search stays a line under them.
+- L19 `kVoiceSearchTools = <String>{ 'search_web', 'read_page', 'get_news', }`  — Tools that show the search line while they run.
+- L25 `kVoiceStageRadius = 28`
+- L28 `class VoiceStageFrame extends StatelessWidget`  — The rounded sheet under the bars.
+  - L29 `const VoiceStageFrame({super.key, required this.child})`
+  - L31 `final Widget child`
+  - L34 `Widget build(BuildContext context)`
+- L51 `class VoiceStageChip extends StatelessWidget`  — A small pill laid over a picture: an icon and an optional word.
+  - L52 `const VoiceStageChip({super.key, required this.icon, this.label, this.dot})`
+  - L54 `final HugeIconData icon`
+  - L55 `final String? label`
+  - L58 `final Color? dot`  — A coloured dot before the icon (the live camera).
+  - L61 `Widget build(BuildContext context)`
+- L101 `class VoiceCameraStage extends StatelessWidget`  — The live camera: the local track, a live mark and the flip control.
+  - L102 `const VoiceCameraStage({ super.key, required this.track, required this.mirrored, required this.onFlip, })`
+  - L109 `final lk.VideoTrack? track`
+  - L110 `final bool mirrored`
+  - L111 `final VoidCallback onFlip`
+  - L114 `Widget build(BuildContext context)`
+- L164 `class VoiceCardStage extends StatelessWidget`  — What the agent put on screen: a picture, found pictures, a set of
+  - L165 `const VoiceCardStage({super.key, required this.card, required this.onClose})`
+  - L167 `final VoiceCard card`
+  - L168 `final VoidCallback onClose`
+  - L171 `static bool isFrameless(VoiceCard card)`  — Places draw as their own floating cards, without the frame.
+  - L174 `static const Set<String> _placeKinds = <String>{'places', 'hotels', 'stays'}`
+  - L176 `static List<Map<String, dynamic>> _places(VoiceCard card)`
+  - L180 `Widget build(BuildContext context)`
+- L214 `class _CloseChip extends StatelessWidget`
+  - L215 `const _CloseChip({required this.onTap})`
+  - L217 `final VoidCallback onTap`
+  - L220 `Widget build(BuildContext context)`
+- L230 `String? _hostOf(Object? url)`
+- L237 `void _openLink(Object? url)`
+- L249 `String? _imageUrl(VoiceCard card)`
+- L251 `class _GeneratingImage extends StatelessWidget`
+  - L252 `const _GeneratingImage()`
+  - L255 `Widget build(BuildContext context)`
+- L283 `Widget _networkImage(BuildContext context, String url)`
+- L306 `class _GeneratedImage extends StatelessWidget`
+  - L307 `const _GeneratedImage({required this.card})`
+  - L309 `final VoiceCard card`
+  - L312 `Widget build(BuildContext context)`
+- L332 `class _FoundImages extends StatelessWidget`
+  - L333 `const _FoundImages({required this.card})`
+  - L335 `final VoiceCard card`
+  - L338 `Widget build(BuildContext context)`
+- L403 `class VoicePlaceCarousel extends StatefulWidget`  — Places as separate cards floating on the page. The next one peeks in;
+  - L404 `const VoicePlaceCarousel({super.key, required this.places})`
+  - L406 `final List<Map<String, dynamic>> places`
+  - L409 `State<VoicePlaceCarousel> createState()`
+- L412 `class _VoicePlaceCarouselState extends State<VoicePlaceCarousel>`
+  - L413 `static const double _fraction = 0.86`
+  - L414 `final PageController _pages = PageController(viewportFraction: _fraction)`
+  - L415 `int _index = 0`
+  - L418 `void dispose()`
+  - L423 `void _go(int index)`
+  - L434 `Widget build(BuildContext context)`
+- L515 `class _PlaceCard extends StatelessWidget`
+  - L516 `const _PlaceCard({required this.place})`
+  - L518 `final Map<String, dynamic> place`
+  - L520 `String? _text(String key)`
+  - L528 `Widget build(BuildContext context)`
+- L754 `class VoiceSearchLine extends StatefulWidget`  — One small line under the bars while the agent searches. Then it walks
+  - L755 `const VoiceSearchLine({ super.key, required this.searching, required this.label, this.result, })`
+  - L763 `final bool searching`  — A search tool is running.
+  - L766 `final String label`  — What the running tool says it does.
+  - L769 `final VoiceCard? result`  — The newest search card; its hosts are walked once when it arrives.
+  - L772 `State<VoiceSearchLine> createState()`
+- L775 `class _VoiceSearchLineState extends State<VoiceSearchLine>`
+  - L776 `static const Duration _step = Duration(milliseconds: 900)`
+  - L778 `Timer? _timer`
+  - L779 `List<String> _hosts = const <String>[]`
+  - L780 `int _tick = 0`
+  - L781 `String? _shownId`
+  - L784 `void initState()`
+  - L790 `void didUpdateWidget(covariant VoiceSearchLine oldWidget)`
+  - L799 `void _walk(VoiceCard card)`
+  - L826 `void dispose()`
+  - L832 `Widget build(BuildContext context)`
 
 ## lib/voice/widgets/voice_playback_caption.dart  (55 Z.)
 - L6 `class VoicePlaybackCaption extends StatelessWidget`  — Ordinary chat rendering of heard speech and an explicitly unspoken draft.

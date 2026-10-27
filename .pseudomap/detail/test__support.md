@@ -1,6 +1,6 @@
 # test/support · Signaturen
 
-## test/support/agent_mail_fake.dart  (639 Z.)
+## test/support/agent_mail_fake.dart  (643 Z.)
 - L21 `kFakeMailBase = 'https://api.test'`
 - L22 `kFakeMailToken = 'jwt-test'`
 - L23 `kFakeMailUser = 'user-test'`
@@ -13,39 +13,39 @@
   - L39 `static String sealSync(String plaintext)`
   - L43 `Future<String> seal(String plaintext)`
   - L52 `Future<String> open(String sealed)`
-- L68 `Map<String, dynamic> fakeMail({ required String id, String direction = 'inbound', String from = 'ada@example.com', String? fromName = 'Ada Lovelace', List<String> to = const <String>['k7f3q9x2mh@chukagents.com'], String subject = 'Quarterly numbers', String? snippet = 'Here are the numbers you asked for last week.', String trust = 'trusted', String folder = 'inbox', bool read = false, bool bulk = false, bool attachments = false, String? status, String? importance, String? note, String createdAt = '2026-09-30T09:15:00Z', String text = 'Hello,\n\nhere are the numbers.\n\nAda', List<Map<String, dynamic>> files = const <Map<String, dynamic>>[], List<String> cc = const <String>[], String? inReplyTo, String? references, bool? dkimAligned = true, String? dkimDomain = 'example.com', bool broken = false, })`  — A mail as the fixtures keep it: plain text. The server seals it on the
-- L128 `MailSummary fakeSummary(Map<String, dynamic> m)`  — The opened summary of a fixture, as the service would hand it out. For a
-- L164 `List<Map<String, dynamic>> fakeMailbox()`  — A few mails over every folder, long enough to test a narrow window.
-- L257 `class FakeAgentMailServer`
-  - L258 `FakeAgentMailServer({ List<Map<String, dynamic>>? mails, List<Map<String, dynamic>>? contacts, this.mailboxStatus = 200, this.mailboxDetail, this.frozen = false, this.sendSuspended = false, bool hasKey = true, FakeChukSecretBox? secretBox, }) : mails = mails ?? fakeMailbox(), secretBox = secretBox ?? FakeChukSecretBox(), contacts = contacts ?? <Map<String, dynamic>>[ <String, dynamic>{ 'id': 'c1', 'address': 'ada@example.com', 'trusted_inbound': true, 'allowed_outbound': true, 'blocked': false, 'created_at': '2026-09-01T10:00:00Z', }, <String, dynamic>{ 'id': 'c2', 'address': '@very-long-company-domain-name.example', 'trusted_inbound': true, 'allowed_outbound': false, 'blocked': false, 'created_at': '2026-09-02T10:00:00Z', }, <String, dynamic>{ 'id': 'c3', 'address': 'spam@junk.example', 'trusted_inbound': false, 'allowed_outbound': false, 'blocked': true, 'created_at': '2026-09-03T10:00:00Z', }, ]`
-  - L307 `final List<Map<String, dynamic>> mails`
-  - L308 `final List<Map<String, dynamic>> contacts`
-  - L311 `final FakeChukSecretBox secretBox`  — The chuk key stand-in the services of this server use.
-  - L314 `Map<String, String>? keyRow`  — `{public_key, private_key_sealed}`, or null: no mail key yet.
-  - L317 `int mailboxStatus`  — 200, or the error status `GET /mailbox` answers with.
-  - L318 `String? mailboxDetail`
-  - L319 `bool frozen`
-  - L320 `bool sendSuspended`
-  - L323 `String? userId = kFakeMailUser`  — The signed-in user the services report.
-  - L327 `int? pageSize`  — When set, the list answers this many rows per page and a
-  - L330 `Future<void>? holdOlderPages`  — When set, a request for an older page waits for it.
-  - L333 `http.Response? sendResponse`  — When set, `POST /drafts/{id}/send` answers with this.
-  - L336 `final Map<String, http.Response> failures = <String, http.Response>{}`  — When set, every call to a path containing the key answers with it.
-  - L339 `final Map<String, List<int>> blobs = <String, List<int>>{}`  — The plain bytes of an attachment, by id. Unset: `bytes of <id>`.
-  - L341 `final List<http.Request> requests = <http.Request>[]`
-  - L343 `int _nextContact = 100`
-  - L346 `List<String> get calls`  — The requests, as `METHOD path?query`.
-  - L352 `List<Map<String, dynamic>> bodiesOf(String method, String path)`
-  - L359 `AgentMailService service()`
-  - L367 `Map<String, dynamic>? fixture(String id)`
-  - L375 `MailSummary summaryOf(String id)`  — The opened summary of mail [id], as a page gets it from the list.
-  - L377 `static http.Response _json(Object body, [int status = 200])`
-  - L385 `static http.Response errorResponse(int status, String detail)`
-  - L389 `Future<List<int>> _publicKey()`  — The public key the server seals to.
-  - L401 `Future<String> _seal(Map<String, dynamic> doc, {bool broken = false})`  — A sealed field as the server sends it: the text envelope as a string.
-  - L409 `Future<Map<String, dynamic>> _summaryRow(Map<String, dynamic> m)`  — A fixture as the list sends it: plain columns and the sealed parts.
-  - L441 `Future<Map<String, dynamic>> _messageRow(Map<String, dynamic> m)`
-  - L457 `Future<http.Response> handle(http.Request request)`
+- L68 `Map<String, dynamic> fakeMail({ required String id, String direction = 'inbound', String from = 'ada@example.com', String? fromName = 'Ada Lovelace', List<String> to = const <String>['k7f3q9x2mh@chukagents.com'], String subject = 'Quarterly numbers', String? snippet = 'Here are the numbers you asked for last week.', String trust = 'trusted', String folder = 'inbox', bool read = false, bool bulk = false, bool attachments = false, String? status, String? importance, String? note, String createdAt = '2026-09-30T09:15:00Z', String? alias, String text = 'Hello,\n\nhere are the numbers.\n\nAda', List<Map<String, dynamic>> files = const <Map<String, dynamic>>[], List<String> cc = const <String>[], String? inReplyTo, String? references, bool? dkimAligned = true, String? dkimDomain = 'example.com', bool broken = false, })`  — A mail as the fixtures keep it: plain text. The server seals it on the
+- L130 `MailSummary fakeSummary(Map<String, dynamic> m)`  — The opened summary of a fixture, as the service would hand it out. For a
+- L167 `List<Map<String, dynamic>> fakeMailbox()`  — A few mails over every folder, long enough to test a narrow window.
+- L260 `class FakeAgentMailServer`
+  - L261 `FakeAgentMailServer({ List<Map<String, dynamic>>? mails, List<Map<String, dynamic>>? contacts, this.mailboxStatus = 200, this.mailboxDetail, this.frozen = false, this.sendSuspended = false, bool hasKey = true, FakeChukSecretBox? secretBox, }) : mails = mails ?? fakeMailbox(), secretBox = secretBox ?? FakeChukSecretBox(), contacts = contacts ?? <Map<String, dynamic>>[ <String, dynamic>{ 'id': 'c1', 'address': 'ada@example.com', 'trusted_inbound': true, 'allowed_outbound': true, 'blocked': false, 'created_at': '2026-09-01T10:00:00Z', }, <String, dynamic>{ 'id': 'c2', 'address': '@very-long-company-domain-name.example', 'trusted_inbound': true, 'allowed_outbound': false, 'blocked': false, 'created_at': '2026-09-02T10:00:00Z', }, <String, dynamic>{ 'id': 'c3', 'address': 'spam@junk.example', 'trusted_inbound': false, 'allowed_outbound': false, 'blocked': true, 'created_at': '2026-09-03T10:00:00Z', }, ]`
+  - L310 `final List<Map<String, dynamic>> mails`
+  - L311 `final List<Map<String, dynamic>> contacts`
+  - L314 `final FakeChukSecretBox secretBox`  — The chuk key stand-in the services of this server use.
+  - L317 `Map<String, String>? keyRow`  — `{public_key, private_key_sealed}`, or null: no mail key yet.
+  - L320 `int mailboxStatus`  — 200, or the error status `GET /mailbox` answers with.
+  - L321 `String? mailboxDetail`
+  - L322 `bool frozen`
+  - L323 `bool sendSuspended`
+  - L326 `String? userId = kFakeMailUser`  — The signed-in user the services report.
+  - L330 `int? pageSize`  — When set, the list answers this many rows per page and a
+  - L333 `Future<void>? holdOlderPages`  — When set, a request for an older page waits for it.
+  - L336 `http.Response? sendResponse`  — When set, `POST /drafts/{id}/send` answers with this.
+  - L339 `final Map<String, http.Response> failures = <String, http.Response>{}`  — When set, every call to a path containing the key answers with it.
+  - L342 `final Map<String, List<int>> blobs = <String, List<int>>{}`  — The plain bytes of an attachment, by id. Unset: `bytes of <id>`.
+  - L344 `final List<http.Request> requests = <http.Request>[]`
+  - L346 `int _nextContact = 100`
+  - L349 `List<String> get calls`  — The requests, as `METHOD path?query`.
+  - L355 `List<Map<String, dynamic>> bodiesOf(String method, String path)`
+  - L362 `AgentMailService service()`
+  - L370 `Map<String, dynamic>? fixture(String id)`
+  - L378 `MailSummary summaryOf(String id)`  — The opened summary of mail [id], as a page gets it from the list.
+  - L380 `static http.Response _json(Object body, [int status = 200])`
+  - L388 `static http.Response errorResponse(int status, String detail)`
+  - L392 `Future<List<int>> _publicKey()`  — The public key the server seals to.
+  - L404 `Future<String> _seal(Map<String, dynamic> doc, {bool broken = false})`  — A sealed field as the server sends it: the text envelope as a string.
+  - L412 `Future<Map<String, dynamic>> _summaryRow(Map<String, dynamic> m)`  — A fixture as the list sends it: plain columns and the sealed parts.
+  - L445 `Future<Map<String, dynamic>> _messageRow(Map<String, dynamic> m)`
+  - L461 `Future<http.Response> handle(http.Request request)`
 
 ## test/support/fake_relay_controller.dart  (279 Z.)
 - L12 `class FakeRelayController implements AgentsRelayController`  — A controller the test drives directly: set [set], push [emit] — no socket

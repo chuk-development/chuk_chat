@@ -1,6 +1,6 @@
 # lib/services/automations · Signaturen
 
-## lib/services/automations/agents_automation.dart  (490 Z.)
+## lib/services/automations/agents_automation.dart  (522 Z.)
 - L13 `@immutable class AgentsAutomation`  — One automation of an agent: a schedule (cron / every / at) or a watcher
   - L15 `const AgentsAutomation({ required this.id, required this.sessionKey, required this.kind, required this.name, required this.state, this.spec = const <String, dynamic>{}, this.prompt = '', this.nextFireAt, this.lastFiredAt, this.fireCount = 0, this.suppressedCount = 0, this.lastError, this.logPath, this.createdAt, this.notify = 'always', this.lastSummary, this.lastResultAt, this.unchangedCount = 0, })`
   - L37 `final String id`  — The host's short handle (`ab12cd34`).
@@ -29,45 +29,47 @@
   - L112 `int? get everySeconds`  — The check interval of a page watch, or the interval of an `every`
   - L118 `String? get mailFrom`  — The sender filter of a mail trigger, or null.
   - L124 `String? get mailSubject`  — The subject filter of a mail trigger, or null.
-  - L132 `String? get scheduleText`  — The schedule as the host's spec grammar writes it (`0 9 * * 1-5`,
-  - L143 `bool get isSchedule`
-  - L144 `bool get isWatcher`
-  - L145 `bool get isActive`
-  - L146 `bool get isPaused`
-  - L149 `bool get isOver`  — `done` or `failed`: nothing more will happen.
-  - L154 `String stateLabel([AppLocalizations? l10n])`  — The words of the state chip, localised and in sentence case ("Active",
-  - L159 `String get specLabel`  — A short human reading of the spec (`every 5m`, `cron 0 9 * * 1-5`,
-  - L181 `String get _eventSpecLabel`
-  - L200 `static String _duration(int seconds)`  — `30m`, `2h`, `1d`, `45s`: the largest whole unit.
-  - L209 `static AgentsAutomation? fromPayload(Map<String, dynamic> payload)`  — Reads an `automation` event or an `automation_list` entry. Null when
-  - L244 `static String? _text(Object? value)`
-  - L247 `Map<String, dynamic> toJson()`
-  - L272 `static int? _int(Object? value)`
-  - L279 `static DateTime? _epoch(Object? value)`
-  - L286 `static String _stamp(DateTime when)`
-  - L293 `bool operator ==(Object other)`
-  - L310 `int get hashCode`
-- L317 `abstract interface class AgentsAutomationControl`  — The two frames the app sends about automations. Kept apart from
-  - L320 `Future<void> sendAutomationControl({ required String id, required String action, })`  — `automation_control`: pause / resume / cancel one automation. The host
-  - L328 `Future<void> requestAutomationList({String? sessionKey})`  — `automation_list`: ask for every automation of one session, or of the
-- L334 `String automationStateLabel(String state, [AppLocalizations? l10n])`  — The words for an automation [state] (`active`, `paused`, `done`,
-- L358 `kWatchUrlMinSeconds = 900`  — The page watch's floor: the host checks a page at most every 15 minutes.
-- L361 `kWatchUrlDefaultSeconds = 3600`  — The page watch's default interval when the user gives none.
-- L364 `kMailFilterMaxLength = 200`  — The longest mail filter the host accepts, per field.
-- L368 `kCreatableAutomationKinds = <String>[ 'schedule', 'watch_url', 'mail', ]`  — The kinds the app can create. A `watcher` needs a script in the workspace,
-- L374 `abstract interface class AgentsAutomationEditControl`
-  - L376 `Future<void> sendAutomationCreate(Map<String, dynamic> frame)`  — `automation_create`. The host answers with one `automation_saved`.
-  - L379 `Future<void> sendAutomationUpdate(Map<String, dynamic> frame)`  — `automation_update`. The host answers with one `automation_saved`.
-- L383 `@immutable class AutomationSaveResult`  — The host's answer to a create or an update: the saved row, or why not.
-  - L385 `const AutomationSaveResult.saved(this.automation) : error = null`
-  - L386 `const AutomationSaveResult.failed(this.error) : automation = null`
-  - L388 `final AgentsAutomation? automation`
-  - L391 `final String? error`  — The host's own words, shown as they are.
-  - L393 `bool get ok`
-  - L397 `static AutomationSaveResult fromPayload(Map<String, dynamic> payload)`  — Reads an `automation_saved` frame. A frame that says `ok` without a row
-- L423 `Object automationSpecFor( String kind, { String schedule = '', String url = '', int? everySeconds, String mailFrom = '', String mailSubject = '', })`  — The spec a create or an update carries for [kind]: the schedule text as
-- L448 `Map<String, dynamic> automationCreateFrame({ required String sessionKey, required String kind, required Object spec, required String prompt, String? name, bool notifyOnChange = false, })`  — `automation_create` for [sessionKey].
-- L467 `Map<String, dynamic>? automationUpdateFrame({ required AgentsAutomation before, required Object spec, required String prompt, required String name, required bool notifyOnChange, })`  — `automation_update` for [before]: only the keys whose value differs from
+  - L131 `String? get mailAlias`  — The plus-alias filter of a mail trigger (`receipts` for mail to
+  - L139 `String? get scheduleText`  — The schedule as the host's spec grammar writes it (`0 9 * * 1-5`,
+  - L150 `bool get isSchedule`
+  - L151 `bool get isWatcher`
+  - L152 `bool get isActive`
+  - L153 `bool get isPaused`
+  - L156 `bool get isOver`  — `done` or `failed`: nothing more will happen.
+  - L161 `String stateLabel([AppLocalizations? l10n])`  — The words of the state chip, localised and in sentence case ("Active",
+  - L166 `String get specLabel`  — A short human reading of the spec (`every 5m`, `cron 0 9 * * 1-5`,
+  - L188 `String get _eventSpecLabel`
+  - L208 `static String _duration(int seconds)`  — `30m`, `2h`, `1d`, `45s`: the largest whole unit.
+  - L217 `static AgentsAutomation? fromPayload(Map<String, dynamic> payload)`  — Reads an `automation` event or an `automation_list` entry. Null when
+  - L252 `static String? _text(Object? value)`
+  - L255 `Map<String, dynamic> toJson()`
+  - L280 `static int? _int(Object? value)`
+  - L287 `static DateTime? _epoch(Object? value)`
+  - L294 `static String _stamp(DateTime when)`
+  - L301 `bool operator ==(Object other)`
+  - L318 `int get hashCode`
+- L325 `abstract interface class AgentsAutomationControl`  — The two frames the app sends about automations. Kept apart from
+  - L328 `Future<void> sendAutomationControl({ required String id, required String action, })`  — `automation_control`: pause / resume / cancel one automation. The host
+  - L336 `Future<void> requestAutomationList({String? sessionKey})`  — `automation_list`: ask for every automation of one session, or of the
+- L342 `String automationStateLabel(String state, [AppLocalizations? l10n])`  — The words for an automation [state] (`active`, `paused`, `done`,
+- L366 `kWatchUrlMinSeconds = 900`  — The page watch's floor: the host checks a page at most every 15 minutes.
+- L369 `kWatchUrlDefaultSeconds = 3600`  — The page watch's default interval when the user gives none.
+- L372 `kMailFilterMaxLength = 200`  — The longest mail filter the host accepts, per field.
+- L378 `String? normalizeMailAlias(String value)`  — A plus alias as the host takes it: `receipts`, `+receipts` or a full
+- L398 `kCreatableAutomationKinds = <String>[ 'schedule', 'watch_url', 'mail', ]`  — The kinds the app can create. A `watcher` needs a script in the workspace,
+- L404 `abstract interface class AgentsAutomationEditControl`
+  - L406 `Future<void> sendAutomationCreate(Map<String, dynamic> frame)`  — `automation_create`. The host answers with one `automation_saved`.
+  - L409 `Future<void> sendAutomationUpdate(Map<String, dynamic> frame)`  — `automation_update`. The host answers with one `automation_saved`.
+- L413 `@immutable class AutomationSaveResult`  — The host's answer to a create or an update: the saved row, or why not.
+  - L415 `const AutomationSaveResult.saved(this.automation) : error = null`
+  - L416 `const AutomationSaveResult.failed(this.error) : automation = null`
+  - L418 `final AgentsAutomation? automation`
+  - L421 `final String? error`  — The host's own words, shown as they are.
+  - L423 `bool get ok`
+  - L427 `static AutomationSaveResult fromPayload(Map<String, dynamic> payload)`  — Reads an `automation_saved` frame. A frame that says `ok` without a row
+- L453 `Object automationSpecFor( String kind, { String schedule = '', String url = '', int? everySeconds, String mailFrom = '', String mailSubject = '', String mailAlias = '', })`  — The spec a create or an update carries for [kind]: the schedule text as
+- L480 `Map<String, dynamic> automationCreateFrame({ required String sessionKey, required String kind, required Object spec, required String prompt, String? name, bool notifyOnChange = false, })`  — `automation_create` for [sessionKey].
+- L499 `Map<String, dynamic>? automationUpdateFrame({ required AgentsAutomation before, required Object spec, required String prompt, required String name, required bool notifyOnChange, })`  — `automation_update` for [before]: only the keys whose value differs from
 
 ## lib/services/automations/automation_ledger.dart  (106 Z.)
 - L12 `ToolCall automationCallFromRelay( ToolCall? existing, AgentsRelayAutomation event, { DateTime? now, })`  — The transcript line of one automation: ONE [ToolCall] per automation id,
@@ -116,3 +118,29 @@
   - L373 `_PendingSave(this.requestId)`
   - L375 `final String requestId`
   - L376 `final Completer<AutomationSaveResult> completer = Completer<AutomationSaveResult>()`
+
+## lib/services/automations/simple_schedule.dart  (171 Z.)
+- L12 `enum SimpleScheduleMode`  — Which picker shape a schedule has.
+  - L12 `daily`
+  - L12 `weekdays`
+  - L12 `everyHours`
+  - L12 `custom`
+- L15 `kWorkWeek = <int>{1, 2, 3, 4, 5}`  — The weekdays a new "weekdays" schedule starts with: Monday to Friday.
+- L19 `kMinEveryHours = 1`  — The interval bounds of "every N hours". A day or longer is a daily
+- L20 `kMaxEveryHours = 23`
+- L22 `class SimpleSchedule`
+  - L23 `const SimpleSchedule({ required this.mode, this.hour = 9, this.minute = 0, this.weekdays = kWorkWeek, this.everyHours = 2, this.custom = '', })`
+  - L32 `final SimpleScheduleMode mode`
+  - L33 `final int hour`
+  - L34 `final int minute`
+  - L37 `final Set<int> weekdays`  — Cron weekdays, 0 = Sunday.
+  - L38 `final int everyHours`
+  - L41 `final String custom`  — The text of a custom schedule, as the user or the agent wrote it.
+  - L44 `static const SimpleSchedule initial = SimpleSchedule( mode: SimpleScheduleMode.daily, )`  — The default for a new routine: every day at 09:00.
+  - L48 `SimpleSchedule copyWith({ SimpleScheduleMode? mode, int? hour, int? minute, Set<int>? weekdays, int? everyHours, String? custom, })`
+  - L66 `String toSpec()`  — The spec the host reads. Empty for a weekdays schedule with no day
+  - L84 `static SimpleSchedule fromSpec(String spec)`  — Reads a spec back into the picker. A spec the picker cannot show
+  - L130 `static final RegExp _everyHours = RegExp( r'^every (\d{1,2}) ?h$', caseSensitive: false, )`
+  - L135 `static int? _plainInt(String text)`
+  - L140 `static Set<int>? _parseWeekdays(String field)`  — `1-5`, `1,3,5`, `0,6`, `7` (Sunday). Names and steps are not the
+- L164 `String cronWeekdays(Set<int> days)`  — The cron day-of-week field for [days]: a range where the days are one

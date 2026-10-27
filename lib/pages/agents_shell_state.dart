@@ -930,6 +930,9 @@ mixin AgentsShellHost on State<MessengerShell> {
       sessionSource: widget.sessionSource,
       pairingStore: _pairingStore,
       threadKey: _selectedThreadKey,
+      // The jump to the first new message (bead chuk_chat-f5wd).
+      unreadSince: _readMarks.unreadSince(_selectedThreadKey),
+      onUnreadSeen: () => _readMarks.clearUnreadSince(_selectedThreadKey),
       shellConfig: widget.shellConfig,
       onPaired: _onPaired,
       onRunStateChanged: (threadKey, running) {

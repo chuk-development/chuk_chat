@@ -510,6 +510,82 @@
   - L77 `static Future<void> settled()`  — Resolves once every pending write has landed. [note] is deliberately
 - L81 `void unawaited(Future<void> future)`  — Local `unawaited`, so this file pulls in nothing but what it uses.
 
+## lib/services/autobahn_traffic_service.dart  (676 Z.)
+- L39 `kAutobahnApiBase = 'https://verkehr.autobahn.de/o/autobahn'`
+- L44 `kAutobahnRefPrefix = 'ab:'`  — Prefix of a feature `ref` that points at Autobahn GmbH items:
+- L47 `kAutobahnHeaders = { 'Accept': 'application/json', 'User-Agent': 'chuk-chat/1.0', }`  — Neutral agent string: the app name only, no user or device data.
+- L53 `kAutobahnServices = ['closure', 'roadworks']`  — The services asked per road.
+- L55 `kAutobahnRoadTtl = Duration(minutes: 5)`
+- L56 `kAutobahnIndexTtl = Duration(hours: 1)`
+- L57 `kAutobahnRoadListTtl = Duration(hours: 24)`
+- L58 `kAutobahnConcurrency = 8`
+- L59 `_requestTimeout = Duration(seconds: 8)`
+- L60 `_lookupDeadline = Duration(seconds: 25)`
+- L63 `kAutobahnLayer = -1`  — Pseudo layer id for Autobahn entries in a [RoadClosure].
+- L66 `bool autobahnFeedCovers(double lat, double lon)`  — Rough box around Germany. The API only knows German motorways.
+- L76 `String autobahnShortId(String identifier)`  — 8 hex chars (FNV-1a, 32 bit) of an item identifier. The identifiers are
+- L87 `(String, List<String>)? parseAutobahnRef(String ref)`  — Parses "ab:A7:1a2b3c4d,5e6f7a8b" into ("A7", ["1a2b3c4d", "5e6f7a8b"]).
+- L104 `class AutobahnItem`  — One item as the API returns it, parsed.
+  - L105 `AutobahnItem({ required this.identifier, required this.road, required this.closure, })`
+  - L111 `final String identifier`
+  - L112 `final String road`
+  - L113 `final RoadClosure closure`
+  - L115 `String get shortId`
+- L118 `_abDate = RegExp(r'\b(\d{1,2})\.(\d{1,2})\.(\d{4}|\d{2})\b')`
+- L119 `_abTime = RegExp(r'\b(\d{1,2}):(\d{2})\b')`
+- L127 `DateRange parseAutobahnValidity(List<String> lines)`  — Start and end of an item from its validity lines:
+- L157 `bool _isLocationLine(String line, String road)`  — "A7: Füssen -> Ulm, zwischen …", "Von A96: …", "Abfahrt von der A9: …"
+- L162 `String _clip(String s, int max)`
+- L167 `List<AutobahnItem> parseAutobahnItems(String road, dynamic json)`  — Parses one service response (`{"closure":[…]}`, `{"roadworks":[…]}`)
+- L180 `AutobahnItem? _parseItem(String road, dynamic raw)`
+- L293 `double distanceToGeometryKm(ResolvedGeometry g, double lat, double lon)`  — Distance in km from ([lat], [lon]) to the nearest part of [g] (lines as
+- L322 `@immutable class _Bounds`  — Bounding box of a road's current items.
+  - L324 `const _Bounds(this.minLat, this.minLon, this.maxLat, this.maxLon)`
+  - L326 `final double minLat, minLon, maxLat, maxLon`
+  - L328 `static _Bounds? of(Iterable<LatLng> points)`
+  - L341 `bool touchesCircle(double lat, double lon, double radiusKm)`  — True when the circle's box (plus a 2 km margin) touches this box.
+- L354 `List<RoadClosure> groupAutobahnItems(List<AutobahnItem> items)`  — Folds the two directions of one measure (same title, same dates, same
+- L389 `List<RoadClosure> dropDanordAutobahnCopies( List<RoadClosure> danord, List<RoadClosure> autobahn, )`  — Drops entries of the DANord feed's own Autobahn layers (5 and 10) that
+- L427 `class AutobahnLookup`  — What one lookup found and how much of the network it reached.
+  - L428 `const AutobahnLookup({ required this.closures, required this.roadsAsked, required this.roadsFailed, required this.requests, })`
+  - L435 `final List<RoadClosure> closures`
+  - L436 `final int roadsAsked`
+  - L437 `final int roadsFailed`
+  - L440 `final int requests`  — HTTP requests this lookup sent (cache hits send none).
+- L443 `class AutobahnUnavailable implements Exception`
+  - L444 `const AutobahnUnavailable()`
+- L447 `class _RoadEntry`
+  - L448 `_RoadEntry(this.items, this.at)`
+  - L449 `final List<AutobahnItem> items`
+  - L450 `final DateTime at`
+- L454 `class _Limiter`  — Runs at most [max] tasks at once; tasks queued past [deadline] fail.
+  - L455 `_Limiter(this.max, this.clock)`
+  - L456 `final int max`
+  - L457 `final DateTime Function() clock`
+  - L458 `int _running = 0`
+  - L459 `final Queue<Completer<void>> _waiting = Queue()`
+  - L461 `Future<T> run<T>(Future<T> Function() task, DateTime deadline)`
+- L484 `class AutobahnTrafficService`
+  - L485 `AutobahnTrafficService({ http.Client? client, DateTime Function()? clock, int concurrency = kAutobahnConcurrency, }) : _http = client ?? http.Client(), _clock = clock ?? DateTime.now, _limiter = _Limiter(concurrency, clock ?? DateTime.now)`
+  - L493 `static final AutobahnTrafficService instance = AutobahnTrafficService()`
+  - L495 `final http.Client _http`
+  - L496 `final DateTime Function() _clock`
+  - L497 `final _Limiter _limiter`
+  - L499 `List<String>? _roads`
+  - L500 `DateTime? _roadsAt`
+  - L501 `final Map<String, _RoadEntry> _cache = {}`
+  - L502 `final Map<String, Future<List<AutobahnItem>?>> _inFlight = {}`
+  - L506 `final Map<String, _Bounds?> _index = {}`  — Road → box of its items. Missing key = unknown (always asked);
+  - L507 `DateTime? _indexAt`
+  - L509 `int _requests = 0`
+  - L512 `void reset()`  — Clears every cache (tests, sign-out).
+  - L520 `Future<dynamic> _getJson(Uri uri, DateTime deadline)`
+  - L533 `Future<List<String>> _roadList(DateTime deadline)`
+  - L563 `Future<List<AutobahnItem>?> _roadItems(String road, DateTime deadline)`  — Items of one road, from cache when fresh. Null when a request failed.
+  - L604 `bool get _indexFresh`
+  - L609 `Future<AutobahnLookup> closuresAround({ required double lat, required double lon, double radiusKm = 5, })`  — Closures and roadworks within [radiusKm] of the point, grouped.
+  - L660 `Future<ResolvedGeometry> refGeometry(String ref)`  — Geometry of an `ab:` ref. Fetches the road (2 requests) unless it is
+
 ## lib/services/bash_sandbox.dart  (457 Z.)
 - L9 `typedef ApprovalCallback = Future<bool> Function(String command, String reason)`  — Callback type for approval dialogs
 - L15 `class BashSandbox`  — Sandboxed Bash Command Executor
@@ -1820,6 +1896,32 @@
   - L342 `static Future<void> _persist( String userId, List<Map<String, dynamic>> chats, )`
   - L353 `static Map<String, dynamic>? _sanitizeRow(Map<String, dynamic> row)`
 
+## lib/services/map_feature_resolver.dart  (255 Z.)
+- L30 `_nominatimBase = 'https://nominatim.openstreetmap.org'`
+- L31 `_headers = { 'Accept': 'application/json', 'User-Agent': 'chuk-chat/1.0', }`
+- L35 `_timeout = Duration(seconds: 15)`
+- L36 `_nominatimSpacing = Duration(milliseconds: 1100)`
+- L37 `_maxCacheEntries = 200`
+- L39 `class MapFeatureResolver`
+  - L40 `MapFeatureResolver._()`
+  - L42 `static final MapFeatureResolver instance = MapFeatureResolver._()`
+  - L44 `final LinkedHashMap<String, Future<ResolvedGeometry>> _cache = LinkedHashMap<String, Future<ResolvedGeometry>>()`
+  - L46 `final Map<String, ResolvedGeometry> _primedRefs = {}`
+  - L47 `final Map<String, Future<ResolvedGeometry>> _streetCache = {}`
+  - L49 `Future<void> _nominatimQueue = Future<void>.value()`
+  - L50 `DateTime _lastNominatim = DateTime.fromMillisecondsSinceEpoch(0)`
+  - L54 `void primeRef(String ref, ResolvedGeometry geometry)`  — Stores geometry the road_closures tool already has, so the map draws
+  - L63 `Future<ResolvedGeometry> resolve(MapFeatureSpec spec)`  — The looked-up geometry of [spec] (without its inline geometry).
+  - L82 `Future<ResolvedGeometry> _resolveUncached(MapFeatureSpec spec)`
+  - L99 `Future<ResolvedGeometry> _resolveRef(String ref)`
+  - L111 `Future<ResolvedGeometry> _resolveRoad(MapFeatureSpec spec)`
+  - L131 `Future<List<LatLng>> _endpointCandidates( List<List<LatLng>> road, FeatureEndpoint end, String? town, )`
+  - L146 `Future<List<List<LatLng>>> _streetLines(String street, String? town)`  — Every line segment of a street. Structured search first (it returns
+  - L179 `List<List<LatLng>> _linesOf(List<dynamic> results)`
+  - L189 `Future<ResolvedGeometry> _resolveArea(String area, String? town)`
+  - L214 `Future<LatLng?> geocode(String query)`  — Coordinates of a place name, through the same rate-limited queue.
+  - L223 `Future<List<dynamic>> _nominatim( Map<String, String> params, { bool geo = true, })`  — One Nominatim search, spaced at least [_nominatimSpacing] from the
+
 ## lib/services/message_composition_service.dart  (412 Z.)
 - L11 `class MessageCompositionResult`  — Result of message composition preparation
   - L12 `final bool isValid`
@@ -1853,7 +1955,7 @@
   - L404 `factory _TokenLimits.error(String message)`
   - L408 `factory _TokenLimits.success(int maxResponseTokens)`
 
-## lib/services/model_cache_service.dart  (228 Z.)
+## lib/services/model_cache_service.dart  (239 Z.)
 - L9 `class ModelCacheService`
   - L10 `const ModelCacheService._()`
   - L12 `static const String _kModelsKey = 'cached_models_v2'`
@@ -1872,15 +1974,15 @@
   - L105 `static Future<List<Map<String, dynamic>>> loadAvailableModels()`
   - L127 `static List<Map<String, dynamic>> _copyOf( List<Map<String, dynamic>> models, )`  — A fresh list of fresh maps, as every read handed out before the memo:
   - L138 `static Future<String?> displayNameFor(String modelId)`  — Human name of a model, e.g. `DeepSeek: DeepSeek V4 Flash` for
-  - L151 `static Future<void> saveSelectedModel(String userId, String modelId)`
-  - L156 `static Future<String?> loadSelectedModel(String userId)`
-  - L161 `static Future<void> saveProviderPreferences( String userId, Map<String, String> providers, )`
-  - L169 `static Future<Map<String, String>> loadProviderPreferences( String userId, )`
-  - L190 `static Future<void> updateProviderPreference( String userId, String modelId, String providerSlug, )`
-  - L206 `static Future<void> clearProviderPreference( String userId, String modelId, )`
-  - L216 `static Future<void> clearAllForUser(String userId)`
-  - L222 `static String _selectedModelKey(String userId)`
-  - L225 `static String _providerPrefsKey(String userId)`
+  - L162 `static Future<void> saveSelectedModel(String userId, String modelId)`
+  - L167 `static Future<String?> loadSelectedModel(String userId)`
+  - L172 `static Future<void> saveProviderPreferences( String userId, Map<String, String> providers, )`
+  - L180 `static Future<Map<String, String>> loadProviderPreferences( String userId, )`
+  - L201 `static Future<void> updateProviderPreference( String userId, String modelId, String providerSlug, )`
+  - L217 `static Future<void> clearProviderPreference( String userId, String modelId, )`
+  - L227 `static Future<void> clearAllForUser(String userId)`
+  - L233 `static String _selectedModelKey(String userId)`
+  - L236 `static String _providerPrefsKey(String userId)`
 
 ## lib/services/model_capabilities_service.dart  (209 Z.)
 - L12 `class ModelCapabilitiesService`  — Service for determining model capabilities like vision and reasoning.
@@ -2054,15 +2156,15 @@
   - L195 `final Set<int> expectedStatusCodes`
   - L197 `const _ConnectivityProbe({ required this.uri, this.headers, required this.expectedStatusCodes, })`
 
-## lib/services/notification_service.dart  (57 Z.)
-- L17 `class NotificationService`
-  - L18 `static bool get isInitialized`
-  - L22 `static Future<void> initialize([GlobalKey<NavigatorState>? navigatorKey])`  — chuk passes its navigator key; Agents's shell routes taps itself, so
-  - L25 `static Future<bool> requestPermission()`
-  - L29 `static Future<bool> requestPermissions()`  — Older name used by Agents's own code.
-  - L39 `static Future<void> showCompletionNotification({ required String chatId, required String chatTitle, required String contentPreview, })`  — chuk's completion toast: the chat's title and a short preview of the
-  - L52 `static Future<void> checkLaunchNotification()`
-  - L55 `static Future<void> cancelAll()`
+## lib/services/notification_service.dart  (60 Z.)
+- L19 `class NotificationService`
+  - L20 `static bool get isInitialized`
+  - L24 `static Future<void> initialize([GlobalKey<NavigatorState>? navigatorKey])`  — chuk passes its navigator key; Agents's shell routes taps itself, so
+  - L27 `static Future<bool> requestPermission()`
+  - L31 `static Future<bool> requestPermissions()`  — Older name used by Agents's own code.
+  - L42 `static Future<void> showCompletionNotification({ required String chatId, required String chatTitle, required String contentPreview, })`  — chuk's completion toast: the chat's title, and a short preview of the
+  - L55 `static Future<void> checkLaunchNotification()`
+  - L58 `static Future<void> cancelAll()`
 
 ## lib/services/notification_service_io.dart  (257 Z.)
 - L13 `class NotificationService`  — Service for handling local notifications (completion notifications with deep linking)
@@ -2497,6 +2599,72 @@
   - L80 `final String message`
   - L83 `String toString()`
 
+## lib/services/road_closures_service.dart  (658 Z.)
+- L28 `kRoadworksMapServer = 'https://service.gdi-sh.de/REST_AGS_SH_Baustelleninformationen_DANord/' 'arcgis/rest/services/FACH`
+- L33 `kRoadworksHeaders = { 'Accept': 'application/json', 'User-Agent': 'chuk-chat/1.0', }`  — Neutral agent string: the app name only, no user or device data.
+- L38 `_timeout = Duration(seconds: 20)`
+- L41 `kRoadworksRefPrefix = 'sh:'`  — Prefix of a feature `ref` that points into [kRoadworksMapServer].
+- L44 `bool roadworksFeedCovers(double lat, double lon)`  — Rough box the feed covers (SH, HH, NI, MV).
+- L48 `class RoadworksLayer`  — One layer of the map service.
+  - L49 `const RoadworksLayer( this.id, this.source, { this.isLine = false, this.isoIsUtc = false, this.isDetour = false, })`
+  - L57 `final int id`
+  - L58 `final String source`
+  - L59 `final bool isLine`
+  - L63 `final bool isoIsUtc`  — The SH layers write ISO timestamps in UTC ("2026-02-02 23:00:00" is
+  - L64 `final bool isDetour`
+- L69 `kRoadworksLayers = [ RoadworksLayer(8, 'LBV.SH', isLine: true, isoIsUtc: true), RoadworksLayer(10, 'Autobahn GmbH', isLi`  — The layers worth asking. Layer 11 (Verkehrslagen) is traffic flow, not
+- L83 `RoadworksLayer? _layerById(int id)`
+- L91 `class DateRange`  — A start/end pair read from one of the feed's many date formats.
+  - L92 `const DateRange(this.start, this.end)`
+  - L93 `final DateTime? start`
+  - L94 `final DateTime? end`
+- L97 `_isoDate = RegExp( r'(\d{4})-(\d{2})-(\d{2})(?:[ T,]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?', )`
+- L100 `_deDate = RegExp( r'(\d{1,2})\.(\d{1,2})\.(\d{4})(?:,?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?', )`
+- L108 `DateRange parseDateRange(String? text, {bool isoIsUtc = false})`  — Reads the first two dates from [text]: "2026-02-02 23:00:00 bis …",
+- L133 `String _two(int v)`
+- L136 `String formatGermanDate(DateTime d)`  — "03.02.2026"
+- L140 `class RoadClosure`  — One closure or roadworks measure, possibly made of several segments.
+  - L141 `RoadClosure({ required this.layer, required this.ids, required this.kind, required this.title, this.road, this.restriction, this.start, this.end, this.detour, this.notes, this.limits, this.geometry = ResolvedGeometry.empty, String? ref, String? source, this.direction, this.whenText, this.blocked = false, }) : _ref = ref, // ignore: prefer_initializing_formals _source = source`
+  - L162 `final int layer`
+  - L163 `final List<int> ids`
+  - L164 `final MapFeatureKind kind`
+  - L165 `final String title`
+  - L166 `final String? road`
+  - L167 `final String? restriction`
+  - L168 `final DateTime? start`
+  - L169 `final DateTime? end`
+  - L170 `final String? detour`
+  - L171 `final String? notes`
+  - L172 `final String? limits`
+  - L173 `ResolvedGeometry geometry`
+  - L176 `final String? _ref`  — Set by sources other than the DANord MapServer (Autobahn GmbH).
+  - L177 `final String? _source`
+  - L180 `final String? direction`  — Direction of travel ("Füssen/Reutte -> Ulm"), when the source says.
+  - L184 `final String? whenText`  — The source's own wording of when it applies (hours included), used
+  - L187 `final bool blocked`  — The road is blocked (source flag, Autobahn GmbH only).
+  - L189 `String get source`
+  - L192 `String get ref`  — What a map feature writes to point back at this measure.
+  - L195 `RoadClosure copyWithRef({String? ref, String? direction})`  — A copy with its own geometry, optionally with a new ref/direction.
+  - L215 `String get datesLabel`
+  - L225 `String get _dedupeKey`
+- L229 `String? _attr(Map<String, dynamic> a, List<String> keys)`
+- L239 `String _fmtNum(dynamic v)`
+- L246 `MapFeatureKind classifyRestriction(String text)`  — Decides closure vs roadworks from the German wording.
+- L268 `List<RoadClosure> parseRoadworksLayer(int layerId, dynamic json)`  — Parses one layer's ArcGIS query response into closures (one per
+- L366 `List<RoadClosure> groupRoadClosures(List<RoadClosure> closures)`  — Folds segments of one measure into one entry and drops point copies of
+- L389 `List<RoadClosure> filterCurrentClosures( List<RoadClosure> closures, { required DateTime now, int daysAhead = 30, double? nearLat, double? nearLon, })`  — Drops finished measures and those starting later than [daysAhead];
+- L426 `String _kindWord(MapFeatureKind k)`
+- L433 `String _short(String s, int max)`
+- L437 `Map<String, dynamic> closureMapFeature(RoadClosure c)`  — The map feature JSON the model can copy into a <map> block.
+- L452 `_modelTextBudget = 3200`  — The tool result is cut at about 4000 chars; entries stop here.
+- L456 `String _closureEntry(RoadClosure c, int n, DateTime now)`  — One numbered entry of [formatClosuresForModel], with a leading blank
+- L488 `String formatClosuresForModel({ required List<RoadClosure> closures, required String placeLabel, required double lat, required double lon, required double radiusKm, required DateTime now, int maxItems = 15, bool northFeed = true, bool autobahn = false, List<String> warnings = const [], })`  — The text the model reads. [northFeed] says the DANord feed was asked,
+- L561 `String _envelope(double lat, double lon, double radiusKm)`
+- L567 `Future<List<RoadClosure>> _queryLayer( http.Client client, RoadworksLayer layer, Map<String, String> params, )`
+- L590 `Future<List<RoadClosure>> fetchRoadClosuresAround({ required double lat, required double lon, double radiusKm = 5, http.Client? client, })`  — Every layer's entries within [radiusKm] of the point, grouped.
+- L619 `(int, List<int>)? parseRoadworksRef(String ref)`  — Parses "sh:8:113,117" into (8, [113, 117]). Null when malformed.
+- L632 `Future<ResolvedGeometry> fetchRoadworksRefGeometry( String ref, { http.Client? client, })`  — Geometry of a ref, fetched by object id.
+
 ## lib/services/round_content_block_service.dart  (326 Z.)
 - L5 `class RoundContentBlockResult`
   - L6 `const RoundContentBlockResult({ required this.blocks, required this.interimOutputText, })`
@@ -2514,14 +2682,14 @@
   - L304 `static String normalizeTextForCompare(String s)`  — Whitespace-normalized form used for duplicate detection.
   - L311 `static String _mergeReasoning( String providerReasoning, String foldedInterim, )`  — Merge provider reasoning with folded interim prose into one reasoning
 
-## lib/services/service_credentials_service.dart  (212 Z.)
+## lib/services/service_credentials_service.dart  (218 Z.)
 - L16 `class ServiceCredentialsService`  — Syncs encrypted OAuth tokens (Google, GitHub, MCP connectors, etc.) to
   - L17 `const ServiceCredentialsService._()`
   - L19 `static const String _table = 'service_credentials'`
-  - L29 `static Future<void> save( String serviceName, Map<String, dynamic> data, )`  — Encrypt and upsert credentials for [serviceName].
-  - L62 `static Future<Map<String, dynamic>?> load(String serviceName)`  — Load and decrypt credentials for [serviceName].
-  - L105 `static Future<Map<String, Map<String, dynamic>>> loadAll({ bool throwOnError = false, Set<String>? undecryptable, })`  — Load all stored credentials for the current user.
-  - L178 `static Future<int> delete( String serviceName, { bool throwOnError = false, })`  — Delete credentials for [serviceName]. Returns how many rows were removed.
+  - L33 `static Future<bool> save( String serviceName, Map<String, dynamic> data, )`  — Encrypt and upsert credentials for [serviceName].
+  - L68 `static Future<Map<String, dynamic>?> load(String serviceName)`  — Load and decrypt credentials for [serviceName].
+  - L111 `static Future<Map<String, Map<String, dynamic>>> loadAll({ bool throwOnError = false, Set<String>? undecryptable, })`  — Load all stored credentials for the current user.
+  - L184 `static Future<int> delete( String serviceName, { bool throwOnError = false, })`  — Delete credentials for [serviceName]. Returns how many rows were removed.
 
 ## lib/services/session_manager_service.dart  (280 Z.)
 - L24 `typedef SessionEventCallback = void Function()`  — Callback for session-related events
@@ -3078,154 +3246,154 @@
   - L282 `int tokens = 0`
   - L283 `int requests = 0`
 
-## lib/services/tool_call_handler.dart  (2356 Z.)
+## lib/services/tool_call_handler.dart  (2366 Z.)
 - L33 `_readOnlyToolNames = <String>{ 'web_search', 'web_crawl', 'search_places', 'search_restaurants', 'geocode', 'get_route',`  — Tools that only read. A round made up entirely of these can run its
-- L54 `repeatableLookupToolNames = <String>{ 'web_search', 'web_crawl', 'search_places', 'search_restaurants', 'geocode', 'get_`  — Read-only lookups whose result does not change within one turn: the same
-- L70 `kRepeatedToolCallNote = '[REPEATED CALL] This exact call already ran in this turn. The result ' 'below is the one it ret`  — Prefix of a tool result that was answered from an identical earlier call
-- L77 `kToolsClosedNote = 'Tools are now closed for this turn. Write the final answer for the user ' 'from the results you have`  — Added to [kRepeatedToolCallNote] on the round that closes the tools.
-- L87 `kMaxToolRoundsPerTurn = 16`  — Most tool rounds one user turn may run. Every round re-sends the whole
-- L95 `kForcedFinalAnswerNote = 'The tool limit for this turn is reached. Tools are now closed. ' 'Write the final answer for t`  — Sent as the user turn of the forced final pass. When the round limit is
-- L103 `_maxForcedFinalPasses = 2`  — Forced final passes one turn may send before it ends with what it has.
-- L110 `kCompactToolResultTriggerChars = 4000`  — An older tool result longer than this is shortened before the next pass.
-- L114 `kCompactToolResultKeepChars = 3000`  — Characters an older tool result keeps when it is shortened.
-- L121 `@visibleForTesting String compactToolResultForModel(String content)`  — Shortens one older tool result. A result at or under
-- L138 `@visibleForTesting void compactOlderToolResults( List<Map<String, dynamic>> history, { int turnStart = 0, Set<int> promptToolResultIndices = const <int>{}, })`  — Shortens, in place, the tool results in [history] that are not part of
-- L167 `@visibleForTesting String toolCallIdentityKey(String name, Map<String, dynamic> arguments)`  — A key that is equal for two calls with the same name and the same
-- L170 `Object? _canonicalJson(Object? value)`
-- L181 `class ToolLoopSession`
-  - L182 `ToolLoopSession({ required this.latestUserMessage, required this.history, required this.accessToken, required this.enforcer, required this.toolCallingEnabled, required this.discoveryMode, this.baseSystemPrompt, this.discoveryContextKey, this.modelId, this.skipIdentity = false, this.nativeToolCalling = false, }) : turnHistoryStart = history.length`
-  - L196 `String latestUserMessage`
-  - L200 `final int turnHistoryStart`  — Length of [history] when the turn started. Entries from here on were
-  - L204 `final Set<int> promptToolResultIndices = <int>{}`  — History indices of prompt-based tool-result messages (see
-  - L208 `String? pendingPromptToolResult`  — The prompt-based tool-result message last handed to the model, so the
-  - L209 `final List<Map<String, dynamic>> history`
-  - L210 `final String accessToken`
-  - L211 `final ToolEnforcer enforcer`
-  - L212 `final bool toolCallingEnabled`
-  - L213 `final bool discoveryMode`
-  - L214 `final String? baseSystemPrompt`
-  - L215 `final String? discoveryContextKey`
-  - L219 `final String? modelId`  — Currently-selected model id. When set, the per-model system prompt
-  - L223 `final bool skipIdentity`  — When true, the identity section (Soul/User/Memory) is not injected
-  - L229 `final bool nativeToolCalling`  — When true, tools are exposed to the model natively (the request carries a
-  - L231 `final List<Map<String, dynamic>> discoveredTools = []`
-  - L232 `final Set<String> discoveredToolNames = {}`
-  - L238 `final List<String> activeSkillNames = []`  — Skills activated via the `skill` tool, oldest first. Their bodies are
-  - L240 `final List<ToolCall> toolCalls = []`
-  - L246 `final List<ContentBlock> producedBlocks = []`  — Content blocks produced as side-effects of tool calls in this loop
-  - L248 `int emptyFinalRecoveryAttempts = 0`
-  - L249 `int malformedToolProtocolRecoveryAttempts = 0`
-  - L250 `int truncatedCompletionRecoveryAttempts = 0`
-  - L251 `int deferredActionRecoveryAttempts = 0`
-  - L252 `int nonFinalTurnRecoveryAttempts = 0`
-  - L253 `int factCheckRecoveryAttempts = 0`
-  - L260 `int repeatedLookupRounds = 0`  — Rounds with at least one call that repeated a lookup this turn already
-  - L264 `bool toolsClosed = false`  — Set when the model kept repeating lookups it already had. The next pass
-  - L269 `bool finalAnswerRequested = false`  — Set by the stream driver when its own pass budget is nearly used up.
-  - L272 `int forcedFinalPasses = 0`  — Forced final passes sent this turn (see [kForcedFinalAnswerNote]).
-  - L275 `bool get toolsShut`  — True once the model may not call tools any more this turn.
-  - L283 `String? factCheckCandidate`  — The tool-grounded candidate answer captured just before a fact-check
-  - L284 `String factCheckCandidateReasoning = ''`
-- L287 `class ToolLoopStep`
-  - L288 `const ToolLoopStep({ required this.message, required this.history, required this.systemPrompt, })`
-  - L294 `final String message`
-  - L295 `final List<Map<String, dynamic>> history`
-  - L296 `final String? systemPrompt`
-- L305 `class RoundSegment`  — One segment in the model's interleaved output for a single round.
-  - L306 `const RoundSegment._({this.text, this.toolCall})`
-  - L308 `factory RoundSegment.text(String text)`
-  - L309 `factory RoundSegment.toolCall(ToolCall tc)`
-  - L311 `final String? text`
-  - L312 `final ToolCall? toolCall`
-  - L314 `bool get isText`
-  - L315 `bool get isToolCall`
-- L318 `class ToolLoopResult`
-  - L319 `const ToolLoopResult._({ required this.shouldContinue, this.nextStep, this.finalContent, this.finalReasoning, this.interimContent, this.interimBeforeToolCalls = false, this.toolCalls = const [], this.interleavedSegments = const [], this.producedBlocks = const [], })`
-  - L331 `factory ToolLoopResult.continueWith({ required ToolLoopStep nextStep, String? interimContent, bool interimBeforeToolCalls = false, List<ToolCall> toolCalls = const [], List<RoundSegment> interleavedSegments = const [], List<ContentBlock> producedBlocks = const [], })`
-  - L350 `factory ToolLoopResult.finalAnswer({ required String content, required String reasoning, List<ToolCall> toolCalls = const [], List<ContentBlock> producedBlocks = const [], })`
-  - L365 `final bool shouldContinue`
-  - L366 `final ToolLoopStep? nextStep`
-  - L367 `final String? finalContent`
-  - L368 `final String? finalReasoning`
-  - L369 `final String? interimContent`
-  - L370 `final bool interimBeforeToolCalls`
-  - L371 `final List<ToolCall> toolCalls`
-  - L377 `final List<RoundSegment> interleavedSegments`  — Ordered list of text/tool segments produced this round. Empty when the
-  - L383 `final List<ContentBlock> producedBlocks`  — New content blocks produced as side-effects of tool calls during this
-- L394 `class ToolTurnSignals`  — Provider/tool-loop hints extracted from stream metadata.
-  - L395 `const ToolTurnSignals._({this.stopReason, this.finishReason, this.rawMeta})`
-  - L397 `final String? stopReason`
-  - L398 `final String? finishReason`
-  - L399 `final Map<String, dynamic>? rawMeta`
-  - L401 `static const Set<String> _toolUseReasons = <String>{ 'tool_use', 'tool_calls', 'function_call', 'function_calls', }`
-  - L408 `static const Set<String> _finalReasons = <String>{ 'stop', 'end_turn', 'stop_sequence', 'eos', }`
-  - L415 `static const Set<String> _truncatedReasons = <String>{'max_tokens', 'length'}`
-  - L417 `bool get indicatesToolUse`
-  - L421 `bool get indicatesFinalStop`
-  - L425 `bool get indicatesTruncated`
-  - L429 `static ToolTurnSignals fromMeta(Map<String, dynamic>? meta)`
-  - L456 `static String? _firstLowercasedString( Map<String, dynamic> root, List<List<Object>> paths, )`
-  - L471 `static Object? _readPath(Object? current, List<Object> path)`
-- L493 `_kMalformedArgumentsKey = '__malformed_arguments__'`  — Marks a call whose arguments did not parse, so the executor can report
-- L495 `class ToolCallHandler`
-  - L496 `ToolCallHandler._internal()`
-  - L523 `static final ToolCallHandler _instance = ToolCallHandler._internal()`
-  - L530 `factory ToolCallHandler()`  — Upstream's client-side tool loop below. The first call builds it, which
-  - L537 `static ToolCallHandler forChat(String? chatId)`  — The loop for [chatId]'s turn. An Agents thread
-  - L546 `static void warmUp()`  — Builds upstream's loop now instead of at the first send, so the tool
-  - L548 `final ToolExecutor _toolExecutor = ToolExecutor()`
-  - L549 `static const int _maxEmptyFinalRecoveryAttempts = 3`
-  - L550 `static const int _maxMalformedToolProtocolRecoveryAttempts = 2`
-  - L551 `static const int _maxTruncatedCompletionRecoveryAttempts = 2`
-  - L552 `static const int _maxDeferredActionRecoveryAttempts = 2`
-  - L553 `static const int _maxNonFinalTurnRecoveryAttempts = 1`
-  - L556 `static const int _maxFactCheckRecoveryAttempts = 1`  — One-shot self-verification pass before a tool-grounded answer is shown.
-  - L563 `static const Set<String> _nonFactualToolNames = { 'find_tools', 'notes', 'ask_user', // Returns a Connect-button marker, not a real-world fact. Without this a // turn whose only tool call was request_mcp_server would fire a spurious // [VERIFY] round against nothing. 'request_mcp_server', 'flip_coin', 'roll_dice', 'random_number', 'countdown', 'password_generator', 'uuid_generator', 'generate_qr', 'calculate', 'generate_image', 'fetch_image', // Hands files over; the result is a delivery receipt, not facts. 'fetch_files', // `skill` returns an acknowledgement, not facts. Without this entry a // turn whose only tool call was `skill()` would trigger a full [VERIFY] // round-trip that fact-checks an ack against nothing. 'skill', // Artifact hosting returns a published URL, not verifiable facts. Without // these entries a turn whose only tool call was create/update_artifact // would fire a spurious [VERIFY] fact-check round against nothing. 'create_artifact', 'update_artifact', }`  — Tools whose results carry no verifiable real-world facts. When EVERY
-  - L594 `static const int _maxDiscoveryContexts = 200`
-  - L600 `static const int _maxActiveSkillsPerChat = 3`  — Ceiling on skills active in one chat. Every active skill's body is
-  - L601 `final Map<String, _DiscoveryContextState> _discoveryContextStates = <String, _DiscoveryContextState>{}`
-  - L604 `ToolExecutor get toolExecutor`
-  - L606 `ToolLoopSession createSession({ required String initialUserMessage, required List<Map<String, dynamic>> history, required String accessToken, String? discoveryContextKey, String? baseSystemPrompt, String? modelId, bool toolCallingEnabled = true, bool discoveryMode = true, bool skipIdentity = false, bool nativeToolCalling = false, })`
-  - L663 `Future<String> buildInitialSystemPrompt(ToolLoopSession session)`
-  - L694 `List<Map<String, dynamic>> nativeToolDefinitions(ToolLoopSession session)`  — The enabled tools as native OpenAI function definitions, for the request's
-  - L718 `Future<ToolLoopResult> _forceFinalAnswer( ToolLoopSession session, { required String content, required String reasoning, })`  — The forced final pass. Sets [ToolLoopSession.toolsClosed] (the next
-  - L762 `String _toolLimitFallbackMessage(ToolLoopSession session)`  — Last resort when even the forced final passes produced no text. If the
-  - L824 `Future<ToolLoopResult> processAssistantResponse({ required ToolLoopSession session, required String content, required String reasoning, ToolTurnSignals? turnSignals, void Function(List<ToolCall>)? onToolCallsUpdated, List<NativeToolCall> nativeToolCalls = const <NativeToolCall>[], })`
-  - L1618 `List<RoundSegment> _splitInterleavedSegments( String content, List<ToolCall> uiCalls, )`  — Walks [content] in source order and splits it into text chunks /
-  - L1661 `static int _countToolGroups(List<RoundSegment> segments)`
-  - L1682 `List<Map<String, dynamic>> _nativeCallsToParsed(List<NativeToolCall> calls)`  — Convert native (structured) tool calls into the parsed-call shape the
-  - L1725 `void _appendRoundToHistory( ToolLoopSession session, { required String assistantContent, String? assistantReasoning, })`
-  - L1759 `void _updateDiscoveredTools(ToolLoopSession session, String findToolsResult)`
-  - L1802 `void _updateActiveSkills(ToolLoopSession session, String skillResult)`  — Records a skill activation from the `skill` tool's acknowledgement.
-  - L1848 `Future<String> _buildSystemPrompt({ required String? baseSystemPrompt, required bool isToolResult, required bool discoveryMode, required List<Map<String, dynamic>> discoveredTools, List<String> activeSkillNames = const [], bool skipIdentity = false, bool nativeToolCalling = false, String? modelId, })`
-  - L2021 `Future<String?> _applyPerModelPrompt({ required String? base, required String? modelId, })`  — Merge the per-model prompt for [modelId] into [base] using the saved
-  - L2050 `String _stripToolCallBlocks(String content)`
-  - L2054 `String _extractPreToolText(String content)`
-  - L2064 `String? _extractRoundThinking({ required String content, required String reasoning, })`
-  - L2085 `static String _stripThinkingTags(String text)`  — Some providers (Kimi on Fireworks, DeepSeek) wrap reasoning in
-  - L2099 `static int? trailingToolCallBlockStart(String text)`  — Returns the start index of the contiguous run of tool-call blocks
-  - L2102 `int? _trailingToolCallBlockStart(String text)`
-  - L2105 `static int? _trailingToolCallBlockStartImpl(String text)`
-  - L2123 `int _indexOfFirstToolCallBlock(String content)`
-  - L2136 `bool _hasInterimTextBeforeToolCalls(String content)`
-  - L2160 `static bool looksLikeDeferredActionWithoutToolCall(String content)`  — Detects "I'll search/check/lookup..." style deferred-action text that
-  - L2163 `static bool _looksLikeDeferredActionWithoutToolCall(String content)`
-  - L2193 `static String _lastSentence(String normalized)`  — Last sentence of [normalized], or the whole string when it has only one.
-  - L2202 `static bool _isDeferredIntentSentence(String sentence)`
-  - L2246 `List<Map<String, dynamic>> _stepHistory(ToolLoopSession session)`  — The history for the next pass: older tool results shortened in place
-  - L2255 `List<Map<String, dynamic>> _cloneHistory(List<Map<String, dynamic>> history)`
-  - L2259 `List<ToolCall> _cloneToolCalls(List<ToolCall> calls)`
-  - L2263 `void _restoreDiscoveryContext(ToolLoopSession session)`
-  - L2287 `void _storeDiscoveryContext(ToolLoopSession session)`
-  - L2312 `void _refreshDiscoveredToolDefinitions(ToolLoopSession session)`
-  - L2327 `void _pruneDiscoveryContextsIfNeeded()`
-- L2349 `class _DiscoveryContextState`  — Per-chat context that survives across user turns (in memory only — it does
-  - L2350 `_DiscoveryContextState()`
-  - L2352 `DateTime lastUsedAt = DateTime.now()`
-  - L2353 `final Set<String> discoveredToolNames = <String>{}`
-  - L2354 `final List<String> activeSkillNames = <String>[]`
+- L55 `repeatableLookupToolNames = <String>{ 'web_search', 'web_crawl', 'search_places', 'search_restaurants', 'geocode', 'get_`  — Read-only lookups whose result does not change within one turn: the same
+- L72 `kRepeatedToolCallNote = '[REPEATED CALL] This exact call already ran in this turn. The result ' 'below is the one it ret`  — Prefix of a tool result that was answered from an identical earlier call
+- L79 `kToolsClosedNote = 'Tools are now closed for this turn. Write the final answer for the user ' 'from the results you have`  — Added to [kRepeatedToolCallNote] on the round that closes the tools.
+- L89 `kMaxToolRoundsPerTurn = 16`  — Most tool rounds one user turn may run. Every round re-sends the whole
+- L97 `kForcedFinalAnswerNote = 'The tool limit for this turn is reached. Tools are now closed. ' 'Write the final answer for t`  — Sent as the user turn of the forced final pass. When the round limit is
+- L105 `_maxForcedFinalPasses = 2`  — Forced final passes one turn may send before it ends with what it has.
+- L112 `kCompactToolResultTriggerChars = 4000`  — An older tool result longer than this is shortened before the next pass.
+- L116 `kCompactToolResultKeepChars = 3000`  — Characters an older tool result keeps when it is shortened.
+- L123 `@visibleForTesting String compactToolResultForModel(String content)`  — Shortens one older tool result. A result at or under
+- L140 `@visibleForTesting void compactOlderToolResults( List<Map<String, dynamic>> history, { int turnStart = 0, Set<int> promptToolResultIndices = const <int>{}, })`  — Shortens, in place, the tool results in [history] that are not part of
+- L169 `@visibleForTesting String toolCallIdentityKey(String name, Map<String, dynamic> arguments)`  — A key that is equal for two calls with the same name and the same
+- L172 `Object? _canonicalJson(Object? value)`
+- L183 `class ToolLoopSession`
+  - L184 `ToolLoopSession({ required this.latestUserMessage, required this.history, required this.accessToken, required this.enforcer, required this.toolCallingEnabled, required this.discoveryMode, this.baseSystemPrompt, this.discoveryContextKey, this.modelId, this.skipIdentity = false, this.nativeToolCalling = false, }) : turnHistoryStart = history.length`
+  - L198 `String latestUserMessage`
+  - L202 `final int turnHistoryStart`  — Length of [history] when the turn started. Entries from here on were
+  - L206 `final Set<int> promptToolResultIndices = <int>{}`  — History indices of prompt-based tool-result messages (see
+  - L210 `String? pendingPromptToolResult`  — The prompt-based tool-result message last handed to the model, so the
+  - L211 `final List<Map<String, dynamic>> history`
+  - L212 `final String accessToken`
+  - L213 `final ToolEnforcer enforcer`
+  - L214 `final bool toolCallingEnabled`
+  - L215 `final bool discoveryMode`
+  - L216 `final String? baseSystemPrompt`
+  - L217 `final String? discoveryContextKey`
+  - L221 `final String? modelId`  — Currently-selected model id. When set, the per-model system prompt
+  - L225 `final bool skipIdentity`  — When true, the identity section (Soul/User/Memory) is not injected
+  - L231 `final bool nativeToolCalling`  — When true, tools are exposed to the model natively (the request carries a
+  - L233 `final List<Map<String, dynamic>> discoveredTools = []`
+  - L234 `final Set<String> discoveredToolNames = {}`
+  - L240 `final List<String> activeSkillNames = []`  — Skills activated via the `skill` tool, oldest first. Their bodies are
+  - L242 `final List<ToolCall> toolCalls = []`
+  - L248 `final List<ContentBlock> producedBlocks = []`  — Content blocks produced as side-effects of tool calls in this loop
+  - L250 `int emptyFinalRecoveryAttempts = 0`
+  - L251 `int malformedToolProtocolRecoveryAttempts = 0`
+  - L252 `int truncatedCompletionRecoveryAttempts = 0`
+  - L253 `int deferredActionRecoveryAttempts = 0`
+  - L254 `int nonFinalTurnRecoveryAttempts = 0`
+  - L255 `int factCheckRecoveryAttempts = 0`
+  - L262 `int repeatedLookupRounds = 0`  — Rounds with at least one call that repeated a lookup this turn already
+  - L266 `bool toolsClosed = false`  — Set when the model kept repeating lookups it already had. The next pass
+  - L271 `bool finalAnswerRequested = false`  — Set by the stream driver when its own pass budget is nearly used up.
+  - L274 `int forcedFinalPasses = 0`  — Forced final passes sent this turn (see [kForcedFinalAnswerNote]).
+  - L277 `bool get toolsShut`  — True once the model may not call tools any more this turn.
+  - L285 `String? factCheckCandidate`  — The tool-grounded candidate answer captured just before a fact-check
+  - L286 `String factCheckCandidateReasoning = ''`
+- L289 `class ToolLoopStep`
+  - L290 `const ToolLoopStep({ required this.message, required this.history, required this.systemPrompt, })`
+  - L296 `final String message`
+  - L297 `final List<Map<String, dynamic>> history`
+  - L298 `final String? systemPrompt`
+- L307 `class RoundSegment`  — One segment in the model's interleaved output for a single round.
+  - L308 `const RoundSegment._({this.text, this.toolCall})`
+  - L310 `factory RoundSegment.text(String text)`
+  - L311 `factory RoundSegment.toolCall(ToolCall tc)`
+  - L313 `final String? text`
+  - L314 `final ToolCall? toolCall`
+  - L316 `bool get isText`
+  - L317 `bool get isToolCall`
+- L320 `class ToolLoopResult`
+  - L321 `const ToolLoopResult._({ required this.shouldContinue, this.nextStep, this.finalContent, this.finalReasoning, this.interimContent, this.interimBeforeToolCalls = false, this.toolCalls = const [], this.interleavedSegments = const [], this.producedBlocks = const [], })`
+  - L333 `factory ToolLoopResult.continueWith({ required ToolLoopStep nextStep, String? interimContent, bool interimBeforeToolCalls = false, List<ToolCall> toolCalls = const [], List<RoundSegment> interleavedSegments = const [], List<ContentBlock> producedBlocks = const [], })`
+  - L352 `factory ToolLoopResult.finalAnswer({ required String content, required String reasoning, List<ToolCall> toolCalls = const [], List<ContentBlock> producedBlocks = const [], })`
+  - L367 `final bool shouldContinue`
+  - L368 `final ToolLoopStep? nextStep`
+  - L369 `final String? finalContent`
+  - L370 `final String? finalReasoning`
+  - L371 `final String? interimContent`
+  - L372 `final bool interimBeforeToolCalls`
+  - L373 `final List<ToolCall> toolCalls`
+  - L379 `final List<RoundSegment> interleavedSegments`  — Ordered list of text/tool segments produced this round. Empty when the
+  - L385 `final List<ContentBlock> producedBlocks`  — New content blocks produced as side-effects of tool calls during this
+- L396 `class ToolTurnSignals`  — Provider/tool-loop hints extracted from stream metadata.
+  - L397 `const ToolTurnSignals._({this.stopReason, this.finishReason, this.rawMeta})`
+  - L399 `final String? stopReason`
+  - L400 `final String? finishReason`
+  - L401 `final Map<String, dynamic>? rawMeta`
+  - L403 `static const Set<String> _toolUseReasons = <String>{ 'tool_use', 'tool_calls', 'function_call', 'function_calls', }`
+  - L410 `static const Set<String> _finalReasons = <String>{ 'stop', 'end_turn', 'stop_sequence', 'eos', }`
+  - L417 `static const Set<String> _truncatedReasons = <String>{'max_tokens', 'length'}`
+  - L419 `bool get indicatesToolUse`
+  - L423 `bool get indicatesFinalStop`
+  - L427 `bool get indicatesTruncated`
+  - L431 `static ToolTurnSignals fromMeta(Map<String, dynamic>? meta)`
+  - L458 `static String? _firstLowercasedString( Map<String, dynamic> root, List<List<Object>> paths, )`
+  - L473 `static Object? _readPath(Object? current, List<Object> path)`
+- L495 `_kMalformedArgumentsKey = '__malformed_arguments__'`  — Marks a call whose arguments did not parse, so the executor can report
+- L497 `class ToolCallHandler`
+  - L498 `ToolCallHandler._internal()`
+  - L525 `static final ToolCallHandler _instance = ToolCallHandler._internal()`
+  - L532 `factory ToolCallHandler()`  — Upstream's client-side tool loop below. The first call builds it, which
+  - L539 `static ToolCallHandler forChat(String? chatId)`  — The loop for [chatId]'s turn. An Agents thread
+  - L548 `static void warmUp()`  — Builds upstream's loop now instead of at the first send, so the tool
+  - L550 `final ToolExecutor _toolExecutor = ToolExecutor()`
+  - L551 `static const int _maxEmptyFinalRecoveryAttempts = 3`
+  - L552 `static const int _maxMalformedToolProtocolRecoveryAttempts = 2`
+  - L553 `static const int _maxTruncatedCompletionRecoveryAttempts = 2`
+  - L554 `static const int _maxDeferredActionRecoveryAttempts = 2`
+  - L555 `static const int _maxNonFinalTurnRecoveryAttempts = 1`
+  - L558 `static const int _maxFactCheckRecoveryAttempts = 1`  — One-shot self-verification pass before a tool-grounded answer is shown.
+  - L565 `static const Set<String> _nonFactualToolNames = { 'find_tools', 'notes', 'ask_user', // Returns a Connect-button marker, not a real-world fact. Without this a // turn whose only tool call was request_mcp_server would fire a spurious // [VERIFY] round against nothing. 'request_mcp_server', 'flip_coin', 'roll_dice', 'random_number', 'countdown', 'password_generator', 'uuid_generator', 'generate_qr', 'calculate', 'generate_image', 'fetch_image', // Hands files over; the result is a delivery receipt, not facts. 'fetch_files', // `skill` returns an acknowledgement, not facts. Without this entry a // turn whose only tool call was `skill()` would trigger a full [VERIFY] // round-trip that fact-checks an ack against nothing. 'skill', // Artifact hosting returns a published URL, not verifiable facts. Without // these entries a turn whose only tool call was create/update_artifact // would fire a spurious [VERIFY] fact-check round against nothing. 'create_artifact', 'update_artifact', }`  — Tools whose results carry no verifiable real-world facts. When EVERY
+  - L596 `static const int _maxDiscoveryContexts = 200`
+  - L602 `static const int _maxActiveSkillsPerChat = 3`  — Ceiling on skills active in one chat. Every active skill's body is
+  - L603 `final Map<String, _DiscoveryContextState> _discoveryContextStates = <String, _DiscoveryContextState>{}`
+  - L606 `ToolExecutor get toolExecutor`
+  - L608 `ToolLoopSession createSession({ required String initialUserMessage, required List<Map<String, dynamic>> history, required String accessToken, String? discoveryContextKey, String? baseSystemPrompt, String? modelId, bool toolCallingEnabled = true, bool discoveryMode = true, bool skipIdentity = false, bool nativeToolCalling = false, })`
+  - L665 `Future<String> buildInitialSystemPrompt(ToolLoopSession session)`
+  - L696 `List<Map<String, dynamic>> nativeToolDefinitions(ToolLoopSession session)`  — The enabled tools as native OpenAI function definitions, for the request's
+  - L720 `Future<ToolLoopResult> _forceFinalAnswer( ToolLoopSession session, { required String content, required String reasoning, })`  — The forced final pass. Sets [ToolLoopSession.toolsClosed] (the next
+  - L764 `String _toolLimitFallbackMessage(ToolLoopSession session)`  — Last resort when even the forced final passes produced no text. If the
+  - L826 `Future<ToolLoopResult> processAssistantResponse({ required ToolLoopSession session, required String content, required String reasoning, ToolTurnSignals? turnSignals, void Function(List<ToolCall>)? onToolCallsUpdated, List<NativeToolCall> nativeToolCalls = const <NativeToolCall>[], })`
+  - L1620 `List<RoundSegment> _splitInterleavedSegments( String content, List<ToolCall> uiCalls, )`  — Walks [content] in source order and splits it into text chunks /
+  - L1663 `static int _countToolGroups(List<RoundSegment> segments)`
+  - L1684 `List<Map<String, dynamic>> _nativeCallsToParsed(List<NativeToolCall> calls)`  — Convert native (structured) tool calls into the parsed-call shape the
+  - L1727 `void _appendRoundToHistory( ToolLoopSession session, { required String assistantContent, String? assistantReasoning, })`
+  - L1761 `void _updateDiscoveredTools(ToolLoopSession session, String findToolsResult)`
+  - L1804 `void _updateActiveSkills(ToolLoopSession session, String skillResult)`  — Records a skill activation from the `skill` tool's acknowledgement.
+  - L1850 `Future<String> _buildSystemPrompt({ required String? baseSystemPrompt, required bool isToolResult, required bool discoveryMode, required List<Map<String, dynamic>> discoveredTools, List<String> activeSkillNames = const [], bool skipIdentity = false, bool nativeToolCalling = false, String? modelId, })`
+  - L2023 `Future<String?> _applyPerModelPrompt({ required String? base, required String? modelId, })`  — Merge the per-model prompt for [modelId] into [base] using the saved
+  - L2052 `String _stripToolCallBlocks(String content)`
+  - L2056 `String _extractPreToolText(String content)`
+  - L2066 `String? _extractRoundThinking({ required String content, required String reasoning, })`
+  - L2087 `static String _stripThinkingTags(String text)`  — Some providers (Kimi on Fireworks, DeepSeek) wrap reasoning in
+  - L2101 `static int? trailingToolCallBlockStart(String text)`  — Returns the start index of the contiguous run of tool-call blocks
+  - L2104 `int? _trailingToolCallBlockStart(String text)`
+  - L2107 `static int? _trailingToolCallBlockStartImpl(String text)`
+  - L2125 `int _indexOfFirstToolCallBlock(String content)`
+  - L2138 `bool _hasInterimTextBeforeToolCalls(String content)`
+  - L2162 `static bool looksLikeDeferredActionWithoutToolCall(String content)`  — Detects "I'll search/check/lookup..." style deferred-action text that
+  - L2165 `static bool _looksLikeDeferredActionWithoutToolCall(String content)`
+  - L2195 `static String _lastSentence(String normalized)`  — Last sentence of [normalized], or the whole string when it has only one.
+  - L2204 `static bool _isDeferredIntentSentence(String sentence)`
+  - L2248 `List<Map<String, dynamic>> _stepHistory(ToolLoopSession session)`  — The history for the next pass: older tool results shortened in place
+  - L2265 `List<Map<String, dynamic>> _cloneHistory(List<Map<String, dynamic>> history)`
+  - L2269 `List<ToolCall> _cloneToolCalls(List<ToolCall> calls)`
+  - L2273 `void _restoreDiscoveryContext(ToolLoopSession session)`
+  - L2297 `void _storeDiscoveryContext(ToolLoopSession session)`
+  - L2322 `void _refreshDiscoveredToolDefinitions(ToolLoopSession session)`
+  - L2337 `void _pruneDiscoveryContextsIfNeeded()`
+- L2359 `class _DiscoveryContextState`  — Per-chat context that survives across user turns (in memory only — it does
+  - L2360 `_DiscoveryContextState()`
+  - L2362 `DateTime lastUsedAt = DateTime.now()`
+  - L2363 `final Set<String> discoveredToolNames = <String>{}`
+  - L2364 `final List<String> activeSkillNames = <String>[]`
 
-## lib/services/tool_enforcer.dart  (421 Z.)
+## lib/services/tool_enforcer.dart  (422 Z.)
 - L10 `class ToolEnforcer`  — Client-side Tool Call Enforcer (inspired by Kimi K2's Enforcer).
   - L13 `int _globalCallIndex = 0`  — Global call index -- increments across the entire conversation,
   - L16 `int _currentIteration = 0`  — Current tool-loop iteration for the active user turn.
@@ -3234,111 +3402,111 @@
   - L25 `Map<String, Map<String, dynamic>> _toolSchemas = {}`  — Parameter schemas keyed by tool name.
   - L28 `bool discoveryMode = false`  — Discovery mode: when true, only find_tools + discovered tools accepted.
   - L31 `Set<String> discoveredToolNames = {}`  — Tools discovered via find_tools (names only). Updated externally.
-  - L40 `static const Set<String> _kBaseAlwaysAllowedTools = { 'notes', 'ask_user', 'web_search', 'web_crawl', 'generate_image', 'fetch_image', 'fetch_files', 'view_chat_images', 'search_places', 'search_restaurants', 'geocode', 'get_route', 'weather', // Artifact tools are core to chuk_chat's UX and their full schemas // live in the system prompt already — forcing the model to // find_tools round-trip them just burns a turn. 'artifact_schema', 'artifact_manager', // typst_compile is the documented follow-up for artifact_schema // type="typst"; gating it behind find_tools wastes a pass. 'typst_compile', // `skill` must be callable on the FIRST attempt. Soft discovery would // auto-allow it on a retry, but the first call is the one that matters. 'skill', }`  — Tools that always bypass discovery, regardless of prompt configuration.
-  - L69 `Set<String> _alwaysAllowedTools = _kBaseAlwaysAllowedTools`  — Tools that bypass discovery (always available without find_tools).
-  - L71 `ToolEnforcer({this.maxIterations = 100})`
-  - L75 `set alwaysAllowedTools(Set<String> tools)`  — Set the tools that bypass discovery mode (always callable).
-  - L84 `void setDeclaredTools(List<Map<String, dynamic>> tools)`  — Update the declared tool set.
-  - L102 `void resetIteration()`  — Reset iteration counter -- call at the start of every new user message.
-  - L107 `void reset()`  — Full reset (new conversation).
-  - L122 `HallucinationCheckResult checkForHallucination(String content)`  — Check the raw LLM response for hallucinated output blocks.
-  - L171 `EnforcerResult enforce(List<Map<String, dynamic>> parsedCalls)`  — Validate and enrich a list of parsed tool calls.
-  - L282 `String? _validateFindToolsArgs(Map<String, dynamic> args)`
-  - L325 `String buildResultMessage(List<ToolCallResult> results)`  — Build the structured result message to send back to the model.
-  - L334 `Map<String, dynamic> _coerceMap(dynamic value)`
-- L353 `class HallucinationCheckResult`
-  - L354 `final String cleanedContent`
-  - L355 `final List<String> warnings`
-  - L356 `final bool hadHallucination`
-  - L358 `const HallucinationCheckResult({ required this.cleanedContent, required this.warnings, required this.hadHallucination, })`
-- L365 `class EnforcedToolCall`
-  - L366 `final String callId`
-  - L367 `final String name`
-  - L368 `final Map<String, dynamic> arguments`
-  - L369 `final List<String> warnings`
-  - L371 `const EnforcedToolCall({ required this.callId, required this.name, required this.arguments, this.warnings = const [], })`
-- L379 `class RejectedToolCall`
-  - L380 `final String name`
-  - L381 `final Map<String, dynamic> arguments`
-  - L382 `final String reason`
-  - L384 `const RejectedToolCall({ required this.name, required this.arguments, required this.reason, })`
-- L391 `class EnforcerResult`
-  - L392 `final List<EnforcedToolCall> validCalls`
-  - L393 `final List<RejectedToolCall> rejectedCalls`
-  - L394 `final bool iterationLimitReached`
-  - L395 `final int currentIteration`
-  - L397 `const EnforcerResult({ required this.validCalls, required this.rejectedCalls, required this.iterationLimitReached, required this.currentIteration, })`
-  - L404 `bool get hasValidCalls`
-  - L405 `bool get hasRejections`
-- L408 `class ToolCallResult`
-  - L409 `final String callId`
-  - L410 `final String name`
-  - L411 `final String result`
-  - L412 `final bool isError`
-  - L414 `const ToolCallResult({ required this.callId, required this.name, required this.result, this.isError = false, })`
+  - L40 `static const Set<String> _kBaseAlwaysAllowedTools = { 'notes', 'ask_user', 'web_search', 'web_crawl', 'generate_image', 'fetch_image', 'fetch_files', 'view_chat_images', 'search_places', 'search_restaurants', 'geocode', 'get_route', 'road_closures', 'weather', // Artifact tools are core to chuk_chat's UX and their full schemas // live in the system prompt already — forcing the model to // find_tools round-trip them just burns a turn. 'artifact_schema', 'artifact_manager', // typst_compile is the documented follow-up for artifact_schema // type="typst"; gating it behind find_tools wastes a pass. 'typst_compile', // `skill` must be callable on the FIRST attempt. Soft discovery would // auto-allow it on a retry, but the first call is the one that matters. 'skill', }`  — Tools that always bypass discovery, regardless of prompt configuration.
+  - L70 `Set<String> _alwaysAllowedTools = _kBaseAlwaysAllowedTools`  — Tools that bypass discovery (always available without find_tools).
+  - L72 `ToolEnforcer({this.maxIterations = 100})`
+  - L76 `set alwaysAllowedTools(Set<String> tools)`  — Set the tools that bypass discovery mode (always callable).
+  - L85 `void setDeclaredTools(List<Map<String, dynamic>> tools)`  — Update the declared tool set.
+  - L103 `void resetIteration()`  — Reset iteration counter -- call at the start of every new user message.
+  - L108 `void reset()`  — Full reset (new conversation).
+  - L123 `HallucinationCheckResult checkForHallucination(String content)`  — Check the raw LLM response for hallucinated output blocks.
+  - L172 `EnforcerResult enforce(List<Map<String, dynamic>> parsedCalls)`  — Validate and enrich a list of parsed tool calls.
+  - L283 `String? _validateFindToolsArgs(Map<String, dynamic> args)`
+  - L326 `String buildResultMessage(List<ToolCallResult> results)`  — Build the structured result message to send back to the model.
+  - L335 `Map<String, dynamic> _coerceMap(dynamic value)`
+- L354 `class HallucinationCheckResult`
+  - L355 `final String cleanedContent`
+  - L356 `final List<String> warnings`
+  - L357 `final bool hadHallucination`
+  - L359 `const HallucinationCheckResult({ required this.cleanedContent, required this.warnings, required this.hadHallucination, })`
+- L366 `class EnforcedToolCall`
+  - L367 `final String callId`
+  - L368 `final String name`
+  - L369 `final Map<String, dynamic> arguments`
+  - L370 `final List<String> warnings`
+  - L372 `const EnforcedToolCall({ required this.callId, required this.name, required this.arguments, this.warnings = const [], })`
+- L380 `class RejectedToolCall`
+  - L381 `final String name`
+  - L382 `final Map<String, dynamic> arguments`
+  - L383 `final String reason`
+  - L385 `const RejectedToolCall({ required this.name, required this.arguments, required this.reason, })`
+- L392 `class EnforcerResult`
+  - L393 `final List<EnforcedToolCall> validCalls`
+  - L394 `final List<RejectedToolCall> rejectedCalls`
+  - L395 `final bool iterationLimitReached`
+  - L396 `final int currentIteration`
+  - L398 `const EnforcerResult({ required this.validCalls, required this.rejectedCalls, required this.iterationLimitReached, required this.currentIteration, })`
+  - L405 `bool get hasValidCalls`
+  - L406 `bool get hasRejections`
+- L409 `class ToolCallResult`
+  - L410 `final String callId`
+  - L411 `final String name`
+  - L412 `final String result`
+  - L413 `final bool isError`
+  - L415 `const ToolCallResult({ required this.callId, required this.name, required this.result, this.isError = false, })`
 
-## lib/services/tool_executor.dart  (1472 Z.)
-- L36 `class ToolExecutionResult`
-  - L37 `const ToolExecutionResult({ required this.output, required this.isError, this.producedBlocks = const [], })`
-  - L43 `final String output`
-  - L44 `final bool isError`
-  - L49 `final List<ContentBlock> producedBlocks`  — Optional content blocks produced as a side-effect of this tool call.
-- L56 `class ToolExecutor`  — Service to execute tools client-side.
-  - L57 `final Map<String, ClientTool> _tools = {}`
-  - L58 `final Map<String, bool> _enabledTools = {}`
-  - L59 `final Map<String, String> _customToolDescriptions = {}`
-  - L60 `Future<void>? _loadPrefsFuture`
-  - L68 `String? currentChatId`  — The chat id for the current send/turn. Set by the send logic before
-  - L70 `static const String _kToolPrefsTable = 'user_tool_preferences'`
-  - L72 `static const Set<String> _builtinExecutableToolNames = { 'find_tools', 'calculate', 'get_time', 'random_number', 'flip_coin', 'roll_dice', 'countdown', 'password_generator', 'uuid_generator', 'notes', 'generate_qr', 'ask_user', 'request_mcp_server', // This set asserts "an executor exists for this name", it is not a // feature gate. registerTool() throws if a registered tool is missing // here. 'skill', 'web_search', 'web_crawl', 'generate_image', 'fetch_image', 'fetch_files', 'view_chat_images', 'weather', 'search_places', 'search_restaurants', 'geocode', 'get_route', 'bash', 'github', 'slack', 'google_calendar', 'gmail', 'device', 'calendar', 'reminder', 'search_chats', 'artifact_manager', 'artifact_schema', // Artifact hosting (gated in tool_registry by kFeatureArtifactHosting). // Listed here unconditionally: this set asserts an executor exists for the // name, it is not the feature gate. 'create_artifact', 'update_artifact', 'update_project', 'typst_compile', }`
-  - L122 `static const Set<String> _defaultDisabledTools = <String>{}`  — Tools that stay off until the user turns them on. Empty today.
-  - L125 `String? get serverHttpUrl`  — Server HTTP base URL for server-proxied tools (Brave search, crawl).
-  - L128 `Map<String, String> _serverHeaders({String? accessToken})`  — HTTP headers for server requests.
-  - L137 `static const Map<String, ToolCategory> toolCategories = registry.toolCategoryMap`  — Map tool names to their categories (from tool_registry.dart).
-  - L141 `Map<String, ClientTool> get tools`  — Read-only view of the internal tools map.
-  - L146 `void registerTool(ClientTool tool)`
-  - L160 `void unregisterTool(String name)`
-  - L165 `List<ClientTool> get allRegisteredTools`  — Get all registered tools.
-  - L167 `Future<void> loadPreferences()`
-  - L172 `Future<void> _loadPreferencesInternal()`
-  - L198 `Future<void> _deferredSupabaseSync(SharedPreferences prefs)`
-  - L212 `String? _safeCurrentUserId()`
-  - L220 `Future<void> _syncToolEnabledPreferencesFromSupabase( SharedPreferences prefs, )`
-  - L284 `Future<void> _syncSingleToolEnabledToSupabase( String name, bool enabled, )`
-  - L306 `Future<void> _syncAllToolEnabledToSupabase()`
-  - L347 `static const Set<String> _alwaysOnTools = {'web_search', 'web_crawl'}`  — Tools the user cannot turn off — they are always sent to the model. Web
-  - L349 `static bool isAlwaysOnTool(String name)`
-  - L351 `Future<void> setToolEnabled(String name, bool enabled)`
-  - L364 `bool isToolEnabled(String name)`
-  - L372 `String getDefaultToolDescription(String name)`
-  - L376 `String getToolDescription(String name)`
-  - L380 `bool hasCustomDescription(String name)`
-  - L384 `Future<void> setToolDescription(String name, String description)`
-  - L404 `Future<void> resetToolDescription(String name)`
-  - L410 `Future<void> resetAllToolPreferences()`
-  - L435 `List<ClientTool> get allTools`  — Get all enabled tools -- this is what gets sent to the LLM.
-  - L446 `bool isToolAvailable(String name)`  — Check if a specific tool is available (enabled + connected).
-  - L457 `bool isServiceConnected(ToolCategory category)`  — Check if a service category is connected.
-  - L484 `Future<ToolExecutionResult> execute( String toolName, Map<String, dynamic> args, { String? accessToken, })`
-  - L531 `Future<ToolExecutionResult> _executeBuiltin( String name, Map<String, dynamic> args, { String? accessToken, })`
-  - L798 `Future<String> _executeArtifactManager(Map<String, dynamic> args)`
-  - L1022 `String _executeArtifactSchema(Map<String, dynamic> args)`  — Returns the full content schema for a complex artifact type, so the
-  - L1057 `String _executeSkill(Map<String, dynamic> args)`  — Activates a skill.
-  - L1103 `Future<String> _executeUpdateProject(Map<String, dynamic> args)`  — Update the active workspace's instructions, name, or description.
-  - L1152 `String _executeAskUser(Map<String, dynamic> args)`  — Format a numbered list of options for the user to choose from.
-  - L1203 `String _executeRequestMcpServer(Map<String, dynamic> args)`  — Validate a `request_mcp_server` call and return a marker the UI keys on.
-  - L1245 `ToolExecutionResult _fetchFilesResult(file_tools.FetchFilesResult result)`  — Wraps a handler's string output, inferring whether it reports a failure.
-  - L1256 `ToolExecutionResult _wrapOutput(String output, {bool sniff = true})`
-  - L1268 `static final RegExp toolFailureSniffPattern = RegExp( r'^\s*(' r'Error\b' r'|Failed\b' r'|Unable to\b' r'|Unknown [A-Za-z_]+ (?:action|operation)\b' r'|Unknown operation\b' r'|Unsupported [A-Za-z]+ (?:method|action)\b' // "<Thing> error:" with at most three words before it, so a prose // sentence that merely reaches an "error:" later does not match. r'|[A-Z][A-Za-z0-9]*(?: [A-Za-z0-9]+){0,2} error(?: \(\d+\))?:' r'|[A-Za-z ]{0,20}not authenticated\b' r'|[A-Za-z ]{0,20}(?:token )?expired\b' r')', )`  — Leading phrases the handlers actually use to report failure.
-  - L1285 `static bool looksLikeToolFailure(String output)`
-  - L1288 `int _coerceInt(dynamic value, {required int fallback})`
-- L1305 `_excalidrawSchemaText = ''' # Excalidraw scene schema (content field for artifact_manager) The `content` string MUST be `
-- L1356 `_technicalDrawingSchemaText = ''' # Technical drawing schema (content field for artifact_manager, type="technical_drawin`
-- L1399 `_typstSchemaText = ''' # Typst schema (source is the content for typst_compile, NOT artifact_manager) Use the dedicated `
-- L1430 `_mermaidSchemaText = ''' # Mermaid schema (content for artifact_manager, type="mermaid") Standard Mermaid diagram source`
-- L1454 `_svgSchemaText = ''' # SVG schema (content for artifact_manager, type="svg") Full SVG document as a string. Example: ````
+## lib/services/tool_executor.dart  (1480 Z.)
+- L39 `class ToolExecutionResult`
+  - L40 `const ToolExecutionResult({ required this.output, required this.isError, this.producedBlocks = const [], })`
+  - L46 `final String output`
+  - L47 `final bool isError`
+  - L52 `final List<ContentBlock> producedBlocks`  — Optional content blocks produced as a side-effect of this tool call.
+- L59 `class ToolExecutor`  — Service to execute tools client-side.
+  - L60 `final Map<String, ClientTool> _tools = {}`
+  - L61 `final Map<String, bool> _enabledTools = {}`
+  - L62 `final Map<String, String> _customToolDescriptions = {}`
+  - L63 `Future<void>? _loadPrefsFuture`
+  - L71 `String? currentChatId`  — The chat id for the current send/turn. Set by the send logic before
+  - L73 `static const String _kToolPrefsTable = 'user_tool_preferences'`
+  - L75 `static const Set<String> _builtinExecutableToolNames = { 'find_tools', 'calculate', 'get_time', 'random_number', 'flip_coin', 'roll_dice', 'countdown', 'password_generator', 'uuid_generator', 'notes', 'generate_qr', 'ask_user', 'request_mcp_server', // This set asserts "an executor exists for this name", it is not a // feature gate. registerTool() throws if a registered tool is missing // here. 'skill', 'web_search', 'web_crawl', 'generate_image', 'fetch_image', 'fetch_files', 'view_chat_images', 'weather', 'search_places', 'search_restaurants', 'geocode', 'get_route', 'road_closures', 'bash', 'github', 'slack', 'google_calendar', 'gmail', 'device', 'calendar', 'reminder', 'search_chats', 'artifact_manager', 'artifact_schema', // Artifact hosting (gated in tool_registry by kFeatureArtifactHosting). // Listed here unconditionally: this set asserts an executor exists for the // name, it is not the feature gate. 'create_artifact', 'update_artifact', 'update_project', 'typst_compile', }`
+  - L126 `static const Set<String> _defaultDisabledTools = <String>{}`  — Tools that stay off until the user turns them on. Empty today.
+  - L129 `String? get serverHttpUrl`  — Server HTTP base URL for server-proxied tools (Brave search, crawl).
+  - L132 `Map<String, String> _serverHeaders({String? accessToken})`  — HTTP headers for server requests.
+  - L141 `static const Map<String, ToolCategory> toolCategories = registry.toolCategoryMap`  — Map tool names to their categories (from tool_registry.dart).
+  - L145 `Map<String, ClientTool> get tools`  — Read-only view of the internal tools map.
+  - L150 `void registerTool(ClientTool tool)`
+  - L164 `void unregisterTool(String name)`
+  - L169 `List<ClientTool> get allRegisteredTools`  — Get all registered tools.
+  - L171 `Future<void> loadPreferences()`
+  - L176 `Future<void> _loadPreferencesInternal()`
+  - L202 `Future<void> _deferredSupabaseSync(SharedPreferences prefs)`
+  - L216 `String? _safeCurrentUserId()`
+  - L224 `Future<void> _syncToolEnabledPreferencesFromSupabase( SharedPreferences prefs, )`
+  - L288 `Future<void> _syncSingleToolEnabledToSupabase( String name, bool enabled, )`
+  - L310 `Future<void> _syncAllToolEnabledToSupabase()`
+  - L351 `static const Set<String> _alwaysOnTools = {'web_search', 'web_crawl'}`  — Tools the user cannot turn off — they are always sent to the model. Web
+  - L353 `static bool isAlwaysOnTool(String name)`
+  - L355 `Future<void> setToolEnabled(String name, bool enabled)`
+  - L368 `bool isToolEnabled(String name)`
+  - L376 `String getDefaultToolDescription(String name)`
+  - L380 `String getToolDescription(String name)`
+  - L384 `bool hasCustomDescription(String name)`
+  - L388 `Future<void> setToolDescription(String name, String description)`
+  - L408 `Future<void> resetToolDescription(String name)`
+  - L414 `Future<void> resetAllToolPreferences()`
+  - L439 `List<ClientTool> get allTools`  — Get all enabled tools -- this is what gets sent to the LLM.
+  - L450 `bool isToolAvailable(String name)`  — Check if a specific tool is available (enabled + connected).
+  - L461 `bool isServiceConnected(ToolCategory category)`  — Check if a service category is connected.
+  - L488 `Future<ToolExecutionResult> execute( String toolName, Map<String, dynamic> args, { String? accessToken, })`
+  - L535 `Future<ToolExecutionResult> _executeBuiltin( String name, Map<String, dynamic> args, { String? accessToken, })`
+  - L804 `Future<String> _executeArtifactManager(Map<String, dynamic> args)`
+  - L1028 `String _executeArtifactSchema(Map<String, dynamic> args)`  — Returns the full content schema for a complex artifact type, so the
+  - L1063 `String _executeSkill(Map<String, dynamic> args)`  — Activates a skill.
+  - L1109 `Future<String> _executeUpdateProject(Map<String, dynamic> args)`  — Update the active workspace's instructions, name, or description.
+  - L1158 `String _executeAskUser(Map<String, dynamic> args)`  — Format a numbered list of options for the user to choose from.
+  - L1211 `String _executeRequestMcpServer(Map<String, dynamic> args)`  — Validate a `request_mcp_server` call and return a marker the UI keys on.
+  - L1253 `ToolExecutionResult _fetchFilesResult(file_tools.FetchFilesResult result)`  — Wraps a handler's string output, inferring whether it reports a failure.
+  - L1264 `ToolExecutionResult _wrapOutput(String output, {bool sniff = true})`
+  - L1276 `static final RegExp toolFailureSniffPattern = RegExp( r'^\s*(' r'Error\b' r'|Failed\b' r'|Unable to\b' r'|Unknown [A-Za-z_]+ (?:action|operation)\b' r'|Unknown operation\b' r'|Unsupported [A-Za-z]+ (?:method|action)\b' // "<Thing> error:" with at most three words before it, so a prose // sentence that merely reaches an "error:" later does not match. r'|[A-Z][A-Za-z0-9]*(?: [A-Za-z0-9]+){0,2} error(?: \(\d+\))?:' r'|[A-Za-z ]{0,20}not authenticated\b' r'|[A-Za-z ]{0,20}(?:token )?expired\b' r')', )`  — Leading phrases the handlers actually use to report failure.
+  - L1293 `static bool looksLikeToolFailure(String output)`
+  - L1296 `int _coerceInt(dynamic value, {required int fallback})`
+- L1313 `_excalidrawSchemaText = ''' # Excalidraw scene schema (content field for artifact_manager) The `content` string MUST be `
+- L1364 `_technicalDrawingSchemaText = ''' # Technical drawing schema (content field for artifact_manager, type="technical_drawin`
+- L1407 `_typstSchemaText = ''' # Typst schema (source is the content for typst_compile, NOT artifact_manager) Use the dedicated `
+- L1438 `_mermaidSchemaText = ''' # Mermaid schema (content for artifact_manager, type="mermaid") Standard Mermaid diagram source`
+- L1462 `_svgSchemaText = ''' # SVG schema (content for artifact_manager, type="svg") Full SVG document as a string. Example: ````
 
-## lib/services/tool_image_result_service.dart  (510 Z.)
+## lib/services/tool_image_result_service.dart  (531 Z.)
 - L13 `class ToolImageUpdateResult`
   - L14 `const ToolImageUpdateResult({ required this.toolCalls, required this.imagePaths, required this.imageMetas, this.imageCostEur, this.imageGeneratedAt, })`
   - L22 `final List<ToolCall> toolCalls`
@@ -3359,18 +3527,19 @@
   - L172 `static Future<_ExtractionResult> _ensureStoragePath( Map<String, dynamic> payload, )`
   - L223 `static Future<String?> _uploadFromDataUri(String dataUri)`
   - L261 `static bool _isPrivateHost(String host)`  — Returns true if the host is a private/internal address that should not
-  - L282 `static Future<String?> _uploadFromUrl(String url)`
-  - L338 `static String? _currentUserId()`  — The signed-in user, or null before the client exists (tests, and the
-  - L348 `static Map<String, String> _downloadHeaders(Uri uri)`  — The headers one image download carries.
-  - L366 `static Future<String?> _cacheUpload( String rawSourceKey, Future<String?> Function() upload, )`
-  - L400 `static Map<String, dynamic>? _tryDecodeMap(String jsonString)`
-  - L425 `static Map<String, dynamic>? _decodeMap(String value)`
-  - L437 `static String? _extractLeadingJsonObject(String text)`
-  - L483 `static String? _nonEmptyString(dynamic value)`
-  - L488 `static double? _coerceDouble(dynamic value)`
-  - L498 `static String? _coerceDateTimeIso(dynamic value)`
+  - L285 `static Uri? resolveImageUri(String url)`  — Resolves the API's relative vault path (`/v1/ai/image/file/<token>`)
+  - L299 `static Future<String?> _uploadFromUrl(String url)`
+  - L359 `static String? _currentUserId()`  — The signed-in user, or null before the client exists (tests, and the
+  - L369 `static Map<String, String> _downloadHeaders(Uri uri)`  — The headers one image download carries.
+  - L387 `static Future<String?> _cacheUpload( String rawSourceKey, Future<String?> Function() upload, )`
+  - L421 `static Map<String, dynamic>? _tryDecodeMap(String jsonString)`
+  - L446 `static Map<String, dynamic>? _decodeMap(String value)`
+  - L458 `static String? _extractLeadingJsonObject(String text)`
+  - L504 `static String? _nonEmptyString(dynamic value)`
+  - L509 `static double? _coerceDouble(dynamic value)`
+  - L519 `static String? _coerceDateTimeIso(dynamic value)`
 
-## lib/services/tool_prompt_builder.dart  (1414 Z.)
+## lib/services/tool_prompt_builder.dart  (1445 Z.)
 - L8 `class ToolPromptBuilder`  — Builds system prompts with tool calling protocol for LLM.
   - L9 `static const String toolCallStart = '<tool_call>'`
   - L10 `static const String toolCallEnd = '</tool_call>'`
@@ -3379,29 +3548,29 @@
   - L24 `Set<String> _catalogSkillNames = const {}`  — Names of the skills in the catalog for the prompt currently being built.
   - L28 `bool _migratedToSkill(String skillName)`  — True when [skillName] is available, i.e. the protocol block it replaces
   - L43 `String buildToolProtocolSection({ required List<Map<String, dynamic>> tools, bool isToolResult = false, List<Map<String, dynamic>>? discoveredTools, String? soulText, String? userInfoText, String? memoryText, Map<String, dynamic>? notesToolDef, Map<String, dynamic>? askUserToolDef, Map<String, dynamic>? requestMcpServerToolDef, List<McpCatalogueEntry> unconnectedMcpServers = const [], List<String> connectedMcpServerNames = const [], Map<String, dynamic>? webSearchToolDef, Map<String, dynamic>? searchPlacesToolDef, Map<String, dynamic>? webCrawlToolDef, Map<String, dynamic>? searchChatsToolDef, Map<String, dynamic>? projectToolDef, Map<String, dynamic>? artifactToolDef, Map<String, dynamic>? artifactSchemaToolDef, Map<String, dynamic>? skillToolDef, List<Skill> skillCatalog = const [], List<Skill> activeSkills = const [], List<Map<String, dynamic>> extraAlwaysAvailableTools = const [], bool nativeToolCalling = false, })`  — Build the tool protocol section to append to the existing system prompt.
-  - L311 `String _buildNativeToolGuidance({ required List<Map<String, dynamic>> tools, Map<String, dynamic>? artifactToolDef, })`  — Native tool-calling guidance (used when [nativeToolCalling] is set).
-  - L397 `String _buildMcpServersSection( List<McpCatalogueEntry> unconnected, List<String> connectedNames, { bool native = false, })`  — The `## MCP SERVERS` awareness block: which servers are connected and
-  - L438 `String _buildSkillsCatalog(List<Skill> skills, {bool native = false})`  — Level 1 of progressive disclosure: every skill's name + description.
-  - L477 `String _buildActiveSkillSection(Skill skill)`  — Level 2: the body of an activated skill, injected verbatim.
-  - L485 `String _buildIdentitySection( String? soulText, String? userInfoText, String? memoryText, )`  — Build the full identity section: Soul, User, Memory.
-  - L628 `String _buildDiscoveryPrompt( List<Map<String, dynamic>> alwaysAvailableTools, { List<String> allToolNames = const [], })`  — Discovery prompt: shows ALL tool names but requires find_tools
-  - L781 `String _buildAlwaysAvailableSection(List<Map<String, dynamic>> tools)`  — Renders tool definitions that are always available (bypass discovery).
-  - L825 `String _buildToolProtocol( List<Map<String, dynamic>> tools, { List<String> undiscoveredToolNames = const [], })`  — Full tool protocol -- shown AFTER find_tools returns tool definitions.
-  - L977 `String _artifactToolProtocol({bool native = false})`
-  - L1042 `List<Map<String, dynamic>> _dedupeToolsByName( List<Map<String, dynamic>> tools, )`
-  - L1061 `void _appendAlwaysOnVisualTags(StringBuffer buffer)`  — Docs for visual tags that are always available regardless of the
-  - L1145 `void _appendWeatherProtocol(StringBuffer buffer)`
-  - L1176 `void _appendNewsProtocol(StringBuffer buffer)`
-  - L1209 `String _answerFormatSection()`  — How an answer starts, and the `:::` blocks `MarkdownMessage` renders
-  - L1274 `String _visualOutputProtocol()`  — Chart and map rendering protocol — these are output formats, not tools.
+  - L312 `String _buildNativeToolGuidance({ required List<Map<String, dynamic>> tools, Map<String, dynamic>? artifactToolDef, })`  — Native tool-calling guidance (used when [nativeToolCalling] is set).
+  - L398 `String _buildMcpServersSection( List<McpCatalogueEntry> unconnected, List<String> connectedNames, { bool native = false, })`  — The `## MCP SERVERS` awareness block: which servers are connected and
+  - L439 `String _buildSkillsCatalog(List<Skill> skills, {bool native = false})`  — Level 1 of progressive disclosure: every skill's name + description.
+  - L478 `String _buildActiveSkillSection(Skill skill)`  — Level 2: the body of an activated skill, injected verbatim.
+  - L486 `String _buildIdentitySection( String? soulText, String? userInfoText, String? memoryText, )`  — Build the full identity section: Soul, User, Memory.
+  - L629 `String _buildDiscoveryPrompt( List<Map<String, dynamic>> alwaysAvailableTools, { List<String> allToolNames = const [], })`  — Discovery prompt: shows ALL tool names but requires find_tools
+  - L782 `String _buildAlwaysAvailableSection(List<Map<String, dynamic>> tools)`  — Renders tool definitions that are always available (bypass discovery).
+  - L826 `String _buildToolProtocol( List<Map<String, dynamic>> tools, { List<String> undiscoveredToolNames = const [], })`  — Full tool protocol -- shown AFTER find_tools returns tool definitions.
+  - L978 `String _artifactToolProtocol({bool native = false})`
+  - L1043 `List<Map<String, dynamic>> _dedupeToolsByName( List<Map<String, dynamic>> tools, )`
+  - L1062 `void _appendAlwaysOnVisualTags(StringBuffer buffer)`  — Docs for visual tags that are always available regardless of the
+  - L1147 `void _appendWeatherProtocol(StringBuffer buffer)`
+  - L1178 `void _appendNewsProtocol(StringBuffer buffer)`
+  - L1211 `String _answerFormatSection()`  — How an answer starts, and the `:::` blocks `MarkdownMessage` renders
+  - L1297 `String _visualOutputProtocol()`  — Chart and map rendering protocol — these are output formats, not tools.
 
-## lib/services/tool_registry.dart  (1842 Z.)
+## lib/services/tool_registry.dart  (1896 Z.)
 - L14 `_serverBackedToolNames = { 'github', 'slack', 'google_calendar', 'gmail', }`
 - L22 `toolCategoryMap = { 'find_tools': ToolCategory.basic, 'calculate': ToolCategory.basic, 'get_time': ToolCategory.basic, '`  — Maps tool names to their ToolCategory for enable/disable filtering.
-- L67 `discoveryCatalog = { 'Maps / Karten': 'Find places and restaurants, geocode addresses and calculate routes / ' 'Orte und`  — Discovery catalog: category labels -> human-readable descriptions.
-- L99 `builtinTools = [ // -- Meta-tool: find_tools -- ClientTool( name: 'find_tools', description: 'Discovery tool. Call this `  — All built-in tool definitions with tags for discovery.
-- L1804 `bool _isMobileRuntime()`  — Whether the current platform is a mobile device (Android/iOS).
-- L1812 `void registerBuiltinTools(ToolExecutor executor)`  — Register all built-in tools from [builtinTools] into a [ToolExecutor].
+- L68 `discoveryCatalog = { 'Maps / Karten': 'Find places and restaurants, geocode addresses and calculate routes / ' 'Orte und`  — Discovery catalog: category labels -> human-readable descriptions.
+- L100 `builtinTools = [ // -- Meta-tool: find_tools -- ClientTool( name: 'find_tools', description: 'Discovery tool. Call this `  — All built-in tool definitions with tags for discovery.
+- L1858 `bool _isMobileRuntime()`  — Whether the current platform is a mobile device (Android/iOS).
+- L1866 `void registerBuiltinTools(ToolExecutor executor)`  — Register all built-in tools from [builtinTools] into a [ToolExecutor].
 
 ## lib/services/tool_result_cache_registry.dart  (139 Z.)
 - L27 `_uuid = Uuid()`
@@ -3694,7 +3863,7 @@
   - L152 `static Future<Map<String, dynamic>?> _readCache(String uid)`
   - L165 `static Future<void> _writeCache( String uid, Map<String, dynamic> value, )`
 
-## lib/services/user_sync_signal_service.dart  (279 Z.)
+## lib/services/user_sync_signal_service.dart  (303 Z.)
 - L31 `typedef SignalChannelOpener = Future<Future<void> Function()> Function( String userId, { required void Function(Map<Stri`  — Opens the signal channel for [userId] and returns a function that closes
 - L37 `class UserSyncSignalService`
   - L38 `UserSyncSignalService._()`
@@ -3718,17 +3887,19 @@
   - L83 `int get pendingTimers`
   - L85 `bool get _agentsEnabled`
   - L90 `Future<void> start(String userId)`  — Start listening for [userId]. Idempotent: a second call for the same
-  - L99 `Future<void> stop()`  — Close the channel, cancel the pending pulls and forget the user.
-  - L107 `Future<void> pause()`  — App went to the background: close the channel and cancel the pending
-  - L115 `Future<void> resume()`  — App came back to the foreground: open the channel again for the kept
-  - L121 `Future<void> _closeChannel()`
-  - L138 `Future<void> _open()`
-  - L161 `static Future<Future<void> Function()> _openSupabaseChannel( String userId, { required void Function(Map<String, dynamic> payload) onSignal, required VoidCallback onSubscribed, })`
-  - L199 `void handleSignal(Map<String, dynamic> message)`  — One broadcast from the trigger. The table name is the only field used.
-  - L213 `void handleSubscribed()`  — The channel joined (first time or after a reconnect): run every pull
-  - L229 `void _schedule(String table)`
-  - L251 `Future<void> Function()? _handlerFor(String table)`
-  - L271 `Future<void> resetForTest()`
+  - L101 `Future<void> stop()`  — Close the channel, cancel the pending pulls and forget the user.
+  - L109 `Future<void> pause()`  — App went to the background: close the channel and cancel the pending
+  - L117 `Future<void> resume()`  — App came back to the foreground: open the channel again for the kept
+  - L123 `Future<void> _closeChannel()`
+  - L144 `Future<void>? _opening`  — The open that is in flight, if any. A second open must not start next
+  - L149 `Future<void> _open()`  — Opens the channel unless one is open or opening. Waits for an open in
+  - L162 `Future<void> _openChannel()`
+  - L185 `static Future<Future<void> Function()> _openSupabaseChannel( String userId, { required void Function(Map<String, dynamic> payload) onSignal, required VoidCallback onSubscribed, })`
+  - L223 `void handleSignal(Map<String, dynamic> message)`  — One broadcast from the trigger. The table name is the only field used.
+  - L237 `void handleSubscribed()`  — The channel joined (first time or after a reconnect): run every pull
+  - L253 `void _schedule(String table)`
+  - L275 `Future<void> Function()? _handlerFor(String table)`
+  - L295 `Future<void> resetForTest()`
 
 ## lib/services/websocket_chat_service.dart  (375 Z.)
 - L30 `class WebSocketChatService`  — Service for handling streaming chat responses.

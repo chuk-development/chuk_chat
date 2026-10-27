@@ -14,7 +14,7 @@
 ## lib/voice/voice_call.dart  (25 Z.)
 - reicht weiter: 'voice_call_controller.dart' show VoiceCallController · 'voice_call_models.dart' · 'voice_call_service.dart' show VoiceCallService, VoiceCallException · 'voice_call_store.dart' show VoiceCallStore · 'widgets/voice_call_button.dart' show VoiceCallButton · 'widgets/voice_call_fullscreen_page.dart' show VoiceCallFullscreenPage · 'widgets/voice_call_panel.dart' show VoiceCallPanel, VoiceTurnLine, formatVoiceCallClock · 'widgets/voice_agent_card.dart' show VoiceAgentCard · 'widgets/voice_call_record_card.dart' show VoiceCallRecordCard, describeVoiceCall, voiceCallTimeline
 
-## lib/voice/voice_call_controller.dart  (1506 Z.)
+## lib/voice/voice_call_controller.dart  (1620 Z.)
 - L32 `class VoiceCallController extends ChangeNotifier`
   - L33 `VoiceCallController._({ VoiceLocationResolver? location, Future<bool> Function(VoiceTaskResult result)? sendResult, List<Duration>? resultBackoff, }) : _location = location ?? VoiceLocationResolver(), _sendResultOverride = sendResult, _resultBackoff = resultBackoff ?? kVoiceResultBackoff`
   - L44 `factory VoiceCallController.forTesting({ VoiceLocationResolver? location, Future<bool> Function(VoiceTaskResult result)? sendResult, List<Duration>? resultBackoff, })`  — A controller outside the app-wide one, for tests. [sendResult] stands
@@ -34,135 +34,140 @@
   - L82 `String _voiceId = 'Bastian'`
   - L83 `String _defaultVoiceId = 'Bastian'`
   - L84 `VoiceCallEngine _defaultEngine = VoiceCallEngine.pipeline`
-  - L85 `String? _preferencesOwner`
-  - L86 `int _preferenceRevision = 0`
-  - L87 `bool _changingVoice = false`
-  - L88 `final VoiceAudioOutput _audioOutput = const VoiceAudioOutput()`
-  - L89 `final ValueNotifier<double> _audioLevel = ValueNotifier(0)`
-  - L90 `Timer? _audioLevelTimer`
-  - L91 `Timer? _outputRouteTimer`
-  - L92 `bool _readingOutputRoute = false`
-  - L93 `int _fullscreenRequest = 0`
-  - L94 `bool _agentSpeaking = false`
-  - L95 `bool _agentThinking = false`
-  - L96 `bool _agentPresent = false`
-  - L97 `bool? _speakerOn`
-  - L98 `String? _outputRoute`
-  - L99 `bool _changingSpeaker = false`
-  - L100 `bool? _debugCanSwitchSpeaker`
-  - L101 `String? get outputRoute`
-  - L102 `bool get changingSpeaker`
-  - L103 `String? _chatId`
-  - L104 `String? _callId`
-  - L105 `VoiceCallMode? _mode`
-  - L106 `String? _agentName`
-  - L107 `String? _error`
-  - L108 `DateTime? _startedAt`
-  - L109 `final VoiceTranscript _transcript = VoiceTranscript()`
-  - L110 `bool _speechSnapshots = false`
-  - L111 `int _settledSpeechThroughMs = 0`
-  - L112 `List<VoiceTurn> _turns = const <VoiceTurn>[]`
-  - L113 `final List<VoiceCard> _cardList = <VoiceCard>[]`
-  - L114 `List<VoiceCard> _cards = const <VoiceCard>[]`
-  - L115 `final Map<String, VoiceToolActivity> _tools = <String, VoiceToolActivity>{}`
-  - L116 `List<VoiceToolActivity> _runningTools = const <VoiceToolActivity>[]`
-  - L119 `static const int _maxCards = 60`  — Cards held per call; the oldest fall off (the prototype's cap).
-  - L121 `lk.Room? _room`
-  - L122 `lk.EventsListener<lk.RoomEvent>? _roomListener`
-  - L123 `String? _agentIdentity`
-  - L124 `final VoiceTaskLedger _tasks = VoiceTaskLedger()`
-  - L125 `final VoiceLocationResolver _location`
-  - L126 `final Future<bool> Function(VoiceTaskResult result)? _sendResultOverride`
-  - L127 `final List<Duration> _resultBackoff`
-  - L128 `StreamSubscription<VoiceTaskResult>? _resultSub`
-  - L129 `Timer? _agentJoinTimer`
-  - L130 `Timer? _agentLeftTimer`
-  - L131 `Timer? _callLimitTimer`
-  - L132 `Future<VoiceCallRecord?>? _finishing`
-  - L136 `int _generation = 0`  — Bumped whenever a call starts or ends. Every async continuation and
-  - L138 `final StreamController<VoiceCallRecord> _ended = StreamController<VoiceCallRecord>.broadcast()`
-  - L140 `final StreamController<VoiceCallPhase> _phases = StreamController<VoiceCallPhase>.broadcast()`
-  - L142 `VoiceCallPhase _lastEmittedPhase = VoiceCallPhase.idle`
-  - L146 `VoiceCallPhase get phase`
-  - L147 `bool get micMuted`
-  - L148 `bool get cameraEnabled`
-  - L149 `lk.LocalVideoTrack? get cameraTrack`
-  - L159 `bool get cameraMirrored`
-  - L161 `Future<void> switchCamera()`
-  - L172 `double get volume`
-  - L173 `String get voiceId`
-  - L174 `String get defaultVoiceId`
-  - L178 `VoiceCallEngine get defaultEngine`  — The engine for the next call. Switching mid-call is not possible: the
-  - L179 `bool get changingVoice`
-  - L180 `List<String> get availableVoices`
-  - L187 `ValueListenable<double> get audioLevel`
-  - L188 `int get fullscreenRequest`
-  - L191 `void requestFullscreen()`  — An explicit return from a notification, independent of automatic opening.
-  - L197 `bool get agentSpeaking`
-  - L198 `String? get chatId`
-  - L199 `VoiceCallMode? get mode`
-  - L203 `List<VoiceTurn> get turns`  — Live transcript of the current (or last) call; partials are replaced
-  - L207 `List<VoiceCard> get cards`  — What the agent showed on screen in this call (`ui.card`), oldest first.
-  - L211 `List<VoiceToolActivity> get runningTools`  — Worker tools running right now (`ui.tool`), oldest first. The panel
-  - L215 `String? get error`  — Why the last call failed, safe to show. Null unless [phase] is
-  - L218 `bool get isActive`  — True while a call holds the room: connecting, live or hanging up.
-  - L224 `bool get agentPresent`  — True once the voice worker is in the room.
-  - L227 `bool get agentThinking`  — The worker is working out its answer (`lk.agent.state` = thinking).
-  - L230 `String? get callId`  — The id of an agent-started call (spec §6.3), as passed to [start].
-  - L234 `bool get canSwitchSpeaker`  — Whether the output can be switched between speaker and earpiece
-  - L239 `bool get speakerOn`  — True when the speaker is the preferred output (LiveKit's default).
-  - L245 `Stream<VoiceCallPhase> get phaseChanges`  — Every phase change, in order. For a layer that mirrors the call
-  - L248 `String? get agentName`  — The name passed to [start], for the panel's transcript labels.
-  - L250 `DateTime? get startedAt`
-  - L256 `Stream<VoiceCallRecord> get onCallEnded`  — Fires once for every call that ends with a final turn or a card —
-  - L266 `Future<void> start({ required String chatId, required VoiceCallMode mode, String? chatTitle, String? agentName, String context = '', String voiceInstructions = '', VoiceTaskDelegate? delegate, String? sttLanguage, String? callId, String? callReason, bool initiatedByAgent = false, })`  — Starts a call for [chatId]. A call that is still running (in any chat)
-  - L437 `Future<void> _connect( lk.Room room, VoiceCredentials credentials, int gen, )`  — Joins with the preconnect buffer when the platform supports it: the
-  - L470 `Future<void> _ensureMicPermission()`
-  - L482 `void _attach(lk.Room room, int gen)`
-  - L528 `void addCard(VoiceCard card)`  — Puts [card] on the stage. A later card with the same id replaces it.
-  - L530 `void _putCard(VoiceCard card)`
-  - L548 `void _onData(int gen, lk.DataReceivedEvent event)`  — `ui.card` and `ui.tool` from the worker (its UI channel).
-  - L588 `void _applySpeechData(List<int> bytes)`
-  - L644 `Future<void> _onSpeechStream( int gen, lk.TextStreamReader reader, String identity, )`
-  - L664 `void _onTranscriptionStream( lk.Room room, int gen, lk.TextStreamReader reader, String identity, )`
-  - L743 `void _publishTurns()`
-  - L748 `void _refreshAgent(int gen)`
-  - L783 `void _onParticipantLeft(int gen)`
-  - L798 `void _armAgentJoinTimer(int gen)`
-  - L809 `void _onDisconnected(int gen, lk.DisconnectReason? reason)`
-  - L823 `static String? _failureFor(lk.DisconnectReason? reason)`
-  - L840 `Future<String> _onOpenLink(lk.RpcInvocationData data)`
-  - L858 `Future<String> _handleDelegateRpc(String payload)`  — `chuk.delegate`: start the task through the current delegate and track
-  - L869 `void _listenForResults(VoiceTaskDelegate? delegate, int gen)`
-  - L884 `void detachDelegate(VoiceTaskDelegate delegate)`  — The chat that owns [delegate] is going away (its screen was disposed).
-  - L909 `Future<bool> _deliverResult(VoiceTaskResult result, int gen)`  — Sends a `chuk.task_result`, retrying after 1 s, 3 s and 6 s while the
-  - L921 `Future<bool> _sendResultOnce(VoiceTaskResult result)`
-  - L955 `void _armCallLimit(int gen, Duration limit)`
-  - L966 `Future<void> _loadVoicePreference(String userId, int gen)`
-  - L1003 `Future<void> _loadEnginePreference(String userId, int gen)`  — The saved engine preference, loaded like the voice default: local first
-  - L1031 `Future<void> setDefaultEngine(VoiceCallEngine engine)`
-  - L1044 `Future<void> setDefaultVoice(String voice)`
-  - L1058 `Future<void> _refreshOutputRoute()`
-  - L1082 `Future<void> _refreshOutputVolume()`
-  - L1096 `Future<void> _setTrackVolume(lk.RemoteAudioTrack track)`
-  - L1101 `Future<void> setVolume(double value)`  — Android controls the real call stream, so both the slider and hardware
-  - L1134 `Future<void> setVoice(String voice)`  — Switches synthesis on the worker, preserving the ongoing conversation.
-  - L1173 `Future<void> setMicMuted(bool muted)`  — Mutes or unmutes the microphone. Before the room is up the choice is
-  - L1199 `Future<void> setCameraEnabled(bool enabled)`  — Publishes the camera. The worker compares a few recent frames, not every one.
-  - L1235 `Future<void> _applyNativeRoute(bool on)`  — Prefers the speaker ([on] true) or the earpiece. A headset always wins.
-  - L1242 `Future<void> setSpeakerOn(bool on)`
-  - L1285 `Future<VoiceCallRecord?> end()`  — Hangs up. Returns the call's record, or null when nothing was said
-  - L1294 `void dismiss()`  — Clears a finished or failed call back to [VoiceCallPhase.idle] (the
-  - L1300 `void _setPhase(VoiceCallPhase next)`
-  - L1311 `Future<VoiceCallRecord?> _finish(VoiceCallPhase target, {String? error})`
-  - L1330 `Future<VoiceCallRecord?> _teardown( VoiceCallPhase target, String? error, )`
-  - L1422 `static Future<void> _quietly(Future<void> Function() op)`
-  - L1430 `static String _describe(Object e)`
-  - L1443 `void debugSetState({ required VoiceCallPhase phase, String? chatId, VoiceCallMode? mode, List<VoiceTurn> turns = const <VoiceTurn>[], List<VoiceCard> cards = const <VoiceCard>[], List<VoiceToolActivity> runningTools = const <VoiceToolActivity>[], bool micMuted = false, bool cameraEnabled = false, lk.LocalVideoTrack? cameraTrack, bool? speakerOn, String? outputRoute, bool changingSpeaker = false, bool? canSwitchSpeaker, bool agentSpeaking = false, bool agentThinking = false, bool agentPresent = true, String? agentName, String? error, DateTime? startedAt, VoiceTaskDelegate? delegate, })`  — Puts the controller into a given state without a room, so widget tests
-  - L1491 `Future<String> debugHandleDelegateRpc(String payload)`  — Runs the `chuk.delegate` handler the room registers.
-  - L1496 `Future<String> debugHandleLocationRpc()`  — Runs the `get_location` handler the room registers.
-  - L1500 `void debugArmCallLimit(Duration limit)`  — Arms the call limit with [limit] instead of [maxCallDuration].
-  - L1504 `Set<String> get debugPendingTasks`  — The task ids started through the current delegate with no result yet.
+  - L88 `int _enginePreferenceRevision = 0`
+  - L89 `Future<void> _engineSyncQueue = Future<void>.value()`
+  - L94 `String? _lastLocalEngine`  — The engine the user last chose on this device. Authoritative over the
+  - L95 `String? _preferencesOwner`
+  - L96 `int _preferenceRevision = 0`
+  - L97 `bool _changingVoice = false`
+  - L98 `final VoiceAudioOutput _audioOutput = const VoiceAudioOutput()`
+  - L99 `final ValueNotifier<double> _audioLevel = ValueNotifier(0)`
+  - L100 `Timer? _audioLevelTimer`
+  - L101 `Timer? _outputRouteTimer`
+  - L102 `bool _readingOutputRoute = false`
+  - L103 `int _fullscreenRequest = 0`
+  - L104 `bool _agentSpeaking = false`
+  - L105 `bool _agentThinking = false`
+  - L106 `bool _agentPresent = false`
+  - L107 `bool? _speakerOn`
+  - L108 `String? _outputRoute`
+  - L109 `bool _changingSpeaker = false`
+  - L110 `bool? _debugCanSwitchSpeaker`
+  - L111 `String? get outputRoute`
+  - L112 `bool get changingSpeaker`
+  - L113 `String? _chatId`
+  - L114 `String? _callId`
+  - L115 `VoiceCallMode? _mode`
+  - L116 `String? _agentName`
+  - L117 `String? _error`
+  - L118 `DateTime? _startedAt`
+  - L119 `final VoiceTranscript _transcript = VoiceTranscript()`
+  - L120 `bool _speechSnapshots = false`
+  - L121 `int _settledSpeechThroughMs = 0`
+  - L122 `List<VoiceTurn> _turns = const <VoiceTurn>[]`
+  - L123 `final List<VoiceCard> _cardList = <VoiceCard>[]`
+  - L124 `List<VoiceCard> _cards = const <VoiceCard>[]`
+  - L125 `final Map<String, VoiceToolActivity> _tools = <String, VoiceToolActivity>{}`
+  - L126 `List<VoiceToolActivity> _runningTools = const <VoiceToolActivity>[]`
+  - L129 `static const int _maxCards = 60`  — Cards held per call; the oldest fall off (the prototype's cap).
+  - L131 `lk.Room? _room`
+  - L132 `lk.EventsListener<lk.RoomEvent>? _roomListener`
+  - L133 `String? _agentIdentity`
+  - L134 `final VoiceTaskLedger _tasks = VoiceTaskLedger()`
+  - L135 `final VoiceLocationResolver _location`
+  - L136 `final Future<bool> Function(VoiceTaskResult result)? _sendResultOverride`
+  - L137 `final List<Duration> _resultBackoff`
+  - L138 `StreamSubscription<VoiceTaskResult>? _resultSub`
+  - L139 `Timer? _agentJoinTimer`
+  - L140 `Timer? _agentLeftTimer`
+  - L141 `Timer? _callLimitTimer`
+  - L142 `Future<VoiceCallRecord?>? _finishing`
+  - L146 `int _generation = 0`  — Bumped whenever a call starts or ends. Every async continuation and
+  - L148 `final StreamController<VoiceCallRecord> _ended = StreamController<VoiceCallRecord>.broadcast()`
+  - L150 `final StreamController<VoiceCallPhase> _phases = StreamController<VoiceCallPhase>.broadcast()`
+  - L152 `VoiceCallPhase _lastEmittedPhase = VoiceCallPhase.idle`
+  - L156 `VoiceCallPhase get phase`
+  - L157 `bool get micMuted`
+  - L158 `bool get cameraEnabled`
+  - L159 `lk.LocalVideoTrack? get cameraTrack`
+  - L169 `bool get cameraMirrored`
+  - L171 `Future<void> switchCamera()`
+  - L182 `double get volume`
+  - L183 `String get voiceId`
+  - L184 `String get defaultVoiceId`
+  - L188 `VoiceCallEngine get defaultEngine`  — The engine for the next call. Switching mid-call is not possible: the
+  - L189 `bool get changingVoice`
+  - L190 `List<String> get availableVoices`
+  - L197 `ValueListenable<double> get audioLevel`
+  - L198 `int get fullscreenRequest`
+  - L201 `void requestFullscreen()`  — An explicit return from a notification, independent of automatic opening.
+  - L207 `bool get agentSpeaking`
+  - L208 `String? get chatId`
+  - L209 `VoiceCallMode? get mode`
+  - L213 `List<VoiceTurn> get turns`  — Live transcript of the current (or last) call; partials are replaced
+  - L217 `List<VoiceCard> get cards`  — What the agent showed on screen in this call (`ui.card`), oldest first.
+  - L221 `List<VoiceToolActivity> get runningTools`  — Worker tools running right now (`ui.tool`), oldest first. The panel
+  - L225 `String? get error`  — Why the last call failed, safe to show. Null unless [phase] is
+  - L228 `bool get isActive`  — True while a call holds the room: connecting, live or hanging up.
+  - L234 `bool get agentPresent`  — True once the voice worker is in the room.
+  - L237 `bool get agentThinking`  — The worker is working out its answer (`lk.agent.state` = thinking).
+  - L240 `String? get callId`  — The id of an agent-started call (spec §6.3), as passed to [start].
+  - L244 `bool get canSwitchSpeaker`  — Whether the output can be switched between speaker and earpiece
+  - L249 `bool get speakerOn`  — True when the speaker is the preferred output (LiveKit's default).
+  - L255 `Stream<VoiceCallPhase> get phaseChanges`  — Every phase change, in order. For a layer that mirrors the call
+  - L258 `String? get agentName`  — The name passed to [start], for the panel's transcript labels.
+  - L260 `DateTime? get startedAt`
+  - L266 `Stream<VoiceCallRecord> get onCallEnded`  — Fires once for every call that ends with a final turn or a card —
+  - L276 `Future<void> start({ required String chatId, required VoiceCallMode mode, String? chatTitle, String? agentName, String context = '', String voiceInstructions = '', VoiceTaskDelegate? delegate, String? sttLanguage, String? callId, String? callReason, bool initiatedByAgent = false, })`  — Starts a call for [chatId]. A call that is still running (in any chat)
+  - L455 `Future<void> _connect( lk.Room room, VoiceCredentials credentials, int gen, )`  — Joins with the preconnect buffer when the platform supports it: the
+  - L488 `Future<void> _ensureMicPermission()`
+  - L500 `void _attach(lk.Room room, int gen)`
+  - L546 `void addCard(VoiceCard card)`  — Puts [card] on the stage. A later card with the same id replaces it.
+  - L548 `void _putCard(VoiceCard card)`
+  - L566 `void _onData(int gen, lk.DataReceivedEvent event)`  — `ui.card` and `ui.tool` from the worker (its UI channel).
+  - L606 `void _applySpeechData(List<int> bytes)`
+  - L662 `Future<void> _onSpeechStream( int gen, lk.TextStreamReader reader, String identity, )`
+  - L682 `void _onTranscriptionStream( lk.Room room, int gen, lk.TextStreamReader reader, String identity, )`
+  - L761 `void _publishTurns()`
+  - L766 `void _refreshAgent(int gen)`
+  - L801 `void _onParticipantLeft(int gen)`
+  - L816 `void _armAgentJoinTimer(int gen)`
+  - L827 `void _onDisconnected(int gen, lk.DisconnectReason? reason)`
+  - L841 `static String? _failureFor(lk.DisconnectReason? reason)`
+  - L858 `Future<String> _onOpenLink(lk.RpcInvocationData data)`
+  - L876 `Future<String> _handleDelegateRpc(String payload)`  — `chuk.delegate`: start the task through the current delegate and track
+  - L887 `void _listenForResults(VoiceTaskDelegate? delegate, int gen)`
+  - L902 `void detachDelegate(VoiceTaskDelegate delegate)`  — The chat that owns [delegate] is going away (its screen was disposed).
+  - L927 `Future<bool> _deliverResult(VoiceTaskResult result, int gen)`  — Sends a `chuk.task_result`, retrying after 1 s, 3 s and 6 s while the
+  - L939 `Future<bool> _sendResultOnce(VoiceTaskResult result)`
+  - L973 `void _armCallLimit(int gen, Duration limit)`
+  - L984 `Future<void> _loadVoicePreference(String userId, int gen)`
+  - L1021 `Future<void> _loadEnginePreference(String userId, int gen)`  — The saved engine preference, loaded like the voice default: local first
+  - L1072 `Future<void> setDefaultEngine(VoiceCallEngine engine)`
+  - L1125 `Future<void> _clearEnginePending(String userId)`  — Clears the persisted unsynced marker; best-effort.
+  - L1135 `Future<void> _retryEngineSync(String owner)`  — Re-pushes the locally chosen engine after a refresh found a stale
+  - L1158 `Future<void> setDefaultVoice(String voice)`
+  - L1172 `Future<void> _refreshOutputRoute()`
+  - L1196 `Future<void> _refreshOutputVolume()`
+  - L1210 `Future<void> _setTrackVolume(lk.RemoteAudioTrack track)`
+  - L1215 `Future<void> setVolume(double value)`  — Android controls the real call stream, so both the slider and hardware
+  - L1248 `Future<void> setVoice(String voice)`  — Switches synthesis on the worker, preserving the ongoing conversation.
+  - L1287 `Future<void> setMicMuted(bool muted)`  — Mutes or unmutes the microphone. Before the room is up the choice is
+  - L1313 `Future<void> setCameraEnabled(bool enabled)`  — Publishes the camera. The worker compares a few recent frames, not every one.
+  - L1349 `Future<void> _applyNativeRoute(bool on)`  — Prefers the speaker ([on] true) or the earpiece. A headset always wins.
+  - L1356 `Future<void> setSpeakerOn(bool on)`
+  - L1399 `Future<VoiceCallRecord?> end()`  — Hangs up. Returns the call's record, or null when nothing was said
+  - L1408 `void dismiss()`  — Clears a finished or failed call back to [VoiceCallPhase.idle] (the
+  - L1414 `void _setPhase(VoiceCallPhase next)`
+  - L1425 `Future<VoiceCallRecord?> _finish(VoiceCallPhase target, {String? error})`
+  - L1444 `Future<VoiceCallRecord?> _teardown( VoiceCallPhase target, String? error, )`
+  - L1536 `static Future<void> _quietly(Future<void> Function() op)`
+  - L1544 `static String _describe(Object e)`
+  - L1557 `void debugSetState({ required VoiceCallPhase phase, String? chatId, VoiceCallMode? mode, List<VoiceTurn> turns = const <VoiceTurn>[], List<VoiceCard> cards = const <VoiceCard>[], List<VoiceToolActivity> runningTools = const <VoiceToolActivity>[], bool micMuted = false, bool cameraEnabled = false, lk.LocalVideoTrack? cameraTrack, bool? speakerOn, String? outputRoute, bool changingSpeaker = false, bool? canSwitchSpeaker, bool agentSpeaking = false, bool agentThinking = false, bool agentPresent = true, String? agentName, String? error, DateTime? startedAt, VoiceTaskDelegate? delegate, })`  — Puts the controller into a given state without a room, so widget tests
+  - L1605 `Future<String> debugHandleDelegateRpc(String payload)`  — Runs the `chuk.delegate` handler the room registers.
+  - L1610 `Future<String> debugHandleLocationRpc()`  — Runs the `get_location` handler the room registers.
+  - L1614 `void debugArmCallLimit(Duration limit)`  — Arms the call limit with [limit] instead of [maxCallDuration].
+  - L1618 `Set<String> get debugPendingTasks`  — The task ids started through the current delegate with no result yet.
 
 ## lib/voice/voice_call_models.dart  (365 Z.)
 - L15 `enum VoiceCallMode`  — Which kind of chat the call belongs to. The worker reads it from the
@@ -321,7 +326,7 @@
   - L42 `String continuation(String heard)`  — Only subtract an exact heard prefix: punctuation/alignment uncertainty
 - L53 `String voicePlaybackContext(String heard, String? metadata)`  — Factual model context for an interrupted voice turn, never a UI message.
 
-## lib/voice/voice_preferences.dart  (65 Z.)
+## lib/voice/voice_preferences.dart  (84 Z.)
 - L7 `abstract final class VoicePreferences`  — User-scoped local default, mirrored encrypted to the existing settings store.
   - L8 `static const _service = 'voice_preferences'`
   - L10 `static Future<String?> loadLocal(String userId)`
@@ -333,7 +338,10 @@
   - L39 `static Future<String?> loadEngineLocal(String userId)`
   - L44 `static Future<String?> loadEngineSynced(String userId)`
   - L53 `static Future<void> saveEngineLocal(String userId, String engine)`
-  - L58 `static Future<void> saveEngineSynced(String userId, String engine)`
+  - L58 `static Future<bool> saveEngineSynced(String userId, String engine)`
+  - L68 `static const _enginePendingKey = 'voice_engine_pending'`  — Marks that this device has an engine choice the cloud has not accepted
+  - L70 `static Future<void> saveEnginePending(String userId, bool pending)`
+  - L79 `static Future<bool> loadEnginePending(String userId)`
 
 ## lib/voice/voice_protocol.dart  (342 Z.)
 - L14 `abstract final class VoiceProtocol`

@@ -15,6 +15,7 @@ all mail sealed at rest. Resend is gone.
 | Provider storage | Cloudflare keeps metadata only. **Email preview** on the sending domain must stay OFF, otherwise Cloudflare keeps sent mail for 7 days. |
 | Domain | `chukagents.com`, DNS at Cloudflare. A separate domain, so abuse does not put `chuk.chat` on block lists. |
 | Address | One address per user, for ever. Local part: 10 random characters from `abcdefghijkmnpqrstuvwxyz23456789`, for example `k7f3q9x2mh@chukagents.com`. Never given to a different user. |
+| Plus aliases | `<local>+<tag>@chukagents.com` reaches the same mailbox, with no set-up per alias (`+receipts`, `+newsletters`, `+signups`). Tag: `a-z0-9._-`, at most 64 characters, starts and ends with a letter or digit, lower case. An invalid tag is an unknown address (reject). The tag is sealed on the mail as `alias` (§3.3). The agent can send from an alias (`from_alias`, §5.3); the send policy does not change. |
 | Who gets one | Only users with an active subscription (`user_billing.is_subscribed`). |
 | Subscription ends | The mailbox is frozen: no send, incoming mail is rejected. A new subscription unfreezes the same address. |
 | Unknown address | The Worker rejects the mail at SMTP time (`setReject`). |
@@ -107,7 +108,7 @@ and `nonce` are fixed):
 
 Each message row has two sealed JSON documents:
 
-* `sealed_summary`: `{subject, from_address, from_name, to, snippet}`.
+* `sealed_summary`: `{subject, from_address, from_name, to, snippet, alias?}`. `alias` is the plus tag the mail came in on (inbound) or went out from (outbound; `from_address` is then `local+alias@domain`). Absent for the plain address.
 * `sealed_body`: `{text, cc, message_id, in_reply_to, references, codes, links, attachments: [{id, filename, content_type, size, too_large}], auth: {dkim_aligned, dkim_domain}}`. A `too_large` attachment is listed but not stored. Outgoing rows have `message_id: null` and `auth: null`.
 * `agent_note_sealed`: `{note}` (the host sends the note in plain text; the server seals it).
 * Attachment objects in the bucket `agent-mail` use the binary form, path `<user_id>/<message_id>/<attachment_id>`.
@@ -173,7 +174,8 @@ Only the Worker calls it. Body: the raw RFC 5322 message
   `AGENT_MAIL_INBOUND_SECRET` over `timestamp + "\n" + to + "\n" + from + "\n" + hex(sha256(body))`.
   Tolerance 5 minutes; constant-time compare.
 
-Steps: check the signature; find the mailbox of `to` (none, frozen, no
+Steps: check the signature; split a plus tag off `to` (`local+tag@domain`
+→ mailbox `local@domain`, `alias = tag`; an invalid tag answers `404`); find the mailbox (none, frozen, no
 subscription or no mail key: answer `404 {"status":"reject"}`, the Worker
 rejects); dedupe by `provider_id = hex(sha256(body))` per mailbox; parse the
 MIME with the stdlib `email` package (text part, HTML to text fallback,
@@ -201,8 +203,8 @@ the host use the same kind of token. Errors: `{"detail": "<code>"}`.
 | `DELETE /v1/agent-mail/messages/{id}` | Deletes the row and its stored attachments. |
 | `GET /v1/agent-mail/messages/{id}/attachments/{attachment_id}` | The sealed binary object (the client unseals it). |
 | `POST /v1/agent-mail/messages/claim` | Body `{ids}`. Sets `delivered_to_host_at` where empty. `{claimed}`. |
-| `POST /v1/agent-mail/send` | Body `{to, cc?, subject, text, reply_to_message_id?, in_reply_to?, references?, attachments?: [{filename, content_type, content_base64}], user_requested?, force_draft?}`. `200 {id, status:"sent"}` or `202 {id, status:"draft", reason}`. Errors: `402 no_subscription`, `403 mailbox_frozen`, `403 send_suspended`, `422 too_many_recipients`, `429 rate_limited`, `429 quota_exhausted`. |
-| `POST /v1/agent-mail/drafts/{id}/send` | Body `{to, cc?, subject, text, in_reply_to?, references?}`: the app sends the full draft (it decrypted it; the user can edit). The server replaces the sealed draft, sends it, marks the recipients `allowed_outbound`. |
+| `POST /v1/agent-mail/send` | Body `{to, cc?, subject, text, reply_to_message_id?, in_reply_to?, references?, attachments?: [{filename, content_type, content_base64}], user_requested?, force_draft?, from_alias?}`. `from_alias` (`receipts`, `+receipts` or `local+receipts@domain`) sends from `local+receipts@domain`; a bad tag is `422 invalid_alias`. `200 {id, status:"sent"}` or `202 {id, status:"draft", reason}`. Errors: `402 no_subscription`, `403 mailbox_frozen`, `403 send_suspended`, `422 too_many_recipients`, `429 rate_limited`, `429 quota_exhausted`. |
+| `POST /v1/agent-mail/drafts/{id}/send` | Body `{to, cc?, subject, text, in_reply_to?, references?, from_alias?}`: the app sends the full draft (with the `alias` it read from the sealed summary) (it decrypted it; the user can edit). The server replaces the sealed draft, sends it, marks the recipients `allowed_outbound`. |
 | `GET /v1/agent-mail/contacts` | `{contacts: [{id, label_sealed, trusted_inbound, allowed_outbound, blocked, created_at}]}`. |
 | `PUT /v1/agent-mail/contacts` | Body `{address, trusted_inbound?, allowed_outbound?, blocked?}` (plain address; the server hashes and seals). Upsert. `{contact}`. |
 | `DELETE /v1/agent-mail/contacts/{id}` | Removes the contact. |
@@ -262,6 +264,12 @@ and no addresses. Routing: Email Routing catch-all → Worker.
   automations. A match fires that automation in its own session. A trusted
   mail an automation took leaves the general full run; an unknown mail keeps
   its restricted run; bulk still starts no run of its own.
+* Plus aliases: `summary_view` and the HostView carry `alias` (also for
+  `unknown` mail: a server-checked tag, no free text). `mail_send` takes
+  `from_alias`; `mail_reply` and `mail_draft_reply` send from the alias of
+  the parent mail. The approval card details carry `from_alias`. A `mail`
+  automation can filter on `alias` (exact tag), alone or with `from` /
+  `subject`.
 * Tools in a full run: `mail_address`, `mail_list`, `mail_read`, `mail_send`,
   `mail_reply`, `mail_archive`, `mail_delete`, `mail_wait`.
 * Tools in a restricted run: `mail_read`, `mail_note`, `mail_draft_reply`
@@ -273,7 +281,7 @@ and no addresses. Routing: Email Routing catch-all → Worker.
 
 * Entry: row "Mailbox" in the Agents settings (phone and desktop).
 * Mail key: make, seal with the chuk key, `PUT /key`; hand it to the host.
-* Mailbox page: address with copy action, filter `Inbox | Unknown | Drafts | Sent`, Archive row, Contacts row, the privacy text of §1.
+* Mailbox page: address with copy action; under it the plus aliases seen in the loaded lists as small pills (tap copies `local+alias@domain`), filter `Inbox | Unknown | Drafts | Sent`, Archive row, Contacts row, the privacy text of §1.
 * Mail page: unseal and show sender, trust badge, date, agent note, text, attachments (download unseals). Actions: archive, delete, trust sender, block sender. Drafts: edit, send (full draft in the body), discard.
 * Contacts: unseal `label_sealed`; delete by id.
 * No subscription: info card. `needs_key`: the app makes the key.
@@ -284,6 +292,12 @@ and no addresses. Routing: Email Routing catch-all → Worker.
 1. Workers Paid on the account.
 2. `chukagents.com`: Email Sending enabled; **Email preview OFF**.
 3. Email Routing enabled; catch-all rule → Worker `agent-mail-inbound`.
+   The catch-all also takes `local+tag@` (the Worker passes `message.to`
+   unchanged; the server splits the tag), so plus aliases need no further
+   rule. Check once after deploy: a test mail to `<address>+test@chukagents.com`
+   must show up in the app with the `+test` pill, and a send with
+   `from_alias` must leave Cloudflare Email Sending with the `+test` From
+   (Email Sending accepts any local part on the verified domain).
 4. Account-owned API token with the permission **Email Sending: Edit** → `CLOUDFLARE_EMAIL_TOKEN`; account id → `CLOUDFLARE_ACCOUNT_ID`.
 5. `_dmarc` TXT `v=DMARC1; p=quarantine;`.
 
@@ -296,6 +310,7 @@ and no addresses. Routing: Email Routing catch-all → Worker.
 
 ## 11. Open points
 
-* More than one address per agent.
+* More than one address per agent (plus aliases cover most uses).
+* A rule list per alias (block one alias, for example `+newsletters` after a leak).
 * HTML view in the app.
 * Key rotation.

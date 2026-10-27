@@ -82,6 +82,7 @@ Map<String, dynamic> fakeMail({
   String? importance,
   String? note,
   String createdAt = '2026-09-30T09:15:00Z',
+  String? alias,
   String text = 'Hello,\n\nhere are the numbers.\n\nAda',
   List<Map<String, dynamic>> files = const <Map<String, dynamic>>[],
   List<String> cc = const <String>[],
@@ -97,6 +98,7 @@ Map<String, dynamic> fakeMail({
   'from_address': from,
   'from_name': fromName,
   'to': to,
+  'alias': alias,
   'subject': subject,
   'snippet': snippet,
   'sender_trust': trust,
@@ -134,6 +136,7 @@ MailSummary fakeSummary(Map<String, dynamic> m) => MailSummary(
   toAddresses: m['broken'] == true
       ? const <String>[]
       : List<String>.from(m['to'] as List),
+  alias: m['broken'] == true ? null : m['alias'] as String?,
   subject: m['broken'] == true ? '' : m['subject'] as String,
   snippet: m['broken'] == true ? null : m['snippet'] as String?,
   senderTrust: switch (m['sender_trust']) {
@@ -431,6 +434,7 @@ class FakeAgentMailServer {
         'from_name': m['from_name'],
         'to': m['to'],
         'snippet': m['snippet'],
+        if (m['alias'] != null) 'alias': m['alias'],
       }, broken: m['broken'] == true),
       'agent_note_sealed': note == null
           ? null

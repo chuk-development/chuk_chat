@@ -53,7 +53,7 @@
   - L36 `Widget build(BuildContext context)`
   - L57 `bool _isMobilePhone(BuildContext context)`
 
-## lib/platform_specific/root_wrapper_mobile.dart  (825 Z.)
+## lib/platform_specific/root_wrapper_mobile.dart  (814 Z.)
 - L37 `class RootWrapperMobile extends StatefulWidget`
   - L38 `final AppShellConfig config`
   - L44 `final Widget? headerCenter`  — Takes the place of the title pill in the floating top bar. The Agents
@@ -88,11 +88,11 @@
   - L450 `void _newChatFromAppBar()`
   - L460 `String? _currentChatTitle()`  — Title of the chat in view, or null for a fresh/unsaved chat.
   - L476 `Widget _buildFloatingTopBar(Color iconFg)`  — The composer's top row, rebuilt as free-floating blocks: a round menu
-  - L580 `Widget _floatIconChip({ required IconData icon, required VoidCallback onTap, required Color iconFg, required String tooltip, required String semanticsId, })`  — One round, frosted icon chip for the floating top bar.
-  - L610 `void _newChatFromSidebar()`
-  - L619 `void _openArtifactSheet()`
-  - L643 `void _copyDebugChat()`
-  - L658 `Widget build(BuildContext context)`
+  - L583 `Widget _floatIconChip({ required IconData icon, required VoidCallback onTap, required Color iconFg, required String tooltip, required String semanticsId, })`  — One round chip of the floating top bar: the app's header chip
+  - L599 `void _newChatFromSidebar()`
+  - L608 `void _openArtifactSheet()`
+  - L632 `void _copyDebugChat()`
+  - L647 `Widget build(BuildContext context)`
 
 ## lib/platform_specific/root_wrapper_stub.dart  (19 Z.)
 - L8 `class RootWrapper extends StatelessWidget`  — Web wrapper - renders desktop UI since web is a desktop-like environment

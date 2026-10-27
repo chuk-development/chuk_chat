@@ -888,7 +888,16 @@ extension _MessageBubbleTools on _MessageBubbleState {
       return const [];
     }
 
-    return [AskUserCard(options: options, onSelect: widget.onAskUserAnswer!)];
+    return [
+      AskUserCard(
+        options: options,
+        onSelect: widget.onAskUserAnswer!,
+        question: (askUserCall.arguments['question'] as Object? ?? '')
+            .toString()
+            .trim(),
+        multiSelect: askUserIsMultiple(askUserCall.arguments['multiple']),
+      ),
+    ];
   }
 
   /// Find the last completed request_mcp_server tool call across all sources.

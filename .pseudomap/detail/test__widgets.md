@@ -105,6 +105,18 @@
   - L74 `Future<void> createAgent( String agentId, String name, { Map<String, Object?>? template, })`
 - L84 `void main()`
 
+## test/widgets/agents_done_notification_answer_test.dart  (71 Z.)
+- L13 `ChatMessage _answer(String text, {String? runId})`
+- L22 `String? _pick({ String? finalAnswer, String? runId = 'run-2', bool stopped = false, required List<ChatMessage> rows, })`
+- L34 `void main()`
+
+## test/widgets/agents_draft_diff_test.dart  (318 Z.)
+- L12 `Widget _app(Widget child, {Locale locale = const Locale('en')})`
+- L24 `AgentsRelayApprovalRequest _mail( String id, { String subject = 'Meeting', String preview = 'Hi Bob, can we meet on Monday at noon?', })`
+- L48 `AgentsRelayApprovalRequest _slack(String id, String text)`
+- L69 `List<TextSpan> _spans(WidgetTester tester, Key key)`
+- L81 `void main()`
+
 ## test/widgets/agents_live_dots_test.dart  (207 Z.)
 - L21 `void main()`  — bead chuk_chat-hfru: while an Agents turn runs, the thread shows the
 
@@ -201,7 +213,7 @@
 - L180 `Widget _plainChat(String text, {double width = 760})`  — chuk_chat's plain desktop transcript around one answer: a selection area,
 - L203 `void main()`
 
-## test/widgets/agents_thread_view_notifications_test.dart  (208 Z.)
+## test/widgets/agents_thread_view_notifications_test.dart  (234 Z.)
 - L35 `class _FakeSessionSource implements AccountSessionSource`
   - L36 `const _FakeSessionSource()`
   - L39 `AccountSession? current()`
@@ -238,7 +250,7 @@
 - L39 `Widget _app(Widget child)`
 - L53 `void main()`  — The visible run must end when the host says the run ended, whatever else the
 
-## test/widgets/agents_thread_view_test.dart  (1539 Z.)
+## test/widgets/agents_thread_view_test.dart  (1708 Z.)
 - L41 `class _MemoryStore implements AgentsSecureKeyValueStore`  — In-memory secure backend so the store round-trips with no platform channel.
   - L42 `final Map<String, String> map = <String, String>{}`
   - L45 `Future<String?> read(String key)`
@@ -252,12 +264,13 @@
   - L71 `Future<AccountSession?> refresh()`
 - L76 `Widget _app(Widget child)`  — The app shell the imported chat screen expects around it: localisations and
 - L87 `void main()`
-- L1518 `Future<void> _flushIdleTimers(WidgetTester tester)`  — The imported chat screen schedules a 60 s idle-close timer for its
-- L1524 `class _ProbingRelayController extends FakeRelayController implements AgentsLinkProbe`  — A fake whose socket can be asked whether it still answers.
-  - L1526 `_ProbingRelayController(this.answers)`
-  - L1528 `final bool answers`
-  - L1529 `int probes = 0`
-  - L1532 `Future<bool> probeLink({ Duration timeout = const Duration(milliseconds: 1500), })`
+- L1683 `Future<void> _flushIdleTimers(WidgetTester tester)`  — The imported chat screen schedules a 60 s idle-close timer for its
+- L1689 `class _ProbingRelayController extends FakeRelayController implements AgentsLinkProbe`  — A fake whose socket can be asked whether it still answers.
+  - L1691 `_ProbingRelayController(this.answers, {this.throws = false})`
+  - L1693 `final bool answers`
+  - L1696 `final bool throws`  — The probe fails with an error, as a send on a closed socket does.
+  - L1697 `int probes = 0`
+  - L1700 `Future<bool> probeLink({ Duration timeout = const Duration(milliseconds: 1500), })`
 
 ## test/widgets/agents_user_browser_test.dart  (747 Z.)
 - L20 `Map<String, dynamic> _block({ bool installed = true, bool connected = true, bool inUse = false, Map<String, dynamic>? inUseBy, bool stopped = false, })`
@@ -285,7 +298,7 @@
 - L11 `Future<void> _pumpAnchor( WidgetTester tester, { required double keyboardInset, required Alignment anchorAt, int itemCount = 3, bool preferAbove = false, })`
 - L63 `void main()`
 
-## test/widgets/answer_blocks_test.dart  (470 Z.)
+## test/widgets/answer_blocks_test.dart  (633 Z.)
 - L11 `_text = Color(0xFF111111)`
 - L12 `_bubble = Color(0xFFFFFFFF)`
 - L14 `Future<void> _pump( WidgetTester tester, String markdown, { double width = 360, double textScale = 1, ValueChanged<String>? onFollowUp, })`
@@ -334,6 +347,10 @@
 ## test/widgets/app_notification_test.dart  (87 Z.)
 - L8 `void main()`
 
+## test/widgets/ask_user_card_test.dart  (103 Z.)
+- L11 `Future<void> _pump(WidgetTester tester, Widget child)`
+- L22 `void main()`
+
 ## test/widgets/auth_gate_test.dart  (297 Z.)
 - L13 `String _jwt({required int exp})`
 - L20 `Session _session({String refresh = 'r1'})`
@@ -344,7 +361,7 @@
 - L29 `Widget _wrap(Widget child)`
 - L31 `void main()`
 
-## test/widgets/automation_editor_sheet_test.dart  (348 Z.)
+## test/widgets/automation_editor_sheet_test.dart  (354 Z.)
 - L17 `void main()`
 
 ## test/widgets/browser_view_page_test.dart  (279 Z.)
@@ -443,11 +460,17 @@
 ## test/widgets/chuk_table_test.dart  (71 Z.)
 - L5 `void main()`
 
+## test/widgets/composer_caret_follower_test.dart  (121 Z.)
+- L6 `void main()`
+
 ## test/widgets/composer_recording_row_test.dart  (96 Z.)
 - L15 `void main()`
 
 ## test/widgets/diff_widget_test.dart  (62 Z.)
 - L6 `void main()`
+
+## test/widgets/email_draft_card_test.dart  (109 Z.)
+- L9 `void main()`
 
 ## test/widgets/excalidraw_svg_export_test.dart  (62 Z.)
 - L5 `_sampleScene = ''' { "type": "excalidraw", "version": 2, "source": "https://excalidraw.com", "elements": [ {"type":"rect`
@@ -464,7 +487,7 @@
 - L60 `Iterable<BoxDecoration> _decorations(WidgetTester tester)`  — Every decorated box the bubbles draw, by fill colour.
 - L70 `void main()`
 
-## test/widgets/floating_app_bar_test.dart  (66 Z.)
+## test/widgets/floating_app_bar_test.dart  (170 Z.)
 - L7 `void main()`
 
 ## test/widgets/html_artifact_view_test.dart  (113 Z.)
@@ -473,6 +496,10 @@
 
 ## test/widgets/map_block_dedupe_test.dart  (72 Z.)
 - L5 `void main()`
+
+## test/widgets/map_features_block_test.dart  (46 Z.)
+- L6 `Widget _host(String json)`
+- L12 `void main()`
 
 ## test/widgets/markdown_message_test.dart  (541 Z.)
 - L18 `kAccent = Color(0xFF1565C0)`
@@ -563,7 +590,7 @@
 - L19 `Widget wrap(Widget child)`
 - L30 `void main()`
 
-## test/widgets/messenger_shell_test.dart  (2200 Z.)
+## test/widgets/messenger_shell_test.dart  (2246 Z.)
 - L61 `class _MemoryStore implements AgentsSecureKeyValueStore`
   - L62 `final Map<String, String> map = <String, String>{}`
   - L65 `Future<String?> read(String key)`
@@ -620,12 +647,12 @@
   - L266 `Future<AccountSession?> refresh()`
 - L275 `Future<void> settle(WidgetTester tester)`  — Pump a few frames without waiting for the tree to go quiet.
 - L281 `void main()`
-- L2181 `class _CountingReadMarks extends AgentReadMarks`
-  - L2182 `int flushes = 0`
-  - L2185 `Future<void> flush()`
-- L2191 `class _CountingRoster extends LocalAgentRosterSource`
-  - L2192 `int flushes = 0`
-  - L2195 `void flushPendingPersist()`
+- L2227 `class _CountingReadMarks extends AgentReadMarks`
+  - L2228 `int flushes = 0`
+  - L2231 `Future<void> flush()`
+- L2237 `class _CountingRoster extends LocalAgentRosterSource`
+  - L2238 `int flushes = 0`
+  - L2241 `void flushPendingPersist()`
 
 ## test/widgets/messenger_typing_indicator_test.dart  (48 Z.)
 - L5 `void main()`
@@ -672,6 +699,11 @@
 ## test/widgets/room_thread_view_test.dart  (373 Z.)
 - L11 `void main()`
 
+## test/widgets/schedule_picker_test.dart  (293 Z.)
+- L9 `Widget _app(Widget child, {Locale locale = const Locale('en')})`
+- L25 `Future<TextEditingController> _pump( WidgetTester tester, String spec, { Locale locale = const Locale('en'), })`
+- L52 `void main()`
+
 ## test/widgets/selection_copy_area_test.dart  (284 Z.)
 - L9 `void main()`
 
@@ -679,18 +711,38 @@
 - L8 `Widget _host({required List<Widget> children})`
 - L14 `void main()`
 
-## test/widgets/status_answer_block_test.dart  (144 Z.)
+## test/widgets/status_answer_block_test.dart  (157 Z.)
 - L10 `_payments = ''' Erledigt, Posteingang ist auf 0. ::: status 4 offene Zahlungen · 122,20 € + 50 \$ Hetzner | Kartenzahlun`
 - L24 `Future<void> _pump( WidgetTester tester, String markdown, { required double width, double textScale = 1, bool dark = false, })`
 - L68 `String _allText(WidgetTester tester)`
 - L73 `void main()`
 
+## test/widgets/tiles_block_test.dart  (93 Z.)
+- L10 `Future<void> _pump(WidgetTester tester, String markdown, double width)`
+- L32 `void main()`
+
 ## test/widgets/turn_status_test.dart  (238 Z.)
 - L16 `void main()`
 
-## test/widgets/voice_message_bubble_test.dart  (135 Z.)
-- L10 `_transcript = 'Okay so I was thinking about the trip next week and I would like to ' 'know what the weather will be like`
-- L14 `void main()`
+## test/widgets/unread_jump_pill_test.dart  (210 Z.)
+- L11 `Map<String, String> _row(String sender, DateTime at)`
+- L17 `class _Harness extends StatefulWidget`
+  - L18 `const _Harness({required this.target, required this.onSeen})`
+  - L20 `final int target`
+  - L21 `final VoidCallback onSeen`
+  - L24 `State<_Harness> createState()`
+- L27 `class _HarnessState extends State<_Harness>`
+  - L28 `final ScrollController controller = ScrollController()`
+  - L29 `final GlobalKey targetKey = GlobalKey()`
+  - L32 `void initState()`
+  - L41 `Widget build(BuildContext context)`
+- L72 `Widget _app(Widget child, {Locale locale = const Locale('en')})`
+- L86 `double _opacity(WidgetTester tester)`
+- L92 `void main()`
+
+## test/widgets/voice_message_bubble_test.dart  (153 Z.)
+- L11 `_transcript = 'Okay so I was thinking about the trip next week and I would like to ' 'know what the weather will be like`
+- L15 `void main()`
 
 ## test/widgets/web_search_sources_test.dart  (40 Z.)
 - L4 `void main()`

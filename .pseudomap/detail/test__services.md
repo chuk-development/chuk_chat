@@ -65,6 +65,18 @@
 ## test/services/auth_trace_test.dart  (43 Z.)
 - L6 `void main()`
 
+## test/services/autobahn_traffic_service_test.dart  (472 Z.)
+- L13 `Map<String, dynamic> _item({ required String id, String title = 'A7 | Füssen - Nesselwang', String subtitle = ' Füssen/Reutte -> Ulm', String displayType = 'SHORT_TERM_ROADWORKS', String isBlocked = 'false', double lat = 47.599, double lon = 10.656, List<String>? description, })`
+- L54 `class _FakeApi`  — Fake API: road list plus per-road closure/roadworks lists. Counts
+  - L55 `_FakeApi(this.roads)`
+  - L57 `final Map<String, Map<String, List<Map<String, dynamic>>>> roads`
+  - L58 `final Map<String, int> hits = {}`
+  - L59 `final Set<String> failing = {}`
+  - L60 `final List<Map<String, String>> headers = []`
+  - L62 `int get total`
+  - L64 `late final http.Client client = MockClient((req) async { headers.add(req.headers); final path = req.url.path; hits[path] = (hits[path] ?? 0) + 1; final seg = req.url.pathSegments.where((s) => s.isNotEmpty).toList(); // /o/autobahn/ or /o/autobahn/<road>/services/<service> if (seg.length == 2) { return http.Response(jsonEncode({'roads': roads.keys.toList()}), 200); } final road = seg[2]; final service = seg[4]; if (failing.contains(road)) return http.Response('busy', 503); final list = roads[road]?[service] ?? const []; return http.Response.bytes( utf8.encode(jsonEncode({service: list})), 200, headers: {'content-type': 'application/json'}, ); })`
+- L85 `void main()`
+
 ## test/services/bash_sandbox_folder_test.dart  (105 Z.)
 - L8 `void main()`
 
@@ -212,6 +224,9 @@
 ## test/services/model_cache_memo_test.dart  (51 Z.)
 - L14 `void main()`
 
+## test/services/model_cache_unavailable_test.dart  (31 Z.)
+- L14 `void main()`
+
 ## test/services/multiplex_auth_refresh_test.dart  (569 Z.)
 - L33 `class _FakeMultiplexServer`  — Minimal stand-in for the `/v2/ws` endpoint.
   - L34 `_FakeMultiplexServer._(this._server)`
@@ -259,6 +274,10 @@
 ## test/services/reasoning_supported_efforts_test.dart  (198 Z.)
 - L19 `Future<void> _seedCatalog(List<Map<String, dynamic>> models)`  — Seed the on-disk catalog cache with [models] and hydrate the capability
 - L25 `void main()`
+
+## test/services/road_closures_service_test.dart  (297 Z.)
+- L11 `Map<String, dynamic> _shLine(int id, {String header = 'B76 Plön - Trent'})`
+- L33 `void main()`
 
 ## test/services/round_content_block_service_test.dart  (519 Z.)
 - L8 `void main()`
@@ -336,7 +355,7 @@
 ## test/services/tool_call_handler_fact_check_test.dart  (193 Z.)
 - L6 `void main()`
 
-## test/services/tool_call_handler_forced_final_test.dart  (309 Z.)
+## test/services/tool_call_handler_forced_final_test.dart  (342 Z.)
 - L16 `void main()`
 
 ## test/services/tool_call_handler_repeated_lookup_test.dart  (409 Z.)
@@ -359,10 +378,10 @@
 ## test/services/tool_failure_detection_test.dart  (129 Z.)
 - L9 `void main()`  — A tool result's failure flag drives the icon the user sees AND whether the
 
-## test/services/tool_image_result_service_test.dart  (178 Z.)
+## test/services/tool_image_result_service_test.dart  (209 Z.)
 - L8 `void main()`
 
-## test/services/tool_prompt_builder_test.dart  (453 Z.)
+## test/services/tool_prompt_builder_test.dart  (457 Z.)
 - L8 `_skillToolDef = { 'name': 'skill', 'description': 'Load a skill.', 'parameters': <String, dynamic>{'name': 'string'}, }`
 - L14 `_tools = [ { 'name': 'find_tools', 'description': 'Discovery', 'parameters': <String, dynamic>{}, }, { 'name': 'web_sear`
 - L37 `_testSkill = Skill( name: 'weather-cards', description: 'Renders weather. Use when the user asks about weather.', body: `
@@ -386,8 +405,8 @@
 ## test/services/user_scoped_cache_race_test.dart  (309 Z.)
 - L21 `void main()`  — The sign-out-mid-flight race: an operation starts as user A, A signs out and
 
-## test/services/user_sync_signal_service_test.dart  (167 Z.)
-- L6 `void main()`
+## test/services/user_sync_signal_service_test.dart  (229 Z.)
+- L8 `void main()`
 
 ## test/services/websocket_chat_service_test.dart  (783 Z.)
 - L24 `List<AgentsRelayInbound> _everyVariant()`  — Every inbound variant the relay can produce, so the "never a ToolCallsEvent"

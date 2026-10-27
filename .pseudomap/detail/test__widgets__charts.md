@@ -12,13 +12,14 @@
 ## test/widgets/charts/chart_spec_test.dart  (228 Z.)
 - L10 `void main()`
 
-## test/widgets/charts/chart_test_support.dart  (150 Z.)
+## test/widgets/charts/chart_test_support.dart  (161 Z.)
 - L19 `Future<void> loadChartFonts()`  — Loads Roboto from the SDK so a golden shows real glyphs instead of the
 - L38 `Directory? _findMaterialFonts()`
-- L66 `ThemeData chartTheme(Brightness brightness)`  — The app's own scheme shape: a neutral seed, so the chart's colours come
-- L75 `kChartGoldenDir = 'goldens'`  — Where the tests write the PNGs. Relative to `test/widgets/charts/`.
-- L79 `Future<Finder> pumpChart( WidgetTester tester, Widget chart, { double width = 366, Brightness brightness = Brightness.dark, double textScale = 1.0, double surfaceHeight = 900, })`  — Pumps [chart] into a bubble-width column on a themed background and
-- L128 `Future<void> shootChart( WidgetTester tester, Object? json, String name, { double width = 366, Brightness brightness = Brightness.dark, double textScale = 1.0, })`  — Renders [spec] finished (no entrance) and writes `<name>.png`.
+- L72 `kGoldenDocumentUpdatedAt = DateTime(2026, 9, 13, 0, 15).millisecondsSinceEpoch / 1000`  — The `updated_at` the document goldens carry, in epoch seconds.
+- L77 `ThemeData chartTheme(Brightness brightness)`  — The app's own scheme shape: a neutral seed, so the chart's colours come
+- L86 `kChartGoldenDir = 'goldens'`  — Where the tests write the PNGs. Relative to `test/widgets/charts/`.
+- L90 `Future<Finder> pumpChart( WidgetTester tester, Widget chart, { double width = 366, Brightness brightness = Brightness.dark, double textScale = 1.0, double surfaceHeight = 900, })`  — Pumps [chart] into a bubble-width column on a themed background and
+- L139 `Future<void> shootChart( WidgetTester tester, Object? json, String name, { double width = 366, Brightness brightness = Brightness.dark, double textScale = 1.0, })`  — Renders [spec] finished (no entrance) and writes `<name>.png`.
 
 ## test/widgets/charts/chuk_chart_golden_test.dart  (147 Z.)
 - L14 `void main()`

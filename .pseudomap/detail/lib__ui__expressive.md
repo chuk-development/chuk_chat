@@ -10,7 +10,7 @@
   - L61 `void paint(Canvas canvas, Rect rect, {TextDirection? textDirection})`
   - L63 `ShapeBorder scale(double t)`
 - L68 `Color agentAccent( BuildContext context, String agentId, { AgentProfileStore? store, })`  — The accent colour of an agent: the picked colour, else the stable hue from
-- L95 `int _paletteIndex(String agentId)`  — A stable index into [kAgentAccents] from the agent id. Its own hash, so a
+- L95 `int _paletteIndex(String agentId)`  — A stable index into [kAgentAccents] from the agent id. Its own hash, so an
 - L105 `kAgentAccents = <Color>[ Color(0xFF2962FF), Color(0xFF7C4DFF), Color(0xFFAA00FF), Color(0xFFFF4081), Color(0xFFFF1744), `  — The palette the profile editor offers for an agent's colour.
 - L124 `class ExpressiveFace extends StatelessWidget`  — A face for an identity the caller only knows as an id and a label — a room
   - L125 `const ExpressiveFace({ super.key, required this.id, required this.label, this.size = 32, this.store, this.dimmed = false, })`
@@ -113,19 +113,19 @@
   - L140 `final VoidCallback onTap`
   - L143 `Widget build(BuildContext context)`
 
-## lib/ui/expressive/expressive_screen.dart  (150 Z.)
-- L27 `class ExpressiveScreen extends StatelessWidget`
-  - L28 `const ExpressiveScreen({ super.key, required this.builder, this.title, this.titleWidget, this.actions = const <Widget>[], this.onBack, this.showBack = true, this.bottomBar, this.backgroundColor, })`
-  - L46 `final WidgetBuilder builder`  — The page itself, built BELOW the media query this widget grows.
-  - L48 `final String? title`
-  - L52 `final Widget? titleWidget`  — A title that is not a plain string (a search field, say). Wins over
-  - L55 `final List<Widget> actions`  — Trailing targets. Use [ExpressiveIconButton] so they match the back one.
-  - L58 `final VoidCallback? onBack`  — What the back target does. Defaults to popping the route.
-  - L60 `final bool showBack`
-  - L63 `final Widget? bottomBar`  — A bar pinned to the bottom, on the mirrored veil.
-  - L65 `final Color? backgroundColor`
-  - L68 `static const double barHeight = 64`  — The height of the bar itself, without the status bar above it.
-  - L71 `Widget build(BuildContext context)`
+## lib/ui/expressive/expressive_screen.dart  (173 Z.)
+- L28 `class ExpressiveScreen extends StatelessWidget`
+  - L29 `const ExpressiveScreen({ super.key, required this.builder, this.title, this.titleWidget, this.actions = const <Widget>[], this.onBack, this.showBack = true, this.bottomBar, this.backgroundColor, })`
+  - L47 `final WidgetBuilder builder`  — The page itself, built BELOW the media query this widget grows.
+  - L49 `final String? title`
+  - L53 `final Widget? titleWidget`  — A title that is not a plain string (a search field, say). Wins over
+  - L56 `final List<Widget> actions`  — Trailing targets. Use [FloatingHeaderButton] so they match the back one.
+  - L59 `final VoidCallback? onBack`  — What the back target does. Defaults to popping the route.
+  - L61 `final bool showBack`
+  - L64 `final Widget? bottomBar`  — A bar pinned to the bottom, on the mirrored veil.
+  - L66 `final Color? backgroundColor`
+  - L69 `static const double barHeight = 64`  — The height of the bar itself, without the status bar above it.
+  - L72 `Widget build(BuildContext context)`
 
 ## lib/ui/expressive/face_image.dart  (10 Z.)
 - reicht weiter: 'face_image_stub.dart' if (dart.library.io) 'face_image_io.dart'

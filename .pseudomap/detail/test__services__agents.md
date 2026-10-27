@@ -1,5 +1,8 @@
 # test/services/agents · Signaturen
 
+## test/services/agents/agent_mail_alias_test.dart  (201 Z.)
+- L15 `void main()`  — Plus aliases of the agent address (docs/AGENT_MAIL.md §1, §8): the tag
+
 ## test/services/agents/agent_mail_crypto_test.dart  (142 Z.)
 - L11 `void main()`  — The seal format `chuk-agent-mail-v1` against the test vector of
 
@@ -322,13 +325,13 @@
 ## test/services/agents/agents_replay_paging_test.dart  (154 Z.)
 - L18 `void main()`  — Replay paging in the loader (docs/WIRE_CONTRACT.md "Replay paging", Bead
 
-## test/services/agents/agents_replay_repeat_test.dart  (207 Z.)
+## test/services/agents/agents_replay_repeat_test.dart  (371 Z.)
 - L12 `Map<String, String> user(String text)`  — Bead cowork-4rpt: the same message, twice.
 - L18 `Map<String, String> ai(String text)`
 - L24 `List<String> texts(List<Map<String, String>> rows)`
 - L27 `void main()`
-- L140 `void _pagingTests()`
-- L157 `void _repairTests()`
+- L271 `void _pagingTests()`
+- L288 `void _repairTests()`
 
 ## test/services/agents/agents_run_cost_test.dart  (281 Z.)
 - L11 `_block = <String, dynamic>{ 'currency': 'EUR', 'eur': 0.002345, 'input_tokens': 5000, 'output_tokens': 150, 'cached_toke`

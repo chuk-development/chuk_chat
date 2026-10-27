@@ -29,7 +29,7 @@
   - L87 `final VoidCallback? onEditRequested`  — Edit this (user) message from the messenger menu.
   - L90 `Widget build(BuildContext context)`
 
-## lib/platform_specific/chat/widgets/composer_send_button.dart  (230 Z.)
+## lib/platform_specific/chat/widgets/composer_send_button.dart  (237 Z.)
 - L23 `enum ComposerSendFace`  — What the composer's primary target shows.
   - L23 `send`
   - L23 `voice`
@@ -55,10 +55,11 @@
   - L89 `final double? spinnerSize`  — Null: the button's short side less 16.
   - L90 `final double spinnerStroke`
   - L92 `final String semanticsId`
-  - L95 `static ComposerSendFace faceFor({ required bool hasContent, required bool voiceAvailable, bool stopping = false, bool loading = false, })`  — The face for a composer state. Loading wins, then stop, then content.
-  - L108 `Widget build(BuildContext context)`
-  - L124 `Widget _build(BuildContext context, ComposerSendFace face, bool hasContent)`
-  - L192 `Widget _glyph(ComposerSendFace face, Color on)`
+  - L99 `static bool stopsWhile({required bool busy, required bool micActive})`  — The face for a composer state. Loading wins, then stop, then content.
+  - L102 `static ComposerSendFace faceFor({ required bool hasContent, required bool voiceAvailable, bool stopping = false, bool loading = false, })`
+  - L115 `Widget build(BuildContext context)`
+  - L131 `Widget _build(BuildContext context, ComposerSendFace face, bool hasContent)`
+  - L199 `Widget _glyph(ComposerSendFace face, Color on)`
 
 ## lib/platform_specific/chat/widgets/mobile_chat_widgets.dart  (213 Z.)
 - L14 `Widget buildTinyIconButton({ IconData? icon, String? svgAssetPath, required VoidCallback? onTap, required bool isActive, required Color color, double buttonSize = 38, double cornerRadius = 12, double iconSize = 18, String? semanticsId, })`  — Build a tiny icon button widget
