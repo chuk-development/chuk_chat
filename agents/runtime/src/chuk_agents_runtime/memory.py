@@ -982,8 +982,7 @@ MEMORY_SEARCH_SCHEMA = {
     "description": (
         "Recall notes from your long-term memory that relate to a query: how "
         "the user wants things done, project facts, decisions from earlier "
-        "tasks. Recall is semantic — search by meaning. Use it whenever a task "
-        "may depend on something decided or learned before."
+        "tasks. Recall is semantic — search by meaning."
     ),
     "properties": {
         "query": {"type": "string", "description": "What to recall."},
@@ -999,9 +998,7 @@ MEMORY_ADD_SCHEMA = {
     "type": "object",
     "description": (
         "Store one note in your long-term memory: a fact, a preference, a "
-        "decision that stays true after this task. Facts from every finished "
-        "task are extracted automatically; use this for what you want kept "
-        "verbatim or that the exchange did not state plainly."
+        "decision that stays true after this task."
     ),
     "properties": {
         "text": {"type": "string", "description": "The note to store."},

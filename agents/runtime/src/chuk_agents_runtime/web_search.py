@@ -69,8 +69,7 @@ WEB_SEARCH_SCHEMA = {
     "description": (
         "Search the web: ranked results with title, URL and a short "
         "description. Use it for facts that can change, for anything after your "
-        "training data, and to find source URLs. Check dynamic pages, local "
-        "prices and availability in the browser."
+        "training data, and to find source URLs."
     ),
     "properties": {
         "query": {

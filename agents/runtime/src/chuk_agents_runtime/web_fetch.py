@@ -132,8 +132,7 @@ WEB_FETCH_SCHEMA = {
         "Markdown, JSON, XML) as Markdown or text, truncated at 40000 "
         "characters. JSON comes back compact; Atom/RSS feeds (arXiv API, "
         "GitHub releases.atom) as one line per entry. Prefer an API URL over "
-        "the HTML page. Not for search-engine result pages (use web_search) or "
-        "for dynamic pages, bot checks, cookies and interaction (use the browser)."
+        "the HTML page."
     ),
     "properties": {
         "url": {
