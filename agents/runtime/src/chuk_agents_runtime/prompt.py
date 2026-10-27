@@ -477,9 +477,10 @@ def build_system_prompt(
     memory: str | None = None,
     mcp_servers: Sequence[str] | None = None,
 ) -> str:
-    """Compose the full system prompt: behaviour + the skill catalogue + the
-    connected MCP server names + the memory snapshot + the operator persona
-    (last, so it wins on any conflict).
+    """Compose the full system prompt: behaviour + the workspace + the skill
+    catalogue + the connected MCP server names + the memory snapshot + the
+    operator persona (last, so it wins on any conflict). The order runs from
+    the most to the least stable part, for the provider's prefix cache.
 
     ``mcp_servers`` is names only. The tools themselves ride natively (or behind
     ``search_tools`` when deferred), but the model must still be able to answer
@@ -505,6 +506,19 @@ def build_system_prompt(
     contract, which tells the model to use them, would be wrong there.
     """
     parts = [instructions if instructions and instructions.strip() else BASE_INSTRUCTIONS]
+    # From the most to the least stable part (bead chuk_chat-0qlc): the
+    # provider cache reuses only an identical prefix, so a new session of the
+    # same agent shares everything up to the first part that changed. The
+    # workspace path is fixed per agent; the skill catalogue changes when a
+    # skill is added or switched; the MCP list when a server is up or down at
+    # seed time; the memory snapshot whenever soul.md or agents.md changes.
+    if workspace:
+        parts.append(
+            "# Workspace\n\n"
+            f"Your working directory is `{workspace}`. Use relative paths inside it. "
+            "Your notes: `notes/`. Scratch: `tmp/` (clean it up). Your searchable "
+            "history: `transcript/` (read-only)."
+        )
     if skills and skills.strip():
         parts.append(skills.strip())
     names = [str(n).strip() for n in (mcp_servers or []) if str(n).strip()]
@@ -517,13 +531,6 @@ def build_system_prompt(
         )
     if memory and memory.strip():
         parts.append(memory.strip())
-    if workspace:
-        parts.append(
-            "# Workspace\n\n"
-            f"Your working directory is `{workspace}`. Use relative paths inside it. "
-            "Your notes: `notes/`. Scratch: `tmp/` (clean it up). Your searchable "
-            "history: `transcript/` (read-only)."
-        )
     if persona and persona.strip():
         parts.append(f"# Operator instructions\n\n{persona.strip()}")
     return "\n\n".join(part.strip() for part in parts if part.strip()) + "\n"

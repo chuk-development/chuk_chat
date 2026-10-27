@@ -63,10 +63,10 @@ RUN_COMMAND_SCHEMA = {
         "stdout and stderr. Use it to run scripts and tests, to inspect the "
         "system, and for git. The working directory stays between calls of this "
         "tool: after `cd x` the next command starts in x. The file tools always "
-        "read relative paths from the workspace root. Chain steps in one "
-        "command (download && check && zip). For a long command (a build, a download, a "
-        "training run) set background=true: it returns a job_id at once, the "
-        "command keeps running, and you are woken with its output when it "
+        "read relative paths from the workspace root. For a long command (a "
+        "build, a download, a training run) set background=true: it returns a "
+        "job_id at once, the command keeps running, and you are woken with its "
+        "output when it "
         "ends. For a program that asks questions use shell_start instead."
     ),
     "properties": {
@@ -95,9 +95,7 @@ RUN_COMMAND_SCHEMA = {
 WRITE_FILE_SCHEMA = {
     "type": "object",
     "description": (
-        "Write text to a file, creating parent directories as needed. This is "
-        "how you create a file. Printing the content in your answer does not "
-        "create anything."
+        "Write text to a file, creating parent directories as needed."
     ),
     "properties": {
         "path": {
