@@ -127,6 +127,46 @@ bool migrate_legacy_app_dirs() {
   }
   return true;
 }
+
+// How the window frame looks, chosen to match the desktop it runs on.
+enum class WindowFrame {
+  kHeaderBar,   // GTK header bar: GNOME and other GTK-first desktops
+  kDesktop,     // plain window, the desktop draws its own title bar (KDE, X11 WMs)
+  kNone,        // no frame: tiling compositors manage and close windows
+};
+
+bool desktop_matches(const gchar* desktop, const char* const* names) {
+  for (const char* const* name = names; *name != nullptr; ++name) {
+    if (g_strrstr(desktop, *name) != nullptr) return true;
+  }
+  return false;
+}
+
+WindowFrame window_frame_for_desktop(GtkWindow* window) {
+#ifdef GDK_WINDOWING_X11
+  // On X11 the window manager draws the title bar; only GNOME Shell expects
+  // the app to bring its own header bar.
+  GdkScreen* screen = gtk_window_get_screen(window);
+  if (GDK_IS_X11_SCREEN(screen)) {
+    const gchar* wm_name = gdk_x11_screen_get_window_manager_name(screen);
+    return g_strcmp0(wm_name, "GNOME Shell") == 0 ? WindowFrame::kHeaderBar
+                                                  : WindowFrame::kDesktop;
+  }
+#endif
+  // Wayland: decide by the desktop name (XDG_CURRENT_DESKTOP may list several,
+  // like "ubuntu:GNOME", so match substrings).
+  const gchar* desktop = g_getenv("XDG_CURRENT_DESKTOP");
+  if (desktop == nullptr) return WindowFrame::kHeaderBar;
+  static const char* const kTiling[] = {"niri", "sway", "Hyprland", "river",
+                                        "dwl", "qtile", nullptr};
+  // These draw server-side title bars that GTK3 uses when the app has no
+  // header bar, so the window gets the desktop's native frame (Breeze etc.).
+  static const char* const kServerSide[] = {"KDE", "LXQt", "labwc", "COSMIC",
+                                            "Wayfire", nullptr};
+  if (desktop_matches(desktop, kTiling)) return WindowFrame::kNone;
+  if (desktop_matches(desktop, kServerSide)) return WindowFrame::kDesktop;
+  return WindowFrame::kHeaderBar;   // GNOME, Budgie, Pantheon, unknown
+}
 }  // namespace
 
 // Implements GApplication::activate.
@@ -148,24 +188,14 @@ static void my_application_activate(GApplication* application) {
   GtkWindow* window =
       GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(application)));
 
-  // Use a header bar when running in GNOME as this is the common style used
-  // by applications and is the setup most users will be using (e.g. Ubuntu
-  // desktop).
-  // If running on X and not using GNOME then just use a traditional title bar
-  // in case the window manager does more exotic layout, e.g. tiling.
-  // If running on Wayland assume the header bar will work (may need changing
-  // if future cases occur).
-  gboolean use_header_bar = TRUE;
-#ifdef GDK_WINDOWING_X11
-  GdkScreen* screen = gtk_window_get_screen(window);
-  if (GDK_IS_X11_SCREEN(screen)) {
-    const gchar* wm_name = gdk_x11_screen_get_window_manager_name(screen);
-    if (g_strcmp0(wm_name, "GNOME Shell") != 0) {
-      use_header_bar = FALSE;
-    }
+  // Match the desktop's own window style: a header bar on GNOME, the
+  // desktop's native title bar on KDE and X11 window managers, and no frame
+  // at all on tiling compositors.
+  const WindowFrame frame = window_frame_for_desktop(window);
+  if (frame == WindowFrame::kNone) {
+    gtk_window_set_decorated(window, FALSE);
   }
-#endif
-  if (use_header_bar) {
+  if (frame == WindowFrame::kHeaderBar) {
     GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
     gtk_widget_show(GTK_WIDGET(header_bar));
     gtk_header_bar_set_title(header_bar, "Chuk Chat");
