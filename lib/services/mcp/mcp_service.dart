@@ -42,6 +42,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:chuk_chat/services/mcp/mcp_catalogue.dart';
@@ -725,25 +726,32 @@ class McpService {
     _recordReachable(id, true);
     _setMember(checking, id, false);
     // Which sign-in this was, read before the record goes: the host forgets
-    // exactly that one.
-    final McpSecrets? record = await store.secretsFor(id);
-    final String endpoint = record?.tokenEndpoint ?? '';
-    final String client = record?.credentials.clientId ?? '';
+    // exactly that one. Best-effort: a keystore that cannot be read must not
+    // stop the sign-out; then the host is not told, and nothing else breaks.
+    try {
+      final McpSecrets? record = await store.secretsFor(id);
+      final String endpoint = record?.tokenEndpoint ?? '';
+      final String client = record?.credentials.clientId ?? '';
+      if (endpoint.isNotEmpty && client.isNotEmpty) {
+        await _addPendingSignOut(<String, String>{
+          'token_endpoint': endpoint,
+          'client_id': client,
+        });
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ [MCP] sign-out of $id not queued for the host: '
+            '${e.runtimeType}');
+      }
+    }
     await store.remove(id);
     connections.value = await store.load();
     unawaited(_pushRemote());
     unawaited(_deleteChukRow(id));
-    // The host keeps a sealed copy of the sign-in (it renews it). The probe
-    // names it, so the host forgets it too.
-    unawaited(
-      probe(
-        includeEmpty: true,
-        signedOut: <Map<String, String>>[
-          if (endpoint.isNotEmpty && client.isNotEmpty)
-            <String, String>{'token_endpoint': endpoint, 'client_id': client},
-        ],
-      ),
-    );
+    // The host keeps a sealed copy of the sign-in (it renews it). Every
+    // probe names the queued sign-outs until the host acknowledges them, so a
+    // host that is offline now forgets it when it is back.
+    unawaited(probe(includeEmpty: true));
   }
 
   // ─── Signing in ────────────────────────────────────────────────────────
@@ -1114,7 +1122,6 @@ class McpService {
   static Future<void> probe({
     McpProbeControl? control,
     bool includeEmpty = false,
-    List<Map<String, String>> signedOut = const <Map<String, String>>[],
   }) async {
     // An `is` check, not a cast: the link carries whatever controller is bound
     // (a fake in tests, a local-socket controller without MCP), and a frame
@@ -1128,7 +1135,8 @@ class McpService {
     if (target == null) return;
     try {
       final List<Map<String, dynamic>> payloads = await store.forwardPayloads();
-      if (payloads.isEmpty && !includeEmpty) return;
+      final List<Map<String, String>> signedOut = await pendingSignOuts();
+      if (payloads.isEmpty && !includeEmpty && signedOut.isEmpty) return;
       final Set<String> asked = <String>{
         for (final Map<String, dynamic> p in payloads)
           if ('${p['id'] ?? ''}'.isNotEmpty) '${p['id']}',
@@ -1147,6 +1155,77 @@ class McpService {
     }
   }
 
+  // ─── Sign-outs the host has not confirmed yet ─────────────────────────
+
+  /// SharedPreferences key of the sign-out outbox: a short JSON list of
+  /// `{token_endpoint, client_id}`, one per removed sign-in the host has not
+  /// acknowledged (`signed_out_ack`). No secret: both are public identifiers.
+  static const String pendingSignOutsKey = 'mcp_pending_signouts_v1';
+
+  /// The queued sign-outs. Empty when none or unreadable.
+  static Future<List<Map<String, String>>> pendingSignOuts() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(pendingSignOutsKey);
+      if (raw == null || raw.isEmpty) return const <Map<String, String>>[];
+      final Object? decoded = jsonDecode(raw);
+      if (decoded is! List) return const <Map<String, String>>[];
+      return <Map<String, String>>[
+        for (final Object? e in decoded)
+          if (e is Map &&
+              '${e['token_endpoint'] ?? ''}'.isNotEmpty &&
+              '${e['client_id'] ?? ''}'.isNotEmpty)
+            <String, String>{
+              'token_endpoint': '${e['token_endpoint']}',
+              'client_id': '${e['client_id']}',
+            },
+      ];
+    } catch (_) {
+      return const <Map<String, String>>[];
+    }
+  }
+
+  static Future<void> _savePendingSignOuts(
+    List<Map<String, String>> entries,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (entries.isEmpty) {
+      await prefs.remove(pendingSignOutsKey);
+    } else {
+      await prefs.setString(pendingSignOutsKey, jsonEncode(entries));
+    }
+  }
+
+  static Future<void> _addPendingSignOut(Map<String, String> entry) async {
+    final List<Map<String, String>> next = List.of(await pendingSignOuts());
+    final bool known = next.any(
+      (Map<String, String> e) =>
+          e['token_endpoint'] == entry['token_endpoint'] &&
+          e['client_id'] == entry['client_id'],
+    );
+    if (known) return;
+    // Bounded: a device that never meets its host again must not grow this.
+    next.add(entry);
+    await _savePendingSignOuts(next.length > 50 ? next.sublist(next.length - 50) : next);
+  }
+
+  static Future<void> _dropPendingSignOuts(List<Object?> acked) async {
+    try {
+      final Set<String> done = <String>{
+        for (final Object? e in acked)
+          if (e is Map) '${e['token_endpoint']}\u0000${e['client_id']}',
+      };
+      final List<Map<String, String>> current = await pendingSignOuts();
+      final List<Map<String, String>> next = <Map<String, String>>[
+        for (final Map<String, String> e in current)
+          if (!done.contains('${e['token_endpoint']}\u0000${e['client_id']}')) e,
+      ];
+      if (next.length != current.length) await _savePendingSignOuts(next);
+    } catch (_) {
+      // The outbox is re-sent anyway; the host forgets idempotently.
+    }
+  }
+
   // ─── What the connectors answered with ─────────────────────────────────
 
   /// Take an `mcp_tools` frame from the host and record what each connector
@@ -1161,6 +1240,10 @@ class McpService {
   /// the name. A server the device does not know is ignored: the frame reports,
   /// it never creates a connector.
   static Future<int> applyToolsFrame(Map<String, dynamic> payload) async {
+    final Object? acked = payload['signed_out_ack'];
+    if (acked is List && acked.isNotEmpty) {
+      await _dropPendingSignOuts(acked);
+    }
     final Object? raw = payload['servers'];
     final List<Object?> entries = raw is List ? raw : <Object?>[payload];
     final List<McpConnection> stored = await store.load();

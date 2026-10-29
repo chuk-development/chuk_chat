@@ -159,7 +159,11 @@ class _FakeHost implements McpProbeControl {
         },
       });
     }
-    await McpService.applyToolsFrame(<String, dynamic>{'servers': rows});
+    await McpService.applyToolsFrame(<String, dynamic>{
+      'servers': rows,
+      // Like the real host: the sign-outs it forgot.
+      if (signedOut.isNotEmpty) 'signed_out_ack': signedOut,
+    });
   }
 
   Future<List<Map<String, dynamic>>?> _toolsWith(String access) async {
@@ -403,5 +407,32 @@ void main() {
     final connection = McpService.connectionFor(id)!;
     expect(connection.lastError, isNull);
     expect(connection.checkedAt, isNotNull);
+  }, skip: !hasPython);
+
+  test('a sign-out while the host is offline reaches it when it is back',
+      () async {
+    await McpService.connectByUrl(server.mcpUrl);
+    await settle();
+    final record = (await McpService.store.secretsFor(id))!;
+    final expected = <String, String>{
+      'token_endpoint': record.tokenEndpoint!,
+      'client_id': record.credentials.clientId,
+    };
+
+    // Host offline: nobody hears the sign-out now.
+    McpService.probeControlOverride = null;
+    await McpService.disconnect(id);
+    await settle();
+    expect(McpService.connectionFor(id), isNull);
+    expect(await McpService.pendingSignOuts(), <Map<String, String>>[expected]);
+
+    // The host is back: the next probe carries it, the host acknowledges,
+    // the outbox is empty.
+    McpService.probeControlOverride = host;
+    host.signOuts.clear();
+    await McpService.probe();
+    await settle();
+    expect(host.signOuts.single, <Map<String, String>>[expected]);
+    expect(await McpService.pendingSignOuts(), isEmpty);
   }, skip: !hasPython);
 }

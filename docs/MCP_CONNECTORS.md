@@ -181,8 +181,11 @@ access token invalid; the second refresher gets `invalid_grant`).
   kind `mcp_signin_expired`, `session_key` `mcp-connector:<id>`). The tap opens
   the connector and starts the browser sign-in (`reconnectOnOpen`).
   A new sign-in cannot be automatic: OAuth consent needs the person in a browser.
-- Sign out: the device deletes its record and sends a probe with
-  `mcp_signed_out` naming that sign-in; the host forgets exactly that grant.
+- Sign out: the device deletes its record and queues the sign-in in a
+  persisted outbox (`mcp_pending_signouts_v1`); every probe carries the outbox
+  as `mcp_signed_out` until the host answers with `signed_out_ack`. The host
+  forgets exactly that grant (idempotent), also when it was offline at the
+  time of the sign-out.
   Never by omission from `mcp_servers` (a second device with an older list must
   not wipe grants the first one holds).
 - `mcp_tools` entries carry `client_id`; the app ignores an entry of a sign-in

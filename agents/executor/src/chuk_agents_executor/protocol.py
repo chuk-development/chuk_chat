@@ -1009,6 +1009,7 @@ def mcp_tools_payload(
     *,
     session_key: str,
     servers: list[dict[str, Any]],
+    signed_out_ack: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Build an ``mcp_tools`` frame (docs/WIRE_CONTRACT.md, inbound to the app):
     what each forwarded connector actually answered with when the host dialled
@@ -1024,11 +1025,16 @@ def mcp_tools_payload(
     ``id`` is the device's own connector id, echoed when the device sent one, so
     the app can match without guessing on the name.
     """
-    return {
+    payload: dict[str, Any] = {
         "type": "mcp_tools",
         "session_key": session_key,
         "servers": list(servers),
     }
+    if signed_out_ack:
+        # The sign-outs (``mcp_signed_out``) this host has forgotten: the
+        # device drops them from its outbox.
+        payload["signed_out_ack"] = list(signed_out_ack)
+    return payload
 
 
 def mcp_credentials_payload(
