@@ -11,6 +11,7 @@ import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/theme_settings_service.dart';
 import 'package:chuk_chat/services/customization_preferences_service.dart';
+import 'package:chuk_chat/theme/legacy_pack_font_migration.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 
 /// Callback type for theme changes
@@ -89,6 +90,9 @@ class AppThemeService extends ChangeNotifier {
   static const String _kDynamicColorEnabledKey = 'dynamicColorEnabled';
   static const String _kContrastKey = 'contrast';
   static const String _kUiFontFamilyKey = 'uiFontFamily';
+  // Set once the legacy pack-font migration is final: after the first
+  // Supabase load, or as soon as the user picks a UI font by hand.
+  static const String _kUiFontPackMigratedKey = 'uiFontPackMigrationV1';
   static const String _kShowReasoningTokensKey = 'showReasoningTokens';
   static const String _kShowModelInfoKey = 'showModelInfo';
   static const String _kShowTpsKey = 'showTps';
@@ -178,6 +182,10 @@ class AppThemeService extends ChangeNotifier {
     return _cachedPrefs!;
   }
 
+  /// Drops the cached [SharedPreferences] so a test can load new mock values.
+  @visibleForTesting
+  void debugResetPrefsCache() => _cachedPrefs = null;
+
   /// Load theme settings from local SharedPreferences
   Future<void> loadFromPrefs() async {
     final prefs = await _getPrefs();
@@ -203,6 +211,13 @@ class AppThemeService extends ChangeNotifier {
       prefs.getDouble(_kContrastKey) ?? kDefaultContrast,
     );
     _uiFontFamily = _sanitizeUiFontFamily(prefs.getString(_kUiFontFamilyKey));
+    if (!(prefs.getBool(_kUiFontPackMigratedKey) ?? false)) {
+      final migrated = _migratedPackUiFont();
+      if (migrated != _uiFontFamily) {
+        _uiFontFamily = migrated;
+        await prefs.setString(_kUiFontFamilyKey, _uiFontFamily);
+      }
+    }
     _showReasoningTokens =
         prefs.getBool(_kShowReasoningTokensKey) ?? kDefaultShowReasoningTokens;
     _showModelInfo = prefs.getBool(_kShowModelInfoKey) ?? kDefaultShowModelInfo;
@@ -277,6 +292,16 @@ class AppThemeService extends ChangeNotifier {
     }
     return id;
   }
+
+  /// The current UI font after the legacy pack-font migration (see
+  /// `legacy_pack_font_migration.dart`).
+  String _migratedPackUiFont() => migrateLegacyPackUiFont(
+    uiFont: _uiFontFamily,
+    accent: _accentColor,
+    iconFg: _iconFgColor,
+    bg: _bgColor,
+    contrast: _contrast,
+  );
 
   /// Load theme from Supabase in background
   Future<void> loadFromSupabaseAsync({bool forceRefresh = false}) async {
@@ -377,6 +402,17 @@ class AppThemeService extends ChangeNotifier {
         settings.dynamicColor == null;
     _contrast = remoteContrast ?? _contrast;
     _uiFontFamily = remoteUiFont ?? _uiFontFamily;
+    // One-time: a Merriweather that only came with the Cappuccino pack moves
+    // to the default font, and the fixed value is pushed to the account so
+    // the other devices follow.
+    final prefsForMigration = await _getPrefs();
+    bool packFontMigrated = false;
+    if (!(prefsForMigration.getBool(_kUiFontPackMigratedKey) ?? false)) {
+      final migrated = _migratedPackUiFont();
+      packFontMigrated = migrated != _uiFontFamily;
+      _uiFontFamily = migrated;
+      await prefsForMigration.setBool(_kUiFontPackMigratedKey, true);
+    }
     _dynamicColorEnabled = settings.dynamicColor ?? _dynamicColorEnabled;
     _showReasoningTokens = customizationPrefs.showReasoningTokens;
     _showModelInfo = customizationPrefs.showModelInfo;
@@ -406,13 +442,13 @@ class AppThemeService extends ChangeNotifier {
 
     await _reconcileOnboarding(user.id, customizationPrefs.onboardingCompleted);
 
-    if (hasVisualOrBehaviorChange) {
+    if (hasVisualOrBehaviorChange || packFontMigrated) {
       notifyListeners();
       // Persist to prefs in background only if state changed.
       unawaited(_persistToPrefs());
     }
 
-    if (lookIsIncomplete) {
+    if (lookIsIncomplete || packFontMigrated) {
       // The stored row predates the contrast/font/dynamic columns. Push what
       // this device has, so the next device to sign in gets the whole look
       // instead of only the colours.
@@ -764,17 +800,23 @@ class AppThemeService extends ChangeNotifier {
     _debouncedSyncTheme();
   }
 
-  /// The app-chrome font is part of a theme pack, so it syncs with the rest of
-  /// the look. Every platform build bundles the same families, and an unknown
-  /// id falls back to the default on read. Persists to SharedPreferences too
-  /// and clears the theme cache.
+  /// The app-chrome font syncs with the rest of the look. Theme packs never
+  /// set it, so every call is the user's own choice: it also ends the legacy
+  /// pack-font migration, which must never undo a hand-picked font. Every
+  /// platform build bundles the same families, and an unknown id falls back
+  /// to the default on read. Persists to SharedPreferences too and clears the
+  /// theme cache.
   Future<void> setUiFontFamily(String id) async {
     final sanitized = _sanitizeUiFontFamily(id);
-    if (_uiFontFamily == sanitized) return;
-    _uiFontFamily = sanitized;
-    _cachedThemeData = null;
-    notifyListeners();
+    final bool changed = _uiFontFamily != sanitized;
+    if (changed) {
+      _uiFontFamily = sanitized;
+      _cachedThemeData = null;
+      notifyListeners();
+    }
     final prefs = await _getPrefs();
+    await prefs.setBool(_kUiFontPackMigratedKey, true);
+    if (!changed) return;
     await prefs.setString(_kUiFontFamilyKey, _uiFontFamily);
     _debouncedSyncTheme();
   }

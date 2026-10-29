@@ -115,9 +115,9 @@ const Map<String, String> stringsPt = {
   'toolCallingTip':
       'Dica: Desative as ferramentas apenas se quiser que o assistente responda com o próprio conhecimento, sem pesquisar ou executar ações.',
   'toolAlwaysOn': 'Sempre ativo',
-  'toolArtifacts': 'Artefatos',
+  'toolArtifacts': 'Páginas',
   'toolArtifactsSubtitle': 'Código, documentos e desenhos editáveis',
-  'toolGroupCodeArtifacts': 'Código e artefatos',
+  'toolGroupCodeArtifacts': 'Código e páginas',
   'connectors': 'Conectores',
   'loadingToolSettings': 'Carregando configurações de ferramentas...',
   'noToolsRegistered': 'Nenhuma ferramenta registrada ainda.',
@@ -476,9 +476,9 @@ const Map<String, String> stringsPt = {
   'openLinkConfirm': 'Você realmente deseja sair do app e abrir {url}?',
   'open': 'Abrir',
   'contentCopied': 'Conteúdo copiado para a área de transferência',
-  'artifactCopied': 'Artefato copiado para a área de transferência',
+  'artifactCopied': 'Página copiada para a área de transferência',
   'fileSaved': 'Arquivo salvo',
-  'failedToExportArtifact': 'Falha ao exportar artefato: {error}',
+  'failedToExportArtifact': 'Falha ao exportar página: {error}',
   'failedToSave': 'Falha ao salvar: {error}',
   'markdownSaved': 'Markdown salvo',
 
@@ -650,4 +650,6 @@ const Map<String, String> stringsPt = {
   'openUiViewFailed': 'Não foi possível mostrar esta visualização.',
   'openUiPleaseWait': 'Aguarde',
   // ── end OpenUI ──
+  // Font picker.
+  'fontFamilyInter': 'Inter (sem serifa)',
 };

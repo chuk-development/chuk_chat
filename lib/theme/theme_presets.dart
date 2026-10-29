@@ -6,9 +6,11 @@
 // that matches the current brightness; flipping the toggle re-applies the
 // sibling variant.
 //
-// Each variant carries the full look: the three palette colours, the contrast
-// strength and the app font. Everything is applied through the existing
-// [AppShellConfig] setters.
+// Each variant carries the full look: the three palette colours and the
+// contrast strength. Everything is applied through the existing
+// [AppShellConfig] setters. A pack never sets a font: colour and font are two
+// separate choices, and a pack that silently swapped the font (Cappuccino used
+// to set Merriweather) changed something the user never picked.
 //
 // Colours are the well-known published palette values of each look (palettes
 // are not copyrightable and the names are descriptive). The two app-inspired
@@ -23,7 +25,7 @@ import 'package:flutter/material.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
 
-/// One complete look: palette + contrast + font, for a single brightness.
+/// One complete look: palette + contrast, for a single brightness.
 @immutable
 class ThemeVariant {
   const ThemeVariant({
@@ -31,7 +33,6 @@ class ThemeVariant {
     required this.iconFg,
     required this.bg,
     this.contrast = kDefaultContrast,
-    this.uiFont = kDefaultUiFontFamily,
   });
 
   /// Accent / primary colour.
@@ -45,9 +46,6 @@ class ThemeVariant {
 
   /// Surface/outline separation strength (see [buildAppTheme]).
   final double contrast;
-
-  /// App-chrome font family id (see [kSupportedUiFontFamilies]).
-  final String uiFont;
 }
 
 /// A named pack with a light and a dark variant.
@@ -79,14 +77,12 @@ class ThemePreset {
     required Color iconFg,
     required Color bg,
     required double contrast,
-    required String uiFont,
   }) {
     final v = variantFor(brightness);
     return v.accent == accent &&
         v.iconFg == iconFg &&
         v.bg == bg &&
-        v.contrast == contrast &&
-        v.uiFont == uiFont;
+        v.contrast == contrast;
   }
 
   /// Applies the pack's variant for [brightness] through the shell config
@@ -103,7 +99,6 @@ class ThemePreset {
     config.setIconFgColor(v.iconFg);
     config.setBgColor(v.bg);
     unawaited(config.setContrast(v.contrast));
-    unawaited(config.setUiFontFamily(v.uiFont));
   }
 }
 
@@ -351,14 +346,12 @@ const List<ThemePreset> kThemePresets = <ThemePreset>[
       iconFg: Color(0xFF4B3B2F),
       bg: Color(0xFFF2E8DC),
       contrast: 0.55,
-      uiFont: kChatFontFamilyMerriweather,
     ),
     dark: ThemeVariant(
       accent: Color(0xFFC89B6A),
       iconFg: Color(0xFFE8DCC8),
       bg: Color(0xFF2A2320),
       contrast: 0.55,
-      uiFont: kChatFontFamilyMerriweather,
     ),
   ),
 ];

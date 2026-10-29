@@ -26,7 +26,7 @@ void main() {
       iconColor: variant.iconFg,
       backgroundColor: variant.bg,
       contrast: variant.contrast,
-      uiFont: variant.uiFont,
+      uiFont: kChatFontFamilyMerriweather,
       dynamicColor: false,
     );
 
@@ -36,7 +36,7 @@ void main() {
     expect(read.iconColor, variant.iconFg);
     expect(read.backgroundColor, variant.bg);
     expect(read.contrast, variant.contrast);
-    expect(read.uiFont, variant.uiFont);
+    expect(read.uiFont, kChatFontFamilyMerriweather);
     expect(read.dynamicColor, isFalse);
   });
 
@@ -54,7 +54,7 @@ void main() {
         iconColor: variant.iconFg,
         backgroundColor: variant.bg,
         contrast: variant.contrast,
-        uiFont: variant.uiFont,
+        uiFont: kDefaultUiFontFamily,
         dynamicColor: false,
       ).toMap(),
     );
@@ -66,7 +66,6 @@ void main() {
         iconFg: read.iconColor,
         bg: read.backgroundColor,
         contrast: read.contrast!,
-        uiFont: read.uiFont!,
       ),
       isTrue,
     );

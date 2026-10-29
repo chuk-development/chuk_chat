@@ -242,6 +242,13 @@ flutter:
         - asset: assets/fonts/Arimo-wght.ttf
         - asset: assets/fonts/Arimo-Italic-wght.ttf
           style: italic
+    # Inter: the default UI and chat font. Latin + Latin-Ext subset of the
+    # variable font (wght 400-800), licence in assets/fonts/LICENSES.txt.
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-wght.ttf
+        - asset: assets/fonts/Inter-Italic-wght.ttf
+          style: italic
     - family: Merriweather
       fonts:
         - asset: assets/fonts/Merriweather-Regular.ttf

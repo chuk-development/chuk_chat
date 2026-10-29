@@ -120,9 +120,9 @@ const Map<String, String> stringsFr = {
   'toolCallingTip':
       'Astuce : Désactivez les outils uniquement si vous voulez que l\'assistant réponde avec ses propres connaissances, sans rechercher ni exécuter d\'actions.',
   'toolAlwaysOn': 'Toujours actif',
-  'toolArtifacts': 'Artéfacts',
+  'toolArtifacts': 'Pages',
   'toolArtifactsSubtitle': 'Code, documents et dessins modifiables',
-  'toolGroupCodeArtifacts': 'Code et artéfacts',
+  'toolGroupCodeArtifacts': 'Code et pages',
   'connectors': 'Connecteurs',
   'loadingToolSettings': 'Chargement des paramètres des outils...',
   'noToolsRegistered': 'Aucun outil n\'est encore enregistré.',
@@ -489,9 +489,9 @@ const Map<String, String> stringsFr = {
 
   // ── Misc / shared ─────────────────────────────────────────
   'contentCopied': 'Contenu copié dans le presse-papiers',
-  'artifactCopied': 'Artefact copié dans le presse-papiers',
+  'artifactCopied': 'Page copiée dans le presse-papiers',
   'fileSaved': 'Fichier enregistré',
-  'failedToExportArtifact': 'Échec de l\'export de l\'artefact : {error}',
+  'failedToExportArtifact': 'Échec de l\'export de la page : {error}',
   'failedToSave': 'Échec de l\'enregistrement : {error}',
   'markdownSaved': 'Markdown enregistré',
   'original': 'Original',
@@ -664,4 +664,6 @@ const Map<String, String> stringsFr = {
   'openUiViewFailed': "Cette vue n'a pas pu être affichée.",
   'openUiPleaseWait': 'Veuillez patienter',
   // ── end OpenUI ──
+  // Font picker.
+  'fontFamilyInter': 'Inter (sans empattement)',
 };
