@@ -49,3 +49,32 @@ Mail-Trigger für Automationen, `<email>`-Card im Chat.
 
 Nicht jetzt: X-DMs und @bot auf X (L, API-Kosten und Ban-Risiko auf X), Teams und
 Zugriffslisten (L, kein Team-Produkt).
+
+# Grok Bot "What's new" (27.10.2026)
+
+Quelle: YouTube `3Edjn34IuzQ`, "What's new in Grok Bot - Oct 27, 2026" (Matt Palmer, 7:44).
+Metadaten und Transkript: `gscrape yt video 3Edjn34IuzQ`.
+
+| Zeit | Funktion | Haben wir es? | Aufwand |
+|---|---|---|---|
+| 0:13 | Pages: Analyse als visuelle Seite, behalten oder teilen | Teilweise. Artifacts (HTML/Markdown-Panel) und der here.now-Publish-Konnektor (`lib/services/herenow/`). Kein "eine Seite aus der Analyse"-Fluss mit Teilen-Link. | M |
+| 1:09 | Vault: Passwörter und Adressen verschlüsselt, der Bot sieht sie nicht, füllt sie in Webseiten | Teilweise. Host-Vault AES-GCM (`agents/executor/.../secrets.py`), Env-Injektion, Scrubber. Kein Ausfüllen in Browser-Felder, ohne dass der Wert ins Modell geht. | M |
+| 2:05 | 1Password-Integration | Nein. | M |
+| 2:21 | Apple Home, Reminders, Location, Contacts, Alarms, Calendar | Android: großteils ja (`docs/ASSISTANT_SURFACE.md`, `call_contact`, `set_alarm`, Kalender). Smart Home: nein (Home Assistant wäre unser Gegenstück). | S–L |
+| 3:21 | Video erzeugen | Teilweise. Bildgenerierung ja; Video nur in Ansätzen. | M |
+| 3:47 | Bot-Charaktere (Pumpkin) | Nein. Spielerei. | S |
+| 4:13 | X Spaces | Nein. Kein X-Kanal. | L |
+| 4:31 | Mobil: neue Schrift, Feinschliff | Laufend (`docs/DESIGN.md`). | – |
+| 4:54 | Einfachere rechte Leiste, klare Reconnect-Cards | Teilweise. `lib/widgets/mcp_connect_card.dart` für MCP; für Server-Tools prüfen. | S |
+| 5:11 | Subagenten erzeugen Bilder und Video | Prüfen, ob Subagenten die Bild-Tools bekommen. | S |
+| 5:11 | Bibliothek: Einträge anpinnen | Nein (Pins nur für Chats). | S |
+| 5:11 | Weitergeleitete Mails behalten ihr Format | Prüfen in `agent_mail`. | S |
+| 5:11 | Weniger Freigabe-Cards | Teilweise (`approval_config.dart`). Lernende Freigaben ("immer erlauben für X") prüfen. | S–M |
+| 5:11 | Blockzitate mit `>` | Ja (Markdown). | – |
+| 5:11 | Cmd+/ zeigt alle Tastenkürzel | Nein. Keine Übersicht der Kürzel. | S |
+| 5:11 | Weniger Handy-Pings, solange man am Desktop sitzt | Nein (siehe 18.10., aktives Gerät). | M |
+| 5:11 | .docx schicken, Google Doc zurück | Nein. | M |
+
+Kandidaten mit gutem Nutzen pro Aufwand: Vault-Autofill im Agenten-Browser,
+Tastenkürzel-Übersicht, Benachrichtigung nur auf dem aktiven Gerät, Pages
+(Artifact plus Teilen-Link), Reconnect-Cards für alle Konnektoren.

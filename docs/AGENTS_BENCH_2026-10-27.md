@@ -13,6 +13,9 @@ timings). Tool: `agents/bench` (`uv run agents-bench report --fresh`,
   signed in is enough; no new pairing. On 2026-10-27 17:07 the restarted
   host refreshed its own session ("the host refreshed its own account
   session") and the relay accepted it at once, so a plain restart was enough.
+- The host logs to the journal: `journalctl --user -u agents-manager`.
+  `~/.local/share/chuk-agents/host.log` is an old file and is not written
+  any more; do not read the host state from it (2026-10-29).
 - Launcher `~/.local/bin/agents-host` runs
   `agents/host/.venv/bin/agents-host` from this checkout. Rolling out = run the
   Python tests, `uv sync` in `agents/host`, `systemctl --user enable --now
@@ -69,6 +72,12 @@ is.
   removed from tool descriptions (-140 tokens).
 - Still open: a live run must show that the model now calls a tool before it
   answers (bead chuk_chat-n69s).
+
+- 2026-10-29: the Mail agent's "Fastmail-Check (stündlich)" (`22d2ae8b`)
+  had `notify=always`: one push per hour, also for "nothing new" (108
+  runs). Set to `on_change` in the DB. `schedule_task` now defaults to
+  `on_change` for cron and `every`; `at`/`in` reminders and mail triggers
+  stay `always`.
 
 ## Levers
 

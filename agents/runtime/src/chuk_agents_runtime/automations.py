@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import calendar
 import hashlib
+import inspect
 import json
 import re
 import time
@@ -43,10 +44,12 @@ KIND_WATCH_URL = "watch_url"
 KIND_MAIL = "mail"
 KINDS = (KIND_SCHEDULE, KIND_WATCHER, KIND_WATCH_URL, KIND_MAIL)
 
-#: ``notify``: ``always`` tells the user after every run (the old behaviour,
-#: and the default); ``on_change`` only when the run reports something new
-#: worth telling (``automation_result``). A run that found nothing stays
-#: silent, the first one included.
+#: ``notify``: ``always`` tells the user after every run; ``on_change`` only
+#: when the run reports something new worth telling (``automation_result``).
+#: A run that found nothing stays silent, the first one included. Default:
+#: ``on_change`` for a repeating check (cron, interval, page watch), because
+#: most of its runs find nothing and an hourly "nothing new" push is noise;
+#: ``always`` for a one-shot reminder and a mail trigger.
 NOTIFY_ALWAYS = "always"
 NOTIFY_ON_CHANGE = "on_change"
 NOTIFY_MODES = (NOTIFY_ALWAYS, NOTIFY_ON_CHANGE)
@@ -184,10 +187,10 @@ def _check_interval(seconds: int) -> None:
         )
 
 
-def parse_notify(value: Any) -> str:
-    """``always`` / ``on_change`` (``None`` or empty = ``always``)."""
+def parse_notify(value: Any, default: str = NOTIFY_ALWAYS) -> str:
+    """``always`` / ``on_change`` (``None`` or empty = ``default``)."""
     if value is None or (isinstance(value, str) and not value.strip()):
-        return NOTIFY_ALWAYS
+        return default
     text = str(value).strip().lower().replace("-", "_")
     if text not in NOTIFY_MODES:
         raise AutomationSpecError("notify must be 'always' or 'on_change'")
@@ -645,11 +648,12 @@ SCHEDULE_TASK_SCHEMA = {
             "type": "string",
             "enum": list(NOTIFY_MODES),
             "description": (
-                "'always' (default): tell the user after every run. 'on_change': "
-                "only when the run finds something new worth telling; a run that "
-                "finds nothing sends no notification. Use 'on_change' for checks "
-                "and monitors where most runs find nothing (inbox check, 'tell me "
-                "if ...')."
+                "'on_change' (default for cron and 'every'): tell the user only "
+                "when the run finds something new worth telling; a run that finds "
+                "nothing sends no notification. 'always' (default for 'at' and "
+                "'in'): tell the user after every run. Pass 'always' for a "
+                "repeating task only when the user wants a report every time "
+                "(a daily briefing)."
             ),
         },
     },
@@ -681,7 +685,7 @@ WATCH_URL_SCHEMA = {
         "notify": {
             "type": "string",
             "enum": list(NOTIFY_MODES),
-            "description": "'always' (default) or 'on_change' (only when the run finds something new worth telling).",
+            "description": "'on_change' (default: only when the page change is worth telling) or 'always'.",
         },
     },
     "required": ["url", "prompt"],
@@ -833,6 +837,14 @@ def with_local_times(row: Any) -> Any:
     return out
 
 
+def _takes_notify(method: Any) -> bool:
+    try:
+        params = inspect.signature(method).parameters
+    except (TypeError, ValueError):
+        return True
+    return "notify" in params or any(p.kind is p.VAR_KEYWORD for p in params.values())
+
+
 def make_schedule_task_handler(backend: AutomationBackend):
     def schedule_task(
         spec: str, prompt: str, name: str | None = None, notify: str | None = None
@@ -841,11 +853,13 @@ def make_schedule_task_handler(backend: AutomationBackend):
             return _error("prompt must not be empty")
         try:
             parsed = parse_schedule_spec(spec)
-            mode = parse_notify(notify)
+            repeating = "cron" in parsed or "every" in parsed
+            mode = parse_notify(notify, NOTIFY_ON_CHANGE if repeating else NOTIFY_ALWAYS)
         except AutomationSpecError as exc:
             return _error(str(exc))
-        if mode == NOTIFY_ALWAYS:
-            # The old three-argument call: a backend without ``notify`` works.
+        if mode == NOTIFY_ALWAYS or (notify is None and not _takes_notify(backend.schedule)):
+            # The old three-argument call: a backend without ``notify`` works
+            # (it keeps its own default when the caller named no mode).
             return with_local_times(backend.schedule(parsed, prompt.strip(), _clean_name(name)))
         return with_local_times(
             backend.schedule(parsed, prompt.strip(), _clean_name(name), notify=mode)
@@ -866,7 +880,7 @@ def make_watch_url_handler(backend: AutomationBackend):
             return _error("prompt must not be empty")
         try:
             spec = parse_watch_url_spec(url, every)
-            mode = parse_notify(notify)
+            mode = parse_notify(notify, NOTIFY_ON_CHANGE)
         except AutomationSpecError as exc:
             return _error(str(exc))
         return backend.watch_url(spec, prompt.strip(), _clean_name(name), mode)  # type: ignore[attr-defined]
