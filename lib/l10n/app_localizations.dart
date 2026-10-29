@@ -125,6 +125,7 @@ class AppLocalizations {
   String get chatFontFamily => _get('chatFontFamily');
   String get chatFontFamilySubtitle => _get('chatFontFamilySubtitle');
   String get fontFamilySystem => _get('fontFamilySystem');
+  String get fontFamilyInter => _get('fontFamilyInter');
   String get fontFamilyArimo => _get('fontFamilyArimo');
   String get fontFamilyMerriweather => _get('fontFamilyMerriweather');
   String get fontFamilyJetBrainsMono => _get('fontFamilyJetBrainsMono');
@@ -331,6 +332,14 @@ class AppLocalizations {
   String get toolArtifactsSubtitle => _get('toolArtifactsSubtitle');
   String get toolGroupCodeArtifacts => _get('toolGroupCodeArtifacts');
   String get connectors => _get('connectors');
+  String get mcpStatusSignInExpired => _get('mcpStatusSignInExpired');
+  String get mcpStatusNoAnswer => _get('mcpStatusNoAnswer');
+  String get mcpStatusHostError => _get('mcpStatusHostError');
+  String get mcpSignInExpiredDetail => _get('mcpSignInExpiredDetail');
+  String mcpNoAnswerDetail(String reason) =>
+      _get('mcpNoAnswerDetail').replaceAll('{reason}', reason);
+  String mcpHostErrorDetail(String reason) =>
+      _get('mcpHostErrorDetail').replaceAll('{reason}', reason);
   String get loadingToolSettings => _get('loadingToolSettings');
   String get noToolsRegistered => _get('noToolsRegistered');
   String get catSearchWeb => _get('catSearchWeb');

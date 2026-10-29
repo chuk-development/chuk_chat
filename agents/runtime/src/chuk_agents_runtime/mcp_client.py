@@ -56,6 +56,7 @@ import asyncio
 import base64
 import hashlib
 import json
+import logging
 import os
 import re
 import threading
@@ -70,6 +71,8 @@ from typing import Any
 import httpx2
 
 from .registry import ToolRegistry
+
+logger = logging.getLogger(__name__)
 
 # Where a workspace keeps its server list, most specific first.
 CONFIG_NAMES = (".agents/mcp.json", "mcp.json")
@@ -383,6 +386,34 @@ def token_expired(oauth: dict[str, Any] | None) -> bool:
     return datetime.now(UTC) >= expires_at - TOKEN_SKEW
 
 
+def _endpoint_host(url: str) -> str:
+    """The host of ``url``, for a log line (no path, no query)."""
+    from urllib.parse import urlsplit
+
+    try:
+        return urlsplit(url).hostname or "?"
+    except ValueError:
+        return "?"
+
+
+def _oauth_error_code(response: Any) -> str:
+    """The RFC 6749 ``error`` code of a refused token request, or ``"-"``.
+
+    Only the code (``invalid_grant``, ``invalid_client``, ...): it names the
+    cause and never holds a secret. The description is free text and is not
+    logged.
+    """
+    try:
+        payload = response.json()
+    except Exception:  # noqa: BLE001 — not JSON: no code
+        return "-"
+    if isinstance(payload, dict):
+        code = payload.get("error")
+        if isinstance(code, str) and re.fullmatch(r"[A-Za-z0-9_.:-]{1,64}", code):
+            return code
+    return "-"
+
+
 def refresh_access_token(
     oauth: dict[str, Any] | None,
     *,
@@ -405,6 +436,11 @@ def refresh_access_token(
     refresh_token = str(block.get("refresh_token") or "")
     token_endpoint = str(block.get("token_endpoint") or "")
     if not refresh_token or not token_endpoint:
+        logger.warning(
+            "mcp token refresh skipped: refresh_token=%s token_endpoint=%s",
+            bool(refresh_token),
+            bool(token_endpoint),
+        )
         return None, block
 
     import httpx
@@ -434,9 +470,20 @@ def refresh_access_token(
             follow_redirects=True,
         )
         if response.status_code >= 400:
+            logger.warning(
+                "mcp token refresh refused: endpoint=%s status=%s error=%s",
+                _endpoint_host(token_endpoint),
+                response.status_code,
+                _oauth_error_code(response),
+            )
             return None, block
         payload = response.json()
-    except Exception:  # noqa: BLE001 — a dead refresh is a dead connector, not a crash
+    except Exception as exc:  # noqa: BLE001 — a dead refresh is a dead connector, not a crash
+        logger.warning(
+            "mcp token refresh failed: endpoint=%s error=%s",
+            _endpoint_host(token_endpoint),
+            type(exc).__name__,
+        )
         return None, block
 
     if not isinstance(payload, dict):
@@ -921,6 +968,43 @@ AUTH_REFUSED_ERROR = (
 )
 
 
+#: Why a connector is not usable, as a word the app can act on
+#: (``mcp_tools`` ``error_kind``, docs/WIRE_CONTRACT.md). Set from the
+#: structure of the failure (the refused-credential flag, the exception
+#: type), never from the wording of the error text.
+ERROR_KIND_AUTH = "auth"
+ERROR_KIND_NETWORK = "network"
+ERROR_KIND_OTHER = "other"
+
+#: Exception class names (anywhere in the MRO) that mean "the network did not
+#: carry the request": httpx/httpx2 transport errors and their timeouts.
+_NETWORK_ERROR_NAMES = frozenset(
+    {"TransportError", "TimeoutException", "NetworkError", "ConnectError", "ConnectTimeout"}
+)
+
+
+def _error_kind_of(exc: BaseException) -> str:
+    """:data:`ERROR_KIND_NETWORK` when ``exc`` (or anything it wraps: an
+    exception group, a cause, a context) is a transport failure, else
+    :data:`ERROR_KIND_OTHER`. The caller handles the refused credential."""
+    seen: set[int] = set()
+    stack: list[BaseException] = [exc]
+    while stack:
+        current = stack.pop()
+        if id(current) in seen:
+            continue
+        seen.add(id(current))
+        if isinstance(current, (OSError, TimeoutError, asyncio.TimeoutError)):
+            return ERROR_KIND_NETWORK
+        if any(klass.__name__ in _NETWORK_ERROR_NAMES for klass in type(current).__mro__):
+            return ERROR_KIND_NETWORK
+        stack.extend(getattr(current, "exceptions", None) or ())
+        for linked in (current.__cause__, current.__context__):
+            if linked is not None:
+                stack.append(linked)
+    return ERROR_KIND_OTHER
+
+
 def _looks_unauthorized(error: str | None) -> bool:
     """Whether an error reads as "the server refused this credential"."""
     return bool(error) and bool(_UNAUTHORIZED.search(error))
@@ -986,6 +1070,9 @@ class MCPConnection:
         self._ready = threading.Event()
         self._tools: list[MCPToolInfo] = []
         self._error: str | None = None
+        #: What kind of failure :attr:`error` is (``ERROR_KIND_*``), or
+        #: ``None`` with no error.
+        self._error_kind: str | None = None
         self._closed = False
         #: True once a handshake has succeeded. It separates "this server is
         #: unreachable" from "this session dropped": the second is worth
@@ -1020,6 +1107,16 @@ class MCPConnection:
     @property
     def error(self) -> str | None:
         return self._error
+
+    @property
+    def error_kind(self) -> str | None:
+        """``auth`` (the sign-in is refused and could not be renewed: only a
+        new sign-in helps), ``network`` (the server did not answer) or
+        ``other`` (it answered, but not as an MCP server should). ``None``
+        when there is no error."""
+        if self._error is None:
+            return None
+        return self._error_kind or ERROR_KIND_OTHER
 
     @property
     def tools(self) -> list[MCPToolInfo]:
@@ -1084,6 +1181,7 @@ class MCPConnection:
         problem = self.config.validate()
         if problem:
             self._error = problem
+            self._error_kind = ERROR_KIND_OTHER
             return False
         self._thread = threading.Thread(
             target=self._serve,
@@ -1101,8 +1199,9 @@ class MCPConnection:
             return self.alive()
         limit = self.config.connect_timeout + 5.0 if timeout is None else max(0.0, timeout)
         if not self._ready.wait(limit):
-            if timeout is None:
-                self._error = self._error or "connect timed out"
+            if timeout is None and self._error is None:
+                self._error = "connect timed out"
+                self._error_kind = ERROR_KIND_NETWORK
             return False
         return self.alive()
 
@@ -1124,9 +1223,14 @@ class MCPConnection:
         try:
             asyncio.run(self._session_task())
         except Exception as exc:  # noqa: BLE001 — the thread reports, never raises
-            self._error = f"{type(exc).__name__}: {exc}"
+            self._error = _redact(f"{type(exc).__name__}: {_clip(exc, 300)}")
+            self._error_kind = (
+                ERROR_KIND_AUTH if self._auth_refused else _error_kind_of(exc)
+            )
         finally:
             self._session = None
+            if self._error is not None and not self._closed:
+                self._log_dial_failure()
             # Before the waiter wakes: it may read what the hook recorded.
             failed_hook = self.on_failed
             if failed_hook is not None and not self._ready.is_set() and not self._closed:
@@ -1136,6 +1240,28 @@ class MCPConnection:
                     pass
             # Unblock a `start()` that is still waiting on a failed connect.
             self._ready.set()
+
+    def _log_dial_failure(self) -> None:
+        """One log line per failed dial: the server, its host and the reason.
+
+        Without it the only trace of a refused connector is the word the app
+        prints, and that word cannot tell a lapsed sign-in from a dead server.
+        The error is already redacted (query values) and never holds a token;
+        the URL is reduced to its host for the same reason.
+        """
+        try:
+            from urllib.parse import urlsplit
+
+            host = urlsplit(self.config.url or "").hostname or self.config.transport
+            logger.warning(
+                "mcp dial failed: server=%s host=%s kind=%s error=%s",
+                self.config.name,
+                host,
+                self.error_kind,
+                _redact(str(self._error))[:400],
+            )
+        except Exception:  # noqa: BLE001 — a log line must never fail a dial
+            pass
 
     async def _session_task(self) -> None:
         from pydantic_ai.mcp import MCPToolset
@@ -1157,17 +1283,25 @@ class MCPConnection:
                     toolset.list_tools(), timeout=self.config.connect_timeout
                 )
             except asyncio.TimeoutError:
-                self._error = "connect timed out"
+                if self._auth_refused:
+                    self._error = AUTH_REFUSED_ERROR
+                    self._error_kind = ERROR_KIND_AUTH
+                else:
+                    self._error = "connect timed out"
+                    self._error_kind = ERROR_KIND_NETWORK
                 return
             except Exception as exc:  # noqa: BLE001
                 if self._auth_refused:
                     self._error = AUTH_REFUSED_ERROR
+                    self._error_kind = ERROR_KIND_AUTH
                 else:
                     self._error = _redact(f"{type(exc).__name__}: {_clip(exc, 300)}")
+                    self._error_kind = _error_kind_of(exc)
                 return
             self._tools = _tool_infos(listed)
             self._session = toolset
             self._error = None
+            self._error_kind = None
             self._connected_once = True
             self._ready.set()
             listed_hook = self.on_listed
@@ -1349,6 +1483,9 @@ class MCPConnection:
                 or "not connected" in closed
             ):
                 self._error = error
+                self._error_kind = (
+                    ERROR_KIND_AUTH if self._auth_refused else _error_kind_of(exc)
+                )
             return {
                 "ok": False,
                 "server": self.config.name,

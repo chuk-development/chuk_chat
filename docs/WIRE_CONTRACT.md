@@ -306,9 +306,18 @@ per task, sent right after the session's MCP manager is up.
  "servers": [
    {"id": "<device connector id>"?, "name": "<connector name>", "url": "<endpoint>",
     "connected": true, "tools": [{"name": "<tool>", "description": "<one line>"}],
-    "error": "<why it is not connected>"?}
+    "error": "<why it is not connected>"?,
+    "error_kind": "auth" | "network" | "other"?}
  ]}
 ```
+
+`error_kind` comes with every `error`. It is set from the structure of the
+failure, not from the error text: `auth` means the server refused the sign-in
+and the host could not renew it (the refresh gave `invalid_grant` or there was
+no refresh material), so only a new sign-in on the device helps; `network`
+means the server did not answer (connect error, timeout); `other` is anything
+else (the server answered, but not as an MCP server). An app reads a missing
+`error_kind` (an older host) as `other`.
 
 Why it exists: this device never connects to an MCP server. It forwards the
 connectors on the `task` frame and the host dials them, so the tool list is not
@@ -2164,6 +2173,30 @@ and there is one renderer, not two. A document written with `chart` carries
 Unchanged. `expected_version` must match the version last read, and an update
 that names neither `chart` nor `rows` keeps the chart the document already had,
 so a caption-only rewrite does not have to resend every point.
+
+## Pages (`chat_document`, kinds `markdown` and `html`)
+
+Additive. The spec is `docs/PAGES.md`. A page is a `chat_document` of kind
+`markdown` or `html`; `text` holds the content. The only wire change is one
+new value of `kind`: `html`. No frame and no field is new.
+
+- The `file` event of a write carries the page in `document`, as for every
+  document. For `kind: html` the file `name` ends in `.html`.
+- `documents_list` and `document_read` answer for pages as for every other
+  document. The list is scoped to `session_key`, which is the agent id, so
+  each agent lists only its own pages.
+- `expected_version` works as before: a write with a stale or missing version
+  on an existing page saves nothing and returns an error.
+
+```json
+{"id": "btc", "title": "BTC dashboard", "kind": "html", "version": 2,
+ "text": "<!doctype html><html>...</html>",
+ "session_key": "local:crypto-desk:1:74112",
+ "created_at": 1761730000.1, "updated_at": 1761731200.4}
+```
+
+An old app does not know `html`. It shows `text` as markdown (the HTML
+source). Nothing breaks and nothing is lost.
 
 ## The agent calls the user (bead chuk_chat-lgq2.8)
 

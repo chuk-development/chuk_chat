@@ -5743,6 +5743,13 @@ class Executor:
             except Exception:  # noqa: BLE001
                 tools = []
             error = getattr(connection, "error", None)
+            # ``auth`` / ``network`` / ``other``: what the app should offer
+            # (a new sign-in, or nothing but waiting). A connection object
+            # that does not classify (an older runtime, a test fake) says
+            # ``other``, never a guess from the error text.
+            kind = getattr(connection, "error_kind", None) if error else None
+            if error and kind not in ("auth", "network", "other"):
+                kind = "other"
             servers.append(
                 {
                     "id": entry.get("id"),
@@ -5756,7 +5763,7 @@ class Executor:
                         }
                         for tool in tools
                     ],
-                    **({"error": str(error)} if error else {}),
+                    **({"error": str(error), "error_kind": kind} if error else {}),
                 }
             )
         return servers

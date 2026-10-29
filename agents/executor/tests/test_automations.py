@@ -149,7 +149,7 @@ def test_the_automation_tools_are_bound_to_the_tasks_session(tmp_path):
     finally:
         executor.stop()
     assert manager.bound_keys == ["thread-A"]
-    assert manager.backends["thread-A"].calls == [("schedule", {"every": 300}, "check", None)]
+    assert manager.backends["thread-A"].calls == [("schedule", {"every": 300}, "check", None, "on_change")]
     tool = [e for e in events if e["type"] == "tool" and e["name"] == "schedule_task"]
     assert tool and tool[0]["status"] == "completed"
 

@@ -467,7 +467,39 @@ def test_http_server_that_is_not_listening_fails_cleanly():
     try:
         assert connection.start() is False
         assert connection.error
+        assert connection.error_kind == "network"
         assert connection.alive() is False
+    finally:
+        connection.close()
+
+
+def test_error_kind_reads_the_exception_structure_not_its_text():
+    import httpx
+
+    from chuk_agents_runtime.mcp_client import _error_kind_of
+
+    assert _error_kind_of(httpx.ConnectError("x")) == "network"
+    assert _error_kind_of(httpx.ReadTimeout("x")) == "network"
+    assert _error_kind_of(ConnectionRefusedError()) == "network"
+    # Wrapped the way anyio task groups wrap it.
+    assert _error_kind_of(ExceptionGroup("g", [ValueError("a"), httpx.ConnectError("b")])) == "network"
+    try:
+        try:
+            raise OSError("dns")
+        except OSError as inner:
+            raise RuntimeError("wrapped") from inner
+    except RuntimeError as outer:
+        assert _error_kind_of(outer) == "network"
+    # "connection refused" in the text of a non-network error is still "other".
+    assert _error_kind_of(ValueError("connection refused, 401")) == "other"
+
+
+def test_a_working_connection_has_no_error_kind():
+    connection = MCPConnection(stdio_config("kindless"))
+    try:
+        assert connection.start() is True
+        assert connection.error is None
+        assert connection.error_kind is None
     finally:
         connection.close()
 

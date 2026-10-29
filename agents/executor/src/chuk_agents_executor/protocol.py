@@ -1019,7 +1019,8 @@ def mcp_tools_payload(
     server that is working perfectly. One frame carries every server of the
     session, because they are discovered together.
 
-    Each entry is ``{id?, name, connected, tools: [{name, description}], error?}``.
+    Each entry is ``{id?, name, connected, tools: [{name, description}], error?,
+    error_kind?}``; ``error_kind`` is ``auth``, ``network`` or ``other``.
     ``id`` is the device's own connector id, echoed when the device sent one, so
     the app can match without guessing on the name.
     """
