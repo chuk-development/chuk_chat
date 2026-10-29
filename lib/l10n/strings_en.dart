@@ -4,6 +4,7 @@
 const Map<String, String> stringsEn = {
   // ── Settings page ──────────────────────────────────────────
   'settings': 'Settings',
+  'settingsAdvanced': 'Advanced',
   'themeSettings': 'Theme Settings',
   'themeSettingsSubtitle': 'Adjust app theme, colors, and appearance',
   'customization': 'Customization',

@@ -342,149 +342,156 @@ class _ThemePageState extends State<ThemePage> {
               },
             ),
 
-          ExpressiveSectionHeader(l.iconFgColor),
-          if (_selectedDynamicColor)
-            _dynamicColorNote(l)
-          else
-            _ColorCard(
-              description: l.iconFgColorSubtitle,
-              hexLabel: l.customHexColor,
-              currentColor: _selectedIconFgColor,
-              options: _iconFgColorOptions,
-              hexController: _iconFgHexController,
-              gridColumns: 5,
-              onColorSelected: (c) {
-                setState(() {
-                  _selectedIconFgColor = c;
-                  _iconFgHexController.text = c.toHexString();
-                  _applyThemeChanges();
-                });
-              },
-              onHexChanged: (hex) {
-                try {
-                  final c = ColorExtension.fromHexString(hex);
-                  setState(() {
-                    _selectedIconFgColor = c;
-                    _applyThemeChanges();
-                  });
-                } catch (_) {}
-              },
-            ),
-
-          ExpressiveSectionHeader(l.backgroundColor),
-          if (_selectedDynamicColor)
-            _dynamicColorNote(l)
-          else
-            _ColorCard(
-              description: l.backgroundColorSubtitle,
-              hexLabel: l.customHexColor,
-              currentColor: _selectedBgColor,
-              options: _bgColorOptions,
-              hexController: _bgHexController,
-              gridColumns: 8,
-              onColorSelected: (c) {
-                setState(() {
-                  _selectedBgColor = c;
-                  _bgHexController.text = c.toHexString();
-                  _applyThemeChanges();
-                });
-              },
-              onHexChanged: (hex) {
-                try {
-                  final c = ColorExtension.fromHexString(hex);
-                  setState(() {
-                    _selectedBgColor = c;
-                    _applyThemeChanges();
-                  });
-                } catch (_) {}
-              },
-            ),
-
-          // Contrast: scales how strongly surfaces and outlines separate from
-          // the background.
-          ExpressiveSectionHeader(l.themeContrast),
-          ExpressiveGroup(
+          // The rest of the look, for those who tune it (bead chuk_chat-pjom,
+          // docs/SETTINGS_ORDER.md): closed by default, nothing removed.
+          ExpressiveAdvancedSection(
+            title: l.settingsAdvanced,
             children: [
-              ExpressiveCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      l.themeContrastStrength,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: cs.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      l.themeContrastSubtitle,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.m3.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
+              ExpressiveSectionHeader(l.iconFgColor),
+              if (_selectedDynamicColor)
+                _dynamicColorNote(l)
+              else
+                _ColorCard(
+                  description: l.iconFgColorSubtitle,
+                  hexLabel: l.customHexColor,
+                  currentColor: _selectedIconFgColor,
+                  options: _iconFgColorOptions,
+                  hexController: _iconFgHexController,
+                  gridColumns: 5,
+                  onColorSelected: (c) {
+                    setState(() {
+                      _selectedIconFgColor = c;
+                      _iconFgHexController.text = c.toHexString();
+                      _applyThemeChanges();
+                    });
+                  },
+                  onHexChanged: (hex) {
+                    try {
+                      final c = ColorExtension.fromHexString(hex);
+                      setState(() {
+                        _selectedIconFgColor = c;
+                        _applyThemeChanges();
+                      });
+                    } catch (_) {}
+                  },
+                ),
+
+              ExpressiveSectionHeader(l.backgroundColor),
+              if (_selectedDynamicColor)
+                _dynamicColorNote(l)
+              else
+                _ColorCard(
+                  description: l.backgroundColorSubtitle,
+                  hexLabel: l.customHexColor,
+                  currentColor: _selectedBgColor,
+                  options: _bgColorOptions,
+                  hexController: _bgHexController,
+                  gridColumns: 8,
+                  onColorSelected: (c) {
+                    setState(() {
+                      _selectedBgColor = c;
+                      _bgHexController.text = c.toHexString();
+                      _applyThemeChanges();
+                    });
+                  },
+                  onHexChanged: (hex) {
+                    try {
+                      final c = ColorExtension.fromHexString(hex);
+                      setState(() {
+                        _selectedBgColor = c;
+                        _applyThemeChanges();
+                      });
+                    } catch (_) {}
+                  },
+                ),
+
+              // Contrast: scales how strongly surfaces and outlines separate from
+              // the background.
+              ExpressiveSectionHeader(l.themeContrast),
+              ExpressiveGroup(
+                children: [
+                  ExpressiveCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        AppIcon(
-                          Icons.contrast_outlined,
-                          size: 20,
-                          color: theme.m3.onSurfaceVariant,
-                        ),
-                        Expanded(
-                          child: Slider(
-                            value: _selectedContrast,
-                            min: kMinContrast,
-                            max: kMaxContrast,
-                            divisions: 10,
-                            label: '${(_selectedContrast * 100).round()}%',
-                            onChanged: (v) => _updateContrast(v),
-                            onChangeEnd: (v) =>
-                                _updateContrast(v, commit: true),
+                        Text(
+                          l.themeContrastStrength,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: cs.onSurface,
                           ),
                         ),
-                        SizedBox(
-                          width: 48,
-                          child: Text(
-                            '${(_selectedContrast * 100).round()}%',
-                            textAlign: TextAlign.right,
-                            style: TextStyle(
-                              color: cs.primary,
-                              fontWeight: FontWeight.w600,
+                        const SizedBox(height: 2),
+                        Text(
+                          l.themeContrastSubtitle,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.m3.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            AppIcon(
+                              Icons.contrast_outlined,
+                              size: 20,
+                              color: theme.m3.onSurfaceVariant,
                             ),
-                          ),
+                            Expanded(
+                              child: Slider(
+                                value: _selectedContrast,
+                                min: kMinContrast,
+                                max: kMaxContrast,
+                                divisions: 10,
+                                label: '${(_selectedContrast * 100).round()}%',
+                                onChanged: (v) => _updateContrast(v),
+                                onChangeEnd: (v) =>
+                                    _updateContrast(v, commit: true),
+                              ),
+                            ),
+                            SizedBox(
+                              width: 48,
+                              child: Text(
+                                '${(_selectedContrast * 100).round()}%',
+                                textAlign: TextAlign.right,
+                                style: TextStyle(
+                                  color: cs.primary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
 
-          // Fonts: the app-chrome font (new) and the chat body font (also
-          // reachable from Customisation), kept together so the two are not
-          // confused.
-          ExpressiveSectionHeader(l.themeFonts),
-          ExpressiveGroup(
-            children: [
-              _FontCard(
-                title: l.interfaceFont,
-                subtitle: l.interfaceFontSubtitle,
-                sample: l.fontSizePreview,
-                value: _selectedUiFont,
-                options: kSupportedUiFontFamilies,
-                labelFor: (id) => _fontLabel(id, l),
-                onChanged: _updateUiFont,
-              ),
-              _FontCard(
-                title: l.chatFontFamily,
-                subtitle: l.chatFontFamilySubtitle,
-                sample: l.fontSizePreview,
-                value: _selectedChatFont,
-                options: kSupportedChatFontFamilies,
-                labelFor: (id) => _fontLabel(id, l),
-                onChanged: _updateChatFont,
+              // Fonts: the app-chrome font (new) and the chat body font (also
+              // reachable from Customisation), kept together so the two are not
+              // confused.
+              ExpressiveSectionHeader(l.themeFonts),
+              ExpressiveGroup(
+                children: [
+                  _FontCard(
+                    title: l.interfaceFont,
+                    subtitle: l.interfaceFontSubtitle,
+                    sample: l.fontSizePreview,
+                    value: _selectedUiFont,
+                    options: kSupportedUiFontFamilies,
+                    labelFor: (id) => _fontLabel(id, l),
+                    onChanged: _updateUiFont,
+                  ),
+                  _FontCard(
+                    title: l.chatFontFamily,
+                    subtitle: l.chatFontFamilySubtitle,
+                    sample: l.fontSizePreview,
+                    value: _selectedChatFont,
+                    options: kSupportedChatFontFamilies,
+                    labelFor: (id) => _fontLabel(id, l),
+                    onChanged: _updateChatFont,
+                  ),
+                ],
               ),
             ],
           ),

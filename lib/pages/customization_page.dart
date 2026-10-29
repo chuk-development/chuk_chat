@@ -311,6 +311,9 @@ class _CustomizationPageState extends State<CustomizationPage> {
       body: SettingsListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
+          // The top: what a normal user sets here (bead chuk_chat-pjom,
+          // docs/SETTINGS_ORDER.md): language, notifications, text size.
+          // Everything else sits in the closed "Advanced" fold below.
           // Language.
           ExpressiveSectionHeader(l.language),
           ExpressiveGroup(
@@ -348,69 +351,24 @@ class _CustomizationPageState extends State<CustomizationPage> {
             ],
           ),
 
-          // Voice transcription.
-          ExpressiveSectionHeader(l.voiceTranscription),
+          // Notifications: answer text in the OS toast, opt-in.
+          ExpressiveSectionHeader(l.notificationsSection),
           ExpressiveGroup(
             children: [
               ExpressiveSwitchRow(
-                icon: Icons.mic_outlined,
-                title: l.autoSendVoice,
-                subtitle: l.autoSendVoiceSubtitle,
-                value: _selectedAutoSendVoiceTranscription,
-                onChanged: (bool value) {
-                  setState(() {
-                    _selectedAutoSendVoiceTranscription = value;
-                  });
-                  widget.config.setAutoSendVoiceTranscription(value);
-                },
+                icon: Icons.notifications_outlined,
+                title: l.notificationAnswerPreview,
+                subtitle: l.notificationAnswerPreviewSubtitle,
+                value: _notificationAnswerPreview,
+                onChanged:
+                    _isLoadingNotificationPreview ||
+                        _isSavingNotificationPreview
+                    ? null
+                    : _setNotificationPreview,
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          ExpressiveInfoCard(text: l.autoSendVoiceInfo),
 
-          // Message display (toggles only; typography is its own section).
-          ExpressiveSectionHeader(l.messageDisplay),
-          ExpressiveGroup(
-            children: [
-              ExpressiveSwitchRow(
-                icon: Icons.psychology_alt_outlined,
-                title: l.showReasoningTokens,
-                subtitle: l.showReasoningTokensSubtitle,
-                value: _selectedShowReasoningTokens,
-                onChanged: (bool value) {
-                  setState(() {
-                    _selectedShowReasoningTokens = value;
-                  });
-                  widget.config.setShowReasoningTokens(value);
-                },
-              ),
-              ExpressiveSwitchRow(
-                icon: Icons.info_outline,
-                title: l.showModelInfo,
-                subtitle: l.showModelInfoSubtitle,
-                value: _selectedShowModelInfo,
-                onChanged: (bool value) {
-                  setState(() {
-                    _selectedShowModelInfo = value;
-                  });
-                  widget.config.setShowModelInfo(value);
-                },
-              ),
-              ExpressiveSwitchRow(
-                icon: Icons.speed_outlined,
-                title: l.showTps,
-                subtitle: l.showTpsSubtitle,
-                value: _selectedShowTps,
-                onChanged: (bool value) {
-                  setState(() {
-                    _selectedShowTps = value;
-                  });
-                  widget.config.setShowTps(value);
-                },
-              ),
-            ],
-          ),
 
           // Typography.
           const ExpressiveSectionHeader('Typography'),
@@ -463,301 +421,359 @@ class _CustomizationPageState extends State<CustomizationPage> {
                   ],
                 ),
               ),
-              ExpressiveCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _CardLabel(
-                      title: l.chatFontFamily,
-                      subtitle: l.chatFontFamilySubtitle,
-                    ),
-                    const SizedBox(height: 10),
-                    ExpressiveField(
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          icon: const AppIcon(
-                            Icons.keyboard_arrow_down_rounded,
-                          ),
-                          value: _selectedChatFontFamily,
-                          isExpanded: true,
-                          dropdownColor: m3.surfaceContainerHigh,
-                          borderRadius: kBorderRadiusMenu,
-                          // The default focus tint is a full-bleed
-                          // rectangle drawn behind the rounded
-                          // container — it is what makes a focused
-                          // dropdown look square. The container
-                          // already carries the shape.
-                          focusColor: Colors.transparent,
-                          items: kSupportedChatFontFamilies
-                              .map(
-                                (id) => DropdownMenuItem<String>(
-                                  value: id,
-                                  child: Text(_fontFamilyLabel(id, l)),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (String? value) {
-                            if (value == null ||
-                                value == _selectedChatFontFamily) {
-                              return;
-                            }
-                            setState(() {
-                              _selectedChatFontFamily = value;
-                            });
-                            widget.config.setChatFontFamily(value);
-                          },
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    ExpressiveField(
-                      padding: const EdgeInsets.all(14),
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: Text(
-                          l.fontSizePreview,
-                          style: TextStyle(
-                            color: cs.onSurface,
-                            fontSize: _selectedChatFontSize,
-                            fontFamily: resolveChatFontFamily(
-                              _selectedChatFontFamily,
-                            ),
-                            height: 1.38,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ],
           ),
 
-          // UI scale.
-          ExpressiveSectionHeader(l.uiScale),
-          ExpressiveGroup(
+          ExpressiveAdvancedSection(
+            title: l.settingsAdvanced,
             children: [
-              ExpressiveCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _CardLabel(
-                      title: l.uiScalePercentage(
-                        (_selectedUiScale * 100).round().toString(),
-                      ),
-                      subtitle: l.uiScaleSubtitle,
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
+              // Voice transcription.
+              ExpressiveSectionHeader(l.voiceTranscription),
+              ExpressiveGroup(
+                children: [
+                  ExpressiveSwitchRow(
+                    icon: Icons.mic_outlined,
+                    title: l.autoSendVoice,
+                    subtitle: l.autoSendVoiceSubtitle,
+                    value: _selectedAutoSendVoiceTranscription,
+                    onChanged: (bool value) {
+                      setState(() {
+                        _selectedAutoSendVoiceTranscription = value;
+                      });
+                      widget.config.setAutoSendVoiceTranscription(value);
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ExpressiveInfoCard(text: l.autoSendVoiceInfo),
+
+              // Message display (toggles only; typography is its own section).
+              ExpressiveSectionHeader(l.messageDisplay),
+              ExpressiveGroup(
+                children: [
+                  ExpressiveSwitchRow(
+                    icon: Icons.psychology_alt_outlined,
+                    title: l.showReasoningTokens,
+                    subtitle: l.showReasoningTokensSubtitle,
+                    value: _selectedShowReasoningTokens,
+                    onChanged: (bool value) {
+                      setState(() {
+                        _selectedShowReasoningTokens = value;
+                      });
+                      widget.config.setShowReasoningTokens(value);
+                    },
+                  ),
+                  ExpressiveSwitchRow(
+                    icon: Icons.info_outline,
+                    title: l.showModelInfo,
+                    subtitle: l.showModelInfoSubtitle,
+                    value: _selectedShowModelInfo,
+                    onChanged: (bool value) {
+                      setState(() {
+                        _selectedShowModelInfo = value;
+                      });
+                      widget.config.setShowModelInfo(value);
+                    },
+                  ),
+                  ExpressiveSwitchRow(
+                    icon: Icons.speed_outlined,
+                    title: l.showTps,
+                    subtitle: l.showTpsSubtitle,
+                    value: _selectedShowTps,
+                    onChanged: (bool value) {
+                      setState(() {
+                        _selectedShowTps = value;
+                      });
+                      widget.config.setShowTps(value);
+                    },
+                  ),
+                ],
+              ),
+
+              // The chat font (also on the Theme page).
+              ExpressiveSectionHeader(l.themeFonts),
+              ExpressiveGroup(
+                children: [
+                  ExpressiveCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Slider(
-                            value: _selectedUiScale,
-                            min: kMinUiScale,
-                            max: kMaxUiScale,
-                            // 5% steps across the 80%-150% range => 14 divisions.
-                            divisions: 14,
-                            label: '${(_selectedUiScale * 100).round()}%',
-                            onChanged: (double value) {
-                              setState(() {
-                                _selectedUiScale = value;
-                              });
-                            },
-                            onChangeEnd: (double value) {
-                              widget.config.setUiScale(value);
-                            },
+                        _CardLabel(
+                          title: l.chatFontFamily,
+                          subtitle: l.chatFontFamilySubtitle,
+                        ),
+                        const SizedBox(height: 10),
+                        ExpressiveField(
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              icon: const AppIcon(
+                                Icons.keyboard_arrow_down_rounded,
+                              ),
+                              value: _selectedChatFontFamily,
+                              isExpanded: true,
+                              dropdownColor: m3.surfaceContainerHigh,
+                              borderRadius: kBorderRadiusMenu,
+                              // The default focus tint is a full-bleed
+                              // rectangle drawn behind the rounded
+                              // container — it is what makes a focused
+                              // dropdown look square. The container
+                              // already carries the shape.
+                              focusColor: Colors.transparent,
+                              items: kSupportedChatFontFamilies
+                                  .map(
+                                    (id) => DropdownMenuItem<String>(
+                                      value: id,
+                                      child: Text(_fontFamilyLabel(id, l)),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (String? value) {
+                                if (value == null ||
+                                    value == _selectedChatFontFamily) {
+                                  return;
+                                }
+                                setState(() {
+                                  _selectedChatFontFamily = value;
+                                });
+                                widget.config.setChatFontFamily(value);
+                              },
+                            ),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                          width: 56,
-                          child: Text(
-                            '${(_selectedUiScale * 100).round()}%',
-                            textAlign: TextAlign.right,
-                            style: TextStyle(
-                              color: cs.primary,
-                              fontWeight: FontWeight.w600,
+                        const SizedBox(height: 12),
+                        ExpressiveField(
+                          padding: const EdgeInsets.all(14),
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: Text(
+                              l.fontSizePreview,
+                              style: TextStyle(
+                                color: cs.onSurface,
+                                fontSize: _selectedChatFontSize,
+                                fontFamily: resolveChatFontFamily(
+                                  _selectedChatFontFamily,
+                                ),
+                                height: 1.38,
+                              ),
                             ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      children: <double>[0.8, 1.0, 1.2].map((preset) {
-                        final selected =
-                            (_selectedUiScale - preset).abs() < 0.001;
-                        return ChoiceChip(
-                          label: Text('${(preset * 100).round()}%'),
-                          selected: selected,
-                          onSelected: (_) {
-                            setState(() {
-                              _selectedUiScale = preset;
-                            });
-                            widget.config.setUiScale(preset);
-                          },
-                        );
-                      }).toList(),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          // AI context.
-          ExpressiveSectionHeader(l.aiContext),
-          ExpressiveInfoCard(text: l.aiContextInfo),
-          const SizedBox(height: 8),
-          ExpressiveGroup(
-            children: [
-              ExpressiveSwitchRow(
-                icon: Icons.image_outlined,
-                title: l.recentImagesInContext,
-                subtitle: l.recentImagesInContextSubtitle,
-                value: _selectedIncludeRecentImagesInHistory,
-                onChanged: (bool value) {
-                  setState(() {
-                    _selectedIncludeRecentImagesInHistory = value;
-                  });
-                  widget.config.setIncludeRecentImagesInHistory(value);
-                },
-              ),
-              ExpressiveSwitchRow(
-                icon: Icons.photo_library_outlined,
-                title: l.allImagesInContext,
-                subtitle: l.allImagesInContextSubtitle,
-                value: _selectedIncludeAllImagesInHistory,
-                onChanged: (bool value) {
-                  setState(() {
-                    _selectedIncludeAllImagesInHistory = value;
-                  });
-                  widget.config.setIncludeAllImagesInHistory(value);
-                },
-              ),
-              ExpressiveSwitchRow(
-                icon: Icons.psychology_outlined,
-                title: l.reasoningInContext,
-                subtitle: l.reasoningInContextSubtitle,
-                value: _selectedIncludeReasoningInHistory,
-                onChanged: (bool value) {
-                  setState(() {
-                    _selectedIncludeReasoningInHistory = value;
-                  });
-                  widget.config.setIncludeReasoningInHistory(value);
-                },
-              ),
-              ExpressiveSwitchRow(
-                icon: Icons.build_outlined,
-                title: l.toolResultsInContext,
-                subtitle: l.toolResultsInContextSubtitle,
-                value: _selectedIncludeToolResultsInHistory,
-                onChanged: (bool value) {
-                  setState(() {
-                    _selectedIncludeToolResultsInHistory = value;
-                  });
-                  widget.config.setIncludeToolResultsInHistory(value);
-                },
-              ),
-            ],
-          ),
-
-          // AGENTS: whether a thread shows every command, MCP call and browser
-          // step, or just the answer (docs/PRODUCT_PHILOSOPHY.md). Default off.
-          // Agents put this where it had deleted upstream's auto-title rows;
-          // the merged app keeps both, so it sits next to them instead.
-          // Only an Agents thread reads it (the relay transport and the thread
-          // view); a chuk_chat chat in the same build shows its tool calls as
-          // it always did. So it stays an Agents-build row, and says whose
-          // threads it changes.
-          if (agentsChatCore) ExpressiveSectionHeader('Detail'),
-          if (agentsChatCore)
-            ListenableBuilder(
-              listenable: VerboseService.instance,
-              builder: (context, _) => ExpressiveGroup(
-                children: [
-                  ExpressiveSwitchRow(
-                    icon: Icons.terminal_outlined,
-                    title: 'Full log',
-                    subtitle:
-                        'Show every command, tool call and browser step in an '
-                        'Agents thread, not just the answer.',
-                    value: VerboseService.instance.enabled,
-                    onChanged: (bool value) =>
-                        VerboseService.instance.setEnabled(value),
                   ),
                 ],
               ),
-            ),
 
-          // Notifications: answer text in the OS toast, opt-in.
-          ExpressiveSectionHeader(l.notificationsSection),
-          ExpressiveGroup(
-            children: [
-              ExpressiveSwitchRow(
-                icon: Icons.notifications_outlined,
-                title: l.notificationAnswerPreview,
-                subtitle: l.notificationAnswerPreviewSubtitle,
-                value: _notificationAnswerPreview,
-                onChanged:
-                    _isLoadingNotificationPreview ||
-                        _isSavingNotificationPreview
-                    ? null
-                    : _setNotificationPreview,
-              ),
-            ],
-          ),
-
-          // Downloads: nav row into DownloadSettingsPage.
-          ExpressiveSectionHeader(l.downloads),
-          ExpressiveGroup(
-            children: [
-              ExpressiveRow(
-                icon: Icons.folder_outlined,
-                title: l.downloads,
-                subtitle: l.downloadsSubtitle,
-                trailing: AppIcon(
-                  Icons.chevron_right,
-                  size: 20,
-                  color: m3.onSurfaceVariant,
-                ),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const DownloadSettingsPage(),
+              // UI scale.
+              ExpressiveSectionHeader(l.uiScale),
+              ExpressiveGroup(
+                children: [
+                  ExpressiveCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _CardLabel(
+                          title: l.uiScalePercentage(
+                            (_selectedUiScale * 100).round().toString(),
+                          ),
+                          subtitle: l.uiScaleSubtitle,
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Slider(
+                                value: _selectedUiScale,
+                                min: kMinUiScale,
+                                max: kMaxUiScale,
+                                // 5% steps across the 80%-150% range => 14 divisions.
+                                divisions: 14,
+                                label: '${(_selectedUiScale * 100).round()}%',
+                                onChanged: (double value) {
+                                  setState(() {
+                                    _selectedUiScale = value;
+                                  });
+                                },
+                                onChangeEnd: (double value) {
+                                  widget.config.setUiScale(value);
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 56,
+                              child: Text(
+                                '${(_selectedUiScale * 100).round()}%',
+                                textAlign: TextAlign.right,
+                                style: TextStyle(
+                                  color: cs.primary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          children: <double>[0.8, 1.0, 1.2].map((preset) {
+                            final selected =
+                                (_selectedUiScale - preset).abs() < 0.001;
+                            return ChoiceChip(
+                              label: Text('${(preset * 100).round()}%'),
+                              selected: selected,
+                              onSelected: (_) {
+                                setState(() {
+                                  _selectedUiScale = preset;
+                                });
+                                widget.config.setUiScale(preset);
+                              },
+                            );
+                          }).toList(),
+                        ),
+                      ],
                     ),
-                  );
-                },
+                  ),
+                ],
               ),
-            ],
-          ),
 
-          // Auto chat titles.
-          ExpressiveSectionHeader(l.chatTitles),
-          ExpressiveGroup(
-            children: [
-              ExpressiveSwitchRow(
-                icon: Icons.auto_awesome_outlined,
-                title: l.autoGenerateTitles,
-                subtitle: l.autoGenerateTitlesSubtitle,
-                value: _isLoadingTitleSetting ? false : _autoGenerateTitles,
-                onChanged: _isLoadingTitleSetting
-                    ? null
-                    : (bool value) async {
-                        setState(() {
-                          _autoGenerateTitles = value;
-                        });
-                        await TitleGenerationService.setEnabled(value);
-                      },
+              // AI context.
+              ExpressiveSectionHeader(l.aiContext),
+              ExpressiveInfoCard(text: l.aiContextInfo),
+              const SizedBox(height: 8),
+              ExpressiveGroup(
+                children: [
+                  ExpressiveSwitchRow(
+                    icon: Icons.image_outlined,
+                    title: l.recentImagesInContext,
+                    subtitle: l.recentImagesInContextSubtitle,
+                    value: _selectedIncludeRecentImagesInHistory,
+                    onChanged: (bool value) {
+                      setState(() {
+                        _selectedIncludeRecentImagesInHistory = value;
+                      });
+                      widget.config.setIncludeRecentImagesInHistory(value);
+                    },
+                  ),
+                  ExpressiveSwitchRow(
+                    icon: Icons.photo_library_outlined,
+                    title: l.allImagesInContext,
+                    subtitle: l.allImagesInContextSubtitle,
+                    value: _selectedIncludeAllImagesInHistory,
+                    onChanged: (bool value) {
+                      setState(() {
+                        _selectedIncludeAllImagesInHistory = value;
+                      });
+                      widget.config.setIncludeAllImagesInHistory(value);
+                    },
+                  ),
+                  ExpressiveSwitchRow(
+                    icon: Icons.psychology_outlined,
+                    title: l.reasoningInContext,
+                    subtitle: l.reasoningInContextSubtitle,
+                    value: _selectedIncludeReasoningInHistory,
+                    onChanged: (bool value) {
+                      setState(() {
+                        _selectedIncludeReasoningInHistory = value;
+                      });
+                      widget.config.setIncludeReasoningInHistory(value);
+                    },
+                  ),
+                  ExpressiveSwitchRow(
+                    icon: Icons.build_outlined,
+                    title: l.toolResultsInContext,
+                    subtitle: l.toolResultsInContextSubtitle,
+                    value: _selectedIncludeToolResultsInHistory,
+                    onChanged: (bool value) {
+                      setState(() {
+                        _selectedIncludeToolResultsInHistory = value;
+                      });
+                      widget.config.setIncludeToolResultsInHistory(value);
+                    },
+                  ),
+                ],
               ),
-              if (_autoGenerateTitles && !_isLoadingTitleSetting)
-                ..._systemPromptEditor(l),
+
+              // AGENTS: whether a thread shows every command, MCP call and browser
+              // step, or just the answer (docs/PRODUCT_PHILOSOPHY.md). Default off.
+              // Agents put this where it had deleted upstream's auto-title rows;
+              // the merged app keeps both, so it sits next to them instead.
+              // Only an Agents thread reads it (the relay transport and the thread
+              // view); a chuk_chat chat in the same build shows its tool calls as
+              // it always did. So it stays an Agents-build row, and says whose
+              // threads it changes.
+              if (agentsChatCore) ExpressiveSectionHeader('Detail'),
+              if (agentsChatCore)
+                ListenableBuilder(
+                  listenable: VerboseService.instance,
+                  builder: (context, _) => ExpressiveGroup(
+                    children: [
+                      ExpressiveSwitchRow(
+                        icon: Icons.terminal_outlined,
+                        title: 'Full log',
+                        subtitle:
+                            'Show every command, tool call and browser step in an '
+                            'Agents thread, not just the answer.',
+                        value: VerboseService.instance.enabled,
+                        onChanged: (bool value) =>
+                            VerboseService.instance.setEnabled(value),
+                      ),
+                    ],
+                  ),
+                ),
+
+              // Downloads: nav row into DownloadSettingsPage.
+              ExpressiveSectionHeader(l.downloads),
+              ExpressiveGroup(
+                children: [
+                  ExpressiveRow(
+                    icon: Icons.folder_outlined,
+                    title: l.downloads,
+                    subtitle: l.downloadsSubtitle,
+                    trailing: AppIcon(
+                      Icons.chevron_right,
+                      size: 20,
+                      color: m3.onSurfaceVariant,
+                    ),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const DownloadSettingsPage(),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+
+              // Auto chat titles.
+              ExpressiveSectionHeader(l.chatTitles),
+              ExpressiveGroup(
+                children: [
+                  ExpressiveSwitchRow(
+                    icon: Icons.auto_awesome_outlined,
+                    title: l.autoGenerateTitles,
+                    subtitle: l.autoGenerateTitlesSubtitle,
+                    value: _isLoadingTitleSetting ? false : _autoGenerateTitles,
+                    onChanged: _isLoadingTitleSetting
+                        ? null
+                        : (bool value) async {
+                            setState(() {
+                              _autoGenerateTitles = value;
+                            });
+                            await TitleGenerationService.setEnabled(value);
+                          },
+                  ),
+                  if (_autoGenerateTitles && !_isLoadingTitleSetting)
+                    ..._systemPromptEditor(l),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ExpressiveInfoCard(text: l.titleGenInfo),
             ],
           ),
-          const SizedBox(height: 8),
-          ExpressiveInfoCard(text: l.titleGenInfo),
 
           // Image generation is now handled via tool calling (generate_image tool)
         ],

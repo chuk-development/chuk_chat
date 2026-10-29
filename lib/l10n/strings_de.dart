@@ -4,6 +4,7 @@
 const Map<String, String> stringsDe = {
   // ── Settings page ──────────────────────────────────────────
   'settings': 'Einstellungen',
+  'settingsAdvanced': 'Erweitert',
   'themeSettings': 'Design',
   'themeSettingsSubtitle': 'App-Design, Farben und Darstellung anpassen',
   'customization': 'Anpassung',

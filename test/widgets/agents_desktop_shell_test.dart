@@ -353,12 +353,23 @@ void main() {
     final (roster, _) = await pumpDesktop(tester);
     await shortcut(tester, LogicalKeyboardKey.period);
     await openDetailsSettings(tester);
+    // Past the top group, the rows sit in the closed "Advanced" fold
+    // (bead chuk_chat-pjom); the pane draws it like the phone.
+    final Finder advanced = find.descendant(
+      of: rightPane,
+      matching: find.byKey(const ValueKey<String>('settings_Advanced')),
+    );
+    await tester.ensureVisible(advanced);
+    await tester.pumpAndSettle();
+    await tester.tap(advanced);
+    await tester.pumpAndSettle();
 
     double last = double.negativeInfinity;
     for (final String key in <String>[
       'settings_Profile & preferences',
       'settings_Model',
       'settings_Permissions',
+      'settings_Advanced',
       'settings_Skills',
       'settings_Connected apps',
       'settings_Mail',

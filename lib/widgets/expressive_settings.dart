@@ -505,3 +505,90 @@ class ExpressiveBadge extends StatelessWidget {
     );
   }
 }
+
+/// The one "Advanced" fold of a settings screen (docs/SETTINGS_ORDER.md).
+///
+/// A screen shows the few things a normal user changes; everything else sits
+/// under this row, closed by default. Nothing in it is removed or renamed:
+/// one tap opens the rest in place, under its own section headers. The open
+/// state lives with the screen only, so no setting or storage key changes.
+class ExpressiveAdvancedSection extends StatefulWidget {
+  const ExpressiveAdvancedSection({
+    super.key,
+    required this.title,
+    required this.children,
+    this.initiallyExpanded = false,
+    this.toggleKey = const ValueKey<String>('settings_advanced'),
+    this.icon = Icons.more_horiz_rounded,
+  });
+
+  /// "Advanced" in the user's language.
+  final String title;
+
+  /// What the fold holds: section headers and groups, as on the screen.
+  final List<Widget> children;
+
+  final bool initiallyExpanded;
+
+  /// Key of the toggle row, so a test or a tour finds it in every language.
+  final Key toggleKey;
+
+  final IconData icon;
+
+  @override
+  State<ExpressiveAdvancedSection> createState() =>
+      _ExpressiveAdvancedSectionState();
+}
+
+class _ExpressiveAdvancedSectionState extends State<ExpressiveAdvancedSection> {
+  late bool _open = widget.initiallyExpanded;
+
+  @override
+  Widget build(BuildContext context) {
+    final m3 = Theme.of(context).m3;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 16),
+        Semantics(
+          button: true,
+          expanded: _open,
+          child: ExpressiveGroup(
+            children: [
+              ExpressiveRow(
+                key: widget.toggleKey,
+                icon: widget.icon,
+                tone: m3.surfaceContainerHighest,
+                title: widget.title,
+                onTap: () => setState(() => _open = !_open),
+                trailing: AnimatedRotation(
+                  turns: _open ? 0.5 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOutCubic,
+                  child: AppIcon(
+                    Icons.expand_more_rounded,
+                    size: 22,
+                    color: m3.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        ClipRect(
+          child: AnimatedSize(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: _open
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: widget.children,
+                  )
+                : const SizedBox(width: double.infinity),
+          ),
+        ),
+      ],
+    );
+  }
+}
