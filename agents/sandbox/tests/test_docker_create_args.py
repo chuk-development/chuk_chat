@@ -150,11 +150,19 @@ def test_the_gpu_can_be_switched_off(tmp_path, nvidia_host, monkeypatch):
 
 
 def test_a_gpu_that_cannot_be_attached_still_gives_a_box(tmp_path, nvidia_host):
+    """The failed `docker run` may have created the container already: it is
+    removed. The new box says the GPU failed, not that it has one."""
+    from chuk_agents_sandbox.docker import LABEL_BOX
+
     cli = _GpuCli(fail_gpu=True)
     env = DockerEnvironment(workdir=str(tmp_path / "ws"), cli=cli, user="1000:1000")
     assert env._create() == "cid-1"
     first, second = _creates(cli)
     assert "--gpus" in first and "--gpus" not in second
+    assert ("rm", "-f", env.container_name) in cli.calls
+    assert cli.calls.index(("rm", "-f", env.container_name)) < len(cli.calls) - 1
+    assert f"{LABEL_BOX}=browser=1;gpu=failed" in second
+    assert f"{LABEL_BOX}=browser=1;gpu=1" in first
 
 
 def test_a_host_without_nvidia_never_probes(tmp_path, monkeypatch):

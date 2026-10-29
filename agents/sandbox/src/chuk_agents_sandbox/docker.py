@@ -161,6 +161,24 @@ LABEL_BROWSER_REVISION = "dev.chuk.agents.browser-revision"
 #: Container label: the browser revision and the GPU decision the box was
 #: created with (see :meth:`DockerEnvironment.box_key`).
 LABEL_BOX = "cowork.box"
+#: The GPU part of :data:`LABEL_BOX` when the GPU could not be attached and
+#: the box was made without it. It counts as ``gpu=1`` when the key is
+#: compared, so a host whose GPU does not attach does not make the box again
+#: on every session.
+GPU_FAILED = "gpu=failed"
+#: The programs of an idle box (``docker top -eo pid,args``) besides the
+#: container's own ``sleep infinity``: the display and live-view servers.
+#: They hold no work of their own. Anything else is work in progress.
+IDLE_PROGRAMS = ("Xvfb", "x11vnc")
+
+
+def _idle_process(args: str) -> bool:
+    if args == "sleep infinity":
+        return True
+    program = args.split(" ", 1)[0].rsplit("/", 1)[-1]
+    return program in IDLE_PROGRAMS
+
+
 #: What a container without :data:`LABEL_BOX` counts as: no browser
 #: revision, no GPU. So a base-image box from before the label is kept.
 DEFAULT_BOX_KEY = "browser=0;gpu=0"
@@ -451,19 +469,40 @@ class DockerEnvironment(BaseEnvironment):
     def _replace_stale(self, existing: ContainerInfo) -> bool:
         """True when ``existing`` has an old box key and may be replaced now.
 
-        Never while a ``docker exec`` runs in it (a command of another
-        thread, the browser MCP server, a VNC bridge): ``ExecIDs`` lists
-        only running execs (measured). A busy box is kept; the next new
-        session tries again. A box that cannot be inspected is kept too.
+        Only an IDLE box is replaced. A box counts as idle when both hold:
+
+        * no ``docker exec`` runs in it (``ExecIDs`` lists only running
+          execs, measured): no command of another thread, no browser MCP
+          server, no VNC bridge;
+        * ``docker top`` lists no process but the idle ones
+          (:data:`IDLE_PROGRAMS`): a watcher, a background job or a tmux
+          server that a finished exec left behind keeps the box.
+
+        A busy box is kept; the next new session tries again. A box that
+        cannot be inspected is kept too.
         """
-        if (existing.labels.get(LABEL_BOX) or DEFAULT_BOX_KEY) == self.box_key():
+        labelled = (existing.labels.get(LABEL_BOX) or DEFAULT_BOX_KEY).replace(
+            GPU_FAILED, "gpu=1"
+        )
+        if labelled == self.box_key():
             return False
         if not existing.running:
             return True
-        result = self._cli.run(
-            "inspect", "-f", "{{len .ExecIDs}}", existing.id or existing.name, timeout=30
-        )
-        return result.ok and result.stdout.strip() == "0"
+        target = existing.id or existing.name
+        execs = self._cli.run("inspect", "-f", "{{len .ExecIDs}}", target, timeout=30)
+        if not (execs.ok and execs.stdout.strip() == "0"):
+            return False
+        # `docker top` needs a PID column (measured: "Couldn't find PID
+        # field" without one); the command line follows it.
+        top = self._cli.run("top", target, "-eo", "pid,args", timeout=30)
+        if not top.ok:
+            return False
+        processes = [
+            parts[1].strip()
+            for parts in (line.strip().split(None, 1) for line in top.stdout.splitlines()[1:])
+            if len(parts) == 2
+        ]
+        return bool(processes) and all(_idle_process(p) for p in processes)
 
     # ------------------------------------------------------------------ #
     # Container lifecycle
@@ -573,8 +612,7 @@ class DockerEnvironment(BaseEnvironment):
 
     def _create(self) -> str:
         policy = self.effective_policy
-        argv = ["run", "-d", *label_args(self.labels())]
-        argv += ["--name", self.container_name, "--workdir", self._cwd]
+        argv = ["--name", self.container_name, "--workdir", self._cwd]
         if self._workspace is not None:
             os.makedirs(self._workspace, exist_ok=True)
             # ``workspace_mount: ro`` (docs/WIRE_CONTRACT.md, "Agent
@@ -605,25 +643,31 @@ class DockerEnvironment(BaseEnvironment):
         tail = [*self._extra_run_args, self._image, "sleep", "infinity"]
         gpu = list(self._box_setup()[1])
 
-        result = self._run_create(argv + gpu + tail)
+        result, name = self._run_create(["run", "-d", *label_args(self.labels()), *argv, *gpu, *tail])
         if not result.ok and gpu and "already in use" not in result.stderr.lower():
             # The GPU could not be attached (a broken toolkit, a driver
             # mismatch). A box without it still works; only WebGL is software.
-            result = self._run_create(argv + tail)
+            # `docker run` may have CREATED the container before the start
+            # failed: remove it, or it blocks the name and stays behind.
+            remove_container(name, cli=self._cli)
+            key = self.box_key().replace("gpu=1", GPU_FAILED)
+            self._box = (key, ())
+            result, _ = self._run_create(["run", "-d", *label_args(self.labels()), *argv, *tail])
         if not result.ok:
             raise DockerUnavailableError(
                 f"could not start container: {result.stderr.strip()}"
             )
         return result.stdout.strip()
 
-    def _run_create(self, argv: list[str]) -> CliResult:
+    def _run_create(self, argv: list[str]) -> tuple[CliResult, str]:
+        """``docker run``; returns the result and the container name used."""
         result = self._cli.run(*argv, timeout=180)
         if not result.ok and "already in use" in result.stderr.lower():
             # A name clash with a container we do not manage (or a racing peer):
             # take a unique name rather than steal or fail.
             argv[argv.index("--name") + 1] = f"{self.container_name}-{self._session_id}"
             result = self._cli.run(*argv, timeout=180)
-        return result
+        return result, argv[argv.index("--name") + 1]
 
     def _resolve_user(self) -> None:
         """Pick the exec user once: the requested one, else the image's ``agents``.
