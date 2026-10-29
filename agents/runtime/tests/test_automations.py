@@ -215,8 +215,17 @@ def test_schedule_task_parses_the_spec_and_hands_the_backend_its_json_form():
         "schedule_task", {"spec": "every 5m", "prompt": "check the inbox", "name": "  inbox   check "}
     )
     assert out["ok"] is True and out["kind"] == "schedule"
-    assert backend.calls == [("schedule", {"every": 300}, "check the inbox", "inbox check")]
+    # A repeating check defaults to on_change: an hourly "nothing new" is no push.
+    assert backend.calls == [("schedule", {"every": 300}, "check the inbox", "inbox check", "on_change")]
     assert out["next_fire_at"] == 300.0
+
+
+def test_a_one_shot_reminder_still_notifies_by_default():
+    backend = RecordingBackend()
+    registry = ToolRegistry()
+    register_automation_tools(registry, backend)
+    registry.dispatch("schedule_task", {"spec": "in 10m", "prompt": "call mum"})
+    assert len(backend.calls[0]) == 4  # the old call: notify stays "always"
 
 
 def test_schedule_task_reports_a_bad_spec_to_the_model_instead_of_raising():
