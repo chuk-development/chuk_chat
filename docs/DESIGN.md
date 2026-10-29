@@ -284,7 +284,9 @@ group. The thread does the same. The bubble itself is chuk_chat's
   bar with close, share and save, the document scrolling under it. A wide window
   keeps the dialog.
 - Files are real files: the agent writes one in its sandbox and sends it
-  (`send_file_to_user`). There is no "artifact" tier with nothing behind it.
+  (`send_file_to_user`). A page is a document the agent keeps and rewrites
+  (`chat_document`, docs/PAGES.md). The user never reads the word
+  "artifact": the app calls them Pages.
 
 ### Chart documents
 
@@ -320,7 +322,12 @@ Never a picture the agent drew, never a second bar widget.
   "No activity yet" — an empty line says it better.
 - The preview text is plain: markdown markers are stripped
   (`ThreadPreviewStore`), and the user's own line is prefixed "You: ".
-- Media is a grid for pictures and the chat's own file row for files.
+- Media has three segments: Pictures, Files, Pages (`mobile_media_page.dart`).
+  Pictures is a grid. Files and Pages are one quiet row each: a 44 px glyph
+  tile, the name (a file keeps its extension in the quieter colour), one meta
+  line (kind, size or version, agent, date). No button on a row: the row
+  opens it, and the viewer carries Share and Save. A page with many versions
+  is one row (docs/PAGES.md).
 
 ## 11. Layout
 

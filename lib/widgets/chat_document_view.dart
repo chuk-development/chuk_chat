@@ -18,6 +18,14 @@ import 'package:chuk_chat/ui/expressive/huge_icon.dart';
 import 'package:chuk_chat/ui/components/components.dart';
 import 'package:chuk_chat/ui/expressive/top_veil.dart';
 import 'package:chuk_chat/widgets/chuk_table.dart';
+import 'package:chuk_chat/widgets/html_artifact_view.dart';
+
+/// Whether [document] is an HTML page (`kind: html`, docs/PAGES.md).
+///
+/// Its `text` is a whole HTML document. It is shown in the sandboxed web view
+/// the app already uses for HTML, never parsed as markdown.
+bool documentIsHtml(Map<String, dynamic> document) =>
+    '${document['kind'] ?? ''}' == 'html';
 
 /// The agent stamps `updated_at` in epoch seconds — a float for chat documents,
 /// a file mtime for workspace files — so it is neither an ISO string nor
@@ -184,10 +192,20 @@ class ChatDocumentView extends StatefulWidget {
     final String text = isTable
         ? const JsonEncoder.withIndent('  ').convert(document)
         : '${document['text'] ?? ''}';
-    final String name =
-        '${documentFileStem(document['title'])}.${isTable ? 'json' : 'md'}';
+    final String suffix = isTable
+        ? 'json'
+        : documentIsHtml(document)
+        ? 'html'
+        : 'md';
+    final String name = '${documentFileStem(document['title'])}.$suffix';
     return (Uint8List.fromList(utf8.encode(text)), name);
   }
+
+  static String _mimeOf(String name) => switch (name.split('.').last) {
+    'json' => 'application/json',
+    'html' => 'text/html',
+    _ => 'text/markdown',
+  };
 
   /// Write the document to wherever the user keeps their downloads.
   static Future<void> save(Map<String, dynamic> document) async {
@@ -204,7 +222,7 @@ class ChatDocumentView extends StatefulWidget {
     final (Uint8List bytes, String name) = _fileOf(document);
     await SharePlus.instance.share(
       ShareParams(
-        files: [XFile.fromData(bytes, name: name, mimeType: 'text/markdown')],
+        files: [XFile.fromData(bytes, name: name, mimeType: _mimeOf(name))],
       ),
     );
   }
@@ -256,10 +274,13 @@ class _ChatDocumentViewState extends State<ChatDocumentView> {
         .map((v) => '$v')
         .toList();
     final rows = (document['rows'] as List? ?? []).whereType<Map>().toList();
+    final isHtml = documentIsHtml(document);
     final shape = isChart
         ? documentChart(document).countLabel
         : isTable
         ? '${rows.length} rows'
+        : isHtml
+        ? 'HTML page'
         : 'Markdown document';
     final freshness = documentFreshness(document);
     return Column(
@@ -321,18 +342,28 @@ class _ChatDocumentViewState extends State<ChatDocumentView> {
             ],
           ),
         if (widget.topInset == 0) const SizedBox(height: 12),
-        Expanded(
-          child: SingleChildScrollView(
-            // The last line of a document needs room under it; without this
-            // the closing paragraph sat flush against the dialog edge.
-            padding: EdgeInsets.only(bottom: 24, top: widget.topInset),
-            child: isChart
-                ? _chart(context)
-                : isTable && columns.isNotEmpty
-                ? _table(context)
-                : _prose(context, '${document['text'] ?? ''}'),
+        if (isHtml)
+          // A web view scrolls itself, so it takes the space as a box and
+          // keeps the bar's room above it instead of travelling under it.
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(top: widget.topInset, bottom: 12),
+              child: HtmlArtifactView(html: '${document['text'] ?? ''}'),
+            ),
+          )
+        else
+          Expanded(
+            child: SingleChildScrollView(
+              // The last line of a document needs room under it; without this
+              // the closing paragraph sat flush against the dialog edge.
+              padding: EdgeInsets.only(bottom: 24, top: widget.topInset),
+              child: isChart
+                  ? _chart(context)
+                  : isTable && columns.isNotEmpty
+                  ? _table(context)
+                  : _prose(context, '${document['text'] ?? ''}'),
+            ),
           ),
-        ),
       ],
     );
   }

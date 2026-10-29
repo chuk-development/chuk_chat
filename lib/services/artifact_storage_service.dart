@@ -129,8 +129,8 @@ class ArtifactStorageService {
   static const String _artifactsTable = 'artifacts';
   static const String _versionsTable = 'artifact_versions';
   static const String _missingSchemaMessage =
-      'Artifact storage is not configured on this server yet. '
-      'Please run the database migrations for artifacts.';
+      'Page storage is not configured on this server yet. '
+      'Please run the database migrations for artifacts (pages).';
   static const int maxContentBytes = 500 * 1024; // 500 KB
   static final RegExp _artifactIdPattern = RegExp(r'^[A-Za-z0-9-]+$');
   static const Uuid _uuid = Uuid();

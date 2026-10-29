@@ -80,9 +80,8 @@ class _MobileHomeState extends State<MobileHome> {
                   index: _index,
                   children: <Widget>[
                     widget.chats,
-                    // Pictures and files, out of every conversation, without
-                    // opening one. Agents has no artifacts of its own.
-                    // An agent writes a real file and sends it.
+                    // Pictures, files and pages, out of every conversation,
+                    // without opening one (docs/PAGES.md).
                     MobileMediaPage(
                       threadKeys: <String>[
                         for (final AgentsAgent agent
@@ -90,6 +89,12 @@ class _MobileHomeState extends State<MobileHome> {
                           for (final AgentsThreadInfo thread in agent.threads)
                             thread.key,
                       ],
+                      agentNames: <String, String>{
+                        for (final AgentsAgent agent
+                            in widget.roster.visibleAgents)
+                          for (final AgentsThreadInfo thread in agent.threads)
+                            thread.key: agent.name,
+                      },
                     ),
                     widget.settings,
                   ],

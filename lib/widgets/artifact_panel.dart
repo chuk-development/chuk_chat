@@ -214,7 +214,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
 
   Future<void> _copyContent() async {
     await Clipboard.setData(ClipboardData(text: _effectiveContent));
-    if (!mounted) return;AppNotifications.show(context, 'Artifact copied to clipboard');
+    if (!mounted) return;AppNotifications.show(context, 'Page copied to clipboard');
   }
 
   /// Formats offered for download based on artifact type.
@@ -366,7 +366,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
       final result = await FileSaveService.save(
         bytes: bytes,
         suggestedName: suggestedName,
-        dialogTitle: 'Save Artifact',
+        dialogTitle: 'Save page',
         allowedExtensions: [ext],
       );
       if (!mounted) return;
@@ -376,14 +376,14 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
         case SaveOutcome.savedViaShare:
         case SaveOutcome.cancelled:
           break;
-        case SaveOutcome.failed:AppNotifications.show(context, 'Failed to save artifact');
+        case SaveOutcome.failed:AppNotifications.show(context, 'Failed to save page');
       }
     } catch (error, stackTrace) {
       if (kDebugMode) {
         debugPrint('Artifact export failed: $error\n$stackTrace');
       }
       if (mounted) {
-        AppNotifications.show(context, 'Failed to export artifact: $error');
+        AppNotifications.show(context, 'Failed to export page: $error');
       }
     } finally {
       if (mounted) {
@@ -824,7 +824,7 @@ class ArtifactBottomSheet extends StatelessWidget {
                         return const Center(
                           child: Padding(
                             padding: EdgeInsets.all(24),
-                            child: Text('No artifact selected.'),
+                            child: Text('No page selected.'),
                           ),
                         );
                       }
@@ -2084,7 +2084,7 @@ class _ArtifactSwitcher extends StatelessWidget {
     }
 
     return PopupMenuButton<String>(
-      tooltip: 'Switch artifact',
+      tooltip: 'Switch page',
       position: PopupMenuPosition.under,
       onSelected: (id) {
         final target = all.firstWhere((a) => a.id == id, orElse: () => current);

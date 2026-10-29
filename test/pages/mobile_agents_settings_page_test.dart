@@ -229,7 +229,7 @@ void main() {
         'settings_Mail',
         'settings_Host & activity',
         'settings_Open screen',
-        'settings_Documents & artifacts',
+        'settings_Documents & pages',
         'settings_Hide',
         'settings_Remove',
       ];
@@ -243,7 +243,7 @@ void main() {
       }
       for (final entry in {
         'settings_Open screen': 'browser',
-        'settings_Documents & artifacts': 'files',
+        'settings_Documents & pages': 'files',
       }.entries) {
         final row = find.byKey(ValueKey(entry.key));
         await revealControl(tester, row);

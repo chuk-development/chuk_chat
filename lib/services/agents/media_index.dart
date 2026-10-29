@@ -20,7 +20,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 
 /// What kind of thing an entry points at.
-enum MediaKind { image, file }
+///
+/// A [page] is a document the agent keeps and rewrites (`chat_document`,
+/// docs/PAGES.md). It is one entry per agent and page id, whatever the number
+/// of versions the agent sent: the newest version wins.
+enum MediaKind { image, file, page }
+
+/// The mime type the host stamps on a document delivery.
+const String kDocumentMime = 'application/vnd.cowork.document+json';
 
 /// One thing an agent handed over.
 @immutable
@@ -33,9 +40,22 @@ class MediaEntry {
     this.mime = '',
     this.sizeBytes,
     this.at,
+    this.pageId,
+    this.pageKind,
+    this.version,
   });
 
+  /// The index key of a page: one per thread (= agent) and page id.
+  static String pageReference(String threadKey, String pageId) =>
+      'page:$threadKey/$pageId';
+
   final MediaKind kind;
+
+  /// For a page: its id in the agent's store, its document kind (`markdown`,
+  /// `html`, `table`, `bar_chart`, `text`) and the newest version seen.
+  final String? pageId;
+  final String? pageKind;
+  final int? version;
 
   /// Where the bytes are: a `cowork://blob/<id>` URL for a picture, the storage
   /// path of the encrypted object for a sandbox file.
@@ -55,22 +75,64 @@ class MediaEntry {
     if (mime.isNotEmpty) 'mime': mime,
     if (sizeBytes != null) 'size': sizeBytes,
     if (at != null) 'at': at!.toIso8601String(),
+    if (pageId != null) 'page': pageId,
+    if (pageKind != null) 'pkind': pageKind,
+    if (version != null) 'v': version,
   };
 
   static MediaEntry? fromJson(Object? value) {
     if (value is! Map) return null;
     final String reference = '${value['ref'] ?? ''}';
     if (reference.isEmpty) return null;
+    final MediaKind kind = switch ('${value['kind']}') {
+      'image' => MediaKind.image,
+      'page' => MediaKind.page,
+      _ => MediaKind.file,
+    };
+    // A document delivery indexed as a file before pages existed. It is not a
+    // file the user can open as one; the next scan of its thread adds it back
+    // as a page.
+    if (kind == MediaKind.file && '${value['mime']}' == kDocumentMime) {
+      return null;
+    }
     return MediaEntry(
-      kind: '${value['kind']}' == 'image' ? MediaKind.image : MediaKind.file,
+      kind: kind,
       reference: reference,
       name: '${value['name'] ?? ''}',
       threadKey: '${value['thread'] ?? ''}',
       mime: '${value['mime'] ?? ''}',
       sizeBytes: value['size'] is int ? value['size'] as int : null,
       at: DateTime.tryParse('${value['at'] ?? ''}'),
+      pageId: value['page'] is String ? value['page'] as String : null,
+      pageKind: value['pkind'] is String ? value['pkind'] as String : null,
+      version: value['v'] is int ? value['v'] as int : null,
     );
   }
+}
+
+/// The newest snapshot of the page [pageId] in [rows], or null.
+///
+/// Every version the agent writes arrives as one more file block carrying the
+/// whole document, so the page is the block with the highest version.
+Map<String, dynamic>? latestPageIn(
+  List<Map<String, dynamic>> rows,
+  String pageId,
+) {
+  Map<String, dynamic>? best;
+  for (final Map<String, dynamic> row in rows) {
+    for (final Object? block in contentBlocksOf(row)) {
+      if (block is! Map) continue;
+      final Object? artifact = block['sandboxArtifact'];
+      if (artifact is! Map) continue;
+      final Object? raw = artifact['document'];
+      if (raw is! Map || '${raw['id']}' != pageId) continue;
+      final Map<String, dynamic> doc = Map<String, dynamic>.from(raw);
+      final num version = doc['version'] as num? ?? 0;
+      final num bestVersion = best?['version'] as num? ?? -1;
+      if (version >= bestVersion) best = doc;
+    }
+  }
+  return best;
 }
 
 /// The content blocks of a stored row.
@@ -190,6 +252,12 @@ class MediaIndex extends ChangeNotifier {
         if (block is! Map) continue;
         final Object? artifact = block['sandboxArtifact'];
         if (artifact is! Map) continue;
+        final Object? document = artifact['document'];
+        if (document is Map) {
+          if (_notePage(threadKey, document, at)) added++;
+          continue;
+        }
+        if ('${artifact['mime']}' == kDocumentMime) continue;
         final String reference = '${artifact['storagePath'] ?? ''}';
         if (reference.isEmpty || _entries.containsKey(reference)) continue;
         final String mime = '${artifact['mime'] ?? ''}';
@@ -210,6 +278,55 @@ class MediaIndex extends ChangeNotifier {
     if (added == 0) return;
     notifyListeners();
     unawaited(_persist());
+  }
+
+  /// Index one page snapshot. True when the index changed: a page seen for
+  /// the first time, or a newer version of one already known.
+  bool _notePage(
+    String threadKey,
+    Map<Object?, Object?> document,
+    DateTime? at,
+  ) {
+    final String id = '${document['id'] ?? ''}';
+    if (id.isEmpty) return false;
+    final String reference = MediaEntry.pageReference(threadKey, id);
+    final int version = (document['version'] as num?)?.toInt() ?? 0;
+    final MediaEntry? known = _entries[reference];
+    if (known != null && (known.version ?? 0) >= version) return false;
+    final String title = '${document['title'] ?? ''}'.trim();
+    final double? stamp = (document['updated_at'] as num?)?.toDouble();
+    _entries[reference] = MediaEntry(
+      kind: MediaKind.page,
+      reference: reference,
+      name: title.isEmpty ? id : title,
+      threadKey: threadKey,
+      mime: kDocumentMime,
+      at: stamp != null && stamp > 0
+          ? DateTime.fromMillisecondsSinceEpoch((stamp * 1000).round())
+          : at ?? known?.at,
+      pageId: id,
+      pageKind: '${document['kind'] ?? 'markdown'}',
+      version: version,
+    );
+    return true;
+  }
+
+  /// The page behind [entry], read from its thread on this device.
+  ///
+  /// The index holds references, never bodies; the body is in the thread's
+  /// stored rows, which every device that holds the thread has.
+  static Future<Map<String, dynamic>?> loadPage(MediaEntry entry) async {
+    final String? id = entry.pageId;
+    if (id == null) return null;
+    final StoredChat? chat = await ChatStorageService.loadFullChat(
+      entry.threadKey,
+    );
+    final List<ChatMessage>? messages = chat?.messagesOrNull;
+    if (messages == null || messages.isEmpty) return null;
+    return latestPageIn(
+      messages.map((ChatMessage m) => m.toJson()).toList(),
+      id,
+    );
   }
 
   Future<void> _persist() async {

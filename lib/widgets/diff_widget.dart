@@ -246,7 +246,7 @@ class _DiffWidgetState extends State<DiffWidget> {
       case 'soul':
         return 'Soul';
       case 'artifact':
-        return 'Artifact';
+        return 'Page';
       default:
         return 'Diff';
     }

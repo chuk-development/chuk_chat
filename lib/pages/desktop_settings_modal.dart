@@ -227,7 +227,7 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
           id: 'tools',
           icon: Icons.build_circle_outlined,
           label: l.toolCalling,
-          keywords: 'tools tool calling function functions artifacts code '
+          keywords: 'tools tool calling function functions artifacts pages code '
               'sandbox web search discovery activity werkzeuge funktionen',
           builder: (_) => ToolCallingSettingsPage(config: widget.config),
         ),

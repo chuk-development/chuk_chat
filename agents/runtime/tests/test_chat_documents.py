@@ -182,3 +182,64 @@ def test_the_tool_takes_a_chart_and_the_description_teaches_the_contract(tmp_pat
     for phrase in ('DESCRIBE the chart', 'no image', 'ONE document', 'in the chat message',
                    '"label":"AfD","value":43.8', 'column_delta'):
         assert phrase in description
+
+
+# --- pages (docs/PAGES.md) -----------------------------------------------------
+
+def test_an_agent_creates_lists_reads_and_updates_its_own_html_page(tmp_path):
+    path = str(tmp_path / 'state.db')
+    store = DocumentStore(path, 'local:crypto-desk:1:74112')
+    registry = ToolRegistry()
+    files = []
+    register_document_tool(registry, store, files.append)
+
+    html = '<!doctype html><html><body><h1>BTC</h1></body></html>'
+    created = registry.dispatch('chat_document', {'action': 'write', 'id': 'btc-page',
+                                'title': 'BTC dashboard', 'kind': 'html', 'text': html})
+    assert created == {'id': 'btc-page', 'version': 1, 'saved': True, 'ui_delivered': True}
+    # The app gets the whole page as a document file, named for what it is.
+    assert files[0].name.endswith('.html')
+    assert files[0].document['kind'] == 'html' and files[0].document['text'] == html
+
+    listed = registry.dispatch('chat_document', {'action': 'list'})
+    assert listed == [{'id': 'btc-page', 'title': 'BTC dashboard', 'kind': 'html', 'version': 1}]
+    assert registry.dispatch('chat_document', {'action': 'read', 'id': 'btc-page'})['text'] == html
+
+    # An update without expected_version, or with a stale one, saves nothing.
+    stale = registry.dispatch('chat_document', {'action': 'write', 'id': 'btc-page',
+                              'title': '', 'text': '<p>lost</p>'})
+    assert 'changed' in json.dumps(stale)
+    assert store.read('btc-page')['text'] == html
+    updated = registry.dispatch('chat_document', {'action': 'write', 'id': 'btc-page', 'title': '',
+                                'text': '<p>v2</p>', 'expected_version': 1})
+    assert updated['version'] == 2
+    page = store.read('btc-page')
+    # Omitting kind keeps the page an html page, and its title.
+    assert (page['kind'], page['title'], page['text']) == ('html', 'BTC dashboard', '<p>v2</p>')
+
+    # Pages are the agent's own: another agent (another session key) sees none.
+    assert DocumentStore(path, 'local:other:2:1').list() == []
+
+
+def test_an_html_page_needs_content_and_takes_no_rows(tmp_path):
+    store = DocumentStore(str(tmp_path / 'state.db'), 'agent')
+    with pytest.raises(ValueError, match='needs its HTML'):
+        store.write('empty', title='Empty', kind='html', text='   ')
+    with pytest.raises(ValueError, match='rows/columns'):
+        store.write('rows', title='Rows', kind='html', text='<p>x</p>', rows=[])
+    assert store.list() == []
+
+
+def test_a_markdown_page_keeps_the_md_file_name(tmp_path):
+    from chuk_agents_runtime.chat_documents import document_file
+    store = DocumentStore(str(tmp_path / 'state.db'), 'agent')
+    doc = store.write('notes', title='Notes', kind='markdown', text='# Notes')
+    assert document_file(doc).name.endswith('.md')
+
+
+def test_the_description_names_pages_so_search_tools_finds_the_tool(tmp_path):
+    registry = ToolRegistry()
+    register_document_tool(registry, DocumentStore(str(tmp_path / 'state.db'), 'a'), lambda f: None)
+    schema = registry.spec('chat_document').schema
+    assert 'PAGES' in schema['description'] and 'kind=html' in schema['description']
+    assert 'html' in schema['properties']['kind']['enum']
