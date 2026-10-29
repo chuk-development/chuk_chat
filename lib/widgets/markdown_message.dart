@@ -1209,7 +1209,8 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
 
   /// Highlight results by language and code, shared by every code block.
   ///
-  /// Highlighting runs in a fresh isolate. A code block that is built again
+  /// A long block is highlighted in a fresh isolate, a short one on the spot
+  /// ([_kInlineHighlightMaxChars]). A code block that is built again
   /// (the chat screen mounts again on every agent switch in the Agents build,
   /// and a scrolled-away bubble is rebuilt when it comes back) used to spawn
   /// that isolate again for the same code. The result depends only on the
@@ -1255,7 +1256,8 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
   bool _applyParsedFromCache({required bool rebuild}) {
     _syncParsedOwner();
     final String code = _codeForDisplay();
-    final List<hi.Node>? nodes = _parsedNodes[_parsedKey(code, widget.language)];
+    final List<hi.Node>? nodes =
+        _parsedNodes[_parsedKey(code, widget.language)];
     if (nodes == null) return false;
     final List<InlineSpan> spans = _convertNodesSafely(
       nodes,
@@ -1327,7 +1329,62 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
   void initState() {
     super.initState();
     if (_applyParsedFromCache(rebuild: false)) return;
+    // A short block is highlighted right here, so its first frame is already
+    // coloured and it is laid out once. Spawning an isolate for it cost more
+    // on the UI thread than the parse itself: one spawn per code block that
+    // scrolled into view, a 15-30 ms frame each in the scroll-up benchmark.
+    final List<InlineSpan>? spans = _highlightInline();
+    if (spans != null) {
+      _highlightedSpans = spans;
+      return;
+    }
     _scheduleHighlight();
+  }
+
+  /// The arguments [_parseCode] takes for the current code, or null when the
+  /// block is shown as plain text without a parse.
+  Map<String, dynamic>? _parseArgs(String code) {
+    if (code.trim().isEmpty || _isMostlyNonAscii(code)) return null;
+    final String normalizedLanguage = (widget.language ?? '')
+        .trim()
+        .toLowerCase();
+    // Only a language from our registry is highlighted; anything else would
+    // fall back to the highlight package's auto-detection and its
+    // "get language error" spam.
+    final bool isKnownLanguage =
+        normalizedLanguage.isNotEmpty &&
+        highlight_registry.isKnownLanguage(normalizedLanguage);
+    return <String, dynamic>{
+      'code': code,
+      'language': isKnownLanguage ? normalizedLanguage : null,
+      'skipHighlighting': !isKnownLanguage && normalizedLanguage.isEmpty,
+    };
+  }
+
+  /// Highlights a short block on the spot and keeps the result like the
+  /// deferred path does; a block with nothing to highlight gets its plain
+  /// text, as the deferred path gives it. Null when the block is too long for
+  /// that (it goes to an isolate).
+  ///
+  /// Only called from [initState]: a block that grows under a stream is
+  /// kept here at most once, with its first chunk, and every later chunk goes
+  /// through [didUpdateWidget], which stops keeping it.
+  List<InlineSpan>? _highlightInline() {
+    final String code = _codeForDisplay();
+    if (code.length > _kInlineHighlightMaxChars) return null;
+    final Map<String, dynamic>? args = _parseArgs(code);
+    final List<hi.Node> nodes = args == null
+        ? const <hi.Node>[]
+        : _parseCode(args);
+    _keepParsed(code, widget.language, nodes, generation: _parsedGeneration);
+    final List<InlineSpan> spans = _convertNodesSafely(
+      nodes,
+      widget.theme,
+      widget.textStyle,
+    );
+    return spans.isEmpty
+        ? <InlineSpan>[TextSpan(text: code, style: widget.textStyle)]
+        : spans;
   }
 
   @override
@@ -1386,32 +1443,24 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
 
     // Normalize and validate language
     final String normalizedLanguage = (language ?? '').trim().toLowerCase();
+    final Map<String, dynamic> args = _parseArgs(code)!;
 
-    // Check if language is in our registry - if not, skip highlighting entirely
-    // This avoids the "get language error" spam from the highlight package's auto-detection
-    final bool isKnownLanguage =
-        normalizedLanguage.isNotEmpty &&
-        highlight_registry.allLanguages.containsKey(normalizedLanguage);
-
-    // Pass only necessary data to the isolate
     try {
-      // Run heavy parsing in an isolate
-      final List<hi.Node> nodes =
-          await compute(_parseCode, {
-            'code': code,
-            'language': isKnownLanguage ? normalizedLanguage : null,
-            'skipHighlighting': !isKnownLanguage && normalizedLanguage.isEmpty,
-          }).timeout(
-            const Duration(seconds: 2),
-            onTimeout: () {
-              if (kDebugMode) {
-                debugPrint(
-                  'Highlight timeout for language: ${normalizedLanguage.isEmpty ? '(auto-detect)' : normalizedLanguage}',
-                );
-              }
-              return <hi.Node>[];
-            },
-          );
+      // A short block parses faster than an isolate starts; only a long one
+      // is worth the spawn.
+      final List<hi.Node> nodes = code.length <= _kInlineHighlightMaxChars
+          ? _parseCode(args)
+          : await compute(_parseCode, args).timeout(
+              const Duration(seconds: 2),
+              onTimeout: () {
+                if (kDebugMode) {
+                  debugPrint(
+                    'Highlight timeout for language: ${normalizedLanguage.isEmpty ? '(auto-detect)' : normalizedLanguage}',
+                  );
+                }
+                return <hi.Node>[];
+              },
+            );
 
       if (_keepHighlight) {
         _keepParsed(code, language, nodes, generation: generation);
@@ -1543,6 +1592,11 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
 }
 
 // Top-level function for compute
+/// Code blocks up to this many characters are highlighted on the UI isolate
+/// (well under a millisecond for a typical answer's snippet); longer ones in
+/// a background isolate.
+const int _kInlineHighlightMaxChars = 3000;
+
 List<hi.Node> _parseCode(Map<String, dynamic> args) {
   try {
     final String code = args['code'] as String? ?? '';
@@ -1566,10 +1620,12 @@ List<hi.Node> _parseCode(Map<String, dynamic> args) {
       return [];
     }
 
-    // Register all languages to ensure syntax highlighting works for any language
-    // inside the isolate.
+    // Register the language (and the ones it embeds) with this isolate's
+    // highlighter. Only those grammars are built: building all of them was
+    // most of the cost of a highlight, on every isolate spawn and, now that
+    // short blocks parse on the UI isolate, on the first code block there.
     try {
-      hi.highlight.registerLanguages(highlight_registry.allLanguages);
+      highlight_registry.registerLanguageWithEmbeds(hi.highlight, language);
     } catch (e) {
       // Language registration failed, return empty to fall back to plain text
       // Silently fail - this is expected in some environments
@@ -1580,7 +1636,7 @@ List<hi.Node> _parseCode(Map<String, dynamic> args) {
     final String normalizedCode = code.replaceAll('\r\n', '\n');
 
     // Double-check language is registered (should be, since we validated before calling)
-    if (!highlight_registry.allLanguages.containsKey(language)) {
+    if (!highlight_registry.isKnownLanguage(language)) {
       return [];
     }
 

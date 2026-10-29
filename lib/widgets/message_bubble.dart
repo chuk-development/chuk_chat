@@ -415,6 +415,12 @@ class _MessageBubbleState extends State<MessageBubble> {
   @override
   void initState() {
     super.initState();
+    // The first bubble reads the two preferences; every later one starts from
+    // the process-wide copy. Without it each row that scrolls into view was
+    // built twice: once on mount and again one frame later from the
+    // SharedPreferences callback, with the same values.
+    _showReasoningTokens = _cachedShowReasoningTokens;
+    _showModelInfo = _cachedShowModelInfo;
     _loadPreferences();
   }
 
@@ -425,14 +431,17 @@ class _MessageBubbleState extends State<MessageBubble> {
           prefs.getBool('showReasoningTokens') ?? kDefaultShowReasoningTokens;
       final showModel = prefs.getBool('showModelInfo') ?? kDefaultShowModelInfo;
 
+      // Cache for future instances
+      _cachedShowReasoningTokens = showReasoning;
+      _cachedShowModelInfo = showModel;
+      if (showReasoning == _showReasoningTokens &&
+          showModel == _showModelInfo) {
+        return;
+      }
       setState(() {
         _showReasoningTokens = showReasoning;
         _showModelInfo = showModel;
       });
-
-      // Cache for future instances
-      _cachedShowReasoningTokens = showReasoning;
-      _cachedShowModelInfo = showModel;
     }
   }
 
