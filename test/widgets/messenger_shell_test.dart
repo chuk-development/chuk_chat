@@ -1355,6 +1355,14 @@ void main() {
         ),
         findsOneWidget,
       );
+      // The row sits in the closed "Advanced" fold (bead chuk_chat-pjom).
+      final Finder advanced = find.byKey(
+        const ValueKey<String>('settings_Advanced'),
+      );
+      await tester.ensureVisible(advanced);
+      await tester.pumpAndSettle();
+      await tester.tap(advanced);
+      await tester.pumpAndSettle();
       final Finder host = find.byKey(
         const ValueKey<String>('settings_Host & activity'),
       );

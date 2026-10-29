@@ -4,6 +4,7 @@
 const Map<String, String> stringsPt = {
   // ── Settings page ──────────────────────────────────────────
   'settings': 'Configurações',
+  'settingsAdvanced': 'Avançado',
   'themeSettings': 'Configurações de Tema',
   'themeSettingsSubtitle': 'Ajuste o tema, cores e aparência do app',
   'customization': 'Personalização',

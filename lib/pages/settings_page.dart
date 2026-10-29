@@ -5,6 +5,11 @@
 // because that build wires no tour. One 'Agents' section adds what only a
 // paired host has: here.now, Embedding, API Keys, Automations and the host's
 // own skills.
+//
+// Order (bead chuk_chat-pjom, docs/SETTINGS_ORDER.md): the top shows only
+// what a normal user changes (account, plan, model, identity, connectors,
+// look). The rest sits in one closed "Advanced" fold. The desktop modal
+// (desktop_settings_modal.dart) keeps the same split.
 // lib/pages/settings_page.dart
 import 'dart:async';
 import 'dart:convert';
@@ -240,20 +245,6 @@ class _SettingsPageState extends State<SettingsPage> {
                   },
                 ),
               ),
-              _SettingsRow(
-                icon: Icons.build_circle_outlined,
-                title: l.toolCalling,
-                subtitle: l.toolCallingSubtitle,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          ToolCallingSettingsPage(config: widget.config),
-                    ),
-                  );
-                },
-              ),
               if (kFeatureMcp && !kIsWeb)
                 _SettingsRow(
                   icon: Icons.extension_outlined,
@@ -268,19 +259,6 @@ class _SettingsPageState extends State<SettingsPage> {
                     );
                   },
                 ),
-              _SettingsRow(
-                icon: Icons.auto_awesome_outlined,
-                title: l.skills,
-                subtitle: l.skillsSubtitle,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const SkillsSettingsPage(),
-                    ),
-                  );
-                },
-              ),
               if (AssistantPlatform.isSupported)
                 KeyedSubtree(
                   key: TourKeyRegistry.instance.anchorFor(
@@ -300,132 +278,8 @@ class _SettingsPageState extends State<SettingsPage> {
                     },
                   ),
                 ),
-              // FEATURE_VOICE_CALL (owner-only test): what a call with the
-              // agent needs from Android, on its own page.
-              if (voiceIncomingEnabled)
-                _SettingsRow(
-                  icon: Icons.call_rounded,
-                  title: 'Voice calls',
-                  subtitle: 'What calls with your agent need from the phone',
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const VoiceCallSettingsPage(),
-                      ),
-                    );
-                  },
-                ),
-              // The GitHub token backs the GitHub MCP connector, so the
-              // entry point is shown together with the connectors.
-              if (kFeatureMcp)
-              _SettingsRow(
-                icon: Icons.code,
-                title: 'GitHub',
-                subtitle: 'Connect GitHub for the GitHub connector',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const GitHubConnectionPage(),
-                    ),
-                  );
-                },
-              ),
             ],
           ),
-
-          // Agents only: about the host the agents run on, which a hosted
-          // chat account has no equivalent for.
-          if (agentsChatCore) ...[
-            ExpressiveSectionHeader('Agents'),
-            ExpressiveGroup(
-              children: [
-                _SettingsRow(
-                  icon: Icons.place_outlined,
-                  title: 'here.now',
-                  subtitle: 'Let an agent publish a page on your behalf',
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const HereNowSettingsPage(),
-                      ),
-                    );
-                  },
-                ),
-                _SettingsRow(
-                  icon: Icons.memory_outlined,
-                  title: 'Embedding',
-                  subtitle: 'The model that indexes what the agent reads',
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const EmbeddingSettingsPage(),
-                      ),
-                    );
-                  },
-                ),
-                _SettingsRow(
-                  icon: Icons.key_outlined,
-                  title: 'API Keys',
-                  subtitle: 'Keys the agent can use but never read',
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const SecretsSettingsPage(),
-                      ),
-                    );
-                  },
-                ),
-                // The agent's own address (docs/AGENT_MAIL.md §6).
-                _SettingsRow(
-                  icon: Icons.mail_outline,
-                  title: l.agentMail,
-                  subtitle: l.agentMailSubtitle,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const AgentMailboxPage(),
-                      ),
-                    );
-                  },
-                ),
-                _SettingsRow(
-                  icon: Icons.schedule_outlined,
-                  title: 'Automations',
-                  subtitle: 'Schedules and watchers your agents set up',
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const AutomationsPage(),
-                      ),
-                    );
-                  },
-                ),
-                // The skills that live on the host, switched over the relay.
-                // They are not chuk_chat's Skills above, which feed the
-                // prompt of a chat on this device.
-                _SettingsRow(
-                  icon: Icons.computer,
-                  title: 'Host skills',
-                  subtitle: 'Skills on the computer your agents run on',
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const AgentsSkillsSettingsPage(),
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ],
 
           ExpressiveSectionHeader('Appearance'),
           ExpressiveGroup(
@@ -459,33 +313,201 @@ class _SettingsPageState extends State<SettingsPage> {
             ],
           ),
 
-          if (_developerOptionsEnabled) ...[
-            ExpressiveSectionHeader('Data & Privacy'),
-            ExpressiveGroup(
-              children: [
-                _SettingsRow(
-                  icon: Icons.file_download_outlined,
-                  title: l.exportChats,
-                  subtitle: l.exportChatsSubtitle,
-                  onTap: () => _exportChats(context),
+          // Everything a normal user rarely changes, in one fold (bead
+          // chuk_chat-pjom, docs/SETTINGS_ORDER.md). Nothing here is gone:
+          // the rows, their pages and their storage are the same as before.
+          ExpressiveAdvancedSection(
+            title: l.settingsAdvanced,
+            children: [
+              ExpressiveSectionHeader('Tools & skills'),
+              ExpressiveGroup(
+                children: [
+                  _SettingsRow(
+                    icon: Icons.build_circle_outlined,
+                    title: l.toolCalling,
+                    subtitle: l.toolCallingSubtitle,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              ToolCallingSettingsPage(config: widget.config),
+                        ),
+                      );
+                    },
+                  ),
+                  _SettingsRow(
+                    icon: Icons.auto_awesome_outlined,
+                    title: l.skills,
+                    subtitle: l.skillsSubtitle,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const SkillsSettingsPage(),
+                        ),
+                      );
+                    },
+                  ),
+                  // FEATURE_VOICE_CALL (owner-only test): what a call with the
+                  // agent needs from Android, on its own page.
+                  if (voiceIncomingEnabled)
+                    _SettingsRow(
+                      icon: Icons.call_rounded,
+                      title: 'Voice calls',
+                      subtitle: 'What calls with your agent need from the phone',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const VoiceCallSettingsPage(),
+                          ),
+                        );
+                      },
+                    ),
+                  // The GitHub token backs the GitHub MCP connector, so the
+                  // entry point is shown together with the connectors.
+                  if (kFeatureMcp)
+                  _SettingsRow(
+                    icon: Icons.code,
+                    title: 'GitHub',
+                    subtitle: 'Connect GitHub for the GitHub connector',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const GitHubConnectionPage(),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+              // Agents only: about the host the agents run on, which a hosted
+              // chat account has no equivalent for.
+              if (agentsChatCore) ...[
+                ExpressiveSectionHeader('Agents'),
+                ExpressiveGroup(
+                  children: [
+                    _SettingsRow(
+                      icon: Icons.place_outlined,
+                      title: 'here.now',
+                      subtitle: 'Let an agent publish a page on your behalf',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const HereNowSettingsPage(),
+                          ),
+                        );
+                      },
+                    ),
+                    _SettingsRow(
+                      icon: Icons.memory_outlined,
+                      title: 'Embedding',
+                      subtitle: 'The model that indexes what the agent reads',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const EmbeddingSettingsPage(),
+                          ),
+                        );
+                      },
+                    ),
+                    _SettingsRow(
+                      icon: Icons.key_outlined,
+                      title: 'API Keys',
+                      subtitle: 'Keys the agent can use but never read',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const SecretsSettingsPage(),
+                          ),
+                        );
+                      },
+                    ),
+                    // The agent's own address (docs/AGENT_MAIL.md §6).
+                    _SettingsRow(
+                      icon: Icons.mail_outline,
+                      title: l.agentMail,
+                      subtitle: l.agentMailSubtitle,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const AgentMailboxPage(),
+                          ),
+                        );
+                      },
+                    ),
+                    _SettingsRow(
+                      icon: Icons.schedule_outlined,
+                      title: 'Automations',
+                      subtitle: 'Schedules and watchers your agents set up',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const AutomationsPage(),
+                          ),
+                        );
+                      },
+                    ),
+                    // The skills that live on the host, switched over the relay.
+                    // They are not chuk_chat's Skills above, which feed the
+                    // prompt of a chat on this device.
+                    _SettingsRow(
+                      icon: Icons.computer,
+                      title: 'Host skills',
+                      subtitle: 'Skills on the computer your agents run on',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const AgentsSkillsSettingsPage(),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
                 ),
               ],
-            ),
-          ],
-
-          ExpressiveSectionHeader('System'),
-          ExpressiveGroup(
-            children: [
+              if (_developerOptionsEnabled) ...[
+                ExpressiveSectionHeader('Data & Privacy'),
+                ExpressiveGroup(
+                  children: [
+                    _SettingsRow(
+                      icon: Icons.file_download_outlined,
+                      title: l.exportChats,
+                      subtitle: l.exportChatsSubtitle,
+                      onTap: () => _exportChats(context),
+                    ),
+                  ],
+                ),
+              ],
               // Agents: that build wires no tour. Its screens carry no tour
               // anchors (TourKeyRegistry.anchorFor is null there), so a
               // replay would have nothing to point at.
-              if (!agentsChatCore)
-                _SettingsRow(
-                  icon: Icons.school_outlined,
-                  title: l.onboardingReplayTile,
-                  subtitle: l.onboardingReplayTileSubtitle,
-                  onTap: () => _replayOnboarding(context),
+              if (!agentsChatCore) ...[
+                ExpressiveSectionHeader('System'),
+                ExpressiveGroup(
+                  children: [
+                    _SettingsRow(
+                      icon: Icons.school_outlined,
+                      title: l.onboardingReplayTile,
+                      subtitle: l.onboardingReplayTileSubtitle,
+                      onTap: () => _replayOnboarding(context),
+                    ),
+                  ],
                 ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 16),
+          ExpressiveGroup(
+            children: [
               _SettingsRow(
                 icon: Icons.info_outline,
                 title: l.about,

@@ -30,7 +30,22 @@ void main() {
   });
   tearDown(() => debugAgentsChatCoreOverride = null);
 
-  Future<void> pumpSettings(WidgetTester tester) async {
+  /// Opens the "Advanced" fold (bead chuk_chat-pjom), where the rows a
+  /// normal user rarely changes sit.
+  Future<void> openAdvanced(WidgetTester tester) async {
+    final Finder toggle = find.byKey(const ValueKey('settings_advanced'));
+    await tester.scrollUntilVisible(toggle, 200);
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    // Back to the top, so a test reads the page from its start.
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, 4000));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> pumpSettings(
+    WidgetTester tester, {
+    bool advanced = true,
+  }) async {
     tester.view.physicalSize = const Size(900, 1400);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -40,6 +55,7 @@ void main() {
     // that timer fire, or the binding reports it pending at teardown.
     await tester.pump(const Duration(seconds: 2));
     await tester.pumpAndSettle();
+    if (advanced) await openAdvanced(tester);
   }
 
   /// Disposes the page and drains what it started, INSIDE the test body.
@@ -85,6 +101,37 @@ void main() {
     return shown;
   }
 
+  testWidgets('the top shows only what a normal user changes; the rest is '
+      'in one closed Advanced fold', (tester) async {
+    await pumpSettings(tester, advanced: false);
+
+    const List<String> top = <String>[
+      'Account',
+      'Pricing Plans',
+      'AI & Chat',
+      'Model Selection',
+      'AI Identity & Memory',
+      'Connectors',
+      'Appearance',
+      'Theme Settings',
+      'Customization',
+      'Advanced',
+      'About',
+    ];
+    expect(await shownInOrder(tester, top), top);
+    // Closed: none of the rarely used rows is built.
+    for (final label in <String>[
+      'Tool Calling',
+      'Skills',
+      'GitHub',
+      'here.now',
+      'Host skills',
+    ]) {
+      expect(find.text(label), findsNothing, reason: label);
+    }
+    await closeSettings(tester);
+  });
+
   testWidgets('the page lists chuk_chat\'s rows in chuk\'s order, then the '
       'Agents section', (tester) async {
     await pumpSettings(tester);
@@ -100,8 +147,13 @@ void main() {
       'AI & Chat',
       'Model Selection',
       'AI Identity & Memory',
-      'Tool Calling',
       'Connectors',
+      'Appearance',
+      'Theme Settings',
+      'Customization',
+      'Advanced',
+      'Tools & skills',
+      'Tool Calling',
       'Skills',
       'GitHub',
       'Agents',
@@ -111,10 +163,6 @@ void main() {
       'Mailbox',
       'Automations',
       'Host skills',
-      'Appearance',
-      'Theme Settings',
-      'Customization',
-      'System',
       'About',
     ];
     expect(await shownInOrder(tester, expected), expected);

@@ -16,14 +16,21 @@ import '../support/test_app.dart';
 /// SettingsPage. The "Chat" half of the Agents build is chuk_chat, so that
 /// build keeps every chuk destination, leaves out only the onboarding replay
 /// (it wires no tour) and adds one 'Agents' group, which holds the host's own
-/// skills as "Host skills". These tests hold both lists in place.
+/// skills as "Host skills". The rarely used rows sit in one closed
+/// "Advanced" fold (docs/SETTINGS_ORDER.md). These tests hold both lists in
+/// place.
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
   tearDown(() => debugAgentsChatCoreOverride = null);
 
-  Future<void> pumpModal(WidgetTester tester, {required bool agents}) async {
+  Future<void> pumpModal(
+    WidgetTester tester, {
+    required bool agents,
+    bool advanced = true,
+    String? initialSectionId,
+  }) async {
     debugAgentsChatCoreOverride = agents;
     // Wide enough for the rail + pane layout, not the compact drill-down.
     tester.view.physicalSize = const Size(1400, 1000);
@@ -31,12 +38,27 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
-      testApp(Scaffold(body: DesktopSettingsModal(config: testShellConfig()))),
+      testApp(
+        Scaffold(
+          body: DesktopSettingsModal(
+            config: testShellConfig(),
+            initialSectionId: initialSectionId,
+          ),
+        ),
+      ),
     );
     // Fixed frames, not pumpAndSettle: the account page it opens on shows a
     // spinner while it waits for a profile that a unit test never delivers.
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
+    if (advanced) {
+      // The rarely used rows sit in the rail's closed "Advanced" fold (bead
+      // chuk_chat-pjom).
+      final Finder toggle = find.byKey(const ValueKey('settings_advanced'));
+      await tester.ensureVisible(toggle);
+      await tester.tap(toggle);
+      await tester.pump(const Duration(milliseconds: 300));
+    }
   }
 
   /// Disposes the modal and drains what the hosted pages started, inside the
@@ -87,10 +109,63 @@ void main() {
     'Appearance',
     'Theme Settings',
     'Customization',
+    'Advanced',
+    'Tools & skills',
     'System',
     'Show onboarding again',
     'About',
   ];
+
+  testWidgets('the rail shows only the main rows; Advanced holds the rest, '
+      'closed', (tester) async {
+    await pumpModal(tester, agents: true, advanced: false);
+
+    expect(railOrder(tester, everyLabel), <String>[
+      'Account',
+      'Account Settings',
+      'Pricing Plans',
+      'AI & Chat',
+      'Model Selection',
+      'AI Identity & Memory',
+      'Connectors',
+      'Appearance',
+      'Theme Settings',
+      'Customization',
+      'Advanced',
+      'About',
+    ]);
+    await closeModal(tester);
+  });
+
+  testWidgets('a search finds a row inside the closed fold', (tester) async {
+    await pumpModal(tester, agents: true, advanced: false);
+    expect(inRail('Tool Calling'), findsNothing);
+
+    await tester.enterText(find.byType(TextField).first, 'tool');
+    await tester.pump();
+    expect(inRail('Tool Calling'), findsOneWidget);
+    expect(inRail('Advanced'), findsOneWidget);
+
+    // The fold's own name lists all of it.
+    await tester.enterText(find.byType(TextField).first, 'advanced');
+    await tester.pump();
+    expect(inRail('Host skills'), findsOneWidget);
+    expect(inRail('GitHub'), findsOneWidget);
+    await closeModal(tester);
+  });
+
+  testWidgets('opening on a page inside the fold starts with it open',
+      (tester) async {
+    await pumpModal(
+      tester,
+      agents: true,
+      advanced: false,
+      initialSectionId: 'tools',
+    );
+    expect(inRail('Tool Calling'), findsOneWidget);
+    expect(find.byType(ToolCallingSettingsPage), findsOneWidget);
+    await closeModal(tester);
+  });
 
   testWidgets('with Agents on the rail keeps chuk\'s destinations in chuk\'s '
       'order, then the Agents group', (tester) async {
@@ -103,8 +178,13 @@ void main() {
       'AI & Chat',
       'Model Selection',
       'AI Identity & Memory',
-      'Tool Calling',
       'Connectors',
+      'Appearance',
+      'Theme Settings',
+      'Customization',
+      'Advanced',
+      'Tools & skills',
+      'Tool Calling',
       'Skills',
       'GitHub',
       'Agents',
@@ -114,10 +194,6 @@ void main() {
       'Mailbox',
       'Automations',
       'Host skills',
-      'Appearance',
-      'Theme Settings',
-      'Customization',
-      'System',
       'About',
     ]);
     await closeModal(tester);
@@ -134,13 +210,15 @@ void main() {
       'AI & Chat',
       'Model Selection',
       'AI Identity & Memory',
-      'Tool Calling',
       'Connectors',
-      'Skills',
-      'GitHub',
       'Appearance',
       'Theme Settings',
       'Customization',
+      'Advanced',
+      'Tools & skills',
+      'Tool Calling',
+      'Skills',
+      'GitHub',
       'System',
       'Show onboarding again',
       'About',

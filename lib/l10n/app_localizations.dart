@@ -50,6 +50,7 @@ class AppLocalizations {
 
   // ── Settings page ──────────────────────────────────────────
   String get settings => _get('settings');
+  String get settingsAdvanced => _get('settingsAdvanced');
   String get themeSettings => _get('themeSettings');
   String get themeSettingsSubtitle => _get('themeSettingsSubtitle');
   String get customization => _get('customization');

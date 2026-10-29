@@ -100,6 +100,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Presets'), findsOneWidget); // section header
+    // Contrast, the extra colours and the fonts sit in the closed
+    // "Advanced" fold (bead chuk_chat-pjom); one tap opens it.
+    expect(find.text('Contrast'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('settings_advanced')));
+    await tester.pumpAndSettle();
     expect(find.text('Contrast'), findsOneWidget);
     expect(find.text('Fonts'), findsOneWidget);
     expect(find.text('Interface font'), findsOneWidget);
@@ -115,12 +120,17 @@ void main() {
     await tester.pumpWidget(_host(_config(_State())));
     await tester.pumpAndSettle();
 
-    // Drive the lazy ListView to the end so every lower card is laid out and
-    // would report an overflow if one existed.
-    await tester.dragUntilVisible(
+    // Open the "Advanced" fold and drive the list to its end, so every lower
+    // card is laid out and would report an overflow if one existed.
+    final Finder toggle = find.byKey(const ValueKey('settings_advanced'));
+    final Finder page = find.byType(Scrollable).first;
+    await tester.scrollUntilVisible(toggle, 300, scrollable: page);
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
       find.text('Chat font'),
-      find.byType(ListView),
-      const Offset(0, -300),
+      300,
+      scrollable: page,
     );
     await tester.pumpAndSettle();
 

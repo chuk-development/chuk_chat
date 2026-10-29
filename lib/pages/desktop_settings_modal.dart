@@ -3,6 +3,9 @@
 // "Chat" half is chuk_chat and reads them; only the onboarding replay is left
 // out there (that build wires no tour). One 'Agents' group adds here.now,
 // Embedding, API Keys, Automations and the host's own skills.
+// The rail keeps the phone's order (bead chuk_chat-pjom,
+// docs/SETTINGS_ORDER.md): the few rows a normal user changes on top, the
+// rest in one closed "Advanced" fold that a search opens.
 // lib/pages/desktop_settings_modal.dart
 //
 // Desktop settings as a modal popup over the chat UI — a proper desktop
@@ -131,9 +134,15 @@ class _SettingsDest {
 }
 
 class _SettingsGroup {
-  const _SettingsGroup(this.title, this.items);
+  const _SettingsGroup(this.title, this.items, {this.advanced = false});
+
+  /// Shown above the group's rows; empty for a group with no title.
   final String title;
   final List<_SettingsDest> items;
+
+  /// The group sits in the rail's closed "Advanced" fold (bead
+  /// chuk_chat-pjom, docs/SETTINGS_ORDER.md). A search still finds its rows.
+  final bool advanced;
 }
 
 class DesktopSettingsModal extends StatefulWidget {
@@ -157,6 +166,11 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
   String _query = '';
   final TextEditingController _searchController = TextEditingController();
   bool _developerOptions = false;
+
+  /// The rail's "Advanced" fold, opened by hand. Closed on every open of the
+  /// modal; a search or a selected page inside it opens it as well.
+  bool _advancedOpen = false;
+  bool _advancedSeeded = false;
 
   /// Whether the modal is in single-column (small window) layout. Computed in
   /// build; read by the tap handler that runs after build.
@@ -223,14 +237,6 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
               'instructions identität gedächtnis erinnerung anweisungen',
           builder: (_) => const SystemPromptPage(),
         ),
-        _SettingsDest(
-          id: 'tools',
-          icon: Icons.build_circle_outlined,
-          label: l.toolCalling,
-          keywords: 'tools tool calling function functions artifacts pages code '
-              'sandbox web search discovery activity werkzeuge funktionen',
-          builder: (_) => ToolCallingSettingsPage(config: widget.config),
-        ),
         if (kFeatureMcp && !kIsWeb)
           _SettingsDest(
             id: 'connectors',
@@ -240,6 +246,42 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
                 'notion email nextcloud oauth verbindungen integration',
             builder: (_) => const McpConnectorsPage(),
           ),
+      ]),
+      _SettingsGroup('Appearance', [
+        _SettingsDest(
+          id: 'theme',
+          icon: Icons.palette_outlined,
+          label: l.themeSettings,
+          keywords: 'theme color colour colors farbe farben accent background '
+              'dark mode light mode contrast palette dynamic color preset '
+              'interface font chat font typeface appearance look design hell '
+              'dunkel kontrast schrift schriftart aussehen',
+          builder: (_) => ThemePage(config: widget.config),
+        ),
+        _SettingsDest(
+          id: 'customization',
+          icon: Icons.tune,
+          label: l.customization,
+          keywords: 'customization language sprache font size ui scale zoom '
+              'reasoning tokens model info tps images in context downloads '
+              'auto titles title generation typography anpassung schriftgröße '
+              'notification notifications preview benachrichtigung '
+              'benachrichtigungen vorschau '
+              'skalierung${agentsChatCore ? ' verbose full log detail' : ''}',
+          builder: (_) => CustomizationPage(config: widget.config),
+        ),
+      ]),
+      // Everything below sits in the closed "Advanced" fold, as on the
+      // phone. Nothing is gone; the search finds every row in it.
+      _SettingsGroup('Tools & skills', advanced: true, [
+        _SettingsDest(
+          id: 'tools',
+          icon: Icons.build_circle_outlined,
+          label: l.toolCalling,
+          keywords: 'tools tool calling function functions artifacts pages code '
+              'sandbox web search discovery activity werkzeuge funktionen',
+          builder: (_) => ToolCallingSettingsPage(config: widget.config),
+        ),
         _SettingsDest(
           id: 'skills',
           icon: Icons.auto_awesome_outlined,
@@ -259,7 +301,7 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
       // Agents only: about the host the agents run on, which a hosted
       // chat account has no equivalent for.
       if (agentsChatCore)
-        _SettingsGroup('Agents', [
+        _SettingsGroup('Agents', advanced: true, [
           _SettingsDest(
             id: 'herenow',
             icon: Icons.place_outlined,
@@ -314,31 +356,7 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
             builder: (_) => const AgentsSkillsSettingsPage(),
           ),
         ]),
-      _SettingsGroup('Appearance', [
-        _SettingsDest(
-          id: 'theme',
-          icon: Icons.palette_outlined,
-          label: l.themeSettings,
-          keywords: 'theme color colour colors farbe farben accent background '
-              'dark mode light mode contrast palette dynamic color preset '
-              'interface font chat font typeface appearance look design hell '
-              'dunkel kontrast schrift schriftart aussehen',
-          builder: (_) => ThemePage(config: widget.config),
-        ),
-        _SettingsDest(
-          id: 'customization',
-          icon: Icons.tune,
-          label: l.customization,
-          keywords: 'customization language sprache font size ui scale zoom '
-              'reasoning tokens model info tps images in context downloads '
-              'auto titles title generation typography anpassung schriftgröße '
-              'notification notifications preview benachrichtigung '
-              'benachrichtigungen vorschau '
-              'skalierung${agentsChatCore ? ' verbose full log detail' : ''}',
-          builder: (_) => CustomizationPage(config: widget.config),
-        ),
-      ]),
-      _SettingsGroup('System', [
+      _SettingsGroup('Data & Privacy', advanced: true, [
         if (_developerOptions)
           _SettingsDest(
             id: 'export',
@@ -347,6 +365,8 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
             keywords: 'export chats backup download exportieren sicherung',
             onAction: _exportChats,
           ),
+      ]),
+      _SettingsGroup('System', advanced: true, [
         // Agents: that build wires no tour. Its screens carry no tour anchors
         // (TourKeyRegistry.anchorFor is null there), so a replay would have
         // nothing to point at.
@@ -358,6 +378,9 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
             keywords: 'onboarding tutorial intro replay walkthrough einführung',
             onAction: _replayOnboarding,
           ),
+      ]),
+      // About closes the list, under the fold, with no title of its own.
+      _SettingsGroup('', [
         _SettingsDest(
           id: 'about',
           icon: Icons.info_outline,
@@ -578,30 +601,58 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
     final cs = theme.colorScheme;
     final query = _query.trim().toLowerCase();
 
+    // A search for the fold's own name ("advanced", "erweitert") lists all
+    // of it, like any other match.
+    final bool queryNamesAdvanced =
+        query.isNotEmpty &&
+        l.settingsAdvanced.toLowerCase().contains(query);
+    // The fold opens by hand or by a search. A modal that opens straight on
+    // a page inside it starts with it open, so the selection is in view.
+    if (!_advancedSeeded) {
+      _advancedSeeded = true;
+      _advancedOpen = groups.any(
+        (g) =>
+            g.advanced &&
+            g.items.any((i) => i.isPage && i.id == widget.initialSectionId),
+      );
+    }
+    final bool advancedOpen = _advancedOpen || query.isNotEmpty;
+
     final List<Widget> navChildren = [];
+    bool foldShown = false;
     for (final group in groups) {
       final matches = group.items
           .where(
             (i) =>
                 query.isEmpty ||
+                (group.advanced && queryNamesAdvanced) ||
                 i.label.toLowerCase().contains(query) ||
                 i.keywords.toLowerCase().contains(query),
           )
           .toList();
       if (matches.isEmpty) continue;
-      navChildren.add(
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 16, 12, 6),
-          child: Text(
-            group.title,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: m3.onSurfaceVariant,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.3,
+      if (group.advanced && !foldShown) {
+        foldShown = true;
+        navChildren.add(_advancedToggle(context, l, open: advancedOpen));
+      }
+      if (group.advanced && !advancedOpen) continue;
+      if (group.title.isNotEmpty) {
+        navChildren.add(
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 16, 12, 6),
+            child: Text(
+              group.title,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: m3.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.3,
+              ),
             ),
           ),
-        ),
-      );
+        );
+      } else {
+        navChildren.add(const SizedBox(height: 12));
+      }
       for (final dest in matches) {
         navChildren.add(_navItem(context, dest));
       }
@@ -681,6 +732,73 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
           Divider(height: 1, color: m3.outlineVariant),
           _buildRailFooter(context, l),
         ],
+      ),
+    );
+  }
+
+  /// The rail's "Advanced" row: one quiet row with a chevron that opens the
+  /// groups that sit in the fold. During a search it stays as their title.
+  Widget _advancedToggle(
+    BuildContext context,
+    AppLocalizations l, {
+    required bool open,
+  }) {
+    final theme = Theme.of(context);
+    final m3 = theme.m3;
+    final cs = theme.colorScheme;
+    final bool searching = _query.trim().isNotEmpty;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 12, 4, 1),
+      child: Semantics(
+        button: !searching,
+        expanded: open,
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(kRadiusRow),
+          child: InkWell(
+            key: const ValueKey<String>('settings_advanced'),
+            borderRadius: BorderRadius.circular(kRadiusRow),
+            onTap: searching
+                ? null
+                : () => setState(() => _advancedOpen = !open),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
+                children: [
+                  AppIcon(
+                    Icons.more_horiz_rounded,
+                    size: 20,
+                    color: m3.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(
+                      l.settingsAdvanced,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  if (!searching)
+                    AnimatedRotation(
+                      turns: open ? 0.5 : 0,
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeOutCubic,
+                      child: AppIcon(
+                        Icons.expand_more_rounded,
+                        size: 20,
+                        color: m3.onSurfaceVariant,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

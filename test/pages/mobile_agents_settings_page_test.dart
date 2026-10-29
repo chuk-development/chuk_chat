@@ -66,12 +66,45 @@ void main() {
         onChat: () => tap('chat'),
       );
 
-  Future<void> smallPhone(WidgetTester tester, Widget child) async {
+  /// The "Advanced" fold (bead chuk_chat-pjom): every row past the top
+  /// group sits in it, closed when the page opens.
+  final Finder advancedToggle = find.byKey(
+    const ValueKey<String>('settings_Advanced'),
+  );
+
+  Future<void> openAdvanced(WidgetTester tester) async {
+    for (
+      var attempts = 0;
+      advancedToggle.hitTestable().evaluate().isEmpty && attempts < 40;
+      attempts++
+    ) {
+      await tester.drag(find.byType(SettingsListView), const Offset(0, -160));
+      await tester.pumpAndSettle();
+    }
+    await tester.tap(advancedToggle);
+    await tester.pumpAndSettle();
+  }
+
+  /// Opens the pushed page and its "Advanced" fold.
+  Future<void> openSettings(WidgetTester tester) async {
+    await tester.tap(find.text('Open settings'));
+    await tester.pumpAndSettle();
+    await openAdvanced(tester);
+  }
+
+  Future<void> smallPhone(
+    WidgetTester tester,
+    Widget child, {
+    bool advanced = true,
+  }) async {
     tester.view.physicalSize = const Size(320, 640);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(testApp(child));
     await tester.pumpAndSettle();
+    if (advanced && advancedToggle.evaluate().isNotEmpty) {
+      await openAdvanced(tester);
+    }
   }
 
   Future<void> reveal(WidgetTester tester, String label) async {
@@ -137,6 +170,35 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('the top is one short group; the rest waits in a closed '
+      'Advanced fold', (tester) async {
+    await smallPhone(tester, page(optional: true), advanced: false);
+    for (final String key in <String>[
+      'settings_Profile & preferences',
+      'settings_Model',
+      'settings_Permissions',
+      'settings_Documents & pages',
+      'settings_Advanced',
+    ]) {
+      expect(find.byKey(ValueKey(key)), findsOneWidget, reason: key);
+    }
+    for (final String key in <String>[
+      'settings_Skills',
+      'settings_Connected apps',
+      'settings_Mail',
+      'settings_Host & activity',
+      'settings_Hide',
+      'settings_Remove',
+      'mobile_show_thinking',
+    ]) {
+      expect(find.byKey(ValueKey(key)), findsNothing, reason: key);
+    }
+    await openAdvanced(tester);
+    expect(find.byKey(const ValueKey('settings_Skills')), findsOneWidget);
+    expect(find.byKey(const ValueKey('settings_Remove')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'destinations call the supplied actions and optional actions hide',
     (tester) async {
@@ -171,8 +233,7 @@ void main() {
     'removal requires confirmation and returns before calling deletion',
     (tester) async {
       await smallPhone(tester, pushed(optional: true));
-      await tester.tap(find.text('Open settings'));
-      await tester.pumpAndSettle();
+      await openSettings(tester);
       await reveal(tester, 'Remove agent');
       await tester.tap(find.text('Remove agent'));
       await tester.pumpAndSettle();
@@ -212,8 +273,7 @@ void main() {
     'every destination is one row, in the fixed order, and Chat returns',
     (tester) async {
       await smallPhone(tester, pushed(optional: true));
-      await tester.tap(find.text('Open settings'));
-      await tester.pumpAndSettle();
+      await openSettings(tester);
       // No quick-action strip that repeats the rows below it.
       for (final label in ['Files', 'Schedules']) {
         expect(find.byTooltip(label), findsNothing);
@@ -224,12 +284,13 @@ void main() {
         'settings_Profile & preferences',
         'settings_Model',
         'settings_Permissions',
+        'settings_Documents & pages',
+        'settings_Advanced',
         'settings_Skills',
         'settings_Connected apps',
         'settings_Mail',
         'settings_Host & activity',
         'settings_Open screen',
-        'settings_Documents & pages',
         'settings_Hide',
         'settings_Remove',
       ];
@@ -241,9 +302,13 @@ void main() {
         expect(top, greaterThan(last), reason: key);
         last = top;
       }
+      // From the top: Documents is in the top group, Open screen in the
+      // fold below it.
+      await tester.drag(find.byType(SettingsListView), const Offset(0, 4000));
+      await tester.pumpAndSettle();
       for (final entry in {
-        'settings_Open screen': 'browser',
         'settings_Documents & pages': 'files',
+        'settings_Open screen': 'browser',
       }.entries) {
         final row = find.byKey(ValueKey(entry.key));
         await revealControl(tester, row);
@@ -267,8 +332,7 @@ void main() {
     tester,
   ) async {
     await smallPhone(tester, pushed());
-    await tester.tap(find.text('Open settings'));
-    await tester.pumpAndSettle();
+    await openSettings(tester);
     final row = find.byKey(const ValueKey('settings_Hide'));
     await revealControl(tester, row);
     await tester.tap(row);
@@ -379,6 +443,8 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Profil & Einstellungen'), findsOneWidget);
+    expect(find.text('Erweitert'), findsOneWidget);
+    await openAdvanced(tester);
     expect(find.text('Host & Aktivität'), findsOneWidget);
     expect(find.text('Sein Rechner'), findsOneWidget);
     expect(find.text('Was er darf'), findsOneWidget);

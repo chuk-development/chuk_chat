@@ -228,6 +228,13 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      // The host row sits in the closed "Advanced" fold (chuk_chat-pjom).
+      final Finder toggle = find.byKey(
+        const ValueKey<String>('settings_Advanced'),
+      );
+      await tester.ensureVisible(toggle);
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
       final Finder row = find.byKey(
         const ValueKey<String>('agent_profile_host'),
       );
