@@ -592,6 +592,14 @@ replacement: the chuk_chat rules keep applying to the app.
 
 ## App inspection and screenshots (user instruction, 2026-09-05)
 
+- **Agents test headless, never on the owner's screen** (owner instruction,
+  2026-10-29). A live run of the Linux app for a test or a screenshot runs
+  under its own Xvfb (`xvfb-run -a -s "-screen 0 1440x900x24" ...`, or
+  `Xvfb :77` and `DISPLAY=:77` for that process only), never on `:0`/`:1`.
+  The Android emulator starts with `-no-window`; `adb exec-out screencap`
+  still works. Exception: `scripts/install_dev.sh`, which installs the build
+  the owner asked to see.
+
 - Read this file first. `AGENTS.md` links to this file so all agents use the same instructions.
 - Never capture the user's desktop, monitor, root window, or unrelated windows. Capture only the explicitly identified project app window; verify its PID/executable and window ID first. If no matching window is available, stop the capture rather than falling back to the desktop.
 - Use `xdotool` and native Linux tools. Do not use Orca computer-use.
