@@ -5797,28 +5797,46 @@ class Executor:
         # explicit list prunes; a missing or malformed one keeps everything,
         # and a connector another device still holds is never named here.
         # Off the serve thread: closing a session joins its transport.
-        signed_out = payload.get("mcp_signed_out")
-        if isinstance(signed_out, list) and signed_out:
-            threading.Thread(
-                target=self._forget_signed_out,
-                args=(list(signed_out),),
-                name=f"mcp-signout-{request_id[:8]}",
-                daemon=True,
-            ).start()
+        # The answer acknowledges the sign-outs it handled
+        # (``signed_out_ack``), so the device can drop them from its outbox; a
+        # repeat is harmless (forgetting a forgotten grant is a no-op).
+        raw_signed_out = payload.get("mcp_signed_out")
+        signed_out = list(raw_signed_out) if isinstance(raw_signed_out, list) else []
         if not isinstance(servers, list) or not servers:
-            self._terminal(
-                request_id, mcp_tools_payload(session_key="", servers=[])
-            )
+            if not signed_out:
+                self._terminal(
+                    request_id, mcp_tools_payload(session_key="", servers=[])
+                )
+                return
+
+            def forget_only() -> None:
+                acked = self._forget_signed_out(signed_out)
+                try:
+                    self._terminal(
+                        request_id,
+                        mcp_tools_payload(
+                            session_key="", servers=[], signed_out_ack=acked
+                        ),
+                    )
+                except Exception as exc:  # noqa: BLE001 — never kill the serve loop
+                    logger.info("mcp sign-out answer failed: %s", type(exc).__name__)
+
+            threading.Thread(
+                target=forget_only, name=f"mcp-signout-{request_id[:8]}", daemon=True
+            ).start()
             return
         session_key = str(payload.get("session_key") or "") or "mcp-probe"
 
         def work() -> None:
             try:
+                acked = self._forget_signed_out(signed_out) if signed_out else []
                 manager = self._session_mcp_manager(session_key, servers)
                 if manager is None:
                     self._terminal(
                         request_id,
-                        mcp_tools_payload(session_key=session_key, servers=[]),
+                        mcp_tools_payload(
+                            session_key=session_key, servers=[], signed_out_ack=acked
+                        ),
                     )
                     return
                 try:
@@ -5840,6 +5858,7 @@ class Executor:
                     mcp_tools_payload(
                         session_key=session_key,
                         servers=self._mcp_tools_servers(session_key, manager),
+                        signed_out_ack=acked,
                     ),
                 )
             except Exception as exc:  # noqa: BLE001 — never kill the serve loop
@@ -5855,23 +5874,27 @@ class Executor:
             target=work, name=f"mcp-probe-{request_id[:8]}", daemon=True
         ).start()
 
-    def _forget_signed_out(self, entries: list) -> None:
+    def _forget_signed_out(self, entries: list) -> list[dict]:
         """Forget the OAuth grants of ``entries`` (``{token_endpoint,
         client_id}`` each, the sign-ins the device removed) and close every
         session manager that still holds one (it is rebuilt from the next
-        forwarded set). Never raises."""
+        forwarded set). Idempotent. Returns the entries it handled (the
+        ``signed_out_ack`` of the answer); ``[]`` when it failed, so the device
+        sends them again. Never raises."""
+        handled: list[dict] = []
         try:
             keys = set()
             for entry in entries:
                 if not isinstance(entry, dict):
                     continue
-                key = _mcp_grants.OAuthGrantStore.client_key(
-                    str(entry.get("token_endpoint") or ""), str(entry.get("client_id") or "")
-                )
-                if key and entry.get("client_id"):
+                endpoint = str(entry.get("token_endpoint") or "")
+                client_id = str(entry.get("client_id") or "")
+                key = _mcp_grants.OAuthGrantStore.client_key(endpoint, client_id)
+                if key and client_id:
                     keys.add(key)
+                    handled.append({"token_endpoint": endpoint, "client_id": client_id})
             if not keys:
-                return
+                return handled
             with self._mcp_lock:
                 managers = dict(self._mcp_managers)
             # Close first: a closing session still speaks to its server (the
@@ -5885,8 +5908,10 @@ class Executor:
                 if held & keys:
                     self._forget_session_mcp(close=True, session_key=session_key)
             _mcp_grants.GRANTS.forget(sorted(keys))
-        except Exception:  # noqa: BLE001 — a cleanup must not fail a probe
-            pass
+            return handled
+        except Exception as exc:  # noqa: BLE001 — a cleanup must not fail a probe
+            logger.warning("mcp sign-out cleanup failed: %s", type(exc).__name__)
+            return []
 
     def _queue_newer_mcp_credentials(
         self, session_key: str, manager: object | None, forwarded: list | None

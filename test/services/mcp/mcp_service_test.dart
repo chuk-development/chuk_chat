@@ -17,8 +17,14 @@ import 'package:chuk_chat/services/mcp/mcp_store.dart';
 class _MemorySecrets implements AgentsSecureKeyValueStore {
   final Map<String, String> map = <String, String>{};
 
+  /// A keystore that throws on every read (a locked keyring).
+  bool failReads = false;
+
   @override
-  Future<String?> read(String key) async => map[key];
+  Future<String?> read(String key) async {
+    if (failReads) throw StateError('keystore locked');
+    return map[key];
+  }
 
   @override
   Future<void> write(String key, String value) async => map[key] = value;
@@ -420,6 +426,24 @@ void main() {
 
     expect(result.status, McpConnectStatus.failed);
     expect(opened, 0);
+  });
+
+  test('a keystore that cannot be read does not stop a sign-out', () async {
+    McpService.launcher = _signIn;
+    await McpService.connect(
+      id: 'srv',
+      name: 'Srv',
+      url: 'https://srv.example/mcp',
+    );
+    secrets.failReads = true;
+
+    await McpService.disconnect('srv');
+
+    expect(McpService.connectionFor('srv'), isNull);
+    // Nothing could be named for the host, and nothing broke.
+    expect(await McpService.pendingSignOuts(), isEmpty);
+    secrets.failReads = false;
+    expect(await McpService.store.secretsFor('srv'), isNull);
   });
 
   test('disconnect forgets the connector and its record', () async {

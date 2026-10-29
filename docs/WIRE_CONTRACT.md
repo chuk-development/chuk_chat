@@ -302,6 +302,15 @@ those grants and closes the sessions that hold them. It never prunes by what
 `mcp_servers` leaves out: another device of the account may hold connectors
 this one does not, and a missing or malformed list keeps everything.
 
+The device keeps these in a small persisted outbox
+(`McpService.pendingSignOutsKey`) and sends them with EVERY probe until the
+host acknowledges them: the probe's `mcp_tools` answer carries
+`"signed_out_ack": [{"token_endpoint", "client_id"}]` for the entries it has
+forgotten, and the device drops exactly those. So a sign-out made while the
+host is offline reaches it when it is back. Forgetting is idempotent on the
+host, so a repeat is harmless. A host that failed to forget sends no ack and
+gets the entry again.
+
 ### `mcp_tools` (NEW, executor → app)
 
 What each forwarded connector answered with when the host dialled it. One frame

@@ -145,9 +145,19 @@ def test_signing_out_forgets_that_grant_on_the_host(tmp_path, monkeypatch, fake)
     monkeypatch.setattr(executor, "_terminal", lambda rid, p: terminals.append(p))
     executor._handle_mcp_probe("req-2", {"type": "mcp_probe", "mcp_servers": [], "mcp_signed_out": [out]})
 
-    assert _wait_until(lambda: mcp_client.GRANTS.current(gone) is None)
+    assert _wait_until(lambda: bool(terminals))
+    assert mcp_client.GRANTS.current(gone) is None
     assert mcp_client.GRANTS.current(kept) is not None
-    assert terminals and terminals[0]["servers"] == []
+    assert terminals[0]["servers"] == []
+    # The answer acknowledges it, so the device drops it from its outbox.
+    assert terminals[0]["signed_out_ack"] == [out]
+
+    # The device re-sends until it saw the ack: a repeat is harmless.
+    terminals.clear()
+    executor._handle_mcp_probe("req-2b", {"type": "mcp_probe", "mcp_servers": [], "mcp_signed_out": [out]})
+    assert _wait_until(lambda: bool(terminals))
+    assert terminals[0]["signed_out_ack"] == [out]
+    assert mcp_client.GRANTS.current(kept) is not None
 
     # Signing in again afterwards works at once.
     again = fake.sign_in()
@@ -175,3 +185,30 @@ def test_a_probe_without_a_sign_out_list_prunes_nothing(tmp_path, monkeypatch, f
     time.sleep(0.3)
     assert mcp_client.GRANTS.current(config) is not None
     assert executor._mcp_managers
+
+
+def test_a_sign_out_sent_with_connectors_is_acknowledged_too(tmp_path, monkeypatch, fake):
+    """The outbox rides on every probe, also one that lists connectors."""
+    executor = _executor(tmp_path)
+    removed = fake.sign_in()
+    kept = fake.sign_in()
+    _probe(executor, monkeypatch, [_entry(fake, removed)], "req-1")
+    out = {"token_endpoint": removed["oauth"]["token_endpoint"], "client_id": removed["oauth"]["client_id"]}
+    frames: list = []
+    done = threading.Event()
+    monkeypatch.setattr(executor, "_event", lambda rid, p: None)
+
+    def terminal(rid, payload):
+        frames.append(payload)
+        done.set()
+
+    monkeypatch.setattr(executor, "_terminal", terminal)
+    executor._handle_mcp_probe(
+        "req-2",
+        {"type": "mcp_probe", "mcp_servers": [_entry(fake, kept)], "mcp_signed_out": [out]},
+    )
+    assert done.wait(30)
+    assert frames[0]["signed_out_ack"] == [out]
+    assert frames[0]["servers"][0]["connected"] is True
+    config = mcp_client.MCPServerConfig(name="Fake", transport="http", url=fake.mcp_url, oauth=removed["oauth"])
+    assert mcp_client.GRANTS.current(config) is None
