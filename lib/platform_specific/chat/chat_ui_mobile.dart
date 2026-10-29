@@ -3940,30 +3940,39 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                         ),
                       ),
                     ),
-                  // Scroll-to-bottom button (centered above input)
-                  if (showScrollToBottom && hasMessages)
+                  // Scroll-to-bottom button (centered above input). It
+                  // listens on its own: showing it must not rebuild the
+                  // screen in the middle of a scroll (ChatScrollMixin).
+                  if (hasMessages)
                     Positioned(
                       bottom: composerReservedSpace + 12,
                       left: 0,
                       right: 0,
-                      child: Center(
-                        child: Material(
-                          elevation: 4,
-                          shape: const CircleBorder(),
-                          color: theme.colorScheme.surfaceContainerHighest,
-                          child: InkWell(
-                            customBorder: const CircleBorder(),
-                            onTap: () => scrollChatToBottom(force: true),
-                            child: Padding(
-                              padding: const EdgeInsets.all(8),
-                              child: AppIcon(
-                                Icons.keyboard_arrow_down,
-                                size: 24,
-                                color: theme.colorScheme.onSurface,
+                      child: ValueListenableBuilder<bool>(
+                        valueListenable: scrollToBottomVisible,
+                        builder: (context, visible, _) => !visible
+                            ? const SizedBox.shrink()
+                            : Center(
+                                child: Material(
+                                  elevation: 4,
+                                  shape: const CircleBorder(),
+                                  color:
+                                      theme.colorScheme.surfaceContainerHighest,
+                                  child: InkWell(
+                                    customBorder: const CircleBorder(),
+                                    onTap: () =>
+                                        scrollChatToBottom(force: true),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(8),
+                                      child: AppIcon(
+                                        Icons.keyboard_arrow_down,
+                                        size: 24,
+                                        color: theme.colorScheme.onSurface,
+                                      ),
+                                    ),
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
-                        ),
                       ),
                     ),
                   Positioned(

@@ -222,7 +222,23 @@ mixin ChatScrollMixin<T extends StatefulWidget> on State<T> {
   }
 
   /// Whether the scroll-to-bottom FAB is currently visible.
-  bool showScrollToBottom = false;
+  ///
+  /// A notifier, not State: the button only appears once the reader is
+  /// [showScrollButtonDistance] up, which is a few frames into every scroll
+  /// up. A setState there rebuilt the whole chat screen (composer, app bar,
+  /// every visible row) in the middle of the drag, the frame the owner felt
+  /// as the lag at the start of the scroll. Only the button listens now
+  /// (`ValueListenableBuilder` at the button in each screen).
+  final ValueNotifier<bool> scrollToBottomVisible = ValueNotifier<bool>(false);
+
+  bool get showScrollToBottom => scrollToBottomVisible.value;
+  set showScrollToBottom(bool value) => scrollToBottomVisible.value = value;
+
+  @override
+  void dispose() {
+    scrollToBottomVisible.dispose();
+    super.dispose();
+  }
 
   /// Whether the view is pinned to the bottom. When true, new content and a
   /// growing composer keep the latest message in view; when false the user has
@@ -359,9 +375,7 @@ mixin ChatScrollMixin<T extends StatefulWidget> on State<T> {
     if (!buttonChanged && !stickyChanged) return;
 
     if (buttonChanged) {
-      setState(() {
-        showScrollToBottom = nextShowScrollButton;
-      });
+      showScrollToBottom = nextShowScrollButton;
       unawaited(
         DiagnosticsLogService.info(
           'chat_ui',

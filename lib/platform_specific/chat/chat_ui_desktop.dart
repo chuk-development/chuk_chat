@@ -2308,20 +2308,24 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                             ),
                           ),
                         ),
-                      // Scroll-to-bottom button (centered above input)
-                      if (showScrollToBottom && !isChatEmpty)
+                      // Scroll-to-bottom button (centered above input). It
+                      // listens on its own: showing it must not rebuild the
+                      // screen in the middle of a scroll (ChatScrollMixin).
+                      if (!isChatEmpty)
                         Positioned(
-                          key: const ValueKey<String>(
-                            'desktop-chat-scroll-to-bottom',
-                          ),
                           bottom: inputAreaTotalHeight + 12,
                           left: 0,
                           right: 0,
-                          child: Center(
-                            child: Builder(
-                              builder: (context) {
-                                final t = Theme.of(context);
-                                return Material(
+                          child: ValueListenableBuilder<bool>(
+                            valueListenable: scrollToBottomVisible,
+                            builder: (context, visible, _) {
+                              if (!visible) return const SizedBox.shrink();
+                              final t = Theme.of(context);
+                              return Center(
+                                key: const ValueKey<String>(
+                                  'desktop-chat-scroll-to-bottom',
+                                ),
+                                child: Material(
                                   elevation: 4,
                                   shape: const CircleBorder(),
                                   color: t.colorScheme.surfaceContainerHighest,
@@ -2338,9 +2342,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                       ),
                                     ),
                                   ),
-                                );
-                              },
-                            ),
+                                ),
+                              );
+                            },
                           ),
                         ),
                       Positioned(
