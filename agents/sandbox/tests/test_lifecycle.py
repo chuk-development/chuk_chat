@@ -568,9 +568,10 @@ class BrowserImageCli(FakeCli):
     """A browser image with revision 1; ``execs`` is what ``docker inspect``
     says runs in a box right now."""
 
-    def __init__(self, containers, *, execs: str = "0") -> None:
+    def __init__(self, containers, *, execs: str = "0", top: str = "sleep infinity") -> None:
         super().__init__(containers)
         self.execs = execs
+        self.top = top
 
     def run(self, *args: str, timeout: int | None = None) -> CliResult:
         if args[:2] == ("image", "inspect"):
@@ -582,6 +583,10 @@ class BrowserImageCli(FakeCli):
         if args[:1] == ("inspect",):
             self.calls.append(args)
             return CliResult(self.execs + "\n", "", 0)
+        if args[:1] == ("top",):
+            self.calls.append(args)
+            rows = "".join(f"{100 + i}   {line}\n" for i, line in enumerate(self.top.splitlines()))
+            return CliResult("PID   COMMAND\n" + rows, "", 0)
         return super().run(*args, timeout=timeout)
 
 
@@ -623,3 +628,39 @@ def test_a_box_with_the_current_key_is_reused():
     env = DockerEnvironment(agent_id="a1", image="img:1", cli=cli)
     assert env._ensure_container() == "new"
     assert not any(c[:1] == ("inspect",) for c in cli.calls)
+
+
+@pytest.mark.parametrize(
+    "top",
+    [
+        "sleep infinity\ntmux new-session -d -s agent",  # left by a finished exec
+        "sleep infinity\npython3 /workspace/watch.py",  # a watcher
+        "sleep infinity\n/opt/google/chrome/chrome --type=renderer",
+    ],
+)
+def test_an_old_box_with_work_left_in_it_is_kept(top):
+    """No exec runs, but a finished exec left a process behind: the box is
+    not idle and is not pulled away from under it."""
+    cli = BrowserImageCli([container(cid="old", agent="a1", image="img:1")], top=top)
+    env = DockerEnvironment(agent_id="a1", image="img:1", cli=cli)
+    assert env._ensure_container() == "old"
+    assert not cli.created
+
+
+def test_display_and_view_servers_alone_count_as_idle():
+    top = "sleep infinity\nXvfb :99 -screen 0 1280x800x24 -nolisten tcp\nx11vnc -display :99"
+    cli = BrowserImageCli([container(cid="old", agent="a1", image="img:1")], top=top)
+    env = DockerEnvironment(agent_id="a1", image="img:1", cli=cli)
+    assert env._ensure_container() != "old"
+
+
+def test_a_box_whose_gpu_failed_is_not_made_again_every_session():
+    """The GPU did not attach, the box was made without it and says so.
+    That counts as the current key: no rebuild loop."""
+    box = container(cid="new", agent="a1", image="img:1")
+    box["labels"]["cowork.box"] = "browser=1;gpu=failed"
+    cli = BrowserImageCli([box])
+    env = DockerEnvironment(agent_id="a1", image="img:1", cli=cli)
+    env._box = ("browser=1;gpu=1", ("--gpus", "all,capabilities=graphics"))
+    assert env._ensure_container() == "new"
+    assert not cli.created

@@ -433,11 +433,15 @@ def display_available(display: str | None = None) -> bool:
 #: The Xvfb this process started, if any. Kept so it is stopped with the process
 #: instead of being orphaned for the lifetime of the machine.
 _xvfb: subprocess.Popen | None = None
+#: The display name of :data:`_xvfb`, the one display this process may write
+#: root window properties on (see :func:`window_bounds`).
+_xvfb_display: str | None = None
 
 
 def _stop_xvfb() -> None:
-    global _xvfb
+    global _xvfb, _xvfb_display
     proc, _xvfb = _xvfb, None
+    _xvfb_display = None
     if proc is None or proc.poll() is not None:
         return
     proc.terminate()
@@ -493,21 +497,65 @@ def display_size(display: str | None = None) -> tuple[int, int]:
 PANEL_HEIGHT = 44
 
 
-def _set_work_area(display: str | None, width: int, height: int) -> None:
-    """Write ``_NET_WORKAREA`` on the root window. Best effort: without
-    ``xprop`` screen.avail* stays the full screen and nothing else breaks."""
-    probe = shutil.which("xprop")
-    name = (display if display is not None else os.environ.get(DISPLAY_ENV_VAR, "")).strip()
+def _own_display(display: str | None) -> bool:
+    """True only for the Xvfb this process started and still runs."""
+    return (
+        _xvfb is not None
+        and _xvfb.poll() is None
+        and display is not None
+        and display.strip() == _xvfb_display
+    )
+
+
+def _xprop() -> str | None:
+    return shutil.which("xprop")
+
+
+def read_work_area(display: str | None) -> tuple[int, int, int, int] | None:
+    """``_NET_WORKAREA`` of the display's root window (x, y, w, h), or None.
+
+    Read only. A real desktop sets it (its panel), and so does the sandbox
+    launcher on its Xvfb (``agents/sandbox/docker/browser-mcp.sh``).
+    """
+    probe = _xprop()
+    name = (display or "").strip()
     if probe is None or not name:
-        return
+        return None
     try:
-        subprocess.run(  # noqa: S603 — argv built by us
-            [probe, "-display", name, "-root", "-f", "_NET_WORKAREA", "32c",
+        done = subprocess.run(  # noqa: S603 — argv built by us
+            [probe, "-display", name, "-root", "_NET_WORKAREA"],
+            capture_output=True, text=True, timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if done.returncode != 0 or "=" not in done.stdout:
+        return None
+    try:
+        values = [int(v) for v in done.stdout.split("=", 1)[1].split(",")[:4]]
+    except ValueError:
+        return None
+    return tuple(values) if len(values) == 4 and values[2] > 0 and values[3] > 0 else None  # type: ignore[return-value]
+
+
+def _set_work_area(display: str | None, width: int, height: int) -> bool:
+    """Write ``_NET_WORKAREA`` on the root window of OUR Xvfb.
+
+    Never on any other display: not on the user's own session, and not on
+    an Xvfb somebody else started. Best effort: without ``xprop`` it returns
+    False and the caller keeps the old window size.
+    """
+    probe = _xprop()
+    if probe is None or not _own_display(display):
+        return False
+    try:
+        done = subprocess.run(  # noqa: S603 — argv built by us
+            [probe, "-display", str(display).strip(), "-root", "-f", "_NET_WORKAREA", "32c",
              "-set", "_NET_WORKAREA", f"0,0,{width},{height}"],
             capture_output=True, timeout=5,
         )
     except (OSError, subprocess.SubprocessError):
-        pass
+        return False
+    return done.returncode == 0
 
 
 def window_bounds(display: str | None = None) -> tuple[dict[str, int], dict[str, int]]:
@@ -516,20 +564,26 @@ def window_bounds(display: str | None = None) -> tuple[dict[str, int], dict[str,
     There is no window manager on a virtual display, so ``--start-maximized``
     does nothing and Chromium picks its own default size, about 1050 px wide:
     the live view and every screenshot of the display were mostly black (bead
-    chuk_chat-elw7). The window goes to 0,0 and fills the work area: the
-    display acts as a desktop with a bottom panel of :data:`PANEL_HEIGHT` px
-    (``_NET_WORKAREA``, which Chromium reads for screen.avail*). The old
+    chuk_chat-elw7). The window goes to the work area and fills it. The old
     window was 1 px LARGER than the display (Chromium shrinks an exactly
     screen-sized X11 window by 1 px), and outer > screen plus avail ==
-    screen are bot tells (bead chuk_chat-5hp7). Same rule as the sandbox
-    launcher; a display too small for a panel keeps the old 1 px trick.
+    screen are bot tells (bead chuk_chat-5hp7).
+
+    The work area is, in this order: the display's own ``_NET_WORKAREA``
+    (the sandbox launcher's Xvfb, a real desktop); on the Xvfb this process
+    started, a new one with a bottom panel of :data:`PANEL_HEIGHT` px (same
+    rule as the sandbox launcher). Any other display is never written to and
+    keeps the old 1 px trick, as does a display too small for a panel.
     Returned in browser-use's ``ViewportSize`` shape (``width``/``height``).
     """
     width, height = display_size(display)
-    if height <= PANEL_HEIGHT * 4:
-        return {"width": width + 1, "height": height + 1}, {"width": 0, "height": 0}
-    _set_work_area(display, width, height - PANEL_HEIGHT)
-    return {"width": width, "height": height - PANEL_HEIGHT}, {"width": 0, "height": 0}
+    area = read_work_area(display)
+    if area is not None and area[2] <= width and area[3] <= height and area[2:] != (width, height):
+        x, y, w, h = area
+        return {"width": w, "height": h}, {"width": x, "height": y}
+    if height > PANEL_HEIGHT * 4 and _set_work_area(display, width, height - PANEL_HEIGHT):
+        return {"width": width, "height": height - PANEL_HEIGHT}, {"width": 0, "height": 0}
+    return {"width": width + 1, "height": height + 1}, {"width": 0, "height": 0}
 
 
 def start_xvfb(
@@ -543,7 +597,7 @@ def start_xvfb(
     display the launcher put Chromium on, which is exactly the one to join).
     ``screen`` defaults to ``AGENTS_BROWSER_SCREEN`` (:func:`configured_screen`).
     """
-    global _xvfb
+    global _xvfb, _xvfb_display
     screen = screen or configured_screen()
     if _xvfb is not None and _xvfb.poll() is None:
         return os.environ.get(DISPLAY_ENV_VAR, "").strip() or None
@@ -570,6 +624,7 @@ def start_xvfb(
                 break  # it died: the number is taken, try the next one
             if display_available(name):
                 _xvfb = proc
+                _xvfb_display = name
                 atexit.register(_stop_xvfb)
                 return name
             time.sleep(0.1)
