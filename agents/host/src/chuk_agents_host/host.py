@@ -787,6 +787,14 @@ class LocalHost:
             self._automations.start()
         except Exception as exc:  # noqa: BLE001 — automations must not block startup
             self._log(f"could not start automations: {type(exc).__name__}: {exc}")
+        # Forwarded MCP sign-ins: the host is the one side that renews them
+        # (docs/MCP_CONNECTORS.md). The keeper renews an idle grant once a day
+        # so its refresh token never times out, and a grant that dies sends
+        # one notice.
+        if self._on_mcp_grant_dead not in mcp_client.GRANTS.dead_listeners:
+            mcp_client.GRANTS.dead_listeners.append(self._on_mcp_grant_dead)
+        self._grant_keeper = mcp_client.GrantKeeper()
+        self._grant_keeper.start()
         # The agent calls the user (docs/WIRE_CONTRACT.md, "The agent calls the
         # user"): the call registry and the sealed ``voice_call_incoming`` ring
         # to every attached controller. With no app attached, the desktop toast
@@ -958,6 +966,13 @@ class LocalHost:
             party.on_controller_left(token)
 
     def stop(self) -> None:
+        keeper = getattr(self, "_grant_keeper", None)
+        if keeper is not None:
+            keeper.stop()
+        try:
+            mcp_client.GRANTS.dead_listeners.remove(self._on_mcp_grant_dead)
+        except ValueError:
+            pass
         automations = getattr(self, "_automations", None)
         if automations is not None:
             automations.stop()
@@ -2419,6 +2434,21 @@ class LocalHost:
         notify = getattr(notifier, "notify_budget", None)
         if callable(notify):
             notify(payload)
+
+    def _on_mcp_grant_dead(self, info: dict) -> None:
+        """A forwarded connector's sign-in died (the provider refused the
+        refresh token for good). The grant store calls this once per dead
+        token; the one push tells the user which connector and opens its
+        Reconnect. There is no way to sign in again without them: an OAuth
+        consent needs a person in a browser."""
+        self._log(f"connector sign-in expired: {info.get('name')} ({info.get('reason')})")
+        notifier = getattr(self, "_notifier", None)
+        notify = getattr(notifier, "notify_connector_expired", None)
+        if callable(notify):
+            try:
+                notify(info)
+            except Exception as exc:  # noqa: BLE001 — a notice must never take the host down
+                self._log(f"connector notice failed: {type(exc).__name__}")
 
     def _on_approval_pending(self, info: dict) -> None:
         """A run is blocked on a here.now publish approval. With no app attached

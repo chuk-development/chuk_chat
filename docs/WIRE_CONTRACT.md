@@ -307,7 +307,8 @@ per task, sent right after the session's MCP manager is up.
    {"id": "<device connector id>"?, "name": "<connector name>", "url": "<endpoint>",
     "connected": true, "tools": [{"name": "<tool>", "description": "<one line>"}],
     "error": "<why it is not connected>"?,
-    "error_kind": "auth" | "network" | "other"?}
+    "error_kind": "auth" | "network" | "other"?,
+    "client_id": "<registered OAuth client the host used>"?}
  ]}
 ```
 
@@ -318,6 +319,11 @@ no refresh material), so only a new sign-in on the device helps; `network`
 means the server did not answer (connect error, timeout); `other` is anything
 else (the server answered, but not as an MCP server). An app reads a missing
 `error_kind` (an older host) as `other`.
+
+`client_id` names the OAuth client registration the host dialled with (public,
+not a secret). An app that has since signed in again (a new registration)
+ignores an entry whose `client_id` is not its current one: that answer was
+computed with the old sign-in and would put a stale error on a fresh one.
 
 Why it exists: this device never connects to an MCP server. It forwards the
 connectors on the `task` frame and the host dials them, so the tool list is not

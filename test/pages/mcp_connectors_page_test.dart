@@ -12,6 +12,7 @@ import 'package:chuk_chat/services/mcp/mcp_connection.dart';
 import 'package:chuk_chat/services/mcp/mcp_icon_cache.dart';
 import 'package:chuk_chat/services/mcp/mcp_service.dart';
 import 'package:chuk_chat/services/mcp/mcp_store.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 import '../support/mcp_memory_list.dart';
 
@@ -105,71 +106,7 @@ void main() {
     expect(await store.load(), isEmpty);
   });
 
-  // With Agents on, one connector serves two kinds of chat: the host dials it
-  // for an Agents thread, and this device calls it for a chuk_chat chat. The
-  // badge is the host's view, the line under the name this device's.
-  group('with Agents on a connected row shows both views', () {
-    http.Client Function()? previousProbeClientFactory;
-
-    setUp(() async {
-      debugAgentsChatCoreOverride = true;
-      final store = McpStore(secrets: _MemorySecrets(), list: memoryMcpList());
-      McpService.resetForTest(store: store);
-      McpService.unreachable.value = <String>{};
-      await store.upsert(
-        const McpConnection(
-          id: 'example',
-          name: 'Example',
-          url: 'https://mcp.example.com/mcp',
-        ),
-      );
-      previousProbeClientFactory = McpService.probeClientFactory;
-    });
-
-    tearDown(() {
-      McpService.probeClientFactory = previousProbeClientFactory;
-      McpService.unreachable.value = <String>{};
-      debugAgentsChatCoreOverride = null;
-    });
-
-    testWidgets('the host has not reported yet and this device reaches it',
-        (tester) async {
-      var dials = 0;
-      McpService.probeClientFactory = () => MockClient((_) async {
-        dials++;
-        return http.Response('', 200);
-      });
-
-      await tester.pumpWidget(const MaterialApp(home: McpConnectorsPage()));
-      await tester.pumpAndSettle();
-
-      // The host has not reported on it yet, so the badge says so instead of
-      // "0 tools" or "Offline".
-      expect(find.text('Example'), findsOneWidget);
-      expect(find.text('not checked'), findsOneWidget);
-      expect(find.text('Offline'), findsNothing);
-      // A chuk_chat chat calls it from here, so this device checks it too.
-      expect(dials, 1);
-      expect(find.text('This device cannot reach the server'), findsNothing);
-    });
-
-    testWidgets('this device cannot reach it, and the host view stays',
-        (tester) async {
-      McpService.probeClientFactory = () =>
-          MockClient((_) async => throw http.ClientException('down'));
-
-      await tester.pumpWidget(const MaterialApp(home: McpConnectorsPage()));
-      await tester.pumpAndSettle();
-
-      expect(find.text('This device cannot reach the server'), findsOneWidget);
-      // The badge is still the host's: the host may reach a server this
-      // device cannot.
-      expect(find.text('not checked'), findsOneWidget);
-      expect(find.text('Offline'), findsNothing);
-    });
-  });
-
-  group('with Agents on the row names why the host could not use it', () {
+  group('with Agents on, a connected row speaks plainly', () {
     setUp(() async {
       debugAgentsChatCoreOverride = true;
       final store = McpStore(secrets: _MemorySecrets(), list: memoryMcpList());
@@ -177,18 +114,21 @@ void main() {
       McpService.unreachable.value = <String>{};
       McpService.probeClientFactory = () =>
           MockClient((_) async => http.Response('', 401));
-      for (final (String id, McpErrorKind kind) in <(String, McpErrorKind)>[
-        ('a', McpErrorKind.auth),
-        ('n', McpErrorKind.network),
-        ('o', McpErrorKind.other),
-      ]) {
+      for (final (String id, McpErrorKind? kind, DateTime? checked)
+          in <(String, McpErrorKind?, DateTime?)>[
+            ('a', McpErrorKind.auth, DateTime(2026, 10, 29)),
+            ('n', McpErrorKind.network, DateTime(2026, 10, 29)),
+            ('o', McpErrorKind.other, DateTime(2026, 10, 29)),
+            ('ok', null, DateTime(2026, 10, 29)),
+            ('new', null, null),
+          ]) {
         await store.upsert(
           McpConnection(
             id: id,
             name: 'Server $id',
             url: 'https://$id.example.com/mcp',
-            checkedAt: DateTime(2026, 10, 29),
-            lastError: 'reason $id',
+            checkedAt: checked,
+            lastError: kind == null ? null : 'HTTP 401 reason $id',
             lastErrorKind: kind,
           ),
         );
@@ -201,40 +141,67 @@ void main() {
       debugAgentsChatCoreOverride = null;
     });
 
-    testWidgets('an expired sign-in and a silent server do not look alike',
+    testWidgets('each state has its own plain line and no technical text',
         (tester) async {
       await tester.pumpWidget(const MaterialApp(home: McpConnectorsPage()));
       await tester.pumpAndSettle();
 
       expect(find.text('Sign-in expired'), findsOneWidget);
-      expect(find.text('Server not answering'), findsOneWidget);
-      expect(find.text('Error'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Sign in again'), findsOneWidget);
+      expect(find.text('Server not answering – we keep trying'), findsOneWidget);
+      expect(find.text('Something went wrong'), findsOneWidget);
+      // Confirmed and not yet confirmed both read "Signed in"; the second
+      // says it is still being checked. Never an error.
+      expect(find.text('Signed in'), findsNWidgets(2));
+      expect(find.text('Signed in, checking…'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (w) => w is AppIcon && w.icon == Icons.check_rounded,
+        ),
+        findsNWidgets(2),
+      );
+      // No technical reason in the list, and none of the old words.
+      expect(find.textContaining('HTTP 401'), findsNothing);
       expect(find.text('not reachable'), findsNothing);
+      expect(find.text('not checked'), findsNothing);
     });
 
-    testWidgets('the detail of an expired sign-in asks for a new one',
+    testWidgets('a running sign-in reads "Connecting…"', (tester) async {
+      McpService.connecting.value = <String>{'ok'};
+      await tester.pumpWidget(const MaterialApp(home: McpConnectorsPage()));
+      await tester.pumpAndSettle();
+      expect(find.text('Connecting…'), findsOneWidget);
+    });
+
+    testWidgets('the detail of an expired sign-in names it and has one action',
         (tester) async {
       await tester.pumpWidget(
         const MaterialApp(home: McpConnectorDetailPage(id: 'a')),
       );
       await tester.pumpAndSettle();
 
-      expect(find.widgetWithText(FilledButton, 'Reconnect'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Sign in again'), findsOneWidget);
       expect(
-        find.textContaining('Sign-in expired. Reconnect to sign in again.'),
+        find.textContaining(
+          'Server a: sign-in expired. Sign in again to keep using it.',
+        ),
         findsOneWidget,
       );
+      // The technical reason only behind "Details".
+      expect(find.textContaining('HTTP 401 reason a'), findsNothing);
+      await tester.tap(find.widgetWithText(ExpansionTile, 'Details'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('HTTP 401 reason a'), findsOneWidget);
     });
 
-    testWidgets('the detail of a silent server shows the real reason',
+    testWidgets('the detail of a silent server says we keep trying',
         (tester) async {
       await tester.pumpWidget(
         const MaterialApp(home: McpConnectorDetailPage(id: 'n')),
       );
       await tester.pumpAndSettle();
-
       expect(
-        find.textContaining('The server is not answering: reason n'),
+        find.textContaining('Server not answering – we keep trying'),
         findsOneWidget,
       );
     });
@@ -260,8 +227,6 @@ void main() {
       dials = 0;
       McpService.unreachable.value = <String>{};
       previousProbeClientFactory = McpService.probeClientFactory;
-      // The server answers any device-side check, so only the host's report
-      // can call the connector broken.
       McpService.probeClientFactory = () => MockClient((_) async {
         dials++;
         return http.Response('', 200);
@@ -274,7 +239,7 @@ void main() {
       debugAgentsChatCoreOverride = null;
     });
 
-    testWidgets('with Agents on it offers Reconnect and shows the host error',
+    testWidgets('with Agents on it offers a new sign-in, reason under Details',
         (tester) async {
       debugAgentsChatCoreOverride = true;
 
@@ -283,15 +248,13 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.widgetWithText(FilledButton, 'Reconnect'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Sign in again'), findsOneWidget);
       expect(find.widgetWithText(FilledButton, 'Disconnect'), findsNothing);
-      expect(
-        find.textContaining('HTTP 401 from the server'),
-        findsOneWidget,
-      );
+      expect(find.text('Something went wrong'), findsOneWidget);
+      await tester.tap(find.widgetWithText(ExpansionTile, 'Details'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('HTTP 401 from the server'), findsOneWidget);
       expect(find.text('Remove this connector'), findsOneWidget);
-      // This device checks too (a chuk_chat chat calls the server from
-      // here). It got through, so only the host's line is shown.
       expect(dials, 1);
       expect(
         find.textContaining('This device could not reach the server'),
@@ -300,9 +263,8 @@ void main() {
     });
 
     testWidgets('with Agents on a device that cannot reach it offers '
-        'Reconnect, though the host can', (tester) async {
+        'a new sign-in, though the host can', (tester) async {
       debugAgentsChatCoreOverride = true;
-      // The host reported the connector as fine this time.
       await McpService.store.upsert(
         failing.copyWith(checkedAt: DateTime(2026, 9, 1), clearError: true),
       );
@@ -315,12 +277,12 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.widgetWithText(FilledButton, 'Reconnect'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Sign in again'), findsOneWidget);
       expect(
         find.textContaining('This device could not reach the server'),
         findsOneWidget,
       );
-      expect(find.textContaining('The host could not use'), findsNothing);
+      expect(find.byType(ExpansionTile), findsNothing);
     });
 
     testWidgets('with Agents off the device check decides, as before',

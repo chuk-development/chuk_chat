@@ -192,6 +192,9 @@ class MCPServerConfig:
     #: :func:`chuk_agents_runtime.oauth_bridge.config_token_exchange` reads the first
     #: only, so a block of one shape is inert in the other's code path.
     oauth: dict[str, Any] = field(default_factory=dict)
+    #: The device's own id of this connector, when the app forwarded one. Only
+    #: used to name the connector back to the app (a dead sign-in notice).
+    connector_id: str | None = None
     enabled: bool = True
     connect_timeout: float = CONNECT_TIMEOUT
     call_timeout: float = CALL_TIMEOUT
@@ -333,6 +336,8 @@ def configs_from_entries(
             token = str(raw["access_token"]) if raw.get("access_token") else None
         if token:
             config.auth_token = token
+        if raw.get("id"):
+            config.connector_id = str(raw["id"])
         # An oauth entry may arrive with no ``access_token`` at all and only an
         # ``oauth`` block: the app has the sign-in but let the bearer lapse
         # while it was closed. That entry is NOT unauthenticated — the first
@@ -414,11 +419,27 @@ def _oauth_error_code(response: Any) -> str:
     return "-"
 
 
+#: RFC 6749 error codes of a token request that mean "this refresh token will
+#: never work again". Asking again only spends requests; only a new sign-in on
+#: the device helps.
+DEAD_GRANT_ERRORS = frozenset({"invalid_grant", "invalid_client", "unauthorized_client"})
+
+
 def refresh_access_token(
     oauth: dict[str, Any] | None,
     *,
     timeout: float = 20.0,
 ) -> tuple[str | None, dict[str, Any]]:
+    """:func:`refresh_access_token_ex` without the failure reason."""
+    token, block, _reason = refresh_access_token_ex(oauth, timeout=timeout)
+    return token, block
+
+
+def refresh_access_token_ex(
+    oauth: dict[str, Any] | None,
+    *,
+    timeout: float = 20.0,
+) -> tuple[str | None, dict[str, Any], str | None]:
     """Mint a fresh access token from a forwarded ``oauth`` block (RFC 6749).
 
     This is what lets a run outlive the app. The device signed in once, in a
@@ -431,6 +452,10 @@ def refresh_access_token(
     On any failure the token is ``None`` and the block comes back unchanged —
     this never raises, because a connector that cannot renew must cost that
     connector and not the task.
+
+    The third value is the reason of a failure: the RFC 6749 ``error`` code
+    of a refused request (``invalid_grant``, ...), ``"no_refresh_material"``,
+    or ``"transport"`` / ``"bad_response"``; ``None`` on success.
     """
     block = dict(oauth or {})
     refresh_token = str(block.get("refresh_token") or "")
@@ -441,7 +466,7 @@ def refresh_access_token(
             bool(refresh_token),
             bool(token_endpoint),
         )
-        return None, block
+        return None, block, "no_refresh_material"
 
     import httpx
 
@@ -470,13 +495,14 @@ def refresh_access_token(
             follow_redirects=True,
         )
         if response.status_code >= 400:
+            code = _oauth_error_code(response)
             logger.warning(
                 "mcp token refresh refused: endpoint=%s status=%s error=%s",
                 _endpoint_host(token_endpoint),
                 response.status_code,
-                _oauth_error_code(response),
+                code,
             )
-            return None, block
+            return None, block, code if code != "-" else f"http_{response.status_code}"
         payload = response.json()
     except Exception as exc:  # noqa: BLE001 — a dead refresh is a dead connector, not a crash
         logger.warning(
@@ -484,13 +510,13 @@ def refresh_access_token(
             _endpoint_host(token_endpoint),
             type(exc).__name__,
         )
-        return None, block
+        return None, block, "transport"
 
     if not isinstance(payload, dict):
-        return None, block
+        return None, block, "bad_response"
     token = str(payload.get("access_token") or "")
     if not token:
-        return None, block
+        return None, block, "bad_response"
 
     updated = dict(block)
     # Servers may rotate the refresh token, or keep the old one.
@@ -512,7 +538,7 @@ def refresh_access_token(
     scope = payload.get("scope")
     if scope:
         updated["scope"] = str(scope)
-    return token, updated
+    return token, updated, None
 
 
 #: The OAuth fields that change at each refresh. Everything else in an
@@ -520,6 +546,17 @@ def refresh_access_token(
 _GRANT_FIELDS = ("refresh_token", "expires_at")
 #: How many earlier refresh tokens a grant remembers (as hashes).
 _GRANT_SEEN_CAP = 64
+#: The fields of a forwarded ``oauth`` block the store keeps with a grant, so
+#: it can renew the grant on its own (:meth:`OAuthGrantStore.keep_alive`) when
+#: no session holds a copy. They name the grant and the client; the sealed file
+#: is the only place they are written.
+_GRANT_IDENTITY_FIELDS = ("token_endpoint", "client_id", "client_secret", "resource", "scope")
+#: A grant that was not renewed for this long is renewed by the keeper, so an
+#: idle refresh token never runs into a provider's inactivity limit. Access
+#: tokens are renewed on use (a request with a lapsed one refreshes first);
+#: renewing an hour-long token all day would only spend rotations, and any
+#: token that lives a day or more is renewed by this rule before its last tenth.
+KEEPALIVE_INTERVAL = 20 * 3600.0
 #: The format of the sealed grant file: AES-256-GCM over the JSON records.
 _GRANT_FILE_VERSION = 1
 _GRANT_NONCE_LEN = 12
@@ -578,6 +615,10 @@ class OAuthGrantStore:
         self._lock = threading.RLock()
         self._data: dict[str, dict] | None = None
         self._grant_locks: dict[str, threading.Lock] = {}
+        #: Called once when a grant dies (``invalid_grant``): ``fn(info)`` with
+        #: ``{grant, name, url, connector_id, reason}``. The host sends the one
+        #: "sign-in expired" notice from here.
+        self.dead_listeners: list[Callable[[dict], None]] = []
 
     # -- configuration ----------------------------------------------------
 
@@ -592,6 +633,7 @@ class OAuthGrantStore:
             self._key = None
             self._data = None
             self._grant_locks.clear()
+            self.dead_listeners.clear()
 
     def set_key(self, key: bytes | None) -> None:
         """Seal the file with ``key`` from now on. A file that is already
@@ -635,7 +677,9 @@ class OAuthGrantStore:
         """The lock that makes one refresh per grant at a time. Two
         connections of one grant must not both spend the same refresh token:
         the second one would get ``invalid_grant`` and keep a dead copy."""
-        key = self.key(config.oauth) or f"config:{id(config)}"
+        return self._lock_for(self.key(config.oauth) or f"config:{id(config)}")
+
+    def _lock_for(self, key: str) -> threading.Lock:
         with self._lock:
             lock = self._grant_locks.get(key)
             if lock is None:
@@ -706,6 +750,166 @@ class OAuthGrantStore:
             return True
         return _token_hash(str((oauth or {}).get("refresh_token") or "")) == record.get("current")
 
+    def retain(self, oauth_blocks: Sequence[dict | None]) -> list[str]:
+        """Forget every grant that none of ``oauth_blocks`` belongs to, on
+        disk too. The device signed out of those connectors: the host must not
+        keep (or renew) a sign-in the user removed. Returns the forgotten keys.
+        """
+        keep = {k for k in (self.key(b) for b in oauth_blocks) if k}
+        with self._lock:
+            data = self._load()
+            gone = [k for k in data if k not in keep]
+            for key in gone:
+                del data[key]
+            if gone:
+                self._write()
+        return gone
+
+    # -- dead grants --------------------------------------------------------
+
+    def is_dead(self, config: "MCPServerConfig") -> bool:
+        """Whether the provider refused the refresh token ``config`` holds for
+        good. A new token (a new sign-in) is a live grant again."""
+        key = self.key(config.oauth)
+        if key is None:
+            return False
+        digest = _token_hash(str(config.oauth.get("refresh_token") or ""))
+        with self._lock:
+            record = self._load().get(key)
+            return bool(record) and record.get("dead") == digest
+
+    def mark_dead(self, config: "MCPServerConfig", reason: str) -> dict | None:
+        """Record that the refresh token of ``config`` will never work again.
+        Returns the notice info the first time for this token, ``None`` when
+        it was already known (so the caller notifies exactly once). Pass the
+        result to :meth:`notify_dead` outside any lock."""
+        key = self.key(config.oauth)
+        if key is None:
+            return None
+        digest = _token_hash(str(config.oauth.get("refresh_token") or ""))
+        with self._lock:
+            data = self._load()
+            record = data.get(key)
+            if record is None or record.get("current") != digest:
+                # A token the store did not hold as current: take it first, so
+                # the dead mark belongs to the token that was refused.
+                self._adopt_locked(key, config)
+                record = data[key]
+            if record.get("dead") == digest:
+                return None
+            record["dead"] = digest
+            record["dead_reason"] = reason
+            record["dead_at"] = round(time.time())
+            self._write()
+            return {
+                "grant": key,
+                "name": record.get("name") or config.name,
+                "url": record.get("url") or config.url or "",
+                "connector_id": record.get("connector_id") or config.connector_id,
+                "reason": reason,
+            }
+
+    def notify_dead(self, info: dict | None) -> None:
+        """Tell the listeners about one dead grant. Never raises."""
+        if not info:
+            return
+        logger.warning(
+            "mcp sign-in expired: server=%s reason=%s", info.get("name"), info.get("reason")
+        )
+        for listener in list(self.dead_listeners):
+            try:
+                listener(dict(info))
+            except Exception:  # noqa: BLE001 — a notice must not fail a refresh
+                pass
+
+    # -- keep alive ---------------------------------------------------------
+
+    def due(self, now: float | None = None) -> list[str]:
+        """The grants the keeper should renew now: live, renewable, and not
+        renewed for :data:`KEEPALIVE_INTERVAL`."""
+        now = time.time() if now is None else now
+        keys: list[str] = []
+        with self._lock:
+            for key, record in self._load().items():
+                if record.get("dead") == record.get("current"):
+                    continue
+                if not record.get("refresh_token") or not record.get("token_endpoint"):
+                    continue
+                last = float(record.get("refreshed_at") or record.get("updated_at") or 0)
+                if now - last >= KEEPALIVE_INTERVAL:
+                    keys.append(key)
+        return keys
+
+    def keep_alive(
+        self,
+        now: float | None = None,
+        *,
+        refresh: Callable[..., tuple[str | None, dict, str | None]] | None = None,
+    ) -> int:
+        """Renew every grant that is :meth:`due`. Returns how many were renewed.
+
+        Runs under the same per-grant lock as a connection's refresh, so the
+        keeper and a session never spend one refresh token twice. The result
+        is written to the sealed file before the lock is released: a crash
+        after the provider rotated the token cannot lose the new one. Live
+        connections pick the new state up at their next request (:meth:`sync`).
+        """
+        renew = refresh or refresh_access_token_ex
+        renewed = 0
+        for key in self.due(now):
+            notice = None
+            with self._lock_for(key):
+                with self._lock:
+                    record = dict(self._load().get(key) or {})
+                if not record or record.get("dead") == record.get("current"):
+                    continue
+                block = {f: record[f] for f in _GRANT_IDENTITY_FIELDS if record.get(f)}
+                block["refresh_token"] = record.get("refresh_token")
+                try:
+                    token, updated, reason = renew(block)
+                except Exception:  # noqa: BLE001 — the keeper never raises
+                    continue
+                with self._lock:
+                    data = self._load()
+                    current = data.get(key)
+                    if current is None or current.get("current") != record.get("current"):
+                        # The grant moved on while the request ran (a new
+                        # sign-in): nothing to record for the old token.
+                        continue
+                    if token:
+                        previous = current.get("current")
+                        seen = [h for h in current.get("seen", []) if h != previous]
+                        seen.append(previous)
+                        rotated = str(updated.get("refresh_token") or record.get("refresh_token"))
+                        current.update(
+                            {
+                                "refresh_token": rotated,
+                                "access_token": token,
+                                "expires_at": updated.get("expires_at") or "",
+                                "current": _token_hash(rotated),
+                                "seen": seen[-_GRANT_SEEN_CAP:],
+                                "updated_at": round(time.time()),
+                                "refreshed_at": round(time.time()),
+                            }
+                        )
+                        current.pop("dead", None)
+                        self._write()
+                        renewed += 1
+                    elif reason in DEAD_GRANT_ERRORS:
+                        current["dead"] = current.get("current")
+                        current["dead_reason"] = reason
+                        current["dead_at"] = round(time.time())
+                        self._write()
+                        notice = {
+                            "grant": key,
+                            "name": current.get("name") or "",
+                            "url": current.get("url") or "",
+                            "connector_id": current.get("connector_id"),
+                            "reason": reason,
+                        }
+            self.notify_dead(notice)
+        return renewed
+
     # -- internals --------------------------------------------------------
 
     @staticmethod
@@ -743,14 +947,35 @@ class OAuthGrantStore:
         current = _token_hash(refresh_token)
         if current in seen:
             seen.remove(current)
-        data[key] = {
+        now = round(time.time())
+        same = old.get("current") == current
+        record: dict[str, Any] = {
             "refresh_token": refresh_token,
             "access_token": config.auth_token or "",
             "expires_at": config.oauth.get("expires_at") or "",
             "current": current,
             "seen": seen[-_GRANT_SEEN_CAP:],
-            "updated_at": round(time.time()),
+            "updated_at": now,
+            # A refresh here, or a token new to the store (a sign-in or a
+            # refresh the device did): both are fresh grant activity.
+            "refreshed_at": now if (previous or not same) else old.get("refreshed_at", now),
         }
+        for name in _GRANT_IDENTITY_FIELDS:
+            value = config.oauth.get(name)
+            if value:
+                record[name] = value
+        record["name"] = config.name
+        record["url"] = config.url or ""
+        if config.connector_id:
+            record["connector_id"] = config.connector_id
+        elif old.get("connector_id"):
+            record["connector_id"] = old["connector_id"]
+        if same and old.get("dead") == current:
+            # Still the refused token: it stays dead.
+            for name in ("dead", "dead_reason", "dead_at"):
+                if name in old:
+                    record[name] = old[name]
+        data[key] = record
         self._write()
 
     #: Set by :meth:`_load` when the file on disk is plaintext (an older
@@ -837,6 +1062,11 @@ class OAuthGrantStore:
             fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
                 json.dump(payload, handle)
+                # On disk before the rename: a rotated refresh token is the
+                # only live copy of the grant, and a crash must not leave an
+                # empty file behind the new name.
+                handle.flush()
+                os.fsync(handle.fileno())
             os.replace(tmp, self._path)
             self._needs_seal = False
         except (OSError, TypeError, ValueError):
@@ -849,6 +1079,50 @@ class OAuthGrantStore:
 def _check_grant_key(key: bytes | None) -> None:
     if key is not None and len(key) != _GRANT_KEY_LEN:
         raise ValueError(f"grant store key must be {_GRANT_KEY_LEN} bytes")
+
+
+class GrantKeeper:
+    """A daemon thread that calls :meth:`OAuthGrantStore.keep_alive`.
+
+    One per process (the host starts it). The first pass runs ``delay``
+    seconds after :meth:`start`, then every ``interval`` seconds. Never raises.
+    """
+
+    def __init__(
+        self,
+        store: "OAuthGrantStore | None" = None,
+        *,
+        interval: float = 600.0,
+        delay: float = 60.0,
+    ) -> None:
+        self._store = store
+        self._interval = interval
+        self._delay = delay
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        if self._thread is not None:
+            return
+        self._thread = threading.Thread(target=self._run, name="mcp-grant-keeper", daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        thread = self._thread
+        if thread is not None:
+            thread.join(5.0)
+
+    def _run(self) -> None:
+        wait = self._delay
+        while not self._stop.wait(wait):
+            wait = self._interval
+            try:
+                renewed = (self._store or GRANTS).keep_alive()
+                if renewed:
+                    logger.info("mcp grant keeper renewed %d grant(s)", renewed)
+            except Exception as exc:  # noqa: BLE001 — the keeper never stops on an error
+                logger.warning("mcp grant keeper failed: %s", type(exc).__name__)
 
 
 #: The process-wide grant store. Every :class:`MCPConnection` uses it unless a
@@ -1399,6 +1673,10 @@ class MCPConnection:
             oauth = self.config.oauth
             if not oauth.get("refresh_token"):
                 return None
+            if self._grants.is_dead(self.config):
+                # The provider already said this token is gone. Asking again
+                # only spends requests: only a new sign-in helps.
+                return None
             current = self.config.auth_token
             if seen_token is not None and current and current != seen_token:
                 return current
@@ -1410,20 +1688,42 @@ class MCPConnection:
                 minted = self._refreshed_at
                 if minted is not None and time.monotonic() - minted < REFRESH_FLOOR:
                     return self.config.auth_token
-            token, updated = refresh_access_token(oauth)
+            token, updated, reason = refresh_access_token_ex(oauth)
+            dead_notice = None
+            rotated = False
             if not token:
-                return None
-            previous = oauth.get("refresh_token")
-            rotated = updated.get("refresh_token") != previous
-            self.config.auth_token = token
-            self.config.oauth = updated
-            self._refreshed_at = time.monotonic()
-            try:
-                self._grants.record_refresh(self.config, previous)
-            except Exception:  # noqa: BLE001 — the token works; the record is a bonus
-                pass
-        # Outside the lock: the listener writes a frame, and the executor takes
-        # this same lock when it adopts credentials from a task payload.
+                if reason in DEAD_GRANT_ERRORS:
+                    try:
+                        dead_notice = self._grants.mark_dead(self.config, reason)
+                    except Exception:  # noqa: BLE001 — the refusal stands either way
+                        dead_notice = None
+            else:
+                previous = oauth.get("refresh_token")
+                rotated = updated.get("refresh_token") != previous
+                # The store first: the sealed file holds the new refresh token
+                # before anyone uses the new access token, so a crash right
+                # after the provider rotated it cannot lose the only live copy.
+                candidate = MCPServerConfig(
+                    name=self.config.name,
+                    url=self.config.url,
+                    transport=self.config.transport,
+                    auth_token=token,
+                    oauth=updated,
+                    connector_id=self.config.connector_id,
+                )
+                try:
+                    self._grants.record_refresh(candidate, previous)
+                except Exception:  # noqa: BLE001 — the token works; the record is a bonus
+                    pass
+                self.config.auth_token = token
+                self.config.oauth = updated
+                self._refreshed_at = time.monotonic()
+        # Outside the locks: the listeners write frames and notifications, and
+        # the executor takes this same lock when it adopts credentials.
+        if dead_notice is not None:
+            self._grants.notify_dead(dead_notice)
+        if not token:
+            return None
         if rotated and self._on_rotated is not None:
             try:
                 self._on_rotated(self.config.name, self.config)

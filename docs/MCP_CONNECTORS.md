@@ -156,3 +156,56 @@ the host, so a host restart (`systemctl --user restart agents-manager`) is enoug
 to get fresh log lines. `_scratch/grants_meta.py` (run with
 `agents/host/.venv/bin/python`) prints the metadata of the sealed
 `~/.local/share/chuk-agents/mcp-grants.json` without any token.
+
+## Who renews a sign-in (bead chuk_chat-meoz)
+
+In the Agents build the **host is the one side that refreshes** a forwarded
+OAuth sign-in. Two refreshers of one grant kill it when the provider rotates
+refresh tokens (Fastmail: each refresh makes the old refresh token AND the old
+access token invalid; the second refresher gets `invalid_grant`).
+
+- `McpStore.forwardPayloads` never refreshes. It forwards the bearer as it is,
+  with the `oauth` block. (Until 2026-10-29 it refreshed a lapsed bearer on every
+  task start and probe, while the host refreshed the same grant: that was the
+  second refresher.)
+- `McpService._clientFor` (a chuk_chat chat in the Agents build) does not
+  refresh while a host is paired. It sends a probe and waits for the host's
+  `mcp_credentials` frame. The host sends one whenever its tokens differ from
+  the forwarded ones (`_queue_newer_mcp_credentials`), rotated or not.
+- Host: one `OAuthGrantStore` per process (`mcp-grants.json`, sealed, written
+  with fsync + rename before the new token is used). `GrantKeeper` renews every
+  grant once per 20 h so an idle refresh token never times out.
+- `invalid_grant` / `invalid_client` marks the grant dead: no more refresh
+  requests for that token (it used to try ~4 times per dial), `error_kind: auth`,
+  and ONE push "<Connector>: sign-in expired" (`notify_connector_expired`,
+  kind `mcp_signin_expired`, `session_key` `mcp-connector:<id>`). The tap opens
+  the connector and starts the browser sign-in (`reconnectOnOpen`).
+  A new sign-in cannot be automatic: OAuth consent needs the person in a browser.
+- A probe carries the device's whole set: grants not in it are forgotten on the
+  host (sign out = gone on both sides).
+- `mcp_tools` entries carry `client_id`; the app ignores an entry of a sign-in
+  it has replaced (a frame in flight across a Reconnect).
+- Every sign-in registers a new client as `McpOAuth.clientName` ("Chuk Chat").
+  A stored client registered under another name ("Agents") signs in again on
+  the next connect.
+
+## Fake server for tests and manual runs
+
+`agents/runtime/tests/fake_mcp_oauth.py`: local MCP + OAuth server (stdlib
+Python), rotating refresh tokens, short access tokens, auto-consent, admin
+switches `POST /admin/revoke`, `POST /admin/expire`, `GET /admin/state`.
+
+```bash
+python3 agents/runtime/tests/fake_mcp_oauth.py --port 8765 --access-ttl 120
+# then "Add by URL": http://127.0.0.1:8765/mcp
+```
+
+Tests against it: `agents/runtime/tests/test_mcp_oauth_e2e.py`,
+`agents/executor/tests/test_mcp_oauth_probe_e2e.py`,
+`test/services/mcp/mcp_fake_server_e2e_test.dart` (real HTTP, a fake host).
+A headless app run can follow its sign-in with
+`--dart-define=MCP_TEST_AUTO_BROWSER=true` (loopback http URLs only).
+
+Trap: `scripts/e2e_stack.sh` fails with "can't read supabase/config.toml" when
+`CDPATH` is set in the shell (`cd` then prints the path twice). Run it as
+`CDPATH= scripts/e2e_stack.sh up`.
