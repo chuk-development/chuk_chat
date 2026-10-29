@@ -127,8 +127,10 @@ Map<String, dynamic>? latestPageIn(
       final Object? raw = artifact['document'];
       if (raw is! Map || '${raw['id']}' != pageId) continue;
       final Map<String, dynamic> doc = Map<String, dynamic>.from(raw);
-      final num version = doc['version'] as num? ?? 0;
-      final num bestVersion = best?['version'] as num? ?? -1;
+      final Object? rawVersion = doc['version'];
+      final num version = rawVersion is num ? rawVersion : 0;
+      final Object? rawBest = best?['version'];
+      final num bestVersion = rawBest is num ? rawBest : -1;
       if (version >= bestVersion) best = doc;
     }
   }
@@ -290,11 +292,13 @@ class MediaIndex extends ChangeNotifier {
     final String id = '${document['id'] ?? ''}';
     if (id.isEmpty) return false;
     final String reference = MediaEntry.pageReference(threadKey, id);
-    final int version = (document['version'] as num?)?.toInt() ?? 0;
+    final Object? rawVersion = document['version'];
+    final int version = rawVersion is num ? rawVersion.toInt() : 0;
     final MediaEntry? known = _entries[reference];
     if (known != null && (known.version ?? 0) >= version) return false;
     final String title = '${document['title'] ?? ''}'.trim();
-    final double? stamp = (document['updated_at'] as num?)?.toDouble();
+    final Object? rawStamp = document['updated_at'];
+    final double? stamp = rawStamp is num ? rawStamp.toDouble() : null;
     _entries[reference] = MediaEntry(
       kind: MediaKind.page,
       reference: reference,
