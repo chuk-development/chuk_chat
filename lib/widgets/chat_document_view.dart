@@ -32,7 +32,7 @@ bool documentIsHtml(Map<String, dynamic> document) =>
 /// milliseconds. Anything else is reported as absent rather than guessed at.
 DateTime? documentUpdatedAt(Map<String, dynamic> document) {
   final raw = document['updated_at'];
-  if (raw is! num || raw <= 0 || !raw.isFinite || raw >= 8.64e12) return null;
+  if (raw is! num || raw <= 0 || !raw.isFinite || raw >= 1e11) return null;
   return DateTime.fromMillisecondsSinceEpoch((raw * 1000).round()).toLocal();
 }
 
