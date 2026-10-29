@@ -41,7 +41,7 @@ const bool kDefaultShowToolCalls = true;
 const bool kDefaultIncludeToolResultsInHistory = true;
 
 /* ---------- CHAT FONT SIZE ---------- */
-const double kDefaultChatFontSize = 15.0;
+const double kDefaultChatFontSize = 16.0;
 const double kMinChatFontSize = 11.0;
 const double kMaxChatFontSize = 24.0;
 
@@ -55,12 +55,16 @@ const double kMaxUiScale = 1.5;
 /// The actual resolved [fontFamily] string is looked up at render time
 /// via [resolveChatFontFamily] (handles GoogleFonts caching).
 const String kChatFontFamilySystem = 'system';
+const String kChatFontFamilyInter = 'inter';
 const String kChatFontFamilyArimo = 'arimo';
 const String kChatFontFamilyMerriweather = 'merriweather';
 const String kChatFontFamilyJetBrainsMono = 'jetbrains_mono';
-const String kDefaultChatFontFamily = kChatFontFamilyArimo;
+/// Inter is the default for chat and UI: open shapes, a tall x-height and
+/// full Latin-Ext (ä ö ü ß ẞ). Mono is selectable but never a default.
+const String kDefaultChatFontFamily = kChatFontFamilyInter;
 
 const List<String> kSupportedChatFontFamilies = <String>[
+  kChatFontFamilyInter,
   kChatFontFamilySystem,
   kChatFontFamilyArimo,
   kChatFontFamilyMerriweather,
@@ -70,9 +74,9 @@ const List<String> kSupportedChatFontFamilies = <String>[
 /* ---------- UI FONT FAMILY ----------
    The font used for the whole app chrome (menus, settings, buttons — every
    surface outside the chat body). Reuses the same bundled families as the
-   chat font, but defaults to the system font so an untouched install keeps
-   Flutter's platform default. Resolved via [resolveUiFontFamily]. */
-const String kDefaultUiFontFamily = kChatFontFamilySystem;
+   chat font and shares its default (Inter), so UI and chat use one face.
+   Theme packs never set it. Resolved via [resolveUiFontFamily]. */
+const String kDefaultUiFontFamily = kChatFontFamilyInter;
 
 const List<String> kSupportedUiFontFamilies = kSupportedChatFontFamilies;
 
@@ -278,8 +282,8 @@ ThemeData buildAppTheme({
         : const Color(0xFF291800),
   );
 
-  // Null / 'system' leaves [ThemeData.fontFamily] unset, so the platform
-  // default font is used — this is the untouched-install behaviour. A bundled
+  // 'system' leaves [ThemeData.fontFamily] unset, so the platform default
+  // font is used. Null or an unknown id means the default (Inter). A bundled
   // family id applies that font to the whole app chrome via the base
   // textTheme; the chat body keeps its own resolved font on top of this.
   final String? uiFontFamily = resolveUiFontFamily(uiFont);

@@ -159,7 +159,8 @@ void main() {
       expect(state.iconFg, v.iconFg);
       expect(state.bg, v.bg);
       expect(state.contrast, v.contrast);
-      expect(state.uiFont, v.uiFont);
+      // A pack never changes the font.
+      expect(state.uiFont, kDefaultUiFontFamily);
     });
   }
 }

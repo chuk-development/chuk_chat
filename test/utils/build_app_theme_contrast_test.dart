@@ -92,10 +92,10 @@ void main() {
     );
   });
 
-  test('uiFont null/system does not apply a bundled family', () {
-    // With fontFamily unset, ThemeData falls back to the platform default
-    // typography (e.g. Roboto), not to any of our bundled fonts. The
-    // invariant is that "system" behaves exactly like passing nothing.
+  test('uiFont null uses Inter; system applies no bundled family', () {
+    // Null means the default (Inter). 'system' leaves fontFamily unset, so
+    // ThemeData falls back to the platform typography (e.g. Roboto), not to
+    // any of our bundled fonts.
     final none = buildAppTheme(
       accent: kDefaultAccentColor,
       iconFg: kDefaultIconFgColor,
@@ -110,18 +110,16 @@ void main() {
       uiFont: kChatFontFamilySystem,
     );
 
+    expect(none.textTheme.bodyMedium?.fontFamily, kFontFamilyInter);
     expect(
       system.textTheme.bodyMedium?.fontFamily,
-      none.textTheme.bodyMedium?.fontFamily,
-    );
-    expect(
-      none.textTheme.bodyMedium?.fontFamily,
       isNot(kFontFamilyMerriweather),
     );
     expect(
-      none.textTheme.bodyMedium?.fontFamily,
+      system.textTheme.bodyMedium?.fontFamily,
       isNot(kFontFamilyJetBrainsMono),
     );
+    expect(system.textTheme.bodyMedium?.fontFamily, isNot(kFontFamilyInter));
   });
 
   test('uiFont with a bundled id applies that family to the text theme', () {
@@ -135,10 +133,11 @@ void main() {
     expect(theme.textTheme.bodyMedium?.fontFamily, kFontFamilyJetBrainsMono);
   });
 
-  test('resolveUiFontFamily maps ids to families, system/unknown to null', () {
+  test('resolveUiFontFamily maps ids to families, system to null', () {
     expect(resolveUiFontFamily(kChatFontFamilySystem), isNull);
-    expect(resolveUiFontFamily(null), isNull);
-    expect(resolveUiFontFamily('nonsense'), isNull);
+    expect(resolveUiFontFamily(null), kFontFamilyInter);
+    expect(resolveUiFontFamily('nonsense'), kFontFamilyInter);
+    expect(resolveUiFontFamily(kChatFontFamilyInter), kFontFamilyInter);
     expect(resolveUiFontFamily(kChatFontFamilyArimo), kFontFamilyArimo);
     expect(
       resolveUiFontFamily(kChatFontFamilyMerriweather),
@@ -146,7 +145,7 @@ void main() {
     );
   });
 
-  test('sanitizeUiFontFamily normalises unknown ids to the system default', () {
+  test('sanitizeUiFontFamily normalises unknown ids to the default (Inter)', () {
     expect(sanitizeUiFontFamily(null), kDefaultUiFontFamily);
     expect(sanitizeUiFontFamily('garbage'), kDefaultUiFontFamily);
     expect(

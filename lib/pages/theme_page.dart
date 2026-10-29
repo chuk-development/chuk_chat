@@ -187,7 +187,6 @@ class _ThemePageState extends State<ThemePage> {
       _selectedIconFgColor = v.iconFg;
       _selectedBgColor = v.bg;
       _selectedContrast = v.contrast;
-      _selectedUiFont = v.uiFont;
       _accentHexController.text = v.accent.toHexString();
       _iconFgHexController.text = v.iconFg.toHexString();
       _bgHexController.text = v.bg.toHexString();
@@ -209,7 +208,6 @@ class _ThemePageState extends State<ThemePage> {
         iconFg: _selectedIconFgColor,
         bg: _selectedBgColor,
         contrast: _selectedContrast,
-        uiFont: _selectedUiFont,
       )) {
         return preset;
       }
@@ -244,6 +242,8 @@ class _ThemePageState extends State<ThemePage> {
     switch (id) {
       case kChatFontFamilySystem:
         return l.fontFamilySystem;
+      case kChatFontFamilyInter:
+        return l.fontFamilyInter;
       case kChatFontFamilyMerriweather:
         return l.fontFamilyMerriweather;
       case kChatFontFamilyJetBrainsMono:

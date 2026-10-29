@@ -769,6 +769,8 @@ class _CustomizationPageState extends State<CustomizationPage> {
     switch (id) {
       case kChatFontFamilySystem:
         return l.fontFamilySystem;
+      case kChatFontFamilyInter:
+        return l.fontFamilyInter;
       case kChatFontFamilyMerriweather:
         return l.fontFamilyMerriweather;
       case kChatFontFamilyJetBrainsMono:

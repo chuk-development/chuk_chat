@@ -1,11 +1,15 @@
 // lib/utils/chat_font_resolver.dart
 //
 // Resolves chat font family identifiers to actual [fontFamily] strings.
-// The three chat fonts are bundled as assets (declared in pubspec.yaml under
+// The chat fonts are bundled as assets (declared in pubspec.yaml under
 // `flutter: fonts:`), so the family name is handed straight to
 // [TextStyle.fontFamily] with no runtime download.
 
 import 'package:chuk_chat/constants.dart';
+
+/// Family name of the bundled Inter font (see `pubspec.yaml`). The default
+/// for chat and UI.
+const String kFontFamilyInter = 'Inter';
 
 /// Family name of the bundled Arimo font (see `pubspec.yaml`).
 const String kFontFamilyArimo = 'Arimo';
@@ -23,6 +27,8 @@ String? resolveChatFontFamily(String id) {
   switch (id) {
     case kChatFontFamilySystem:
       return null;
+    case kChatFontFamilyInter:
+      return kFontFamilyInter;
     case kChatFontFamilyArimo:
       return kFontFamilyArimo;
     case kChatFontFamilyMerriweather:
@@ -30,7 +36,7 @@ String? resolveChatFontFamily(String id) {
     case kChatFontFamilyJetBrainsMono:
       return kFontFamilyJetBrainsMono;
     default:
-      return kFontFamilyArimo;
+      return kFontFamilyInter;
   }
 }
 
@@ -44,25 +50,28 @@ String sanitizeChatFontFamily(String? id) {
 }
 
 /// Map a stored UI-font identifier to a font family string for
-/// [ThemeData.fontFamily]. Returns `null` for the system default (and for any
-/// unknown id) so the platform font stack is used — that is the untouched
-/// behaviour of the app chrome.
+/// [ThemeData.fontFamily]. Returns `null` for the system font so the platform
+/// font stack is used; an unknown or missing id falls back to the default
+/// (Inter).
 String? resolveUiFontFamily(String? id) {
   switch (id) {
+    case kChatFontFamilySystem:
+      return null;
+    case kChatFontFamilyInter:
+      return kFontFamilyInter;
     case kChatFontFamilyArimo:
       return kFontFamilyArimo;
     case kChatFontFamilyMerriweather:
       return kFontFamilyMerriweather;
     case kChatFontFamilyJetBrainsMono:
       return kFontFamilyJetBrainsMono;
-    case kChatFontFamilySystem:
     default:
-      return null;
+      return kFontFamilyInter;
   }
 }
 
-/// Normalize an unknown UI-font id back to a supported value. Defaults to the
-/// system font (unlike the chat font, which defaults to Arimo).
+/// Normalize an unknown UI-font id back to a supported value. Defaults to
+/// Inter, the same default as the chat font.
 String sanitizeUiFontFamily(String? id) {
   if (id == null || !kSupportedUiFontFamilies.contains(id)) {
     return kDefaultUiFontFamily;

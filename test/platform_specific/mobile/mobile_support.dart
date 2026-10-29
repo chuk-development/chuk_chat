@@ -78,7 +78,8 @@ AgentsAgent agent({
 LocalAgentRosterSource rosterWith(List<AgentsAgent> agents) =>
     LocalAgentRosterSource(seed: agents);
 
-/// Loads Roboto and the Material icon font from the Flutter SDK so a golden
+/// Loads Roboto and the Material icon font from the Flutter SDK (and the
+/// bundled Inter from assets/fonts) so a golden
 /// shows real glyphs instead of Ahem boxes. Test-only; the SDK path is
 /// derived from the running `flutter_tester` binary, nothing is hard-coded.
 Future<void> loadRealFonts() async {
@@ -107,4 +108,18 @@ Future<void> loadRealFonts() async {
     'Roboto-Black.ttf',
   ]);
   await load('MaterialIcons', <String>['MaterialIcons-Regular.otf']);
+
+  // Inter is the app's default UI and chat font, bundled in assets/fonts.
+  // The test runs from the repository root.
+  final inter = FontLoader('Inter');
+  for (final String file in <String>[
+    'assets/fonts/Inter-wght.ttf',
+    'assets/fonts/Inter-Italic-wght.ttf',
+  ]) {
+    final File f = File(file);
+    if (!f.existsSync()) continue;
+    final bytes = await f.readAsBytes();
+    inter.addFont(Future<ByteData>.value(ByteData.sublistView(bytes)));
+  }
+  await inter.load();
 }

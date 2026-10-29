@@ -94,7 +94,6 @@ const _preset = ThemePreset(
     iconFg: Color(0xFF445566),
     bg: Color(0xFF778899),
     contrast: 0.7,
-    uiFont: kChatFontFamilyMerriweather,
   ),
   dark: ThemeVariant(
     accent: Color(0xFFAABBCC),
@@ -117,14 +116,9 @@ void main() {
     expect(aya.light.bg, isNot(kDefaultBgColor));
   });
 
-  test('every variant uses a supported UI font and an in-range contrast', () {
+  test('every variant has an in-range contrast', () {
     for (final p in kThemePresets) {
       for (final v in [p.light, p.dark]) {
-        expect(
-          kSupportedUiFontFamilies.contains(v.uiFont),
-          isTrue,
-          reason: '${p.name} has an unsupported uiFont ${v.uiFont}',
-        );
         expect(v.contrast, inInclusiveRange(kMinContrast, kMaxContrast));
       }
     }
@@ -143,7 +137,6 @@ void main() {
         iconFg: _preset.light.iconFg,
         bg: _preset.light.bg,
         contrast: _preset.light.contrast,
-        uiFont: _preset.light.uiFont,
       ),
       isTrue,
     );
@@ -155,7 +148,6 @@ void main() {
         iconFg: _preset.light.iconFg,
         bg: _preset.light.bg,
         contrast: _preset.light.contrast,
-        uiFont: _preset.light.uiFont,
       ),
       isFalse,
     );
@@ -170,7 +162,8 @@ void main() {
     expect(r.iconFg, const Color(0xFF445566));
     expect(r.bg, const Color(0xFF778899));
     expect(r.contrast, 0.7);
-    expect(r.uiFont, kChatFontFamilyMerriweather);
+    // A pack never sets a font: colour and font are separate choices.
+    expect(r.uiFont, isNull);
 
     final r2 = _Recorder();
     _preset.applyTo(_config(r2), Brightness.dark);
