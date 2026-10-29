@@ -348,7 +348,14 @@ class _ChatDocumentViewState extends State<ChatDocumentView> {
           Expanded(
             child: Padding(
               padding: EdgeInsets.only(top: widget.topInset, bottom: 12),
-              child: HtmlArtifactView(html: '${document['text'] ?? ''}'),
+              // A new version is a new web view: the native view loads its
+              // HTML once and would keep showing the old page.
+              child: HtmlArtifactView(
+                key: ValueKey<String>(
+                  'html-${document['id']}-${document['version']}',
+                ),
+                html: '${document['text'] ?? ''}',
+              ),
             ),
           )
         else

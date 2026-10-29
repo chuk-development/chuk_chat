@@ -185,4 +185,53 @@ void main() {
       },
     );
   });
+  test('a page with a malformed version or stamp does not drop the thread', () {
+    final index = MediaIndex()
+      ..noteRows('agent-x', <Map<String, dynamic>>[
+        {
+          'contentBlocks': [
+            {
+              'sandboxArtifact': {
+                'storagePath': 'cowork://blob/bad',
+                'filename': 'bad.json',
+                'mime': kDocumentMime,
+                'sizeBytes': 1,
+                'document': {
+                  'id': 'bad',
+                  'title': 'Bad',
+                  'kind': 'markdown',
+                  'version': 'two',
+                  'updated_at': 'now',
+                  'text': 'x',
+                },
+              },
+            },
+            {
+              'sandboxArtifact': {
+                'storagePath': 'p9',
+                'filename': 'ok.pdf',
+                'mime': 'application/pdf',
+                'sizeBytes': 3,
+              },
+            },
+          ],
+        },
+      ]);
+    expect(index.entries(kind: MediaKind.page).single.version, 0);
+    expect(index.entries(kind: MediaKind.file).single.name, 'ok.pdf');
+    expect(
+      latestPageIn(<Map<String, dynamic>>[
+        {
+          'contentBlocks': [
+            {
+              'sandboxArtifact': {
+                'document': {'id': 'bad', 'version': 'x', 'text': 't'},
+              },
+            },
+          ],
+        },
+      ], 'bad')!['text'],
+      't',
+    );
+  });
 }

@@ -442,7 +442,7 @@ class _ArtifactInlineCardState extends State<_ArtifactInlineCard> {
       case 'excalidraw':
         return 'Excalidraw sketch';
       default:
-        return 'Artifact';
+        return 'Page';
     }
   }
 
@@ -502,7 +502,7 @@ class _ArtifactInlineCardState extends State<_ArtifactInlineCard> {
           await ArtifactStorageService.loadArtifactById(widget.artifactId);
       if (art == null) {
         if (context.mounted) {
-          NiceSnackBar.showError(context, 'Artifact is no longer available.');
+          NiceSnackBar.showError(context, 'This page is no longer available.');
         }
         return;
       }
@@ -552,7 +552,7 @@ class _ArtifactInlineCardState extends State<_ArtifactInlineCard> {
     //   - No version info anywhere: "Excalidraw sketch"
     final String secondaryLabel;
     if (removed) {
-      secondaryLabel = 'Artifact removed';
+      secondaryLabel = 'Page removed';
     } else {
       final liveVersion = _live?.version;
       final authoredVersion = widget.authoredVersion;
@@ -676,7 +676,7 @@ class _ArtifactErrorCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Artifact could not be created',
+                  'Page could not be created',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,

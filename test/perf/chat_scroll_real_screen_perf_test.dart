@@ -68,9 +68,12 @@ void main() {
       );
       await g.moveBy(const Offset(0, 20));
       final List<String> dirty = <String>[];
-      debugOnRebuildDirtyWidget = (Element e, bool builtOnce) {
-        dirty.add(e.widget.runtimeType.toString());
-      };
+      // Only when asked: the hook runs inside the timed pump.
+      if (const bool.fromEnvironment('PERF_DIRTY')) {
+        debugOnRebuildDirtyWidget = (Element e, bool builtOnce) {
+          dirty.add(e.widget.runtimeType.toString());
+        };
+      }
       for (int f = 0; f < 200; f++) {
         await g.moveBy(const Offset(0, 40));
         dirty.clear();
