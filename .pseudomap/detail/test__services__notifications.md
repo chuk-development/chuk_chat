@@ -18,6 +18,9 @@
   - L52 `Future<bool> requestPermission()`
 - L55 `void main()`
 
+## test/services/notifications/notification_target_connector_test.dart  (25 Z.)
+- L5 `void main()`
+
 ## test/services/notifications/push_service_test.dart  (221 Z.)
 - L10 `class FakeTransport implements PushTransport`  — Firebase, faked: the tests drive tokens and taps by hand.
   - L11 `bool available = true`

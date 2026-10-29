@@ -142,160 +142,163 @@
   - L96 `static AppMode? parse(String? raw)`  — The mode a stored value names, or null for anything else.
   - L103 `void dispose()`
 
-## lib/services/app_theme_service.dart  (870 Z.)
-- L17 `typedef ThemeChangedCallback = void Function()`  — Callback type for theme changes
-- L20 `class AppThemeService extends ChangeNotifier`  — Service for managing application theme state, persistence, and Supabase sync
-  - L21 `AppThemeService._()`
-  - L23 `static final AppThemeService _instance = AppThemeService._()`
-  - L24 `static AppThemeService get instance`
-  - L27 `Brightness _themeMode = kDefaultThemeMode`
-  - L28 `Color _accentColor = kDefaultAccentColor`
-  - L29 `Color _iconFgColor = kDefaultIconFgColor`
-  - L30 `Color _bgColor = kDefaultBgColor`
-  - L31 `bool _dynamicColorEnabled = kDefaultDynamicColorEnabled`
-  - L35 `double _contrast = kDefaultContrast`
-  - L39 `String _uiFontFamily = kDefaultUiFontFamily`
-  - L42 `bool _showReasoningTokens = kDefaultShowReasoningTokens`
-  - L43 `bool _showModelInfo = kDefaultShowModelInfo`
-  - L44 `bool _showTps = kDefaultShowTps`
-  - L47 `bool _autoSendVoiceTranscription = false`
-  - L50 `bool _imageGenEnabled = false`
-  - L51 `String _imageGenDefaultSize = 'landscape_4_3'`
-  - L52 `int _imageGenCustomWidth = 1024`
-  - L53 `int _imageGenCustomHeight = 768`
-  - L54 `bool _imageGenUseCustomSize = false`
-  - L57 `bool _includeRecentImagesInHistory = true`
-  - L58 `bool _includeAllImagesInHistory = false`
-  - L59 `bool _includeReasoningInHistory = false`
-  - L60 `bool _includeToolResultsInHistory = kDefaultIncludeToolResultsInHistory`
-  - L63 `bool _toolCallingEnabled = kDefaultToolCallingEnabled`
-  - L64 `bool _toolDiscoveryMode = kDefaultToolDiscoveryMode`
-  - L65 `bool _showToolCalls = kDefaultShowToolCalls`
-  - L68 `String _uiLocale = kDefaultUiLocale`
-  - L71 `double _chatFontSize = kDefaultChatFontSize`
-  - L74 `String _chatFontFamily = kDefaultChatFontFamily`
-  - L77 `double _uiScale = kDefaultUiScale`
-  - L82 `bool _onboardingCompleted = false`
-  - L85 `static const String _kThemeModeKey = 'themeMode'`
-  - L86 `static const String _kAccentColorKey = 'accentColor'`
-  - L87 `static const String _kIconFgColorKey = 'iconFgColor'`
-  - L88 `static const String _kBgColorKey = 'bgColor'`
-  - L89 `static const String _kDynamicColorEnabledKey = 'dynamicColorEnabled'`
-  - L90 `static const String _kContrastKey = 'contrast'`
-  - L91 `static const String _kUiFontFamilyKey = 'uiFontFamily'`
-  - L92 `static const String _kShowReasoningTokensKey = 'showReasoningTokens'`
-  - L93 `static const String _kShowModelInfoKey = 'showModelInfo'`
-  - L94 `static const String _kShowTpsKey = 'showTps'`
-  - L95 `static const String _kAutoSendVoiceTranscriptionKey = 'autoSendVoiceTranscription'`
-  - L97 `static const String _kImageGenEnabledKey = 'imageGenEnabled'`
-  - L98 `static const String _kImageGenDefaultSizeKey = 'imageGenDefaultSize'`
-  - L99 `static const String _kImageGenCustomWidthKey = 'imageGenCustomWidth'`
-  - L100 `static const String _kImageGenCustomHeightKey = 'imageGenCustomHeight'`
-  - L101 `static const String _kImageGenUseCustomSizeKey = 'imageGenUseCustomSize'`
-  - L102 `static const String _kIncludeRecentImagesInHistoryKey = 'includeRecentImagesInHistory'`
-  - L104 `static const String _kIncludeAllImagesInHistoryKey = 'includeAllImagesInHistory'`
-  - L106 `static const String _kIncludeReasoningInHistoryKey = 'includeReasoningInHistory'`
-  - L108 `static const String _kIncludeToolResultsInHistoryKey = 'includeToolResultsInHistory'`
-  - L110 `static const String _kToolCallingEnabledKey = 'toolCallingEnabled'`
-  - L111 `static const String _kToolDiscoveryModeKey = 'toolDiscoveryMode'`
-  - L112 `static const String _kShowToolCallsKey = 'showToolCalls'`
-  - L113 `static const String _kUiLocaleKey = 'uiLocale'`
-  - L114 `static const String _kChatFontSizeKey = 'chatFontSize'`
-  - L115 `static const String _kChatFontFamilyKey = 'chatFontFamily'`
-  - L116 `static const String _kUiScaleKey = 'uiScale'`
-  - L119 `static const String _kOnboardingCompletedKey = 'onboardingCompleted'`
-  - L121 `static String _onboardingKeyFor(String userId)`
-  - L125 `SharedPreferences? _cachedPrefs`
-  - L126 `Timer? _themeSyncDebounce`
-  - L127 `Timer? _customizationSyncDebounce`
-  - L128 `ThemeData? _cachedThemeData`
-  - L132 `Color? _cachedThemeAccent`
-  - L133 `Color? _cachedThemeBg`
-  - L134 `Color? _cachedThemeIconFg`
-  - L135 `double? _cachedThemeContrast`
-  - L136 `String? _cachedThemeUiFont`
-  - L137 `bool _hasAppliedSupabaseTheme = false`
-  - L138 `Future<void>? _supabaseLoadInFlight`
-  - L139 `DateTime? _lastSupabaseLoadAt`
-  - L140 `static const Duration _supabaseLoadTtl = Duration(seconds: 20)`
-  - L143 `Brightness get themeMode`
-  - L144 `Color get accentColor`
-  - L145 `Color get iconFgColor`
-  - L146 `Color get bgColor`
-  - L147 `bool get dynamicColorEnabled`
-  - L148 `double get contrast`
-  - L149 `String get uiFontFamily`
-  - L150 `bool get showReasoningTokens`
-  - L151 `bool get showModelInfo`
-  - L152 `bool get showTps`
-  - L153 `bool get autoSendVoiceTranscription`
-  - L154 `bool get imageGenEnabled`
-  - L155 `String get imageGenDefaultSize`
-  - L156 `int get imageGenCustomWidth`
-  - L157 `int get imageGenCustomHeight`
-  - L158 `bool get imageGenUseCustomSize`
-  - L159 `bool get includeRecentImagesInHistory`
-  - L160 `bool get includeAllImagesInHistory`
-  - L161 `bool get includeReasoningInHistory`
-  - L162 `bool get includeToolResultsInHistory`
-  - L163 `bool get toolCallingEnabled`
-  - L164 `bool get toolDiscoveryMode`
-  - L165 `bool get showToolCalls`
-  - L166 `String get uiLocale`
-  - L167 `double get chatFontSize`
-  - L168 `String get chatFontFamily`
-  - L169 `double get uiScale`
-  - L170 `bool get onboardingCompleted`
-  - L171 `bool get hasAppliedSupabaseTheme`
-  - L173 `ThemeData? get cachedThemeData`
-  - L176 `Future<SharedPreferences> _getPrefs()`
-  - L182 `Future<void> loadFromPrefs()`  — Load theme settings from local SharedPreferences
-  - L248 `bool _readLocalOnboarding(SharedPreferences prefs)`  — Reads the locally cached onboarding state for the signed-in user,
-  - L260 `double _clampChatFontSize(double v)`
-  - L263 `double _clampUiScale(double v)`
-  - L265 `double _clampContrast(double v)`
-  - L267 `String _sanitizeChatFontFamily(String? id)`
-  - L274 `String _sanitizeUiFontFamily(String? id)`
-  - L282 `Future<void> loadFromSupabaseAsync({bool forceRefresh = false})`  — Load theme from Supabase in background
-  - L311 `Future<void> _loadFromSupabase()`
-  - L429 `Future<void> _reconcileOnboarding(String userId, bool serverCompleted)`  — Merges the per-user Supabase onboarding flag with the local cache.
-  - L442 `Future<void> _persistToPrefs()`
-  - L493 `void _debouncedSyncTheme()`
-  - L500 `void _debouncedSyncCustomization()`
-  - L507 `Future<void> _syncThemeToSupabase()`
-  - L534 `Future<void> _syncCustomizationToSupabase()`
-  - L578 `void setThemeMode(Brightness mode)`
-  - L585 `void setAccentColor(Color color)`
-  - L592 `void setIconFgColor(Color color)`
-  - L599 `void setBgColor(Color color)`
-  - L612 `Future<void> setDynamicColorEnabled(bool enabled)`  — Material You overrides the explicit palette, so it is part of the look and
-  - L622 `void setShowReasoningTokens(bool show)`
-  - L628 `void setShowModelInfo(bool show)`
-  - L634 `void setShowTps(bool show)`
-  - L640 `void setAutoSendVoiceTranscription(bool autoSend)`
-  - L646 `void setImageGenEnabled(bool enabled)`
-  - L652 `void setImageGenDefaultSize(String size)`
-  - L658 `void setImageGenCustomWidth(int width)`
-  - L664 `void setImageGenCustomHeight(int height)`
-  - L670 `void setImageGenUseCustomSize(bool useCustom)`
-  - L676 `void setIncludeRecentImagesInHistory(bool value)`
-  - L682 `void setIncludeAllImagesInHistory(bool value)`
-  - L688 `void setIncludeReasoningInHistory(bool value)`
-  - L694 `void setIncludeToolResultsInHistory(bool value)`
-  - L700 `void setToolCallingEnabled(bool value)`
-  - L706 `void setToolDiscoveryMode(bool value)`
-  - L712 `void setShowToolCalls(bool value)`
-  - L718 `void setUiLocale(String locale)`
-  - L724 `void setChatFontSize(double size)`
-  - L732 `void setChatFontFamily(String id)`
-  - L742 `Future<void> setUiScale(double scale)`  — UI scale is a device-local display preference and is NOT synced to
-  - L756 `Future<void> setContrast(double contrast)`  — Contrast belongs to the look, not to the device: a theme pack sets it
-  - L771 `Future<void> setUiFontFamily(String id)`  — The app-chrome font is part of a theme pack, so it syncs with the rest of
-  - L784 `Future<void> setOnboardingCompleted(bool completed)`  — Onboarding completion is per-user: cached locally under a user-scoped
-  - L802 `void resetSupabaseThemeFlag()`
-  - L819 `ThemeData buildTheme({ColorScheme? lightDynamic, ColorScheme? darkDynamic})`  — Build the ThemeData from current settings.
-  - L855 `ColorScheme? _resolveDynamicScheme({ ColorScheme? lightDynamic, ColorScheme? darkDynamic, })`  — The dynamic scheme for the active brightness, or `null` when Material You
-  - L864 `void dispose()`
+## lib/services/app_theme_service.dart  (912 Z.)
+- L18 `typedef ThemeChangedCallback = void Function()`  — Callback type for theme changes
+- L21 `class AppThemeService extends ChangeNotifier`  — Service for managing application theme state, persistence, and Supabase sync
+  - L22 `AppThemeService._()`
+  - L24 `static final AppThemeService _instance = AppThemeService._()`
+  - L25 `static AppThemeService get instance`
+  - L28 `Brightness _themeMode = kDefaultThemeMode`
+  - L29 `Color _accentColor = kDefaultAccentColor`
+  - L30 `Color _iconFgColor = kDefaultIconFgColor`
+  - L31 `Color _bgColor = kDefaultBgColor`
+  - L32 `bool _dynamicColorEnabled = kDefaultDynamicColorEnabled`
+  - L36 `double _contrast = kDefaultContrast`
+  - L40 `String _uiFontFamily = kDefaultUiFontFamily`
+  - L43 `bool _showReasoningTokens = kDefaultShowReasoningTokens`
+  - L44 `bool _showModelInfo = kDefaultShowModelInfo`
+  - L45 `bool _showTps = kDefaultShowTps`
+  - L48 `bool _autoSendVoiceTranscription = false`
+  - L51 `bool _imageGenEnabled = false`
+  - L52 `String _imageGenDefaultSize = 'landscape_4_3'`
+  - L53 `int _imageGenCustomWidth = 1024`
+  - L54 `int _imageGenCustomHeight = 768`
+  - L55 `bool _imageGenUseCustomSize = false`
+  - L58 `bool _includeRecentImagesInHistory = true`
+  - L59 `bool _includeAllImagesInHistory = false`
+  - L60 `bool _includeReasoningInHistory = false`
+  - L61 `bool _includeToolResultsInHistory = kDefaultIncludeToolResultsInHistory`
+  - L64 `bool _toolCallingEnabled = kDefaultToolCallingEnabled`
+  - L65 `bool _toolDiscoveryMode = kDefaultToolDiscoveryMode`
+  - L66 `bool _showToolCalls = kDefaultShowToolCalls`
+  - L69 `String _uiLocale = kDefaultUiLocale`
+  - L72 `double _chatFontSize = kDefaultChatFontSize`
+  - L75 `String _chatFontFamily = kDefaultChatFontFamily`
+  - L78 `double _uiScale = kDefaultUiScale`
+  - L83 `bool _onboardingCompleted = false`
+  - L86 `static const String _kThemeModeKey = 'themeMode'`
+  - L87 `static const String _kAccentColorKey = 'accentColor'`
+  - L88 `static const String _kIconFgColorKey = 'iconFgColor'`
+  - L89 `static const String _kBgColorKey = 'bgColor'`
+  - L90 `static const String _kDynamicColorEnabledKey = 'dynamicColorEnabled'`
+  - L91 `static const String _kContrastKey = 'contrast'`
+  - L92 `static const String _kUiFontFamilyKey = 'uiFontFamily'`
+  - L95 `static const String _kUiFontPackMigratedKey = 'uiFontPackMigrationV1'`
+  - L96 `static const String _kShowReasoningTokensKey = 'showReasoningTokens'`
+  - L97 `static const String _kShowModelInfoKey = 'showModelInfo'`
+  - L98 `static const String _kShowTpsKey = 'showTps'`
+  - L99 `static const String _kAutoSendVoiceTranscriptionKey = 'autoSendVoiceTranscription'`
+  - L101 `static const String _kImageGenEnabledKey = 'imageGenEnabled'`
+  - L102 `static const String _kImageGenDefaultSizeKey = 'imageGenDefaultSize'`
+  - L103 `static const String _kImageGenCustomWidthKey = 'imageGenCustomWidth'`
+  - L104 `static const String _kImageGenCustomHeightKey = 'imageGenCustomHeight'`
+  - L105 `static const String _kImageGenUseCustomSizeKey = 'imageGenUseCustomSize'`
+  - L106 `static const String _kIncludeRecentImagesInHistoryKey = 'includeRecentImagesInHistory'`
+  - L108 `static const String _kIncludeAllImagesInHistoryKey = 'includeAllImagesInHistory'`
+  - L110 `static const String _kIncludeReasoningInHistoryKey = 'includeReasoningInHistory'`
+  - L112 `static const String _kIncludeToolResultsInHistoryKey = 'includeToolResultsInHistory'`
+  - L114 `static const String _kToolCallingEnabledKey = 'toolCallingEnabled'`
+  - L115 `static const String _kToolDiscoveryModeKey = 'toolDiscoveryMode'`
+  - L116 `static const String _kShowToolCallsKey = 'showToolCalls'`
+  - L117 `static const String _kUiLocaleKey = 'uiLocale'`
+  - L118 `static const String _kChatFontSizeKey = 'chatFontSize'`
+  - L119 `static const String _kChatFontFamilyKey = 'chatFontFamily'`
+  - L120 `static const String _kUiScaleKey = 'uiScale'`
+  - L123 `static const String _kOnboardingCompletedKey = 'onboardingCompleted'`
+  - L125 `static String _onboardingKeyFor(String userId)`
+  - L129 `SharedPreferences? _cachedPrefs`
+  - L130 `Timer? _themeSyncDebounce`
+  - L131 `Timer? _customizationSyncDebounce`
+  - L132 `ThemeData? _cachedThemeData`
+  - L136 `Color? _cachedThemeAccent`
+  - L137 `Color? _cachedThemeBg`
+  - L138 `Color? _cachedThemeIconFg`
+  - L139 `double? _cachedThemeContrast`
+  - L140 `String? _cachedThemeUiFont`
+  - L141 `bool _hasAppliedSupabaseTheme = false`
+  - L142 `Future<void>? _supabaseLoadInFlight`
+  - L143 `DateTime? _lastSupabaseLoadAt`
+  - L144 `static const Duration _supabaseLoadTtl = Duration(seconds: 20)`
+  - L147 `Brightness get themeMode`
+  - L148 `Color get accentColor`
+  - L149 `Color get iconFgColor`
+  - L150 `Color get bgColor`
+  - L151 `bool get dynamicColorEnabled`
+  - L152 `double get contrast`
+  - L153 `String get uiFontFamily`
+  - L154 `bool get showReasoningTokens`
+  - L155 `bool get showModelInfo`
+  - L156 `bool get showTps`
+  - L157 `bool get autoSendVoiceTranscription`
+  - L158 `bool get imageGenEnabled`
+  - L159 `String get imageGenDefaultSize`
+  - L160 `int get imageGenCustomWidth`
+  - L161 `int get imageGenCustomHeight`
+  - L162 `bool get imageGenUseCustomSize`
+  - L163 `bool get includeRecentImagesInHistory`
+  - L164 `bool get includeAllImagesInHistory`
+  - L165 `bool get includeReasoningInHistory`
+  - L166 `bool get includeToolResultsInHistory`
+  - L167 `bool get toolCallingEnabled`
+  - L168 `bool get toolDiscoveryMode`
+  - L169 `bool get showToolCalls`
+  - L170 `String get uiLocale`
+  - L171 `double get chatFontSize`
+  - L172 `String get chatFontFamily`
+  - L173 `double get uiScale`
+  - L174 `bool get onboardingCompleted`
+  - L175 `bool get hasAppliedSupabaseTheme`
+  - L177 `ThemeData? get cachedThemeData`
+  - L180 `Future<SharedPreferences> _getPrefs()`
+  - L187 `void debugResetPrefsCache()`  — Drops the cached [SharedPreferences] so a test can load new mock values.
+  - L190 `Future<void> loadFromPrefs()`  — Load theme settings from local SharedPreferences
+  - L263 `bool _readLocalOnboarding(SharedPreferences prefs)`  — Reads the locally cached onboarding state for the signed-in user,
+  - L275 `double _clampChatFontSize(double v)`
+  - L278 `double _clampUiScale(double v)`
+  - L280 `double _clampContrast(double v)`
+  - L282 `String _sanitizeChatFontFamily(String? id)`
+  - L289 `String _sanitizeUiFontFamily(String? id)`
+  - L298 `String _migratedPackUiFont()`  — The current UI font after the legacy pack-font migration (see
+  - L307 `Future<void> loadFromSupabaseAsync({bool forceRefresh = false})`  — Load theme from Supabase in background
+  - L336 `Future<void> _loadFromSupabase()`
+  - L465 `Future<void> _reconcileOnboarding(String userId, bool serverCompleted)`  — Merges the per-user Supabase onboarding flag with the local cache.
+  - L478 `Future<void> _persistToPrefs()`
+  - L529 `void _debouncedSyncTheme()`
+  - L536 `void _debouncedSyncCustomization()`
+  - L543 `Future<void> _syncThemeToSupabase()`
+  - L570 `Future<void> _syncCustomizationToSupabase()`
+  - L614 `void setThemeMode(Brightness mode)`
+  - L621 `void setAccentColor(Color color)`
+  - L628 `void setIconFgColor(Color color)`
+  - L635 `void setBgColor(Color color)`
+  - L648 `Future<void> setDynamicColorEnabled(bool enabled)`  — Material You overrides the explicit palette, so it is part of the look and
+  - L658 `void setShowReasoningTokens(bool show)`
+  - L664 `void setShowModelInfo(bool show)`
+  - L670 `void setShowTps(bool show)`
+  - L676 `void setAutoSendVoiceTranscription(bool autoSend)`
+  - L682 `void setImageGenEnabled(bool enabled)`
+  - L688 `void setImageGenDefaultSize(String size)`
+  - L694 `void setImageGenCustomWidth(int width)`
+  - L700 `void setImageGenCustomHeight(int height)`
+  - L706 `void setImageGenUseCustomSize(bool useCustom)`
+  - L712 `void setIncludeRecentImagesInHistory(bool value)`
+  - L718 `void setIncludeAllImagesInHistory(bool value)`
+  - L724 `void setIncludeReasoningInHistory(bool value)`
+  - L730 `void setIncludeToolResultsInHistory(bool value)`
+  - L736 `void setToolCallingEnabled(bool value)`
+  - L742 `void setToolDiscoveryMode(bool value)`
+  - L748 `void setShowToolCalls(bool value)`
+  - L754 `void setUiLocale(String locale)`
+  - L760 `void setChatFontSize(double size)`
+  - L768 `void setChatFontFamily(String id)`
+  - L778 `Future<void> setUiScale(double scale)`  — UI scale is a device-local display preference and is NOT synced to
+  - L792 `Future<void> setContrast(double contrast)`  — Contrast belongs to the look, not to the device: a theme pack sets it
+  - L809 `Future<void> setUiFontFamily(String id)`  — The app-chrome font syncs with the rest of the look. Theme packs never
+  - L826 `Future<void> setOnboardingCompleted(bool completed)`  — Onboarding completion is per-user: cached locally under a user-scoped
+  - L844 `void resetSupabaseThemeFlag()`
+  - L861 `ThemeData buildTheme({ColorScheme? lightDynamic, ColorScheme? darkDynamic})`  — Build the ThemeData from current settings.
+  - L897 `ColorScheme? _resolveDynamicScheme({ ColorScheme? lightDynamic, ColorScheme? darkDynamic, })`  — The dynamic scheme for the active brightness, or `null` when Material You
+  - L906 `void dispose()`
 
 ## lib/services/approval_config.dart  (140 Z.)
 - L4 `enum ApprovalCategory`  — Categories of actions that may require approval
@@ -346,7 +349,7 @@
   - L99 `static Future<void> flushPendingEdits()`  — Invokes every registered flusher and awaits them all. Used right
   - L129 `static const String _artifactsTable = 'artifacts'`
   - L130 `static const String _versionsTable = 'artifact_versions'`
-  - L131 `static const String _missingSchemaMessage = 'Artifact storage is not configured on this server yet. ' 'Please run the database migrations for artifacts.'`
+  - L131 `static const String _missingSchemaMessage = 'Page storage is not configured on this server yet. ' 'Please run the database migrations for artifacts (pages).'`
   - L134 `static const int maxContentBytes = 500 * 1024`
   - L135 `static final RegExp _artifactIdPattern = RegExp(r'^[A-Za-z0-9-]+$')`
   - L136 `static const Uuid _uuid = Uuid()`
@@ -3564,13 +3567,13 @@
   - L1211 `String _answerFormatSection()`  — How an answer starts, and the `:::` blocks `MarkdownMessage` renders
   - L1297 `String _visualOutputProtocol()`  — Chart and map rendering protocol — these are output formats, not tools.
 
-## lib/services/tool_registry.dart  (1896 Z.)
+## lib/services/tool_registry.dart  (1898 Z.)
 - L14 `_serverBackedToolNames = { 'github', 'slack', 'google_calendar', 'gmail', }`
 - L22 `toolCategoryMap = { 'find_tools': ToolCategory.basic, 'calculate': ToolCategory.basic, 'get_time': ToolCategory.basic, '`  — Maps tool names to their ToolCategory for enable/disable filtering.
 - L68 `discoveryCatalog = { 'Maps / Karten': 'Find places and restaurants, geocode addresses and calculate routes / ' 'Orte und`  — Discovery catalog: category labels -> human-readable descriptions.
 - L100 `builtinTools = [ // -- Meta-tool: find_tools -- ClientTool( name: 'find_tools', description: 'Discovery tool. Call this `  — All built-in tool definitions with tags for discovery.
-- L1858 `bool _isMobileRuntime()`  — Whether the current platform is a mobile device (Android/iOS).
-- L1866 `void registerBuiltinTools(ToolExecutor executor)`  — Register all built-in tools from [builtinTools] into a [ToolExecutor].
+- L1860 `bool _isMobileRuntime()`  — Whether the current platform is a mobile device (Android/iOS).
+- L1868 `void registerBuiltinTools(ToolExecutor executor)`  — Register all built-in tools from [builtinTools] into a [ToolExecutor].
 
 ## lib/services/tool_result_cache_registry.dart  (139 Z.)
 - L27 `_uuid = Uuid()`

@@ -2528,36 +2528,45 @@
   - L278 `static List<ToolCall> _decodeToolCalls(Object? raw)`
   - L292 `static List<ContentBlock> _decodeBlocks(Object? raw)`
 
-## lib/services/agents/media_index.dart  (236 Z.)
-- L23 `enum MediaKind`  — What kind of thing an entry points at.
-  - L23 `image`
-  - L23 `file`
-- L26 `@immutable class MediaEntry`  — One thing an agent handed over.
-  - L28 `const MediaEntry({ required this.kind, required this.reference, required this.name, required this.threadKey, this.mime = '', this.sizeBytes, this.at, })`
-  - L38 `final MediaKind kind`
-  - L42 `final String reference`  — Where the bytes are: a `cowork://blob/<id>` URL for a picture, the storage
-  - L44 `final String name`
-  - L45 `final String threadKey`
-  - L46 `final String mime`
-  - L47 `final int? sizeBytes`
-  - L48 `final DateTime? at`
-  - L50 `Map<String, dynamic> toJson()`
-  - L60 `static MediaEntry? fromJson(Object? value)`
-- L82 `List<Object?> contentBlocksOf(Map<String, dynamic> row)`  — The content blocks of a stored row.
-- L96 `class MediaIndex extends ChangeNotifier`
-  - L97 `MediaIndex()`
-  - L99 `static final MediaIndex instance = MediaIndex()`
-  - L101 `static const String _prefsKey = 'cowork_media_index_v1'`
-  - L104 `final Map<String, MediaEntry> _entries = <String, MediaEntry>{}`  — Keyed by reference, so the same file indexed twice is one entry.
-  - L105 `bool _loaded = false`
-  - L107 `bool get loaded`
-  - L110 `List<MediaEntry> entries({MediaKind? kind})`  — Newest first. [kind] null returns everything.
-  - L125 `Future<void> load()`
-  - L150 `Future<void> ensureFor(Iterable<String> threadKeys)`  — Read the threads this device already holds, once per thread.
-  - L166 `final Set<String> _scanned = <String>{}`  — Threads already read, so a rebuild does not read them again.
-  - L170 `void noteRows(String threadKey, List<Map<String, dynamic>> rows)`  — Take every picture and every file out of [rows] and remember where they
-  - L215 `Future<void> _persist()`
-  - L230 `void clearForTest()`
+## lib/services/agents/media_index.dart  (353 Z.)
+- L27 `enum MediaKind`  — What kind of thing an entry points at.
+  - L27 `image`
+  - L27 `file`
+  - L27 `page`
+- L30 `kDocumentMime = 'application/vnd.cowork.document+json'`  — The mime type the host stamps on a document delivery.
+- L33 `@immutable class MediaEntry`  — One thing an agent handed over.
+  - L35 `const MediaEntry({ required this.kind, required this.reference, required this.name, required this.threadKey, this.mime = '', this.sizeBytes, this.at, this.pageId, this.pageKind, this.version, })`
+  - L49 `static String pageReference(String threadKey, String pageId)`  — The index key of a page: one per thread (= agent) and page id.
+  - L52 `final MediaKind kind`
+  - L56 `final String? pageId`  — For a page: its id in the agent's store, its document kind (`markdown`,
+  - L57 `final String? pageKind`
+  - L58 `final int? version`
+  - L62 `final String reference`  — Where the bytes are: a `cowork://blob/<id>` URL for a picture, the storage
+  - L64 `final String name`
+  - L65 `final String threadKey`
+  - L66 `final String mime`
+  - L67 `final int? sizeBytes`
+  - L68 `final DateTime? at`
+  - L70 `Map<String, dynamic> toJson()`
+  - L83 `static MediaEntry? fromJson(Object? value)`
+- L117 `Map<String, dynamic>? latestPageIn( List<Map<String, dynamic>> rows, String pageId, )`  — The newest snapshot of the page [pageId] in [rows], or null.
+- L144 `List<Object?> contentBlocksOf(Map<String, dynamic> row)`  — The content blocks of a stored row.
+- L158 `class MediaIndex extends ChangeNotifier`
+  - L159 `MediaIndex()`
+  - L161 `static final MediaIndex instance = MediaIndex()`
+  - L163 `static const String _prefsKey = 'cowork_media_index_v1'`
+  - L166 `final Map<String, MediaEntry> _entries = <String, MediaEntry>{}`  — Keyed by reference, so the same file indexed twice is one entry.
+  - L167 `bool _loaded = false`
+  - L169 `bool get loaded`
+  - L172 `List<MediaEntry> entries({MediaKind? kind})`  — Newest first. [kind] null returns everything.
+  - L187 `Future<void> load()`
+  - L212 `Future<void> ensureFor(Iterable<String> threadKeys)`  — Read the threads this device already holds, once per thread.
+  - L228 `final Set<String> _scanned = <String>{}`  — Threads already read, so a rebuild does not read them again.
+  - L232 `void noteRows(String threadKey, List<Map<String, dynamic>> rows)`  — Take every picture and every file out of [rows] and remember where they
+  - L285 `bool _notePage( String threadKey, Map<Object?, Object?> document, DateTime? at, )`  — Index one page snapshot. True when the index changed: a page seen for
+  - L318 `static Future<Map<String, dynamic>?> loadPage(MediaEntry entry)`  — The page behind [entry], read from its thread on this device.
+  - L332 `Future<void> _persist()`
+  - L347 `void clearForTest()`
 
 ## lib/services/agents/room_source.dart  (214 Z.)
 - L21 `abstract class RoomSource extends ChangeNotifier`  — Read/write access to the app's rooms, as a [ChangeNotifier] the UI listens to.

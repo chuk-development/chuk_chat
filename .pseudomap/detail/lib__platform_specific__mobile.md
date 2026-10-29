@@ -236,7 +236,7 @@
   - L78 `final ContainerTransformSource? closed`  — The row the travel starts from. Null before any row has been tapped (a
   - L81 `Widget build(BuildContext context)`
 
-## lib/platform_specific/mobile/mobile_home.dart  (273 Z.)
+## lib/platform_specific/mobile/mobile_home.dart  (278 Z.)
 - L26 `class MobileHome extends StatefulWidget`
   - L27 `const MobileHome({ super.key, required this.roster, required this.chats, required this.settings, this.readMarks, })`
   - L36 `final AgentRosterSource roster`  — The roster, for the media tab's thread keys and the unread badge.
@@ -248,24 +248,24 @@
   - L52 `int _index = 0`
   - L54 `AgentReadMarks get _marks`
   - L57 `Widget build(BuildContext context)`
-- L145 `class FadeThroughTabs extends StatefulWidget`  — An [IndexedStack] that fades through instead of cutting.
-  - L146 `const FadeThroughTabs({ super.key, required this.index, required this.children, })`
-  - L152 `final int index`
-  - L153 `final List<Widget> children`
-  - L156 `static const Duration duration = Duration(milliseconds: 300)`  — Inside the 200–350 ms band the rest of the app's motion lives in.
-  - L159 `State<FadeThroughTabs> createState()`
-- L162 `class _FadeThroughTabsState extends State<FadeThroughTabs> with SingleTickerProviderStateMixin`
-  - L164 `late final AnimationController _c = AnimationController( vsync: this, duration: FadeThroughTabs.duration, value: 1, )..addStatusListener(_onStatus)`
-  - L171 `late int _incoming = widget.index`  — The tab that is arriving (at rest: the tab that is simply there).
-  - L174 `int? _outgoing`  — The tab that is leaving, while it is still worth painting.
-  - L176 `bool _reducedMotion = false`
-  - L178 `late final Animation<double> _out = CurvedAnimation( parent: _c, curve: const Interval(0, 0.35, curve: Curves.easeOut), )`
-  - L182 `late final Animation<double> _in = CurvedAnimation( parent: _c, curve: const Interval(0.35, 1, curve: kExpressiveDecelerate), )`
-  - L187 `void _onStatus(AnimationStatus status)`
-  - L194 `void didChangeDependencies()`
-  - L205 `void didUpdateWidget(covariant FadeThroughTabs oldWidget)`
-  - L221 `void dispose()`
-  - L227 `Widget build(BuildContext context)`
+- L150 `class FadeThroughTabs extends StatefulWidget`  — An [IndexedStack] that fades through instead of cutting.
+  - L151 `const FadeThroughTabs({ super.key, required this.index, required this.children, })`
+  - L157 `final int index`
+  - L158 `final List<Widget> children`
+  - L161 `static const Duration duration = Duration(milliseconds: 300)`  — Inside the 200–350 ms band the rest of the app's motion lives in.
+  - L164 `State<FadeThroughTabs> createState()`
+- L167 `class _FadeThroughTabsState extends State<FadeThroughTabs> with SingleTickerProviderStateMixin`
+  - L169 `late final AnimationController _c = AnimationController( vsync: this, duration: FadeThroughTabs.duration, value: 1, )..addStatusListener(_onStatus)`
+  - L176 `late int _incoming = widget.index`  — The tab that is arriving (at rest: the tab that is simply there).
+  - L179 `int? _outgoing`  — The tab that is leaving, while it is still worth painting.
+  - L181 `bool _reducedMotion = false`
+  - L183 `late final Animation<double> _out = CurvedAnimation( parent: _c, curve: const Interval(0, 0.35, curve: Curves.easeOut), )`
+  - L187 `late final Animation<double> _in = CurvedAnimation( parent: _c, curve: const Interval(0.35, 1, curve: kExpressiveDecelerate), )`
+  - L192 `void _onStatus(AnimationStatus status)`
+  - L199 `void didChangeDependencies()`
+  - L210 `void didUpdateWidget(covariant FadeThroughTabs oldWidget)`
+  - L226 `void dispose()`
+  - L232 `Widget build(BuildContext context)`
 
 ## lib/platform_specific/mobile/mobile_layout.dart  (96 Z.)
 - L20 `class MobileLayout`
@@ -283,29 +283,61 @@
   - L86 `static bool isPhoneWidth(double width)`  — The same rule for a width the caller already has (a `LayoutBuilder`
   - L93 `static double chromeInset(BuildContext context)`  — Space the chat body reserves at the top so its first row starts below
 
-## lib/platform_specific/mobile/mobile_media_page.dart  (225 Z.)
-- L25 `class MobileMediaPage extends StatefulWidget`
-  - L26 `const MobileMediaPage({super.key, this.index, this.threadKeys = const []})`
-  - L28 `final MediaIndex? index`
-  - L32 `final List<String> threadKeys`  — Every thread this device holds. Read once each, so what arrived before
-  - L35 `State<MobileMediaPage> createState()`
-- L38 `class _MobileMediaPageState extends State<MobileMediaPage>`
-  - L39 `int _filter = 0`
-  - L41 `MediaIndex get _index`
-  - L44 `void initState()`
-  - L50 `void didUpdateWidget(MobileMediaPage oldWidget)`
-  - L56 `Widget build(BuildContext context)`
-  - L159 `static SandboxArtifactPayload _payloadOf(MediaEntry entry)`  — A file entry, in the shape the chat's own file row takes. Reusing that row
-- L168 `class _Thumbnail extends StatelessWidget`
-  - L169 `const _Thumbnail({required this.entry})`
-  - L171 `final MediaEntry entry`
-  - L174 `Widget build(BuildContext context)`
-- L192 `class _Empty extends StatelessWidget`
-  - L193 `const _Empty({ required this.topSpace, required this.message, required this.hint, })`
-  - L199 `final double topSpace`
-  - L200 `final String message`
-  - L201 `final String hint`
-  - L204 `Widget build(BuildContext context)`
+## lib/platform_specific/mobile/mobile_media_page.dart  (648 Z.)
+- L36 `kMediaSegments = <String>['Pictures', 'Files', 'Pages']`  — The three segments, in the order the switch shows them.
+- L38 `class MobileMediaPage extends StatefulWidget`
+  - L39 `const MobileMediaPage({ super.key, this.index, this.threadKeys = const [], this.agentNames = const <String, String>{}, this.initialSegment = 0, })`
+  - L47 `final MediaIndex? index`
+  - L51 `final List<String> threadKeys`  — Every thread this device holds. Read once each, so what arrived before
+  - L54 `final Map<String, String> agentNames`  — The agent name for a thread key, for the line under a row.
+  - L57 `final int initialSegment`  — The segment shown first (0 pictures, 1 files, 2 pages).
+  - L60 `State<MobileMediaPage> createState()`
+- L63 `class _MobileMediaPageState extends State<MobileMediaPage>`
+  - L64 `late int _filter = widget.initialSegment.clamp(0, 2)`
+  - L66 `MediaIndex get _index`
+  - L69 `void initState()`
+  - L75 `void didUpdateWidget(MobileMediaPage oldWidget)`
+  - L81 `Widget build(BuildContext context)`
+- L172 `class MediaRow extends StatefulWidget`  — One file or one page: a glyph tile, the name, one quiet line. The whole
+  - L173 `const MediaRow({super.key, required this.entry, this.agentName})`
+  - L175 `final MediaEntry entry`
+  - L176 `final String? agentName`
+  - L179 `State<MediaRow> createState()`
+- L182 `class _MediaRowState extends State<MediaRow>`
+  - L183 `bool _busy = false`
+  - L185 `Future<void> _open()`
+  - L200 `Widget build(BuildContext context)`
+- L275 `class _RowName extends StatelessWidget`
+  - L276 `const _RowName({required this.name, required this.splitExtension})`
+  - L278 `final String name`
+  - L279 `final bool splitExtension`
+  - L282 `Widget build(BuildContext context)`
+- L319 `String _extensionOf(String name)`  — The extension of [name] in lower case, or '' when it has none.
+- L328 `@visibleForTesting HugeIconData mediaRowGlyph(MediaEntry entry)`  — The glyph for a row: the page kind, or the file kind from the extension
+- L383 `@visibleForTesting String mediaRowMeta(MediaEntry entry, {String? agentName, DateTime? now})`  — The line under a row's name: what it is, how big, which agent, when.
+- L419 `Future<void> _openPage(BuildContext context, MediaEntry entry)`
+- L436 `Future<void> _openFile(BuildContext context, MediaEntry entry)`  — What opening a file does: read it in the app when the app can show it,
+- L473 `enum _Readable`
+  - L473 `prose`
+  - L473 `code`
+  - L473 `html`
+- L475 `_Readable? _readableOf(String ext, String mime)`
+- L510 `String? _utf8OrNull(Uint8List bytes)`
+- L518 `Future<void> _save(BuildContext context, String name, Uint8List bytes)`
+- L538 `class _PdfScreen extends StatelessWidget`  — A PDF, full screen, in the frame every viewer uses.
+  - L539 `const _PdfScreen({required this.name, required this.bytes})`
+  - L541 `final String name`
+  - L542 `final Uint8List bytes`
+  - L545 `Widget build(BuildContext context)`
+- L567 `class _Thumbnail extends StatelessWidget`
+  - L568 `const _Thumbnail({required this.entry})`
+  - L570 `final MediaEntry entry`
+  - L573 `Widget build(BuildContext context)`
+- L591 `class _Empty extends StatelessWidget`
+  - L592 `const _Empty({required this.topSpace, required this.kind})`
+  - L594 `final double topSpace`
+  - L595 `final MediaKind kind`
+  - L598 `Widget build(BuildContext context)`
 
 ## lib/platform_specific/mobile/mobile_nav_bar.dart  (170 Z.)
 - L16 `@immutable class MobileNavDestination`  — One destination of [MobileNavBar].

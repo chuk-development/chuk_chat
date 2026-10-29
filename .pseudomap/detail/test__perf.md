@@ -29,6 +29,45 @@
 - L135 `List<Map<String, dynamic>> _transcript(int agent)`
 - L147 `void main()`
 
+## test/perf/chat_scroll_fixture.dart  (198 Z.)
+- L19 `scrollPerfMessageCount = 300`
+- L21 `String _answer(int i, String mix)`
+- L70 `String _toolCalls(int i)`
+- L89 `List<Map<String, String>> scrollPerfTranscript({ String mix = '', })`  — [mix] narrows the answers to one kind for attributing cost: `prose`,
+- L109 `class ScrollPerfHost extends StatefulWidget`  — The mobile chat's list, reduced to the list: anchored transcript, shared
+  - L110 `const ScrollPerfHost({super.key, required this.messages})`
+  - L112 `final List<Map<String, String>> messages`
+  - L115 `State<ScrollPerfHost> createState()`
+- L118 `class _HostState extends State<ScrollPerfHost> with ChatScrollMixin<ScrollPerfHost>`
+  - L120 `final MessageRenderCache _cache = MessageRenderCache(shared: true)`
+  - L121 `final Uuid _uuid = const Uuid()`
+  - L124 `bool get anchoredTranscript`
+  - L127 `List<Map<String, String>> get transcriptRows`
+  - L130 `double get transcriptPxPerChar`
+  - L133 `void initState()`
+  - L142 `void dispose()`
+  - L148 `Widget build(BuildContext context)`
+
+## test/perf/chat_scroll_real_screen_perf_test.dart  (123 Z.)
+- L24 `_guard = Timeout(Duration(minutes: 5))`
+- L26 `void main()`
+
+## test/perf/chat_scroll_screen_fixture.dart  (150 Z.)
+- L31 `class _MemoryStore implements AgentsSecureKeyValueStore`
+  - L32 `final Map<String, String> map = <String, String>{}`
+  - L35 `Future<String?> read(String key)`
+  - L38 `Future<void> write(String key, String value)`
+  - L41 `Future<void> delete(String key)`
+- L45 `class _SignedIn implements AccountSessionSource`  — A signed-in account, so the shell takes its normal paired path.
+  - L46 `const _SignedIn()`
+  - L49 `AccountSession? current()`
+  - L56 `Future<AccountSession?> refresh()`
+- L60 `Future<void> resetScreenWorld()`  — Resets the singletons the shell reads. Call before and after each test.
+- L74 `Future<ScrollableState> mountRealScreenThread( WidgetTester tester, FakeDisk disk, )`  — Seeds [disk] with the thread, mounts the shell, opens the thread and
+
+## test/perf/chat_scroll_up_perf_test.dart  (122 Z.)
+- L28 `void main()`
+
 ## test/perf/cold_start_perf_test.dart  (584 Z.)
 - L43 `_guard = Timeout(Duration(minutes: 5))`  — A wall-clock guard on every test in this file. A regression that made one
 - L47 `_mountRuns = 5`  — Runs per measured quantity. Five is the floor the bead asks for; the mount

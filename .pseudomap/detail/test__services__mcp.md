@@ -47,6 +47,31 @@
 - L101 `ChukMcpRow _row(String id)`
 - L107 `void main()`
 
+## test/services/mcp/mcp_fake_server_e2e_test.dart  (395 Z.)
+- L31 `class _MemorySecrets implements AgentsSecureKeyValueStore`
+  - L32 `final Map<String, String> map = <String, String>{}`
+  - L35 `Future<String?> read(String key)`
+  - L38 `Future<void> write(String key, String value)`
+  - L41 `Future<void> delete(String key)`
+- L45 `class _FakeServer`  — The real fake server, as a child process.
+  - L46 `_FakeServer._(this._process, this.mcpUrl)`
+  - L48 `final Process _process`
+  - L49 `final String mcpUrl`
+  - L51 `String get base`
+  - L53 `static Future<_FakeServer> start()`
+  - L69 `Future<Map<String, dynamic>> state()`
+  - L74 `Future<void> revoke()`
+  - L76 `void stop()`
+- L81 `Future<bool> _browser(Uri url)`  — The browser: open the authorization URL, let the server's auto-consent
+- L100 `class _FakeHost implements McpProbeControl`  — A host that answers like the real one: it dials with the forwarded
+  - L101 `_FakeHost(this.server)`
+  - L103 `final _FakeServer server`
+  - L104 `final List<List<Map<String, dynamic>>> probes = <List<Map<String, dynamic>>>[]`
+  - L108 `bool renewOnProbe = false`  — Set to refresh the forwarded grant on the next probe (the host renewed
+  - L111 `Future<void> probeMcpServers(List<Map<String, dynamic>> servers)`
+  - L160 `Future<List<Map<String, dynamic>>?> _toolsWith(String access)`
+- L186 `void main()`
+
 ## test/services/mcp/mcp_oauth_test.dart  (395 Z.)
 - L9 `http.Response _json(Map<String, dynamic> body)`
 - L17 `MockClient _compliantServer({ List<String> scopes = const <String>['read', 'write'], void Function(Map<String, String> body)? onToken, Map<String, dynamic> Function()? tokenResponse, List<String>? registeredRedirectUris, })`  — A server that publishes protected-resource metadata pointing at its own
@@ -55,7 +80,7 @@
 ## test/services/mcp/mcp_redirect_test.dart  (60 Z.)
 - L9 `void main()`
 
-## test/services/mcp/mcp_service_test.dart  (728 Z.)
+## test/services/mcp/mcp_service_test.dart  (807 Z.)
 - L17 `class _MemorySecrets implements AgentsSecureKeyValueStore`
   - L18 `final Map<String, String> map = <String, String>{}`
   - L21 `Future<String?> read(String key)`
@@ -72,7 +97,7 @@
 - L107 `Future<bool> _signIn(Uri authorizationUrl)`  — Stands in for the browser: takes the authorization URL, hands the loopback
 - L126 `void main()`
 
-## test/services/mcp/mcp_store_test.dart  (564 Z.)
+## test/services/mcp/mcp_store_test.dart  (514 Z.)
 - L19 `class _MemorySecrets implements AgentsSecureKeyValueStore`  — In-memory secure backend so secrets round-trip with no platform channel.
   - L20 `final Map<String, String> map = <String, String>{}`
   - L23 `Future<String?> read(String key)`

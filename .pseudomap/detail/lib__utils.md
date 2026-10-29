@@ -381,14 +381,15 @@
 ## lib/utils/certificate_pinning_register_stub.dart  (10 Z.)
 - L7 `void registerCertificatePinning()`  — No-op on web. The browser's TLS stack validates certificates.
 
-## lib/utils/chat_font_resolver.dart  (72 Z.)
-- L11 `kFontFamilyArimo = 'Arimo'`  — Family name of the bundled Arimo font (see `pubspec.yaml`).
-- L14 `kFontFamilyMerriweather = 'Merriweather'`  — Family name of the bundled Merriweather font (see `pubspec.yaml`).
-- L17 `kFontFamilyJetBrainsMono = 'JetBrains Mono'`  — Family name of the bundled JetBrains Mono font (see `pubspec.yaml`).
-- L22 `String? resolveChatFontFamily(String id)`  — Map a stored identifier (e.g. `'arimo'`) to a font family string usable
-- L39 `String sanitizeChatFontFamily(String? id)`  — Normalize an unknown id (e.g. from Supabase) back to a known value so the
-- L50 `String? resolveUiFontFamily(String? id)`  — Map a stored UI-font identifier to a font family string for
-- L66 `String sanitizeUiFontFamily(String? id)`  — Normalize an unknown UI-font id back to a supported value. Defaults to the
+## lib/utils/chat_font_resolver.dart  (81 Z.)
+- L12 `kFontFamilyInter = 'Inter'`  — Family name of the bundled Inter font (see `pubspec.yaml`). The default
+- L15 `kFontFamilyArimo = 'Arimo'`  — Family name of the bundled Arimo font (see `pubspec.yaml`).
+- L18 `kFontFamilyMerriweather = 'Merriweather'`  — Family name of the bundled Merriweather font (see `pubspec.yaml`).
+- L21 `kFontFamilyJetBrainsMono = 'JetBrains Mono'`  — Family name of the bundled JetBrains Mono font (see `pubspec.yaml`).
+- L26 `String? resolveChatFontFamily(String id)`  — Map a stored identifier (e.g. `'arimo'`) to a font family string usable
+- L45 `String sanitizeChatFontFamily(String? id)`  — Normalize an unknown id (e.g. from Supabase) back to a known value so the
+- L56 `String? resolveUiFontFamily(String? id)`  — Map a stored UI-font identifier to a font family string for
+- L75 `String sanitizeUiFontFamily(String? id)`  — Normalize an unknown UI-font id back to a supported value. Defaults to
 
 ## lib/utils/client_platform.dart  (26 Z.)
 - L9 `String clientPlatformName()`  — Human-readable name of the current client platform.
@@ -514,8 +515,12 @@
 ## lib/utils/format_bytes.dart  (21 Z.)
 - L7 `String formatBytes(int bytes)`  — Formats a byte count for a reader: `842 B`, `1.5 KB`, `12 MB`.
 
-## lib/utils/highlight_registry.dart  (98 Z.)
-- L42 `allLanguages = { 'dart': dart, 'json': json, 'python': python, 'py': python, 'javascript': javascript, 'js': javascript,`
+## lib/utils/highlight_registry.dart  (150 Z.)
+- L47 `languageFactories = { 'dart': () => dart, 'json': () => json, 'python': () => python, 'py': () => python, 'javascript': `  — Every language the chat highlights, by the name a code fence uses.
+- L111 `bool isKnownLanguage(String name)`  — The modes themselves, keyed like [languageFactories]. Building it builds
+- L115 `_registered = <String>{}`  — Names already registered on this isolate's highlighter. A global, so each
+- L121 `void registerLanguageWithEmbeds(Highlight highlighter, String name)`  — Registers [name] with [highlighter], together with every language its
+- L135 `void _collectSubLanguages(Mode? mode, Set<Mode> seen, Set<String> out)`
 
 ## lib/utils/host_lookup.dart  (5 Z.)
 - reicht weiter: 'host_lookup_stub.dart' if (dart.library.io) 'host_lookup_io.dart'

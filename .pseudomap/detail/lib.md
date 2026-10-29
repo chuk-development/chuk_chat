@@ -1,6 +1,6 @@
 # lib · Signaturen
 
-## lib/constants.dart  (574 Z.)
+## lib/constants.dart  (578 Z.)
 - L8 `kDefaultBgColor = Color(0xFF111318)`
 - L9 `kDefaultAccentColor = Color(0xFFA8C7FA)`
 - L10 `kDefaultIconFgColor = Color(0xFFE2E2E9)`
@@ -14,47 +14,48 @@
 - L35 `kDefaultToolDiscoveryMode = true`
 - L36 `kDefaultShowToolCalls = true`
 - L41 `kDefaultIncludeToolResultsInHistory = true`  — Include prior tool calls + their results in the API history so the
-- L44 `kDefaultChatFontSize = 15.0`
+- L44 `kDefaultChatFontSize = 16.0`
 - L45 `kMinChatFontSize = 11.0`
 - L46 `kMaxChatFontSize = 24.0`
 - L49 `kDefaultUiScale = 1.0`
 - L50 `kMinUiScale = 0.8`
 - L51 `kMaxUiScale = 1.5`
 - L57 `kChatFontFamilySystem = 'system'`  — Identifiers used to persist the user's font family preference.
-- L58 `kChatFontFamilyArimo = 'arimo'`
-- L59 `kChatFontFamilyMerriweather = 'merriweather'`
-- L60 `kChatFontFamilyJetBrainsMono = 'jetbrains_mono'`
-- L61 `kDefaultChatFontFamily = kChatFontFamilyArimo`
-- L63 `kSupportedChatFontFamilies = <String>[ kChatFontFamilySystem, kChatFontFamilyArimo, kChatFontFamilyMerriweather, kChatFo`
-- L75 `kDefaultUiFontFamily = kChatFontFamilySystem`
-- L77 `kSupportedUiFontFamilies = kSupportedChatFontFamilies`
-- L87 `kMinContrast = 0.0`
-- L88 `kMaxContrast = 1.0`
-- L89 `kDefaultContrast = 0.5`
-- L94 `double contrastFactor(double contrast)`  — Maps the [kMinContrast]..[kMaxContrast] slider value to the multiplier
-- L104 `kRadiusCard = 20.0`
-- L105 `kRadiusField = 16.0`
-- L106 `kRadiusMenu = 16.0`
-- L107 `kRadiusRow = 14.0`
-- L108 `kRadiusDialog = 28.0`
-- L111 `kRadiusPill = 999.0`  — Stadium radius for every button. Buttons are pills app-wide.
-- L115 `_kButtonPadding = EdgeInsets.symmetric( horizontal: 20, vertical: 14, )`  — One padding, one minimum height and one label style for every button
-- L119 `_kButtonMinSize = Size(0, 48)`
-- L120 `_kButtonTextStyle = TextStyle( fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: 0.1, )`
-- L126 `kBorderRadiusCard = BorderRadius.circular(kRadiusCard)`
-- L127 `kBorderRadiusField = BorderRadius.circular(kRadiusField)`
-- L128 `kBorderRadiusMenu = BorderRadius.circular(kRadiusMenu)`
-- L129 `kBorderRadiusRow = BorderRadius.circular(kRadiusRow)`
-- L130 `kBorderRadiusPill = BorderRadius.circular(kRadiusPill)`
-- L133 `ThemeData buildAppTheme({ required Color accent, required Color iconFg, required Color bg, required Brightness brightness, double contrast = kDefaultContrast, String? uiFont, })`
-- L554 `Color _shiftHue(Color c, double degrees)`
-- L561 `kCompactModeBreakpoint = 600.0`
-- L566 `kDesktopSidebarWidth = 320.0`  — Width of the open desktop sidebar: chuk's chat list and the Agents roster.
-- L567 `kTabletBreakpoint = 800.0`
-- L570 `kFixedLeftPadding = 8.0`
-- L571 `kTopInitialSpacing = 16.0`
-- L572 `kMenuButtonHeight = 48.0`
-- L573 `kButtonVisualHeight = 40.0`
+- L58 `kChatFontFamilyInter = 'inter'`
+- L59 `kChatFontFamilyArimo = 'arimo'`
+- L60 `kChatFontFamilyMerriweather = 'merriweather'`
+- L61 `kChatFontFamilyJetBrainsMono = 'jetbrains_mono'`
+- L64 `kDefaultChatFontFamily = kChatFontFamilyInter`  — Inter is the default for chat and UI: open shapes, a tall x-height and
+- L66 `kSupportedChatFontFamilies = <String>[ kChatFontFamilyInter, kChatFontFamilySystem, kChatFontFamilyArimo, kChatFontFamil`
+- L79 `kDefaultUiFontFamily = kChatFontFamilyInter`
+- L81 `kSupportedUiFontFamilies = kSupportedChatFontFamilies`
+- L91 `kMinContrast = 0.0`
+- L92 `kMaxContrast = 1.0`
+- L93 `kDefaultContrast = 0.5`
+- L98 `double contrastFactor(double contrast)`  — Maps the [kMinContrast]..[kMaxContrast] slider value to the multiplier
+- L108 `kRadiusCard = 20.0`
+- L109 `kRadiusField = 16.0`
+- L110 `kRadiusMenu = 16.0`
+- L111 `kRadiusRow = 14.0`
+- L112 `kRadiusDialog = 28.0`
+- L115 `kRadiusPill = 999.0`  — Stadium radius for every button. Buttons are pills app-wide.
+- L119 `_kButtonPadding = EdgeInsets.symmetric( horizontal: 20, vertical: 14, )`  — One padding, one minimum height and one label style for every button
+- L123 `_kButtonMinSize = Size(0, 48)`
+- L124 `_kButtonTextStyle = TextStyle( fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: 0.1, )`
+- L130 `kBorderRadiusCard = BorderRadius.circular(kRadiusCard)`
+- L131 `kBorderRadiusField = BorderRadius.circular(kRadiusField)`
+- L132 `kBorderRadiusMenu = BorderRadius.circular(kRadiusMenu)`
+- L133 `kBorderRadiusRow = BorderRadius.circular(kRadiusRow)`
+- L134 `kBorderRadiusPill = BorderRadius.circular(kRadiusPill)`
+- L137 `ThemeData buildAppTheme({ required Color accent, required Color iconFg, required Color bg, required Brightness brightness, double contrast = kDefaultContrast, String? uiFont, })`
+- L558 `Color _shiftHue(Color c, double degrees)`
+- L565 `kCompactModeBreakpoint = 600.0`
+- L570 `kDesktopSidebarWidth = 320.0`  — Width of the open desktop sidebar: chuk's chat list and the Agents roster.
+- L571 `kTabletBreakpoint = 800.0`
+- L574 `kFixedLeftPadding = 8.0`
+- L575 `kTopInitialSpacing = 16.0`
+- L576 `kMenuButtonHeight = 48.0`
+- L577 `kButtonVisualHeight = 40.0`
 
 ## lib/env_loader.dart  (172 Z.)
 - L13 `class EnvLoader`  — Loads environment variables from .env file at runtime.

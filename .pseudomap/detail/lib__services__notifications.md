@@ -58,22 +58,25 @@
   - L384 `Future<bool> requestPermission()`
 - L398 `String notificationPreview(String raw, {int maxChars = 240})`  — The answer, made fit for one notification: markdown and the app's own
 
-## lib/services/notifications/notification_router.dart  (79 Z.)
+## lib/services/notifications/notification_router.dart  (101 Z.)
 - L16 `@immutable class NotificationTarget`
-  - L18 `const NotificationTarget({required this.sessionKey, this.runId})`
-  - L21 `final String sessionKey`  — The thread to open — the executor's session key.
-  - L24 `final String? runId`  — The run the notification was about, when the sender knew it.
-  - L28 `static NotificationTarget? fromData(Map<Object?, Object?>? data)`  — Parses the payload both channels use: the local toast's JSON payload
-  - L40 `bool operator ==(Object other)`
-  - L46 `int get hashCode`
-  - L49 `String toString()`
-- L52 `class NotificationRouter`
-  - L53 `NotificationRouter._()`
-  - L55 `static final NotificationRouter instance = NotificationRouter._()`
-  - L59 `final ValueNotifier<NotificationTarget?> pending = ValueNotifier<NotificationTarget?>(null)`  — The tap nobody has handled yet. The shell listens, reads, then calls
-  - L64 `void open(NotificationTarget target)`  — A tap arrived (from the local plugin, from FCM, or from the launch
-  - L69 `NotificationTarget? take()`  — The shell took the target. Returns it, or null when there was none.
-  - L77 `void reset()`  — Test seam.
+  - L18 `const NotificationTarget({ required this.sessionKey, this.runId, this.connectorId, })`
+  - L25 `static const String kindConnectorExpired = 'mcp_signin_expired'`  — The `kind` of a host notice about a connector whose sign-in expired.
+  - L28 `static const String connectorTargetPrefix = 'mcp-connector:'`  — The `session_key` prefix of that notice; the connector id follows it.
+  - L31 `final String sessionKey`  — The thread to open — the executor's session key.
+  - L34 `final String? runId`  — The run the notification was about, when the sender knew it.
+  - L38 `final String? connectorId`  — Set when the notice is about a connector, not a thread: the tap opens
+  - L42 `static NotificationTarget? fromData(Map<Object?, Object?>? data)`  — Parses the payload both channels use: the local toast's JSON payload
+  - L61 `bool operator ==(Object other)`
+  - L68 `int get hashCode`
+  - L71 `String toString()`
+- L74 `class NotificationRouter`
+  - L75 `NotificationRouter._()`
+  - L77 `static final NotificationRouter instance = NotificationRouter._()`
+  - L81 `final ValueNotifier<NotificationTarget?> pending = ValueNotifier<NotificationTarget?>(null)`  — The tap nobody has handled yet. The shell listens, reads, then calls
+  - L86 `void open(NotificationTarget target)`  — A tap arrived (from the local plugin, from FCM, or from the launch
+  - L91 `NotificationTarget? take()`  — The shell took the target. Returns it, or null when there was none.
+  - L99 `void reset()`  — Test seam.
 
 ## lib/services/notifications/push_service.dart  (353 Z.)
 - L36 `@immutable class PushMessage`  — A push message as the service sees it: only the `data` map matters.

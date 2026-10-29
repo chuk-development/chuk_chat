@@ -59,7 +59,7 @@
 ## test/platform_specific/chat/chat_ui_helpers_test.dart  (701 Z.)
 - L14 `void main()`
 
-## test/platform_specific/chat/composer_send_target_test.dart  (129 Z.)
+## test/platform_specific/chat/composer_send_target_test.dart  (155 Z.)
 - L27 `Finder findId(String id)`  — The composer's targets carry a semantics identifier, not a label.
 - L32 `class _NoopSaver implements AgentFileSaver`
   - L34 `Future<String> save(AgentsRelayFile file)`

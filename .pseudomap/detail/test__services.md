@@ -30,8 +30,8 @@
 ## test/services/app_mode_service_test.dart  (117 Z.)
 - L8 `void main()`
 
-## test/services/app_theme_contrast_uifont_test.dart  (94 Z.)
-- L12 `void main()`
+## test/services/app_theme_contrast_uifont_test.dart  (174 Z.)
+- L13 `void main()`
 
 ## test/services/app_theme_service_dynamic_color_test.dart  (165 Z.)
 - L10 `ColorScheme _schemeWithPrimary(Color primary, Brightness brightness)`
@@ -215,7 +215,7 @@
   - L20 `Future<void> delete(String key)`
 - L23 `void main()`
 
-## test/services/media_index_test.dart  (111 Z.)
+## test/services/media_index_test.dart  (189 Z.)
 - L6 `void main()`
 
 ## test/services/message_composition_service_test.dart  (69 Z.)
@@ -343,7 +343,7 @@
   - L58 `Future<void> dispose(WidgetTester tester)`  — Winds the run down inside the test's fake time.
 - L65 `void main()`
 
-## test/services/theme_settings_sync_fields_test.dart  (122 Z.)
+## test/services/theme_settings_sync_fields_test.dart  (121 Z.)
 - L12 `void main()`
 
 ## test/services/thread_preview_store_test.dart  (97 Z.)

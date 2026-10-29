@@ -16,7 +16,7 @@
 ## test/utils/build_app_theme_agents_test.dart  (58 Z.)
 - L11 `void main()`  — The theme has one side. The Agents build uses chuk_chat's theme as is: the
 
-## test/utils/build_app_theme_contrast_test.dart  (161 Z.)
+## test/utils/build_app_theme_contrast_test.dart  (160 Z.)
 - L10 `void main()`
 
 ## test/utils/clipboard_text_sanitizer_test.dart  (48 Z.)

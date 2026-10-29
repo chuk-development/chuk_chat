@@ -1538,112 +1538,114 @@
   - L104 `final String semanticsIdentifier`
   - L107 `Widget build(BuildContext context)`
 
-## lib/widgets/chat_document_inline.dart  (721 Z.)
+## lib/widgets/chat_document_inline.dart  (724 Z.)
 - L45 `kInlineDocumentRows = 6`  — How much of a document the thread shows before it defers to the reader.
 - L47 `kInlineDocumentProseHeight = 260`
 - L56 `bool inlineDocumentHasContent(Map<String, dynamic> document)`  — Whether [document] carries content the thread can draw.
-- L76 `bool documentIsChart(Map<String, dynamic> document)`  — Whether [document] draws as a chart.
-- L82 `List<String> documentColumns(Map<String, dynamic> document)`  — The column names of a table document.
-- L87 `List<Map> documentRows(Map<String, dynamic> document)`  — The rows of a table document.
-- L94 `List<Map> documentChartRows(Map<String, dynamic> document)`  — The rows of a chart document that have a bar to draw.
-- L109 `Map<String, Object?> documentChartJson(Map<String, dynamic> document)`  — The chart JSON of [document], in the contract `chart_spec.dart` documents.
-- L134 `String documentSourceName(Object? raw)`  — A source URL as a chart footer says it: the host, not the whole path.
-- L146 `@immutable class DocumentChart`  — A document's chart, ready to draw, with what had to be left out of it.
-  - L148 `const DocumentChart({ required this.spec, required this.total, required this.shown, })`
-  - L155 `final ChartSpec spec`  — The spec as drawn — already sorted, already cut to [shown] categories.
-  - L158 `final int total`  — How many categories the document holds.
-  - L161 `final int shown`  — How many of them this spec draws.
-  - L164 `bool get isCut`  — True when the reader has to open the document to see the rest.
-  - L167 `String get countLabel`  — "6 bars", "30 points" — what the block says it is holding.
-- L184 `DocumentChart documentChart( Map<String, dynamic> document, { int? maxPoints, bool withSource = true, })`  — Reads the chart out of [document].
-- L203 `_documentMemo = Expando<Map<Object, Object>>( 'chat document memo', )`  — Per-document memo for [documentChart] and [documentParsedTable].
-- L207 `DocumentChart _documentChart( Map<String, dynamic> document, { int? maxPoints, bool withSource = true, })`
-- L259 `String documentCellText(Object? raw)`  — One cell as [ChukTable] reads it. A bare URL becomes a markdown link
-- L277 `ParsedTable documentParsedTable(Map<String, dynamic> document, {int? maxRows})`  — A table document in the shape [ChukTable] draws.
-- L286 `ParsedTable _documentParsedTable( Map<String, dynamic> document, { int? maxRows, })`
-- L323 `Future<void> openDocumentLink(BuildContext context, String href)`  — Open a link out of a document cell, in the platform browser.
-- L337 `class InlineChatDocument extends StatefulWidget`  — A document, drawn in the thread in the agent's bubble.
-  - L338 `const InlineChatDocument({ super.key, required this.document, this.onOpen, this.borderRadius, })`
-  - L345 `final Map<String, dynamic> document`
-  - L351 `final BorderRadius? borderRadius`  — The corners this block draws. A document that follows an answer from the
-  - L356 `final VoidCallback? onOpen`  — What a tap does. Defaults to the full-screen reader the row opened
-  - L359 `State<InlineChatDocument> createState()`
-- L362 `class _InlineChatDocumentState extends State<InlineChatDocument>`
-  - L366 `bool _proseCut = false`  — Whether the prose ran past [kInlineDocumentProseHeight]. Measured, not
-  - L368 `void _open()`
-  - L380 `String _meta()`  — The line under the title: what the document is, how big it is, which
-  - L396 `HugeIconData get _glyph`
-  - L409 `Widget build(BuildContext context)`
-- L555 `class _OpenAction extends StatelessWidget`  — The one action a cut document offers, in the app's button family: a tonal
-  - L556 `const _OpenAction({required this.label, required this.onTap})`
-  - L558 `final String label`
-  - L559 `final VoidCallback onTap`
-  - L562 `Widget build(BuildContext context)`
-- L601 `class _CutAtHeight extends StatelessWidget`  — Shows the top [maxHeight] of its child and fades the cut into the bubble.
-  - L602 `const _CutAtHeight({ required this.maxHeight, required this.fade, required this.cut, required this.onCut, required this.child, })`
-  - L610 `final double maxHeight`
-  - L611 `final Color fade`
-  - L612 `final bool cut`
-  - L613 `final ValueChanged<bool> onCut`
-  - L614 `final Widget child`
-  - L617 `Widget build(BuildContext context)`
-- L645 `class _HeightCap extends SingleChildRenderObjectWidget`
-  - L646 `const _HeightCap({ required this.maxHeight, required this.onOverflow, required Widget super.child, })`
-  - L652 `final double maxHeight`
-  - L653 `final ValueChanged<bool> onOverflow`
-  - L656 `_RenderHeightCap createRenderObject(BuildContext context)`
-  - L660 `void updateRenderObject(BuildContext context, _RenderHeightCap render)`
-- L667 `class _RenderHeightCap extends RenderProxyBox`
-  - L668 `_RenderHeightCap({required double maxHeight, required this.onOverflow}) : _maxHeight = maxHeight`
-  - L671 `double _maxHeight`
-  - L672 `ValueChanged<bool> onOverflow`
-  - L673 `bool? _reported`
-  - L675 `set maxHeight(double value)`
-  - L682 `void performLayout()`
-  - L709 `void paint(PaintingContext context, Offset offset)`
+- L79 `bool documentIsChart(Map<String, dynamic> document)`  — Whether [document] draws as a chart.
+- L85 `List<String> documentColumns(Map<String, dynamic> document)`  — The column names of a table document.
+- L90 `List<Map> documentRows(Map<String, dynamic> document)`  — The rows of a table document.
+- L97 `List<Map> documentChartRows(Map<String, dynamic> document)`  — The rows of a chart document that have a bar to draw.
+- L112 `Map<String, Object?> documentChartJson(Map<String, dynamic> document)`  — The chart JSON of [document], in the contract `chart_spec.dart` documents.
+- L137 `String documentSourceName(Object? raw)`  — A source URL as a chart footer says it: the host, not the whole path.
+- L149 `@immutable class DocumentChart`  — A document's chart, ready to draw, with what had to be left out of it.
+  - L151 `const DocumentChart({ required this.spec, required this.total, required this.shown, })`
+  - L158 `final ChartSpec spec`  — The spec as drawn — already sorted, already cut to [shown] categories.
+  - L161 `final int total`  — How many categories the document holds.
+  - L164 `final int shown`  — How many of them this spec draws.
+  - L167 `bool get isCut`  — True when the reader has to open the document to see the rest.
+  - L170 `String get countLabel`  — "6 bars", "30 points" — what the block says it is holding.
+- L187 `DocumentChart documentChart( Map<String, dynamic> document, { int? maxPoints, bool withSource = true, })`  — Reads the chart out of [document].
+- L206 `_documentMemo = Expando<Map<Object, Object>>( 'chat document memo', )`  — Per-document memo for [documentChart] and [documentParsedTable].
+- L210 `DocumentChart _documentChart( Map<String, dynamic> document, { int? maxPoints, bool withSource = true, })`
+- L262 `String documentCellText(Object? raw)`  — One cell as [ChukTable] reads it. A bare URL becomes a markdown link
+- L280 `ParsedTable documentParsedTable(Map<String, dynamic> document, {int? maxRows})`  — A table document in the shape [ChukTable] draws.
+- L289 `ParsedTable _documentParsedTable( Map<String, dynamic> document, { int? maxRows, })`
+- L326 `Future<void> openDocumentLink(BuildContext context, String href)`  — Open a link out of a document cell, in the platform browser.
+- L340 `class InlineChatDocument extends StatefulWidget`  — A document, drawn in the thread in the agent's bubble.
+  - L341 `const InlineChatDocument({ super.key, required this.document, this.onOpen, this.borderRadius, })`
+  - L348 `final Map<String, dynamic> document`
+  - L354 `final BorderRadius? borderRadius`  — The corners this block draws. A document that follows an answer from the
+  - L359 `final VoidCallback? onOpen`  — What a tap does. Defaults to the full-screen reader the row opened
+  - L362 `State<InlineChatDocument> createState()`
+- L365 `class _InlineChatDocumentState extends State<InlineChatDocument>`
+  - L369 `bool _proseCut = false`  — Whether the prose ran past [kInlineDocumentProseHeight]. Measured, not
+  - L371 `void _open()`
+  - L383 `String _meta()`  — The line under the title: what the document is, how big it is, which
+  - L399 `HugeIconData get _glyph`
+  - L412 `Widget build(BuildContext context)`
+- L558 `class _OpenAction extends StatelessWidget`  — The one action a cut document offers, in the app's button family: a tonal
+  - L559 `const _OpenAction({required this.label, required this.onTap})`
+  - L561 `final String label`
+  - L562 `final VoidCallback onTap`
+  - L565 `Widget build(BuildContext context)`
+- L604 `class _CutAtHeight extends StatelessWidget`  — Shows the top [maxHeight] of its child and fades the cut into the bubble.
+  - L605 `const _CutAtHeight({ required this.maxHeight, required this.fade, required this.cut, required this.onCut, required this.child, })`
+  - L613 `final double maxHeight`
+  - L614 `final Color fade`
+  - L615 `final bool cut`
+  - L616 `final ValueChanged<bool> onCut`
+  - L617 `final Widget child`
+  - L620 `Widget build(BuildContext context)`
+- L648 `class _HeightCap extends SingleChildRenderObjectWidget`
+  - L649 `const _HeightCap({ required this.maxHeight, required this.onOverflow, required Widget super.child, })`
+  - L655 `final double maxHeight`
+  - L656 `final ValueChanged<bool> onOverflow`
+  - L659 `_RenderHeightCap createRenderObject(BuildContext context)`
+  - L663 `void updateRenderObject(BuildContext context, _RenderHeightCap render)`
+- L670 `class _RenderHeightCap extends RenderProxyBox`
+  - L671 `_RenderHeightCap({required double maxHeight, required this.onOverflow}) : _maxHeight = maxHeight`
+  - L674 `double _maxHeight`
+  - L675 `ValueChanged<bool> onOverflow`
+  - L676 `bool? _reported`
+  - L678 `set maxHeight(double value)`
+  - L685 `void performLayout()`
+  - L712 `void paint(PaintingContext context, Offset offset)`
 
-## lib/widgets/chat_document_view.dart  (692 Z.)
-- L25 `DateTime? documentUpdatedAt(Map<String, dynamic> document)`  — The agent stamps `updated_at` in epoch seconds — a float for chat documents,
-- L41 `String? documentFreshness(Map<String, dynamic> document, {DateTime? now})`  — How fresh a document is, as one short line: `v17 · 00:06`.
-- L68 `String documentFileStem(Object? title)`  — A file name for a document, from its title.
-- L77 `class ChatDocumentView extends StatefulWidget`
-  - L78 `const ChatDocumentView({ super.key, required this.document, this.showActions = true, this.topInset = 0, })`
-  - L84 `final Map<String, dynamic> document`
-  - L89 `final bool showActions`  — Whether the body draws its own Save action. The full-screen presentation
-  - L95 `final double topInset`  — Room kept at the top of the SCROLLING content, not around the widget.
-  - L103 `static Future<void> open( BuildContext context, Map<String, dynamic> document, )`  — Show [document].
-  - L181 `static (Uint8List, String) _fileOf(Map<String, dynamic> document)`  — The document as the bytes a file would hold: JSON for a table, the
-  - L193 `static Future<void> save(Map<String, dynamic> document)`  — Write the document to wherever the user keeps their downloads.
-  - L203 `static Future<void> share(Map<String, dynamic> document)`  — Hand the document to whatever the platform offers to share with.
-  - L213 `State<ChatDocumentView> createState()`
-- L216 `class _ChatDocumentViewState extends State<ChatDocumentView>`
-  - L220 `static const Duration _flashDuration = Duration(seconds: 6)`  — How long the "Updated" mark stays up after the agent rewrote the document
-  - L222 `Timer? _flashTimer`
-  - L223 `bool _flashing = false`
-  - L226 `void didUpdateWidget(ChatDocumentView oldWidget)`
-  - L244 `void dispose()`
-  - L250 `Widget build(BuildContext context)`
-  - L343 `static const double _readingMeasure = 720`  — The longest line a reader should have to track back from. Past roughly
-  - L348 `Widget _prose(BuildContext context, String text)`  — A markdown document, at document size rather than chat size: a larger
-  - L364 `Widget _table(BuildContext context)`  — A table document, drawn by the same widget the chat uses.
-  - L392 `Widget _chart(BuildContext context)`  — The chart, whole.
-- L446 `class _UpdatedMark extends StatelessWidget`  — The quiet end of "make an update legible": a mark, not a message. It never
-  - L447 `const _UpdatedMark()`
-  - L450 `Widget build(BuildContext context)`
-- L480 `class _DocumentCell extends StatelessWidget`
-  - L481 `const _DocumentCell(this.value, {this.expanded = false})`
-  - L482 `final String value`
-  - L483 `final bool expanded`
-  - L485 `Widget build(BuildContext context)`
-- L554 `class _DocumentScreen extends StatelessWidget`  — The phone presentation of a document: its own screen, a bar that floats on
-  - L555 `const _DocumentScreen({required this.document})`
-  - L557 `final Map<String, dynamic> document`
-  - L560 `Widget build(BuildContext context)`
-- L648 `class _MiddleEllipsis extends StatelessWidget`  — One line that loses its middle, not its end.
-  - L649 `const _MiddleEllipsis({required this.text, this.style})`
-  - L651 `final String text`
-  - L652 `final TextStyle? style`
-  - L655 `Widget build(BuildContext context)`
+## lib/widgets/chat_document_view.dart  (723 Z.)
+- L27 `bool documentIsHtml(Map<String, dynamic> document)`  — Whether [document] is an HTML page (`kind: html`, docs/PAGES.md).
+- L33 `DateTime? documentUpdatedAt(Map<String, dynamic> document)`  — The agent stamps `updated_at` in epoch seconds — a float for chat documents,
+- L49 `String? documentFreshness(Map<String, dynamic> document, {DateTime? now})`  — How fresh a document is, as one short line: `v17 · 00:06`.
+- L76 `String documentFileStem(Object? title)`  — A file name for a document, from its title.
+- L85 `class ChatDocumentView extends StatefulWidget`
+  - L86 `const ChatDocumentView({ super.key, required this.document, this.showActions = true, this.topInset = 0, })`
+  - L92 `final Map<String, dynamic> document`
+  - L97 `final bool showActions`  — Whether the body draws its own Save action. The full-screen presentation
+  - L103 `final double topInset`  — Room kept at the top of the SCROLLING content, not around the widget.
+  - L111 `static Future<void> open( BuildContext context, Map<String, dynamic> document, )`  — Show [document].
+  - L189 `static (Uint8List, String) _fileOf(Map<String, dynamic> document)`  — The document as the bytes a file would hold: JSON for a table, the
+  - L204 `static String _mimeOf(String name)`
+  - L211 `static Future<void> save(Map<String, dynamic> document)`  — Write the document to wherever the user keeps their downloads.
+  - L221 `static Future<void> share(Map<String, dynamic> document)`  — Hand the document to whatever the platform offers to share with.
+  - L231 `State<ChatDocumentView> createState()`
+- L234 `class _ChatDocumentViewState extends State<ChatDocumentView>`
+  - L238 `static const Duration _flashDuration = Duration(seconds: 6)`  — How long the "Updated" mark stays up after the agent rewrote the document
+  - L240 `Timer? _flashTimer`
+  - L241 `bool _flashing = false`
+  - L244 `void didUpdateWidget(ChatDocumentView oldWidget)`
+  - L262 `void dispose()`
+  - L268 `Widget build(BuildContext context)`
+  - L374 `static const double _readingMeasure = 720`  — The longest line a reader should have to track back from. Past roughly
+  - L379 `Widget _prose(BuildContext context, String text)`  — A markdown document, at document size rather than chat size: a larger
+  - L395 `Widget _table(BuildContext context)`  — A table document, drawn by the same widget the chat uses.
+  - L423 `Widget _chart(BuildContext context)`  — The chart, whole.
+- L477 `class _UpdatedMark extends StatelessWidget`  — The quiet end of "make an update legible": a mark, not a message. It never
+  - L478 `const _UpdatedMark()`
+  - L481 `Widget build(BuildContext context)`
+- L511 `class _DocumentCell extends StatelessWidget`
+  - L512 `const _DocumentCell(this.value, {this.expanded = false})`
+  - L513 `final String value`
+  - L514 `final bool expanded`
+  - L516 `Widget build(BuildContext context)`
+- L585 `class _DocumentScreen extends StatelessWidget`  — The phone presentation of a document: its own screen, a bar that floats on
+  - L586 `const _DocumentScreen({required this.document})`
+  - L588 `final Map<String, dynamic> document`
+  - L591 `Widget build(BuildContext context)`
+- L679 `class _MiddleEllipsis extends StatelessWidget`  — One line that loses its middle, not its end.
+  - L680 `const _MiddleEllipsis({required this.text, this.style})`
+  - L682 `final String text`
+  - L683 `final TextStyle? style`
+  - L686 `Widget build(BuildContext context)`
 
 ## lib/widgets/chat_documents_explorer.dart  (700 Z.)
 - part of 'chat_documents_panel.dart'
@@ -1696,7 +1698,7 @@
   - L661 `final VoidCallback onTap`
   - L664 `Widget build(BuildContext context)`
 
-## lib/widgets/chat_documents_panel.dart  (1259 Z.)
+## lib/widgets/chat_documents_panel.dart  (1261 Z.)
 - part 'chat_documents_explorer.dart'
 - L24 `_kTwoPaneWidth = 720`  — Below this width a list column and a reading pane would each be too narrow
 - L28 `_kListWidth = 320`  — The list column on the two-pane layout. Wide enough for a file name plus
@@ -1775,19 +1777,19 @@
 - L1077 `String? _folderLabel(String path)`  — Where a workspace file sits, short enough for one line. Twenty skills all
 - L1088 `String? _sizeLabel(Map<String, dynamic> document)`  — The house file-size wording, byte for byte the one the workspace file tiles
 - L1100 `String _kindLabel(Map<String, dynamic> document)`
-- L1109 `HugeIconData _documentIcon(Map<String, dynamic> document)`  — The glyph for a row, from the app's own set: the kind first, then the file
-- L1151 `class _EmptyBlock extends StatelessWidget`  — The panel's one empty state, in the house shape: a large quiet icon, the
-  - L1152 `const _EmptyBlock({ required this.icon, required this.title, required this.detail, this.action, this.topInset = 0, })`
-  - L1160 `final HugeIconData icon`
-  - L1161 `final String title`
-  - L1162 `final String detail`
-  - L1163 `final Widget? action`
-  - L1167 `final double topInset`  — Room the floating bar needs above the block, so a short empty state is
-  - L1170 `Widget build(BuildContext context)`
-- L1217 `class _MiddleEllipsis extends StatelessWidget`  — A screen title that loses its middle, not its end.
-  - L1218 `const _MiddleEllipsis({required this.text})`
-  - L1220 `final String text`
-  - L1223 `Widget build(BuildContext context)`
+- L1110 `HugeIconData _documentIcon(Map<String, dynamic> document)`  — The glyph for a row, from the app's own set: the kind first, then the file
+- L1153 `class _EmptyBlock extends StatelessWidget`  — The panel's one empty state, in the house shape: a large quiet icon, the
+  - L1154 `const _EmptyBlock({ required this.icon, required this.title, required this.detail, this.action, this.topInset = 0, })`
+  - L1162 `final HugeIconData icon`
+  - L1163 `final String title`
+  - L1164 `final String detail`
+  - L1165 `final Widget? action`
+  - L1169 `final double topInset`  — Room the floating bar needs above the block, so a short empty state is
+  - L1172 `Widget build(BuildContext context)`
+- L1219 `class _MiddleEllipsis extends StatelessWidget`  — A screen title that loses its middle, not its end.
+  - L1220 `const _MiddleEllipsis({required this.text})`
+  - L1222 `final String text`
+  - L1225 `Widget build(BuildContext context)`
 
 ## lib/widgets/chat_maintenance_gate.dart  (218 Z.)
 - L21 `class ChatMaintenanceGate extends StatefulWidget`
@@ -2317,7 +2319,7 @@
 - L575 `String _fmt(num v)`
 - L583 `double _d(dynamic v)`
 
-## lib/widgets/expressive_settings.dart  (508 Z.)
+## lib/widgets/expressive_settings.dart  (595 Z.)
 - L17 `kExpressiveOuterRadius = 26`  — Corner radius at the outer edges of a group.
 - L20 `kExpressiveInnerRadius = 6`  — Corner radius where two tiles meet.
 - L23 `extension ExpressiveOnColor on ColorScheme`  — Picks the contrast colour of a tone from the scheme.
@@ -2398,6 +2400,17 @@
   - L469 `final Color? tone`
   - L470 `final IconData? icon`
   - L473 `Widget build(BuildContext context)`
+- L515 `class ExpressiveAdvancedSection extends StatefulWidget`  — The one "Advanced" fold of a settings screen (docs/SETTINGS_ORDER.md).
+  - L516 `const ExpressiveAdvancedSection({ super.key, required this.title, required this.children, this.initiallyExpanded = false, this.toggleKey = const ValueKey<String>('settings_advanced'), this.icon = Icons.tune_rounded, })`
+  - L526 `final String title`  — "Advanced" in the user's language.
+  - L529 `final List<Widget> children`  — What the fold holds: section headers and groups, as on the screen.
+  - L531 `final bool initiallyExpanded`
+  - L534 `final Key toggleKey`  — Key of the toggle row, so a test or a tour finds it in every language.
+  - L536 `final IconData icon`
+  - L539 `State<ExpressiveAdvancedSection> createState()`
+- L543 `class _ExpressiveAdvancedSectionState extends State<ExpressiveAdvancedSection>`
+  - L544 `late bool _open = widget.initiallyExpanded`
+  - L547 `Widget build(BuildContext context)`
 
 ## lib/widgets/floating_app_bar.dart  (334 Z.)
 - L23 `kFloatingAppBarHeight = 62`  — Height of the header band: the chat top bar's 48 row plus its 8/6 of air
@@ -2672,7 +2685,7 @@
 - L21 `TileLayer buildBaseTileLayer()`  — The base tile layer. OSM's tile policy asks for an identifying user
 - L32 `Widget buildOsmAttribution()`  — The attribution OSM's licence requires: a small info chip in the corner
 
-## lib/widgets/markdown_message.dart  (2187 Z.)
+## lib/widgets/markdown_message.dart  (2243 Z.)
 - part 'answer_blocks.dart' · part 'visual_answer_blocks.dart' · part 'visual_answer_blocks_more.dart'
 - L46 `TextStyle _overlayStyle(TextStyle? base, TextStyle overlay)`  — Lays [overlay] on top of [base] field by field.
 - L68 `class InlineCodeNode extends SpanNode`  — Inline `` `code` `` that keeps its monospace font, its own colour and its
@@ -2746,69 +2759,72 @@
   - L1206 `List<InlineSpan>? _highlightedSpans`
   - L1207 `Timer? _debounceTimer`
   - L1208 `String? _displayedCode`
-  - L1222 `static final Map<String, List<hi.Node>> _parsedNodes = <String, List<hi.Node>>{}`  — Highlight results by language and code, shared by every code block.
-  - L1224 `static const int _parsedNodesMax = 300`
-  - L1225 `static String? _parsedNodesOwner`
-  - L1230 `static int _parsedGeneration = 0`  — Bumped whenever [_parsedNodes] is emptied. A highlight that started
-  - L1232 `static void _syncParsedOwner()`
-  - L1241 `static void clearParsed()`  — Drops every kept highlight. See [MarkdownMessage.clearCaches].
-  - L1248 `bool _keepHighlight = true`  — False once the code changed under this block (a stream in progress).
-  - L1250 `static String _parsedKey(String code, String? language)`
-  - L1255 `bool _applyParsedFromCache({required bool rebuild})`  — Applies a kept result for the current code, if there is one. Returns
-  - L1274 `static void _keepParsed( String code, String? language, List<hi.Node> nodes, { required int generation, })`
-  - L1292 `String _prettifyIfJson(String code, String? language)`  — Returns a pretty-printed version of [code] if the language is `json`
-  - L1311 `bool _autoDetectJson(String code)`
-  - L1323 `String _codeForDisplay()`
-  - L1327 `void initState()`
-  - L1334 `void didUpdateWidget(covariant _AsyncCodeBlock oldWidget)`
-  - L1348 `void dispose()`
-  - L1353 `void _scheduleHighlight()`
-  - L1362 `Future<void> _highlightCode()`
-  - L1458 `bool _isMostlyNonAscii(String text)`  — Check if text is mostly non-ASCII characters (CJK, Arabic, Cyrillic, etc.)
-  - L1485 `Widget build(BuildContext context)`
-- L1546 `List<hi.Node> _parseCode(Map<String, dynamic> args)`
-- L1616 `bool _isMostlyNonAsciiCode(String text)`  — Top-level helper for checking if text is mostly non-ASCII (for isolate use)
-- L1643 `List<TextSpan> _convertNodesSafely( List<hi.Node>? nodes, Map<String, TextStyle> theme, TextStyle baseStyle, )`
-- L1674 `List<TextSpan> _collectSpans( hi.Node? node, Map<String, TextStyle> theme, TextStyle baseStyle, TextStyle? parentThemeStyle, )`
-- L1760 `_latexTag = 'latex'`  — Tag used to identify LaTeX elements
-- L1767 `class LatexSyntax extends m.InlineSyntax`  — LaTeX inline syntax parser - matches $$...$$ and \(...\) and \[...\].
-  - L1768 `LatexSyntax() : super(r'(\$\$[\s\S]+?\$\$)|(\\\([\s\S]+?\\\))|(\\\[[\s\S]+?\\\])')`
-  - L1772 `bool onMatch(m.InlineParser parser, Match match)`
-- L1800 `class LatexNode extends SpanNode`  — LaTeX node that renders math using flutter_math_fork
-  - L1801 `final Map<String, String> attributes`
-  - L1802 `final Color textColor`
-  - L1804 `LatexNode(this.attributes, {required this.textColor})`
-  - L1807 `InlineSpan build()`
-  - L1817 `Widget _buildMathWidget(String tex, bool isBlock)`
-- L1890 `class _CopyButton extends StatefulWidget`  — Copy button widget for code blocks
-  - L1891 `final String code`
-  - L1892 `final Color textColor`
-  - L1894 `const _CopyButton({required this.code, required this.textColor})`
-  - L1897 `State<_CopyButton> createState()`
-- L1900 `class _CopyButtonState extends State<_CopyButton>`
-  - L1901 `bool _copied = false`
-  - L1903 `Future<void> _copyToClipboard()`
-  - L1920 `Widget build(BuildContext context)`
-- L1956 `class _SafeCodeBlockNode extends ElementNode`  — Replacement for markdown_widget's CodeBlockNode that avoids noisy
-  - L1957 `_SafeCodeBlockNode(this.element, this.preConfig, this.visitor)`
-  - L1959 `final m.Element element`
-  - L1960 `final PreConfig preConfig`
-  - L1961 `final WidgetVisitor visitor`
-  - L1963 `String get content`
-  - L1966 `InlineSpan build()`
-  - L2014 `TextStyle get style`
-  - L2016 `static String _extractLanguage(m.Element element)`
-- L2043 `class _MarkdownImage extends StatelessWidget`  — Polished markdown image: full-width on mobile bubbles (capped at 540px wide
-  - L2044 `const _MarkdownImage({required this.url, required this.alt})`
-  - L2046 `final String url`
-  - L2047 `final String alt`
-  - L2050 `Widget build(BuildContext context)`
-  - L2118 `Widget _errorTile(ColorScheme colorScheme)`
-  - L2132 `void _openFullscreen(BuildContext context)`
-- L2143 `class _NetworkImageViewer extends StatelessWidget`
-  - L2144 `const _NetworkImageViewer({required this.url})`
-  - L2145 `final String url`
-  - L2148 `Widget build(BuildContext context)`
+  - L1223 `static final Map<String, List<hi.Node>> _parsedNodes = <String, List<hi.Node>>{}`  — Highlight results by language and code, shared by every code block.
+  - L1225 `static const int _parsedNodesMax = 300`
+  - L1226 `static String? _parsedNodesOwner`
+  - L1231 `static int _parsedGeneration = 0`  — Bumped whenever [_parsedNodes] is emptied. A highlight that started
+  - L1233 `static void _syncParsedOwner()`
+  - L1242 `static void clearParsed()`  — Drops every kept highlight. See [MarkdownMessage.clearCaches].
+  - L1249 `bool _keepHighlight = true`  — False once the code changed under this block (a stream in progress).
+  - L1251 `static String _parsedKey(String code, String? language)`
+  - L1256 `bool _applyParsedFromCache({required bool rebuild})`  — Applies a kept result for the current code, if there is one. Returns
+  - L1276 `static void _keepParsed( String code, String? language, List<hi.Node> nodes, { required int generation, })`
+  - L1294 `String _prettifyIfJson(String code, String? language)`  — Returns a pretty-printed version of [code] if the language is `json`
+  - L1313 `bool _autoDetectJson(String code)`
+  - L1325 `String _codeForDisplay()`
+  - L1329 `void initState()`
+  - L1346 `Map<String, dynamic>? _parseArgs(String code)`  — The arguments [_parseCode] takes for the current code, or null when the
+  - L1372 `List<InlineSpan>? _highlightInline()`  — Highlights a short block on the spot and keeps the result like the
+  - L1391 `void didUpdateWidget(covariant _AsyncCodeBlock oldWidget)`
+  - L1405 `void dispose()`
+  - L1410 `void _scheduleHighlight()`
+  - L1419 `Future<void> _highlightCode()`
+  - L1507 `bool _isMostlyNonAscii(String text)`  — Check if text is mostly non-ASCII characters (CJK, Arabic, Cyrillic, etc.)
+  - L1534 `Widget build(BuildContext context)`
+- L1598 `_kInlineHighlightMaxChars = 3000`  — Code blocks up to this many characters are highlighted on the UI isolate
+- L1600 `List<hi.Node> _parseCode(Map<String, dynamic> args)`
+- L1672 `bool _isMostlyNonAsciiCode(String text)`  — Top-level helper for checking if text is mostly non-ASCII (for isolate use)
+- L1699 `List<TextSpan> _convertNodesSafely( List<hi.Node>? nodes, Map<String, TextStyle> theme, TextStyle baseStyle, )`
+- L1730 `List<TextSpan> _collectSpans( hi.Node? node, Map<String, TextStyle> theme, TextStyle baseStyle, TextStyle? parentThemeStyle, )`
+- L1816 `_latexTag = 'latex'`  — Tag used to identify LaTeX elements
+- L1823 `class LatexSyntax extends m.InlineSyntax`  — LaTeX inline syntax parser - matches $$...$$ and \(...\) and \[...\].
+  - L1824 `LatexSyntax() : super(r'(\$\$[\s\S]+?\$\$)|(\\\([\s\S]+?\\\))|(\\\[[\s\S]+?\\\])')`
+  - L1828 `bool onMatch(m.InlineParser parser, Match match)`
+- L1856 `class LatexNode extends SpanNode`  — LaTeX node that renders math using flutter_math_fork
+  - L1857 `final Map<String, String> attributes`
+  - L1858 `final Color textColor`
+  - L1860 `LatexNode(this.attributes, {required this.textColor})`
+  - L1863 `InlineSpan build()`
+  - L1873 `Widget _buildMathWidget(String tex, bool isBlock)`
+- L1946 `class _CopyButton extends StatefulWidget`  — Copy button widget for code blocks
+  - L1947 `final String code`
+  - L1948 `final Color textColor`
+  - L1950 `const _CopyButton({required this.code, required this.textColor})`
+  - L1953 `State<_CopyButton> createState()`
+- L1956 `class _CopyButtonState extends State<_CopyButton>`
+  - L1957 `bool _copied = false`
+  - L1959 `Future<void> _copyToClipboard()`
+  - L1976 `Widget build(BuildContext context)`
+- L2012 `class _SafeCodeBlockNode extends ElementNode`  — Replacement for markdown_widget's CodeBlockNode that avoids noisy
+  - L2013 `_SafeCodeBlockNode(this.element, this.preConfig, this.visitor)`
+  - L2015 `final m.Element element`
+  - L2016 `final PreConfig preConfig`
+  - L2017 `final WidgetVisitor visitor`
+  - L2019 `String get content`
+  - L2022 `InlineSpan build()`
+  - L2070 `TextStyle get style`
+  - L2072 `static String _extractLanguage(m.Element element)`
+- L2099 `class _MarkdownImage extends StatelessWidget`  — Polished markdown image: full-width on mobile bubbles (capped at 540px wide
+  - L2100 `const _MarkdownImage({required this.url, required this.alt})`
+  - L2102 `final String url`
+  - L2103 `final String alt`
+  - L2106 `Widget build(BuildContext context)`
+  - L2174 `Widget _errorTile(ColorScheme colorScheme)`
+  - L2188 `void _openFullscreen(BuildContext context)`
+- L2199 `class _NetworkImageViewer extends StatelessWidget`
+  - L2200 `const _NetworkImageViewer({required this.url})`
+  - L2201 `final String url`
+  - L2204 `Widget build(BuildContext context)`
 
 ## lib/widgets/mcp_connect_card.dart  (207 Z.)
 - L26 `class McpConnectCard extends StatefulWidget`  — A single Connect button for one catalogue server, shown inline under an
@@ -2873,7 +2889,7 @@
   - L335 `final bool expand`  — Fills the width, the way `isExpanded` did.
   - L338 `Widget build(BuildContext context)`
 
-## lib/widgets/message_bubble.dart  (522 Z.)
+## lib/widgets/message_bubble.dart  (531 Z.)
 - part 'message_bubble/models.dart' · part 'message_bubble/layout.dart' · part 'message_bubble/chrome.dart' · part 'message_bubble/rich_blocks.dart' · part 'message_bubble/tools.dart' · part 'message_bubble/images.dart' · part 'message_bubble/cards.dart'
 - L113 `_kBlockGap = 8`  — Gap between two sibling "block" rounds inside the same assistant
 - L118 `_kArtifactGap = 6`  — Gap between a tool-call bar and its attached artifact cards, and
@@ -2956,9 +2972,9 @@
   - L409 `String? _strippedMessageSource`
   - L413 `int _openUiProgramCount = 0`  — Counts the OpenUI programs while one build draws the answer. Reset at
   - L416 `void initState()`
-  - L421 `Future<void> _loadPreferences()`
-  - L440 `void didUpdateWidget(covariant MessageBubble oldWidget)`
-  - L448 `Widget build(BuildContext context)`
+  - L427 `Future<void> _loadPreferences()`
+  - L449 `void didUpdateWidget(covariant MessageBubble oldWidget)`
+  - L457 `Widget build(BuildContext context)`
 
 ## lib/widgets/message_fly_in.dart  (70 Z.)
 - L12 `class MessageFlyIn extends StatefulWidget`  — A one-shot entrance for a just-sent message: the bubble starts a little

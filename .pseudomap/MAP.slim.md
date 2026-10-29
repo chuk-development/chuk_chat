@@ -1,6 +1,6 @@
 # pseudomap · chuk_chat
 
-739 Dateien · 3933 Typen/Funktionen · 19551 Member · 1793/2355 öffentliche Symbole mit Zweckzeile · Stand 2026-10-27
+740 Dateien · 3969 Typen/Funktionen · 19643 Member · 1809/2370 öffentliche Symbole mit Zweckzeile · Stand 2026-10-29
 
 Diese Datei ist `.pseudomap/MAP.md` — Stufe 1: was es gibt und wo es liegt.
 
@@ -11,8 +11,8 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - Neu bauen: `pseudomap build` (läuft nach jedem Edit automatisch).
 
 ## lib
-### constants.dart  (574 Z.)
-- const: kDefaultBgColor kDefaultAccentColor kDefaultIconFgColor kDefaultThemeMode kDefaultDynamicColorEnabled kDefaultShowReasoningTokens kDefaultShowModelInfo kDefaultShowTps kDefaultUiLocale kDefaultToolCallingEnabled kDefaultToolDiscoveryMode kDefaultShowToolCalls kDefaultIncludeToolResultsInHistory kDefaultChatFontSize kMinChatFontSize kMaxChatFontSize kDefaultUiScale kMinUiScale kMaxUiScale kChatFontFamilySystem kChatFontFamilyArimo kChatFontFamilyMerriweather kChatFontFamilyJetBrainsMono kDefaultChatFontFamily kSupportedChatFontFamilies +26
+### constants.dart  (578 Z.)
+- const: kDefaultBgColor kDefaultAccentColor kDefaultIconFgColor kDefaultThemeMode kDefaultDynamicColorEnabled kDefaultShowReasoningTokens kDefaultShowModelInfo kDefaultShowTps kDefaultUiLocale kDefaultToolCallingEnabled kDefaultToolDiscoveryMode kDefaultShowToolCalls kDefaultIncludeToolResultsInHistory kDefaultChatFontSize kMinChatFontSize kMaxChatFontSize kDefaultUiScale kMinUiScale kMaxUiScale kChatFontFamilySystem kChatFontFamilyInter kChatFontFamilyArimo kChatFontFamilyMerriweather kChatFontFamilyJetBrainsMono kDefaultChatFontFamily +27
 - `double contrastFactor(double contrast)`  — Maps the [kMinContrast]..[kMaxContrast] slider value to the multiplier
 - `ThemeData buildAppTheme({ required Color accent, required Color iconFg, required Color bg, required Brightness brightnes …)`
 - `Color _shiftHue(Color c, double degrees)`
@@ -192,23 +192,23 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _SearchTrigger extends StatelessWidget`  — Subtle search icon button. No layout shift, no inline bar.
 
 ## lib/l10n
-### app_localizations.dart  (1381 Z.)
+### app_localizations.dart  (1398 Z.)
 - `class AppLocalizations`  — Holds all translated UI strings for the current locale.
 - `class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations>`
 
-### strings_de.dart  (1376 Z.)
+### strings_de.dart  (1390 Z.)
 - const: stringsDe
 
-### strings_en.dart  (1358 Z.)
+### strings_en.dart  (1372 Z.)
 - const: stringsEn
 
-### strings_es.dart  (661 Z.)
+### strings_es.dart  (664 Z.)
 - const: stringsEs
 
-### strings_fr.dart  (668 Z.)
+### strings_fr.dart  (671 Z.)
 - const: stringsFr
 
-### strings_pt.dart  (654 Z.)
+### strings_pt.dart  (657 Z.)
 - const: stringsPt
 
 ## lib/models
@@ -790,7 +790,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class AgentsPairingPage extends StatefulWidget`
 - `class _AgentsPairingPageState extends State<AgentsPairingPage>`
 
-### agents_shell_state.dart  (1382 Z.)
+### agents_shell_state.dart  (1400 Z.)
 - part of 'messenger_shell.dart'
 - `Future<AgentsRelayController> _buildRelayController( AgentsPairingStore store, AccountSessionSource sessionSource, )`  — Builds the default production relay controller: a real [AgentsRelayClient]
 - `mixin AgentsShellHost on State<MessengerShell>`  — Everything the shell OWNS, as opposed to how it lays it out.
@@ -815,7 +815,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class ConnectorDetailPage extends StatefulWidget`  — Full-screen detail page for a single tool, showing enable/disable,
 - `class _ConnectorDetailPageState extends State<ConnectorDetailPage>`
 
-### customization_page.dart  (882 Z.)
+### customization_page.dart  (884 Z.)
 - `class CustomizationPage extends StatefulWidget`
 - `class _CustomizationPageState extends State<CustomizationPage>`
 - `class _CardLabel extends StatelessWidget`  — Title and explanation at the top of a card that is not a row.
@@ -825,7 +825,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Future<void> showDesktopMediaModal(BuildContext context)`  — Opens the media library over the current page.
 - `class DesktopMediaModal extends StatelessWidget`  — The panel itself: a header row, then the library.
 
-### desktop_settings_modal.dart  (893 Z.)
+### desktop_settings_modal.dart  (1011 Z.)
 - `Future<void> showDesktopSettingsModal( BuildContext context, { required AppShellConfig config, String? initialSectionId …)`  — Opens the desktop settings modal over the current chat UI.
 - `class _SettingsDest`  — A settings destination: either a page shown in the right pane, or an
 - `class _SettingsGroup`
@@ -858,7 +858,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _LoginPageState extends State<LoginPage>`
 - `class _CenteredScroll extends StatelessWidget`  — Centres the sign-in card and scrolls it when it is taller than the screen.
 
-### mcp_connectors_page.dart  (1108 Z.)
+### mcp_connectors_page.dart  (1289 Z.)
 - `class McpConnectorsPage extends StatefulWidget`
 - `class _McpConnectorsPageState extends State<McpConnectorsPage>`
 - `class McpConnectorDetailPage extends StatefulWidget`  — One connector: connect or disconnect it, and see what it can do.
@@ -869,8 +869,10 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Future<T> _withProgress<T>( BuildContext context, Future<T> Function() work, { McpConnectCanceler? canceler, })`
 - `class _AddByUrlDialog extends StatefulWidget`  — The "Add a connector" dialog. It owns its text controller, so the
 - `class _AddByUrlDialogState extends State<_AddByUrlDialog>`
+- `AppLocalizations _stringsOf(BuildContext context)`  — The strings of [context], or English where no delegate is installed (a
+- `@immutable class _RowStatus`  — One connected row's state in the Agents build: a badge on the right (with
 
-### media_manager_page.dart  (1514 Z.)
+### media_manager_page.dart  (1517 Z.)
 - const: kMediaFilterBarHeight
 - `enum _MediaFilter`
 - `class MediaManagerPage extends StatefulWidget`
@@ -894,7 +896,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class MobileAgentPermissionsPage extends StatefulWidget`
 - `class _MobileAgentPermissionsPageState extends State<MobileAgentPermissionsPage>`
 
-### mobile_agents_settings_page.dart  (660 Z.)
+### mobile_agents_settings_page.dart  (669 Z.)
 - `class AgentSettingsView extends StatefulWidget`  — An agent's settings: ONE content for every form factor (bead
 - `class MobileAgentsSettingsPage extends AgentSettingsView`  — [AgentSettingsView] as a phone page: the shared transparent header over
 - `class _AgentSettingsViewState extends State<AgentSettingsView>`
@@ -931,7 +933,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class SetNewPasswordPage extends StatefulWidget`  — Page shown after a user clicks a password reset link.
 - `class _SetNewPasswordPageState extends State<SetNewPasswordPage>`
 
-### settings_page.dart  (1158 Z.)
+### settings_page.dart  (1180 Z.)
 - `class SettingsPage extends StatefulWidget`
 - `class _SettingsPageState extends State<SettingsPage>`
 - `class _PlanInfo`
@@ -1094,12 +1096,12 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### chat_model_selection_mixin.dart  (540 Z.)
 - `mixin ChatModelSelectionMixin<W extends StatefulWidget> on State<W>, ModelProviderResolutionMixin<W>`
 
-### chat_scroll_mixin.dart  (538 Z.)
+### chat_scroll_mixin.dart  (552 Z.)
 - const: _kTranscriptCenterKey
 - `mixin ChatScrollMixin<T extends StatefulWidget> on State<T>`  — Shared message-list scroll behaviour for the desktop and mobile chat UIs.
 - `class _TranscriptScrollController extends ScrollController`  — A [ScrollController] whose initial offset is read when a position is
 
-### chat_ui_desktop.dart  (2912 Z.)
+### chat_ui_desktop.dart  (2916 Z.)
 - part 'desktop_send_logic.dart'
 - `class ChukChatUIDesktop extends StatefulWidget`
 - `class ChukChatUIDesktopState extends State<ChukChatUIDesktop> with SingleTickerProviderStateMixin, ChatScrollMixin, Mode …)`
@@ -1118,7 +1120,8 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `bool messageStartsRun(List<Map<String, String>> messages, int index)`  — Whether the row at [index] opens a new run: it is the first row, the sender
 - `bool messageEndsRun(List<Map<String, String>> messages, int index)`  — Whether the row at [index] closes its run: the last row, or the next row
 
-### chat_ui_mobile.dart  (4431 Z.)
+### chat_ui_mobile.dart  (4490 Z.)
+- const: _kComposerSendWidth _kComposerSendHeight _kComposerSendGap
 - `enum _AttachChoice`  — What the plus menu can start.
 - `class _WorkspaceChoice`  — A row in the workspace menu: a workspace to switch to (null clears it),
 - `@visibleForTesting String queuedMessagesForComposer(String pending, List<String> followUps)`  — The text a cancelled queue puts back into the composer: the pending
@@ -1293,7 +1296,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `@immutable class ContainerTransformSource`  — One tapped roster row, as the container transform needs it: where the row
 - `class MobileContainerTransform extends StatelessWidget`  — The container transform: [closed] grows into [open] over [progress].
 
-### mobile_home.dart  (273 Z.)
+### mobile_home.dart  (278 Z.)
 - `class MobileHome extends StatefulWidget`
 - `class _MobileHomeState extends State<MobileHome>`
 - `class FadeThroughTabs extends StatefulWidget`  — An [IndexedStack] that fades through instead of cutting.
@@ -1302,9 +1305,23 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### mobile_layout.dart  (96 Z.)
 - `class MobileLayout`
 
-### mobile_media_page.dart  (225 Z.)
+### mobile_media_page.dart  (648 Z.)
+- const: kMediaSegments
 - `class MobileMediaPage extends StatefulWidget`
 - `class _MobileMediaPageState extends State<MobileMediaPage>`
+- `class MediaRow extends StatefulWidget`  — One file or one page: a glyph tile, the name, one quiet line. The whole
+- `class _MediaRowState extends State<MediaRow>`
+- `class _RowName extends StatelessWidget`
+- `String _extensionOf(String name)`  — The extension of [name] in lower case, or '' when it has none.
+- `@visibleForTesting HugeIconData mediaRowGlyph(MediaEntry entry)`  — The glyph for a row: the page kind, or the file kind from the extension
+- `@visibleForTesting String mediaRowMeta(MediaEntry entry, {String? agentName, DateTime? now})`  — The line under a row's name: what it is, how big, which agent, when.
+- `Future<void> _openPage(BuildContext context, MediaEntry entry)`
+- `Future<void> _openFile(BuildContext context, MediaEntry entry)`  — What opening a file does: read it in the app when the app can show it,
+- `enum _Readable`
+- `_Readable? _readableOf(String ext, String mime)`
+- `String? _utf8OrNull(Uint8List bytes)`
+- `Future<void> _save(BuildContext context, String name, Uint8List bytes)`
+- `class _PdfScreen extends StatelessWidget`  — A PDF, full screen, in the frame every viewer uses.
 - `class _Thumbnail extends StatelessWidget`
 - `class _Empty extends StatelessWidget`
 
@@ -1354,7 +1371,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `enum AppMode`  — The two halves, in the order the switch shows them: Chat on the left,
 - `class AppModeService extends ValueNotifier<AppMode>`  — The current [AppMode], with its persistence.
 
-### app_theme_service.dart  (870 Z.)
+### app_theme_service.dart  (912 Z.)
 - `typedef ThemeChangedCallback = void Function()`  — Callback type for theme changes
 - `class AppThemeService extends ChangeNotifier`  — Service for managing application theme state, persistence, and Supabase sync
 
@@ -1935,7 +1952,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### tool_prompt_builder.dart  (1445 Z.)
 - `class ToolPromptBuilder`  — Builds system prompts with tool calling protocol for LLM.
 
-### tool_registry.dart  (1896 Z.)
+### tool_registry.dart  (1898 Z.)
 - const: _serverBackedToolNames toolCategoryMap discoveryCatalog builtinTools
 - `bool _isMobileRuntime()`  — Whether the current platform is a mobile device (Android/iOS).
 - `void registerBuiltinTools(ToolExecutor executor)`  — Register all built-in tools from [builtinTools] into a [ToolExecutor].
@@ -2432,9 +2449,11 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### chat_debug_export.dart  (307 Z.)
 - `abstract final class ChatDebugExport`  — Builds and copies the structured debug export for one thread.
 
-### media_index.dart  (236 Z.)
+### media_index.dart  (353 Z.)
+- const: kDocumentMime
 - `enum MediaKind`  — What kind of thing an entry points at.
 - `@immutable class MediaEntry`  — One thing an agent handed over.
+- `Map<String, dynamic>? latestPageIn( List<Map<String, dynamic>> rows, String pageId, )`  — The newest snapshot of the page [pageId] in [rows], or null.
 - `List<Object?> contentBlocksOf(Map<String, dynamic> row)`  — The content blocks of a stored row.
 - `class MediaIndex extends ChangeNotifier`
 
@@ -2529,8 +2548,9 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class McpCallResult`  — The outcome of a tools/call: the text the model gets, plus whether the
 - `class McpClient`
 
-### mcp_connection.dart  (216 Z.)
+### mcp_connection.dart  (256 Z.)
 - `enum McpAuth`  — How a connection proves who it is.
+- `enum McpErrorKind`  — What kind of failure the host reported for a connector (`error_kind` in
 - `class McpTool`  — One tool a server offers. Kept minimal because Agents discovers the live
 - `class McpConnection`  — A configured MCP server. The non-secret config; the token or the API
 
@@ -2540,7 +2560,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### mcp_icon_cache.dart  (122 Z.)
 - `class McpIconCache`
 
-### mcp_oauth.dart  (549 Z.)
+### mcp_oauth.dart  (596 Z.)
 - `class McpAuthServer`  — What a server's authorization looks like once discovered.
 - `class McpClientCredentials`  — The client id (and secret, if the server insists on one) we registered.
 - `class McpTokens`  — The tokens a server issued.
@@ -2560,7 +2580,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### mcp_redirect_stub.dart  (23 Z.)
 - `class McpRedirectListener`
 
-### mcp_service.dart  (1315 Z.)
+### mcp_service.dart  (1491 Z.)
 - const: kMcpProtocolVersion
 - `enum McpConnectStatus`  — What a connect attempt ended in, for the UI to show.
 - `class McpConnectCanceler`  — A handle the screen keeps so it can stop a connect. On Agents the connect
@@ -2568,7 +2588,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class McpConnectResult`
 - `class McpService`
 
-### mcp_store.dart  (592 Z.)
+### mcp_store.dart  (535 Z.)
 - `class McpSecrets`  — Everything secret about one connection: the client this device registered
 - `class McpListBackend`  — Where [McpStore] keeps the connection list: the SQLite kv_cache by
 - `class McpStore`
@@ -2604,7 +2624,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _PluginBackend implements LocalNotificationsBackend`  — The real backend: `flutter_local_notifications` on Android, iOS, macOS
 - `String notificationPreview(String raw, {int maxChars = 240})`  — The answer, made fit for one notification: markdown and the app's own
 
-### notification_router.dart  (79 Z.)
+### notification_router.dart  (101 Z.)
 - `@immutable class NotificationTarget`
 - `class NotificationRouter`
 
@@ -2724,9 +2744,15 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class ChatOrigin`
 
 ## lib/theme
-### theme_presets.dart  (365 Z.)
+### legacy_pack_font_migration.dart  (90 Z.)
+- const: _kLegacyMerriweatherVariants
+- `@immutable class _LegacyFontVariant`  — Palette + contrast of one legacy pack variant that set a UI font.
+- `bool uiFontCameFromLegacyPack({ required String uiFont, required Color accent, required Color iconFg, required Color bg …)`  — Whether [uiFont] was most likely set by the legacy Cappuccino pack and
+- `String migrateLegacyPackUiFont({ required String uiFont, required Color accent, required Color iconFg, required Color bg …)`  — The UI font after the migration: [kDefaultUiFontFamily] when the pack set
+
+### theme_presets.dart  (358 Z.)
 - const: kThemePresets
-- `@immutable class ThemeVariant`  — One complete look: palette + contrast + font, for a single brightness.
+- `@immutable class ThemeVariant`  — One complete look: palette + contrast, for a single brightness.
 - `@immutable class ThemePreset`  — A named pack with a light and a dark variant.
 
 ## lib/tool_handlers
@@ -3210,12 +3236,12 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### certificate_pinning_register_stub.dart  (10 Z.)
 - `void registerCertificatePinning()`  — No-op on web. The browser's TLS stack validates certificates.
 
-### chat_font_resolver.dart  (72 Z.)
-- const: kFontFamilyArimo kFontFamilyMerriweather kFontFamilyJetBrainsMono
+### chat_font_resolver.dart  (81 Z.)
+- const: kFontFamilyInter kFontFamilyArimo kFontFamilyMerriweather kFontFamilyJetBrainsMono
 - `String? resolveChatFontFamily(String id)`  — Map a stored identifier (e.g. `'arimo'`) to a font family string usable
 - `String sanitizeChatFontFamily(String? id)`  — Normalize an unknown id (e.g. from Supabase) back to a known value so the
 - `String? resolveUiFontFamily(String? id)`  — Map a stored UI-font identifier to a font family string for
-- `String sanitizeUiFontFamily(String? id)`  — Normalize an unknown UI-font id back to a supported value. Defaults to the
+- `String sanitizeUiFontFamily(String? id)`  — Normalize an unknown UI-font id back to a supported value. Defaults to
 
 ### client_platform.dart  (26 Z.)
 - `String clientPlatformName()`  — Human-readable name of the current client platform.
@@ -3252,8 +3278,11 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### format_bytes.dart  (21 Z.)
 - `String formatBytes(int bytes)`  — Formats a byte count for a reader: `842 B`, `1.5 KB`, `12 MB`.
 
-### highlight_registry.dart  (98 Z.)
-- const: allLanguages
+### highlight_registry.dart  (150 Z.)
+- const: languageFactories _registered
+- `bool isKnownLanguage(String name)`  — The modes themselves, keyed like [languageFactories]. Building it builds
+- `void registerLanguageWithEmbeds(Highlight highlighter, String name)`  — Registers [name] with [highlighter], together with every language its
+- `void _collectSubLanguages(Mode? mode, Set<Mode> seen, Set<String> out)`
 
 ### host_lookup.dart  (5 Z.)
 - reicht weiter: 'host_lookup_stub.dart' if (dart.library.io) 'host_lookup_io.dart'
@@ -4004,7 +4033,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class ChatComposerBox extends StatelessWidget`
 - `class ChatComposerField extends StatelessWidget`  — The composer's text field, with the chat's typography and its borderless
 
-### chat_document_inline.dart  (721 Z.)
+### chat_document_inline.dart  (724 Z.)
 - const: kInlineDocumentRows kInlineDocumentProseHeight _documentMemo
 - `bool inlineDocumentHasContent(Map<String, dynamic> document)`  — Whether [document] carries content the thread can draw.
 - `bool documentIsChart(Map<String, dynamic> document)`  — Whether [document] draws as a chart.
@@ -4027,7 +4056,8 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _HeightCap extends SingleChildRenderObjectWidget`
 - `class _RenderHeightCap extends RenderProxyBox`
 
-### chat_document_view.dart  (692 Z.)
+### chat_document_view.dart  (723 Z.)
+- `bool documentIsHtml(Map<String, dynamic> document)`  — Whether [document] is an HTML page (`kind: html`, docs/PAGES.md).
 - `DateTime? documentUpdatedAt(Map<String, dynamic> document)`  — The agent stamps `updated_at` in epoch seconds — a float for chat documents,
 - `String? documentFreshness(Map<String, dynamic> document, {DateTime? now})`  — How fresh a document is, as one short line: `v17 · 00:06`.
 - `String documentFileStem(Object? title)`  — A file name for a document, from its title.
@@ -4048,7 +4078,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _SearchField extends StatelessWidget`  — The list's search input, in the shape the roster uses: one rounded filled
 - `class _FileGridTile extends StatelessWidget`
 
-### chat_documents_panel.dart  (1259 Z.)
+### chat_documents_panel.dart  (1261 Z.)
 - part 'chat_documents_explorer.dart'
 - const: _kTwoPaneWidth _kListWidth
 - `class ChatDocumentsPanel extends StatefulWidget`
@@ -4179,7 +4209,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `String _fmt(num v)`
 - `double _d(dynamic v)`
 
-### expressive_settings.dart  (508 Z.)
+### expressive_settings.dart  (595 Z.)
 - const: kExpressiveOuterRadius kExpressiveInnerRadius kExpressiveTileGap
 - `extension ExpressiveOnColor on ColorScheme`  — Picks the contrast colour of a tone from the scheme.
 - `class ExpressiveGroup extends StatelessWidget`  — A group of settings tiles. The first and last tile round outwards, the
@@ -4195,6 +4225,8 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class ExpressiveIconTile extends StatelessWidget`  — The rounded tile an icon sits in.
 - `class ExpressiveSectionHeader extends StatelessWidget`  — The label above a group. Large and heavy, the way Expressive titles are
 - `class ExpressiveBadge extends StatelessWidget`  — A trailing pill: a short state word on the right of a row.
+- `class ExpressiveAdvancedSection extends StatefulWidget`  — The one "Advanced" fold of a settings screen (docs/SETTINGS_ORDER.md).
+- `class _ExpressiveAdvancedSectionState extends State<ExpressiveAdvancedSection>`
 
 ### floating_app_bar.dart  (334 Z.)
 - const: kFloatingAppBarHeight kFloatingAppBarChip kFloatingAppBarTarget _kChipSlop _kTitleRadius
@@ -4283,9 +4315,9 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `TileLayer buildBaseTileLayer()`  — The base tile layer. OSM's tile policy asks for an identifying user
 - `Widget buildOsmAttribution()`  — The attribution OSM's licence requires: a small info chip in the corner
 
-### markdown_message.dart  (2187 Z.)
+### markdown_message.dart  (2243 Z.)
 - part 'answer_blocks.dart' · part 'visual_answer_blocks.dart' · part 'visual_answer_blocks_more.dart'
-- const: _latexTag
+- const: _kInlineHighlightMaxChars _latexTag
 - `TextStyle _overlayStyle(TextStyle? base, TextStyle overlay)`  — Lays [overlay] on top of [base] field by field.
 - `class InlineCodeNode extends SpanNode`  — Inline `` `code` `` that keeps its monospace font, its own colour and its
 - `class AccentLinkNode extends LinkNode`  — A link that reads as a link: the accent colour plus an underline in that
@@ -4326,7 +4358,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Future<T?> showMenuSheet<T>( BuildContext context, { required List<List<Widget>> groups, Widget? header, Color? color, } …)`  — A menu as a bottom sheet: the house sheet chrome, then the same tiles a
 - `class MenuAnchorButton extends StatelessWidget`  — The control a menu hangs off: the current value, an arrow, and the tap
 
-### message_bubble.dart  (522 Z.)
+### message_bubble.dart  (531 Z.)
 - part 'message_bubble/models.dart' · part 'message_bubble/layout.dart' · part 'message_bubble/chrome.dart' · part 'message_bubble/rich_blocks.dart' · part 'message_bubble/tools.dart' · part 'message_bubble/images.dart' · part 'message_bubble/cards.dart'
 - const: _kBlockGap _kArtifactGap _kCardStackGap _kInfoBarGap _kFileGap _kMobileBottomBarHeight _richBlockRegex _visualBlockStartRegex _diffBlockRegex _attachmentHeaderRe _kAiResponseFontFamilyDefault _cachedShowReasoningTokens _cachedShowModelInfo
 - `class MessageBubble extends StatefulWidget`
@@ -5024,21 +5056,21 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - 9 Dateien: lib/services/agents/agents_queued_marks.dart → lib/services/chat_preload_service.dart → lib/services/chat_storage_crud.dart → lib/services/chat_storage_mutations.dart → lib/services/chat_storage_servi
 
 **Größte Dateien (95 über der Schwelle)**
-- `lib/platform_specific/chat/chat_ui_mobile.dart` — 4431 Zeilen, 186 Symbole
+- `lib/platform_specific/chat/chat_ui_mobile.dart` — 4490 Zeilen, 189 Symbole
 - `lib/services/agents/agents_relay_client.dart` — 3956 Zeilen, 483 Symbole
 - `lib/widgets/agents_thread_view.dart` — 3263 Zeilen, 190 Symbole
 - `lib/services/artifact_storage_service.dart` — 3209 Zeilen, 133 Symbole
-- `lib/platform_specific/chat/chat_ui_desktop.dart` — 2912 Zeilen, 154 Symbole
+- `lib/platform_specific/chat/chat_ui_desktop.dart` — 2916 Zeilen, 154 Symbole
 
 ## Mehrfach vergebene Namen
 
-370 Namen existieren in mehr als einer Datei. Meist kopierter Code. Bevor du so etwas neu schreibst, eine der Stellen wiederverwenden. Volle Liste: `pseudomap dupes`.
+372 Namen existieren in mehr als einer Datei. Meist kopierter Code. Bevor du so etwas neu schreibst, eine der Stellen wiederverwenden. Volle Liste: `pseudomap dupes`.
 
-- `Function` — lib/openui/components/data_cards/card_blocks.dart:49 · lib/openui/components/tables_charts/round_charts.dart:23 · lib/pages/mcp_connectors_page.dart:1041 · lib/platform_specific/chat/handlers/scanned_pdf_pages.dart:20 +14
+- `Function` — lib/openui/components/data_cards/card_blocks.dart:49 · lib/openui/components/tables_charts/round_charts.dart:23 · lib/pages/mcp_connectors_page.dart:1204 · lib/platform_specific/chat/handlers/scanned_pdf_pages.dart:20 +14
 - `_load` — lib/openui/dev/gallery_main.dart:110 · lib/pages/agent_mail_contacts_page.dart:50 · lib/pages/agent_mail_detail_page.dart:98 · lib/pages/agent_model_page.dart:131 +14
-- `_save` — lib/openui/components/tables_charts/editable_table.dart:381 · lib/pages/agent_mail_detail_page.dart:283 · lib/pages/agent_profile_edit_page.dart:143 · lib/pages/skills_settings_page.dart:323 +12
-- `_open` — lib/pages/agent_mailbox_page.dart:277 · lib/pages/assistant_settings_page.dart:153 · lib/pages/mcp_connectors_page.dart:354 · lib/services/agents/agent_mail_crypto.dart:161 +8
-- `_row` — lib/pages/mcp_connectors_page.dart:330 · lib/pages/mobile_agents_settings_page.dart:501 · lib/pages/skills_settings_page.dart:724 · lib/voice/incoming/voice_call_permissions_section.dart:120 +7
+- `_save` — lib/openui/components/tables_charts/editable_table.dart:381 · lib/pages/agent_mail_detail_page.dart:283 · lib/pages/agent_profile_edit_page.dart:143 · lib/pages/skills_settings_page.dart:323 +13
+- `_open` — lib/pages/agent_mailbox_page.dart:277 · lib/pages/assistant_settings_page.dart:153 · lib/platform_specific/mobile/mobile_media_page.dart:185 · lib/services/agents/agent_mail_crypto.dart:161 +8
+- `_row` — lib/pages/mcp_connectors_page.dart:382 · lib/pages/mobile_agents_settings_page.dart:510 · lib/pages/skills_settings_page.dart:724 · lib/voice/incoming/voice_call_permissions_section.dart:120 +7
 - `_persist` — lib/services/agents/agent_profile_store.dart:291 · lib/services/agents/agent_read_marks.dart:181 · lib/services/agents/agent_roster_source.dart:197 · lib/services/agents/agent_roster_store.dart:168 +5
 - `_key` — lib/platform_specific/chat/voice/voice_turn_queue.dart:156 · lib/services/agents/agents_task_outbox.dart:192 · lib/services/agents/agents_task_outbox.dart:562 · lib/services/chat_dirty_store.dart:50 +4
 - `_send` — lib/openui/components/forms_buttons/buttons.dart:308 · lib/services/agents/agent_mail_service.dart:811 · lib/services/multiplex_connection.dart:896 · lib/voice/incoming/incoming_call_service.dart:351 +4
@@ -5059,4 +5091,4 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `_select` — lib/pages/agent_mailbox_page.dart:226 · lib/pages/agents_shell_state.dart:213 · lib/pages/messenger_shell.dart:645 · lib/services/storage/agents_chat_store.dart:904 +1
 - `_set` — lib/assistant/assistant_session.dart:467 · lib/openui/components/tables_charts/editable_table.dart:270 · lib/services/agents/agents_install_flow.dart:225 · lib/services/agents/agents_relay_client.dart:3916 +1
 - `_actions` — lib/pages/agent_mail_detail_page.dart:598 · lib/widgets/agents_skill_proposal_card.dart:532 · lib/widgets/agents_status_panel.dart:181 · lib/widgets/automation_card.dart:225
-- … +345 weitere
+- … +347 weitere

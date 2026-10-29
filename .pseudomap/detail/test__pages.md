@@ -56,13 +56,13 @@
 ## test/pages/desktop_settings_modal_test.dart  (182 Z.)
 - L20 `void main()`  — The desktop settings modal lists the same destinations as the phone's
 
-## test/pages/mcp_connectors_page_test.dart  (273 Z.)
-- L19 `class _MemorySecrets implements AgentsSecureKeyValueStore`  — In-memory secure backend so secrets round-trip with no platform channel.
-  - L20 `final Map<String, String> map = <String, String>{}`
-  - L23 `Future<String?> read(String key)`
-  - L26 `Future<void> write(String key, String value)`
-  - L29 `Future<void> delete(String key)`
-- L32 `void main()`
+## test/pages/mcp_connectors_page_test.dart  (306 Z.)
+- L20 `class _MemorySecrets implements AgentsSecureKeyValueStore`  — In-memory secure backend so secrets round-trip with no platform channel.
+  - L21 `final Map<String, String> map = <String, String>{}`
+  - L24 `Future<String?> read(String key)`
+  - L27 `Future<void> write(String key, String value)`
+  - L30 `Future<void> delete(String key)`
+- L33 `void main()`
 
 ## test/pages/mobile_agent_permissions_page_test.dart  (225 Z.)
 - L21 `_phone = Size(360, 780)`
@@ -101,7 +101,7 @@
 - L40 `AgentsSkill _skill(String name, {String source = 'workspace', bool enabled = true})`
 - L48 `void main()`
 
-## test/pages/theme_page_test.dart  (166 Z.)
+## test/pages/theme_page_test.dart  (167 Z.)
 - L15 `class _State`
   - L16 `Brightness themeMode = Brightness.dark`
   - L17 `Color accent = kDefaultAccentColor`

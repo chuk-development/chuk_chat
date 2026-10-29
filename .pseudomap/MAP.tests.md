@@ -1,6 +1,6 @@
 # pseudomap · chuk_chat · Tests
 
-464 Dateien · 1278 Typen/Funktionen · 1102 Member · Stand 2026-10-27
+472 Dateien · 1302 Typen/Funktionen · 1138 Member · Stand 2026-10-29
 
 Diese Datei ist `.pseudomap/MAP.md` — Stufe 1: was es gibt und wo es liegt.
 
@@ -458,7 +458,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### desktop_settings_modal_test.dart  (182 Z.)
 - `void main()`  — The desktop settings modal lists the same destinations as the phone's
 
-### mcp_connectors_page_test.dart  (273 Z.)
+### mcp_connectors_page_test.dart  (306 Z.)
 - `class _MemorySecrets implements AgentsSecureKeyValueStore`  — In-memory secure backend so secrets round-trip with no platform channel.
   - read write delete map
 - `void main()`
@@ -497,7 +497,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `AgentsSkill _skill(String name, {String source = 'workspace', bool enabled = true})`
 - `void main()`
 
-### theme_page_test.dart  (166 Z.)
+### theme_page_test.dart  (167 Z.)
 - `class _State`
   - themeMode accent iconFg bg contrast uiFont chatFont dynamicColor
 - `AppShellConfig _config(_State s)`
@@ -521,6 +521,31 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `String _answer(int agent, int i)`
 - `String _toolCalls(int i)`
 - `List<Map<String, dynamic>> _transcript(int agent)`
+- `void main()`
+
+### chat_scroll_fixture.dart  (198 Z.)
+- const: scrollPerfMessageCount
+- `String _answer(int i, String mix)`
+- `String _toolCalls(int i)`
+- `List<Map<String, String>> scrollPerfTranscript({ String mix = '', })`  — [mix] narrows the answers to one kind for attributing cost: `prose`,
+- `class ScrollPerfHost extends StatefulWidget`  — The mobile chat's list, reduced to the list: anchored transcript, shared
+  - messages
+- `class _HostState extends State<ScrollPerfHost> with ChatScrollMixin<ScrollPerfHost>`
+  - anchoredTranscript transcriptRows transcriptPxPerChar
+
+### chat_scroll_real_screen_perf_test.dart  (123 Z.)
+- const: _guard
+- `void main()`
+
+### chat_scroll_screen_fixture.dart  (150 Z.)
+- `class _MemoryStore implements AgentsSecureKeyValueStore`
+  - read write delete map
+- `class _SignedIn implements AccountSessionSource`  — A signed-in account, so the shell takes its normal paired path.
+  - current refresh
+- `Future<void> resetScreenWorld()`  — Resets the singletons the shell reads. Call before and after each test.
+- `Future<ScrollableState> mountRealScreenThread( WidgetTester tester, FakeDisk disk, )`  — Seeds [disk] with the thread, mounts the shell, opens the thread and
+
+### chat_scroll_up_perf_test.dart  (122 Z.)
 - `void main()`
 
 ### cold_start_perf_test.dart  (584 Z.)
@@ -586,7 +611,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### chat_ui_helpers_test.dart  (701 Z.)
 - `void main()`
 
-### composer_send_target_test.dart  (129 Z.)
+### composer_send_target_test.dart  (155 Z.)
 - `Finder findId(String id)`  — The composer's targets carry a semantics identifier, not a label.
 - `class _NoopSaver implements AgentFileSaver`
   - save
@@ -644,19 +669,25 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### mobile_chat_screen_test.dart  (129 Z.)
 - `void main()`
 
+### mobile_media_page_test.dart  (197 Z.)
+- `Map<String, dynamic> _fileRow(String path, String name, String mime)`
+- `Map<String, dynamic> _pageRow(String id, String title, String kind, int v)`
+- `Future<void> _pump(WidgetTester tester, MediaIndex index)`
+- `void main()`
+
 ### mobile_preview_test.dart  (295 Z.)
 - const: _out
 - `void main()`
 - `class _PlaceholderChat extends StatelessWidget`  — Stands in for the verbatim chuk_chat phone screen in the preview: a
   - topInset
 
-### mobile_support.dart  (111 Z.)
+### mobile_support.dart  (126 Z.)
 - const: kPhoneSize kPhonePadding
 - `Finder findId(String id)`  — Finds the `Semantics(identifier: id)` widget the mobile layer wraps each
 - `Future<void> pumpPhone( WidgetTester tester, Widget child, { ThemeData? theme, })`  — Pumps [child] into a phone-shaped, localised app.
 - `AgentsAgent agent({ required String id, required String name, String? role, String? brief, bool running = false, DateTim …)`
 - `LocalAgentRosterSource rosterWith(List<AgentsAgent> agents)`
-- `Future<void> loadRealFonts()`  — Loads Roboto and the Material icon font from the Flutter SDK so a golden
+- `Future<void> loadRealFonts()`  — Loads Roboto and the Material icon font from the Flutter SDK (and the
 
 ### touch_target_walk_test.dart  (140 Z.)
 - `bool _isTarget(Widget w)`  — True for a widget that takes a tap and is therefore a touch target.
@@ -686,7 +717,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### app_mode_service_test.dart  (117 Z.)
 - `void main()`
 
-### app_theme_contrast_uifont_test.dart  (94 Z.)
+### app_theme_contrast_uifont_test.dart  (174 Z.)
 - `void main()`
 
 ### app_theme_service_dynamic_color_test.dart  (165 Z.)
@@ -828,7 +859,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
   - read write delete map
 - `void main()`
 
-### media_index_test.dart  (111 Z.)
+### media_index_test.dart  (189 Z.)
 - `void main()`
 
 ### message_composition_service_test.dart  (69 Z.)
@@ -914,7 +945,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
   - start chatId input manager updates completions errors errorCodes
 - `void main()`
 
-### theme_settings_sync_fields_test.dart  (122 Z.)
+### theme_settings_sync_fields_test.dart  (121 Z.)
 - `void main()`
 
 ### thread_preview_store_test.dart  (97 Z.)
@@ -1274,6 +1305,16 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `ChukMcpRow _row(String id)`
 - `void main()`
 
+### mcp_fake_server_e2e_test.dart  (395 Z.)
+- `class _MemorySecrets implements AgentsSecureKeyValueStore`
+  - read write delete map
+- `class _FakeServer`  — The real fake server, as a child process.
+  - start state revoke stop base mcpUrl
+- `Future<bool> _browser(Uri url)`  — The browser: open the authorization URL, let the server's auto-consent
+- `class _FakeHost implements McpProbeControl`  — A host that answers like the real one: it dials with the forwarded
+  - probeMcpServers _toolsWith server probes renewOnProbe
+- `void main()`
+
 ### mcp_oauth_test.dart  (395 Z.)
 - `http.Response _json(Map<String, dynamic> body)`
 - `MockClient _compliantServer({ List<String> scopes = const <String>['read', 'write'], void Function(Map<String, String> b …)`  — A server that publishes protected-resource metadata pointing at its own
@@ -1282,7 +1323,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### mcp_redirect_test.dart  (60 Z.)
 - `void main()`
 
-### mcp_service_test.dart  (728 Z.)
+### mcp_service_test.dart  (807 Z.)
 - `class _MemorySecrets implements AgentsSecureKeyValueStore`
   - read write delete map
 - `class _FakeSync implements McpConnectorSync`  — An in-memory stand-in for the encrypted Supabase mirror.
@@ -1293,7 +1334,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Future<bool> _signIn(Uri authorizationUrl)`  — Stands in for the browser: takes the authorization URL, hands the loopback
 - `void main()`
 
-### mcp_store_test.dart  (564 Z.)
+### mcp_store_test.dart  (514 Z.)
 - `class _MemorySecrets implements AgentsSecureKeyValueStore`  — In-memory secure backend so secrets round-trip with no platform channel.
   - read write delete map
 - `McpSecrets _record({ String accessToken = 'at-1', String? refreshToken = 'rt-1', DateTime? expiresAt, String tokenEndpoi …)`  — A full record, as `_authorize` writes one after a real sign-in.
@@ -1306,6 +1347,9 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### local_notifications_test.dart  (262 Z.)
 - `class FakeBackend implements LocalNotificationsBackend`  — Records every call; the platform plugin never runs in a test.
   - Function show cancel launchPayload requestPermission initOk launch permission tap shown cancelled
+- `void main()`
+
+### notification_target_connector_test.dart  (25 Z.)
 - `void main()`
 
 ### push_service_test.dart  (221 Z.)
@@ -1452,7 +1496,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `MaterialApp testApp(Widget home, {Key? key})`  — A `MaterialApp` shaped like the real one: localised, with [home] as its body.
 
 ## test/theme
-### theme_presets_test.dart  (194 Z.)
+### theme_presets_test.dart  (187 Z.)
 - const: _preset
 - `class _Recorder`  — Captures every setter call so a test can assert what a preset applied.
   - themeMode accent iconFg bg contrast uiFont dynamicCalls
@@ -1503,7 +1547,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### build_app_theme_agents_test.dart  (58 Z.)
 - `void main()`  — The theme has one side. The Agents build uses chuk_chat's theme as is: the
 
-### build_app_theme_contrast_test.dart  (161 Z.)
+### build_app_theme_contrast_test.dart  (160 Z.)
 - `void main()`
 
 ### clipboard_text_sanitizer_test.dart  (48 Z.)
@@ -2061,6 +2105,9 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Future<void> _settleCodeBlocks(WidgetTester tester)`  — Lets an `_AsyncCodeBlock` finish: the 50 ms highlight debounce and then the
 - `List<String> _pastRightEdge(WidgetTester tester, Finder root)`  — Every box inside [root] that paints past its right edge.
 - `void main()`
+
+### chat_document_view_html_test.dart  (51 Z.)
+- `void main()`  — An HTML page (docs/PAGES.md) is shown in the web view path, never parsed as
 
 ### chat_document_view_test.dart  (212 Z.)
 - `void main()`

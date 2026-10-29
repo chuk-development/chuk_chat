@@ -399,6 +399,9 @@
 - L153 `List<String> _pastRightEdge(WidgetTester tester, Finder root)`  — Every box inside [root] that paints past its right edge.
 - L197 `void main()`
 
+## test/widgets/chat_document_view_html_test.dart  (51 Z.)
+- L11 `void main()`  — An HTML page (docs/PAGES.md) is shown in the web view path, never parsed as
+
 ## test/widgets/chat_document_view_test.dart  (212 Z.)
 - L9 `void main()`
 
