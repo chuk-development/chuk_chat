@@ -1196,7 +1196,21 @@ class McpService {
     }
   }
 
-  static Future<void> _addPendingSignOut(Map<String, String> entry) async {
+  /// Every outbox change runs after the one before it: each one reads,
+  /// awaits and writes the whole list, so two of them side by side would
+  /// lose an entry.
+  static Future<void> _outboxTail = Future<void>.value();
+
+  static Future<void> _serializeOutbox(Future<void> Function() change) {
+    final Future<void> next = _outboxTail.then((_) => change());
+    _outboxTail = next.catchError((Object _) {});
+    return next;
+  }
+
+  static Future<void> _addPendingSignOut(Map<String, String> entry) =>
+      _serializeOutbox(() => _addPendingSignOutNow(entry));
+
+  static Future<void> _addPendingSignOutNow(Map<String, String> entry) async {
     final List<Map<String, String>> next = List.of(await pendingSignOuts());
     final bool known = next.any(
       (Map<String, String> e) =>
@@ -1209,7 +1223,10 @@ class McpService {
     await _savePendingSignOuts(next.length > 50 ? next.sublist(next.length - 50) : next);
   }
 
-  static Future<void> _dropPendingSignOuts(List<Object?> acked) async {
+  static Future<void> _dropPendingSignOuts(List<Object?> acked) =>
+      _serializeOutbox(() => _dropPendingSignOutsNow(acked));
+
+  static Future<void> _dropPendingSignOutsNow(List<Object?> acked) async {
     try {
       final Set<String> done = <String>{
         for (final Object? e in acked)

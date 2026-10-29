@@ -298,10 +298,10 @@ class MediaIndex extends ChangeNotifier {
     if (known != null && (known.version ?? 0) >= version) return false;
     final String title = '${document['title'] ?? ''}'.trim();
     final Object? rawStamp = document['updated_at'];
-    // Seconds since the epoch, in DateTime's range; anything else (a
-    // millisecond stamp, NaN) counts as no stamp instead of throwing.
+    // Seconds since the epoch (below 1e11, about the year 5138); a
+    // millisecond or microsecond stamp or NaN counts as no stamp.
     final double? stamp =
-        rawStamp is num && rawStamp.isFinite && rawStamp > 0 && rawStamp < 8.64e12
+        rawStamp is num && rawStamp.isFinite && rawStamp > 0 && rawStamp < 1e11
         ? rawStamp.toDouble()
         : null;
     _entries[reference] = MediaEntry(

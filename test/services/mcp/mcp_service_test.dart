@@ -93,7 +93,7 @@ MockClient _authServer({bool refuseRegistration = false}) =>
         if (refuseRegistration) return http.Response('no', 403);
         final body = jsonDecode(request.body) as Map<String, dynamic>;
         return _json(<String, dynamic>{
-          'client_id': 'cid-live',
+          'client_id': _registeredClientId,
           'redirect_uris': body['redirect_uris'],
         });
       }
@@ -128,6 +128,9 @@ Future<bool> _signIn(Uri authorizationUrl) async {
     client.close(force: true);
   }
 }
+
+/// The client id the fake server hands out; one test changes it per sign-in.
+String _registeredClientId = 'cid-live';
 
 void main() {
   late _MemorySecrets secrets;
@@ -444,6 +447,23 @@ void main() {
     expect(await McpService.pendingSignOuts(), isEmpty);
     secrets.failReads = false;
     expect(await McpService.store.secretsFor('srv'), isNull);
+  });
+
+  test('two sign-outs at the same time both reach the outbox', () async {
+    McpService.launcher = _signIn;
+    addTearDown(() => _registeredClientId = 'cid-live');
+    _registeredClientId = 'cid-a';
+    await McpService.connect(id: 'a', name: 'A', url: 'https://srv.example/mcp');
+    _registeredClientId = 'cid-b';
+    await McpService.connect(id: 'b', name: 'B', url: 'https://srv.example/mcp');
+
+    await Future.wait(<Future<void>>[
+      McpService.disconnect('a'),
+      McpService.disconnect('b'),
+    ]);
+
+    final pending = await McpService.pendingSignOuts();
+    expect(pending.map((e) => e['client_id']).toSet(), <String>{'cid-a', 'cid-b'});
   });
 
   test('disconnect forgets the connector and its record', () async {
