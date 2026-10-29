@@ -13,6 +13,13 @@ from .registry import ToolRegistry
 from .sqlite_tuning import tune_connection
 
 MAX_DOCUMENT_BYTES = 256 * 1024
+
+# Every kind the store keeps. A PAGE is a document of kind ``markdown`` or
+# ``html`` (docs/PAGES.md): its ``text`` is the page content. ``html`` is the
+# one kind added for pages; the others are unchanged since the first release.
+DOCUMENT_KINDS = ('table', 'markdown', 'text', 'bar_chart', 'html')
+PROSE_KINDS = ('markdown', 'text', 'html')
+PAGE_KINDS = ('markdown', 'html')
 _ID = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,79}$')
 
 # --- the chart the app draws -------------------------------------------------
@@ -173,9 +180,9 @@ class DocumentStore:
                                  (self.session, document_id)).fetchone()
             old = json.loads(old_row[0]) if old_row else None
             kind = kind if kind is not None else (old['kind'] if old else 'markdown')
-            if kind not in ('table', 'markdown', 'text', 'bar_chart'):
-                raise ValueError('kind must be table, markdown, text or bar_chart')
-            if kind in ('markdown', 'text') and (rows is not None or columns is not None):
+            if kind not in DOCUMENT_KINDS:
+                raise ValueError('kind must be ' + ', '.join(DOCUMENT_KINDS[:-1]) + ' or ' + DOCUMENT_KINDS[-1])
+            if kind in PROSE_KINDS and (rows is not None or columns is not None):
                 raise ValueError('rows/columns require kind=table or kind=bar_chart; no data was saved')
             if chart is not None and kind != 'bar_chart':
                 raise ValueError('chart requires kind=bar_chart; no data was saved')
@@ -244,6 +251,8 @@ class DocumentStore:
                 if chart is not None:
                     doc['chart'] = chart
             else:
+                if kind == 'html' and not text.strip():
+                    raise ValueError('An html page needs its HTML in text; no data was saved')
                 doc['text'] = text
             raw = json.dumps(doc, ensure_ascii=False, allow_nan=False)
             if len(raw.encode()) > MAX_DOCUMENT_BYTES:
@@ -255,7 +264,8 @@ class DocumentStore:
 
 def document_file(doc: dict) -> SentFile:
     data = json.dumps(doc, ensure_ascii=False).encode()
-    return SentFile(name=sanitize_name(doc['title'] + ('.json' if doc['kind'] in ('table', 'bar_chart') else '.md')),
+    suffix = {'table': '.json', 'bar_chart': '.json', 'html': '.html'}.get(doc['kind'], '.md')
+    return SentFile(name=sanitize_name(doc['title'] + suffix),
                     mime_type='application/vnd.cowork.document+json', size=len(data), data=data,
                     document=doc)
 
@@ -285,7 +295,7 @@ def register_document_tool(registry: ToolRegistry, store: DocumentStore, sink: F
 
     registry.register('chat_document', {
         'type': 'object',
-        'description': 'Create/update persistent tables and Markdown documents visible in the chat Documents panel. '
+        'description': 'Create/update persistent tables, Markdown documents and HTML pages visible in the chat Documents panel. '
                        'Separate from semantic memory: documents survive context compaction and task restarts. '
                        'Use list/read to recover earlier documents. Read before updating and pass expected_version. '
                        'A document NEVER replaces the answer: the reader must see the result in the message itself, '
@@ -309,11 +319,16 @@ def register_document_tool(registry: ToolRegistry, store: DocumentStore, sink: F
                        'kind is bar | column_delta (a negative value hangs below the baseline) | line | grouped | '
                        'stacked; for several series write series=[{"name":"BTC","direction":"up","points":[...]}] '
                        'instead of points. Optional: sort (given|desc|asc), axis {min,max}, show_values, '
-                       'per-point note.',
+                       'per-point note. '
+                       'PAGES: the app lists every document of this agent under Media > Pages; call them '
+                       'pages when you talk to the user. A page is kind=markdown or kind=html with the content '
+                       'in text. For html write ONE self-contained document (inline CSS and JS, no build step); '
+                       'the app shows it in a sandbox, so it cannot reach your workspace. To change a page, '
+                       'read it, then write the whole new text with expected_version.',
         'properties': {
             'action': {'type': 'string', 'enum': ['list', 'read', 'write', 'append']},
             'id': {'type': 'string'}, 'title': {'type': 'string'},
-            'kind': {'type': 'string', 'enum': ['table', 'markdown', 'text', 'bar_chart'],
+            'kind': {'type': 'string', 'enum': list(DOCUMENT_KINDS),
                      'description': 'Omit on updates to retain the existing document type. Set explicitly when creating a table or chart.'},
             'text': {'type': 'string'},
             'columns': {'type': 'array', 'items': {'type': 'string'}},

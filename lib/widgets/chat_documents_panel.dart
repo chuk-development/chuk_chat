@@ -1100,6 +1100,7 @@ String? _sizeLabel(Map<String, dynamic> document) {
 String _kindLabel(Map<String, dynamic> document) => switch (document['kind']) {
   'table' => 'Table',
   'bar_chart' => 'Chart',
+  'html' => 'HTML page',
   _ => 'Document',
 };
 
@@ -1109,6 +1110,7 @@ String _kindLabel(Map<String, dynamic> document) => switch (document['kind']) {
 HugeIconData _documentIcon(Map<String, dynamic> document) {
   if (document['kind'] == 'table') return HugeIcons.sheet;
   if (document['kind'] == 'bar_chart') return HugeIcons.presentation01;
+  if (document['kind'] == 'html') return HugeIcons.globe02;
   if (document['kind'] != 'file') return HugeIcons.fileText;
   final name = '${document['path'] ?? document['title'] ?? ''}'.toLowerCase();
   final suffix = name.contains('.') ? name.split('.').last : '';

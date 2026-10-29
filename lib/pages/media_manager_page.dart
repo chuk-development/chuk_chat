@@ -20,7 +20,7 @@ import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 enum _MediaFilter { images, artifacts }
 
-/// Height of the floating Images / Artifacts track, so the library below it
+/// Height of the floating Images / Pages track, so the library below it
 /// can start exactly where the track ends.
 const double kMediaFilterBarHeight = 52;
 
@@ -686,7 +686,7 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
               Text(
                 _filter == _MediaFilter.images
                     ? '${_images.length} image${_images.length == 1 ? '' : 's'}'
-                    : '${_artifacts.length} artifact'
+                    : '${_artifacts.length} page'
                           '${_artifacts.length == 1 ? '' : 's'}',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: m3.onSurfaceVariant,
@@ -819,12 +819,13 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
             ),
             const SizedBox(height: 16),
             Text(
-              'No artifacts yet',
+              'No pages yet',
               style: TextStyle(color: iconFg.withValues(alpha: 0.5)),
             ),
             const SizedBox(height: 8),
             Text(
-              'SVGs, HTML pages, drawings, and PDFs will appear here.',
+              'Documents, HTML pages, drawings and PDFs the assistant '
+              'makes show up here.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: iconFg.withValues(alpha: 0.3),
@@ -1358,7 +1359,9 @@ class _MediaFilterBar extends StatelessWidget {
             child: _segment(
               context,
               _MediaFilter.artifacts,
-              'Artifacts',
+              // Artifacts are called Pages wherever the user reads it
+              // (docs/PAGES.md). Code and storage keep the old name.
+              'Pages',
               artifactCount,
             ),
           ),

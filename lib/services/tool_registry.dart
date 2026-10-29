@@ -1605,7 +1605,9 @@ final List<ClientTool> builtinTools = [
         'use that SAME id with action=update or rewrite — this bumps its '
         'version. To create a NEW, unrelated document: pick a DIFFERENT '
         'descriptive id so both coexist with independent version histories. '
-        'The user can switch between them in the artifact panel.',
+        'The user can switch between them in the artifact panel. '
+        'The app calls artifacts "Pages": say "page" when you talk to the '
+        'user.',
     parameters: {
       'type': 'object',
       'properties': {

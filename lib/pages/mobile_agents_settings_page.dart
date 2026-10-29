@@ -343,7 +343,7 @@ class _AgentSettingsViewState extends State<AgentSettingsView> {
                     ),
                   if (widget.onDocuments != null)
                     _row(
-                      'Documents & artifacts',
+                      'Documents & pages',
                       l.agentsCwDocuments,
                       Icons.folder_open_rounded,
                       widget.onDocuments!,

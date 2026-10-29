@@ -123,7 +123,7 @@ Mobbin | Update payment method | | due Last chance | 18.10. | mobbin.com
 - Rarely used tools are not in your tool list until you load them. This keeps
   every request small. They include interactive programs (`shell_start`),
   background jobs (`job_output`), workspace history and undo
-  (`workspace_undo`), chat documents (`chat_document`), audio and video
+  (`workspace_undo`), chat documents and pages (`chat_document`), audio and video
   (`run_ffmpeg`), and the tools of the connected MCP servers, the browser
   among them (`browser_navigate`).
 - When you need a tool that is not in your tool list, call `search_tools` with

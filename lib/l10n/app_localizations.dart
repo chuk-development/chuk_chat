@@ -336,6 +336,13 @@ class AppLocalizations {
   String get mcpStatusNoAnswer => _get('mcpStatusNoAnswer');
   String get mcpStatusHostError => _get('mcpStatusHostError');
   String get mcpSignInExpiredDetail => _get('mcpSignInExpiredDetail');
+  String get mcpStatusSignedIn => _get('mcpStatusSignedIn');
+  String get mcpStatusChecking => _get('mcpStatusChecking');
+  String get mcpStatusConnecting => _get('mcpStatusConnecting');
+  String get mcpActionSignInAgain => _get('mcpActionSignInAgain');
+  String get mcpDetails => _get('mcpDetails');
+  String mcpSignInExpiredNamed(String name) =>
+      _get('mcpSignInExpiredNamed').replaceAll('{name}', name);
   String mcpNoAnswerDetail(String reason) =>
       _get('mcpNoAnswerDetail').replaceAll('{reason}', reason);
   String mcpHostErrorDetail(String reason) =>

@@ -56,6 +56,9 @@ const double kInlineDocumentProseHeight = 260;
 bool inlineDocumentHasContent(Map<String, dynamic> document) {
   switch ('${document['kind'] ?? ''}') {
     case 'file':
+    // An HTML page is a whole web document. The thread never renders it as
+    // markdown; the compact row opens it in the reader (docs/PAGES.md).
+    case 'html':
       return false;
     case 'table':
       final List<String> columns = documentColumns(document);

@@ -107,4 +107,82 @@ void main() {
       ]);
     expect(index.entries().first.name, 'new');
   });
+
+  group('pages', () {
+    Map<String, dynamic> pageRow(int version, String text, {String? at}) =>
+        <String, dynamic>{
+          'sender': 'ai',
+          'timestamp': at ?? '2026-10-29T10:0$version:00.000Z',
+          'contentBlocks': [
+            {
+              'sandboxArtifact': {
+                'storagePath': 'cowork://blob/page-v$version',
+                'filename': 'BTC.html',
+                'mime': kDocumentMime,
+                'sizeBytes': text.length,
+                'document': {
+                  'id': 'btc',
+                  'title': 'BTC dashboard',
+                  'kind': 'html',
+                  'version': version,
+                  'text': text,
+                },
+              },
+            },
+          ],
+        };
+
+    test('every version of a page is one page entry, not a file', () {
+      final rows = [pageRow(1, '<p>1</p>'), pageRow(2, '<p>2</p>')];
+      final index = MediaIndex()..noteRows('agent-a', rows);
+      expect(index.entries(kind: MediaKind.file), isEmpty);
+      final page = index.entries(kind: MediaKind.page).single;
+      expect(page.name, 'BTC dashboard');
+      expect(page.pageId, 'btc');
+      expect(page.pageKind, 'html');
+      expect(page.version, 2);
+      expect(page.reference, MediaEntry.pageReference('agent-a', 'btc'));
+    });
+
+    test('an older version arriving late does not win', () {
+      final index = MediaIndex()
+        ..noteRows('agent-a', [pageRow(3, '<p>3</p>')])
+        ..noteRows('agent-a', [pageRow(1, '<p>1</p>')]);
+      expect(index.entries(kind: MediaKind.page).single.version, 3);
+    });
+
+    test('two agents with the same page id keep two pages', () {
+      final index = MediaIndex()
+        ..noteRows('agent-a', [pageRow(1, 'a')])
+        ..noteRows('agent-b', [pageRow(1, 'b')]);
+      expect(index.entries(kind: MediaKind.page).length, 2);
+    });
+
+    test('the newest snapshot is read back out of the rows', () {
+      final rows = [pageRow(2, '<p>2</p>'), pageRow(1, '<p>1</p>')];
+      expect(latestPageIn(rows, 'btc')!['text'], '<p>2</p>');
+      expect(latestPageIn(rows, 'missing'), isNull);
+    });
+
+    test(
+      'a page survives the json round trip; a legacy document file does not',
+      () {
+        final index = MediaIndex()..noteRows('agent-a', [pageRow(4, 'x')]);
+        final json = index.entries(kind: MediaKind.page).single.toJson();
+        final back = MediaEntry.fromJson(json)!;
+        expect(back.kind, MediaKind.page);
+        expect(back.version, 4);
+        expect(back.pageKind, 'html');
+        expect(
+          MediaEntry.fromJson(<String, dynamic>{
+            'kind': 'file',
+            'ref': 'cowork://blob/old',
+            'name': 'notes.json',
+            'mime': kDocumentMime,
+          }),
+          isNull,
+        );
+      },
+    );
+  });
 }
