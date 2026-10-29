@@ -144,12 +144,14 @@ class McpListBackend {
 }
 
 class McpStore {
+  /// [oauth] is not used any more: the store no longer refreshes a sign-in it
+  /// forwards (the host does, see [forwardPayloads]). Kept so callers that
+  /// pass one still compile.
   McpStore({
     AgentsSecureKeyValueStore? secrets,
     McpOAuth? oauth,
     McpListBackend? list,
   }) : _secrets = secrets ?? const FlutterSecureKeyValueStore(),
-       _oauth = oauth ?? McpOAuth(),
        _list = list ?? const McpListBackend();
 
   /// Non-secret connection config: the kv_cache key, and the legacy
@@ -164,21 +166,8 @@ class McpStore {
   static const String apiCredsPrefix = 'mcp_apicreds_';
 
   final AgentsSecureKeyValueStore _secrets;
-  final McpOAuth _oauth;
   final McpListBackend _list;
 
-  /// The refresh in flight for a connection id, if any.
-  ///
-  /// Two task launches close together both read the same lapsed record and
-  /// would both spend the same refresh token. A server that rotates refresh
-  /// tokens answers one of them and invalidates the other's, and whichever
-  /// write lands last decides what is stored — so the loser can leave a dead
-  /// refresh token behind and the connector needs a fresh sign-in. Sharing the
-  /// one in-flight future makes the second caller wait for the first's answer
-  /// instead of asking again. Static because callers hold their own [McpStore]
-  /// instances over the same keychain.
-  static final Map<String, Future<McpSecrets?>> _refreshes =
-      <String, Future<McpSecrets?>>{};
 
   /// One queue for every read-modify-write of the connection list: the
   /// legacy move ([migrateLegacyPrefs], and the one [load] does on the way),
@@ -451,9 +440,14 @@ class McpStore {
   ///
   /// An [McpAuth.oauth] connection forwards its resolved bearer and, when the
   /// record holds the refresh material, an `oauth` block so the host can mint
-  /// its own tokens after the app is gone. A token already past its expiry is
-  /// refreshed here first and the fresh one written back, so a running app
-  /// never hands the host a bearer it knows is dead.
+  /// its own tokens after the app is gone. A token past its expiry is
+  /// forwarded as it is, with the block: the HOST renews it. This device never
+  /// refreshes a sign-in it forwards (bead chuk_chat-meoz). It used to, on
+  /// every task start and probe with a lapsed bearer, while the host renewed
+  /// the same grant too. With a provider that rotates refresh tokens
+  /// (Fastmail) the second refresher gets `invalid_grant`, and the copies of
+  /// the two sides drift until the grant is dead. The host hands every token
+  /// it mints back (`mcp_credentials`), so this device stays current anyway.
   ///
   /// An [McpAuth.apiKey] connection is forwarded as an unauthenticated server
   /// whose credentials are already on the URL: the stored base URL gets the
@@ -485,64 +479,13 @@ class McpStore {
         payloads.add(c.toForwardJson());
         continue;
       }
-      final secrets = await _refreshedSecrets(c);
+      final secrets = await secretsFor(c.id);
       final payload = c.toForwardJson(accessToken: secrets?.tokens.accessToken);
       final block = _oauthBlock(c, secrets);
       if (block != null) payload['oauth'] = block;
       payloads.add(payload);
     }
     return payloads;
-  }
-
-  /// The record for [connection], with the access token refreshed when it is
-  /// about to lapse and enough was recorded to do so. Returns the record
-  /// unchanged when there is nothing to refresh or the server refuses — a
-  /// stale bearer plus the refresh block still lets the host try.
-  Future<McpSecrets?> _refreshedSecrets(McpConnection connection) async {
-    final secrets = await secretsFor(connection.id);
-    if (secrets == null) return null;
-    final refreshToken = secrets.tokens.refreshToken;
-    if (!secrets.tokens.isExpired || refreshToken == null) return secrets;
-
-    final server = secrets.authServer;
-    final endpoint = Uri.tryParse(connection.url);
-    if (server == null || endpoint == null) return secrets;
-
-    final inFlight = _refreshes[connection.id];
-    if (inFlight != null) return inFlight;
-    final future = _refreshOnce(connection, secrets, server, refreshToken);
-    _refreshes[connection.id] = future;
-    try {
-      return await future;
-    } finally {
-      _refreshes.remove(connection.id);
-    }
-  }
-
-  /// One trip to the token endpoint, with the result written back.
-  Future<McpSecrets?> _refreshOnce(
-    McpConnection connection,
-    McpSecrets secrets,
-    McpAuthServer server,
-    String refreshToken,
-  ) async {
-    final endpoint = Uri.parse(connection.url);
-    try {
-      final refreshed = await _oauth.refresh(
-        server: server,
-        credentials: secrets.credentials,
-        refreshToken: refreshToken,
-        resource: McpOAuth.canonicalResource(endpoint),
-        scope: secrets.scope,
-      );
-      if (refreshed == null) return secrets;
-      final next = secrets.withTokens(refreshed);
-      await setSecrets(connection.id, next);
-      return next;
-    } catch (e) {
-      if (kDebugMode) debugPrint('⚠️ [Mcp] Could not refresh a token: $e');
-      return secrets;
-    }
   }
 
   /// The `oauth` block the host needs to keep [connection] alive on its own,

@@ -139,8 +139,8 @@ class McpRedirectListener {
 
   static String _page(bool ok) =>
       '<!doctype html><meta charset="utf-8">'
-      '<title>Agents</title>'
+      '<title>Chuk Chat</title>'
       '<body style="font-family:system-ui;background:#111;color:#eee;'
       'display:flex;align-items:center;justify-content:center;height:100vh">'
-      '<p>${ok ? 'Connected. You can close this tab and go back to Agents.' : 'Sign-in was cancelled. You can close this tab.'}</p>';
+      '<p>${ok ? 'Connected. You can close this tab and go back to Chuk Chat.' : 'Sign-in was cancelled. You can close this tab.'}</p>';
 }

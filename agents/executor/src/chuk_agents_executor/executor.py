@@ -4659,6 +4659,9 @@ class Executor:
                 mcp_manager.start()
             except Exception:  # noqa: BLE001 — build_runtime records what failed
                 pass
+        # The host may hold newer tokens than the device forwarded (the grant
+        # keeper renewed it, another session rotated it): hand them back.
+        self._queue_newer_mcp_credentials(session_key, mcp_manager, servers)
         # Anything the device has not acknowledged yet (a rotated refresh token
         # from an earlier task) goes out again on this task's stream.
         self._flush_pending_mcp_credentials(session_key, request_id)
@@ -5750,6 +5753,8 @@ class Executor:
             kind = getattr(connection, "error_kind", None) if error else None
             if error and kind not in ("auth", "network", "other"):
                 kind = "other"
+            config = getattr(connection, "config", None)
+            client_id = str(((getattr(config, "oauth", None) or {}).get("client_id")) or "")
             servers.append(
                 {
                     "id": entry.get("id"),
@@ -5764,6 +5769,11 @@ class Executor:
                         for tool in tools
                     ],
                     **({"error": str(error), "error_kind": kind} if error else {}),
+                    # The registered OAuth client the answer was got with (a
+                    # public id, not a secret). The app drops an answer about
+                    # a sign-in it has since replaced (a frame that was in
+                    # flight across a Reconnect).
+                    **({"client_id": client_id} if client_id else {}),
                 }
             )
         return servers
@@ -5782,6 +5792,10 @@ class Executor:
         connect timeout, and the frame loop must not wait for it.
         """
         servers = payload.get("mcp_servers")
+        # A probe carries the device's whole connector set. A sign-in that is
+        # not in it was removed on the device: forget it here too (bead
+        # chuk_chat-meoz), and drop the sessions that still hold it.
+        self._forget_removed_grants(servers if isinstance(servers, list) else [])
         if not isinstance(servers, list) or not servers:
             self._terminal(
                 request_id, mcp_tools_payload(session_key="", servers=[])
@@ -5806,7 +5820,11 @@ class Executor:
                     pass
                 # A probe can refresh a token. The probe has no running task,
                 # so the rotation listener could not send it: send it now, on
-                # the probe's own request, or the app keeps a dead token.
+                # the probe's own request, or the app keeps a dead token. A
+                # fresh access token goes too, rotated or not: the app never
+                # refreshes a connector itself while a host is paired, so this
+                # is how a chuk_chat chat on the device gets a live bearer.
+                self._queue_newer_mcp_credentials(session_key, manager, servers)
                 self._flush_pending_mcp_credentials(session_key, request_id)
                 self._terminal(
                     request_id,
@@ -5827,6 +5845,83 @@ class Executor:
         threading.Thread(
             target=work, name=f"mcp-probe-{request_id[:8]}", daemon=True
         ).start()
+
+    def _forget_removed_grants(self, servers: list) -> None:
+        """Forget the OAuth grants the device no longer forwards, and close
+        every session manager that still holds one of them (it is rebuilt from
+        the next forwarded set). Never raises."""
+        try:
+            blocks = [
+                entry.get("oauth") if isinstance(entry.get("oauth"), dict) else None
+                for entry in servers
+                if isinstance(entry, dict)
+            ]
+            keep = {k for k in (_mcp_grants.OAuthGrantStore.key(b) for b in blocks) if k}
+            with self._mcp_lock:
+                managers = dict(self._mcp_managers)
+            # Close first: a closing session still speaks to its server (the
+            # DELETE of the MCP session), and that request would adopt the
+            # grant into the store again.
+            for session_key, manager in managers.items():
+                held = {
+                    _mcp_grants.OAuthGrantStore.key(getattr(c, "oauth", None))
+                    for c in getattr(manager, "configs", []) or []
+                } - {None}
+                if held - keep:
+                    self._forget_session_mcp(close=True, session_key=session_key)
+            _mcp_grants.GRANTS.retain(blocks)
+        except Exception:  # noqa: BLE001 — a cleanup must not fail a probe
+            pass
+
+    def _queue_newer_mcp_credentials(
+        self, session_key: str, manager: object | None, forwarded: list | None
+    ) -> None:
+        """Park an ``mcp_credentials`` frame for every connector whose tokens
+        on the host differ from the ones the device forwarded.
+
+        The host is the one side that renews a forwarded sign-in (bead
+        chuk_chat-meoz): with rotating refresh tokens two refreshers kill the
+        grant. So the device only learns a new token from here. Parked like a
+        rotation (``_mcp_rotation_listener``), so it is re-sent until the device
+        forwards the same token back. Never raises.
+        """
+        if manager is None or not forwarded:
+            return
+        try:
+            sent: dict[str, tuple[str, str]] = {}
+            for entry in forwarded:
+                if not isinstance(entry, dict) or not entry.get("name"):
+                    continue
+                oauth = entry.get("oauth") if isinstance(entry.get("oauth"), dict) else {}
+                sent[str(entry["name"])] = (
+                    str(entry.get("access_token") or ""),
+                    str(oauth.get("refresh_token") or ""),
+                )
+            listener = self._mcp_rotation_listener(session_key)
+            for config in list(getattr(manager, "configs", []) or []):
+                previous = sent.get(config.name)
+                oauth = getattr(config, "oauth", None) or {}
+                if previous is None or not oauth.get("refresh_token"):
+                    continue
+                # A cached session holds the grant as of its last request; the
+                # keeper or another session may have renewed it since.
+                connection = (getattr(manager, "connections", {}) or {}).get(config.name)
+                lock = getattr(connection, "_refresh_lock", None)
+                with lock if lock is not None else nullcontext():
+                    _mcp_grants.GRANTS.sync(config)
+                oauth = getattr(config, "oauth", None) or {}
+                if _mcp_grants.GRANTS.is_dead(config):
+                    continue
+                now = (str(config.auth_token or ""), str(oauth.get("refresh_token") or ""))
+                if now == previous:
+                    # The device already holds what the host holds: nothing
+                    # left to hand back for this connector.
+                    with self._mcp_lock:
+                        self._mcp_pending_credentials.get(session_key, {}).pop(config.name, None)
+                elif now[0]:
+                    listener(config.name, config)
+        except Exception:  # noqa: BLE001 — a credentials echo must not fail a task
+            pass
 
     def _flush_pending_mcp_credentials(self, session_key: str, request_id: str) -> None:
         """Re-send every unacknowledged ``mcp_credentials`` frame of this session

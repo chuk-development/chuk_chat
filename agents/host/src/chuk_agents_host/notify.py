@@ -46,6 +46,7 @@ from .notification_text import (
     approval_text,
     budget_text,
     completion_text,
+    connector_expired_text,
     resolve_labels,
     takeover_text,
 )
@@ -54,6 +55,11 @@ KIND_COMPLETED = "completed"
 KIND_FAILED = "failed"
 KIND_APPROVAL = "approval_needed"
 KIND_BUDGET = "budget"
+#: A connector's sign-in died. The app opens that connector's Reconnect.
+KIND_MCP_SIGNIN_EXPIRED = "mcp_signin_expired"
+#: The ``session_key`` prefix of that notification: the app reads the
+#: connector id after it (lib/services/notifications/notification_router.dart).
+MCP_CONNECTOR_TARGET = "mcp-connector:"
 
 #: A pending cloud delivery: the row to insert, as the REST API wants it.
 Record = dict[str, Any]
@@ -189,6 +195,25 @@ class SupabaseNotifier:
             agent_name=labels.coworker or "",
             session_key=session_key,
             kind=KIND_BUDGET,
+            title=title,
+            body=body,
+        )
+        self._fire(title, body, record)
+
+    def notify_connector_expired(self, info: dict) -> None:
+        """A connector's sign-in can no longer be renewed (the provider said
+        ``invalid_grant``). Once per dead grant: the row's ``run_id`` names the
+        grant, so the table's one-row-per-run rule drops a repeat, and the
+        grant store fires this only on the transition to dead."""
+        name = str(info.get("name") or "")
+        connector = str(info.get("connector_id") or name)
+        title, body = connector_expired_text(name)
+        record = self._record(
+            run_id=f"mcp-auth:{str(info.get('grant') or connector)[:32]}",
+            agent_id=self._agent_id(),
+            agent_name="",
+            session_key=f"{MCP_CONNECTOR_TARGET}{connector}",
+            kind=KIND_MCP_SIGNIN_EXPIRED,
             title=title,
             body=body,
         )

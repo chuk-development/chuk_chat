@@ -54,6 +54,6 @@ void main() {
     client.close();
     await listener.callback;
 
-    expect(body, contains('go back to Agents'));
+    expect(body, contains('go back to Chuk Chat'));
   });
 }

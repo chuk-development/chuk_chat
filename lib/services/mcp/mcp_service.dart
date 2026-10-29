@@ -54,6 +54,8 @@ import 'package:chuk_chat/services/mcp/chuk_mcp_mirror.dart';
 import 'package:chuk_chat/services/mcp/mcp_connector_sync.dart';
 import 'package:chuk_chat/services/mcp/mcp_oauth.dart';
 import 'package:chuk_chat/services/mcp/mcp_redirect.dart';
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
+import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/mcp/mcp_probe_control.dart';
 import 'package:chuk_chat/services/mcp/mcp_store.dart';
@@ -113,6 +115,37 @@ class McpService {
 
   static bool _loaded = false;
 
+  /// Ids of connectors whose browser sign-in is running now. The list shows
+  /// "Connecting…" for them.
+  static final ValueNotifier<Set<String>> connecting =
+      ValueNotifier<Set<String>>(<String>{});
+
+  /// Ids of connectors the host was asked about and has not answered for yet.
+  /// A signed-in connector in here reads "Signed in, checking…", never an
+  /// error: the sign-in worked, only the host's confirmation is outstanding.
+  static final ValueNotifier<Set<String>> checking =
+      ValueNotifier<Set<String>>(<String>{});
+
+  /// Whether the paired host renews the OAuth sign-ins of the connectors it
+  /// dials (bead chuk_chat-meoz). Then this device never refreshes one
+  /// itself: with rotating refresh tokens (Fastmail) two refreshers kill the
+  /// grant. Swappable in tests; null means "ask the build and the pairing".
+  @visibleForTesting
+  static Future<bool> Function()? hostRenewsOverride;
+
+  /// The host link [probe] uses when none is passed. Tests put a fake host
+  /// here; null means the live relay controller.
+  @visibleForTesting
+  static McpProbeControl? probeControlOverride;
+
+  /// How long a device-side call waits for the host to hand back a renewed
+  /// token before it gives up.
+  @visibleForTesting
+  static Duration hostRenewWait = const Duration(seconds: 15);
+
+  static final StreamController<String> _credentialsArrived =
+      StreamController<String>.broadcast();
+
   /// Injected in tests so no browser opens and no real server is called.
   @visibleForTesting
   static Future<bool> Function(Uri url)? launcher;
@@ -141,6 +174,11 @@ class McpService {
     launcher = null;
     oauthFactory = null;
     probeClientFactory = null;
+    hostRenewsOverride = null;
+    probeControlOverride = null;
+    hostRenewWait = const Duration(seconds: 15);
+    connecting.value = <String>{};
+    checking.value = <String>{};
     _loaded = false;
     _adopting = null;
     _adoptedAt = null;
@@ -520,9 +558,12 @@ class McpService {
       );
     }
 
+    _setMember(connecting, id, true);
     try {
       if (auth == McpAuth.oauth &&
-          (forceSignIn || !await _hasUsableRecord(id))) {
+          (forceSignIn ||
+              !await _hasUsableRecord(id) ||
+              !await _isCurrentRegistration(id))) {
         final token = await _authorize(
           id: id,
           endpoint: endpoint,
@@ -554,7 +595,9 @@ class McpService {
       connections.value = await store.load();
       unawaited(_pushRemote());
       // The host has the credentials now; ask it to dial before the user goes
-      // looking for the tools this connector was signed in for.
+      // looking for the tools this connector was signed in for. Until it
+      // answers the row says "Signed in, checking…": the new connection was
+      // stored without an error, so no old one can show.
       unawaited(probe());
       return McpConnectResult(
         McpConnectStatus.connected,
@@ -567,12 +610,30 @@ class McpService {
         McpConnectStatus.failed,
         message: 'Could not save the connector: $e',
       );
+    } finally {
+      _setMember(connecting, id, false);
     }
   }
 
   /// True when [id] already holds a record this device can still use.
   static Future<bool> _hasUsableRecord(String id) async =>
       _isUsable(await store.secretsFor(id));
+
+  /// Whether [id]'s stored client was registered under the app's current
+  /// name. A client registered as "Agents" shows that name on the provider's
+  /// consent screen, so a connect over such a record signs in again (and
+  /// registers anew as [McpOAuth.clientName]). No record: nothing to replace.
+  static Future<bool> _isCurrentRegistration(String id) async {
+    final record = await store.secretsFor(id);
+    if (record == null || record.credentials.clientId.isEmpty) return true;
+    return record.credentials.isCurrentRegistration;
+  }
+
+  static void _setMember(ValueNotifier<Set<String>> set, String id, bool on) {
+    final next = Set<String>.from(set.value);
+    final changed = on ? next.add(id) : next.remove(id);
+    if (changed) set.value = next;
+  }
 
   /// Whether [record] can still get a request authenticated: a bearer that has
   /// not lapsed, or a refresh token to mint a new one with. Anything else means
@@ -662,10 +723,15 @@ class McpService {
     // No connection left, so nothing to report as dead (upstream did this in
     // _forgetLocal, which this structure does not have).
     _recordReachable(id, true);
+    _setMember(checking, id, false);
     await store.remove(id);
     connections.value = await store.load();
     unawaited(_pushRemote());
     unawaited(_deleteChukRow(id));
+    // The host keeps a sealed copy of the sign-in (it renews it). A probe
+    // with the remaining set makes it forget every grant not in that set,
+    // the empty set included.
+    unawaited(probe(includeEmpty: true));
   }
 
   // ─── Signing in ────────────────────────────────────────────────────────
@@ -816,12 +882,41 @@ class McpService {
   /// Opens the sign-in inside the app: a Custom Tab on Android, a Safari
   /// sheet on iOS, a browser window on desktop. It can be closed again from
   /// here, which a separate browser app cannot.
+  /// Test builds only (`--dart-define=MCP_TEST_AUTO_BROWSER=true`): the
+  /// "browser" is a plain HTTP client that follows the sign-in redirect of a
+  /// LOOPBACK test server (agents/runtime/tests/fake_mcp_oauth.py, which
+  /// consents by itself). It lets a headless run drive the whole sign-in.
+  /// Never set in a release; and even then only loopback http URLs take it.
+  static const bool _autoBrowser = bool.fromEnvironment('MCP_TEST_AUTO_BROWSER');
+
   static Future<bool> _launch(Uri url) async {
+    if (_autoBrowser &&
+        url.isScheme('http') &&
+        (url.host == '127.0.0.1' || url.host == 'localhost')) {
+      return _followTestSignIn(url);
+    }
     try {
       return await launchUrl(url, mode: LaunchMode.inAppBrowserView);
     } catch (_) {
       // Desktop has no in-app browser view.
       return launchUrl(url, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  static Future<bool> _followTestSignIn(Uri url) async {
+    final client = http.Client();
+    try {
+      final request = http.Request('GET', url)..followRedirects = false;
+      final response = await client.send(request);
+      await response.stream.drain<void>();
+      final String? location = response.headers['location'];
+      if (location == null) return false;
+      final back = await client.get(Uri.parse(location));
+      return back.statusCode < 400;
+    } catch (_) {
+      return false;
+    } finally {
+      client.close();
     }
   }
 
@@ -1004,18 +1099,35 @@ class McpService {
   ///
   /// Does nothing when no host is attached: an unpaired app has nobody to ask,
   /// and the list keeps saying "not checked" rather than inventing a zero.
-  static Future<void> probe({McpProbeControl? control}) async {
+  static Future<void> probe({
+    McpProbeControl? control,
+    bool includeEmpty = false,
+  }) async {
     // An `is` check, not a cast: the link carries whatever controller is bound
     // (a fake in tests, a local-socket controller without MCP), and a frame
     // they cannot send is a probe that does not happen — never a crash in the
     // middle of a pairing notification.
-    final Object? bound = control ?? AgentsRelayLink.instance.controller.value;
+    final Object? bound =
+        control ??
+        probeControlOverride ??
+        AgentsRelayLink.instance.controller.value;
     final McpProbeControl? target = bound is McpProbeControl ? bound : null;
     if (target == null) return;
     try {
       final List<Map<String, dynamic>> payloads = await store.forwardPayloads();
-      if (payloads.isEmpty) return;
-      await target.probeMcpServers(payloads);
+      if (payloads.isEmpty && !includeEmpty) return;
+      final Set<String> asked = <String>{
+        for (final Map<String, dynamic> p in payloads)
+          if ('${p['id'] ?? ''}'.isNotEmpty) '${p['id']}',
+      };
+      if (asked.isNotEmpty) checking.value = {...checking.value, ...asked};
+      try {
+        await target.probeMcpServers(payloads);
+      } catch (_) {
+        // Not sent: nobody will answer, so nothing is being checked.
+        checking.value = Set<String>.from(checking.value)..removeAll(asked);
+        rethrow;
+      }
     } catch (_) {
       // A probe is a convenience. A relay that is down leaves the list as it
       // was; the next task reports the same thing anyway.
@@ -1056,6 +1168,15 @@ class McpService {
         }
       }
       if (target == null) continue;
+      // An answer computed with a sign-in this device has since replaced (it
+      // was in flight across a Reconnect) says nothing about the new one.
+      final String frameClient = '${row['client_id'] ?? ''}';
+      if (frameClient.isNotEmpty) {
+        final McpSecrets? record = await store.secretsFor(target.id);
+        final String ours = record?.credentials.clientId ?? '';
+        if (ours.isNotEmpty && ours != frameClient) continue;
+      }
+      _setMember(checking, target.id, false);
       final Object? toolsRaw = row['tools'];
       final List<McpTool> tools = <McpTool>[
         if (toolsRaw is List)
@@ -1142,6 +1263,7 @@ class McpService {
         return false;
       }
       await store.setSecrets(connection.id, next);
+      _credentialsArrived.add(connection.id);
       return true;
     } catch (e) {
       if (kDebugMode) debugPrint('⚠️ [MCP] Could not apply credentials: $e');
@@ -1281,7 +1403,15 @@ class McpService {
     }
 
     var tokens = secrets.tokens;
-    if (tokens.isExpired && tokens.refreshToken != null) {
+    if (tokens.isExpired &&
+        tokens.refreshToken != null &&
+        await _hostRenews()) {
+      // The host is the one side that renews this sign-in. Ask it, and take
+      // the token it hands back (`mcp_credentials`).
+      final McpTokens? renewed = await _tokensFromHost(connection.id);
+      if (renewed == null || renewed.isExpired) return null;
+      tokens = renewed;
+    } else if (tokens.isExpired && tokens.refreshToken != null) {
       final server = secrets.authServer;
       if (server == null) return null;
       final refreshed = await (oauthFactory ?? McpOAuth.new)().refresh(
@@ -1301,6 +1431,37 @@ class McpService {
 
     if (tokens.accessToken.isEmpty) return McpClient(endpoint: endpoint);
     return McpClient(endpoint: endpoint, accessToken: tokens.accessToken);
+  }
+
+  /// Whether the paired host renews this device's connector sign-ins. True in
+  /// the Agents build whenever a host is paired, attached or not: the host's
+  /// keeper renews grants while the app is closed, so a device refresh at any
+  /// time could spend a refresh token the host already rotated.
+  static Future<bool> _hostRenews() async {
+    final override = hostRenewsOverride;
+    if (override != null) return override();
+    if (!agentsChatCore) return false;
+    if (AgentsRelayLink.instance.controller.value != null) return true;
+    try {
+      return await AgentsPairingStore().loadPairing() != null;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Ask the host for [id]'s current tokens and wait for them. Null when no
+  /// host answers within [hostRenewWait].
+  static Future<McpTokens?> _tokensFromHost(String id) async {
+    final Future<String> arrived = _credentialsArrived.stream
+        .firstWhere((String which) => which == id)
+        .timeout(hostRenewWait);
+    unawaited(probe());
+    try {
+      await arrived;
+    } catch (_) {
+      return null;
+    }
+    return (await store.secretsFor(id))?.tokens;
   }
 
   /// The account's own access token, for a server fronted by our API.

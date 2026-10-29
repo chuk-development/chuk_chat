@@ -607,6 +607,24 @@ mixin AgentsShellHost on State<MessengerShell> {
       if (pending == null) _cancelWaitingTap();
       return;
     }
+    final String? connectorId = pending.connectorId;
+    if (connectorId != null) {
+      // "Fastmail: sign-in expired": the tap opens that connector and starts
+      // its browser sign-in at once. No thread to select.
+      _cancelWaitingTap();
+      NotificationRouter.instance.take();
+      unawaited(
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => McpConnectorDetailPage(
+              id: connectorId,
+              reconnectOnOpen: true,
+            ),
+          ),
+        ),
+      );
+      return;
+    }
     final String? agentId = _agentIdForThread(pending.sessionKey);
     if (agentId == null) {
       // Not an agent's thread at all: not this shell's to open.

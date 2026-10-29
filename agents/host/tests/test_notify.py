@@ -304,3 +304,25 @@ def test_an_approval_push_follows_the_thread_it_names(tmp_path):
         notifier.close()
     row = cloud.bodies("/rest/v1/cowork_run_notifications")[0]
     assert row["session_key"] == "agent:x"
+
+
+def test_a_dead_connector_sign_in_sends_one_named_notice(tmp_path):
+    """Bead chuk_chat-meoz: the grant store reports a dead sign-in once; the
+    push names the connector and routes the tap to its Reconnect."""
+    cloud = _Cloud()
+    notifier = _notifier(tmp_path, cloud, _session(cloud))
+    info = {"grant": "g" * 64, "name": "Fastmail", "connector_id": "fastmail", "reason": "invalid_grant"}
+
+    notifier.notify_connector_expired(info)
+
+    rows = cloud.bodies("/rest/v1/cowork_run_notifications")
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["kind"] == "mcp_signin_expired"
+    assert row["title"] == "Fastmail: sign-in expired"
+    assert row["body"] == "Tap to sign in again."
+    assert row["session_key"] == "mcp-connector:fastmail"
+    # One row per dead grant: a retry carries the same run id.
+    assert row["run_id"] == "mcp-auth:" + "g" * 32
+    # No reason, no token, no URL in the push.
+    assert "invalid_grant" not in json.dumps(row)

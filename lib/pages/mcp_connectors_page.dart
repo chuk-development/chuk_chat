@@ -82,28 +82,48 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
     );
   }
 
-  /// The right-hand line of a connected row in the Agents build.
+  /// What a connected row says in the Agents build, in words a reader who
+  /// is not technical can act on. One line, never the technical reason (that
+  /// is behind "Details" on the connector's own page).
   ///
-  /// The states must not look alike: nobody has asked the host yet, the
-  /// host asked and the sign-in was refused, the host asked and the server
-  /// did not answer, the host asked and got a list. Printing "0 tools" (or
-  /// "not reachable") for all of them said nothing: an expired sign-in read
-  /// as a dead server, and the reader had no reason to reconnect.
-  static String _hostStatusOf(BuildContext context, McpConnection connection) {
+  /// The states must not look alike: a sign-in that is running, a sign-in
+  /// that worked but the host has not confirmed yet, a confirmed one, a
+  /// sign-in the provider revoked (only a new sign-in helps), and a server
+  /// that does not answer (nothing to do but wait).
+  static _RowStatus _hostStatusOf(
+    BuildContext context,
+    McpConnection connection, {
+    required bool connecting,
+    required bool checking,
+  }) {
     final AppLocalizations strings = _stringsOf(context);
+    if (connecting) return _RowStatus(badge: strings.mcpStatusConnecting);
     switch (connection.errorKind) {
       case McpErrorKind.auth:
-        return strings.mcpStatusSignInExpired;
+        return _RowStatus(
+          line: strings.mcpStatusSignInExpired,
+          action: strings.mcpActionSignInAgain,
+        );
       case McpErrorKind.network:
-        return strings.mcpStatusNoAnswer;
+        return _RowStatus(line: strings.mcpStatusNoAnswer);
       case McpErrorKind.other:
-        return strings.mcpStatusHostError;
+        return _RowStatus(line: strings.mcpStatusHostError);
       case null:
         break;
     }
-    if (connection.checkedAt == null) return 'not checked';
-    final int count = connection.tools.length;
-    return count == 1 ? '1 tool' : '$count tools';
+    if (checking || connection.checkedAt == null) {
+      // The sign-in worked; the host's confirmation is still out (or the host
+      // is offline). Optimistic on purpose: this is not an error.
+      return _RowStatus(
+        badge: strings.mcpStatusSignedIn,
+        badgeIcon: Icons.check_rounded,
+        line: strings.mcpStatusChecking,
+      );
+    }
+    return _RowStatus(
+      badge: strings.mcpStatusSignedIn,
+      badgeIcon: Icons.check_rounded,
+    );
   }
 
   @override
@@ -158,7 +178,12 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
           onSubmitted: (_) => _searchRegistry(),
         ),
       ),
-      body: ValueListenableBuilder<Set<String>>(
+      body: ListenableBuilder(
+        listenable: Listenable.merge(<Listenable>[
+          McpService.connecting,
+          McpService.checking,
+        ]),
+        builder: (context, _) => ValueListenableBuilder<Set<String>>(
         valueListenable: McpService.unreachable,
         builder: (context, unreachable, _) =>
             ValueListenableBuilder<List<McpConnection>>(
@@ -225,27 +250,40 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
                 ExpressiveGroup(
                   children: [
                     for (final connection in visibleConnections)
-                      _row(
-                        url: connection.url,
-                        icon: connection.iconUrl,
-                        assetPath: bundledIconAsset(connection.id),
-                        name: connection.name,
-                        // Agents: the line under the name is this device's
-                        // check (a chuk_chat chat), the badge is the host's
-                        // (an Agents thread). One can fail while the other
-                        // works, so neither hides the other.
-                        subtitle: unreachable.contains(connection.id)
-                            ? (agentsChatCore
-                                  ? 'This device cannot reach the server'
-                                  : 'The server did not answer')
-                            : subtitleFor(connection),
-                        trailing: agentsChatCore
-                            ? _hostStatusOf(context, connection)
-                            : unreachable.contains(connection.id)
-                            ? 'Offline'
-                            : '${connection.tools.length} tools',
-                        onTap: () => _open(connection.id, null),
-                      ),
+                      if (agentsChatCore)
+                        _agentsRow(
+                          connection,
+                          status: _hostStatusOf(
+                            context,
+                            connection,
+                            connecting: McpService.connecting.value
+                                .contains(connection.id),
+                            checking: McpService.checking.value
+                                .contains(connection.id),
+                          ),
+                          // The host's line wins: it is the side that uses
+                          // the connector for an Agents thread. This
+                          // device's own check (a chuk_chat chat) shows
+                          // only when the host has nothing to say.
+                          deviceLine: unreachable.contains(connection.id)
+                              ? 'This device cannot reach the server'
+                              : null,
+                          description: subtitleFor(connection),
+                        )
+                      else
+                        _row(
+                          url: connection.url,
+                          icon: connection.iconUrl,
+                          assetPath: bundledIconAsset(connection.id),
+                          name: connection.name,
+                          subtitle: unreachable.contains(connection.id)
+                              ? 'The server did not answer'
+                              : subtitleFor(connection),
+                          trailing: unreachable.contains(connection.id)
+                              ? 'Offline'
+                              : '${connection.tools.length} tools',
+                          onTap: () => _open(connection.id, null),
+                        ),
                   ],
                 ),
               ],
@@ -336,6 +374,7 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
           );
         },
         ),
+        ),
       ),
     );
   }
@@ -364,10 +403,50 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
     );
   }
 
-  Future<void> _open(String id, McpCatalogueEntry? entry) async {
+  /// A connected row in the Agents build: the status line under the name,
+  /// and on the right either the "Signed in" badge or the one action that
+  /// helps ("Sign in again", which opens the browser sign-in at once).
+  Widget _agentsRow(
+    McpConnection connection, {
+    required _RowStatus status,
+    required String? deviceLine,
+    required String? description,
+  }) {
+    final Widget? trailing = status.action != null
+        ? FilledButton.tonal(
+            onPressed: () => _open(connection.id, null, reconnect: true),
+            child: Text(status.action!),
+          )
+        : (status.badge != null
+              ? ExpressiveBadge(status.badge!, icon: status.badgeIcon)
+              : null);
+    return ExpressiveRow(
+      title: connection.name,
+      subtitle: status.line ?? deviceLine ?? description,
+      leading: McpConnectorIcon(
+        url: connection.iconUrl,
+        assetPath: bundledIconAsset(connection.id),
+        serverUrl: connection.url,
+        name: connection.name,
+        size: 42,
+      ),
+      trailing: trailing,
+      onTap: () => _open(connection.id, null),
+    );
+  }
+
+  Future<void> _open(
+    String id,
+    McpCatalogueEntry? entry, {
+    bool reconnect = false,
+  }) async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => McpConnectorDetailPage(id: id, entry: entry),
+        builder: (_) => McpConnectorDetailPage(
+          id: id,
+          entry: entry,
+          reconnectOnOpen: reconnect,
+        ),
       ),
     );
   }
@@ -405,10 +484,20 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
 
 /// One connector: connect or disconnect it, and see what it can do.
 class McpConnectorDetailPage extends StatefulWidget {
-  const McpConnectorDetailPage({super.key, required this.id, this.entry});
+  const McpConnectorDetailPage({
+    super.key,
+    required this.id,
+    this.entry,
+    this.reconnectOnOpen = false,
+  });
 
   final String id;
   final McpCatalogueEntry? entry;
+
+  /// Start the browser sign-in as soon as the page opens: the "Sign in
+  /// again" button of the list and the tap on a "sign-in expired"
+  /// notification both mean exactly that, so a second tap would be noise.
+  final bool reconnectOnOpen;
 
   @override
   State<McpConnectorDetailPage> createState() => _McpConnectorDetailPageState();
@@ -438,6 +527,18 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
   void initState() {
     super.initState();
     unawaited(_checkReachable());
+    if (widget.reconnectOnOpen) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _busy) return;
+        final connection = McpService.connectionFor(widget.id);
+        final url = connection?.url ?? widget.entry?.url ?? '';
+        if (url.isEmpty) return;
+        unawaited(
+          _connect(url, connection?.name ?? widget.entry?.name ?? '',
+              forceSignIn: connection != null),
+        );
+      });
+    }
   }
 
   Future<void> _checkReachable() async {
@@ -470,17 +571,16 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
   String _failureText(McpConnection connection) {
     if (agentsChatCore) {
       final AppLocalizations strings = _stringsOf(context);
-      final String? reason = connection.lastError;
+      // Plain words and the one action. The technical reason is behind
+      // "Details" ([_technicalReason]).
       return <String>[
-        if (_reachable == false) 'This device could not reach the server.',
-        if (reason != null)
+        if (connection.lastError != null)
           switch (connection.errorKind) {
-            // The host's text names the HTTP status and the renewal that
-            // failed; the reader needs the one action that helps.
-            McpErrorKind.auth => strings.mcpSignInExpiredDetail,
-            McpErrorKind.network => strings.mcpNoAnswerDetail(reason),
-            _ => strings.mcpHostErrorDetail(reason),
+            McpErrorKind.auth => strings.mcpSignInExpiredNamed(connection.name),
+            McpErrorKind.network => strings.mcpStatusNoAnswer,
+            _ => strings.mcpStatusHostError,
           },
+        if (_reachable == false) 'This device could not reach the server.',
       ].join('\n');
     }
     return 'The server did not answer. The sign-in may have expired.';
@@ -587,7 +687,9 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
                         child: Text(
                           connection == null
                               ? 'Connect'
-                              : (failed ? 'Reconnect' : 'Disconnect'),
+                              : (failed
+                                    ? _stringsOf(context).mcpActionSignInAgain
+                                    : 'Disconnect'),
                         ),
                       ),
               ),
@@ -615,6 +717,30 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
                     ),
                   ],
                 ),
+                if (agentsChatCore && connection.lastError != null)
+                  Theme(
+                    // No divider lines around the disclosure.
+                    data: theme.copyWith(dividerColor: Colors.transparent),
+                    child: ExpansionTile(
+                      title: Text(
+                        _stringsOf(context).mcpDetails,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      dense: true,
+                      tilePadding: EdgeInsets.zero,
+                      childrenPadding: const EdgeInsets.only(bottom: 8),
+                      children: <Widget>[
+                        SelectableText(
+                          connection.lastError!,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.resolvedIconColor.withValues(
+                              alpha: 0.7,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 const SizedBox(height: 4),
                 Center(
                   child: TextButton(
@@ -1147,3 +1273,16 @@ class _AddByUrlDialogState extends State<_AddByUrlDialog> {
 /// bare test harness).
 AppLocalizations _stringsOf(BuildContext context) =>
     AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));
+
+/// One connected row's state in the Agents build: a badge on the right (with
+/// an optional icon), or the one action that helps, and a status line under
+/// the name. Null fields are not shown.
+@immutable
+class _RowStatus {
+  const _RowStatus({this.badge, this.badgeIcon, this.line, this.action});
+
+  final String? badge;
+  final IconData? badgeIcon;
+  final String? line;
+  final String? action;
+}

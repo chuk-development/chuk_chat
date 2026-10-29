@@ -227,7 +227,7 @@ void main() {
     expect(block.containsKey('client_secret'), isFalse);
   });
 
-  test('forwardPayloads refreshes an expired token before it forwards it',
+  test('forwardPayloads never refreshes: the host is the one refresher',
       () async {
     final secrets = _MemorySecrets();
     var tokenCalls = 0;
@@ -266,12 +266,13 @@ void main() {
 
     final payload = (await store.forwardPayloads()).single;
 
-    expect(tokenCalls, 1);
-    expect(payload['access_token'], 'at-fresh');
-    // The rotated token is written back, so the next launch does not re-refresh.
-    expect((await store.secretsFor('n'))!.tokens.accessToken, 'at-fresh');
-    // The server kept the old refresh token, so it must survive the write-back.
+    // Bead chuk_chat-meoz: a device refresh here raced the host's own one,
+    // and with rotating refresh tokens one side always lost the grant. The
+    // lapsed bearer goes out with the block; the host renews it.
+    expect(tokenCalls, 0);
+    expect(payload['access_token'], 'at-1');
     expect((payload['oauth'] as Map)['refresh_token'], 'rt-1');
+    expect((await store.secretsFor('n'))!.tokens.accessToken, 'at-1');
   });
 
   test('a refusal to refresh still forwards the stale token and the block',
@@ -392,68 +393,18 @@ void main() {
     expect(await store.forwardPayloads(), expected);
   });
 
-  test('a rotated refresh token is persisted, not dropped', () async {
-    // Google, Okta and Auth0 with rotation on hand back a NEW refresh token and
-    // kill the old one. Keeping the old one would work exactly once and then
-    // leave the connector dead with no way back but a fresh sign-in.
-    final secrets = _MemorySecrets();
-    final client = MockClient((http.Request request) async {
-      expect(request.bodyFields['refresh_token'], 'rt-1');
-      return http.Response(
-        jsonEncode(<String, dynamic>{
-          'access_token': 'at-fresh',
-          'refresh_token': 'rt-2',
-          'expires_in': 3600,
-        }),
-        200,
-        headers: const {'content-type': 'application/json'},
-      );
-    });
-    final store = McpStore(
-      secrets: secrets,
-      oauth: McpOAuth(httpClient: client),
-      list: memoryMcpList(),
-    );
-    await store.upsert(
-      const McpConnection(
-        id: 'n',
-        name: 'Notion',
-        url: 'https://mcp.notion.example/mcp',
-        auth: McpAuth.oauth,
-      ),
-    );
-    await store.setSecrets(
-      'n',
-      _record(expiresAt: DateTime.now().subtract(const Duration(hours: 1))),
-    );
-
-    final payload = (await store.forwardPayloads()).single;
-
-    expect((payload['oauth'] as Map)['refresh_token'], 'rt-2');
-    expect((await store.secretsFor('n'))!.tokens.refreshToken, 'rt-2');
-  });
-
-  test('two launches at once spend the refresh token only once', () async {
-    // Both callers read the same lapsed record. On a rotating server the second
-    // request would be answered with invalid_grant, and whichever write landed
-    // last would decide what is stored — including, in the bad ordering, the
-    // now-dead old token.
+  test('two launches at once never spend the refresh token on the device',
+      () async {
+    // Bead chuk_chat-meoz. The device used to refresh a lapsed bearer here
+    // (single-flight per device), and the host refreshed the same grant on
+    // its side: two refreshers of one rotating grant. A rotated token now
+    // only ever comes from the host (`mcp_credentials`, see
+    // McpService.applyRotatedCredentials).
     final secrets = _MemorySecrets();
     var tokenCalls = 0;
     final client = MockClient((http.Request request) async {
       tokenCalls++;
-      if (tokenCalls > 1) return http.Response('invalid_grant', 400);
-      // Let the second caller reach the store while this one is in flight.
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-      return http.Response(
-        jsonEncode(<String, dynamic>{
-          'access_token': 'at-fresh',
-          'refresh_token': 'rt-2',
-          'expires_in': 3600,
-        }),
-        200,
-        headers: const {'content-type': 'application/json'},
-      );
+      return http.Response('{}', 200);
     });
     final store = McpStore(
       secrets: secrets,
@@ -478,11 +429,10 @@ void main() {
       store.forwardPayloads(),
     ]);
 
-    expect(tokenCalls, 1);
+    expect(tokenCalls, 0);
     for (final payloads in both) {
-      expect(payloads.single['access_token'], 'at-fresh');
+      expect((payloads.single['oauth'] as Map)['refresh_token'], 'rt-1');
     }
-    expect((await store.secretsFor('n'))!.tokens.refreshToken, 'rt-2');
   });
 
   test('clearing the bearer keeps the refresh material', () async {

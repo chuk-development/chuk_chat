@@ -37,20 +37,35 @@ class McpAuthServer {
 
 /// The client id (and secret, if the server insists on one) we registered.
 class McpClientCredentials {
-  const McpClientCredentials({required this.clientId, this.clientSecret});
+  const McpClientCredentials({
+    required this.clientId,
+    this.clientSecret,
+    this.clientName,
+  });
 
   final String clientId;
   final String? clientSecret;
 
+  /// The `client_name` this client was registered under: what the provider's
+  /// consent screen shows. Null for a record from before it was kept. Every
+  /// sign-in registers anew ([McpService.connect]), so a record under an
+  /// older name is replaced by the next sign-in; this says which one it is.
+  final String? clientName;
+
+  /// Whether this registration was made under the app's current name.
+  bool get isCurrentRegistration => clientName == McpOAuth.clientName;
+
   Map<String, dynamic> toJson() => {
     'client_id': clientId,
     if (clientSecret != null) 'client_secret': clientSecret,
+    if (clientName != null) 'client_name': clientName,
   };
 
   static McpClientCredentials fromJson(Map<String, dynamic> json) =>
       McpClientCredentials(
         clientId: (json['client_id'] ?? '').toString(),
         clientSecret: json['client_secret']?.toString(),
+        clientName: json['client_name']?.toString(),
       );
 }
 
@@ -143,10 +158,32 @@ class McpOAuth {
 
   final http.Client _http;
 
-  static const String clientName = 'Agents';
-  static const String clientUri = 'https://agents.chuk.chat';
+  /// What a provider's consent screen shows ("Chuk Chat wants to access your
+  /// account"). Fixed at registration: an older client keeps its old name
+  /// until the next sign-in registers a new one.
+  static const String clientName = 'Chuk Chat';
+
+  /// The product site. `agents.chuk.chat` (the old value) does not resolve.
+  static const String clientUri = 'https://chuk.chat';
 
   // ─── Discovery ─────────────────────────────────────────────────────────
+
+  /// [scopes] plus `offline_access` when the authorization server lists it
+  /// and [scopes] does not ask for it yet. That scope is what makes an OpenID
+  /// provider issue a refresh token at all, so without it a connector would
+  /// need a new sign-in every time the access token lapses. Left alone when
+  /// [scopes] is empty: then the request carries no scope and the server
+  /// picks its default.
+  static List<String> _withOfflineAccess(
+    List<String> scopes,
+    Object? serverScopes,
+  ) {
+    const offline = 'offline_access';
+    if (scopes.isEmpty || scopes.contains(offline)) return scopes;
+    final bool offered =
+        serverScopes is List && serverScopes.map((e) => '$e').contains(offline);
+    return offered ? <String>[...scopes, offline] : scopes;
+  }
 
   /// The canonical resource identifier of an MCP server, as RFC 8707 wants
   /// it: no fragment, no trailing slash.
@@ -254,12 +291,15 @@ class McpOAuth {
           // registers clients" — which is how a server without dynamic
           // registration looked connectable and then failed at the POST.
           registrationEndpoint: _uriOrNull(metadata['registration_endpoint']),
-          scopesSupported: scopes.isNotEmpty
-              ? scopes.toSet().toList()
-              : ((metadata['scopes_supported'] as List?)
-                        ?.map((e) => e.toString())
-                        .toList() ??
-                    const <String>[]),
+          scopesSupported: _withOfflineAccess(
+            scopes.isNotEmpty
+                ? scopes.toSet().toList()
+                : ((metadata['scopes_supported'] as List?)
+                          ?.map((e) => e.toString())
+                          .toList() ??
+                      const <String>[]),
+            metadata['scopes_supported'],
+          ),
         );
       }
     }
@@ -345,7 +385,14 @@ class McpOAuth {
       );
     }
 
-    return McpClientCredentials.fromJson(Map<String, dynamic>.from(json));
+    final issued = McpClientCredentials.fromJson(Map<String, dynamic>.from(json));
+    // Recorded as asked: a server that does not echo the name still showed
+    // this one on its consent screen.
+    return McpClientCredentials(
+      clientId: issued.clientId,
+      clientSecret: issued.clientSecret,
+      clientName: clientName,
+    );
   }
 
   /// True for a redirect URI the app can actually receive a sign-in on: plain

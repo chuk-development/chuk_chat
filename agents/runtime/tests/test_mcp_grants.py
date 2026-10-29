@@ -319,3 +319,124 @@ def test_a_refused_sign_in_says_reconnect(ratchet, refusing_server):
     assert "Reconnect" in connection.error
     # It tried to renew once with the refresh token it had.
     assert ratchet.calls >= 1
+
+
+# -- one refresher, keep-alive, dead grants (bead chuk_chat-meoz) -------------
+
+
+def test_two_refreshers_at_the_same_moment_spend_the_token_once(ratchet):
+    """Two connections of one grant see an expired token at the same time.
+    One refreshes; the other takes its result. Never two refreshes."""
+    first = MCPConnection(_forwarded("rt-1", "at-1", expires_at=_past()))
+    second = MCPConnection(_forwarded("rt-1", "at-1", expires_at=_past()))
+    results: list[str | None] = []
+    barrier = threading.Barrier(2)
+
+    def run(connection):
+        barrier.wait()
+        results.append(connection._http_headers().get("Authorization"))  # noqa: SLF001
+
+    threads = [threading.Thread(target=run, args=(c,)) for c in (first, second)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(10)
+
+    assert results == ["Bearer at-2", "Bearer at-2"]
+    assert ratchet.calls == 1
+    assert ratchet.refused == 0
+
+
+def test_a_refresh_is_on_disk_before_the_new_token_is_used(ratchet, tmp_path):
+    path = tmp_path / "mcp-grants.json"
+    mcp_client.GRANTS.set_path(path)
+    connection = MCPConnection(_forwarded("rt-1", "at-1", expires_at=_past()))
+
+    assert connection.refresh_token() == "at-2"
+
+    # A fresh process (a crash right after the refresh) reads the new token.
+    reread = OAuthGrantStore(path)
+    assert reread.current(connection.config)["refresh_token"] == "rt-2"
+
+
+def test_invalid_grant_stops_at_once_and_marks_the_grant_dead(ratchet):
+    notices: list[dict] = []
+    mcp_client.GRANTS.dead_listeners.append(notices.append)
+    config = _forwarded("rt-revoked", "at-old", expires_at=_past())
+    config.connector_id = "fastmail"
+    connection = MCPConnection(config)
+
+    assert connection.refresh_token(force=True) is None
+    assert ratchet.calls == 1
+    # Every later attempt (headers, the 401 retry, a second dial) asks nobody.
+    assert connection.refresh_token(force=True) is None
+    connection._http_headers()  # noqa: SLF001
+    again = MCPConnection(_forwarded("rt-revoked", "at-old", expires_at=_past()))
+    assert again.refresh_token(force=True) is None
+    assert ratchet.calls == 1
+    # One notice, naming the connector.
+    assert len(notices) == 1
+    assert notices[0]["name"] == "Fastmail"
+    assert notices[0]["connector_id"] == "fastmail"
+    assert notices[0]["reason"] == "invalid_grant"
+
+
+def test_a_new_sign_in_after_a_dead_grant_works_again(ratchet):
+    dead = MCPConnection(_forwarded("rt-revoked", "at-old", expires_at=_past()))
+    assert dead.refresh_token(force=True) is None
+    calls = ratchet.calls
+
+    # The device signed in again: a new refresh token of the same client.
+    fresh = MCPConnection(_forwarded("rt-1", "at-1", expires_at=_past()))
+    assert fresh.refresh_token() == "at-2"
+    assert ratchet.calls == calls + 1
+
+
+def test_the_dead_mark_survives_a_restart(ratchet, tmp_path):
+    path = tmp_path / "mcp-grants.json"
+    mcp_client.GRANTS.set_path(path)
+    assert MCPConnection(_forwarded("rt-revoked", "at")).refresh_token(force=True) is None
+    calls = ratchet.calls
+
+    restarted = OAuthGrantStore(path)
+    connection = MCPConnection(_forwarded("rt-revoked", "at"), grants=restarted)
+    notices: list[dict] = []
+    restarted.dead_listeners.append(notices.append)
+    assert connection.refresh_token(force=True) is None
+    assert ratchet.calls == calls
+    assert notices == []
+
+
+def test_the_keeper_renews_an_idle_grant_once_a_day(ratchet):
+    store = mcp_client.GRANTS
+    MCPConnection(_forwarded("rt-1", "at-1"))  # the store adopts the grant
+    now = __import__("time").time()
+
+    assert store.due(now) == []
+    assert store.keep_alive(now) == 0
+    assert ratchet.calls == 0
+
+    later = now + mcp_client.KEEPALIVE_INTERVAL + 1
+    assert len(store.due(later)) == 1
+    assert store.keep_alive(later) == 1
+    assert ratchet.calls == 1
+    # A live session of the grant picks the renewed state up without a refresh.
+    session = MCPConnection(_forwarded("rt-1", "at-1"))
+    assert session._http_headers()["Authorization"] == "Bearer at-2"  # noqa: SLF001
+    assert session.config.oauth["refresh_token"] == "rt-2"
+    assert ratchet.calls == 1
+    # Just renewed (the clock of the renewal is the real one): not due again.
+    assert store.due(now + 60) == []
+
+
+def test_the_keeper_marks_a_dead_grant_and_notifies_once(ratchet):
+    store = mcp_client.GRANTS
+    notices: list[dict] = []
+    store.dead_listeners.append(notices.append)
+    MCPConnection(_forwarded("rt-revoked", "at"))
+    later = __import__("time").time() + mcp_client.KEEPALIVE_INTERVAL + 1
+
+    assert store.keep_alive(later) == 0
+    assert store.keep_alive(later + 10) == 0
+    assert ratchet.calls == 1
+    assert len(notices) == 1

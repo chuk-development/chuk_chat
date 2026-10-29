@@ -213,3 +213,11 @@ def _clip(value: str | None) -> str | None:
     if name is None:
         return None
     return name if len(name) <= MAX_LABEL_LEN else name[: MAX_LABEL_LEN - 1].rstrip() + "…"
+
+
+def connector_expired_text(name: str) -> tuple[str, str]:
+    """Title and body for a connector whose sign-in the provider revoked
+    (``invalid_grant``). One action: sign in again. Only a person can do it:
+    the OAuth consent screen needs them in a browser."""
+    label = (name or "").strip() or "A connector"
+    return (f"{label}: sign-in expired", "Tap to sign in again.")
