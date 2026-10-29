@@ -24,7 +24,10 @@ VIEWPORT="${AGENTS_BROWSER_VIEWPORT:-}"
 
 # Bring up Xvfb on the display if nothing answers there yet.
 if ! xdpyinfo -display "${DISPLAY_NUM}" >/dev/null 2>&1; then
-    Xvfb "${DISPLAY_NUM}" -screen 0 "${SCREEN}" -nolisten tcp >/tmp/xvfb.log 2>&1 &
+    # -noreset: by default Xvfb resets when its last client goes away, and a
+    # reset drops every root window property. The work area below is such a
+    # property, and the browser connects only after this script set it.
+    Xvfb "${DISPLAY_NUM}" -screen 0 "${SCREEN}" -nolisten tcp -noreset >/tmp/xvfb.log 2>&1 &
     # Wait for it to accept connections (up to ~5s) so Chromium never races it.
     i=0
     while [ "${i}" -lt 50 ]; do
@@ -62,8 +65,8 @@ export XCURSOR_SIZE="${AGENTS_BROWSER_CURSOR_SIZE:-64}"
 mkdir -p "${PROFILE}"
 
 # Window = display (bead chuk_chat-elw7). The live view and every screenshot
-# show the whole display, so the browser window must cover it exactly: at 0,0
-# and as large as the screen. There is no window manager, so --start-maximized
+# show the whole display, so the browser window must cover it: at 0,0 and as
+# large as the work area (see "A work area" below). There is no window manager, so --start-maximized
 # does nothing and Chromium picks its own bounds: measured at +10+10 and
 # 1288x931 on a 1280x800 screen with the old fixed viewport (black strips at
 # the top and left, page bottom cut off), about 1050 px wide without one, and
@@ -92,13 +95,39 @@ case "${WIDTH}${HEIGHT}" in
     *[!0-9]* | "") WIDTH=1280; HEIGHT=800 ;;
 esac
 
-# One pixel MORE than the display, on purpose: Chromium on X11 shrinks a window
-# that is exactly screen-sized by 1 px each way (so it is not taken for
-# fullscreen), which left a black line at the right and bottom edge. Measured
-# in a container: --window-size=1280,800 gives 1279x799, 1281,801 gives
-# 1281x801, and the framebuffer then has no black column or row.
-WINDOW_W=$((WIDTH + 1))
-WINDOW_H=$((HEIGHT + 1))
+# A work area and a window that fills it (bead chuk_chat-elw7 and the
+# fingerprint work, 2026-10-29). Chromium on X11 makes a window that is
+# exactly screen-sized 1 px smaller each way, so it is not taken for
+# fullscreen: --window-size=1280,800 gave 1279x799 and a black line at the
+# right and bottom edge. The old fix was a window 1 px LARGER than the screen
+# (1281x801). That is a bot tell: outerWidth/outerHeight were larger than
+# screen.width/height, and screen.avail* was the full screen (no taskbar).
+# Measured on a real desktop: availHeight = screen minus the panel, and a
+# maximized window = the work area.
+#
+# So the launcher now acts as a desktop with a bottom panel of PANEL px. It
+# writes _NET_WORKAREA on the root window (Chromium reads it for
+# screen.avail*, also with no window manager) and makes the window as large
+# as the work area. The window is then not screen-sized, so Chromium does not
+# shrink it. Measured on 1280x800: screen 1280x800, avail 1280x756, outer
+# 1280x756 at 0,0. The strip under the window has no content; agents-vnc-up
+# reads the same _NET_WORKAREA and clips the live view to it, so the watcher
+# does not see the strip. 44 px is the default KDE Plasma panel height.
+PANEL=44
+if [ "${HEIGHT}" -le $((PANEL * 4)) ]; then
+    PANEL=0
+fi
+WINDOW_W="${WIDTH}"
+WINDOW_H=$((HEIGHT - PANEL))
+if [ "${PANEL}" -eq 0 ]; then
+    # A display too small for a panel: the old 1 px trick.
+    WINDOW_W=$((WIDTH + 1))
+    WINDOW_H=$((HEIGHT + 1))
+fi
+# Best effort: with no xprop, screen.avail* is the full screen. Nothing else
+# breaks.
+xprop -root -f _NET_WORKAREA 32c -set _NET_WORKAREA \
+    "0,0,${WIDTH},$((HEIGHT - PANEL))" >/dev/null 2>&1 || true
 
 # Look like a normal Chrome, not like a test browser. Sites such as PayPal
 # answer an automated browser with endless captchas, and they do not need the
@@ -114,12 +143,62 @@ WINDOW_H=$((HEIGHT + 1))
 #   AGENTS_BROWSER_LOCALE, set by the sandbox when it creates the container),
 #   so they agree with the user's IP. Chromium ships its own time zone data,
 #   so TZ works without tzdata in the image.
+# - The language goes to Chrome through LANGUAGE, as on a real Linux desktop.
+#   Chrome then picks its UI language and its default Accept-Language list
+#   itself. Measured for de-DE: Accept-Language "de-DE,de;q=0.9,en-US;q=0.8,
+#   en;q=0.7", navigator.languages ["de-DE","de","en-US","en"], Intl locale
+#   "de" - the same as a real German Chrome. Two traps: Playwright's
+#   contextOptions.locale overrides the header with the bare locale
+#   ("de-DE", one entry, a tell), so it is not set. And --lang does nothing
+#   on Linux (Chrome reads the environment there).
+# - WebGL: with no GPU, Chrome draws with SwiftShader and says so in
+#   UNMASKED_RENDERER ("ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device
+#   (Subzero)...)"). That is the strongest bot tell. Xvfb has no GLX for a
+#   real GPU, so ANGLE's GL backend cannot use one, but its Vulkan backend
+#   can. When the sandbox gave the container an NVIDIA GPU (docker.py,
+#   --gpus with capability graphics), --use-angle=vulkan makes WebGL and the
+#   compositor use it. Measured on an RTX 3060: "ANGLE (NVIDIA, Vulkan 1.4.341
+#   (NVIDIA NVIDIA GeForce RTX 3060 (0x00002504)), NVIDIA)", and the live view
+#   shows the page and the WebGL canvas. With no GPU the flag is not set (it
+#   would fall back to SwiftShader too, measured). Instead webgl-mesa.js
+#   (an init script) makes a software renderer report "ANGLE (Intel, Mesa
+#   Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)". That is the usual
+#   host: a VPS has no GPU. The pixels are still SwiftShader's, see the
+#   script.
+#   --use-angle=gl and gl-egl give no WebGL at all on Xvfb;
+#   --ignore-gpu-blocklist gives "llvmpipe", a tell of its own.
+# - Media devices: a container has no microphone, camera or speaker, so
+#   enumerateDevices() was []. A real PC lists one of each.
+#   --use-fake-device-for-media-stream gives one audioinput, videoinput and
+#   audiooutput. Before a permission grant the labels are empty, as on a real
+#   PC; getUserMedia still asks for permission as usual.
 # - Google Chrome instead of Chrome for Testing: see Dockerfile.browser.
 # Measure again with fingerprint-probe.py (next to this file) after a change.
+# Also measured clean: bot.sannysoft.com all passed; creepjs 0% headless,
+# 0% stealth. Its "like headless" hits left are noWebShare, noContentIndex,
+# noContactsManager, noDownlinkMax (true on every desktop Linux Chrome),
+# hasKnownBgColor and prefersLightColor (a light theme).
 LOCALE="${AGENTS_BROWSER_LOCALE:-en-US}"
 case "${LOCALE}" in
     *[!A-Za-z0-9-]* | "") LOCALE=en-US ;;
 esac
+# de-DE -> de_DE, the form the environment uses.
+export LANGUAGE="$(printf '%s' "${LOCALE}" | tr '-' '_')"
+
+# /dev/nvidiactl exists only when the NVIDIA container toolkit put the GPU
+# into this container (docker.py decides that, AGENTS_SANDBOX_GPU=0 turns it
+# off).
+GPU_ARGS=""
+# AGENTS_BROWSER_WEBGL_SCRIPT="" turns the WebGL init script off.
+WEBGL_SCRIPT="${AGENTS_BROWSER_WEBGL_SCRIPT-/usr/local/lib/agents/webgl-mesa.js}"
+if [ -e /dev/nvidiactl ]; then
+    GPU_ARGS='"--use-angle=vulkan",'
+elif [ -r "${WEBGL_SCRIPT}" ]; then
+    # No GPU (a VPS, a headless server): WebGL is SwiftShader. The init
+    # script makes it report a common Intel GPU on Mesa; read its header for
+    # what it cannot hide.
+    set -- --init-script "${WEBGL_SCRIPT}" "$@"
+fi
 
 # Playwright MCP has no CLI flag for extra Chromium arguments; its config file
 # carries them (browser.launchOptions.args). One file per uid, rewritten on
@@ -130,14 +209,15 @@ cat >"${CONFIG}.tmp" <<JSON
   "browser": {
     "launchOptions": {
       "args": [
+        ${GPU_ARGS}
         "--window-position=0,0",
         "--window-size=${WINDOW_W},${WINDOW_H}",
         "--disable-blink-features=AutomationControlled",
-        "--lang=${LOCALE}"
+        "--use-fake-device-for-media-stream"
       ],
       "ignoreDefaultArgs": ["--enable-automation"]
     },
-    "contextOptions": { "viewport": null, "locale": "${LOCALE}" }
+    "contextOptions": { "viewport": null }
   }
 }
 JSON

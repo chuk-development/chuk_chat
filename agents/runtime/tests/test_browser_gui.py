@@ -273,14 +273,27 @@ def test_a_broken_screen_setting_falls_back_to_the_default(monkeypatch):
     assert configured_screen() == "1280x800x24"
 
 
-def test_the_window_sits_at_the_origin_one_pixel_larger_than_the_display(monkeypatch):
-    """Chromium on X11 shrinks an exactly screen-sized window by 1 px, which
-    left a black line at the right and bottom edge (measured: 1280,800 gives
-    1279x799). One pixel more covers the display completely."""
-    monkeypatch.setattr("chuk_agents_runtime.browser.display_size", lambda display=None: (1280, 800))
+def test_the_window_fills_the_work_area_of_the_display(monkeypatch):
+    """The window sits at 0,0 and fills the work area (display minus a 44 px
+    bottom panel, written as _NET_WORKAREA). The old window was 1 px larger
+    than the display, and outer > screen is a bot tell (chuk_chat-5hp7)."""
+    import chuk_agents_runtime.browser as browser_mod
+
+    monkeypatch.setattr(browser_mod, "display_size", lambda display=None: (1280, 800))
+    written: list[tuple] = []
+    monkeypatch.setattr(browser_mod, "_set_work_area", lambda *a: written.append(a))
     size, position = window_bounds(":99")
-    assert size == {"width": 1281, "height": 801}
+    assert size == {"width": 1280, "height": 756}
     assert position == {"width": 0, "height": 0}
+    assert written == [(":99", 1280, 756)]
+
+
+def test_a_tiny_display_keeps_the_one_pixel_window(monkeypatch):
+    """Chromium shrinks an exactly screen-sized window by 1 px (measured:
+    1280,800 gives 1279x799); with no room for a panel, one pixel more."""
+    monkeypatch.setattr("chuk_agents_runtime.browser.display_size", lambda display=None: (160, 120))
+    size, _ = window_bounds(":99")
+    assert size == {"width": 161, "height": 121}
 
 
 def test_xvfb_starts_with_the_configured_screen(monkeypatch):
@@ -310,10 +323,11 @@ def test_a_headful_run_hands_browser_use_the_display_sized_window(
     monkeypatch.delenv(HEADLESS_ENV_VAR, raising=False)
     monkeypatch.setattr("chuk_agents_runtime.browser.ensure_display", lambda: ":99")
     monkeypatch.setattr("chuk_agents_runtime.browser.display_size", lambda display=None: (1440, 2000))
+    monkeypatch.setattr("chuk_agents_runtime.browser._set_work_area", lambda *a: None)
 
     run_once(BrowserUseRunner())
 
-    assert fake_browser_use["window_size"] == {"width": 1441, "height": 2001}
+    assert fake_browser_use["window_size"] == {"width": 1440, "height": 1956}
     assert fake_browser_use["window_position"] == {"width": 0, "height": 0}
     # No fixed viewport: the page follows the window, so nothing is cut off.
     assert "viewport" not in fake_browser_use

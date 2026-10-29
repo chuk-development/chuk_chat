@@ -177,6 +177,7 @@ that is in neither list, so this table cannot fall behind the code.
 | `AGENTS_SANDBOX_KIND` | `sandbox.kind` | `auto`, `local`, `docker` | `auto` | Which backend runs the agent's commands. |
 | `AGENTS_SANDBOX_IMAGE` | `sandbox.image` | string | *(empty)* | The container image every sandbox starts from. |
 | `AGENTS_SANDBOX_IMAGE_DIGEST` | `sandbox.image_digest` | string | *(empty)* | A `sha256:...` digest the image must have. |
+| `AGENTS_SANDBOX_GPU` | `sandbox.gpu` | string | `auto` | Give a browser box the host's NVIDIA GPU (`auto`), or never (`0`). |
 | `AGENTS_RUNTIME` | `sandbox.runtime` | string | *(empty)* | The container runtime binary: `docker`, `podman` or a path. |
 | `AGENTS_WORKSPACE` | `sandbox.workspace` | string | `/workspace` | Where the agent's working directory is mounted **inside** the container. |
 | `AGENTS_USER` | `sandbox.user` | string | `agents` | The unprivileged account inside the image that commands run as. |
@@ -197,6 +198,8 @@ that is in neither list, so this table cannot fall behind the code.
 | `AGENTS_BROWSER_VIEWPORT` | `browser.viewport` | string | *(empty)* | A fixed page size, as `WIDTHxHEIGHT`. Empty means the page fills the window. |
 | `AGENTS_BROWSER_CURSOR_THEME` | `browser.cursor_theme` | string | `DMZ-White` | The X cursor theme. |
 | `AGENTS_BROWSER_CURSOR_SIZE` | `browser.cursor_size` | integer | `64` | The cursor size in pixels. |
+| `AGENTS_BROWSER_TIMEZONE` | `browser.timezone` | string | *(empty)* | The time zone of the box browser; empty = the host's zone. |
+| `AGENTS_BROWSER_LOCALE` | `browser.locale` | string | *(empty)* | The language of the box browser (`de-DE`); empty = the host's `LANG`. |
 | `AGENTS_BROWSER_RETIRED_HOSTNAME` | `browser.retired_hostname` | string | *(empty)* | The hostname of the container that last owned the browser profile. |
 | `AGENTS_EXTENSION_MCP` | `browser.extension_mcp` | string | *(empty)* | Path to the `agents-extension-mcp` server that drives the user's own browser. |
 | `AGENTS_VNC_PORT` | `vnc.port` | integer | `5900` | The RFB port x11vnc binds **inside** the container. |

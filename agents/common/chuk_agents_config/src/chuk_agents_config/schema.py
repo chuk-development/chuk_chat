@@ -146,6 +146,17 @@ class SandboxConfig:
             "digest is different. Empty means do not check."
         ),
     )
+    gpu: str = setting(
+        "auto",
+        env="AGENTS_SANDBOX_GPU",
+        doc=(
+            "Whether a browser box gets the host's NVIDIA GPU. ``auto`` gives "
+            "it one when the host has an NVIDIA GPU and docker has the NVIDIA "
+            "runtime; the box browser then reports the real card for WebGL "
+            "instead of SwiftShader, a strong bot tell. ``0`` keeps the GPU "
+            "out of every box (less driver surface in the sandbox)."
+        ),
+    )
     runtime: str = setting(
         "",
         env="AGENTS_RUNTIME",
@@ -331,6 +342,26 @@ class BrowserConfig:
         doc=(
             "The cursor size in pixels. Large, because the live view is "
             "scaled down on a phone screen."
+        ),
+    )
+    timezone: str = setting(
+        "",
+        env="AGENTS_BROWSER_TIMEZONE",
+        doc=(
+            "The IANA time zone of the box browser and of ``date`` in the "
+            "box, e.g. ``Europe/Berlin``. Empty means the host's own zone. "
+            "Set it on a server whose clock runs in UTC: the browser's zone "
+            "must fit the user's IP and language, or it is a bot signal."
+        ),
+    )
+    locale: str = setting(
+        "",
+        env="AGENTS_BROWSER_LOCALE",
+        doc=(
+            "The language of the box browser, as a tag like ``de-DE``. Empty "
+            "means the host's ``LANG``. Chrome derives its Accept-Language "
+            "list and navigator.languages from it. The sandbox passes the "
+            "value into the container under the same name."
         ),
     )
     retired_hostname: str = setting(
@@ -1076,6 +1107,31 @@ del _spec
 #: variable in the tree must be either a field above or an entry here, so the
 #: schema cannot quietly fall behind the code.
 NOT_CONFIG: dict[str, str] = {
+    "AGENTS_BROWSER_WEBGL_SCRIPT": (
+        "A test hook of ``browser-mcp.sh``, not a setting: the path of the "
+        "WebGL init script for a box with no GPU, or empty to leave it out. "
+        "The image ships the script; only the launcher tests point it "
+        "elsewhere."
+    ),
+    "AGENTS_BRIDGE_SOCKET": (
+        "A path override for tests and a packaged install: the socket of the "
+        "user-browser bridge. The executor derives it from the runtime "
+        "directory; there is no value a person chooses."
+    ),
+    "AGENTS_BROWSER_BROKER_SOCKET": (
+        "A path override for tests and a packaged install: the client socket "
+        "of the user-browser broker, next to the bridge socket."
+    ),
+    "AGENTS_BROWSER_SESSION": (
+        "A per-process value, not a setting: the executor sets it in the "
+        "environment of one ``agents-extension-mcp`` so it speaks for one "
+        "session."
+    ),
+    "AGENTS_RECALL_WAIT_MS": (
+        "A tuning knob for tests and measurements, not a setting: how long "
+        "the first model call waits for the background memory recall. The "
+        "default 0 is the product behaviour."
+    ),
     "AGENTS_AGENT_MAIL": (
         "A kill switch for tests and offline runs, not a setting. ``0`` keeps "
         "the host from starting the agent mail service, so no test reaches "

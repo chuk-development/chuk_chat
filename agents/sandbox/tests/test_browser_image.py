@@ -128,8 +128,13 @@ def _run_launcher(tmp_path, dimensions, env_extra=None):
             f"echo '  dimensions:    {dimensions} pixels (338x211 millimeters)'\n"
         )
     (bin_dir / "xdpyinfo").write_text(xdpyinfo)
-    (bin_dir / "python3").write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$ARGV_OUT"\n')
-    for name in ("xdpyinfo", "python3"):
+    # The fake python3 also records the language the browser gets.
+    (bin_dir / "python3").write_text(
+        '#!/bin/sh\nprintf "%s\\n" "$@" > "$ARGV_OUT"\n'
+        'printf "%s" "$LANGUAGE" > "$ARGV_OUT.language"\n'
+    )
+    (bin_dir / "xprop").write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$ARGV_OUT.xprop"\n')
+    for name in ("xdpyinfo", "python3", "xprop"):
         (bin_dir / name).chmod(0o755)
     env = {
         "PATH": f"{bin_dir}:/usr/bin:/bin",
@@ -146,19 +151,38 @@ def _run_launcher(tmp_path, dimensions, env_extra=None):
     return argv, json.loads(config_path.read_text())
 
 
-def test_the_browser_window_covers_the_display(tmp_path):
+def _work_area(tmp_path):
+    xprop = tmp_path / "argv.xprop"
+    return xprop.read_text().splitlines()[-1] if xprop.exists() else None
+
+
+def test_the_browser_window_fills_the_work_area(tmp_path):
     """Bead chuk_chat-elw7: with no window manager Chromium opened at its own
     default size in the top-left corner and the rest of the live view (and of
-    every screenshot of the display) was black. The window now sits at 0,0 and
-    is one pixel larger than the display (Chromium shrinks an exactly
-    screen-sized X11 window by 1 px), and the page follows the window."""
+    every screenshot of the display) was black. The window sits at 0,0 and
+    the page follows the window.
+
+    Fingerprint (2026-10-29): the old window was 1 px LARGER than the screen
+    (Chromium shrinks an exactly screen-sized X11 window by 1 px), and a
+    window larger than the screen is a bot tell, as is avail* == screen. The
+    launcher now writes a work area with a 44 px bottom panel and makes the
+    window as large as the work area."""
     argv, config = _run_launcher(tmp_path, "1280x800")
     browser = config["browser"]
-    assert browser["launchOptions"]["args"][:2] == ["--window-position=0,0", "--window-size=1281,801"]
+    args = browser["launchOptions"]["args"]
+    assert "--window-position=0,0" in args
+    assert "--window-size=1280,756" in args
+    assert _work_area(tmp_path) == "0,0,1280,756"
     assert browser["contextOptions"]["viewport"] is None
     # A fixed viewport makes Playwright resize the window to viewport + chrome,
     # taller than the screen; none is passed unless somebody asks for one.
     assert "--viewport-size" not in argv
+
+
+def test_a_display_too_small_for_a_panel_keeps_the_old_window(tmp_path):
+    _, config = _run_launcher(tmp_path, "160x120")
+    assert "--window-size=161,121" in config["browser"]["launchOptions"]["args"]
+    assert _work_area(tmp_path) == "0,0,160,120"
 
 
 def test_the_browser_does_not_say_it_is_automated(tmp_path):
@@ -171,28 +195,49 @@ def test_the_browser_does_not_say_it_is_automated(tmp_path):
     assert "--disable-blink-features=AutomationControlled" in launch["args"]
 
 
+def test_a_real_pc_has_a_microphone_a_camera_and_a_speaker(tmp_path):
+    """enumerateDevices() was [] in the container. The fake devices list one
+    of each kind, with empty labels until a permission grant (measured)."""
+    _, config = _run_launcher(tmp_path, "1280x800")
+    assert "--use-fake-device-for-media-stream" in config["browser"]["launchOptions"]["args"]
+
+
+def test_webgl_uses_the_gpu_when_the_container_has_one(tmp_path):
+    """SwiftShader in UNMASKED_RENDERER is the strongest bot tell. With the
+    NVIDIA GPU in the container (docker.py), ANGLE's Vulkan backend reports
+    the real card; with no GPU the flag is not passed."""
+    _, config = _run_launcher(tmp_path, "1280x800")
+    args = config["browser"]["launchOptions"]["args"]
+    assert ("--use-angle=vulkan" in args) == os.path.exists("/dev/nvidiactl")
+
+
 @pytest.mark.parametrize(
-    ("value", "expected"), [(None, "en-US"), ("de-DE", "de-DE"), ("x;rm -rf", "en-US")]
+    ("value", "expected"), [(None, "en_US"), ("de-DE", "de_DE"), ("x;rm -rf", "en_US")]
 )
 def test_the_browser_language_comes_from_the_host(tmp_path, value, expected):
+    """Chrome on Linux takes its language from the environment (--lang does
+    nothing there) and then builds the same Accept-Language list a real
+    Chrome of that language sends. Playwright's contextOptions.locale must
+    stay unset: it replaces that list with the bare locale, a tell."""
     extra = {} if value is None else {"AGENTS_BROWSER_LOCALE": value}
     _, config = _run_launcher(tmp_path, "1280x800", extra)
     browser = config["browser"]
-    assert f"--lang={expected}" in browser["launchOptions"]["args"]
-    assert browser["contextOptions"]["locale"] == expected
+    assert (tmp_path / "argv.language").read_text() == expected
+    assert "locale" not in browser["contextOptions"]
+    assert not any(a.startswith(("--lang", "--accept-lang")) for a in browser["launchOptions"]["args"])
 
 
 def test_the_window_follows_a_display_somebody_else_started(tmp_path):
     """The display may exist already with another size (an agent once started a
     1440x2000 Xvfb on :99). The window follows the display that is there."""
     _, config = _run_launcher(tmp_path, "1440x2000")
-    assert "--window-size=1441,2001" in config["browser"]["launchOptions"]["args"]
+    assert "--window-size=1440,1956" in config["browser"]["launchOptions"]["args"]
 
 
 @pytest.mark.parametrize("screen", ["1600x900x24", "1600x900"])
 def test_an_unmeasurable_display_uses_the_configured_screen(tmp_path, screen):
     _, config = _run_launcher(tmp_path, None, {"AGENTS_BROWSER_SCREEN": screen})
-    assert "--window-size=1601,901" in config["browser"]["launchOptions"]["args"]
+    assert "--window-size=1600,856" in config["browser"]["launchOptions"]["args"]
 
 
 def test_a_fixed_viewport_is_still_possible_on_request(tmp_path):
@@ -331,3 +376,28 @@ def test_supervisor_sigterm_reaps_owned_children_and_releases_profile(tmp_path):
         if process.poll() is None:
             process.terminate()
             process.wait(timeout=10)
+
+
+def test_a_box_without_gpu_gets_the_webgl_init_script(tmp_path):
+    """A VPS has no GPU: SwiftShader in UNMASKED_RENDERER is then the
+    strongest tell, so webgl-mesa.js reports a common Intel GPU. A box with
+    the GPU reports the real card and gets no script."""
+    script = tmp_path / "webgl.js"
+    script.write_text("// test\n")
+    argv, _ = _run_launcher(tmp_path, "1280x800", {"AGENTS_BROWSER_WEBGL_SCRIPT": str(script)})
+    has_gpu = os.path.exists("/dev/nvidiactl")
+    assert ("--init-script" in argv) == (not has_gpu)
+    if not has_gpu:
+        assert argv[argv.index("--init-script") + 1] == str(script)
+
+
+def test_the_webgl_init_script_can_be_turned_off(tmp_path):
+    argv, _ = _run_launcher(tmp_path, "1280x800", {"AGENTS_BROWSER_WEBGL_SCRIPT": ""})
+    assert "--init-script" not in argv
+
+
+def test_the_image_ships_the_webgl_init_script():
+    assert "COPY webgl-mesa.js /usr/local/lib/agents/webgl-mesa.js" in BROWSER.read_text()
+    script = (DOCKER_DIR / "webgl-mesa.js").read_text()
+    # Only a software renderer is replaced; a real GPU stays as it is.
+    assert "SwiftShader|llvmpipe" in script

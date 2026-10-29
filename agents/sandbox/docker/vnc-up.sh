@@ -124,6 +124,7 @@ fi
 #              pump stops draining socat, socat stops reading, x11vnc blocks —
 #              so a 20 s tunnel hiccup killed the view for good. 120 s rides out
 #              a tunnel or a lift.
+# -clip        see CLIP_ARGS below (revision 3).
 # -desktop     a version marker, nothing else. It is how the block below tells
 #              an x11vnc started by an OLDER copy of this script (an image that
 #              was already running when the flags changed) from a current one,
@@ -161,11 +162,26 @@ fi
 # Bump AGENTS_VNC_REVISION whenever the flag list changes, so a container that
 # is already running picks the new flags up on the next view instead of serving
 # the old ones until it is recreated.
-AGENTS_VNC_REVISION=2
+AGENTS_VNC_REVISION=3
 DESKTOP_NAME="cowork-vnc/${AGENTS_VNC_REVISION}"
 DAMAGE_ARGS="-nonap"
 if [ "${AGENTS_VNC_XDAMAGE:-1}" = "0" ]; then
     DAMAGE_ARGS="-noxdamage"
+fi
+
+# -clip WxH+X+Y: serve only the work area. The browser launcher acts as a
+# desktop with a bottom panel (so screen.avail* is not the full screen, a
+# bot tell): it writes _NET_WORKAREA on the root window and sizes the browser
+# window to it. The panel strip under the window has no content, so the view
+# shows the work area only, and the browser fills the view. No
+# _NET_WORKAREA (an older launcher, no xprop) = no clip, the whole display.
+CLIP_ARGS=""
+if command -v xprop >/dev/null 2>&1; then
+    AREA=$(DISPLAY="${DISPLAY_NUM}" xprop -root _NET_WORKAREA 2>/dev/null \
+        | sed -n 's/^_NET_WORKAREA(CARDINAL) = \([0-9]*\), \([0-9]*\), \([0-9]*\), \([0-9]*\).*/\3x\4+\1+\2/p')
+    case "${AREA}" in
+        [0-9]*x[0-9]*+[0-9]*+[0-9]*) CLIP_ARGS="-clip ${AREA}" ;;
+    esac
 fi
 
 # An x11vnc from an older copy of this script serves the port with the old
@@ -194,6 +210,7 @@ if ! pgrep -f "x11vnc.*-rfbport ${PORT}" >/dev/null 2>&1; then
         -forever \
         -shared \
         ${DAMAGE_ARGS} \
+        ${CLIP_ARGS} \
         -noshm \
         -quiet \
         -threads \
