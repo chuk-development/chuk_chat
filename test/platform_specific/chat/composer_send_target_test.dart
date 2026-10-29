@@ -105,7 +105,7 @@ void main() {
     await pumpPhoneChat(tester);
 
     expect(findId('send_button'), findsOneWidget);
-    expect(findIcon(Icons.north_rounded), findsOneWidget);
+    expect(findIcon(Icons.arrow_upward_rounded), findsOneWidget);
     expect(
       findIcon(Icons.stop_rounded),
       findsNothing,
@@ -122,7 +122,33 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(findId('send_button'), findsOneWidget);
-    expect(findIcon(Icons.north_rounded), findsOneWidget);
+    expect(findIcon(Icons.arrow_upward_rounded), findsOneWidget);
     expect(findIcon(Icons.stop_rounded), findsNothing);
+  });
+
+  // The phone draws the desktop composer's target in the desktop's place:
+  // pinned to the top right of the box, beside the text, at 44 x 36. It is
+  // not in the action row under the text (owner: "muss genau gleich sein").
+  testWidgets('the target sits top right of the composer, desktop size', (
+    tester,
+  ) async {
+    await pumpPhoneChat(tester);
+
+    final Finder target = find.byKey(
+      const ValueKey<String>('composer-send-target'),
+    );
+    expect(target, findsOneWidget);
+    expect(tester.getSize(target), const Size(44, 36));
+
+    final Rect send = tester.getRect(target);
+    final Rect field = tester.getRect(find.byType(TextField).first);
+    final Rect mic = tester.getRect(findId('mic_button'));
+
+    // Beside the text, on its first line, not below it.
+    expect(send.left, greaterThanOrEqualTo(field.right));
+    expect(send.top, lessThan(field.bottom));
+    expect(send.bottom, lessThanOrEqualTo(mic.top));
+    // Right edge flush with the action row's last target (the microphone).
+    expect(send.right, closeTo(mic.right, 1));
   });
 }
