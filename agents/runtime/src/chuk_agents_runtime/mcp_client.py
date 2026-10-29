@@ -750,15 +750,23 @@ class OAuthGrantStore:
             return True
         return _token_hash(str((oauth or {}).get("refresh_token") or "")) == record.get("current")
 
-    def retain(self, oauth_blocks: Sequence[dict | None]) -> list[str]:
-        """Forget every grant that none of ``oauth_blocks`` belongs to, on
-        disk too. The device signed out of those connectors: the host must not
-        keep (or renew) a sign-in the user removed. Returns the forgotten keys.
-        """
-        keep = {k for k in (self.key(b) for b in oauth_blocks) if k}
+    @staticmethod
+    def client_key(token_endpoint: str, client_id: str) -> str | None:
+        """The grant id of one registered client (what :meth:`key` derives
+        from an ``oauth`` block), from its two identity fields alone."""
+        if not token_endpoint:
+            return None
+        return _token_hash(json.dumps([str(token_endpoint), str(client_id or "")]))
+
+    def forget(self, keys: Sequence[str]) -> list[str]:
+        """Forget the grants ``keys``, on disk too: the user signed out of
+        them, so the host must not keep (or renew) them. Returns the keys that
+        were there. Only the named grants: another device of the account may
+        still hold sign-ins this one never had."""
+        wanted = {k for k in keys if k}
         with self._lock:
             data = self._load()
-            gone = [k for k in data if k not in keep]
+            gone = [k for k in data if k in wanted]
             for key in gone:
                 del data[key]
             if gone:
@@ -1344,6 +1352,8 @@ class MCPConnection:
         self._ready = threading.Event()
         self._tools: list[MCPToolInfo] = []
         self._error: str | None = None
+        #: The exception class behind :attr:`error`, for the log line only.
+        self._error_class: str | None = None
         #: What kind of failure :attr:`error` is (``ERROR_KIND_*``), or
         #: ``None`` with no error.
         self._error_kind: str | None = None
@@ -1475,6 +1485,7 @@ class MCPConnection:
         if not self._ready.wait(limit):
             if timeout is None and self._error is None:
                 self._error = "connect timed out"
+                self._error_class = "TimeoutError"
                 self._error_kind = ERROR_KIND_NETWORK
             return False
         return self.alive()
@@ -1498,6 +1509,7 @@ class MCPConnection:
             asyncio.run(self._session_task())
         except Exception as exc:  # noqa: BLE001 — the thread reports, never raises
             self._error = _redact(f"{type(exc).__name__}: {_clip(exc, 300)}")
+            self._error_class = type(exc).__name__
             self._error_kind = (
                 ERROR_KIND_AUTH if self._auth_refused else _error_kind_of(exc)
             )
@@ -1527,12 +1539,14 @@ class MCPConnection:
             from urllib.parse import urlsplit
 
             host = urlsplit(self.config.url or "").hostname or self.config.transport
+            # No error text: an exception message can quote the URL, and a
+            # connector may carry its key in the URL path.
             logger.warning(
-                "mcp dial failed: server=%s host=%s kind=%s error=%s",
+                "mcp dial failed: server=%s host=%s kind=%s error_class=%s",
                 self.config.name,
                 host,
                 self.error_kind,
-                _redact(str(self._error))[:400],
+                self._error_class or "-",
             )
         except Exception:  # noqa: BLE001 — a log line must never fail a dial
             pass
@@ -1557,6 +1571,7 @@ class MCPConnection:
                     toolset.list_tools(), timeout=self.config.connect_timeout
                 )
             except asyncio.TimeoutError:
+                self._error_class = "TimeoutError"
                 if self._auth_refused:
                     self._error = AUTH_REFUSED_ERROR
                     self._error_kind = ERROR_KIND_AUTH
@@ -1565,6 +1580,7 @@ class MCPConnection:
                     self._error_kind = ERROR_KIND_NETWORK
                 return
             except Exception as exc:  # noqa: BLE001
+                self._error_class = type(exc).__name__
                 if self._auth_refused:
                     self._error = AUTH_REFUSED_ERROR
                     self._error_kind = ERROR_KIND_AUTH

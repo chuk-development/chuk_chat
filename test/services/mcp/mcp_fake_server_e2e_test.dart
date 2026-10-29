@@ -102,14 +102,19 @@ class _FakeHost implements McpProbeControl {
 
   final _FakeServer server;
   final List<List<Map<String, dynamic>>> probes = <List<Map<String, dynamic>>>[];
+  final List<List<Map<String, String>>> signOuts = <List<Map<String, String>>>[];
 
   /// Set to refresh the forwarded grant on the next probe (the host renewed
   /// it) and hand the new tokens back.
   bool renewOnProbe = false;
 
   @override
-  Future<void> probeMcpServers(List<Map<String, dynamic>> servers) async {
+  Future<void> probeMcpServers(
+    List<Map<String, dynamic>> servers, {
+    List<Map<String, String>> signedOut = const <Map<String, String>>[],
+  }) async {
     probes.add(servers);
+    signOuts.add(signedOut);
     final List<Map<String, dynamic>> rows = <Map<String, dynamic>>[];
     for (final Map<String, dynamic> entry in servers) {
       final oauth = Map<String, dynamic>.from(entry['oauth'] as Map? ?? {});
@@ -376,13 +381,21 @@ void main() {
     await McpService.connectByUrl(server.mcpUrl);
     await settle();
     host.probes.clear();
+    host.signOuts.clear();
+    final record = (await McpService.store.secretsFor(id))!;
 
     await McpService.disconnect(id);
     await settle();
     expect(McpService.connectionFor(id), isNull);
     expect(await McpService.store.secretsFor(id), isNull);
-    // The host heard the remaining set (empty), so it forgets its copy.
+    // The host is told which sign-in to forget, by name, not by omission.
     expect(host.probes.single, isEmpty);
+    expect(host.signOuts.single, <Map<String, String>>[
+      <String, String>{
+        'token_endpoint': record.tokenEndpoint!,
+        'client_id': record.credentials.clientId,
+      },
+    ]);
 
     final again = await McpService.connectByUrl(server.mcpUrl);
     expect(again.status, McpConnectStatus.connected);

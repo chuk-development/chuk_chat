@@ -116,24 +116,62 @@ def test_a_token_the_host_renewed_goes_back_to_the_app(tmp_path, monkeypatch, fa
     assert not [p for kind, p in frames if p.get("type") == "mcp_credentials"]
 
 
-def test_signing_out_forgets_the_grant_on_the_host(tmp_path, monkeypatch, fake):
+def _wait_until(check, timeout=10.0):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if check():
+            return True
+        time.sleep(0.05)
+    return False
+
+
+def test_signing_out_forgets_that_grant_on_the_host(tmp_path, monkeypatch, fake):
     executor = _executor(tmp_path)
     signed = fake.sign_in()
-    _probe(executor, monkeypatch, [_entry(fake, signed)], "req-1")
-    block = signed["oauth"]
-    probe_config = mcp_client.MCPServerConfig(name="Fake", transport="http", url=fake.mcp_url, oauth=block)
-    assert mcp_client.GRANTS.current(probe_config) is not None
-    assert executor._mcp_managers
+    other = fake.sign_in()
+    _probe(
+        executor,
+        monkeypatch,
+        [_entry(fake, signed), _entry(fake, other, connector_id="conn-other") | {"name": "Other"}],
+        "req-1",
+    )
+    gone = mcp_client.MCPServerConfig(name="Fake", transport="http", url=fake.mcp_url, oauth=signed["oauth"])
+    kept = mcp_client.MCPServerConfig(name="Other", transport="http", url=fake.mcp_url, oauth=other["oauth"])
+    assert mcp_client.GRANTS.current(gone) is not None
 
-    # The device removed its last connector and says so with an empty probe.
-    frames = _probe(executor, monkeypatch, [], "req-2")
-    assert frames[-1][1]["servers"] == []
-    assert mcp_client.GRANTS.current(probe_config) is None
-    assert not executor._mcp_managers
-    # Nothing renews a removed sign-in any more.
-    assert mcp_client.GRANTS.keep_alive(time.time() + mcp_client.KEEPALIVE_INTERVAL + 1) == 0
+    # The device signed out of "Fake": the probe names that sign-in only.
+    out = {"token_endpoint": signed["oauth"]["token_endpoint"], "client_id": signed["oauth"]["client_id"]}
+    terminals: list = []
+    monkeypatch.setattr(executor, "_terminal", lambda rid, p: terminals.append(p))
+    executor._handle_mcp_probe("req-2", {"type": "mcp_probe", "mcp_servers": [], "mcp_signed_out": [out]})
+
+    assert _wait_until(lambda: mcp_client.GRANTS.current(gone) is None)
+    assert mcp_client.GRANTS.current(kept) is not None
+    assert terminals and terminals[0]["servers"] == []
 
     # Signing in again afterwards works at once.
     again = fake.sign_in()
     frames = _probe(executor, monkeypatch, [_entry(fake, again)], "req-3")
     assert frames[-1][1]["servers"][0]["connected"] is True
+
+
+def test_a_probe_without_a_sign_out_list_prunes_nothing(tmp_path, monkeypatch, fake):
+    """A missing, malformed or empty ``mcp_servers`` (an older app, another
+    device with fewer connectors) must never wipe grants."""
+    executor = _executor(tmp_path)
+    signed = fake.sign_in()
+    _probe(executor, monkeypatch, [_entry(fake, signed)], "req-1")
+    config = mcp_client.MCPServerConfig(name="Fake", transport="http", url=fake.mcp_url, oauth=signed["oauth"])
+    monkeypatch.setattr(executor, "_terminal", lambda rid, p: None)
+
+    for payload in (
+        {"type": "mcp_probe"},
+        {"type": "mcp_probe", "mcp_servers": "garbage"},
+        {"type": "mcp_probe", "mcp_servers": []},
+        {"type": "mcp_probe", "mcp_servers": [], "mcp_signed_out": "garbage"},
+        {"type": "mcp_probe", "mcp_servers": [], "mcp_signed_out": [{"client_id": ""}]},
+    ):
+        executor._handle_mcp_probe("req-x", payload)
+    time.sleep(0.3)
+    assert mcp_client.GRANTS.current(config) is not None
+    assert executor._mcp_managers

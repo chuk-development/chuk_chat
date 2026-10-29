@@ -181,8 +181,10 @@ access token invalid; the second refresher gets `invalid_grant`).
   kind `mcp_signin_expired`, `session_key` `mcp-connector:<id>`). The tap opens
   the connector and starts the browser sign-in (`reconnectOnOpen`).
   A new sign-in cannot be automatic: OAuth consent needs the person in a browser.
-- A probe carries the device's whole set: grants not in it are forgotten on the
-  host (sign out = gone on both sides).
+- Sign out: the device deletes its record and sends a probe with
+  `mcp_signed_out` naming that sign-in; the host forgets exactly that grant.
+  Never by omission from `mcp_servers` (a second device with an older list must
+  not wipe grants the first one holds).
 - `mcp_tools` entries carry `client_id`; the app ignores an entry of a sign-in
   it has replaced (a frame in flight across a Reconnect).
 - Every sign-in registers a new client as `McpOAuth.clientName` ("Chuk Chat").

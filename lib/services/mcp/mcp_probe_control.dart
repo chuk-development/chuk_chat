@@ -12,5 +12,13 @@ library;
 abstract interface class McpProbeControl {
   /// Dial [servers] (the same projection the task frame carries) and answer
   /// with what each one holds.
-  Future<void> probeMcpServers(List<Map<String, dynamic>> servers);
+  ///
+  /// [signedOut] names sign-ins the user removed on this device
+  /// (`{token_endpoint, client_id}` each). The host forgets exactly those;
+  /// it never prunes by what [servers] leaves out, because another device of
+  /// the account may hold connectors this one does not.
+  Future<void> probeMcpServers(
+    List<Map<String, dynamic>> servers, {
+    List<Map<String, String>> signedOut = const <Map<String, String>>[],
+  });
 }
