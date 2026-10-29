@@ -562,3 +562,64 @@ def test_remove_without_an_owner_keeps_the_old_lookup():
     env = DockerEnvironment(agent_id="a1", cli=cli)
     assert env.remove() is True
     assert cli.containers == []
+
+
+class BrowserImageCli(FakeCli):
+    """A browser image with revision 1; ``execs`` is what ``docker inspect``
+    says runs in a box right now."""
+
+    def __init__(self, containers, *, execs: str = "0") -> None:
+        super().__init__(containers)
+        self.execs = execs
+
+    def run(self, *args: str, timeout: int | None = None) -> CliResult:
+        if args[:2] == ("image", "inspect"):
+            self.calls.append(args)
+            return CliResult("1\n", "", 0)
+        if args[:1] == ("info",):
+            self.calls.append(args)
+            return CliResult('{"runc":{}}', "", 0)
+        if args[:1] == ("inspect",):
+            self.calls.append(args)
+            return CliResult(self.execs + "\n", "", 0)
+        return super().run(*args, timeout=timeout)
+
+
+def test_an_idle_box_from_an_older_browser_image_is_made_again():
+    """The launcher lives in the box. A box from before the fingerprint
+    fixes keeps the old one (and no GPU) until it is made again."""
+    cli = BrowserImageCli([container(cid="old", agent="a1", image="img:1")])
+    env = DockerEnvironment(agent_id="a1", image="img:1", cli=cli)
+    assert env._ensure_container() != "old"
+    assert len(cli.created) == 1
+    created = dict(a.partition("=")[::2] for a in cli.created[0] if a.startswith("cowork.box="))
+    assert created == {"cowork.box": "browser=1;gpu=0"}
+
+
+def test_a_busy_old_box_is_kept():
+    """Something runs in it (another thread's command, the browser server):
+    the box is not pulled away from under it."""
+    cli = BrowserImageCli([container(cid="old", agent="a1", image="img:1")], execs="2")
+    env = DockerEnvironment(agent_id="a1", image="img:1", cli=cli)
+    assert env._ensure_container() == "old"
+    assert not cli.created
+
+
+def test_an_old_box_is_never_replaced_in_the_middle_of_a_session():
+    cli = BrowserImageCli([container(cid="old", agent="a1", image="img:1")], execs="1")
+    env = DockerEnvironment(agent_id="a1", image="img:1", cli=cli)
+    assert env._ensure_container() == "old"
+    cli.execs = "0"  # idle between two commands of the same task
+    assert env._ensure_container() == "old"
+    assert not cli.created
+    env.cleanup()  # the session ends; the next one may make it again
+    assert env._ensure_container() != "old"
+
+
+def test_a_box_with_the_current_key_is_reused():
+    box = container(cid="new", agent="a1", image="img:1")
+    box["labels"]["cowork.box"] = "browser=1;gpu=0"
+    cli = BrowserImageCli([box])
+    env = DockerEnvironment(agent_id="a1", image="img:1", cli=cli)
+    assert env._ensure_container() == "new"
+    assert not any(c[:1] == ("inspect",) for c in cli.calls)

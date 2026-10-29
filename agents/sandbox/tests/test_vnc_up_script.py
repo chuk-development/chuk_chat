@@ -27,7 +27,7 @@ SCRIPT = Path(__file__).resolve().parents[1] / "docker" / "vnc-up.sh"
 
 #: Bumped in the script whenever the x11vnc flags change; a running x11vnc
 #: without this marker is from an older image and must be replaced.
-MARKER = "cowork-vnc/2"
+MARKER = "cowork-vnc/3"
 
 
 def _starts(started: Path) -> list[str]:
@@ -80,6 +80,8 @@ def rig(tmp_path):
         f'2>/dev/null; mv -f "{running}.new" "{running}"',
     )
     _shim(bin_dir, "setsid", 'exec "$@"')
+    # No work area by default (an older launcher); a test writes one here.
+    _shim(bin_dir, "xprop", f'cat "{tmp_path}/workarea" 2>/dev/null')
     _shim(
         bin_dir,
         "x11vnc",
@@ -165,6 +167,27 @@ def test_the_flags_that_decide_latency_and_stability_are_all_there(rig, tmp_path
     # The secret, and only inside the container.
     assert "-passwdfile read:" in argv and "-localhost" in argv
     assert "-nopw" not in argv
+
+
+def test_the_view_is_clipped_to_the_work_area(rig, tmp_path):
+    """The browser launcher writes _NET_WORKAREA (a desktop with a bottom
+    panel, so screen.avail* is not the full screen) and sizes the window to
+    it. The strip under the window has no content, so the view shows the
+    work area only."""
+    bin_dir, _running, started = rig
+    (tmp_path / "workarea").write_text("_NET_WORKAREA(CARDINAL) = 0, 0, 1280, 756\n")
+
+    assert _run(bin_dir, tmp_path).returncode == 0
+
+    assert "-clip 1280x756+0+0" in _starts(started)[0]
+
+
+def test_no_work_area_no_clip(rig, tmp_path):
+    bin_dir, _running, started = rig
+
+    assert _run(bin_dir, tmp_path).returncode == 0
+
+    assert "-clip" not in _starts(started)[0]
 
 
 def test_xdamage_can_be_switched_off_for_a_display_that_misbehaves(rig, tmp_path):

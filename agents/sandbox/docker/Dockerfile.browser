@@ -64,6 +64,12 @@ USER root
 # Chrome for Testing. Chrome stable is not pinned: Google keeps no old .deb
 # files, and a current version is what a normal user has.
 #
+# No GPU driver is baked in. On an NVIDIA host the sandbox starts the box
+# with `--gpus all,capabilities=graphics` (docker.py), the NVIDIA container
+# toolkit mounts the host's own user-space driver and Vulkan ICD, and Chrome
+# draws WebGL on the real card through ANGLE's Vulkan backend
+# (browser-mcp.sh). The Vulkan loader (libvulkan1) comes with Chrome's deps.
+#
 # `/opt/chromium-path` records which build the symlink points at, so
 # `docker run <image> cat /opt/chromium-path` answers "which Chromium is in
 # here" without repeating the glob. `--version` at the end is the build-time
@@ -178,7 +184,16 @@ ENV AGENTS_BROWSER_DISPLAY=:99 \
 COPY browser-mcp.sh /usr/local/bin/agents-browser-mcp
 COPY browser-mcp-owner.py /usr/local/lib/agents/browser-mcp-owner.py
 COPY vnc-up.sh /usr/local/bin/agents-vnc-up
+COPY webgl-mesa.js /usr/local/lib/agents/webgl-mesa.js
 RUN chmod 0755 /usr/local/bin/agents-browser-mcp /usr/local/bin/agents-vnc-up
+
+# The browser box revision (docker.py, LABEL_BROWSER_REVISION). A box keeps
+# the scripts of the image it was made from, so the host makes a box again
+# when this number differs from the one on the box (only when nothing runs in
+# it). Bump it when browser-mcp.sh, vnc-up.sh or what the box needs at
+# creation (the GPU) changes. 1 = work area, GPU WebGL, fake media devices,
+# native Accept-Language (2026-10-29).
+LABEL dev.chuk.agents.browser-revision="1"
 
 WORKDIR /workspace
 ENTRYPOINT ["/usr/local/bin/agents-entrypoint"]

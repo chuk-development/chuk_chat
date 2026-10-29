@@ -46,6 +46,7 @@ from .lifecycle import (
     LABEL_IMAGE,
     LABEL_WORKSPACE,
     SESSION_LABEL,
+    CliResult,
     ContainerInfo,
     DockerCli,
     DockerUnavailableError,
@@ -95,6 +96,8 @@ __all__ = [
     "SESSION_LABEL",
     "default_image",
     "docker_available",
+    "browser_revision",
+    "host_gpu_run_args",
     "image_has_browser",
     "image_present",
     "resolve_image",
@@ -142,6 +145,64 @@ def forget_image_probes() -> None:
     _BROWSER_PROBE.clear()
 
 
+#: ``AGENTS_SANDBOX_GPU=0`` keeps the GPU out of every browser box.
+GPU_ENV_VAR = "AGENTS_SANDBOX_GPU"
+#: The device node the NVIDIA driver creates on a host with an NVIDIA GPU.
+NVIDIA_CTL = "/dev/nvidiactl"
+#: Only the ``graphics`` capability: Vulkan and GL for the box browser, no
+#: CUDA, no nvidia-smi. Less driver surface in the sandbox.
+NVIDIA_GPU_ARGS = ("--gpus", "all,capabilities=graphics")
+
+
+#: Image label with the revision of the browser box (launcher, VNC script,
+#: what the container needs). ``Dockerfile.browser`` sets it; bump it there
+#: whenever a box made from an older image must be made again.
+LABEL_BROWSER_REVISION = "dev.chuk.agents.browser-revision"
+#: Container label: the browser revision and the GPU decision the box was
+#: created with (see :meth:`DockerEnvironment.box_key`).
+LABEL_BOX = "cowork.box"
+#: What a container without :data:`LABEL_BOX` counts as: no browser
+#: revision, no GPU. So a base-image box from before the label is kept.
+DEFAULT_BOX_KEY = "browser=0;gpu=0"
+
+
+def browser_revision(image: str, cli: DockerCli) -> str:
+    """The image's :data:`LABEL_BROWSER_REVISION`, ``"0"`` when it has none.
+
+    Read from the image config, so no container is started.
+    """
+    result = cli.run(
+        "image", "inspect", "-f",
+        f"{{{{index .Config.Labels {_go_label_key(LABEL_BROWSER_REVISION)}}}}}",
+        image, timeout=20,
+    )
+    value = result.stdout.strip() if result.ok else ""
+    return value if value.isdigit() else "0"
+
+
+def host_gpu_run_args(image: str, cli: DockerCli) -> tuple[str, ...]:
+    """``docker run`` arguments that give a browser box the host's GPU.
+
+    With no GPU the box browser draws WebGL with SwiftShader, and
+    ``UNMASKED_RENDERER_WEBGL`` then says "SwiftShader": the strongest bot
+    tell left (see ``docker/browser-mcp.sh``). With the NVIDIA GPU in the
+    container, Chrome reports the real card. Empty when the host has no
+    NVIDIA GPU, when the daemon has no NVIDIA runtime, when the image is not
+    a browser image (no :data:`LABEL_BROWSER_REVISION`; a GPU there buys
+    nothing), or when ``AGENTS_SANDBOX_GPU`` is ``0``. No answer is cached:
+    the checks are cheap, they run once per environment, and a cached answer
+    would outlive a daemon restart or a newly installed toolkit.
+    """
+    if os.environ.get(GPU_ENV_VAR, "").strip().lower() in ("0", "off", "false", "no"):
+        return ()
+    if not os.path.exists(NVIDIA_CTL):
+        return ()
+    info = cli.run("info", "--format", "{{json .Runtimes}}", timeout=20)
+    if not (info.ok and "nvidia" in info.stdout) or browser_revision(image, cli) == "0":
+        return ()
+    return NVIDIA_GPU_ARGS
+
+
 def default_image(cli: DockerCli | None = None) -> str:
     """The image a host should run when the user named none.
 
@@ -159,11 +220,16 @@ def default_image(cli: DockerCli | None = None) -> str:
 
 
 def host_timezone() -> str | None:
-    """The host's IANA time zone (``Europe/Berlin``), or None if unknown.
+    """The box's IANA time zone (``Europe/Berlin``), or None if unknown.
 
     The box browser must use the same time zone as the user's IP. A browser
     on UTC behind a German IP is a bot signal (see ``docker/browser-mcp.sh``).
+    ``AGENTS_BROWSER_TIMEZONE`` wins: a server (a VPS) often runs in UTC
+    while its user lives elsewhere. Otherwise the host's own zone.
     """
+    value = os.environ.get(TIMEZONE_ENV_VAR, "").strip().lstrip(":")
+    if value and _valid_zone(value):
+        return value
     value = os.environ.get("TZ", "").lstrip(":")
     if not value:
         try:
@@ -178,15 +244,28 @@ def host_timezone() -> str | None:
             target = ""
         if "zoneinfo/" in target:
             value = target.split("zoneinfo/", 1)[1]
+    return value if _valid_zone(value) else None
+
+
+def _valid_zone(value: str) -> bool:
     if not value or value.startswith("/") or ".." in value:
-        return None
-    if not all(c.isalnum() or c in "/_+-" for c in value):
-        return None
-    return value
+        return False
+    return all(c.isalnum() or c in "/_+-" for c in value)
+
+
+#: Time zone of the box, above the host's own (see :func:`host_timezone`).
+TIMEZONE_ENV_VAR = "AGENTS_BROWSER_TIMEZONE"
+#: Language of the box, above the host's ``LANG``; the same name goes into
+#: the container (see :func:`host_browser_locale`).
+LOCALE_ENV_VAR = "AGENTS_BROWSER_LOCALE"
 
 
 def host_browser_locale() -> str:
-    """The host's language as a browser locale (``en_US.UTF-8`` -> ``en-US``)."""
+    """The box browser's locale: ``AGENTS_BROWSER_LOCALE`` if set, else the
+    host's language (``en_US.UTF-8`` -> ``en-US``)."""
+    override = os.environ.get(LOCALE_ENV_VAR, "").strip().replace("_", "-")
+    if override and all(c.isalnum() or c == "-" for c in override):
+        return override
     for name in ("LC_ALL", "LC_MESSAGES", "LANG"):
         value = os.environ.get(name, "")
         if value:
@@ -257,6 +336,8 @@ class DockerEnvironment(BaseEnvironment):
         # Workspace roots that attribute a container from before the owner
         # label to this owner (see ``owned_by``). Used only with an owner.
         self._legacy_roots = tuple(legacy_workspace_roots)
+        # Browser revision + GPU decision, worked out once (see box_key).
+        self._box: tuple[str, tuple[str, ...]] | None = None
         self._container: str | None = None
         self._reused = False
         # The exec client this environment is blocked on, so ``cancel`` (§7.1)
@@ -344,7 +425,45 @@ class DockerEnvironment(BaseEnvironment):
         # The permissions the container was created with (docs/WIRE_CONTRACT.md,
         # "Agent permissions"): the third half of the reuse guard.
         labels[LABEL_POLICY] = self.effective_policy.container_key()
+        labels[LABEL_BOX] = self.box_key()
         return labels
+
+    def _box_setup(self) -> tuple[str, tuple[str, ...]]:
+        if self._box is None:
+            revision = browser_revision(self._image, self._cli)
+            gpu = host_gpu_run_args(self._image, self._cli) if revision != "0" else ()
+            self._box = (f"browser={revision};gpu={int(bool(gpu))}", gpu)
+        return self._box
+
+    def box_key(self) -> str:
+        """What the box is made with beyond image tag, workspace and policy:
+        the image's browser revision and the GPU decision.
+
+        A box from an older browser image keeps its old launcher (the
+        scripts live in the container, not on the host), and a box made
+        before the GPU passthrough has no GPU. Neither gets better by
+        itself, so a box whose key differs is made again: on the first use
+        of an environment, and only when nothing runs in it (see
+        :meth:`_replace_stale`).
+        """
+        return self._box_setup()[0]
+
+    def _replace_stale(self, existing: ContainerInfo) -> bool:
+        """True when ``existing`` has an old box key and may be replaced now.
+
+        Never while a ``docker exec`` runs in it (a command of another
+        thread, the browser MCP server, a VNC bridge): ``ExecIDs`` lists
+        only running execs (measured). A busy box is kept; the next new
+        session tries again. A box that cannot be inspected is kept too.
+        """
+        if (existing.labels.get(LABEL_BOX) or DEFAULT_BOX_KEY) == self.box_key():
+            return False
+        if not existing.running:
+            return True
+        result = self._cli.run(
+            "inspect", "-f", "{{len .ExecIDs}}", existing.id or existing.name, timeout=30
+        )
+        return result.ok and result.stdout.strip() == "0"
 
     # ------------------------------------------------------------------ #
     # Container lifecycle
@@ -362,6 +481,15 @@ class DockerEnvironment(BaseEnvironment):
         if existing is not None and not self._matches(existing):
             # Wrong workspace or wrong image: reusing it would hand the agent
             # someone else's files. Replace it.
+            remove_container(existing.id or existing.name, cli=self._cli)
+            existing = None
+        if (
+            existing is not None
+            and existing.id != self._container
+            and self._replace_stale(existing)
+        ):
+            # First use of this environment (or a new session after
+            # cleanup), and the box is idle: never in the middle of a task.
             remove_container(existing.id or existing.name, cli=self._cli)
             existing = None
         if existing is not None and not existing.running:
@@ -474,19 +602,28 @@ class DockerEnvironment(BaseEnvironment):
         # No sudo -> no-new-privileges; no network -> ``--network none``. The
         # default policy adds nothing, so a default box is created as before.
         argv += list(policy.docker_run_args())
-        argv += [*self._extra_run_args, self._image, "sleep", "infinity"]
+        tail = [*self._extra_run_args, self._image, "sleep", "infinity"]
+        gpu = list(self._box_setup()[1])
 
+        result = self._run_create(argv + gpu + tail)
+        if not result.ok and gpu and "already in use" not in result.stderr.lower():
+            # The GPU could not be attached (a broken toolkit, a driver
+            # mismatch). A box without it still works; only WebGL is software.
+            result = self._run_create(argv + tail)
+        if not result.ok:
+            raise DockerUnavailableError(
+                f"could not start container: {result.stderr.strip()}"
+            )
+        return result.stdout.strip()
+
+    def _run_create(self, argv: list[str]) -> CliResult:
         result = self._cli.run(*argv, timeout=180)
         if not result.ok and "already in use" in result.stderr.lower():
             # A name clash with a container we do not manage (or a racing peer):
             # take a unique name rather than steal or fail.
             argv[argv.index("--name") + 1] = f"{self.container_name}-{self._session_id}"
             result = self._cli.run(*argv, timeout=180)
-        if not result.ok:
-            raise DockerUnavailableError(
-                f"could not start container: {result.stderr.strip()}"
-            )
-        return result.stdout.strip()
+        return result
 
     def _resolve_user(self) -> None:
         """Pick the exec user once: the requested one, else the image's ``agents``.

@@ -604,7 +604,12 @@ im = ImageGrab.grab(xdisplay=":99")
 im.save("/tmp/e2e-root.png")
 out = subprocess.run(["xdpyinfo", "-display", ":99"], capture_output=True, text=True).stdout
 dims = [l.split()[1] for l in out.splitlines() if "dimensions:" in l]
-print(json.dumps({"size": list(im.size), "xdpyinfo": dims}))
+area = subprocess.run(["xprop", "-display", ":99", "-root", "_NET_WORKAREA"],
+                      capture_output=True, text=True).stdout
+work = [int(v) for v in area.split("=", 1)[1].split(",")[:4]] if "=" in area else None
+if work:
+    im.crop((work[0], work[1], work[0] + work[2], work[1] + work[3])).save("/tmp/e2e-work.png")
+print(json.dumps({"size": list(im.size), "xdpyinfo": dims, "workarea": work}))
 '''
 
 
@@ -639,13 +644,24 @@ def test_flow2_browser_screenshot_fills_the_display(rig: Rig):
                    capture_output=True, timeout=30)
     evidence("2", screenshot=shot, display=root, display_pixels=root_px)
     display = [int(v) for v in root["xdpyinfo"][0].split("x")]
-    # browser_take_screenshot is the page viewport: the window is the display
-    # plus 1 px (browser-mcp.sh), minus the browser's own toolbar in height.
-    assert display[0] <= shot["size"][0] <= display[0] + 1, (shot, display)
-    assert display[1] * 0.8 <= shot["size"][1] <= display[1], (shot, display)
+    # browser-mcp.sh acts as a desktop with a bottom panel: it writes
+    # _NET_WORKAREA (so screen.avail* is not the full screen, a bot tell) and
+    # the window fills the work area. The live view (agents-vnc-up -clip)
+    # shows the work area only; the panel strip below it stays black.
+    work = root["workarea"]
+    assert work is not None and work[:2] == [0, 0], root
+    assert work[2] == display[0] and work[3] < display[1], (work, display)
+    # browser_take_screenshot is the page viewport: the window minus the
+    # browser's own toolbar in height.
+    assert shot["size"][0] == work[2], (shot, work)
+    assert work[3] * 0.75 <= shot["size"][1] <= work[3], (shot, work)
     assert shot["black_rows"] == 0 and shot["black_cols"] == 0, shot
     assert root_px["size"] == display
-    assert root_px["black_rows"] == 0 and root_px["black_cols"] == 0, root_px
+    assert root_px["black_cols"] == 0, root_px
+    assert root_px["black_rows"] == display[1] - work[3], (root_px, work)
+    work_px = json.loads(rig.dexec(PIXELS.replace("sys.argv[1]", "'/tmp/e2e-work.png'")).stdout)
+    assert work_px["size"] == work[2:]
+    assert work_px["black_rows"] == 0 and work_px["black_cols"] == 0, work_px
 
 
 def test_flow2b_a_second_thread_of_the_coworker_browses_too(rig: Rig):

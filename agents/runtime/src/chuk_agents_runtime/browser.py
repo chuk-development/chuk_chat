@@ -488,20 +488,48 @@ def display_size(display: str | None = None) -> tuple[int, int]:
     return _parse_size(configured_screen()) or (1280, 800)
 
 
+#: Height of the bottom panel the virtual desktop pretends to have. Same
+#: value as the sandbox launcher (``agents/sandbox/docker/browser-mcp.sh``).
+PANEL_HEIGHT = 44
+
+
+def _set_work_area(display: str | None, width: int, height: int) -> None:
+    """Write ``_NET_WORKAREA`` on the root window. Best effort: without
+    ``xprop`` screen.avail* stays the full screen and nothing else breaks."""
+    probe = shutil.which("xprop")
+    name = (display if display is not None else os.environ.get(DISPLAY_ENV_VAR, "")).strip()
+    if probe is None or not name:
+        return
+    try:
+        subprocess.run(  # noqa: S603 — argv built by us
+            [probe, "-display", name, "-root", "-f", "_NET_WORKAREA", "32c",
+             "-set", "_NET_WORKAREA", f"0,0,{width},{height}"],
+            capture_output=True, timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
 def window_bounds(display: str | None = None) -> tuple[dict[str, int], dict[str, int]]:
-    """Window size and position that make a headful Chromium cover the display.
+    """Window size and position that make a headful Chromium fill the desktop.
 
     There is no window manager on a virtual display, so ``--start-maximized``
     does nothing and Chromium picks its own default size, about 1050 px wide:
     the live view and every screenshot of the display were mostly black (bead
-    chuk_chat-elw7). The window goes to 0,0 and is one pixel larger than the
-    display each way, because Chromium on X11 shrinks a window that is exactly
-    screen-sized by 1 px (so it is not taken for fullscreen), which leaves a
-    black line at the right and bottom edge. Same rule as the sandbox launcher.
+    chuk_chat-elw7). The window goes to 0,0 and fills the work area: the
+    display acts as a desktop with a bottom panel of :data:`PANEL_HEIGHT` px
+    (``_NET_WORKAREA``, which Chromium reads for screen.avail*). The old
+    window was 1 px LARGER than the display (Chromium shrinks an exactly
+    screen-sized X11 window by 1 px), and outer > screen plus avail ==
+    screen are bot tells (bead chuk_chat-5hp7). Same rule as the sandbox
+    launcher; a display too small for a panel keeps the old 1 px trick.
     Returned in browser-use's ``ViewportSize`` shape (``width``/``height``).
     """
     width, height = display_size(display)
-    return {"width": width + 1, "height": height + 1}, {"width": 0, "height": 0}
+    if height <= PANEL_HEIGHT * 4:
+        return {"width": width + 1, "height": height + 1}, {"width": 0, "height": 0}
+    _set_work_area(display, width, height - PANEL_HEIGHT)
+    return {"width": width, "height": height - PANEL_HEIGHT}, {"width": 0, "height": 0}
 
 
 def start_xvfb(
@@ -528,7 +556,9 @@ def start_xvfb(
             return name
         try:
             proc = subprocess.Popen(  # noqa: S603 — argv built by us
-                [binary, name, "-screen", "0", screen, "-nolisten", "tcp"],
+                # -noreset: a reset (last client gone) drops the root
+                # window's _NET_WORKAREA, see window_bounds.
+                [binary, name, "-screen", "0", screen, "-nolisten", "tcp", "-noreset"],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
