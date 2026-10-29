@@ -129,3 +129,30 @@ needs no entry at all.
 `FEATURE_MCP`, default **on**. Web is excluded in the settings entry: a web
 page cannot open a loopback port, so connecting there would fail halfway
 through. Supporting web needs a redirect page on our own origin.
+
+## Debugging a connector the Agents host cannot use
+
+The host dials every forwarded connector itself (`agents/runtime/.../mcp_client.py`)
+and reports the result in the `mcp_tools` frame, with `error` and a structural
+`error_kind` (`auth` / `network` / `other`, docs/WIRE_CONTRACT.md). The app shows
+`auth` as "Sign-in expired" / "Anmeldung abgelaufen", `network` as "Server not
+answering" / "Server antwortet nicht".
+
+The host logs one line per failed dial and per refused token refresh, never a
+token:
+
+```bash
+journalctl --user -u agents-manager --since -10min | grep -E 'mcp dial|mcp token refresh'
+# mcp dial failed: server=Fastmail host=api.fastmail.com kind=auth error=...
+# mcp token refresh refused: endpoint=api.fastmail.com status=400 error=invalid_grant
+```
+
+`invalid_grant` means the provider revoked the refresh token: only a new sign-in
+helps. Reconnect on the detail page always runs the browser sign-in
+(`McpService.connect(forceSignIn: true)`); before 2026-10-29 it reused the stored
+record whenever it held a refresh token, so it could never fix a dead grant.
+The app sends `mcp_probe` when the Connectors page opens and when it reconnects to
+the host, so a host restart (`systemctl --user restart agents-manager`) is enough
+to get fresh log lines. `_scratch/grants_meta.py` (run with
+`agents/host/.venv/bin/python`) prints the metadata of the sealed
+`~/.local/share/chuk-agents/mcp-grants.json` without any token.

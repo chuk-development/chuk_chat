@@ -495,6 +495,12 @@ class McpService {
   /// handed. An [McpAuth.appSession] server needs none (the host resolves the
   /// account credential), and a server that is already signed in is not asked
   /// to do it again. Tool discovery still happens host-side when a task runs.
+  ///
+  /// [forceSignIn] is Reconnect: the stored record exists but the server (or
+  /// the host) refused it. A record with a refresh token looks "usable" here,
+  /// yet the provider may have revoked it (`invalid_grant`), so without this
+  /// flag Reconnect saved the same dead record again and never opened the
+  /// browser. With it the sign-in always runs and replaces the record.
   static Future<McpConnectResult> connect({
     required String id,
     required String name,
@@ -504,6 +510,7 @@ class McpService {
     bool addedByHand = false,
     McpAuth auth = McpAuth.oauth,
     McpConnectCanceler? canceler,
+    bool forceSignIn = false,
   }) async {
     final endpoint = Uri.tryParse(url);
     if (endpoint == null || !_isAcceptableEndpoint(endpoint)) {
@@ -514,7 +521,8 @@ class McpService {
     }
 
     try {
-      if (auth == McpAuth.oauth && !await _hasUsableRecord(id)) {
+      if (auth == McpAuth.oauth &&
+          (forceSignIn || !await _hasUsableRecord(id))) {
         final token = await _authorize(
           id: id,
           endpoint: endpoint,
@@ -1055,6 +1063,11 @@ class McpService {
             if (tool is Map) McpTool.fromJson(Map<String, dynamic>.from(tool)),
       ];
       final String error = '${row['error'] ?? ''}'.trim();
+      // Structural, from the host: `auth` / `network` / `other`. An older
+      // host sends none, which reads as `other`.
+      final McpErrorKind? kind = error.isEmpty
+          ? null
+          : McpErrorKind.parse(row['error_kind']?.toString());
       final List<String> before = target.tools
           .map((McpTool tool) => tool.name)
           .toList();
@@ -1064,7 +1077,8 @@ class McpService {
       final bool sameTools =
           before.length == after.length &&
           before.join('\u0000') == after.join('\u0000');
-      final bool sameError = (target.lastError ?? '') == error;
+      final bool sameError =
+          (target.lastError ?? '') == error && target.errorKind == kind;
       if (sameTools && sameError && target.checkedAt != null) continue;
       await store.upsert(
         target.copyWith(
@@ -1072,6 +1086,7 @@ class McpService {
           checkedAt: DateTime.now(),
           clearError: error.isEmpty,
           lastError: error.isEmpty ? null : error,
+          lastErrorKind: kind,
         ),
       );
       changed++;

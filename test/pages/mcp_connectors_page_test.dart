@@ -169,6 +169,77 @@ void main() {
     });
   });
 
+  group('with Agents on the row names why the host could not use it', () {
+    setUp(() async {
+      debugAgentsChatCoreOverride = true;
+      final store = McpStore(secrets: _MemorySecrets(), list: memoryMcpList());
+      McpService.resetForTest(store: store);
+      McpService.unreachable.value = <String>{};
+      McpService.probeClientFactory = () =>
+          MockClient((_) async => http.Response('', 401));
+      for (final (String id, McpErrorKind kind) in <(String, McpErrorKind)>[
+        ('a', McpErrorKind.auth),
+        ('n', McpErrorKind.network),
+        ('o', McpErrorKind.other),
+      ]) {
+        await store.upsert(
+          McpConnection(
+            id: id,
+            name: 'Server $id',
+            url: 'https://$id.example.com/mcp',
+            checkedAt: DateTime(2026, 10, 29),
+            lastError: 'reason $id',
+            lastErrorKind: kind,
+          ),
+        );
+      }
+      McpService.connections.value = await store.load();
+    });
+
+    tearDown(() {
+      McpService.unreachable.value = <String>{};
+      debugAgentsChatCoreOverride = null;
+    });
+
+    testWidgets('an expired sign-in and a silent server do not look alike',
+        (tester) async {
+      await tester.pumpWidget(const MaterialApp(home: McpConnectorsPage()));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Sign-in expired'), findsOneWidget);
+      expect(find.text('Server not answering'), findsOneWidget);
+      expect(find.text('Error'), findsOneWidget);
+      expect(find.text('not reachable'), findsNothing);
+    });
+
+    testWidgets('the detail of an expired sign-in asks for a new one',
+        (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(home: McpConnectorDetailPage(id: 'a')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.widgetWithText(FilledButton, 'Reconnect'), findsOneWidget);
+      expect(
+        find.textContaining('Sign-in expired. Reconnect to sign in again.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('the detail of a silent server shows the real reason',
+        (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(home: McpConnectorDetailPage(id: 'n')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('The server is not answering: reason n'),
+        findsOneWidget,
+      );
+    });
+  });
+
   group('detail page of a connector the host could not use', () {
     // What the host reported for the connector: it asked, and it failed.
     const McpConnection failing = McpConnection(

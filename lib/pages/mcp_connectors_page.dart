@@ -16,6 +16,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
 
 import 'package:chuk_chat/widgets/app_notification.dart';
@@ -83,11 +84,23 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
 
   /// The right-hand line of a connected row in the Agents build.
   ///
-  /// Three states, and they must not look alike: nobody has asked the host
-  /// yet, the host asked and the server refused, the host asked and got a
-  /// list. Printing "0 tools" for all three said nothing.
-  static String _hostStatusOf(McpConnection connection) {
-    if (connection.lastError != null) return 'not reachable';
+  /// The states must not look alike: nobody has asked the host yet, the
+  /// host asked and the sign-in was refused, the host asked and the server
+  /// did not answer, the host asked and got a list. Printing "0 tools" (or
+  /// "not reachable") for all of them said nothing: an expired sign-in read
+  /// as a dead server, and the reader had no reason to reconnect.
+  static String _hostStatusOf(BuildContext context, McpConnection connection) {
+    final AppLocalizations strings = _stringsOf(context);
+    switch (connection.errorKind) {
+      case McpErrorKind.auth:
+        return strings.mcpStatusSignInExpired;
+      case McpErrorKind.network:
+        return strings.mcpStatusNoAnswer;
+      case McpErrorKind.other:
+        return strings.mcpStatusHostError;
+      case null:
+        break;
+    }
     if (connection.checkedAt == null) return 'not checked';
     final int count = connection.tools.length;
     return count == 1 ? '1 tool' : '$count tools';
@@ -227,7 +240,7 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
                                   : 'The server did not answer')
                             : subtitleFor(connection),
                         trailing: agentsChatCore
-                            ? _hostStatusOf(connection)
+                            ? _hostStatusOf(context, connection)
                             : unreachable.contains(connection.id)
                             ? 'Offline'
                             : '${connection.tools.length} tools',
@@ -456,10 +469,18 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
   /// What the failed check found, in words.
   String _failureText(McpConnection connection) {
     if (agentsChatCore) {
+      final AppLocalizations strings = _stringsOf(context);
+      final String? reason = connection.lastError;
       return <String>[
         if (_reachable == false) 'This device could not reach the server.',
-        if (connection.lastError != null)
-          'The host could not use this connector: ${connection.lastError}',
+        if (reason != null)
+          switch (connection.errorKind) {
+            // The host's text names the HTTP status and the renewal that
+            // failed; the reader needs the one action that helps.
+            McpErrorKind.auth => strings.mcpSignInExpiredDetail,
+            McpErrorKind.network => strings.mcpNoAnswerDetail(reason),
+            _ => strings.mcpHostErrorDetail(reason),
+          },
       ].join('\n');
     }
     return 'The server did not answer. The sign-in may have expired.';
@@ -555,7 +576,13 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
                         onPressed: url.isEmpty
                             ? null
                             : (connection == null || failed
-                                  ? () => _connect(url, name)
+                                  ? () => _connect(
+                                      url,
+                                      name,
+                                      // Reconnect: the stored sign-in did not
+                                      // work, so it must not be reused.
+                                      forceSignIn: connection != null,
+                                    )
                                   : _disconnect),
                         child: Text(
                           connection == null
@@ -742,7 +769,11 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
 
   void _cancelConnect() => _canceler?.cancel();
 
-  Future<void> _connect(String url, String name) async {
+  Future<void> _connect(
+    String url,
+    String name, {
+    bool forceSignIn = false,
+  }) async {
     final entry = widget.entry;
     final fields = entry?.credentials ?? const <McpCredentialField>[];
 
@@ -782,8 +813,14 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
       url: url,
       description: widget.entry?.description ?? '',
       iconUrl: widget.entry?.iconUrl,
-      auth: widget.entry?.auth ?? McpAuth.oauth,
+      // A stored connector opened from the list has no catalogue entry:
+      // keep the kind of sign-in it was made with.
+      auth:
+          widget.entry?.auth ??
+          McpService.connectionFor(widget.id)?.auth ??
+          McpAuth.oauth,
       canceler: canceler,
+      forceSignIn: forceSignIn,
     );
     if (!mounted) return;
     setState(() {
@@ -1105,3 +1142,8 @@ class _AddByUrlDialogState extends State<_AddByUrlDialog> {
     );
   }
 }
+
+/// The strings of [context], or English where no delegate is installed (a
+/// bare test harness).
+AppLocalizations _stringsOf(BuildContext context) =>
+    AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));

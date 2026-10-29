@@ -99,6 +99,29 @@ def test_a_refused_server_is_reported_not_dropped(tmp_path, monkeypatch):
     assert entry["connected"] is False
     assert entry["tools"] == []
     assert entry["error"] == "401 Unauthorized"
+    # A connection that does not classify its failure reads as "other".
+    assert entry["error_kind"] == "other"
+
+
+def test_the_error_kind_of_the_connection_is_forwarded(tmp_path, monkeypatch):
+    """The app words an expired sign-in and a silent server differently, so
+    the kind travels as a field, not as text to be parsed."""
+    executor = _executor(tmp_path)
+    sent = _capture(executor, monkeypatch)
+    refused = _connection([], error="the server refused the sign-in")
+    refused.error_kind = "auth"
+    down = _connection([], error="connect timed out")
+    down.error_kind = "network"
+    working = _connection([("t", "d")])
+    working.error_kind = None
+    manager = _FakeManager({"Fastmail": refused, "Plane": down, "Ok": working})
+
+    executor._send_mcp_tools("sess", "req-1", manager)
+
+    entries = {e["name"]: e for e in sent[0][1]["servers"]}
+    assert entries["Fastmail"]["error_kind"] == "auth"
+    assert entries["Plane"]["error_kind"] == "network"
+    assert "error_kind" not in entries["Ok"]
 
 
 def test_no_manager_and_no_connectors_send_nothing(tmp_path, monkeypatch):

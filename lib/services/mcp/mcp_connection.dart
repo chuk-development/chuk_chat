@@ -39,6 +39,28 @@ enum McpAuth {
   }
 }
 
+/// What kind of failure the host reported for a connector (`error_kind` in
+/// the `mcp_tools` frame, docs/WIRE_CONTRACT.md). The host sets it from the
+/// structure of the failure, so the app never reads the error text to decide.
+enum McpErrorKind {
+  /// The server refused the sign-in and the host could not renew it. Only a
+  /// new sign-in on this device helps.
+  auth,
+
+  /// The server did not answer (connect error, timeout).
+  network,
+
+  /// Anything else, and every report of an older host that does not say.
+  other;
+
+  static McpErrorKind parse(String? raw) {
+    for (final value in McpErrorKind.values) {
+      if (value.name == raw) return value;
+    }
+    return McpErrorKind.other;
+  }
+}
+
 /// One tool a server offers. Kept minimal because Agents discovers the live
 /// tool list host-side; this only carries what the connectors UI shows.
 class McpTool {
@@ -90,6 +112,7 @@ class McpConnection {
     this.auth = McpAuth.oauth,
     this.checkedAt,
     this.lastError,
+    this.lastErrorKind,
   });
 
   final String id;
@@ -113,6 +136,14 @@ class McpConnection {
   /// the last check succeeded.
   final String? lastError;
 
+  /// What kind of failure [lastError] is. Null when there is no error; read
+  /// it through [errorKind], which falls back to [McpErrorKind.other].
+  final McpErrorKind? lastErrorKind;
+
+  /// The kind of the last error, or null when the last check succeeded.
+  McpErrorKind? get errorKind =>
+      lastError == null ? null : (lastErrorKind ?? McpErrorKind.other);
+
   /// True when the user typed the URL instead of picking a connector.
   final bool addedByHand;
 
@@ -134,6 +165,7 @@ class McpConnection {
     // it through the usual `?? this.lastError`.
     bool clearError = false,
     String? lastError,
+    McpErrorKind? lastErrorKind,
   }) => McpConnection(
     id: id,
     name: name ?? this.name,
@@ -145,6 +177,9 @@ class McpConnection {
     auth: auth ?? this.auth,
     checkedAt: checkedAt ?? this.checkedAt,
     lastError: clearError ? null : (lastError ?? this.lastError),
+    lastErrorKind: clearError
+        ? null
+        : (lastErrorKind ?? this.lastErrorKind),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -158,6 +193,8 @@ class McpConnection {
     'tools': <Map<String, dynamic>>[for (final t in tools) t.toJson()],
     if (checkedAt != null) 'checked_at': checkedAt!.toIso8601String(),
     if (lastError != null) 'last_error': lastError,
+    if (lastError != null && lastErrorKind != null)
+      'last_error_kind': lastErrorKind!.name,
   };
 
   static McpConnection fromJson(Map<String, dynamic> json) => McpConnection(
@@ -176,6 +213,9 @@ class McpConnection {
     lastError: (json['last_error'] as String?)?.trim().isEmpty ?? true
         ? null
         : json['last_error'] as String,
+    lastErrorKind: json['last_error_kind'] == null
+        ? null
+        : McpErrorKind.parse(json['last_error_kind']?.toString()),
   );
 
   /// The name a model sees for [tool] on this server. Prefixed, because two

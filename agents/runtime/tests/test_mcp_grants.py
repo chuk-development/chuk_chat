@@ -315,6 +315,7 @@ def test_a_refused_sign_in_says_reconnect(ratchet, refusing_server):
         connection.close()
 
     assert connection.error == AUTH_REFUSED_ERROR
+    assert connection.error_kind == "auth"
     assert "Reconnect" in connection.error
     # It tried to renew once with the refresh token it had.
     assert ratchet.calls >= 1

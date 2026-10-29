@@ -234,6 +234,85 @@ void main() {
     expect(McpService.connections.value.single.name, 'Srv renamed');
   });
 
+  test('Reconnect signs in again even when a refresh token is stored',
+      () async {
+    // The provider revoked the grant (the host's refresh got invalid_grant),
+    // but the record still carries a refresh token, so it looks usable.
+    // Reconnect must open the browser, or it saves the dead record again.
+    var opened = 0;
+    McpService.launcher = (Uri url) async {
+      opened++;
+      return _signIn(url);
+    };
+
+    await McpService.connect(
+      id: 'srv',
+      name: 'Srv',
+      url: 'https://srv.example/mcp',
+    );
+    final again = await McpService.connect(
+      id: 'srv',
+      name: 'Srv',
+      url: 'https://srv.example/mcp',
+      forceSignIn: true,
+    );
+
+    expect(again.status, McpConnectStatus.connected);
+    expect(opened, 2);
+  });
+
+  test('the host error kind is stored with the error and cleared with it',
+      () async {
+    await McpService.store.upsert(
+      const McpConnection(id: 'fm', name: 'Fastmail', url: 'https://a.example/mcp'),
+    );
+
+    await McpService.applyToolsFrame(<String, dynamic>{
+      'servers': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'id': 'fm',
+          'name': 'Fastmail',
+          'connected': false,
+          'tools': <Object>[],
+          'error': 'the server refused the sign-in',
+          'error_kind': 'auth',
+        },
+      ],
+    });
+    var stored = (await McpService.store.load()).single;
+    expect(stored.errorKind, McpErrorKind.auth);
+    // It survives the round trip through storage.
+    expect(
+      McpConnection.fromJson(stored.toJson()).errorKind,
+      McpErrorKind.auth,
+    );
+
+    // An older host sends no kind: that reads as "other", never a guess.
+    await McpService.applyToolsFrame(<String, dynamic>{
+      'servers': <Map<String, dynamic>>[
+        <String, dynamic>{'id': 'fm', 'name': 'Fastmail', 'error': 'boom'},
+      ],
+    });
+    stored = (await McpService.store.load()).single;
+    expect(stored.errorKind, McpErrorKind.other);
+
+    await McpService.applyToolsFrame(<String, dynamic>{
+      'servers': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'id': 'fm',
+          'name': 'Fastmail',
+          'connected': true,
+          'tools': <Map<String, dynamic>>[
+            <String, dynamic>{'name': 'list', 'description': 'd'},
+          ],
+        },
+      ],
+    });
+    stored = (await McpService.store.load()).single;
+    expect(stored.lastError, isNull);
+    expect(stored.errorKind, isNull);
+  });
+
   test('cancelling the sign-in reports a cancel and stores nothing', () async {
     final canceler = McpConnectCanceler();
     // The browser opens and the user backs out instead of signing in.
