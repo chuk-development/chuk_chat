@@ -185,6 +185,42 @@ void main() {
       },
     );
   });
+  test('a page stamp outside the DateTime range does not drop the thread', () {
+    final index = MediaIndex()
+      ..noteRows('agent-x', <Map<String, dynamic>>[
+        {
+          'contentBlocks': [
+            {
+              'sandboxArtifact': {
+                'storagePath': 'cowork://blob/micro',
+                'filename': 'micro.json',
+                'mime': kDocumentMime,
+                'sizeBytes': 1,
+                // A microsecond epoch where seconds are expected.
+                'document': {
+                  'id': 'micro',
+                  'title': 'Micro',
+                  'kind': 'markdown',
+                  'version': 1,
+                  'updated_at': 1.7e15,
+                  'text': 'x',
+                },
+              },
+            },
+            {
+              'sandboxArtifact': {
+                'storagePath': 'p10',
+                'filename': 'ok.pdf',
+                'mime': 'application/pdf',
+                'sizeBytes': 3,
+              },
+            },
+          ],
+        },
+      ]);
+    expect(index.entries(kind: MediaKind.page).single.name, 'Micro');
+    expect(index.entries(kind: MediaKind.file).single.name, 'ok.pdf');
+  });
   test('a page with a malformed version or stamp does not drop the thread', () {
     final index = MediaIndex()
       ..noteRows('agent-x', <Map<String, dynamic>>[

@@ -604,8 +604,8 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
     // A search for the fold's own name ("advanced", "erweitert") lists all
     // of it, like any other match.
     final bool queryNamesAdvanced =
-        query.isNotEmpty &&
-        l.settingsAdvanced.toLowerCase().contains(query);
+        query.length >= 3 &&
+        l.settingsAdvanced.toLowerCase().startsWith(query);
     // The fold opens by hand or by a search. A modal that opens straight on
     // a page inside it starts with it open, so the selection is in view.
     if (!_advancedSeeded) {

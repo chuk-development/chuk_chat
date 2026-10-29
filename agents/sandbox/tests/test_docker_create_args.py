@@ -8,7 +8,7 @@ import os
 
 import pytest
 
-from chuk_agents_sandbox.docker import CONTAINER_WORKSPACE, DockerEnvironment
+from chuk_agents_sandbox.docker import CONTAINER_WORKSPACE, DockerEnvironment, DockerUnavailableError
 from chuk_agents_sandbox.lifecycle import CliResult
 
 
@@ -163,6 +163,24 @@ def test_a_gpu_that_cannot_be_attached_still_gives_a_box(tmp_path, nvidia_host):
     assert cli.calls.index(("rm", "-f", env.container_name)) < len(cli.calls) - 1
     assert f"{LABEL_BOX}=browser=1;gpu=failed" in second
     assert f"{LABEL_BOX}=browser=1;gpu=1" in first
+
+
+def test_a_non_gpu_failure_does_not_drop_the_gpu(tmp_path, nvidia_host):
+    """A daemon or disk error is not a GPU problem: no retry without GPU, so
+    one transient failure cannot leave a box on SwiftShader for good."""
+
+    class _DiskFull(_GpuCli):
+        def run(self, *args: str, timeout: int | None = None) -> CliResult:
+            if args[:1] == ("run",) and "--gpus" in args:
+                self.calls.append(args)
+                return CliResult(stdout="", stderr="no space left on device", exit_code=125)
+            return super().run(*args, timeout=timeout)
+
+    cli = _DiskFull()
+    env = DockerEnvironment(workdir=str(tmp_path / "ws"), cli=cli, user="1000:1000")
+    with pytest.raises(DockerUnavailableError):
+        env._create()
+    assert len(_creates(cli)) == 1
 
 
 def test_a_host_without_nvidia_never_probes(tmp_path, monkeypatch):

@@ -644,7 +644,9 @@ class DockerEnvironment(BaseEnvironment):
         gpu = list(self._box_setup()[1])
 
         result, name = self._run_create(["run", "-d", *label_args(self.labels()), *argv, *gpu, *tail])
-        if not result.ok and gpu and "already in use" not in result.stderr.lower():
+        stderr = result.stderr.lower()
+        gpu_error = any(word in stderr for word in ("gpu", "nvidia", "device driver"))
+        if not result.ok and gpu and gpu_error and "already in use" not in stderr:
             # The GPU could not be attached (a broken toolkit, a driver
             # mismatch). A box without it still works; only WebGL is software.
             # `docker run` may have CREATED the container before the start
