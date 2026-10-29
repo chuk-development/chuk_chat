@@ -724,14 +724,26 @@ class McpService {
     // _forgetLocal, which this structure does not have).
     _recordReachable(id, true);
     _setMember(checking, id, false);
+    // Which sign-in this was, read before the record goes: the host forgets
+    // exactly that one.
+    final McpSecrets? record = await store.secretsFor(id);
+    final String endpoint = record?.tokenEndpoint ?? '';
+    final String client = record?.credentials.clientId ?? '';
     await store.remove(id);
     connections.value = await store.load();
     unawaited(_pushRemote());
     unawaited(_deleteChukRow(id));
-    // The host keeps a sealed copy of the sign-in (it renews it). A probe
-    // with the remaining set makes it forget every grant not in that set,
-    // the empty set included.
-    unawaited(probe(includeEmpty: true));
+    // The host keeps a sealed copy of the sign-in (it renews it). The probe
+    // names it, so the host forgets it too.
+    unawaited(
+      probe(
+        includeEmpty: true,
+        signedOut: <Map<String, String>>[
+          if (endpoint.isNotEmpty && client.isNotEmpty)
+            <String, String>{'token_endpoint': endpoint, 'client_id': client},
+        ],
+      ),
+    );
   }
 
   // ─── Signing in ────────────────────────────────────────────────────────
@@ -1102,6 +1114,7 @@ class McpService {
   static Future<void> probe({
     McpProbeControl? control,
     bool includeEmpty = false,
+    List<Map<String, String>> signedOut = const <Map<String, String>>[],
   }) async {
     // An `is` check, not a cast: the link carries whatever controller is bound
     // (a fake in tests, a local-socket controller without MCP), and a frame
@@ -1122,7 +1135,7 @@ class McpService {
       };
       if (asked.isNotEmpty) checking.value = {...checking.value, ...asked};
       try {
-        await target.probeMcpServers(payloads);
+        await target.probeMcpServers(payloads, signedOut: signedOut);
       } catch (_) {
         // Not sent: nobody will answer, so nothing is being checked.
         checking.value = Set<String>.from(checking.value)..removeAll(asked);

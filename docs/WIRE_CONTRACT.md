@@ -296,6 +296,12 @@ signed in, so a server shows its tools immediately instead of after whatever
 task happens to run next. The sign-in itself stays on the device — an OAuth
 consent screen needs a person — and only the credentials travel.
 
+`mcp_signed_out` (optional) lists sign-ins the user removed on the device,
+`[{"token_endpoint": "...", "client_id": "..."}]`. The host forgets exactly
+those grants and closes the sessions that hold them. It never prunes by what
+`mcp_servers` leaves out: another device of the account may hold connectors
+this one does not, and a missing or malformed list keeps everything.
+
 ### `mcp_tools` (NEW, executor → app)
 
 What each forwarded connector answered with when the host dialled it. One frame

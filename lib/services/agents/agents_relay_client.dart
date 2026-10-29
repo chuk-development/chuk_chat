@@ -3130,12 +3130,16 @@ class AgentsRelayClient
   // ── end skill proposals ──
 
   @override
-  Future<void> probeMcpServers(List<Map<String, dynamic>> servers) =>
+  Future<void> probeMcpServers(
+    List<Map<String, dynamic>> servers, {
+    List<Map<String, String>> signedOut = const <Map<String, String>>[],
+  }) =>
       // Answered with one terminal `mcp_tools` frame, like a skills list
       // (docs/WIRE_CONTRACT.md, "mcp_probe").
       _sendFramePayload(<String, dynamic>{
         'type': 'mcp_probe',
         'mcp_servers': servers,
+        if (signedOut.isNotEmpty) 'mcp_signed_out': signedOut,
       });
 
   @override

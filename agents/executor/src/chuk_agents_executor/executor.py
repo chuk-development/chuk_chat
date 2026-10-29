@@ -5792,10 +5792,19 @@ class Executor:
         connect timeout, and the frame loop must not wait for it.
         """
         servers = payload.get("mcp_servers")
-        # A probe carries the device's whole connector set. A sign-in that is
-        # not in it was removed on the device: forget it here too (bead
-        # chuk_chat-meoz), and drop the sessions that still hold it.
-        self._forget_removed_grants(servers if isinstance(servers, list) else [])
+        # The user signed out of these connectors on the device (bead
+        # chuk_chat-meoz): forget exactly those sign-ins here too. Only an
+        # explicit list prunes; a missing or malformed one keeps everything,
+        # and a connector another device still holds is never named here.
+        # Off the serve thread: closing a session joins its transport.
+        signed_out = payload.get("mcp_signed_out")
+        if isinstance(signed_out, list) and signed_out:
+            threading.Thread(
+                target=self._forget_signed_out,
+                args=(list(signed_out),),
+                name=f"mcp-signout-{request_id[:8]}",
+                daemon=True,
+            ).start()
         if not isinstance(servers, list) or not servers:
             self._terminal(
                 request_id, mcp_tools_payload(session_key="", servers=[])
@@ -5846,17 +5855,23 @@ class Executor:
             target=work, name=f"mcp-probe-{request_id[:8]}", daemon=True
         ).start()
 
-    def _forget_removed_grants(self, servers: list) -> None:
-        """Forget the OAuth grants the device no longer forwards, and close
-        every session manager that still holds one of them (it is rebuilt from
-        the next forwarded set). Never raises."""
+    def _forget_signed_out(self, entries: list) -> None:
+        """Forget the OAuth grants of ``entries`` (``{token_endpoint,
+        client_id}`` each, the sign-ins the device removed) and close every
+        session manager that still holds one (it is rebuilt from the next
+        forwarded set). Never raises."""
         try:
-            blocks = [
-                entry.get("oauth") if isinstance(entry.get("oauth"), dict) else None
-                for entry in servers
-                if isinstance(entry, dict)
-            ]
-            keep = {k for k in (_mcp_grants.OAuthGrantStore.key(b) for b in blocks) if k}
+            keys = set()
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                key = _mcp_grants.OAuthGrantStore.client_key(
+                    str(entry.get("token_endpoint") or ""), str(entry.get("client_id") or "")
+                )
+                if key and entry.get("client_id"):
+                    keys.add(key)
+            if not keys:
+                return
             with self._mcp_lock:
                 managers = dict(self._mcp_managers)
             # Close first: a closing session still speaks to its server (the
@@ -5866,10 +5881,10 @@ class Executor:
                 held = {
                     _mcp_grants.OAuthGrantStore.key(getattr(c, "oauth", None))
                     for c in getattr(manager, "configs", []) or []
-                } - {None}
-                if held - keep:
+                }
+                if held & keys:
                     self._forget_session_mcp(close=True, session_key=session_key)
-            _mcp_grants.GRANTS.retain(blocks)
+            _mcp_grants.GRANTS.forget(sorted(keys))
         except Exception:  # noqa: BLE001 — a cleanup must not fail a probe
             pass
 

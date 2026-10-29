@@ -1442,3 +1442,28 @@ def test_a_tokenless_oauth_entry_and_an_apikey_entry_are_both_kept():
     assert brave.auth_token is None
     assert brave.url == "https://mcp.brave.example/mcp?key=SECRET-123"
     assert "Authorization" not in brave.headers
+
+
+def test_a_failed_dial_logs_no_error_text(caplog):
+    """A connector may carry its key in the URL path, and an exception message
+    can quote the URL. The log line names server, host, kind and class only."""
+    import logging
+
+    connection = MCPConnection(
+        MCPServerConfig(
+            name="keyed",
+            transport=HTTP,
+            url="http://127.0.0.1:1/secret-key-in-path/mcp",
+            connect_timeout=5.0,
+        )
+    )
+    with caplog.at_level(logging.WARNING, logger="chuk_agents_runtime.mcp_client"):
+        try:
+            assert connection.start() is False
+        finally:
+            connection.close()
+    lines = [r.getMessage() for r in caplog.records if "mcp dial failed" in r.getMessage()]
+    assert lines, caplog.text
+    assert "secret-key-in-path" not in caplog.text
+    assert "server=keyed" in lines[0] and "kind=network" in lines[0]
+    assert "error_class=" in lines[0]
