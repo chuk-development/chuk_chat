@@ -104,6 +104,16 @@ const KITS = {
     s += `  mirror z\n    plate ${id}_pec pts=${f(L * 0.15)},0 ${f(L * 0.02)},${f(-d * 0.7)} ${f(-L * 0.03)},0 h=${f(d * 0.05)} rot=25,0,0 at=0,${f(-d * 0.2)},${f(d * 0.42)} color=${fin}\n    sphere ${id}_eye r=${f(d * 0.05)} at=${f(L * 0.33)},${f(d * 0.08)},${f(d * 0.3)} color=black\n`;
     return s;
   },
+  // Two gears that really mesh. Both lie in the XY plane, axles along z.
+  // In `anim`, write: drive pair turns=3
+  gearpair(id, k) {
+    const a = +(k.teeth1 ?? 12), b = +(k.teeth2 ?? 36), m = +(k.module ?? 0.1), h = +(k.h ?? 0.3);
+    const ra = (m * a) / 2, rb = (m * b) / 2, gap = ra + rb;
+    let s = `group ${id}\n`;
+    s += `  group ${id}_a at=${fmt(-gap / 2)},0,0 axis=z\n    gear ${id}_ga teeth=${a} r=${fmt(ra)} h=${h} axis=z color=${k.color1 ?? 'orange'}\n    cyl ${id}_sa r=${fmt(ra * 0.28)} h=${fmt(h * 2.6)} axis=z color=steel\n    box ${id}_ma size=${fmt(ra * 0.7)},${fmt(ra * 0.16)},${fmt(h * 1.1)} at=${fmt(ra * 0.5)},0,0 color=white\n`;
+    s += `  group ${id}_b at=${fmt(gap / 2)},0,0 axis=z\n    gear ${id}_gb teeth=${b} r=${fmt(rb)} h=${h} phase=${fmt(Math.PI + Math.PI / b)} axis=z color=${k.color2 ?? 'blue'}\n    cyl ${id}_sb r=${fmt(ra * 0.28)} h=${fmt(h * 2.6)} axis=z color=steel\n    box ${id}_mb size=${fmt(rb * 0.6)},${fmt(ra * 0.16)},${fmt(h * 1.1)} at=${fmt(rb * 0.45)},0,0 color=white\n`;
+    return s;
+  },
   // Tree: trunk and clumps of leaves.
   tree(id, k) {
     const h = +(k.height ?? 5), c = k.color ?? 'green';
@@ -145,6 +155,7 @@ export function expandKits(kids) {
     const body = parse(kit(id, n.kv)).root.kids;
     body.forEach(function mark(b) { b.line = n.line; b.kit = true; b.kids.forEach(mark); });
     const wrapper = { cmd: 'group', args: [id], kv: {}, kids: body, line: n.line };
+    if (n.cmd === 'gearpair') wrapper.gearset = { a: `${id}_a`, b: `${id}_b`, ratio: Number(n.kv.teeth1 ?? 12) / Number(n.kv.teeth2 ?? 36) };
     for (const k of keep) if (n.kv[k] !== undefined) wrapper.kv[k] = n.kv[k];
     return [wrapper];
   });

@@ -1,8 +1,12 @@
 // CPU renderer: z-buffer, cel shading, edge lines from the id, depth and normal
 // buffers, soft ground shadow. No GPU, no assets, small enough to port to Dart.
 import zlib from 'node:zlib';
+import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import { buildShape, SHAPES, COLORS3D, shapeKeys, isCommon } from './geom.mjs';
 import { expandKits } from './kits.mjs';
+import { buildPhoto } from './photo.mjs';
 import { nums } from './parse.mjs';
 
 const hex = (c) => {
@@ -11,6 +15,27 @@ const hex = (c) => {
   const n = parseInt(v, 16);
   return Number.isNaN(n) ? [184, 188, 192] : [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 };
+
+// Photo on the top of a part: `tex=name crop=x0,y0,x1,y1`, in pixels of the image.
+// The context image of the user works here, so the model shows the real thing.
+const TEX = new Map();
+function loadTexture(name, crop) {
+  const dirs = [process.env.CHALK_CTX, new URL('./library', import.meta.url).pathname].filter(Boolean);
+  const file = dirs.flatMap((d) => [name, `${name}.png`, `${name}.jpg`].map((n) => path.join(d, n))).find((f) => existsSync(f));
+  if (!file) return null;
+  const key = `${file}|${crop ?? ''}`;
+  if (TEX.has(key)) return TEX.get(key);
+  const args = [file];
+  if (crop) { const [a, b, c, d] = crop.map(Math.round); args.push('-crop', `${c - a}x${d - b}+${a}+${b}`, '+repage'); }
+  args.push('-resize', '1400x1400>', '-depth', '8');
+  const size = execFileSync('identify', ['-format', '%w %h', ...(crop ? [] : [file])].length > 3 ? ['-format', '%w %h', file] : ['-format', '%w %h', file]).toString();
+  void size;
+  const dims = execFileSync('convert', [...args, '-format', '%w %h', 'info:-']).toString().trim().split(' ').map(Number);
+  const data = execFileSync('convert', [...args, 'rgb:-'], { maxBuffer: 1e9 });
+  const tex = { w: dims[0], h: dims[1], data };
+  TEX.set(key, tex);
+  return tex;
+}
 
 const IDENT = [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0]; // 3x3 then translate
 const mul = (a, b) => {
@@ -103,9 +128,11 @@ export function buildParts(model, errors) {
     for (const p of list) for (const id of p.path) boxes.delete(id);
     for (const p of list) { const b = boundsOf([p]); for (const id of p.path) grow(id, b); }
   };
+  parts.gearsets = new Map();
   const walk = (node, M, ctx, top) => {
     const { cmd, kv } = node;
     const start = parts.length;
+    if (node.gearset) parts.gearsets.set(node.args[0], node.gearset);
     const inh = { kit: node.kit || ctx.kit, color: kv.color ?? ctx.color, mat: kv.mat ?? ctx.mat, label: ctx.label, group: ctx.group, shell: kv.shell ?? ctx.shell, path: ctx.path ?? [] };
     if (cmd === 'group' || cmd === 'repeat' || cmd === 'ring' || cmd === 'mirror') {
       const id = kv.id ?? (cmd === 'group' ? node.args[0] : null);
@@ -144,6 +171,25 @@ export function buildParts(model, errors) {
       if (kv.on) attach(node, start, M);
       return;
     }
+    if (cmd === 'photo') {
+      const m = mul(M, nodeMatrix(kv));
+      for (const piece of buildPhoto(node, errors)) {
+        const t = piece.tris;
+        for (let i = 0; i < t.length; i += 3) {
+          const q = apply(m, [t[i], t[i + 1], t[i + 2]]);
+          piece.raw ??= t.slice();
+          t[i] = q[0]; t[i + 1] = q[1]; t[i + 2] = q[2];
+        }
+        const c = [0, 0, 0];
+        for (let i = 0; i < t.length; i += 3) { c[0] += t[i]; c[1] += t[i + 1]; c[2] += t[i + 2]; }
+        const n = t.length / 3 || 1;
+        parts.pivots.set(piece.id, c.map((v) => v / n));
+        parts.axes.set(piece.id, [0, 0, 1]);
+        parts.push({ id: piece.id, color: [200, 200, 200], mat: 'photo', label: piece.label, tris: t, raw: piece.raw, photo: piece.tex, isRegion: piece.region, top: `${node.line}:${piece.id}`, line: node.line, path: [...(ctx.path ?? []), node.args[0], piece.id].filter((v, i, a) => a.indexOf(v) === i), link: { a: null } && null, noSnap: true });
+      }
+      note(node.args[0], m, kv.axis);
+      return;
+    }
     if (cmd === 'link') {
       // A rod that always spans two parts, also while they move.
       const mesh = buildShape({ cmd: 'cyl', kv: { r: kv.r ?? '0.1', h: '1', seg: '16' }, args: [], kids: [] });
@@ -160,7 +206,8 @@ export function buildParts(model, errors) {
     for (const k of Object.keys(kv)) {
       if (!isCommon(k) && !shapeKeys(cmd).includes(k)) errors.push(`line ${node.line}: ${cmd} has no "${k}". Keys: ${shapeKeys(cmd).join(' ')}`);
     }
-    const mesh = buildShape(node);
+    let mesh = null;
+    try { mesh = buildShape(node); } catch (e) { errors.push(`line ${node.line}: ${cmd}: ${e.message}`); return; }
     if (!mesh || !mesh.t.length || mesh.t.some(Number.isNaN)) {
       errors.push(`line ${node.line}: ${cmd} gave no valid geometry`);
       return;
@@ -182,14 +229,15 @@ export function buildParts(model, errors) {
     seen.add(id);
     parts.push({
       id, color: hex(kv.color ?? ctx.color), mat: kv.mat ?? ctx.mat ?? (/(steel|alu|metal|titanium|copper|gold|brass)/.test(kv.color ?? ctx.color ?? '') ? 'metal' : 'matte'),
-      label: kv.label ?? ctx.label, group: kv.label ? null : ctx.group, shell: kv.shell ?? ctx.shell, path: [...(ctx.path ?? []), id], kit: node.kit || ctx.kit, tris: t, top: top ?? `${node.line}`, line: node.line,
+      label: kv.label ?? ctx.label, group: kv.label ? null : ctx.group, shell: kv.shell ?? ctx.shell, path: [...(ctx.path ?? []), id], kit: node.kit || ctx.kit, tex: kv.tex ? loadTexture(kv.tex, kv.crop ? nums(kv.crop) : null) : null, tris: t, top: top ?? `${node.line}`, line: node.line,
     });
     { const b = boundsOf([parts.at(-1)]); for (const pid of parts.at(-1).path) grow(pid, b); }
     if (kv.on) attach(node, start, M);
   };
   for (const k of expandKits(model.kids.filter((c) => c.cmd !== 'anim'))) walk(k, IDENT, {}, null);
   markGround(parts);
-  if (!model.kv.explode && !model.kids.some((c) => c.cmd === 'anim')) parts.repaired = snapFloating(parts.filter((p) => !p.ground && !p.link));
+  fixPivots(parts);
+  if (!model.kv.explode && !model.kids.some((c) => c.cmd === 'anim')) parts.repaired = snapFloating(parts.filter((p) => !p.ground && !p.link && !p.noSnap));
   return parts;
 }
 
@@ -227,6 +275,8 @@ function smoothNormals(tris, creaseCos = 0.72) {
   }
   return out;
 }
+
+const fragCorner = () => 0;
 
 function hsl(h, s, l) {
   const k = (n) => (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
@@ -358,6 +408,12 @@ export function renderModel(parts, opt) {
     const glow = tint ? tint(pi) : 0;
     const col0 = glow ? part.color.map((c, k) => c + ([255, 190, 40][k] - c) * glow) : part.color;
     const glass = part.mat === 'glass';
+    let tb = null;
+    if (part.tex) {
+      const lo = [1e9, 1e9], hi = [-1e9, -1e9];
+      for (let i = 0; i < t.length; i += 3) { lo[0] = Math.min(lo[0], t[i]); hi[0] = Math.max(hi[0], t[i]); lo[1] = Math.min(lo[1], t[i + 2]); hi[1] = Math.max(hi[1], t[i + 2]); }
+      tb = { x0: lo[0], z0: lo[1], w: hi[0] - lo[0] || 1, d: hi[1] - lo[1] || 1 };
+    }
     const cutHere = cutAxis >= 0 && (part.shell || !anyShell);
     const metal = part.mat === 'metal';
     const inner = col0.map((v) => v * 0.42);
@@ -424,13 +480,34 @@ export function renderModel(parts, opt) {
             col[i * 4 + 3] = out * 255;
             continue;
           }
+          const zPrev = zbuf[i], idPrev = idbuf[i];
           zbuf[i] = z;
           idbuf[i] = pi;
           nbuf[i * 3] = nx; nbuf[i * 3 + 1] = ny; nbuf[i * 3 + 2] = nz;
           const d = Math.max(0, nx * lightV[0] + ny * lightV[1] + nz * lightV[2]);
           let tone = 0.74 + 0.3 * smoothstep(0.1, 0.6, d);
           tone += 0.07 * (ny * 0.5 + 0.5);
-          const base = back ? inner : col0;
+          let base = back ? inner : col0;
+          if (tb && !back && N[f + 1] > 0.6) {
+            const u = (w0 * wp[0][0] + w1 * wp[1][0] + w2 * wp[2][0] - tb.x0) / tb.w, v = (w0 * wp[0][2] + w1 * wp[1][2] + w2 * wp[2][2] - tb.z0) / tb.d;
+            const tx = Math.min(part.tex.w - 1, Math.max(0, Math.round(u * (part.tex.w - 1)))), ty = Math.min(part.tex.h - 1, Math.max(0, Math.round(v * (part.tex.h - 1))));
+            const o2 = (ty * part.tex.w + tx) * 3;
+            base = [part.tex.data[o2], part.tex.data[o2 + 1], part.tex.data[o2 + 2]];
+          }
+          if (part.photo) {
+            // Photo pixels stay true, the shape adds only soft light.
+            const ph = part.photo, q = part.raw;
+            const ux = w0 * q[f] + w1 * q[f + 3] + w2 * q[f + 6], uy = w0 * q[f + 1] + w1 * q[f + 4] + w2 * q[f + 7];
+            const fu = ux / ph.W + 0.5, fv = 0.5 - uy / ph.H;
+            const tx = Math.min(ph.w - 1, Math.max(0, Math.round(fu * (ph.w - 1)))), ty = Math.min(ph.h - 1, Math.max(0, Math.round(fv * (ph.h - 1))));
+            const o2 = (ty * ph.w + tx) * 4;
+            if (ph.rgba[o2 + 3] < 128) { zbuf[i] = zPrev; idbuf[i] = idPrev; continue; }
+            base = [ph.rgba[o2], ph.rgba[o2 + 1], ph.rgba[o2 + 2]];
+            // Where a part has moved out, a dark recess stays.
+            if (!part.isRegion && opt.gone) for (const g2 of ph.regions) { const k3 = opt.gone(g2.id); if (k3 > 0 && g2.inside(fu, fv)) { const m3 = 1 - 0.8 * k3; base = base.map((c3) => c3 * m3); break; } }
+            tone = 0.84 + (tone - 0.74) * 0.5;
+            if (back) { base = base.map((c3) => c3 * 0.6 + 60); tone = 0.8; }
+          }
           let r = base[0] * tone, g = base[1] * tone, bl = base[2] * tone;
           if (metal && !back) {
             const rz = 2 * nz * nz - 1; // reflection toward the viewer
@@ -516,7 +593,7 @@ export function renderModel(parts, opt) {
         if (id !== o) { e = 2; continue; }
         if (Math.abs(zbuf[i] - zbuf[j]) > dz) { e = 2; continue; }
         const nd = nbuf[i * 3] * nbuf[j * 3] + nbuf[i * 3 + 1] * nbuf[j * 3 + 1] + nbuf[i * 3 + 2] * nbuf[j * 3 + 2];
-        if (nd < 0.75) e = Math.max(e, 1);
+        if (nd < 0.75 && parts[id]?.mat !== 'photo') e = Math.max(e, 1);
       }
       if (e) edge[i] = e;
     }
@@ -583,6 +660,20 @@ export function renderModel(parts, opt) {
       return out;
     },
   };
+}
+
+// A group without its own position has its pivot at the world origin, so a spin
+// would throw it around the scene. A pivot far outside its parts moves to their centre.
+function fixPivots(parts) {
+  for (const [id, piv] of parts.pivots) {
+    const list = parts.filter((p) => p.path.includes(id) && !p.link);
+    if (!list.length) continue;
+    const lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
+    for (const p of list) for (let i = 0; i < p.tris.length; i += 3) for (let c = 0; c < 3; c++) { lo[c] = Math.min(lo[c], p.tris[i + c]); hi[c] = Math.max(hi[c], p.tris[i + c]); }
+    const mid = lo.map((v, c) => (v + hi[c]) / 2);
+    const reach = Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2;
+    if (Math.hypot(piv[0] - mid[0], piv[1] - mid[1], piv[2] - mid[2]) > reach * 0.75) { piv[0] = mid[0]; piv[1] = mid[1]; piv[2] = mid[2]; }
+  }
 }
 
 // Voxels decide what really touches: a long diagonal arm has a huge bounding box,

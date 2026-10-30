@@ -124,6 +124,34 @@ Findings:
 - Facts need a source. A model places a connector from memory at the wrong
   place. Photos, facts and vetted models in `library/` fix this.
 
+## Photo pipeline: any subject
+
+`draw.py <out> "<request>" [--ctx image] --film` handles a subject that the engine
+does not know.
+
+1. GLM names the subject and an image search.
+2. With `--ctx`, GLM finds the object in the screenshot. Without it, Bing images
+   and Wikimedia give candidates and GLM picks one.
+3. `cutout.py` cuts the object out. `photo.mjs` inflates the silhouette to a
+   3D body with the real pixels. `profile=flat` makes a slab for boards.
+4. GLM reads a pixel grid and marks regions. `rembg` cuts each region, so a part
+   can move and a dark recess stays behind.
+5. GLM writes labels, new parts and the timeline.
+
+Traps found on the way:
+
+- Grid numbers must be pixels of the shown image. Shares of 1000 gave wrong
+  boxes on wide images, because the model reads pixels.
+- A screenshot crop must try the plain background fill first. `rembg` keeps only
+  the brightest chip of a board. Keep the largest connected piece.
+- The camera must stay near the photo angle: yaw within 24, pitch within -6 to 16.
+- Take screenshots at scale 3 or the texture is soft.
+- Stock sites carry watermarks, `draw.py` filters them. Web photos shown to users
+  are a copyright risk. A user's own screenshot and CC images are the safe case.
+
+Hard test of pure Chalk with no kit and no blueprint, 16 odd objects: 94 % blind
+hit, 4.4 score, 23 s. See `versions/v10_kontextbild`.
+
 ## Open work
 
 - Port the engine to Dart and add a chat block. Render time on phones is unknown.

@@ -59,7 +59,26 @@ FRESH = {
     'cow': ('Zeichne eine Kuh in 3D.', 'cow|kuh|cattle|bull'),
     'tram': ('Draw a modern city tram in 3D.', 'tram|streetcar|train|strassenbahn|light rail'),
 }
+WEIRD = {
+    'toaster': ('Zeichne einen Toaster in 3D.', 'toaster'),
+    'barrow': ('Draw a wheelbarrow in 3D.', 'wheelbarrow|barrow|schubkarre'),
+    'zeppelin': ('Zeichne einen Zeppelin in 3D.', 'zeppelin|airship|blimp|dirigible'),
+    'gnome': ('Draw a garden gnome in 3D.', 'gnome|zwerg|dwarf'),
+    'tap': ('Zeichne einen Wasserhahn in 3D.', 'faucet|tap|wasserhahn'),
+    'gumball': ('Draw a gumball machine in 3D.', 'gumball|candy|kaugummi'),
+    'gondola': ('Zeichne eine venezianische Gondel in 3D.', 'gondola|gondel|boat'),
+    'stapler': ('Draw a desk stapler in 3D.', 'stapler|hefter|tacker'),
+    'mushroom': ('Zeichne einen Fliegenpilz in 3D.', 'mushroom|pilz|toadstool|fungus|amanita'),
+    'pyramid': ('Draw the Great Sphinx of Giza in 3D.', 'sphinx'),
+    'lobster': ('Zeichne einen Hummer (das Tier) in 3D.', 'lobster|hummer|crayfish'),
+    'accordion': ('Draw an accordion in 3D.', 'accordion|akkordeon|concertina|bellows'),
+    'skeleton': ('Zeichne einen menschlichen Schädel in 3D.', 'skull|schädel|cranium'),
+    'teapot': ('Draw a Japanese cast iron teapot in 3D.', 'teapot|kettle|tea'),
+    'snail': ('Zeichne eine Schnecke mit Haus in 3D.', 'snail|schnecke'),
+    'trebuchet': ('Draw a medieval trebuchet in 3D.', 'trebuchet|catapult|siege'),
+}
 OBJECTS.update(FRESH)
+OBJECTS.update(WEIRD)
 CORE = ['tank', 'f35', 'heli', 'excavator', 'car', 'guitar', 'horse', 'elephant', 'locomotive', 'microscope', 'ship', 'tractor']
 
 
@@ -316,7 +335,7 @@ def main():
     ap.add_argument('--tasks', default='core')
     ap.add_argument('--judge', default='qwen3.8-max')
     a = ap.parse_args()
-    tasks = CORE if a.tasks == 'core' else list(FRESH) if a.tasks == 'fresh' else [n for n in OBJECTS if n not in FRESH] if a.tasks == 'all' else a.tasks.split(',')
+    tasks = CORE if a.tasks == 'core' else list(FRESH) if a.tasks == 'fresh' else list(WEIRD) if a.tasks == 'weird' else [n for n in OBJECTS if n not in FRESH and n not in WEIRD] if a.tasks == 'all' else a.tasks.split(',')
     base = Path(a.out)
     for c in a.configs.split(','):
         run_cfg(c, CONFIGS[c], tasks, base, a.judge)

@@ -52,11 +52,15 @@ export function checkTimeline(tl, parts, errors) {
   const known = new Set(parts.pivots.keys());
   for (const s of tl.steps) {
     for (const op of s.ops) {
-      if (!['move', 'osc', 'spin', 'show', 'hide', 'pulse', 'camera'].includes(op.cmd)) errors.push(`line ${op.line}: unknown action "${op.cmd}". Actions: move osc spin show hide pulse camera`);
-      else if (op.cmd !== 'camera' && !known.has(op.args[0])) errors.push(`line ${op.line}: ${op.cmd}: no part "${op.args[0]}"`);
+      if (!['move', 'osc', 'spin', 'drive', 'show', 'hide', 'pulse', 'camera'].includes(op.cmd)) errors.push(`line ${op.line}: unknown action "${op.cmd}". Actions: move osc spin show hide pulse camera`);
+      else if (op.cmd === 'drive' ? !parts.gearsets.has(op.args[0]) : op.cmd !== 'camera' && !known.has(op.args[0])) errors.push(`line ${op.line}: ${op.cmd}: no part "${op.args[0]}"`);
     }
   }
 }
+
+// A film at 15 frames shows a fast rotor as standing still, like a wagon wheel.
+// The shown speed is capped so that the eye can follow the turn.
+const shown = (turns, step) => Math.sign(turns) * Math.min(Math.abs(turns), 1.1 * step.dur);
 
 // Time past the end gives the final pose.
 export function pose(tl, parts, time) {
@@ -76,8 +80,18 @@ export function pose(tl, parts, time) {
         const b = nums(k.by, [0, 0, 0]), n = Number(k.cycles ?? 1), phase = Number(k.phase ?? 0);
         const v = 0.5 - 0.5 * Math.cos((raw * n + phase) * Math.PI * 2);
         st.off = st.off.map((x, i) => x + b[i] * v);
+      } else if (op.cmd === 'drive') {
+        // Meshing gears: the second one turns the other way, at the tooth ratio.
+        const set = parts.gearsets.get(id);
+        if (set) {
+          const turns = shown(Number(k.turns ?? 1), s);
+          const A = get(set.a), B = get(set.b);
+          A.ang += raw * turns * Math.PI * 2; A.axis = [0, 0, 1];
+          B.ang -= raw * turns * set.ratio * Math.PI * 2; B.axis = [0, 0, 1];
+        }
       } else if (op.cmd === 'spin') {
-        const turns = Number(k.turns ?? 1);
+        const inMech = s.ops.some((o) => o.cmd === 'osc');
+        const turns = inMech ? Number(k.turns ?? 1) : shown(Number(k.turns ?? 1), s);
         st.ang += raw * turns * Math.PI * 2;
         st.axis = k.axis ? { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] }[k.axis] : parts.axes.get(id);
       } else if (op.cmd === 'show') {
@@ -103,9 +117,10 @@ export function pose(tl, parts, time) {
     }
     return m;
   };
+  const gone = (id) => { const st = state.get(id); return st ? Math.min(1, Math.hypot(...st.off) * 3) : 0; };
   const xf = linkPose(parts, motion);
   const tint = (i) => Math.max(0, ...parts[i].path.map((id) => state.get(id)?.glow ?? 0));
-  return { xf, tint };
+  return { xf, tint, gone };
 }
 
 // Camera keys: each `camera` action blends from the previous key over its step.
