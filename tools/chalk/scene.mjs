@@ -432,6 +432,9 @@ export function describeStroke(r, pts) {
       const total = m.res.stats.filter((s) => s.id === id).reduce((t, s) => t + s.px, 0);
       if (px / total >= 0.35) hits.set(id, px / total);
     }
+    // The part under the centre always counts, so a small mark on a big part hits it.
+    const middle = m.res.idAt((box[0] + box[2]) / 2 - n.x, (box[1] + box[3]) / 2 - n.y);
+    if (middle) hits.set(middle, Math.max(hits.get(middle) ?? 0, 1));
   }
   const list = [...hits.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id).slice(0, 6);
   return `user ${closed ? 'circled' : 'drew a line over'} ${list.join(', ') || 'empty space'} at ${box.map(Math.round).join(',')}`;
