@@ -1,118 +1,87 @@
-# Visual canvas: a shared drawing channel between user and AI
+# Chalk: a shared visual channel between user and AI
 
-Status: plan, nothing built. Date: 2026-10-30.
+Status: working prototype in `tools/chalk/`, tested with GLM 5.3 Flash.
+It is not in the app yet. Date: 2026-10-30.
 
 ## Goal
 
-The user draws or marks something. The AI sees it and draws back. The loop
-repeats. GLM 5.3 Flash (`z-ai/glm-5.3-flash`, `supports_vision: true`; plain
-`glm-5.3` has no vision) must do this with no training and a small prompt.
+The user asks, draws or marks something. The AI draws an answer, sees it, and
+corrects it. GLM 5.3 Flash must do this with no training. No 3D assets, no
+second generator, no GPU, no Excalidraw format.
 
-Scope: canvas inside the app. No overlay on the user's desktop.
+## Idea
 
-Reference: heyclicky "real-time graphics" (https://youtu.be/YlW_-hdw7hs,
-2026-10-29). The engine is private. The open-source `farzaa/clicky` does not
-contain it. The 3D scenes in the video look like generated primitives with
-labels on 3D points. This is an inference from the frames, not a known fact.
+The model does not draw pixels and does not place things. It writes short
+lines. Each line names a part. The engine does the rest:
 
-## Current state
+- **2D:** flex layout (`row`, `col`, `card`), wrapped rows, arrows by id, label
+  space between neighbours, hand-drawn lines.
+- **Sketch:** free strokes (`curve`, `shape`, `poly`) with local coordinates.
+- **3D:** parts from a closed catalogue (`loft`, `limb`, `lathe`, `extrude`,
+  `fan`, `gear`, `port` and more), with `repeat`, `ring`, `mirror`. One line
+  gives a rotor with 22 blades. Nothing is loaded, every model is text.
+- **Render:** a CPU z-buffer with cel shading, edge lines from the id, depth and
+  normal buffers, a soft shadow, cutaways and exploded views. Labels sit in two
+  columns with leader lines. This is the look of the reference video, and it
+  costs a few hundred lines. A render takes about 0.3 s on one CPU core.
 
-- `markdraw` (`vendor/markdraw`) renders and edits. It has Excalidraw import
-  and export, PNG and SVG export, and a text format.
-- `artifact_manager` with raw Excalidraw JSON (`lib/services/tool_executor.dart`,
-  `_excalidrawSchemaText`). The model must set pixel coordinates. A change is a
-  full rewrite. The model gets no image and no check of the result.
-- `technical_drawing` is a separate JSON format for DIN drawings.
+## Files
 
-## Design
+| File | Purpose |
+|---|---|
+| `parse.mjs` | Line parser, edit commands. Bad lines never stop a render |
+| `geom.mjs` | 3D catalogue, shape to triangles |
+| `raster.mjs` | Software renderer, part statistics, floating part check |
+| `scene.mjs` | Layout, SVG output, text feedback, `describeStroke` |
+| `PROMPT.md` | System prompt with 8 worked examples, about 13 000 characters |
+| `eval.py` | Draw, feedback, fix loop over the task list |
+| `loop.mjs`, `mark.mjs`, `stroke.py`, `shot.py` | Loop step, user mark test, SVG to PNG |
+| `chalk.test.mjs` | Tests: `node --test` in `tools/chalk` |
 
-### Format
+Run one request:
 
-A line-based format with a closed catalogue. The model names things and
-relations. A solver sets the coordinates.
-
-```text
-scene "Turbofan"
-box fan "Fan"
-box comp "Compressor"
-box burn "Combustor"
-row fan comp burn
-fan -> comp "air"
-note burn "fuel ignites here"
+```bash
+python3 tools/chalk/eval.py _scratch/out --effort high --ask "Zeig einen Panzer in 3D"
 ```
 
-Rules:
+The key file is `_scratch/rtgfx/.melious_key` (gitignored). Melious API:
+`https://api.melious.ai/v1`, model id `glm-5.3-flash`. Slugs like
+`z-ai/glm-5.3-flash` give a 404 there.
 
-- One element on each line, with a stable id. The renderer can draw each
-  complete line while the stream runs. It drops an incomplete last line.
-- Edits are lines too (`move`, `set`, `delete`), so a change is not a rewrite.
-- Optional hints, no required coordinates.
-- Excalidraw stays an export and import target, not the model's format.
+## Feedback loop
 
-### Feedback loop
+Each draw returns element ids, parts with visible pixels, ERRORS and LINTS
+(unknown keys, floating parts, hidden parts, overflow, arrows through elements)
+and the image. The model answers with edits (`set`, `del`, `replace`, `add`) or
+`DONE`. An edit round that adds issues is rejected, so a fix cannot damage the
+picture. Rejecting is required: without it two sketches came out empty.
 
-Each draw returns text first, because this is cheap and exact:
+User marks become text in the model's own ids plus the image, for example:
+`user circled pouch, beak at 572,159,682,231`. A 3D part counts only if the
+mark holds at least 35 % of its visible pixels.
 
-- Element list with ids and positions.
-- Lints: text overflow, overlaps, loose arrows, elements out of frame.
+## Results, 18 tasks, GLM 5.3 Flash
 
-The model asks for an image with `look`, normally once at the end. Research
-shows that a render after each step can make untrained models worse.
-(https://arxiv.org/html/2604.20730v1)
+Six tasks are holdouts with no matching example (tank, drone, phone, boat, hand,
+lighthouse).
 
-### User input
+| Effort | Median time for all rounds | Median output tokens | Quality by eye |
+|---|---|---|---|
+| low | about 10 s | about 1 200 | 2D good, physical objects often wrong |
+| high | 22 s | 3 255 | Most physical objects recognizable |
 
-User strokes stay in the scene. The app sends what they touch, as text, plus a
-small PNG: "user circled `comp`". Pins point at an element. The model can point
-back with a tag.
+Median input over all rounds is 18 789 tokens, because the prompt is sent in
+each round. Output speed was about 180 tokens/s by rough estimate. The numbers
+are from one run on 2026-10-30. Quality was judged by one person from images,
+not by a metric.
 
-### 3D
+Weak results at high effort: anatomy (heart, hand) and hard silhouettes (F-35).
 
-A second catalogue, same line format: `box`, `cylinder`, `extrude`, `lathe`,
-with position and label. No assets needed for the first version.
+## Open work
 
-Renderer order:
-
-1. `flutter_scene` (0.24.3). Test first: it needs Flutter GPU, so check Linux,
-   Android and web.
-2. Fallback: own `CustomPainter` renderer with projection, depth sort and flat
-   shading.
-
-glTF assets and text-to-3D are optional additions, later.
-
-## Steps
-
-1. Benchmark, no UI: 20 prompts over 3 formats (Excalidraw JSON, Mermaid or D2,
-   the new format) on GLM 5.3 Flash. Measure render rate, lint errors, tokens
-   and time. **No data for GLM 5.3 Flash exists, so this decides the format.**
-2. Parser, solver and output to `markdraw`, with streaming in a chat block.
-3. Feedback tools: lints, `look`, edit lines.
-4. User strokes and pins as input.
-5. 3D: renderer test, then the catalogue.
-
-## Prior art
-
-| Project | What to take | Limit |
-|---|---|---|
-| excalidraw-mcp (MIT) | Streaming, drop incomplete element, checkpoints | Model still sets coordinates |
-| tldraw agent kit | Typed actions, shapes in detail levels, lints, pins | License needs watermark or business plan |
-| Feynman + Penrose | Content and layout apart: 97.0 % compile, 87.5 % yield with GPT-4o-mini | Research, no direct comparison with coordinates |
-| OpenUI Lang (MIT) | Compact line format, 52 % fewer tokens (own benchmark) | UI only, no image feedback |
-| A2UI (Apache-2.0) | Closed component catalogue | UI only |
-| D2 (MPL-2.0), Pintora (MIT) | Layout from text | No feedback loop |
-
-Links:
-
-- https://github.com/excalidraw/excalidraw-mcp
-- https://tldraw.dev/starter-kits/agent
-- https://tldraw.dev/blog/agents-cant-point
-- https://arxiv.org/html/2603.12597 (Feynman)
-- https://arxiv.org/html/2605.15677v1 (GLM-4.6V on mxGraph: ESR 0.747)
-- https://github.com/thesysdev/openui
-- https://heyclicky.com/changelog
-
-## Known gaps
-
-- No paper compares semantic formats with coordinates directly on a canvas.
-- No tweets or HN threads about the Clicky engine were read.
-- `flutter_scene` is not tested on our targets.
+- Port the engine to Dart and add a chat block. Render time on phones is unknown.
+- Orbit by drag needs a lower resolution while dragging.
+- Stream lines to the canvas. High effort thinks first, so a first picture can
+  come from a fast low-effort draft and be replaced.
+- Arrows between elements that are not neighbours can cross other elements. The
+  lint reports it, the router does not avoid it yet.

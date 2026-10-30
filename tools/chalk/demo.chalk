@@ -1,0 +1,17 @@
+canvas paper
+title "Turbofan"
+row gap=30
+  col gap=16
+    box a "Air" color=blue
+    box b "Thrust" color=orange
+  model eng 860 440 view=28,16 cut=z>0
+    group casing color=alu label="Casing" shell=1
+      lathe nac pts=-2.6,1.1 -2,1.25 2,1.05 3,0.7 smooth=1 axis=x
+    fan f1 blades=22 r=1.05 hub=0.3 h=0.4 axis=x at=-1.9,0,0 color=titanium label="Fan"
+    repeat 5 step=0.25,0,0 at=-1.1,0,0
+      fan c blades=26 r=0.55 hub=0.33 h=0.14 axis=x color=steel
+    cyl burn r=0.55 h=0.7 axis=x at=0.5,0,0 color=orange label="Combustor"
+    repeat 3 step=0.28,0,0 at=1.2,0,0
+      fan t blades=20 r=0.6 hub=0.3 h=0.16 axis=x color=darkmetal
+    cyl shaft r=0.1 h=4.6 axis=x at=0.3,0,0 color=dark label="Shaft"
+arrow a b "through the core"

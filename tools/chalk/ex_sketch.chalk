@@ -1,0 +1,13 @@
+canvas paper
+title "A house at sunset"
+sketch scene 620 340
+  dot 480,80 r=46 fill=yellow color=orange
+  curve pts=0,290 150,262 320,280 470,258 620,282 color=green sw=3
+  poly pts=120,270 120,160 250,160 250,270 fill=orange
+  poly pts=102,166 185,92 268,166 fill=red
+  poly pts=170,270 170,212 202,212 202,270 fill=#8a5a3c
+  dot 225,195 r=13 fill=blue
+  curve pts=380,270 382,210 color=#7a5230 sw=5
+  shape pts=380,120 340,160 345,205 382,216 420,206 426,160 fill=green
+  curve pts=40,60 60,48 80,60 100,48 120,60 color=#555
+  label 300,325 "Warm light from the west" size=18

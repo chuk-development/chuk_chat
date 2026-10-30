@@ -1,0 +1,10 @@
+canvas white
+title "Ballpoint pen, exploded"
+model pen 860 300 view=20,14 explode=0.5
+  lathe barrel pts=-3,0.34 2,0.34 3,0.2 axis=x color=blue label="Barrel"
+  group tip color=steel label="Tip" at=5,0,0
+    lathe nose pts=-1,0.34 1,0.1 axis=x
+  spring spr r=0.14 wire=0.02 turns=9 h=1.4 axis=x at=8,0,0 color=steel label="Spring"
+  group ink at=-8,0,0 label="Ink refill"
+    cyl tubei r=0.09 h=5 axis=x color=orange
+    cone point r=0.09 h=0.4 axis=x at=2.7,0,0 color=steel
