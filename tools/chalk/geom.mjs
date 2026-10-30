@@ -223,7 +223,7 @@ function tube(pts, r, seg, flat = 1, smooth = true) {
     const ring = [];
     for (let k = 0; k < seg; k++) {
       const a = (k / seg) * Math.PI * 2;
-      const cu = Math.cos(a) * r * flat, cv = Math.sin(a) * r;
+      const cu = Math.cos(a) * r, cv = (Math.sin(a) * r) / flat; // flat keeps the width and thins the tube
       ring.push([p[0] + u[0] * cu + v[0] * cv, p[1] + u[1] * cu + v[1] * cv, p[2] + u[2] * cu + v[2] * cv]);
     }
     if (prev) for (let k = 0; k < seg; k++) m.quad(prev[k], prev[(k + 1) % seg], ring[(k + 1) % seg], ring[k]);

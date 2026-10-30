@@ -1,6 +1,7 @@
 # Chalk: a shared visual channel between user and AI
 
-Status: working prototype in `tools/chalk/`, tested with GLM 5.3 Flash.
+Status: working prototype in `tools/chalk/`, tested with GLM 5.3 Flash and
+DeepSeek V4.1 Flash.
 It is not in the app yet. Date: 2026-10-30.
 
 ## Goal
@@ -33,7 +34,7 @@ lines. Each line names a part. The engine does the rest:
 | `geom.mjs` | 3D catalogue, shape to triangles |
 | `raster.mjs` | Software renderer, part statistics, floating part check |
 | `scene.mjs` | Layout, SVG output, text feedback, `describeStroke` |
-| `PROMPT.md` | System prompt with blueprints and 8 worked examples, about 23 000 characters |
+| `PROMPT.md` | System prompt with blueprints and 8 worked examples, about 23 000 characters. `PROMPT_PLUS.md` adds master examples |
 | `eval.py` | Draw, feedback, fix loop over the task list |
 | `loop.mjs`, `mark.mjs`, `stroke.py`, `shot.py` | Loop step, user mark test, SVG to PNG |
 | `kits.mjs`, `anim.mjs`, `video.mjs` | Macro kits, timeline, film export |
@@ -84,6 +85,31 @@ models. Kimi and Qwen answer 429 with this plan.
 | DeepSeek V4.1 Flash 1017, high, photos | 96 % | 4.5 | 40 s | 5 861 |
 | DeepSeek V4 Flash 0731, high | 71 % | 3.3 | 182 s | 26 316 |
 
+Results on 12 new objects that are in no prompt (motorbike, crane, fire truck,
+penguin, T. rex, violin, sailboat, robot arm, shuttle, bulldozer, cow, tram):
+
+| Pipeline | Hit | Score | Time | Output tokens |
+|---|---|---|---|---|
+| GLM Flash, high, photos, 3 drafts | 100 % | 4.3 | 22 s | 8 265 |
+| GLM Flash, same, plus master examples | 100 % | 4.3 | 22 s | 9 321 |
+| DeepSeek 1017, high, photos | 100 % | 4.2 | see note | 5 538 |
+| DeepSeek 1017, same, plus master examples | 92 % | 4.9 | 59 s | 9 546 |
+
+Note: the 203 s median of the plain DeepSeek run is rate limit wait, not model
+time. GLM with 3 drafts and photos reaches 96 % on the first 24 objects.
+
+Recommended pipeline:
+
+1. One cheap call names the subject. A library model is used if it exists.
+2. The server fetches 3 photos and a fact text, one at a time, cached.
+3. GLM Flash writes 3 drafts in parallel at high effort. The judge picks one.
+   The user sees a picture after about 22 s.
+4. DeepSeek V4.1 Flash 1017 at high effort, with the master examples, replaces
+   the picture after about 1 minute.
+5. Good results go into the library. A repeated subject is then instant.
+
+No critic round. Keep `max_tokens` at 48 000.
+
 Findings:
 
 - The score is weak: the GLM judge gives almost every picture 3 to 5, and a
@@ -101,11 +127,15 @@ Findings:
 ## Open work
 
 - Port the engine to Dart and add a chat block. Render time on phones is unknown.
+- T3 restarts kill background jobs. Run long tests as a systemd unit:
+  `systemd-run --user --unit=chalk-bench --collect ./chain.sh`.
 - Orbit by drag needs a lower resolution while dragging.
 - Stream lines to the canvas. Show a fast GLM picture first, then replace it
   with the DeepSeek picture.
 - Cache good results as library models, so a repeated subject is free and instant.
 - Fetch reference photos on the server. Check the image license before any
   image reaches a user. Today the photos only go to the model.
+- In the helicopter film a label can stay on the pad for a moment.
+- Anatomy (cow, hand) stays the weakest group.
 - Arrows between elements that are not neighbours can cross other elements. The
   lint reports it, the router does not avoid it yet.

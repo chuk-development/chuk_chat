@@ -60,7 +60,7 @@ Shapes. All take: id first, then at=x,y,z rot=rx,ry,rz scale=s color= mat=metal|
   body id top=x,y ... bottom=x,y ... width=x,w ... square=1   # THE main shape for vehicles, hulls, fuselages. Draw the side view: the upper outline, the lower outline, and the width along x. square=1 for cars, tanks, trucks; leave out for round bodies.
   plate id pts=x,y ... h=thickness            # flat outline seen from the side, thickness along z: arms, brackets, fins, guitar bodies, bucket, rudders, signs.
   extrude id pts=x,z ... h=thickness axis=    # flat outline seen from above, thickness along y: PCB, wings, floors.
-  tube id pts=x,y,z ... r= flat=             # pipe or cable along a smooth path. flat=6 makes a ribbon.
+  tube id pts=x,y,z ... r= flat=             # pipe or cable along a smooth path. flat=8 makes a flat ribbon, r is half its width.
   blob id k=0.5                               # organic skin: indented limb and sphere children melt into ONE smooth surface. Use it for every animal, organ, person, fruit, cloud, rock. Children may use mirror z. k is how much they melt: 0.3 tight, 0.5 normal, 1 soft.
   limb id pts=x,y,z,radius ...               # smooth body with a radius at each point: legs, arms, necks, tails, vessels, branches, organs. The best shape for anything living.
   port id type=usb|usbc|hdmi|ethernet|jack|sd|fpc|power size=1   # connector on a board, opening faces +z, about 1 unit = 1 cm

@@ -45,6 +45,21 @@ OBJECTS = {
     'plane': ('Zeichne ein Passagierflugzeug in 3D.', 'plane|airliner|aircraft|airplane|flugzeug|jet'),
     'tractor': ('Draw a farm tractor in 3D.', 'tractor|traktor'),
 }
+FRESH = {
+    'motorbike': ('Zeichne ein Motorrad in 3D.', 'motorcycle|motorbike|motorrad|bike'),
+    'crane': ('Draw a mobile crane truck in 3D.', 'crane|kran'),
+    'firetruck': ('Zeichne ein Feuerwehrauto in 3D.', 'fire|feuerwehr'),
+    'penguin': ('Draw a penguin in 3D.', 'penguin|pinguin'),
+    'dino': ('Zeichne einen Tyrannosaurus Rex in 3D.', 'dinosaur|rex|dino'),
+    'violin': ('Draw a violin in 3D.', 'violin|geige|fiddle|cello|viola'),
+    'sailboat': ('Zeichne ein Segelboot in 3D.', 'sail|segel|boat|yacht'),
+    'robotarm': ('Draw an industrial robot arm in 3D.', 'robot|arm'),
+    'shuttle': ('Zeichne das Space Shuttle in 3D.', 'shuttle|orbiter|spacecraft'),
+    'bulldozer': ('Draw a bulldozer in 3D.', 'bulldozer|dozer|raupe'),
+    'cow': ('Zeichne eine Kuh in 3D.', 'cow|kuh|cattle|bull'),
+    'tram': ('Draw a modern city tram in 3D.', 'tram|streetcar|train|strassenbahn|light rail'),
+}
+OBJECTS.update(FRESH)
 CORE = ['tank', 'f35', 'heli', 'excavator', 'car', 'guitar', 'horse', 'elephant', 'locomotive', 'microscope', 'ship', 'tractor']
 
 
@@ -72,6 +87,8 @@ def call(model, messages, effort=None, max_tokens=48000, temperature=0.4):
 def prompt(size):
     p = (HERE / 'PROMPT.md').read_text()
     head, *rest = re.split(r'(?=^# Example \d)', p, flags=re.M)
+    if size == 'plus':
+        return p + (HERE / 'PROMPT_PLUS.md').read_text()
     if size == 'full':
         return p
     if size == 'mid':
@@ -299,7 +316,7 @@ def main():
     ap.add_argument('--tasks', default='core')
     ap.add_argument('--judge', default='qwen3.8-max')
     a = ap.parse_args()
-    tasks = CORE if a.tasks == 'core' else list(OBJECTS) if a.tasks == 'all' else a.tasks.split(',')
+    tasks = CORE if a.tasks == 'core' else list(FRESH) if a.tasks == 'fresh' else [n for n in OBJECTS if n not in FRESH] if a.tasks == 'all' else a.tasks.split(',')
     base = Path(a.out)
     for c in a.configs.split(','):
         run_cfg(c, CONFIGS[c], tasks, base, a.judge)

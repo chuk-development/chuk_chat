@@ -260,7 +260,14 @@ function drawModel(n, ctx, theme) {
     }
     const P = pose(tl, parts, time);
     const centerOf = (id) => {
-      if (id && parts.pivots.has(id)) return parts.pivots.get(id);
+      if (id && parts.pivots.has(id)) {
+        // Follow the target while it moves, or the camera loses it.
+        const piv = parts.pivots.get(id);
+        const i = parts.findIndex((p) => p.path.includes(id));
+        const M = i >= 0 ? P.xf(i) : null;
+        if (!M || M === 'hidden') return piv;
+        return [0, 1, 2].map((c) => M[c] * piv[0] + M[c + 3] * piv[1] + M[c + 6] * piv[2] + M[c + 9]);
+      }
       return [0, 1, 2].map((c) => (box[0][c] + box[1][c]) / 2);
     };
     const end = Math.min(time, tl.total);
