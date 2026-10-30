@@ -33,9 +33,13 @@ lines. Each line names a part. The engine does the rest:
 | `geom.mjs` | 3D catalogue, shape to triangles |
 | `raster.mjs` | Software renderer, part statistics, floating part check |
 | `scene.mjs` | Layout, SVG output, text feedback, `describeStroke` |
-| `PROMPT.md` | System prompt with 8 worked examples, about 13 000 characters |
+| `PROMPT.md` | System prompt with blueprints and 8 worked examples, about 23 000 characters |
 | `eval.py` | Draw, feedback, fix loop over the task list |
 | `loop.mjs`, `mark.mjs`, `stroke.py`, `shot.py` | Loop step, user mark test, SVG to PNG |
+| `kits.mjs`, `anim.mjs`, `video.mjs` | Macro kits, timeline, film export |
+| `bench.py`, `pair.py`, `refs.py`, `configs.json` | Benchmark, head-to-head, photos and facts, pipelines |
+| `library/` | Vetted models, today the Raspberry Pi 5 |
+| `versions/` | Result of each iteration, pictures and films |
 | `chalk.test.mjs` | Tests: `node --test` in `tools/chalk` |
 
 Run one request:
@@ -60,28 +64,48 @@ User marks become text in the model's own ids plus the image, for example:
 `user circled pouch, beak at 572,159,682,231`. A 3D part counts only if the
 mark holds at least 35 % of its visible pixels.
 
-## Results, 18 tasks, GLM 5.3 Flash
+## Results, 24 objects, 2026-10-30
 
-Six tasks are holdouts with no matching example (tank, drone, phone, boat, hand,
-lighthouse).
+`hit` is blind recognition: a judge sees the picture with no title and no labels
+and names the object. Time is the median per request. All runs use the Melious
+plan, so the included models are GLM 5.3, GLM 5.3 Flash and the DeepSeek Flash
+models. Kimi and Qwen answer 429 with this plan.
 
-| Effort | Median time for all rounds | Median output tokens | Quality by eye |
-|---|---|---|---|
-| low | about 10 s | about 1 200 | 2D good, physical objects often wrong |
-| high | 22 s | 3 255 | Most physical objects recognizable |
+| Pipeline | Hit | Score | Time | Output tokens |
+|---|---|---|---|---|
+| GLM Flash, low, 3 drafts | 88 % | 3.8 | 6 s | 1 575 |
+| GLM Flash, high, 1 draft | 83 % | 3.9 | 9 s | 1 638 |
+| GLM Flash, high, photos, 1 draft | 100 % | 4.0 | 13 s | 2 819 |
+| GLM Flash, high, 3 drafts, critic round | 96 % | 4.1 | 24 s | 8 731 |
+| GLM Flash, high, build sheet, 3 drafts, critic | 100 % | 4.0 | 38 s | 9 736 |
+| GLM Flash, high, photos, sheet, 3 drafts, critic | 92 % | 4.3 | 40 s | 11 271 |
+| DeepSeek V4.1 Flash, high | 100 % | 4.6 | 46 s | 10 579 |
+| DeepSeek V4.1 Flash 1017, high | 96 % | 4.6 | 42 s | 6 599 |
+| DeepSeek V4.1 Flash 1017, high, photos | 96 % | 4.5 | 40 s | 5 861 |
+| DeepSeek V4 Flash 0731, high | 71 % | 3.3 | 182 s | 26 316 |
 
-Median input over all rounds is 18 789 tokens, because the prompt is sent in
-each round. Output speed was about 180 tokens/s by rough estimate. The numbers
-are from one run on 2026-10-30. Quality was judged by one person from images,
-not by a metric.
+Findings:
 
-Weak results at high effort: anatomy (heart, hand) and hard silhouettes (F-35).
+- The score is weak: the GLM judge gives almost every picture 3 to 5, and a
+  head-to-head vote is near 50 % for most pairs. Judge by eye as well.
+- High variance between runs of one object is the main GLM problem.
+- By eye DeepSeek with photos gives the best pictures.
+- A critic round can damage a good picture. Tank and tractor came apart.
+- `max` effort gave worse results at 8 times the time, and DeepSeek needs
+  `max_tokens` of 48 000: at 16 000 the reasoning used all tokens and the answer
+  was empty.
+- Wikimedia answers 429 to bursts. Fetch photos one at a time and cache them.
+- Facts need a source. A model places a connector from memory at the wrong
+  place. Photos, facts and vetted models in `library/` fix this.
 
 ## Open work
 
 - Port the engine to Dart and add a chat block. Render time on phones is unknown.
 - Orbit by drag needs a lower resolution while dragging.
-- Stream lines to the canvas. High effort thinks first, so a first picture can
-  come from a fast low-effort draft and be replaced.
+- Stream lines to the canvas. Show a fast GLM picture first, then replace it
+  with the DeepSeek picture.
+- Cache good results as library models, so a repeated subject is free and instant.
+- Fetch reference photos on the server. Check the image license before any
+  image reaches a user. Today the photos only go to the model.
 - Arrows between elements that are not neighbours can cross other elements. The
   lint reports it, the router does not avoid it yet.
