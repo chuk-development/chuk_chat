@@ -1,0 +1,41 @@
+# Raspberry Pi 5, checked against a top photo. 1 unit = 1 cm, board 8.5 x 5.6.
+# Top edge -z: GPIO. Right edge +x: USB and Ethernet. Bottom edge +z: USB-C, 2 x micro HDMI.
+# Left edge -x: PCIe FPC. Between HDMI and Ethernet: cam0 and cam1, the two 22 pin camera sockets.
+# Latch parts cam0_latch and cam1_latch lift up to open a socket.
+group rpi5
+  box board size=8.5,0.16,5.6 round=0.3 color=pcb
+  scatter smd n=70 size=0.13 area=7.4,4.4 at=0,0.11,0
+  mirror x
+    mirror z
+      cyl pad r=0.3 h=0.02 at=2.9,0.09,2.45 color=gold
+  box soc size=1.6,0.1,1.6 at=-1.2,0.16,0.4 color=alu
+  box rp1 size=1.15,0.1,1.15 at=1.25,0.14,-0.8 color=dark
+  box ram size=1.45,0.1,1.05 at=-1.15,0.14,-1.2 color=black
+  box pmic size=0.6,0.06,0.6 at=-3.2,0.12,1.2 color=dark
+  box wifi size=1.0,0.09,1.2 at=-3.2,0.14,-1.5 color=alu
+  header gpio n=20 rows=2 pitch=0.254 pinh=0.85 at=-1.2,0.15,-2.45 color=black
+  box fanconn size=0.3,0.3,0.45 at=2.1,0.2,-2.35 color=plastic
+  group usbc at=-3.3,0.23,2.5
+    port pwr type=usbc color=steel
+  group hdmi0 at=-1.85,0.2,2.55
+    port hd0 type=hdmi size=0.5 color=steel
+  group hdmi1 at=-0.6,0.2,2.55
+    port hd1 type=hdmi size=0.5 color=steel
+  box rtc size=0.4,0.25,0.3 at=-2.55,0.18,2.5 color=plastic
+  box uart size=0.4,0.25,0.3 at=-1.2,0.18,2.5 color=plastic
+  group cam0 at=0.3,0.2,1.8
+    box cam0_base size=0.35,0.14,1.65 color=plastic
+    box cam0_latch size=0.14,0.1,1.75 at=-0.1,0.11,0 color=dark
+  group cam1 at=0.95,0.2,1.8
+    box cam1_base size=0.35,0.14,1.65 color=plastic
+    box cam1_latch size=0.14,0.1,1.75 at=-0.1,0.11,0 color=dark
+  group usb0 at=3.5,0.82,-2.0
+    port u0 type=usb rot=0,90,0 color=steel
+  group usb1 at=3.5,0.82,-0.2
+    port u1 type=usb rot=0,90,0 color=steel
+  group eth at=3.25,0.76,1.85
+    port et type=ethernet rot=0,90,0 color=steel
+  box pcie size=0.3,0.12,1.5 at=-4.0,0.15,-0.2 color=plastic
+  header poe n=2 rows=2 pitch=0.254 pinh=0.4 at=1.5,0.15,1.85 color=black
+  box button size=0.3,0.22,0.3 at=-4.05,0.18,1.6 color=dark
+  box leds size=0.25,0.08,0.4 at=-3.95,0.13,2.2 color=green

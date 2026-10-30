@@ -2,6 +2,7 @@
 // buffers, soft ground shadow. No GPU, no assets, small enough to port to Dart.
 import zlib from 'node:zlib';
 import { buildShape, SHAPES, COLORS3D, shapeKeys, isCommon } from './geom.mjs';
+import { expandKits } from './kits.mjs';
 import { nums } from './parse.mjs';
 
 const hex = (c) => {
@@ -48,14 +49,79 @@ const nodeMatrix = (kv) => {
 export function buildParts(model, errors) {
   const parts = [];
   const seen = new Set();
+  parts.pivots = new Map();
+  parts.axes = new Map();
+  const note = (id, m, axis) => {
+    if (!id || parts.pivots.has(id)) return;
+    parts.pivots.set(id, [m[9], m[10], m[11]]);
+    const a = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] }[String(axis ?? 'y').replace(/[^xyz]/g, '')] ?? [0, 1, 0];
+    parts.axes.set(id, [0, 1, 2].map((k) => m[k] * a[0] + m[k + 3] * a[1] + m[k + 6] * a[2]));
+  };
+  const boxes = new Map();
+  const scopes = [];
+  const grow = (id, b) => {
+    for (const s of scopes) s.add(id);
+    const cur = boxes.get(id);
+    if (!cur) { boxes.set(id, [b[0].slice(), b[1].slice()]); return; }
+    for (let c = 0; c < 3; c++) { cur[0][c] = Math.min(cur[0][c], b[0][c]); cur[1][c] = Math.max(cur[1][c], b[1][c]); }
+  };
+  const boundsOf = (list) => {
+    const lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
+    for (const p of list) for (let i = 0; i < p.tris.length; i += 3) for (let c = 0; c < 3; c++) { lo[c] = Math.min(lo[c], p.tris[i + c]); hi[c] = Math.max(hi[c], p.tris[i + c]); }
+    return [lo, hi];
+  };
+  // `on=hull+y:0.3,-0.2` puts a part on the +y face of hull. The numbers run from
+  // -1 to 1 along the other two axes. `sink` sets how far it goes into the parent.
+  const attach = (node, start, M) => {
+    const m = String(node.kv.on).match(/^(.+)([+-])([xyz])(?::(-?[\d.]+)(?:,(-?[\d.]+))?)?$/);
+    if (!m) { errors.push(`line ${node.line}: on= must look like hull+y or hull+y:0.3,0`); return; }
+    const parent = boxes.get(m[1]);
+    if (!parent) { errors.push(`line ${node.line}: on=: no part "${m[1]}" above this line. Known: ${[...boxes.keys()].slice(-12).join(' ')}`); return; }
+    const list = parts.slice(start);
+    if (!list.length) return;
+    const [lo, hi] = boundsOf(list);
+    const axis = 'xyz'.indexOf(m[3]);
+    const mirrored = [M[0], M[4], M[8]][axis] < 0;
+    const side = (m[2] === '+') !== mirrored ? 1 : -1;
+    const others = [0, 1, 2].filter((c) => c !== axis);
+    const sink = Number(node.kv.sink ?? 0.08) * (hi[axis] - lo[axis]);
+    const d = [0, 0, 0];
+    d[axis] = side > 0 ? parent[1][axis] - lo[axis] - sink : parent[0][axis] - hi[axis] + sink;
+    [m[4], m[5]].forEach((v, i) => {
+      const c = others[i];
+      const sign = [M[0], M[4], M[8]][c] < 0 ? -1 : 1;
+      const half = (parent[1][c] - parent[0][c]) / 2, mid = (parent[1][c] + parent[0][c]) / 2;
+      d[c] = mid + sign * Number(v ?? 0) * half - (lo[c] + hi[c]) / 2;
+    });
+    const at = node.kv.at && node.cmd !== 'group' ? [0, 0, 0] : [0, 0, 0];
+    void at;
+    for (const p of list) {
+      for (let i = 0; i < p.tris.length; i += 3) { p.tris[i] += d[0]; p.tris[i + 1] += d[1]; p.tris[i + 2] += d[2]; }
+    }
+    for (const p of list) for (const id of p.path) { const piv = parts.pivots.get(id); if (piv && !piv.moved) { piv[0] += d[0]; piv[1] += d[1]; piv[2] += d[2]; piv.moved = true; } }
+    for (const p of list) for (const id of p.path) { const piv = parts.pivots.get(id); if (piv) delete piv.moved; }
+    for (const p of list) for (const id of p.path) boxes.delete(id);
+    for (const p of list) { const b = boundsOf([p]); for (const id of p.path) grow(id, b); }
+  };
   const walk = (node, M, ctx, top) => {
     const { cmd, kv } = node;
-    const inh = { color: kv.color ?? ctx.color, mat: kv.mat ?? ctx.mat, label: ctx.label, group: ctx.group, shell: kv.shell ?? ctx.shell };
+    const start = parts.length;
+    const inh = { kit: node.kit || ctx.kit, color: kv.color ?? ctx.color, mat: kv.mat ?? ctx.mat, label: ctx.label, group: ctx.group, shell: kv.shell ?? ctx.shell, path: ctx.path ?? [] };
     if (cmd === 'group' || cmd === 'repeat' || cmd === 'ring' || cmd === 'mirror') {
       const id = kv.id ?? (cmd === 'group' ? node.args[0] : null);
       if (kv.label) { inh.label = kv.label; inh.group = id ?? `g${node.line}`; }
       const base = mul(M, nodeMatrix(kv));
-      const each = (m, i) => { for (const k of node.kids) walk(k, m, inh, top ?? `${node.line}:${i}`); };
+      if (id) { note(id, base, kv.axis); inh.path = [...inh.path, id]; }
+      // Every copy of a mirror or repeat has the same ids. Each copy sees only itself.
+      let prev = null;
+      const each = (m, i) => {
+        if (prev) for (const id of prev) boxes.delete(id);
+        const scope = new Set();
+        scopes.push(scope);
+        for (const k of node.kids) walk(k, m, inh, top ?? `${node.line}:${i}`);
+        scopes.pop();
+        prev = scope;
+      };
       if (cmd === 'group') {
         each(base, 0);
       } else if (cmd === 'repeat') {
@@ -75,6 +141,16 @@ export function buildParts(model, errors) {
         const s = [axis === 'x' ? -1 : 1, axis === 'y' ? -1 : 1, axis === 'z' ? -1 : 1];
         each(mul(scaleM(s), base), 1);
       }
+      if (kv.on) attach(node, start, M);
+      return;
+    }
+    if (cmd === 'link') {
+      // A rod that always spans two parts, also while they move.
+      const mesh = buildShape({ cmd: 'cyl', kv: { r: kv.r ?? '0.1', h: '1', seg: '16' }, args: [], kids: [] });
+      const t = new Float32Array(mesh.t.length);
+      for (let i = 0; i < t.length; i += 3) { t[i] = mesh.t[i]; t[i + 1] = mesh.t[i + 1] + 0.5; t[i + 2] = mesh.t[i + 2]; }
+      const id = node.args[0] ?? `link@${node.line}`;
+      parts.push({ id, color: hex(kv.color ?? ctx.color ?? 'steel'), mat: 'metal', label: kv.label, tris: t, top: top ?? `${node.line}`, line: node.line, path: [...(ctx.path ?? []), id], link: { a: kv.a, b: kv.b } });
       return;
     }
     if (!SHAPES.has(cmd)) {
@@ -90,6 +166,7 @@ export function buildParts(model, errors) {
       return;
     }
     const m = mul(M, nodeMatrix(kv));
+    note(node.args[0], m, kv.axis);
     const flip = m[0] * (m[4] * m[8] - m[5] * m[7]) - m[3] * (m[1] * m[8] - m[2] * m[7]) + m[6] * (m[1] * m[5] - m[2] * m[4]) < 0;
     const t = new Float32Array(mesh.t.length);
     for (let i = 0; i < t.length; i += 3) {
@@ -105,10 +182,14 @@ export function buildParts(model, errors) {
     seen.add(id);
     parts.push({
       id, color: hex(kv.color ?? ctx.color), mat: kv.mat ?? ctx.mat ?? (/(steel|alu|metal|titanium|copper|gold|brass)/.test(kv.color ?? ctx.color ?? '') ? 'metal' : 'matte'),
-      label: kv.label ?? ctx.label, group: kv.label ? null : ctx.group, shell: kv.shell ?? ctx.shell, tris: t, top: top ?? `${node.line}`, line: node.line,
+      label: kv.label ?? ctx.label, group: kv.label ? null : ctx.group, shell: kv.shell ?? ctx.shell, path: [...(ctx.path ?? []), id], kit: node.kit || ctx.kit, tris: t, top: top ?? `${node.line}`, line: node.line,
     });
+    { const b = boundsOf([parts.at(-1)]); for (const pid of parts.at(-1).path) grow(pid, b); }
+    if (kv.on) attach(node, start, M);
   };
-  for (const k of model.kids) walk(k, IDENT, {}, null);
+  for (const k of expandKits(model.kids.filter((c) => c.cmd !== 'anim'))) walk(k, IDENT, {}, null);
+  markGround(parts);
+  if (!model.kv.explode && !model.kids.some((c) => c.cmd === 'anim')) parts.repaired = snapFloating(parts.filter((p) => !p.ground && !p.link));
   return parts;
 }
 
@@ -147,12 +228,53 @@ function smoothNormals(tris, creaseCos = 0.72) {
   return out;
 }
 
+function hsl(h, s, l) {
+  const k = (n) => (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
+  const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1));
+  return [f(0) * 255, f(8) * 255, f(4) * 255];
+}
+
 const smoothstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const LIGHT = (() => { const l = [-0.45, 0.8, 0.55], n = Math.hypot(...l); return l.map((v) => v / n); })();
 
 // Writes a transparent RGBA image of the model plus part statistics.
+// A flat part much wider than everything else is ground: the camera ignores it.
+export function markGround(parts) {
+  const span = (p) => { const b = [1e9, -1e9, 1e9, -1e9, 1e9, -1e9]; for (let i = 0; i < p.tris.length; i += 3) for (let k = 0; k < 3; k++) { b[k * 2] = Math.min(b[k * 2], p.tris[i + k]); b[k * 2 + 1] = Math.max(b[k * 2 + 1], p.tris[i + k]); } return [b[1] - b[0], b[3] - b[2], b[5] - b[4]]; };
+  const spans = parts.map(span);
+  if (parts.length < 3) return;
+  parts.forEach((p, i) => {
+    const s = spans[i], foot = Math.max(s[0], s[2]);
+    // Compare with all other parts together, so a circuit board stays the object.
+    const others = parts.filter((_, j) => j !== i);
+    const lo = [1e9, 1e9], hi = [-1e9, -1e9];
+    for (const o of others) for (let v = 0; v < o.tris.length; v += 3) { lo[0] = Math.min(lo[0], o.tris[v]); hi[0] = Math.max(hi[0], o.tris[v]); lo[1] = Math.min(lo[1], o.tris[v + 2]); hi[1] = Math.max(hi[1], o.tris[v + 2]); }
+    const rest = Math.max(hi[0] - lo[0], hi[1] - lo[1]);
+    if (s[1] < foot * 0.08 && foot > rest * 1.25) p.ground = true;
+  });
+}
+
+// Tries many views at low resolution. A good view shows many parts and a large,
+// well-filled silhouette, and looks from the side with some height.
+export function bestView(parts, base) {
+  let best = base, top = -1;
+  for (const pitch of [12, 24, 38]) {
+    for (let yaw = -150; yaw <= 180; yaw += 30) {
+      const r = renderModel(parts, { w: 120, h: 80, yaw, pitch, noShade: true });
+      const seen = r.stats.filter((s) => s.px > 1 && !s.kit);
+      const area = r.stats.reduce((t, s) => t + s.px, 0) / (120 * 80);
+      const front = Math.abs(((yaw % 180) + 180) % 180 - 90) < 20 ? 0.85 : 1; // not head-on
+      const sideOn = Math.abs(((yaw % 90) + 90) % 90) < 1 ? 0.92 : 1; // not flat side
+      const score = (seen.length ** 0.6) * (area ** 0.5) * front * sideOn;
+      if (score > top) { top = score; best = [yaw, pitch]; }
+    }
+  }
+  return best;
+}
+
 export function renderModel(parts, opt) {
-  const { w, h, yaw = 35, pitch = 22, cut = null, explode = 0, marginX = 0, ink = [34, 36, 40], persp = 0.12 } = opt;
+  const { w, h, yaw = 35, pitch = 22, cut = null, explode = 0, marginX = 0, ink = [34, 36, 40], persp = 0.12, xf = null, tint = null, zoom = 1, focus = null, fitBox = null, flat = false } = opt;
+  const XF = parts.map((_, i) => (xf ? xf(i) : null));
   const SS = 2;
   const W = w * SS, H = h * SS;
 
@@ -163,6 +285,7 @@ export function renderModel(parts, opt) {
       for (let k = 0; k < 3; k++) { min[k] = Math.min(min[k], p.tris[i + k]); max[k] = Math.max(max[k], p.tris[i + k]); }
     }
   }
+  if (fitBox) { min = fitBox[0]; max = fitBox[1]; }
   const center = [0, 1, 2].map((k) => (min[k] + max[k]) / 2);
   const size = Math.max(...[0, 1, 2].map((k) => max[k] - min[k])) || 1;
   const offsets = new Map();
@@ -190,6 +313,7 @@ export function renderModel(parts, opt) {
   const pdepth = size / Math.max(persp, 0.01);
   const proj = (v) => { const f = pdepth / (pdepth - v[2]); return [v[0] * f, v[1] * f, v[2]]; };
   for (const p of parts) {
+    if (p.ground) continue;
     const off = offsets.get(p.top) ?? [0, 0, 0];
     for (let i = 0; i < p.tris.length; i += 3) {
       const q = proj(view(p.tris[i] + off[0], p.tris[i + 1] + off[1], p.tris[i + 2] + off[2]));
@@ -197,8 +321,17 @@ export function renderModel(parts, opt) {
     }
   }
   const pad = 14;
-  const scale = Math.min((w - pad * 2 - marginX * 2) / (x1 - x0 || 1), (h - pad * 2) / (y1 - y0 || 1)) * SS;
-  const ox = W / 2 - ((x0 + x1) / 2) * scale, oy = H / 2 + ((y0 + y1) / 2) * scale;
+  if (fitBox) {
+    const R = Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]) / 2;
+    x0 = -R; x1 = R; y0 = -R * 0.8; y1 = R * 0.8;
+  }
+  const scale = Math.min((w - pad * 2 - marginX * 2) / (x1 - x0 || 1), (h - pad * 2) / (y1 - y0 || 1)) * SS * zoom;
+  let ox = W / 2 - ((x0 + x1) / 2) * scale, oy = H / 2 + ((y0 + y1) / 2) * scale;
+  if (focus) {
+    const q = proj(view(focus[0], focus[1], focus[2]));
+    ox = W / 2 - q[0] * scale; oy = H / 2 + q[1] * scale;
+  }
+  const project = (p) => { const q = proj(view(p[0], p[1], p[2])); return [(ox + q[0] * scale) / SS, (oy - q[1] * scale) / SS]; };
 
   const zbuf = new Float32Array(W * H).fill(-1e9);
   const idbuf = new Int32Array(W * H).fill(-1);
@@ -214,11 +347,16 @@ export function renderModel(parts, opt) {
   const kept = (x, y, z) => (cutGreater ? [x, y, z][cutAxis] <= cutVal : [x, y, z][cutAxis] >= cutVal);
 
   const stats = parts.map(() => ({ px: 0, sx: 0, sy: 0 }));
-  parts.forEach((part, pi) => {
+  const order = parts.map((p, i) => i).sort((a, b) => (parts[a].mat === 'glass') - (parts[b].mat === 'glass'));
+  order.forEach((pi) => {
+    const part = parts[pi];
     part.normals ??= smoothNormals(part.tris);
     const t = part.tris, N = part.normals;
     const off = offsets.get(part.top) ?? [0, 0, 0];
-    const col0 = part.color;
+    const X = XF[pi];
+    if (X === 'hidden') return;
+    const glow = tint ? tint(pi) : 0;
+    const col0 = glow ? part.color.map((c, k) => c + ([255, 190, 40][k] - c) * glow) : part.color;
     const glass = part.mat === 'glass';
     const cutHere = cutAxis >= 0 && (part.shell || !anyShell);
     const metal = part.mat === 'metal';
@@ -227,14 +365,20 @@ export function renderModel(parts, opt) {
       const pv = [], sc = [], nv = [], wp = [];
       for (let c = 0; c < 3; c++) {
         const o = f + c * 3;
-        const wx = t[o], wy = t[o + 1], wz = t[o + 2];
-        wp.push([wx, wy, wz]);
+        let wx = t[o], wy = t[o + 1], wz = t[o + 2], ax = N[o], ay = N[o + 1], az = N[o + 2];
+        if (X) {
+          const a = apply(X, [wx, wy, wz]);
+          wx = a[0]; wy = a[1]; wz = a[2];
+          const b = [X[0] * ax + X[3] * ay + X[6] * az, X[1] * ax + X[4] * ay + X[7] * az, X[2] * ax + X[5] * ay + X[8] * az];
+          const l = Math.hypot(...b) || 1;
+          ax = b[0] / l; ay = b[1] / l; az = b[2] / l;
+        }
+        wp.push([t[o], t[o + 1], t[o + 2]]);
         const v = view(wx + off[0], wy + off[1], wz + off[2]);
         const q = proj(v);
         pv.push(v);
         sc.push([ox + q[0] * scale, oy - q[1] * scale, q[2]]);
-        const nw = view(center[0] + N[o], center[1] + N[o + 1], center[2] + N[o + 2]);
-        nv.push(nw);
+        nv.push(view(center[0] + ax, center[1] + ay, center[2] + az));
       }
       const [a, b, c] = sc;
       const area = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
@@ -252,7 +396,6 @@ export function renderModel(parts, opt) {
           const w1 = ((c[0] - px) * (a[1] - py) - (c[1] - py) * (a[0] - px)) / area;
           const w2 = 1 - w0 - w1;
           if (w0 < 0 || w1 < 0 || w2 < 0) continue;
-          if (glass && ((x + y * 3) % 5) < 3) continue;
           const z = w0 * a[2] + w1 * b[2] + w2 * c[2];
           const i = y * W + x;
           if (z <= zbuf[i]) continue;
@@ -262,17 +405,30 @@ export function renderModel(parts, opt) {
             const wz = w0 * wp[0][2] + w1 * wp[1][2] + w2 * wp[2][2];
             if (!kept(wx, wy, wz)) continue;
           }
-          zbuf[i] = z;
-          idbuf[i] = pi;
           let nx = w0 * nv[0][0] + w1 * nv[1][0] + w2 * nv[2][0];
           let ny = w0 * nv[0][1] + w1 * nv[1][1] + w2 * nv[2][1];
           let nz = w0 * nv[0][2] + w1 * nv[1][2] + w2 * nv[2][2];
           const l = Math.hypot(nx, ny, nz) || 1;
           nx /= l; ny /= l; nz /= l;
           if (back) { nx = -nx; ny = -ny; nz = -nz; }
+          if (glass) {
+            if (back) continue;
+            // Clear in the middle, reflective at the rim, with a highlight.
+            const rim = (1 - Math.abs(nz)) ** 2;
+            const spec = smoothstep(0.82, 0.98, nx * lightV[0] + ny * lightV[1] + nz * lightV[2]);
+            const a = Math.min(1, 0.28 + rim * 0.6 + spec * 0.7);
+            const tintC = col0.map((c) => c * 0.8 + 255 * (0.2 + spec * 0.8));
+            const old = col[i * 4 + 3] / 255;
+            const out = a + old * (1 - a);
+            for (let k = 0; k < 3; k++) col[i * 4 + k] = (tintC[k] * a + col[i * 4 + k] * old * (1 - a)) / out;
+            col[i * 4 + 3] = out * 255;
+            continue;
+          }
+          zbuf[i] = z;
+          idbuf[i] = pi;
           nbuf[i * 3] = nx; nbuf[i * 3 + 1] = ny; nbuf[i * 3 + 2] = nz;
           const d = Math.max(0, nx * lightV[0] + ny * lightV[1] + nz * lightV[2]);
-          let tone = 0.66 + 0.34 * smoothstep(0.12, 0.62, d);
+          let tone = 0.74 + 0.3 * smoothstep(0.1, 0.6, d);
           tone += 0.07 * (ny * 0.5 + 0.5);
           const base = back ? inner : col0;
           let r = base[0] * tone, g = base[1] * tone, bl = base[2] * tone;
@@ -287,7 +443,65 @@ export function renderModel(parts, opt) {
     }
   });
 
-  // Edge lines.
+  if (opt.noShade) {
+    return { stats: stats.map((s, i) => ({ id: parts[i].id, kit: parts[i].kit, px: 0 })).map((s, i) => { let n = 0; for (let k = 0; k < idbuf.length; k += 1) if (idbuf[k] === i) n++; return { ...s, px: n / (SS * SS) }; }) };
+  }
+
+  // Ambient occlusion from the depth buffer: creases and contacts go darker.
+  if (!flat) {
+    const step = 3, rad = Math.round(Math.min(W, H) * 0.022), range = size * 0.1, bias = size * 0.006;
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [0.7, 0.7], [-0.7, 0.7], [0.7, -0.7], [-0.7, -0.7]];
+    const gw = Math.ceil(W / step), gh = Math.ceil(H / step), raw = new Float32Array(gw * gh);
+    for (let gy = 0; gy < gh; gy++) {
+      for (let gx = 0; gx < gw; gx++) {
+        const x = gx * step, y = gy * step, i0 = y * W + x, z = zbuf[i0];
+        if (z < -1e8) continue;
+        const nx = nbuf[i0 * 3], ny = nbuf[i0 * 3 + 1], nz = Math.max(0.25, nbuf[i0 * 3 + 2]);
+        let occ = 0;
+        for (const [dx, dy] of dirs) {
+          for (const f of [0.4, 1]) {
+            const ox2 = dx * rad * f, oy2 = dy * rad * f;
+            const sx = Math.round(x + ox2), sy2 = Math.round(y + oy2);
+            if (sx < 0 || sy2 < 0 || sx >= W || sy2 >= H) continue;
+            // Depth against the tangent plane, so a curved surface does not shade itself.
+            const plane = z - ((nx * ox2 - ny * oy2) / scale) / nz;
+            const d = zbuf[sy2 * W + sx] - plane;
+            if (d > bias && d < range) occ += 1 - d / range;
+          }
+        }
+        raw[gy * gw + gx] = occ / 16;
+      }
+    }
+    const ao = new Float32Array(gw * gh);
+    for (let gy = 1; gy < gh - 1; gy++) {
+      for (let gx = 1; gx < gw - 1; gx++) {
+        let t = 0;
+        for (let a2 = -1; a2 <= 1; a2++) for (let b2 = -1; b2 <= 1; b2++) t += raw[(gy + a2) * gw + gx + b2];
+        ao[gy * gw + gx] = t / 9;
+      }
+    }
+    for (let i = 0; i < W * H; i++) {
+      if (!col[i * 4 + 3]) continue;
+      const fx = (i % W) / step, fy = Math.floor(i / W) / step;
+      const gx = Math.floor(fx), gy = Math.floor(fy), tx = fx - gx, ty = fy - gy;
+      const A = (x, y) => ao[Math.min(gh - 1, y) * gw + Math.min(gw - 1, x)];
+      const v = A(gx, gy) * (1 - tx) * (1 - ty) + A(gx + 1, gy) * tx * (1 - ty) + A(gx, gy + 1) * (1 - tx) * ty + A(gx + 1, gy + 1) * tx * ty;
+      const m = 1 - Math.min(0.55, v * 2.2);
+      col[i * 4] *= m; col[i * 4 + 1] *= m; col[i * 4 + 2] *= m;
+    }
+  }
+
+  // Part-id picture for the model: every part in its own flat colour.
+  if (flat) {
+    for (let i = 0; i < W * H; i++) {
+      const id = idbuf[i];
+      if (id < 0) continue;
+      const hue = (id * 137.5) % 360, c = hsl(hue, 0.65, 0.55);
+      col[i * 4] = c[0]; col[i * 4 + 1] = c[1]; col[i * 4 + 2] = c[2];
+    }
+  }
+
+  // Edge lines: dark at silhouettes and part borders, soft at creases.
   const edge = new Uint8Array(W * H);
   const depthTol = size * scale * 0.0;
   const dz = (size * 0.012);
@@ -299,12 +513,12 @@ export function renderModel(parts, opt) {
       for (const j of [i + 1, i + W]) {
         const o = idbuf[j];
         if (id < 0 && o < 0) continue;
-        if (id !== o) { e = 1; continue; }
-        if (Math.abs(zbuf[i] - zbuf[j]) > dz) { e = 1; continue; }
+        if (id !== o) { e = 2; continue; }
+        if (Math.abs(zbuf[i] - zbuf[j]) > dz) { e = 2; continue; }
         const nd = nbuf[i * 3] * nbuf[j * 3] + nbuf[i * 3 + 1] * nbuf[j * 3 + 1] + nbuf[i * 3 + 2] * nbuf[j * 3 + 2];
-        if (nd < 0.75) e = 1;
+        if (nd < 0.75) e = Math.max(e, 1);
       }
-      if (e) edge[i] = 1;
+      if (e) edge[i] = e;
     }
   }
 
@@ -317,7 +531,8 @@ export function renderModel(parts, opt) {
         for (let sx2 = 0; sx2 < SS; sx2++) {
           const i = (y * SS + sy2) * W + x * SS + sx2;
           let cr = col[i * 4], cg = col[i * 4 + 1], cb = col[i * 4 + 2], ca = col[i * 4 + 3];
-          if (edge[i] || edge[i - 1] || edge[i - W]) { cr = ink[0]; cg = ink[1]; cb = ink[2]; ca = 255; }
+          const e = Math.max(edge[i], edge[i - 1] ?? 0, edge[i - W] ?? 0);
+          if (e === 2) { cr = ink[0]; cg = ink[1]; cb = ink[2]; ca = 255; } else if (e === 1 && ca) { cr = cr * 0.55 + ink[0] * 0.45; cg = cg * 0.55 + ink[1] * 0.45; cb = cb * 0.55 + ink[2] * 0.45; }
           r += cr * ca; g += cg * ca; b += cb * ca; a += ca;
         }
       }
@@ -359,8 +574,8 @@ export function renderModel(parts, opt) {
     }
   }
   return {
-    rgba, w, h,
-    stats: stats.map((s, i) => ({ id: parts[i].id, px: s.px / (SS * SS), x: s.px ? s.sx / s.px : 0, y: s.px ? s.sy / s.px : 0 })),
+    rgba, w, h, project,
+    stats: stats.map((s, i) => ({ id: parts[i].id, kit: parts[i].kit, px: s.px / (SS * SS), x: s.px ? s.sx / s.px : 0, y: s.px ? s.sy / s.px : 0 })),
     idAt: (x, y) => { const v = idbuf[Math.round(y) * SS * W + Math.round(x) * SS]; return v >= 0 ? parts[v].id : null; },
     pixelsOf: (ids) => {
       const set = new Set(ids); const out = [];
@@ -368,6 +583,96 @@ export function renderModel(parts, opt) {
       return out;
     },
   };
+}
+
+// Voxels decide what really touches: a long diagonal arm has a huge bounding box,
+// so boxes alone would call a loose bucket connected.
+function voxelize(parts) {
+  const lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
+  for (const p of parts) for (let i = 0; i < p.tris.length; i += 3) for (let c = 0; c < 3; c++) { lo[c] = Math.min(lo[c], p.tris[i + c]); hi[c] = Math.max(hi[c], p.tris[i + c]); }
+  const size = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) || 1;
+  const h = size / 72;
+  const key = (x, y, z) => Math.floor((x - lo[0]) / h) + Math.floor((y - lo[1]) / h) * 256 + Math.floor((z - lo[2]) / h) * 65536;
+  for (const p of parts) {
+    const set = new Set();
+    const t = p.tris;
+    for (let f = 0; f < t.length; f += 9) {
+      const ax = t[f], ay = t[f + 1], az = t[f + 2], bx = t[f + 3], by = t[f + 4], bz = t[f + 5], cx = t[f + 6], cy = t[f + 7], cz = t[f + 8];
+      const span = Math.max(Math.hypot(bx - ax, by - ay, bz - az), Math.hypot(cx - ax, cy - ay, cz - az), Math.hypot(cx - bx, cy - by, cz - bz));
+      const n = Math.min(60, Math.ceil(span / (h * 0.7)) + 1);
+      for (let i = 0; i <= n; i++) {
+        for (let j = 0; j <= n - i; j++) {
+          const u = i / n, v = j / n, w = 1 - u - v;
+          set.add(key(ax * w + bx * u + cx * v, ay * w + by * u + cy * v, az * w + bz * u + cz * v));
+        }
+      }
+    }
+    p.vox = set;
+  }
+  return h;
+}
+
+const unpack = (k) => [k & 255, (k >> 8) & 255, (k >> 16) & 255];
+
+function touching(a, b) {
+  const [small, big] = a.size < b.size ? [a, b] : [b, a];
+  for (const k of small) {
+    const [x, y, z] = unpack(k);
+    for (let dz = -1; dz <= 1; dz++) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const nx = x + dx, ny = y + dy, nz = z + dz;
+      if (nx >= 0 && ny >= 0 && nz >= 0 && big.has(nx + ny * 256 + nz * 65536)) return true;
+    }
+  }
+  return false;
+}
+
+function components(parts) {
+  voxelize(parts);
+  const n = parts.length, seen = new Uint8Array(n), groups = [];
+  for (let i = 0; i < n; i++) {
+    if (seen[i]) continue;
+    const g = [], st = [i];
+    seen[i] = 1;
+    while (st.length) {
+      const c = st.pop();
+      g.push(c);
+      for (let j = 0; j < n; j++) if (!seen[j] && touching(parts[c].vox, parts[j].vox)) { seen[j] = 1; st.push(j); }
+    }
+    groups.push(g);
+  }
+  const mass = (g) => g.reduce((t, i) => t + parts[i].vox.size, 0);
+  return groups.sort((a, b) => mass(b) - mass(a));
+}
+
+// Pulls loose pieces back to the main body along the shortest way.
+function snapFloating(parts) {
+  if (parts.length < 2 || parts.length > 400) return [];
+  const comps = components(parts);
+  if (comps.length < 2) return [];
+  const moved = [];
+  const h = voxelStep(parts);
+  const sample = (set, max) => { const a = [...set], s = Math.max(1, Math.floor(a.length / max)); return a.filter((_, i) => i % s === 0).map(unpack); };
+  const body = sample(new Set(comps[0].flatMap((i) => [...parts[i].vox])), 1500);
+  for (const comp of comps.slice(1)) {
+    const piece = sample(new Set(comp.flatMap((i) => [...parts[i].vox])), 500);
+    let best = 1e18, d = [0, 0, 0];
+    for (const a of piece) for (const b of body) {
+      const g = (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+      if (g < best) { best = g; d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]]; }
+    }
+    for (const i of comp) {
+      const p = parts[i];
+      for (let v = 0; v < p.tris.length; v += 3) { p.tris[v] += d[0] * h; p.tris[v + 1] += d[1] * h; p.tris[v + 2] += d[2] * h; }
+      moved.push(p.id);
+    }
+  }
+  return moved;
+}
+
+function voxelStep(parts) {
+  const lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
+  for (const p of parts) for (let i = 0; i < p.tris.length; i += 3) for (let c = 0; c < 3; c++) { lo[c] = Math.min(lo[c], p.tris[i + c]); hi[c] = Math.max(hi[c], p.tris[i + c]); }
+  return Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 72;
 }
 
 // Parts that touch nothing else. This finds floating geometry for the model.
@@ -397,6 +702,16 @@ export function floatingParts(parts) {
   groups.sort((a, b) => b.length - a.length);
   return groups.slice(1).flat().map((i) => parts[i].id);
 }
+
+// Offset plus rotation around a pivot, used by the timeline.
+export function poseMatrix(off, pivot, axis, angle, scale = 1) {
+  const [x, y, z] = axis;
+  const l = Math.hypot(x, y, z) || 1, a = x / l, b = y / l, c = z / l;
+  const C = Math.cos(angle), S = Math.sin(angle), T = 1 - C;
+  const R = [T * a * a + C, T * a * b + S * c, T * a * c - S * b, T * a * b - S * c, T * b * b + C, T * b * c + S * a, T * a * c + S * b, T * b * c - S * a, T * c * c + C, 0, 0, 0];
+  return mul(mul(translate([pivot[0] + off[0], pivot[1] + off[1], pivot[2] + off[2]]), mul(R, scaleM([scale, scale, scale]))), translate(pivot.map((v) => -v)));
+}
+export const composeMatrix = mul;
 
 export function encodePng(rgba, w, h) {
   const raw = Buffer.alloc((w * 4 + 1) * h);

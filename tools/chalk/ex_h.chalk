@@ -1,0 +1,11 @@
+canvas paper
+row
+  model a 560 420
+    quadruped h height=1.6 mane=1 color=brown
+  model b 560 420
+    quadruped e height=3 length=1.2 leg=0.5 depth=0.36 neck=0.1 neckangle=10 head=0.5 thick=2 ears=big trunk=1 tusks=1 tail=0.4 color=#8f9499
+row
+  model c 560 420
+    quadruped d height=0.6 length=1.2 leg=0.5 neck=0.3 neckangle=50 head=0.5 ears=floppy tail=0.4 color=#c49a6c
+  model e 560 420
+    fish s length=3 color=#8a97a3

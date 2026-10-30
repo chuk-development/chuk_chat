@@ -2,7 +2,8 @@
 // embedded 3D renders, labels with leader lines, and text feedback for the model.
 import { readFileSync } from 'node:fs';
 import { parse, nodeId, nums, points } from './parse.mjs';
-import { buildParts, renderModel, floatingParts, encodePng } from './raster.mjs';
+import { buildParts, renderModel, floatingParts, encodePng, bestView, markGround } from './raster.mjs';
+import { timeline, checkTimeline, pose, cameraAt, caption, linkPose } from './anim.mjs';
 
 const THEMES = {
   paper: { bg: '#fbf7ee', ink: '#2b2b2b', mute: '#77736a' },
@@ -207,7 +208,9 @@ function drawSketch(n, theme) {
 
 function drawModel(n, ctx, theme) {
   const k = n.kv;
-  const parts = buildParts(n, ctx.errors);
+  const cacheKey = `${k.id ?? n.args[0]}:${n.line}`;
+  let parts = ctx.cache?.get(cacheKey);
+  if (!parts) { parts = buildParts(n, ctx.errors); markGround(parts); ctx.cache?.set(cacheKey, parts); }
   if (!parts.length) return '';
   const labels = new Map();
   parts.forEach((p, i) => {
@@ -216,19 +219,80 @@ function drawModel(n, ctx, theme) {
     if (!labels.has(key)) labels.set(key, { text: p.label, idx: [] });
     labels.get(key).idx.push(i);
   });
-  const marginX = labels.size ? Number(k.margin ?? 130) : 0;
-  const [yaw, pitch] = nums(k.view, [35, 22]);
-  const res = renderModel(parts, {
-    w: Math.round(n.w), h: Math.round(n.h), yaw, pitch, cut: k.cut, explode: Number(k.explode ?? 0), marginX,
+  const widest = Math.max(0, ...[...labels.values()].map((l) => textW(l.text, 18) + 20));
+  const marginX = labels.size ? Number(k.margin ?? Math.min(170, widest + 24)) : 0;
+  const auto = k.view === undefined || k.view === 'auto';
+  let base = nums(auto ? undefined : k.view, [35, 22]);
+  if (ctx.forceView) base = ctx.forceView;
+  if (auto && parts.length && !ctx.forceView) {
+    const key = `${cacheKey}:view`;
+    base = ctx.cache?.get(key) ?? bestView(parts, base);
+    ctx.cache?.set(key, base);
+  }
+  const tl = timeline(n);
+  const time = ctx.time ?? Infinity;
+  const look = { yaw: base[0], pitch: base[1] };
+  if (ctx.forceView) ctx.persp = 0.001;
+  const opt = {
+    w: Math.round(n.w), h: Math.round(n.h), cut: k.cut, explode: Number(k.explode ?? 0), marginX, flat: ctx.flat,
     ink: theme.bg === '#fbf7ee' || theme.bg === '#ffffff' ? [36, 38, 42] : [12, 14, 18],
-  });
+  };
+  if (tl) {
+    if (!ctx.timelineChecked) { checkTimeline(tl, parts, ctx.errors); ctx.timelineChecked = true; }
+    ctx.duration = Math.max(ctx.duration ?? 0, tl.total);
+    // One frame for all poses: the box over rest and start positions.
+    let box = ctx.cache?.get(`${cacheKey}:box`);
+    if (!box) {
+      const min = [1e9, 1e9, 1e9], max = [-1e9, -1e9, -1e9];
+      for (const T of [0, tl.total * 0.5, Infinity]) {
+        const P = pose(tl, parts, T);
+        parts.forEach((p, i) => {
+          const X = P.xf(i);
+          if (X === 'hidden') return;
+          for (let v = 0; v < p.tris.length; v += 9 * 7) {
+            const q = X ? [0, 1, 2].map((c) => X[c] * p.tris[v] + X[c + 3] * p.tris[v + 1] + X[c + 6] * p.tris[v + 2] + X[c + 9]) : [p.tris[v], p.tris[v + 1], p.tris[v + 2]];
+            for (let c = 0; c < 3; c++) { min[c] = Math.min(min[c], q[c]); max[c] = Math.max(max[c], q[c]); }
+          }
+        });
+      }
+      box = [min, max];
+      ctx.cache?.set(`${cacheKey}:box`, box);
+    }
+    const P = pose(tl, parts, time);
+    const centerOf = (id) => {
+      if (id && parts.pivots.has(id)) return parts.pivots.get(id);
+      return [0, 1, 2].map((c) => (box[0][c] + box[1][c]) / 2);
+    };
+    const end = Math.min(time, tl.total);
+    const cam = cameraAt(tl, base, ctx.time === undefined ? tl.total : end, centerOf);
+    Object.assign(opt, { xf: P.xf, tint: P.tint, zoom: cam.zoom, focus: cam.focus, fitBox: box });
+    look.yaw = cam.yaw; look.pitch = cam.pitch;
+    if (ctx.time !== undefined) ctx.caption = caption(tl, time);
+  }
+  if (!opt.xf && parts.some((p) => p.link)) opt.xf = linkPose(parts, null);
+  const res = renderModel(parts, { ...opt, yaw: look.yaw, pitch: look.pitch });
   const png = encodePng(res.rgba, res.w, res.h).toString('base64');
   let out = `<image x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" href="data:image/png;base64,${png}"/>`;
+  if (parts.repaired?.length) ctx.lints.push(`model ${n.args[0] ?? ''}: these parts did not touch the body and were pulled to it: ${[...new Set(parts.repaired)].slice(0, 8).join(', ')}`);
   const fl = floatingParts(parts);
   if (fl.length && !k.explode) ctx.lints.push(`model ${n.args[0] ?? ''}: not connected to the main body: ${fl.slice(0, 8).join(', ')}`);
-  const hidden = new Set(res.stats.filter((s) => s.px < 4).map((s) => s.id));
+  const hidden = new Set(res.stats.filter((s) => s.px < 4 && !s.kit).map((s) => s.id));
   res.stats.forEach((s) => { if (s.px >= 4) hidden.delete(s.id); });
   for (const id of hidden) ctx.lints.push(`model ${n.args[0] ?? ''}: part "${id}" is not visible (hidden or too small)`);
+
+  if (ctx.flat) {
+    const seen = new Map();
+    for (const st of res.stats) {
+      if (st.px < 40) continue;
+      const cur = seen.get(st.id);
+      if (!cur || st.px > cur.px) seen.set(st.id, st);
+    }
+    for (const st of seen.values()) {
+      out += `<rect x="${n.x + st.x - textW(st.id, 13) / 2 - 3}" y="${n.y + st.y - 9}" width="${textW(st.id, 13) + 6}" height="18" fill="#000" opacity="0.7"/>` + textBlock(n.x + st.x, n.y + st.y, st.id, 13, '#fff');
+    }
+    ctx.models.push({ node: n, res, parts });
+    return out;
+  }
 
   // Labels sit in two columns, sorted by height, so leaders never cross.
   const anchors = [];
@@ -248,7 +312,8 @@ function drawModel(n, ctx, theme) {
     big.sort((a, b) => Math.abs(a.ax - mid) - Math.abs(b.ax - mid));
     small.push(big.shift());
   }
-  sides.forEach((side, si) => {
+  // Labels leave during a close-up, the caption carries the story.
+  if (!ctx.notext && (opt.zoom ?? 1) < 1.25) sides.forEach((side, si) => {
     side.sort((a, b) => a.ay - b.ay);
     const step = 40;
     const ys = side.map((a) => a.ay);
@@ -268,6 +333,10 @@ function drawModel(n, ctx, theme) {
       out += textBlock(X + lx + tw / 2, Y + ly, a.text, size, '#222');
     });
   });
+  if (ctx.time !== undefined && ctx.caption) {
+    const tw = textW(ctx.caption, 22) + 32;
+    out += `<rect x="${n.x + n.w / 2 - tw / 2}" y="${n.y + n.h - 50}" width="${tw}" height="38" rx="19" fill="#222428"/>` + textBlock(n.x + n.w / 2, n.y + n.h - 31, ctx.caption, 22, '#fff');
+  }
   ctx.models.push({ node: n, res, parts });
   return out;
 }
@@ -286,7 +355,7 @@ function draw(n, ctx, theme) {
       if (n.args[1]) s += textBlock(n.x + n.pad, n.y + 24, n.args[1], 22, theme.ink, 'start', 700);
       return s + n.flow.map((c) => draw(c, ctx, theme)).join('');
     }
-    case 'title': case 'h2': return textBlock(n.x, cy, n.args.at(-1), n.size, theme.ink, 'start', 700);
+    case 'title': case 'h2': if (ctx.notext) return ''; return textBlock(n.x, cy, n.args.at(-1), n.size, theme.ink, 'start', 700);
     case 'text': return textBlock(n.x, cy, n.text, n.size, k.color ? (FILL[k.color]?.[1] ?? k.color) : theme.ink, 'start');
     case 'note': return `<rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" fill="${FILL[k.color ?? 'yellow']?.[0] ?? '#fdf2c4'}" transform="rotate(-1 ${cx} ${cy})"/>` + textBlock(n.x + 15, cy, n.text, n.size, '#333', 'start');
     case 'box': return roughRect(n.x, n.y, n.w, n.h, stroke, fill, id) + textBlock(cx, cy, n.text, n.size, '#222');
@@ -294,7 +363,9 @@ function draw(n, ctx, theme) {
     case 'circle': return `<ellipse cx="${cx}" cy="${cy}" rx="${n.w / 2}" ry="${n.h / 2}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>` + textBlock(cx, cy, n.text, n.size, '#222');
     case 'diamond': return `<path d="M${cx} ${n.y}L${n.x + n.w} ${cy}L${cx} ${n.y + n.h}L${n.x} ${cy}Z" fill="${fill}" stroke="${stroke}" stroke-width="2" stroke-linejoin="round"/>` + textBlock(cx, cy, n.text, n.size, '#222');
     case 'sketch': return drawSketch(n, theme);
-    case 'model': return drawModel(n, ctx, theme);
+    case 'model':
+      // A broken model must never lose the page: report it to the writer instead.
+      try { return drawModel(n, ctx, theme); } catch (e) { ctx.errors.push(`line ${n.line}: model ${id ?? ''} failed: ${e.message}`); return ''; }
     case 'bars': {
       const max = Math.max(...n.items.map((i) => Number(i[1]) || 0), 1e-9);
       const bw = n.w / n.items.length;
@@ -356,8 +427,8 @@ function fonts() {
 }
 
 // Full render of a tree. Errors never stop the drawing.
-export function render(root) {
-  const ctx = { errors: [], lints: [], ids: new Map(), models: [], arrows: [] };
+export function render(root, options = {}) {
+  const ctx = { errors: [], lints: [], ids: new Map(), models: [], arrows: [], ...options };
   const canvas = root.kids.find((k) => k.cmd === 'canvas');
   const theme = THEMES[canvas?.args[0] ?? 'paper'] ?? THEMES.paper;
   const body = { cmd: 'col', args: [], kv: { gap: canvas?.kv.gap ?? 34, align: 'start' }, kids: [], line: 0 };
@@ -394,7 +465,7 @@ export function feedback(root, r) {
   out.push(`canvas ${r.W}x${r.H}`);
   if (items.length) out.push(`elements: ${items.join(' ')}`);
   for (const m of r.ctx.models) {
-    const big = m.res.stats.filter((s) => s.px >= 4).sort((a, b) => b.px - a.px).map((s) => `${s.id}=${Math.round(s.px)}`);
+    const big = m.res.stats.filter((s) => s.px >= 4 && !s.kit).sort((a, b) => b.px - a.px).map((s) => `${s.id}=${Math.round(s.px)}`);
     out.push(`model parts visible px: ${big.slice(0, 40).join(' ')}`);
   }
   if (r.ctx.errors.length) out.push(`ERRORS:\n${r.ctx.errors.join('\n')}`);
