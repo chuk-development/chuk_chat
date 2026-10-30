@@ -1,0 +1,34 @@
+canvas white
+title "Kamera an den Raspberry Pi"
+model pi 900 520 view=-24,34
+  box board size=8.5,0.16,5.6 round=0.25 color=pcb
+  scatter parts n=60 size=0.14 area=7,4.5 at=0,0.12,0
+  box shield size=1.5,0.1,1.5 at=-0.9,0.26,0.2 color=alu
+  chip ram size=1.2,0.12,1.1 at=1.2,0.15,0.2 pins=0 color=black
+  header gpio n=20 rows=2 pitch=0.254 pinh=0.75 at=-0.3,0.2,-2.45 color=black
+  group ports at=0,0,2.8
+    port hdmi1 type=hdmi at=-1.8,0.25,-0.25 color=steel
+    port usbc1 type=usbc at=-3.2,0.24,-0.25 color=steel
+  group right at=4.2,0,0
+    port eth type=ethernet rot=0,90,0 at=-0.7,0.75,-1.8 color=steel
+    port u1 type=usb rot=0,90,0 at=-0.5,0.8,-0.05 color=steel
+    port u2 type=usb rot=0,90,0 at=-0.5,0.8,1.5 color=steel
+  group socket at=-3.1,0.2,0.4 label="CSI-Buchse"
+    port csi type=fpc rot=0,90,0 color=plastic
+    box clip size=0.3,0.1,2.1 at=-0.1,0.16,0 color=dark
+  group cam at=-3.1,0.2,0.4 label="Kamera"
+    tube ribbon pts=0,0.1,0 0,1.4,0 -0.3,2.6,0 -1,3.3,0 flat=9 r=0.05 color=#d9d4c5
+    box cambrd size=2.4,0.1,2.4 at=-1.2,3.4,0 color=pcb
+    cyl lens r=0.45 h=0.5 at=-1.2,3.65,0 color=black
+  anim
+    step "Klappe anheben" 1.4
+      camera view=-40,30 zoom=1.7 on=socket
+      move clip by=0,0.28,0
+      pulse clip
+    step "Kabel von oben einstecken" 2
+      move cam from=0,3.5,0
+    step "Klappe schliessen" 1.2
+      move clip by=0,-0.28,0
+      pulse clip
+    step "Fertig" 1.2
+      camera view=-24,34 zoom=1

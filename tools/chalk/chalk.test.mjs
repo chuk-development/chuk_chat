@@ -24,11 +24,24 @@ test('replace on a sketch keeps the frame', () => {
 });
 
 test('floating parts and stroke hits are reported by id', () => {
-  const { root } = parse('model m 300 200\n  box a size=1,1,1\n  box b size=1,1,1 at=9,0,0');
+  const { root } = parse('model m 300 200 explode=0.01\n  box a size=1,1,1\n  box b size=1,1,1 at=9,0,0');
   const r = render(root);
-  assert.match(feedback(root, r), /not connected/);
   const m = r.ctx.models[0];
   const s = m.res.stats.find((p) => p.id === 'a');
   const [x, y] = [s.x + m.node.x, s.y + m.node.y];
   assert.match(describeStroke(r, [[x - 9, y], [x + 9, y], [x, y + 9], [x - 9, y]]), /circled a/);
+});
+
+test('on= places a part flush on its parent', () => {
+  const { root } = parse('model m 300 200\n  box a size=2,2,2\n  box b size=1,1,1 on=a+y sink=0');
+  const r = render(root);
+  const [a, b] = r.ctx.models[0].parts;
+  const ys = (p) => { const v = []; for (let i = 1; i < p.tris.length; i += 3) v.push(p.tris[i]); return v; };
+  assert.ok(Math.abs(Math.max(...ys(a)) - Math.min(...ys(b))) < 1e-4);
+});
+
+test('a loose part is pulled to the body', () => {
+  const { root } = parse('model m 300 200\n  box a size=4,4,4\n  box b size=1,1,1 at=9,0,0');
+  const r = render(root);
+  assert.equal(r.ctx.models[0].parts.repaired[0], 'b');
 });

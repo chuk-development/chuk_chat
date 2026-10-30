@@ -14,15 +14,15 @@ export const COLORS3D = {
 };
 
 const PARAMS = {
-  box: ['size'], cyl: ['r', 'h', 'r2', 'axis', 'hole'], cone: ['r', 'h', 'axis'], sphere: ['r', 'scale3'],
+  box: ['size', 'round'], cyl: ['r', 'h', 'r2', 'axis', 'hole'], cone: ['r', 'h', 'axis'], sphere: ['r', 'scale3'],
   lathe: ['pts', 'axis', 'smooth'], extrude: ['pts', 'h', 'axis'], loft: ['sections', 'axis', 'square'],
   tube: ['pts', 'r', 'flat'], fan: ['blades', 'r', 'hub', 'h', 'axis', 'twist'],
   gear: ['teeth', 'r', 'h', 'axis'], spring: ['r', 'wire', 'turns', 'h', 'axis'],
   chip: ['size', 'pins'], header: ['n', 'rows', 'pitch', 'pinh'], screw: ['r', 'h'],
-  wheel: ['r', 'w', 'axis'], port: ['type', 'size'], limb: ['pts'],
+  plate: ['pts', 'h'], body: ['top', 'bottom', 'width', 'square'], wing: ['root', 'tip', 'span', 'sweep', 'thick', 'dihedral'], wheel: ['r', 'w', 'axis'], port: ['type', 'size'], limb: ['pts'], blob: ['k', 'res'],
 };
 export const SHAPES = new Set(Object.keys(PARAMS));
-const COMMON = new Set(['id', 'at', 'rot', 'scale', 'color', 'mat', 'label', 'seg', 'shell']);
+const COMMON = new Set(['id', 'at', 'rot', 'scale', 'color', 'mat', 'label', 'seg', 'shell', 'on', 'sink']);
 
 export function shapeKeys(cmd) { return PARAMS[cmd]; }
 export function isCommon(k) { return COMMON.has(k); }
@@ -80,6 +80,41 @@ function box([w, h, d]) {
   m.quad(v(-1, -1, -1), v(1, -1, -1), v(1, -1, 1), v(-1, -1, 1));
   m.quad(v(1, -1, 1), v(1, -1, -1), v(1, 1, -1), v(1, 1, 1));
   m.quad(v(-1, -1, -1), v(-1, -1, 1), v(-1, 1, 1), v(-1, 1, -1));
+  return m;
+}
+
+// Box with rounded edges. Bevels catch the light, so nothing looks like a raw block.
+function roundBox([w, h, d], r, steps = 3) {
+  r = Math.min(r, w / 2, h / 2, d / 2);
+  if (r <= 1e-6) return box([w, h, d]);
+  const axisValues = (H) => {
+    const I = H - r, out = [];
+    for (let i = 0; i <= steps; i++) out.push(-H + (r * i) / steps);
+    for (let i = 0; i <= steps; i++) out.push(I + (r * i) / steps);
+    return out;
+  };
+  const m = new Mesh();
+  const X = w / 2, Y = h / 2, Z = d / 2;
+  const fix = (p) => {
+    const q = [Math.max(-(X - r), Math.min(X - r, p[0])), Math.max(-(Y - r), Math.min(Y - r, p[1])), Math.max(-(Z - r), Math.min(Z - r, p[2]))];
+    const e = [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
+    const l = Math.hypot(...e) || 1;
+    return [q[0] + (e[0] / l) * r, q[1] + (e[1] / l) * r, q[2] + (e[2] / l) * r];
+  };
+  const face = (U, V, map) => {
+    const us = axisValues(U), vs = axisValues(V);
+    for (let i = 0; i + 1 < us.length; i++) {
+      for (let j = 0; j + 1 < vs.length; j++) {
+        m.quad(fix(map(us[i], vs[j])), fix(map(us[i + 1], vs[j])), fix(map(us[i + 1], vs[j + 1])), fix(map(us[i], vs[j + 1])));
+      }
+    }
+  };
+  face(X, Y, (u, v) => [u, v, Z]);
+  face(X, Y, (u, v) => [-u, v, -Z]);
+  face(X, Z, (u, v) => [u, Y, -v]);
+  face(X, Z, (u, v) => [u, -Y, v]);
+  face(Z, Y, (u, v) => [X, v, -u]);
+  face(Z, Y, (u, v) => [-X, v, u]);
   return m;
 }
 
@@ -235,6 +270,159 @@ function port(type, scale) {
   return m;
 }
 
+// Tapered wing with an airfoil section. Root at z=0, span along +z, chord along x.
+function wing(root, tip, span, sweep, thick, dihedral) {
+  const m = new Mesh();
+  const air = [[0, 0], [0.05, 0.6], [0.2, 1], [0.45, 0.85], [0.75, 0.4], [1, 0.03]];
+  const low = air.slice(1, -1).reverse().map(([x, t]) => [x, -t * 0.6]);
+  const loop = [...air, ...low];
+  const steps = 8;
+  const sect = (f) => {
+    const c = root + (tip - root) * f, x0 = sweep * f, y0 = dihedral * f * span, z = span * f;
+    return loop.map(([u, t]) => [x0 + u * c, y0 + t * c * thick * 0.5, z]);
+  };
+  for (let i = 0; i < steps; i++) {
+    const a = sect(i / steps), b = sect((i + 1) / steps);
+    a.forEach((_, k) => { const n = (k + 1) % a.length; m.quad(a[k], b[k], b[n], a[n]); });
+  }
+  const cap = (s, flip) => { for (let k = 1; k + 1 < s.length; k++) flip ? m.tri(s[0], s[k], s[k + 1]) : m.tri(s[0], s[k + 1], s[k]); };
+  cap(sect(0), false); cap(sect(1), true);
+  return m;
+}
+
+// Organic body: spheres and limbs blend into one skin (signed distance field,
+// meshed by surface nets). This removes the seams that make animals look like pipes.
+function blob(node, seg) {
+  const prims = [];
+  const addPts = (pts, mx) => {
+    for (let i = 0; i + 1 < pts.length; i++) prims.push({ a: pts[i].slice(0, 3).map((v, c) => v * mx[c]), b: pts[i + 1].slice(0, 3).map((v, c) => v * mx[c]), ra: pts[i][3], rb: pts[i + 1][3] });
+  };
+  const walk = (kids, mx) => {
+    for (const k of kids) {
+      if (k.cmd === 'mirror') {
+        const ax = 'xyz'.indexOf(k.args[0] ?? 'z');
+        walk(k.kids, mx);
+        walk(k.kids, mx.map((v, c) => (c === ax ? -v : v)));
+      } else if (k.cmd === 'limb') {
+        addPts(points(k.kv.pts), mx);
+      } else if (k.cmd === 'sphere') {
+        const c = nums(k.kv.at, [0, 0, 0]).map((v, i) => v * mx[i]), r = Number(k.kv.r ?? 0.5);
+        const sc = nums(k.kv.scale, [1, 1, 1]);
+        prims.push({ c, r, s: sc.length === 1 ? [sc[0], sc[0], sc[0]] : sc });
+      }
+    }
+  };
+  walk(node.kids, [1, 1, 1]);
+  if (!prims.length) return new Mesh();
+  const lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
+  for (const p of prims) {
+    const list = p.c ? [[p.c, p.r * Math.max(...p.s)]] : [[p.a, p.ra], [p.b, p.rb]];
+    for (const [q, r] of list) for (let c = 0; c < 3; c++) { lo[c] = Math.min(lo[c], q[c] - r); hi[c] = Math.max(hi[c], q[c] + r); }
+  }
+  // Melting is relative to the typical thickness, so thin legs survive a big body.
+  const radii = prims.map((p) => (p.c ? p.r : Math.min(p.ra, p.rb))).sort((a, b) => a - b);
+  const K = Math.max(1e-4, Number(node.kv.k ?? 0.5) * radii[Math.floor(radii.length * 0.4)]);
+  const margin = K + (hi[0] - lo[0]) * 0.02;
+  for (let c = 0; c < 3; c++) { lo[c] -= margin; hi[c] += margin; }
+  const longest = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]);
+  const res = Number(node.kv.res ?? 64), h = longest / res;
+  const dim = [0, 1, 2].map((c) => Math.ceil((hi[c] - lo[c]) / h) + 1);
+  const dist = (x, y, z) => {
+    let d = 1e9;
+    for (const p of prims) {
+      let e;
+      if (p.c) {
+        const qx = (x - p.c[0]) / p.s[0], qy = (y - p.c[1]) / p.s[1], qz = (z - p.c[2]) / p.s[2];
+        e = (Math.hypot(qx, qy, qz) - p.r) * Math.min(...p.s);
+      } else {
+        const ab = [p.b[0] - p.a[0], p.b[1] - p.a[1], p.b[2] - p.a[2]];
+        const ap = [x - p.a[0], y - p.a[1], z - p.a[2]];
+        const t = Math.max(0, Math.min(1, dot(ap, ab) / (dot(ab, ab) || 1)));
+        e = Math.hypot(ap[0] - ab[0] * t, ap[1] - ab[1] * t, ap[2] - ab[2] * t) - (p.ra + (p.rb - p.ra) * t);
+      }
+      const m = Math.max(K - Math.abs(d - e), 0) / K;
+      d = Math.min(d, e) - m * m * K * 0.25;
+    }
+    return d;
+  };
+  const [nx, ny, nz] = dim;
+  const f = new Float32Array(nx * ny * nz);
+  const I = (x, y, z) => x + y * nx + z * nx * ny;
+  for (let z = 0; z < nz; z++) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) f[I(x, y, z)] = dist(lo[0] + x * h, lo[1] + y * h, lo[2] + z * h);
+  const verts = new Map();
+  const corners = [[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0], [0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]];
+  const edges = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]];
+  const cell = (x, y, z) => {
+    const key = I(x, y, z);
+    if (verts.has(key)) return verts.get(key);
+    const v = corners.map(([a, b, c]) => f[I(x + a, y + b, z + c)]);
+    const s = [0, 0, 0];
+    let n = 0;
+    for (const [a, b] of edges) {
+      if (v[a] < 0 === v[b] < 0) continue;
+      const t = v[a] / (v[a] - v[b]);
+      for (let c = 0; c < 3; c++) s[c] += corners[a][c] + (corners[b][c] - corners[a][c]) * t;
+      n++;
+    }
+    const out = n ? [lo[0] + (x + s[0] / n) * h, lo[1] + (y + s[1] / n) * h, lo[2] + (z + s[2] / n) * h] : null;
+    verts.set(key, out);
+    return out;
+  };
+  const m = new Mesh();
+  const face = (a, b, c, d, flip) => { if (!a || !b || !c || !d) return; if (flip) m.quad(d, c, b, a); else m.quad(a, b, c, d); };
+  for (let z = 1; z < nz - 1; z++) {
+    for (let y = 1; y < ny - 1; y++) {
+      for (let x = 1; x < nx - 1; x++) {
+        const c = f[I(x, y, z)] < 0;
+        if (c !== (f[I(x + 1, y, z)] < 0)) face(cell(x, y - 1, z - 1), cell(x, y, z - 1), cell(x, y, z), cell(x, y - 1, z), !c);
+        if (c !== (f[I(x, y + 1, z)] < 0)) face(cell(x - 1, y, z - 1), cell(x - 1, y, z), cell(x, y, z), cell(x, y, z - 1), !c);
+        if (c !== (f[I(x, y, z + 1)] < 0)) face(cell(x - 1, y - 1, z), cell(x, y - 1, z), cell(x, y, z), cell(x - 1, y, z), !c);
+      }
+    }
+  }
+  return m;
+}
+
+// A body from its side view, the way a designer draws: upper and lower outline
+// along x, plus the width along x. Cars, hulls, fuselages, locomotives, animals.
+function sideBody(top, bottom, width, seg, square) {
+  const at = (curve, x) => {
+    if (x <= curve[0][0]) return curve[0][1];
+    for (let i = 0; i + 1 < curve.length; i++) {
+      const [a, va] = curve[i], [b, vb] = curve[i + 1];
+      if (x <= b) { const t = (x - a) / (b - a || 1); const s = t * t * (3 - 2 * t); return va + (vb - va) * (t * 0.5 + s * 0.5); }
+    }
+    return curve.at(-1)[1];
+  };
+  const x0 = Math.min(top[0][0], bottom[0][0]), x1 = Math.max(top.at(-1)[0], bottom.at(-1)[0]);
+  const rows = [];
+  const n = 36;
+  for (let i = 0; i <= n; i++) {
+    const x = x0 + ((x1 - x0) * i) / n, t = at(top, x), b = at(bottom, x);
+    rows.push([x, Math.max(0.0005, at(width, x)), Math.max(0.0005, t - b), (t + b) / 2]);
+  }
+  const e = square ? 0.45 : 1;
+  const ring = (r, a) => {
+    const c = Math.cos(a), s = Math.sin(a);
+    return [r[0], r[3] + (Math.sign(s) * Math.abs(s) ** e * r[2]) / 2, (Math.sign(c) * Math.abs(c) ** e * r[1]) / 2];
+  };
+  const m = new Mesh();
+  for (let i = 0; i + 1 < rows.length; i++) {
+    for (let k = 0; k < seg; k++) {
+      const a0 = (k / seg) * Math.PI * 2, a1 = ((k + 1) / seg) * Math.PI * 2;
+      m.quad(ring(rows[i], a0), ring(rows[i + 1], a0), ring(rows[i + 1], a1), ring(rows[i], a1));
+    }
+  }
+  for (const [r, flip] of [[rows[0], false], [rows.at(-1), true]]) {
+    const c = [r[0], r[3], 0];
+    for (let k = 0; k < seg; k++) {
+      const a = ring(r, (k / seg) * Math.PI * 2), b = ring(r, ((k + 1) / seg) * Math.PI * 2);
+      if (flip) m.tri(c, b, a); else m.tri(c, a, b);
+    }
+  }
+  return m;
+}
+
 function fan(blades, r, hub, h, twist) {
   const m = revolve([[-h / 2, 0], [-h / 2, hub * 0.55], [-h * 0.1, hub], [h / 2, hub], [h / 2, 0]], 32);
   for (let b = 0; b < blades; b++) {
@@ -325,7 +513,11 @@ export function buildShape(node) {
   const n = (k, d) => (kv[k] === undefined ? d : Number(kv[k]));
   const ax = axisTo(kv.axis);
   switch (cmd) {
-    case 'box': return box(nums(kv.size, [1, 1, 1]));
+    case 'box': {
+      const s = nums(kv.size, [1, 1, 1]);
+      const r = kv.round === undefined ? Math.min(...s) * 0.07 : Number(kv.round);
+      return Math.min(...s) < 1e-3 || r === 0 ? box(s) : roundBox(s, r, kv.round === undefined ? 2 : 3);
+    }
     case 'cyl': {
       const r = n('r', 0.5), h = n('h', 1), r2 = n('r2', r), hole = n('hole', 0);
       const prof = hole
@@ -360,6 +552,11 @@ export function buildShape(node) {
     case 'screw': return screw(n('r', 0.15), n('h', 0.6), 16);
     case 'port': return port(kv.type, n('size', 1));
     case 'limb': return limb(points(kv.pts), Number(kv.seg ?? 18));
+    case 'wing': return wing(n('root', 3), n('tip', 1), n('span', 8), n('sweep', 2), n('thick', 0.12), n('dihedral', 0));
+    case 'blob': return blob(node, seg);
+    // Side-view outline: x,y points, thickness along z.
+    case 'plate': return extrude(points(kv.pts).map(([x, y]) => [x, -y]), n('h', 0.1)).map(([x, y, z]) => [x, -z, y]);
+    case 'body': return sideBody(points(kv.top), points(kv.bottom), points(kv.width), Math.max(seg, 40), kv.square);
     case 'wheel': return wheel(n('r', 1), n('w', 0.4), seg).map(ax);
     default: return null;
   }

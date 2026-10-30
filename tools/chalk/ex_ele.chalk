@@ -1,0 +1,14 @@
+canvas paper
+model ele 860 480 view=auto
+  blob elephant k=0.5 color=#8f9499
+    limb body pts=-1.9,1.9,0,1.0 -0.6,2.05,0,1.2 0.8,2.0,0,1.15 1.5,2.05,0,0.95
+    limb head pts=1.9,2.35,0,0.75 2.5,2.3,0,0.62
+    limb trunk pts=2.7,2.0,0,0.36 3.1,1.3,0,0.24 3.3,0.7,0,0.17 3.15,0.25,0,0.12
+    mirror z
+      limb front pts=1.2,1.2,0.62,0.45 1.2,0.1,0.62,0.4
+      limb back pts=-1.5,1.2,0.62,0.48 -1.5,0.1,0.62,0.42
+  mirror z
+    sphere ear r=1 scale=0.85,1.05,0.1 at=1.55,2.5,1.0 rot=0,-20,0 color=#868b90
+    sphere eye r=0.07 at=2.72,2.5,0.5 color=black
+    limb tusk pts=2.75,1.7,0.3,0.1 3.15,1.15,0.36,0.08 3.55,1.05,0.4,0.03 color=white
+  limb tail pts=-2.75,2.2,0,0.08 -3.05,1.5,0,0.05 -3.1,0.9,0,0.03 color=#6f7479
