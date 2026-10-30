@@ -1,0 +1,14 @@
+canvas paper
+title "Airliner"
+model plane 900 460 view=-38,7
+  loft body sections=-19,0,0,0.2 -18,1.6,1.8,0.1 -15,3.6,3.9 -8,4,4 12,4,4 18,2.4,3,0.6 22,0.3,0.8,1.5 color=white label="Fuselage"
+  group cockpit at=-16.3,0.9,0
+    mirror z
+      box win size=1.3,0.5,0.7 at=0,0,0.95 rot=0,-30,0 color=navy
+  mirror z
+    extrude wing pts=-5,1.8 1.5,1.8 5,17 3,17 color=gray at=0,-1.2,0 h=0.35 label="Wing"
+    cyl eng r=1.1 h=3.4 axis=x at=-3.2,-2.3,7 color=alu
+    fan intake blades=18 r=0.95 hub=0.3 h=0.1 axis=x at=-4.95,-2.3,7 color=dark
+    box pylon size=2.2,1.3,0.2 at=-2,-1.5,7 color=gray
+    extrude tailp pts=16,0.3 20,0.3 22,6.5 20.5,6.5 at=0,1.4,0 h=0.2 color=gray
+  extrude fin pts=15.5,0 21,0 23.2,6.8 21,6.8 h=0.3 axis=z at=0,1.8,0 color=blue label="Tail fin"

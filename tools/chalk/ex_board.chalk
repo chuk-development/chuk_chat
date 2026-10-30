@@ -1,0 +1,19 @@
+canvas white
+title "Single-board computer"
+model sbc 860 460 view=-22,38
+  box board size=8.5,0.16,5.6 color=pcb label="Circuit board"
+  chip soc size=1.5,0.14,1.5 at=-0.9,0.17,0.2 pins=0 color=dark label="Processor"
+  box shield size=1.5,0.1,1.5 at=-0.9,0.26,0.2 color=alu
+  chip ram size=1.2,0.12,1.1 at=1.2,0.15,0.2 pins=0 color=black label="Memory"
+  header gpio n=20 rows=2 pitch=0.254 pinh=0.75 at=-0.3,0.2,-2.45 color=black label="GPIO pins"
+  group ports at=0,0,2.8
+    port hdmi1 type=hdmi at=-1.8,0.25,-0.25 color=steel
+    port usbc1 type=usbc at=-3.2,0.24,-0.25 color=steel label="Power"
+    port jack1 type=jack at=0.5,0.38,-0.45 color=black
+  group right at=4.2,0,0
+    port eth type=ethernet rot=0,90,0 at=-0.7,0.75,-1.8 color=steel label="Ethernet"
+    port u1 type=usb rot=0,90,0 at=-0.5,0.8,-0.05 color=steel
+    port u2 type=usb rot=0,90,0 at=-0.5,0.8,1.5 color=steel label="USB"
+  port cam type=fpc at=-3.1,0.2,0.4 rot=0,90,0 color=plastic label="Camera socket"
+  repeat 6 step=0.3,0,0 at=2.0,0.12,-1
+    box cap size=0.14,0.14,0.22 color=gold
