@@ -234,5 +234,35 @@
 "rounds": 0,
 "par": 3,
 "ref": true
+},
+"v9g": {
+"model": "glm-5.3-flash",
+"effort": "high",
+"drafts": 3,
+"rounds": 0,
+"par": 3,
+"ref": true
+},
+"v9gp": {
+"model": "glm-5.3-flash",
+"effort": "high",
+"drafts": 3,
+"rounds": 0,
+"par": 3,
+"ref": true,
+"prompt": "plus"
+},
+"v9d": {
+"model": "deepseek-v4.1-flash-1017",
+"effort": "high",
+"rounds": 0,
+"ref": true
+},
+"v9dp": {
+"model": "deepseek-v4.1-flash-1017",
+"effort": "high",
+"rounds": 0,
+"ref": true,
+"prompt": "plus"
 }
 }
