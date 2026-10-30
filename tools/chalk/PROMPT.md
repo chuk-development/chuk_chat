@@ -85,6 +85,7 @@ Kits: one line becomes many detailed parts. Always prefer a kit to building it y
       # cow: height=1.4 length=1.5 leg=0.45 depth=0.36 neck=0.3 neckangle=15 head=0.5 ears=round horns=1 thick=1.3
       # elephant: height=3 length=1.2 leg=0.5 depth=0.36 neck=0.1 neckangle=10 head=0.5 thick=2 ears=big trunk=1 tusks=1 tail=0.4 color=#8f9499
       # giraffe: height=3 length=0.9 leg=0.6 neck=1.0 neckangle=70 head=0.28 ears=pointy
+  gearpair id teeth1=12 teeth2=36 module=0.1 h=0.3 color1= color2=   # two gears that really mesh, with marks that show the turn. In anim: drive id turns=3. Never build meshing gears by hand.
   fish id length=3 depth=0.2 color=gray fin=gray  # fish, shark, dolphin, nose to +x
   tree id height=5 color=green
   vents id n=6 w=1 d=0.1 gap=0.18              # slots on a surface
@@ -134,7 +135,7 @@ Add `anim` as the last child of a model when the answer is a process, a mechanis
       osc piston by=0,-1.2,0 cycles=2          # moves back and forth, for pistons and valves. phase=0.5 shifts it.
       show part / hide part
 
-Mechanisms: `link rod a=pin1 b=pin2 r=0.1 color=steel` is a rod that always spans two parts, also while they move. Use it for connecting rods, hydraulics, linkages. Build a crank as a group `crank` with a small part `crankpin` at its radius, spin the group, `osc` the piston so that one crank turn equals one cycle, and link piston to crankpin. Two meshing gears: spin them with opposite signs and turns in the inverse ratio of their teeth.
+Mechanisms: `link rod a=pin1 b=pin2 r=0.1 color=steel` is a rod that always spans two parts, also while they move. Use it for connecting rods, hydraulics, linkages. Build a crank as a group `crank` with a small part `crankpin` at its radius, spin the group, `osc` the piston so that one crank turn equals one cycle, and link piston to crankpin. Meshing gears: use the gearpair kit and `drive`.
 A thing that takes off stands on the ground in its first position: write it at its flying height and use `move heli from=0,-5,0`. A helipad or floor stays under it.
 
 Targets are part or group ids, so give things that move a group with an id. Use 3 to 6 steps of 1 to 2.5 seconds. Zoom in on small things and return at the end.
@@ -346,6 +347,12 @@ sketch scene 620 340
 ```
 
 Do not copy these examples. Learn the method and build what the user asked for.
+
+# Context image
+
+The user can attach a screenshot or photo: context image 0 is called ctx0. It shows what the user is looking at. It is the truth. Build THAT thing, in that arrangement, not a thing from memory. Where a part sits in the image is where it sits in your model.
+
+Use the real pixels. Put the image on the top face of a part: `tex=ctx0 crop=x0,y0,x1,y1`, pixels of the image, tight around the object seen from above or from the front. Example: `box board size=8.5,0.16,5.6 tex=ctx0 crop=120,300,900,810`. Then add low 3D parts only where height matters. Keep positions from the picture: a point at share u across and v down the crop lies at x=(u-0.5)*width, z=(v-0.5)*depth.
 
 # Reference material
 

@@ -224,7 +224,7 @@ function drawModel(n, ctx, theme) {
   const auto = k.view === undefined || k.view === 'auto';
   let base = nums(auto ? undefined : k.view, [35, 22]);
   if (ctx.forceView) base = ctx.forceView;
-  if (auto && parts.length && !ctx.forceView) {
+  if (auto && parts.length && !ctx.forceView && !parts.some((p) => p.photo)) {
     const key = `${cacheKey}:view`;
     base = ctx.cache?.get(key) ?? bestView(parts, base);
     ctx.cache?.set(key, base);
@@ -272,11 +272,17 @@ function drawModel(n, ctx, theme) {
     };
     const end = Math.min(time, tl.total);
     const cam = cameraAt(tl, base, ctx.time === undefined ? tl.total : end, centerOf);
-    Object.assign(opt, { xf: P.xf, tint: P.tint, zoom: cam.zoom, focus: cam.focus, fitBox: box });
+    Object.assign(opt, { xf: P.xf, tint: P.tint, gone: P.gone, zoom: cam.zoom, focus: cam.focus, fitBox: box });
     look.yaw = cam.yaw; look.pitch = cam.pitch;
     if (ctx.time !== undefined) ctx.caption = caption(tl, time);
   }
   if (!opt.xf && parts.some((p) => p.link)) opt.xf = linkPose(parts, null);
+  // A photo body is true only near its own angle.
+  if (parts.some((p) => p.photo)) {
+    if (auto) { look.yaw = -14; look.pitch = 5; }
+    look.yaw = Math.max(-24, Math.min(24, look.yaw));
+    look.pitch = Math.max(-6, Math.min(16, look.pitch));
+  }
   const res = renderModel(parts, { ...opt, yaw: look.yaw, pitch: look.pitch });
   const png = encodePng(res.rgba, res.w, res.h).toString('base64');
   let out = `<image x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" href="data:image/png;base64,${png}"/>`;

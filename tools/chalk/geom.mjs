@@ -16,13 +16,13 @@ export const COLORS3D = {
 const PARAMS = {
   box: ['size', 'round'], cyl: ['r', 'h', 'r2', 'axis', 'hole'], cone: ['r', 'h', 'axis'], sphere: ['r', 'scale3'],
   lathe: ['pts', 'axis', 'smooth'], extrude: ['pts', 'h', 'axis'], loft: ['sections', 'axis', 'square'],
-  tube: ['pts', 'r', 'flat'], fan: ['blades', 'r', 'hub', 'h', 'axis', 'twist'],
-  gear: ['teeth', 'r', 'h', 'axis'], spring: ['r', 'wire', 'turns', 'h', 'axis'],
+  tube: ['pts', 'r', 'flat', 'from', 'to'], fan: ['blades', 'r', 'hub', 'h', 'axis', 'twist'],
+  gear: ['teeth', 'r', 'h', 'axis', 'phase'], spring: ['r', 'wire', 'turns', 'h', 'axis'],
   chip: ['size', 'pins'], header: ['n', 'rows', 'pitch', 'pinh'], screw: ['r', 'h'],
   plate: ['pts', 'h'], body: ['top', 'bottom', 'width', 'square'], wing: ['root', 'tip', 'span', 'sweep', 'thick', 'dihedral'], wheel: ['r', 'w', 'axis'], port: ['type', 'size'], limb: ['pts'], blob: ['k', 'res'],
 };
 export const SHAPES = new Set(Object.keys(PARAMS));
-const COMMON = new Set(['id', 'at', 'rot', 'scale', 'color', 'mat', 'label', 'seg', 'shell', 'on', 'sink']);
+const COMMON = new Set(['id', 'at', 'rot', 'scale', 'color', 'mat', 'label', 'seg', 'shell', 'on', 'sink', 'tex', 'crop']);
 
 export function shapeKeys(cmd) { return PARAMS[cmd]; }
 export function isCommon(k) { return COMMON.has(k); }
@@ -448,13 +448,19 @@ function fan(blades, r, hub, h, twist) {
   return m;
 }
 
-function gear(teeth, r, h) {
+// Gear with trapezoid teeth. r is the pitch radius. Two gears mesh when they have
+// the same tooth size, so the gearpair kit sets r from the tooth count.
+function gear(teeth, r, h, phase = 0) {
+  const module = (2 * r) / teeth;
+  const tip = r + module * 0.95, root = r - module * 1.15;
   const poly = [];
-  const root = r * 0.84, n = teeth * 4;
-  for (let i = 0; i < n; i++) {
-    const a = (i / n) * Math.PI * 2;
-    const R = i % 4 === 1 || i % 4 === 2 ? r : root;
-    poly.push([Math.cos(a) * R, Math.sin(a) * R]);
+  const pitch = (Math.PI * 2) / teeth;
+  for (let i = 0; i < teeth; i++) {
+    const c = i * pitch + phase;
+    [[-0.32, root], [-0.2, root], [-0.11, tip], [0.11, tip], [0.2, root], [0.32, root]].forEach(([d, R]) => {
+      const a = c + d * pitch;
+      poly.push([Math.cos(a) * R, Math.sin(a) * R]);
+    });
   }
   return extrude(poly, h);
 }
@@ -543,9 +549,9 @@ export function buildShape(node) {
       if (kv.axis === 'z') return m.map(([x, y, z]) => [z, y, x]);
       return m;
     }
-    case 'tube': return tube(points(kv.pts), n('r', 0.05), Number(kv.seg ?? 12), n('flat', 1));
+    case 'tube': return tube(kv.pts ? points(kv.pts) : [nums(kv.from, [0, 0, 0]), nums(kv.to, [1, 0, 0])], n('r', 0.05), Number(kv.seg ?? 12), n('flat', 1));
     case 'fan': return fan(n('blades', 16), n('r', 1), n('hub', 0.3), n('h', 0.3), n('twist', 0.8)).map(ax);
-    case 'gear': return gear(n('teeth', 16), n('r', 1), n('h', 0.2)).map(ax);
+    case 'gear': return gear(n('teeth', 16), n('r', 1), n('h', 0.2), n('phase', 0)).map(ax);
     case 'spring': return spring(n('r', 0.3), n('wire', 0.04), n('turns', 6), n('h', 1)).map(ax);
     case 'chip': return chip(nums(kv.size, [1, 0.15, 1]), n('pins', 8));
     case 'header': return header(n('n', 10), n('rows', 2), n('pitch', 0.254), n('pinh', 0.6));
