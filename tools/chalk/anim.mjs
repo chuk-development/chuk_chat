@@ -53,7 +53,7 @@ export function checkTimeline(tl, parts, errors) {
   for (const s of tl.steps) {
     for (const op of s.ops) {
       if (!['move', 'osc', 'spin', 'drive', 'show', 'hide', 'pulse', 'camera'].includes(op.cmd)) errors.push(`line ${op.line}: unknown action "${op.cmd}". Actions: move osc spin show hide pulse camera`);
-      else if (op.cmd === 'drive' ? !parts.gearsets.has(op.args[0]) : op.cmd !== 'camera' && !known.has(op.args[0])) errors.push(`line ${op.line}: ${op.cmd}: no part "${op.args[0]}"`);
+      else if (op.cmd === 'drive' ? !parts.gearsets.has(String(op.args[0]).split(/[._]/)[0]) && !parts.gearsets.has(op.args[0]) : op.cmd !== 'camera' && !known.has(op.args[0])) errors.push(`line ${op.line}: ${op.cmd}: no part "${op.args[0]}"`);
     }
   }
 }
@@ -82,7 +82,7 @@ export function pose(tl, parts, time) {
         st.off = st.off.map((x, i) => x + b[i] * v);
       } else if (op.cmd === 'drive') {
         // Meshing gears: the second one turns the other way, at the tooth ratio.
-        const set = parts.gearsets.get(id);
+        const set = parts.gearsets.get(String(id).split(/[._]/)[0]) ?? parts.gearsets.get(id);
         if (set) {
           const turns = shown(Number(k.turns ?? 1), s);
           const A = get(set.a), B = get(set.b);
