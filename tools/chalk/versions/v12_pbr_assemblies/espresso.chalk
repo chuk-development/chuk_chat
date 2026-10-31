@@ -1,0 +1,482 @@
+canvas dark
+title "Siebträger-Espressomaschine mit integriertem Mahlwerk – Detailplan"
+model obj 1100 620 keep=1 tidy=1 view=35,18
+
+  group whole
+    group hull
+      # --- main stainless shell: near-vertical front face, flat top, rounded top-front edge over the panel ---
+      body main top=2.5,27.6,8,28,16,28,24,27.8,26.5,27 bottom=26.5,7.6,20,7.4,10,7.4,5,7.7,2.5,9,0.8,11.5,0.2,15,0.2,19,0.8,22.5,1.6,25.5,2.5,27.6 width=2.5,26.5,8,29.4,16,30,24,29.4,26.5,26.5 square=1 color=#c6cacc mat=paint
+      # --- dark plinth base under everything ---
+      body plinth top=1,2.5,10,2.5,20,2.5,25,2.5 bottom=25,0.5,20,0.5,10,0.5,3,0.5,1,1.5 width=1,24,10,27.5,20,27.5,25,24 square=1 color=#2a2d30 mat=paint
+      # --- stainless drip-tray band protruding at the bottom front ---
+      body tray top=-2.5,7.5,3,7.7,10,7.7,16,7.5 bottom=16,2.4,10,2.4,3,2.4,-2.5,3.5 width=-2.5,22,3,28,10,28.6,16,28 square=1 color=#cfd2d5 mat=paint
+      # --- black bean hopper sitting on the flat top, toward the back, wider at the top ---
+      body hopper top=13,36.8,16.5,37.6,21.5,37.6,25,36.8 bottom=25,26.5,21.5,26.5,16.5,26.5,13,26.5 width=13,10,16.5,12.2,21.5,12.2,25,10 square=1 color=#23262a mat=paint
+      # --- hopper lid, slightly overhanging ---
+      body lid top=14,38.4,18,39.3,22,39.3,25.5,38.4 bottom=25.5,36.6,22,36.6,18,36.6,14,36.6 width=14,10.5,18,13,22,13,25.5,10.5 square=1 color=#2c3034 mat=paint
+      # --- dark collar where the hopper meets the top cap ---
+      body collar top=13,28.4,25,28.4 bottom=25,26.8,13,26.8 width=13,11,25,11 square=1 color=#3a3e42 mat=paint
+      # --- group head: big chrome mass protruding at mid front, centre ---
+      body ghead top=-5.5,17.5,2,17.5 bottom=2,13.5,-5.5,13.5 width=-5.5,8.6,2,8.6 square=1 color=#d8dadd mat=paint
+      # --- portafilter chrome chunk under the group head ---
+      body pfork top=-7.5,15.2,-3,15.6 bottom=-3,12.2,-7.5,12.6 width=-7.5,5,-3,6 square=1 color=#c6c9cc mat=paint
+      # --- wooden portafilter handle pointing forward ---
+      body handle top=-14.5,13.6,-7,14 bottom=-7,11.6,-14.5,12 width=-14.5,3,-7,3.2 square=1 color=#8a5a34 mat=paint
+      # --- livery: sides slightly darker brushed steel ---
+      paint hull color=#bfc3c6 box=2,7,-16,27,28,-14.3
+      paint hull color=#bfc3c6 box=2,7,14.3,27,28,16
+      # --- top surface a touch lighter ---
+      paint hull color=#d0d3d6 box=3,27.8,-14,26,28.4,14
+      # --- front face brighter curved stainless ---
+      paint hull color=#d8dbdd box=-3,7,-14,1.8,26.5,14
+      # --- drip tray grill: dark recessed grid on the tray top ---
+      paint hull color=#17191c box=-1.8,7.15,-12,2.5,7.8,12
+      # --- control panel: central pressure gauge, dark bezel + white face + needle ---
+      paint hull color=#2b2e31 poly=0,21.7,1.77,22.43,2.5,24.2,1.77,25.97,0,26.7,-1.77,25.97,-2.5,24.2,-1.77,22.43 axis=x
+      paint hull color=#f2f4f5 poly=0,22.4,1.27,22.93,1.8,24.2,1.27,25.47,0,25.9,-1.27,25.47,-1.8,24.2,-1.27,22.93 axis=x
+      paint hull color=#2b2e31 poly=0,24.2,0.14,25.3,-0.14,25.3 axis=x
+      # --- grind amount dial, large dark knurled with silver centre ---
+      paint hull color=#2b2e31 poly=-7.3,22.1,-5.81,22.71,-5.2,24.2,-5.81,25.69,-7.3,26.3,-8.79,25.69,-9.4,24.2,-8.79,22.71 axis=x
+      paint hull color=#c9ccd0 poly=-7.3,23.1,-6.52,23.42,-6.2,24.2,-6.52,24.98,-7.3,25.3,-8.08,24.98,-8.4,24.2,-8.08,23.42 axis=x
+      # --- power and filter-size buttons, left of the dial ---
+      paint hull color=#d0d3d6 poly=-11,23.25,-10.33,23.53,-10.05,24.2,-10.33,24.87,-11,25.15,-11.67,24.87,-11.95,24.2,-11.67,23.53 axis=x
+      paint hull color=#2b2e31 poly=-11,23.7,-10.65,23.85,-10.5,24.2,-10.65,24.55,-11,24.7,-11.35,24.55,-11.5,24.2,-11.35,23.85 axis=x
+      paint hull color=#d0d3d6 poly=-3.6,23.25,-2.93,23.53,-2.65,24.2,-2.93,24.87,-3.6,25.15,-4.27,24.87,-4.55,24.2,-4.27,23.53 axis=x
+      paint hull color=#2b2e31 poly=-3.6,23.7,-3.25,23.85,-3.1,24.2,-3.25,24.55,-3.6,24.7,-3.95,24.55,-4.1,24.2,-3.95,23.85 axis=x
+      # --- three chrome program buttons right of the gauge ---
+      paint hull color=#d0d3d6 poly=4.5,23.25,5.17,23.53,5.45,24.2,5.17,24.87,4.5,25.15,3.83,24.87,3.55,24.2,3.83,23.53 axis=x
+      paint hull color=#2b2e31 poly=4.5,23.7,4.85,23.85,5,24.2,4.85,24.55,4.5,24.7,4.15,24.55,4,24.2,4.15,23.85 axis=x
+      paint hull color=#d0d3d6 poly=8,23.25,8.67,23.53,8.95,24.2,8.67,24.87,8,25.15,7.33,24.87,7.05,24.2,7.33,23.53 axis=x
+      paint hull color=#2b2e31 poly=8,23.7,8.35,23.85,8.5,24.2,8.35,24.55,8,24.7,7.65,24.55,7.5,24.2,7.65,23.85 axis=x
+      paint hull color=#d0d3d6 poly=11.5,23.25,12.17,23.53,12.45,24.2,12.17,24.87,11.5,25.15,10.83,24.87,10.55,24.2,10.83,23.53 axis=x
+      paint hull color=#2b2e31 poly=11.5,23.7,11.85,23.85,12,24.2,11.85,24.55,11.5,24.7,11.15,24.55,11,24.2,11.15,23.85 axis=x
+      # --- panel lines ---
+      seam hull plane=0,1,0,27.3 w=0.012 box=3,26,-14,26,29,14
+      seam hull plane=0,0,1,14.6 w=0.012 box=2,7,-16,27,28,16
+      seam hull plane=0,0,-1,14.6 w=0.012 box=2,7,-16,27,28,16
+      seam hull plane=0,1,0,7.6 w=0.014 box=-3,6.5,-15,17,9,15
+      seam hull plane=1,0,0,-4.6 w=0.012 box=-6,12,-5,2,19,5
+      seam hull plane=0,-1,0,36.7 w=0.012 box=13,36,-8,26,40,8
+      seam hull plane=0,1,0,26.6 w=0.012 box=12,26,-8,26,29,8
+      # --- printed labels under the controls ---
+      decal hull "POWER" at=-11,22.9 axis=x h=0.32 color=#7d8286
+      decal hull "GRIND AMOUNT" at=-7.3,21.5 axis=x h=0.32 color=#7d8286
+      decal hull "FILTER SIZE" at=-3.6,22.9 axis=x h=0.32 color=#7d8286
+      decal hull "PROGRAM" at=4.5,22.9 axis=x h=0.32 color=#7d8286
+      # --- branding on the lower front ---
+      decal hull "BREVILLE" at=0,10.5 axis=x h=0.9 color=#8a8f93 bold=1
+    group fit_1652 at=3.2495,-0.4526,0.0000 scale=1.2236,1.0400,1.5294
+      group portafilter at=-7.35,14.4,0 rot=0,0,8 label="54mm Bottomless Siebtraeger"
+        # --- verchromter Klemmring, am Bruehkopfhals eingelegt ---
+        cyl pf_ring r=2.8 hole=2.55 h=1.0 axis=x at=0.05,0,0 color=#d8dadd mat=chrome
+        cyl pf_lip r=2.92 hole=2.5 h=0.22 axis=x at=-0.42,0,0 color=#e0e3e5 mat=chrome
+        cyl pf_seam r=2.93 hole=2.86 h=0.04 axis=x at=-0.3,0,0 color=#8f9397 mat=brushed
+        ring 26 r=2.9 axis=x at=-0.42,0,0
+          box pf_knurl size=0.06,0.1,0.12 color=#b9bdc0 mat=brushed
+        ring 18 r=2.84 axis=x at=0.32,0,0
+          box pf_knurl2 size=0.05,0.08,0.1 color=#b2b6b9 mat=brushed
+        repeat 3 step=0.18,0,0 at=-0.12,0,0
+          cyl pf_riefe r=2.83 hole=2.77 h=0.05 axis=x color=#a8acaf mat=brushed
+        cyl pf_glanz r=0.05 h=0.85 axis=x at=0.05,2.76,0 color=#f1f4f6 mat=chrome
+        # --- Oesen-Laschen zum Einrasten ---
+        mirror z
+          box pf_ear size=1.25,0.5,0.8 round=0.3 at=0.05,0,2.9 color=#d8dadd mat=chrome
+          screw pf_earscrew r=0.1 h=0.08 axis=z at=0.05,0,3.3 color=#9ea3a7
+        # --- Silikon-Dichtungsring als dunkle Linie ---
+        cyl pf_gasket r=2.68 hole=2.45 h=0.16 axis=x at=0.62,0,0 color=#141518 mat=rubber
+        # --- bodenloser Siebkorb mit Puck, von vorn sichtbar ---
+        cyl pf_basket r=2.7 hole=2.45 h=1.3 axis=x at=1.4,0,0 color=#d4d7d9 mat=chrome
+        cyl pf_inner r=2.46 hole=2.34 h=0.9 axis=x at=1.35,0,0 color=#ced2d5 mat=chrome
+        cyl pf_residue r=2.56 hole=2.44 h=0.5 axis=x at=1.0,0,0 color=#4a2c1a mat=matte
+        cyl pf_puck r=2.4 h=0.55 axis=x at=0.62,0,0 color=#32200f mat=matte
+        cyl pf_puckedge r=2.42 hole=2.3 h=0.1 axis=x at=0.36,0,0 color=#22140a mat=matte
+        cyl pf_puckwet r=2.28 h=0.07 axis=x at=0.33,0,0 color=#1b0f07 mat=plastic
+        ring 20 r=2.42 axis=x at=0.42,0,0
+          cyl pf_hole r=0.06 h=0.09 axis=x color=#26170c mat=matte
+        # --- Kaffeesprenkel auf dem Chrom ---
+        sphere pf_speck1 r=0.07 at=-0.5,1.9,2.2 color=#2a1a0d mat=matte
+        sphere pf_speck2 r=0.05 at=-0.48,-1.6,2.45 color=#241609 mat=matte
+        # --- Espresso-Tropfen unter dem Korb ---
+        sphere pf_bead r=0.05 at=-0.5,-2.72,0.12 color=#1a0d05 mat=glass
+        sphere pf_drop r=0.08 scale=0.7,1.4,0.7 at=-0.5,-2.85,0.12 color=#1a0d05 mat=glass
+        # --- Griff: Ferrule + Walnuss ---
+        group pf_handle label="Walnussholzgriff"
+          cyl pf_ferrbase r=1.5 h=0.28 axis=x at=-0.6,0,0 color=#cfd2d5 mat=chrome
+          lathe pf_ferrule pts=-0.45,1.55 -0.8,1.52 -1.25,1.3 -1.75,1.12 -2.2,1.04 axis=x smooth=1 color=#d8dadd mat=chrome
+          cyl pf_rib1 r=1.3 hole=1.18 h=0.07 axis=x at=-1.05,0,0 color=#b4b8bb mat=brushed
+          cyl pf_rib2 r=1.16 hole=1.06 h=0.06 axis=x at=-1.55,0,0 color=#b4b8bb mat=brushed
+          cyl pf_ferglanz r=0.04 h=0.8 axis=x at=-1.2,1.27,0 color=#f1f4f6 mat=chrome
+          cyl pf_collar r=1.06 hole=0.94 h=0.16 axis=x at=-2.28,0,0 color=#63676b
+          limb pf_wood pts=-2.15,0,0,1.0 -3.2,0.04,0,1.1 -4.5,0.05,0,1.03 -5.7,0,0,0.86 -6.5,-0.04,0,0.66 -7.05,-0.06,0,0.5 color=#8a5a34 mat=wood
+          cyl pf_endcap r=0.5 h=0.13 axis=x at=-7.1,-0.06,0 color=#5c3a20 mat=wood
+          tube pf_grain1 pts=-2.4,0.6,0.8 -3.3,0.66,0.78 -4.5,0.65,0.76 -5.6,0.57,0.66 -6.5,0.44,0.48 r=0.03 color=#6e4526 mat=wood
+          tube pf_grain2 pts=-2.4,-0.68,-0.74 -3.5,-0.7,-0.72 -4.7,-0.7,-0.7 -5.8,-0.58,-0.56 -6.6,-0.44,-0.42 r=0.03 color=#6e4526 mat=wood
+          tube pf_grain3 pts=-2.5,0.95,0.22 -3.6,1.02,0.18 -4.8,0.96,0.14 -6.0,0.8,0.1 -6.7,0.58,0.08 r=0.03 color=#6e4526 mat=wood
+          tube pf_grain4 pts=-2.6,-0.92,0.18 -3.8,-0.98,0.14 -5.0,-0.9,0.1 r=0.03 color=#6e4526 mat=wood
+          tube pf_sheen pts=-2.4,0.99,0.05 -3.6,1.06,0.03 -4.8,1.0,0 -6.0,0.83,-0.02 -6.6,0.7,-0.03 r=0.04 color=#a5713f mat=wood
+    group fit_16500 at=-0.6134,10.9164,0.0000 scale=0.8481,0.6784,0.9890
+      group group_head_face
+        # ---- chrome brew head front block (slightly proud of the brushed hull) ----
+        box gh_block size=2.6,4.3,9.0 at=-4.35,15.45,0 round=0.12 color=#c6cacc mat=brushed
+        box gh_step size=2.6,0.28,9.0 at=-4.35,13.44,0 color=#b7bbbe mat=brushed
+        box gh_rear_seam size=0.12,4.35,9.1 at=-3.12,15.45,0 color=#2a2d30 mat=matte
+        # fine horizontal brushing / parting lines on the front face
+        repeat 6 step=0,0.62,0 at=-5.665,13.75,0
+          box size=0.015,0.012,8.7 color=#b0b4b7 mat=brushed
+        box gh_side_seam size=0.02,4.2,0.015 at=-5.66,15.45,4.49 color=#9ba0a3 mat=brushed
+        mirror z
+          box gh_side_seam2 size=0.02,4.2,0.015 at=-5.66,15.45,4.49 color=#9ba0a3 mat=brushed
+          box gh_edge_light size=0.03,4.25,0.06 at=-5.64,15.45,4.46 color=#eef1f2 mat=chrome
+          box gh_streak size=0.015,3.4,0.22 at=-5.665,15.5,3.3 color=#e4e7e9 mat=chrome
+          screw gh_topbolt r=0.1 h=0.06 at=-4.4,17.62,3.4 rot=90,0,0 color=#8f9497 mat=steel
+        # seams where the head meets the housing front
+        box gh_seam_top size=0.06,0.05,8.8 at=-5.5,17.53,0 color=#8f9497 mat=brushed
+        box gh_seam_bot size=0.06,0.05,8.8 at=-5.5,13.36,0 color=#8f9497 mat=brushed
+        # drip lip under the head
+        box gh_lip size=0.55,0.14,3.2 at=-5.45,13.24,0 round=0.04 color=#c2c6c8 mat=chrome
+        # ---- polished locking collar with sharp reflex edge ----
+        lathe gh_collar at=-5.0,0,0 axis=x smooth=1 pts=-0.62,3.1 -0.5,3.95 -0.25,4.3 0.15,4.3 0.45,3.95 0.72,3.2 color=#d8dadd mat=chrome
+        cyl gh_edge_ring r=4.32 hole=4.02 h=0.05 axis=x at=-5.62,0,0 color=#f1f4f5 mat=chrome
+        # ---- black group gasket (2 mm ring) ----
+        cyl gh_gasket r=3.35 hole=2.85 h=0.2 axis=x at=-5.66,0,0 color=#17191b mat=rubber
+        # ---- shower screen with wet sheen ----
+        cyl gh_screen r=2.8 h=0.1 axis=x at=-5.74,0,0 color=#ccd0d3 mat=chrome
+        cyl gh_film r=2.55 h=0.02 axis=x at=-5.80,0,0 color=#dfeef2 mat=glass
+        # microscopic bores, concentric pattern
+        ring 8 r=0.32 axis=x at=-5.815,0,0
+          cyl r=0.04 h=0.04 axis=x color=#33373a mat=dark
+        ring 12 r=0.85 axis=x at=-5.815,0,0
+          cyl r=0.04 h=0.04 axis=x color=#33373a mat=dark
+        ring 17 r=1.42 axis=x at=-5.815,0,0
+          cyl r=0.04 h=0.04 axis=x color=#33373a mat=dark
+        ring 23 r=2.05 axis=x at=-5.815,0,0
+          cyl r=0.04 h=0.04 axis=x color=#33373a mat=dark
+        # central jet bore
+        cyl gh_jet r=0.11 h=0.05 axis=x at=-5.82,0,0 color=#1e2124 mat=dark
+        # residual droplets, freshly flushed
+        repeat 3 step=0,0,0.55 at=-5.825,-1.45,0.25
+          sphere r=0.055 scale=1,1,0.6 color=#e8f5f8 mat=glass
+        # ---- two torx screws on the retaining ring ----
+        mirror z
+          screw gh_torx r=0.09 h=0.05 at=-5.68,3.85,0 rot=0,90,0 color=#6f7477 mat=steel
+        # finger smudge on the polished collar
+        box gh_smudge size=0.012,1.7,1.15 at=-5.672,14.55,1.55 color=#e9f1f3 mat=glass
+        # ---- markings on the hull front beside the head ----
+        decal hull "INSERT · LOCK" at=13.85,0 axis=x h=0.3 color=#7d8286
+        decal hull "→" at=13.85,2.5 axis=x h=0.3 color=#7d8286
+    group fit_61264 at=-4.1180,1.2500,-1.0609 scale=1.3030,0.9973,1.0424
+      group steam_wand
+        # --- Wanddurchführung rechts (z=13.25) auf Hoehe y=17 ---
+        box wall_plate size=3.6,3.6,0.35 at=8,17,13.28 color=#b7bbbe mat=brushed
+        cyl gasket1 r=1.5 h=0.1 axis=z at=8,17,13.44 color=#1a1d1f mat=rubber
+        cyl escutcheon r=1.4 h=0.25 axis=z at=8,17,13.6 color=#d4d7d9 mat=brushed
+        cyl gasket2 r=1.05 h=0.08 axis=z at=8,17,13.76 color=#1a1d1f mat=rubber
+        cyl socket r=1.0 h=0.7 axis=z at=8,17,13.95 color=#232629 mat=plastic
+        ring 14 r=1.0 axis=z at=8,17,14.18
+          box sockknurl size=0.07,0.1,0.12 color=#17191b mat=plastic
+        cyl nipple r=0.15 h=0.6 axis=y at=8,15.75,13.85 color=#232629 mat=plastic
+        sphere nipdrop r=0.07 at=8,15.35,13.85 color=#cfe4ee mat=glass
+        repeat 2 step=3.0,0,0 at=6.5,17,13.5
+          cyl pscrew r=0.12 h=0.12 axis=z color=#9aa0a4 mat=steel
+        box rating_plate size=1.8,1.0,0.1 at=11.5,14.5,13.32 color=#7d8286 mat=brushed
+        repeat 2 step=1.2,0,0 at=10.9,14.5,13.39
+          cyl rpscrew r=0.06 h=0.08 axis=z color=#5f6468 mat=steel
+        # --- Abstellklemme fuer die Lanze an der Wand ---
+        box rest_clip size=1.0,1.6,0.5 at=8,14.3,13.42 color=#232629 mat=plastic round=0.05
+        screw clipscrew r=0.12 h=0.15 at=8,14.3,13.7 color=#9aa0a4
+        repeat 2 step=0,1.4,0 at=8,13.7,13.7
+          cyl clscrew r=0.09 h=0.1 axis=z color=#9aa0a4 mat=steel
+        # --- Klemmbuegel am Rohrbogen ---
+        box arc_clamp size=0.5,0.5,0.7 at=8,12.8,13.55 color=#232629 mat=plastic
+        cyl clampscr r=0.08 h=0.1 axis=z at=8,12.8,13.92 color=#9aa0a4 mat=steel
+        # --- schwenkbarer Lanzenarm (Kugelgelenk) ---
+        group wand_arm
+          sphere ball r=0.65 at=8,17,13.85 color=#e6e8ea
+          cyl washer r=0.16 h=0.05 axis=y at=8,17.62,13.85 color=#c6c9cc mat=steel
+          cyl ballscr r=0.09 h=0.14 axis=y at=8,17.7,13.85 color=#c6c9cc mat=steel
+          cyl nut r=0.75 hole=0.45 h=0.35 axis=z at=8,17,14.3 color=#cdd0d3
+          ring 10 r=0.75 axis=z at=8,17,14.3
+            box nutknurl size=0.05,0.08,0.28 color=#aeb2b5 mat=steel
+          tube arc pts=8,17.05,13.8 8,16.95,14.25 8,16.6,14.45 8,15.6,14.5 8,14.2,14.3 8,12.8,13.9 8,11.5,13.4 8,10.7,13.05 r=0.42 color=#dfe2e4
+          tube highlight pts=8,17.4,13.85 8,17.3,14.24 8,16.95,14.44 8,15.95,14.48 8,14.55,14.28 8,13.15,13.88 8,11.85,13.38 r=0.07 color=#eef1f3
+          lathe grip pts=0,0.5 0.5,0.74 1.0,0.72 1.4,0.79 1.8,0.71 2.2,0.79 2.6,0.71 3.0,0.79 3.4,0.71 3.8,0.78 4.2,0.72 4.6,0.58 5.0,0.42 axis=y smooth=1 at=8,6.0,11.34 rot=20,0,0 color=#2b2e31 mat=plastic
+          cyl grip_cap r=0.48 h=0.12 axis=y rot=20,0,0 at=8,10.72,13.06 color=#1e2124 mat=plastic
+          cyl pin1 r=0.62 hole=0.5 h=0.12 axis=y rot=20,0,0 at=8,10.32,12.91 color=#d0d3d5
+          cyl pin2 r=0.68 hole=0.55 h=0.12 axis=y rot=20,0,0 at=8,6.42,11.49 color=#d0d3d5
+          repeat 4 step=0,0.55,0.2 at=8,7.13,11.75
+            cyl rib r=0.82 hole=0.72 h=0.08 axis=y rot=20,0,0 color=#1e2124 mat=plastic
+          cyl collar r=0.5 h=0.45 axis=y rot=20,0,0 at=8,6.09,11.37 color=#cdd0d3
+          tube lance pts=8,6.0,11.34 8,5.5,11.11 8,5.15,10.93 r=0.27 color=#d8dbdd
+          cyl heattint r=0.29 hole=0.24 h=0.18 axis=y rot=20,0,0 at=8,5.4,11.05 color=#7a8a94
+          cyl tipcone r=0.27 r2=0.07 h=0.55 axis=y rot=20,0,0 at=8,4.95,10.85 color=#cfd2d5
+          ring 4 r=0.17 axis=y at=8,5.05,10.9
+            sphere steamscrew r=0.055 color=#141618
+          sphere centerhole r=0.05 at=8,4.68,10.76 color=#141618
+          sphere drop r=0.09 at=8,4.55,10.72 color=#cfe4ee mat=glass
+          repeat 2 step=0,-0.38,-0.12 at=8,4.2,10.6
+            sphere falling r=0.06 color=#dcebf2 mat=glass
+          tube wisp pts=8,4.65,10.72 8,5.6,10.35 8,6.6,9.95 8,7.6,9.75 r=0.1 color=#e8f1f5 mat=glass
+    group fit_68203 at=-0.6667,-0.7681,7.7860 scale=1.1111,1.0145,1.3889
+      group hot_water_spout label="Heißwasserauslauf links mit Absperrknopf"
+        # --- Befestigungsflansch an der Seitenwand (z=-13.25), gebördelt ---
+        cyl flange_base r=1.7 h=0.25 axis=z at=5,15,-13.32 color=#cfd2d4 mat=brushed
+        cyl flange_step r=1.25 h=0.5 axis=z at=5,15,-13.48 color=#d8dadd mat=brushed
+        ring 4 r=1.48 axis=z at=5,15,-13.46
+          screw fscrew r=0.09 h=0.12 color=#9aa0a3 mat=steel
+        # --- Wanddurchführung: Chromzierling + geriffelte Überwurfmutter ---
+        cyl wall_bead r=0.85 hole=0.62 h=0.45 axis=z at=5,15,-13.6 color=#d4d7d9 mat=brushed
+        gear compression_nut teeth=16 r=0.8 h=0.6 axis=z at=5,15,-13.85 color=#c9ccce mat=brushed
+        # --- Auslauf: kurzer gerader Chromauslauf, ca. 30-45° nach vorn-unten ---
+        tube spout r=0.58 color=#d8dadd mat=brushed pts=5,15,-13.1 5,15,-13.95 4.7,14.7,-14.35 3.9,13.9,-14.7 3.15,13.05,-14.8
+        cyl tip_taper r=0.58 r2=0.46 h=0.8 axis=x rot=0,0,-48 at=3.15,13.05,-14.8 color=#dcdfe1 mat=brushed
+        # --- schwarze Silikonmündung, matte Innenseite sichtbar dunkel ---
+        cyl tip_silicone r=0.6 h=0.55 axis=x rot=0,0,-48 at=2.78,12.65,-14.82 color=#1e2124 mat=rubber
+        cyl tip_bore r=0.38 h=0.45 axis=x rot=0,0,-48 at=2.72,12.71,-14.82 color=#0e1012 mat=matte
+        # --- Wassertropfen an der Mündung als Glanzpunkt ---
+        sphere drop1 r=0.13 scale=1,1.35,1 at=2.52,12.34,-14.82 color=#d6ecf4 mat=glass
+        sphere drop2 r=0.07 at=2.5,12.06,-14.82 color=#cfe6ee mat=glass
+        sphere drop3 r=0.05 at=3.5,13.35,-15.02 color=#cfe6ee mat=glass
+        # --- seitlicher Drehknopf (Durchmesser 2 cm) mit geriffelter Kante ---
+        cyl knob_bezel r=1.2 hole=1.02 h=0.2 axis=z at=5,17.3,-13.35 color=#c9ccce mat=brushed
+        gear knob_knurl teeth=22 r=1.0 h=0.75 axis=z at=5,17.3,-13.72 color=#2b2e31 mat=plastic
+        cyl knob_cap r=0.72 h=0.4 axis=z at=5,17.3,-14.06 color=#33373a mat=plastic
+        box knob_indicator size=0.08,0.5,0.06 rot=0,0,30 at=5,17.3,-14.28 color=#d0d3d6 mat=paint
+        cyl knob_dot r=0.1 h=0.05 axis=z at=5,17.3,-14.29 color=#6a6f73 mat=metal
+        cyl heat_mark r=0.11 h=0.04 axis=z at=5.38,17.58,-14.28 color=#b3372c mat=paint
+        # --- Beschriftung ---
+        decal hull "HOT WATER" at=5,12.35 axis=-z h=0.42 color=#7d8286
+        # --- Naht zum Gehäuseblech: Panellinien + Befestigungsschrauben ---
+        seam hull plane=0,0,1,-13.25 w=0.015 box=1.55,11.0,-13.3,1.65,18.0,-13.2
+        seam hull plane=0,0,1,-13.25 w=0.015 box=8.55,11.0,-13.3,8.65,18.0,-13.2
+        seam hull plane=0,0,1,-13.25 w=0.015 box=1.6,18.15,-13.3,8.6,18.25,-13.2
+        screw pscr1 r=0.1 h=0.12 at=1.6,17.6,-13.28 color=#9ea3a6 mat=steel
+        screw pscr2 r=0.1 h=0.12 at=8.6,17.6,-13.28 color=#9ea3a6 mat=steel
+        screw pscr3 r=0.1 h=0.12 at=1.6,11.6,-13.28 color=#9ea3a6 mat=steel
+        screw pscr4 r=0.1 h=0.12 at=8.6,11.6,-13.28 color=#9ea3a6 mat=steel
+    group fit_83846 at=-0.9720,2.1238,-0.0971 scale=1.5173,0.9711,1.2138
+      group panel_hardware at=1.19,25.9,0 rot=0,0,71.3 label="Bedienfeld-Hardware"
+        group pressure_gauge at=0,0,0 label="Manometer"
+          cyl g_recess r=2.25 h=0.14 axis=y at=0,0,0 color=#141618 mat=plastic
+          cyl g_bezel r=2.1 h=0.42 hole=1.82 axis=y at=0,0.16,0 color=#232629 mat=plastic
+          cyl g_dial r=1.82 h=0.1 axis=y at=0,0.2,0 color=#f2f4f5 mat=plastic
+          ring 12 r=1.5 axis=y at=0,0.26,0
+            box g_tick size=0.18,0.02,0.06 color=#7d8286 mat=brushed
+          ring 4 r=0.42 axis=y at=-0.95,0.27,-0.65
+            box g_red size=0.14,0.02,0.05 color=#b8352c mat=paint
+          box g_needle size=0.06,0.03,1.0 at=-0.37,0.31,-0.25 rot=0,-124,0 color=#2b2e31 mat=plastic
+          cyl g_hub r=0.14 h=0.07 axis=y at=0,0.32,0 color=#2b2e31 mat=plastic
+          sphere g_glass r=1.8 scale=1,0.24,1 at=0,0.22,0 mat=glass color=#dcebf2
+          cyl g_rim r=1.84 h=0.05 hole=1.76 axis=y at=0,0.27,0 color=#f4f8fa mat=glass
+          sphere g_fingerprint r=0.55 scale=1.5,0.06,1 at=0.45,0.62,-0.35 rot=0,20,0 mat=glass color=#ffffff
+        group grind_knob at=0,0,-5.6 label="Mahlgrad-Knopf"
+          cyl k_gap r=1.42 h=0.1 axis=y at=0,0,0 color=#141618 mat=plastic
+          cyl k_body r=1.24 h=1.15 axis=y at=0,0.6,0 color=#2b2e31 mat=plastic
+          ring 24 r=1.25 axis=y at=0,0.6,0
+            box k_rib size=0.045,1.12,0.07 color=#1f2225 mat=plastic
+          sphere k_top r=1.24 scale=1,0.16,1 at=0,1.18,0 color=#2b2e31 mat=plastic
+          cyl k_cap r=0.56 h=0.12 axis=y at=0,1.3,0 color=#cfd2d4 mat=brushed
+          box k_mark size=0.07,0.02,0.42 at=0,1.38,0 color=#4a4e52 mat=plastic
+        group key_caps label="Tastenkappen"
+          repeat 3 step=0,0,2.6 at=0,0,4.2
+            cyl b_gap r=1.04 h=0.08 axis=y at=0,0.02,0 color=#141618 mat=plastic
+            cyl b_cap r=0.94 h=0.14 axis=y at=0,0.09,0 color=#d0d3d6 mat=brushed
+            sphere b_dome r=0.94 scale=1,0.22,1 at=0,0.16,0 color=#d8dbdd mat=brushed
+          cyl ic1 r=0.07 h=0.03 axis=y at=0,0.26,4.2 color=#6a6f73 mat=plastic
+          cyl ic2a r=0.06 h=0.03 axis=y at=0,0.26,6.68 color=#6a6f73 mat=plastic
+          cyl ic2b r=0.06 h=0.03 axis=y at=0,0.26,6.94 color=#6a6f73 mat=plastic
+          box ic3 size=0.15,0.03,0.15 at=0,0.26,9.4 color=#6a6f73 mat=plastic
+        cyl p_gap r=0.82 h=0.08 axis=y at=0,0.02,-9.4 color=#141618 mat=plastic
+        cyl p_cap r=0.72 h=0.12 axis=y at=0,0.08,-9.4 color=#c6c9cb mat=brushed
+        box p_bar size=0.05,0.02,0.3 at=0,0.16,-9.4 color=#7d8286 mat=plastic
+        cyl led_power r=0.09 h=0.04 axis=y at=0,0.1,-8.2 color=#eaf4f6 mat=light
+        cyl led_steam r=0.09 h=0.04 axis=y at=0,0.1,10.7 color=#ff9a3d mat=light
+        box seam_h size=0.06,0.025,19 at=-3.4,0.06,0 color=#7d8286 mat=brushed
+        box seam_l size=4.2,0.025,0.06 at=-1.0,0.06,-10.6 color=#7d8286 mat=brushed
+        box seam_r size=4.2,0.025,0.06 at=-1.0,0.06,10.6 color=#7d8286 mat=brushed
+        mirror z
+          screw sc1 r=0.07 h=0.04 at=-3.1,0.08,10.0 color=#b7babc mat=brushed
+          screw sc2 r=0.07 h=0.04 at=1.2,0.08,10.0 color=#b7babc mat=brushed
+    group fit_25903 at=-1.5289,1.7330,0.0000 scale=1.0800,0.9948,1.0816
+      group hopper_beans
+        lathe fill pts=27.2,4.9 28.6,5.0 31.0,5.0 33.2,4.9 34.2,4.4 34.6,3.4 34.3,2.2 33.8,1.1 33.5,0.15 at=19,0,0 axis=y smooth=1 color=#33200f mat=matte
+        cone chute at=19,27.0,0 axis=y r=2.7 h=3.2 r2=1.0 color=#1a1c1e mat=plastic
+        cyl chute_collar r=2.8 h=0.5 at=19,30.1,0 axis=y color=#222528 mat=plastic
+        cyl chute_throat r=1.0 h=1.2 at=19,27.5,0 axis=y color=#141618 mat=plastic
+        sphere dip_shadow r=1.7 scale=1,0.55,1 at=19,33.55,0 color=#1e1007 mat=matte
+        ring 10 r=4.45 axis=y at=19,34.25,0
+          sphere bean r=0.5 scale=1,0.5,0.72 rot=0,12,4 color=#452a16 mat=matte
+        ring 9 r=4.6 axis=y at=19,33.35,0
+          sphere bean r=0.5 scale=1,0.5,0.72 rot=8,0,0 color=#3a2210 mat=matte
+        ring 8 r=4.6 axis=y at=19,32.3,0
+          sphere bean r=0.5 scale=1,0.5,0.72 rot=0,20,0 color=#4a2e18 mat=matte
+        repeat 5 step=1.0,0.18,0 at=15.4,31.1,4.35
+          sphere bean r=0.5 scale=1,0.5,0.72 rot=0,0,7 color=#402613 mat=matte
+        repeat 4 step=1.05,0.2,0 at=15.9,31.95,4.4
+          sphere bean r=0.5 scale=1,0.5,0.72 rot=5,0,0 color=#331c0e mat=matte
+        repeat 4 step=1.0,-0.15,0 at=16.2,31.4,-4.35
+          sphere bean r=0.5 scale=1,0.5,0.72 rot=0,0,-6 color=#3a2210 mat=matte
+        repeat 5 step=0,-0.32,0.95 at=19,34.15,-2.5
+          sphere bean r=0.5 scale=1,0.5,0.72 rot=0,90,8 color=#402613 mat=matte
+        sphere b01 r=0.5 scale=1,0.5,0.72 at=17.2,33.9,1.6 rot=15,30,10 color=#50331a mat=matte
+        sphere b02 r=0.5 scale=1,0.5,0.72 at=21.0,33.8,-1.4 rot=-10,140,8 color=#3d2412 mat=matte
+        sphere b03 r=0.5 scale=1,0.5,0.72 at=19.6,34.4,2.6 rot=8,70,0 color=#452a16 mat=matte
+        sphere b04 r=0.5 scale=1,0.5,0.72 at=16.4,34.35,-2.0 rot=-6,200,12 color=#57391e mat=matte
+        sphere b05 r=0.5 scale=1,0.5,0.72 at=21.8,34.25,1.8 rot=12,110,-8 color=#3a2210 mat=matte
+        sphere b06 r=0.5 scale=1,0.5,0.72 at=17.8,34.65,0.2 rot=0,45,6 color=#4a2e18 mat=matte
+        sphere b07 r=0.5 scale=1,0.5,0.72 at=20.4,34.7,-0.6 rot=-4,160,0 color=#402613 mat=matte
+        sphere b08 r=0.5 scale=1,0.5,0.72 at=19.0,33.0,3.2 rot=10,80,0 color=#331c0e mat=matte
+        sphere b09 r=0.5 scale=1,0.5,0.72 at=19.2,32.6,-3.4 rot=-8,30,0 color=#452a16 mat=matte
+        sphere b10 r=0.5 scale=1,0.5,0.72 at=16.0,32.6,-3.6 rot=6,120,0 color=#50331a mat=matte
+        sphere b11 r=0.5 scale=1,0.5,0.72 at=22.2,32.5,-3.0 rot=-12,75,0 color=#3a2210 mat=matte
+        sphere b12 r=0.5 scale=1,0.5,0.72 at=18.3,34.3,3.0 rot=6,95,0 color=#5e3c1f mat=plastic
+        sphere b13 r=0.5 scale=1,0.5,0.72 at=21.2,34.45,0.6 rot=-8,150,0 color=#63401f mat=plastic
+        sphere top1 r=0.5 scale=1,0.5,0.72 at=14.9,34.7,1.2 rot=0,15,0 color=#452a16 mat=matte
+        sphere top2 r=0.5 scale=1,0.5,0.72 at=23.0,34.6,-1.0 rot=0,170,0 color=#3a2210 mat=matte
+        sphere top3 r=0.5 scale=1,0.5,0.72 at=19.5,34.55,4.3 rot=8,80,0 color=#402613 mat=matte
+        sphere hero1 r=0.5 scale=1,0.5,0.72 at=19.5,34.55,-1.8 rot=6,20,0 color=#4a2e18 mat=matte
+        tube crease1 pts=19.05,34.75,-1.8 19.95,34.73,-1.76 r=0.035 color=#20100a
+        sphere hero2 r=0.5 scale=1,0.5,0.72 at=16.9,34.5,2.2 rot=-5,60,0 color=#402613 mat=matte
+        tube crease2 pts=16.68,34.68,2.59 17.13,34.66,1.81 r=0.035 color=#1d0f08
+        sphere hero3 r=0.5 scale=1,0.5,0.72 at=21.9,33.6,3.0 rot=10,100,0 color=#452a16 mat=matte
+        tube crease3 pts=21.98,33.78,3.44 21.82,33.77,2.56 r=0.035 color=#221207
+    group fit_41808 at=-7.0431,-50.7114,0.0000 scale=1.8286,2.8571,2.2857
+      group top_vents
+        # versenkte Grundplatte des Lüftungsfeldes, bündig zur Deckplatten-Partung
+        box vent_tray at=8,27.545,0 size=9.8,0.07,5.6 round=0.03 color=#bfc3c6 mat=brushed
+        # feine Panelnaht rund um das Lüftungsfeld
+        box seam_f1 at=8,27.592,-2.85 size=9.9,0.018,0.035 color=#6f7478 mat=matte
+        box seam_f2 at=8,27.592,2.85 size=9.9,0.018,0.035 color=#6f7478 mat=matte
+        box seam_f3 at=3.1,27.592,0 size=0.035,0.018,5.7 color=#6f7478 mat=matte
+        box seam_f4 at=12.9,27.592,0 size=0.035,0.018,5.7 color=#6f7478 mat=matte
+        # sechs Lamellenschlitze, 8 cm lang, 4 mm breit, 6 mm Teilung, parallel zur x-Achse
+        repeat 6 step=0,0,0.6 at=0,0,0
+          box slot at=8,27.49,-1.5 size=8,0.16,0.4 round=0.02 color=#17191c mat=plastic
+          box halo at=8,27.575,-1.5 size=8.5,0.015,0.72 color=#5a5e62 mat=matte
+          box lip_f at=8,27.605,-1.74 size=8,0.06,0.09 round=0.03 color=#cdd0d3 mat=brushed
+          box lip_b at=8,27.605,-1.26 size=8,0.06,0.09 round=0.03 color=#c9cccf mat=brushed
+          box facet_f at=8,27.628,-1.795 size=8,0.028,0.015 color=#f2f5f7 mat=brushed
+          box facet_b at=8,27.628,-1.205 size=8,0.028,0.015 color=#e8ebed mat=brushed
+        # Befestigungsschrauben an den Feldenden
+        repeat 2 step=9,0,0 at=0,0,0
+          screw scr_a at=3.5,27.625,-2.5 r=0.09 h=0.07 color=#9ba0a4 mat=brushed
+        repeat 2 step=9,0,0 at=0,0,0
+          screw scr_b at=3.5,27.625,2.5 r=0.09 h=0.07 color=#9ba0a4 mat=brushed
+        # Spiegelfacette der Edelstahlkante zur Bohnenbehälter-Seite
+        box trim at=13.05,27.62,0 size=0.16,0.06,10.5 round=0.02 color=#d8dbdd mat=brushed
+        # kleines Typenschild mit Mikroschrauben
+        box id_plate at=10.6,27.615,3.7 size=1.7,0.05,0.75 round=0.02 color=#d0d3d6 mat=brushed
+        screw pl1 at=10.05,27.645,3.7 r=0.05 h=0.04 color=#8a8f93 mat=brushed
+        screw pl2 at=11.15,27.645,3.7 r=0.05 h=0.04 color=#8a8f93 mat=brushed
+        # hauchfeine Partungslinien der Schleifrichtung auf der Deckplatte
+        seam hull plane=0,1,0,27.6 w=0.01 box=3.2,27.6,-4.6,12.4,27.6,-4.5
+        seam hull plane=0,1,0,27.6 w=0.01 box=3.2,27.6,4.5,12.4,27.6,4.6
+        seam hull plane=0,1,0,27.6 w=0.01 box=3.2,27.6,-9.5,12.4,27.6,-9.4
+        seam hull plane=0,1,0,27.6 w=0.01 box=3.2,27.6,9.4,12.4,27.6,9.5
+    group fit_35508 at=-9.6585,-1.6402,-0.5886 scale=1.3304,1.0643,1.3751
+      group rear_fittings color=#bfc3c6
+        # ---- Wassertank-Deckel oben hinten (gewölbt, abnehmbar) ----
+        loft tank_lid sections=25.6,11.8,2.6 26.3,12,3 27.3,11.6,2.8 28.3,9.5,2 square=1 at=0,28.8,0 color=#c6cacc mat=brushed
+        tube lid_gasket pts=25.62,27.5,-5.9 28.28,27.5,-5.9 28.28,27.5,5.9 25.62,27.5,5.9 25.62,27.5,-5.9 r=0.07 color=#1a1c1e mat=rubber
+        box lid_seam size=2.5,0.06,0.12 at=26.95,30.25,0 color=#9ba0a3 mat=metal
+        box lid_latch size=0.5,1.1,1.5 at=25.7,28.8,0 color=#2b2e31 mat=plastic
+        box latch_btn size=0.3,0.6,0.9 at=25.55,28.8,0 color=#3a3e42 mat=plastic
+        # ---- klappbarer Tragegriff, flach liegend ----
+        box handle_mount_l size=1.5,0.5,1 at=26.9,30.45,-2.7 color=#23262a mat=plastic
+        box handle_mount_r size=1.5,0.5,1 at=26.9,30.45,2.7 color=#23262a mat=plastic
+        box handle_bar size=1.1,0.6,6.6 round=0.25 at=26.9,30.75,0 color=#23262a mat=plastic
+        box handle_grip size=1.2,0.65,4.6 round=0.28 at=26.9,30.78,0 color=#1d2023 mat=rubber
+        # ---- transluzente Tank-Wandung unter dem Deckel ----
+        box tank_wall size=2.5,6,11 at=26.95,24.4,0 color=#9db3bc mat=glass
+        box tank_frame_l size=2.6,6,0.16 at=26.95,24.4,-5.5 color=#aeb3b6 mat=brushed
+        box tank_frame_r size=2.6,6,0.16 at=26.95,24.4,5.5 color=#aeb3b6 mat=brushed
+        box tank_frame_mid size=2.6,0.08,11 at=26.95,24.4,0 color=#aeb3b6 mat=brushed
+        repeat 4 step=0,1.15,0 at=28.24,22.3,3.6
+          box fill_tick size=0.08,0.1,1.5 color=#eef1f2 mat=plastic
+        box fill_max size=0.1,0.16,2.7 at=28.24,26.4,3.6 color=#f2f4f5 mat=plastic
+        decal hull "MAX" at=25.2,6.4 axis=x h=0.7 color=#7d8286 bold=1
+        # ---- Netzbuchse unten rechts, versenkt ----
+        box socket_recess size=1.4,3.6,5 at=26,4.6,5.2 color=#17191b mat=plastic
+        box socket_face size=0.5,2.8,4.2 at=26.55,4.6,5.2 color=#0d0f10 mat=plastic
+        repeat 2 step=0,0,1.2 at=26.82,4.6,4.6
+          box contact size=0.3,0.5,0.9 color=#b8863b mat=metal
+        repeat 2 step=0,-3.2,3.6 at=26.84,6.2,3.4
+          screw socket_screw r=0.12 h=0.15 rot=0,0,90 color=#8f9498 mat=metal
+        # ---- Zugentlastung + Kabel in Katenerie ----
+        cone strain_relief r=0.5 r2=0.32 h=0.8 axis=y at=26.3,2.3,5.2 color=#1a1c1e mat=rubber
+        tube power_cable pts=26.3,2.05,5.2 26.7,1.3,5.5 27.5,0.78,5.9 28.4,0.55,6.3 r=0.4 color=#1a1c1e mat=rubber
+        box cable_clip size=0.5,0.7,1.2 at=25.85,1.7,5.2 color=#23262a mat=plastic
+        # ---- Entlüftungsnippel, chrom ----
+        cyl vent_nipple r=0.28 h=0.9 axis=x at=25.9,20.5,-4 color=#d8dadd mat=metal
+        cyl vent_nut r=0.45 h=0.35 axis=x at=25.82,20.5,-4 color=#b4b8bb mat=metal
+        # ---- Typenschild (Decal) + Schrauben ----
+        decal hull "BREVILLE · BES870" at=15.2,0 axis=x h=0.8 color=#8a8f93 bold=1
+        decal hull "220-240 V~  50 Hz  1700 W" at=13.9,0 axis=x h=0.5 color=#6a6f73
+        decal hull "SERIAL T2210-0417" at=13,0 axis=x h=0.4 color=#6a6f73
+        repeat 2 step=0,-2.6,0 at=25.72,16.4,3.1
+          screw plate_screw r=0.1 h=0.12 rot=0,0,90 color=#9ba0a3 mat=metal
+        # ---- Panelnahte auf der Rückwand ----
+        seam hull plane=1,0,0,25.65 box=25.6,27.3,-6.1,25.75,27.45,6.1
+        seam hull plane=1,0,0,25.65 box=25.6,21.4,-5.8,25.75,21.55,5.8
+        seam hull plane=1,0,0,25.65 box=25.6,8.6,-8.5,25.75,8.75,8.5
+        seam hull plane=1,0,0,25.65 box=25.6,1.2,-0.04,25.75,26.8,0.06
+    group rubber_feet label="Gummifüße"
+      # ---- Schattenfuge / Versenkung im Sockel (Übergang Fuß -> Basis) ----
+      mirror z
+        repeat 2 step=20,0,0 at=3.5,0.49,-11.5
+          cyl groove r=2.15 h=0.04 hole=1.8 axis=y color=#17191b mat=matte
+      # ---- die vier Füße ----
+      mirror z
+        repeat 2 step=20,0,0 at=3.5,0,-11.5
+          # Körper: flache Bodenkante, leicht bauchig, oben in Sockel versenkt
+          lathe foot pts=0,1.45 0.015,1.68 0.07,1.75 0.3,1.76 0.46,1.73 0.55,1.35 axis=y smooth=1 color=#26292c mat=rubber
+          # feine Riffelung: vertikale Grate am Umfang
+          ring 28 r=1.72 axis=y at=0,0.24,0
+            box rib size=0.06,0.3,0.06 color=#202326 mat=rubber
+          # obere feine Partungslinie
+          cyl seam_top r=1.78 h=0.012 hole=1.7 axis=y at=0,0.42,0 color=#1e2124 mat=rubber
+          # untere Partungslinie über der Bodenkante
+          cyl seam_bot r=1.78 h=0.012 hole=1.7 axis=y at=0,0.09,0 color=#1e2124 mat=rubber
+          # Last-Abflachung: dunkle Kontaktzone am Boden
+          cyl contact r=1.6 h=0.02 hole=0.6 axis=y at=0,0.012,0 color=#1b1e20 mat=rubber
+          # hauchfeiner Staubrand am Fußumfang
+          cyl dust r=1.94 h=0.012 hole=1.76 axis=y at=0,0.008,0 color=#3d4043 mat=matte
+          # versenkte Stahl-Unterlegscheibe im Fußzentrum (von unten sichtbar)
+          cyl washer r=0.7 h=0.025 hole=0.28 axis=y at=0,0.02,0 color=#6f7478 mat=brushed
+  anim
+    step "Die Maschine in der Übersicht" 2.4
+      camera view=40,18 zoom=1 on=whole
+      move whole from=0,-4,0
+      spin whole turns=0.4 axis=y
+
+    step "Der Siebträger wird eingelegt und verriegelt" 2.8
+      camera view=-35,15 zoom=1.8 on=portafilter
+      move portafilter from=-8,0,6
+      spin portafilter turns=0.5 axis=y
+      pulse group_head_face
+
+    step "Heißer Druck: Espresso läuft in dünnen Strähnen" 3
+      camera view=-25,10 zoom=2.2 on=group_head_face
+      show drop1
+      show drop2
+      show drop3
+      osc drop1 by=0,-0.6,0 cycles=3
+      osc drop2 by=0,-0.6,0 cycles=3 phase=0.3
+      osc drop3 by=0,-0.6,0 cycles=3 phase=0.6
+
+    step "Die Dampflanze düst Milch für feinen Schaum" 2.8
+      camera view=35,12 zoom=1.9 on=steam_wand
+      move steam_wand by=0,-0.8,1.5
+      show wisp
+      osc wisp by=0,0.8,0 cycles=2
+
+    step "Heißwasser links, Druck prüfen vorne" 2.6
+      camera view=20,14 zoom=1.7 on=hot_water_spout
+      move hot_water_spout by=0,-0.4,0
+      pulse hot_water_spout
+      camera view=-30,20 zoom=2 on=pressure_gauge
+      move g_needle by=0,0,0.2
+      pulse pressure_gauge
+
+    step "Fertig: die Espresso-Maschine im Ganzen" 2.2
+      camera view=40,20 zoom=1 on=whole
+      spin whole turns=0.3 axis=y

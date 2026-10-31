@@ -1,0 +1,651 @@
+canvas dark
+title "Airbus H145 DRF Luftrettung – Startaufstellung"
+model obj 1100 620 keep=1 tidy=1 view=35,18
+
+  group whole
+    group hull
+      body fuselage top=-3.6,1.35 -3.15,1.8 -2.65,2.12 -2.1,2.4 -1.5,2.56 -0.9,2.64 -0.2,2.68 0.5,2.7 1.1,2.72 1.6,2.74 2.0,2.68 2.3,2.55 bottom=-3.6,1.05 -3.15,0.82 -2.65,0.64 -2.1,0.52 -1.5,0.45 -0.9,0.42 -0.2,0.41 0.5,0.41 1.1,0.44 1.6,0.52 2.0,0.68 2.3,0.85 width=-3.6,0.55 -3.15,1.05 -2.65,1.55 -2.1,1.9 -1.5,2.06 -0.9,2.14 -0.2,2.16 0.5,2.16 1.1,2.1 1.6,2.0 2.0,1.85 2.3,1.65 square=1
+      body cowl top=0.5,2.6 1.2,2.82 1.9,2.84 2.5,2.6 2.9,2.25 bottom=0.5,2.3 1.2,2.35 1.9,2.3 2.5,2.1 2.9,1.85 width=0.5,1.5 1.2,1.65 1.9,1.6 2.5,1.3 2.9,1.0 square=1
+      body boom top=2.2,2.5 2.8,2.28 3.5,2.1 4.2,1.95 4.9,1.85 5.5,1.78 6.0,1.73 6.6,1.68 bottom=2.2,0.85 2.8,1.02 3.5,1.16 4.2,1.26 4.9,1.33 5.5,1.38 6.0,1.41 6.6,1.44 width=2.2,1.5 2.8,1.2 3.5,1.0 4.2,0.88 4.9,0.79 5.5,0.73 6.0,0.7 6.6,0.64 square=1
+      body fin top=5.7,1.45 5.95,2.1 6.2,2.85 6.4,3.55 6.5,3.95 bottom=6.85,1.45 6.8,2.1 6.72,2.85 6.6,3.55 6.5,3.95 width=5.7,1.0 5.95,0.95 6.2,0.85 6.4,0.7 6.5,0.55 square=1
+      plate stab pts=4.3,1.82 5.4,1.74 5.5,1.58 5.35,1.45 4.3,1.5 h=2.3
+      paint hull color=#e8380d
+      paint hull color=#f2f2f0 poly=0.35,0.42 2.25,0.5 2.25,1.55 1.75,1.4 1.05,1.05 0.35,0.88 axis=z both=1
+      paint hull color=#f2f2f0 box=0.3,0.38,-1.1,2.3,0.9,1.1
+      paint hull color=#f2f2f0 box=5.6,3.35,-0.6,7.0,4.1,0.6
+      paint hull color=#0b1a22 mat=glass poly=-3.62,1.2 -3.55,1.55 -3.3,1.95 -2.85,2.3 -2.2,2.52 -1.4,2.62 -0.7,2.64 -0.35,2.55 -0.3,2.0 -0.55,1.5 -1.1,1.1 -1.8,0.82 -2.6,0.68 -3.2,0.78 -3.5,0.95 axis=z both=1
+      paint hull color=#0b1a22 mat=glass poly=-3.6,0 -3.2,0.5 -2.6,0.78 -1.8,0.92 -1.0,0.98 -0.5,0.95 -0.5,-0.95 -1.0,-0.98 -1.8,-0.92 -2.6,-0.78 -3.2,-0.5 axis=y
+      paint hull color=#0b1a22 mat=glass poly=-0.15,1.6 0.6,1.58 0.6,2.35 -0.15,2.38 axis=z both=1
+      paint hull color=#0b1a22 mat=glass poly=0.78,1.52 1.55,1.48 1.55,2.28 0.78,2.32 axis=z both=1
+      paint hull color=#0b1a22 mat=glass poly=1.7,1.5 2.05,1.45 2.05,2.05 1.7,2.1 axis=z both=1
+      paint hull color=#101214 poly=0,2.55 0.36,2.4 0.5,2.05 0.36,1.7 0,1.55 -0.36,1.7 -0.5,2.05 -0.36,2.4 axis=x both=1
+      paint hull color=#101214 box=1.15,2.64,-0.78,1.55,2.74,-0.5
+      paint hull color=#101214 box=1.15,2.64,0.5,1.55,2.74,0.78
+      paint hull color=#dd0000 box=1.15,2.54,-0.78,1.55,2.64,-0.5
+      paint hull color=#dd0000 box=1.15,2.54,0.5,1.55,2.64,0.78
+      paint hull color=#ffce00 box=1.15,2.44,-0.78,1.55,2.54,-0.5
+      paint hull color=#ffce00 box=1.15,2.44,0.5,1.55,2.54,0.78
+      decal hull "Luftrettung" at=-0.25,0.82 axis=z both=1 h=0.28 color=#f2f2f0 bold=1
+      decal hull "DRF" at=1.55,1.02 axis=z both=1 h=0.5 color=#e8380d bold=1
+      decal hull "D-HXFF" at=3.9,1.72 axis=z both=1 h=0.3 color=#f2f2f0 bold=1
+      decal hull "DRF" at=0,3.62 axis=x both=1 h=0.28 color=#e8380d bold=1
+      decal hull "Luftrettung" at=0,3.34 axis=x both=1 h=0.11 color=#e8380d bold=1
+      seam hull plane=0,0,1,0 box=-3.6,1.0,-0.04,-0.5,2.6,0.04 w=0.015
+      seam hull plane=1,0,0,-0.32 box=-0.36,0.7,-1.1,-0.28,2.5,1.1 w=0.012
+      seam hull plane=1,0,0,0.68 box=0.64,0.6,-1.1,0.72,2.4,1.1 w=0.012
+      seam hull plane=1,0,0,1.62 box=1.58,0.6,-1.1,1.66,2.35,1.1 w=0.012
+      seam hull plane=1,0,0,2.25 box=2.2,0.7,-0.95,2.3,2.4,0.95 w=0.01
+    group fit_50257 at=-0.0891,-0.7949,0.0000 scale=1.0990,1.2821,1.0990
+      group main_rotor label="Hauptrotor DRF Luftrettung"
+        cyl mast r=0.09 h=0.42 axis=y at=0.9,3.0,0 color=titanium mat=brushed
+        cyl mastbase r=0.12 h=0.10 axis=y at=0.9,2.85,0 color=darkmetal
+        cyl collar r=0.17 h=0.07 axis=y at=0.9,2.80,0 color=#141414 mat=rubber
+        ring 10 r=0.145 axis=y at=0.9,2.84,0
+          screw collarbolt r=0.009 h=0.012 color=darkmetal
+        tube hyd1 pts=1.03,2.84,0.04 1.08,2.96,0.06 1.02,3.10,0.05 r=0.010 color=black mat=rubber
+        tube hyd2 pts=0.77,2.84,-0.04 0.72,2.96,-0.06 0.78,3.10,-0.05 r=0.010 color=black mat=rubber
+        cyl swash1 r=0.16 h=0.028 axis=y at=0.9,2.905,0 color=alu mat=brushed
+        cyl swash2 r=0.105 h=0.032 axis=y at=0.9,2.942,0 color=darkmetal
+        ring 6 r=0.145 axis=y at=0.9,2.923,0
+          screw swashbolt r=0.008 h=0.010 color=steel
+        ring 3 r=0.135 axis=y at=0.9,3.06,0
+          group link
+            cyl rod r=0.013 h=0.24 axis=y at=0,0,0 color=darkmetal
+            sphere rodend_lo r=0.026 at=0,-0.13,0 color=steel
+            sphere rodend_hi r=0.026 at=0,0.13,0 color=steel
+        group rotor_spin at=0.9,3.18,0 rot=0,30,0 label="Rotorkopf drehend"
+          lathe hub pts=0,0.22 0.05,0.28 0.13,0.28 0.19,0.19 0.25,0.12 0.28,0.07 0.28,0.02 axis=y smooth=1 color=#e8380d mat=paint
+          cyl hubcap r=0.07 h=0.05 axis=y at=0,0.30,0 color=darkmetal
+          cyl hubnut r=0.045 h=0.04 axis=y at=0,0.345,0 color=steel
+          tube oil1 pts=0.20,0.06,0.10 0.16,-0.04,0.16 0.10,-0.16,0.12 r=0.008 color=darkmetal
+          tube oil2 pts=0.20,0.06,-0.10 0.16,-0.04,-0.16 0.10,-0.16,-0.12 r=0.008 color=darkmetal
+          ring 4 r=0.02 axis=y at=0,0.10,0
+            group hinge
+              cyl arm r=0.045 h=0.24 axis=x at=0.26,0,0 color=#26282a mat=metal
+              cyl bolt r=0.055 h=0.10 axis=y at=0.38,0,0 color=darkmetal
+              cyl nipple r=0.012 h=0.035 axis=y at=0.38,0.065,0 color=black
+              box horn size=0.12,0.07,0.07 at=0.31,0.06,0 color=darkmetal
+          group blade1 at=0,0.10,0 rot=0,0,0
+            limb blade pts=0.30,0.02,0,0.030 1.2,0.048,0,0.030 2.4,0.040,0,0.027 3.6,0.008,0,0.023 4.5,-0.062,0,0.018 4.9,-0.112,0,0.012 scale=1,1,4.5 color=#3a3d40 mat=plastic
+            limb tipcap pts=4.42,-0.052,0,0.021 4.9,-0.115,0,0.014 scale=1,1,4.7 color=#e8380d mat=paint
+            tube lestrip pts=0.40,0.018,-0.125 2.4,0.038,-0.125 4.3,-0.055,-0.125 4.85,-0.112,-0.125 r=0.013 color=#1b1d1f mat=metal
+            tube bottomstrip pts=0.6,-0.012,0 2.4,0.006,0 4.2,-0.078,0 r=0.017 color=#4a4d50 mat=plastic
+            box rootshoe size=0.42,0.13,0.21 at=0.44,0.01,0 color=alu mat=brushed
+            box deice size=0.06,0.05,0.05 at=0.62,0.01,0.12 color=black mat=plastic
+            repeat 4 step=0.085,0,0 at=0.31,0.078,0
+              screw shoescrew r=0.011 h=0.012 color=darkmetal
+            cyl pitchbolt r=0.028 h=0.14 axis=y at=0.36,0,0 color=darkmetal
+            cyl wick r=0.004 h=0.05 axis=z at=4.82,-0.108,0.075 color=darkmetal
+            box arrow1 size=0.40,0.008,0.045 at=2.75,0.074,-0.017 rot=0,175,0 color=#ffd200 mat=paint
+            box arrow2 size=0.40,0.008,0.045 at=2.84,0.074,-0.164 rot=0,125,0 color=#ffd200 mat=paint
+          group blade2 at=0,0.10,0 rot=0,90,0
+            limb blade pts=0.30,0.02,0,0.030 1.2,0.048,0,0.030 2.4,0.040,0,0.027 3.6,0.008,0,0.023 4.5,-0.062,0,0.018 4.9,-0.112,0,0.012 scale=1,1,4.5 color=#3a3d40 mat=plastic
+            limb tipcap pts=4.42,-0.052,0,0.021 4.9,-0.115,0,0.014 scale=1,1,4.7 color=#e8380d mat=paint
+            tube lestrip pts=0.40,0.018,-0.125 2.4,0.038,-0.125 4.3,-0.055,-0.125 4.85,-0.112,-0.125 r=0.013 color=#1b1d1f mat=metal
+            tube bottomstrip pts=0.6,-0.012,0 2.4,0.006,0 4.2,-0.078,0 r=0.017 color=#4a4d50 mat=plastic
+            box rootshoe size=0.42,0.13,0.21 at=0.44,0.01,0 color=alu mat=brushed
+            repeat 4 step=0.085,0,0 at=0.31,0.078,0
+              screw shoescrew r=0.011 h=0.012 color=darkmetal
+            cyl pitchbolt r=0.028 h=0.14 axis=y at=0.36,0,0 color=darkmetal
+            cyl wick r=0.004 h=0.05 axis=z at=4.82,-0.108,0.075 color=darkmetal
+          group blade3 at=0,0.10,0 rot=0,180,0
+            limb blade pts=0.30,0.02,0,0.030 1.2,0.048,0,0.030 2.4,0.040,0,0.027 3.6,0.008,0,0.023 4.5,-0.062,0,0.018 4.9,-0.112,0,0.012 scale=1,1,4.5 color=#3a3d40 mat=plastic
+            limb tipcap pts=4.42,-0.052,0,0.021 4.9,-0.115,0,0.014 scale=1,1,4.7 color=#e8380d mat=paint
+            tube lestrip pts=0.40,0.018,-0.125 2.4,0.038,-0.125 4.3,-0.055,-0.125 4.85,-0.112,-0.125 r=0.013 color=#1b1d1f mat=metal
+            tube bottomstrip pts=0.6,-0.012,0 2.4,0.006,0 4.2,-0.078,0 r=0.017 color=#4a4d50 mat=plastic
+            box rootshoe size=0.42,0.13,0.21 at=0.44,0.01,0 color=alu mat=brushed
+            repeat 4 step=0.085,0,0 at=0.31,0.078,0
+              screw shoescrew r=0.011 h=0.012 color=darkmetal
+            cyl pitchbolt r=0.028 h=0.14 axis=y at=0.36,0,0 color=darkmetal
+            cyl wick r=0.004 h=0.05 axis=z at=4.82,-0.108,0.075 color=darkmetal
+          group blade4 at=0,0.10,0 rot=0,270,0
+            limb blade pts=0.30,0.02,0,0.030 1.2,0.048,0,0.030 2.4,0.040,0,0.027 3.6,0.008,0,0.023 4.5,-0.062,0,0.018 4.9,-0.112,0,0.012 scale=1,1,4.5 color=#3a3d40 mat=plastic
+            limb tipcap pts=4.42,-0.052,0,0.021 4.9,-0.115,0,0.014 scale=1,1,4.7 color=#e8380d mat=paint
+            tube lestrip pts=0.40,0.018,-0.125 2.4,0.038,-0.125 4.3,-0.055,-0.125 4.85,-0.112,-0.125 r=0.013 color=#1b1d1f mat=metal
+            tube bottomstrip pts=0.6,-0.012,0 2.4,0.006,0 4.2,-0.078,0 r=0.017 color=#4a4d50 mat=plastic
+            box rootshoe size=0.42,0.13,0.21 at=0.44,0.01,0 color=alu mat=brushed
+            repeat 4 step=0.085,0,0 at=0.31,0.078,0
+              screw shoescrew r=0.011 h=0.012 color=darkmetal
+            cyl pitchbolt r=0.028 h=0.14 axis=y at=0.36,0,0 color=darkmetal
+            cyl wick r=0.004 h=0.05 axis=z at=4.82,-0.108,0.075 color=darkmetal
+    group fit_74486 at=-1.6025,0.4253,0.0000 scale=1.2455,0.8224,0.9964
+      group fenestron label="Fenestron-Heckrotor"
+        # ---- Duct ring embedded in the fin, axis along x ----
+        cyl duct r=0.525 h=0.36 hole=0.445 axis=x at=6.25,2.3,0 color=#e8380d mat=paint
+        cyl lip_in r=0.447 h=0.36 hole=0.405 axis=x at=6.25,2.3,0 color=#f2f2f0 mat=paint
+        cyl lip_f r=0.548 h=0.035 hole=0.44 axis=x at=6.075,2.3,0 color=#e8380d mat=paint
+        cyl lip_b r=0.548 h=0.035 hole=0.44 axis=x at=6.425,2.3,0 color=#e8380d mat=paint
+        # ---- dark sealing seam where duct meets fin skin ----
+        cyl seal_f r=0.552 hole=0.53 h=0.014 axis=x at=6.052,2.3,0 color=#141414 mat=rubber
+        cyl seal_b r=0.552 hole=0.53 h=0.014 axis=x at=6.448,2.3,0 color=#141414 mat=rubber
+        # ---- recessed screw rings on the duct rim faces ----
+        ring 18 r=0.485 axis=x at=6.056,2.3,0
+          screw rimbolt r=0.006 h=0.012 axis=x color=darkmetal mat=brushed
+        ring 18 r=0.485 axis=x at=6.444,2.3,0
+          screw rimbolt2 r=0.006 h=0.012 axis=x color=darkmetal mat=brushed
+        # ---- internal stiffener rings in the white inlet channel ----
+        cyl rib1 r=0.443 hole=0.425 h=0.02 axis=x at=6.16,2.3,0 color=#6b6e70 mat=cast
+        cyl rib2 r=0.443 hole=0.425 h=0.02 axis=x at=6.34,2.3,0 color=#6b6e70 mat=cast
+        # ---- vertical protective grid in front of the fan ----
+        cyl guard_mid r=0.012 h=0.88 axis=y at=6.03,2.3,0 color=#9a9da0 mat=brushed
+        cyl guard_l1 r=0.012 h=0.80 axis=y at=6.03,2.3,0.19 color=#9a9da0 mat=brushed
+        cyl guard_l2 r=0.012 h=0.80 axis=y at=6.03,2.3,-0.19 color=#9a9da0 mat=brushed
+        cyl guard_l3 r=0.012 h=0.55 axis=y at=6.03,2.3,0.36 color=#9a9da0 mat=brushed
+        cyl guard_l4 r=0.012 h=0.55 axis=y at=6.03,2.3,-0.36 color=#9a9da0 mat=brushed
+        cyl guard_hoop r=0.456 hole=0.446 h=0.012 axis=x at=6.03,2.3,0 color=#3a3d40 mat=brushed
+        # ---- rotating fan assembly ----
+        group fan_rot label="Fenestron-Fan 8-Blatt"
+          fan fblades blades=8 r=0.42 hub=0.09 h=0.045 twist=0.55 axis=x at=6.30,2.3,0 color=#2c2f32 mat=brushed
+          cyl hub_red r=0.055 h=0.05 axis=x at=6.268,2.3,0 color=#e8380d mat=paint
+          sphere hub_nut r=0.03 at=6.246,2.3,0 scale=0.6,1,1 color=#c8c9cb mat=brushed
+          ring 4 r=0.115 axis=x at=6.272,2.3,0
+            cyl pclink r=0.008 h=0.09 axis=x color=darkmetal mat=brushed
+        # ---- drive shaft and stator stage behind the fan ----
+        cyl shaft r=0.05 h=0.32 axis=x at=6.53,2.3,0 color=darkmetal mat=brushed
+        cyl stator_shroud r=0.432 hole=0.40 h=0.03 axis=x at=6.45,2.3,0 color=#3a3d40 mat=cast
+        ring 10 r=0.24 axis=x at=6.45,2.3,0
+          box stator_vane size=0.012,0.46,0.05 color=#4a4d50 mat=cast
+        ring 3 r=0.27 axis=x at=6.52,2.3,0
+          box shaft_strut size=0.015,0.54,0.05 color=#3a3d40 mat=cast
+        # ---- fairings blending duct top/bottom into the fin ----
+        box fair_t size=0.5,0.3,0.12 round=0.06 at=6.25,2.92,0 color=#e8380d mat=paint
+        box fair_b size=0.5,0.26,0.12 round=0.06 at=6.25,1.68,0 color=#e8380d mat=paint
+        # ---- oil supply line along the duct underside ----
+        tube oil_line pts=6.06,1.80,0.14 6.25,1.775,0.17 6.44,1.80,0.14 r=0.016 color=#141414 mat=rubber
+        cyl oil_fitting r=0.02 h=0.035 axis=y at=6.25,1.79,0.17 color=brass mat=brushed
+        # ---- small maintenance panel with screws on duct underside ----
+        box mpanel size=0.16,0.014,0.12 at=6.25,1.815,0.24 rot=28,0,0 color=#e8380d mat=paint
+        ring 4 r=0.06 axis=y at=6.25,1.806,0.24
+          screw panelscrew r=0.004 h=0.008 axis=y color=darkmetal mat=brushed
+        # ---- static discharge brush at duct lower edge ----
+        tube sbrush pts=6.25,1.77,0.02 6.25,1.66,0.03 6.25,1.58,0.05 r=0.009 color=#1a1a1a mat=rubber
+    group engine_deck
+      loft cowl sections=0.50,1.55,0.34,2.75 0.95,1.88,0.28,2.77 1.45,1.92,0.26,2.76 1.95,1.86,0.26,2.74 2.40,1.58,0.28,2.66 2.72,1.22,0.30,2.50 2.95,0.82,0.24,2.28 square=1 color=#e8380d mat=paint
+      # central spine panel seam
+      tube seamspine pts=0.55,2.885,0 0.95,2.915,0 1.45,2.895,0 1.95,2.875,0 2.40,2.805,0 2.72,2.655,0 r=0.009 color=#7a1505 mat=matte
+      # cross panel seams
+      tube seamc1 pts=1.15,2.80,-0.86 1.15,2.905,0 1.15,2.80,0.86 r=0.009 color=#7a1505 mat=matte
+      tube seamc2 pts=2.05,2.76,-0.80 2.05,2.875,0 2.05,2.76,0.80 r=0.009 color=#7a1505 mat=matte
+      tube seamc3 pts=2.45,2.71,-0.72 2.45,2.79,0 2.45,2.71,0.72 r=0.009 color=#7a1505 mat=matte
+      # oil cooler mesh between the intakes on the cowl front
+      box oilcool size=0.03,0.17,0.22 at=0.50,2.70,0 color=#15181a mat=matte
+      box oilframe size=0.035,0.21,0.26 at=0.495,2.70,0 color=#c2270e mat=paint
+      repeat oilfins 4 step=0.012,0,0 at=0.505,2.70,-0.08
+        box fin size=0.008,0.16,0.012 color=#2a2e32 mat=brushed
+      # fuel filler cap on deck
+      cyl fuelcap r=0.07 h=0.035 axis=y at=1.35,2.895,0.28 color=#c2270e mat=paint
+      box fuelslot size=0.05,0.012,0.012 at=1.35,2.915,0.28 color=#5c0f04 mat=matte
+      ring fuelscrews 8 r=0.085 axis=y at=1.35,2.888,0.28
+        screw fs r=0.006 h=0.012 color=#9aa0a6 mat=brushed
+      # spine screw row (front flat section)
+      repeat spinescrews 5 step=0.22,0,0 at=0.70,2.908,0
+        screw ss r=0.008 h=0.014 color=#8a8f94 mat=brushed
+      # cross-seam screw row
+      repeat cscrews 7 step=0,0,0.19 at=1.15,2.893,-0.57
+        screw cs r=0.008 h=0.016 color=#8a8f94 mat=brushed
+      # double rivet row at rear sheet joint near antenna base
+      repeat rivets1 6 step=0,0,0.14 at=2.48,2.752,-0.35
+        screw r1 r=0.006 h=0.012 color=#8a8f94 mat=brushed
+      repeat rivets2 6 step=0,0,0.14 at=2.56,2.735,-0.33
+        screw r2 r=0.006 h=0.012 color=#8a8f94 mat=brushed
+      mirror z
+        # ---- engine air intake scoop ----
+        group intake at=0.46,2.68,0.52
+          lathe duct pts=0.05,0.10 0.10,0.15 0.24,0.155 0.36,0.13 axis=x scale=1,0.75,1 color=#e8380d mat=paint
+          lathe lipring pts=0,0.115 0.03,0.16 0.065,0.16 axis=x scale=1,0.75,1 color=#1a1c1e mat=matte
+          cyl screen r=0.125 h=0.015 axis=x at=0.15,0,0 scale=1,0.75,1 color=#2e3338 mat=brushed
+          repeat bars 4 step=0,0.055,0 at=0.16,-0.082,0
+            box bar size=0.012,0.008,0.20 color=#3a4046 mat=brushed
+        # screws up the cowl front corner beside intake
+        repeat frontscrews 5 step=0,0.07,0 at=0.53,2.62,0.68
+          screw fsc r=0.007 h=0.012 color=#8a8f94 mat=brushed
+        # ---- exhaust stub, burnt titanium ----
+        group exhaust at=2.50,2.56,0.50 rot=0,-35,0
+          lathe shroud pts=0,0.08 0.08,0.12 0.28,0.13 0.40,0.115 axis=x scale=1,0.78,1 color=#6b5344 mat=cast
+          lathe bore pts=0.06,0.055 0.38,0.095 axis=x scale=1,0.78,1 color=#17110d mat=matte
+          lathe exrim pts=0.38,0.13 0.415,0.12 axis=x scale=1,0.78,1 color=#5a4438 mat=cast
+        # heat-scorched panel on cowl behind exhaust
+        box scorch size=0.36,0.012,0.30 at=2.42,2.60,0.60 rot=0,-14,0 color=#4a3a30 mat=cast
+        # warning decal yellow/black near exhaust
+        box warncolor size=0.20,0.006,0.07 at=2.28,2.795,0.34 color=#e6c229 mat=matte
+        repeat warnstripes 3 step=0.055,0.006,0 at=2.22,2.795,0.34
+          box stripe size=0.02,0.008,0.07 rot=0,25,0 color=#141414 mat=matte
+        # NACA vent on haube shoulder
+        box nacarec size=0.32,0.008,0.16 at=1.70,2.845,0.62 rot=0,0,-8 color=#c2270e mat=paint
+        repeat nacafins 4 step=0.062,0.007,0 at=1.58,2.845,0.62
+          box fin2 size=0.014,0.012,0.13 rot=0,0,-8 color=#1f2225 mat=matte
+        # side cooling grille slots
+        repeat grille 5 step=0,0.05,-0.012 at=1.10,2.66,0.90
+          box slot size=0.26,0.014,0.022 color=#1f2225 mat=matte
+        # longitudinal haube seam
+        tube seamlong pts=0.55,2.83,0.50 0.95,2.865,0.58 1.45,2.845,0.62 1.95,2.825,0.60 2.40,2.76,0.52 2.70,2.62,0.42 r=0.009 color=#7a1505 mat=matte
+        # red tie-down loop with base plate
+        box tieplate size=0.11,0.014,0.06 at=1.05,2.705,0.92 color=#c2270e mat=paint
+        tube tieloop pts=1.01,2.715,0.92 1.05,2.79,0.945 1.09,2.715,0.92 r=0.012 flat=6 color=#c2270e mat=paint
+        # cable harness and pressure line routed in intake shadow
+        tube harness pts=0.80,2.64,0.55 1.15,2.68,0.70 1.55,2.70,0.78 1.92,2.70,0.80 r=0.022 color=#22252a mat=rubber
+        tube pressureline pts=0.82,2.62,0.58 1.20,2.65,0.74 1.60,2.66,0.82 r=0.011 color=#8d939a mat=brushed
+        # cowl latches front and rear
+        box latchf size=0.06,0.035,0.045 at=0.74,2.79,0.58 color=#b9bec4 mat=brushed
+        box leverf size=0.035,0.012,0.055 at=0.74,2.815,0.58 rot=0,0,30 color=#e8380d mat=paint
+        box latchr size=0.06,0.035,0.045 at=2.22,2.73,0.60 color=#b9bec4 mat=brushed
+        box leverr size=0.035,0.012,0.055 at=2.22,2.755,0.60 rot=0,0,30 color=#e8380d mat=paint
+    group cockpit_interior
+      # ---- Boden und Laufkanäle ----
+      box floor size=2.3,0.1,1.75 at=-1.45,0.72,0 color=#1a1c20 mat=matte
+      mirror z
+        box fchan size=2.0,0.06,0.12 at=-1.45,0.79,0.55 color=#0d0e11 mat=matte
+        repeat 2 step=0,0,0.22
+          box pedal size=0.1,0.22,0.08 at=-2.25,0.92,0.34 rot=0,0,-15 color=#24272c mat=metal
+      # ---- Instrumentenbrett ----
+      box panellow size=0.35,0.7,1.5 at=-2.15,1.15,0 color=#14161a mat=matte
+      box panel size=0.28,0.55,1.55 at=-2.08,1.72,0 rot=0,0,10 color=#14161a mat=matte
+      box glare size=0.42,0.05,1.6 at=-2.02,2.02,0 rot=0,0,10 color=#0e1013 mat=matte
+      mirror z
+        box mfdBezel size=0.03,0.36,0.46 at=-1.95,1.78,0.38 rot=0,0,10 color=#000000 mat=metal
+        box mfd size=0.03,0.3,0.4 at=-1.93,1.78,0.38 rot=0,0,10 color=#155084 mat=light
+        repeat 4 step=0,0.09,0
+          cyl sw r=0.014 h=0.02 axis=x at=-1.93,1.3,0.6 color=#e8a13a mat=light
+      ring 5 r=0.12 axis=x at=-1.92,1.5,0
+        cyl rinst r=0.05 h=0.025 axis=x color=#0a1018 mat=glass
+      cyl rinst2 r=0.055 h=0.025 axis=x at=-1.92,1.5,0 color=#05070a mat=metal hole=0.7
+      repeat 2 step=0,0,0.5
+        box radio size=0.12,0.06,0.18 at=-2.0,2.07,0.3 color=#0a0b0d mat=matte
+      # ---- Mittelkonsole ----
+      box console size=1.1,0.35,0.34 at=-1.45,0.95,0 color=#1b1d22 mat=matte
+      box consoleTop size=1.0,0.04,0.3 at=-1.45,1.14,0 color=#101216 mat=matte
+      repeat 5 step=0.09,0,0
+        cyl csw r=0.012 h=0.03 axis=y at=-1.7,1.17,-0.08 color=#d2340f mat=plastic
+      cyl csw2 r=0.02 h=0.04 axis=y at=-1.2,1.17,0.08 color=#3a3d40 mat=metal
+      # ---- Steuerknüppel und Kollektive ----
+      mirror z
+        cyl cyc r=0.022 h=0.42 axis=y at=-1.42,1.05,0.13 color=#17181c mat=metal
+        box cycgrip size=0.09,0.14,0.07 at=-1.42,1.3,0.13 rot=0,0,-15 color=#0c0d10 mat=rubber
+        sphere cycbtn r=0.016 at=-1.375,1.33,0.13 color=#d0301a mat=plastic
+        cyl coll r=0.022 h=0.55 axis=x at=-1.45,1.05,0.68 rot=0,0,55 color=#17181c mat=metal
+        cyl twistgrip r=0.038 h=0.14 axis=x at=-1.29,1.28,0.68 rot=0,0,55 color=#0c0d10 mat=rubber
+        box friction size=0.1,0.028,0.028 at=-1.52,1.0,0.68 rot=0,0,55 color=#e8641b mat=metal
+      # ---- Pilotensitze mit roten Schonern ----
+      mirror z
+        cyl seatped r=0.07 h=0.28 axis=y at=-1.5,0.92,0.42 color=#14161a mat=metal
+        box seatpan size=0.5,0.14,0.48 at=-1.5,1.16,0.42 color=#c22a12 mat=fabric
+        box seatcushion size=0.46,0.08,0.44 at=-1.5,1.27,0.42 round=0.4 color=#b3260f mat=fabric
+        box seatback size=0.13,0.8,0.48 at=-1.73,1.62,0.42 rot=0,0,10 color=#c22a12 mat=fabric
+        box headrest size=0.12,0.2,0.3 at=-1.79,2.08,0.42 rot=0,0,10 color=#a82210 mat=fabric
+        repeat 2 step=0,0,0.14
+          tube strap pts=-1.66,2.0,0.36 -1.6,1.55,0.38 -1.56,1.28,0.4 r=0.02 color=#8f1c0c mat=fabric
+        box buckle size=0.05,0.07,0.06 at=-1.55,1.28,0.43 color=#b9bec4 mat=metal
+        sphere helmet r=0.145 scale=1,1.05,0.92 at=-1.76,2.3,0.42 color=#e8e8e6 mat=plastic
+        box visor size=0.03,0.11,0.22 at=-1.62,2.28,0.42 color=#101418 mat=glass
+      # ---- Rahmenpfosten innen, Dachhimmel ----
+      tube wshpost pts=-2.55,0.9,0 -2.35,1.9,0 -2.15,2.5,0 r=0.028 color=#0b0c0e mat=matte
+      box header size=0.05,0.06,1.7 at=-1.95,2.44,0 color=#0b0c0e mat=matte
+      mirror z
+        tube sidepost pts=-2.3,0.95,0.85 -2.15,1.8,0.9 -2.0,2.45,0.88 r=0.025 color=#0b0c0e mat=matte
+        tube doorpost pts=-0.5,0.8,0.93 -0.5,2.3,0.95 r=0.025 color=#0b0c0e mat=matte
+        box sidewall size=1.4,1.0,0.05 at=-1.3,1.5,0.93 color=#2a2d33 mat=matte
+      box roofconsole size=0.5,0.08,0.5 at=-1.5,2.36,0 color=#14161a mat=matte
+      cyl maplight r=0.035 h=0.05 axis=y at=-1.35,2.31,0.15 color=#ffe9b0 mat=light
+      repeat 3 step=0.08,0,0
+        cyl ovsw r=0.012 h=0.02 axis=y at=-1.6,2.31,0.1 color=#d2340f mat=light
+      # ---- Trennwand zur Kabine ----
+      box bulkhead size=0.06,1.2,1.85 at=-0.45,1.3,0 color=#1e2126 mat=matte
+    group cabin_interior
+      # ---- Boden: schwarzer Riffelgummi, im unteren Glasbereich sichtbar ----
+      box floor size=2.1,0.08,1.8 at=0.7,0.59,0 color=#18181a mat=rubber
+      repeat 14 step=0.14,0,0 at=0.02,0.635,0
+        box rib size=0.05,0.014,1.72 color=#242427 mat=rubber
+      box aisle_strip size=2.1,0.006,0.34 at=0.7,0.638,0 color=#2e2e31 mat=rubber
+      mirror z
+        box seat_rail size=1.5,0.045,0.05 at=0.9,0.65,0.55 color=#26282a mat=metal
+      # ---- Wandverkleidung hellgrau mit Fensterleiste in Wagenfarbe ----
+      mirror z
+        box wall_low size=2.05,0.45,0.05 at=0.7,0.87,0.86 color=#9ea1a3 mat=plastic
+        box wall_up size=2.05,0.72,0.05 at=0.7,1.96,0.86 color=#c9cbcc mat=plastic
+        box trim_red size=2.05,0.2,0.065 at=0.7,1.5,0.855 color=#e8380d mat=paint
+        box trim_white size=2.05,0.06,0.065 at=0.7,1.37,0.855 color=#f2f2f0 mat=paint
+        box frame_top size=2.05,0.035,0.045 at=0.7,1.74,0.85 color=#3a3d40 mat=plastic
+        box wall_seam size=2.05,0.012,0.056 at=0.7,1.12,0.858 color=#7d8082 mat=plastic
+      box ceiling size=2.05,0.05,1.75 at=0.7,2.3,0 color=#c9cbcc mat=plastic
+      repeat 6 step=0,0,0.3 at=0.7,2.268,-0.75
+        box ceil_rib size=1.95,0.018,0.05 color=#b0b2b4 mat=plastic
+      box light_strip size=0.55,0.02,0.09 at=0.55,2.268,0 color=#fff4d6 mat=light
+      # ---- Trennwand zu x=1.7 mit Kabelbaum und Halterung ----
+      box bulkhead size=0.05,1.65,1.75 at=1.7,1.47,0 color=#b7b9ba mat=plastic
+      box bh_seam1 size=0.056,0.012,1.7 at=1.7,1.5,0 color=#8f9193 mat=plastic
+      box bh_seam2 size=0.056,1.6,0.012 at=1.7,1.47,0.45 color=#8f9193 mat=plastic
+      box bh_bracket size=0.05,0.22,0.32 at=1.68,1.55,0.3 color=#8f9193 mat=metal
+      tube loom1 pts=1.66,2.2,0.3 1.66,1.75,0.36 1.66,1.15,0.32 1.66,0.78,0.12 r=0.032 color=#1c1c1e mat=rubber
+      tube loom2 pts=1.66,2.2,-0.25 1.66,1.6,-0.32 1.66,0.95,-0.18 r=0.026 color=#3a3d40 mat=rubber
+      repeat 4 step=0,-0.36,0.02 at=1.665,1.95,0.33
+        box clip size=0.03,0.04,0.06 color=#26282a mat=plastic
+      # ---- Gelber Steckanschluss an der Kabinenwand ----
+      box socket size=0.11,0.15,0.045 at=1.32,1.22,0.845 color=#f0b91d mat=plastic
+      box socket_in size=0.055,0.075,0.02 at=1.32,1.22,0.872 color=#26282a mat=plastic
+      # ---- Blauer Bucher-Rettungssitz rechts ----
+      group seat_blue at=0.95,0,0.55 color=#2f6fb4 label="Bucher Rettungssitz"
+        cyl pedestal r=0.055 h=0.34 at=0,0.8,0 color=#26282a mat=metal
+        box seat_frame size=0.5,0.06,0.44 at=0,0.94,0 color=#26282a mat=metal
+        box cushion size=0.52,0.13,0.48 at=0,1.02,0 round=0.04 color=#2f6fb4 mat=fabric
+        box cushion_seam size=0.53,0.014,0.49 at=0,1.075,0 color=#255a94 mat=fabric
+        box backrest size=0.13,0.72,0.48 at=0.24,1.4,0 rot=0,0,-14 round=0.04 color=#2f6fb4 mat=fabric
+        box back_seam size=0.135,0.014,0.49 at=0.2,1.42,0 rot=0,0,-14 color=#255a94 mat=fabric
+        box bucher_plate size=0.02,0.07,0.3 at=0.155,1.5,0 rot=0,0,-14 color=#f2f2f0 mat=plastic
+        box headrest size=0.12,0.2,0.3 at=0.33,1.84,0 rot=0,0,-14 round=0.05 color=#255a94 mat=fabric
+        tube harness_l pts=0.14,1.68,-0.14 0.1,1.3,-0.16 0.12,1.05,-0.18 r=0.022 color=#1c1c1e mat=fabric
+        tube harness_r pts=0.14,1.68,0.14 0.1,1.3,0.16 0.12,1.05,0.18 r=0.022 color=#1c1c1e mat=fabric
+        box buckle size=0.05,0.08,0.1 at=0.11,1.06,0 color=#8f9193 mat=metal
+      # ---- Roter zweiter Sitz links mit Kopfstütze ----
+      group seat_red at=0.85,0,-0.55 color=#d0341c label="Bergesitz"
+        cyl pedestal r=0.055 h=0.34 at=0,0.8,0 color=#26282a mat=metal
+        box seat_frame size=0.5,0.06,0.44 at=0,0.94,0 color=#26282a mat=metal
+        box cushion size=0.52,0.13,0.48 at=0,1.02,0 round=0.04 color=#d0341c mat=fabric
+        box cushion_seam size=0.53,0.014,0.49 at=0,1.075,0 color=#a82812 mat=fabric
+        box backrest size=0.13,0.72,0.48 at=0.24,1.4,0 rot=0,0,-14 round=0.04 color=#d0341c mat=fabric
+        box back_seam size=0.135,0.014,0.49 at=0.2,1.42,0 rot=0,0,-14 color=#a82812 mat=fabric
+        box headrest size=0.13,0.22,0.32 at=0.33,1.86,0 rot=0,0,-14 round=0.05 color=#a82812 mat=fabric
+        tube harness_l pts=0.14,1.68,-0.14 0.1,1.3,-0.16 0.12,1.05,-0.18 r=0.022 color=#1c1c1e mat=fabric
+        tube harness_r pts=0.14,1.68,0.14 0.1,1.3,0.16 0.12,1.05,0.18 r=0.022 color=#1c1c1e mat=fabric
+      # ---- Rotes Rettungsrucksack-Paket an der Rückwand ----
+      group backpack at=1.48,0,0.12
+        box pack size=0.3,0.6,0.42 at=0,1.32,0 round=0.05 color=#c22a15 mat=fabric
+        box pack_flap size=0.32,0.2,0.44 at=-0.02,1.58,0 round=0.04 color=#a82210 mat=fabric
+        box strap_l size=0.02,0.5,0.05 at=-0.165,1.3,-0.12 color=#1c1c1e mat=fabric
+        box strap_r size=0.02,0.5,0.05 at=-0.165,1.3,0.12 color=#1c1c1e mat=fabric
+        box buckle1 size=0.03,0.05,0.06 at=-0.17,1.12,-0.12 color=#8f9193 mat=metal
+        box buckle2 size=0.03,0.05,0.06 at=-0.17,1.12,0.12 color=#8f9193 mat=metal
+        box pack_pocket size=0.06,0.22,0.3 at=-0.16,1.0,0 round=0.03 color=#a82210 mat=fabric
+      # ---- Deckenhandgriff orange ----
+      mirror z
+        group grab_handle at=0.85,0,0.35
+          box hanger_rail size=0.46,0.03,0.05 at=0,2.26,0 color=#8f9193 mat=metal
+          tube handle pts=-0.18,2.26,0 -0.18,2.07,0 0.18,2.07,0 0.18,2.26,0 r=0.026 color=#ff8a00 mat=plastic
+          box mount1 size=0.04,0.05,0.05 at=-0.18,2.24,0 color=#d97400 mat=plastic
+          box mount2 size=0.04,0.05,0.05 at=0.18,2.24,0 color=#d97400 mat=plastic
+      # ---- Verbandkasten und Kleinteile an der unteren Wand ----
+      box medkit size=0.26,0.17,0.13 at=0.15,0.96,0.79 color=#f2f2f0 mat=plastic
+      box cross_v size=0.05,0.11,0.015 at=0.15,0.96,0.86 color=#d0341c mat=paint
+      box cross_h size=0.11,0.05,0.015 at=0.15,0.96,0.86 color=#d0341c mat=paint
+      box stowage size=0.5,0.24,0.16 at=0.55,0.79,-0.78 color=#6f7274 mat=plastic
+      box stowage_lip size=0.52,0.03,0.18 at=0.55,0.92,-0.78 color=#5a5d5f mat=plastic
+    group skid_gear
+      mirror z
+        tube skid r=0.045 pts=-2.85,0.45,1.45 -2.72,0.24,1.452 -2.54,0.11,1.455 -2.30,0.07,1.45 -1.00,0.06,1.45 0.50,0.06,1.45 1.70,0.06,1.45 color=#17181a mat=brushed
+        sphere tipcap r=0.05 scale=1.7,1,1 at=-2.88,0.47,1.45 color=#17181a mat=brushed
+        cyl reartip r=0.05 h=0.06 axis=x at=1.73,0.06,1.45 color=#17181a mat=brushed
+        box reflector size=0.03,0.05,0.05 round=0.01 at=1.70,0.06,1.50 color=#c22a12 mat=plastic
+        box gskid size=3.05,0.028,0.095 round=0.015 at=0.20,0.108,1.45 color=#232527 mat=plastic
+        box gskidfront size=0.45,0.025,0.09 round=0.015 at=-1.55,0.115,1.45 rot=0,0,-4 color=#232527 mat=plastic
+        repeat 9 step=0.33,0,0 at=-1.30,0.125,1.492
+          screw skidscrew r=0.007 h=0.01 color=#3c3f42 mat=brushed
+        tube fs1 r=0.038 pts=-1.62,0.56,1.28 -1.85,0.30,1.38 -2.12,0.09,1.45 color=#17181a mat=brushed
+        tube fs2 r=0.038 pts=-1.18,0.56,1.32 -1.40,0.30,1.40 -1.64,0.08,1.45 color=#17181a mat=brushed
+        tube rs r=0.038 pts=1.22,0.58,1.30 1.42,0.30,1.40 1.60,0.08,1.45 color=#17181a mat=brushed
+        repeat 2 step=0.09,0,0 at=-2.16,0.09,1.45
+          cyl collar r=0.062 h=0.06 hole=0.042 axis=x color=#202224 mat=brushed
+        repeat 2 step=0.045,0,0 at=-2.15,0.15,1.45
+          screw collarbolt r=0.008 h=0.014 color=#4a4d50 mat=chrome
+        cyl collar2 r=0.062 h=0.16 hole=0.042 axis=x at=-1.64,0.08,1.45 color=#202224 mat=brushed
+        screw bolt2 r=0.008 h=0.014 at=-1.64,0.15,1.45 color=#4a4d50 mat=chrome
+        cyl collar3 r=0.062 h=0.16 hole=0.042 axis=x at=1.60,0.08,1.45 color=#202224 mat=brushed
+        screw bolt3 r=0.008 h=0.014 at=1.60,0.15,1.45 color=#4a4d50 mat=chrome
+        cyl buffer1 r=0.06 h=0.07 axis=y at=-1.62,0.51,1.28 color=#0d0d0e mat=rubber
+        cyl buffer2 r=0.06 h=0.07 axis=y at=-1.18,0.51,1.32 color=#0d0d0e mat=rubber
+        cyl buffer3 r=0.06 h=0.07 axis=y at=1.22,0.53,1.30 color=#0d0d0e mat=rubber
+        box step size=0.88,0.03,0.30 round=0.012 at=-1.48,0.33,1.42 color=#1a1b1d mat=rubber
+        repeat 8 step=0.095,0,0 at=-1.85,0.352,1.42
+          box rib size=0.035,0.014,0.26 round=0.005 color=#26282a mat=rubber
+        box stepedge size=0.88,0.02,0.025 at=-1.48,0.345,1.285 color=#101112 mat=plastic
+      group landinglight at=-1.85,0.30,0
+        tube llbracket r=0.014 pts=-1.85,0.30,1.40 -1.85,0.30,1.46 color=#17181a mat=brushed
+        cyl llbody r=0.068 h=0.09 axis=z at=-1.85,0.30,1.50 color=#17181a mat=brushed
+        cyl lllens r=0.052 h=0.018 axis=z at=-1.85,0.30,1.548 color=#fff0c2 mat=light
+        cyl llring r=0.062 h=0.012 hole=0.05 axis=z at=-1.85,0.30,1.545 color=#2c2e30 mat=brushed
+      tube rope r=0.03 pts=-1.62,0.50,-1.30 -1.76,0.22,-1.33 -1.95,0.06,-1.24 -2.18,0.05,-1.42 -1.86,0.05,-1.52 -1.56,0.06,-1.33 -1.34,0.05,-1.47 -1.12,0.06,-1.26 -0.95,0.05,-1.42 color=#dcb41e mat=rubber
+      tube ropeend r=0.03 pts=-1.62,0.50,-1.30 -1.55,0.42,-1.24 -1.50,0.34,-1.28 color=#dcb41e mat=rubber
+      tube ct1 r=0.05 pts=-1.60,0.40,-1.42 -1.60,0.40,1.42 color=#17181a mat=brushed
+      tube ct2 r=0.05 pts=0.90,0.40,-1.42 0.90,0.40,1.42 color=#17181a mat=brushed
+      cyl turnbuckle r=0.062 h=0.20 axis=z at=0.90,0.40,0 color=#2b2d2f mat=brushed
+      cyl tbnut1 r=0.05 h=0.03 axis=z at=0.90,0.40,0.12 color=#3a3d40 mat=chrome
+      cyl tbnut2 r=0.05 h=0.03 axis=z at=0.90,0.40,-0.12 color=#3a3d40 mat=chrome
+      tube safetywire r=0.004 pts=0.90,0.44,0.10 0.99,0.41,0.17 1.07,0.45,0.10 1.14,0.41,0.16 color=#c9cbce mat=chrome
+    group fit_15557 at=-0.2476,-0.1627,0.0000 scale=1.8744,1.4480,1.8100
+      group camera_turret at=0,0,0 label="Wescam MX-Sensorball"
+        sphere ball r=0.22 at=0.3,0.24,0 scale=1,1,1 color=#101214 mat=matte
+        cyl ball_seam r=0.221 r2=0.221 h=0.008 hole=0.214 axis=y at=0.3,0.24,0 color=#050607 mat=metal
+        cyl ball_seam2 r=0.218 r2=0.218 h=0.006 hole=0.212 axis=y at=0.3,0.35,0 color=#08090b mat=metal
+        lathe collar pts=0.355,0.10 0.365,0.148 0.40,0.152 0.44,0.140 0.48,0.128 0.52,0.115 0.55,0.09 axis=y smooth=1 at=0.3,0,0 color=#1c1e20 mat=cast
+        cyl clamp_ring r=0.152 r2=0.152 h=0.035 hole=0.128 axis=y at=0.3,0.385,0 color=#2a2d30 mat=brushed
+        cyl clamp_ring2 r=0.146 r2=0.146 h=0.02 hole=0.126 axis=y at=0.3,0.435,0 color=#232629 mat=brushed
+        ring 4 r=0.108 axis=y at=0.3,0.372,0
+          screw s1 r=0.008 h=0.012 color=#8a8f94 mat=steel
+        ring 6 r=0.138 axis=y at=0.3,0.385,0
+          screw s2 r=0.007 h=0.010 color=#6f7478 mat=steel
+        cyl lens_bezel r=0.068 r2=0.058 h=0.05 axis=x at=0.455,0.145,0 rot=0,0,-30 color=#0a0c0d mat=cast
+        cyl lens_glass r=0.052 r2=0.048 h=0.018 axis=x at=0.487,0.128,0 rot=0,0,-30 color=#1c2a38 mat=glass
+        cyl lens_inner r=0.030 r2=0.026 h=0.012 axis=x at=0.492,0.124,0 rot=0,0,-30 color=#0e1620 mat=glass
+        cyl rangefinder r=0.034 r2=0.028 h=0.07 axis=x at=0.43,0.315,0.135 rot=0,0,-15 color=#0d0f11 mat=matte
+        cyl rangefinder_lens r=0.024 h=0.01 axis=x at=0.465,0.30,0.145 rot=0,0,-15 color=#182634 mat=glass
+        tube lens_guard pts=0.435,0.27,0.105 0.525,0.325,0.06 0.55,0.235,0 0.525,0.145,0.06 0.435,0.09,0.105 r=0.009 color=#1a1c1e mat=brushed
+        tube lens_guard_foot1 pts=0.435,0.27,0.105 0.40,0.26,0.13 r=0.008 color=#1a1c1e mat=brushed
+        tube lens_guard_foot2 pts=0.435,0.09,0.105 0.40,0.12,0.13 r=0.008 color=#1a1c1e mat=brushed
+        tube cable_hose pts=0.365,0.47,0.105 0.30,0.455,0.175 0.16,0.435,0.16 0.06,0.415,0.12 r=0.018 color=#0b0c0d mat=rubber
+        cyl cable_nut r=0.028 h=0.03 axis=y at=0.365,0.475,0.105 color=#2e3134 mat=brushed
+        box type_plate size=0.10,0.05,0.006 at=0.295,0.255,0.212 rot=0,0,0 color=#e8e8e6 mat=plastic
+        box type_plate_border size=0.106,0.056,0.004 at=0.295,0.255,0.209 color=#141618 mat=plastic
+        sphere status_light r=0.012 at=0.24,0.36,0.16 color=#ff3300 mat=light
+        cyl mount_flange r=0.165 r2=0.165 h=0.05 hole=0.10 axis=y at=0.3,0.50,0 color=#232527 mat=cast
+        ring 8 r=0.145 axis=y at=0.3,0.505,0
+          screw s3 r=0.007 h=0.012 color=#7d8286 mat=steel
+    group fit_19485 at=0.1379,-0.2079,0.0000 scale=1.0427,1.3034,0.8342
+      group wipers_mirrors_pitot
+        # ================= SCHEIBENWISCHER (paarig) =================
+        mirror z
+          group wiper at=-2.55,1.30,0.35
+            # Motorbasis mit Gummidichtung an der Glasrahmenkante
+            cyl gasket r=0.05 h=0.008 axis=x at=-0.022,0,0 color=#0b0b0b mat=rubber
+            cyl base r=0.034 h=0.042 axis=x at=0,0,0 color=#141414 mat=plastic
+            cyl basecap r=0.021 h=0.012 axis=x at=0.026,0,0 color=#2e2e2e mat=metal
+            cyl nozzle r=0.006 h=0.022 axis=y at=0.03,0.03,0 color=#0a0a0a mat=plastic
+            # Wischerarm auf der gewölbten Scheibe
+            tube arm pts=0,0,0 0.13,0.36,0 0.24,0.66,0 r=0.012 color=#161616 mat=plastic
+            sphere armend r=0.016 at=0.24,0.66,0 color=#101010 mat=plastic
+            # Federwelle am Armfuß
+            cyl spring r=0.007 h=0.1 rot=0,0,-0.35 at=0.055,0.17,0.022 color=#3a3a3a mat=metal
+            # Wischblatt in dunklem Gummi mit Metallspine
+            tube blade pts=-0.03,0.03,0 0.10,0.39,0 0.21,0.69,0 r=0.017 flat=8 color=#060606 mat=rubber
+            tube spine pts=-0.03,0.03,0.004 0.10,0.39,0.004 0.21,0.69,0.004 r=0.005 color=#2b2b2b mat=metal
+            box bladeclip size=0.022,0.032,0.034 at=0.215,0.635,0 color=#1a1a1a mat=metal
+        # dritte kurze Wischerwelle mittig unten an der Frontscheibe
+        cyl wc_gasket r=0.034 h=0.006 axis=x at=-2.545,1.12,0 color=#0b0b0b mat=rubber
+        cyl wc_base r=0.024 h=0.05 axis=x at=-2.52,1.12,0 color=#141414 mat=plastic
+        cyl wc_shaft r=0.01 h=0.09 axis=x at=-2.60,1.12,0 color=#262626 mat=metal
+        cyl wc_cap r=0.014 h=0.012 axis=x at=-2.655,1.12,0 color=#101010 mat=plastic
+        # ================= AUßENSPIEGEL (paarig) =================
+        mirror z
+          group mirror at=-0.45,1.9,0
+            # Klemmplatte mit Schraube an der Türrahmenleiste
+            box clampplate size=0.06,0.15,0.018 at=0,0,1.055 color=#141414 mat=metal
+            cyl clamp r=0.016 h=0.03 axis=z at=0,0,1.075 color=#111111 mat=metal
+            cyl clampscrew r=0.009 h=0.016 axis=z at=0,0,1.097 color=#9aa0a6 mat=metal
+            cyl clampnut r=0.013 h=0.008 axis=z at=0,0,1.088 color=#5a5f64 mat=metal
+            # Spiegelarm
+            tube arm pts=0,0,1.08 0,0.015,1.22 0,0,1.33 r=0.011 color=#161616 mat=plastic
+            # Spiegelkopf, leicht nach hinten geneigt
+            group head at=0,0,1.375 rot=0,0,0.15
+              box frame size=0.035,0.115,0.175 round=0.012 color=#101010 mat=plastic
+              box glass size=0.014,0.095,0.155 at=-0.013,0,0 color=#1e2c36 mat=glass
+              box rib size=0.04,0.012,0.17 at=0.006,0.045,0 color=#1c1c1c mat=plastic
+        # ================= PITOTROHRE (paarig) =================
+        mirror z
+          group pitot at=0,1.35,0.58
+            cyl flange r=0.03 h=0.014 axis=x at=-3.235,0,0 color=#1c1c1c mat=metal
+            cyl base r=0.021 h=0.05 axis=x at=-3.27,0,0 color=#202020 mat=metal
+            # beheiztes, leicht bläulich angelaufenes Stahlrohr
+            cyl tube r=0.012 h=0.16 axis=x at=-3.36,0,0 color=#8a97a5 mat=brushed
+            cyl tube2 r=0.0105 h=0.05 axis=x at=-3.415,0,0 color=#7d8b99 mat=brushed
+            cyl tipcap r=0.012 h=0.014 axis=x at=-3.434,0,0 color=#6f7d8b mat=brushed
+        # Statikbohrungen seitlich am Bug
+        mirror z
+          cyl port1 r=0.009 h=0.015 axis=z at=-2.95,1.30,0.73 color=#0c0c0c mat=metal
+          cyl port2 r=0.009 h=0.015 axis=z at=-2.95,1.06,0.73 color=#0c0c0c mat=metal
+        # Beschriftung
+        decal hull "PITOT" at=-2.98,1.18 axis=z both=1 h=0.08 color=#ffffff
+    group fit_64441 at=0.8987,1.9356,0.0000 scale=0.7500,0.5096,0.6000
+      group antennas_lights
+        # ---- Messerantenne 1 bei x=1.3 ----
+        group ant1 at=1.30,2.83,0
+          box a1_seal size=0.17,0.012,0.11 at=0,0.004,0 color=#6a6a68 mat=rubber
+          box a1_base size=0.14,0.025,0.09 at=0,0.014,0 color=#2b2b2b mat=plastic
+          plate a1_blade pts=0,0.02 0.05,0.11 0.19,0.11 0.28,0.02 h=0.018 at=-0.14,0.02,0 color=#f2f2f0 mat=paint
+          ring a1_screws 4 r=0.048 axis=y at=0,0.028,0
+            screw a1s r=0.005 h=0.007 color=#8a8a88 mat=steel
+        # ---- Messerantenne 2 bei x=2.3 ----
+        group ant2 at=2.30,2.75,0
+          box a2_seal size=0.17,0.012,0.11 at=0,0.004,0 color=#6a6a68 mat=rubber
+          box a2_base size=0.14,0.025,0.09 at=0,0.014,0 color=#2b2b2b mat=plastic
+          plate a2_blade pts=0,0.02 0.05,0.11 0.19,0.11 0.28,0.02 h=0.018 at=-0.14,0.02,0 color=#f2f2f0 mat=paint
+          ring a2_screws 4 r=0.048 axis=y at=0,0.028,0
+            screw a2s r=0.005 h=0.007 color=#8a8a88 mat=steel
+        # Kabel vom Antennenfuss zur Durchführung
+        tube ant_cable pts=2.30,2.77,0 2.48,2.75,0 2.64,2.72,0 r=0.008 color=#1c1c1c mat=rubber
+        # ---- GPS-Kuppel bei x=1.8 ----
+        group gps1 at=1.80,2.84,0.15
+          cyl gps_ring r=0.082 h=0.02 axis=y at=0,0.008,0 color=#b9b9b6 mat=brushed
+          sphere gps_dome r=0.07 scale=1,0.62,1 at=0,0.02,0 sink=0.25 color=#d8d8d6 mat=brushed
+          ring gps_screws 6 r=0.068 axis=y at=0,0.02,0
+            screw gpss r=0.004 h=0.005 color=#7a7a78 mat=steel
+        # ---- Kabeldurchführungen mit grauen Dichtungen ----
+        group feed1 at=1.55,2.845,0
+          cyl f1_seal r=0.034 h=0.018 axis=y at=0,0.007,0 color=#8a8a86 mat=rubber
+          cyl f1_nut r=0.024 h=0.026 axis=y at=0,0.012,0 color=#4a4a48 mat=darkmetal
+        group feed2 at=2.66,2.72,0
+          cyl f2_seal r=0.034 h=0.018 axis=y at=0,0.007,0 color=#8a8a86 mat=rubber
+          cyl f2_nut r=0.024 h=0.026 axis=y at=0,0.012,0 color=#4a4a48 mat=darkmetal
+        # ---- kleine HF-Antenne hinter dem Cowl ----
+        group hf_ant at=3.32,2.17,0
+          cyl hf_seal r=0.038 h=0.016 axis=y at=0,0.006,0 color=#8a8a86 mat=rubber
+          cyl hf_rod r=0.018 h=0.14 axis=y at=0,0.08,0 color=#1f1f1f mat=plastic
+          sphere hf_tip r=0.022 at=0,0.155,0 color=#1f1f1f mat=plastic
+        # ---- Rote Antikollisionslampe auf der Flossenspitze ----
+        group beacon at=6.45,3.94,0
+          cyl bc_base r=0.058 h=0.045 axis=y at=0,0.02,0 color=#232323 mat=plastic
+          cyl bc_ring r=0.05 h=0.012 axis=y at=0,0.048,0 color=#3a3a3a mat=metal
+          cyl bc_bulb r=0.032 h=0.02 axis=y at=0,0.055,0 color=#ff2222 mat=light
+          sphere bc_dome r=0.06 scale=1,0.85,1 at=0,0.06,0 sink=0.2 color=#dd0000 mat=glass
+        # ---- Weisses Heckpositionslicht an der Flossenhinterkante ----
+        group tail_light at=6.30,2.00,0
+          cyl tl_house r=0.038 h=0.07 axis=x at=0,0,0 color=#cfcfcd mat=brushed
+          cyl tl_refl r=0.03 h=0.02 axis=x at=0.035,0,0 hole=0.5 color=#e9e9e7 mat=chrome
+          sphere tl_lens r=0.028 at=0.045,0,0 color=#ffffff mat=glass
+        # ---- Gruenes Positionslicht an der linken Flossenkante ----
+        group port_light at=5.88,2.55,-0.44
+          box pl_house size=0.07,0.055,0.045 color=#2b2b2b mat=plastic
+          sphere pl_lens r=0.028 at=0.01,0,-0.025 color=#22dd44 mat=glass
+    group door_fittings
+      mirror z
+        # ---- Schiebetürschiene (eloxiertes Aluminium) ----
+        box rail size=1.2,0.025,0.035 at=1.15,1.55,1.078 color=alu mat=brushed
+        box rail_lip size=1.2,0.012,0.014 at=1.15,1.578,1.078 color=#8f9294 mat=brushed
+        box rail_end_l size=0.03,0.03,0.04 at=0.57,1.55,1.078 color=#6f7274 mat=metal
+        box rail_end_r size=0.03,0.03,0.04 at=1.73,1.55,1.078 color=#6f7274 mat=metal
+        repeat 4 step=0.32,0,0
+          cyl roller r=0.028 h=0.034 axis=y at=0.72,1.522,1.082 color=darkmetal mat=metal
+        repeat 3 step=0.5,0,0
+          box rail_brkt size=0.035,0.05,0.02 at=0.7,1.505,1.068 color=#7d8082 mat=brushed
+        # ---- Chrom Türgriff Schiebetür ----
+        box handle_bar size=0.16,0.028,0.032 at=0.75,1.35,1.092 round=0.012 color=#b8b8b6 mat=chrome
+        box handle_std1 size=0.028,0.045,0.02 at=0.685,1.35,1.075 color=#a8a8a6 mat=chrome
+        box handle_std2 size=0.028,0.045,0.02 at=0.815,1.35,1.075 color=#a8a8a6 mat=chrome
+        # ---- orangefarbener Verriegelungshebel ----
+        box lever_base size=0.055,0.055,0.016 at=1.55,1.30,1.072 color=#c46a10 mat=plastic
+        box lever size=0.10,0.032,0.03 at=1.55,1.30,1.09 round=0.01 color=#ff8a00 mat=plastic
+        cyl lever_pin r=0.012 h=0.03 axis=z at=1.55,1.30,1.082 color=darkmetal mat=metal
+        # ---- Warnplakette DOOR ----
+        box placard size=0.1,0.06,0.006 at=1.40,1.10,1.084 color=#f2f2f0 mat=paint
+        decal hull "DOOR" at=1.40,1.10 axis=x both=1 h=0.045 color=#1a1a1a bold=1
+        # ---- Gummidichtung um Türöffnung ----
+        box seal_front size=0.02,0.9,0.022 at=0.55,1.15,1.072 color=#141414 mat=rubber
+        box seal_rear size=0.02,0.9,0.022 at=1.75,1.15,1.072 color=#141414 mat=rubber
+        box seal_top size=1.22,0.02,0.022 at=1.15,1.615,1.072 color=#141414 mat=rubber
+        box seal_bottom size=1.22,0.02,0.022 at=1.15,0.70,1.072 color=#141414 mat=rubber
+        box seal_pl size=0.02,1.25,0.022 at=-0.36,1.55,1.072 color=#141414 mat=rubber
+        box seal_pt size=0.34,0.02,0.022 at=-0.19,2.16,1.072 color=#141414 mat=rubber
+        # ---- versenkte Nietenreihen entlang der Umrandung ----
+        repeat 9 step=0.135,0,0
+          screw rv1 r=0.005 h=0.006 at=0.62,1.638,1.085 color=#9a9d9f mat=metal
+        repeat 6 step=0,0.15,0
+          screw rv2 r=0.005 h=0.006 at=0.545,0.82,1.085 color=#9a9d9f mat=metal
+        repeat 6 step=0,0.15,0
+          screw rv3 r=0.005 h=0.006 at=1.755,0.82,1.085 color=#9a9d9f mat=metal
+        # ---- orange Griffe an Türunterkanten ----
+        box ogrip1 size=0.04,0.11,0.03 at=0.62,0.86,1.088 round=0.01 color=#ff8a00 mat=plastic
+        box ogrip2 size=0.04,0.11,0.03 at=1.68,0.86,1.088 round=0.01 color=#ff8a00 mat=plastic
+        box ogrip3 size=0.035,0.1,0.028 at=0.50,1.30,1.088 round=0.01 color=#ff8a00 mat=plastic
+        # ---- Scharniere Pilotentür (vordere Kante) ----
+        repeat 3 step=0,0.48,0
+          box hinge size=0.07,0.1,0.035 at=-0.30,1.02,1.078 color=alu mat=brushed
+          cyl hinge_pin r=0.012 h=0.13 axis=y at=-0.30,1.02,1.098 color=darkmetal mat=metal
+        box hinge_plate size=0.05,0.34,0.012 at=-0.335,1.5,1.07 color=#8f9294 mat=brushed
+        # ---- Pilotentürgriff chrom + orange Entriegelung ----
+        box phandle size=0.15,0.03,0.032 at=-0.02,1.35,1.092 round=0.012 color=#b8b8b6 mat=chrome
+        box pstd1 size=0.026,0.045,0.02 at=-0.08,1.35,1.075 color=#a8a8a6 mat=chrome
+        box pstd2 size=0.026,0.045,0.02 at=0.04,1.35,1.075 color=#a8a8a6 mat=chrome
+        cyl pbutton r=0.016 h=0.022 axis=z at=0.10,1.35,1.09 color=#ff8a00 mat=plastic
+        # ---- Trittaussparung mit schwarzer Riffelleiste ----
+        box step_base size=0.58,0.05,0.1 at=1.15,0.60,1.01 color=#1c1c1c mat=rubber
+        repeat 7 step=0.075,0,0
+          box step_rib size=0.018,0.056,0.104 at=0.885,0.60,1.01 color=#2c2c2c mat=rubber
+        box step_edge size=0.58,0.015,0.03 at=1.15,0.635,1.01 color=#3a3d40 mat=metal
+    group fit_9414 at=1.3692,0.4422,0.0000 scale=0.7774,0.6530,0.9717
+      group tail_bumper at=0,0,0 label="Hecksporn"
+        # oberes Anschlussfairing, taucht in den Flossenunterteil ein
+        plate fairing pts=6.15,1.60 6.50,1.62 6.85,1.55 6.85,1.30 6.20,1.45 h=0.14 color=#e8380d mat=paint
+        # Hauptkeil, nach hinten-unten geneigt
+        plate wedge pts=6.20,1.45 6.85,1.32 6.85,1.10 6.32,1.38 h=0.12 color=#e5340b mat=paint
+        # schwarze Schleifkante aus GFK, leicht breiter, steht unten ueber
+        plate wear_edge pts=6.30,1.39 6.85,1.12 6.85,1.04 6.34,1.34 h=0.145 color=#141414 mat=plastic
+        # Fugenlinie zum Flossenunterteil
+        box seam_fairing at=6.30,1.485,0 size=0.30,0.014,0.15 color=#7a1f08 mat=paint
+        box seam_mid at=6.52,1.335,0 size=0.34,0.012,0.13 rot=0,0,-8 color=#7a1f08 mat=paint
+        # Seitenwangen als Befestigungsflansche + versenkte Schrauben
+        mirror z
+          plate flange pts=6.24,1.50 6.80,1.46 6.80,1.18 6.38,1.36 h=0.012 color=#dd320a mat=paint
+          screw s1 at=6.44,1.42,0.088 rot=90,0,0 r=0.013 h=0.012 color=#8a8f94 mat=brushed
+          screw s2 at=6.70,1.30,0.088 rot=90,0,0 r=0.013 h=0.012 color=#8a8f94 mat=brushed
+          screw s3 at=6.78,1.44,0.088 rot=90,0,0 r=0.010 h=0.010 color=#6f7478 mat=brushed
+        # Warnstreifen schwarz/gelb an der Vorderkante
+        repeat 2 step=0.09,-0.09,0 at=6.205,1.50,0
+          box stripe_y at=0,0,0 size=0.032,0.10,0.16 rot=0,0,-45 color=#f2c400 mat=paint
+        repeat 2 step=0.09,-0.09,0 at=6.25,1.455,0
+          box stripe_b at=0,0,0 size=0.032,0.10,0.16 rot=0,0,-45 color=#101010 mat=plastic
+        # Statikentladungsbuerste am Spornende
+        tube brush at=0,0,0 pts=6.83,1.20,0 6.94,1.06,0 7.02,0.96,0 r=0.008 color=#2c2e30 mat=metal
+        cone brush_tip at=7.03,0.95,0 rot=0,0,-125 r=0.014 h=0.05 color=#1c1c1c mat=rubber
+        repeat 4 step=0.012,-0.016,0 at=6.96,1.05,0
+          tube bristle at=0,0,0 pts=0,0,0 0.05,-0.07,0 r=0.002 color=#3a3a3a mat=metal
+  anim
+    step "Die Triebwerke starten, die Rotoren laufen an" 2.6
+      camera view=-40,15 zoom=1
+      move whole by=0,-2.5,0
+      spin main_rotor turns=3 axis=y
+      spin fenestron turns=6 axis=x
+    step "Der Hauptrotor erzeugt Auftrieb" 2.6
+      camera view=-25,28 zoom=1.8 on=main_rotor
+      spin main_rotor turns=5 axis=y
+      spin fenestron turns=8 axis=x
+    step "Fenestron und Kamerakugel im Check" 2.4
+      camera view=45,12 zoom=1.7 on=fenestron
+      spin fenestron turns=8 axis=x
+      swing camera_turret deg=30 axis=y pivot=0.3,0.25,0 cycles=2
+      spin main_rotor turns=4 axis=y
+    step "Der H145 hebt ab" 3.0
+      camera view=-40,12 zoom=1.2
+      move whole by=0,2.5,0
+      spin main_rotor turns=6 axis=y
+      spin fenestron turns=10 axis=x
+    step "Stabiler Schwebeflug über dem Platz" 2.6
+      camera view=-40,20 zoom=1
+      osc whole by=0,0.15,0 cycles=2 phase=0.5
+      spin main_rotor turns=5 axis=y
+      spin fenestron turns=8 axis=x

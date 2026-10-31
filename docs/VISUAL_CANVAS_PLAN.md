@@ -148,6 +148,33 @@ pixels. Take screenshots at scale 3. Wikimedia and stock sites: see above.
 Hard test of pure Chalk with no kit and no blueprint, 16 odd objects: 94 % blind
 hit, 4.4 score, 23 s. See `versions/v10_kontextbild`.
 
+## Forge: dense models with real light (v12)
+
+`forge.py <out> "<request>" [--ctx image] --film`. Long runs: use `systemd-run --user`.
+
+1. Reference: a screenshot crop or an image search. Reference only, as always.
+2. Skin: 3 GLM drafts of the outer form with `body`, `loft` and so on, a vision vote,
+   2 rounds of correction with a three-quarter and a side view.
+3. Surface work on the skin (`paint.mjs`): `paint`, `seam`, `decal` clip the real mesh,
+   so windows, liveries, panel lines and text follow the curve for a few tokens.
+4. Plan: GLM splits the object into 8 to 16 assemblies with real boxes. The engine prints
+   a station table of the skin, so that each builder knows where the surface is.
+5. Assemblies: one GLM call each, in parallel, 40 to 120 lines. Off-plan results are fitted
+   to their box. `tidy=1` removes small loose crumbs.
+6. Critic: 2 rounds with 3 angles. It rebuilds or removes assemblies. A vote keeps a round
+   only if it is better.
+7. Film: a last call writes `anim`. `swing` is the hinge action.
+
+Renderer: `export3d.mjs` bakes parts per motion and material. `view/viewer.js` is three.js
+PBR. One frame adds up 24 to 96 renders with a moving light, which gives soft shadows,
+occlusion and clean edges. It runs in a browser on any GPU, 0.05 s per sample here on an
+RTX 3060. `render3d.py` drives it in headless Chrome: the flag `--use-angle=gl-egl` is
+required, other flags gave a white page.
+
+Numbers: 700 to 1850 parts, 300 000 to 1 000 000 triangles. 8 to 12 minutes of model time.
+Traps: a sliver polygon on a clip plane multiplies pieces, so `solid()` drops it. Do not run
+`pkill -f` with a pattern that the own shell holds.
+
 ## Open work
 
 - Port the engine to Dart and add a chat block. Render time on phones is unknown.

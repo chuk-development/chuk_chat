@@ -80,7 +80,7 @@ def show_form(frag, out, name, yaw):
     f = out / f'{name}.chalk'
     f.write_text(f'canvas dark\nmodel obj 1100 620 keep=1 view={yaw},12\n{indent(frag)}\n')
     render(f, out / f'{name}.png', 24)
-    subprocess.run(['python3', str(HERE / 'render3d.py'), str(f), str(out / f'{name}_side.png'), '--samples', '16', '--size', '1000x560', '--view', '0,4'], capture_output=True, timeout=150)
+    subprocess.run(['python3', str(HERE / 'render3d.py'), str(f), str(out / f'{name}_side.png'), '--samples', '16', '--size', '1000x560', '--view', '0,4'], capture_output=True, timeout=500)
     subprocess.run(['montage', str(out / f'{name}.png'), str(out / f'{name}_side.png'), '-tile', '2x', '-geometry', '800x+2+2', str(out / f'{name}_both.png')])
     return (out / f'{name}_both.png').read_bytes()
 
@@ -148,7 +148,7 @@ def render(chalk, png, samples=48, view=''):
     if view:
         args += ['--view', view]
     try:
-        return subprocess.run(args, capture_output=True, text=True, timeout=150).stdout
+        return subprocess.run(args, capture_output=True, text=True, timeout=500).stdout
     except subprocess.TimeoutExpired:
         return 'render timeout'
 
@@ -238,6 +238,10 @@ def run(a):
         scene2 = assemble(plan, new)
         (out / f'r{r + 1}.chalk').write_text(scene2)
         views(out / f'r{r + 1}.chalk', out, f'r{r + 1}', plan)
+        if not (out / f'r{r + 1}.png').exists():
+            plan['form'] = keep_form
+            (out / f'r{r + 1}.png').write_bytes((out / f'r{r}.png').read_bytes())
+            continue
         vote = llm(model, [{'type': 'text', 'text': f'Request: {a.request}\nFirst image: reference, if any. Then model A, then model B. Which looks more real and more like the thing? Answer A or B.'}] + imgs + [uri((out / f'r{r}.png').read_bytes(), 'image/png'), uri((out / f'r{r + 1}.png').read_bytes(), 'image/png')], effort='low', tokens=3000)
         if 'B' in vote.upper()[:20]:
             built = new
