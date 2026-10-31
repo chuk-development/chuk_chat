@@ -1,0 +1,896 @@
+canvas dark
+title "V8-Motor im Längsschnitt mit laufenden Kolben"
+model obj 1100 620 keep=1 tidy=1 view=35,18 cut=z>0
+
+  group whole
+    group hull shell=1
+      body pan top=-0.38,0.16 -0.18,0.16 0.05,0.16 0.26,0.15 0.38,0.14 bottom=-0.38,0.05 -0.18,0.04 0.05,0.03 0.26,0.00 0.38,0.00 width=-0.38,0.30 -0.18,0.36 0.05,0.36 0.26,0.32 0.38,0.28 square=1 color=#26292d
+      body block top=-0.42,0.44 -0.22,0.45 0,0.45 0.22,0.45 0.42,0.43 bottom=-0.42,0.13 -0.22,0.12 0,0.12 0.22,0.12 0.42,0.14 width=-0.42,0.50 -0.22,0.58 0,0.60 0.22,0.58 0.42,0.50 square=1 color=#8d939a
+      body deck top=-0.40,0.56 -0.20,0.57 0,0.57 0.20,0.57 0.40,0.55 bottom=-0.40,0.42 -0.20,0.42 0,0.42 0.20,0.42 0.40,0.42 width=-0.40,0.62 -0.20,0.70 0,0.72 0.20,0.70 0.40,0.62 square=1 color=#a2a8ae
+      loft coverL sections=-0.34,0.60,0.13,0.645 -0.27,0.66,0.14,0.625 -0.18,0.68,0.14,0.595 -0.10,0.66,0.13,0.575 -0.05,0.58,0.12,0.565 axis=z square=1 color=#c4c9cf
+      loft coverR sections=0.05,0.58,0.12,0.565 0.10,0.66,0.13,0.575 0.18,0.68,0.14,0.595 0.27,0.66,0.14,0.625 0.34,0.60,0.13,0.645 axis=z square=1 color=#c4c9cf
+      loft plenum sections=-0.11,0.68,0.14,0.63 -0.06,0.72,0.17,0.645 0,0.72,0.18,0.65 0.06,0.72,0.17,0.645 0.11,0.68,0.14,0.63 axis=z square=1 color=#b3b9bf
+      body fcover top=-0.47,0.46 -0.43,0.47 bottom=-0.47,0.10 -0.43,0.10 width=-0.47,0.44 -0.43,0.54 square=1 color=#b9bec4
+      body rplate top=0.42,0.46 0.46,0.44 bottom=0.42,0.12 0.46,0.12 width=0.42,0.50 0.46,0.42 square=1 color=#9aa0a6
+      paint hull color=#70767d box=-0.44,0.10,-0.31,0.44,0.27,0.31
+      paint hull color=#cdd2d8 box=-0.30,0.68,-0.09,0.30,0.76,0.09
+      paint hull color=#4d535a box=-0.48,0.00,0.04,0.48,0.56,0.50
+      seam hull plane=0,1,0,0.425 w=0.010 box=-0.44,0.40,-0.33,0.44,0.45,0.33
+      seam hull plane=0,1,0,0.155 w=0.010 box=-0.40,0.13,-0.30,0.40,0.18,0.30
+      seam hull plane=1,0,0,-0.435 w=0.010 box=-0.48,0.08,-0.29,-0.40,0.50,0.29
+      seam hull plane=1,0,0,0.425 w=0.010 box=0.40,0.10,-0.27,0.47,0.48,0.27
+      seam hull plane=0,0,1,-0.20 w=0.008 box=-0.36,0.53,-0.26,0.36,0.73,-0.14
+      seam hull plane=0,0,1,0.20 w=0.008 box=-0.36,0.53,0.14,0.36,0.73,0.26
+      seam hull plane=0,0,1,0 w=0.008 box=-0.38,0.58,-0.05,0.38,0.76,0.05
+      seam hull plane=1,0,0,-0.25 w=0.006 box=-0.27,0.54,-0.33,-0.23,0.73,-0.06
+      seam hull plane=1,0,0,-0.08 w=0.006 box=-0.10,0.54,-0.33,-0.06,0.73,-0.06
+      seam hull plane=1,0,0,0.08 w=0.006 box=0.06,0.54,-0.33,0.10,0.73,-0.06
+      seam hull plane=1,0,0,0.25 w=0.006 box=0.23,0.54,-0.33,0.27,0.73,-0.06
+      seam hull plane=1,0,0,-0.25 w=0.006 box=-0.27,0.54,0.06,-0.23,0.73,0.33
+      seam hull plane=1,0,0,-0.08 w=0.006 box=-0.10,0.54,0.06,-0.06,0.73,0.33
+      seam hull plane=1,0,0,0.08 w=0.006 box=0.06,0.54,0.06,0.10,0.73,0.33
+      seam hull plane=1,0,0,0.25 w=0.006 box=0.23,0.54,0.06,0.27,0.73,0.33
+      decal hull "V8" at=0,0.66 axis=z both=1 h=0.10 color=#3a3f45 bold=1
+    group fit_8489 at=0.0029,0.0618,0.0000 scale=0.9639,0.7711,1.1404
+      group kurbelwelle at=0,0,0 label="Kurbelwelle"
+        # ---- Hauptzapfen, poliert, mit Bronze-Lagerschalen an den Trennflächen ----
+        repeat 5 step=0.18,0,0 at=-0.36,0.27,0
+          cyl hzapfen r=0.03 h=0.065 axis=x color=#c9cdd2 mat=brushed
+        repeat 5 step=0.18,0,0 at=-0.36,0.27,0
+          cyl lagerschale r=0.0365 h=0.052 hole=0.0305 axis=x color=#b08d57 mat=brushed
+        repeat 5 step=0.18,0,0 at=-0.36,0.301,0
+          cyl oelbohrung r=0.004 h=0.014 axis=y color=#17191c
+        # ---- Hubzapfen, abwechselnd +z / -z versetzt (Zündfolge 1-8-4-3-6-5-7-2) ----
+        repeat 2 step=0.36,0,0 at=-0.27,0.27,0.04
+          cyl hubzapfen_a r=0.025 h=0.1 axis=x color=#c9cdd2 mat=brushed
+        repeat 2 step=0.36,0,0 at=-0.09,0.27,-0.04
+          cyl hubzapfen_b r=0.025 h=0.1 axis=x color=#c9cdd2 mat=brushed
+        repeat 2 step=0.36,0,0 at=-0.27,0.296,0.04
+          cyl oelbohrung_pa r=0.004 h=0.014 axis=y color=#17191c
+        repeat 2 step=0.36,0,0 at=-0.09,0.296,-0.04
+          cyl oelbohrung_pb r=0.004 h=0.014 axis=y color=#17191c
+        # ---- Kurbelarme mit Gegengewichten, Pin-Paare 1+3 nach +z ----
+        repeat 2 step=0.36,0,0 at=-0.315,0.27,0
+          plate kurbelarm_a1 pts=-0.055,0.042 0.035,0.042 0.035,0.005 0.066,-0.025 0.058,-0.06 0.02,-0.076 -0.02,-0.072 -0.042,-0.045 -0.055,-0.015 h=0.03 rot=0,90,0 color=#4a4f55 mat=cast
+          cyl entlast_a1 r=0.007 h=0.034 axis=x at=0,-0.045,-0.038 color=#17191c
+        repeat 2 step=0.36,0,0 at=-0.225,0.27,0
+          plate kurbelarm_a2 pts=-0.055,0.042 0.035,0.042 0.035,0.005 0.066,-0.025 0.058,-0.06 0.02,-0.076 -0.02,-0.072 -0.042,-0.045 -0.055,-0.015 h=0.03 rot=0,90,0 color=#4a4f55 mat=cast
+          cyl entlast_a2 r=0.007 h=0.034 axis=x at=0,-0.045,-0.038 color=#17191c
+        # ---- Kurbelarme, Pin-Paare 2+4 nach -z ----
+        repeat 2 step=0.36,0,0 at=-0.135,0.27,0
+          plate kurbelarm_b1 pts=0.055,0.042 -0.035,0.042 -0.035,0.005 -0.066,-0.025 -0.058,-0.06 -0.02,-0.076 0.02,-0.072 0.042,-0.045 0.055,-0.015 h=0.03 rot=0,90,0 color=#4a4f55 mat=cast
+          cyl entlast_b1 r=0.007 h=0.034 axis=x at=0,-0.045,0.038 color=#17191c
+        repeat 2 step=0.36,0,0 at=-0.045,0.27,0
+          plate kurbelarm_b2 pts=0.055,0.042 -0.035,0.042 -0.035,0.005 -0.066,-0.025 -0.058,-0.06 -0.02,-0.076 0.02,-0.072 0.042,-0.045 0.055,-0.015 h=0.03 rot=0,90,0 color=#4a4f55 mat=cast
+          cyl entlast_b2 r=0.007 h=0.034 axis=x at=0,-0.045,0.038 color=#17191c
+        # ---- Wellenstummel zu Schwungrad und Dämpfer ----
+        cyl stub_hinten r=0.028 h=0.035 axis=x at=0.402,0.27,0 color=#4a4f55 mat=cast
+        cyl stub_vorn r=0.026 h=0.075 axis=x at=-0.415,0.27,0 color=#4a4f55 mat=cast
+        # ---- Schwungrad mit gezahntem Ringkranz und Kupplungsauflage ----
+        group schwungrad at=0.45,0.27,0 label="Schwungrad"
+          lathe scheibe pts=-0.035,0.035 -0.029,0.1 -0.024,0.13 0.018,0.13 0.023,0.1 0.028,0.035 axis=x smooth=1 color=#565b62 mat=cast
+          gear kranz teeth=60 r=0.136 h=0.026 axis=x at=-0.018,0,0 color=#3a3f45 mat=cast
+          lathe reibflaeche pts=0.018,0.05 0.02,0.118 0.026,0.118 0.028,0.05 axis=x color=#b6bcc2 mat=brushed
+          cyl drehring r=0.085 h=0.0015 hole=0.06 axis=x at=0.0275,0,0 color=#8d939a
+          ring 6 r=0.055 axis=x at=0.024,0,0
+            screw kopfschraube r=0.009 h=0.012 axis=x color=#2b2f34
+          ring 8 r=0.098 axis=x at=-0.003,0,0
+            cyl entlastungsbohrung r=0.005 h=0.058 axis=x color=#17191c
+          cyl pilotbuchse r=0.013 h=0.014 hole=0.008 axis=x at=0.03,0,0 color=#b08d57 mat=brushed
+          screw pilzniete r=0.008 h=0.01 axis=x at=0.037,0,0 color=#9aa0a6
+        # ---- Schwingungsdämpfer mit Gummiring und Riemenscheibe ----
+        group daempfer at=-0.46,0.27,0 label="Schwingungsdämpfer"
+          lathe laeufer pts=-0.02,0.02 -0.018,0.05 -0.012,0.07 0.006,0.07 0.012,0.05 0.02,0.022 axis=x smooth=1 color=#3d4248 mat=cast
+          cyl gummi r=0.066 h=0.008 hole=0.056 axis=x at=-0.016,0,0 color=#241d18 mat=rubber
+          repeat 3 step=0.009,0,0 at=-0.006,0,0
+            cyl rille r=0.0705 h=0.005 hole=0.06 axis=x color=#1e2124
+          cyl markierring r=0.0705 h=0.004 hole=0.064 axis=x at=0.008,0,0 color=#d0d4d8
+          screw nabenbolzen r=0.016 h=0.014 axis=x at=-0.025,0,0 color=#2b2f34
+    group kolben_rechts label="Kolben & Pleuel rechte Bank (Schnitt)"
+      group kolben1 at=-0.25,0.3046,0.06 rot=30,0,0 label="Zyl.1 Kolben OT"
+        lathe kolb1 pts=0.120,0.034 0.124,0.045 0.150,0.045 0.170,0.045 0.186,0.0448 0.190,0.043 0.193,0.037 0.194,0.020 axis=y smooth=1 color=#ccd1d6 mat=brushed
+        cyl kranz1 r=0.0448 h=0.0015 hole=0.036 axis=y at=0,0.1935,0 color=#4a3b28 mat=cast
+        repeat 3 step=0,-0.0068,0 at=0,0.187,0
+          cyl ring1 r=0.0458 h=0.0032 hole=0.0443 axis=y color=#2e3237 mat=steel
+        cyl oelspur1 r=0.0452 h=0.004 hole=0.0438 axis=y at=0,0.124,0 color=#3a3630 mat=matte
+        cyl bolzen1 r=0.011 h=0.078 axis=x at=0,0.15,0 color=#dfe2e5 mat=chrome
+        cyl clip1a r=0.0145 h=0.0018 hole=0.0125 axis=x at=0.039,0.15,0 color=#3a3f45 mat=brushed
+        cyl clip1b r=0.0145 h=0.0018 hole=0.0125 axis=x at=-0.039,0.15,0 color=#3a3f45 mat=brushed
+        cyl aug1 r=0.019 h=0.023 hole=0.0115 axis=x at=0,0.15,0 color=#4a4f55 mat=brushed
+        cyl gross1 r=0.027 h=0.019 hole=0.021 axis=x color=#4a4f55 mat=brushed
+        cyl schale1 r=0.0218 h=0.0185 hole=0.0212 axis=x color=#b08d57 mat=brushed
+        box bruch1 size=0.021,0.0012,0.055 at=0,0.001,0 color=#26292d mat=matte
+        screw schr1a r=0.0028 h=0.018 at=0,-0.018,0.0155 color=#3a3f45 mat=steel
+        screw schr1b r=0.0028 h=0.018 at=0,-0.018,-0.0155 color=#3a3f45 mat=steel
+        box steg1 size=0.008,0.11,0.012 at=0,0.08,0 color=#4a4f55 mat=brushed
+        box flg1a size=0.017,0.11,0.002 at=0,0.08,0.007 color=#50555b mat=brushed
+        box flg1b size=0.017,0.11,0.002 at=0,0.08,-0.007 color=#50555b mat=brushed
+        box marke1 size=0.001,0.005,0.005 at=0.0095,0.07,0 color=#d97a2b mat=paint
+        cyl lauf1 r=0.0505 h=0.04 hole=0.0455 axis=y at=0,0.243,0 shell=1 color=#a9afb5 mat=brushed
+        cyl honen1 r=0.0472 h=0.038 hole=0.0456 axis=y at=0,0.243,0 color=#82888e mat=brushed
+        repeat 3 step=0,-0.010,0 at=0,0.258,0.045
+          box kreuz1 size=0.043,0.0016,0.0016 rot=0,0,35 color=#6f757c mat=matte
+      group kolben2 at=-0.08,0.27,0.08 rot=30,0,0 label="Zyl.2 Kolben Wechsel"
+        lathe kolb2 pts=0.120,0.034 0.124,0.045 0.150,0.045 0.170,0.045 0.186,0.0448 0.190,0.043 0.193,0.037 0.194,0.020 axis=y smooth=1 color=#c9ced3 mat=brushed
+        cyl kranz2 r=0.0448 h=0.0015 hole=0.036 axis=y at=0,0.1935,0 color=#463a2a mat=cast
+        repeat 3 step=0,-0.0068,0 at=0,0.187,0
+          cyl ring2 r=0.0458 h=0.0032 hole=0.0443 axis=y color=#2b2f34 mat=steel
+        cyl oelspur2 r=0.0452 h=0.004 hole=0.0438 axis=y at=0,0.124,0 color=#3a3630 mat=matte
+        cyl bolzen2 r=0.011 h=0.078 axis=x at=0,0.15,0 color=#dfe2e5 mat=chrome
+        cyl clip2a r=0.0145 h=0.0018 hole=0.0125 axis=x at=0.039,0.15,0 color=#3a3f45 mat=brushed
+        cyl clip2b r=0.0145 h=0.0018 hole=0.0125 axis=x at=-0.039,0.15,0 color=#3a3f45 mat=brushed
+        cyl aug2 r=0.019 h=0.023 hole=0.0115 axis=x at=0,0.15,0 color=#4a4f55 mat=brushed
+        cyl gross2 r=0.027 h=0.019 hole=0.021 axis=x color=#4a4f55 mat=brushed
+        cyl schale2 r=0.0218 h=0.0185 hole=0.0212 axis=x color=#b08d57 mat=brushed
+        box bruch2 size=0.021,0.0012,0.055 at=0,0.001,0 color=#26292d mat=matte
+        screw schr2a r=0.0028 h=0.018 at=0,-0.018,0.0155 color=#3a3f45 mat=steel
+        screw schr2b r=0.0028 h=0.018 at=0,-0.018,-0.0155 color=#3a3f45 mat=steel
+        box steg2 size=0.008,0.11,0.012 at=0,0.08,0 color=#4a4f55 mat=brushed
+        box flg2a size=0.017,0.11,0.002 at=0,0.08,0.007 color=#50555b mat=brushed
+        box flg2b size=0.017,0.11,0.002 at=0,0.08,-0.007 color=#50555b mat=brushed
+        box marke2 size=0.001,0.005,0.005 at=0.0095,0.07,0 color=#d97a2b mat=paint
+        cyl lauf2 r=0.0505 h=0.04 hole=0.0455 axis=y at=0,0.243,0 shell=1 color=#a6acb2 mat=brushed
+        cyl honen2 r=0.0472 h=0.038 hole=0.0456 axis=y at=0,0.243,0 color=#7f858c mat=brushed
+        repeat 3 step=0,-0.010,0 at=0,0.258,0.045
+          box kreuz2 size=0.043,0.0016,0.0016 rot=0,0,35 color=#6f757c mat=matte
+      group kolben3 at=0.08,0.2354,0.02 rot=30,0,0 label="Zyl.3 Kolben VT"
+        lathe kolb3 pts=0.120,0.034 0.124,0.045 0.150,0.045 0.170,0.045 0.186,0.0448 0.190,0.043 0.193,0.037 0.194,0.020 axis=y smooth=1 color=#ced3d8 mat=brushed
+        cyl kranz3 r=0.0448 h=0.0015 hole=0.036 axis=y at=0,0.1935,0 color=#4e4030 mat=cast
+        repeat 3 step=0,-0.0068,0 at=0,0.187,0
+          cyl ring3 r=0.0458 h=0.0032 hole=0.0443 axis=y color=#303439 mat=steel
+        cyl oelspur3 r=0.0452 h=0.004 hole=0.0438 axis=y at=0,0.124,0 color=#3a3630 mat=matte
+        cyl bolzen3 r=0.011 h=0.078 axis=x at=0,0.15,0 color=#dfe2e5 mat=chrome
+        cyl clip3a r=0.0145 h=0.0018 hole=0.0125 axis=x at=0.039,0.15,0 color=#3a3f45 mat=brushed
+        cyl clip3b r=0.0145 h=0.0018 hole=0.0125 axis=x at=-0.039,0.15,0 color=#3a3f45 mat=brushed
+        cyl aug3 r=0.019 h=0.023 hole=0.0115 axis=x at=0,0.15,0 color=#4a4f55 mat=brushed
+        cyl gross3 r=0.027 h=0.019 hole=0.021 axis=x color=#4a4f55 mat=brushed
+        cyl schale3 r=0.0218 h=0.0185 hole=0.0212 axis=x color=#b08d57 mat=brushed
+        box bruch3 size=0.021,0.0012,0.055 at=0,0.001,0 color=#26292d mat=matte
+        screw schr3a r=0.0028 h=0.018 at=0,-0.018,0.0155 color=#3a3f45 mat=steel
+        screw schr3b r=0.0028 h=0.018 at=0,-0.018,-0.0155 color=#3a3f45 mat=steel
+        box steg3 size=0.008,0.11,0.012 at=0,0.08,0 color=#4a4f55 mat=brushed
+        box flg3a size=0.017,0.11,0.002 at=0,0.08,0.007 color=#50555b mat=brushed
+        box flg3b size=0.017,0.11,0.002 at=0,0.08,-0.007 color=#50555b mat=brushed
+        box marke3 size=0.001,0.005,0.005 at=0.0095,0.07,0 color=#d97a2b mat=paint
+        cyl lauf3 r=0.0505 h=0.04 hole=0.0455 axis=y at=0,0.243,0 shell=1 color=#a9afb5 mat=brushed
+        cyl honen3 r=0.0472 h=0.038 hole=0.0456 axis=y at=0,0.243,0 color=#82888e mat=brushed
+        repeat 3 step=0,-0.010,0 at=0,0.258,0.045
+          box kreuz3 size=0.043,0.0016,0.0016 rot=0,0,35 color=#6f757c mat=matte
+      group kolben4 at=0.25,0.25,0.0746 rot=30,0,0 label="Zyl.4 Kolben Mitte"
+        lathe kolb4 pts=0.120,0.034 0.124,0.045 0.150,0.045 0.170,0.045 0.186,0.0448 0.190,0.043 0.193,0.037 0.194,0.020 axis=y smooth=1 color=#cbd0d5 mat=brushed
+        cyl kranz4 r=0.0448 h=0.0015 hole=0.036 axis=y at=0,0.1935,0 color=#483c2c mat=cast
+        repeat 3 step=0,-0.0068,0 at=0,0.187,0
+          cyl ring4 r=0.0458 h=0.0032 hole=0.0443 axis=y color=#2d3136 mat=steel
+        cyl oelspur4 r=0.0452 h=0.004 hole=0.0438 axis=y at=0,0.124,0 color=#3a3630 mat=matte
+        cyl bolzen4 r=0.011 h=0.078 axis=x at=0,0.15,0 color=#dfe2e5 mat=chrome
+        cyl clip4a r=0.0145 h=0.0018 hole=0.0125 axis=x at=0.039,0.15,0 color=#3a3f45 mat=brushed
+        cyl clip4b r=0.0145 h=0.0018 hole=0.0125 axis=x at=-0.039,0.15,0 color=#3a3f45 mat=brushed
+        cyl aug4 r=0.019 h=0.023 hole=0.0115 axis=x at=0,0.15,0 color=#4a4f55 mat=brushed
+        cyl gross4 r=0.027 h=0.019 hole=0.021 axis=x color=#4a4f55 mat=brushed
+        cyl schale4 r=0.0218 h=0.0185 hole=0.0212 axis=x color=#b08d57 mat=brushed
+        box bruch4 size=0.021,0.0012,0.055 at=0,0.001,0 color=#26292d mat=matte
+        screw schr4a r=0.0028 h=0.018 at=0,-0.018,0.0155 color=#3a3f45 mat=steel
+        screw schr4b r=0.0028 h=0.018 at=0,-0.018,-0.0155 color=#3a3f45 mat=steel
+        box steg4 size=0.008,0.11,0.012 at=0,0.08,0 color=#4a4f55 mat=brushed
+        box flg4a size=0.017,0.11,0.002 at=0,0.08,0.007 color=#50555b mat=brushed
+        box flg4b size=0.017,0.11,0.002 at=0,0.08,-0.007 color=#50555b mat=brushed
+        box marke4 size=0.001,0.005,0.005 at=0.0095,0.07,0 color=#d97a2b mat=paint
+        cyl lauf4 r=0.0505 h=0.04 hole=0.0455 axis=y at=0,0.243,0 shell=1 color=#a6acb2 mat=brushed
+        cyl honen4 r=0.0472 h=0.038 hole=0.0456 axis=y at=0,0.243,0 color=#7f858c mat=brushed
+        repeat 3 step=0,-0.010,0 at=0,0.258,0.045
+          box kreuz4 size=0.043,0.0016,0.0016 rot=0,0,35 color=#6f757c mat=matte
+      repeat 5 step=0.1575,0,0 at=-0.315,0,0
+        tube oelduese pts=0,0.274,0.042 0,0.292,0.053 0,0.301,0.063 r=0.0032 color=#3a3f45 mat=cast
+    group fit_3371 at=0.0000,-0.0266,-0.1128 scale=1.1327,1.0948,1.2387
+      group kolben_links label="Kolben links mit Pleuel"
+        # --- Zylinderlaufbahnen (Schnitt, statisch) mit Kreuzschliff, Schnittkante, Öldüsen ---
+        group liner_l1 at=-0.25,0.4562,-0.1075 rot=-30,0,0
+          cyl lauf1a r=0.032 hole=0.0285 h=0.06 axis=y color=#9aa1a8 mat=brushed
+          cyl lauf1b r=0.0289 hole=0.0284 h=0.05 axis=y color=#b0b6bd mat=brushed
+          cyl schnitt1 r=0.0325 hole=0.0305 h=0.002 axis=y at=0,0.03,0 color=#1e2126 mat=dark
+          cyl lauf1c r=0.032 hole=0.0285 h=0.032 axis=y at=0,-0.104,0 color=#969da4 mat=brushed
+          cyl oelduese1 r=0.005 h=0.016 axis=y at=0,-0.13,0 color=#4a4f55 mat=steel
+          sphere oelstrahl1 r=0.0028 at=0,-0.1215,0 color=#c8963a mat=light
+        group liner_l2 at=-0.08,0.4562,-0.1075 rot=-30,0,0
+          cyl lauf2a r=0.032 hole=0.0285 h=0.06 axis=y color=#9ea5ac mat=brushed
+          cyl lauf2b r=0.0289 hole=0.0284 h=0.05 axis=y color=#b4bac1 mat=brushed
+          cyl schnitt2 r=0.0325 hole=0.0305 h=0.002 axis=y at=0,0.03,0 color=#1e2126 mat=dark
+          cyl lauf2c r=0.032 hole=0.0285 h=0.032 axis=y at=0,-0.104,0 color=#9aa1a8 mat=brushed
+          cyl oelduese2 r=0.005 h=0.016 axis=y at=0,-0.13,0 color=#4a4f55 mat=steel
+          sphere oelstrahl2 r=0.0028 at=0,-0.1215,0 color=#c8963a mat=light
+        group liner_l3 at=0.08,0.4562,-0.1075 rot=-30,0,0
+          cyl lauf3a r=0.032 hole=0.0285 h=0.06 axis=y color=#9aa1a8 mat=brushed
+          cyl lauf3b r=0.0289 hole=0.0284 h=0.05 axis=y color=#b0b6bd mat=brushed
+          cyl schnitt3 r=0.0325 hole=0.0305 h=0.002 axis=y at=0,0.03,0 color=#1e2126 mat=dark
+          cyl lauf3c r=0.032 hole=0.0285 h=0.032 axis=y at=0,-0.104,0 color=#969da4 mat=brushed
+          cyl oelduese3 r=0.005 h=0.016 axis=y at=0,-0.13,0 color=#4a4f55 mat=steel
+          sphere oelstrahl3 r=0.0028 at=0,-0.1215,0 color=#c8963a mat=light
+        group liner_l4 at=0.25,0.4562,-0.1075 rot=-30,0,0
+          cyl lauf4a r=0.032 hole=0.0285 h=0.06 axis=y color=#9ea5ac mat=brushed
+          cyl lauf4b r=0.0289 hole=0.0284 h=0.05 axis=y color=#b4bac1 mat=brushed
+          cyl schnitt4 r=0.0325 hole=0.0305 h=0.002 axis=y at=0,0.03,0 color=#1e2126 mat=dark
+          cyl lauf4c r=0.032 hole=0.0285 h=0.032 axis=y at=0,-0.104,0 color=#9aa1a8 mat=brushed
+          cyl oelduese4 r=0.005 h=0.016 axis=y at=0,-0.13,0 color=#4a4f55 mat=steel
+          sphere oelstrahl4 r=0.0028 at=0,-0.1215,0 color=#c8963a mat=light
+        # --- Zylinder 1 (x=-0.25), Hubphase 90° ---
+        group kolb_l1 at=-0.25,0.388,-0.0681 rot=-30,0,0 label="Kolben 1 links"
+          lathe kolben1 pts=-0.014,0.020 -0.011,0.0265 -0.004,0.0272 0.006,0.0238 0.014,0.0238 0.016,0.0272 0.020,0.0272 0.022,0.0238 0.024,0.0238 0.026,0.0272 0.028,0.0272 0.030,0.0238 0.032,0.0238 0.034,0.0272 0.036,0.0272 0.038,0.0238 0.040,0.0238 0.040,0.0 smooth=1 color=#b6bcc3 mat=brushed
+          repeat 3 step=0,0.007,0 at=0,0.023,0
+            cyl ring1 r=0.0278 hole=0.0242 h=0.0016 axis=y color=#c8ccd2 mat=steel
+          cyl rueckstand1 r=0.022 h=0.0012 axis=y at=0,0.0405,0 color=#2b241c mat=cast
+          cyl bolzen1 r=0.009 h=0.054 axis=x color=#b8bec4 mat=brushed
+        group pleuel_l1 at=-0.25,0.27,0.04 rot=-42.5,0,0 label="Pleuel 1 links"
+          cyl grossauge1 r=0.023 hole=0.0145 h=0.02 axis=x color=#4a4f55 mat=steel
+          cyl lagerschale1 r=0.0148 hole=0.0138 h=0.021 axis=x color=#b08d57 mat=brushed
+          box passungsm1 size=0.0215,0.0015,0.003 at=0,0.0155,0 color=#e8e4da mat=paint
+          box steg1 size=0.008,0.15,0.004 at=0,0.08,0 color=#4a4f55 mat=steel
+          mirror z
+            box flansch1 size=0.016,0.15,0.0025 at=0,0.08,0.0045 color=#4d5258 mat=steel
+            cyl pleuelschraube1 r=0.0035 h=0.026 axis=y at=0,-0.006,0.0105 color=#3a3f45 mat=steel
+            cyl schraubenkopf1 r=0.0055 h=0.0035 axis=y at=0,-0.015,0.0105 color=#33383e mat=steel
+          cyl kleinauge1 r=0.014 hole=0.0092 h=0.017 axis=x at=0,0.16,0 color=#4a4f55 mat=steel
+          cyl buchse1 r=0.0095 hole=0.0085 h=0.018 axis=x at=0,0.16,0 color=#b08d57 mat=brushed
+          box marke_l1 size=0.001,0.012,0.005 at=0.0085,0.1,0 color=#d8b56e mat=paint
+        # --- Zylinder 2 (x=-0.08), Hubphase 270° ---
+        group kolb_l2 at=-0.08,0.4226,-0.0881 rot=-30,0,0 label="Kolben 2 links"
+          lathe kolben2 pts=-0.014,0.020 -0.011,0.0265 -0.004,0.0272 0.006,0.0238 0.014,0.0238 0.016,0.0272 0.020,0.0272 0.022,0.0238 0.024,0.0238 0.026,0.0272 0.028,0.0272 0.030,0.0238 0.032,0.0238 0.034,0.0272 0.036,0.0272 0.038,0.0238 0.040,0.0238 0.040,0.0 smooth=1 color=#b2b8bf mat=brushed
+          repeat 3 step=0,0.007,0 at=0,0.023,0
+            cyl ring2 r=0.0278 hole=0.0242 h=0.0016 axis=y color=#c4c8ce mat=steel
+          cyl rueckstand2 r=0.022 h=0.0012 axis=y at=0,0.0405,0 color=#2e2720 mat=cast
+          cyl bolzen2 r=0.009 h=0.054 axis=x color=#b8bec4 mat=brushed
+        group pleuel_l2 at=-0.08,0.27,-0.04 rot=-17.5,0,0 label="Pleuel 2 links"
+          cyl grossauge2 r=0.023 hole=0.0145 h=0.02 axis=x color=#4d5258 mat=steel
+          cyl lagerschale2 r=0.0148 hole=0.0138 h=0.021 axis=x color=#b08d57 mat=brushed
+          box passungsm2 size=0.0215,0.0015,0.003 at=0,0.0155,0 color=#e8e4da mat=paint
+          box steg2 size=0.008,0.15,0.004 at=0,0.08,0 color=#4d5258 mat=steel
+          mirror z
+            box flansch2 size=0.016,0.15,0.0025 at=0,0.08,0.0045 color=#474c52 mat=steel
+            cyl pleuelschraube2 r=0.0035 h=0.026 axis=y at=0,-0.006,0.0105 color=#3a3f45 mat=steel
+            cyl schraubenkopf2 r=0.0055 h=0.0035 axis=y at=0,-0.015,0.0105 color=#33383e mat=steel
+          cyl kleinauge2 r=0.014 hole=0.0092 h=0.017 axis=x at=0,0.16,0 color=#4d5258 mat=steel
+          cyl buchse2 r=0.0095 hole=0.0085 h=0.018 axis=x at=0,0.16,0 color=#b08d57 mat=brushed
+          box marke_l2 size=0.001,0.012,0.005 at=0.0085,0.1,0 color=#d8b56e mat=paint
+        # --- Zylinder 3 (x=0.08), Hubphase 0° (äußerster TDC) ---
+        group kolb_l3 at=0.08,0.4375,-0.0967 rot=-30,0,0 label="Kolben 3 links"
+          lathe kolben3 pts=-0.014,0.020 -0.011,0.0265 -0.004,0.0272 0.006,0.0238 0.014,0.0238 0.016,0.0272 0.020,0.0272 0.022,0.0238 0.024,0.0238 0.026,0.0272 0.028,0.0272 0.030,0.0238 0.032,0.0238 0.034,0.0272 0.036,0.0272 0.038,0.0238 0.040,0.0238 0.040,0.0 smooth=1 color=#bac0c7 mat=brushed
+          repeat 3 step=0,0.007,0 at=0,0.023,0
+            cyl ring3 r=0.0278 hole=0.0242 h=0.0016 axis=y color=#ccd0d6 mat=steel
+          cyl rueckstand3 r=0.022 h=0.0012 axis=y at=0,0.0405,0 color=#292219 mat=cast
+          cyl bolzen3 r=0.009 h=0.054 axis=x color=#b8bec4 mat=brushed
+        group pleuel_l3 at=0.08,0.31,0 rot=-37.2,0,0 label="Pleuel 3 links"
+          cyl grossauge3 r=0.023 hole=0.0145 h=0.02 axis=x color=#474c52 mat=steel
+          cyl lagerschale3 r=0.0148 hole=0.0138 h=0.021 axis=x color=#b08d57 mat=brushed
+          box passungsm3 size=0.0215,0.0015,0.003 at=0,0.0155,0 color=#e8e4da mat=paint
+          box steg3 size=0.008,0.15,0.004 at=0,0.08,0 color=#474c52 mat=steel
+          mirror z
+            box flansch3 size=0.016,0.15,0.0025 at=0,0.08,0.0045 color=#4b5056 mat=steel
+            cyl pleuelschraube3 r=0.0035 h=0.026 axis=y at=0,-0.006,0.0105 color=#3a3f45 mat=steel
+            cyl schraubenkopf3 r=0.0055 h=0.0035 axis=y at=0,-0.015,0.0105 color=#33383e mat=steel
+          cyl kleinauge3 r=0.014 hole=0.0092 h=0.017 axis=x at=0,0.16,0 color=#474c52 mat=steel
+          cyl buchse3 r=0.0095 hole=0.0085 h=0.018 axis=x at=0,0.16,0 color=#b08d57 mat=brushed
+          box marke_l3 size=0.001,0.012,0.005 at=0.0085,0.1,0 color=#d8b56e mat=paint
+        # --- Zylinder 4 (x=0.25), Hubphase 180° (äußerster BDC) ---
+        group kolb_l4 at=0.25,0.3774,-0.062 rot=-30,0,0 label="Kolben 4 links"
+          lathe kolben4 pts=-0.014,0.020 -0.011,0.0265 -0.004,0.0272 0.006,0.0238 0.014,0.0238 0.016,0.0272 0.020,0.0272 0.022,0.0238 0.024,0.0238 0.026,0.0272 0.028,0.0272 0.030,0.0238 0.032,0.0238 0.034,0.0272 0.036,0.0272 0.038,0.0238 0.040,0.0238 0.040,0.0 smooth=1 color=#b4bac0 mat=brushed
+          repeat 3 step=0,0.007,0 at=0,0.023,0
+            cyl ring4 r=0.0278 hole=0.0242 h=0.0016 axis=y color=#c8ccd2 mat=steel
+          cyl rueckstand4 r=0.022 h=0.0012 axis=y at=0,0.0405,0 color=#2b241c mat=cast
+          cyl bolzen4 r=0.009 h=0.054 axis=x color=#b8bec4 mat=brushed
+        group pleuel_l4 at=0.25,0.23,0 rot=-22.8,0,0 label="Pleuel 4 links"
+          cyl grossauge4 r=0.023 hole=0.0145 h=0.02 axis=x color=#4b5056 mat=steel
+          cyl lagerschale4 r=0.0148 hole=0.0138 h=0.021 axis=x color=#b08d57 mat=brushed
+          box passungsm4 size=0.0215,0.0015,0.003 at=0,0.0155,0 color=#e8e4da mat=paint
+          box steg4 size=0.008,0.15,0.004 at=0,0.08,0 color=#4b5056 mat=steel
+          mirror z
+            box flansch4 size=0.016,0.15,0.0025 at=0,0.08,0.0045 color=#4a4f55 mat=steel
+            cyl pleuelschraube4 r=0.0035 h=0.026 axis=y at=0,-0.006,0.0105 color=#3a3f45 mat=steel
+            cyl schraubenkopf4 r=0.0055 h=0.0035 axis=y at=0,-0.015,0.0105 color=#33383e mat=steel
+          cyl kleinauge4 r=0.014 hole=0.0092 h=0.017 axis=x at=0,0.16,0 color=#4b5056 mat=steel
+          cyl buchse4 r=0.0095 hole=0.0085 h=0.018 axis=x at=0,0.16,0 color=#b08d57 mat=brushed
+          box marke_l4 size=0.001,0.012,0.005 at=0.0085,0.1,0 color=#d8b56e mat=paint
+        # --- Ölspuren an den Laufbahn-Nähten ---
+        tube oelspur1 pts=-0.25,0.345,-0.052 -0.25,0.328,-0.046 r=0.0018 color=#7a5c1e mat=cast
+        tube oelspur3 pts=0.08,0.348,-0.054 0.08,0.33,-0.047 r=0.0018 color=#6f541c mat=cast
+    group fit_55663 at=-0.0076,0.0350,0.0000 scale=0.9774,0.8738,1.2217
+      group nockenwelle at=0,0,0 label="Nockenwelle"
+        lathe welle pts=-0.40,0.010 -0.385,0.013 -0.345,0.013 -0.340,0.0175 -0.300,0.0175 -0.295,0.013 -0.185,0.013 -0.180,0.0175 -0.140,0.0175 -0.135,0.013 -0.025,0.013 -0.020,0.0175 0.020,0.0175 0.025,0.013 0.135,0.013 0.140,0.0175 0.180,0.0175 0.185,0.013 0.295,0.013 0.300,0.0175 0.340,0.0175 0.345,0.013 0.385,0.013 0.400,0.009 axis=x smooth=1 at=0,0.40,0 color=#5a6066 mat=brushed
+        # --- 16 Nocken, 4 Zylinderstationen, je 2 Paare (rechte Bank +z, linke Bank -z), Zündfolge-Winkel ---
+        group lA1 at=-0.283,0.40,0 rot=30,0,0
+          cyl r=0.020 h=0.013 axis=x color=#7d838a mat=brushed
+          box at=0,0,0.023 size=0.013,0.009,0.017 round=0.004 color=#4a4f55 mat=brushed
+        group lA2 at=-0.261,0.40,0 rot=50,0,0
+          cyl r=0.020 h=0.013 axis=x color=#7d838a mat=brushed
+          box at=0,0,-0.023 size=0.013,0.009,0.017 round=0.004 color=#4a4f55 mat=brushed
+        group lA3 at=-0.239,0.40,0 rot=60,0,0
+          cyl r=0.020 h=0.013 axis=x color=#7d838a mat=brushed
+          box at=0,0,0.023 size=0.013,0.009,0.017 round=0.004 color=#4a4f55 mat=brushed
+        group lA4 at=-0.217,0.40,0 rot=20,0,0
+          cyl r=0.020 h=0.013 axis=x color=#7d838a mat=brushed
+          box at=0,0,-0.023 size=0.013,0.009,0.017 round=0.004 color=#4a4f55 mat=brushed
+        group lB1 at=-0.113,0.40,0 rot=45,0,0
+          cyl r=0.020 h=0.013 axis=x color=#7d838a mat=brushed
+          box at=0,0,0.023 size=0.013,0.009,0.017 round=0.004 color=#4a4f55 mat=brushed
+        group lB2 at=-0.091,0.40,0 rot=25,0,0
+          cyl r=0.020 h=0.013 axis=x color=#7d838a mat=brushed
+          box at=0,0,-0.023 size=0.013,0.009,0.017 round=0.004 color=#4a4f55 mat=brushed
+        group lB3 at=-0.069,0.40,0 rot=15,0,0
+          cyl r=0.020 h=0.013 axis=x color=#7d838a mat=brushed
+          box at=0,0,0.023 size=0.013,0.009,0.017 round=0.004 color=#4a4f55 mat=brushed
+        group lB4 at=-0.047,0.40,0 rot=55,0,0
+          cyl r=0.020 h=0.013 axis=x color=#7d838a mat=brushed
+          box at=0,0,-0.023 size=0.013,0.009,0.017 round=0.004 color=#4a4f55 mat=brushed
+        group lC1 at=0.047,0.40,0 rot=20,0,0
+          cyl r=0.020 h=0.013 axis=x color=#7d838a mat=brushed
+          box at=0,0,0.023 size=0.013,0.009,0.017 round=0.004 color=#4a4f55 mat=brushed
+        group lC2 at=0.069,0.40,0 rot=60,0,0
+          cyl r=0.020 h=0.013 axis=x color=#7d838a mat=brushed
+          box at=0,0,-0.023 size=0.013,0.009,0.017 round=0.004 color=#4a4f55 mat=brushed
+        group lC3 at=0.091,0.40,0 rot=50,0,0
+          cyl r=0.020 h=0.013 axis=x color=#7d838a mat=brushed
+          box at=0,0,0.023 size=0.013,0.009,0.017 round=0.004 color=#4a4f55 mat=brushed
+        group lC4 at=0.113,0.40,0 rot=30,0,0
+          cyl r=0.020 h=0.013 axis=x color=#7d838a mat=brushed
+          box at=0,0,-0.023 size=0.013,0.009,0.017 round=0.004 color=#4a4f55 mat=brushed
+        group lD1 at=0.217,0.40,0 rot=55,0,0
+          cyl r=0.020 h=0.013 axis=x color=#7d838a mat=brushed
+          box at=0,0,0.023 size=0.013,0.009,0.017 round=0.004 color=#4a4f55 mat=brushed
+        group lD2 at=0.239,0.40,0 rot=15,0,0
+          cyl r=0.020 h=0.013 axis=x color=#7d838a mat=brushed
+          box at=0,0,-0.023 size=0.013,0.009,0.017 round=0.004 color=#4a4f55 mat=brushed
+        group lD3 at=0.261,0.40,0 rot=35,0,0
+          cyl r=0.020 h=0.013 axis=x color=#7d838a mat=brushed
+          box at=0,0,0.023 size=0.013,0.009,0.017 round=0.004 color=#4a4f55 mat=brushed
+        group lD4 at=0.283,0.40,0 rot=45,0,0
+          cyl r=0.020 h=0.013 axis=x color=#7d838a mat=brushed
+          box at=0,0,-0.023 size=0.013,0.009,0.017 round=0.004 color=#4a4f55 mat=brushed
+        # --- 5 Lagerböcke mit Bronzelagerschale, Deckelschrauben, Ölaustritt, Nummerier-Marke ---
+        repeat 5 step=0.16,0,0 at=-0.32,0.40,0
+          group lager at=0,0,0 label="Lagerdeckel"
+            cyl schale r=0.0195 h=0.052 hole=0.0175 axis=x color=#b08d57 mat=brushed
+            box deckel at=0,0.033,0 size=0.06,0.03,0.092 round=0.006 color=#6d7378 mat=cast
+            screw s1 r=0.005 h=0.012 at=0,0.048,0.031 color=#3a3f45
+            screw s2 r=0.005 h=0.012 at=0,0.048,-0.031 color=#3a3f45
+            cyl oelbohrung r=0.002 h=0.004 axis=y at=0,0.017,0 color=#1a1c1e
+            box nummer at=0.026,0.036,0 size=0.006,0.012,0.003 color=#e8a33d mat=paint
+            box oelspur at=0,0.0185,0 size=0.063,0.001,0.094 color=#4a3a20 mat=matte
+        # --- vorn: Axiallager-Platte, Schneckenfeder, Kettenrad-Nabe mit Schrauben, Passfedernut ---
+        cyl axialplatte r=0.028 h=0.005 axis=x at=-0.372,0.40,0 color=#8a9096 mat=brushed
+        spring feder r=0.020 wire=0.0018 turns=7 h=0.03 axis=x at=-0.358,0.40,0 color=#9aa0a6
+        cyl nabe r=0.024 h=0.02 axis=x at=-0.388,0.40,0 color=#7a8086 mat=brushed
+        ring 3 r=0.016 axis=x at=-0.399,0.40,0
+          screw r=0.0025 h=0.004 color=#3a3f45
+        box passfeder at=-0.383,0.412,0 size=0.012,0.005,0.005 color=#26292d
+        # --- hinten: Verteiler-Antriebsnut, Nut, Einstellmarkierung ---
+        cyl verteilertreib r=0.009 h=0.02 axis=x at=0.407,0.40,0 color=#6a7076 mat=brushed
+        box antriebsnut at=0.412,0.40,0 size=0.01,0.006,0.02 color=#26292d
+        box einstellmarkierung at=0.393,0.411,0 size=0.006,0.004,0.006 color=#e8a33d mat=paint
+    group fit_1162 at=0.0000,0.1111,-0.0011 scale=0.8696,0.7940,1.0870
+      group ventiltrieb_rechts
+        # ---- Ventilshafts ----
+        cyl shaft r=0.008 h=0.72 axis=x at=0,0.56,0.20 color=#9aa0a6 mat=brushed
+        cyl shaftplug_l r=0.0095 h=0.01 axis=x at=-0.363,0.56,0.20 color=#4a4f55
+        cyl shaftplug_r r=0.0095 h=0.01 axis=x at=0.363,0.56,0.20 color=#4a4f55
+        # ---- Lagerböcke der Kipphebelwelle ----
+        repeat 5 step=0.17,0,0
+          box pedestal size=0.02,0.048,0.028 at=-0.34,0.534,0.20 color=#8d939a mat=cast
+        # ---- Ölspritzleiste ueber den Kipphebeln ----
+        cyl spraybar r=0.0025 h=0.68 axis=x at=0,0.588,0.20 color=#8d939a mat=brushed
+        repeat 8 step=0.086,0,0
+          cyl drip r=0.0015 h=0.014 axis=y at=-0.302,0.579,0.20 color=#8d939a
+        # ---- Einlassventile, hell poliert ----
+        repeat 4 step=0.18,0,0
+          group vin at=-0.302,0.44,0.16 rot=30,0,0
+            cyl seat r=0.021 h=0.005 hole=0.013 at=0,-0.001,0 color=#e8ecef mat=brushed
+            cyl throat r=0.012 h=0.012 at=0,-0.008,0 color=#6f757c mat=cast
+            cyl teller r=0.0175 h=0.005 at=0,0.0025,0 color=#dfe3e7 mat=brushed
+            cyl guide r=0.0085 h=0.026 at=0,0.036,0 color=#b8bec4 mat=cast
+            cyl stem r=0.004 h=0.115 at=0,0.0575,0 color=#dfe3e7 mat=brushed
+            cyl vseal r=0.007 h=0.012 at=0,0.076,0 color=#1c1e20 mat=rubber
+            cyl springseat r=0.015 h=0.003 at=0,0.063,0 color=#8d939a mat=cast
+            spring feder r=0.012 wire=0.0025 turns=5 h=0.048 axis=y at=0,0.089,0 color=#9aa0a6
+            cyl retainer r=0.015 h=0.005 at=0,0.115,0 color=#a2a8ae mat=brushed
+            box keil size=0.009,0.006,0.005 at=0,0.12,0 color=#4a4f55
+            cyl tip r=0.005 h=0.004 at=0,0.123,0 color=#4a4f55
+        # ---- Auslassventile mit Waermebraeunung ----
+        repeat 4 step=0.18,0,0
+          group vout at=-0.238,0.44,0.16 rot=30,0,0
+            cyl seat r=0.021 h=0.005 hole=0.013 at=0,-0.001,0 color=#e8ecef mat=brushed
+            cyl throat r=0.012 h=0.012 at=0,-0.008,0 color=#7a5a3a mat=cast
+            cyl teller r=0.0175 h=0.005 at=0,0.0025,0 color=#9c7448 mat=brushed
+            cyl guide r=0.0085 h=0.026 at=0,0.036,0 color=#b8bec4 mat=cast
+            cyl stem r=0.004 h=0.115 at=0,0.0575,0 color=#c9b8a4 mat=brushed
+            cyl vseal r=0.007 h=0.012 at=0,0.076,0 color=#1c1e20 mat=rubber
+            cyl springseat r=0.015 h=0.003 at=0,0.063,0 color=#8d939a mat=cast
+            spring feder r=0.012 wire=0.0025 turns=5 h=0.048 axis=y at=0,0.089,0 color=#9aa0a6
+            cyl retainer r=0.015 h=0.005 at=0,0.115,0 color=#a2a8ae mat=brushed
+            box keil size=0.009,0.006,0.005 at=0,0.12,0 color=#4a4f55
+            cyl tip r=0.005 h=0.004 at=0,0.123,0 color=#4a4f55
+        # ---- Kipphebel Einlassseite ----
+        repeat 4 step=0.18,0,0
+          group rockerin at=-0.302,0.56,0.20 rot=-3,0,0
+            box arm size=0.018,0.011,0.095 at=0,0.002,0.002 color=#4a4f55 mat=brushed
+            cyl boss r=0.009 h=0.015 axis=x at=0,0,0 color=#6f757c mat=brushed
+            cyl adjuster r=0.0035 h=0.017 axis=y at=0,-0.012,-0.045 color=#c4c9cf mat=brushed
+            cyl nut r=0.0055 h=0.004 axis=y at=0,-0.005,-0.045 color=#b08d57 mat=brass
+        # ---- Kipphebel Auslassseite ----
+        repeat 4 step=0.18,0,0
+          group rockerout at=-0.238,0.56,0.20 rot=-3,0,0
+            box arm size=0.018,0.011,0.095 at=0,0.002,0.002 color=#4a4f55 mat=brushed
+            cyl boss r=0.009 h=0.015 axis=x at=0,0,0 color=#6f757c mat=brushed
+            cyl adjuster r=0.0035 h=0.017 axis=y at=0,-0.012,-0.045 color=#c4c9cf mat=brushed
+            cyl nut r=0.0055 h=0.004 axis=y at=0,-0.005,-0.045 color=#b08d57 mat=brass
+        # ---- Stosstangen Einlassseite, Rohr mit Kugelenden ----
+        repeat 4 step=0.18,0,0
+          group prin at=-0.302,0.4825,0.12 rot=29,0,0
+            cyl tube r=0.004 h=0.143 axis=y at=0,0,0 color=#a8aeb4 mat=brushed
+            sphere balltop r=0.005 at=0,0.0715,0 color=#4a4f55
+            sphere ballbot r=0.005 at=0,-0.0715,0 color=#4a4f55
+        # ---- Stosstangen Auslassseite ----
+        repeat 4 step=0.18,0,0
+          group prout at=-0.238,0.4825,0.12 rot=29,0,0
+            cyl tube r=0.004 h=0.143 axis=y at=0,0,0 color=#a8aeb4 mat=brushed
+            sphere balltop r=0.005 at=0,0.0715,0 color=#4a4f55
+            sphere ballbot r=0.005 at=0,-0.0715,0 color=#4a4f55
+        # ---- Hydrostoessel Einlassseite ----
+        repeat 4 step=0.18,0,0
+          group liftin at=-0.302,0.405,0.088
+            cyl cup r=0.0115 h=0.032 axis=y at=0,0,0 color=#6f757c mat=brushed
+            cyl bore r=0.0135 h=0.02 hole=0.0115 at=0,0.024,0 color=#8d939a mat=cast
+        # ---- Hydrostoessel Auslassseite ----
+        repeat 4 step=0.18,0,0
+          group liftout at=-0.238,0.405,0.088
+            cyl cup r=0.0115 h=0.032 axis=y at=0,0,0 color=#6f757c mat=brushed
+            cyl bore r=0.0135 h=0.02 hole=0.0115 at=0,0.024,0 color=#8d939a mat=cast
+    group fit_4656 at=0.0000,0.4282,-0.1674 scale=0.1991,0.1593,0.1274
+      group ventiltrieb_links label="Ventiltrieb links (Kipphebel, Stoßstangen, Hydrostößel)"
+        # --- Kipphebelwelle mit Lagern ---
+        cyl kipphebelwelle r=0.008 h=0.62 axis=x at=0,0.560,-0.185 color=#9aa0a6 mat=brushed
+        cyl wellenkappe_v r=0.010 h=0.008 axis=x at=-0.314,0.560,-0.185 color=#3a3f45
+        cyl wellenkappe_h r=0.010 h=0.008 axis=x at=0.314,0.560,-0.185 color=#3a3f45
+        repeat 5 step=0.15,0,0 at=-0.28,0,0
+          box lagerbock size=0.014,0.055,0.030 at=0,0.532,-0.185 color=#8d939a mat=cast
+          screw bockschraube r=0.005 h=0.004 at=0,0.532,-0.202 rot=90,0,0 color=#4a4f55
+        # --- Brennraumdichtung: helle Dichtlinie auf der Kopfdichtfläche ---
+        tube dichtlinie pts=-0.31,0.462,-0.172 0,0.463,-0.172 0.31,0.462,-0.172 r=0.002 color=#e8e2d0
+        # --- Ölschmierungsspuren an Welle und Kipphebeln ---
+        tube oelspur_welle pts=-0.26,0.567,-0.185 0.05,0.568,-0.186 0.28,0.566,-0.185 r=0.0018 color=#4a3a14
+        sphere oltropfen1 r=0.004 at=-0.10,0.547,-0.192 color=#3d2f10
+        sphere oltropfen2 r=0.0035 at=0.16,0.544,-0.198 color=#3d2f10
+        # --- 4 Zylinder: je 2 Ventile, Federn, Kipphebel, Stoßstangen, Hydrostößel ---
+        repeat 4 step=0.16,0,0 at=-0.24,0,0
+          # Einlassventil (+x Seite), 30° nach -z geneigt
+          cyl sitzring_i r=0.026 h=0.005 hole=1 at=0.035,0.4505,-0.165 rot=-30,0,0 color=#2e3236
+          lathe ventil_i pts=0,0.024 0.004,0.023 0.009,0.010 0.016,0.0048 0.105,0.004 axis=y smooth=1 at=0.035,0.449,-0.165 rot=-30,0,0 color=#9aa0a6 mat=brushed
+          cyl fuehrung_i r=0.0075 h=0.034 at=0.035,0.480,-0.181 rot=-30,0,0 color=#33383d
+          spring feder_i r=0.016 wire=0.0022 turns=5 h=0.042 axis=y at=0.035,0.505,-0.194 rot=-30,0,0 color=#565b61
+          cyl federteller_i r=0.017 h=0.005 at=0.035,0.528,-0.208 rot=-30,0,0 color=#d9dee3 mat=brushed
+          box kipphebel_i size=0.020,0.008,0.088 at=0.035,0.558,-0.185 rot=-6,0,0 color=#7a8087 mat=brushed
+          box hebelrippe_i size=0.006,0.005,0.058 at=0.035,0.5645,-0.185 rot=-6,0,0 color=#74797f mat=brushed
+          cyl lagerauge_i r=0.0105 h=0.016 axis=x at=0.035,0.558,-0.185 color=#b08d57
+          screw ventilstell_i r=0.0035 h=0.007 at=0.035,0.549,-0.222 color=#c9ced4
+          box schlitz_i size=0.0065,0.0012,0.0015 at=0.035,0.5528,-0.222 color=#2b2f33
+          sphere pfanne_i r=0.006 at=0.035,0.556,-0.145 color=#3a3f45
+          tube stossstange_i pts=0.035,0.554,-0.146 0.035,0.495,-0.106 0.035,0.445,-0.064 r=0.0035 color=#5a5f66
+          sphere stosskugel_i r=0.005 at=0.035,0.443,-0.062 color=#c4c9cf
+          cyl stosselbohrung_i r=0.0135 h=0.05 hole=1 at=0.035,0.445,-0.060 color=#2b2f33
+          cyl hydrostoessel_i r=0.012 h=0.028 at=0.035,0.432,-0.060 color=#9aa0a6 mat=brushed
+          cyl stosselfuss_i r=0.0125 h=0.007 r2=0.010 at=0.035,0.4155,-0.060 color=#8d939a
+          cyl drehmarke_i r=0.0122 h=0.003 hole=1 at=0.035,0.444,-0.060 color=#3a3f45
+          tube oelfilm_i pts=0.035,0.5675,-0.20 0.035,0.567,-0.17 r=0.0012 color=#4a3a14
+          # Auslassventil (-x Seite), hitzeangefärbt
+          cyl sitzring_e r=0.022 h=0.005 hole=1 at=-0.035,0.4505,-0.165 rot=-30,0,0 color=#2e3236
+          lathe ventil_e pts=0,0.020 0.004,0.019 0.009,0.009 0.016,0.0045 0.105,0.0038 axis=y smooth=1 at=-0.035,0.449,-0.165 rot=-30,0,0 color=#8a7160 mat=brushed
+          cyl fuehrung_e r=0.0075 h=0.034 at=-0.035,0.480,-0.181 rot=-30,0,0 color=#33383d
+          spring feder_e r=0.016 wire=0.0022 turns=5 h=0.042 axis=y at=-0.035,0.505,-0.194 rot=-30,0,0 color=#51565c
+          cyl federteller_e r=0.017 h=0.005 at=-0.035,0.528,-0.208 rot=-30,0,0 color=#d4d9de mat=brushed
+          box kipphebel_e size=0.020,0.008,0.088 at=-0.035,0.558,-0.185 rot=-6,0,0 color=#7a8087 mat=brushed
+          box hebelrippe_e size=0.006,0.005,0.058 at=-0.035,0.5645,-0.185 rot=-6,0,0 color=#74797f mat=brushed
+          cyl lagerauge_e r=0.0105 h=0.016 axis=x at=-0.035,0.558,-0.185 color=#b08d57
+          screw ventilstell_e r=0.0035 h=0.007 at=-0.035,0.549,-0.222 color=#c9ced4
+          box schlitz_e size=0.0065,0.0012,0.0015 at=-0.035,0.5528,-0.222 color=#2b2f33
+          sphere pfanne_e r=0.006 at=-0.035,0.556,-0.145 color=#3a3f45
+          tube stossstange_e pts=-0.035,0.554,-0.146 -0.035,0.495,-0.106 -0.035,0.445,-0.064 r=0.0035 color=#5a5f66
+          sphere stosskugel_e r=0.005 at=-0.035,0.443,-0.062 color=#c4c9cf
+          cyl stosselbohrung_e r=0.0135 h=0.05 hole=1 at=-0.035,0.445,-0.060 color=#2b2f33
+          cyl hydrostoessel_e r=0.012 h=0.028 at=-0.035,0.432,-0.060 color=#9aa0a6 mat=brushed
+          cyl stosselfuss_e r=0.0125 h=0.007 r2=0.010 at=-0.035,0.4155,-0.060 color=#8d939a
+          cyl drehmarke_e r=0.0122 h=0.003 hole=1 at=-0.035,0.444,-0.060 color=#3a3f45
+          tube oelfilm_e pts=-0.035,0.5675,-0.20 -0.035,0.567,-0.17 r=0.0012 color=#4a3a14
+    group steuerkette label="Steuerkette"
+      group kette label="Rollkette, 58 Glieder"
+        repeat 12 step=0,0.0119,0.0032 at=-0.41,0.2897,0.0444 rot=15,0,0
+          box platte_r size=0.006,0.017,0.011 round=0.002 color=#9aa0a6 mat=brushed
+          cyl bolzen_r r=0.0026 h=0.016 axis=x color=#6f757c mat=steel
+        repeat 12 step=0,0.0119,-0.0032 at=-0.41,0.2897,-0.0444 rot=-15,0,0
+          box platte_l size=0.006,0.017,0.011 round=0.002 color=#9aa0a6 mat=brushed
+          cyl bolzen_l r=0.0026 h=0.016 axis=x color=#6f757c mat=steel
+        repeat 4 step=0,0.0125,-0.0063 rotstep=0,-9,0 at=-0.41,0.4339,0.0823 rot=-22,0,0
+          box platte_c1 size=0.006,0.017,0.011 round=0.002 color=#9aa0a6 mat=brushed
+          cyl bolzen_c1 r=0.0026 h=0.016 axis=x color=#6f757c mat=steel
+        repeat 4 step=0,0.0064,-0.0125 rotstep=0,-9,0 at=-0.41,0.4758,0.0466 rot=-58,0,0
+          box platte_c2 size=0.006,0.017,0.011 round=0.002 color=#9aa0a6 mat=brushed
+          cyl bolzen_c2 r=0.0026 h=0.016 axis=x color=#6f757c mat=steel
+        repeat 4 step=0,-0.0022,-0.0138 rotstep=0,-9,0 at=-0.41,0.4887,-0.0068 rot=86,0,0
+          box platte_c3 size=0.006,0.017,0.011 round=0.002 color=#9aa0a6 mat=brushed
+          cyl bolzen_c3 r=0.0026 h=0.016 axis=x color=#6f757c mat=steel
+        repeat 4 step=0,-0.0099,-0.0099 rotstep=0,-9,0 at=-0.41,0.4678,-0.0577 rot=50,0,0
+          box platte_c4 size=0.006,0.017,0.011 round=0.002 color=#9aa0a6 mat=brushed
+          cyl bolzen_c4 r=0.0026 h=0.016 axis=x color=#6f757c mat=steel
+        repeat 3 step=0,-0.0104,-0.0014 rotstep=0,-12,0 at=-0.41,0.2817,-0.0486 rot=13,0,0
+          box platte_k1 size=0.006,0.016,0.011 round=0.002 color=#9aa0a6 mat=brushed
+          cyl bolzen_k1 r=0.0026 h=0.016 axis=x color=#6f757c mat=steel
+        repeat 3 step=0,-0.0092,0.0050 rotstep=0,-12,0 at=-0.41,0.2507,-0.0461 rot=-23,0,0
+          box platte_k2 size=0.006,0.016,0.011 round=0.002 color=#9aa0a6 mat=brushed
+          cyl bolzen_k2 r=0.0026 h=0.016 axis=x color=#6f757c mat=steel
+        repeat 3 step=0,-0.0045,0.0095 rotstep=0,-12,0 at=-0.41,0.2273,-0.0261 rot=-59,0,0
+          box platte_k3 size=0.006,0.016,0.011 round=0.002 color=#9aa0a6 mat=brushed
+          cyl bolzen_k3 r=0.0026 h=0.016 axis=x color=#6f757c mat=steel
+        repeat 3 step=0,0.0019,0.0103 rotstep=0,-12,0 at=-0.41,0.2202,0.0047 rot=85,0,0
+          box platte_k4 size=0.006,0.016,0.011 round=0.002 color=#9aa0a6 mat=brushed
+          cyl bolzen_k4 r=0.0026 h=0.016 axis=x color=#6f757c mat=steel
+        repeat 3 step=0,0.0076,0.0072 rotstep=0,-12,0 at=-0.41,0.2321,0.0326 rot=49,0,0
+          box platte_k5 size=0.006,0.016,0.011 round=0.002 color=#9aa0a6 mat=brushed
+          cyl bolzen_k5 r=0.0026 h=0.016 axis=x color=#6f757c mat=steel
+        repeat 3 step=0,0.0104,-0.0014 rotstep=0,-12,0 at=-0.41,0.2583,0.0486 rot=13,0,0
+          box platte_k6 size=0.006,0.016,0.011 round=0.002 color=#9aa0a6 mat=brushed
+          cyl bolzen_k6 r=0.0026 h=0.016 axis=x color=#6f757c mat=steel
+      group kettenrad_kurbelwelle at=-0.41,0.27,0 label="Kurbelwellen-Kettenrad"
+        gear rad_k teeth=14 r=0.045 h=0.014 axis=x color=#7d838a mat=brushed
+        cyl nabe_k r=0.020 h=0.026 axis=x color=#84898f mat=brushed
+        cyl oelring_dichtung r=0.054 h=0.012 hole=0.034 axis=x at=-0.020,0,0 color=#26292d mat=rubber
+        box kerbe_k size=0.004,0.006,0.005 at=0.008,0.043,0 color=#26292d
+        screw zentralschraube_k r=0.013 h=0.010 axis=x at=0.012,0,0 color=#9aa0a6
+      group kettenrad_nockenwelle at=-0.41,0.40,0 label="Nockenwellen-Kettenrad"
+        gear rad_n teeth=28 r=0.085 h=0.015 axis=x color=#84898f mat=brushed
+        cyl nabe_n r=0.030 h=0.024 axis=x color=#8d939a mat=brushed
+        ring 3 r=0.052 axis=x
+          cyl leichtbohrung r=0.013 h=0.017 axis=x color=#26292d
+        cyl einstellmarke r=0.004 h=0.004 axis=x at=0.009,0.083,0 color=#e8b23a
+        screw zentralschraube_n r=0.016 h=0.012 axis=x at=0.014,0,0 color=#9aa0a6
+      tube spannschiene pts=-0.404,0.283,0.052 -0.404,0.33,0.066 -0.404,0.385,0.081 -0.404,0.43,0.092 r=0.006 flat=8 color=#3a3f45 mat=plastic
+      tube verschliss_spann pts=-0.409,0.30,0.057 -0.409,0.36,0.073 -0.409,0.42,0.089 r=0.0015 color=#6a7076
+      tube fuehrungsschiene pts=-0.404,0.44,-0.094 -0.404,0.38,-0.083 -0.404,0.32,-0.067 -0.404,0.27,-0.053 r=0.006 flat=8 color=#3a3f45 mat=plastic
+      tube verschliss_fuehr pts=-0.409,0.42,-0.089 -0.409,0.35,-0.070 -0.409,0.29,-0.055 r=0.0015 color=#6a7076
+      cyl schienenbolzen_r r=0.005 h=0.014 axis=x at=-0.404,0.283,0.052 color=#9aa0a6
+      cyl schienenbolzen_l r=0.005 h=0.014 axis=x at=-0.404,0.44,-0.094 color=#9aa0a6
+      group kettenspanner at=-0.40,0.335,0.098 label="Hydraulischer Kettenspanner"
+        cyl gehaeuse r=0.014 h=0.04 axis=z color=#6a7076 mat=cast
+        cyl kolbenstange r=0.006 h=0.026 axis=z at=0,0,-0.033 color=#a8adb3 mat=brushed
+        cyl flansch r=0.021 h=0.005 axis=z at=0,0,0.017 color=#565c62 mat=cast
+        ring 3 r=0.015 axis=z at=0,0,0.017
+          screw flanschschraube r=0.004 h=0.005 color=#9aa0a6
+        tube oelleitung pts=0,0.012,0.012 0.006,0.045,0.018 0.012,0.08,0.02 r=0.0025 color=#26292d
+      box dichtkante_oben size=0.005,0.006,0.234 at=-0.418,0.505,0 color=#26292d mat=rubber
+      box dichtkante_unten size=0.005,0.006,0.234 at=-0.418,0.203,0 color=#26292d mat=rubber
+      box dichtkante_links size=0.005,0.296,0.006 at=-0.418,0.354,-0.114 color=#26292d mat=rubber
+      box dichtkante_rechts size=0.005,0.296,0.006 at=-0.418,0.354,0.114 color=#26292d mat=rubber
+      repeat 4 step=0,0,0.06 at=-0.414,0.505,-0.09
+        screw blockschraube_oben r=0.005 h=0.006 axis=x color=#84898f
+      repeat 4 step=0,0,0.06 at=-0.414,0.203,-0.09
+        screw blockschraube_unten r=0.005 h=0.006 axis=x color=#84898f
+      sphere oeltropfen r=0.005 scale=0.6,1.4,2.2 at=-0.41,0.218,0.012 color=#4a3410 mat=plastic
+      sphere oeltropfen_klein r=0.003 scale=0.6,1.2,1.8 at=-0.41,0.202,0.03 color=#4a3410 mat=plastic
+      tube oelfilm pts=-0.4145,0.29,0.040 -0.4145,0.36,0.058 -0.4145,0.42,0.075 r=0.0012 color=#4a3410
+    group ansauggung label="Ansaugkrümmer mit Einspritzleiste"
+      loft plenum sections=-0.24,0.30,0.13,0.66 -0.16,0.37,0.16,0.66 0.16,0.37,0.16,0.66 0.26,0.28,0.12,0.66 square=1 color=#c4c9cf mat=cast shell=1
+      box plenumseam size=0.48,0.003,0.011 at=0.01,0.741,0 color=#9aa0a6 mat=brushed
+      repeat 6 step=0.085,0,0 at=-0.19,0.743,0
+        screw b1 r=0.005 h=0.005 color=#6d7378 mat=steel
+      mirror z
+        box plenumrib size=0.36,0.06,0.008 at=0.01,0.655,0.186 color=#b7bdc3 mat=cast
+      mirror z
+        repeat 4 step=0.14,0,0 at=-0.21,0,0
+          tube runner pts=0,0.575,0.06 0,0.548,0.11 0,0.515,0.152 0,0.492,0.18 r=0.025 color=#bfc5cb mat=cast shell=1
+          cyl rstub r=0.026 h=0.045 axis=y at=0,0.585,0.06 color=#b4bac0 mat=cast
+          box rflange size=0.08,0.05,0.018 at=0,0.488,0.185 color=#a9afb5 mat=cast
+          ring 2 r=0.025 axis=x at=0,0.488,0.196
+            screw fb r=0.004 h=0.006 rot=90,0,0 color=#6d7378 mat=steel
+          cyl rrib r=0.0275 hole=0.025 h=0.007 at=0,0.545,0.128 rot=-0.9,0,0 color=#b7bdc3 mat=cast
+          cyl rboss r=0.009 h=0.014 at=0,0.53,0.148 rot=-0.9,0,0 color=#b7bdc3 mat=cast
+        tube rail pts=-0.245,0.585,0.115 0.245,0.585,0.115 r=0.007 color=#9aa0a6 mat=brushed
+        repeat 4 step=0.14,0,0 at=-0.21,0,0
+          cyl inj r=0.0075 h=0.032 axis=y at=0,0.562,0.115 color=#2e3238 mat=plastic
+          cyl oring1 r=0.0095 hole=0.0075 h=0.004 axis=y at=0,0.574,0.115 color=#1a1c1f mat=rubber
+          cyl oring2 r=0.0095 hole=0.0075 h=0.004 axis=y at=0,0.552,0.115 color=#1a1c1f mat=rubber
+          box iconn size=0.013,0.008,0.011 at=0,0.573,0.127 color=#23262a mat=plastic
+        repeat 2 step=0.3,0,0 at=-0.15,0,0
+          box rbracket size=0.014,0.026,0.018 at=0,0.585,0.115 color=#8d939a mat=brushed
+      tube railcross pts=-0.245,0.585,0.115 -0.275,0.585,0.10 -0.275,0.585,-0.10 -0.245,0.585,-0.115 r=0.0055 color=#9aa0a6 mat=brushed
+      cyl fport r=0.006 h=0.024 axis=x at=-0.288,0.585,0 color=#6d7378 mat=steel
+      cyl fcap r=0.0085 h=0.006 axis=x at=-0.298,0.585,0 color=#4a4f55 mat=steel
+      cyl csv r=0.011 h=0.03 axis=x at=-0.256,0.635,0.07 color=#aeb4ba mat=brushed
+      box csvconn size=0.012,0.014,0.012 at=-0.262,0.655,0.07 color=#23262a mat=plastic
+      tube csvfuel pts=-0.272,0.6,0.07 -0.275,0.588,0.05 r=0.0035 color=#23262a mat=rubber
+      cyl vacstub r=0.005 h=0.018 axis=y at=0.18,0.748,0.05 color=#6d7378 mat=brushed
+      tube vachose pts=0.18,0.756,0.05 0.185,0.772,0.09 0.15,0.776,0.125 r=0.0035 color=#1c1e21 mat=rubber
+      group throttle at=-0.27,0.66,0 label="Drosselklappe"
+        cyl tbhousing r=0.036 h=0.06 axis=x hole=0.03 color=#aeb4ba mat=brushed shell=1
+        cyl tbplate r=0.029 h=0.003 axis=x rot=0,0,0.32 at=0.002,0,0 color=#d9dde1 mat=steel
+        cyl tbshaft r=0.0035 h=0.078 axis=z at=0.002,0,0 color=#4a4f55 mat=steel
+        plate tblever pts=-0.012,0 0.014,-0.007 0.022,-0.026 h=0.005 at=0,0,0.043 color=#6d7378 mat=steel
+        cyl tbcam r=0.011 h=0.006 axis=z at=0.014,-0.022,0.049 color=#3a3f45 mat=steel
+        spring tbspring r=0.009 wire=0.0012 turns=5 h=0.016 axis=z at=0.002,-0.01,0.054 color=#8d939a mat=steel
+        box tbflangeF size=0.01,0.088,0.088 at=-0.034,0,0 color=#9ba1a7 mat=brushed
+        ring 4 r=0.037 axis=x at=-0.04,0,0
+          screw fsb r=0.004 h=0.005 rot=0,0,90 color=#6d7378 mat=steel
+        box tbflangeR size=0.012,0.1,0.1 at=0.036,0,0 color=#9ba1a7 mat=brushed
+        ring 4 r=0.042 axis=x at=0.044,0,0
+          screw rsb r=0.0045 h=0.006 rot=0,0,90 color=#6d7378 mat=steel
+        cyl tbrim r=0.034 hole=0.029 h=0.01 axis=x at=-0.037,0,0 color=#1c1e21 mat=rubber
+        cyl hstuba r=0.005 h=0.016 axis=y at=0.018,-0.047,0.018 color=#4a4f55 mat=steel
+        cyl hstubb r=0.005 h=0.016 axis=y at=0.018,-0.047,-0.018 color=#4a4f55 mat=steel
+        tube hhose pts=0.018,-0.056,0.018 0.028,-0.078,0.026 r=0.004 color=#1c1e21 mat=rubber
+        cyl iac r=0.011 h=0.018 axis=z at=0.012,0.018,0.052 color=#2e3238 mat=plastic
+        box tps size=0.018,0.024,0.014 at=0.002,-0.012,-0.05 color=#23262a mat=plastic
+      box badgeV1 size=0.055,0.004,0.011 rot=0,0.45,0 at=-0.02,0.742,-0.021 color=#3a3f45 mat=paint
+      box badgeV2 size=0.055,0.004,0.011 rot=0,-0.45,0 at=-0.02,0.742,0.021 color=#3a3f45 mat=paint
+      cyl badge8a r=0.015 hole=0.01 h=0.004 axis=y at=0.035,0.742,-0.014 color=#3a3f45 mat=paint
+      cyl badge8b r=0.015 hole=0.01 h=0.004 axis=y at=0.035,0.742,0.014 color=#3a3f45 mat=paint
+      tube stain1 pts=-0.21,0.575,0.09 -0.19,0.57,0.12 r=0.0025 color=#7a6224 mat=matte
+      tube stain2 pts=-0.24,0.615,0.03 -0.235,0.6,0.05 r=0.002 color=#6b5620 mat=matte
+    group fit_24257 at=0.0723,0.2455,-0.0136 scale=0.4255,0.2723,0.3404
+      group auspuffkrümmer
+        mirror z
+          repeat 4 step=0.16,0,0 at=-0.24,0,0
+            tube runner r=0.0225 pts=-0.24,0.452,0.285 -0.24,0.400,0.318 -0.24,0.300,0.318 -0.24,0.218,0.292 color=#4d535a mat=cast
+          repeat 4 step=0.16,0,0 at=-0.24,0,0
+            tube soot r=0.0245 pts=-0.24,0.450,0.288 -0.24,0.424,0.303 color=#2b2d30 mat=cast
+          repeat 4 step=0.16,0,0 at=-0.24,0,0
+            tube tintbraun r=0.0235 pts=-0.24,0.414,0.310 -0.24,0.366,0.318 color=#6a5340 mat=cast
+          repeat 4 step=0.16,0,0 at=-0.24,0,0
+            tube tintblau r=0.0235 pts=-0.24,0.300,0.318 -0.24,0.252,0.306 color=#4e5a68 mat=cast
+          repeat 4 step=0.16,0,0 at=-0.24,0,0
+            group portflange
+              box flange at=-0.24,0.455,0.297 size=0.075,0.085,0.012 color=#3f444a mat=cast
+              cyl nut1 at=-0.24,0.492,0.305 r=0.008 h=0.010 axis=z color=#5a5148 mat=steel
+              cyl nut2 at=-0.24,0.418,0.305 r=0.008 h=0.010 axis=z color=#6e4a30 mat=cast
+              cyl bolt1 at=-0.24,0.492,0.299 r=0.004 h=0.014 axis=z color=#3a3f45 mat=steel
+              cyl bolt2 at=-0.24,0.418,0.299 r=0.004 h=0.014 axis=z color=#3a3f45 mat=steel
+          tube collector r=0.033 pts=-0.325,0.20,0.285 0.32,0.20,0.285 color=#474c53 mat=cast
+          tube bend r=0.033 pts=0.30,0.20,0.285 0.38,0.20,0.262 0.44,0.20,0.175 0.468,0.20,0.10 color=#474c53 mat=cast
+          repeat 9 step=0.08,0,0 at=-0.28,0,0
+            cyl gussrippe at=-0.28,0.20,0.285 r=0.0375 h=0.006 axis=x hole=0.85 color=#3c4147 mat=cast
+          sphere logowoelbung at=0.0,0.229,0.285 scale=0.035,0.012,0.022 color=#5a6067 mat=cast
+          cyl lambdaboss at=0.12,0.20,0.317 r=0.012 h=0.018 axis=z color=#3c4147 mat=steel
+          cyl lambdaplug at=0.12,0.20,0.330 r=0.014 h=0.012 axis=z color=#8a6a3f mat=brass
+          tube oiltrace r=0.005 pts=-0.30,0.171,0.285 0.30,0.171,0.285 color=#4a3a1e mat=cast
+          box halter at=-0.315,0.245,0.295 size=0.018,0.07,0.028 color=#3c4147 mat=cast
+          group downpipe
+            cyl flansch at=0.476,0.20,0.10 r=0.045 h=0.014 axis=x color=#3c4147 mat=cast
+            cyl dichtung at=0.485,0.20,0.10 r=0.036 h=0.004 axis=x color=#2a2d30 mat=rubber
+            cyl stehbolzen1 at=0.489,0.238,0.10 r=0.004 h=0.032 axis=x color=#8a8f94 mat=steel
+            cyl stehbolzen2 at=0.489,0.162,0.10 r=0.004 h=0.032 axis=x color=#8a8f94 mat=steel
+            cyl mutter1 at=0.494,0.238,0.10 r=0.009 h=0.010 axis=x color=#565c63 mat=steel
+            cyl mutter2 at=0.494,0.162,0.10 r=0.009 h=0.010 axis=x color=#6e4a30 mat=cast
+        group hitschild_rechts
+          cyl schild at=0.0,0.20,0.285 r=0.053 h=0.50 axis=x hole=0.86 color=#b8bdc2 mat=brushed
+          repeat 5 step=0.09,0,0 at=-0.18,0,0
+            cyl praegung at=-0.18,0.20,0.285 r=0.0555 h=0.012 axis=x hole=0.93 color=#aeb3b8 mat=brushed
+          repeat 2 step=0.30,0,0 at=-0.15,0,0
+            cyl klemmband at=-0.15,0.20,0.285 r=0.057 h=0.014 axis=x hole=0.90 color=#7d838a mat=brushed
+          cyl kante_vorn at=-0.255,0.20,0.285 r=0.054 h=0.010 axis=x hole=0.80 color=#9aa0a6 mat=brushed
+          cyl kante_hinten at=0.255,0.20,0.285 r=0.054 h=0.010 axis=x hole=0.80 color=#9aa0a6 mat=brushed
+    group fit_21459 at=0.0000,-0.0043,0.0000 scale=0.9756,0.7805,1.1523
+      group oelwanne
+        # --- Wannengehäuse, vorn flach, hinten tiefer Sumpf ---
+        loft wannengehaeuse sections=-0.40,0.42,0.078,0.089 -0.30,0.46,0.082,0.089 -0.05,0.47,0.086,0.087 0.05,0.47,0.095,0.0825 0.13,0.45,0.118,0.071 0.27,0.43,0.126,0.067 0.40,0.38,0.126,0.067 square=1 shell=1 color=#26292d mat=cast
+        # --- Verstärkungsrippen der Wanne (Tiefziehrippen) ---
+        mirror z
+          box rippe_oben size=0.42,0.014,0.008 at=0.0,0.098,0.236 color=#1f2226 mat=cast
+          box rippe_unten size=0.36,0.012,0.008 at=0.02,0.068,0.236 color=#1f2226 mat=cast
+        repeat 3 step=0.07,0,0 at=0.16,0.003,0
+          box sumpfrippe size=0.018,0.010,0.40 color=#1f2226 mat=cast
+        # --- Schraubflansch mit Dichtung ---
+        extrude flansch pts=-0.40,-0.21 -0.35,-0.235 0.35,-0.235 0.40,-0.21 0.40,0.21 0.35,0.235 -0.35,0.235 -0.40,0.21 h=0.014 at=0,0.124,0 color=#a2a8ae mat=brushed
+        extrude dichtung pts=-0.41,-0.215 -0.355,-0.243 0.355,-0.243 0.41,-0.215 0.41,0.215 0.355,0.243 -0.355,0.243 -0.41,0.215 h=0.004 at=0,0.138,0 color=#1a1c1e mat=rubber
+        repeat 10 step=0.08,0,0 at=-0.36,0.141,-0.222
+          screw flanschschraube r=0.005 h=0.008 color=#b8bec4 mat=steel
+        mirror z
+          repeat 10 step=0.08,0,0 at=-0.36,0.141,0.222
+            screw flanschschraube2 r=0.005 h=0.008 color=#b8bec4 mat=steel
+        repeat 3 step=0,0,0.15 at=-0.388,0.141,-0.15
+          screw endschraube_v r=0.005 h=0.008 color=#b8bec4 mat=steel
+        repeat 3 step=0,0,0.15 at=0.388,0.141,-0.15
+          screw endschraube_h r=0.005 h=0.008 color=#b8bec4 mat=steel
+        # --- dunkle Schnittkante am Flansch ---
+        box schnittkante size=0.80,0.014,0.003 at=0,0.131,0.0015 color=#101214 mat=matte
+        # --- Öl im Sumpf, bernstein, spiegelnde Oberfläche ---
+        body oel top=-0.38,0.052 0.38,0.052 bottom=-0.38,0.048 0.02,0.042 0.12,0.018 0.22,0.008 0.38,0.008 width=-0.38,0.38 0.05,0.42 0.22,0.40 0.38,0.34 shell=1 color=#c8963a mat=glass
+        extrude oeloberflaeche pts=-0.38,-0.18 -0.20,-0.20 0.30,-0.20 0.38,-0.17 0.38,0.17 0.30,0.20 -0.20,0.20 -0.38,0.18 h=0.004 at=0,0.050,0 color=#c8963a mat=metal
+        repeat 3 step=0.13,0,0.05 at=-0.15,0.0545,-0.09
+          box reflexion size=0.10,0.0015,0.022 color=#ecd28a mat=metal
+        box oelschnitt size=0.26,0.038,0.002 at=0.24,0.027,0.0015 color=#e2b45a mat=metal
+        # --- Schwebstoffe im Öl ---
+        repeat 5 step=0.085,0,0.028 at=-0.15,0.030,-0.11
+          sphere schwebteil r=0.0035 scale=1,0.6,1 color=#7a5a18 mat=plastic
+        # --- Ölpumpe: Zahnpumpengehäuse im Schnitt, zwei Zahnräder, Antriebswelle ---
+        group pumpe at=-0.30,0.095,0
+          box gehaeuse size=0.10,0.08,0.08 shell=1 color=#3a3f45 mat=cast
+          gear zahnrad_v r=0.026 h=0.056 teeth=9 axis=y at=0,0,0.021 color=#9aa0a6 mat=brushed
+          gear zahnrad_h r=0.026 h=0.056 teeth=9 axis=y at=0,0,-0.021 color=#6a7076 mat=brushed
+          ring 4 r=0.036 axis=y at=0,0.042,0
+            screw deckelschraube r=0.004 h=0.005 color=#b8bec4 mat=steel
+          cyl antriebswelle r=0.009 h=0.135 axis=y at=0,0.0275,0 color=#b8bec4 mat=brushed
+          box wellenschlitz size=0.004,0.045,0.019 at=0,0.075,0 color=#101214 mat=matte
+          box blocklager size=0.06,0.02,0.06 at=0,0.052,0 color=#4a4f55 mat=steel
+          box ansaugflansch size=0.028,0.018,0.05 at=0.045,-0.035,0 color=#8d939a mat=brushed
+          screw flanschschraube_p1 r=0.003 h=0.005 at=0.045,-0.028,0.018 color=#b8bec4 mat=steel
+          screw flanschschraube_p2 r=0.003 h=0.005 at=0.045,-0.028,-0.018 color=#b8bec4 mat=steel
+        # --- Ansaugrohr zur Pumpe ---
+        tube ansaugrohr pts=-0.255,0.062,0 -0.10,0.074,0 0.08,0.072,0 0.185,0.080,0 0.20,0.070,0 0.20,0.058,0 r=0.011 color=#9aa0a6 mat=brushed
+        # --- Ansaugsieb: Trichter mit Drahtgitter und Flachblechrahmen ---
+        group sieb at=0.20,0.050,0
+          lathe siebtrichter pts=0,0.001 0.010,0.001 0.020,0.008 0.040,0.010 0.045,0.014 axis=y color=#8d939a mat=brushed
+          cyl siebrahmen r=0.046 h=0.005 hole=0.042 axis=y at=0,0.014,0 color=#a2a8ae mat=brushed
+          repeat 5 step=0,0,0.018 at=0,0.0135,-0.036
+            box gitter_x size=0.084,0.0015,0.0012 color=#4a4f55 mat=brushed
+          repeat 5 step=0.018,0,0 at=-0.036,0.0135,0
+            box gitter_z size=0.0012,0.0015,0.084 color=#4a4f55 mat=brushed
+          ring 6 r=0.043 axis=y at=0,0.017,0
+            screw siebschraube r=0.0025 h=0.004 color=#8d939a mat=steel
+        # --- Ölhahn-Ablassschraube mit Magnetkern an der Sumpftiefstelle ---
+        cyl dichtungsring r=0.016 h=0.002 axis=y at=0.28,0.010,-0.07 color=#b08d57 mat=metal
+        screw ablassschraube r=0.014 h=0.014 at=0.28,0.004,-0.07 color=#4a4f55 mat=steel
+        cyl magnetkern r=0.008 h=0.012 axis=y at=0.28,0.022,-0.07 color=#6a7076 mat=metal
+        # --- Beruhigungsblech im Sumpf mit Ablaufbohrungen ---
+        box beruhigungsblech size=0.16,0.004,0.30 at=0.22,0.034,0 shell=1 color=#4a4f55 mat=brushed
+        cyl blechbohrung1 r=0.008 h=0.006 axis=y at=0.17,0.034,0.08 color=#14161a mat=matte
+        cyl blechbohrung2 r=0.008 h=0.006 axis=y at=0.17,0.034,-0.08 color=#14161a mat=matte
+        # --- Ölstand-Ruhemarke (Min/Max) an der Innenwand ---
+        box marke_max size=0.05,0.003,0.002 at=-0.05,0.050,-0.205 color=#3a3f45 mat=matte
+        box marke_min size=0.05,0.003,0.002 at=-0.05,0.038,-0.205 color=#3a3f45 mat=matte
+        # --- Ölspuren an der Naht Flansch/Wanne, Tropfen ---
+        tube oelnaht pts=-0.38,0.126,-0.21 0.0,0.128,-0.232 0.30,0.126,-0.21 r=0.002 color=#4a3510 mat=plastic
+        sphere oeltropfen1 r=0.004 scale=1,2.2,1 at=0.12,0.100,-0.237 color=#4a3510 mat=plastic
+        sphere oeltropfen2 r=0.003 scale=1,2.0,1 at=-0.16,0.088,-0.237 color=#4a3510 mat=plastic
+    group fit_27313 at=0.2760,0.3834,0.0000 scale=0.1882,0.2941,0.2353
+      group zuendung
+        lathe gehaeuse pts=0,0.020 0.005,0.031 0.095,0.029 0.11,0.026 axis=y at=0.34,0.445,0 color=#6a6f75 mat=cast
+        cyl klemmring r=0.0345 h=0.014 axis=y at=0.34,0.452,0 color=#4a4f55 mat=steel
+        cyl oelnaht r=0.0305 h=0.003 hole=0.6 axis=y at=0.34,0.505,0 color=#3a3325 mat=matte
+        cyl welle r=0.006 h=0.10 axis=y at=0.34,0.50,0 color=#9aa0a6 mat=brushed
+        group laeufer at=0.34,0.548,0 rot=0,35,0
+          cyl nabe r=0.013 h=0.014 axis=y color=#4a4f55 mat=steel
+          box schneide size=0.026,0.007,0.009 at=0.010,0.004,0 color=#4a4f55 mat=steel
+        lathe deckel pts=0,0.036 0.045,0.036 0.058,0.031 0.06,0.024 axis=y at=0.34,0.555,0 color=#15161a mat=plastic
+        cyl deckelring r=0.0365 h=0.002 hole=0.85 axis=y at=0.34,0.592,0 color=#d8d5cc mat=matte
+        ring 8 r=0.024 axis=y at=0.34,0.615,0
+          cyl turm r=0.0065 h=0.026 axis=y at=0,0.013,0 color=#15161a mat=plastic
+          cyl turmkragen r=0.0095 h=0.005 axis=y at=0,0.028,0 color=#1d1f24 mat=plastic
+        cyl vacuumbecher r=0.013 h=0.030 axis=z at=0.34,0.505,-0.055 color=#3a3f45 mat=steel
+        cyl vacuumstange r=0.0025 h=0.014 axis=z at=0.34,0.505,-0.037 color=#9aa0a6 mat=brushed
+        box hebel size=0.008,0.014,0.007 at=0.34,0.505,-0.032 color=#4a4f55 mat=steel
+        box klipp1 size=0.012,0.022,0.008 at=0.34,0.585,0.038 color=#8d939a mat=brushed
+        box klipp2 size=0.012,0.022,0.008 at=0.34,0.585,-0.038 color=#8d939a mat=brushed
+        screw klippfs1 r=0.004 h=0.005 at=0.34,0.596,0.038 rot=90,0,0 color=#4a4f55 mat=steel
+        screw klippfs2 r=0.004 h=0.005 at=0.34,0.596,-0.038 rot=90,0,0 color=#4a4f55 mat=steel
+        box kabelhalter size=0.05,0.008,0.08 at=0.30,0.662,0 color=#26292d mat=plastic
+        screw halterfs1 r=0.004 h=0.006 at=0.283,0.668,0.03 rot=0,0,90 color=#9aa0a6 mat=steel
+        screw halterfs2 r=0.004 h=0.006 at=0.283,0.668,-0.03 rot=0,0,90 color=#9aa0a6 mat=steel
+        mirror z
+          tube kabel_a pts=0.364,0.642,0.002 0.370,0.680,0.040 0.320,0.650,0.140 0.270,0.610,0.240 0.250,0.578,0.305 r=0.003 color=#1a1b1e mat=rubber
+          tube kabel_b pts=0.357,0.642,0.017 0.350,0.685,0.050 0.260,0.660,0.150 0.120,0.620,0.250 0.083,0.578,0.305 r=0.003 color=#1a1b1e mat=rubber
+          tube kabel_c pts=0.340,0.644,0.024 0.330,0.685,0.060 0.200,0.660,0.160 -0.020,0.620,0.250 -0.077,0.578,0.305 r=0.003 color=#1a1b1e mat=rubber
+          tube kabel_d pts=0.323,0.642,0.017 0.310,0.680,0.050 0.140,0.655,0.150 -0.160,0.620,0.250 -0.244,0.578,0.305 r=0.003 color=#1a1b1e mat=rubber
+          repeat 4 step=0.1667,0,0 at=-0.25,0.535,0.292
+            group kerze rot=30,0,0
+              screw sechskant r=0.009 h=0.011 at=0,-0.003,0 color=#9aa0a6 mat=steel
+              cyl dichtung r=0.010 h=0.003 axis=y at=0,-0.010,0 color=#4a4f55 mat=steel
+              cyl keramik r=0.0055 h=0.024 axis=y at=0,0.012,0 color=#f2f0ea mat=ceramic
+              cyl rippe1 r=0.0065 h=0.003 axis=y at=0,0.008,0 color=#e4e1d8 mat=ceramic
+              cyl rippe2 r=0.0065 h=0.003 axis=y at=0,0.017,0 color=#e4e1d8 mat=ceramic
+              cyl steckhuelse r=0.0065 h=0.018 axis=y at=0,0.031,0 color=#c23b2e mat=rubber
+              cyl kontakt r=0.003 h=0.008 axis=y at=0,0.043,0 color=#9aa0a6 mat=steel
+    group fit_79530 at=-0.1343,0.1069,0.0372 scale=0.3658,0.4572,0.5715
+      group riementrieb
+        # ---- Keilrippenriemen, Riemenebene x=-0.46 ----
+        tube riemen pts=-0.46,0.19,0.00 -0.46,0.26,0.078 -0.46,0.226,0.185 -0.46,0.252,0.232 -0.46,0.305,0.195 -0.46,0.42,0.10 -0.46,0.545,-0.148 -0.46,0.552,-0.212 -0.46,0.584,-0.182 -0.46,0.50,-0.06 -0.46,0.456,0.012 -0.46,0.406,0.079 -0.46,0.33,0.086 -0.46,0.272,0.086 -0.46,0.19,0.00 r=0.008 color=#1c1c1e mat=rubber
+        repeat 6 step=0.0028,0,0 at=-0.467,0,0
+          tube rippe pts=-0.467,0.19,0.00 -0.467,0.26,0.078 -0.467,0.226,0.185 -0.467,0.252,0.232 -0.467,0.305,0.195 -0.467,0.42,0.10 -0.467,0.545,-0.148 -0.467,0.552,-0.212 -0.467,0.584,-0.182 -0.467,0.50,-0.06 -0.467,0.456,0.012 -0.467,0.406,0.079 -0.467,0.33,0.086 -0.467,0.272,0.086 -0.467,0.19,0.00 r=0.0016 color=#2a2a2d mat=rubber
+        # ---- Lichtmaschine oben links ----
+        group lichtmaschine at=0,0.55,-0.18
+          lathe gehaeuse pts=0,0.03 0.006,0.05 0.012,0.055 0.022,0.055 0.032,0.052 0.04,0.054 0.046,0.045 0.05,0.032 axis=x at=-0.448,0,0 smooth=1 color=#b9bec4 mat=brushed
+          repeat 4 step=0.006,0,0 at=-0.436,0,0
+            cyl lamelle r=0.0565 h=0.0035 axis=x at=-0.436,0,0 color=#a6acb2 mat=brushed
+          fan luefterrad blades=8 r=0.052 hub=0.014 h=0.006 twist=0.5 axis=x at=-0.447,0,0 color=#8d939a
+          lathe deckel pts=0,0.032 0.004,0.044 0.01,0.04 0.014,0.024 axis=x at=-0.398,0,0 smooth=1 color=#2e3236 mat=plastic
+          box plusklemme size=0.014,0.022,0.016 at=-0.396,0.035,0 color=#c2312a mat=plastic
+          cyl plusstift r=0.004 h=0.012 axis=x at=-0.402,0.035,0 color=#b08d57
+          cyl durchsteckschraube r=0.0045 h=0.09 axis=x at=-0.476,0,0 color=#6e747b
+          box schraubenkopf size=0.008,0.015,0.015 at=-0.479,0,0 color=#565b62
+          plate konsole pts=-0.445,0.515 -0.40,0.515 -0.395,0.46 -0.44,0.46 h=0.008 at=0,0,-0.186 color=#84898f mat=cast
+          box haltewinkel size=0.05,0.01,0.018 at=-0.42,0.605,0 rot=0,0,-15 color=#84898f mat=cast
+          box typenschild size=0.002,0.018,0.026 at=-0.399,-0.02,0.02 color=#d8b544 mat=light
+        group riemenscheibe_lichtmaschine at=0,0.55,-0.18
+          cyl scheibe r=0.032 h=0.022 hole=0.008 axis=x at=-0.471,0,0 color=#9ba1a8 mat=brushed
+          repeat 3 step=0.005,0,0 at=-0.47,0,0
+            cyl rille r=0.0325 h=0.002 hole=0.008 axis=x at=-0.47,0,0 color=#5a5f66
+          cyl mutter r=0.008 h=0.01 axis=x at=-0.477,0,0 color=#6e747b
+        # ---- Wasserpumpe mittig ----
+        group wasserpumpe at=0,0.40,0.02
+          cyl snout r=0.026 h=0.06 axis=x at=-0.448,0,0 color=#a8adb3 mat=brushed
+          cyl flansch r=0.042 h=0.005 hole=0.026 axis=x at=-0.446,0,0 color=#3a3f45 mat=cast
+          ring 4 r=0.034 axis=x at=-0.443,0,0
+            cyl flanschschraube r=0.004 h=0.008 axis=x at=-0.443,0,0 color=#565b62
+        group riemenscheibe_wasserpumpe at=-0.46,0.40,0.02
+          cyl kranz r=0.06 h=0.018 hole=0.014 axis=x at=-0.469,0,0 color=#a8adb3 mat=brushed
+          repeat 3 step=0.005,0,0 at=-0.468,0,0
+            cyl rille r=0.0605 h=0.002 hole=0.014 axis=x at=-0.468,0,0 color=#5a5f66
+          cyl nabe r=0.017 h=0.028 axis=x at=-0.474,0,0 color=#8d939a
+          repeat 4 rotstep=0,0,90 at=-0.46,0.40,0.02
+            group doppelspeiche
+              box speiche1 size=0.005,0.055,0.005 at=0,0.032,0.007 color=#8d939a
+              box speiche2 size=0.005,0.055,0.005 at=0,0.032,-0.007 color=#878c93
+          cyl zentralschraube r=0.006 h=0.012 axis=x at=-0.477,0,0 color=#565b62
+          box hexkopf size=0.007,0.013,0.013 at=-0.48,0,0 color=#4a4f55
+        # ---- Spannrolle mit Spannarm ----
+        group spannrolle at=-0.46,0.25,0.20
+          cyl rollenkranz r=0.03 h=0.018 hole=0.011 axis=x at=-0.469,0,0 color=#9ba1a8 mat=brushed
+          repeat 2 step=0.006,0,0 at=-0.468,0,0
+            cyl rille r=0.0305 h=0.002 hole=0.011 axis=x at=-0.468,0,0 color=#5a5f66
+          cyl kugellager r=0.013 h=0.022 axis=x at=-0.471,0,0 color=#8a9096 mat=brushed
+        tube spannarm pts=-0.452,0.155,0.115 -0.452,0.205,0.16 -0.452,0.248,0.197 r=0.011 color=#565b62 mat=cast
+        cyl pivotboss r=0.015 h=0.035 axis=x at=-0.472,0.155,0.115 color=#6e747b mat=cast
+        spring spannfeder r=0.011 wire=0.002 turns=7 h=0.03 axis=x at=-0.478,0.155,0.115 color=#9aa0a6
+        box konsole_spanner size=0.014,0.085,0.03 at=-0.452,0.115,0.115 color=#84898f mat=cast
+        box kontermutter size=0.008,0.016,0.016 at=-0.477,0.155,0.115 color=#4a4f55
+        # ---- Kurbelwellen-Daempferscheibe unten ----
+        group daempfer at=0,0.27,0
+          cyl nabe r=0.026 h=0.055 axis=x at=-0.488,0,0 color=#3d4248 mat=darkmetal
+          cyl gummiring r=0.06 h=0.026 hole=0.028 axis=x at=-0.474,0,0 color=#1a1a1a mat=rubber
+          cyl aussenring r=0.08 h=0.026 hole=0.062 axis=x at=-0.474,0,0 color=#4a4f55 mat=darkmetal
+          repeat 3 step=0.006,0,0 at=-0.473,0,0
+            cyl riemenrille r=0.0805 h=0.0022 hole=0.062 axis=x at=-0.473,0,0 color=#26292d
+          ring 6 r=0.051 axis=x at=-0.476,0,0
+            cyl entlastungsloch r=0.007 h=0.03 axis=x at=-0.476,0,0 color=#26292d
+          cyl zentralschraube r=0.011 h=0.018 axis=x at=-0.492,0,0 color=#565b62
+          cyl unterlegscheibe r=0.018 h=0.004 axis=x at=-0.494,0,0 color=#6e747b
+          box timingmark size=0.004,0.012,0.008 at=-0.478,0.076,0.02 color=#d8dce0
+        # ---- Ölspur unter dem Daempfer ----
+        tube oelspur pts=-0.462,0.185,0.0 -0.462,0.15,0.012 -0.462,0.115,0.004 r=0.004 color=#7a4f16
+  anim
+    step "Der V8 im Schnitt – Gesamtübersicht" 2.5
+      camera view=40,20 zoom=1 on=whole
+      spin kurbelwelle turns=2 axis=x
+      spin nockenwelle turns=2 axis=x
+
+    step "Blick in die rechte Zylinderbank" 2.5
+      camera view=-35,15 zoom=2.2 on=kolben_rechts
+      hide ansauggung
+      hide zuendung
+      osc kolben_rechts by=0,-0.14,0 cycles=4 phase=0
+      spin kurbelwelle turns=6 axis=x
+
+    step "Kurbelwelle und Schwungrad wandeln Hub in Drehung" 2.5
+      camera view=25,10 zoom=1.8 on=kurbelwelle
+      spin kurbelwelle turns=6 axis=x
+      osc kolben_rechts by=0,-0.14,0 cycles=4 phase=0
+      osc kolben_links by=0,-0.14,0 cycles=4 phase=0.5
+
+    step "Nockenwelle steuert Ventile und Kipphebel" 2.5
+      camera view=-30,25 zoom=1.9 on=nockenwelle
+      spin nockenwelle turns=6 axis=x
+      osc ventilstell_e by=0,-0.05,0 cycles=4 phase=0
+      osc ventilstell_i by=0,-0.05,0 cycles=4 phase=0.5
+      swing kipphebel_e deg=8 axis=x pivot=0,0.5,0.15 cycles=4
+      swing kipphebel_i deg=-8 axis=x pivot=0,0.5,-0.15 cycles=4
+
+    step "Ansaugung und Abgas kommen dazu" 2.8
+      camera view=35,18 zoom=1.4 on=whole
+      show ansauggung
+      move ansauggung from=0,0.5,0
+      show zuendung
+      move zuendung from=0,0.4,0
+      spin kurbelwelle turns=5 axis=x
+      spin nockenwelle turns=5 axis=x
+      osc kolben_rechts by=0,-0.14,0 cycles=4 phase=0
+      osc kolben_links by=0,-0.14,0 cycles=4 phase=0.5
+
+    step "Der laufende V8 – alle Teile im Zusammenspiel" 2.5
+      camera view=40,22 zoom=1 on=whole
+      spin kurbelwelle turns=4 axis=x
+      spin nockenwelle turns=4 axis=x
+      osc kolben_rechts by=0,-0.14,0 cycles=3 phase=0
+      osc kolben_links by=0,-0.14,0 cycles=3 phase=0.5
+      osc ventilstell_e by=0,-0.05,0 cycles=3 phase=0
+      osc ventilstell_i by=0,-0.05,0 cycles=3 phase=0.5
