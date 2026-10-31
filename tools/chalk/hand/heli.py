@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """GLM H145 with a real rotor system. The film has a run-up, a lift-off and a transition."""
-import sys
+import re, sys
 t = open(sys.argv[1]).read()
 t = t[:t.index('\n  anim')] + '\n'
 t = t.replace('model obj 1100 620 keep=1 tidy=1 view=35,18', 'model obj 1100 620 keep=1 tidy=1 view=-38,10 fit=whole')
 # The fan duct lay along the boom. Its axis must cross the boom, through the fin.
-t = t.replace('    group fit_74486 at=-1.6025,0.4253,0.0000 scale=1.2455,0.8224,0.9964\n', '    group fit_74486 at=6.5,2.2,0 rot=0,90,0 scale=0.86\n     group fen_inner at=-6.25,-2.3,0\n')
-t = '\n'.join(l for l in t.split('\n') if ' tipcap ' not in l)
+t = t.replace('    group fit_74486 at=-1.6025,0.4253,0.0000 scale=1.2455,0.8224,0.9964\n', '    group fit_74486 at=6.32,2.2,0 rot=0,90,0 scale=0.86\n     group fen_inner at=-6.25,-2.3,0\n')
+t = '\n'.join(l for l in t.split('\n') if not re.search(r'\b(tipcap|tl_house|tl_refl|tl_lens|pl_house|pl_lens) ', l))
 t += '''  group pad
     cyl padslab r=9 h=0.2 axis=y at=0,-0.1,0 color=#3c3f44 mat=matte
     cyl padring r=7 hole=6.7 h=0.21 axis=y at=0,-0.1,0 color=#e8e8e8 mat=matte

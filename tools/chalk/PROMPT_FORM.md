@@ -23,3 +23,5 @@ Then the surface work, these follow the curved skin exactly and cost almost noth
   decal hull "TEXT" at=x,y axis=z both=1 h=0.25 color=#ffffff bold=1   # printed text. at= is x,y for axis=z, z,y for axis=x, x,z for axis=y
 
 Paint zones from big to small: later lines paint over earlier ones. Copy the real livery of the reference: stripes, the colour break lines, all windows with their true outline, door seams, registration text.
+
+A ducted fan, intake, exhaust or any opening is an open ring, never a closed body: use `cyl r= hole= h=`, so that one can see through it.

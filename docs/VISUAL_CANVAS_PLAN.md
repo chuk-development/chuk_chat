@@ -190,3 +190,16 @@ Traps: a sliver polygon on a clip plane multiplies pieces, so `solid()` drops it
 - Anatomy (cow, hand) stays the weakest group.
 - Arrows between elements that are not neighbours can cross other elements. The
   lint reports it, the router does not avoid it yet.
+
+## Research: how others make LLM mechanics reliable (2026-10-31)
+
+Pattern in the field: the LLM proposes structure, a deterministic engine computes coordinates, a checker sends numbers back.
+
+- Articraft (arXiv 2605.15187): LLM writes one file against an SDK with parts, joints and tests. Tools: read, patch, find_examples, compile, probe. Mean 16.8 turns, about 1.13 USD per kept asset, 91.8 % kept, no renders in the loop. Weak points: bad global shape, and pose faults, because pose sweeps are not a default.
+- LAM (CVPR 2026): closed-loop code generation, 77.1 % joint success against 40.3 % for Articulate Anything.
+- Holodeck 2.0: the solver names which constraint failed, and that drives the next attempt.
+- AIDL: a solver-aided language beats OpenSCAD in few-shot use.
+- Infinigen-Articulated: 18 procedural categories with exact joints, no LLM.
+- LayoutDSL: a small fine-tuned model on a DSL beats larger LLMs in few-shot use.
+
+Decisions for Chalk: keep free shape, keep the solver. Add (1) an edit loop with patch, compile and probe in place of full rewrites, (2) a pose sweep over the whole turn as a default check, for collisions and lost contact, (3) `find_examples` over verified Chalk snippets, (4) parametric families for gears, chains, wheels, linkages.

@@ -45,8 +45,9 @@ def fit(frag, m, box):
     target = [box[i + 3] - box[i] for i in range(3)]
     have = [max(m['hi'][i] - m['lo'][i], 1e-6) for i in range(3)]
     ratio = [t / h for t, h in zip(target, have)]
-    # One scale for all axes, or round parts turn into ovals and wobble when they spin.
-    mid = sorted(ratio)[1]
+    # One scale for all axes, or round parts turn into ovals. Small corrections only:
+    # build() sends a big error back to the model, so nothing shrinks in silence.
+    mid = max(0.8, min(1.25, min(sorted(ratio)[1], max(ratio))))
     s = [mid, mid, mid]
     c0 = [(m['hi'][i] + m['lo'][i]) / 2 for i in range(3)]
     c1 = [(box[i + 3] + box[i]) / 2 for i in range(3)]
@@ -63,18 +64,31 @@ def build(plan, a, content_img, feedback=''):
     text += f"\n\nYOU BUILD: id `{a['id']}`\nWhat: {a['what']}\nBox: {a['box']}\nForm: {a.get('shape', '')}\nDetails to include: {'; '.join(a.get('details', []))}{feedback}"
     text += '\n\nOuter skin `hull`, stations along x (x: y bottom .. y top, z half width):\n' + plan['table']
     content = [{'type': 'text', 'text': text}] + content_img
-    best = None
-    for _ in range(2):
-        reply = llm(plan['model'], content, system=sys_prompt)
+    best, note = None, ''
+    for _ in range(3):
+        reply = llm(plan['model'], content + ([{'type': 'text', 'text': note}] if note else []), system=sys_prompt)
         frag = normal(fence(reply))
         m = measure(frag)
         if None in m['lo'] + m['hi']:
             m['parts'] = 0
-        if m['parts'] and (best is None or m['parts'] > best[1]['parts']):
-            best = (frag, m)
-        if m['parts'] >= 25:
+        miss = misfit(m, a['box'])
+        if m['parts'] and (best is None or (miss, -m['parts']) < (best[2], -best[1]['parts'])):
+            best = (frag, m, miss)
+        if m['parts'] >= 25 and miss < 1.4:
             break
-    return best
+        note = f"Your last version measures min {[round(v, 2) for v in m['lo']]} max {[round(v, 2) for v in m['hi']]} but the box is {a['box']}. It is wrong by a factor {miss:.1f}. Usual cause: world numbers inside a group that has at=, or inside ring or repeat, so the offset counts twice. Children of a group are relative to it. Write the full assembly again, inside the box. Your last version:\n```chalk\n{frag[:9000]}\n```"
+    return best[:2] if best else None
+
+
+def misfit(m, box):
+    """How many times an assembly is too big or too far from its box. 1 is perfect."""
+    if not m['parts'] or None in m['lo'] + m['hi']:
+        return 99.0
+    worst = 1.0
+    for i in range(3):
+        want = max(box[i + 3] - box[i], 1e-6)
+        worst = max(worst, (m['hi'][i] - m['lo'][i]) / want, 1 + max(box[i] - m['lo'][i], m['hi'][i] - box[i + 3], 0) / want)
+    return worst
 
 
 def show_form(frag, out, name, yaw):
@@ -194,9 +208,13 @@ def film(scene, a, plan, model, out, log):
         base += '\nA rig exists:\n' + scene[scene.index('\n  mech\n'):].split('\n  anim')[0][:6000]
     errs, best = [], None
     for k in range(4):
-        reply = llm(model, base + (f'\n\nYour last version:\n```chalk\n{best}\n```\nErrors:\n' + '\n'.join(errs) if errs else ''), system=system, tokens=16000)
+        reply = llm(model, base + (f'\n\nYour last version:\n```chalk\n{best}\n```\nErrors:\n' + '\n'.join(errs) if errs else ''), system=system, tokens=40000)
         best = fence(reply)
         lines = [l for l in best.split('\n') if l.strip()]
+        if not any(l.strip().startswith('run ') for l in lines) or not any(l.strip() == 'anim' for l in lines):
+            errs = ['Your answer had no `anim` block with `run`. Write the full fence: mech and anim.']
+            log.setdefault('mech_errors', []).append(1)
+            continue
         i = next((n for n, l in enumerate(lines) if l.strip() == 'anim'), len(lines))
         joints = [l.strip() for l in lines[:i] if l.strip() and l.strip() != 'mech']
         anim = lines[i:]
