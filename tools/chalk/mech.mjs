@@ -116,6 +116,7 @@ export function readMech(model, parts, errors) {
   }
   const m = { joints, order };
   checkMech(m, parts, errors);
+  if (!errors.some((e) => e.startsWith('mech'))) sweep(m, parts, errors);
   return m;
 }
 
@@ -234,6 +235,51 @@ function checkMech(m, parts, errors) {
       for (let i = 0; i < 24; i++) if (!wristAt(m, j, i / 24 * Math.PI * 2).ok) { errors.push(`mech: piston ${j.id}: rod is too short for this crank`); break; }
       if (reach(parts, j.id, j.wrist) > tol) errors.push(`mech: piston ${j.id}: wrist is outside the piston`);
     }
+  }
+}
+
+// Turns the machine through a full cycle and measures what no single picture shows:
+// a moving group that hangs in the air, and moving parts that run through standing parts.
+// Parts that touch at rest are neighbours, a piston slides in its liner and that is fine.
+function sweep(m, parts, errors) {
+  const ids = new Set(m.order.map((j) => j.id));
+  const moving = m.order.filter((j) => j.type !== 'travel' && j.type !== 'fire');
+  const fixed = parts.filter((p) => !p.path.some((id) => ids.has(id)) && !p.ground && !p.decal && p.mat !== 'glass');
+  if (!fixed.length) return;
+  const lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
+  for (const p of parts) if (!p.ground && !p.decal) for (let i = 0; i < p.tris.length; i += 3) for (let c = 0; c < 3; c++) { lo[c] = Math.min(lo[c], p.tris[i + c]); hi[c] = Math.max(hi[c], p.tris[i + c]); }
+  const N = 240, cell = Math.max(...hi.map((v, c) => v - lo[c])) / (N - 8);
+  const key = (x, y, z) => Math.floor((x - lo[0]) / cell + 4) + N * Math.floor((y - lo[1]) / cell + 4) + N * N * Math.floor((z - lo[2]) / cell + 4);
+  const grid = new Map();
+  for (const p of fixed) {
+    const t = p.tris;
+    for (let i = 0; i + 8 < t.length; i += 9) {
+      const e = Math.max(Math.hypot(t[i] - t[i + 3], t[i + 1] - t[i + 4], t[i + 2] - t[i + 5]), Math.hypot(t[i] - t[i + 6], t[i + 1] - t[i + 7], t[i + 2] - t[i + 8]));
+      const n = Math.min(60, Math.ceil(e / cell));
+      for (let a = 0; a <= n; a++) for (let b = 0; a + b <= n; b++) {
+        const u = a / n, v = b / n, w = 1 - u - v;
+        grid.set(key(w * t[i] + u * t[i + 3] + v * t[i + 6], w * t[i + 1] + u * t[i + 4] + v * t[i + 7], w * t[i + 2] + u * t[i + 5] + v * t[i + 8]), p.id);
+      }
+    }
+  }
+  const around = (q, R, f) => { for (let a = -R; a <= R; a++) for (let b = -R; b <= R; b++) for (let c = -R; c <= R; c++) { const o = grid.get(key(q[0] + a * cell, q[1] + b * cell, q[2] + c * cell)); if (o) f(o); } };
+  for (const j of moving) {
+    const all = parts.filter((p) => p.path.includes(j.id));
+    const n = all.reduce((t, p) => t + p.tris.length / 3, 0), every = Math.max(1, Math.round(n / 1200));
+    const pts = [];
+    for (const p of all) for (let i = 0; i < p.tris.length; i += 3 * every) pts.push([p.tris[i], p.tris[i + 1], p.tris[i + 2]]);
+    const near = new Set();
+    for (const q of pts) around(q, 2, (o) => near.add(o));
+    if (j.type === 'rotor' && !j.of && !near.size) errors.push(`mech: ${j.id} hangs in the air: it touches no standing part. Its middle is ${j.box.mid.map((v) => v.toFixed(2))}. Give it a shaft or a mount`);
+    const hits = new Map();
+    for (let k = 1; k < 36; k++) {
+      const M = solve(m, k / 36 * Math.PI * 4).get(j.id);
+      for (const q of pts) {
+        const w = apply(M, q), o = grid.get(key(...w));
+        if (o && !near.has(o)) hits.set(o, (hits.get(o) ?? 0) + 1);
+      }
+    }
+    for (const [other, c] of [...hits].sort((x, y) => y[1] - x[1]).slice(0, 2)) if (c > 12) errors.push(`mech: ${j.id} runs through ${other} while it moves (${c} hits). Make room or move the axis`);
   }
 }
 

@@ -146,7 +146,7 @@ def shell_block():
     # Crankcase: side walls, front and rear plates and bearing webs.
     for s, n in ((1, 'p'), (-1, 'm')):
         w(3, f"plate case{n} pts=-2.7,0 -2.7,0.18 2.7,0.18 2.7,0 h=0 rot=0,0,0 color=#5d6b78" if False else f'box case{n} size=5.5,1.0,0.12 at={f(0, -0.25, s * 1.27)} round=0 shell=1')
-        w(3, f'box case{n}b size=5.5,0.12,0.5 at={f(0, 0.28, s * 1.05)} rot={f(s * 45, 0, 0)} round=0 shell=1')
+        w(3, f'box case{n}b size=5.5,0.12,0.42 at={f(0, 0.34, s * 1.34)} rot={f(s * 45, 0, 0)} round=0 shell=1')
     for i in range(5):
         x = -2.4 + 1.2 * i
         pts = ' '.join(f(u, v) for u, v in [(-1.3, -0.74), (-0.3, -0.74), (-0.3, -0.26), (-0.27, 0.1), (-0.1, 0.27), (0.1, 0.27), (0.27, 0.1), (0.3, -0.26), (0.3, -0.74), (1.3, -0.74), (1.3, -0.62), (0.42, -0.62), (0.42, 0.42), (-0.42, 0.42), (-0.42, -0.62), (-1.3, -0.62)])
@@ -254,13 +254,13 @@ def dress():
     a, d, e = bank_axes('B')
     for i in range(4):
         c = cylinder('B', i)
-        p0 = (c['x'] + 0.2, d[0] * (DECK + 0.14) + e[0] * 0.8, d[1] * (DECK + 0.14) + e[1] * 0.8)
-        p1 = (c['x'] + 0.2, p0[1] + e[0] * 0.55, p0[2] + e[1] * 0.55)
-        p2 = (c['x'] * 0.7 + 0.1, -0.1, -2.1)
-        p3 = (2.5, -1.1, -1.95)
+        p0 = (c['x'] + 0.2, d[0] * (DECK + 0.14) - e[0] * 0.82, d[1] * (DECK + 0.14) - e[1] * 0.82)
+        p1 = (c['x'] + 0.2, p0[1] - e[0] * 0.5, p0[2] - e[1] * 0.5)
+        p2 = (c['x'] * 0.8 + 0.3, 0.3, -2.75)
+        p3 = (2.5, -1.1, -2.2)
         w(2, f'tube header{i} pts={f(*p0)} {f(*p1)} {f(*p2)} {f(*p3)} r=0.11 color=#7d6a58 mat=brushed')
         w(2, f'box flange{i} size=0.42,0.08,0.34 at={f(*p0)} rot={f(a + 90, 0, 0)} round=0 color=#6e6256 mat=cast')
-    w(2, 'tube collector pts=2.4,-1.1,-1.95 3.0,-1.25,-1.95 4.3,-1.3,-1.95 r=0.2 color=#8a7866 mat=brushed')
+    w(2, 'tube collector pts=2.4,-1.1,-2.2 3.0,-1.25,-2.2 4.3,-1.3,-2.2 r=0.2 color=#8a7866 mat=brushed')
     # Intake on top of the V.
     w(2, 'group intake color=#a8acb2 mat=cast')
     w(3, f'loft plenum sections=-2.2,0.5,0.5 -1,0.7,0.62 1,0.7,0.62 2.2,0.5,0.5 axis=x at=0,3.25,0')
