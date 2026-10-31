@@ -135,19 +135,23 @@ export function buildParts(model, errors) {
     const { cmd, kv } = node;
     const start = parts.length;
     if (node.gearset) parts.gearsets.set(node.args[0], node.gearset);
-    const inh = { kit: node.kit || ctx.kit, color: kv.color ?? ctx.color, mat: kv.mat ?? ctx.mat, label: ctx.label, group: ctx.group, shell: kv.shell ?? ctx.shell, path: ctx.path ?? [] };
+    const inh = { kit: node.kit || ctx.kit, color: kv.color ?? ctx.color, mat: kv.mat ?? ctx.mat, label: ctx.label, group: ctx.group, shell: kv.shell ?? ctx.shell, path: ctx.path ?? [], copy: ctx.copy };
     if (cmd === 'group' || cmd === 'repeat' || cmd === 'ring' || cmd === 'mirror') {
       const id = kv.id ?? (cmd === 'group' ? node.args[0] : null);
       if (kv.label) { inh.label = kv.label; inh.group = id ?? `g${node.line}`; }
       const base = mul(M, nodeMatrix(kv));
-      if (id) { note(id, base, kv.axis); inh.path = [...inh.path, id]; }
+      // A group inside a repeat or mirror also has an address per copy: wheel#2 or wheel#1.2.
+      const each_id = id && ctx.copy ? `${id}#${ctx.copy}` : null;
+      if (id) { note(id, base, kv.axis); inh.path = [...inh.path, id, ...(each_id ? [each_id] : [])]; }
+      if (each_id) note(each_id, base, kv.axis);
       // Every copy of a mirror or repeat has the same ids. Each copy sees only itself.
       let prev = null;
       const each = (m, i) => {
         if (prev) for (const id of prev) boxes.delete(id);
         const scope = new Set();
         scopes.push(scope);
-        for (const k of node.kids) walk(k, m, inh, top ?? `${node.line}:${i}`);
+        const copy = cmd === 'group' ? ctx.copy : `${ctx.copy ? ctx.copy + '.' : ''}${i}`;
+        for (const k of node.kids) walk(k, m, { ...inh, copy }, top ?? `${node.line}:${i}`);
         scopes.pop();
         prev = scope;
       };
@@ -237,7 +241,7 @@ export function buildParts(model, errors) {
     { const b = boundsOf([parts.at(-1)]); for (const pid of parts.at(-1).path) grow(pid, b); }
     if (kv.on) attach(node, start, M);
   };
-  for (const k of expandKits(model.kids.filter((c) => c.cmd !== 'anim'))) walk(k, IDENT, {}, null);
+  for (const k of expandKits(model.kids.filter((c) => c.cmd !== 'anim' && c.cmd !== 'mech'))) walk(k, IDENT, {}, null);
   applySurface(parts, parts.surface, hex, errors);
   markGround(parts);
   fixPivots(parts);

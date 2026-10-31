@@ -7,6 +7,7 @@
 // The final pose is the static picture, so one scene gives picture and film.
 import { nums } from './parse.mjs';
 import { poseMatrix, composeMatrix } from './raster.mjs';
+import { solve, masterAngle } from './mech.mjs';
 
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 const clamp = (t) => Math.max(0, Math.min(1, t));
@@ -52,8 +53,8 @@ export function checkTimeline(tl, parts, errors) {
   const known = new Set(parts.pivots.keys());
   for (const s of tl.steps) {
     for (const op of s.ops) {
-      if (!['move', 'osc', 'swing', 'spin', 'drive', 'show', 'hide', 'pulse', 'camera'].includes(op.cmd)) errors.push(`line ${op.line}: unknown action "${op.cmd}". Actions: move osc spin show hide pulse camera`);
-      else if (op.cmd === 'drive' ? !parts.gearsets.has(String(op.args[0]).split(/[._]/)[0]) && !parts.gearsets.has(op.args[0]) : op.cmd !== 'camera' && !known.has(op.args[0])) errors.push(`line ${op.line}: ${op.cmd}: no part "${op.args[0]}"`);
+      if (!['move', 'osc', 'swing', 'spin', 'drive', 'show', 'hide', 'pulse', 'camera', 'run'].includes(op.cmd)) errors.push(`line ${op.line}: unknown action "${op.cmd}". Actions: run move osc spin swing show hide pulse camera`);
+      else if (op.cmd === 'drive' ? !parts.gearsets.has(String(op.args[0]).split(/[._]/)[0]) && !parts.gearsets.has(op.args[0]) : op.cmd !== 'camera' && op.cmd !== 'run' && !known.has(op.args[0])) errors.push(`line ${op.line}: ${op.cmd}: no part "${op.args[0]}"`);
     }
   }
 }
@@ -70,7 +71,7 @@ export function pose(tl, parts, time) {
     const raw = clamp((time - s.start) / s.dur), e = ease(raw);
     for (const op of s.ops) {
       const id = op.args[0], k = op.kv;
-      if (op.cmd === 'camera') continue;
+      if (op.cmd === 'camera' || op.cmd === 'run') continue;
       const st = get(id);
       if (op.cmd === 'move') {
         if (k.from) { const f = nums(k.from); st.off = st.off.map((v, i) => v + f[i] * (1 - e)); }
@@ -113,15 +114,21 @@ export function pose(tl, parts, time) {
       }
     }
   }
+  if (tl.mech && !tl.angle) tl.angle = masterAngle(tl);
+  const solved = tl.mech ? solve(tl.mech, tl.angle(Math.min(time, tl.total))) : null;
+  // Outer groups act last: a wheel turns on its own axle and the train carries the wheel.
   const motion = (i) => {
     let m = null;
     for (const id of parts[i].path) {
       const st = state.get(id);
-      if (!st) continue;
-      if (st.hidden) return 'hidden';
-      const piv = st.pivot ?? parts.pivots.get(id) ?? [0, 0, 0];
-      const p = poseMatrix(st.off, piv, st.axis ?? [0, 1, 0], st.ang, st.scale);
-      m = m ? composeMatrix(p, m) : p;
+      const q = solved?.get(id);
+      if (st?.hidden) return 'hidden';
+      if (st) {
+        const piv = st.pivot ?? parts.pivots.get(id) ?? [0, 0, 0];
+        const p = poseMatrix(st.off, piv, st.axis ?? [0, 1, 0], st.ang, st.scale);
+        m = m ? composeMatrix(m, p) : p;
+      }
+      if (q) m = m ? composeMatrix(m, q) : q;
     }
     return m;
   };

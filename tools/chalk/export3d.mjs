@@ -7,8 +7,10 @@ import { pathToFileURL } from 'node:url';
 import { parse } from './parse.mjs';
 import { buildParts, smoothNormals, bestView } from './raster.mjs';
 import { timeline, checkTimeline, pose, cameraAt, caption } from './anim.mjs';
+import { readMech } from './mech.mjs';
 
 const FPS = 30;
+const SUB = 4; // Poses per frame, for motion blur.
 const findModel = (n) => (n.cmd === 'model' ? n : n.kids?.map(findModel).find(Boolean));
 const b64 = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength).toString('base64');
 
@@ -40,11 +42,16 @@ export function exportScene(src) {
   if (model.kv.explode) exploded(parts, Number(model.kv.explode));
   const tl = timeline(model);
   if (tl) checkTimeline(tl, parts, errors);
+  const mech = readMech(model, parts, errors);
+  if (tl) tl.mech = mech;
+  // fit=id: the camera frames this group. A long track does not make the train small.
+  if (model.kv.fit) for (const p of parts) if (!p.path.includes(model.kv.fit)) p.ground = true;
   const auto = !model.kv.view;
   const base = auto ? bestView(parts, [35, 22]) : model.kv.view.split(',').map(Number);
   const animated = new Set();
   if (tl) for (const s of tl.steps) for (const op of s.ops) if (op.cmd !== 'camera') animated.add(op.args[0]);
   if (tl) for (const s of tl.steps) for (const op of s.ops) if (op.cmd === 'drive') { const g = parts.gearsets.get(String(op.args[0]).split(/[._]/)[0]) ?? parts.gearsets.get(op.args[0]); if (g) { animated.add(g.a); animated.add(g.b); } }
+  if (tl && mech) for (const id of mech.joints.keys()) animated.add(id);
   const motionKey = (p) => (p.link ? `link:${p.id}` : p.path.filter((id) => animated.has(id)).join('/'));
   const groups = new Map();
   parts.forEach((p, i) => {
@@ -58,8 +65,8 @@ export function exportScene(src) {
   let lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
   const grow = (x, y, z) => { lo = [Math.min(lo[0], x), Math.min(lo[1], y), Math.min(lo[2], z)]; hi = [Math.max(hi[0], x), Math.max(hi[1], y), Math.max(hi[2], z)]; };
   const frames = tl ? Math.max(1, Math.ceil((tl.total + 1.2) * FPS)) : 1;
-  const out = { fps: FPS, frames, title: parsed.kids?.find((c) => c.cmd === 'title')?.args?.[0] ?? '', cut: model.kv.cut ?? null, groups: [], captions: [], camera: [], tris: 0, parts: parts.length };
-  const poses = tl ? Array.from({ length: frames }, (_, f) => pose(tl, parts, f / FPS)) : [null];
+  const out = { fps: FPS, frames, title: parsed.kids?.find((c) => c.cmd === 'title')?.args?.[0] ?? '', cut: model.kv.cut ?? null, cap: model.kv.cap ?? null, sub: SUB, groups: [], captions: [], camera: [], tris: 0, parts: parts.length };
+  const poses = tl ? Array.from({ length: frames * SUB }, (_, f) => pose(tl, parts, f / FPS / SUB)) : [null];
   for (const g of groups.values()) {
     const rec = { key: g.key, meshes: [], matrices: null, glow: null };
     for (const m of g.meshes.values()) {
@@ -74,8 +81,8 @@ export function exportScene(src) {
       rec.meshes.push({ color: m.color, mat: m.mat, name: m.name, shell: m.shell, pos: b64(pos), nor: b64(nor), ...(m.decal ? { decal: m.decal, uv: b64(m.uv) } : {}) });
     }
     if (tl && g.key) {
-      const mats = new Float32Array(frames * 13);
-      const glow = new Float32Array(frames);
+      const mats = new Float32Array(poses.length * 13);
+      const glow = new Float32Array(poses.length);
       poses.forEach((P, f) => {
         const X = P.xf(g.rep);
         if (X === 'hidden') { mats[f * 13 + 12] = 0; return; }
@@ -89,7 +96,7 @@ export function exportScene(src) {
     out.groups.push(rec);
   }
   // The frame holds every pose. Ground parts do not count.
-  for (const P of tl ? [poses[0], poses[frames >> 1], poses[frames - 1]] : [null]) {
+  for (const P of tl ? [poses[0], poses[poses.length >> 1], poses.at(-1)] : [null]) {
     parts.forEach((p, i) => {
       if (p.ground || p.decal) return;
       const X = P ? P.xf(i) : null;
@@ -105,7 +112,7 @@ export function exportScene(src) {
   // Points for a tight camera fit.
   const fit = [];
   const every = Math.max(1, Math.round(parts.reduce((t, p) => t + (p.ground || p.decal ? 0 : p.tris.length / 3), 0) / 4000));
-  for (const P of tl ? [poses[0], poses[frames >> 1], poses[frames - 1]] : [null]) {
+  for (const P of tl ? [poses[0], poses[poses.length >> 1], poses.at(-1)] : [null]) {
     parts.forEach((p, i) => {
       if (p.ground || p.decal) return;
       const X = P ? P.xf(i) : null;
@@ -121,7 +128,8 @@ export function exportScene(src) {
   const centre = lo.map((v, c) => (v + hi[c]) / 2);
   out.floor = Math.min(lo[1], ...parts.flatMap((p) => { let m = 1e9; for (let i = 1; i < p.tris.length; i += 3) m = Math.min(m, p.tris[i]); return [m]; }));
   if (tl) {
-    poses.forEach((P, f) => {
+    for (let f = 0; f < frames; f++) {
+      const P = poses[f * SUB];
       const t = f / FPS;
       const centerOf = (id) => {
         if (id && parts.pivots.has(id)) {
@@ -136,7 +144,7 @@ export function exportScene(src) {
       const c = cameraAt(tl, base, Math.min(t, tl.total), centerOf);
       out.camera.push([c.yaw, c.pitch, c.zoom, ...(c.focus ?? centre)]);
       out.captions.push(caption(tl, t));
-    });
+    }
   } else {
     out.camera.push([base[0], base[1], 1, ...centre]);
     out.captions.push('');

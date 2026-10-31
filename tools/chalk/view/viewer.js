@@ -57,7 +57,7 @@ const outMat = new THREE.ShaderMaterial({ uniforms: { t: { value: null }, k: { v
 function targets() {
   rtA?.dispose(); rtSum?.dispose();
   const opt = { type: THREE.HalfFloatType, format: THREE.RGBAFormat, colorSpace: THREE.LinearSRGBColorSpace };
-  rtA = new THREE.WebGLRenderTarget(size[0], size[1], { ...opt, samples: 4 });
+  rtA = new THREE.WebGLRenderTarget(size[0], size[1], { ...opt, samples: 4, stencilBuffer: true });
   rtSum = new THREE.WebGLRenderTarget(size[0], size[1], { ...opt, type: THREE.FloatType, depthBuffer: false });
 }
 
@@ -100,6 +100,34 @@ function backdrop(lo, hi) {
   return m;
 }
 
+// cut=z>0 or a free plane cut=nx,ny,nz,d. Everything with n.p > d goes away.
+function cutPlane(text) {
+  if (text.includes(',')) { const [a, b, c, k] = text.split(',').map(Number), n = new THREE.Vector3(a, b, c), l = n.length(); return new THREE.Plane(n.multiplyScalar(-1 / l), k / l); }
+  const a = 'xyz'.indexOf(text[0]), sign = text[1] === '>' ? -1 : 1, n = new THREE.Vector3();
+  n.setComponent(a, sign);
+  return new THREE.Plane(n, -sign * Number(text.slice(2)));
+}
+
+// Solid cut faces: the stencil counts how many closed bodies a pixel of the plane is in.
+function stencil(geo, cut) {
+  const base = { depthWrite: false, depthTest: false, colorWrite: false, stencilWrite: true, stencilFunc: THREE.AlwaysStencilFunc, clippingPlanes: [cut] };
+  return [[THREE.BackSide, THREE.IncrementWrapStencilOp], [THREE.FrontSide, THREE.DecrementWrapStencilOp]].map(([side, op]) => {
+    const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ ...base, side, stencilFail: op, stencilZFail: op, stencilZPass: op }));
+    mesh.renderOrder = 1;
+    return mesh;
+  });
+}
+
+function capPlane(cut, color) {
+  const mat = new THREE.MeshPhysicalMaterial({ color: new THREE.Color(color), roughness: 0.55, clearcoat: 0.4, side: THREE.DoubleSide, stencilWrite: true, stencilRef: 0, stencilFunc: THREE.NotEqualStencilFunc, stencilFail: THREE.ReplaceStencilOp, stencilZFail: THREE.ReplaceStencilOp, stencilZPass: THREE.ReplaceStencilOp });
+  const cap = new THREE.Mesh(new THREE.PlaneGeometry(radius * 8, radius * 8), mat);
+  cut.coplanarPoint(cap.position);
+  cap.lookAt(cap.position.clone().sub(cut.normal));
+  cap.receiveShadow = true; cap.renderOrder = 1.1;
+  cap.onAfterRender = (r) => r.clearStencil();
+  return cap;
+}
+
 export function load(d) {
   data = d;
   d.fit = float32(d.fit);
@@ -107,7 +135,7 @@ export function load(d) {
   centre.set((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2);
   radius = Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2 || 1;
   camera.near = radius * 0.05; camera.far = radius * 80;
-  const cut = d.cut ? (() => { const a = 'xyz'.indexOf(d.cut[0]), sign = d.cut[1] === '>' ? -1 : 1, n = new THREE.Vector3(); n.setComponent(a, sign); return new THREE.Plane(n, -sign * Number(d.cut.slice(2))); })() : null;
+  const cut = d.cut ? cutPlane(d.cut) : null;
   if (cut) renderer.localClippingEnabled = true;
   groups = d.groups.map((g) => {
     const o = new THREE.Group(); o.matrixAutoUpdate = false;
@@ -118,8 +146,9 @@ export function load(d) {
       geo.setAttribute('normal', new THREE.BufferAttribute(float32(m.nor), 3));
       if (m.decal) geo.setAttribute('uv', new THREE.BufferAttribute(float32(m.uv), 2));
       const mat = m.decal ? decalMat(m.decal) : material(m);
-      if (cut && (m.shell || !anyShell)) mat.clippingPlanes = [cut];
+      if (cut && (m.shell || !anyShell)) { mat.clippingPlanes = [cut]; mat.clipShadows = true; }
       const mesh = new THREE.Mesh(geo, mat);
+      if (cut && d.cap && m.shell) o.add(...stencil(geo, cut));
       mesh.castShadow = !m.decal && pickMat(m) !== 'glass'; mesh.receiveShadow = true;
       if (pickMat(m) === 'glass') mesh.renderOrder = 2; if (m.decal) mesh.renderOrder = 1;
       o.add(mesh);
@@ -128,6 +157,7 @@ export function load(d) {
     scene.add(o);
     return { o, mats, base: mats.map((m) => m.emissive.clone()), M: g.matrices ? float32(g.matrices) : null, glow: g.glow ? float32(g.glow) : null };
   });
+  if (cut && d.cap) scene.add(capPlane(cut, d.cap));
   floorMesh = backdrop(lo, hi);
   floorMesh.position.y = d.floor - radius * 0.002;
   scene.add(floorMesh);
@@ -141,18 +171,26 @@ export function setSize(w, h) { size = [w, h]; renderer.setPixelRatio(1); render
 
 export function setFrame(f) {
   frame = Math.min(data.frames - 1, Math.max(0, f));
-  for (const g of groups) {
-    if (!g.M) continue;
-    const o = frame * 13, m = g.M;
-    g.o.visible = m[o + 12] > 0.5;
-    g.o.matrix.set(m[o], m[o + 3], m[o + 6], m[o + 9], m[o + 1], m[o + 4], m[o + 7], m[o + 10], m[o + 2], m[o + 5], m[o + 8], m[o + 11], 0, 0, 0, 1);
-    const k = g.glow[frame];
-    g.mats.forEach((mat, i) => { mat.emissive.copy(g.base[i]).lerp(new THREE.Color(1, 0.62, 0.12), k); mat.emissiveIntensity = k ? 0.9 : mat.emissiveIntensity; });
-  }
-  scene.updateMatrixWorld(true);
+  moment(frame);
   const c = user ?? data.camera[Math.min(frame, data.camera.length - 1)];
   aim(c);
   return data.captions[Math.min(frame, data.captions.length - 1)] ?? '';
+}
+
+// Parts at a moment between two frames. Poses are stored four times per frame.
+function moment(t) {
+  const sub = data.sub ?? 1, last = data.frames * sub - 1;
+  const x = Math.min(last, t * sub), a = Math.floor(x), b = Math.min(last, a + 1), w = x - a;
+  for (const g of groups) {
+    if (!g.M) continue;
+    const m = g.M, o = a * 13, q = b * 13;
+    const v = (i) => m[o + i] + (m[q + i] - m[o + i]) * w;
+    g.o.visible = m[o + 12] > 0.5;
+    g.o.matrix.set(v(0), v(3), v(6), v(9), v(1), v(4), v(7), v(10), v(2), v(5), v(8), v(11), 0, 0, 0, 1);
+    const k = g.glow[a];
+    g.mats.forEach((mat, i) => { mat.emissive.copy(g.base[i]).lerp(new THREE.Color(1, 0.62, 0.12), k); mat.emissiveIntensity = k ? 0.9 : mat.emissiveIntensity; });
+  }
+  scene.updateMatrixWorld(true);
 }
 
 function aim([yaw, pitch, zoom, fx, fy, fz]) {
@@ -204,6 +242,8 @@ export function render(samples = 32) {
     sun.target.position.copy(centre); sun.target.updateMatrixWorld();
     sun.intensity = power;
     camera.setViewOffset(size[0], size[1], halton(i + 1, 7) - 0.5, w - 0.5, size[0], size[1]);
+    // Half a frame of shutter gives motion blur on rotors and fast parts.
+    if (data.frames > 1) moment(frame + 0.5 * (i + 0.5) / samples);
     renderer.setRenderTarget(rtA);
     renderer.setClearColor(0x9ea0a6, 1);
     renderer.clear();
