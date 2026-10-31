@@ -59,8 +59,11 @@ function revolve(profile, seg) {
       m.tri([0, y, 0], ring(y, r, a0), ring(y, r, a1));
     }
   };
-  capProfile(...profile[0]);
-  capProfile(...profile.at(-1));
+  // A closed profile is a ring. It has no end faces, the hole stays open.
+  const first = profile[0], end = profile.at(-1);
+  const closed = first[0] === end[0] && first[1] === end[1];
+  if (!closed) capProfile(...profile[0]);
+  if (!closed) capProfile(...profile.at(-1));
   return m;
 }
 

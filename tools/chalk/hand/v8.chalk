@@ -1,0 +1,689 @@
+canvas dark
+title "V8 Cross-Plane, 90 Grad"
+model v8 1100 620 keep=1 view=26,12 cut=0,-0.7071,0.7071,0.001 cap=#a8321f
+  group engine
+    group crank
+      cyl nose r=0.2 h=1.1 axis=x at=-2.95,0,0 color=#a9adb4 mat=chrome
+      cyl tail r=0.24 h=0.5 axis=x at=2.75,0,0 color=#a9adb4 mat=chrome
+      cyl main0 r=0.24 h=0.3 axis=x at=-2.4,0,0 color=#c9ccd2 mat=chrome
+      cyl main1 r=0.24 h=0.3 axis=x at=-1.2,0,0 color=#c9ccd2 mat=chrome
+      cyl main2 r=0.24 h=0.3 axis=x at=0,0,0 color=#c9ccd2 mat=chrome
+      cyl main3 r=0.24 h=0.3 axis=x at=1.2,0,0 color=#c9ccd2 mat=chrome
+      cyl main4 r=0.24 h=0.3 axis=x at=2.4,0,0 color=#c9ccd2 mat=chrome
+      cyl pin0 r=0.17 h=0.5 axis=x at=-1.8,0.43,0 color=#d6d9de mat=chrome
+      group web0a at=-2.11,0,0 rot=0,0,0
+        plate web0ap pts=-0.636,-0.3974 0.3,-0.12 0.24,0.215 0.22,0.43 0.2067,0.5052 0.1685,0.5714 0.11,0.6205 0.0382,0.6467 -0.0382,0.6467 -0.11,0.6205 -0.1685,0.5714 -0.2067,0.5052 -0.22,0.43 -0.24,0.215 -0.3,-0.12 0.636,-0.3974 0.5314,-0.5293 0.3999,-0.6345 0.2483,-0.7077 0.0842,-0.7453 -0.0842,-0.7453 -0.2483,-0.7077 -0.3999,-0.6345 -0.5314,-0.5293 h=0.12 rot=0,90,0 color=#6f7277 mat=cast
+        cyl web0ac r=0.05 h=0.13 axis=x at=0,-0.52,0.3 color=#2a2c30 mat=metal
+        cyl web0ad r=0.05 h=0.13 axis=x at=0,-0.52,-0.3 color=#2a2c30 mat=metal
+      group web0b at=-1.49,0,0 rot=0,0,0
+        plate web0bp pts=-0.636,-0.3974 0.3,-0.12 0.24,0.215 0.22,0.43 0.2067,0.5052 0.1685,0.5714 0.11,0.6205 0.0382,0.6467 -0.0382,0.6467 -0.11,0.6205 -0.1685,0.5714 -0.2067,0.5052 -0.22,0.43 -0.24,0.215 -0.3,-0.12 0.636,-0.3974 0.5314,-0.5293 0.3999,-0.6345 0.2483,-0.7077 0.0842,-0.7453 -0.0842,-0.7453 -0.2483,-0.7077 -0.3999,-0.6345 -0.5314,-0.5293 h=0.12 rot=0,90,0 color=#6f7277 mat=cast
+        cyl web0bc r=0.05 h=0.13 axis=x at=0,-0.52,0.3 color=#2a2c30 mat=metal
+        cyl web0bd r=0.05 h=0.13 axis=x at=0,-0.52,-0.3 color=#2a2c30 mat=metal
+      cyl pin1 r=0.17 h=0.5 axis=x at=-0.6,0,0.43 color=#d6d9de mat=chrome
+      group web1a at=-0.91,0,0 rot=90,0,0
+        plate web1ap pts=-0.636,-0.3974 0.3,-0.12 0.24,0.215 0.22,0.43 0.2067,0.5052 0.1685,0.5714 0.11,0.6205 0.0382,0.6467 -0.0382,0.6467 -0.11,0.6205 -0.1685,0.5714 -0.2067,0.5052 -0.22,0.43 -0.24,0.215 -0.3,-0.12 0.636,-0.3974 0.5314,-0.5293 0.3999,-0.6345 0.2483,-0.7077 0.0842,-0.7453 -0.0842,-0.7453 -0.2483,-0.7077 -0.3999,-0.6345 -0.5314,-0.5293 h=0.12 rot=0,90,0 color=#6f7277 mat=cast
+        cyl web1ac r=0.05 h=0.13 axis=x at=0,-0.52,0.3 color=#2a2c30 mat=metal
+        cyl web1ad r=0.05 h=0.13 axis=x at=0,-0.52,-0.3 color=#2a2c30 mat=metal
+      group web1b at=-0.29,0,0 rot=90,0,0
+        plate web1bp pts=-0.636,-0.3974 0.3,-0.12 0.24,0.215 0.22,0.43 0.2067,0.5052 0.1685,0.5714 0.11,0.6205 0.0382,0.6467 -0.0382,0.6467 -0.11,0.6205 -0.1685,0.5714 -0.2067,0.5052 -0.22,0.43 -0.24,0.215 -0.3,-0.12 0.636,-0.3974 0.5314,-0.5293 0.3999,-0.6345 0.2483,-0.7077 0.0842,-0.7453 -0.0842,-0.7453 -0.2483,-0.7077 -0.3999,-0.6345 -0.5314,-0.5293 h=0.12 rot=0,90,0 color=#6f7277 mat=cast
+        cyl web1bc r=0.05 h=0.13 axis=x at=0,-0.52,0.3 color=#2a2c30 mat=metal
+        cyl web1bd r=0.05 h=0.13 axis=x at=0,-0.52,-0.3 color=#2a2c30 mat=metal
+      cyl pin2 r=0.17 h=0.5 axis=x at=0.6,0,-0.43 color=#d6d9de mat=chrome
+      group web2a at=0.29,0,0 rot=270,0,0
+        plate web2ap pts=-0.636,-0.3974 0.3,-0.12 0.24,0.215 0.22,0.43 0.2067,0.5052 0.1685,0.5714 0.11,0.6205 0.0382,0.6467 -0.0382,0.6467 -0.11,0.6205 -0.1685,0.5714 -0.2067,0.5052 -0.22,0.43 -0.24,0.215 -0.3,-0.12 0.636,-0.3974 0.5314,-0.5293 0.3999,-0.6345 0.2483,-0.7077 0.0842,-0.7453 -0.0842,-0.7453 -0.2483,-0.7077 -0.3999,-0.6345 -0.5314,-0.5293 h=0.12 rot=0,90,0 color=#6f7277 mat=cast
+        cyl web2ac r=0.05 h=0.13 axis=x at=0,-0.52,0.3 color=#2a2c30 mat=metal
+        cyl web2ad r=0.05 h=0.13 axis=x at=0,-0.52,-0.3 color=#2a2c30 mat=metal
+      group web2b at=0.91,0,0 rot=270,0,0
+        plate web2bp pts=-0.636,-0.3974 0.3,-0.12 0.24,0.215 0.22,0.43 0.2067,0.5052 0.1685,0.5714 0.11,0.6205 0.0382,0.6467 -0.0382,0.6467 -0.11,0.6205 -0.1685,0.5714 -0.2067,0.5052 -0.22,0.43 -0.24,0.215 -0.3,-0.12 0.636,-0.3974 0.5314,-0.5293 0.3999,-0.6345 0.2483,-0.7077 0.0842,-0.7453 -0.0842,-0.7453 -0.2483,-0.7077 -0.3999,-0.6345 -0.5314,-0.5293 h=0.12 rot=0,90,0 color=#6f7277 mat=cast
+        cyl web2bc r=0.05 h=0.13 axis=x at=0,-0.52,0.3 color=#2a2c30 mat=metal
+        cyl web2bd r=0.05 h=0.13 axis=x at=0,-0.52,-0.3 color=#2a2c30 mat=metal
+      cyl pin3 r=0.17 h=0.5 axis=x at=1.8,-0.43,0 color=#d6d9de mat=chrome
+      group web3a at=1.49,0,0 rot=180,0,0
+        plate web3ap pts=-0.636,-0.3974 0.3,-0.12 0.24,0.215 0.22,0.43 0.2067,0.5052 0.1685,0.5714 0.11,0.6205 0.0382,0.6467 -0.0382,0.6467 -0.11,0.6205 -0.1685,0.5714 -0.2067,0.5052 -0.22,0.43 -0.24,0.215 -0.3,-0.12 0.636,-0.3974 0.5314,-0.5293 0.3999,-0.6345 0.2483,-0.7077 0.0842,-0.7453 -0.0842,-0.7453 -0.2483,-0.7077 -0.3999,-0.6345 -0.5314,-0.5293 h=0.12 rot=0,90,0 color=#6f7277 mat=cast
+        cyl web3ac r=0.05 h=0.13 axis=x at=0,-0.52,0.3 color=#2a2c30 mat=metal
+        cyl web3ad r=0.05 h=0.13 axis=x at=0,-0.52,-0.3 color=#2a2c30 mat=metal
+      group web3b at=2.11,0,0 rot=180,0,0
+        plate web3bp pts=-0.636,-0.3974 0.3,-0.12 0.24,0.215 0.22,0.43 0.2067,0.5052 0.1685,0.5714 0.11,0.6205 0.0382,0.6467 -0.0382,0.6467 -0.11,0.6205 -0.1685,0.5714 -0.2067,0.5052 -0.22,0.43 -0.24,0.215 -0.3,-0.12 0.636,-0.3974 0.5314,-0.5293 0.3999,-0.6345 0.2483,-0.7077 0.0842,-0.7453 -0.0842,-0.7453 -0.2483,-0.7077 -0.3999,-0.6345 -0.5314,-0.5293 h=0.12 rot=0,90,0 color=#6f7277 mat=cast
+        cyl web3bc r=0.05 h=0.13 axis=x at=0,-0.52,0.3 color=#2a2c30 mat=metal
+        cyl web3bd r=0.05 h=0.13 axis=x at=0,-0.52,-0.3 color=#2a2c30 mat=metal
+      lathe pulley pts=0,0.2 0,0.62 0.06,0.66 0.1,0.6 0.14,0.66 0.18,0.6 0.22,0.66 0.26,0.6 0.3,0.66 0.36,0.62 0.36,0.2 axis=x at=-3.5,0,0 color=#2c2e33 mat=cast
+      cyl pulleybolt r=0.09 h=0.1 axis=x at=-3.52,0,0 color=#c4c7cc mat=chrome
+      gear gear_crank teeth=24 r=0.3667 h=0.14 axis=x at=-2.72,0,0 color=#b9b090 mat=brushed
+      group flywheel at=3.1,0,0
+        cyl fw r=1.18 h=0.16 axis=x color=#6c6f75 mat=cast
+        gear ring teeth=96 r=1.27 h=0.1 axis=x color=#8d9096 mat=metal
+        ring 8 r=0.4 axis=x at=0.1,0,0
+          cyl fwb r=0.05 h=0.06 axis=x color=#d0d3d8 mat=chrome
+        ring 6 r=0.82 axis=x
+          cyl fwh r=0.12 h=0.17 axis=x color=#3a3c41 mat=cast
+    group piston_A0 at=-1.92,1.2897,1.2897 rot=45,0,0
+      lathe piston_A0b pts=-0.3,0.42 -0.3,0.445 -0.05,0.452 0.1,0.452 0.1,0.44 0.12,0.44 0.12,0.452 0.16,0.452 0.16,0.44 0.18,0.44 0.18,0.452 0.22,0.452 0.22,0.44 0.24,0.44 0.24,0.452 0.33,0.452 0.345,0.44 0.345,0.3 0.33,0.2 0.33,0 axis=y color=#c7cbd1 mat=brushed
+      cyl piston_A0r0 r=0.456 h=0.018 axis=y at=0,0.13,0 color=#35373c mat=metal
+      cyl piston_A0r1 r=0.456 h=0.018 axis=y at=0,0.17,0 color=#35373c mat=metal
+      cyl piston_A0r2 r=0.456 h=0.018 axis=y at=0,0.23,0 color=#35373c mat=metal
+      cyl piston_A0w r=0.1 h=0.74 axis=x color=#e2e4e8 mat=chrome
+      cyl piston_A0c r=0.2 h=0.14 axis=x at=-0.27,0,0 color=#aeb2b8 mat=brushed
+      cyl piston_A0e r=0.2 h=0.14 axis=x at=0.27,0,0 color=#aeb2b8 mat=brushed
+    group rod_A0 at=-1.92,0.43,0 rot=56.3128,0,0
+      plate rod_A0s pts=0.075,1.42 0.13,0.26 0.26,0.12 0.26,-0.02 -0.26,-0.02 -0.26,0.12 -0.13,0.26 -0.075,1.42 h=0.12 rot=0,90,0 color=#8d9198 mat=cast
+      plate rod_A0i pts=0.04,1.350 0.08,0.32 -0.08,0.32 -0.04,1.350 h=0.2 rot=0,90,0 color=#7a7e85 mat=cast
+      cyl rod_A0big r=0.27 hole=0.17 h=0.2 axis=x color=#969aa1 mat=cast
+      cyl rod_A0brg r=0.178 hole=0.165 h=0.21 axis=x color=#c8873f mat=metal
+      cyl rod_A0cap r=0.05 h=0.12 at=0,-0.3,0 axis=z color=#8d9198 mat=cast
+      cyl rod_A0small r=0.15 hole=0.1 h=0.2 axis=x at=0,1.55,0 color=#969aa1 mat=cast
+      cyl rod_A0b0 r=0.035 h=0.42 at=0,-0.1,-0.235 color=#ddd mat=chrome
+      cyl rod_A0b2 r=0.035 h=0.42 at=0,-0.1,0.235 color=#ddd mat=chrome
+    group piston_A1 at=-0.72,1.2897,1.2897 rot=45,0,0
+      lathe piston_A1b pts=-0.3,0.42 -0.3,0.445 -0.05,0.452 0.1,0.452 0.1,0.44 0.12,0.44 0.12,0.452 0.16,0.452 0.16,0.44 0.18,0.44 0.18,0.452 0.22,0.452 0.22,0.44 0.24,0.44 0.24,0.452 0.33,0.452 0.345,0.44 0.345,0.3 0.33,0.2 0.33,0 axis=y color=#c7cbd1 mat=brushed
+      cyl piston_A1r0 r=0.456 h=0.018 axis=y at=0,0.13,0 color=#35373c mat=metal
+      cyl piston_A1r1 r=0.456 h=0.018 axis=y at=0,0.17,0 color=#35373c mat=metal
+      cyl piston_A1r2 r=0.456 h=0.018 axis=y at=0,0.23,0 color=#35373c mat=metal
+      cyl piston_A1w r=0.1 h=0.74 axis=x color=#e2e4e8 mat=chrome
+      cyl piston_A1c r=0.2 h=0.14 axis=x at=-0.27,0,0 color=#aeb2b8 mat=brushed
+      cyl piston_A1e r=0.2 h=0.14 axis=x at=0.27,0,0 color=#aeb2b8 mat=brushed
+    group rod_A1 at=-0.72,0,0.43 rot=33.6872,0,0
+      plate rod_A1s pts=0.075,1.42 0.13,0.26 0.26,0.12 0.26,-0.02 -0.26,-0.02 -0.26,0.12 -0.13,0.26 -0.075,1.42 h=0.12 rot=0,90,0 color=#8d9198 mat=cast
+      plate rod_A1i pts=0.04,1.350 0.08,0.32 -0.08,0.32 -0.04,1.350 h=0.2 rot=0,90,0 color=#7a7e85 mat=cast
+      cyl rod_A1big r=0.27 hole=0.17 h=0.2 axis=x color=#969aa1 mat=cast
+      cyl rod_A1brg r=0.178 hole=0.165 h=0.21 axis=x color=#c8873f mat=metal
+      cyl rod_A1cap r=0.05 h=0.12 at=0,-0.3,0 axis=z color=#8d9198 mat=cast
+      cyl rod_A1small r=0.15 hole=0.1 h=0.2 axis=x at=0,1.55,0 color=#969aa1 mat=cast
+      cyl rod_A1b0 r=0.035 h=0.42 at=0,-0.1,-0.235 color=#ddd mat=chrome
+      cyl rod_A1b2 r=0.035 h=0.42 at=0,-0.1,0.235 color=#ddd mat=chrome
+    group piston_A2 at=0.48,0.8597,0.8597 rot=45,0,0
+      lathe piston_A2b pts=-0.3,0.42 -0.3,0.445 -0.05,0.452 0.1,0.452 0.1,0.44 0.12,0.44 0.12,0.452 0.16,0.452 0.16,0.44 0.18,0.44 0.18,0.452 0.22,0.452 0.22,0.44 0.24,0.44 0.24,0.452 0.33,0.452 0.345,0.44 0.345,0.3 0.33,0.2 0.33,0 axis=y color=#c7cbd1 mat=brushed
+      cyl piston_A2r0 r=0.456 h=0.018 axis=y at=0,0.13,0 color=#35373c mat=metal
+      cyl piston_A2r1 r=0.456 h=0.018 axis=y at=0,0.17,0 color=#35373c mat=metal
+      cyl piston_A2r2 r=0.456 h=0.018 axis=y at=0,0.23,0 color=#35373c mat=metal
+      cyl piston_A2w r=0.1 h=0.74 axis=x color=#e2e4e8 mat=chrome
+      cyl piston_A2c r=0.2 h=0.14 axis=x at=-0.27,0,0 color=#aeb2b8 mat=brushed
+      cyl piston_A2e r=0.2 h=0.14 axis=x at=0.27,0,0 color=#aeb2b8 mat=brushed
+    group rod_A2 at=0.48,0,-0.43 rot=56.3128,0,0
+      plate rod_A2s pts=0.075,1.42 0.13,0.26 0.26,0.12 0.26,-0.02 -0.26,-0.02 -0.26,0.12 -0.13,0.26 -0.075,1.42 h=0.12 rot=0,90,0 color=#8d9198 mat=cast
+      plate rod_A2i pts=0.04,1.350 0.08,0.32 -0.08,0.32 -0.04,1.350 h=0.2 rot=0,90,0 color=#7a7e85 mat=cast
+      cyl rod_A2big r=0.27 hole=0.17 h=0.2 axis=x color=#969aa1 mat=cast
+      cyl rod_A2brg r=0.178 hole=0.165 h=0.21 axis=x color=#c8873f mat=metal
+      cyl rod_A2cap r=0.05 h=0.12 at=0,-0.3,0 axis=z color=#8d9198 mat=cast
+      cyl rod_A2small r=0.15 hole=0.1 h=0.2 axis=x at=0,1.55,0 color=#969aa1 mat=cast
+      cyl rod_A2b0 r=0.035 h=0.42 at=0,-0.1,-0.235 color=#ddd mat=chrome
+      cyl rod_A2b2 r=0.035 h=0.42 at=0,-0.1,0.235 color=#ddd mat=chrome
+    group piston_A3 at=1.68,0.8597,0.8597 rot=45,0,0
+      lathe piston_A3b pts=-0.3,0.42 -0.3,0.445 -0.05,0.452 0.1,0.452 0.1,0.44 0.12,0.44 0.12,0.452 0.16,0.452 0.16,0.44 0.18,0.44 0.18,0.452 0.22,0.452 0.22,0.44 0.24,0.44 0.24,0.452 0.33,0.452 0.345,0.44 0.345,0.3 0.33,0.2 0.33,0 axis=y color=#c7cbd1 mat=brushed
+      cyl piston_A3r0 r=0.456 h=0.018 axis=y at=0,0.13,0 color=#35373c mat=metal
+      cyl piston_A3r1 r=0.456 h=0.018 axis=y at=0,0.17,0 color=#35373c mat=metal
+      cyl piston_A3r2 r=0.456 h=0.018 axis=y at=0,0.23,0 color=#35373c mat=metal
+      cyl piston_A3w r=0.1 h=0.74 axis=x color=#e2e4e8 mat=chrome
+      cyl piston_A3c r=0.2 h=0.14 axis=x at=-0.27,0,0 color=#aeb2b8 mat=brushed
+      cyl piston_A3e r=0.2 h=0.14 axis=x at=0.27,0,0 color=#aeb2b8 mat=brushed
+    group rod_A3 at=1.68,-0.43,0 rot=33.6872,0,0
+      plate rod_A3s pts=0.075,1.42 0.13,0.26 0.26,0.12 0.26,-0.02 -0.26,-0.02 -0.26,0.12 -0.13,0.26 -0.075,1.42 h=0.12 rot=0,90,0 color=#8d9198 mat=cast
+      plate rod_A3i pts=0.04,1.350 0.08,0.32 -0.08,0.32 -0.04,1.350 h=0.2 rot=0,90,0 color=#7a7e85 mat=cast
+      cyl rod_A3big r=0.27 hole=0.17 h=0.2 axis=x color=#969aa1 mat=cast
+      cyl rod_A3brg r=0.178 hole=0.165 h=0.21 axis=x color=#c8873f mat=metal
+      cyl rod_A3cap r=0.05 h=0.12 at=0,-0.3,0 axis=z color=#8d9198 mat=cast
+      cyl rod_A3small r=0.15 hole=0.1 h=0.2 axis=x at=0,1.55,0 color=#969aa1 mat=cast
+      cyl rod_A3b0 r=0.035 h=0.42 at=0,-0.1,-0.235 color=#ddd mat=chrome
+      cyl rod_A3b2 r=0.035 h=0.42 at=0,-0.1,0.235 color=#ddd mat=chrome
+    group piston_B0 at=-1.68,1.2897,-1.2897 rot=-45,0,0
+      lathe piston_B0b pts=-0.3,0.42 -0.3,0.445 -0.05,0.452 0.1,0.452 0.1,0.44 0.12,0.44 0.12,0.452 0.16,0.452 0.16,0.44 0.18,0.44 0.18,0.452 0.22,0.452 0.22,0.44 0.24,0.44 0.24,0.452 0.33,0.452 0.345,0.44 0.345,0.3 0.33,0.2 0.33,0 axis=y color=#c7cbd1 mat=brushed
+      cyl piston_B0r0 r=0.456 h=0.018 axis=y at=0,0.13,0 color=#35373c mat=metal
+      cyl piston_B0r1 r=0.456 h=0.018 axis=y at=0,0.17,0 color=#35373c mat=metal
+      cyl piston_B0r2 r=0.456 h=0.018 axis=y at=0,0.23,0 color=#35373c mat=metal
+      cyl piston_B0w r=0.1 h=0.74 axis=x color=#e2e4e8 mat=chrome
+      cyl piston_B0c r=0.2 h=0.14 axis=x at=-0.27,0,0 color=#aeb2b8 mat=brushed
+      cyl piston_B0e r=0.2 h=0.14 axis=x at=0.27,0,0 color=#aeb2b8 mat=brushed
+    group rod_B0 at=-1.68,0.43,0 rot=-56.3128,0,0
+      plate rod_B0s pts=0.075,1.42 0.13,0.26 0.26,0.12 0.26,-0.02 -0.26,-0.02 -0.26,0.12 -0.13,0.26 -0.075,1.42 h=0.12 rot=0,90,0 color=#8d9198 mat=cast
+      plate rod_B0i pts=0.04,1.350 0.08,0.32 -0.08,0.32 -0.04,1.350 h=0.2 rot=0,90,0 color=#7a7e85 mat=cast
+      cyl rod_B0big r=0.27 hole=0.17 h=0.2 axis=x color=#969aa1 mat=cast
+      cyl rod_B0brg r=0.178 hole=0.165 h=0.21 axis=x color=#c8873f mat=metal
+      cyl rod_B0cap r=0.05 h=0.12 at=0,-0.3,0 axis=z color=#8d9198 mat=cast
+      cyl rod_B0small r=0.15 hole=0.1 h=0.2 axis=x at=0,1.55,0 color=#969aa1 mat=cast
+      cyl rod_B0b0 r=0.035 h=0.42 at=0,-0.1,-0.235 color=#ddd mat=chrome
+      cyl rod_B0b2 r=0.035 h=0.42 at=0,-0.1,0.235 color=#ddd mat=chrome
+    group piston_B1 at=-0.48,0.8597,-0.8597 rot=-45,0,0
+      lathe piston_B1b pts=-0.3,0.42 -0.3,0.445 -0.05,0.452 0.1,0.452 0.1,0.44 0.12,0.44 0.12,0.452 0.16,0.452 0.16,0.44 0.18,0.44 0.18,0.452 0.22,0.452 0.22,0.44 0.24,0.44 0.24,0.452 0.33,0.452 0.345,0.44 0.345,0.3 0.33,0.2 0.33,0 axis=y color=#c7cbd1 mat=brushed
+      cyl piston_B1r0 r=0.456 h=0.018 axis=y at=0,0.13,0 color=#35373c mat=metal
+      cyl piston_B1r1 r=0.456 h=0.018 axis=y at=0,0.17,0 color=#35373c mat=metal
+      cyl piston_B1r2 r=0.456 h=0.018 axis=y at=0,0.23,0 color=#35373c mat=metal
+      cyl piston_B1w r=0.1 h=0.74 axis=x color=#e2e4e8 mat=chrome
+      cyl piston_B1c r=0.2 h=0.14 axis=x at=-0.27,0,0 color=#aeb2b8 mat=brushed
+      cyl piston_B1e r=0.2 h=0.14 axis=x at=0.27,0,0 color=#aeb2b8 mat=brushed
+    group rod_B1 at=-0.48,0,0.43 rot=-56.3128,0,0
+      plate rod_B1s pts=0.075,1.42 0.13,0.26 0.26,0.12 0.26,-0.02 -0.26,-0.02 -0.26,0.12 -0.13,0.26 -0.075,1.42 h=0.12 rot=0,90,0 color=#8d9198 mat=cast
+      plate rod_B1i pts=0.04,1.350 0.08,0.32 -0.08,0.32 -0.04,1.350 h=0.2 rot=0,90,0 color=#7a7e85 mat=cast
+      cyl rod_B1big r=0.27 hole=0.17 h=0.2 axis=x color=#969aa1 mat=cast
+      cyl rod_B1brg r=0.178 hole=0.165 h=0.21 axis=x color=#c8873f mat=metal
+      cyl rod_B1cap r=0.05 h=0.12 at=0,-0.3,0 axis=z color=#8d9198 mat=cast
+      cyl rod_B1small r=0.15 hole=0.1 h=0.2 axis=x at=0,1.55,0 color=#969aa1 mat=cast
+      cyl rod_B1b0 r=0.035 h=0.42 at=0,-0.1,-0.235 color=#ddd mat=chrome
+      cyl rod_B1b2 r=0.035 h=0.42 at=0,-0.1,0.235 color=#ddd mat=chrome
+    group piston_B2 at=0.72,1.2897,-1.2897 rot=-45,0,0
+      lathe piston_B2b pts=-0.3,0.42 -0.3,0.445 -0.05,0.452 0.1,0.452 0.1,0.44 0.12,0.44 0.12,0.452 0.16,0.452 0.16,0.44 0.18,0.44 0.18,0.452 0.22,0.452 0.22,0.44 0.24,0.44 0.24,0.452 0.33,0.452 0.345,0.44 0.345,0.3 0.33,0.2 0.33,0 axis=y color=#c7cbd1 mat=brushed
+      cyl piston_B2r0 r=0.456 h=0.018 axis=y at=0,0.13,0 color=#35373c mat=metal
+      cyl piston_B2r1 r=0.456 h=0.018 axis=y at=0,0.17,0 color=#35373c mat=metal
+      cyl piston_B2r2 r=0.456 h=0.018 axis=y at=0,0.23,0 color=#35373c mat=metal
+      cyl piston_B2w r=0.1 h=0.74 axis=x color=#e2e4e8 mat=chrome
+      cyl piston_B2c r=0.2 h=0.14 axis=x at=-0.27,0,0 color=#aeb2b8 mat=brushed
+      cyl piston_B2e r=0.2 h=0.14 axis=x at=0.27,0,0 color=#aeb2b8 mat=brushed
+    group rod_B2 at=0.72,0,-0.43 rot=-33.6872,0,0
+      plate rod_B2s pts=0.075,1.42 0.13,0.26 0.26,0.12 0.26,-0.02 -0.26,-0.02 -0.26,0.12 -0.13,0.26 -0.075,1.42 h=0.12 rot=0,90,0 color=#8d9198 mat=cast
+      plate rod_B2i pts=0.04,1.350 0.08,0.32 -0.08,0.32 -0.04,1.350 h=0.2 rot=0,90,0 color=#7a7e85 mat=cast
+      cyl rod_B2big r=0.27 hole=0.17 h=0.2 axis=x color=#969aa1 mat=cast
+      cyl rod_B2brg r=0.178 hole=0.165 h=0.21 axis=x color=#c8873f mat=metal
+      cyl rod_B2cap r=0.05 h=0.12 at=0,-0.3,0 axis=z color=#8d9198 mat=cast
+      cyl rod_B2small r=0.15 hole=0.1 h=0.2 axis=x at=0,1.55,0 color=#969aa1 mat=cast
+      cyl rod_B2b0 r=0.035 h=0.42 at=0,-0.1,-0.235 color=#ddd mat=chrome
+      cyl rod_B2b2 r=0.035 h=0.42 at=0,-0.1,0.235 color=#ddd mat=chrome
+    group piston_B3 at=1.92,0.8597,-0.8597 rot=-45,0,0
+      lathe piston_B3b pts=-0.3,0.42 -0.3,0.445 -0.05,0.452 0.1,0.452 0.1,0.44 0.12,0.44 0.12,0.452 0.16,0.452 0.16,0.44 0.18,0.44 0.18,0.452 0.22,0.452 0.22,0.44 0.24,0.44 0.24,0.452 0.33,0.452 0.345,0.44 0.345,0.3 0.33,0.2 0.33,0 axis=y color=#c7cbd1 mat=brushed
+      cyl piston_B3r0 r=0.456 h=0.018 axis=y at=0,0.13,0 color=#35373c mat=metal
+      cyl piston_B3r1 r=0.456 h=0.018 axis=y at=0,0.17,0 color=#35373c mat=metal
+      cyl piston_B3r2 r=0.456 h=0.018 axis=y at=0,0.23,0 color=#35373c mat=metal
+      cyl piston_B3w r=0.1 h=0.74 axis=x color=#e2e4e8 mat=chrome
+      cyl piston_B3c r=0.2 h=0.14 axis=x at=-0.27,0,0 color=#aeb2b8 mat=brushed
+      cyl piston_B3e r=0.2 h=0.14 axis=x at=0.27,0,0 color=#aeb2b8 mat=brushed
+    group rod_B3 at=1.92,-0.43,0 rot=-33.6872,0,0
+      plate rod_B3s pts=0.075,1.42 0.13,0.26 0.26,0.12 0.26,-0.02 -0.26,-0.02 -0.26,0.12 -0.13,0.26 -0.075,1.42 h=0.12 rot=0,90,0 color=#8d9198 mat=cast
+      plate rod_B3i pts=0.04,1.350 0.08,0.32 -0.08,0.32 -0.04,1.350 h=0.2 rot=0,90,0 color=#7a7e85 mat=cast
+      cyl rod_B3big r=0.27 hole=0.17 h=0.2 axis=x color=#969aa1 mat=cast
+      cyl rod_B3brg r=0.178 hole=0.165 h=0.21 axis=x color=#c8873f mat=metal
+      cyl rod_B3cap r=0.05 h=0.12 at=0,-0.3,0 axis=z color=#8d9198 mat=cast
+      cyl rod_B3small r=0.15 hole=0.1 h=0.2 axis=x at=0,1.55,0 color=#969aa1 mat=cast
+      cyl rod_B3b0 r=0.035 h=0.42 at=0,-0.1,-0.235 color=#ddd mat=chrome
+      cyl rod_B3b2 r=0.035 h=0.42 at=0,-0.1,0.235 color=#ddd mat=chrome
+    group block shell=1 color=#5d6b78 mat=cast
+      group liner_A0 at=-1.92,1.1455,1.1455 rot=45,0,0
+        cyl liner_A0c r=0.53 hole=0.462 h=1.48 axis=y color=#9b9ea3 mat=brushed shell=1
+        cyl jacket_A0a r=0.6 hole=0.53 h=0.06 axis=y at=0,0.71,0 color=#5d6b78 mat=cast shell=1
+      group liner_A1 at=-0.72,1.1455,1.1455 rot=45,0,0
+        cyl liner_A1c r=0.53 hole=0.462 h=1.48 axis=y color=#9b9ea3 mat=brushed shell=1
+        cyl jacket_A1a r=0.6 hole=0.53 h=0.06 axis=y at=0,0.71,0 color=#5d6b78 mat=cast shell=1
+      group liner_A2 at=0.48,1.1455,1.1455 rot=45,0,0
+        cyl liner_A2c r=0.53 hole=0.462 h=1.48 axis=y color=#9b9ea3 mat=brushed shell=1
+        cyl jacket_A2a r=0.6 hole=0.53 h=0.06 axis=y at=0,0.71,0 color=#5d6b78 mat=cast shell=1
+      group liner_A3 at=1.68,1.1455,1.1455 rot=45,0,0
+        cyl liner_A3c r=0.53 hole=0.462 h=1.48 axis=y color=#9b9ea3 mat=brushed shell=1
+        cyl jacket_A3a r=0.6 hole=0.53 h=0.06 axis=y at=0,0.71,0 color=#5d6b78 mat=cast shell=1
+      box wall_Ao size=5.2,1.5,0.12 at=-0.12,1.6122,0.6788 rot=45,0,0 round=0 shell=1
+      box wall_Ai size=5.2,1.5,0.12 at=-0.12,0.6788,1.6122 rot=45,0,0 round=0 shell=1
+      box deck_A0 size=0.16,0.1,1.42 at=-2.52,1.6688,1.6688 rot=45,0,0 round=0 shell=1
+      box deck_A1 size=0.16,0.1,1.42 at=-1.32,1.6688,1.6688 rot=45,0,0 round=0 shell=1
+      box deck_A2 size=0.16,0.1,1.42 at=-0.12,1.6688,1.6688 rot=45,0,0 round=0 shell=1
+      box deck_A3 size=0.16,0.1,1.42 at=1.08,1.6688,1.6688 rot=45,0,0 round=0 shell=1
+      box deck_A4 size=0.16,0.1,1.42 at=2.28,1.6688,1.6688 rot=45,0,0 round=0 shell=1
+      box lip_A0 size=5.2,0.1,0.14 at=-0.12,2.1355,1.2021 rot=45,0,0 round=0 shell=1
+      box lip_A2 size=5.2,0.1,0.14 at=-0.12,1.2021,2.1355 rot=45,0,0 round=0 shell=1
+      group liner_B0 at=-1.68,1.1455,-1.1455 rot=-45,0,0
+        cyl liner_B0c r=0.53 hole=0.462 h=1.48 axis=y color=#9b9ea3 mat=brushed shell=1
+        cyl jacket_B0a r=0.6 hole=0.53 h=0.06 axis=y at=0,0.71,0 color=#5d6b78 mat=cast shell=1
+      group liner_B1 at=-0.48,1.1455,-1.1455 rot=-45,0,0
+        cyl liner_B1c r=0.53 hole=0.462 h=1.48 axis=y color=#9b9ea3 mat=brushed shell=1
+        cyl jacket_B1a r=0.6 hole=0.53 h=0.06 axis=y at=0,0.71,0 color=#5d6b78 mat=cast shell=1
+      group liner_B2 at=0.72,1.1455,-1.1455 rot=-45,0,0
+        cyl liner_B2c r=0.53 hole=0.462 h=1.48 axis=y color=#9b9ea3 mat=brushed shell=1
+        cyl jacket_B2a r=0.6 hole=0.53 h=0.06 axis=y at=0,0.71,0 color=#5d6b78 mat=cast shell=1
+      group liner_B3 at=1.92,1.1455,-1.1455 rot=-45,0,0
+        cyl liner_B3c r=0.53 hole=0.462 h=1.48 axis=y color=#9b9ea3 mat=brushed shell=1
+        cyl jacket_B3a r=0.6 hole=0.53 h=0.06 axis=y at=0,0.71,0 color=#5d6b78 mat=cast shell=1
+      box wall_Bo size=5.2,1.5,0.12 at=0.12,0.6788,-1.6122 rot=-45,0,0 round=0 shell=1
+      box wall_Bi size=5.2,1.5,0.12 at=0.12,1.6122,-0.6788 rot=-45,0,0 round=0 shell=1
+      box deck_B0 size=0.16,0.1,1.42 at=-2.28,1.6688,-1.6688 rot=-45,0,0 round=0 shell=1
+      box deck_B1 size=0.16,0.1,1.42 at=-1.08,1.6688,-1.6688 rot=-45,0,0 round=0 shell=1
+      box deck_B2 size=0.16,0.1,1.42 at=0.12,1.6688,-1.6688 rot=-45,0,0 round=0 shell=1
+      box deck_B3 size=0.16,0.1,1.42 at=1.32,1.6688,-1.6688 rot=-45,0,0 round=0 shell=1
+      box deck_B4 size=0.16,0.1,1.42 at=2.52,1.6688,-1.6688 rot=-45,0,0 round=0 shell=1
+      box lip_B0 size=5.2,0.1,0.14 at=0.12,1.2021,-2.1355 rot=-45,0,0 round=0 shell=1
+      box lip_B2 size=5.2,0.1,0.14 at=0.12,2.1355,-1.2021 rot=-45,0,0 round=0 shell=1
+      box casep size=5.5,1.0,0.12 at=0,-0.25,1.27 round=0 shell=1
+      box casepb size=5.5,0.12,0.5 at=0,0.28,1.05 rot=45,0,0 round=0 shell=1
+      box casem size=5.5,1.0,0.12 at=0,-0.25,-1.27 round=0 shell=1
+      box casemb size=5.5,0.12,0.5 at=0,0.28,-1.05 rot=-45,0,0 round=0 shell=1
+      plate bulk0 pts=-1.3,-0.74 -0.3,-0.74 -0.3,-0.26 -0.27,0.1 -0.1,0.27 0.1,0.27 0.27,0.1 0.3,-0.26 0.3,-0.74 1.3,-0.74 1.3,-0.62 0.42,-0.62 0.42,0.42 -0.42,0.42 -0.42,-0.62 -1.3,-0.62 h=0.1 rot=0,90,0 at=-2.4,0,0 shell=1
+      plate bulk1 pts=-1.3,-0.74 -0.3,-0.74 -0.3,-0.26 -0.27,0.1 -0.1,0.27 0.1,0.27 0.27,0.1 0.3,-0.26 0.3,-0.74 1.3,-0.74 1.3,-0.62 0.42,-0.62 0.42,0.42 -0.42,0.42 -0.42,-0.62 -1.3,-0.62 h=0.1 rot=0,90,0 at=-1.2,0,0 shell=1
+      plate bulk2 pts=-1.3,-0.74 -0.3,-0.74 -0.3,-0.26 -0.27,0.1 -0.1,0.27 0.1,0.27 0.27,0.1 0.3,-0.26 0.3,-0.74 1.3,-0.74 1.3,-0.62 0.42,-0.62 0.42,0.42 -0.42,0.42 -0.42,-0.62 -1.3,-0.62 h=0.1 rot=0,90,0 at=0,0,0 shell=1
+      plate bulk3 pts=-1.3,-0.74 -0.3,-0.74 -0.3,-0.26 -0.27,0.1 -0.1,0.27 0.1,0.27 0.27,0.1 0.3,-0.26 0.3,-0.74 1.3,-0.74 1.3,-0.62 0.42,-0.62 0.42,0.42 -0.42,0.42 -0.42,-0.62 -1.3,-0.62 h=0.1 rot=0,90,0 at=1.2,0,0 shell=1
+      plate bulk4 pts=-1.3,-0.74 -0.3,-0.74 -0.3,-0.26 -0.27,0.1 -0.1,0.27 0.1,0.27 0.27,0.1 0.3,-0.26 0.3,-0.74 1.3,-0.74 1.3,-0.62 0.42,-0.62 0.42,0.42 -0.42,0.42 -0.42,-0.62 -1.3,-0.62 h=0.1 rot=0,90,0 at=2.4,0,0 shell=1
+    group pan shell=1 color=#2e3136 mat=paint
+      box panfloor size=5.5,0.08,2.3 at=0,-1.42,0 round=0 shell=1
+      box panside0 size=5.5,0.72,0.08 at=0,-1.08,-1.15 round=0 shell=1
+      box panside2 size=5.5,0.72,0.08 at=0,-1.08,1.15 round=0 shell=1
+      box panend0 size=0.08,0.72,2.3 at=-2.75,-1.08,0 round=0 shell=1
+      box panend2 size=0.08,0.72,2.3 at=2.75,-1.08,0 round=0 shell=1
+    group head_A at=-0.12,1.8668,1.8668 rot=45,0,0 shell=1 color=#6b7a88 mat=cast
+      box head_Ao size=5.2,0.42,0.1 at=0,0,0.76 round=0 shell=1
+      box head_Ai size=5.2,0.42,0.1 at=0,0,-0.76 round=0 shell=1
+      box head_Ap size=5.2,0.08,0.3 at=0,0.2,0.66 round=0 shell=1
+      box head_Aq size=5.2,0.08,0.3 at=0,0.2,-0.66 round=0 shell=1
+    group cover_A at=-0.12,2.3052,2.3052 rot=45,0,0 shell=1 color=#b5461f mat=paint
+      box cover_Ao size=5.2,0.92,0.08 at=0,0,0.78 round=0 shell=1
+      box cover_Ai size=5.2,0.92,0.08 at=0,0,-0.78 round=0 shell=1
+      box cover_At size=5.2,0.08,1.64 at=0,0.46,0 round=0 shell=1
+    group head_B at=0.12,1.8668,-1.8668 rot=-45,0,0 shell=1 color=#6b7a88 mat=cast
+      box head_Bo size=5.2,0.42,0.1 at=0,0,0.76 round=0 shell=1
+      box head_Bi size=5.2,0.42,0.1 at=0,0,-0.76 round=0 shell=1
+      box head_Bp size=5.2,0.08,0.3 at=0,0.2,0.66 round=0 shell=1
+      box head_Bq size=5.2,0.08,0.3 at=0,0.2,-0.66 round=0 shell=1
+    group cover_B at=0.12,2.3052,-2.3052 rot=-45,0,0 shell=1 color=#b5461f mat=paint
+      box cover_Bo size=5.2,0.92,0.08 at=0,0,0.78 round=0 shell=1
+      box cover_Bi size=5.2,0.92,0.08 at=0,0,-0.78 round=0 shell=1
+      box cover_Bt size=5.2,0.08,1.64 at=0,0.46,0 round=0 shell=1
+    group valve_in_A0 at=-2.12,1.6829,1.6829 rot=45,0,0
+      lathe valve_in_A0h pts=-0.05,0.2 -0.03,0.2 0,0.12 0.08,0.04 0.1,0.03 axis=y color=#d7dade mat=brushed
+      cyl valve_in_A0s r=0.03 h=0.84 at=0,0.5,0 axis=y color=#d7dade mat=chrome
+      cyl valve_in_A0k r=0.07 h=0.05 at=0,0.82,0 axis=y color=#555 mat=metal
+      spring valve_in_A0p r=0.1 wire=0.016 turns=6 h=0.36 at=0,0.62,0 axis=y color=#2f6bd6 mat=metal
+    group rocker_in_A0
+      tube rocker_in_A0a pts=-2.12,2.284,2.284 -2.12,2.5739,2.1496 -2.12,2.7082,1.8597 r=0.05 color=#c5c8cd mat=brushed
+      cyl rocker_in_A0b r=0.08 h=0.16 axis=x at=-2.12,2.5739,2.1496 color=#8e9298 mat=chrome
+    group push_in_A0
+      tube push_in_A0r pts=-2.12,0.2696,1.1756 -2.12,2.7082,1.8597 r=0.028 color=#d9dce0 mat=chrome
+      cyl push_in_A0l r=0.075 h=0.28 at=-2.12,0.2889,1.181 rot=15.6695,0,0 axis=y color=#73777d mat=metal
+    group valve_ex_A0 at=-1.72,1.6829,1.6829 rot=45,0,0
+      lathe valve_ex_A0h pts=-0.05,0.2 -0.03,0.2 0,0.12 0.08,0.04 0.1,0.03 axis=y color=#b78f6c mat=brushed
+      cyl valve_ex_A0s r=0.03 h=0.84 at=0,0.5,0 axis=y color=#b78f6c mat=chrome
+      cyl valve_ex_A0k r=0.07 h=0.05 at=0,0.82,0 axis=y color=#555 mat=metal
+      spring valve_ex_A0p r=0.1 wire=0.016 turns=6 h=0.36 at=0,0.62,0 axis=y color=#2f6bd6 mat=metal
+    group rocker_ex_A0
+      tube rocker_ex_A0a pts=-1.72,2.284,2.284 -1.72,2.5739,2.1496 -1.72,2.7082,1.8597 r=0.05 color=#c5c8cd mat=brushed
+      cyl rocker_ex_A0b r=0.08 h=0.16 axis=x at=-1.72,2.5739,2.1496 color=#8e9298 mat=chrome
+    group push_ex_A0
+      tube push_ex_A0r pts=-1.72,0.2696,1.1756 -1.72,2.7082,1.8597 r=0.028 color=#d9dce0 mat=chrome
+      cyl push_ex_A0l r=0.075 h=0.28 at=-1.72,0.2889,1.181 rot=15.6695,0,0 axis=y color=#73777d mat=metal
+    group valve_in_A1 at=-0.92,1.6829,1.6829 rot=45,0,0
+      lathe valve_in_A1h pts=-0.05,0.2 -0.03,0.2 0,0.12 0.08,0.04 0.1,0.03 axis=y color=#d7dade mat=brushed
+      cyl valve_in_A1s r=0.03 h=0.84 at=0,0.5,0 axis=y color=#d7dade mat=chrome
+      cyl valve_in_A1k r=0.07 h=0.05 at=0,0.82,0 axis=y color=#555 mat=metal
+      spring valve_in_A1p r=0.1 wire=0.016 turns=6 h=0.36 at=0,0.62,0 axis=y color=#2f6bd6 mat=metal
+    group rocker_in_A1
+      tube rocker_in_A1a pts=-0.92,2.284,2.284 -0.92,2.5739,2.1496 -0.92,2.7082,1.8597 r=0.05 color=#c5c8cd mat=brushed
+      cyl rocker_in_A1b r=0.08 h=0.16 axis=x at=-0.92,2.5739,2.1496 color=#8e9298 mat=chrome
+    group push_in_A1
+      tube push_in_A1r pts=-0.92,0.2696,1.1756 -0.92,2.7082,1.8597 r=0.028 color=#d9dce0 mat=chrome
+      cyl push_in_A1l r=0.075 h=0.28 at=-0.92,0.2889,1.181 rot=15.6695,0,0 axis=y color=#73777d mat=metal
+    group valve_ex_A1 at=-0.52,1.6829,1.6829 rot=45,0,0
+      lathe valve_ex_A1h pts=-0.05,0.2 -0.03,0.2 0,0.12 0.08,0.04 0.1,0.03 axis=y color=#b78f6c mat=brushed
+      cyl valve_ex_A1s r=0.03 h=0.84 at=0,0.5,0 axis=y color=#b78f6c mat=chrome
+      cyl valve_ex_A1k r=0.07 h=0.05 at=0,0.82,0 axis=y color=#555 mat=metal
+      spring valve_ex_A1p r=0.1 wire=0.016 turns=6 h=0.36 at=0,0.62,0 axis=y color=#2f6bd6 mat=metal
+    group rocker_ex_A1
+      tube rocker_ex_A1a pts=-0.52,2.284,2.284 -0.52,2.5739,2.1496 -0.52,2.7082,1.8597 r=0.05 color=#c5c8cd mat=brushed
+      cyl rocker_ex_A1b r=0.08 h=0.16 axis=x at=-0.52,2.5739,2.1496 color=#8e9298 mat=chrome
+    group push_ex_A1
+      tube push_ex_A1r pts=-0.52,0.2696,1.1756 -0.52,2.7082,1.8597 r=0.028 color=#d9dce0 mat=chrome
+      cyl push_ex_A1l r=0.075 h=0.28 at=-0.52,0.2889,1.181 rot=15.6695,0,0 axis=y color=#73777d mat=metal
+    group valve_in_A2 at=0.28,1.6829,1.6829 rot=45,0,0
+      lathe valve_in_A2h pts=-0.05,0.2 -0.03,0.2 0,0.12 0.08,0.04 0.1,0.03 axis=y color=#d7dade mat=brushed
+      cyl valve_in_A2s r=0.03 h=0.84 at=0,0.5,0 axis=y color=#d7dade mat=chrome
+      cyl valve_in_A2k r=0.07 h=0.05 at=0,0.82,0 axis=y color=#555 mat=metal
+      spring valve_in_A2p r=0.1 wire=0.016 turns=6 h=0.36 at=0,0.62,0 axis=y color=#2f6bd6 mat=metal
+    group rocker_in_A2
+      tube rocker_in_A2a pts=0.28,2.284,2.284 0.28,2.5739,2.1496 0.28,2.7082,1.8597 r=0.05 color=#c5c8cd mat=brushed
+      cyl rocker_in_A2b r=0.08 h=0.16 axis=x at=0.28,2.5739,2.1496 color=#8e9298 mat=chrome
+    group push_in_A2
+      tube push_in_A2r pts=0.28,0.2696,1.1756 0.28,2.7082,1.8597 r=0.028 color=#d9dce0 mat=chrome
+      cyl push_in_A2l r=0.075 h=0.28 at=0.28,0.2889,1.181 rot=15.6695,0,0 axis=y color=#73777d mat=metal
+    group valve_ex_A2 at=0.68,1.6829,1.6829 rot=45,0,0
+      lathe valve_ex_A2h pts=-0.05,0.2 -0.03,0.2 0,0.12 0.08,0.04 0.1,0.03 axis=y color=#b78f6c mat=brushed
+      cyl valve_ex_A2s r=0.03 h=0.84 at=0,0.5,0 axis=y color=#b78f6c mat=chrome
+      cyl valve_ex_A2k r=0.07 h=0.05 at=0,0.82,0 axis=y color=#555 mat=metal
+      spring valve_ex_A2p r=0.1 wire=0.016 turns=6 h=0.36 at=0,0.62,0 axis=y color=#2f6bd6 mat=metal
+    group rocker_ex_A2
+      tube rocker_ex_A2a pts=0.68,2.284,2.284 0.68,2.5739,2.1496 0.68,2.7082,1.8597 r=0.05 color=#c5c8cd mat=brushed
+      cyl rocker_ex_A2b r=0.08 h=0.16 axis=x at=0.68,2.5739,2.1496 color=#8e9298 mat=chrome
+    group push_ex_A2
+      tube push_ex_A2r pts=0.68,0.2696,1.1756 0.68,2.7082,1.8597 r=0.028 color=#d9dce0 mat=chrome
+      cyl push_ex_A2l r=0.075 h=0.28 at=0.68,0.2889,1.181 rot=15.6695,0,0 axis=y color=#73777d mat=metal
+    group valve_in_A3 at=1.48,1.6829,1.6829 rot=45,0,0
+      lathe valve_in_A3h pts=-0.05,0.2 -0.03,0.2 0,0.12 0.08,0.04 0.1,0.03 axis=y color=#d7dade mat=brushed
+      cyl valve_in_A3s r=0.03 h=0.84 at=0,0.5,0 axis=y color=#d7dade mat=chrome
+      cyl valve_in_A3k r=0.07 h=0.05 at=0,0.82,0 axis=y color=#555 mat=metal
+      spring valve_in_A3p r=0.1 wire=0.016 turns=6 h=0.36 at=0,0.62,0 axis=y color=#2f6bd6 mat=metal
+    group rocker_in_A3
+      tube rocker_in_A3a pts=1.48,2.284,2.284 1.48,2.5739,2.1496 1.48,2.7082,1.8597 r=0.05 color=#c5c8cd mat=brushed
+      cyl rocker_in_A3b r=0.08 h=0.16 axis=x at=1.48,2.5739,2.1496 color=#8e9298 mat=chrome
+    group push_in_A3
+      tube push_in_A3r pts=1.48,0.2696,1.1756 1.48,2.7082,1.8597 r=0.028 color=#d9dce0 mat=chrome
+      cyl push_in_A3l r=0.075 h=0.28 at=1.48,0.2889,1.181 rot=15.6695,0,0 axis=y color=#73777d mat=metal
+    group valve_ex_A3 at=1.88,1.6829,1.6829 rot=45,0,0
+      lathe valve_ex_A3h pts=-0.05,0.2 -0.03,0.2 0,0.12 0.08,0.04 0.1,0.03 axis=y color=#b78f6c mat=brushed
+      cyl valve_ex_A3s r=0.03 h=0.84 at=0,0.5,0 axis=y color=#b78f6c mat=chrome
+      cyl valve_ex_A3k r=0.07 h=0.05 at=0,0.82,0 axis=y color=#555 mat=metal
+      spring valve_ex_A3p r=0.1 wire=0.016 turns=6 h=0.36 at=0,0.62,0 axis=y color=#2f6bd6 mat=metal
+    group rocker_ex_A3
+      tube rocker_ex_A3a pts=1.88,2.284,2.284 1.88,2.5739,2.1496 1.88,2.7082,1.8597 r=0.05 color=#c5c8cd mat=brushed
+      cyl rocker_ex_A3b r=0.08 h=0.16 axis=x at=1.88,2.5739,2.1496 color=#8e9298 mat=chrome
+    group push_ex_A3
+      tube push_ex_A3r pts=1.88,0.2696,1.1756 1.88,2.7082,1.8597 r=0.028 color=#d9dce0 mat=chrome
+      cyl push_ex_A3l r=0.075 h=0.28 at=1.88,0.2889,1.181 rot=15.6695,0,0 axis=y color=#73777d mat=metal
+    group valve_in_B0 at=-1.88,1.6829,-1.6829 rot=-45,0,0
+      lathe valve_in_B0h pts=-0.05,0.2 -0.03,0.2 0,0.12 0.08,0.04 0.1,0.03 axis=y color=#d7dade mat=brushed
+      cyl valve_in_B0s r=0.03 h=0.84 at=0,0.5,0 axis=y color=#d7dade mat=chrome
+      cyl valve_in_B0k r=0.07 h=0.05 at=0,0.82,0 axis=y color=#555 mat=metal
+      spring valve_in_B0p r=0.1 wire=0.016 turns=6 h=0.36 at=0,0.62,0 axis=y color=#2f6bd6 mat=metal
+    group rocker_in_B0
+      tube rocker_in_B0a pts=-1.88,2.284,-2.284 -1.88,2.5739,-2.1496 -1.88,2.7082,-1.8597 r=0.05 color=#c5c8cd mat=brushed
+      cyl rocker_in_B0b r=0.08 h=0.16 axis=x at=-1.88,2.5739,-2.1496 color=#8e9298 mat=chrome
+    group push_in_B0
+      tube push_in_B0r pts=-1.88,0.189,0.8934 -1.88,2.7082,-1.8597 r=0.028 color=#d9dce0 mat=chrome
+      cyl push_in_B0l r=0.075 h=0.28 at=-1.88,0.2025,0.8787 rot=-47.5404,0,0 axis=y color=#73777d mat=metal
+    group valve_ex_B0 at=-1.48,1.6829,-1.6829 rot=-45,0,0
+      lathe valve_ex_B0h pts=-0.05,0.2 -0.03,0.2 0,0.12 0.08,0.04 0.1,0.03 axis=y color=#b78f6c mat=brushed
+      cyl valve_ex_B0s r=0.03 h=0.84 at=0,0.5,0 axis=y color=#b78f6c mat=chrome
+      cyl valve_ex_B0k r=0.07 h=0.05 at=0,0.82,0 axis=y color=#555 mat=metal
+      spring valve_ex_B0p r=0.1 wire=0.016 turns=6 h=0.36 at=0,0.62,0 axis=y color=#2f6bd6 mat=metal
+    group rocker_ex_B0
+      tube rocker_ex_B0a pts=-1.48,2.284,-2.284 -1.48,2.5739,-2.1496 -1.48,2.7082,-1.8597 r=0.05 color=#c5c8cd mat=brushed
+      cyl rocker_ex_B0b r=0.08 h=0.16 axis=x at=-1.48,2.5739,-2.1496 color=#8e9298 mat=chrome
+    group push_ex_B0
+      tube push_ex_B0r pts=-1.48,0.189,0.8934 -1.48,2.7082,-1.8597 r=0.028 color=#d9dce0 mat=chrome
+      cyl push_ex_B0l r=0.075 h=0.28 at=-1.48,0.2025,0.8787 rot=-47.5404,0,0 axis=y color=#73777d mat=metal
+    group valve_in_B1 at=-0.68,1.6829,-1.6829 rot=-45,0,0
+      lathe valve_in_B1h pts=-0.05,0.2 -0.03,0.2 0,0.12 0.08,0.04 0.1,0.03 axis=y color=#d7dade mat=brushed
+      cyl valve_in_B1s r=0.03 h=0.84 at=0,0.5,0 axis=y color=#d7dade mat=chrome
+      cyl valve_in_B1k r=0.07 h=0.05 at=0,0.82,0 axis=y color=#555 mat=metal
+      spring valve_in_B1p r=0.1 wire=0.016 turns=6 h=0.36 at=0,0.62,0 axis=y color=#2f6bd6 mat=metal
+    group rocker_in_B1
+      tube rocker_in_B1a pts=-0.68,2.284,-2.284 -0.68,2.5739,-2.1496 -0.68,2.7082,-1.8597 r=0.05 color=#c5c8cd mat=brushed
+      cyl rocker_in_B1b r=0.08 h=0.16 axis=x at=-0.68,2.5739,-2.1496 color=#8e9298 mat=chrome
+    group push_in_B1
+      tube push_in_B1r pts=-0.68,0.189,0.8934 -0.68,2.7082,-1.8597 r=0.028 color=#d9dce0 mat=chrome
+      cyl push_in_B1l r=0.075 h=0.28 at=-0.68,0.2025,0.8787 rot=-47.5404,0,0 axis=y color=#73777d mat=metal
+    group valve_ex_B1 at=-0.28,1.6829,-1.6829 rot=-45,0,0
+      lathe valve_ex_B1h pts=-0.05,0.2 -0.03,0.2 0,0.12 0.08,0.04 0.1,0.03 axis=y color=#b78f6c mat=brushed
+      cyl valve_ex_B1s r=0.03 h=0.84 at=0,0.5,0 axis=y color=#b78f6c mat=chrome
+      cyl valve_ex_B1k r=0.07 h=0.05 at=0,0.82,0 axis=y color=#555 mat=metal
+      spring valve_ex_B1p r=0.1 wire=0.016 turns=6 h=0.36 at=0,0.62,0 axis=y color=#2f6bd6 mat=metal
+    group rocker_ex_B1
+      tube rocker_ex_B1a pts=-0.28,2.284,-2.284 -0.28,2.5739,-2.1496 -0.28,2.7082,-1.8597 r=0.05 color=#c5c8cd mat=brushed
+      cyl rocker_ex_B1b r=0.08 h=0.16 axis=x at=-0.28,2.5739,-2.1496 color=#8e9298 mat=chrome
+    group push_ex_B1
+      tube push_ex_B1r pts=-0.28,0.189,0.8934 -0.28,2.7082,-1.8597 r=0.028 color=#d9dce0 mat=chrome
+      cyl push_ex_B1l r=0.075 h=0.28 at=-0.28,0.2025,0.8787 rot=-47.5404,0,0 axis=y color=#73777d mat=metal
+    group valve_in_B2 at=0.52,1.6829,-1.6829 rot=-45,0,0
+      lathe valve_in_B2h pts=-0.05,0.2 -0.03,0.2 0,0.12 0.08,0.04 0.1,0.03 axis=y color=#d7dade mat=brushed
+      cyl valve_in_B2s r=0.03 h=0.84 at=0,0.5,0 axis=y color=#d7dade mat=chrome
+      cyl valve_in_B2k r=0.07 h=0.05 at=0,0.82,0 axis=y color=#555 mat=metal
+      spring valve_in_B2p r=0.1 wire=0.016 turns=6 h=0.36 at=0,0.62,0 axis=y color=#2f6bd6 mat=metal
+    group rocker_in_B2
+      tube rocker_in_B2a pts=0.52,2.284,-2.284 0.52,2.5739,-2.1496 0.52,2.7082,-1.8597 r=0.05 color=#c5c8cd mat=brushed
+      cyl rocker_in_B2b r=0.08 h=0.16 axis=x at=0.52,2.5739,-2.1496 color=#8e9298 mat=chrome
+    group push_in_B2
+      tube push_in_B2r pts=0.52,0.189,0.8934 0.52,2.7082,-1.8597 r=0.028 color=#d9dce0 mat=chrome
+      cyl push_in_B2l r=0.075 h=0.28 at=0.52,0.2025,0.8787 rot=-47.5404,0,0 axis=y color=#73777d mat=metal
+    group valve_ex_B2 at=0.92,1.6829,-1.6829 rot=-45,0,0
+      lathe valve_ex_B2h pts=-0.05,0.2 -0.03,0.2 0,0.12 0.08,0.04 0.1,0.03 axis=y color=#b78f6c mat=brushed
+      cyl valve_ex_B2s r=0.03 h=0.84 at=0,0.5,0 axis=y color=#b78f6c mat=chrome
+      cyl valve_ex_B2k r=0.07 h=0.05 at=0,0.82,0 axis=y color=#555 mat=metal
+      spring valve_ex_B2p r=0.1 wire=0.016 turns=6 h=0.36 at=0,0.62,0 axis=y color=#2f6bd6 mat=metal
+    group rocker_ex_B2
+      tube rocker_ex_B2a pts=0.92,2.284,-2.284 0.92,2.5739,-2.1496 0.92,2.7082,-1.8597 r=0.05 color=#c5c8cd mat=brushed
+      cyl rocker_ex_B2b r=0.08 h=0.16 axis=x at=0.92,2.5739,-2.1496 color=#8e9298 mat=chrome
+    group push_ex_B2
+      tube push_ex_B2r pts=0.92,0.189,0.8934 0.92,2.7082,-1.8597 r=0.028 color=#d9dce0 mat=chrome
+      cyl push_ex_B2l r=0.075 h=0.28 at=0.92,0.2025,0.8787 rot=-47.5404,0,0 axis=y color=#73777d mat=metal
+    group valve_in_B3 at=1.72,1.6829,-1.6829 rot=-45,0,0
+      lathe valve_in_B3h pts=-0.05,0.2 -0.03,0.2 0,0.12 0.08,0.04 0.1,0.03 axis=y color=#d7dade mat=brushed
+      cyl valve_in_B3s r=0.03 h=0.84 at=0,0.5,0 axis=y color=#d7dade mat=chrome
+      cyl valve_in_B3k r=0.07 h=0.05 at=0,0.82,0 axis=y color=#555 mat=metal
+      spring valve_in_B3p r=0.1 wire=0.016 turns=6 h=0.36 at=0,0.62,0 axis=y color=#2f6bd6 mat=metal
+    group rocker_in_B3
+      tube rocker_in_B3a pts=1.72,2.284,-2.284 1.72,2.5739,-2.1496 1.72,2.7082,-1.8597 r=0.05 color=#c5c8cd mat=brushed
+      cyl rocker_in_B3b r=0.08 h=0.16 axis=x at=1.72,2.5739,-2.1496 color=#8e9298 mat=chrome
+    group push_in_B3
+      tube push_in_B3r pts=1.72,0.189,0.8934 1.72,2.7082,-1.8597 r=0.028 color=#d9dce0 mat=chrome
+      cyl push_in_B3l r=0.075 h=0.28 at=1.72,0.2025,0.8787 rot=-47.5404,0,0 axis=y color=#73777d mat=metal
+    group valve_ex_B3 at=2.12,1.6829,-1.6829 rot=-45,0,0
+      lathe valve_ex_B3h pts=-0.05,0.2 -0.03,0.2 0,0.12 0.08,0.04 0.1,0.03 axis=y color=#b78f6c mat=brushed
+      cyl valve_ex_B3s r=0.03 h=0.84 at=0,0.5,0 axis=y color=#b78f6c mat=chrome
+      cyl valve_ex_B3k r=0.07 h=0.05 at=0,0.82,0 axis=y color=#555 mat=metal
+      spring valve_ex_B3p r=0.1 wire=0.016 turns=6 h=0.36 at=0,0.62,0 axis=y color=#2f6bd6 mat=metal
+    group rocker_ex_B3
+      tube rocker_ex_B3a pts=2.12,2.284,-2.284 2.12,2.5739,-2.1496 2.12,2.7082,-1.8597 r=0.05 color=#c5c8cd mat=brushed
+      cyl rocker_ex_B3b r=0.08 h=0.16 axis=x at=2.12,2.5739,-2.1496 color=#8e9298 mat=chrome
+    group push_ex_B3
+      tube push_ex_B3r pts=2.12,0.189,0.8934 2.12,2.7082,-1.8597 r=0.028 color=#d9dce0 mat=chrome
+      cyl push_ex_B3l r=0.075 h=0.28 at=2.12,0.2025,0.8787 rot=-47.5404,0,0 axis=y color=#73777d mat=metal
+    group cam at=0,1.1,0
+      cyl camcore r=0.075 h=5.4 axis=x color=#b8bcc2 mat=brushed
+      cyl camj0 r=0.14 h=0.16 axis=x at=-2.4,0,0 color=#d4d7dc mat=chrome
+      cyl camj1 r=0.14 h=0.16 axis=x at=-1.2,0,0 color=#d4d7dc mat=chrome
+      cyl camj2 r=0.14 h=0.16 axis=x at=0,0,0 color=#d4d7dc mat=chrome
+      cyl camj3 r=0.14 h=0.16 axis=x at=1.2,0,0 color=#d4d7dc mat=chrome
+      cyl camj4 r=0.14 h=0.16 axis=x at=2.4,0,0 color=#d4d7dc mat=chrome
+      group lobe_in_A0 at=-2.12,0,0 rot=273.1695,0,0
+        plate lobe_in_A0p pts=0.13,0 0.09,0.1 0.04,0.19 0,0.21 -0.04,0.19 -0.09,0.1 -0.13,0 -0.09,-0.09 0,-0.13 0.09,-0.09 h=0.1 rot=0,90,0 color=#a7abb1 mat=metal
+      group lobe_ex_A0 at=-1.72,0,0 rot=163.1695,0,0
+        plate lobe_ex_A0p pts=0.13,0 0.09,0.1 0.04,0.19 0,0.21 -0.04,0.19 -0.09,0.1 -0.13,0 -0.09,-0.09 0,-0.13 0.09,-0.09 h=0.1 rot=0,90,0 color=#a7abb1 mat=metal
+      group lobe_in_A1 at=-0.92,0,0 rot=48.1695,0,0
+        plate lobe_in_A1p pts=0.13,0 0.09,0.1 0.04,0.19 0,0.21 -0.04,0.19 -0.09,0.1 -0.13,0 -0.09,-0.09 0,-0.13 0.09,-0.09 h=0.1 rot=0,90,0 color=#a7abb1 mat=metal
+      group lobe_ex_A1 at=-0.52,0,0 rot=298.1695,0,0
+        plate lobe_ex_A1p pts=0.13,0 0.09,0.1 0.04,0.19 0,0.21 -0.04,0.19 -0.09,0.1 -0.13,0 -0.09,-0.09 0,-0.13 0.09,-0.09 h=0.1 rot=0,90,0 color=#a7abb1 mat=metal
+      group lobe_in_A2 at=0.28,0,0 rot=318.1695,0,0
+        plate lobe_in_A2p pts=0.13,0 0.09,0.1 0.04,0.19 0,0.21 -0.04,0.19 -0.09,0.1 -0.13,0 -0.09,-0.09 0,-0.13 0.09,-0.09 h=0.1 rot=0,90,0 color=#a7abb1 mat=metal
+      group lobe_ex_A2 at=0.68,0,0 rot=208.1695,0,0
+        plate lobe_ex_A2p pts=0.13,0 0.09,0.1 0.04,0.19 0,0.21 -0.04,0.19 -0.09,0.1 -0.13,0 -0.09,-0.09 0,-0.13 0.09,-0.09 h=0.1 rot=0,90,0 color=#a7abb1 mat=metal
+      group lobe_in_A3 at=1.48,0,0 rot=363.1695,0,0
+        plate lobe_in_A3p pts=0.13,0 0.09,0.1 0.04,0.19 0,0.21 -0.04,0.19 -0.09,0.1 -0.13,0 -0.09,-0.09 0,-0.13 0.09,-0.09 h=0.1 rot=0,90,0 color=#a7abb1 mat=metal
+      group lobe_ex_A3 at=1.88,0,0 rot=253.1695,0,0
+        plate lobe_ex_A3p pts=0.13,0 0.09,0.1 0.04,0.19 0,0.21 -0.04,0.19 -0.09,0.1 -0.13,0 -0.09,-0.09 0,-0.13 0.09,-0.09 h=0.1 rot=0,90,0 color=#a7abb1 mat=metal
+      group lobe_in_B0 at=-1.88,0,0 rot=164.9596,0,0
+        plate lobe_in_B0p pts=0.13,0 0.09,0.1 0.04,0.19 0,0.21 -0.04,0.19 -0.09,0.1 -0.13,0 -0.09,-0.09 0,-0.13 0.09,-0.09 h=0.1 rot=0,90,0 color=#a7abb1 mat=metal
+      group lobe_ex_B0 at=-1.48,0,0 rot=54.9596,0,0
+        plate lobe_ex_B0p pts=0.13,0 0.09,0.1 0.04,0.19 0,0.21 -0.04,0.19 -0.09,0.1 -0.13,0 -0.09,-0.09 0,-0.13 0.09,-0.09 h=0.1 rot=0,90,0 color=#a7abb1 mat=metal
+      group lobe_in_B1 at=-0.68,0,0 rot=119.9596,0,0
+        plate lobe_in_B1p pts=0.13,0 0.09,0.1 0.04,0.19 0,0.21 -0.04,0.19 -0.09,0.1 -0.13,0 -0.09,-0.09 0,-0.13 0.09,-0.09 h=0.1 rot=0,90,0 color=#a7abb1 mat=metal
+      group lobe_ex_B1 at=-0.28,0,0 rot=9.9596,0,0
+        plate lobe_ex_B1p pts=0.13,0 0.09,0.1 0.04,0.19 0,0.21 -0.04,0.19 -0.09,0.1 -0.13,0 -0.09,-0.09 0,-0.13 0.09,-0.09 h=0.1 rot=0,90,0 color=#a7abb1 mat=metal
+      group lobe_in_B2 at=0.52,0,0 rot=29.9596,0,0
+        plate lobe_in_B2p pts=0.13,0 0.09,0.1 0.04,0.19 0,0.21 -0.04,0.19 -0.09,0.1 -0.13,0 -0.09,-0.09 0,-0.13 0.09,-0.09 h=0.1 rot=0,90,0 color=#a7abb1 mat=metal
+      group lobe_ex_B2 at=0.92,0,0 rot=279.9596,0,0
+        plate lobe_ex_B2p pts=0.13,0 0.09,0.1 0.04,0.19 0,0.21 -0.04,0.19 -0.09,0.1 -0.13,0 -0.09,-0.09 0,-0.13 0.09,-0.09 h=0.1 rot=0,90,0 color=#a7abb1 mat=metal
+      group lobe_in_B3 at=1.72,0,0 rot=74.9596,0,0
+        plate lobe_in_B3p pts=0.13,0 0.09,0.1 0.04,0.19 0,0.21 -0.04,0.19 -0.09,0.1 -0.13,0 -0.09,-0.09 0,-0.13 0.09,-0.09 h=0.1 rot=0,90,0 color=#a7abb1 mat=metal
+      group lobe_ex_B3 at=2.12,0,0 rot=-35.0404,0,0
+        plate lobe_ex_B3p pts=0.13,0 0.09,0.1 0.04,0.19 0,0.21 -0.04,0.19 -0.09,0.1 -0.13,0 -0.09,-0.09 0,-0.13 0.09,-0.09 h=0.1 rot=0,90,0 color=#a7abb1 mat=metal
+      group cam_gear_g at=-2.72,0,0
+        gear gear_cam teeth=48 r=0.7333 h=0.14 axis=x phase=0.0655 color=#9c8e5b mat=brushed
+        cyl camdisk r=0.3 h=0.17 axis=x color=#6f7277 mat=cast
+        ring 6 r=0.5 axis=x
+          cyl camhole r=0.1 h=0.18 axis=x color=#24262a mat=cast
+    group trim_A at=-0.12,2.6304,2.6304 rot=45,0,0 shell=1
+      box rib_A0 size=0.05,0.05,1.5 at=-2.4,0.04,0 round=0.015 color=#d4633a mat=paint shell=1
+      box rib_A1 size=0.05,0.05,1.5 at=-1.8,0.04,0 round=0.015 color=#d4633a mat=paint shell=1
+      box rib_A2 size=0.05,0.05,1.5 at=-1.2,0.04,0 round=0.015 color=#d4633a mat=paint shell=1
+      box rib_A3 size=0.05,0.05,1.5 at=-0.6,0.04,0 round=0.015 color=#d4633a mat=paint shell=1
+      box rib_A4 size=0.05,0.05,1.5 at=0,0.04,0 round=0.015 color=#d4633a mat=paint shell=1
+      box rib_A5 size=0.05,0.05,1.5 at=0.6,0.04,0 round=0.015 color=#d4633a mat=paint shell=1
+      box rib_A6 size=0.05,0.05,1.5 at=1.2,0.04,0 round=0.015 color=#d4633a mat=paint shell=1
+      box rib_A7 size=0.05,0.05,1.5 at=1.8,0.04,0 round=0.015 color=#d4633a mat=paint shell=1
+      box rib_A8 size=0.05,0.05,1.5 at=2.4,0.04,0 round=0.015 color=#d4633a mat=paint shell=1
+      cyl cb_A00 r=0.035 h=0.05 axis=y at=-2.5,0.03,-0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_A02 r=0.035 h=0.05 axis=y at=-2.5,0.03,0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_A10 r=0.035 h=0.05 axis=y at=-1.945,0.03,-0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_A12 r=0.035 h=0.05 axis=y at=-1.945,0.03,0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_A20 r=0.035 h=0.05 axis=y at=-1.39,0.03,-0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_A22 r=0.035 h=0.05 axis=y at=-1.39,0.03,0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_A30 r=0.035 h=0.05 axis=y at=-0.835,0.03,-0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_A32 r=0.035 h=0.05 axis=y at=-0.835,0.03,0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_A40 r=0.035 h=0.05 axis=y at=-0.28,0.03,-0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_A42 r=0.035 h=0.05 axis=y at=-0.28,0.03,0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_A50 r=0.035 h=0.05 axis=y at=0.275,0.03,-0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_A52 r=0.035 h=0.05 axis=y at=0.275,0.03,0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_A60 r=0.035 h=0.05 axis=y at=0.83,0.03,-0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_A62 r=0.035 h=0.05 axis=y at=0.83,0.03,0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_A70 r=0.035 h=0.05 axis=y at=1.385,0.03,-0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_A72 r=0.035 h=0.05 axis=y at=1.385,0.03,0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_A80 r=0.035 h=0.05 axis=y at=1.94,0.03,-0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_A82 r=0.035 h=0.05 axis=y at=1.94,0.03,0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_A90 r=0.035 h=0.05 axis=y at=2.495,0.03,-0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_A92 r=0.035 h=0.05 axis=y at=2.495,0.03,0.79 color=#d8dade mat=chrome shell=1
+      cyl cap_A r=0.17 h=0.12 axis=y at=1.7,0.1,0.3 color=#16171a mat=rubber shell=1
+    group trim_B at=0.12,2.6304,-2.6304 rot=-45,0,0 shell=1
+      box rib_B0 size=0.05,0.05,1.5 at=-2.4,0.04,0 round=0.015 color=#d4633a mat=paint shell=1
+      box rib_B1 size=0.05,0.05,1.5 at=-1.8,0.04,0 round=0.015 color=#d4633a mat=paint shell=1
+      box rib_B2 size=0.05,0.05,1.5 at=-1.2,0.04,0 round=0.015 color=#d4633a mat=paint shell=1
+      box rib_B3 size=0.05,0.05,1.5 at=-0.6,0.04,0 round=0.015 color=#d4633a mat=paint shell=1
+      box rib_B4 size=0.05,0.05,1.5 at=0,0.04,0 round=0.015 color=#d4633a mat=paint shell=1
+      box rib_B5 size=0.05,0.05,1.5 at=0.6,0.04,0 round=0.015 color=#d4633a mat=paint shell=1
+      box rib_B6 size=0.05,0.05,1.5 at=1.2,0.04,0 round=0.015 color=#d4633a mat=paint shell=1
+      box rib_B7 size=0.05,0.05,1.5 at=1.8,0.04,0 round=0.015 color=#d4633a mat=paint shell=1
+      box rib_B8 size=0.05,0.05,1.5 at=2.4,0.04,0 round=0.015 color=#d4633a mat=paint shell=1
+      cyl cb_B00 r=0.035 h=0.05 axis=y at=-2.5,0.03,-0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_B02 r=0.035 h=0.05 axis=y at=-2.5,0.03,0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_B10 r=0.035 h=0.05 axis=y at=-1.945,0.03,-0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_B12 r=0.035 h=0.05 axis=y at=-1.945,0.03,0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_B20 r=0.035 h=0.05 axis=y at=-1.39,0.03,-0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_B22 r=0.035 h=0.05 axis=y at=-1.39,0.03,0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_B30 r=0.035 h=0.05 axis=y at=-0.835,0.03,-0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_B32 r=0.035 h=0.05 axis=y at=-0.835,0.03,0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_B40 r=0.035 h=0.05 axis=y at=-0.28,0.03,-0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_B42 r=0.035 h=0.05 axis=y at=-0.28,0.03,0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_B50 r=0.035 h=0.05 axis=y at=0.275,0.03,-0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_B52 r=0.035 h=0.05 axis=y at=0.275,0.03,0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_B60 r=0.035 h=0.05 axis=y at=0.83,0.03,-0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_B62 r=0.035 h=0.05 axis=y at=0.83,0.03,0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_B70 r=0.035 h=0.05 axis=y at=1.385,0.03,-0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_B72 r=0.035 h=0.05 axis=y at=1.385,0.03,0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_B80 r=0.035 h=0.05 axis=y at=1.94,0.03,-0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_B82 r=0.035 h=0.05 axis=y at=1.94,0.03,0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_B90 r=0.035 h=0.05 axis=y at=2.495,0.03,-0.79 color=#d8dade mat=chrome shell=1
+      cyl cb_B92 r=0.035 h=0.05 axis=y at=2.495,0.03,0.79 color=#d8dade mat=chrome shell=1
+      cyl cap_B r=0.17 h=0.12 axis=y at=1.7,0.1,0.3 color=#16171a mat=rubber shell=1
+    tube header0 pts=-1.48,2.3335,-1.2021 -1.48,2.7224,-0.8132 -1.076,-0.1,-2.1 2.5,-1.1,-1.95 r=0.11 color=#7d6a58 mat=brushed
+    box flange0 size=0.42,0.08,0.34 at=-1.48,2.3335,-1.2021 rot=45,0,0 round=0 color=#6e6256 mat=cast
+    tube header1 pts=-0.28,2.3335,-1.2021 -0.28,2.7224,-0.8132 -0.236,-0.1,-2.1 2.5,-1.1,-1.95 r=0.11 color=#7d6a58 mat=brushed
+    box flange1 size=0.42,0.08,0.34 at=-0.28,2.3335,-1.2021 rot=45,0,0 round=0 color=#6e6256 mat=cast
+    tube header2 pts=0.92,2.3335,-1.2021 0.92,2.7224,-0.8132 0.604,-0.1,-2.1 2.5,-1.1,-1.95 r=0.11 color=#7d6a58 mat=brushed
+    box flange2 size=0.42,0.08,0.34 at=0.92,2.3335,-1.2021 rot=45,0,0 round=0 color=#6e6256 mat=cast
+    tube header3 pts=2.12,2.3335,-1.2021 2.12,2.7224,-0.8132 1.444,-0.1,-2.1 2.5,-1.1,-1.95 r=0.11 color=#7d6a58 mat=brushed
+    box flange3 size=0.42,0.08,0.34 at=2.12,2.3335,-1.2021 rot=45,0,0 round=0 color=#6e6256 mat=cast
+    tube collector pts=2.4,-1.1,-1.95 3.0,-1.25,-1.95 4.3,-1.3,-1.95 r=0.2 color=#8a7866 mat=brushed
+    group intake color=#a8acb2 mat=cast
+      loft plenum sections=-2.2,0.5,0.5 -1,0.7,0.62 1,0.7,0.62 2.2,0.5,0.5 axis=x at=0,3.25,0
+      tube runner_A0 pts=-1.728,3.25,0 -1.824,3.1,0.688 -2.12,2.2161,1.3761 r=0.1
+      tube runner_A1 pts=-0.648,3.25,0 -0.684,3.1,0.688 -0.92,2.2161,1.3761 r=0.1
+      tube runner_A2 pts=0.432,3.25,0 0.456,3.1,0.688 0.28,2.2161,1.3761 r=0.1
+      tube runner_A3 pts=1.512,3.25,0 1.596,3.1,0.688 1.48,2.2161,1.3761 r=0.1
+      tube runner_B0 pts=-1.512,3.25,0 -1.596,3.1,-0.688 -1.88,2.2161,-1.3761 r=0.1
+      tube runner_B1 pts=-0.432,3.25,0 -0.456,3.1,-0.688 -0.68,2.2161,-1.3761 r=0.1
+      tube runner_B2 pts=0.648,3.25,0 0.684,3.1,-0.688 0.52,2.2161,-1.3761 r=0.1
+      tube runner_B3 pts=1.728,3.25,0 1.824,3.1,-0.688 1.72,2.2161,-1.3761 r=0.1
+      cyl carb r=0.32 h=0.42 axis=y at=0,3.68,0 color=#c6a24c mat=brushed
+      cyl filter r=0.95 r2=0.95 h=0.3 axis=y at=0,4.04,0 color=#17181b mat=paint
+      cyl filterel r=0.86 h=0.31 axis=y at=0,4.04,0 color=#d8d0ba mat=fabric
+      cyl filtertop r=0.97 h=0.05 axis=y at=0,4.21,0 color=#17181b mat=paint
+      cyl wing r=0.09 h=0.1 axis=y at=0,4.27,0 color=#d0d3d8 mat=chrome
+    group waterpump at=-3.5,1.05,0
+      cyl wp r=0.42 h=0.12 axis=x color=#3b3e44 mat=cast
+      cyl wpg r=0.46 hole=0.36 h=0.06 axis=x color=#4a4e55 mat=cast
+      ring 5 r=0.2 axis=x
+        cyl wph r=0.07 h=0.13 axis=x color=#17181b mat=cast
+    group altern at=-3.5,1.25,-1.45
+      cyl alp r=0.26 h=0.12 axis=x color=#3b3e44 mat=cast
+      box alm size=0.46,0.05,0.05 color=#d8dade mat=chrome
+    cyl albody r=0.5 h=0.8 axis=x at=-3.0,1.25,-1.45 color=#c2c4c8 mat=cast
+    tube belt pts=-3.5,1.5,0.1 -3.5,1.49,-0.1 -3.5,1.5,-1.45 -3.5,1.2,-1.72 -3.5,0.98,-1.5 -3.5,0.6,-0.6 -3.5,0.05,-0.66 -3.5,-0.64,-0.1 -3.5,-0.45,0.48 -3.5,0.3,0.55 -3.5,1.05,0.47 -3.5,1.5,0.1 r=0.06 flat=4 color=#141517 mat=rubber
+    cyl oilfilter r=0.3 h=0.7 axis=z at=-1.6,-0.6,-1.66 color=#d8a21c mat=paint
+    cyl starter r=0.34 h=1.0 axis=x at=2.2,-0.75,-1.5 color=#25272b mat=cast
+    sphere flame_A0 r=0.4 scale=1,0.32,1 rot=45,0,0 at=-1.92,1.6433,1.6433 color=#ff8a24 mat=light
+    sphere flame_A1 r=0.4 scale=1,0.32,1 rot=45,0,0 at=-0.72,1.6433,1.6433 color=#ff8a24 mat=light
+    sphere flame_A2 r=0.4 scale=1,0.32,1 rot=45,0,0 at=0.48,1.2133,1.2133 color=#ff8a24 mat=light
+    sphere flame_A3 r=0.4 scale=1,0.32,1 rot=45,0,0 at=1.68,1.2133,1.2133 color=#ff8a24 mat=light
+    sphere flame_B0 r=0.4 scale=1,0.32,1 rot=-45,0,0 at=-1.68,1.6433,-1.6433 color=#ff8a24 mat=light
+    sphere flame_B1 r=0.4 scale=1,0.32,1 rot=-45,0,0 at=-0.48,1.2133,-1.2133 color=#ff8a24 mat=light
+    sphere flame_B2 r=0.4 scale=1,0.32,1 rot=-45,0,0 at=0.72,1.6433,-1.6433 color=#ff8a24 mat=light
+    sphere flame_B3 r=0.4 scale=1,0.32,1 rot=-45,0,0 at=1.92,1.2133,-1.2133 color=#ff8a24 mat=light
+  mech
+    rotor crank at=0,0,0 axis=x
+    rotor cam at=0,1.1,0 axis=x of=crank ratio=-0.5
+    rotor waterpump at=-3.5,1.05,0 axis=x of=crank ratio=1.45
+    rotor altern at=-3.5,1.25,-1.45 axis=x of=crank ratio=2.4
+    piston piston_A0 crank=crank pin=-1.92,0.43,0 wrist=-1.92,1.2897,1.2897
+    rod rod_A0 crank=crank pin=-1.92,0.43,0 wrist=piston_A0
+    fire flame_A0 of=crank at=-1.92,1.6433,1.6433 piston=piston_A0 phase=63 width=100 cycle=720
+    piston piston_A1 crank=crank pin=-0.72,0,0.43 wrist=-0.72,1.2897,1.2897
+    rod rod_A1 crank=crank pin=-0.72,0,0.43 wrist=piston_A1
+    fire flame_A1 of=crank at=-0.72,1.6433,1.6433 piston=piston_A1 phase=333 width=100 cycle=720
+    piston piston_A2 crank=crank pin=0.48,0,-0.43 wrist=0.48,0.8597,0.8597
+    rod rod_A2 crank=crank pin=0.48,0,-0.43 wrist=piston_A2
+    fire flame_A2 of=crank at=0.48,1.2133,1.2133 piston=piston_A2 phase=153 width=100 cycle=720
+    piston piston_A3 crank=crank pin=1.68,-0.43,0 wrist=1.68,0.8597,0.8597
+    rod rod_A3 crank=crank pin=1.68,-0.43,0 wrist=piston_A3
+    fire flame_A3 of=crank at=1.68,1.2133,1.2133 piston=piston_A3 phase=243 width=100 cycle=720
+    piston piston_B0 crank=crank pin=-1.68,0.43,0 wrist=-1.68,1.2897,-1.2897
+    rod rod_B0 crank=crank pin=-1.68,0.43,0 wrist=piston_B0
+    fire flame_B0 of=crank at=-1.68,1.6433,-1.6433 piston=piston_B0 phase=693 width=100 cycle=720
+    piston piston_B1 crank=crank pin=-0.48,0,0.43 wrist=-0.48,0.8597,-0.8597
+    rod rod_B1 crank=crank pin=-0.48,0,0.43 wrist=piston_B1
+    fire flame_B1 of=crank at=-0.48,1.2133,-1.2133 piston=piston_B1 phase=603 width=100 cycle=720
+    piston piston_B2 crank=crank pin=0.72,0,-0.43 wrist=0.72,1.2897,-1.2897
+    rod rod_B2 crank=crank pin=0.72,0,-0.43 wrist=piston_B2
+    fire flame_B2 of=crank at=0.72,1.6433,-1.6433 piston=piston_B2 phase=423 width=100 cycle=720
+    piston piston_B3 crank=crank pin=1.92,-0.43,0 wrist=1.92,0.8597,-0.8597
+    rod rod_B3 crank=crank pin=1.92,-0.43,0 wrist=piston_B3
+    fire flame_B3 of=crank at=1.92,1.2133,-1.2133 piston=piston_B3 phase=513 width=100 cycle=720
+    lift valve_in_A0 of=cam dir=0,-0.7071,-0.7071 by=0.16 at=257.5 width=125
+    rocker rocker_in_A0 of=valve_in_A0 at=-2.12,2.5739,2.1496 axis=x deg=-8.2
+    lift push_in_A0 of=cam dir=0,0.9628,0.2701 by=0.105 at=257.5 width=125
+    lift valve_ex_A0 of=cam dir=0,-0.7071,-0.7071 by=0.16 at=147.5 width=125
+    rocker rocker_ex_A0 of=valve_ex_A0 at=-1.72,2.5739,2.1496 axis=x deg=-8.2
+    lift push_ex_A0 of=cam dir=0,0.9628,0.2701 by=0.105 at=147.5 width=125
+    lift valve_in_A1 of=cam dir=0,-0.7071,-0.7071 by=0.16 at=32.5 width=125
+    rocker rocker_in_A1 of=valve_in_A1 at=-0.92,2.5739,2.1496 axis=x deg=-8.2
+    lift push_in_A1 of=cam dir=0,0.9628,0.2701 by=0.105 at=32.5 width=125
+    lift valve_ex_A1 of=cam dir=0,-0.7071,-0.7071 by=0.16 at=282.5 width=125
+    rocker rocker_ex_A1 of=valve_ex_A1 at=-0.52,2.5739,2.1496 axis=x deg=-8.2
+    lift push_ex_A1 of=cam dir=0,0.9628,0.2701 by=0.105 at=282.5 width=125
+    lift valve_in_A2 of=cam dir=0,-0.7071,-0.7071 by=0.16 at=302.5 width=125
+    rocker rocker_in_A2 of=valve_in_A2 at=0.28,2.5739,2.1496 axis=x deg=-8.2
+    lift push_in_A2 of=cam dir=0,0.9628,0.2701 by=0.105 at=302.5 width=125
+    lift valve_ex_A2 of=cam dir=0,-0.7071,-0.7071 by=0.16 at=192.5 width=125
+    rocker rocker_ex_A2 of=valve_ex_A2 at=0.68,2.5739,2.1496 axis=x deg=-8.2
+    lift push_ex_A2 of=cam dir=0,0.9628,0.2701 by=0.105 at=192.5 width=125
+    lift valve_in_A3 of=cam dir=0,-0.7071,-0.7071 by=0.16 at=347.5 width=125
+    rocker rocker_in_A3 of=valve_in_A3 at=1.48,2.5739,2.1496 axis=x deg=-8.2
+    lift push_in_A3 of=cam dir=0,0.9628,0.2701 by=0.105 at=347.5 width=125
+    lift valve_ex_A3 of=cam dir=0,-0.7071,-0.7071 by=0.16 at=237.5 width=125
+    rocker rocker_ex_A3 of=valve_ex_A3 at=1.88,2.5739,2.1496 axis=x deg=-8.2
+    lift push_ex_A3 of=cam dir=0,0.9628,0.2701 by=0.105 at=237.5 width=125
+    lift valve_in_B0 of=cam dir=0,-0.7071,0.7071 by=0.16 at=212.5 width=125
+    rocker rocker_in_B0 of=valve_in_B0 at=-1.88,2.5739,-2.1496 axis=x deg=8.2
+    lift push_in_B0 of=cam dir=0,0.6751,-0.7378 by=0.105 at=212.5 width=125
+    lift valve_ex_B0 of=cam dir=0,-0.7071,0.7071 by=0.16 at=102.5 width=125
+    rocker rocker_ex_B0 of=valve_ex_B0 at=-1.48,2.5739,-2.1496 axis=x deg=8.2
+    lift push_ex_B0 of=cam dir=0,0.6751,-0.7378 by=0.105 at=102.5 width=125
+    lift valve_in_B1 of=cam dir=0,-0.7071,0.7071 by=0.16 at=167.5 width=125
+    rocker rocker_in_B1 of=valve_in_B1 at=-0.68,2.5739,-2.1496 axis=x deg=8.2
+    lift push_in_B1 of=cam dir=0,0.6751,-0.7378 by=0.105 at=167.5 width=125
+    lift valve_ex_B1 of=cam dir=0,-0.7071,0.7071 by=0.16 at=57.5 width=125
+    rocker rocker_ex_B1 of=valve_ex_B1 at=-0.28,2.5739,-2.1496 axis=x deg=8.2
+    lift push_ex_B1 of=cam dir=0,0.6751,-0.7378 by=0.105 at=57.5 width=125
+    lift valve_in_B2 of=cam dir=0,-0.7071,0.7071 by=0.16 at=77.5 width=125
+    rocker rocker_in_B2 of=valve_in_B2 at=0.52,2.5739,-2.1496 axis=x deg=8.2
+    lift push_in_B2 of=cam dir=0,0.6751,-0.7378 by=0.105 at=77.5 width=125
+    lift valve_ex_B2 of=cam dir=0,-0.7071,0.7071 by=0.16 at=327.5 width=125
+    rocker rocker_ex_B2 of=valve_ex_B2 at=0.92,2.5739,-2.1496 axis=x deg=8.2
+    lift push_ex_B2 of=cam dir=0,0.6751,-0.7378 by=0.105 at=327.5 width=125
+    lift valve_in_B3 of=cam dir=0,-0.7071,0.7071 by=0.16 at=122.5 width=125
+    rocker rocker_in_B3 of=valve_in_B3 at=1.72,2.5739,-2.1496 axis=x deg=8.2
+    lift push_in_B3 of=cam dir=0,0.6751,-0.7378 by=0.105 at=122.5 width=125
+    lift valve_ex_B3 of=cam dir=0,-0.7071,0.7071 by=0.16 at=12.5 width=125
+    rocker rocker_ex_B3 of=valve_ex_B3 at=2.12,2.5739,-2.1496 axis=x deg=8.2
+    lift push_ex_B3 of=cam dir=0,0.6751,-0.7378 by=0.105 at=12.5 width=125
+  anim
+    step "Eine einzige Welle treibt alles: Kolben, Pleuel, Nocken und Ventile" 3.0
+      run turns=3
+      camera view=26,12 zoom=1.25
+    step "Acht Kolben, 90 Grad versetzt: alle 90 Grad zündet ein Zylinder" 3.5
+      run turns=4
+      camera view=20,6 zoom=1.9 on=piston_A1
+    step "Pleuel wandeln das Auf und Ab in die Drehung der Kurbelwelle" 4.0
+      run turns=2.5
+      camera view=8,-6 zoom=2.2 on=crank
+    step "Die Nockenwelle läuft halb so schnell und öffnet die Ventile" 4.0
+      run turns=2.5
+      camera view=34,22 zoom=2.3 on=head_A
+    step "Gesamter Motor unter Last" 3.0
+      run turns=5
+      camera view=26,12 zoom=1.25
