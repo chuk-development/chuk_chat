@@ -39,12 +39,14 @@ function bounds(parts, id) {
   return n ? { lo, hi, mid: lo.map((v, c) => (v + hi[c]) / 2) } : null;
 }
 
-// Smallest distance from a point to the corners of a part, in world units.
+// Distance from a point to the nearest part box of a group. Inside a part it is 0.
 function reach(parts, id, point) {
   let best = 1e9;
   for (const p of parts) {
     if (!p.path.includes(id)) continue;
-    for (let i = 0; i < p.tris.length; i += 3) best = Math.min(best, Math.hypot(p.tris[i] - point[0], p.tris[i + 1] - point[1], p.tris[i + 2] - point[2]));
+    const lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
+    for (let i = 0; i < p.tris.length; i += 3) for (let c = 0; c < 3; c++) { lo[c] = Math.min(lo[c], p.tris[i + c]); hi[c] = Math.max(hi[c], p.tris[i + c]); }
+    best = Math.min(best, Math.hypot(...[0, 1, 2].map((c) => Math.max(lo[c] - point[c], 0, point[c] - hi[c]))));
   }
   return best;
 }

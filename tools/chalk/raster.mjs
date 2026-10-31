@@ -62,6 +62,11 @@ const apply = (m, [x, y, z]) => [
 const nodeMatrix = (kv) => {
   let m = IDENT;
   if (kv.at) m = mul(m, translate(nums(kv.at)));
+  // basis=ax,ay,az,bx,by,bz: local x runs along a, local y along b.
+  if (kv.basis) {
+    const [a, b, c, d, e, f] = nums(kv.basis);
+    m = mul(m, [a, b, c, d, e, f, b * f - c * e, c * d - a * f, a * e - b * d, 0, 0, 0]);
+  }
   if (kv.rot) m = mul(m, rotM(nums(kv.rot)));
   if (kv.scale) {
     const s = nums(kv.scale);
@@ -72,7 +77,9 @@ const nodeMatrix = (kv) => {
 
 // Walks a model tree into flat parts: {id, color, mat, label, tris}.
 import { applySurface } from './paint.mjs';
+import { expandRig } from './rig.mjs';
 export function buildParts(model, errors) {
+  expandRig(model, errors);
   const parts = [];
   const seen = new Set();
   parts.pivots = new Map();
@@ -241,7 +248,7 @@ export function buildParts(model, errors) {
     { const b = boundsOf([parts.at(-1)]); for (const pid of parts.at(-1).path) grow(pid, b); }
     if (kv.on) attach(node, start, M);
   };
-  for (const k of expandKits(model.kids.filter((c) => c.cmd !== 'anim' && c.cmd !== 'mech'))) walk(k, IDENT, {}, null);
+  for (const k of expandKits(model.kids.filter((c) => !['anim', 'mech', 'template'].includes(c.cmd)))) walk(k, IDENT, {}, null);
   applySurface(parts, parts.surface, hex, errors);
   markGround(parts);
   fixPivots(parts);

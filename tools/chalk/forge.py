@@ -45,8 +45,9 @@ def fit(frag, m, box):
     target = [box[i + 3] - box[i] for i in range(3)]
     have = [max(m['hi'][i] - m['lo'][i], 1e-6) for i in range(3)]
     ratio = [t / h for t, h in zip(target, have)]
+    # One scale for all axes, or round parts turn into ovals and wobble when they spin.
     mid = sorted(ratio)[1]
-    s = [max(mid / 1.25, min(mid * 1.25, r)) for r in ratio]
+    s = [mid, mid, mid]
     c0 = [(m['hi'][i] + m['lo'][i]) / 2 for i in range(3)]
     c1 = [(box[i + 3] + box[i]) / 2 for i in range(3)]
     if all(0.8 < r < 1.25 for r in ratio) and all(abs(c1[i] - c0[i]) < 0.12 * max(target) for i in range(3)):
@@ -140,7 +141,7 @@ def assemble(plan, built):
     if plan.get('cut'):
         moving[0] = moving[0].replace('group hull', 'group hull shell=1', 1)
     body += '\n  group whole\n' + '\n'.join(indent(x, 4) for x in moving)
-    return head + body + '\n'
+    return head + body + '\n' + (indent(plan['rig']) + '\n' if plan.get('rig') else '')
 
 
 def render(chalk, png, samples=48, view=''):
@@ -151,6 +152,67 @@ def render(chalk, png, samples=48, view=''):
         return subprocess.run(args, capture_output=True, text=True, timeout=500).stdout
     except subprocess.TimeoutExpired:
         return 'render timeout'
+
+
+def scene_errors(path):
+    code = "import('./export3d.mjs').then(m=>{const s=m.exportScene(require('fs').readFileSync(process.argv[1],'utf8'));console.log(JSON.stringify(s.errors.filter(e=>/^mech|joint|anim|no part|step|action|template|cylinder/.test(e)).slice(0,20)))}).catch(e=>console.log(JSON.stringify([String(e)])))"
+    p = subprocess.run(['node', '-e', code, str(path)], capture_output=True, text=True, cwd=HERE, timeout=300)
+    try:
+        return json.loads(p.stdout.strip().split('\n')[-1])
+    except Exception:
+        return ['export failed: ' + p.stderr[-300:]]
+
+
+def group_table(scene):
+    return subprocess.run(['node', str(HERE / 'ids.mjs')], input=scene, capture_output=True, text=True).stdout
+
+
+def rig_block(plan, a, model, out):
+    """The moving heart of a machine, written before the parts that surround it."""
+    system = (HERE / 'PROMPT_RIG.md').read_text()
+    msg = f"Request: {a.request}\nPlan: {json.dumps({k: plan.get(k) for k in ('subject', 'size', 'unit', 'motion')}, ensure_ascii=False)}\nBuild it in the same units as the plan, with the crank where the plan needs it."
+    errs = []
+    for _ in range(3):
+        reply = llm(model, msg + (f'\nYour last version had these errors, fix them:\n{errs}' if errs else ''), system=system)
+        text = fence(reply)
+        test = 'canvas dark\nmodel m 800 400 keep=1\n' + indent(text) + '\n  anim\n    step "t" 1\n      run turns=1\n'
+        (out / 'rig.chalk').write_text(test)
+        errs = scene_errors(out / 'rig.chalk')
+        if not errs:
+            return text
+    return text
+
+
+def film(scene, a, plan, model, out, log):
+    """Joints and film. The checker sends numbers back until the machine holds together."""
+    system = (HERE / 'PROMPT_MECH.md').read_text()
+    table_ = group_table(scene)
+    (out / 'groups.txt').write_text(table_)
+    has_rig = '\n  mech\n' in scene
+    base = f"Request: {a.request}\nMotion: {plan.get('motion', '')}\nPlan: {json.dumps([{k: x.get(k) for k in ('id', 'what', 'static')} for x in plan['assemblies']], ensure_ascii=False)}\nGroups:\n{table_}"
+    if has_rig:
+        base += '\nA rig exists:\n' + scene[scene.index('\n  mech\n'):].split('\n  anim')[0][:6000]
+    errs, best = [], None
+    for k in range(4):
+        reply = llm(model, base + (f'\n\nYour last version:\n```chalk\n{best}\n```\nErrors:\n' + '\n'.join(errs) if errs else ''), system=system, tokens=16000)
+        best = fence(reply)
+        lines = [l for l in best.split('\n') if l.strip()]
+        i = next((n for n, l in enumerate(lines) if l.strip() == 'anim'), len(lines))
+        joints = [l.strip() for l in lines[:i] if l.strip() and l.strip() != 'mech']
+        anim = lines[i:]
+        body = scene
+        if has_rig:
+            body = body.replace('\n  mech\n', '\n  mech\n' + ''.join('    ' + j + '\n' for j in joints), 1)
+        else:
+            body = body.rstrip('\n') + '\n  mech\n' + ''.join('    ' + j + '\n' for j in joints)
+        ind = len(anim[0]) - len(anim[0].lstrip()) if anim else 0
+        text = body.rstrip('\n') + '\n' + '\n'.join('  ' + l[ind:] for l in anim) + '\n'
+        (out / 'scene.chalk').write_text(text)
+        errs = scene_errors(out / 'scene.chalk')
+        log.setdefault('mech_errors', []).append(len(errs))
+        if not errs:
+            break
+    log['mech_left'] = errs[:8]
 
 
 def views(chalk, out, name, plan):
@@ -198,6 +260,9 @@ def run(a):
     plan['request'] = a.request
     plan['model'] = model
     (out / 'plan.json').write_text(json.dumps(plan, indent=1, ensure_ascii=False))
+    plan['rig'] = rig_block(plan, a, model, out) if plan.get('crank') else ''
+    if plan['rig']:
+        plan['table'] += '\n\nThe moving heart exists already, do not build crank, pistons or rods. Build around it. These are the real numbers:\n' + plan['rig'][plan['rig'].index('mech'):]
     t1 = time.time()
     built = {}
     with cf.ThreadPoolExecutor(10) as ex:
@@ -250,13 +315,9 @@ def run(a):
             plan['form'] = keep_form
             (out / f'r{r + 1}.chalk').write_text(scene)
             views(out / f'r{r + 1}.chalk', out, f'r{r + 1}', plan)
-    ids = sorted({i for v in built.values() for i in v[1]['ids']})
     (out / 'scene.chalk').write_text(scene)
     if a.film:
-        reply = llm(model, f"Request: {a.request}\nPlan: {json.dumps([{k: x.get(k) for k in ('id', 'what', 'box', 'static')} for x in plan['assemblies']], ensure_ascii=False)}\nReal group ids: whole {' '.join(ids)}", system=(HERE / 'PROMPT_ANIM.md').read_text(), tokens=12000)
-        anim = fence(reply)
-        film = scene.rstrip('\n') + '\n' + indent(anim) + '\n'
-        (out / 'scene.chalk').write_text(film)
+        film(scene, a, plan, model, out, log)
         log['film'] = subprocess.run(['python3', str(HERE / 'render3d.py'), str(out / 'scene.chalk'), str(out / 'film.mp4'), '--samples', '24', '--size', '1280x720', '--fps', '24'], capture_output=True, text=True).stdout[-200:]
     render(out / 'scene.chalk', out / 'final.png', 96, f"{plan['view'][0]},{plan['view'][1]}")
     log['total_s'] = round(time.time() - t0)
