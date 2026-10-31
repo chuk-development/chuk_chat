@@ -1,6 +1,6 @@
 # pseudomap · chuk_chat · Tests
 
-472 Dateien · 1302 Typen/Funktionen · 1138 Member · Stand 2026-10-29
+472 Dateien · 1303 Typen/Funktionen · 1140 Member · Stand 2026-10-30
 
 Diese Datei ist `.pseudomap/MAP.md` — Stufe 1: was es gibt und wo es liegt.
 
@@ -435,7 +435,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### agent_profile_edit_page_test.dart  (115 Z.)
 - `void main()`
 
-### agent_settings_view_test.dart  (320 Z.)
+### agent_settings_view_test.dart  (327 Z.)
 - `Widget _page( String agentId, AgentRosterSource source, AgentProfileStore store, )`  — The one agent settings content, as a page, with every destination a
 - `void main()`
 
@@ -455,7 +455,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `AgentsAutomation _automation( String id, { String session = 'thread-1', String state = 'active', })`
 - `void main()`
 
-### desktop_settings_modal_test.dart  (182 Z.)
+### desktop_settings_modal_test.dart  (260 Z.)
 - `void main()`  — The desktop settings modal lists the same destinations as the phone's
 
 ### mcp_connectors_page_test.dart  (306 Z.)
@@ -472,7 +472,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void _expectInsideWindow(WidgetTester tester)`  — Every text on screen sits inside the 360 px window.
 - `void main()`
 
-### mobile_agents_settings_page_test.dart  (393 Z.)
+### mobile_agents_settings_page_test.dart  (459 Z.)
 - `void main()`
 
 ### model_selector_design_test.dart  (114 Z.)
@@ -488,7 +488,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `String _j(Map<String, String> m)`
 - `void main()`
 
-### settings_page_test.dart  (228 Z.)
+### settings_page_test.dart  (276 Z.)
 - `void main()`  — One settings page for both builds. With Agents on it is upstream
 
 ### skills_settings_page_test.dart  (357 Z.)
@@ -497,7 +497,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `AgentsSkill _skill(String name, {String source = 'workspace', bool enabled = true})`
 - `void main()`
 
-### theme_page_test.dart  (167 Z.)
+### theme_page_test.dart  (177 Z.)
 - `class _State`
   - themeMode accent iconFg bg contrast uiFont chatFont dynamicColor
 - `AppShellConfig _config(_State s)`
@@ -533,7 +533,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _HostState extends State<ScrollPerfHost> with ChatScrollMixin<ScrollPerfHost>`
   - anchoredTranscript transcriptRows transcriptPxPerChar
 
-### chat_scroll_real_screen_perf_test.dart  (123 Z.)
+### chat_scroll_real_screen_perf_test.dart  (126 Z.)
 - const: _guard
 - `void main()`
 
@@ -859,7 +859,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
   - read write delete map
 - `void main()`
 
-### media_index_test.dart  (189 Z.)
+### media_index_test.dart  (274 Z.)
 - `void main()`
 
 ### message_composition_service_test.dart  (69 Z.)
@@ -1305,14 +1305,14 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `ChukMcpRow _row(String id)`
 - `void main()`
 
-### mcp_fake_server_e2e_test.dart  (395 Z.)
+### mcp_fake_server_e2e_test.dart  (439 Z.)
 - `class _MemorySecrets implements AgentsSecureKeyValueStore`
   - read write delete map
 - `class _FakeServer`  — The real fake server, as a child process.
   - start state revoke stop base mcpUrl
 - `Future<bool> _browser(Uri url)`  — The browser: open the authorization URL, let the server's auto-consent
 - `class _FakeHost implements McpProbeControl`  — A host that answers like the real one: it dials with the forwarded
-  - probeMcpServers _toolsWith server probes renewOnProbe
+  - _toolsWith server probes signOuts renewOnProbe signedOut
 - `void main()`
 
 ### mcp_oauth_test.dart  (395 Z.)
@@ -1323,9 +1323,10 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### mcp_redirect_test.dart  (60 Z.)
 - `void main()`
 
-### mcp_service_test.dart  (807 Z.)
+### mcp_service_test.dart  (851 Z.)
+- const: _registeredClientId
 - `class _MemorySecrets implements AgentsSecureKeyValueStore`
-  - read write delete map
+  - read write delete map failReads
 - `class _FakeSync implements McpConnectorSync`  — An in-memory stand-in for the encrypted Supabase mirror.
   - save load clear blob
 - `http.Response _json(Map<String, dynamic> body)`
@@ -1871,7 +1872,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void _silenceUnrelatedPlugins(WidgetTester tester)`  — The imported screen constructs an [AudioRecorder] on mount, which calls the
 - `Future<void> _settle(WidgetTester tester)`  — [WidgetTester.pumpAndSettle] never returns here: the thread view arms an
 
-### agents_desktop_shell_test.dart  (667 Z.)
+### agents_desktop_shell_test.dart  (678 Z.)
 - `class _MemoryStore implements AgentsSecureKeyValueStore`
   - read write delete map
 - `class _FailingRefreshSource extends FakeAgentControlSource`  — A host that answers the panel's first look and then fails a refresh.
@@ -2282,7 +2283,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Widget wrap(Widget child)`
 - `void main()`
 
-### messenger_shell_test.dart  (2246 Z.)
+### messenger_shell_test.dart  (2254 Z.)
 - `class _MemoryStore implements AgentsSecureKeyValueStore`
   - read write delete map
 - `class _FakeRelayController implements AgentsRelayController`  — A controller the test drives: it can report itself paired, and it records

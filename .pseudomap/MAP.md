@@ -1,6 +1,6 @@
 # pseudomap · chuk_chat
 
-740 Dateien · 3969 Typen/Funktionen · 19643 Member · 1809/2370 öffentliche Symbole mit Zweckzeile · Stand 2026-10-29
+740 Dateien · 3969 Typen/Funktionen · 19652 Member · 1809/2370 öffentliche Symbole mit Zweckzeile · Stand 2026-10-30
 
 Diese Datei ist `.pseudomap/MAP.md` — Stufe 1: was es gibt und wo es liegt.
 
@@ -1130,7 +1130,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _ConnectorDetailPageState extends State<ConnectorDetailPage>`
   - _buildParameterRow _isEnabled _isAlwaysOn _hasCustomPrompt _currentDescription _promptChanged
 
-### customization_page.dart  (884 Z.)
+### customization_page.dart  (900 Z.)
 - `class CustomizationPage extends StatefulWidget`
   - config
 - `class _CustomizationPageState extends State<CustomizationPage>`
@@ -1354,7 +1354,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _MaterialTextField extends StatelessWidget`
   - _openFullscreen controller hintText minLines maxLines fullscreenTitle fontFamily contextMenuBuilder
 
-### theme_page.dart  (1160 Z.)
+### theme_page.dart  (1167 Z.)
 - `class ThemePage extends StatefulWidget`
   - config
 - `class _ThemePageState extends State<ThemePage>`
@@ -3211,7 +3211,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
   - initiator joiner _resolveNonce _require _abort _currentTranscript _sign _verifyPeer _checkPeerDevice createHello onResponse onHello onConfirm _decodeNonce _decodeBytes _constantTimeStringEquals role state channelId peerDeviceId authenticated
 - `SimplePublicKey agentsReconnectPeerKeyFromBase64(String encoded)`  — Parses a peer public key stored in a trust record. Delegates the length +
 
-### agents_relay_client.dart  (3956 Z.)
+### agents_relay_client.dart  (3960 Z.)
 - const: kReplayPageSize kBrowserTargetUserBrowser kBrowserTargetSandbox
 - `abstract interface class RelaySocket`  — A minimal duplex socket seam: an inbound stream of text frames and a way to
   - send close incoming
@@ -3409,7 +3409,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `abstract final class ChatDebugExport`  — Builds and copies the structured debug export for one thread.
   - _cap _toolCallJson _blockJson buildJson copyToClipboard plainTranscript _rowsFor _decodeToolCalls _decodeBlocks kind
 
-### media_index.dart  (353 Z.)
+### media_index.dart  (362 Z.)
 - const: kDocumentMime
 - `enum MediaKind`  — What kind of thing an entry points at.
   - image file page
@@ -3579,9 +3579,9 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class McpOAuth`
   - _withOfflineAccess canonicalResource resourceMetadataUrl challengeScopes resourceMetadataCandidates authServerMetadataCandidates discover register _isLoopbackRedirect _isLoopbackHost _loopbackCompatibleWith exchange refresh _token _getJson _uriOrNull _randomString clientName clientUri scopes
 
-### mcp_probe_control.dart  (17 Z.)
+### mcp_probe_control.dart  (25 Z.)
 - `abstract interface class McpProbeControl`
-  - probeMcpServers
+  - signedOut
 
 ### mcp_redirect.dart  (12 Z.)
 - reicht weiter: 'mcp_redirect_stub.dart' if (dart.library.io) 'mcp_redirect_io.dart'
@@ -3594,7 +3594,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class McpRedirectListener`
   - start close redirectUri callback
 
-### mcp_service.dart  (1491 Z.)
+### mcp_service.dart  (1604 Z.)
 - const: kMcpProtocolVersion
 - `enum McpConnectStatus`  — What a connect attempt ended in, for the UI to show.
   - connected cancelled failed
@@ -3604,7 +3604,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class McpConnectResult`
   - status message connection
 - `class McpService`
-  - resetForTest load pullRemoteForTest pushRemoteForTest _isAdoptDue _adoptOnce _pullOwnMirror _pullChukMirror _pushRemote _pushChukRows _chukRowFor _deleteChukRow _hasUsableRecord _isCurrentRegistration _setMember _isUsable connectByUrl disconnect _challengeFor _launch _followTestSignIn _closeBrowser _recordFromMirror applyRotatedCredentials verifyReachable verifyAllReachable _recordReachable _answersInitialize applyToolsFrame _applyOneCredential _connectionFromFrame connectionFor _isAcceptableEndpoint resolve call _clientFor _hostRenews _tokensFromHost _appSessionToken _endpointWithCredentials +24
+  - resetForTest load pullRemoteForTest pushRemoteForTest _isAdoptDue _adoptOnce _pullOwnMirror _pullChukMirror _pushRemote _pushChukRows _chukRowFor _deleteChukRow _hasUsableRecord _isCurrentRegistration _setMember _isUsable connectByUrl disconnect _challengeFor _launch _followTestSignIn _closeBrowser _recordFromMirror applyRotatedCredentials verifyReachable verifyAllReachable _recordReachable _answersInitialize pendingSignOuts _savePendingSignOuts Function _addPendingSignOut _addPendingSignOutNow _dropPendingSignOuts _dropPendingSignOutsNow applyToolsFrame _applyOneCredential _connectionFromFrame connectionFor _isAcceptableEndpoint +32
 
 ### mcp_store.dart  (535 Z.)
 - `class McpSecrets`  — Everything secret about one connection: the client this device registered
@@ -5523,7 +5523,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _RenderHeightCap extends RenderProxyBox`
   - performLayout paint maxHeight onOverflow
 
-### chat_document_view.dart  (723 Z.)
+### chat_document_view.dart  (730 Z.)
 - `bool documentIsHtml(Map<String, dynamic> document)`  — Whether [document] is an HTML page (`kind: html`, docs/PAGES.md).
 - `DateTime? documentUpdatedAt(Map<String, dynamic> document)`  — The agent stamps `updated_at` in epoch seconds — a float for chat documents,
 - `String? documentFreshness(Map<String, dynamic> document, {DateTime? now})`  — How fresh a document is, as one short line: `v17 · 00:06`.
@@ -6901,7 +6901,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 **Größte Dateien (95 über der Schwelle)**
 - `lib/platform_specific/chat/chat_ui_mobile.dart` — 4490 Zeilen, 189 Symbole
-- `lib/services/agents/agents_relay_client.dart` — 3956 Zeilen, 483 Symbole
+- `lib/services/agents/agents_relay_client.dart` — 3960 Zeilen, 483 Symbole
 - `lib/widgets/agents_thread_view.dart` — 3263 Zeilen, 190 Symbole
 - `lib/services/artifact_storage_service.dart` — 3209 Zeilen, 133 Symbole
 - `lib/platform_specific/chat/chat_ui_desktop.dart` — 2916 Zeilen, 154 Symbole
@@ -6933,6 +6933,6 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `_formatDate` — lib/pages/media_manager_page.dart:580 · lib/pages/usage_details_page.dart:916 · lib/pages/workspace_mobile_detail_page.dart:525 · lib/services/workspace_message_service.dart:260 +1
 - `_pick` — lib/openui/components/content_layout/disclosure.dart:50 · lib/openui/components/forms_buttons/pickers.dart:319 · lib/pages/settings/embedding_settings_page.dart:41 · lib/widgets/agent_roster_view.dart:281 +1
 - `_select` — lib/pages/agent_mailbox_page.dart:226 · lib/pages/agents_shell_state.dart:213 · lib/pages/messenger_shell.dart:645 · lib/services/storage/agents_chat_store.dart:904 +1
-- `_set` — lib/assistant/assistant_session.dart:467 · lib/openui/components/tables_charts/editable_table.dart:270 · lib/services/agents/agents_install_flow.dart:225 · lib/services/agents/agents_relay_client.dart:3916 +1
+- `_set` — lib/assistant/assistant_session.dart:467 · lib/openui/components/tables_charts/editable_table.dart:270 · lib/services/agents/agents_install_flow.dart:225 · lib/services/agents/agents_relay_client.dart:3920 +1
 - `_actions` — lib/pages/agent_mail_detail_page.dart:598 · lib/widgets/agents_skill_proposal_card.dart:532 · lib/widgets/agents_status_panel.dart:181 · lib/widgets/automation_card.dart:225
 - … +347 weitere

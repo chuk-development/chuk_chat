@@ -25,7 +25,7 @@
 ## test/pages/agent_profile_edit_page_test.dart  (115 Z.)
 - L11 `void main()`
 
-## test/pages/agent_settings_view_test.dart  (320 Z.)
+## test/pages/agent_settings_view_test.dart  (327 Z.)
 - L26 `Widget _page( String agentId, AgentRosterSource source, AgentProfileStore store, )`  — The one agent settings content, as a page, with every destination a
 - L49 `void main()`
 
@@ -53,8 +53,8 @@
 - L14 `AgentsAutomation _automation( String id, { String session = 'thread-1', String state = 'active', })`
 - L28 `void main()`
 
-## test/pages/desktop_settings_modal_test.dart  (182 Z.)
-- L20 `void main()`  — The desktop settings modal lists the same destinations as the phone's
+## test/pages/desktop_settings_modal_test.dart  (260 Z.)
+- L22 `void main()`  — The desktop settings modal lists the same destinations as the phone's
 
 ## test/pages/mcp_connectors_page_test.dart  (306 Z.)
 - L20 `class _MemorySecrets implements AgentsSecureKeyValueStore`  — In-memory secure backend so secrets round-trip with no platform channel.
@@ -73,7 +73,7 @@
 - L82 `void _expectInsideWindow(WidgetTester tester)`  — Every text on screen sits inside the 360 px window.
 - L92 `void main()`
 
-## test/pages/mobile_agents_settings_page_test.dart  (393 Z.)
+## test/pages/mobile_agents_settings_page_test.dart  (459 Z.)
 - L22 `void main()`
 
 ## test/pages/model_selector_design_test.dart  (114 Z.)
@@ -92,7 +92,7 @@
 - L37 `String _j(Map<String, String> m)`
 - L39 `void main()`
 
-## test/pages/settings_page_test.dart  (228 Z.)
+## test/pages/settings_page_test.dart  (276 Z.)
 - L26 `void main()`  — One settings page for both builds. With Agents on it is upstream
 
 ## test/pages/skills_settings_page_test.dart  (357 Z.)
@@ -101,7 +101,7 @@
 - L40 `AgentsSkill _skill(String name, {String source = 'workspace', bool enabled = true})`
 - L48 `void main()`
 
-## test/pages/theme_page_test.dart  (167 Z.)
+## test/pages/theme_page_test.dart  (177 Z.)
 - L15 `class _State`
   - L16 `Brightness themeMode = Brightness.dark`
   - L17 `Color accent = kDefaultAccentColor`

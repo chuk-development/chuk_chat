@@ -1521,7 +1521,7 @@
   - L437 `static bool _constantTimeStringEquals(String a, String b)`
 - L451 `SimplePublicKey agentsReconnectPeerKeyFromBase64(String encoded)`  — Parses a peer public key stored in a trust record. Delegates the length +
 
-## lib/services/agents/agents_relay_client.dart  (3956 Z.)
+## lib/services/agents/agents_relay_client.dart  (3960 Z.)
 - L67 `abstract interface class RelaySocket`  — A minimal duplex socket seam: an inbound stream of text frames and a way to
   - L70 `Stream<dynamic> get incoming`  — Frames arriving from the peer. Each element is the raw String (or bytes)
   - L73 `void send(String data)`  — Sends one text frame to the peer.
@@ -1973,38 +1973,38 @@
   - L3106 `void _completeSkillProposalDecision(Map<String, dynamic> payload)`
   - L3112 `void _settleSkillProposalDecision(AgentsSkillProposalResult result)`
   - L3119 `void _failSkillProposalDecisions()`  — Ends every decision still waiting: this client is going away, and its
-  - L3133 `Future<void> probeMcpServers(List<Map<String, dynamic>> servers)`
-  - L3142 `Future<void> requestAgentStatus(String sessionKey)`
-  - L3151 `Future<void> requestDocuments(String sessionKey, {String? id})`
-  - L3159 `Future<void> sendSecrets({ required Map<String, String> values, required int revision, String? requestId, })`
-  - L3177 `Future<void> dispose()`
-  - L3205 `void _onData(dynamic raw)`
-  - L3260 `Future<void> _handleReconnect(Map<String, dynamic> env)`
-  - L3283 `Future<void> _handlePairing(Map<String, dynamic> env)`
-  - L3312 `void _maybeCompletePairing()`
-  - L3319 `void _sendPairing(String step, Map<String, dynamic> data)`
-  - L3330 `void _enqueueFrame(Map<String, dynamic> env)`
-  - L3341 `Future<void> _handleFrame(Map<String, dynamic> env)`
-  - L3376 `void _dispatch(Map<String, dynamic> payload)`
-  - L3668 `static AgentsRelaySubagent? _subagentFromPayload( Map<String, dynamic> payload, )`  — Turns a `subagent` frame into a [AgentsRelaySubagent], or null when the
-  - L3697 `static AgentsRelayRoomTurn? _roomTurnFromPayload( Map<String, dynamic> payload, )`  — Turns a `room_turn` frame into a [AgentsRelayRoomTurn], or null when a
-  - L3723 `static AgentsRelayRoomHistory? _roomHistoryFromPayload( Map<String, dynamic> payload, )`  — Turns a `room_history` frame into a [AgentsRelayRoomHistory], or null when
-  - L3754 `static AgentsRelayFile _fileFromPayload(Map<String, dynamic> payload)`  — Turns a `file` payload into a [AgentsRelayFile], decoding the base64 body
-  - L3835 `Future<void> _sendChain = Future<void>.value()`
-  - L3837 `Future<void> _sendFramePayload(Map<String, dynamic> payload)`
-  - L3846 `static Future<void> Function(Map<String, dynamic> payload)? debugBeforeSeal`  — Test seam: awaited before each seal so a test can delay or fail one send
-  - L3848 `Future<void> _sendFramePayloadNow(Map<String, dynamic> payload)`
-  - L3867 `void _onSocketDone()`
-  - L3899 `void _failPairing(Object error)`
-  - L3905 `void _fail(String detail)`
-  - L3909 `Future<void> _closeSocket()`
-  - L3916 `void _set(AgentsRelayState next)`
-  - L3922 `static String _pairingErrorText(Object error)`
-  - L3931 `static String _frameToWire(AgentsFrame frame)`  — A sealed frame as it rides the relay: base64 of the frame's JSON text.
-  - L3934 `static AgentsFrame _frameFromWire(String wire)`
-- L3941 `kBrowserTargetUserBrowser = 'user_browser'`  — The `run_state.browser_target` value for the user's own browser. Any other
-- L3944 `kBrowserTargetSandbox = 'sandbox'`  — The `run_state.browser_target` value for the sandbox browser.
-- L3949 `String? parseBrowserTarget(Object? raw)`  — Reads `run_state.browser_target`: [kBrowserTargetUserBrowser], or
+  - L3133 `Future<void> probeMcpServers( List<Map<String, dynamic>> servers, { List<Map<String, String>> signedOut = const <Map<String, String>>[], })`
+  - L3146 `Future<void> requestAgentStatus(String sessionKey)`
+  - L3155 `Future<void> requestDocuments(String sessionKey, {String? id})`
+  - L3163 `Future<void> sendSecrets({ required Map<String, String> values, required int revision, String? requestId, })`
+  - L3181 `Future<void> dispose()`
+  - L3209 `void _onData(dynamic raw)`
+  - L3264 `Future<void> _handleReconnect(Map<String, dynamic> env)`
+  - L3287 `Future<void> _handlePairing(Map<String, dynamic> env)`
+  - L3316 `void _maybeCompletePairing()`
+  - L3323 `void _sendPairing(String step, Map<String, dynamic> data)`
+  - L3334 `void _enqueueFrame(Map<String, dynamic> env)`
+  - L3345 `Future<void> _handleFrame(Map<String, dynamic> env)`
+  - L3380 `void _dispatch(Map<String, dynamic> payload)`
+  - L3672 `static AgentsRelaySubagent? _subagentFromPayload( Map<String, dynamic> payload, )`  — Turns a `subagent` frame into a [AgentsRelaySubagent], or null when the
+  - L3701 `static AgentsRelayRoomTurn? _roomTurnFromPayload( Map<String, dynamic> payload, )`  — Turns a `room_turn` frame into a [AgentsRelayRoomTurn], or null when a
+  - L3727 `static AgentsRelayRoomHistory? _roomHistoryFromPayload( Map<String, dynamic> payload, )`  — Turns a `room_history` frame into a [AgentsRelayRoomHistory], or null when
+  - L3758 `static AgentsRelayFile _fileFromPayload(Map<String, dynamic> payload)`  — Turns a `file` payload into a [AgentsRelayFile], decoding the base64 body
+  - L3839 `Future<void> _sendChain = Future<void>.value()`
+  - L3841 `Future<void> _sendFramePayload(Map<String, dynamic> payload)`
+  - L3850 `static Future<void> Function(Map<String, dynamic> payload)? debugBeforeSeal`  — Test seam: awaited before each seal so a test can delay or fail one send
+  - L3852 `Future<void> _sendFramePayloadNow(Map<String, dynamic> payload)`
+  - L3871 `void _onSocketDone()`
+  - L3903 `void _failPairing(Object error)`
+  - L3909 `void _fail(String detail)`
+  - L3913 `Future<void> _closeSocket()`
+  - L3920 `void _set(AgentsRelayState next)`
+  - L3926 `static String _pairingErrorText(Object error)`
+  - L3935 `static String _frameToWire(AgentsFrame frame)`  — A sealed frame as it rides the relay: base64 of the frame's JSON text.
+  - L3938 `static AgentsFrame _frameFromWire(String wire)`
+- L3945 `kBrowserTargetUserBrowser = 'user_browser'`  — The `run_state.browser_target` value for the user's own browser. Any other
+- L3948 `kBrowserTargetSandbox = 'sandbox'`  — The `run_state.browser_target` value for the sandbox browser.
+- L3953 `String? parseBrowserTarget(Object? raw)`  — Reads `run_state.browser_target`: [kBrowserTargetUserBrowser], or
 
 ## lib/services/agents/agents_relay_link.dart  (89 Z.)
 - L30 `class AgentsRelayLink`  — Process-wide singleton joining the relay transport to the imported chat UI.
@@ -2528,7 +2528,7 @@
   - L278 `static List<ToolCall> _decodeToolCalls(Object? raw)`
   - L292 `static List<ContentBlock> _decodeBlocks(Object? raw)`
 
-## lib/services/agents/media_index.dart  (353 Z.)
+## lib/services/agents/media_index.dart  (362 Z.)
 - L27 `enum MediaKind`  — What kind of thing an entry points at.
   - L27 `image`
   - L27 `file`
@@ -2550,23 +2550,23 @@
   - L70 `Map<String, dynamic> toJson()`
   - L83 `static MediaEntry? fromJson(Object? value)`
 - L117 `Map<String, dynamic>? latestPageIn( List<Map<String, dynamic>> rows, String pageId, )`  — The newest snapshot of the page [pageId] in [rows], or null.
-- L144 `List<Object?> contentBlocksOf(Map<String, dynamic> row)`  — The content blocks of a stored row.
-- L158 `class MediaIndex extends ChangeNotifier`
-  - L159 `MediaIndex()`
-  - L161 `static final MediaIndex instance = MediaIndex()`
-  - L163 `static const String _prefsKey = 'cowork_media_index_v1'`
-  - L166 `final Map<String, MediaEntry> _entries = <String, MediaEntry>{}`  — Keyed by reference, so the same file indexed twice is one entry.
-  - L167 `bool _loaded = false`
-  - L169 `bool get loaded`
-  - L172 `List<MediaEntry> entries({MediaKind? kind})`  — Newest first. [kind] null returns everything.
-  - L187 `Future<void> load()`
-  - L212 `Future<void> ensureFor(Iterable<String> threadKeys)`  — Read the threads this device already holds, once per thread.
-  - L228 `final Set<String> _scanned = <String>{}`  — Threads already read, so a rebuild does not read them again.
-  - L232 `void noteRows(String threadKey, List<Map<String, dynamic>> rows)`  — Take every picture and every file out of [rows] and remember where they
-  - L285 `bool _notePage( String threadKey, Map<Object?, Object?> document, DateTime? at, )`  — Index one page snapshot. True when the index changed: a page seen for
-  - L318 `static Future<Map<String, dynamic>?> loadPage(MediaEntry entry)`  — The page behind [entry], read from its thread on this device.
-  - L332 `Future<void> _persist()`
-  - L347 `void clearForTest()`
+- L146 `List<Object?> contentBlocksOf(Map<String, dynamic> row)`  — The content blocks of a stored row.
+- L160 `class MediaIndex extends ChangeNotifier`
+  - L161 `MediaIndex()`
+  - L163 `static final MediaIndex instance = MediaIndex()`
+  - L165 `static const String _prefsKey = 'cowork_media_index_v1'`
+  - L168 `final Map<String, MediaEntry> _entries = <String, MediaEntry>{}`  — Keyed by reference, so the same file indexed twice is one entry.
+  - L169 `bool _loaded = false`
+  - L171 `bool get loaded`
+  - L174 `List<MediaEntry> entries({MediaKind? kind})`  — Newest first. [kind] null returns everything.
+  - L189 `Future<void> load()`
+  - L214 `Future<void> ensureFor(Iterable<String> threadKeys)`  — Read the threads this device already holds, once per thread.
+  - L230 `final Set<String> _scanned = <String>{}`  — Threads already read, so a rebuild does not read them again.
+  - L234 `void noteRows(String threadKey, List<Map<String, dynamic>> rows)`  — Take every picture and every file out of [rows] and remember where they
+  - L287 `bool _notePage( String threadKey, Map<Object?, Object?> document, DateTime? at, )`  — Index one page snapshot. True when the index changed: a page seen for
+  - L327 `static Future<Map<String, dynamic>?> loadPage(MediaEntry entry)`  — The page behind [entry], read from its thread on this device.
+  - L341 `Future<void> _persist()`
+  - L356 `void clearForTest()`
 
 ## lib/services/agents/room_source.dart  (214 Z.)
 - L21 `abstract class RoomSource extends ChangeNotifier`  — Read/write access to the app's rooms, as a [ChangeNotifier] the UI listens to.

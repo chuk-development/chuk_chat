@@ -48,7 +48,7 @@
   - L142 `void dispose()`
   - L148 `Widget build(BuildContext context)`
 
-## test/perf/chat_scroll_real_screen_perf_test.dart  (123 Z.)
+## test/perf/chat_scroll_real_screen_perf_test.dart  (126 Z.)
 - L24 `_guard = Timeout(Duration(minutes: 5))`
 - L26 `void main()`
 

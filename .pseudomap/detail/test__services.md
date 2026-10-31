@@ -215,7 +215,7 @@
   - L20 `Future<void> delete(String key)`
 - L23 `void main()`
 
-## test/services/media_index_test.dart  (189 Z.)
+## test/services/media_index_test.dart  (274 Z.)
 - L6 `void main()`
 
 ## test/services/message_composition_service_test.dart  (69 Z.)

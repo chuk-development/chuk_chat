@@ -662,7 +662,7 @@
   - L66 `Widget build(BuildContext context)`
   - L222 `Widget _buildParameterRow(String name, String description)`
 
-## lib/pages/customization_page.dart  (884 Z.)
+## lib/pages/customization_page.dart  (900 Z.)
 - L31 `class CustomizationPage extends StatefulWidget`
   - L32 `final AppShellConfig config`
   - L34 `const CustomizationPage({super.key, required this.config})`
@@ -698,13 +698,13 @@
   - L277 `Future<void> _resetSystemPrompt()`
   - L294 `void dispose()`
   - L300 `Widget build(BuildContext context)`
-  - L768 `String _fontFamilyLabel(String id, AppLocalizations l)`
-  - L786 `List<Widget> _systemPromptEditor(AppLocalizations l)`  — The prompt editor is two tiles of the same group: the row that opens it,
-- L852 `class _CardLabel extends StatelessWidget`  — Title and explanation at the top of a card that is not a row.
-  - L853 `const _CardLabel({required this.title, this.subtitle})`
-  - L855 `final String title`
-  - L856 `final String? subtitle`
-  - L859 `Widget build(BuildContext context)`
+  - L784 `String _fontFamilyLabel(String id, AppLocalizations l)`
+  - L802 `List<Widget> _systemPromptEditor(AppLocalizations l)`  — The prompt editor is two tiles of the same group: the row that opens it,
+- L868 `class _CardLabel extends StatelessWidget`  — Title and explanation at the top of a card that is not a row.
+  - L869 `const _CardLabel({required this.title, this.subtitle})`
+  - L871 `final String title`
+  - L872 `final String? subtitle`
+  - L875 `Widget build(BuildContext context)`
 
 ## lib/pages/desktop_media_modal.dart  (128 Z.)
 - L21 `_kRadius = 28`  — Corner radius of the panel. The settings modal's.
@@ -1589,7 +1589,7 @@
   - L785 `Future<void> _openFullscreen(BuildContext context)`  — Opens the field on a screen of its own and takes the text back.
   - L797 `Widget build(BuildContext context)`
 
-## lib/pages/theme_page.dart  (1160 Z.)
+## lib/pages/theme_page.dart  (1167 Z.)
 - L23 `class ThemePage extends StatefulWidget`
   - L24 `final AppShellConfig config`
   - L26 `const ThemePage({super.key, required this.config})`
@@ -1622,68 +1622,68 @@
   - L234 `void _updateChatFont(String id)`
   - L241 `String _fontLabel(String id, AppLocalizations l)`
   - L258 `Widget build(BuildContext context)`
-  - L498 `Widget _dynamicColorNote(AppLocalizations l)`
-- L507 `class _ColorCard extends StatelessWidget`
-  - L508 `final String description`
-  - L509 `final String hexLabel`
-  - L510 `final Color currentColor`
-  - L511 `final List<Color> options`
-  - L512 `final TextEditingController hexController`
-  - L513 `final int gridColumns`
-  - L514 `final ValueChanged<Color> onColorSelected`
-  - L515 `final ValueChanged<String> onHexChanged`
-  - L517 `const _ColorCard({ required this.description, required this.hexLabel, required this.currentColor, required this.options, required this.hexController, required this.gridColumns, required this.onColorSelected, required this.onHexChanged, })`
-  - L529 `Widget build(BuildContext context)`
-- L643 `class _ColorPickerDialog extends StatefulWidget`
-  - L644 `final Color initial`
-  - L645 `const _ColorPickerDialog({required this.initial})`
-  - L648 `State<_ColorPickerDialog> createState()`
-- L651 `class _ColorPickerDialogState extends State<_ColorPickerDialog>`
-  - L652 `late HSVColor _hsv`
-  - L653 `late TextEditingController _hexController`
-  - L656 `void initState()`
-  - L663 `void dispose()`
-  - L668 `void _setHsv(HSVColor v)`
-  - L675 `void _onHexSubmit(String hex)`
-  - L686 `Widget build(BuildContext context)`
-- L794 `class _GradientSlider extends StatelessWidget`
-  - L795 `final List<Color> colors`
-  - L796 `final double value`
-  - L797 `final ValueChanged<double> onChanged`
-  - L799 `const _GradientSlider({ required this.colors, required this.value, required this.onChanged, })`
-  - L806 `Widget build(BuildContext context)`
-- L871 `class _Swatch extends StatelessWidget`
-  - L872 `final Color color`
-  - L873 `final bool selected`
-  - L874 `final double size`
-  - L875 `final VoidCallback onTap`
-  - L877 `const _Swatch({ required this.color, required this.selected, required this.size, required this.onTap, })`
-  - L885 `Widget build(BuildContext context)`
-- L933 `class _PresetPicker extends StatelessWidget`
-  - L934 `final List<ThemePreset> presets`
-  - L935 `final ThemePreset? selected`
-  - L936 `final Brightness brightness`
-  - L937 `final ValueChanged<ThemePreset> onSelected`
-  - L938 `final String title`
-  - L939 `final String subtitle`
-  - L940 `final String customLabel`
-  - L942 `const _PresetPicker({ required this.presets, required this.selected, required this.brightness, required this.onSelected, required this.title, required this.subtitle, required this.customLabel, })`
-  - L953 `Widget build(BuildContext context)`
-- L1032 `class _PresetDots extends StatelessWidget`
-  - L1033 `final ThemePreset preset`
-  - L1034 `final Brightness brightness`
-  - L1035 `const _PresetDots({required this.preset, required this.brightness})`
-  - L1038 `Widget build(BuildContext context)`
-- L1064 `class _FontCard extends StatelessWidget`
-  - L1065 `final String title`
-  - L1066 `final String subtitle`
-  - L1067 `final String sample`
-  - L1068 `final String value`
-  - L1069 `final List<String> options`
-  - L1070 `final String Function(String) labelFor`
-  - L1071 `final ValueChanged<String> onChanged`
-  - L1073 `const _FontCard({ required this.title, required this.subtitle, required this.sample, required this.value, required this.options, required this.labelFor, required this.onChanged, })`
-  - L1084 `Widget build(BuildContext context)`
+  - L505 `Widget _dynamicColorNote(AppLocalizations l)`
+- L514 `class _ColorCard extends StatelessWidget`
+  - L515 `final String description`
+  - L516 `final String hexLabel`
+  - L517 `final Color currentColor`
+  - L518 `final List<Color> options`
+  - L519 `final TextEditingController hexController`
+  - L520 `final int gridColumns`
+  - L521 `final ValueChanged<Color> onColorSelected`
+  - L522 `final ValueChanged<String> onHexChanged`
+  - L524 `const _ColorCard({ required this.description, required this.hexLabel, required this.currentColor, required this.options, required this.hexController, required this.gridColumns, required this.onColorSelected, required this.onHexChanged, })`
+  - L536 `Widget build(BuildContext context)`
+- L650 `class _ColorPickerDialog extends StatefulWidget`
+  - L651 `final Color initial`
+  - L652 `const _ColorPickerDialog({required this.initial})`
+  - L655 `State<_ColorPickerDialog> createState()`
+- L658 `class _ColorPickerDialogState extends State<_ColorPickerDialog>`
+  - L659 `late HSVColor _hsv`
+  - L660 `late TextEditingController _hexController`
+  - L663 `void initState()`
+  - L670 `void dispose()`
+  - L675 `void _setHsv(HSVColor v)`
+  - L682 `void _onHexSubmit(String hex)`
+  - L693 `Widget build(BuildContext context)`
+- L801 `class _GradientSlider extends StatelessWidget`
+  - L802 `final List<Color> colors`
+  - L803 `final double value`
+  - L804 `final ValueChanged<double> onChanged`
+  - L806 `const _GradientSlider({ required this.colors, required this.value, required this.onChanged, })`
+  - L813 `Widget build(BuildContext context)`
+- L878 `class _Swatch extends StatelessWidget`
+  - L879 `final Color color`
+  - L880 `final bool selected`
+  - L881 `final double size`
+  - L882 `final VoidCallback onTap`
+  - L884 `const _Swatch({ required this.color, required this.selected, required this.size, required this.onTap, })`
+  - L892 `Widget build(BuildContext context)`
+- L940 `class _PresetPicker extends StatelessWidget`
+  - L941 `final List<ThemePreset> presets`
+  - L942 `final ThemePreset? selected`
+  - L943 `final Brightness brightness`
+  - L944 `final ValueChanged<ThemePreset> onSelected`
+  - L945 `final String title`
+  - L946 `final String subtitle`
+  - L947 `final String customLabel`
+  - L949 `const _PresetPicker({ required this.presets, required this.selected, required this.brightness, required this.onSelected, required this.title, required this.subtitle, required this.customLabel, })`
+  - L960 `Widget build(BuildContext context)`
+- L1039 `class _PresetDots extends StatelessWidget`
+  - L1040 `final ThemePreset preset`
+  - L1041 `final Brightness brightness`
+  - L1042 `const _PresetDots({required this.preset, required this.brightness})`
+  - L1045 `Widget build(BuildContext context)`
+- L1071 `class _FontCard extends StatelessWidget`
+  - L1072 `final String title`
+  - L1073 `final String subtitle`
+  - L1074 `final String sample`
+  - L1075 `final String value`
+  - L1076 `final List<String> options`
+  - L1077 `final String Function(String) labelFor`
+  - L1078 `final ValueChanged<String> onChanged`
+  - L1080 `const _FontCard({ required this.title, required this.subtitle, required this.sample, required this.value, required this.options, required this.labelFor, required this.onChanged, })`
+  - L1091 `Widget build(BuildContext context)`
 
 ## lib/pages/tool_calling_settings_page.dart  (761 Z.)
 - L23 `class ToolCallingSettingsPage extends StatefulWidget`

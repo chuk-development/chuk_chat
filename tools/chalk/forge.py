@@ -76,6 +76,9 @@ def build(plan, a, content_img, feedback=''):
             best = (frag, m, miss)
         if m['parts'] >= 25 and miss < 1.4:
             break
+        if None in m['lo'] + m['hi']:
+            note = f"Your last version had no parts that build. Errors: {m['errors'][:6]}. Write the full assembly again, inside the box {a['box']}."
+            continue
         note = f"Your last version measures min {[round(v, 2) for v in m['lo']]} max {[round(v, 2) for v in m['hi']]} but the box is {a['box']}. It is wrong by a factor {miss:.1f}. Usual cause: world numbers inside a group that has at=, or inside ring or repeat, so the offset counts twice. Children of a group are relative to it. Write the full assembly again, inside the box. Your last version:\n```chalk\n{frag[:9000]}\n```"
     return best[:2] if best else None
 

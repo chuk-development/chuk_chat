@@ -251,9 +251,9 @@
   - L589 `static final Random _random = Random.secure()`
   - L591 `static String _randomString(int length)`
 
-## lib/services/mcp/mcp_probe_control.dart  (17 Z.)
+## lib/services/mcp/mcp_probe_control.dart  (25 Z.)
 - L12 `abstract interface class McpProbeControl`
-  - L15 `Future<void> probeMcpServers(List<Map<String, dynamic>> servers)`  — Dial [servers] (the same projection the task frame carries) and answer
+  - L20 `Future<void> probeMcpServers( List<Map<String, dynamic>> servers, { List<Map<String, String>> signedOut = const <Map<String, String>>[], })`  — Dial [servers] (the same projection the task frame carries) and answer
 
 ## lib/services/mcp/mcp_redirect.dart  (12 Z.)
 - reicht weiter: 'mcp_redirect_stub.dart' if (dart.library.io) 'mcp_redirect_io.dart'
@@ -281,97 +281,106 @@
   - L18 `Future<Uri> get callback`
   - L21 `Future<void> close()`
 
-## lib/services/mcp/mcp_service.dart  (1491 Z.)
-- L67 `kMcpProtocolVersion = '2025-06-18'`  — The MCP revision the challenge probe claims to speak. It only has to be a
-- L70 `enum McpConnectStatus`  — What a connect attempt ended in, for the UI to show.
-  - L70 `connected`
-  - L70 `cancelled`
-  - L70 `failed`
-- L75 `class McpConnectCanceler`  — A handle the screen keeps so it can stop a connect. On Agents the connect
-  - L76 `final Completer<void> _canceled = Completer<void>()`
-  - L78 `void cancel()`
-  - L82 `bool get isCanceled`
-  - L83 `Future<void> get whenCanceled`
-- L88 `class _ConnectCanceled implements Exception`  — Thrown inside [McpService] when the user cancels the sign-in. Private: it
-  - L89 `const _ConnectCanceled()`
-- L92 `class McpConnectResult`
-  - L93 `const McpConnectResult(this.status, {this.message, this.connection})`
-  - L95 `final McpConnectStatus status`
-  - L96 `final String? message`
-  - L97 `final McpConnection? connection`
-- L100 `class McpService`
-  - L101 `McpService._()`
-  - L104 `static McpStore store = McpStore()`  — The local persistence. Swappable in tests through [resetForTest].
-  - L107 `static McpConnectorSync sync = const McpConnectorSync()`  — The encrypted Supabase mirror. Swappable in tests through [resetForTest].
-  - L111 `static ChukMcpMirror chukMirror = const ChukMcpSync()`  — chuk_chat's per-connector rows in `service_credentials` (bead
-  - L113 `static final ValueNotifier<List<McpConnection>> connections = ValueNotifier<List<McpConnection>>(const <McpConnection>[])`
-  - L116 `static bool _loaded = false`
-  - L120 `static final ValueNotifier<Set<String>> connecting = ValueNotifier<Set<String>>(<String>{})`  — Ids of connectors whose browser sign-in is running now. The list shows
-  - L126 `static final ValueNotifier<Set<String>> checking = ValueNotifier<Set<String>>(<String>{})`  — Ids of connectors the host was asked about and has not answered for yet.
-  - L134 `static Future<bool> Function()? hostRenewsOverride`  — Whether the paired host renews the OAuth sign-ins of the connectors it
-  - L139 `static McpProbeControl? probeControlOverride`  — The host link [probe] uses when none is passed. Tests put a fake host
-  - L144 `static Duration hostRenewWait = const Duration(seconds: 15)`  — How long a device-side call waits for the host to hand back a renewed
-  - L146 `static final StreamController<String> _credentialsArrived = StreamController<String>.broadcast()`
-  - L151 `static Future<bool> Function(Uri url)? launcher`  — Injected in tests so no browser opens and no real server is called.
-  - L156 `static McpOAuth Function()? oauthFactory`  — Injected in tests so the OAuth discovery, registration and token
-  - L161 `static http.Client Function()? probeClientFactory`  — Injected in tests so the unauthenticated challenge probe answers from a
-  - L165 `static void resetForTest({ McpStore? store, McpConnectorSync? sync, ChukMcpMirror? chukMirror, })`  — Reset for a test: inject a store / sync and forget the loaded state.
-  - L197 `static Future<void> load()`  — Load the connector set into [connections]. Runs once. Reads the local
-  - L217 `static Future<void> pullRemoteForTest()`  — Adopt the encrypted mirror and wait for it, for a test. [load] fires the
-  - L220 `static Future<void> pushRemoteForTest()`
-  - L247 `static const Duration kDefaultAdoptInterval = Duration(minutes: 5)`  — How long a successful adoption is trusted before the next caller pulls
-  - L251 `static const Duration kDefaultAdoptRetryInterval = Duration(seconds: 20)`  — How long to wait after an attempt that could NOT read the mirror (no
-  - L253 `static Duration adoptInterval = kDefaultAdoptInterval`
-  - L254 `static Duration adoptRetryInterval = kDefaultAdoptRetryInterval`
-  - L258 `static DateTime Function() clock = DateTime.now`  — Test seam so a test can move time instead of waiting for it.
-  - L260 `static Future<void>? _adopting`
-  - L261 `static DateTime? _adoptedAt`
-  - L262 `static DateTime? _attemptedAt`
-  - L265 `static bool get hasAdopted`  — True when a pull has read the mirrors at least once.
-  - L275 `static Future<void> adoptMirrors({bool force = false})`  — Pull both mirrors and adopt what this device is missing.
-  - L286 `static bool _isAdoptDue()`
-  - L299 `static Future<void> _adoptOnce()`
-  - L315 `static Future<bool> _pullOwnMirror()`  — Adopt the own encrypted mirror. Returns true when it was readable — a
-  - L379 `static Future<bool> _pullChukMirror()`  — What chuk_chat connected, adopted where this device has nothing
-  - L432 `static Future<void> _pushRemote()`  — Read the whole connector set and its secrets and push it to the encrypted
-  - L476 `static Future<void> _pushChukRows(List<McpConnection> list)`  — The write-back into chuk_chat's table (bead cowork-hza): one
-  - L486 `static Future<ChukMcpRow> _chukRowFor(McpConnection c)`
-  - L512 `static Future<void> _deleteChukRow(String id)`  — Removes chuk's row for [id], but only a row that is really this
-  - L542 `static Future<McpConnectResult> connect({ required String id, required String name, required String url, String description = '', String? iconUrl, bool addedByHand = false, McpAuth auth = McpAuth.oauth, McpConnectCanceler? canceler, bool forceSignIn = false, })`  — Record [url] as a connector the user wants, signing in first when the
-  - L619 `static Future<bool> _hasUsableRecord(String id)`  — True when [id] already holds a record this device can still use.
-  - L626 `static Future<bool> _isCurrentRegistration(String id)`  — Whether [id]'s stored client was registered under the app's current
-  - L632 `static void _setMember(ValueNotifier<Set<String>> set, String id, bool on)`
-  - L641 `static bool _isUsable(McpSecrets? record)`  — Whether [record] can still get a request authenticated: a bearer that has
-  - L653 `static Future<McpConnectResult> connectWithCredentials({ required String id, required String name, required String url, required Map<String, String> credentials, String description = '', String? iconUrl, bool addedByHand = false, })`  — Record a server that takes the user's own credentials on its URL (an API
-  - L700 `static Future<McpConnectResult> connectByUrl( String url, { String? name, McpConnectCanceler? canceler, })`  — Add a server the user typed in by hand.
-  - L722 `static Future<void> disconnect(String id)`  — Forget a server: its config and its secrets, here and on the mirror.
-  - L749 `static Future<String?> _authorize({ required String id, required Uri endpoint, String? wwwAuthenticate, McpConnectCanceler? canceler, bool signInOptional = false, })`  — Run the OAuth flow for [endpoint] and store what came out of it.
-  - L846 `static Future<String?> _challengeFor(Uri endpoint)`  — The `WWW-Authenticate` challenge [endpoint] answers an unauthenticated
-  - L890 `static const bool _autoBrowser = bool.fromEnvironment('MCP_TEST_AUTO_BROWSER')`  — Opens the sign-in inside the app: a Custom Tab on Android, a Safari
-  - L892 `static Future<bool> _launch(Uri url)`
-  - L906 `static Future<bool> _followTestSignIn(Uri url)`
-  - L923 `static Future<void> _closeBrowser()`
-  - L937 `static McpSecrets? _recordFromMirror(Map<Object?, Object?> entry)`  — The secret record inside one mirrored entry. A blob written by this
-  - L982 `static Future<int> applyRotatedCredentials( Map<String, dynamic> payload, )`  — Take an `mcp_credentials` frame from the host and update the stored
-  - L1015 `static final ValueNotifier<Set<String>> unreachable = ValueNotifier<Set<String>>(<String>{})`  — Ids of connections whose server did not answer the last time it was
-  - L1031 `static Future<bool> verifyReachable(String id)`  — Ask the server whether it is still there.
-  - L1044 `static Future<void> verifyAllReachable()`  — Check every connection. Used when the connectors page opens, so the
-  - L1048 `static void _recordReachable(String id, bool alive)`
-  - L1056 `static Future<bool> _answersInitialize(Uri endpoint)`  — Whether [endpoint] answers an MCP `initialize` at all. The status does
-  - L1102 `static Future<void> probe({ McpProbeControl? control, bool includeEmpty = false, })`  — Ask the paired host to dial every stored connector now.
-  - L1150 `static Future<int> applyToolsFrame(Map<String, dynamic> payload)`  — Take an `mcp_tools` frame from the host and record what each connector
-  - L1220 `static Future<bool> _applyOneCredential(Map<String, dynamic> payload)`  — One connector out of an `mcp_credentials` frame. True when it was written.
-  - L1278 `static Future<McpConnection?> _connectionFromFrame( Map<String, dynamic> payload, )`  — The connection an `mcp_credentials` frame is about, or null when this
-  - L1299 `static McpConnection? connectionFor(String id)`
-  - L1308 `static bool _isAcceptableEndpoint(Uri endpoint)`  — https everywhere, except a server on this machine. A debug build may
-  - L1331 `static ({McpConnection connection, String tool})? resolve(String toolName)`  — The connection and the server-side tool name behind a registered tool.
-  - L1343 `static Future<McpCallResult> call( String toolName, Map<String, dynamic> arguments, )`  — Call [toolName] on the server that offers it, from this device.
-  - L1383 `static Future<McpClient?> _clientFor(McpConnection connection)`  — A client for [connection], with whatever credential it needs. Null when
-  - L1440 `static Future<bool> _hostRenews()`  — Whether the paired host renews this device's connector sign-ins. True in
-  - L1454 `static Future<McpTokens?> _tokensFromHost(String id)`  — Ask the host for [id]'s current tokens and wait for them. Null when no
-  - L1468 `static Future<String?> _appSessionToken()`  — The account's own access token, for a server fronted by our API.
-  - L1478 `static Uri _endpointWithCredentials(Uri base, Map<String, String> creds)`
-  - L1486 `static Uri endpointWithCredentialsForTest( Uri base, Map<String, String> creds, )`  — The credentialed endpoint, exposed for tests: the reader's key must land
+## lib/services/mcp/mcp_service.dart  (1604 Z.)
+- L68 `kMcpProtocolVersion = '2025-06-18'`  — The MCP revision the challenge probe claims to speak. It only has to be a
+- L71 `enum McpConnectStatus`  — What a connect attempt ended in, for the UI to show.
+  - L71 `connected`
+  - L71 `cancelled`
+  - L71 `failed`
+- L76 `class McpConnectCanceler`  — A handle the screen keeps so it can stop a connect. On Agents the connect
+  - L77 `final Completer<void> _canceled = Completer<void>()`
+  - L79 `void cancel()`
+  - L83 `bool get isCanceled`
+  - L84 `Future<void> get whenCanceled`
+- L89 `class _ConnectCanceled implements Exception`  — Thrown inside [McpService] when the user cancels the sign-in. Private: it
+  - L90 `const _ConnectCanceled()`
+- L93 `class McpConnectResult`
+  - L94 `const McpConnectResult(this.status, {this.message, this.connection})`
+  - L96 `final McpConnectStatus status`
+  - L97 `final String? message`
+  - L98 `final McpConnection? connection`
+- L101 `class McpService`
+  - L102 `McpService._()`
+  - L105 `static McpStore store = McpStore()`  — The local persistence. Swappable in tests through [resetForTest].
+  - L108 `static McpConnectorSync sync = const McpConnectorSync()`  — The encrypted Supabase mirror. Swappable in tests through [resetForTest].
+  - L112 `static ChukMcpMirror chukMirror = const ChukMcpSync()`  — chuk_chat's per-connector rows in `service_credentials` (bead
+  - L114 `static final ValueNotifier<List<McpConnection>> connections = ValueNotifier<List<McpConnection>>(const <McpConnection>[])`
+  - L117 `static bool _loaded = false`
+  - L121 `static final ValueNotifier<Set<String>> connecting = ValueNotifier<Set<String>>(<String>{})`  — Ids of connectors whose browser sign-in is running now. The list shows
+  - L127 `static final ValueNotifier<Set<String>> checking = ValueNotifier<Set<String>>(<String>{})`  — Ids of connectors the host was asked about and has not answered for yet.
+  - L135 `static Future<bool> Function()? hostRenewsOverride`  — Whether the paired host renews the OAuth sign-ins of the connectors it
+  - L140 `static McpProbeControl? probeControlOverride`  — The host link [probe] uses when none is passed. Tests put a fake host
+  - L145 `static Duration hostRenewWait = const Duration(seconds: 15)`  — How long a device-side call waits for the host to hand back a renewed
+  - L147 `static final StreamController<String> _credentialsArrived = StreamController<String>.broadcast()`
+  - L152 `static Future<bool> Function(Uri url)? launcher`  — Injected in tests so no browser opens and no real server is called.
+  - L157 `static McpOAuth Function()? oauthFactory`  — Injected in tests so the OAuth discovery, registration and token
+  - L162 `static http.Client Function()? probeClientFactory`  — Injected in tests so the unauthenticated challenge probe answers from a
+  - L166 `static void resetForTest({ McpStore? store, McpConnectorSync? sync, ChukMcpMirror? chukMirror, })`  — Reset for a test: inject a store / sync and forget the loaded state.
+  - L198 `static Future<void> load()`  — Load the connector set into [connections]. Runs once. Reads the local
+  - L218 `static Future<void> pullRemoteForTest()`  — Adopt the encrypted mirror and wait for it, for a test. [load] fires the
+  - L221 `static Future<void> pushRemoteForTest()`
+  - L248 `static const Duration kDefaultAdoptInterval = Duration(minutes: 5)`  — How long a successful adoption is trusted before the next caller pulls
+  - L252 `static const Duration kDefaultAdoptRetryInterval = Duration(seconds: 20)`  — How long to wait after an attempt that could NOT read the mirror (no
+  - L254 `static Duration adoptInterval = kDefaultAdoptInterval`
+  - L255 `static Duration adoptRetryInterval = kDefaultAdoptRetryInterval`
+  - L259 `static DateTime Function() clock = DateTime.now`  — Test seam so a test can move time instead of waiting for it.
+  - L261 `static Future<void>? _adopting`
+  - L262 `static DateTime? _adoptedAt`
+  - L263 `static DateTime? _attemptedAt`
+  - L266 `static bool get hasAdopted`  — True when a pull has read the mirrors at least once.
+  - L276 `static Future<void> adoptMirrors({bool force = false})`  — Pull both mirrors and adopt what this device is missing.
+  - L287 `static bool _isAdoptDue()`
+  - L300 `static Future<void> _adoptOnce()`
+  - L316 `static Future<bool> _pullOwnMirror()`  — Adopt the own encrypted mirror. Returns true when it was readable — a
+  - L380 `static Future<bool> _pullChukMirror()`  — What chuk_chat connected, adopted where this device has nothing
+  - L433 `static Future<void> _pushRemote()`  — Read the whole connector set and its secrets and push it to the encrypted
+  - L477 `static Future<void> _pushChukRows(List<McpConnection> list)`  — The write-back into chuk_chat's table (bead cowork-hza): one
+  - L487 `static Future<ChukMcpRow> _chukRowFor(McpConnection c)`
+  - L513 `static Future<void> _deleteChukRow(String id)`  — Removes chuk's row for [id], but only a row that is really this
+  - L543 `static Future<McpConnectResult> connect({ required String id, required String name, required String url, String description = '', String? iconUrl, bool addedByHand = false, McpAuth auth = McpAuth.oauth, McpConnectCanceler? canceler, bool forceSignIn = false, })`  — Record [url] as a connector the user wants, signing in first when the
+  - L620 `static Future<bool> _hasUsableRecord(String id)`  — True when [id] already holds a record this device can still use.
+  - L627 `static Future<bool> _isCurrentRegistration(String id)`  — Whether [id]'s stored client was registered under the app's current
+  - L633 `static void _setMember(ValueNotifier<Set<String>> set, String id, bool on)`
+  - L642 `static bool _isUsable(McpSecrets? record)`  — Whether [record] can still get a request authenticated: a bearer that has
+  - L654 `static Future<McpConnectResult> connectWithCredentials({ required String id, required String name, required String url, required Map<String, String> credentials, String description = '', String? iconUrl, bool addedByHand = false, })`  — Record a server that takes the user's own credentials on its URL (an API
+  - L701 `static Future<McpConnectResult> connectByUrl( String url, { String? name, McpConnectCanceler? canceler, })`  — Add a server the user typed in by hand.
+  - L723 `static Future<void> disconnect(String id)`  — Forget a server: its config and its secrets, here and on the mirror.
+  - L769 `static Future<String?> _authorize({ required String id, required Uri endpoint, String? wwwAuthenticate, McpConnectCanceler? canceler, bool signInOptional = false, })`  — Run the OAuth flow for [endpoint] and store what came out of it.
+  - L866 `static Future<String?> _challengeFor(Uri endpoint)`  — The `WWW-Authenticate` challenge [endpoint] answers an unauthenticated
+  - L910 `static const bool _autoBrowser = bool.fromEnvironment('MCP_TEST_AUTO_BROWSER')`  — Opens the sign-in inside the app: a Custom Tab on Android, a Safari
+  - L912 `static Future<bool> _launch(Uri url)`
+  - L926 `static Future<bool> _followTestSignIn(Uri url)`
+  - L943 `static Future<void> _closeBrowser()`
+  - L957 `static McpSecrets? _recordFromMirror(Map<Object?, Object?> entry)`  — The secret record inside one mirrored entry. A blob written by this
+  - L1002 `static Future<int> applyRotatedCredentials( Map<String, dynamic> payload, )`  — Take an `mcp_credentials` frame from the host and update the stored
+  - L1035 `static final ValueNotifier<Set<String>> unreachable = ValueNotifier<Set<String>>(<String>{})`  — Ids of connections whose server did not answer the last time it was
+  - L1051 `static Future<bool> verifyReachable(String id)`  — Ask the server whether it is still there.
+  - L1064 `static Future<void> verifyAllReachable()`  — Check every connection. Used when the connectors page opens, so the
+  - L1068 `static void _recordReachable(String id, bool alive)`
+  - L1076 `static Future<bool> _answersInitialize(Uri endpoint)`  — Whether [endpoint] answers an MCP `initialize` at all. The status does
+  - L1122 `static Future<void> probe({ McpProbeControl? control, bool includeEmpty = false, })`  — Ask the paired host to dial every stored connector now.
+  - L1163 `static const String pendingSignOutsKey = 'mcp_pending_signouts_v1'`  — SharedPreferences key of the sign-out outbox: a short JSON list of
+  - L1166 `static Future<List<Map<String, String>>> pendingSignOuts()`  — The queued sign-outs. Empty when none or unreadable.
+  - L1188 `static Future<void> _savePendingSignOuts( List<Map<String, String>> entries, )`
+  - L1202 `static Future<void> _outboxTail = Future<void>.value()`  — Every outbox change runs after the one before it: each one reads,
+  - L1204 `static Future<void> _serializeOutbox(Future<void> Function() change)`
+  - L1210 `static Future<void> _addPendingSignOut(Map<String, String> entry)`
+  - L1213 `static Future<void> _addPendingSignOutNow(Map<String, String> entry)`
+  - L1226 `static Future<void> _dropPendingSignOuts(List<Object?> acked)`
+  - L1229 `static Future<void> _dropPendingSignOutsNow(List<Object?> acked)`
+  - L1259 `static Future<int> applyToolsFrame(Map<String, dynamic> payload)`  — Take an `mcp_tools` frame from the host and record what each connector
+  - L1333 `static Future<bool> _applyOneCredential(Map<String, dynamic> payload)`  — One connector out of an `mcp_credentials` frame. True when it was written.
+  - L1391 `static Future<McpConnection?> _connectionFromFrame( Map<String, dynamic> payload, )`  — The connection an `mcp_credentials` frame is about, or null when this
+  - L1412 `static McpConnection? connectionFor(String id)`
+  - L1421 `static bool _isAcceptableEndpoint(Uri endpoint)`  — https everywhere, except a server on this machine. A debug build may
+  - L1444 `static ({McpConnection connection, String tool})? resolve(String toolName)`  — The connection and the server-side tool name behind a registered tool.
+  - L1456 `static Future<McpCallResult> call( String toolName, Map<String, dynamic> arguments, )`  — Call [toolName] on the server that offers it, from this device.
+  - L1496 `static Future<McpClient?> _clientFor(McpConnection connection)`  — A client for [connection], with whatever credential it needs. Null when
+  - L1553 `static Future<bool> _hostRenews()`  — Whether the paired host renews this device's connector sign-ins. True in
+  - L1567 `static Future<McpTokens?> _tokensFromHost(String id)`  — Ask the host for [id]'s current tokens and wait for them. Null when no
+  - L1581 `static Future<String?> _appSessionToken()`  — The account's own access token, for a server fronted by our API.
+  - L1591 `static Uri _endpointWithCredentials(Uri base, Map<String, String> creds)`
+  - L1599 `static Uri endpointWithCredentialsForTest( Uri base, Map<String, String> creds, )`  — The credentialed endpoint, exposed for tests: the reader's key must land
 
 ## lib/services/mcp/mcp_store.dart  (535 Z.)
 - L47 `class McpSecrets`  — Everything secret about one connection: the client this device registered

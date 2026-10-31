@@ -88,7 +88,7 @@
 - L388 `Future<void> _settle(WidgetTester tester)`  — [WidgetTester.pumpAndSettle] never returns here: the thread view arms an
 - L398 `_guard = Timeout(Duration(seconds: 60))`  — A wall-clock guard on every test in this file. Nothing here should take
 
-## test/widgets/agents_desktop_shell_test.dart  (667 Z.)
+## test/widgets/agents_desktop_shell_test.dart  (678 Z.)
 - L37 `class _MemoryStore implements AgentsSecureKeyValueStore`
   - L38 `final Map<String, String> map = <String, String>{}`
   - L40 `Future<String?> read(String key)`
@@ -593,7 +593,7 @@
 - L19 `Widget wrap(Widget child)`
 - L30 `void main()`
 
-## test/widgets/messenger_shell_test.dart  (2246 Z.)
+## test/widgets/messenger_shell_test.dart  (2254 Z.)
 - L61 `class _MemoryStore implements AgentsSecureKeyValueStore`
   - L62 `final Map<String, String> map = <String, String>{}`
   - L65 `Future<String?> read(String key)`
@@ -650,12 +650,12 @@
   - L266 `Future<AccountSession?> refresh()`
 - L275 `Future<void> settle(WidgetTester tester)`  — Pump a few frames without waiting for the tree to go quiet.
 - L281 `void main()`
-- L2227 `class _CountingReadMarks extends AgentReadMarks`
-  - L2228 `int flushes = 0`
-  - L2231 `Future<void> flush()`
-- L2237 `class _CountingRoster extends LocalAgentRosterSource`
-  - L2238 `int flushes = 0`
-  - L2241 `void flushPendingPersist()`
+- L2235 `class _CountingReadMarks extends AgentReadMarks`
+  - L2236 `int flushes = 0`
+  - L2239 `Future<void> flush()`
+- L2245 `class _CountingRoster extends LocalAgentRosterSource`
+  - L2246 `int flushes = 0`
+  - L2249 `void flushPendingPersist()`
 
 ## test/widgets/messenger_typing_indicator_test.dart  (48 Z.)
 - L5 `void main()`

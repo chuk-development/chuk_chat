@@ -1602,7 +1602,7 @@
   - L685 `void performLayout()`
   - L712 `void paint(PaintingContext context, Offset offset)`
 
-## lib/widgets/chat_document_view.dart  (723 Z.)
+## lib/widgets/chat_document_view.dart  (730 Z.)
 - L27 `bool documentIsHtml(Map<String, dynamic> document)`  — Whether [document] is an HTML page (`kind: html`, docs/PAGES.md).
 - L33 `DateTime? documentUpdatedAt(Map<String, dynamic> document)`  — The agent stamps `updated_at` in epoch seconds — a float for chat documents,
 - L49 `String? documentFreshness(Map<String, dynamic> document, {DateTime? now})`  — How fresh a document is, as one short line: `v17 · 00:06`.
@@ -1625,27 +1625,27 @@
   - L244 `void didUpdateWidget(ChatDocumentView oldWidget)`
   - L262 `void dispose()`
   - L268 `Widget build(BuildContext context)`
-  - L374 `static const double _readingMeasure = 720`  — The longest line a reader should have to track back from. Past roughly
-  - L379 `Widget _prose(BuildContext context, String text)`  — A markdown document, at document size rather than chat size: a larger
-  - L395 `Widget _table(BuildContext context)`  — A table document, drawn by the same widget the chat uses.
-  - L423 `Widget _chart(BuildContext context)`  — The chart, whole.
-- L477 `class _UpdatedMark extends StatelessWidget`  — The quiet end of "make an update legible": a mark, not a message. It never
-  - L478 `const _UpdatedMark()`
-  - L481 `Widget build(BuildContext context)`
-- L511 `class _DocumentCell extends StatelessWidget`
-  - L512 `const _DocumentCell(this.value, {this.expanded = false})`
-  - L513 `final String value`
-  - L514 `final bool expanded`
-  - L516 `Widget build(BuildContext context)`
-- L585 `class _DocumentScreen extends StatelessWidget`  — The phone presentation of a document: its own screen, a bar that floats on
-  - L586 `const _DocumentScreen({required this.document})`
-  - L588 `final Map<String, dynamic> document`
-  - L591 `Widget build(BuildContext context)`
-- L679 `class _MiddleEllipsis extends StatelessWidget`  — One line that loses its middle, not its end.
-  - L680 `const _MiddleEllipsis({required this.text, this.style})`
-  - L682 `final String text`
-  - L683 `final TextStyle? style`
-  - L686 `Widget build(BuildContext context)`
+  - L381 `static const double _readingMeasure = 720`  — The longest line a reader should have to track back from. Past roughly
+  - L386 `Widget _prose(BuildContext context, String text)`  — A markdown document, at document size rather than chat size: a larger
+  - L402 `Widget _table(BuildContext context)`  — A table document, drawn by the same widget the chat uses.
+  - L430 `Widget _chart(BuildContext context)`  — The chart, whole.
+- L484 `class _UpdatedMark extends StatelessWidget`  — The quiet end of "make an update legible": a mark, not a message. It never
+  - L485 `const _UpdatedMark()`
+  - L488 `Widget build(BuildContext context)`
+- L518 `class _DocumentCell extends StatelessWidget`
+  - L519 `const _DocumentCell(this.value, {this.expanded = false})`
+  - L520 `final String value`
+  - L521 `final bool expanded`
+  - L523 `Widget build(BuildContext context)`
+- L592 `class _DocumentScreen extends StatelessWidget`  — The phone presentation of a document: its own screen, a bar that floats on
+  - L593 `const _DocumentScreen({required this.document})`
+  - L595 `final Map<String, dynamic> document`
+  - L598 `Widget build(BuildContext context)`
+- L686 `class _MiddleEllipsis extends StatelessWidget`  — One line that loses its middle, not its end.
+  - L687 `const _MiddleEllipsis({required this.text, this.style})`
+  - L689 `final String text`
+  - L690 `final TextStyle? style`
+  - L693 `Widget build(BuildContext context)`
 
 ## lib/widgets/chat_documents_explorer.dart  (700 Z.)
 - part of 'chat_documents_panel.dart'
@@ -2401,7 +2401,7 @@
   - L470 `final IconData? icon`
   - L473 `Widget build(BuildContext context)`
 - L515 `class ExpressiveAdvancedSection extends StatefulWidget`  — The one "Advanced" fold of a settings screen (docs/SETTINGS_ORDER.md).
-  - L516 `const ExpressiveAdvancedSection({ super.key, required this.title, required this.children, this.initiallyExpanded = false, this.toggleKey = const ValueKey<String>('settings_advanced'), this.icon = Icons.tune_rounded, })`
+  - L516 `const ExpressiveAdvancedSection({ super.key, required this.title, required this.children, this.initiallyExpanded = false, this.toggleKey = const ValueKey<String>('settings_advanced'), this.icon = Icons.more_horiz_rounded, })`
   - L526 `final String title`  — "Advanced" in the user's language.
   - L529 `final List<Widget> children`  — What the fold holds: section headers and groups, as on the screen.
   - L531 `final bool initiallyExpanded`

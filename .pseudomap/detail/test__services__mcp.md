@@ -47,7 +47,7 @@
 - L101 `ChukMcpRow _row(String id)`
 - L107 `void main()`
 
-## test/services/mcp/mcp_fake_server_e2e_test.dart  (395 Z.)
+## test/services/mcp/mcp_fake_server_e2e_test.dart  (439 Z.)
 - L31 `class _MemorySecrets implements AgentsSecureKeyValueStore`
   - L32 `final Map<String, String> map = <String, String>{}`
   - L35 `Future<String?> read(String key)`
@@ -67,10 +67,11 @@
   - L101 `_FakeHost(this.server)`
   - L103 `final _FakeServer server`
   - L104 `final List<List<Map<String, dynamic>>> probes = <List<Map<String, dynamic>>>[]`
-  - L108 `bool renewOnProbe = false`  — Set to refresh the forwarded grant on the next probe (the host renewed
-  - L111 `Future<void> probeMcpServers(List<Map<String, dynamic>> servers)`
-  - L160 `Future<List<Map<String, dynamic>>?> _toolsWith(String access)`
-- L186 `void main()`
+  - L105 `final List<List<Map<String, String>>> signOuts = <List<Map<String, String>>>[]`
+  - L109 `bool renewOnProbe = false`  — Set to refresh the forwarded grant on the next probe (the host renewed
+  - L112 `Future<void> probeMcpServers( List<Map<String, dynamic>> servers, { List<Map<String, String>> signedOut = const <Map<String, String>>[], })`
+  - L169 `Future<List<Map<String, dynamic>>?> _toolsWith(String access)`
+- L195 `void main()`
 
 ## test/services/mcp/mcp_oauth_test.dart  (395 Z.)
 - L9 `http.Response _json(Map<String, dynamic> body)`
@@ -80,22 +81,24 @@
 ## test/services/mcp/mcp_redirect_test.dart  (60 Z.)
 - L9 `void main()`
 
-## test/services/mcp/mcp_service_test.dart  (807 Z.)
+## test/services/mcp/mcp_service_test.dart  (851 Z.)
 - L17 `class _MemorySecrets implements AgentsSecureKeyValueStore`
   - L18 `final Map<String, String> map = <String, String>{}`
-  - L21 `Future<String?> read(String key)`
-  - L24 `Future<void> write(String key, String value)`
-  - L27 `Future<void> delete(String key)`
-- L31 `class _FakeSync implements McpConnectorSync`  — An in-memory stand-in for the encrypted Supabase mirror.
-  - L32 `Map<String, dynamic>? blob`
-  - L35 `Future<void> save(Map<String, dynamic> payload)`
-  - L38 `Future<Map<String, dynamic>?> load()`
-  - L41 `Future<void> clear()`
-- L44 `http.Response _json(Map<String, dynamic> body)`
-- L54 `MockClient _challengingServer({String scope = 'read'})`  — The server's answer to an unauthenticated request: a 401 that names both
-- L67 `MockClient _authServer({bool refuseRegistration = false})`  — A compliant authorization server for `https://srv.example/mcp`.
-- L107 `Future<bool> _signIn(Uri authorizationUrl)`  — Stands in for the browser: takes the authorization URL, hands the loopback
-- L126 `void main()`
+  - L21 `bool failReads = false`  — A keystore that throws on every read (a locked keyring).
+  - L24 `Future<String?> read(String key)`
+  - L30 `Future<void> write(String key, String value)`
+  - L33 `Future<void> delete(String key)`
+- L37 `class _FakeSync implements McpConnectorSync`  — An in-memory stand-in for the encrypted Supabase mirror.
+  - L38 `Map<String, dynamic>? blob`
+  - L41 `Future<void> save(Map<String, dynamic> payload)`
+  - L44 `Future<Map<String, dynamic>?> load()`
+  - L47 `Future<void> clear()`
+- L50 `http.Response _json(Map<String, dynamic> body)`
+- L60 `MockClient _challengingServer({String scope = 'read'})`  — The server's answer to an unauthenticated request: a 401 that names both
+- L73 `MockClient _authServer({bool refuseRegistration = false})`  — A compliant authorization server for `https://srv.example/mcp`.
+- L113 `Future<bool> _signIn(Uri authorizationUrl)`  — Stands in for the browser: takes the authorization URL, hands the loopback
+- L133 `_registeredClientId = 'cid-live'`  — The client id the fake server hands out; one test changes it per sign-in.
+- L135 `void main()`
 
 ## test/services/mcp/mcp_store_test.dart  (514 Z.)
 - L19 `class _MemorySecrets implements AgentsSecureKeyValueStore`  — In-memory secure backend so secrets round-trip with no platform channel.

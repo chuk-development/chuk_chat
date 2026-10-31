@@ -1,12 +1,12 @@
 # pseudomap · Regelbefunde · chuk_chat
 
-8205 Befunde aus 1212 Dateien · Stand 2026-10-29
+8215 Befunde aus 1212 Dateien · Stand 2026-10-30
 
 Rang 1 sind Fehler: Lecks, verschluckte Ausnahmen, Zustand nach await. Rang 2 ist Wartbarkeit, Rang 3 sind Flutter- und Stilregeln. Volle Liste je Regel: `pseudomap lint --rule <name>`.
 
-## Rang 1 — Fehler (285)
+## Rang 1 — Fehler (286)
 
-avoid-empty-catch 213 · use-setstate-synchronously 57 · always-remove-listener 9 · dispose-fields 5 · avoid-only-rethrow 1
+avoid-empty-catch 214 · use-setstate-synchronously 57 · always-remove-listener 9 · dispose-fields 5 · avoid-only-rethrow 1
 
 - `lib/model_selector_page.dart:176` **always-remove-listener** — 1x addListener, 0x removeListener in `_ModelSelectorPageState`
 - `lib/openui/components/tables_charts/editable_table.dart:186` **always-remove-listener** — 1x addListener, 0x removeListener in `_EditableTableState`
@@ -37,9 +37,9 @@ avoid-empty-catch 213 · use-setstate-synchronously 57 · always-remove-listener
 - `lib/pages/fullscreen_map_page.dart:665` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/pages/settings_page.dart:750` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/pages/theme_page.dart:341` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/pages/theme_page.dart:370` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/pages/theme_page.dart:399` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/pages/theme_page.dart:682` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/pages/theme_page.dart:375` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/pages/theme_page.dart:404` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/pages/theme_page.dart:689` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/platform_specific/chat/chat_model_selection_mixin.dart:291` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/platform_specific/chat/chat_ui_helpers.dart:351` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/platform_specific/chat/chat_ui_helpers.dart:688` **avoid-empty-catch** — leerer catch verschluckt den Fehler
@@ -69,11 +69,11 @@ avoid-empty-catch 213 · use-setstate-synchronously 57 · always-remove-listener
 - `lib/services/agents/agents_install_flow.dart:208` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/services/agents/agents_relay_client.dart:2512` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/services/agents/agents_relay_client.dart:2639` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/services/agents/agents_relay_client.dart:3183` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/services/agents/media_index.dart:151` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/services/agents/media_index.dart:201` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/services/agents/media_index.dart:221` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/services/agents/media_index.dart:341` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/services/agents/agents_relay_client.dart:3187` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/services/agents/media_index.dart:153` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/services/agents/media_index.dart:203` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/services/agents/media_index.dart:223` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/services/agents/media_index.dart:350` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/services/agents/roster_pins.dart:69` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/services/agents/roster_pins.dart:106` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/services/agents/roster_pins.dart:135` **avoid-empty-catch** — leerer catch verschluckt den Fehler
@@ -109,9 +109,10 @@ avoid-empty-catch 213 · use-setstate-synchronously 57 · always-remove-listener
 - `lib/services/google_oauth.dart:715` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/services/mcp/mcp_icon_cache.dart:46` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/services/mcp/mcp_icon_cache.dart:115` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/services/mcp/mcp_service.dart:928` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/services/mcp/mcp_service.dart:942` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/services/mcp/mcp_service.dart:1131` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/services/mcp/mcp_service.dart:948` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/services/mcp/mcp_service.dart:962` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/services/mcp/mcp_service.dart:1152` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/services/mcp/mcp_service.dart:1241` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/services/mcp/mcp_store.dart:354` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/services/model_cache_service.dart:53` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/services/multiplex_connection.dart:280` **avoid-empty-catch** — leerer catch verschluckt den Fehler
@@ -242,7 +243,7 @@ avoid-empty-catch 213 · use-setstate-synchronously 57 · always-remove-listener
 - `lib/pages/agent_mailbox_page.dart:280` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
 - `lib/pages/agents_desktop_layout.dart:135` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
 - `lib/pages/agents_desktop_layout.dart:141` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
-- `lib/pages/customization_page.dart:801` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
+- `lib/pages/customization_page.dart:817` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
 - `lib/pages/github_connection_page.dart:177` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
 - `lib/pages/media_manager_page.dart:352` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
 - `lib/pages/media_manager_page.dart:465` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
@@ -340,9 +341,9 @@ avoid-long-functions 1028 · avoid-nested-conditional-expressions 214 · avoid-h
 - `lib/models/workspace_model.dart:358` **avoid-high-cyclomatic-complexity** — Komplexität 38 (Grenze 20)
 - … +1437 weitere, siehe `pseudomap lint --rank 2`
 
-## Rang 3 — Flutter und Stil (6443)
+## Rang 3 — Flutter und Stil (6452)
 
-avoid-dynamic 3354 · avoid-non-null-assertion 2945 · avoid-border-all 113 · avoid-print 23 · avoid-shrink-wrap-in-lists 8
+avoid-dynamic 3357 · avoid-non-null-assertion 2951 · avoid-border-all 113 · avoid-print 23 · avoid-shrink-wrap-in-lists 8
 
 - `lib/assistant/assistant_overlay.dart:462` **avoid-border-all** — Border.all ohne const erzeugt bei jedem Build neu
 - `lib/demo/shared_widgets.dart:153` **avoid-border-all** — Border.all ohne const erzeugt bei jedem Build neu
@@ -359,4 +360,4 @@ avoid-dynamic 3354 · avoid-non-null-assertion 2945 · avoid-border-all 113 · a
 - `lib/openui/components/forms_buttons/choices.dart:714` **avoid-border-all** — Border.all ohne const erzeugt bei jedem Build neu
 - `lib/openui/components/forms_buttons/choices.dart:798` **avoid-border-all** — Border.all ohne const erzeugt bei jedem Build neu
 - `lib/openui/components/tables_charts/editable_table.dart:617` **avoid-border-all** — Border.all ohne const erzeugt bei jedem Build neu
-- … +6428 weitere, siehe `pseudomap lint --rank 3`
+- … +6437 weitere, siehe `pseudomap lint --rank 3`
