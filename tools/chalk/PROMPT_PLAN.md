@@ -17,10 +17,16 @@ Answer with JSON only:
  "look": "one paragraph: colours in hex, finish of each surface, markings, what makes it look real",
  "view": [yaw, pitch],
  "cut": null,
+ "motion": "one sentence: what drives what, and which parts move how",
+ "crank": false,
  "assemblies": [
   {"id": "short_id", "what": "what it is", "box": [xmin, ymin, zmin, xmax, ymax, zmax], "shape": "exact description of form and profile so that the engineer can draw it", "details": ["each small visible feature", "at least 8 of them"], "static": false}
  ]
 }
+
+`crank`: true only if the object has pistons, a crankshaft or steam cylinders. Then no assembly may build crank, pistons or con rods: they exist in a rig, and assemblies build the block, frames and covers around them.
+
+Things that turn: each wheel, rotor, fan or gear is its own round unit with one true axis. It holds nothing that stands still. Plan the correct axis: a tail fan of a helicopter turns across the boom, through the fin. A side rod never joins a wheel group.
 
 `cut`: if the inside must be seen (engine, pump, heart), write "z>0": this removes the front half of the skin. Then the inside assemblies matter most, plan them in full depth. Otherwise null.
 
