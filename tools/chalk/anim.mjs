@@ -52,7 +52,7 @@ export function checkTimeline(tl, parts, errors) {
   const known = new Set(parts.pivots.keys());
   for (const s of tl.steps) {
     for (const op of s.ops) {
-      if (!['move', 'osc', 'spin', 'drive', 'show', 'hide', 'pulse', 'camera'].includes(op.cmd)) errors.push(`line ${op.line}: unknown action "${op.cmd}". Actions: move osc spin show hide pulse camera`);
+      if (!['move', 'osc', 'swing', 'spin', 'drive', 'show', 'hide', 'pulse', 'camera'].includes(op.cmd)) errors.push(`line ${op.line}: unknown action "${op.cmd}". Actions: move osc spin show hide pulse camera`);
       else if (op.cmd === 'drive' ? !parts.gearsets.has(String(op.args[0]).split(/[._]/)[0]) && !parts.gearsets.has(op.args[0]) : op.cmd !== 'camera' && !known.has(op.args[0])) errors.push(`line ${op.line}: ${op.cmd}: no part "${op.args[0]}"`);
     }
   }
@@ -80,6 +80,14 @@ export function pose(tl, parts, time) {
         const b = nums(k.by, [0, 0, 0]), n = Number(k.cycles ?? 1), phase = Number(k.phase ?? 0);
         const v = 0.5 - 0.5 * Math.cos((raw * n + phase) * Math.PI * 2);
         st.off = st.off.map((x, i) => x + b[i] * v);
+      } else if (op.cmd === 'swing') {
+        // A hinge: doors, levers, lids, wings. Turns by deg around its pivot and stays.
+        // cycles=3 beats back and forth, for wings and pendulums.
+        const deg = Number(k.deg ?? 45), n = Number(k.cycles ?? 0);
+        const v = n ? Math.sin(raw * n * Math.PI * 2) * Math.sin(raw * Math.PI) : e;
+        st.ang += (deg * Math.PI / 180) * v;
+        st.axis = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] }[k.axis ?? 'z'];
+        if (k.pivot) st.pivot = nums(k.pivot);
       } else if (op.cmd === 'drive') {
         // Meshing gears: the second one turns the other way, at the tooth ratio.
         const set = parts.gearsets.get(String(id).split(/[._]/)[0]) ?? parts.gearsets.get(id);
@@ -111,7 +119,7 @@ export function pose(tl, parts, time) {
       const st = state.get(id);
       if (!st) continue;
       if (st.hidden) return 'hidden';
-      const piv = parts.pivots.get(id) ?? [0, 0, 0];
+      const piv = st.pivot ?? parts.pivots.get(id) ?? [0, 0, 0];
       const p = poseMatrix(st.off, piv, st.axis ?? [0, 1, 0], st.ang, st.scale);
       m = m ? composeMatrix(p, m) : p;
     }

@@ -71,6 +71,7 @@ const nodeMatrix = (kv) => {
 };
 
 // Walks a model tree into flat parts: {id, color, mat, label, tris}.
+import { applySurface } from './paint.mjs';
 export function buildParts(model, errors) {
   const parts = [];
   const seen = new Set();
@@ -129,6 +130,7 @@ export function buildParts(model, errors) {
     for (const p of list) { const b = boundsOf([p]); for (const id of p.path) grow(id, b); }
   };
   parts.gearsets = new Map();
+  parts.surface = [];
   const walk = (node, M, ctx, top) => {
     const { cmd, kv } = node;
     const start = parts.length;
@@ -190,6 +192,7 @@ export function buildParts(model, errors) {
       note(node.args[0], m, kv.axis);
       return;
     }
+    if (cmd === 'paint' || cmd === 'seam' || cmd === 'decal') { parts.surface.push(node); return; }
     if (cmd === 'link') {
       // A rod that always spans two parts, also while they move.
       const mesh = buildShape({ cmd: 'cyl', kv: { r: kv.r ?? '0.1', h: '1', seg: '16' }, args: [], kids: [] });
@@ -228,16 +231,18 @@ export function buildParts(model, errors) {
     const id = node.args[0] ?? `${cmd}@${node.line}`;
     seen.add(id);
     parts.push({
-      id, color: hex(kv.color ?? ctx.color), mat: kv.mat ?? ctx.mat ?? (/(steel|alu|metal|titanium|copper|gold|brass)/.test(kv.color ?? ctx.color ?? '') ? 'metal' : 'matte'),
+      id, color: hex(kv.color ?? ctx.color), colorName: kv.color ?? ctx.color, mat: kv.mat ?? ctx.mat ?? (/(steel|alu|metal|titanium|copper|gold|brass)/.test(kv.color ?? ctx.color ?? '') ? 'metal' : 'matte'),
       label: kv.label ?? ctx.label, group: kv.label ? null : ctx.group, shell: kv.shell ?? ctx.shell, path: [...(ctx.path ?? []), id], kit: node.kit || ctx.kit, tex: kv.tex ? loadTexture(kv.tex, kv.crop ? nums(kv.crop) : null) : null, tris: t, top: top ?? `${node.line}`, line: node.line,
     });
     { const b = boundsOf([parts.at(-1)]); for (const pid of parts.at(-1).path) grow(pid, b); }
     if (kv.on) attach(node, start, M);
   };
   for (const k of expandKits(model.kids.filter((c) => c.cmd !== 'anim'))) walk(k, IDENT, {}, null);
+  applySurface(parts, parts.surface, hex, errors);
   markGround(parts);
   fixPivots(parts);
-  if (!model.kv.explode) {
+  if (model.kv.tidy) tidy(parts);
+  if (!model.kv.explode && !model.kv.keep) {
     // Things that move as one must hold together. Each moved group is repaired on
     // its own, so a helicopter stays whole and is not pulled down to its pad.
     const anim = model.kids.find((c) => c.cmd === 'anim');
@@ -256,11 +261,11 @@ export function buildParts(model, errors) {
   return parts;
 }
 
-function smoothNormals(tris, creaseCos = 0.72) {
+export function smoothNormals(tris, creaseCos = 0.72) {
   const n = tris.length / 9;
   const face = new Float32Array(n * 3);
   const map = new Map();
-  const key = (i) => `${Math.round(tris[i] * 2e3)},${Math.round(tris[i + 1] * 2e3)},${Math.round(tris[i + 2] * 2e3)}`;
+  const key = (i) => (Math.imul(Math.round(tris[i] * 2e3), 73856093) ^ Math.imul(Math.round(tris[i + 1] * 2e3), 19349663) ^ Math.imul(Math.round(tris[i + 2] * 2e3), 83492791)) | 0;
   for (let f = 0; f < n; f++) {
     const o = f * 9;
     const ax = tris[o + 3] - tris[o], ay = tris[o + 4] - tris[o + 1], az = tris[o + 5] - tris[o + 2];
@@ -305,17 +310,19 @@ const LIGHT = (() => { const l = [-0.45, 0.8, 0.55], n = Math.hypot(...l); retur
 // Writes a transparent RGBA image of the model plus part statistics.
 // A flat part much wider than everything else is ground: the camera ignores it.
 export function markGround(parts) {
-  const span = (p) => { const b = [1e9, -1e9, 1e9, -1e9, 1e9, -1e9]; for (let i = 0; i < p.tris.length; i += 3) for (let k = 0; k < 3; k++) { b[k * 2] = Math.min(b[k * 2], p.tris[i + k]); b[k * 2 + 1] = Math.max(b[k * 2 + 1], p.tris[i + k]); } return [b[1] - b[0], b[3] - b[2], b[5] - b[4]]; };
-  const spans = parts.map(span);
   if (parts.length < 3) return;
+  const boxes = parts.map((p) => {
+    const b = [1e9, -1e9, 1e9, -1e9, 1e9, -1e9];
+    for (let i = 0; i < p.tris.length; i += 3) for (let k = 0; k < 3; k++) { b[k * 2] = Math.min(b[k * 2], p.tris[i + k]); b[k * 2 + 1] = Math.max(b[k * 2 + 1], p.tris[i + k]); }
+    return b;
+  });
   parts.forEach((p, i) => {
-    const s = spans[i], foot = Math.max(s[0], s[2]);
+    const s = boxes[i], foot = Math.max(s[1] - s[0], s[5] - s[4]);
+    if (s[3] - s[2] >= foot * 0.08) return;
     // Compare with all other parts together, so a circuit board stays the object.
-    const others = parts.filter((_, j) => j !== i);
     const lo = [1e9, 1e9], hi = [-1e9, -1e9];
-    for (const o of others) for (let v = 0; v < o.tris.length; v += 3) { lo[0] = Math.min(lo[0], o.tris[v]); hi[0] = Math.max(hi[0], o.tris[v]); lo[1] = Math.min(lo[1], o.tris[v + 2]); hi[1] = Math.max(hi[1], o.tris[v + 2]); }
-    const rest = Math.max(hi[0] - lo[0], hi[1] - lo[1]);
-    if (s[1] < foot * 0.08 && foot > rest * 1.25) p.ground = true;
+    boxes.forEach((o, j) => { if (j === i) return; lo[0] = Math.min(lo[0], o[0]); hi[0] = Math.max(hi[0], o[1]); lo[1] = Math.min(lo[1], o[4]); hi[1] = Math.max(hi[1], o[5]); });
+    if (foot > Math.max(hi[0] - lo[0], hi[1] - lo[1]) * 1.25) p.ground = true;
   });
 }
 
@@ -748,6 +755,37 @@ function components(parts) {
   }
   const mass = (g) => g.reduce((t, i) => t + parts[i].vox.size, 0);
   return groups.sort((a, b) => mass(b) - mass(a));
+}
+
+// Generated assemblies leave crumbs in the air. Small loose pieces go away. Larger
+// ones are pulled to the body. Things inside the skin stay, they are interior.
+function tidy(parts) {
+  const solid = parts.filter((p) => !p.decal && !p.link && !p.ground);
+  if (solid.length < 2) return;
+  voxelize(solid);
+  const up = solid.map((_, i) => i);
+  const find = (i) => { while (up[i] !== i) { up[i] = up[up[i]]; i = up[i]; } return i; };
+  const owner = new Map();
+  solid.forEach((p, i) => { for (const k of p.vox) { const o = owner.get(k); if (o === undefined) owner.set(k, i); else up[find(i)] = find(o); } });
+  solid.forEach((p, i) => { for (const k of p.vox) for (const d of [1, 256, 65536, -1, -256, -65536]) { const o = owner.get(k + d); if (o !== undefined) up[find(i)] = find(o); } });
+  const comps = new Map();
+  solid.forEach((p, i) => { const r = find(i); if (!comps.has(r)) comps.set(r, []); comps.get(r).push(i); });
+  const list = [...comps.values()].map((g) => ({ g, mass: g.reduce((t, i) => t + solid[i].vox.size, 0) })).sort((a, b) => b.mass - a.mass);
+  const total = list.reduce((t, c) => t + c.mass, 0);
+  const lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
+  for (const i of list[0].g) { const t = solid[i].tris; for (let v = 0; v < t.length; v += 3) for (let c = 0; c < 3; c++) { lo[c] = Math.min(lo[c], t[v + c]); hi[c] = Math.max(hi[c], t[v + c]); } }
+  const drop = new Set();
+  for (const c of list.slice(1)) {
+    if (c.mass > total * 0.012) continue;
+    const m = [0, 0, 0];
+    let n = 0;
+    for (const i of c.g) { const t = solid[i].tris; for (let v = 0; v < t.length; v += 3) { for (let k = 0; k < 3; k++) m[k] += t[v + k]; n++; } }
+    if ([0, 1, 2].every((k) => m[k] / n > lo[k] && m[k] / n < hi[k]) && c.mass < total) { const inner = hi.map((v, k) => [lo[k] + (v - lo[k]) * 0.08, v - (v - lo[k]) * 0.08]); if ([0, 1, 2].every((k) => m[k] / n > inner[k][0] && m[k] / n < inner[k][1])) continue; }
+    for (const i of c.g) drop.add(solid[i]);
+  }
+  parts.dropped = drop.size;
+  for (let i = parts.length - 1; i >= 0; i--) if (drop.has(parts[i])) parts.splice(i, 1);
+  for (const p of solid) delete p.vox;
 }
 
 // Pulls loose pieces back to the main body along the shortest way.
