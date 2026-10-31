@@ -1,0 +1,520 @@
+canvas dark
+title "Weißkopfseeadler im Schlagflug"
+model obj 1100 620 keep=1 tidy=1 view=35,18
+
+  group whole
+    group hull
+      # body + head, axis x, head at -x
+      loft body sections=-0.56,0.09,0.10,0.55 -0.48,0.13,0.14,0.55 -0.38,0.15,0.16,0.54 -0.28,0.17,0.18,0.52 -0.12,0.26,0.24,0.48 0.08,0.28,0.26,0.45 0.28,0.24,0.22,0.42 0.45,0.15,0.14,0.40 axis=x square=1 color=#241509 mat=paint
+      # tail, spread white fan
+      loft tail sections=0.42,0.20,0.05,0.38 0.55,0.32,0.045,0.36 0.70,0.44,0.04,0.34 0.85,0.50,0.03,0.32 axis=x square=1 color=#e9e5db mat=paint
+      # beak, yellow hook
+      loft beak sections=-0.52,0.09,0.09,0.55 -0.58,0.10,0.08,0.545 -0.63,0.07,0.055,0.54 -0.68,0.03,0.025,0.535 axis=x square=1 color=#eda51f mat=paint
+      # right wing, raised in upstroke, axis z
+      loft wingR sections=0.10,0.62,0.10,0.50 0.25,0.60,0.10,0.53 0.45,0.55,0.09,0.60 0.65,0.48,0.08,0.72 0.85,0.40,0.07,0.90 1.00,0.30,0.05,1.10 1.12,0.16,0.035,1.28 axis=z square=1 color=#241509 mat=paint
+      # left wing, mirrored
+      loft wingL sections=-0.10,0.62,0.10,0.50 -0.25,0.60,0.10,0.53 -0.45,0.55,0.09,0.60 -0.65,0.48,0.08,0.72 -0.85,0.40,0.07,0.90 -1.00,0.30,0.05,1.10 -1.12,0.16,0.035,1.28 axis=z square=1 color=#241509 mat=paint
+      # primary feathers, splayed fingers at both wingtips
+      loft p1R sections=1.00,0.16,0.03,1.12 1.16,0.12,0.025,1.16 1.32,0.09,0.02,1.22 axis=z square=1 color=#1a1008 mat=paint
+      loft p2R sections=0.96,0.15,0.03,1.18 1.15,0.11,0.025,1.24 1.34,0.08,0.02,1.32 axis=z square=1 color=#1a1008 mat=paint
+      loft p3R sections=0.92,0.14,0.03,1.24 1.11,0.10,0.025,1.32 1.30,0.07,0.02,1.42 axis=z square=1 color=#1a1008 mat=paint
+      loft p1L sections=-1.00,0.16,0.03,1.12 -1.16,0.12,0.025,1.16 -1.32,0.09,0.02,1.22 axis=z square=1 color=#1a1008 mat=paint
+      loft p2L sections=-0.96,0.15,0.03,1.18 -1.15,0.11,0.025,1.24 -1.34,0.08,0.02,1.32 axis=z square=1 color=#1a1008 mat=paint
+      loft p3L sections=-0.92,0.14,0.03,1.24 -1.11,0.10,0.025,1.32 -1.30,0.07,0.02,1.42 axis=z square=1 color=#1a1008 mat=paint
+      # ---- surface work ----
+      # base dark brown already set; lighter wing coverts near the body
+      paint hull color=#4a2c15 box=-0.30,0.40,0.10,0.15,0.80,0.60
+      paint hull color=#4a2c15 box=-0.30,0.40,-0.60,0.15,0.80,-0.10
+      # white head and neck
+      paint hull color=#f5f2ea box=-0.75,0.40,-0.20,-0.26,0.70,0.20
+      # white tail
+      paint hull color=#e9e5db box=0.42,0.25,-0.55,0.90,0.45,0.55
+      # black primary tips
+      paint hull color=#0e0a06 box=-0.12,1.05,1.05,0.12,1.50,1.40
+      paint hull color=#0e0a06 box=-0.12,1.05,-1.40,0.12,1.50,-1.05
+      # yellow beak zone over the head front
+      paint hull color=#eda51f box=-0.72,0.47,-0.07,-0.50,0.63,0.07
+      # dark eyes
+      paint hull color=#1a1208 box=-0.565,0.548,0.045,-0.515,0.592,0.095
+      paint hull color=#1a1208 box=-0.565,0.548,-0.095,-0.515,0.592,-0.045
+      # feather rows on the wings (chordwise lines)
+      seam hull plane=1,0,0,-0.15 w=0.012 box=-0.16,0.40,-1.05,-0.14,1.40,1.05
+      seam hull plane=1,0,0,0.00 w=0.012 box=-0.01,0.40,-1.05,0.01,1.40,1.05
+      seam hull plane=1,0,0,0.15 w=0.012 box=0.14,0.40,-1.05,0.16,1.40,1.05
+      # tail feather separations
+      seam hull plane=0,0,1,-0.15 w=0.012 box=0.42,0.28,-0.16,0.88,0.42,-0.14
+      seam hull plane=0,0,1,0.00 w=0.012 box=0.42,0.28,-0.01,0.88,0.42,0.01
+      seam hull plane=0,0,1,0.15 w=0.012 box=0.42,0.28,0.14,0.88,0.42,0.16
+      # neck ring where white meets dark body
+      seam hull plane=1,0,0,-0.26 w=0.014 box=-0.27,0.40,-0.20,-0.25,0.70,0.20
+    group fit_26631 at=-0.2773,0.2366,0.0000 scale=0.3385,0.4232,0.5290
+      group kopf_gesicht color=#f5f2ea label="Kopfdetail Weißkopfseeadler"
+        # ---- Augen mit Überbrauenwulst, beidseits ----
+        mirror z
+          group auge at=-0.545,0.556,0.052
+            sphere augapfel r=0.028 scale=0.75,1,1 color=#efece2 mat=plastic
+            cyl iris r=0.017 h=0.007 axis=z at=0.004,0,0.017 color=#2a1c0c mat=plastic
+            sphere pupille r=0.011 scale=0.6,1,1 at=0.006,0,0.021 color=#060402 mat=plastic
+            sphere glanz r=0.0042 at=0.011,0.008,0.025 color=#fff6df mat=plastic
+            cyl augring r=0.032 h=0.003 hole=0.028 axis=z at=0.002,0,0.011 color=#4a4034 mat=matte
+          # knöcherner Überbrauenwulst, gibt den zornigen Blick
+          limb braue pts=-0.605,0.580,0.044,0.008 -0.568,0.592,0.054,0.012 -0.528,0.597,0.057,0.013 -0.488,0.590,0.056,0.011 -0.455,0.580,0.050,0.007 color=#f5f2ea mat=matte
+          repeat 5 step=0.030,0.001,0.001 at=-0.598,0.591,0.048
+            box braunfeder size=0.024,0.005,0.004 rot=0,0,-6 color=#f2efe6 mat=matte
+          # dunkle Augenring-Federchen hinter dem Auge
+          repeat 3 step=-0.007,-0.009,0 at=-0.506,0.577,0.057
+            box ringfeder size=0.014,0.003,0.002 rot=0,0,-24 color=#514637 mat=matte
+          # Wangenbefiederung, kurz und dicht gestuft, grauweiß
+          repeat 2 step=0.008,-0.017,0 at=-0.478,0.543,0.056
+            box wange_hell size=0.036,0.018,0.004 rot=0,-6,-8 color=#ece8de mat=matte
+          repeat 2 step=0.008,-0.017,0 at=-0.462,0.509,0.054
+            box wange_grau size=0.034,0.017,0.004 rot=0,-6,-10 color=#ddd8cc mat=matte
+          # Hinterkopffedern leicht aufgestellt, weicher Übergang zum Hals
+          repeat 3 step=-0.011,0.014,0 at=-0.462,0.516,0.042
+            box nape size=0.028,0.022,0.003 rot=0,12,18 color=#f0ede3 mat=matte
+          # Kinnfederchen, strähnig nach hinten gekämmt
+          repeat 4 step=0,0.003,0.011 at=-0.575,0.491,0.006
+            tube kinn pts=-0.600,0.491,0.006 -0.528,0.500,0.008 r=0.0035 flat=6 color=#f1eee5 mat=matte
+          # Kehlfederchen am Halsansatz, länger und strähnig
+          repeat 3 step=0,0.013,0.013 at=-0.468,0.479,0.012
+            tube kehle pts=-0.500,0.479,0.012 -0.446,0.494,0.014 r=0.004 flat=6 color=#eae6dc mat=matte
+          # kleine Federchen an der Schnabelbasis
+          repeat 3 step=0,-0.013,0.012 at=-0.622,0.574,0.010
+            box basisfeder size=0.013,0.014,0.003 rot=0,0,-12 color=#f3f0e8 mat=matte
+        # ---- mittige Kinnfeder unter dem Schnabel ----
+        tube kinn_mitte pts=-0.600,0.490,0 -0.526,0.500,0 r=0.0035 flat=6 color=#f1eee5 mat=matte
+        # ---- Schezelfedern, gestufte Reihen über dem Kopf ----
+        repeat 4 step=0.014,0.008,0 at=-0.615,0.577,0
+          box schein size=0.020,0.004,0.034 rot=0,0,5 color=#f2efe6 mat=matte
+        repeat 3 step=0.015,0.007,0 at=-0.606,0.570,0
+          box schein2 size=0.018,0.0035,0.030 rot=0,0,-4 color=#ece9df mat=matte
+        # ---- feine graue Sprenkel im weißen Gefieder ----
+        repeat 7 step=0.016,-0.008,0.006 at=-0.615,0.590,0.014
+          box sprenkel size=0.007,0.0025,0.0025 rot=0,0,15 color=#b5afa1 mat=matte
+        repeat 5 step=0.013,-0.011,-0.005 at=-0.600,0.585,0.030
+          box sprenkel2 size=0.006,0.002,0.002 rot=0,0,-20 color=#a9a294 mat=matte
+    group fit_96968 at=0.0395,-0.1949,0.0000 scale=1.0638,1.3725,1.3298
+      group schnabel_detail label="Schnabeldetail" at=0,0,0
+        loft obermandibel sections=-0.49,0.070,0.082,0.559 -0.55,0.062,0.070,0.551 -0.61,0.050,0.056,0.541 -0.655,0.040,0.050,0.540 -0.68,0.020,0.026,0.524 axis=x color=#eda51f mat=ceramic
+        loft cere sections=-0.485,0.073,0.086,0.558 -0.53,0.066,0.076,0.554 axis=x color=#f4c14e mat=ceramic
+        loft untermandibel sections=-0.495,0.058,0.030,0.505 -0.55,0.048,0.024,0.506 -0.61,0.034,0.018,0.507 -0.65,0.018,0.012,0.508 axis=x color=#f0b43a mat=ceramic
+        limb haken pts=-0.66,0.530,0,0.020 -0.682,0.502,0,0.013 -0.694,0.470,0,0.007 color=#43454a mat=ceramic
+        cone hakenspitze r=0.006 h=0.02 at=-0.695,0.458,0 rot=180,0,0 color=#26282c mat=matte
+        box hakenfacet size=0.016,0.012,0.005 at=-0.682,0.494,0.007 rot=0,0,40 color=#5d6066 mat=matte
+        tube hakenscratch pts=-0.672,0.512,0.010 -0.686,0.488,0.006 r=0.0012 color=#6a6c70 mat=matte
+        tube kulmenlicht pts=-0.50,0.599,0 -0.58,0.585,0 -0.645,0.564,0 r=0.0016 color=#f6c65a mat=ceramic
+        tube keel untermandibel pts=-0.51,0.492,0 -0.58,0.493,0 -0.645,0.501,0 r=0.0022 color=#d9a52e mat=ceramic
+        box mundspalt_vorne size=0.02,0.006,0.014 at=-0.668,0.516,0 color=#1c1206 mat=matte
+        repeat kerben 4 step=-0.045,-0.014,0 at=-0.525,0.591,0
+          box kerbe size=0.008,0.004,0.005 color=#a87612 mat=matte
+        repeat unterkerben 4 step=-0.03,0.002,0 at=-0.53,0.494,0
+          box kerbe_u size=0.007,0.004,0.012 color=#d9a52e mat=ceramic
+        mirror z
+          tube mundspalt pts=-0.50,0.521,0.031 -0.575,0.521,0.024 -0.645,0.521,0.013 r=0.0035 color=#1c1206 mat=matte
+          box narisrim size=0.022,0.010,0.004 at=-0.577,0.566,0.049 rot=0,0,25 color=#e8b23c mat=ceramic
+          box naris size=0.016,0.006,0.010 at=-0.575,0.564,0.046 rot=0,0,25 color=#150e06 mat=matte
+          sphere nariskern r=0.003 scale=1.4,0.7,0.5 at=-0.576,0.564,0.043 color=#0a0704 mat=matte
+          tube cere_naht pts=-0.531,0.584,0.010 -0.534,0.548,0.031 -0.531,0.521,0.029 r=0.002 color=#c8931c mat=ceramic
+          tube grat_inneres pts=-0.51,0.592,0.012 -0.58,0.579,0.010 -0.645,0.560,0.007 r=0.0022 color=#d3941b mat=ceramic
+          tube grat_ausseres pts=-0.51,0.588,0.026 -0.58,0.574,0.020 -0.64,0.554,0.012 r=0.002 color=#d3941b mat=ceramic
+          box tomialzahn size=0.016,0.011,0.010 at=-0.615,0.518,0.034 rot=0,0,-20 color=#2a1c08 mat=matte
+          repeat saegung 5 step=-0.028,-0.001,-0.003 at=-0.525,0.517,0.027
+            box sagezahn size=0.008,0.005,0.008 color=#c8931c mat=ceramic
+          sphere mundwinkel r=0.008 scale=1.2,0.8,0.8 at=-0.492,0.517,0.050 color=#e9a72a mat=ceramic
+          repeat bartborsten 3 step=-0.006,-0.008,0.003 at=0,0,0
+            tube borste pts=-0.49,0.516,0.048 -0.525,0.507,0.057 -0.558,0.500,0.053 r=0.0016 color=#17100a mat=matte
+    group fit_33526 at=-0.2282,-0.0680,0.0000 scale=1.7544,1.2251,1.4035
+      group beine_faenge
+        mirror z
+          group bein at=0.15,0,0.13
+            limb schenkel_befiederung pts=0.00,0.325,0 0.012,0.30,0 0.02,0.272,0 r=0.06,0.052,0.044 color=#2e1b0d mat=matte
+            limb schenkel pts=0.00,0.33,0 0.01,0.296,0 0.02,0.27,0 r=0.055,0.048,0.042 color=#241509 mat=matte
+            repeat 4 step=0.002,-0.014,0 at=0.0,0.315,0
+              box federsaum size=0.075,0.02,0.055 round=0.5 color=#3a2412 mat=matte
+            repeat 3 step=0.001,-0.016,0 at=-0.005,0.308,0
+              box federschicht size=0.06,0.018,0.095 round=0.5 color=#2e1b0d mat=matte
+            ring 6 r=0.045 axis=x at=0.02,0.272,0
+              box hose_feder size=0.014,0.032,0.02 round=0.4 color=#4a2c15 mat=matte
+            limb lauf pts=0.02,0.275,0 0.07,0.235,0 0.115,0.20,0 r=0.018,0.017,0.016 color=#eda51f mat=matte
+            group schuppung at=0.02,0.275,0 rot=0,0,-38
+              repeat 8 step=0.013,0,0
+                cyl schuppe r=0.019 h=0.0045 axis=x hole=0.011 color=#d99a1c mat=matte
+              repeat 7 step=0.013,0,0 at=0.0065,0,0
+                cyl schuppe2 r=0.0175 h=0.004 axis=x hole=0.010 color=#e2a41e mat=matte
+            sphere gelenk r=0.021 scale=1.15,0.9,1.0 at=0.115,0.20,0 color=#e09d1a mat=matte
+            group fang at=0.115,0.20,0 rot=0,0,-15
+              sphere fussbasis r=0.022 scale=1.25,0.8,1.1 color=#eda51f mat=matte
+              sphere sohle r=0.018 scale=1.15,0.4,1.05 at=0.012,-0.015,0 color=#d4a04a mat=matte
+              limb zehe_mitte pts=0.01,0,0 0.045,-0.006,0 0.078,-0.014,0 r=0.011,0.0095,0.0075 color=#e6a01c mat=matte
+              repeat 2 step=0.033,-0.007,0
+                sphere knorren_m r=0.0115 scale=1.0,0.9,1.0 at=0.028,-0.004,0 color=#d99818 mat=matte
+              repeat 3 step=0.02,0,0
+                sphere zehenpolster r=0.007 scale=1.3,0.45,1.0 at=0.03,-0.014,0 color=#d4a04a mat=matte
+              limb zehe_innen pts=0.01,0,-0.026 0.038,-0.006,-0.033 0.06,-0.013,-0.038 r=0.010,0.0085,0.0065 color=#e6a01c mat=matte
+              repeat 2 step=0.025,-0.006,0
+                sphere knorren_i r=0.010 scale=1.0,0.9,1.0 at=0.026,-0.004,-0.03 color=#d99818 mat=matte
+              limb zehe_aussen pts=0.01,0,0.026 0.038,-0.006,0.033 0.06,-0.013,0.038 r=0.010,0.0085,0.0065 color=#e6a01c mat=matte
+              repeat 2 step=0.025,-0.006,0
+                sphere knorren_a r=0.010 scale=1.0,0.9,1.0 at=0.026,-0.004,0.03 color=#d99818 mat=matte
+              limb hinterzehe pts=0.005,-0.002,0 -0.018,-0.008,0 -0.03,-0.015,0 r=0.0095,0.008,0.006 color=#e6a01c mat=matte
+              sphere hinterknorren r=0.0095 at=-0.014,-0.007,0 color=#d99818 mat=matte
+              limb kralle_mitte pts=0.078,-0.014,0 0.09,-0.026,0 0.088,-0.044,0 0.08,-0.052,0 r=0.006,0.0045,0.0025,0.001 color=#14100a mat=matte
+              tube kante_mitte pts=0.078,-0.011,0 0.09,-0.023,0 0.088,-0.041,0 r=0.0012 color=#8a7050 mat=matte
+              limb kralle_innen pts=0.06,-0.013,-0.038 0.072,-0.026,-0.041 0.068,-0.044,-0.042 0.058,-0.052,-0.041 r=0.007,0.005,0.0028,0.0012 color=#14100a mat=matte
+              tube kante_i pts=0.06,-0.010,-0.038 0.072,-0.023,-0.041 0.068,-0.041,-0.042 r=0.0013 color=#8a7050 mat=matte
+              limb kralle_aussen pts=0.06,-0.013,0.038 0.072,-0.026,0.041 0.068,-0.044,0.042 0.058,-0.052,0.041 r=0.007,0.005,0.0028,0.0012 color=#14100a mat=matte
+              tube kante_a pts=0.06,-0.010,0.038 0.072,-0.023,0.041 0.068,-0.041,0.042 r=0.0013 color=#8a7050 mat=matte
+              limb kralle_hinten pts=-0.03,-0.015,0 -0.042,-0.026,0 -0.04,-0.044,0 -0.032,-0.052,0 r=0.0065,0.005,0.0028,0.0012 color=#14100a mat=matte
+              tube kante_h pts=-0.03,-0.012,0 -0.042,-0.023,0 -0.04,-0.041,0 r=0.0012 color=#8a7050 mat=matte
+    group fit_48352 at=0.0671,-0.4325,0.0000 scale=1.0947,1.3351,1.0344
+      group fluegeldecken
+        mirror z
+          group decke_r label="Flügeldecken" color=#241509
+            # Schulterfeld: besonders helles, warmes Braun
+            extrude schulterfeld pts=-0.20,0.15 0.06,0.15 0.10,0.32 0.04,0.50 -0.12,0.52 -0.22,0.32 h=0.014 axis=y at=0,0.592,0 rot=-8,0,-3 color=#503016 mat=matte
+            # Reihe 1: kleine Decken an der Vorderkante, innen
+            repeat 4 step=0.007,0.02,0.10 rotstep=-2,0,0 at=-0.30,0.593,0.18 rot=-2,0,-5
+              extrude deck_klein pts=-0.035,0 0.035,0 0.032,0.06 0,0.10 -0.032,0.06 h=0.012 axis=y color=#2e1c0d mat=matte
+            # Reihe 1: außen, laenger und schmaler, folgt Vorderkante
+            repeat 6 step=0.026,0.095,0.10 rotstep=-7,0,0 at=-0.27,0.675,0.58 rot=-9,0,-5
+              extrude deck_klein_a pts=-0.032,0 0.032,0 0.028,0.065 0,0.11 -0.028,0.065 h=0.012 axis=y color=#2b190b mat=matte
+            # Reihe 2: mittlere Decken, innen
+            repeat 4 step=0.01,0.015,0.10 rotstep=-2,0,0 at=-0.18,0.588,0.22 rot=-2,0,-4
+              extrude deck_mitt pts=-0.042,0 0.042,0 0.038,0.09 0,0.145 -0.038,0.09 h=0.013 axis=y color=#291708 mat=matte
+            # Reihe 2: außen
+            repeat 6 step=0.011,0.104,0.10 rotstep=-7,0,0 at=-0.135,0.70,0.62 rot=-11,0,-4
+              extrude deck_mitt_a pts=-0.042,0 0.042,0 0.038,0.09 0,0.145 -0.038,0.09 h=0.013 axis=y color=#261507 mat=matte
+            # helle Saeume auf mittleren Decken (aussen)
+            repeat 6 step=0.011,0.104,0.10 rotstep=-7,0,0 at=-0.135,0.712,0.625 rot=-11,0,-4
+              extrude saum_mitt pts=-0.034,0.005 0.034,0.005 0.03,0.08 0,0.13 -0.03,0.08 h=0.005 axis=y color=#3a2410 mat=matte
+            # Reihe 3: grosse Decken, innen
+            repeat 4 step=0,0.03,0.11 rotstep=-3,0,0 at=0.02,0.60,0.26 rot=-3,0,-3
+              extrude deck_gross pts=-0.05,0 0.05,0 0.046,0.13 0,0.20 -0.046,0.13 h=0.014 axis=y color=#241509 mat=matte
+            # Reihe 3: aussen, zur Fluegelspitze laenger
+            repeat 4 step=0,0.105,0.11 rotstep=-7,0,0 at=-0.005,0.775,0.70 rot=-14,0,-3
+              extrude deck_gross_a pts=-0.05,0 0.05,0 0.046,0.13 0,0.20 -0.046,0.13 h=0.014 axis=y color=#221306 mat=matte
+            # helle Braunraender auf den grossen Decken, dachziegelartig
+            repeat 4 step=0,0.03,0.11 rotstep=-3,0,0 at=0.02,0.612,0.265 rot=-3,0,-3
+              extrude saum_gross pts=-0.042,0.005 0.042,0.005 0.038,0.11 0,0.17 -0.038,0.11 h=0.006 axis=y color=#4a2c15 mat=matte
+            repeat 4 step=0,0.105,0.11 rotstep=-7,0,0 at=-0.005,0.787,0.705 rot=-14,0,-3
+              extrude saum_gross_a pts=-0.042,0.005 0.042,0.005 0.038,0.11 0,0.17 -0.038,0.11 h=0.006 axis=y color=#452812 mat=matte
+            # Uebergang zu den schwarzen Handschwingen: dunkle aussere Decken
+            repeat 3 step=0,0.12,0.09 rotstep=-8,0,0 at=-0.05,1.08,1.05 rot=-10,0,0
+              extrude deck_aussen pts=-0.04,0 0.04,0 0.036,0.09 0,0.13 -0.036,0.09 h=0.012 axis=y color=#1a1008 mat=matte
+            # innere Schulterdecken am Rumpfuebergang
+            repeat 3 step=0,0.012,0.10 rotstep=-3,0,0 at=0.16,0.592,0.22 rot=-3,0,-4
+              extrude deck_schulter pts=-0.05,0 0.05,0 0.045,0.10 0,0.16 -0.045,0.10 h=0.013 axis=y color=#33200e mat=matte
+            # dunkle Kiele zwischen den Federreihen, folgen der Fluegelwoelbung
+            tube kiel1 pts=-0.22,0.60,0.25 -0.20,0.64,0.55 -0.16,0.78,0.85 -0.12,1.00,1.05 -0.10,1.18,1.20 r=0.006 flat=6 color=#140c06 mat=matte
+            tube kiel2 pts=-0.10,0.60,0.28 -0.08,0.66,0.60 -0.06,0.82,0.90 -0.05,1.05,1.12 -0.04,1.22,1.22 r=0.006 flat=6 color=#140c06 mat=matte
+            tube kiel3 pts=0.10,0.60,0.35 0.06,0.70,0.65 0.00,0.90,0.95 -0.03,1.10,1.15 -0.05,1.28,1.30 r=0.007 flat=6 color=#100a05 mat=matte
+            # heller Randwulst entlang der Vorderkante
+            tube vorderkante pts=-0.30,0.59,0.20 -0.28,0.62,0.50 -0.24,0.72,0.80 -0.18,0.92,1.00 -0.12,1.15,1.15 -0.08,1.32,1.30 r=0.008 flat=6 color=#4a2c15 mat=matte
+    group fit_83298 at=-0.0183,-0.3543,0.0000 scale=1.2336,1.3966,1.0660
+      group armschwingen label="Armschwingen"
+        mirror z
+          plate sec00 pts=-0.115,-0.0525 -0.09,-0.0688 0.045,-0.0688 0.115,-0.0275 0.115,0.0225 0.045,0.0563 -0.09,0.0563 -0.115,0.0425 h=0.014 at=0.178,0.530,0.295 rot=38,0,-4 color=#1a1008 mat=matte
+          tube k00 pts=0.093,0.549,0.295 0.285,0.533,0.295 r=0.0045 color=#452c15 mat=matte
+          box ts00 size=0.022,0.100,0.013 at=0.279,0.528,0.295 rot=38,0,-4 color=#7a6b56 mat=matte
+          plate sec01 pts=-0.12,-0.050 -0.095,-0.066 0.05,-0.066 0.12,-0.026 0.12,0.022 0.05,0.054 -0.095,0.054 -0.12,0.041 h=0.014 at=0.163,0.569,0.345 rot=39,0,-4 color=#1c1209 mat=matte
+          tube k01 pts=0.073,0.589,0.345 0.275,0.572,0.345 r=0.0045 color=#4a3018 mat=matte
+          box ts01 size=0.022,0.096,0.013 at=0.269,0.567,0.345 rot=39,0,-4 color=#857a66 mat=matte
+          plate sec02 pts=-0.13,-0.049 -0.105,-0.065 0.06,-0.065 0.13,-0.026 0.13,0.021 0.06,0.053 -0.105,0.053 -0.13,0.040 h=0.014 at=0.139,0.619,0.4095 rot=40.3,0,-4 color=#19100a mat=matte
+          tube k02 pts=0.039,0.640,0.4095 0.261,0.621,0.4095 r=0.0045 color=#452c15 mat=matte
+          box ts02 size=0.022,0.094,0.013 at=0.255,0.612,0.4095 rot=40.3,0,-4 color=#7a6b56 mat=matte
+          plate sec03 pts=-0.14,-0.048 -0.115,-0.063 0.07,-0.063 0.14,-0.025 0.14,0.021 0.07,0.052 -0.115,0.052 -0.14,0.039 h=0.014 at=0.116,0.670,0.474 rot=41.5,0,-4 color=#1b1109 mat=matte
+          tube k03 pts=0.005,0.690,0.474 0.248,0.671,0.474 r=0.0045 color=#4a3018 mat=matte
+          box ts03 size=0.022,0.092,0.013 at=0.242,0.662,0.474 rot=41.5,0,-4 color=#857a66 mat=matte
+          plate sec04 pts=-0.15,-0.047 -0.125,-0.062 0.08,-0.062 0.15,-0.025 0.15,0.020 0.08,0.051 -0.125,0.051 -0.15,0.038 h=0.014 at=0.092,0.720,0.5385 rot=42.8,0,-4 color=#1a1008 mat=matte
+          tube k04 pts=-0.028,0.742,0.5385 0.234,0.721,0.5385 r=0.0045 color=#452c15 mat=matte
+          box ts04 size=0.022,0.090,0.013 at=0.228,0.712,0.5385 rot=42.8,0,-4 color=#7a6b56 mat=matte
+          plate sec05 pts=-0.16,-0.046 -0.135,-0.061 0.09,-0.061 0.16,-0.024 0.16,0.020 0.09,0.050 -0.135,0.050 -0.16,0.037 h=0.014 at=0.068,0.770,0.603 rot=44,0,-4 color=#1c1209 mat=matte
+          tube k05 pts=-0.062,0.792,0.603 0.220,0.770,0.603 r=0.0045 color=#4a3018 mat=matte
+          box ts05 size=0.022,0.088,0.013 at=0.214,0.761,0.603 rot=44,0,-4 color=#857a66 mat=matte
+          plate sec06 pts=-0.17,-0.045 -0.145,-0.059 0.10,-0.059 0.17,-0.024 0.17,0.019 0.10,0.048 -0.145,0.048 -0.17,0.037 h=0.014 at=0.045,0.821,0.6675 rot=45.3,0,-4 color=#19100a mat=matte
+          tube k06 pts=-0.095,0.844,0.6675 0.207,0.820,0.6675 r=0.0045 color=#452c15 mat=matte
+          box ts06 size=0.022,0.086,0.013 at=0.201,0.811,0.6675 rot=45.3,0,-4 color=#7a6b56 mat=matte
+          plate sec07 pts=-0.178,-0.044 -0.153,-0.058 0.108,-0.058 0.178,-0.023 0.178,0.019 0.108,0.047 -0.153,0.047 -0.178,0.036 h=0.014 at=0.024,0.871,0.732 rot=46.5,0,-4 color=#1b1109 mat=matte
+          tube k07 pts=-0.124,0.894,0.732 0.193,0.870,0.732 r=0.0045 color=#4a3018 mat=matte
+          box ts07 size=0.022,0.084,0.013 at=0.187,0.861,0.732 rot=46.5,0,-4 color=#857a66 mat=matte
+          plate sec08 pts=-0.183,-0.043 -0.158,-0.056 0.113,-0.056 0.183,-0.023 0.183,0.018 0.113,0.046 -0.158,0.046 -0.183,0.035 h=0.014 at=0.005,0.921,0.7965 rot=47.8,0,-4 color=#1a1008 mat=matte
+          tube k08 pts=-0.147,0.945,0.7965 0.180,0.920,0.7965 r=0.0045 color=#452c15 mat=matte
+          box ts08 size=0.022,0.082,0.013 at=0.174,0.911,0.7965 rot=47.8,0,-4 color=#7a6b56 mat=matte
+          plate sec09 pts=-0.18,-0.042 -0.155,-0.055 0.11,-0.055 0.18,-0.022 0.18,0.018 0.11,0.045 -0.155,0.045 -0.18,0.034 h=0.014 at=-0.006,0.972,0.861 rot=49,0,-4 color=#1c1209 mat=matte
+          tube k09 pts=-0.156,0.995,0.861 0.166,0.970,0.861 r=0.0045 color=#4a3018 mat=matte
+          box ts09 size=0.022,0.080,0.013 at=0.160,0.960,0.861 rot=49,0,-4 color=#857a66 mat=matte
+          plate sec10 pts=-0.17,-0.041 -0.145,-0.054 0.10,-0.054 0.17,-0.021 0.17,0.018 0.10,0.044 -0.145,0.044 -0.17,0.033 h=0.014 at=-0.009,1.022,0.9255 rot=50.3,0,-4 color=#19100a mat=matte
+          tube k10 pts=-0.149,1.045,0.9255 0.153,1.022,0.9255 r=0.0045 color=#452c15 mat=matte
+          box ts10 size=0.022,0.078,0.013 at=0.147,1.010,0.9255 rot=50.3,0,-4 color=#7a6b56 mat=matte
+          plate sec11 pts=-0.155,-0.040 -0.13,-0.052 0.085,-0.052 0.155,-0.021 0.155,0.017 0.085,0.043 -0.13,0.043 -0.155,0.032 h=0.014 at=-0.008,1.072,0.99 rot=51.5,0,-4 color=#1b1109 mat=matte
+          tube k11 pts=-0.133,1.094,0.99 0.139,1.072,0.99 r=0.0045 color=#4a3018 mat=matte
+          box ts11 size=0.022,0.076,0.013 at=0.133,1.061,0.99 rot=51.5,0,-4 color=#857a66 mat=matte
+          plate sec12 pts=-0.135,-0.039 -0.11,-0.051 0.065,-0.051 0.135,-0.020 0.135,0.017 0.065,0.042 -0.11,0.042 -0.135,0.031 h=0.014 at=-0.001,1.123,1.0545 rot=52.8,0,-4 color=#1a1008 mat=matte
+          tube k12 pts=-0.106,1.143,1.0545 0.126,1.124,1.0545 r=0.0045 color=#452c15 mat=matte
+          box ts12 size=0.022,0.074,0.013 at=0.120,1.111,1.0545 rot=52.8,0,-4 color=#7a6b56 mat=matte
+          plate sec13 pts=-0.115,-0.038 -0.09,-0.050 0.045,-0.050 0.115,-0.020 0.115,0.016 0.045,0.041 -0.09,0.041 -0.115,0.031 h=0.014 at=0.005,1.173,1.119 rot=54,0,-4 color=#1c1209 mat=matte
+          tube k13 pts=-0.080,1.192,1.119 0.112,1.174,1.119 r=0.0045 color=#4a3018 mat=matte
+          box ts13 size=0.022,0.072,0.013 at=0.106,1.162,1.119 rot=54,0,-4 color=#857a66 mat=matte
+          plate sec14 pts=-0.10,-0.037 -0.075,-0.048 0.03,-0.048 0.10,-0.019 0.10,0.016 0.03,0.039 -0.075,0.039 -0.10,0.030 h=0.014 at=0.007,1.223,1.1835 rot=55.3,0,-4 color=#19100a mat=matte
+          tube k14 pts=-0.064,1.241,1.1835 0.099,1.227,1.1835 r=0.0045 color=#452c15 mat=matte
+          box ts14 size=0.022,0.070,0.013 at=0.093,1.212,1.1835 rot=55.3,0,-4 color=#7a6b56 mat=matte
+          tube saum pts=0.29,0.528,0.28 0.269,0.560,0.345 0.255,0.608,0.41 0.242,0.658,0.474 0.228,0.708,0.539 0.214,0.757,0.603 0.201,0.807,0.668 0.187,0.857,0.732 0.174,0.907,0.797 0.160,0.956,0.861 0.147,1.006,0.926 0.133,1.057,0.99 0.120,1.107,1.055 0.106,1.158,1.119 0.093,1.208,1.184 r=0.009 color=#241509 mat=matte
+    group fit_84932 at=-0.0582,0.3775,0.0000 scale=0.8251,0.7994,0.9929
+      group alula_bogen
+        mirror z
+          group fluegelknick_vorderkante label="Alula und Vorderkante"
+            tube vorderkante pts=0.30,0.58,0.40 0.25,0.74,0.62 0.19,0.95,0.82 0.12,1.14,0.96 0.07,1.24,1.06 r=0.038 color=#1a1008 mat=matte
+            tube sehne pts=0.09,1.12,0.95 0.15,1.04,0.89 0.20,0.94,0.80 r=0.012 color=#160d07 mat=matte
+            sphere kniechel r=0.055 scale=1.25,0.85,0.95 at=0.09,1.12,0.95 color=#1a1008 mat=matte
+            sphere kniechel_2 r=0.035 scale=1.1,0.9,1.0 at=0.13,1.06,0.90 color=#20130a mat=matte
+            repeat randdecken n=7 step=-0.037,0.107,0.108 at=0.31,0.57,0.39 rotstep=-1,0,0
+              extrude federchen pts=0,0 0.016,0.02 0.02,0.07 0,0.095 -0.02,0.07 -0.016,0.02 h=0.008 rot=-40,0,0 color=#241509 mat=matte
+            repeat unterkante n=5 step=-0.040,0.118,0.110 at=0.30,0.545,0.395 rotstep=-1,0,0
+              extrude unterfeder pts=0,0 0.018,0.02 0.022,0.08 0,0.105 -0.022,0.08 -0.018,0.02 h=0.008 rot=-52,0,0 color=#14100a mat=matte
+            repeat decken_reihe1 n=6 step=-0.046,0.122,0.113 at=0.335,0.55,0.38 rotstep=-2,0,0
+              extrude decke1 pts=0,0 0.024,0.03 0.03,0.11 0,0.15 -0.03,0.11 -0.024,0.03 h=0.011 rot=-38,0,0 color=#2b1a0d mat=matte
+            repeat decken_reihe2 n=6 step=-0.044,0.118,0.110 at=0.375,0.52,0.36 rotstep=-2,0,0
+              extrude decke2 pts=0,0 0.03,0.04 0.038,0.14 0,0.19 -0.038,0.14 -0.03,0.04 h=0.013 rot=-36,0,0 color=#241509 mat=matte
+            repeat decken_reihe3 n=5 step=-0.042,0.115,0.108 at=0.42,0.49,0.34 rotstep=-2,0,0
+              extrude decke3 pts=0,0 0.035,0.05 0.045,0.17 0,0.23 -0.045,0.17 -0.035,0.05 h=0.015 rot=-34,0,0 color=#1f1209 mat=matte
+            repeat schulterdecken n=4 step=-0.018,0.055,0.085 at=0.30,0.55,0.30 rotstep=-3,0,0
+              extrude schulterfeder pts=0,0 0.02,0.03 0.026,0.09 0,0.12 -0.026,0.09 -0.02,0.03 h=0.010 rot=-30,0,0 color=#33200f mat=matte
+            plate saumfeder pts=0.24,0.50 0.28,0.52 0.30,0.56 0.27,0.58 0.23,0.55 h=0.008 rot=-25,0,18 color=#4a2c15 mat=matte
+            plate saumfeder2 pts=0.17,0.62 0.21,0.65 0.22,0.70 0.18,0.71 0.15,0.66 h=0.008 rot=-32,0,14 color=#452813 mat=matte
+            repeat knicktuft n=3 step=-0.012,0.045,0.045 at=0.11,1.16,0.90 rotstep=-4,0,0
+              extrude knickfeder pts=0,0 0.014,0.02 0.018,0.06 0,0.08 -0.018,0.06 -0.014,0.02 h=0.007 rot=-46,0,0 color=#1d1109 mat=matte
+            group alula_f1 at=0.07,1.20,0.96 rot=0,4,-24 label="Alula Feder 1"
+              plate schaft pts=0,0 -0.05,0.02 -0.14,0.034 -0.165,0.014 -0.15,-0.008 -0.05,-0.016 h=0.009 color=#1a1008 mat=matte
+              plate spitze pts=-0.12,0.03 -0.165,0.016 -0.152,-0.005 -0.11,-0.007 h=0.011 color=#0e0a06 mat=matte
+              tube kiel pts=0,0.005,0 -0.15,0.011,0 r=0.004 color=#0e0a06 mat=matte
+            group alula_f2 at=0.07,1.20,0.96 rot=0,12,-38 scale=0.88 label="Alula Feder 2"
+              plate schaft pts=0,0 -0.05,0.02 -0.14,0.034 -0.165,0.014 -0.15,-0.008 -0.05,-0.016 h=0.009 color=#1a1008 mat=matte
+              plate spitze pts=-0.12,0.03 -0.165,0.016 -0.152,-0.005 -0.11,-0.007 h=0.011 color=#0e0a06 mat=matte
+              tube kiel pts=0,0.005,0 -0.15,0.011,0 r=0.004 color=#0e0a06 mat=matte
+            group alula_f3 at=0.07,1.20,0.96 rot=0,20,-52 scale=0.78 label="Alula Feder 3"
+              plate schaft pts=0,0 -0.05,0.02 -0.14,0.034 -0.165,0.014 -0.15,-0.008 -0.05,-0.016 h=0.009 color=#1c1008 mat=matte
+              plate spitze pts=-0.12,0.03 -0.165,0.016 -0.152,-0.005 -0.11,-0.007 h=0.011 color=#0e0a06 mat=matte
+            group alula_f4 at=0.07,1.20,0.96 rot=0,28,-66 scale=0.68 label="Alula Feder 4"
+              plate schaft pts=0,0 -0.05,0.02 -0.14,0.034 -0.165,0.014 -0.15,-0.008 -0.05,-0.016 h=0.009 color=#1e1209 mat=matte
+              plate spitze pts=-0.12,0.03 -0.165,0.016 -0.152,-0.005 -0.11,-0.007 h=0.011 color=#0e0a06 mat=matte
+    group fit_93169 at=0.0148,0.0217,0.0000 scale=0.9499,0.9099,1.1874
+      group schwanzdecken label="Schwanzdecken" color=#e9e5db
+        group uebergang at=0.365,0.5,0 rot=0,0,-24 label="Bürzelübergang"
+          plate uegC pts=0,-0.016 0.025,-0.022 0.06,-0.02 0.088,-0.011 0.10,0 0.088,0.011 0.06,0.02 0.025,0.022 0,-0.016 h=0.008 rot=90,0,0 at=0,0,0 color=#d9cfba mat=matte
+          mirror z
+            plate uegS1 pts=0,-0.016 0.025,-0.022 0.06,-0.02 0.088,-0.011 0.10,0 0.088,0.011 0.06,0.02 0.025,0.022 0,-0.016 h=0.008 rot=90,0,0 at=0,0,0.045 scale=0.9 color=#ddd3bf mat=matte
+            plate uegS2 pts=0,-0.016 0.025,-0.022 0.06,-0.02 0.088,-0.011 0.10,0 0.088,0.011 0.06,0.02 0.025,0.022 0,-0.016 h=0.008 rot=90,0,0 at=0,0,0.085 scale=0.78 color=#e0d7c4 mat=matte
+        group reiheA at=0.385,0.488,0 rot=0,0,-17 label="Obere Schwanzdecken mittel"
+          plate raC pts=0,-0.018 0.03,-0.024 0.08,-0.022 0.113,-0.013 0.13,0 0.113,0.013 0.08,0.022 0.03,0.024 0,-0.018 h=0.008 rot=90,0,0 at=0,0,0 color=#d5cab2 mat=matte
+          tube raK pts=0.01,0.006,0 0.07,0.006,0 0.122,0.006,0 r=0.0035 color=#f6f2e6 mat=matte
+          repeat 3 step=0.03,0,0.012 at=0.025,0.007,0.01
+            box raSp size=0.012,0.004,0.009 color=#7a5230 mat=matte
+          mirror z
+            plate raS1 pts=0,-0.018 0.03,-0.024 0.08,-0.022 0.113,-0.013 0.13,0 0.113,0.013 0.08,0.022 0.03,0.024 0,-0.018 h=0.008 rot=90,0,0 at=0,0,0.05 scale=0.94 color=#d9cfba mat=matte
+            plate raS2 pts=0,-0.018 0.03,-0.024 0.08,-0.022 0.113,-0.013 0.13,0 0.113,0.013 0.08,0.022 0.03,0.024 0,-0.018 h=0.008 rot=90,0,0 at=0,0,0.095 scale=0.84 color=#ddd3bf mat=matte
+          repeat 2 step=0,0,0.05
+            tube raKS pts=0.012,0.006,0 0.065,0.006,0 0.115,0.006,0 r=0.003 color=#f2ede0 mat=matte
+        group reiheB at=0.425,0.472,0 rot=0,0,-15 label="Obere Schwanzdecken lang"
+          plate rbC pts=0,-0.02 0.035,-0.026 0.09,-0.024 0.132,-0.014 0.15,0 0.132,0.014 0.09,0.024 0.035,0.026 0,-0.02 h=0.008 rot=90,0,0 at=0,0,0 color=#e3ddcc mat=matte
+          tube rbK pts=0.01,0.006,0 0.075,0.006,0 0.142,0.006,0 r=0.0035 color=#f6f2e6 mat=matte
+          repeat 4 step=0.026,0,0.016 at=0.03,0.007,0.018
+            box rbSp size=0.012,0.004,0.009 color=#8a5a2e mat=matte
+          mirror z
+            plate rbS1 pts=0,-0.02 0.035,-0.026 0.09,-0.024 0.132,-0.014 0.15,0 0.132,0.014 0.09,0.024 0.035,0.026 0,-0.02 h=0.008 rot=90,0,0 at=0,0,0.056 scale=0.95 color=#e6e1d3 mat=matte
+            plate rbS2 pts=0,-0.02 0.035,-0.026 0.09,-0.024 0.132,-0.014 0.15,0 0.132,0.014 0.09,0.024 0.035,0.026 0,-0.02 h=0.008 rot=90,0,0 at=0,0,0.108 scale=0.87 color=#e4ded0 mat=matte
+            plate rbS3 pts=0,-0.02 0.035,-0.026 0.09,-0.024 0.132,-0.014 0.15,0 0.132,0.014 0.09,0.024 0.035,0.026 0,-0.02 h=0.008 rot=90,0,0 at=0,0,0.155 scale=0.76 color=#e6e1d3 mat=matte
+        group reiheC at=0.455,0.452,0 rot=0,0,-12 label="Obere Schwanzdecken lang hell gesäumt"
+          plate rcC pts=0,-0.022 0.04,-0.028 0.10,-0.026 0.147,-0.015 0.165,0 0.147,0.015 0.10,0.026 0.04,0.028 0,-0.022 h=0.008 rot=90,0,0 at=0,0,0 color=#ece8dc mat=matte
+          tube rcK pts=0.01,0.006,0 0.08,0.006,0 0.157,0.006,0 r=0.0035 color=#f6f2e6 mat=matte
+          repeat 2 step=0,0,0.058
+            tube rcKS pts=0.015,0.006,0 0.08,0.006,0 0.14,0.006,0 r=0.003 color=#f4f0e4 mat=matte
+          repeat 4 step=0.03,0,0.021 at=0.045,0.007,0.03
+            box rcSp1 size=0.012,0.004,0.009 color=#6f4522 mat=matte
+          repeat 3 step=0.034,0,-0.024 at=0.06,0.007,0.09
+            box rcSp2 size=0.011,0.004,0.008 color=#8a5a2e mat=matte
+          mirror z
+            plate rcS1 pts=0,-0.022 0.04,-0.028 0.10,-0.026 0.147,-0.015 0.165,0 0.147,0.015 0.10,0.026 0.04,0.028 0,-0.022 h=0.008 rot=90,0,0 at=0,0,0.06 scale=0.96 color=#eae6d9 mat=matte
+            plate rcS2 pts=0,-0.022 0.04,-0.028 0.10,-0.026 0.147,-0.015 0.165,0 0.147,0.015 0.10,0.026 0.04,0.028 0,-0.022 h=0.008 rot=90,0,0 at=0,0,0.118 scale=0.9 color=#ece8dc mat=matte
+            plate rcS3 pts=0,-0.022 0.04,-0.028 0.10,-0.026 0.147,-0.015 0.165,0 0.147,0.015 0.10,0.026 0.04,0.028 0,-0.022 h=0.008 rot=90,0,0 at=0,0,0.20 scale=0.76 color=#e9e5db mat=matte
+            plate rcS4 pts=0,-0.022 0.04,-0.028 0.10,-0.026 0.147,-0.015 0.165,0 0.147,0.015 0.10,0.026 0.04,0.028 0,-0.022 h=0.008 rot=90,0,0 at=0,0,0.26 scale=0.62 color=#ebe7da mat=matte
+            plate rcFringe pts=0,-0.022 0.04,-0.028 0.10,-0.026 0.147,-0.015 0.165,0 0.147,0.015 0.10,0.026 0.04,0.028 0,-0.022 h=0.005 rot=90,0,0 at=0.01,-0.002,0.255 scale=0.5 color=#f1ede0 mat=matte
+        group untA at=0.40,0.33,0 rot=0,0,-13 label="Unterschwanzdecken vorn"
+          plate uaC pts=0,-0.011 0.05,-0.015 0.12,-0.013 0.17,-0.007 0.19,0 0.17,0.007 0.12,0.013 0.05,0.015 0,-0.011 h=0.007 rot=90,0,0 at=0,0,0 color=#e0dbcb mat=matte
+          mirror z
+            plate uaS1 pts=0,-0.011 0.05,-0.015 0.12,-0.013 0.17,-0.007 0.19,0 0.17,0.007 0.12,0.013 0.05,0.015 0,-0.011 h=0.007 rot=90,0,0 at=0,0,0.045 scale=0.94 color=#e2ddcd mat=matte
+            plate uaS2 pts=0,-0.011 0.05,-0.015 0.12,-0.013 0.17,-0.007 0.19,0 0.17,0.007 0.12,0.013 0.05,0.015 0,-0.011 h=0.007 rot=90,0,0 at=0,0,0.088 scale=0.84 color=#ded8c7 mat=matte
+            plate uaS3 pts=0,-0.011 0.05,-0.015 0.12,-0.013 0.17,-0.007 0.19,0 0.17,0.007 0.12,0.013 0.05,0.015 0,-0.011 h=0.007 rot=90,0,0 at=0,0,0.126 scale=0.7 color=#e0dbcb mat=matte
+        group untB at=0.405,0.335,0 rot=0,0,-11 label="Unterschwanzdecken strähnig"
+          plate ubC pts=0,-0.009 0.06,-0.013 0.14,-0.011 0.196,-0.006 0.215,0 0.196,0.006 0.14,0.011 0.06,0.013 0,-0.009 h=0.007 rot=90,0,0 at=0,0,0 color=#d8d2c0 mat=matte
+          repeat 3 step=0.045,0.003,0.05 at=0.02,0,0.02
+            plate ubStr pts=0,-0.006 0.05,-0.009 0.115,-0.008 0.15,-0.004 0.16,0 0.15,0.004 0.115,0.008 0.05,0.009 0,-0.006 h=0.006 rot=90,0,0 scale=0.78 color=#e2ddcb mat=matte
+          repeat 3 step=0.035,0,0.024 at=0.05,0.006,0.015
+            box ubSp size=0.011,0.003,0.008 color=#7a5230 mat=matte
+          mirror z
+            plate ubS1 pts=0,-0.009 0.06,-0.013 0.14,-0.011 0.196,-0.006 0.215,0 0.196,0.006 0.14,0.011 0.06,0.013 0,-0.009 h=0.007 rot=90,0,0 at=0,0,0.05 scale=0.92 color=#dcd6c5 mat=matte
+            plate ubS2 pts=0,-0.009 0.06,-0.013 0.14,-0.011 0.196,-0.006 0.215,0 0.196,0.006 0.14,0.011 0.06,0.013 0,-0.009 h=0.007 rot=90,0,0 at=0,0,0.098 scale=0.8 color=#d8d2c0 mat=matte
+    group rumpf_mantel label="Mantel- und Schulterfedern sowie Brustbefiederung"
+      # --- Strähniger Übergang zum weißen Halskragen ---
+      group kragen at=-0.30,0.60,0
+        limb kragen_m pts=0,0,0,0.014 0.10,-0.05,0,0.003 color=#efe9da mat=matte
+        mirror z
+          limb kragen_a pts=0,0.01,0.04,0.012 0.09,-0.05,0.055,0.003 color=#e6dfcd mat=matte
+          limb kragen_b pts=0,-0.01,0.09,0.011 0.08,-0.06,0.105,0.003 color=#241509 mat=matte
+          limb kragen_c pts=0,-0.03,0.14,0.010 0.07,-0.08,0.155,0.003 color=#d8d0bc mat=matte
+      # --- Lange lanzettliche Mantelfedern, gekämmt nach hinten, mit hellen Säumen ---
+      repeat 5 step=0.13,-0.02,0 at=-0.26,0.62,0
+        limb mantel_m pts=0,0,0,0.018 0.17,-0.03,0,0.004 color=#241509 mat=matte
+        limb mantel_kiel pts=0,0.005,0,0.0025 0.14,-0.022,0,0.001 color=#5a3a1c mat=matte
+        mirror z
+          limb mantel_i pts=0,-0.01,0.07,0.016 0.15,-0.045,0.10,0.004 color=#241509 mat=matte
+          limb mantel_m2 pts=0,-0.02,0.14,0.014 0.13,-0.06,0.175,0.005 color=#2b1a0c mat=matte
+          limb mantel_saum pts=0,-0.045,0.21,0.012 0.11,-0.09,0.245,0.004 color=#4a2c15 mat=matte
+      # --- Schulterfedern (Scapulars), größer, hell gesäumt, leicht aufgestellt ---
+      group schulter at=-0.10,0.57,0
+        mirror z
+          repeat 3 step=0.085,0,0
+            limb scap pts=0,0.01,0.15,0.016 0.18,-0.03,0.21,0.004 color=#33200e mat=matte
+            limb scap_kiel pts=0.01,0.016,0.155,0.002 0.16,-0.018,0.20,0.001 color=#4a2c15 mat=matte
+      # --- Mantelbrücke über die Flügelwurzeln ---
+      group fluegelwurzel at=-0.16,0.58,0.20
+        mirror z
+          repeat 3 step=0.09,0,0
+            limb wurzel_f pts=0,0,0,0.014 0.08,-0.05,0.10,0.003 color=#33200e mat=matte
+      # --- Brustbefiederung: kurz, dicht, nach hinten-unten gekämmt ---
+      repeat 4 step=0.015,-0.04,0 at=-0.305,0.585,0
+        limb brust_m pts=0,0,0,0.014 0.09,-0.04,0,0.003 color=#241509 mat=matte
+        mirror z
+          limb brust_i pts=0.01,0,0.07,0.013 0.10,-0.045,0.09,0.003 color=#241509 mat=matte
+          limb brust_a pts=0.03,-0.005,0.14,0.012 0.11,-0.06,0.165,0.003 color=#2b1a0c mat=matte
+      # --- Feine helle Sprenkelung auf der Brust ---
+      mirror z
+        repeat 3 step=0.02,-0.055,0 at=-0.315,0.575,0
+          limb sprenkel pts=-0.005,0.012,0.06,0.008 0.05,-0.012,0.072,0.002 color=#4a3520 mat=matte
+      # --- Flankenfedern: lang, locker, leicht aufgestellt ---
+      group flanken at=-0.02,0.46,0.15
+        mirror z
+          repeat 3 step=0.085,0,0
+            limb flank_a pts=0,0,0,0.015 0.13,-0.09,0.06,0.004 color=#2e1c0c mat=matte
+            limb flank_b pts=0.02,0.012,0.05,0.012 0.14,-0.08,0.10,0.003 color=#241509 mat=matte
+      # --- Bauchgefieder mittig ---
+      repeat 3 step=0.09,0,0 at=0.06,0.35,0
+        limb bauch_f pts=0,0,0,0.014 0.10,-0.05,0.02,0.004 color=#1f1208 mat=matte
+      # --- Beinwurzel verdeckende Bauchfedern an den Seiten ---
+      mirror z
+        repeat 3 step=0.09,0,0 at=0.02,0.42,0.16
+          limb beindecke pts=0,0,0,0.016 0.13,-0.10,0.05,0.004 color=#241509 mat=matte
+      # --- Bürzelfeld: dunkler, glatter, dicht anliegend ---
+      group buerzel at=0.32,0.52,0
+        sphere buerzel_kappe scale=0.06,0.022,0.11 color=#1a1008 mat=matte
+        mirror z
+          limb buerzel_a pts=0,-0.01,0.06,0.014 0.06,-0.025,0.085,0.005 color=#1c1108 mat=matte
+          limb buerzel_b pts=0,0,0.10,0.011 0.05,-0.02,0.12,0.004 color=#241509 mat=matte
+    group fit_53306 at=-0.0054,-0.8465,0.0000 scale=0.8167,1.2182,0.9746
+      group hand_spreizung label="Handschwingen-Spreizung"
+        # ---------------- rechter Fluegel (+z) ----------------
+        group hand_r label="Handspreizung rechts"
+          sphere knuckle_r r=0.055 scale=1.2,0.7,1.6 at=0.0,1.30,1.16 color=#241509 mat=matte
+          # sechs getrennte Handschwingen, Vanes
+          extrude v_r0 pts=-0.030,0 0.030,0 0.048,0.162 0.038,0.306 0.022,0.349 0,0.36 -0.022,0.349 -0.038,0.306 -0.048,0.162 h=0.022 at=-0.060,1.300,1.080 rot=-12,13,0 color=#1a1008 mat=matte
+          extrude v_r1 pts=-0.029,0 0.029,0 0.046,0.149 0.037,0.281 0.021,0.320 0,0.33 -0.021,0.320 -0.037,0.281 -0.046,0.149 h=0.022 at=-0.030,1.300,1.130 rot=-12,17,0 color=#1d1209 mat=matte
+          extrude v_r2 pts=-0.027,0 0.027,0 0.043,0.133 0.034,0.251 0.020,0.286 0,0.295 -0.020,0.286 -0.034,0.251 -0.043,0.133 h=0.022 at=0.000,1.300,1.180 rot=-11,22,0 color=#1a1008 mat=matte
+          extrude v_r3 pts=-0.025,0 0.025,0 0.040,0.113 0.032,0.213 0.019,0.243 0,0.25 -0.019,0.243 -0.032,0.213 -0.040,0.113 h=0.022 at=0.030,1.300,1.220 rot=-10,26,0 color=#1d1209 mat=matte
+          extrude v_r4 pts=-0.022,0 0.022,0 0.036,0.09 0.029,0.17 0.017,0.194 0,0.20 -0.017,0.194 -0.029,0.17 -0.036,0.09 h=0.020 at=0.060,1.300,1.260 rot=-9,23,0 color=#1a1008 mat=matte
+          extrude v_r5 pts=-0.020,0 0.020,0 0.032,0.065 0.026,0.123 0.015,0.141 0,0.145 -0.015,0.141 -0.026,0.123 -0.032,0.065 h=0.020 at=0.090,1.300,1.290 rot=-8,20,0 color=#1d1209 mat=matte
+          # runde, fast schwarze Federspitzen, leicht aufgebogen
+          sphere t_r0 r=0.032 scale=1.5,0.55,1.3 at=0.019,1.383,1.423 rot=0,13,0 color=#0e0a06 mat=matte
+          sphere t_r1 r=0.031 scale=1.5,0.55,1.3 at=0.063,1.377,1.439 rot=0,17,0 color=#0e0a06 mat=matte
+          sphere t_r2 r=0.030 scale=1.5,0.55,1.3 at=0.108,1.364,1.448 rot=0,22,0 color=#0e0a06 mat=matte
+          sphere t_r3 r=0.028 scale=1.5,0.55,1.3 at=0.137,1.351,1.442 rot=0,26,0 color=#0e0a06 mat=matte
+          sphere t_r4 r=0.026 scale=1.5,0.55,1.3 at=0.137,1.339,1.442 rot=0,23,0 color=#0e0a06 mat=matte
+          sphere t_r5 r=0.024 scale=1.5,0.55,1.3 at=0.139,1.328,1.425 rot=0,20,0 color=#0e0a06 mat=matte
+          # Kiele auf der Federoberseite
+          tube k_r0 pts=-0.060,1.315,1.08 -0.020,1.322,1.26 0.019,1.384,1.415 r=0.006 color=#2e1c0e mat=matte
+          tube k_r1 pts=-0.030,1.315,1.13 0.010,1.322,1.29 0.063,1.378,1.430 r=0.006 color=#2e1c0e mat=matte
+          tube k_r2 pts=0.000,1.315,1.18 0.050,1.321,1.32 0.108,1.365,1.440 r=0.006 color=#2e1c0e mat=matte
+          tube k_r3 pts=0.030,1.315,1.22 0.080,1.320,1.33 0.137,1.352,1.435 r=0.006 color=#2e1c0e mat=matte
+          tube k_r4 pts=0.060,1.315,1.26 0.100,1.319,1.35 0.137,1.340,1.435 r=0.005 color=#2e1c0e mat=matte
+          tube k_r5 pts=0.090,1.315,1.29 0.115,1.318,1.36 0.139,1.329,1.420 r=0.005 color=#2e1c0e mat=matte
+          # helle Saumlinie an der Aussenfahne
+          tube e_r0 pts=-0.012,1.312,1.12 0.000,1.318,1.28 0.024,1.372,1.410 r=0.004 color=#4a2c15 mat=matte
+          tube e_r1 pts=0.014,1.312,1.16 0.030,1.318,1.30 0.062,1.376,1.428 r=0.004 color=#4a2c15 mat=matte
+          tube e_r2 pts=0.040,1.312,1.21 0.058,1.317,1.33 0.104,1.362,1.438 r=0.004 color=#4a2c15 mat=matte
+          tube e_r3 pts=0.066,1.312,1.25 0.084,1.316,1.34 0.132,1.350,1.432 r=0.004 color=#4a2c15 mat=matte
+          tube e_r4 pts=0.092,1.312,1.28 0.106,1.315,1.36 0.132,1.338,1.432 r=0.003 color=#4a2c15 mat=matte
+          tube e_r5 pts=0.116,1.312,1.30 0.126,1.314,1.36 0.136,1.327,1.415 r=0.003 color=#4a2c15 mat=matte
+          # tiefe Schlitze zwischen den Federn (dunkle Grundausschattung)
+          repeat 5 step=0.030,0,0.047 at=-0.045,1.295,1.10
+            box slot size=0.012,0.05,0.11 rot=0,20,0 round=0.5 color=#0b0704 mat=matte
+          # kleine Deckfedern ueber den Federbasen, gestuft
+          repeat 4 step=0.047,0,0.067 at=-0.065,1.316,1.09
+            box covert size=0.060,0.022,0.085 rot=0,37,0 round=0.4 color=#2a1a0d mat=matte
+        # ---------------- linker Fluegel (-z) ----------------
+        group hand_l label="Handspreizung links"
+          sphere knuckle_l r=0.055 scale=1.2,0.7,1.6 at=0.0,1.30,-1.16 color=#241509 mat=matte
+          extrude v_l0 pts=-0.030,0 0.030,0 0.048,0.162 0.038,0.306 0.022,0.349 0,0.36 -0.022,0.349 -0.038,0.306 -0.048,0.162 h=0.022 at=-0.060,1.300,-1.080 rot=-12,-13,0 color=#1a1008 mat=matte
+          extrude v_l1 pts=-0.029,0 0.029,0 0.046,0.149 0.037,0.281 0.021,0.320 0,0.33 -0.021,0.320 -0.037,0.281 -0.046,0.149 h=0.022 at=-0.030,1.300,-1.130 rot=-12,-17,0 color=#1d1209 mat=matte
+          extrude v_l2 pts=-0.027,0 0.027,0 0.043,0.133 0.034,0.251 0.020,0.286 0,0.295 -0.020,0.286 -0.034,0.251 -0.043,0.133 h=0.022 at=0.000,1.300,-1.180 rot=-11,-22,0 color=#1a1008 mat=matte
+          extrude v_l3 pts=-0.025,0 0.025,0 0.040,0.113 0.032,0.213 0.019,0.243 0,0.25 -0.019,0.243 -0.032,0.213 -0.040,0.113 h=0.022 at=0.030,1.300,-1.220 rot=-10,-26,0 color=#1d1209 mat=matte
+          extrude v_l4 pts=-0.022,0 0.022,0 0.036,0.09 0.029,0.17 0.017,0.194 0,0.20 -0.017,0.194 -0.029,0.17 -0.036,0.09 h=0.020 at=0.060,1.300,-1.260 rot=-9,-23,0 color=#1a1008 mat=matte
+          extrude v_l5 pts=-0.020,0 0.020,0 0.032,0.065 0.026,0.123 0.015,0.141 0,0.145 -0.015,0.141 -0.026,0.123 -0.032,0.065 h=0.020 at=0.090,1.300,-1.290 rot=-8,-20,0 color=#1d1209 mat=matte
+          sphere t_l0 r=0.032 scale=1.5,0.55,1.3 at=0.019,1.383,-1.423 rot=0,-13,0 color=#0e0a06 mat=matte
+          sphere t_l1 r=0.031 scale=1.5,0.55,1.3 at=0.063,1.377,-1.439 rot=0,-17,0 color=#0e0a06 mat=matte
+          sphere t_l2 r=0.030 scale=1.5,0.55,1.3 at=0.108,1.364,-1.448 rot=0,-22,0 color=#0e0a06 mat=matte
+          sphere t_l3 r=0.028 scale=1.5,0.55,1.3 at=0.137,1.351,-1.442 rot=0,-26,0 color=#0e0a06 mat=matte
+          sphere t_l4 r=0.026 scale=1.5,0.55,1.3 at=0.137,1.339,-1.442 rot=0,-23,0 color=#0e0a06 mat=matte
+          sphere t_l5 r=0.024 scale=1.5,0.55,1.3 at=0.139,1.328,-1.425 rot=0,-20,0 color=#0e0a06 mat=matte
+          tube k_l0 pts=-0.060,1.315,-1.08 -0.020,1.322,-1.26 0.019,1.384,-1.415 r=0.006 color=#2e1c0e mat=matte
+          tube k_l1 pts=-0.030,1.315,-1.13 0.010,1.322,-1.29 0.063,1.378,-1.430 r=0.006 color=#2e1c0e mat=matte
+          tube k_l2 pts=0.000,1.315,-1.18 0.050,1.321,-1.32 0.108,1.365,-1.440 r=0.006 color=#2e1c0e mat=matte
+          tube k_l3 pts=0.030,1.315,-1.22 0.080,1.320,-1.33 0.137,1.352,-1.435 r=0.006 color=#2e1c0e mat=matte
+          tube k_l4 pts=0.060,1.315,-1.26 0.100,1.319,-1.35 0.137,1.340,-1.435 r=0.005 color=#2e1c0e mat=matte
+          tube k_l5 pts=0.090,1.315,-1.29 0.115,1.318,-1.36 0.139,1.329,-1.420 r=0.005 color=#2e1c0e mat=matte
+          tube e_l0 pts=-0.012,1.312,-1.12 0.000,1.318,-1.28 0.024,1.372,-1.410 r=0.004 color=#4a2c15 mat=matte
+          tube e_l1 pts=0.014,1.312,-1.16 0.030,1.318,-1.30 0.062,1.376,-1.428 r=0.004 color=#4a2c15 mat=matte
+          tube e_l2 pts=0.040,1.312,-1.21 0.058,1.317,-1.33 0.104,1.362,-1.438 r=0.004 color=#4a2c15 mat=matte
+          tube e_l3 pts=0.066,1.312,-1.25 0.084,1.316,-1.34 0.132,1.350,-1.432 r=0.004 color=#4a2c15 mat=matte
+          tube e_l4 pts=0.092,1.312,-1.28 0.106,1.315,-1.36 0.132,1.338,-1.432 r=0.003 color=#4a2c15 mat=matte
+          tube e_l5 pts=0.116,1.312,-1.30 0.126,1.314,-1.36 0.136,1.327,-1.415 r=0.003 color=#4a2c15 mat=matte
+          repeat 5 step=0.030,0,-0.047 at=-0.045,1.295,-1.10
+            box slot size=0.012,0.05,0.11 rot=0,-20,0 round=0.5 color=#0b0704 mat=matte
+          repeat 4 step=0.047,0,-0.067 at=-0.065,1.316,-1.09
+            box covert size=0.060,0.022,0.085 rot=0,-37,0 round=0.4 color=#2a1a0d mat=matte
+  anim
+    step "Anflug: Der Weißkopfseeadler steigt herauf" 2.6
+      camera yaw=40 pitch=18 zoom=1 on=whole
+      move whole from=0,-1.4,0
+      swing fluegeldecken deg=18 axis=x pivot=0,0.3,0 cycles=2
+      swing armschwingen deg=18 axis=x pivot=0,0.3,0 cycles=2
+      swing alula_bogen deg=18 axis=x pivot=0,0.3,0 cycles=2
+      swing hand_spreizung deg=18 axis=x pivot=0,0.3,0 cycles=2
+      osc whole by=0,-0.12,0 cycles=2 phase=0.5
+    step "Der mächtige Flügelschlag" 2.8
+      camera yaw=25 pitch=28 zoom=1.5 on=fluegeldecken
+      swing fluegeldecken deg=30 axis=x pivot=0,0.3,0 cycles=3
+      swing armschwingen deg=30 axis=x pivot=0,0.3,0 cycles=3
+      swing alula_bogen deg=30 axis=x pivot=0,0.3,0 cycles=3
+      swing hand_spreizung deg=30 axis=x pivot=0,0.3,0 cycles=3
+      osc whole by=0,-0.15,0 cycles=3 phase=0.5
+    step "Aufmerksam Blick und Schnabel" 2.4
+      camera yaw=-35 pitch=15 zoom=2.2 on=kopf_gesicht
+      swing kopf_gesicht deg=14 axis=y pivot=-0.4,0.5,0 cycles=2
+      swing schnabel_detail deg=14 axis=y pivot=-0.4,0.5,0 cycles=2
+      swing fluegeldecken deg=10 axis=x pivot=0,0.3,0 cycles=2
+      swing armschwingen deg=10 axis=x pivot=0,0.3,0 cycles=2
+      swing hand_spreizung deg=10 axis=x pivot=0,0.3,0 cycles=2
+    step "Gesteuert mit Schwanz und Fängen" 2.6
+      camera yaw=15 pitch=8 zoom=1.5 on=schwanzdecken
+      swing schwanzdecken deg=12 axis=z pivot=0.4,0.35,0 cycles=3
+      osc beine_faenge by=0,-0.06,0 cycles=3 phase=0.25
+      swing fluegeldecken deg=24 axis=x pivot=0,0.3,0 cycles=3
+      swing armschwingen deg=24 axis=x pivot=0,0.3,0 cycles=3
+      swing alula_bogen deg=24 axis=x pivot=0,0.3,0 cycles=3
+      swing hand_spreizung deg=24 axis=x pivot=0,0.3,0 cycles=3
+    step "Kraftvoll im Gleitflug" 2.8
+      camera yaw=40 pitch=20 zoom=1 on=whole
+      swing fluegeldecken deg=32 axis=x pivot=0,0.3,0 cycles=3
+      swing armschwingen deg=32 axis=x pivot=0,0.3,0 cycles=3
+      swing alula_bogen deg=32 axis=x pivot=0,0.3,0 cycles=3
+      swing hand_spreizung deg=32 axis=x pivot=0,0.3,0 cycles=3
+      swing schwanzdecken deg=10 axis=z pivot=0.4,0.35,0 cycles=3
+      osc whole by=0,-0.14,0 cycles=3 phase=0.5
