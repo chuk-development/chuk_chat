@@ -148,7 +148,7 @@ def table(frag):
 
 def assemble(plan, built):
     head = f"canvas dark\ntitle \"{plan['title']}\"\nmodel obj 1100 620 keep=1 tidy=1 view={plan['view'][0]},{plan['view'][1]}{' cut=' + plan['cut'] if plan.get('cut') else ''}\n"
-    static, moving = [], [plan['form']]
+    static, moving = [], [plan['form']] if plan['form'] else []
     for a in plan['assemblies']:
         if a['id'] not in built:
             continue
@@ -198,6 +198,23 @@ def rig_block(plan, a, model, out):
         if not errs:
             return text
     return text
+
+
+def rig_probe(rig, out):
+    """The outer body of a rig as text for the plan, for numbers only."""
+    return 'box rig_bounds ' + 'size=' + ','.join(f'{v:.3f}' for v in rig_size(rig, out)['size']) + ' at=' + ','.join(f'{v:.3f}' for v in rig_size(rig, out)['mid'])
+
+
+def rig_size(rig, out):
+    p = subprocess.run(['node', str(HERE / 'ids.mjs')], input='canvas dark\nmodel m 800 400 keep=1\n' + indent(rig) + '\n', capture_output=True, text=True, cwd=HERE)
+    lo, hi = [1e9] * 3, [-1e9] * 3
+    for line in p.stdout.split('\n'):
+        m = re.search(r'min ([-\d.,]+), max ([-\d.,]+), mid', line)
+        if m:
+            a_, b_ = [float(v) for v in m.group(1).split(',')], [float(v) for v in m.group(2).split(',')]
+            lo = [min(x, y) for x, y in zip(lo, a_)]
+            hi = [max(x, y) for x, y in zip(hi, b_)]
+    return {'size': [h - l for l, h in zip(lo, hi)], 'mid': [(l + h) / 2 for l, h in zip(lo, hi)]}
 
 
 def film(scene, a, plan, model, out, log):
@@ -272,7 +289,11 @@ def run(a):
     if refs:
         refs[0].save(out / 'reference.png')
     imgs = [uri(jpg(i, 1400)) for i in refs]
-    form = forge_form(a, out, imgs, model)
+    # A piston machine starts from its rig. The engine builds the body from the table,
+    # so body and mechanism cannot disagree.
+    kind = obj(llm(model, f'Request: {a.request}\nJSON only: {{"crank": true or false}}. true only if the thing has pistons and a crankshaft and shows them working.', effort='low', tokens=2000))
+    rig = rig_block({'subject': a.request, 'size': '', 'unit': ''}, a, model, out) if kind.get('crank') else ''
+    form = ('group hull\n' + indent(rig_probe(rig, out))) if rig else forge_form(a, out, imgs, model)
     stations = table(form)
     (out / 'form.chalk').write_text(form)
     plan = obj(llm(model, [{'type': 'text', 'text': a.request + '\n\nThe skin:\n```chalk\n' + form + '\n```\nIts surface:\n' + stations}] + imgs, system=(HERE / 'PROMPT_PLAN.md').read_text()))
@@ -281,8 +302,9 @@ def run(a):
     plan['request'] = a.request
     plan['model'] = model
     (out / 'plan.json').write_text(json.dumps(plan, indent=1, ensure_ascii=False))
-    plan['rig'] = rig_block(plan, a, model, out) if plan.get('crank') else ''
-    if plan['rig']:
+    plan['rig'] = rig
+    if rig:
+        plan['form'] = ''
         plan['table'] += '\n\nThe moving heart exists already, do not build crank, pistons or rods. Build around it. These are the real numbers:\n' + plan['rig'][plan['rig'].index('mech'):]
     t1 = time.time()
     built = {}
