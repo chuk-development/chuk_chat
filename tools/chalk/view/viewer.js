@@ -211,7 +211,17 @@ function aim([yaw, pitch, zoom, fx, fy, fz]) {
   const dist = (Math.max((x1 - x0) / 2 / (tan * camera.aspect), (y1 - y0) / 2 / tan) * margin + z1) / (zoom || 1);
   const f = new THREE.Vector3(fx, fy, fz);
   if (Math.abs(fx - centre.x) + Math.abs(fy - centre.y) + Math.abs(fz - centre.z) < radius * 1e-3) f.addScaledVector(right, (x0 + x1) / 2).addScaledVector(up, (y0 + y1) / 2 - radius * 0.03);
-  camera.position.copy(f).addScaledVector(back, dist);
+  // A close shot must not end inside the model.
+  let d = dist;
+  const gap = radius * 0.28;
+  for (let i = 0; i < 24; i++) {
+    const c = f.clone().addScaledVector(back, d);
+    let close = false;
+    for (let k = 0; k < P.length && !close; k += 3) close = (P[k] - c.x) ** 2 + (P[k + 1] - c.y) ** 2 + (P[k + 2] - c.z) ** 2 < gap * gap;
+    if (!close) break;
+    d += gap * 0.5;
+  }
+  camera.position.copy(f).addScaledVector(back, d);
   camera.up.set(0, 1, 0);
   camera.lookAt(f);
   camera.updateMatrixWorld(true);

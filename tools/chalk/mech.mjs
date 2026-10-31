@@ -117,6 +117,13 @@ export function readMech(model, parts, errors) {
     if (j.of && !joints.has(j.of)) errors.push(`line ${j.line}: ${j.type} ${j.id}: no joint "${j.of}"`);
     if (j.type === 'rod' && !joints.has(j.slider)) errors.push(`line ${j.line}: rod ${j.id}: no piston "${j.slider}"`);
   }
+  // A rotor inside a rotor on the same axis turns twice. Only the outer one stays.
+  for (let i = order.length - 1; i >= 0; i--) {
+    const j = order[i];
+    if (j.type !== 'rotor') continue;
+    const outer = parts.find((p) => p.path.includes(j.id))?.path.map((id) => joints.get(id)).find((o) => o && o !== j && o.type === 'rotor');
+    if (outer && Math.abs(dot(outer.axis, j.axis)) > 0.99 && j.ratio === 1 && (j.of === outer.id)) { joints.delete(j.id); order.splice(i, 1); }
+  }
   const m = { joints, order };
   checkMech(m, parts, errors);
   if (!errors.some((e) => e.startsWith('mech'))) sweep(m, parts, errors);
@@ -220,6 +227,10 @@ function checkMech(m, parts, errors) {
           sum = add(sum, off); far = Math.max(far, Math.hypot(...off)); n++;
         }
       }
+      const ext = [0, 1, 2].map((c) => j.box.hi[c] - j.box.lo[c]);
+      const main = j.axis.map(Math.abs).indexOf(Math.max(...j.axis.map(Math.abs)));
+      const across = ext.filter((_, c) => c !== main);
+      if (Math.max(...across) > 2 * Math.min(...across) && Math.min(...ext) === Math.min(...across)) errors.push(`mech: rotor ${j.id} has the wrong axis: its box is ${ext.map((v) => v.toFixed(2))}, so it is flat along ${'xyz'[ext.indexOf(Math.min(...ext))]}, and that is its axis`);
       const shift = Math.hypot(...sum) / (n || 1);
       if (shift > far * 0.3) errors.push(`mech: rotor ${j.id} is not centred on its axis: mean offset ${shift.toFixed(3)} at radius ${far.toFixed(3)}. Give each wheel its own id and the true at=`);
     }

@@ -24,11 +24,11 @@ Answer with JSON only:
  ]
 }
 
-`crank`: true only if the object has pistons, a crankshaft or steam cylinders. Then no assembly may build crank, pistons or con rods: they exist in a rig, and assemblies build the block, frames and covers around them.
+`crank`: true only if the object has pistons, a crankshaft or steam cylinders. Then crank, pistons, rods, block, heads and pan exist already as the rig. Plan only what sits on the outside of it: intake, exhaust, belts, pumps, sensors, flywheel. Each box touches the block from outside.
 
 Things that turn: each wheel, rotor, fan or gear is its own round unit with one true axis. It holds nothing that stands still. Plan the correct axis: a tail fan of a helicopter turns across the boom, through the fin. A side rod never joins a wheel group.
 
-Chains, belts and meshing gears are built later by the engine from numbers. Plan their position in `motion`, with the centre and radius of each wheel, and do not plan them as assemblies.
+Spoked wheels of bicycles and motorcycles, chains, belts and meshing gears are built later by the engine from numbers. Plan their position in `motion`, with the centre and radius of each wheel, and do not plan them as assemblies.
 
 `cut`: if the inside must be seen (engine, pump, heart), write "z>0": this removes the front half of the skin. Then the inside assemblies matter most, plan them in full depth. Otherwise null.
 

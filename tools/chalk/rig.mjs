@@ -11,6 +11,9 @@
 //     chain c of=g0 ra=0.2 a=x,y,z b=x,y,z rb=0.1 axis=z pitch=0.05
 //       a closed chain or belt around two wheels. `of` turns at wheel a. belt=1 gives a smooth band
 //     spokedwheel w at=x,y,z axis=z r=0.34 width=0.025 spokes=32 of=crank ratio=1
+//     block b crank=crank bore=0.46 color=#5d6b78 cover=#b5461f
+//       hollow engine block, heads, covers and pan, made from the cylinder table. It always
+//       fits, and it opens with a cut through the first bank
 // `angle` is the cylinder line, `throw` the crank pin, both in degrees around the crank axis.
 import { parse, nums } from './parse.mjs';
 
@@ -88,6 +91,40 @@ function loopPath(A, ra, B, rb, axis) {
   for (let i = 0; i <= steps; i++) pts.push(P(B, rb, -Math.PI / 2 + a + (i / steps) * (Math.PI + 2 * -a) + 0));
   pts.push(pts[0]);
   return pts;
+}
+
+function blockText(k, f, rows, crown) {
+  const id = k.args[0], bore = Number(k.kv.bore ?? 0.46), col = k.kv.color ?? '#5d6b78', cover = k.kv.cover ?? '#b5461f';
+  const r = rows[0].r, rod = rows[0].L, wall = bore * 0.15;
+  const deck = rod + r + crown + bore * 0.08, low = rod - r - crown * 0.6;
+  const xs = rows.map((c) => c.x), x0 = Math.min(...xs) - bore * 1.35, x1 = Math.max(...xs) + bore * 1.35, len = x1 - x0, mid = (x0 + x1) / 2;
+  const box = (name, size, off, c = col) => `  box ${id}${name} size=${fmt(size)} at=${fmt(off)} round=0 color=${c} mat=cast shell=1\n`;
+  let s = `group ${id} at=${fmt(f.at)} basis=${fmt(f.a)},${fmt(f.u)} shell=1\n`;
+  const banks = [...new Set(rows.map((c) => c.ang))];
+  const half = bore * 1.3, h = deck - low, m = (deck + low) / 2;
+  banks.forEach((ang, b) => {
+    s += ` group ${id}bank${b} rot=${ang},0,0 shell=1\n`;
+    for (const c of rows.filter((q) => q.ang === ang)) s += `   cyl ${id}l${c.i} r=${(bore * 1.14).toFixed(4)} hole=${(bore * 1.01).toFixed(4)} h=${h.toFixed(4)} axis=y at=${fmt([c.x, m, 0])} color=#9b9ea3 mat=brushed shell=1\n`;
+    for (const t of [-1, 1]) {
+      s += ` ${box(`w${b}${t + 1}`, [len, h, wall], [mid, m, t * half])}`;
+      s += ` ${box(`d${b}${t + 1}`, [len, wall, wall], [mid, deck, t * (half + wall)])}`;
+      s += ` ${box(`h${b}${t + 1}`, [len, bore * 1.0, wall], [mid, deck + bore * 0.5, t * half])}`;
+      s += ` ${box(`c${b}${t + 1}`, [len, bore * 1.7, wall * 0.7], [mid, deck + bore * 1.85, t * half], cover).replace('mat=cast', 'mat=paint')}`;
+    }
+    for (const q of [-1, 1]) s += ` ${box(`e${b}${q + 1}`, [wall, deck - low + bore * 2.7, half * 2], [mid + q * len / 2, (low + deck + bore * 2.7) / 2, 0])}`;
+    s += ` ${box(`t${b}`, [len + wall, wall * 0.8, half * 2 + wall], [mid, deck + bore * 2.7, 0], cover).replace('mat=cast', 'mat=paint')}`;
+    for (let i = 0; i < 9; i++) s += ` ${box(`r${b}${i}`, [wall * 0.5, wall * 0.5, half * 1.7], [x0 + len * (i + 0.5) / 9, deck + bore * 2.75, 0], cover).replace('mat=cast', 'mat=paint')}`;
+  });
+  const spread = (fn) => Math.max(...banks.map((a) => fn(Math.abs(Math.sin(rad(a))), Math.abs(Math.cos(rad(a))))));
+  const cw = Math.max(r * 2.2, spread((sn, cs) => sn * low + cs * half + wall)), deep = r * 1.72 + bore * 0.3;
+  const top = Math.max(r * 0.8, Math.min(...banks.map((a) => Math.abs(Math.cos(rad(a))) * low - Math.abs(Math.sin(rad(a))) * half)));
+  for (const t of [-1, 1]) s += box(`case${t + 1}`, [len, top + deep, wall], [mid, (top - deep) / 2, t * cw]);
+  for (const t of [-1, 1]) s += box(`end${t + 1}`, [wall, top + deep, cw * 2], [mid + t * len / 2, (top - deep) / 2, 0]);
+  s += box('pan', [len, wall, cw * 2], [mid, -deep - bore * 0.8, 0], '#2e3136');
+  for (const t of [-1, 1]) s += box(`ps${t + 1}`, [len, bore * 0.8, wall], [mid, -deep - bore * 0.4, t * cw], '#2e3136');
+  for (const t of [-1, 1]) s += box(`pe${t + 1}`, [wall, bore * 0.8, cw * 2], [mid + t * len / 2, -deep - bore * 0.4, 0], '#2e3136');
+  const plane = rows[0].ang;
+  return { text: s, cut: [...[0, 1, 2].map((c) => -f.u[c] * Math.sin(rad(plane)) + f.v[c] * Math.cos(rad(plane))), 0.0001] };
 }
 
 export function along(path, s, normal) {
@@ -173,6 +210,7 @@ export function expandRig(model, errors) {
       const pin = at(c.f, x, th, r), wrist = at(c.f, x, ang, s);
       const line = [0, 1, 2].map((i) => c.f.u[i] * Math.cos(rad(ang)) + c.f.v[i] * Math.sin(rad(ang)));
       const up = [0, 1, 2].map((i) => (wrist[i] - pin[i]) / L);
+      (c.rows ??= []).push({ x, ang, r, L, i: c.rows?.length ?? 0, crown: Number(k.kv.crown ?? 0.3) });
       added.push(group(`p_${id}`, { at: fmt(wrist), basis: `${fmt(c.f.a)},${fmt(line)}` }, P.kids));
       added.push(group(`r_${id}`, { at: fmt(pin), basis: `${fmt(c.f.a)},${fmt(up)}` }, R.kids));
       joints.push(joint('piston', `p_${id}`, { crank: k.kv.crank, pin: fmt(pin), wrist: fmt(wrist) }, k.line));
@@ -184,10 +222,15 @@ export function expandRig(model, errors) {
         fired.set(tdc, n + 1);
         const crown = Number(k.kv.crown ?? 0.3), fr = Number(k.kv.flame);
         const spot = [0, 1, 2].map((i) => wrist[i] + line[i] * (crown + fr * 0.2));
-        added.push(...parse(`sphere f_${id} r=${fr} scale=1,0.32,1 at=${fmt(spot)} color=#ff8a24 mat=light\n`).root.kids);
-        added.at(-1).kv.basis = `${fmt(c.f.a)},${fmt(line)}`;
+        added.push(...parse(`group f_${id} at=${fmt(spot)} basis=${fmt(c.f.a)},${fmt(line)}\n  sphere f_${id}s r=${fr} scale=1,0.32,1 color=#ff8a24 mat=light\n`).root.kids);
         joints.push(joint('fire', `f_${id}`, { of: k.kv.crank, at: fmt(spot), piston: `p_${id}`, phase: String(tdc + 360 * (n % 2) + 18), width: '100', cycle: '720' }, k.line));
       }
+    } else if (k.cmd === 'block') {
+      const c = cranks.get(k.kv.crank);
+      if (!c?.rows) { errors.push(`line ${k.line}: block needs cylinders above it`); continue; }
+      const b = blockText(k, c.f, c.rows, c.rows[0].crown);
+      added.push(...parse(b.text).root.kids);
+      if (k.kv.cut !== '0') { model.kv.cut ??= fmt(b.cut); model.kv.cap ??= '#a8321f'; }
     } else joints.push(k);
   }
   mech.kids = joints;
