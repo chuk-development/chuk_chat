@@ -1,0 +1,465 @@
+canvas dark
+title "Rennrad in Fahrt – Antrieb über Kette"
+model obj 1100 620 keep=1 tidy=1 view=-35,12
+  group fit_13785 at=-0.0022,-0.0099,0.0000 scale=1.0151,1.0151,1.0151
+    group fork at=-0.545,0.66,0
+      # --- Steuerrohr, konisch, mit Alu-Deckel und Sternmutter ---
+      lathe steerer pts=0,0.0175 0.08,0.0155 0.16,0.0142 0.24,0.0135 0.29,0.013 axis=y smooth=1 color=#1b1b1e mat=cast
+      cyl race r=0.0195 h=0.008 axis=y at=0,0.004,0 color=#26262a mat=darkmetal
+      cyl starnut r=0.009 h=0.004 axis=y at=0,0.287,0 color=#0c0c0e mat=darkmetal
+      cyl topcap r=0.015 h=0.006 axis=y at=0,0.2925,0 color=#b8b8bc mat=brushed
+      cyl capring r=0.0158 h=0.002 axis=y at=0,0.2895,0 color=#8f8f94 mat=brushed
+      # --- Kabelfuehrung auf der Schaft-Rueckseite ---
+      tube cableguide pts=0.015,0.05,0 0.016,0.13,0 0.015,0.21,0 r=0.0025 color=#101012 mat=plastic
+      repeat 3 step=0,0.07,0
+        box cablestop size=0.006,0.011,0.015 round=0.002 at=0.0165,0.08,0 color=#101012 mat=plastic
+      # --- Krone mit Tropfen-Uebergang ---
+      lathe crowndrop pts=0,0.029 -0.014,0.027 -0.035,0.021 -0.055,0.013 axis=y smooth=1 color=#1b1b1e mat=cast
+      box crown size=0.054,0.04,0.05 round=0.015 at=0,-0.038,0 color=#1b1b1e mat=cast
+      tube crownseam pts=0.023,-0.038,0.011 0.025,-0.038,0 0.023,-0.038,-0.011 r=0.0012 color=#0c0c0e mat=matte
+      box crownlogo size=0.002,0.014,0.02 at=-0.0275,-0.038,0 color=#e8e8ea mat=paint
+      # --- Bremsaufnahme hinten an der Krone ---
+      cyl brakeboss r=0.005 h=0.013 axis=x at=0.030,-0.038,0 color=#101012 mat=darkmetal
+      cyl brakenut r=0.0075 h=0.004 axis=x at=0.038,-0.038,0 color=#3a3a40 mat=brushed
+      screw brakebolt r=0.0022 h=0.003 at=0.0405,-0.038,0 color=#b8b8bc mat=brushed
+      # --- Gabelscheiden mit 0.018 Vorlauf nach vorn, weisser Zierstreifen, Faser-Naht ---
+      mirror z
+        limb blade pts=0.004,-0.052,0.019,0.020 -0.001,-0.13,0.024,0.017 -0.007,-0.21,0.030,0.014 -0.012,-0.28,0.036,0.012 -0.015,-0.315,0.038,0.011 color=#1b1b1e mat=cast
+        limb stripe pts=-0.003,-0.112,0.0245,0.018 -0.0055,-0.148,0.0275,0.0175 color=#e8e8ea mat=paint
+        tube moldseam pts=0,-0.06,0.040 -0.006,-0.16,0.042 -0.013,-0.29,0.048 r=0.001 color=#0c0c0e mat=matte
+        # --- Ausfallende mit 10-mm-Aufnahme und Schnellspann-Lasche ---
+        box dropout size=0.034,0.034,0.007 round=0.004 at=-0.015,-0.318,0.040 color=#1b1b1e mat=cast
+        cyl axlehole r=0.008 h=0.010 hole=0.005 axis=z at=-0.015,-0.32,0.042 color=#26262a mat=darkmetal
+        cyl qrrod r=0.003 h=0.010 axis=z at=-0.015,-0.32,0.0445 color=#b8b8bc mat=brushed
+        cyl qrnut r=0.0055 h=0.003 axis=z at=-0.015,-0.32,0.048 color=#8f8f94 mat=brushed
+        tube qrlever pts=-0.015,-0.318,0.049 -0.020,-0.314,0.049 -0.024,-0.306,0.0485 r=0.002 color=#b8b8bc mat=brushed
+        cyl qrtip r=0.0032 h=0.005 axis=x at=-0.026,-0.303,0.0485 color=#101012 mat=rubber
+  group whole
+    group hull
+      body seatube top=-0.17,0.848 -0.13,0.735 -0.09,0.615 -0.05,0.495 -0.01,0.375 0.03,0.300 bottom=-0.17,0.810 -0.13,0.697 -0.09,0.577 -0.05,0.457 -0.01,0.330 0.03,0.242 width=-0.17,0.036 -0.09,0.040 -0.01,0.046 0.03,0.054 square=1
+      body seatpost top=-0.150,0.860 -0.168,0.925 -0.186,0.985 bottom=-0.150,0.832 -0.168,0.897 -0.186,0.957 width=-0.150,0.030 -0.186,0.030 square=1
+      body toptube top=-0.545,0.944 -0.45,0.920 -0.35,0.893 -0.25,0.866 -0.15,0.840 bottom=-0.545,0.908 -0.45,0.886 -0.35,0.859 -0.25,0.832 -0.15,0.806 width=-0.545,0.042 -0.35,0.038 -0.15,0.038 square=1
+      body headtube top=-0.575,0.955 -0.515,0.955 bottom=-0.575,0.675 -0.515,0.675 width=-0.575,0.052 -0.515,0.052 square=1
+      body downtube top=-0.535,0.730 -0.42,0.635 -0.30,0.535 -0.18,0.432 -0.06,0.328 0.03,0.300 bottom=-0.535,0.672 -0.42,0.577 -0.30,0.477 -0.18,0.374 -0.06,0.262 0.03,0.232 width=-0.535,0.048 -0.30,0.062 -0.06,0.062 0.03,0.058 square=1
+      body bbshell top=-0.055,0.318 0.055,0.318 bottom=-0.055,0.222 0.055,0.222 width=-0.055,0.098 0.055,0.098 square=1
+      body chainstay top=-0.03,0.298 0.10,0.308 0.25,0.325 0.43,0.352 bottom=-0.03,0.238 0.10,0.265 0.25,0.288 0.43,0.318 width=-0.03,0.095 0.15,0.100 0.43,0.072 square=1
+      body seatstay top=-0.125,0.722 0.05,0.594 0.22,0.478 0.43,0.350 bottom=-0.125,0.698 0.05,0.570 0.22,0.454 0.43,0.326 width=-0.125,0.070 0.15,0.062 0.43,0.050 square=1
+      paint hull color=#1b1b1e mat=paint plane=0,1,0,-10
+      paint hull color=#232327 mat=paint box=-0.55,0.20,-0.05,0.05,0.75,0.05
+      paint hull color=#17171a mat=paint box=-0.20,0.78,-0.04,-0.12,0.99,0.04
+      seam hull plane=0,1,0,0.825 w=0.008 box=-0.20,0.80,-0.04,-0.12,0.87,0.04
+      seam hull plane=1,0,0,-0.545 w=0.008 box=-0.58,0.66,-0.04,-0.51,0.71,0.04
+      seam hull plane=1,0,0,-0.545 w=0.008 box=-0.58,0.92,-0.04,-0.51,0.96,0.04
+      seam hull plane=0,1,0,0.245 w=0.010 box=-0.06,0.22,-0.06,0.06,0.26,0.06
+      seam hull plane=0,1,0,0.30 w=0.006 box=0.36,0.30,-0.05,0.44,0.37,0.05
+      decal hull "LIFE" at=-0.30,0.55 axis=z both=1 h=0.055 color=#7d7d82 bold=1
+      decal hull "LIFE" at=-0.28,0.875 axis=z both=1 h=0.028 color=#6f6f74 bold=1
+      decal hull "LIFE" at=-0.09,0.55 axis=z both=1 h=0.030 color=#5a5a5e
+      decal hull "CARBON" at=0.18,0.30 axis=z both=1 h=0.016 color=#4a4a4e
+    group cockpit
+      cyl steerer r=0.0205 h=0.05 axis=y at=-0.545,0.93,0 color=#1a1a1e mat=brushed
+      cyl hscover r=0.0265 h=0.005 axis=y at=-0.545,0.9525,0 color=#1a1a1e mat=brushed
+      cyl spacer1 r=0.0235 h=0.007 axis=y at=-0.545,0.9585,0 color=#232327 mat=brushed
+      cyl spacer2 r=0.0235 h=0.005 axis=y at=-0.545,0.9645,0 color=#84848c mat=brushed
+      cyl topcap r=0.014 h=0.005 axis=y at=-0.545,0.9925,0 color=#9a9aa2 mat=brushed
+      cyl topcapbolt r=0.003 h=0.006 axis=y at=-0.545,0.9975,0 color=#6f6f77 mat=brushed
+      box stemclamp size=0.04,0.024,0.044 at=-0.549,0.978,0 round=0.004 color=#1e1e22 mat=brushed
+      box stemarm size=0.07,0.026,0.03 at=-0.583,0.9795,0 rot=0,0,-4.8 round=0.006 color=#1e1e22 mat=brushed
+      box stemface size=0.007,0.026,0.05 at=-0.6205,0.981,0 round=0.003 color=#19191d mat=brushed
+      repeat 2 step=0,0,0.028 at=-0.6255,0.981,-0.014
+        cyl fbolt r=0.0045 h=0.005 axis=x hole=0.0022 color=#3c3c42 mat=brushed
+      repeat 2 step=0,0,0.046 at=-0.549,0.978,-0.023
+        cyl sbolt r=0.0035 h=0.006 axis=z hole=0.0018 color=#3c3c42 mat=brushed
+      cyl barclamp r=0.0135 h=0.05 axis=z at=-0.612,0.981,0 color=#141418 mat=brushed
+      box bartop size=0.022,0.0025,0.26 at=-0.612,0.9925,0 color=#131316 mat=brushed
+      repeat 2 step=0,0,0.054 at=-0.545,0.90,0.027
+        cyl grommet r=0.006 h=0.012 axis=z color=#0f0f12 mat=rubber
+      mirror z
+        tube bar pts=-0.612,0.981,0.02 -0.612,0.981,0.09 -0.612,0.981,0.145 -0.618,0.979,0.18 -0.628,0.970,0.196 -0.638,0.954,0.202 -0.645,0.934,0.205 -0.648,0.914,0.206 -0.645,0.903,0.206 -0.635,0.896,0.205 -0.619,0.895,0.204 -0.604,0.898,0.203 -0.595,0.901,0.202 r=0.011 color=#131316 mat=brushed
+        tube tapetop pts=-0.612,0.981,0.10 -0.612,0.981,0.15 -0.617,0.9795,0.18 r=0.014 color=#2a2a2c mat=rubber
+        tube tapedrop pts=-0.638,0.954,0.202 -0.645,0.934,0.205 -0.648,0.914,0.206 -0.645,0.903,0.206 -0.635,0.896,0.205 -0.619,0.895,0.204 -0.604,0.898,0.203 -0.595,0.901,0.202 r=0.014 color=#2a2a2c mat=rubber
+        repeat 6 step=0,0,0.012 at=-0.612,0.981,0.106
+          cyl wraptop r=0.0148 h=0.0045 axis=z color=#242426 mat=rubber
+        repeat 5 step=-0.0005,-0.005,0.0001 at=-0.6465,0.929,0.2055
+          cyl wrap2 r=0.015 h=0.0045 axis=y rot=0,0,-8.5 color=#242426 mat=rubber
+        repeat 7 step=0.0055,0.0007,-0.0004 at=-0.630,0.8965,0.2048
+          cyl wrap r=0.015 h=0.0045 axis=x rot=0,0,7 color=#242426 mat=rubber
+        cyl finish r=0.0145 h=0.007 axis=x rot=0,0,7 at=-0.5985,0.9008,0.2023 color=#1a1a1c mat=rubber
+        cyl plug r=0.0115 h=0.012 axis=x rot=0,0,7 at=-0.589,0.9015,0.202 color=#26262a mat=brushed
+        box stemlogo size=0.018,0.004,0.0012 at=-0.583,0.982,0.0155 color=#e8e8ea mat=paint
+        group lever at=-0.628,0.965,0.190 rot=0,10,-142
+          lathe hood pts=0,0.017 0.008,0.0175 0.018,0.016 0.030,0.014 0.040,0.0128 0.050,0.011 0.056,0.008 0.058,0.004 axis=x smooth=1 color=#121214 mat=rubber
+          cyl collar r=0.0185 h=0.014 axis=x at=0.001,0,0 color=#0f0f12 mat=brushed
+          plate blade pts=0.024,0.000 0.040,0.006 0.052,0.014 0.060,0.024 0.058,0.032 0.048,0.028 0.036,0.016 0.026,0.006 h=0.010 color=#0c0c0e mat=paint
+          cyl port r=0.004 h=0.012 axis=x at=0.012,0.016,0 color=#0f0f12 mat=rubber
+          box logo1 size=0.014,0.0025,0.0012 at=0.028,0.003,0.0125 color=#e8e8ea mat=paint
+          box logo2 size=0.014,0.0025,0.0012 at=0.028,0.003,-0.0125 color=#e8e8ea mat=paint
+        tube cableout pts=-0.630,0.943,0.186 -0.620,0.918,0.184 -0.606,0.902,0.183 r=0.0026 color=#101014 mat=rubber
+        tube cableunder pts=-0.618,0.958,0.186 -0.612,0.966,0.170 -0.610,0.970,0.150 r=0.0026 color=#101014 mat=rubber
+    group saddle at=-0.168,0.985,0 rot=0,0,-2 label="Rennsattel LIFE Carbon"
+      # ---- Hauptschale: Carbon-Deck, W-Form, hinten hoch (y~1.02), Nase flach (y~0.99) ----
+      loft deck sections=-0.148,0.116,0.028,0.020 -0.110,0.114,0.030,0.018 -0.060,0.106,0.032,0.014 0.000,0.092,0.030,0.010 0.050,0.070,0.026,0.006 0.090,0.050,0.020,0.002 0.112,0.038,0.014,0.000 0.118,0.028,0.010,0.000 square=1 color=#17171a mat=matte
+      loft under sections=-0.140,0.106,0.020,0.006 -0.090,0.100,0.020,0.002 -0.030,0.084,0.018,0.000 0.040,0.058,0.014,-0.001 0.100,0.034,0.010,-0.002 0.116,0.026,0.008,-0.002 square=1 color=#0f0f12 mat=matte
+      # ---- Polsterkern unter den Sitzknochen, leicht erhaben angedeutet ----
+      box pad size=0.090,0.008,0.098 at=-0.062,0.024,0 round=0.6 color=#232327 mat=matte
+      box pad2 size=0.050,0.006,0.072 at=-0.008,0.018,0 round=0.6 color=#1f1f23 mat=matte
+      # ---- Laengsrille in der Mittelachse ----
+      tube groove pts=-0.110,0.032,0 -0.050,0.029,0 0.020,0.024,0 0.090,0.011,0 r=0.0035 color=#0b0b0d mat=matte
+      # ---- Deckkante und Naht ----
+      mirror z
+        tube seam pts=-0.140,0.024,0.054 -0.060,0.026,0.050 0.030,0.020,0.040 0.100,0.008,0.021 r=0.0018 color=#2a2a2f mat=matte
+        repeat 7 step=0.020,-0.0012,-0.0042 at=-0.128,0.026,0.052
+          box stitch size=0.0016,0.0016,0.0016 color=#3a3a40 mat=matte
+        # ---- Seidenmatter Lacksstreifen auf der Deckseite ----
+        box sidepanel size=0.100,0.002,0.012 at=-0.068,0.014,0.050 rot=0,0,3 color=#202026 mat=paint
+        # ---- Seitliches LIFE-Schriftzug-Decal ----
+        box sideLogo size=0.030,0.0015,0.006 at=-0.100,0.021,0.052 rot=0,0,3 color=#e8e8ea mat=paint label="LIFE"
+        # ---- Titan-Sattelstrebe, laeuft nach vorn zur Klemme ----
+        tube rail pts=-0.132,-0.005,0.040 -0.060,-0.006,0.034 0.020,-0.007,0.016 0.056,-0.007,0.004 r=0.003 color=#9a9da3 mat=brushed
+        # ---- Streben-Befestigungspads unter der Schale ----
+        box railpad size=0.026,0.006,0.012 at=-0.122,-0.003,0.038 color=#101013 mat=matte
+        box railpad2 size=0.024,0.006,0.010 at=0.046,-0.003,0.012 color=#101013 mat=matte
+      # ---- Rueckwaertige Buegelbruecke zwischen den Streben ----
+      box bridge size=0.012,0.006,0.080 at=-0.132,-0.006,0 round=0.3 color=#101013 mat=matte
+      # ---- Kevlar-Schutzkante an der Nase ----
+      tube kevlar pts=0.112,0.004,0.016 0.119,0.000,0 0.112,0.004,-0.016 r=0.003 color=#4a4030 mat=matte
+      # ---- Sattelstützen-Kopf: Stütze, Klemmplatte, Keil ----
+      cyl post r=0.0135 h=0.010 axis=y at=0,-0.005,0 color=#141417 mat=matte
+      cyl collar r=0.0155 h=0.006 axis=y at=0,-0.004,0 color=#1c1c20 mat=brushed
+      box head size=0.058,0.008,0.032 at=0.002,-0.005,0 round=0.2 color=#17171a mat=matte
+      box headtop size=0.050,0.002,0.026 at=0.002,-0.002,0 color=#202024 mat=paint
+      box clampWedge size=0.016,0.004,0.022 at=0.014,-0.008,0 round=0.2 color=#0f0f12 mat=matte
+      # ---- Klemmskala auf beiden Seiten der Kopfplatte ----
+      mirror z
+        repeat 5 step=0.005,0,0 at=-0.012,-0.005,0.0165
+          box tick size=0.0012,0.004,0.0012 color=#b8b8bc mat=brushed
+      # ---- Klemmschrauben vorne ----
+      screw clampBolt1 r=0.0045 h=0.006 at=0.026,-0.005,0.008 color=#8f9298 mat=brushed
+      screw clampBolt2 r=0.0045 h=0.006 at=0.026,-0.005,-0.008 color=#8f9298 mat=brushed
+      screw clampBoltC r=0.004 h=0.005 at=0.030,-0.006,0 color=#8f9298 mat=brushed
+      # ---- Glanz-Decals auf dem Deck (Carbon-Deko mit Klarlack) ----
+      box gloss size=0.070,0.0012,0.046 at=-0.075,0.031,0 rot=0,0,4 color=#232329 mat=paint
+      box glossNose size=0.034,0.001,0.020 at=0.078,0.011,0 rot=0,0,-10 color=#202026 mat=paint
+      # ---- Weisses 'LIFE'-Logo klein auf der Nase ----
+      box logo size=0.026,0.0012,0.006 at=0.096,0.012,0 rot=0,0,-10 color=#e8e8ea mat=paint label="LIFE"
+      # ---- Montageplatte hinten (Ruecklicht) ----
+      box mount size=0.014,0.005,0.018 at=-0.140,-0.001,0 color=#101013 mat=matte
+      screw mountBolt r=0.003 h=0.004 at=-0.140,-0.005,0 color=#8f9298 mat=brushed
+    group crankarms at=0,0.27,0 label="SRAM Rival Kurbel 172.5"
+      # Tretlagerwelle mit Dichtung im Gehäusespalt
+      cyl spindle r=0.011 h=0.115 axis=z mat=brushed color=#b8b8bc
+      cyl sealR r=0.017 h=0.005 axis=z at=0,0,0.047 mat=rubber color=#141416
+      cyl sealL r=0.017 h=0.005 axis=z at=0,0,-0.047 mat=rubber color=#141416
+      cyl cupR hole=0.012 r=0.020 h=0.010 axis=z at=0,0,0.057 mat=cast color=#26262a
+      cyl cupL hole=0.012 r=0.020 h=0.010 axis=z at=0,0,-0.057 mat=cast color=#26262a
+      # ---------- rechter Kurbelarm, 6 Uhr, Antriebsseite ----------
+      group armR at=0,0,0.045 rot=0,0,180 label="SRAM"
+        loft arm sections=0,0.024,0.024 0.05,0.027,0.020 0.115,0.030,0.017 0.1725,0.030,0.016 axis=y square=0 mat=matte color=#101012
+        cyl boss r=0.018 h=0.028 axis=y at=0,0.004,0 mat=matte color=#121215
+        # Blattstern-Anschluss (Kettenblaetter kommen aus Motion)
+        cyl spiderRing hole=0.030 r=0.048 h=0.003 axis=z at=0,0.004,0.0145 mat=matte color=#101012
+        ring 4 r=0.032 axis=z at=0,0.004,0
+          box spoke size=0.034,0.011,0.003 mat=matte color=#101012
+        # 4-Loch-Kettenblattschrauben r=0.028
+        ring 4 r=0.028 axis=z at=0,0.004,0.0165
+          cyl bolt r=0.0045 h=0.004 axis=z mat=darkmetal color=#1c1c1f
+        # selbstentfernende Kurbelschraube
+        cyl crankBolt r=0.0085 h=0.006 axis=z at=0,0.004,0.0155 mat=brushed color=#9a9aa0
+        cyl crankBoltHex hole=0.0035 r=0.005 h=0.002 axis=z at=0,0.004,0.019 mat=darkmetal color=#2a2a2e
+        # Pedalauge mit Konus und Unterlegscheibe
+        cyl eye r=0.009 r2=0.007 h=0.013 axis=z at=0,0.1725,0.004 mat=brushed color=#a8a8ae
+        cyl washer hole=0.005 r=0.011 h=0.002 axis=z at=0,0.1725,0.012 mat=brushed color=#b8b8bc
+        # Kante/Rippung an der Arm-Innenseite
+        box rib size=0.003,0.125,0.007 at=0.0135,0.085,0 mat=matte color=#1a1a1d
+        # glänzendes SRAM-Logo
+        box sramBadge size=0.038,0.011,0.0012 at=0,0.095,0.0126 mat=paint color=#e8e8ea
+        # eingravierte Kurbellänge
+        box lenMark size=0.015,0.004,0.001 at=-0.004,0.145,-0.0126 mat=matte color=#3c3c42
+      group armL at=0,0,-0.045 label="RIVAL"
+        loft arm sections=0,0.024,0.024 0.05,0.027,0.020 0.115,0.030,0.017 0.1725,0.030,0.016 axis=y square=0 mat=matte color=#101012
+        cyl boss r=0.018 h=0.028 axis=y at=0,0.004,0 mat=matte color=#121215
+        # Verschlusskappe / Gegenstueck der Kurbelschraube
+        cyl cap r=0.009 h=0.005 axis=z at=0,0.004,-0.0145 mat=darkmetal color=#1c1c1f
+        cyl capHex hole=0.0035 r=0.0055 h=0.002 axis=z at=0,0.004,-0.0175 mat=darkmetal color=#2a2a2e
+        # Pedalauge mit Konus und Unterlegscheibe
+        cyl eye r=0.009 r2=0.007 h=0.013 axis=z at=0,0.1725,-0.004 mat=brushed color=#a8a8ae
+        cyl washer hole=0.005 r=0.011 h=0.002 axis=z at=0,0.1725,-0.012 mat=brushed color=#b8b8bc
+        # Kante/Rippung an der Arm-Innenseite
+        box rib size=0.003,0.125,0.007 at=-0.0135,0.085,0 mat=matte color=#1a1a1d
+        # dezent glänzendes RIVAL-Logo
+        box rivalBadge size=0.034,0.009,0.0012 at=0,0.095,-0.0126 mat=paint color=#e8e8ea
+        box lenMark size=0.015,0.004,0.001 at=-0.004,0.145,0.0126 mat=matte color=#3c3c42
+    group fit_13383 at=0.0044,-0.0713,0.0000 scale=1.2500,1.2500,1.2500
+      group pedals
+          group pedal_right at=0,0.0975,-0.058 label="Klickpedal rechts"
+              cyl spindle r=0.006 h=0.04 axis=z at=0,0,0.017 color=#c8c8cc mat=chrome
+              cyl hexsocket r=0.0045 h=0.004 axis=z at=0,0,0.036 color=#2a2a2e mat=steel
+              cyl axlemark r=0.0064 h=0.003 axis=z at=0,0,0.027 color=#e8e8ea mat=paint
+              box body size=0.09,0.018,0.06 color=#141416 mat=brushed
+              box deck size=0.084,0.004,0.054 at=0,0.011,0 color=#1b1b1e mat=plastic
+              box nose size=0.012,0.014,0.03 at=-0.046,0.001,0 color=#141416 mat=brushed
+              box pad size=0.038,0.005,0.04 at=0.022,0.0145,0 color=#202022 mat=rubber
+              box clip size=0.026,0.01,0.032 at=-0.028,0.01,0 color=#8a8a90 mat=steel
+              spring clip_spring r=0.006 wire=0.0015 turns=4 h=0.014 axis=x at=-0.028,0.008,0.02 color=#b8b8bc mat=steel
+              cyl seal_out r=0.011 h=0.004 hole=0.007 axis=z at=0,0,-0.031 color=#2c2c30 mat=darkmetal
+              cyl seal_in r=0.011 h=0.004 hole=0.007 axis=z at=0,0,0.031 color=#2c2c30 mat=darkmetal
+              cyl endcap r=0.008 h=0.002 axis=z at=0,0,-0.032 color=#3a3a3e mat=steel
+              repeat 3 step=0.02,0,0 at=-0.024,0.0155,0.016
+                  cyl pin r=0.0012 h=0.003 axis=y color=#9a9aa0 mat=steel
+              repeat 3 step=0.02,0,0 at=-0.024,0.0155,-0.016
+                  cyl pin r=0.0012 h=0.003 axis=y color=#9a9aa0 mat=steel
+          group pedal_left at=0,0.4425,0.058 label="Klickpedal links"
+              cyl spindle r=0.006 h=0.04 axis=z at=0,0,-0.017 color=#c8c8cc mat=chrome
+              cyl hexsocket r=0.0045 h=0.004 axis=z at=0,0,-0.036 color=#2a2a2e mat=steel
+              cyl axlemark r=0.0064 h=0.003 axis=z at=0,0,-0.027 color=#e8e8ea mat=paint
+              box body size=0.09,0.018,0.06 color=#141416 mat=brushed
+              box deck size=0.084,0.004,0.054 at=0,0.011,0 color=#1b1b1e mat=plastic
+              box nose size=0.012,0.014,0.03 at=-0.046,0.001,0 color=#141416 mat=brushed
+              box pad size=0.038,0.005,0.04 at=0.022,0.0145,0 color=#202022 mat=rubber
+              box clip size=0.026,0.01,0.032 at=-0.028,0.01,0 color=#8a8a90 mat=steel
+              spring clip_spring r=0.006 wire=0.0015 turns=4 h=0.014 axis=x at=-0.028,0.008,0.02 color=#b8b8bc mat=steel
+              cyl seal_out r=0.011 h=0.004 hole=0.007 axis=z at=0,0,0.031 color=#2c2c30 mat=darkmetal
+              cyl seal_in r=0.011 h=0.004 hole=0.007 axis=z at=0,0,-0.031 color=#2c2c30 mat=darkmetal
+              cyl endcap r=0.008 h=0.002 axis=z at=0,0,0.032 color=#3a3a3e mat=steel
+              repeat 3 step=0.02,0,0 at=-0.024,0.0155,0.016
+                  cyl pin r=0.0012 h=0.003 axis=y color=#9a9aa0 mat=steel
+              repeat 3 step=0.02,0,0 at=-0.024,0.0155,-0.016
+                  cyl pin r=0.0012 h=0.003 axis=y color=#9a9aa0 mat=steel
+    group fit_50441 at=-0.0223,-0.0316,0.0122 scale=1.0409,1.0409,1.0409
+      group rear_derailleur at=0.44,0.34,-0.04 color=#101012 label="SRAM RIVAL Hinterradschaltwerk"
+        # --- B-Aufnahme am Ausfallende ---
+        cyl b_bolt r=0.005 h=0.05 axis=z at=0,0.004,-0.015 color=#b8b8bc mat=chrome
+        cyl b_head r=0.009 h=0.005 axis=z at=0,0.004,-0.037 color=#8a8a90 mat=brushed
+        cyl b_gasket r=0.011 h=0.002 axis=z at=0,0.004,-0.004 color=#0a0a0c mat=rubber
+        # --- Hauptkoerper (B-Knuckle), Platte ausserhalb der Kette ---
+        plate body pts=0.028,0.012 0.052,-0.02 0.056,-0.085 0.034,-0.125 0.006,-0.105 -0.002,-0.05 0.008,0.005 h=0.018 at=0,0,-0.025 color=#101012 mat=brushed
+        # --- blaues Akzentfeld + weisse Schriftzuege auf der Aussenplatte ---
+        box accent size=0.028,0.04,0.0015 at=0.03,-0.065,-0.0345 color=#2a4a8a mat=paint
+        box txt_rival size=0.024,0.006,0.001 at=0.03,-0.05,-0.0355 color=#e8e8ea mat=plastic
+        box txt_sram size=0.016,0.004,0.001 at=0.03,-0.082,-0.0355 color=#e8e8ea mat=plastic
+        # --- Grenzenschrauben H/L mit Markierung ---
+        cyl lim_h r=0.002 h=0.012 axis=y at=0.012,0.018,-0.02 color=#b8b8bc mat=chrome
+        cyl lim_h_tip r=0.002 h=0.003 axis=y at=0.012,0.026,-0.02 color=#cc2222 mat=paint
+        cyl lim_l r=0.002 h=0.012 axis=y at=0.026,0.018,-0.02 color=#b8b8bc mat=chrome
+        cyl lim_l_tip r=0.002 h=0.003 axis=y at=0.026,0.026,-0.02 color=#2244cc mat=paint
+        # --- B-Schraube mit Feder und Raendelmutter ---
+        cyl b_screw r=0.0022 h=0.026 axis=x at=0.06,-0.008,-0.02 color=#b8b8bc mat=chrome
+        spring b_spring r=0.0045 wire=0.001 turns=5 h=0.012 axis=x at=0.066,-0.008,-0.02 color=#8a8a90
+        cyl b_nut r=0.0045 h=0.006 axis=x at=0.05,-0.008,-0.02 color=#8a8a90 mat=brushed
+        # --- Schaltbuegel mit Zugklemme, Huelle und 1.1mm Zug ---
+        box c_stop size=0.012,0.018,0.012 at=0.004,-0.015,-0.012 rot=0,0,20 color=#101012 mat=brushed
+        cyl c_clamp r=0.003 h=0.008 axis=y at=0.002,-0.008,-0.012 color=#b8b8bc mat=chrome
+        tube c_housing pts=0.0,-0.005,-0.012 -0.01,0.02,-0.01 -0.018,0.04,-0.008 r=0.0035 color=#0a0a0c
+        cyl c_ferrule r=0.004 h=0.005 axis=x at=-0.018,0.04,-0.008 color=#8a8a90
+        tube c_wire pts=-0.018,0.04,-0.008 -0.024,0.052,-0.007 r=0.0006 color=#b8b8bc
+        # --- Parallelgestellung (zwei Seitenplatten) ---
+        box link_out size=0.078,0.012,0.005 at=0.0225,-0.085,-0.012 rot=0,0,-70 color=#101012 mat=brushed
+        box link_in size=0.078,0.012,0.005 at=0.0225,-0.085,-0.032 rot=0,0,-70 color=#0c0c0e mat=brushed
+        # --- P-Knuckle mit sichtbarer Kaefigfeder ---
+        cyl p_knuckle r=0.012 h=0.034 axis=z at=0.035,-0.12,-0.022 color=#0c0c0e mat=brushed
+        cyl p_cap r=0.012 h=0.003 axis=z at=0.035,-0.12,-0.038 color=#2a4a8a mat=paint
+        spring cage_spring r=0.009 wire=0.0012 turns=4 h=0.014 axis=z at=0.035,-0.12,-0.022 color=#8a8a90
+        # --- Kaefig: Carbon-Aussen- und Innenplatte ---
+        plate cage_out pts=0.005,0.078 0.03,0.035 0.022,-0.025 -0.006,-0.072 -0.03,-0.045 -0.022,0.03 h=0.005 at=0.028,-0.19,-0.016 color=#141416 mat=brushed
+        plate cage_in pts=0.005,0.07 0.026,0.03 0.014,-0.03 -0.012,-0.05 -0.02,-0.01 h=0.004 at=0.03,-0.17,0.008 color=#101012 mat=brushed
+        # --- CARBON-Praegung auf dem Kaefig ---
+        box carbon_strip size=0.026,0.05,0.001 at=0.026,-0.185,-0.019 color=#0a0a0c mat=brushed
+        box txt_carbon size=0.018,0.0035,0.001 at=0.026,-0.168,-0.0195 color=#e8e8ea mat=plastic
+        # --- obere Leitrolle mit Zaehnen, in Kettebene z=-0.042 ---
+        group pulley_top at=0.03,-0.17,-0.002 label="Leitrolle"
+          gear pt_body r=0.022 h=0.013 teeth=11 axis=z color=#101012
+          cyl pt_hub r=0.008 h=0.016 axis=z color=#0a0a0c
+          cyl pt_ring r=0.005 h=0.017 axis=z hole=0.002 color=#b8b8bc mat=chrome
+          screw pt_bolt r=0.003 h=0.01 axis=z color=#b8b8bc
+        # --- untere Spannrolle mit Keramiklager ---
+        group pulley_low at=0.01,-0.24,-0.002 label="Spannrolle"
+          cyl pl_body r=0.022 h=0.013 axis=z hole=0.008 color=#101012
+          cyl pl_bearing r=0.008 h=0.014 axis=z hole=0.004 color=#d8d8dc mat=ceramic
+          screw pl_bolt r=0.003 h=0.011 axis=z color=#b8b8bc
+        # --- Ketteneinlauf von der Kassette ---
+        repeat 6 step=-0.007,-0.002,0 at=0.077,-0.142,-0.002
+          box ch1 size=0.008,0.0045,0.009 color=#b8b8bc mat=brushed
+        # --- Kette zwischen den Rollen ---
+        repeat 5 step=-0.005,-0.0175,0 at=0.032,-0.192,-0.002
+          box ch2 size=0.007,0.012,0.009 color=#b8b8bc mat=brushed
+        # --- Kettenauslauf vorwaerts zum Kettenblatt ---
+        repeat 6 step=-0.009,0.0055,0 at=-0.004,-0.226,-0.002
+          box ch3 size=0.009,0.005,0.009 color=#b8b8bc mat=brushed
+    group fit_72504 at=0.0162,-0.1257,-0.0100 scale=1.2500,1.2500,1.2500
+      group front-derailleur
+        # ---- Bandklemme 34 mm am Sitzrohr, Sitzrohr bei (-0.055,0.44), ~16° geneigt ----
+        cyl band r=0.0195 h=0.013 axis=y at=-0.055,0.440,0 rot=0,0,0.28 color=#101012 mat=brushed
+        cyl bandtop r=0.0215 h=0.010 axis=y at=-0.0585,0.4525,0 rot=0,0,0.28 color=#0c0c0e mat=brushed
+        ring 14 r=0.0197 axis=y at=-0.055,0.4345,0
+          box knurl size=0.0022,0.0016,0.0022 color=#1c1c1f mat=brushed
+        screw clampbolt r=0.0045 h=0.006 at=-0.0385,0.4415,0.001 rot=0,0,-1.57 color=#3a3a40 mat=brushed
+        cyl clampsocket r=0.0028 h=0.0012 hole=0.0016 axis=x at=-0.0355,0.4415,0.001 color=#000000 mat=black
+        # ---- Korpus von Klemme zum Käfiggelenk ----
+        box body size=0.030,0.036,0.022 at=-0.060,0.438,-0.014 rot=0,0,0.28 color=#101012 mat=brushed
+        tube armlink pts=-0.052,0.446,-0.006 -0.066,0.436,-0.026 -0.079,0.427,-0.042 r=0.005 color=#101012 mat=brushed
+        # ---- Gelenk: Spindel, Trim-Rasterung, Feder ----
+        cyl spindle r=0.006 h=0.046 axis=z at=-0.079,0.427,-0.042 color=#3a3a40 mat=brushed
+        screw pivboltR r=0.0035 h=0.0025 at=-0.079,0.427,-0.0665 rot=1.57,0,0 color=#2a2a2e mat=brushed
+        screw pivboltL r=0.0035 h=0.0025 at=-0.079,0.427,-0.0185 rot=1.57,0,0 color=#2a2a2e mat=brushed
+        gear trimring teeth=14 r=0.0085 h=0.0025 axis=z at=-0.079,0.427,-0.058 color=#2a2a2e mat=brushed
+        spring trimfeder r=0.0055 wire=0.0011 turns=4 h=0.008 axis=z at=-0.079,0.427,-0.032 color=#8a8a90 mat=brushed
+        cyl washer r=0.0095 h=0.0012 hole=0.006 axis=z at=-0.079,0.427,-0.0255 color=#2a2a2e mat=brushed
+        # ---- Grenzenschraube L mit Prägung ----
+        screw limL r=0.002 h=0.007 at=-0.066,0.452,-0.027 rot=0,0,0.3 color=#b8b8bc mat=brushed
+        box tagL size=0.0035,0.0035,0.001 at=-0.0705,0.4555,-0.030 label="L" color=#e8e8ea mat=paint
+        # ---- Zugklemme oben, 1.1-mm-Zug nach oben ----
+        box cableblock size=0.014,0.012,0.010 at=-0.047,0.4605,0.001 rot=0,0,0.28 color=#101012 mat=brushed
+        screw pinchbolt r=0.0018 h=0.004 at=-0.047,0.468,0.001 color=#b8b8bc mat=brushed
+        cyl ferrule r=0.0024 h=0.005 axis=y at=-0.049,0.464,0.001 color=#2a2a2e mat=brushed
+        tube cable pts=-0.047,0.468,0.001 -0.042,0.492,0.004 -0.038,0.514,0.006 r=0.0009 color=#b8b8bc mat=brushed
+        # ---- Käfig: zwei Bleche 0.04 auseinander, schräg nach unten-hinten zur Kette (z=-0.042) ----
+        plate cageout pts=-0.090,0.428 -0.070,0.419 -0.040,0.405 -0.012,0.393 -0.002,0.387 0.000,0.379 -0.010,0.377 -0.042,0.389 -0.074,0.403 -0.092,0.419 h=0.002 at=0,0,-0.064 color=#141416 mat=brushed
+        plate cageoutface pts=-0.090,0.428 -0.070,0.419 -0.040,0.405 -0.012,0.393 -0.002,0.387 0.000,0.379 -0.010,0.377 -0.042,0.389 -0.074,0.403 -0.092,0.419 h=0.0005 at=0,0,-0.062 color=#9a9aa0 mat=brushed
+        plate cagein pts=-0.084,0.421 -0.056,0.408 -0.024,0.394 -0.006,0.386 -0.004,0.379 -0.014,0.377 -0.046,0.390 -0.078,0.404 -0.086,0.412 h=0.002 at=0,0,-0.028 color=#101012 mat=brushed
+        plate cageinface pts=-0.084,0.421 -0.056,0.408 -0.024,0.394 -0.006,0.386 -0.004,0.379 -0.014,0.377 -0.046,0.390 -0.078,0.404 -0.086,0.412 h=0.0005 at=0,0,-0.0285 color=#9a9aa0 mat=brushed
+        box cagetail size=0.016,0.028,0.040 at=-0.084,0.420,-0.044 color=#101012 mat=brushed
+        box cagenose size=0.012,0.016,0.038 at=-0.004,0.383,-0.044 rot=0,0.06,0 color=#101012 mat=brushed
+        # ---- SRAM-Prägung auf dem äusseren Käfigblatt ----
+        box badge1 size=0.022,0.006,0.0006 at=-0.044,0.404,-0.0648 label="SRAM" color=#e8e8ea mat=paint
+        box badge2 size=0.018,0.004,0.0006 at=-0.044,0.395,-0.0648 label="RIVAL" color=#e8e8ea mat=paint
+        repeat 3 step=0.010,-0.005,0 at=-0.070,0.416,-0.0645
+          box rib size=0.0015,0.018,0.0008 color=#1c1c1f mat=brushed
+    group fit_52771 at=0.0033,-0.0605,0.0000 scale=1.0270,1.0270,1.0270
+      group brakes label="SRAM Rival Felgenbremsen"
+        # ---------- Vordere Dual-Pivot-Bremse, unter der Gabelkrone ----------
+        group brake_front at=-0.545,0.60,0 label="VR Bremse"
+          box mount size=0.034,0.024,0.030 at=0,0.054,0 round=0.004 color=#101012 mat=brushed
+          cyl mbolt r=0.0055 h=0.016 axis=y at=0,0.062,0 color=#b8b8bc mat=brushed
+          box clamp size=0.014,0.008,0.012 at=0,0.072,0 color=#141416 mat=brushed
+          tube cablestub pts=0,0.074,0 0.002,0.100,0.007 r=0.0017 color=#151517 mat=rubber
+          cyl dpivot r=0.006 h=0.034 axis=z at=0,0.044,0 color=#b8b8bc mat=brushed
+          cyl mnut r=0.006 h=0.005 axis=z at=0,0.054,-0.017 color=#b8b8bc mat=brushed
+          box qrarm size=0.004,0.026,0.0025 at=0.017,0.050,0.016 rot=0,0,-0.55 color=#101012 mat=brushed
+          box qrknob size=0.008,0.008,0.0045 at=0.025,0.038,0.016 color=#1a1a1c mat=rubber
+          mirror z
+            tube arm pts=0,0.044,0.011 0.001,0.030,0.030 0,0.006,0.030 0,-0.002,0.020 r=0.0055 color=#101012 mat=brushed
+            cyl pivot r=0.005 h=0.016 axis=z at=0,0.044,0.012 color=#b8b8bc mat=brushed
+            sphere pcap r=0.0048 at=0,0.044,0.021 color=#0a0a0c mat=plastic
+            spring ret r=0.0055 wire=0.001 turns=3 h=0.007 axis=z at=0,0.044,0.019 color=#b8b8bc
+            cyl tscrew r=0.0042 h=0.005 axis=z at=0,0.044,0.0245 color=#b8b8bc mat=brushed
+            box pholder size=0.046,0.014,0.009 at=0,-0.002,0.0175 color=#141416 mat=brushed
+            box pad size=0.040,0.011,0.011 at=0,-0.002,0.019 color=#1c1c1e mat=rubber
+            box wearline size=0.040,0.0018,0.001 at=0,-0.002,0.0138 color=#9a9a9e
+            box badge size=0.015,0.0035,0.0008 at=0.001,0.030,0.0360 color=#e8e8ea
+        # ---------- Hintere Bremse, unter der Sitzstreben-Brücke, auf die Nabe gerichtet ----------
+        group brake_rear at=0.28,0.42,0 rot=0,0,1.125 label="HR Bremse"
+          box mount size=0.034,0.024,0.030 at=0,0.054,0 round=0.004 color=#101012 mat=brushed
+          cyl mbolt r=0.0055 h=0.016 axis=y at=0,0.062,0 color=#b8b8bc mat=brushed
+          box clamp size=0.014,0.008,0.012 at=0,0.072,0 color=#141416 mat=brushed
+          tube cablestub pts=0,0.074,0 -0.004,0.100,0.005 r=0.0017 color=#151517 mat=rubber
+          cyl mnut r=0.006 h=0.005 axis=z at=0,0.054,-0.017 color=#b8b8bc mat=brushed
+          box qrarm size=0.004,0.026,0.0025 at=0.017,0.050,0.016 rot=0,0,-0.55 color=#101012 mat=brushed
+          box qrknob size=0.008,0.008,0.0045 at=0.025,0.038,0.016 color=#1a1a1c mat=rubber
+          mirror z
+            tube arm pts=0,0.044,0.011 0.001,0.030,0.030 0,0.006,0.030 0,-0.002,0.020 r=0.0055 color=#101012 mat=brushed
+            cyl pivot r=0.005 h=0.016 axis=z at=0,0.044,0.012 color=#b8b8bc mat=brushed
+            sphere pcap r=0.0048 at=0,0.044,0.021 color=#0a0a0c mat=plastic
+            spring ret r=0.0055 wire=0.001 turns=3 h=0.007 axis=z at=0,0.044,0.019 color=#b8b8bc
+            cyl tscrew r=0.0042 h=0.005 axis=z at=0,0.044,0.0245 color=#b8b8bc mat=brushed
+            box pholder size=0.046,0.014,0.009 at=0,-0.002,0.0175 color=#141416 mat=brushed
+            box pad size=0.040,0.011,0.011 at=0,-0.002,0.019 color=#1c1c1e mat=rubber
+            box wearline size=0.040,0.0018,0.001 at=0,-0.002,0.0138 color=#9a9a9e
+            box badge size=0.015,0.0035,0.0008 at=0.001,0.030,0.0360 color=#e8e8ea
+    group cables
+      # --- Hülse 1: Hinterbremse, vom Lenker entlang Oberrohr, um Sitzrohr, Sitzstrebe zur Bremsbrücke ---
+      tube brakeTop pts=-0.573,0.950,0.012 -0.47,0.935,0.012 -0.39,0.915,0.012 -0.30,0.885,0.012 -0.22,0.865,0.010 -0.165,0.858,0.008 -0.150,0.845,0.030 -0.120,0.815,0.040 -0.095,0.775,0.040 -0.075,0.735,0.024 -0.058,0.695,0.012 -0.045,0.668,0.008 -0.012,0.658,0.005 0.03,0.616,0.004 0.12,0.566,0.003 0.20,0.506,0.002 0.26,0.458,0.001 0.30,0.451,0 r=0.004 color=#1a1a1c mat=plastic
+      # --- Hülse 2: Schaltung, vom Lenker entlang Oberrohr, linke Sitzrohrseite, ueber Tretlager, Kettenstrebe zum Schaltwerk ---
+      tube shiftTop pts=-0.573,0.943,-0.012 -0.47,0.929,-0.012 -0.39,0.909,-0.012 -0.30,0.879,-0.012 -0.22,0.859,-0.014 -0.165,0.845,-0.028 -0.140,0.800,-0.036 -0.112,0.700,-0.037 -0.088,0.600,-0.038 -0.064,0.500,-0.038 -0.042,0.400,-0.037 -0.028,0.335,-0.034 -0.005,0.315,-0.030 0.05,0.312,-0.030 0.14,0.322,-0.030 0.22,0.332,-0.028 0.30,0.342,-0.025 0.393,0.349,-0.022 r=0.004 color=#19191b mat=plastic
+      # --- Hülse 3: Umwerfer, entlang Unterrohr-Oberseite zum Sitzrohrklemmung ---
+      tube shiftDown pts=-0.528,0.734,0.012 -0.428,0.658,0.012 -0.328,0.581,0.012 -0.228,0.505,0.012 -0.128,0.429,0.012 -0.062,0.378,0.013 -0.040,0.398,0.016 -0.034,0.418,0.016 r=0.004 color=#1a1a1c mat=plastic
+      # --- Hülse 4: Hinterbau-Zug, entlang Unterrohr, ueber Tretlager, rechte Kettenstrebe zum Schaltwerk ---
+      tube brakeDown pts=-0.528,0.726,-0.012 -0.428,0.650,-0.012 -0.328,0.573,-0.012 -0.228,0.497,-0.012 -0.128,0.421,-0.013 -0.070,0.380,-0.016 -0.030,0.345,-0.020 0.02,0.332,-0.006 0.06,0.326,0.012 0.13,0.328,0.028 0.21,0.338,0.028 0.29,0.348,0.024 0.36,0.354,0.018 0.393,0.356,0.012 r=0.004 color=#19191b mat=plastic
+      # --- Alu-Kabelstopfen an beiden Hülsenenden ---
+      cyl ferrA1 r=0.0065 h=0.012 axis=x at=-0.571,0.950,0.012 mat=brushed color=#b0b0b6
+      cyl ferrA2 r=0.0065 h=0.013 at=0.305,0.448,0 rot=0,0,-35 mat=brushed color=#b0b0b6
+      cyl ferrB1 r=0.0065 h=0.012 axis=x at=-0.571,0.943,-0.012 mat=brushed color=#a8a8ae
+      cyl ferrB2 r=0.006 h=0.011 axis=x at=0.394,0.350,-0.022 mat=brushed color=#a8a8ae
+      cyl ferrC1 r=0.006 h=0.012 at=-0.533,0.737,0.012 rot=0,0,-37 mat=brushed color=#b0b0b6
+      cyl ferrC2 r=0.006 h=0.011 at=-0.031,0.421,0.016 rot=0,0,-70 mat=brushed color=#b0b0b6
+      cyl ferrD1 r=0.006 h=0.012 at=-0.533,0.729,-0.012 rot=0,0,-37 mat=brushed color=#a8a8ae
+      cyl ferrD2 r=0.006 h=0.011 axis=x at=0.394,0.357,0.012 mat=brushed color=#a8a8ae
+      # --- Schaltwerk: Zugende mit Stellschraube und Klemmschraube sichtbar ---
+      cyl barrel r=0.0045 h=0.016 axis=x at=0.391,0.353,-0.005 mat=plastic color=#101012
+      screw clampScrew r=0.0035 h=0.005 at=0.385,0.347,-0.005 mat=brushed color=#b8b8bc
+      # --- Zugausgaenge am Sitzrohr (unter Sattelklemmbereich und mittig) ---
+      box seatStopHi size=0.018,0.022,0.014 at=-0.155,0.848,-0.026 mat=plastic color=#101012
+      box seatStopLo size=0.016,0.026,0.012 at=-0.133,0.790,-0.037 mat=plastic color=#101012
+      # --- Zugführer am Tretlager (Umlenkung auf beide Kettenstreben-Seiten) ---
+      box bbGuideL size=0.024,0.010,0.014 at=-0.005,0.310,-0.030 mat=plastic color=#101012
+      box bbGuideR size=0.024,0.010,0.020 at=0.02,0.326,0.004 mat=plastic color=#101012
+      # --- Kabelbinder ueber beide Hülssen auf dem Oberrohr ---
+      repeat 3 step=0.12,-0.032,0 at=-0.50,0.937,0
+        box tie size=0.006,0.018,0.054 color=#0d0d0f mat=plastic
+      box tieEnd size=0.006,0.016,0.05 at=-0.19,0.862,0 color=#0d0d0f mat=plastic
+      # --- Kabelbinder auf der Sitzstrebe (Bremszug) ---
+      repeat 2 step=0.08,-0.060,0 at=0.12,0.564,0
+        box stayTie size=0.006,0.014,0.016 color=#0d0d0f mat=plastic
+      # --- Kabelbinder auf der Kettenstrebe ueber beide Züge ---
+      repeat 2 step=0.09,0.009,0 at=0.14,0.325,0
+        box csTie size=0.006,0.016,0.070 color=#0d0d0f mat=plastic
+      # --- Drei Kabelhalter mit C-Clips am Unterrohr ---
+      repeat 3 step=0.134,-0.106,0 at=-0.428,0.656,0
+        box cclip size=0.008,0.016,0.054 rot=0,0,37 color=#0d0d0f mat=plastic
+    group fit_84832 at=0.0400,-0.0941,0.0000 scale=1.2500,1.2500,1.2500
+      group bottle at=-0.302,0.570,0 rot=0,0,-54 label="LIFE Flaschenhalter"
+        group flasche at=0.068,0,0 label="LIFE Trinkflasche 0.5L"
+          lathe korpus pts=-0.090,0.010 -0.086,0.030 -0.083,0.0365 -0.076,0.037 -0.071,0.0335 -0.066,0.037 -0.061,0.0335 -0.056,0.037 -0.040,0.037 0.028,0.037 0.042,0.0345 0.055,0.027 0.066,0.0195 0.074,0.0175 0.078,0.0175 axis=y smooth=1 mat=glass color=#3a3a3e
+          cyl griprib r=0.0378 h=0.009 axis=y at=0,-0.0855,0 mat=rubber color=#26262a
+          cyl moldseam r=0.0373 h=0.002 hole=0.0368 axis=y at=0,0.032,0 mat=plastic color=#323238
+          cyl fillmax r=0.0376 h=0.006 hole=0.0370 axis=y at=0,0.012,0 mat=paint color=#e8e8ea
+          cyl fillmin r=0.0376 h=0.004 hole=0.0370 axis=y at=0,-0.045,0 mat=paint color=#e8e8ea
+          cyl schulterlogo r=0.030 h=0.004 hole=0.0294 axis=y at=0,0.050,0 mat=paint color=#55555c
+          cyl deckel r=0.0205 h=0.018 axis=y at=0,0.087,0 mat=plastic color=#141417
+          ring 14 r=0.0205 axis=y at=0,0.087,0
+            box knurl size=0.0025,0.016,0.002 mat=plastic color=#101013
+          box klappdeckel size=0.026,0.014,0.032 round=0.004 at=0,0.100,0 mat=plastic color=#17171a
+          box scharnier size=0.016,0.008,0.006 at=0,0.094,-0.015 mat=plastic color=#101013
+          box schnappnase size=0.006,0.008,0.009 at=0,0.100,0.018 mat=plastic color=#101013
+          cyl tuelle r=0.0075 h=0.009 axis=y at=0,0.108,0 mat=plastic color=#17171a
+          sphere tuellenkugel r=0.006 at=0,0.113,0 mat=plastic color=#1d1d21
+          repeat 7 step=0,0.011,0 rotstep=0,0,30 at=0.027,-0.038,0.025
+            sphere tropfen r=0.0016 mat=glass color=#c8cdd4
+          repeat 5 step=0,0.014,0 rotstep=0,0,32 at=0.030,-0.012,-0.020
+            sphere tropfen2 r=0.0013 mat=glass color=#c8cdd4
+        group halter mat=matte color=#1b1b1e label="LIFE Carbon-Seitenhalter"
+          box tabunten size=0.022,0.018,0.082 round=0.004 at=0.040,-0.090,0 mat=paint color=#202024
+          box taboben size=0.022,0.016,0.072 round=0.004 at=0.040,0.084,0 mat=paint color=#202024
+          tube bodenschiene pts=0.044,-0.086,0.048 0.052,-0.086,0 0.044,-0.086,-0.048 r=0.0035 mat=matte color=#1b1b1e
+          box gusset size=0.014,0.030,0.020 round=0.003 at=0.042,-0.070,0.040 mat=paint color=#1e1e22
+          mirror z
+            tube arm pts=0.042,-0.090,0.050 0.056,-0.055,0.043 0.066,-0.015,0.0405 0.068,0.030,0.0405 0.060,0.060,0.044 0.046,0.082,0.052 r=0.004 mat=matte color=#1b1b1e
+            box griffpad size=0.030,0.050,0.004 round=0.002 at=0.063,0.008,0.0382 mat=rubber color=#26262a
+            box lifeplate size=0.030,0.012,0.0015 at=0.068,0.055,0.0455 label="LIFE" mat=paint color=#26262a
+            screw schraube1 r=0.004 h=0.007 rot=0,0,90 at=0.050,-0.090,0.026 mat=brushed color=#2a2a2e
+            cyl scheibe1 r=0.0065 h=0.0012 axis=x at=0.0545,-0.090,0.026 mat=brushed color=#333338
+            screw schraube2 r=0.004 h=0.007 rot=0,0,90 at=0.050,0.084,0.024 mat=brushed color=#2a2a2e
+            cyl scheibe2 r=0.0065 h=0.0012 axis=x at=0.0545,0.084,0.024 mat=brushed color=#333338
+  mech
+    rotor armR at=0,0.27,0 axis=z
+    rotor armL at=0,0.27,0 axis=z of=armR ratio=1
+    couple pedal_right crank=armR pin=0,0.09,0.045
+    couple pedal_left crank=armL pin=0,0.45,-0.045
+    chain kette of=armR ra=0.105 a=0,0.27,-0.042 b=0.44,0.34,-0.042 rb=0.068 axis=z pitch=0.0127
+    spokedwheel hinterrad at=0.44,0.34,0 axis=z r=0.34 width=0.025 spokes=24 of=armR ratio=1.544
+    spokedwheel vorderrad at=-0.56,0.34,0 axis=z r=0.34 width=0.025 spokes=24 of=hinterrad ratio=1
+  anim
+    step "Rennrad im Überblick: Rahmen, Gabel und der komplette Antrieb" 4
+      run turns=1
+      camera view=25,10 zoom=1 on=whole
+    step "Tretkurbel und Kettenblatt: die Pedale bleiben dabei stets horizontal" 4
+      run turns=2
+      camera view=200,8 zoom=2.2 on=crankarms
+    step "Die Kette läuft über das Schaltwerk vom Kettenblatt zum Ritzel hinten" 4
+      run turns=2
+      camera view=185,4 zoom=2.4 on=rear_derailleur
+    step "Das Ritzel treibt das Hinterrad an, das Vorderrad rollt frei mit" 4
+      run turns=2
+      camera view=215,3 zoom=1.7 on=hinterrad
+    step "Der ganze Antrieb im Verbund: so fährt das Rennrad" 4
+      run turns=2
+      camera view=30,12 zoom=1 on=whole

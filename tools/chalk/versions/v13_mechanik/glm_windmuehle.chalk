@@ -1,0 +1,736 @@
+canvas dark
+title "Holländische Windmühle – Getriebe im Schnitt"
+model obj 1100 620 keep=1 tidy=1 view=35,18 cut=z>0
+
+  group whole
+    group hull shell=1
+      # Brick base of the mill (tapered, slight plinth flare at the bottom)
+      lathe base pts=0,3.8 0.15,3.85 0.35,3.6 1.8,3.45 3.0,3.35 3.2,3.3 axis=y smooth=1 mat=paint color=#9c6b53
+      # Smock: octagonal tarred timber body, strong taper up to the cap
+      lathe smock pts=3.1,3.32 4.2,3.1 5.4,2.9 6.6,2.65 7.8,2.4 9.0,2.15 axis=y smooth=1 mat=paint color=#2e2620
+      # Stage / gallery deck ringing the mill at the top of the brick base
+      lathe gallery pts=3.15,4.75 3.35,4.75 axis=y mat=paint color=#6b4a32
+      # Gallery railing ring
+      lathe rail pts=4.2,4.75 4.42,4.75 axis=y mat=paint color=#3a2c22
+      # Cap: onion-shaped dome, bulging forward over the smock top, closing to a point
+      lathe cap pts=8.9,2.05 9.3,2.5 10.0,2.75 10.8,2.6 11.5,1.9 12.1,1.0 12.5,0.35 12.65,0.02 axis=y smooth=1 mat=paint color=#26201a
+      # --- livery ---
+      # white trim band where cap meets smock
+      paint smock color=#e8e2d5 box=-3.0,8.55,-3.0,3.0,9.0,3.0
+      paint cap color=#e8e2d5 box=-3.0,8.9,-3.0,3.0,9.3,3.0
+      # door in the brick base, facing the front (-x)
+      paint base color=#3a2418 box=-3.95,0,-0.85,-3.2,2.2,0.85
+      # small leaded windows up the smock, front and back
+      paint smock mat=glass poly=-2.0,4.3 -1.4,4.3 -1.4,5.0 -2.0,5.0 axis=z both=1
+      paint smock mat=glass poly=-1.7,6.1 -1.15,6.1 -1.15,6.75 -1.7,6.75 axis=z both=1
+      paint smock mat=glass poly=-1.45,7.4 -0.95,7.4 -0.95,8.0 -1.45,8.0 axis=z both=1
+      paint smock mat=glass poly=0.6,4.6 1.2,4.6 1.2,5.2 0.6,5.2 axis=z both=1
+      # dark opening in the cap front where the windshaft passes out
+      paint cap color=#0d0d0d box=-2.95,10.1,-0.5,-2.0,11.0,0.5
+      # --- panel lines ---
+      # horizontal weatherboard seams on the smock
+      seam smock plane=0,1,0,4.0 w=0.012
+      seam smock plane=0,1,0,4.7 w=0.012
+      seam smock plane=0,1,0,5.4 w=0.012
+      seam smock plane=0,1,0,6.1 w=0.012
+      seam smock plane=0,1,0,6.8 w=0.012
+      seam smock plane=0,1,0,7.5 w=0.012
+      seam smock plane=0,1,0,8.2 w=0.012
+      # brick course seams on the base
+      seam base plane=0,1,0,0.8 w=0.018
+      seam base plane=0,1,0,1.6 w=0.018
+      seam base plane=0,1,0,2.4 w=0.018
+      # door frame seam
+      seam base box=-3.98,0,-0.95,-3.15,2.3,0.95 w=0.015
+      # cap hoop seams following the onion
+      seam cap plane=0,1,0,9.7 w=0.012
+      seam cap plane=0,1,0,10.5 w=0.012
+      seam cap plane=0,1,0,11.3 w=0.012
+    group fit_50455 at=0.0041,-0.0877,-0.0217 scale=1.0062,1.0062,1.0062
+      group sails at=-2.6,10.55,0 rot=5,0,0 label="Flügelkreuz"
+        # ---- cast-iron hub canister on the windshaft front ----
+        box hub size=0.9,0.7,0.7 round=0.08 color=#3a3a3c mat=cast
+        cyl hubplate r=0.37 h=0.07 axis=x at=-0.485,0,0 color=#343436 mat=cast
+        cyl hubrear r=0.30 h=0.10 axis=x at=0.48,0,0 color=#343436 mat=cast
+        ring 8 r=0.27 axis=x at=-0.535,0,0
+          cyl boltf r=0.025 h=0.035 axis=x color=#75757a mat=brushed
+        ring 6 r=0.22 axis=x at=0.535,0,0
+          cyl boltr r=0.022 h=0.03 axis=x color=#75757a mat=brushed
+        # ---- four oak stocks, cross through the hub ----
+        box stockY size=0.30,19,0.18 round=0.03 color=#8a6a45 mat=wood
+        box stockZ size=0.30,0.18,19 round=0.03 color=#8a6a45 mat=wood
+        cyl strapY1 r=0.21 hole=0.17 h=0.05 axis=y at=0,0.55,0 color=#4a4a4c mat=cast
+        cyl strapY2 r=0.21 hole=0.17 h=0.05 axis=y at=0,-0.55,0 color=#4a4a4c mat=cast
+        cyl strapZ1 r=0.21 hole=0.17 h=0.05 axis=z at=0,0,0.55 color=#4a4a4c mat=cast
+        cyl strapZ2 r=0.21 hole=0.17 h=0.05 axis=z at=0,0,-0.55 color=#4a4a4c mat=cast
+        # ---- iron-shod stock tips with rope loops ----
+        repeat 2 step=0,-18.7,0 at=0,9.35,0
+          box shodY size=0.34,0.30,0.22 round=0.06 color=#454548 mat=cast
+          cyl loopY r=0.07 hole=0.04 h=0.025 axis=y at=0,0.18,0 color=#a98d5f mat=rubber
+        repeat 2 step=0,0,-18.7 at=0,0,9.35
+          box shodZ size=0.34,0.22,0.30 round=0.06 color=#454548 mat=cast
+          cyl loopZ r=0.07 hole=0.04 h=0.025 axis=z at=0,0,0.18 color=#a98d5f mat=rubber
+        # ---- upper sail: clothed with canvas ----
+        group sailUp rot=0,0,0
+          cyl whip1 r=0.035 h=7.8 axis=y at=-0.35,5.4,-0.55 color=#96774e mat=wood
+          cyl whip2 r=0.035 h=7.8 axis=y at=-0.35,5.4,0.55 color=#96774e mat=wood
+          box carrier size=0.34,0.25,1.25 at=-0.18,1.45,0 color=#7d5f3c mat=wood
+          repeat 14 step=0,0.55,0 at=-0.35,2.0,0
+            box rib size=0.02,0.05,1.16 color=#85653f mat=wood
+          box leadboard size=0.25,7.3,0.06 at=-0.55,5.65,0 color=#93744c mat=wood
+          box tipiron size=0.30,0.22,1.22 round=0.04 at=-0.35,9.3,0 color=#454548 mat=cast
+          box canvas1 size=0.05,2.4,1.12 at=-0.315,3.3,0 color=#e6e0d0 mat=fabric
+          box canvas2 size=0.05,2.3,1.12 at=-0.285,5.65,0 color=#e2dcca mat=fabric
+          box canvas3 size=0.05,2.4,1.12 at=-0.315,8.0,0 color=#e6e0d0 mat=fabric
+          repeat 9 step=0,0.85,0 at=-0.30,2.4,-0.55
+            cyl lace1 r=0.012 h=0.07 axis=z color=#b7ad98 mat=fabric
+          repeat 9 step=0,0.85,0 at=-0.30,2.4,0.55
+            cyl lace2 r=0.012 h=0.07 axis=z color=#b7ad98 mat=fabric
+        # ---- right sail: bare lattice ----
+        group sailRight rot=90,0,0
+          cyl whip1 r=0.035 h=7.8 axis=y at=-0.35,5.4,-0.55 color=#96774e mat=wood
+          cyl whip2 r=0.035 h=7.8 axis=y at=-0.35,5.4,0.55 color=#916f47 mat=wood
+          box carrier size=0.34,0.25,1.25 at=-0.18,1.45,0 color=#7d5f3c mat=wood
+          repeat 14 step=0,0.55,0 at=-0.35,2.0,0
+            box rib size=0.02,0.05,1.16 color=#8a6a45 mat=wood
+          box leadboard size=0.25,7.3,0.06 at=-0.55,5.65,0 color=#93744c mat=wood
+          box tipiron size=0.30,0.22,1.22 round=0.04 at=-0.35,9.3,0 color=#454548 mat=cast
+        # ---- lower sail: bare lattice ----
+        group sailDown rot=180,0,0
+          cyl whip1 r=0.035 h=7.8 axis=y at=-0.35,5.4,-0.55 color=#916f47 mat=wood
+          cyl whip2 r=0.035 h=7.8 axis=y at=-0.35,5.4,0.55 color=#96774e mat=wood
+          box carrier size=0.34,0.25,1.25 at=-0.18,1.45,0 color=#7d5f3c mat=wood
+          repeat 14 step=0,0.55,0 at=-0.35,2.0,0
+            box rib size=0.02,0.05,1.16 color=#85653f mat=wood
+          box leadboard size=0.25,7.3,0.06 at=-0.55,5.65,0 color=#8f7048 mat=wood
+          box tipiron size=0.30,0.22,1.22 round=0.04 at=-0.35,9.3,0 color=#454548 mat=cast
+        # ---- left sail: bare lattice ----
+        group sailLeft rot=270,0,0
+          cyl whip1 r=0.035 h=7.8 axis=y at=-0.35,5.4,-0.55 color=#96774e mat=wood
+          cyl whip2 r=0.035 h=7.8 axis=y at=-0.35,5.4,0.55 color=#8d6c44 mat=wood
+          box carrier size=0.34,0.25,1.25 at=-0.18,1.45,0 color=#7d5f3c mat=wood
+          repeat 14 step=0,0.55,0 at=-0.35,2.0,0
+            box rib size=0.02,0.05,1.16 color=#8a6a45 mat=wood
+          box leadboard size=0.25,7.3,0.06 at=-0.55,5.65,0 color=#93744c mat=wood
+          box tipiron size=0.30,0.22,1.22 round=0.04 at=-0.35,9.3,0 color=#454548 mat=cast
+    group windshaft_brake_wheel at=0,10.55,0
+      # ---- tapered cast-iron windshaft, poll end to tail journal ----
+      lathe shaft pts=-2.9,0.125 -2.6,0.14 -2.3,0.165 -2.05,0.19 -1.9,0.21 -1.5,0.205 -1.2,0.175 -0.95,0.13 axis=x smooth=1 color=#4a4a4c mat=cast
+      box pollface size=0.07,0.3,0.3 at=-2.9,0,0 color=#3a3a3c mat=cast round=0.02
+      ring pollbolts 4 r=0.11 axis=x at=-2.945,0,0
+        cyl pbolt r=0.016 h=0.04 axis=x color=#6a6a6e mat=brushed
+      ring hubrivets 6 r=0.185 axis=x at=-2.145,0,0
+        cyl hrv r=0.012 h=0.02 axis=x color=#5a5a5e mat=brushed
+      # ---- neck bearing: cast pillow + cap on heavy oak breast beam ----
+      box breastbeam size=0.38,0.32,2.3 at=-2.6,-0.58,0 color=#8a6a45 mat=wood round=0.03
+      box pillow size=0.32,0.2,0.38 at=-2.6,-0.15,0 color=#4a4a4c mat=cast
+      box pillowcap size=0.32,0.12,0.38 at=-2.6,0.16,0 color=#454547 mat=cast
+      cyl pbolt1 r=0.018 h=0.44 axis=y at=-2.6,0,-0.16 color=#6a6a6e mat=brushed
+      cyl pbolt2 r=0.018 h=0.44 axis=y at=-2.6,0,0.16 color=#6a6a6e mat=brushed
+      cyl grease1 r=0.032 h=0.09 axis=y at=-2.54,0.25,0 color=#b08d3e mat=brass
+      cyl oiler1 r=0.02 h=0.06 axis=y at=-2.66,0.25,0 color=#b08d3e mat=brass
+      # ---- cap framing: side beams, tail post, cross beam ----
+      box sidebeamL size=2.3,0.26,0.2 at=-1.8,-0.58,-1.05 color=#82643f mat=wood round=0.02
+      box sidebeamR size=2.3,0.26,0.2 at=-1.8,-0.58,1.05 color=#82643f mat=wood round=0.02
+      box kneeL size=0.5,0.14,0.14 at=-2.25,-0.45,-0.85 rot=0,0,35 color=#7a5e3c mat=wood
+      box kneeR size=0.5,0.14,0.14 at=-2.25,-0.45,0.85 rot=0,0,-35 color=#7a5e3c mat=wood
+      box tailpost size=0.2,0.8,0.2 at=-0.95,-0.85,0 color=#8a6a45 mat=wood round=0.02
+      box tailcross size=0.26,0.26,2.0 at=-0.95,-0.3,0 color=#82643f mat=wood round=0.02
+      # ---- tail bearing: iron gudgeon box on cross beam ----
+      box gudgeon size=0.3,0.26,0.3 at=-0.95,0,0 color=#454547 mat=cast
+      ring gbolts 4 r=0.12 axis=x at=-0.95,0,0
+        cyl gbolt r=0.015 h=0.34 axis=x color=#6a6a6e mat=brushed
+      cyl grease2 r=0.03 h=0.08 axis=y at=-0.9,0.17,0 color=#b08d3e mat=brass
+      # ---- brake wheel: cast hub with key seats ----
+      cyl hub r=0.24 h=0.55 axis=x at=-1.9,0,0 color=#4a4a4c mat=cast
+      box key1 size=0.45,0.05,0.05 at=-1.9,0.215,0 color=#333336 mat=darkmetal
+      box key2 size=0.45,0.05,0.05 at=-1.9,0,0.215 color=#333336 mat=darkmetal
+      # ---- two oak rim rings with iron strap band ----
+      cyl rimA r=1.15 hole=1.02 h=0.13 axis=x at=-2.0,0,0 color=#8a6a45 mat=wood
+      cyl rimB r=1.15 hole=1.02 h=0.13 axis=x at=-1.78,0,0 color=#82643f mat=wood
+      cyl rimstrap r=1.16 hole=1.1 h=0.06 axis=x at=-1.89,0,0 color=#4a4a4c mat=cast
+      # ---- 64 beech cog teeth on forward shroud ----
+      ring cogs 64 r=1.16 axis=x at=-2.09,0,0
+        box tooth size=0.1,0.13,0.055 color=#c9a870 mat=wood
+      # ---- rivets on forward rim face ----
+      ring rivets 16 r=1.085 axis=x at=-2.075,0,0
+        cyl rv r=0.013 h=0.025 axis=x color=#5a5a5e mat=brushed
+      # ---- six square iron spokes per side ----
+      ring spokesA 6 r=0.575 axis=x at=-2.0,0,0
+        box spA size=0.05,0.98,0.05 color=#4a4a4c mat=cast
+      ring spokesB 6 r=0.575 axis=x rot=30,0,0 at=-1.78,0,0
+        box spB size=0.05,0.98,0.05 color=#454547 mat=cast
+      # ---- quant out-shaft bracket strapped to rim inner face ----
+      box qbracket size=0.06,0.42,0.26 at=-1.94,-0.92,0 color=#4a4a4c mat=cast
+      box qstrap size=0.07,0.12,0.5 at=-1.94,-1.09,0 color=#3f3f42 mat=cast
+      ring qbolts 4 r=0.09 axis=x at=-1.98,-0.92,0
+        cyl qbolt r=0.013 h=0.05 axis=x color=#6a6a6e mat=brushed
+      cyl quantstub r=0.055 h=0.22 axis=y at=-1.94,-1.22,0 color=#333336 mat=darkmetal
+    group fit_92308 at=0.3893,-1.1030,-0.0082 scale=1.0934,1.0934,1.0934
+      group band_brake at=-1.9,10.45,0 label="Federbandbremse mit Bremsbaum"
+        # --- brake beam over the wheel top ---
+        box beam size=0.20,0.24,2.10 at=0,1.15,0 color=#8a6a45 mat=wood
+        box postF size=0.16,1.98,0.14 at=0,0.04,1.02 color=#6b5136 mat=wood
+        box postB size=0.16,1.98,0.14 at=0,0.04,-1.02 color=#6b5136 mat=wood
+        box strapF size=0.24,0.03,0.07 at=0,1.285,0.55 color=#4a4a4c mat=cast
+        box strapB size=0.24,0.03,0.07 at=0,1.285,-0.55 color=#4a4a4c mat=cast
+        screw boltF r=0.012 h=0.05 at=0,1.31,0.55 color=#3a3a3c mat=cast
+        screw boltB r=0.012 h=0.05 at=0,1.31,-0.55 color=#3a3a3c mat=cast
+        box beamplateF size=0.22,0.20,0.02 at=0,1.15,1.06 color=#55555a mat=cast
+        box beamplateB size=0.22,0.20,0.02 at=0,1.15,-1.06 color=#55555a mat=cast
+        # --- 12 curved oak brake blocks on the upper rim ---
+        box blk1 size=0.22,0.07,0.24 at=0,1.055,0 rot=-62,0,0 color=#8a6a45 mat=wood
+        box blk2 size=0.22,0.07,0.24 at=0,1.055,0 rot=-51,0,0 color=#84653f mat=wood
+        box blk3 size=0.22,0.07,0.24 at=0,1.055,0 rot=-39,0,0 color=#8a6a45 mat=wood
+        box blk4 size=0.22,0.07,0.24 at=0,1.055,0 rot=-28,0,0 color=#876741 mat=wood
+        box blk5 size=0.22,0.07,0.24 at=0,1.055,0 rot=-17,0,0 color=#8a6a45 mat=wood
+        box blk6 size=0.22,0.07,0.24 at=0,1.055,0 rot=-6,0,0 color=#84653f mat=wood
+        box blk7 size=0.22,0.07,0.24 at=0,1.055,0 rot=6,0,0 color=#8a6a45 mat=wood
+        box blk8 size=0.22,0.07,0.24 at=0,1.055,0 rot=17,0,0 color=#876741 mat=wood
+        box blk9 size=0.22,0.07,0.24 at=0,1.055,0 rot=28,0,0 color=#8a6a45 mat=wood
+        box blk10 size=0.22,0.07,0.24 at=0,1.055,0 rot=39,0,0 color=#84653f mat=wood
+        box blk11 size=0.22,0.07,0.24 at=0,1.055,0 rot=51,0,0 color=#8a6a45 mat=wood
+        box blk12 size=0.22,0.07,0.24 at=0,1.055,0 rot=62,0,0 color=#876741 mat=wood
+        # --- charred lining face against the wheel rim ---
+        tube lining pts=0,0.483,-0.909 0,0.789,-0.662 0,0.968,-0.352 0,1.03,0 0,0.968,0.352 0,0.789,0.662 0,0.483,0.909 r=0.032 color=#241f19 mat=matte
+        # --- wrought-iron band around the blocks, with riveted lugs ---
+        tube band pts=0,0.516,-0.971 0,0.843,-0.707 0,1.034,-0.376 0,1.10,0 0,1.034,0.376 0,0.843,0.707 0,0.516,0.971 r=0.025 flat=8 color=#4a4a4c mat=cast
+        box lug1 size=0.07,0.06,0.06 at=0,0.799,-0.799 color=#3f3f42 mat=cast
+        box lug2 size=0.07,0.06,0.06 at=0,1.13,0 color=#3f3f42 mat=cast
+        box lug3 size=0.07,0.06,0.06 at=0,0.799,0.799 color=#3f3f42 mat=cast
+        screw riv1 r=0.008 h=0.015 at=0,1.165,-0.799 color=#2e2e30 mat=cast
+        screw riv2 r=0.008 h=0.015 at=0,1.165,0 color=#2e2e30 mat=cast
+        screw riv3 r=0.008 h=0.015 at=0,1.165,0.799 color=#2e2e30 mat=cast
+        # --- brake hooks and chain links at the beam ends ---
+        tube hookF pts=0,1.12,1.03 0,0.85,1.02 0,0.55,0.98 r=0.02 color=#3a3a3c mat=cast
+        tube hookB pts=0,1.12,-1.03 0,0.85,-1.02 0,0.55,-0.98 r=0.02 color=#3a3a3c mat=cast
+        cyl chainF r=0.045 hole=0.028 h=0.02 axis=z at=0,0.85,1.02 color=#2e2e30 mat=cast
+        cyl chainB r=0.045 hole=0.028 h=0.02 axis=z at=0,0.85,-1.02 color=#2e2e30 mat=cast
+        cyl turnbuckle r=0.03 h=0.13 axis=y at=0,0.99,1.0 color=#6a6a6e mat=brushed
+        # --- breast beam lever dropping forward through the cap floor ---
+        box lever size=0.13,1.66,0.18 at=-0.175,0.375,0.9 rot=0,0,-19.5 color=#8a6a45 mat=wood
+        box levershoe size=0.15,0.13,0.20 at=-0.45,-0.36,0.9 color=#4a4a4c mat=cast
+        cyl pivotbolt r=0.032 h=0.34 axis=z at=0.1,1.15,0.9 color=#3a3a3c mat=cast
+        cyl pivothead r=0.05 h=0.03 axis=z at=0.1,1.15,1.08 color=#2e2e30 mat=cast
+        # --- ratchet quadrant plate with teeth and pawl ---
+        plate quadrant pts=0.1,0.30 -0.12,0.33 -0.32,0.41 -0.50,0.55 -0.60,0.66 -0.19,0.95 0.1,0.80 h=0.03 axis=z at=0.1,0,1.06 color=#4a4a4c mat=cast
+        repeat 5 step=-0.13,0.075,0 at=-0.05,0.32,1.09
+          box tooth size=0.035,0.06,0.03 color=#3a3a3c mat=cast
+        box pawl size=0.05,0.30,0.035 at=-0.32,0.62,0.97 rot=0,0,-35 color=#3a3a3c mat=cast
+        cyl pawlpin r=0.016 h=0.06 axis=z at=-0.28,0.72,0.97 color=#2e2e30 mat=cast
+        # --- worn rope loop for the miller at the lever end ---
+        cyl ropeloop r=0.11 hole=0.065 h=0.045 axis=z at=-0.45,-0.47,0.9 color=#9c7b4f mat=matte
+        tube ropetail pts=-0.45,-0.53,0.9 -0.5,-0.95,0.9 r=0.026 color=#93744a mat=matte
+    group fit_27602 at=0.0306,-0.1102,0.0000 scale=1.0204,1.0204,1.0204
+      group upright_shaft_gears at=-1.5,0,0 label="Königswelle mit Bunkerrad und großem Zahnrad"
+        # ---- laminated oak upright shaft, dark polished by age ----
+        box shaft size=0.30,4.90,0.30 at=0,7.30,0 round=0.02 color=#5a4632 mat=wood
+        box lam1 size=0.014,4.70,0.305 at=0.153,7.30,0 color=#463624 mat=wood
+        box lam2 size=0.014,4.70,0.305 at=-0.153,7.30,0 color=#463624 mat=wood
+        box lam3 size=0.305,4.70,0.014 at=0,7.30,0.153 color=#463624 mat=wood
+        box lam4 size=0.305,4.70,0.014 at=0,7.30,-0.153 color=#463624 mat=wood
+        cyl burn1 r=0.185 h=0.05 hole=0.16 axis=y at=0,6.15,0 color=#3a2e20 mat=wood
+        cyl burn2 r=0.183 h=0.04 hole=0.16 axis=y at=0,6.34,0 color=#3a2e20 mat=wood
+        # sack-hoist rope running on the shaft, with cleat
+        box cleat size=0.10,0.16,0.10 at=0.26,4.98,0.20 color=#6b5638 mat=wood
+        tube rope pts=0.27,5.05,0.21 0.29,6.4,0.23 0.26,8.3,0.21 0.23,9.45,0.17 r=0.035 color=#a08050 mat=fabric
+        # ---- upper pivot: iron cap on cap-floor cross beam ----
+        box capbeam size=1.50,0.24,0.34 at=0,9.99,0 color=#6b5638 mat=wood
+        box capplate size=0.56,0.05,0.56 at=0,9.815,0 color=#4a4a4c mat=cast
+        cyl capcone r=0.27 h=0.11 hole=0.20 axis=y at=0,9.895,0 color=#454547 mat=cast
+        sphere pivotsphere r=0.07 at=0,9.78,0 color=#5a5a5c mat=metal
+        cyl oilcup r=0.04 h=0.10 axis=x at=0.29,9.95,0 color=#3d3d3f mat=cast
+        ring capbolts 4 r=0.24 axis=y at=0,9.845,0
+          screw cb r=0.02 h=0.04 color=#3d3d3f mat=cast
+        # ---- lower pivot foot: cast-iron step on stone-floor beam ----
+        box footbeam size=1.50,0.24,0.34 at=0,4.73,0 color=#6b5638 mat=wood
+        box stepplate size=0.55,0.05,0.55 at=0,4.875,0 color=#4a4a4c mat=cast
+        cyl stepcup r=0.24 h=0.08 hole=0.15 axis=y at=0,4.94,0 color=#454547 mat=cast
+        box oilbox size=0.18,0.12,0.14 at=0.52,4.915,0.26 color=#7a5c38 mat=wood
+        # ---- Bunkerrad / wallower: beech bevel gear, 30 deg helix teeth ----
+        lathe wallower at=0,9.55,0 axis=y smooth=1 pts=-0.14,0.28 -0.14,0.86 -0.10,0.95 0.10,0.95 0.14,0.86 0.14,0.28 color=#c9a870 mat=wood
+        ring wteeth 26 r=0.85 axis=y at=0,9.62,0
+          box tooth size=0.18,0.30,0.11 at=0,0.06,0 rot=0,0,30 round=0.015 color=#cfae76 mat=wood
+        box worn1 size=0.18,0.30,0.11 at=-0.148,9.68,0.837 rot=0,-100,30 round=0.015 color=#d8b87e mat=wood
+        box worn2 size=0.18,0.30,0.11 at=0.62,9.68,-0.60 rot=0,44,30 round=0.015 color=#d8b87e mat=wood
+        cyl wtyre r=0.98 h=0.26 hole=0.90 axis=y at=0,9.55,0 color=#4a4a4c mat=cast
+        cyl whub r=0.30 h=0.52 axis=y at=0,9.55,0 color=#b5945f mat=wood
+        box wwedge1 size=0.06,0.30,0.05 at=0.24,9.55,0.12 rot=0,0,12 color=#8a6a45 mat=wood
+        box wwedge2 size=0.06,0.30,0.05 at=-0.24,9.55,-0.12 rot=0,0,-12 color=#8a6a45 mat=wood
+        box wdog1 size=0.50,0.07,0.10 at=0,9.37,0 color=#3d3d3f mat=cast
+        box wdog2 size=0.10,0.07,0.50 at=0,9.37,0 color=#3d3d3f mat=cast
+        # ---- great spur wheel: beech disc, wooden cogs mortised and pinned ----
+        lathe spurwheel at=0,5.15,0 axis=y smooth=1 pts=-0.11,0.30 -0.11,0.82 -0.08,0.90 0.08,0.90 0.11,0.82 0.11,0.30 color=#c9a870 mat=wood
+        cyl styre r=0.94 h=0.22 hole=0.86 axis=y at=0,5.15,0 color=#4a4a4c mat=cast
+        ring scogs 60 r=0.92 axis=y at=0,5.15,0
+          box cog size=0.15,0.30,0.065 round=0.01 color=#b99a68 mat=wood
+        # two replacement cogs of paler new wood, with pins
+        box cognew1 size=0.15,0.30,0.065 at=0.834,5.15,0.389 rot=0,-25,0 round=0.01 color=#dcc79e mat=wood
+        box cognew2 size=0.15,0.30,0.065 at=-0.834,5.15,-0.389 rot=0,25,0 round=0.01 color=#dcc79e mat=wood
+        cyl cnpin1 r=0.015 h=0.34 axis=y at=0.861,5.15,0.401 color=#6b5638 mat=wood
+        cyl cnpin2 r=0.015 h=0.34 axis=y at=-0.861,5.15,-0.401 color=#6b5638 mat=wood
+        ring spins 60 r=0.965 axis=y at=0,5.31,0
+          cyl pin r=0.013 h=0.06 axis=y color=#6b5638 mat=wood
+        cyl shub r=0.30 h=0.54 axis=y at=0,5.15,0 color=#b5945f mat=wood
+        box swedge1 size=0.06,0.32,0.05 at=0.24,5.15,0.12 rot=0,0,12 color=#8a6a45 mat=wood
+        box swedge2 size=0.06,0.32,0.05 at=-0.24,5.15,-0.12 rot=0,0,-12 color=#8a6a45 mat=wood
+        box sdog1 size=0.52,0.07,0.10 at=0,5.40,0 color=#3d3d3f mat=cast
+        box sdog2 size=0.10,0.07,0.52 at=0,5.40,0 color=#3d3d3f mat=cast
+        # ---- balance counterweight bar bolted across the spur hub ----
+        box cwbar size=1.70,0.13,0.20 at=0,4.98,0 round=0.02 color=#5a4632 mat=wood
+        cyl cwbolt1 r=0.035 h=0.24 axis=y at=-0.78,4.98,0 color=#4a4a4c mat=cast
+        cyl cwbolt2 r=0.035 h=0.24 axis=y at=0.78,4.98,0 color=#4a4a4c mat=cast
+        cyl cwnut1 r=0.055 h=0.05 axis=y at=-0.78,5.11,0 color=#3d3d3f mat=cast
+        cyl cwnut2 r=0.055 h=0.05 axis=y at=0.78,5.11,0 color=#3d3d3f mat=cast
+        # ---- flour dust settled on the upper shoulders ----
+        cyl dust1 r=0.78 h=0.016 axis=y at=0,5.268,0 color=#e8e2d5 mat=matte
+        cyl dust2 r=0.55 h=0.014 axis=y at=0,9.698,0 color=#e8e2d5 mat=matte
+        # ---- hub bolts ----
+        ring hubbolts 6 r=0.21 axis=y at=0,9.80,0
+          screw hb r=0.02 h=0.04 color=#3d3d3f mat=cast
+        ring hubbolts2 6 r=0.22 axis=y at=0,5.31,0
+          screw hb2 r=0.02 h=0.04 color=#3d3d3f mat=cast
+    group millstone_drive label="Steintrieb: Steinrad, Quantwelle, Spindel, Mahlsteine"
+      # --- timber bed under the bedstone ---
+      box bedbeamA size=1.5,0.16,0.30 at=-1.5,4.38,1.72 color=#8a6a45 mat=wood
+      box bedbeamB size=0.30,0.16,0.80 at=-1.5,4.38,2.42 color=#8a6a45 mat=wood
+      box strapA1 size=0.32,0.17,0.03 at=-1.5,4.38,1.62 color=#4a4a4c mat=metal
+      box strapA2 size=0.32,0.17,0.03 at=-1.5,4.38,1.82 color=#4a4a4c mat=metal
+      box strapB1 size=0.32,0.17,0.03 at=-1.5,4.38,2.28 color=#4a4a4c mat=metal
+      box wedge1 size=0.10,0.05,0.08 at=-1.92,4.335,2.05 rot=0,0,8 color=#8a6a45 mat=wood
+      box wedge2 size=0.10,0.05,0.08 at=-1.08,4.335,2.05 rot=0,0,-6 color=#8a6a45 mat=wood
+      box wedge3 size=0.08,0.05,0.10 at=-1.5,4.335,1.68 rot=5,0,0 color=#8a6a45 mat=wood
+      # --- bedstone (fixed), worn furrows, eye ---
+      cyl bedstone r=0.75 h=0.24 axis=y at=-1.5,4.43,2.05 color=#9a958c mat=matte
+      cyl bedfurrow1 r=0.70 hole=0.675 h=0.015 axis=y at=-1.5,4.552,2.05 color=#847f72 mat=matte
+      cyl bedfurrow2 r=0.46 hole=0.44 h=0.015 axis=y at=-1.5,4.552,2.05 color=#847f72 mat=matte
+      cyl bedeye r=0.11 hole=0.06 h=0.02 axis=y at=-1.5,4.556,2.05 color=#4a4a4c mat=metal
+      # --- runner stone, domed dressing face, harp furrows, chipped edge ---
+      lathe runner pts=4.55,0.72 4.57,0.725 4.90,0.725 4.97,0.70 5.02,0.55 5.05,0.25 5.06,0.10 axis=y smooth=1 at=-1.5,0,2.05 color=#9a958c mat=matte
+      cyl runhoop r=0.732 hole=0.718 h=0.05 axis=y at=-1.5,4.75,2.05 color=#4a4a4c mat=metal
+      cyl furrowring1 r=0.31 hole=0.295 h=0.012 axis=y at=-1.5,5.048,2.05 color=#7d786f mat=matte
+      cyl furrowring2 r=0.53 hole=0.515 h=0.012 axis=y at=-1.5,5.022,2.05 color=#7d786f mat=matte
+      ring 14 r=0.42 axis=y at=-1.5,5.038,2.05
+        box size=0.34,0.012,0.03 color=#7d786f mat=matte
+      box chip1 size=0.06,0.03,0.05 at=-0.82,4.80,2.30 rot=0,20,10 color=#b5b0a7 mat=matte
+      box chip2 size=0.05,0.03,0.06 at=-1.55,4.82,1.35 rot=15,0,0 color=#b5b0a7 mat=matte
+      box chip3 size=0.06,0.025,0.05 at=-2.14,4.78,1.86 rot=0,0,-15 color=#b5b0a7 mat=matte
+      # --- eye boss, rynd and polished steel spindle ---
+      cyl eyebush r=0.15 hole=0.088 h=0.55 axis=y at=-1.5,4.855,2.05 color=#4a4a4c mat=metal
+      box rynd size=0.40,0.04,0.07 at=-1.5,5.115,2.05 color=#d8dce0 mat=brushed
+      lathe spindle pts=4.55,0.04 4.75,0.05 5.0,0.055 5.15,0.06 5.32,0.05 axis=y smooth=1 at=-1.5,0,2.05 color=#c8ccd2 mat=brushed
+      box driver size=0.028,0.16,0.085 at=-1.468,4.72,2.05 color=#c8ccd2 mat=brushed
+      # --- stone vat: pine staves, two iron hoops, rim ---
+      group vat label="Steinkranz" at=-1.5,4.55,2.05
+        ring 22 r=0.775 axis=y
+          box size=0.115,0.50,0.05 color=#b08d5f mat=wood
+        cyl hoop1 r=0.815 hole=0.795 h=0.035 axis=y at=0,-0.13,0 color=#4a4a4c mat=metal
+        cyl hoop2 r=0.815 hole=0.795 h=0.035 axis=y at=0,0.15,0 color=#4a4a4c mat=metal
+        cyl vatrim r=0.83 hole=0.72 h=0.035 axis=y at=0,0.25,0 color=#c4a06b mat=wood
+      # --- flour spout and dust ---
+      box spout size=0.16,0.05,0.42 at=-1.5,4.40,2.66 rot=20,0,0 color=#c9b08a mat=wood
+      sphere flourpile r=0.09 scale=1.6,0.5,1.2 at=-1.5,4.345,2.78 color=#e6e0d0 mat=matte
+      scatter flour n=24 size=0.05 area=1.5,1.3 at=-1.5,4.475,2.0 color=#e6e0d0
+      # --- stone nut (beech, 20 cogs) with iron tyre bands on tapered seat ---
+      gear stonenut teeth=20 r=0.30 h=0.12 axis=z at=-1.5,5.2,1.55 color=#c9a870 mat=wood
+      cyl tyre1 r=0.318 hole=0.30 h=0.025 axis=z at=-1.5,5.2,1.505 color=#4a4a4c mat=metal
+      cyl tyre2 r=0.318 hole=0.30 h=0.025 axis=z at=-1.5,5.2,1.595 color=#4a4a4c mat=metal
+      box nutseat size=0.26,0.14,0.30 at=-1.5,5.10,1.55 round=0.02 color=#6b4a2e mat=wood
+      box nutstrap size=0.28,0.04,0.32 at=-1.5,5.05,1.55 color=#4a4a4c mat=metal
+      box nutpost size=0.20,0.72,0.24 at=-1.5,4.66,1.55 color=#6b4a2e mat=wood
+      screw nutset r=0.015 h=0.05 at=-1.5,5.31,1.55 color=#c8ccd2
+      # --- quant shaft with miter pair to the spindle ---
+      cyl quant r=0.08 h=0.62 axis=z at=-1.5,5.2,1.76 color=#8a6a45 mat=wood
+      gear quantpinion teeth=12 r=0.13 h=0.07 axis=z at=-1.5,5.2,2.00 color=#c9a870 mat=wood
+      gear spindlegear teeth=16 r=0.17 h=0.07 axis=y at=-1.5,5.24,2.05 color=#c9a870 mat=wood
+      # --- adjustable iron bridge beams, brass bearings, merrimets ---
+      group bridge label="Brückenlager mit Merrimets"
+        box bridgepost1 size=0.07,0.60,0.07 at=-2.0,5.10,2.05 color=#4a4a4c mat=metal
+        box bridgepost2 size=0.07,0.60,0.07 at=-1.0,5.10,2.05 color=#4a4a4c mat=metal
+        box bridgebeam1 size=1.1,0.06,0.09 at=-1.5,5.40,2.05 color=#4a4a4c mat=metal
+        box bridgepost3 size=0.07,0.60,0.07 at=-1.95,5.10,1.80 color=#4a4a4c mat=metal
+        box bridgepost4 size=0.07,0.60,0.07 at=-1.05,5.10,1.80 color=#4a4a4c mat=metal
+        box bridgebeam2 size=0.9,0.06,0.08 at=-1.5,5.40,1.80 color=#4a4a4c mat=metal
+        box brgspindle size=0.12,0.14,0.12 at=-1.5,5.30,2.05 color=#b08d3a mat=metal
+        box brgquant size=0.10,0.10,0.13 at=-1.5,5.33,1.80 color=#b08d3a mat=metal
+        screw merrimet1 r=0.018 h=0.09 at=-1.30,5.47,2.05 color=#c8ccd2
+        screw merrimet2 r=0.018 h=0.09 at=-1.70,5.47,2.05 color=#c8ccd2
+        cyl nut1 r=0.03 h=0.02 axis=y at=-1.30,5.475,2.05 color=#b08d3a mat=metal
+        cyl nut2 r=0.03 h=0.02 axis=y at=-1.70,5.475,2.05 color=#b08d3a mat=metal
+        tube tenterscrew pts=-1.22,5.46,2.05 -1.78,5.46,2.05 r=0.015 color=#c8ccd2
+        cyl handwheel r=0.06 hole=0.02 h=0.02 axis=y at=-1.16,5.46,2.05 color=#4a4a4c mat=metal
+        cyl oiler1 r=0.025 h=0.05 axis=y at=-1.5,5.455,2.05 color=#b08d3a mat=metal
+        cyl oiler2 r=0.025 h=0.05 axis=y at=-1.5,5.455,1.80 color=#b08d3a mat=metal
+      # --- stone crane folded back against the wall ---
+      group crane label="Steinkran"
+        box cranepost size=0.09,1.25,0.09 at=-2.18,4.925,2.55 color=#6b4a2e mat=wood
+        box cranecap size=0.14,0.05,0.14 at=-2.18,5.575,2.55 color=#4a4a4c mat=metal
+        box jib size=0.07,0.07,0.78 at=-2.18,5.52,2.18 color=#6b4a2e mat=wood
+        tube brace pts=-2.18,5.50,2.50 -2.18,5.20,2.00 r=0.025 color=#6b4a2e
+        tube chain pts=-2.18,5.485,1.86 -2.18,5.30,1.86 -2.18,5.14,1.86 r=0.014 color=#4a4a4c
+        box shackle size=0.03,0.06,0.03 at=-2.18,5.13,1.86 color=#4a4a4c mat=metal
+        cyl hook r=0.055 hole=0.035 h=0.018 axis=z at=-2.18,5.10,1.86 color=#4a4a4c mat=metal
+        box wallbracket size=0.06,0.35,0.30 at=-2.26,5.30,2.55 color=#6b4a2e mat=wood
+    group hopper_shoe at=-1.5,5.3,2.05 label="Trichter mit Schuettelrinne ueber dem Laeuferauge"
+      loft hopper sections=0.35,0.25,0.25 0.7,0.44,0.44 1.05,0.68,0.68 1.4,1.1,1.1 axis=y square=1 color=#b08d5f mat=wood
+      box throat size=0.27,0.12,0.27 at=0,0.31,0 color=#a5824f mat=wood round=0.01
+      box rimF size=1.16,0.055,0.055 at=0,1.42,0.56 color=#c4a06a mat=wood round=0.015
+      box rimB size=1.16,0.055,0.055 at=0,1.42,-0.56 color=#c4a06a mat=wood round=0.015
+      box rimL size=0.055,0.055,1.09 at=-0.56,1.42,0 color=#c4a06a mat=wood round=0.015
+      box rimR size=0.055,0.055,1.09 at=0.56,1.42,0 color=#c4a06a mat=wood round=0.015
+      box dustRimF size=1.14,0.008,0.08 at=0,1.452,0.56 color=#e9e4d8 mat=matte
+      box dustRimB size=1.14,0.008,0.08 at=0,1.452,-0.56 color=#e9e4d8 mat=matte
+      box dustRimL size=0.08,0.008,1.07 at=-0.56,1.452,0 color=#e9e4d8 mat=matte
+      box dustRimR size=0.08,0.008,1.07 at=0.56,1.452,0 color=#e9e4d8 mat=matte
+      box seamF1 size=0.016,1.13,0.016 at=-0.17,0.875,0.345 rot=22,0,0 color=#9a7a4c mat=wood
+      box seamF2 size=0.016,1.13,0.016 at=0.17,0.875,0.345 rot=22,0,0 color=#9a7a4c mat=wood
+      box seamB1 size=0.016,1.13,0.016 at=-0.17,0.875,-0.345 rot=-22,0,0 color=#9a7a4c mat=wood
+      box seamB2 size=0.016,1.13,0.016 at=0.17,0.875,-0.345 rot=-22,0,0 color=#9a7a4c mat=wood
+      box seamL1 size=0.016,1.13,0.016 at=-0.345,0.875,-0.17 rot=0,0,22 color=#9a7a4c mat=wood
+      box seamL2 size=0.016,1.13,0.016 at=-0.345,0.875,0.17 rot=0,0,22 color=#9a7a4c mat=wood
+      box seamR1 size=0.016,1.13,0.016 at=0.345,0.875,-0.17 rot=0,0,-22 color=#9a7a4c mat=wood
+      box seamR2 size=0.016,1.13,0.016 at=0.345,0.875,0.17 rot=0,0,-22 color=#9a7a4c mat=wood
+      box staveC1 size=0.03,1.13,0.03 at=0.345,0.875,0.345 rot=22,0,-22 color=#8f7046 mat=wood
+      box staveC2 size=0.03,1.13,0.03 at=-0.345,0.875,0.345 rot=22,0,22 color=#8f7046 mat=wood
+      box staveC3 size=0.03,1.13,0.03 at=0.345,0.875,-0.345 rot=-22,0,-22 color=#8f7046 mat=wood
+      box staveC4 size=0.03,1.13,0.03 at=-0.345,0.875,-0.345 rot=-22,0,22 color=#8f7046 mat=wood
+      box hoop1F size=0.56,0.035,0.018 at=0,0.7,0.277 color=#4a4a4c mat=brushed
+      box hoop1B size=0.56,0.035,0.018 at=0,0.7,-0.277 color=#4a4a4c mat=brushed
+      box hoop1L size=0.018,0.035,0.56 at=-0.277,0.7,0 color=#4a4a4c mat=brushed
+      box hoop1R size=0.018,0.035,0.56 at=0.277,0.7,0 color=#4a4a4c mat=brushed
+      box hoop2F size=0.8,0.035,0.018 at=0,1.05,0.398 color=#454547 mat=brushed
+      box hoop2B size=0.8,0.035,0.018 at=0,1.05,-0.398 color=#454547 mat=brushed
+      box hoop2L size=0.018,0.035,0.8 at=-0.398,1.05,0 color=#454547 mat=brushed
+      box hoop2R size=0.018,0.035,0.8 at=0.398,1.05,0 color=#454547 mat=brushed
+      box plaque size=0.24,0.15,0.014 at=0,1.0,0.397 rot=22,0,0 color=#8a6a45 mat=wood label="1874"
+      box plaqueIn size=0.19,0.1,0.012 at=0,1.0,0.405 rot=22,0,0 color=#6b543a mat=wood
+      sphere heap r=0.5 scale=1,0.16,1 at=0,1.41,0 color=#c8a45a mat=matte
+      ring 8 r=0.3 axis=y at=0,1.46,0
+        sphere grain r=0.02 color=#c8a45a mat=matte
+      group shoe at=0.02,0.34,0 rot=0,0,-35 label="Schuettelrinne"
+        box shoeBot size=0.5,0.02,0.15 color=#b89058 mat=wood
+        box shoeSL size=0.5,0.09,0.018 at=0,0.05,-0.075 color=#b89058 mat=wood
+        box shoeSR size=0.5,0.09,0.018 at=0,0.05,0.075 color=#b89058 mat=wood
+        box shoeEnd size=0.018,0.11,0.15 at=0.25,0.045,0 color=#a5824f mat=wood
+        box damper size=0.15,0.012,0.17 at=-0.1,0.105,0 color=brass mat=metal
+        box damperKnob size=0.03,0.03,0.05 at=-0.1,0.105,0.11 color=brass mat=metal
+        box dustShoe size=0.42,0.006,0.12 at=0.02,0.032,0 color=#e9e4d8 mat=matte
+        repeat 4 step=0.06,0,0.015 at=-0.05,0.06,0
+          sphere spill r=0.015 color=#c8a45a mat=matte
+      tube feedPipe pts=0.22,0.19,0 0.16,0.07,0 0.06,0.01,0 r=0.05 color=#b6b8ba mat=brushed
+      box leg1 size=0.05,0.64,0.05 at=0.37,0.31,0.37 rot=-13,0,13 color=#a5824f mat=wood
+      box leg2 size=0.05,0.64,0.05 at=0.37,0.31,-0.37 rot=13,0,13 color=#a5824f mat=wood
+      box leg3 size=0.05,0.64,0.05 at=-0.37,0.31,0.37 rot=-13,0,-13 color=#a5824f mat=wood
+      box leg4 size=0.05,0.64,0.05 at=-0.37,0.31,-0.37 rot=13,0,-13 color=#a5824f mat=wood
+      box strap1F size=0.85,0.03,0.02 at=0,0.18,0.4 color=#4a4a4c mat=cast
+      box strap1B size=0.85,0.03,0.02 at=0,0.18,-0.4 color=#4a4a4c mat=cast
+      box strap1L size=0.02,0.03,0.85 at=-0.4,0.18,0 color=#4a4a4c mat=cast
+      box strap1R size=0.02,0.03,0.85 at=0.4,0.18,0 color=#4a4a4c mat=cast
+      box strap2F size=0.72,0.03,0.02 at=0,0.42,0.33 color=#454547 mat=cast
+      box strap2B size=0.72,0.03,0.02 at=0,0.42,-0.33 color=#454547 mat=cast
+      box strap2L size=0.02,0.03,0.72 at=-0.33,0.42,0 color=#454547 mat=cast
+      box strap2R size=0.02,0.03,0.72 at=0.33,0.42,0 color=#454547 mat=cast
+      box brace1 size=0.03,0.03,0.3 at=0.44,0.24,0.44 rot=0,45,0 color=#55524e mat=cast
+      box brace2 size=0.03,0.03,0.3 at=0.44,0.24,-0.44 rot=0,-45,0 color=#55524e mat=cast
+      box brace3 size=0.03,0.03,0.3 at=-0.44,0.24,0.44 rot=0,-45,0 color=#55524e mat=cast
+      box brace4 size=0.03,0.03,0.3 at=-0.44,0.24,-0.44 rot=0,45,0 color=#55524e mat=cast
+      box pad1 size=0.11,0.02,0.11 at=0.44,0.01,0.44 color=#6b543a mat=wood
+      box pad2 size=0.11,0.02,0.11 at=0.44,0.01,-0.44 color=#6b543a mat=wood
+      box pad3 size=0.11,0.02,0.11 at=-0.44,0.01,0.44 color=#6b543a mat=wood
+      box pad4 size=0.11,0.02,0.11 at=-0.44,0.01,-0.44 color=#6b543a mat=wood
+      box vatStrapF size=1.04,0.025,0.015 at=0,0.02,0.5 color=#4a4a4c mat=cast
+      box vatStrapB size=1.04,0.025,0.015 at=0,0.02,-0.5 color=#4a4a4c mat=cast
+      box vatStrapL size=0.015,0.025,1.04 at=-0.5,0.02,0 color=#4a4a4c mat=cast
+      box vatStrapR size=0.015,0.025,1.04 at=0.5,0.02,0 color=#4a4a4c mat=cast
+      box dustStrap size=0.8,0.006,0.05 at=0,0.198,0.4 color=#e9e4d8 mat=matte
+      box bracket size=0.12,0.025,0.025 at=-0.42,0.95,0.2 color=#4a4a4c mat=cast
+      lathe bell pts=0,0.02 0.03,0.05 0.07,0.068 0.1,0.07 0.115,0.06 axis=y smooth=1 at=-0.47,0.78,0.2 color=brass mat=metal
+      sphere clapper r=0.012 at=-0.47,0.765,0.2 color=darkmetal
+      tube bellCord pts=-0.47,0.72,0.2 -0.47,0.35,0.22 -0.45,0.02,0.25 r=0.005 color=#d8cdb8
+      tube damperCord pts=-0.0,0.47,0.11 0.25,0.35,0.28 0.4,0.02,0.32 r=0.006 color=#d8cdb8
+    group fit_87604 at=0.0562,-1.0563,-0.5563 scale=1.2500,1.2500,1.2500
+      group governor_tenter
+        # ---- Stellwerk frame, aged pine, standing on the stone floor ----
+        box sillF size=0.84,0.07,0.09 at=-0.20,4.435,2.26 color=#b08d5f mat=wood
+        box sillB size=0.84,0.07,0.09 at=-0.20,4.435,1.74 color=#a5824f mat=wood
+        box sillX1 size=0.09,0.07,0.52 at=-0.53,4.435,2.00 color=#ab8752 mat=wood
+        box sillX2 size=0.09,0.07,0.52 at=0.13,4.435,2.00 color=#ab8752 mat=wood
+        repeat 2 step=0.66,0,0 at=-0.53,5.00,2.26
+          box post size=0.07,1.06,0.07 color=#b08d5f mat=wood
+        repeat 2 step=0.66,0,0 at=-0.53,5.00,1.74
+          box post size=0.07,1.06,0.07 color=#a88450 mat=wood
+        box railF size=0.84,0.07,0.06 at=-0.20,5.565,2.26 color=#b08d5f mat=wood
+        box railB size=0.84,0.07,0.06 at=-0.20,5.565,1.74 color=#a5824f mat=wood
+        box railL size=0.06,0.07,0.58 at=-0.53,5.565,2.00 color=#a5824f mat=wood
+        box railR size=0.06,0.07,0.58 at=0.13,5.565,2.00 color=#a5824f mat=wood
+        box brace1 size=0.72,0.05,0.018 at=-0.20,5.00,1.772 rot=0,0,0.55 color=#9c7a48 mat=wood
+        box brace2 size=0.72,0.05,0.018 at=-0.20,5.00,1.772 rot=0,0,-0.55 color=#9c7a48 mat=wood
+        box govPad size=0.18,0.05,0.18 at=-0.20,4.495,2.00 color=#8f7346 mat=wood
+        # ---- governor pedestal, cast iron, bolted down ----
+        lathe ped pts=0,0.10 0.02,0.10 0.05,0.042 0.10,0.032 0.22,0.026 axis=y at=-0.20,4.52,2.00 color=#4a4a4c mat=cast
+        ring 4 r=0.075 axis=y at=-0.20,4.535,2.00
+          screw bolt r=0.006 h=0.012 color=#3a3a3d mat=cast
+        # ---- rotating governor head: spindle, belt pulley, bevel crown, fly balls ----
+        group gov at=-0.20,4.72,2.00
+          cyl spindle r=0.011 h=0.62 axis=y at=0,0.31,0 color=#5a5a5e mat=brushed
+          cyl gpulley r=0.05 h=0.028 hole=0.011 axis=y at=0,0.10,0 color=#3d3d40 mat=cast
+          cyl collar r=0.024 h=0.05 axis=y at=0,0.49,0 color=#3d3d40 mat=cast
+          gear gwheel teeth=18 r=0.05 h=0.018 axis=y at=0,0.56,0 color=#4a4a4c mat=cast
+          tube armR pts=0,0.605,0 0.07,0.675,0 0.145,0.62,0 r=0.007 color=#3d3d40 mat=cast
+          tube armL pts=0,0.605,0 -0.07,0.675,0 -0.145,0.62,0 r=0.007 color=#3d3d40 mat=cast
+          sphere ballR r=0.06 at=0.16,0.55,0 scale=1,1.1,1 color=#333336 mat=cast
+          sphere ballL r=0.06 at=-0.16,0.55,0 scale=1,1.1,1 color=#333336 mat=cast
+          tube linkR pts=0.155,0.60,0 0.03,0.505,0 r=0.005 color=#5a5a5e mat=brushed
+          tube linkL pts=-0.155,0.60,0 -0.03,0.505,0 r=0.005 color=#5a5a5e mat=brushed
+        # ---- countershaft with bevel pinion reversing the motion ----
+        cyl cshaft r=0.009 h=0.28 axis=x at=-0.02,5.28,2.00 color=#5a5a5e mat=brushed
+        gear pinion teeth=12 r=0.038 h=0.016 axis=x at=-0.135,5.28,2.00 color=#4a4a4c mat=cast
+        cyl cpulley r=0.05 h=0.026 hole=0.009 axis=x at=0.07,5.28,2.00 color=#3d3d40 mat=cast
+        box pillow size=0.05,0.06,0.055 at=0.115,5.28,2.00 color=#4a4a4c mat=cast
+        lathe greaser pts=0,0 0,0.03 0.012,0.035 0.02,0.02 0.02,0 axis=y at=0.115,5.31,2.00 color=#b08d3f mat=brass
+        # ---- thin leather belt down to the pulley on the quant shaft ----
+        cyl qpulley r=0.08 h=0.036 hole=0.028 axis=x at=-0.64,4.72,2.32 color=#3d3d40 mat=cast
+        cyl qstub r=0.028 h=0.10 axis=x at=-0.65,4.72,2.32 color=#4a4a4c mat=cast
+        box qbearing size=0.06,0.09,0.09 at=-0.585,4.72,2.32 color=#4a4a4c mat=cast
+        box qpost size=0.05,0.22,0.05 at=-0.585,4.61,2.32 color=#a5824f mat=wood
+        box qfoot size=0.08,0.05,0.10 at=-0.585,4.495,2.32 color=#8f7346 mat=wood
+        tube belt1 pts=-0.155,4.845,1.965 -0.655,4.775,2.255 r=0.006 color=#7a5b3c mat=rubber
+        tube belt2 pts=-0.245,4.795,2.045 -0.655,4.665,2.385 r=0.006 color=#7a5b3c mat=rubber
+        # ---- rock shaft with bell-crank lever, split-pinned links ----
+        box rpost1 size=0.05,0.62,0.05 at=-0.42,4.78,2.18 color=#a5824f mat=wood
+        box rpost2 size=0.05,0.62,0.05 at=-0.42,4.78,1.82 color=#a5824f mat=wood
+        box rblock1 size=0.055,0.06,0.05 at=-0.42,5.05,2.18 color=#4a4a4c mat=cast
+        box rblock2 size=0.055,0.06,0.05 at=-0.42,5.05,1.82 color=#4a4a4c mat=cast
+        cyl rshaft r=0.011 h=0.40 axis=z at=-0.42,5.05,2.00 color=#5a5a5e mat=brushed
+        box govlvr size=0.34,0.014,0.028 at=-0.28,5.05,2.00 color=#4a4a4c mat=cast
+        tube collarlink pts=-0.20,5.225,2.00 -0.13,5.062,2.00 r=0.005 color=#5a5a5e mat=brushed
+        box crank size=0.09,0.013,0.018 at=-0.44,4.99,1.93 rot=0,0,0.6 color=#4a4a4c mat=cast
+        tube cranklink pts=-0.465,4.955,1.93 -0.53,4.815,1.87 r=0.005 color=#5a5a5e mat=brushed
+        cyl spin1 r=0.007 h=0.005 hole=0.004 axis=z at=-0.13,5.062,2.00 color=#b08d3f mat=brass
+        cyl spin2 r=0.007 h=0.005 hole=0.004 axis=z at=-0.465,4.955,1.93 color=#b08d3f mat=brass
+        cyl spin3 r=0.007 h=0.005 hole=0.004 axis=x at=-0.20,5.225,2.00 color=#b08d3f mat=brass
+        # ---- tentering lever on fulcrum, link out to the stone spindle bridge ----
+        box fbase size=0.12,0.04,0.12 at=-0.30,4.49,1.86 color=#8f7346 mat=wood
+        box fpost size=0.045,0.30,0.045 at=-0.30,4.62,1.86 color=#a5824f mat=wood
+        box slever size=0.50,0.018,0.03 at=-0.30,4.78,1.86 rot=0,0,0.08 color=#4a4a4c mat=cast
+        tube bridgelink pts=-0.06,4.80,1.86 -0.69,4.92,2.02 r=0.005 color=#5a5a5e mat=brushed
+        cyl spin4 r=0.007 h=0.005 hole=0.004 axis=z at=-0.06,4.80,1.86 color=#b08d3f mat=brass
+        # ---- coarse tentering screw with worn-bright hand wheel ----
+        box sfoot size=0.06,0.05,0.26 at=0.13,4.495,1.80 color=#a5824f mat=wood
+        box sbear size=0.08,0.06,0.08 at=0.13,4.60,1.74 color=#4a4a4c mat=cast
+        cyl screw r=0.011 h=1.00 axis=y at=0.13,5.13,1.74 color=#8f8f8c mat=brushed
+        repeat 12 step=0,0.08,0 at=0.13,4.70,1.74
+          cyl thread r=0.017 h=0.016 hole=0.011 axis=y color=#7d7d7a mat=brushed
+        box snut size=0.09,0.07,0.09 at=0.13,5.66,1.74 color=#4a4a4c mat=cast
+        cyl hwheel r=0.15 h=0.02 hole=0.011 axis=y at=0.13,5.76,1.74 color=#3d3d40 mat=cast
+        box spoke1 size=0.29,0.012,0.018 at=0.13,5.76,1.74 color=#9a9a98 mat=brushed
+        box spoke2 size=0.018,0.012,0.29 at=0.13,5.76,1.74 color=#9a9a98 mat=brushed
+        cyl hub r=0.03 h=0.08 axis=y at=0.13,5.72,1.74 color=#5a5a5e mat=brushed
+        # ---- graduated quadrant plate with pointer for the gap setting ----
+        plate quadrant pts=0.2,0 0.185,0.078 0.141,0.141 0.078,0.185 0,0.2 0,0.05 0.05,0.05 0.05,0 h=0.008 at=0.09,5.30,1.70 color=#b08d3f mat=brass
+        box pointer size=0.012,0.17,0.006 at=0.045,5.44,1.693 rot=0,0,0.45 color=#3d3d40 mat=cast
+        box ptip size=0.014,0.03,0.007 at=-0.005,5.365,1.693 rot=0,0,0.45 color=#8a2a22 mat=paint
+        repeat 5 step=-0.03,0.026,0 at=0.22,5.38,1.693
+          box tick size=0.004,0.022,0.004 rot=0,0,-0.785 color=#4a3a1a mat=brass
+        # ---- oil shelf with oil can and greasy rags ----
+        box shelf size=0.30,0.025,0.24 at=0.05,5.02,2.38 color=#b08d5f mat=wood
+        tube sbrace pts=0.13,4.90,2.26 0.10,5.01,2.34 r=0.012 color=#9c7a48 mat=wood
+        lathe oilcan pts=0,0 0,0.055 0.015,0.062 0.045,0.056 0.055,0.03 0.055,0 axis=y at=0.00,5.033,2.42 color=#3d4a3d mat=brushed
+        tube oilspout pts=0.00,5.09,2.42 0.04,5.12,2.38 0.08,5.11,2.34 r=0.004 color=#3d4a3d mat=brushed
+        sphere rag1 r=0.05 at=0.13,5.05,2.44 scale=1,0.4,0.7 color=#cfc7b2 mat=fabric
+        sphere rag2 r=0.04 at=0.17,5.045,2.33 scale=1,0.4,0.7 color=#b8ad96 mat=fabric
+        # ---- grease stains on the bearing pedestals ----
+        cyl stain1 r=0.02 h=0.002 axis=y at=-0.20,4.541,2.07 color=#17150f mat=matte
+        cyl stain2 r=0.016 h=0.002 axis=y at=0.115,5.311,2.03 color=#1c1a14 mat=matte
+        cyl stain3 r=0.018 h=0.002 axis=y at=-0.585,4.766,2.35 color=#17150f mat=matte
+        # ---- brass maker's plate on the front rail ----
+        box mplate size=0.11,0.05,0.006 at=-0.20,5.565,2.292 color=#b08d3f mat=brass
+    group tailpole_winding
+      group tailbeam at=2.1,10.3,0 rot=0,0,22.4 color=#948b7e mat=wood label="Steert"
+        box beam size=0.30,5.9,0.24 at=0,-2.95,0 round=0.02
+        box headband size=0.36,0.09,0.29 at=0,-0.12,0 color=#45454a mat=cast
+        repeat 4 step=0,-1.3,0 at=0,-1.05,0
+          box strap size=0.335,0.05,0.27 color=#45454a mat=cast
+        repeat 4 step=0,-1.3,0 at=0,-1.05,0.145
+          screw boltA r=0.018 h=0.03 color=#5a5a5e mat=brushed
+        repeat 4 step=0,-1.3,0 at=0,-1.05,-0.145
+          screw boltB r=0.018 h=0.03 color=#5a5a5e mat=brushed
+        repeat 4 step=0,-0.09,0 at=0,-5.32,0
+          cyl lashing r=0.175 h=0.02 hole=0.13 axis=y color=#c8b28c mat=fabric
+        box tipiron size=0.32,0.34,0.27 at=0,-5.72,0 color=#3b3b3e mat=cast
+        cyl ropeeye r=0.09 h=0.035 hole=0.055 axis=z at=0,-5.95,0 color=#3b3b3e mat=cast
+        gear krahranz teeth=28 r=0.45 h=0.12 axis=y at=0,-0.5,0 color=#c9a870 mat=wood
+        cyl krahhub r=0.17 h=0.16 axis=y at=0,-0.5,0 color=#4a4a4c mat=cast
+        ring 6 r=0.27 axis=y at=0,-0.585,0
+          screw krahbolt r=0.016 h=0.025 color=#5a5a5e mat=brushed
+        tube strutP pts=0.04,-2.3,0.10 -0.15,-0.9,0.35 -0.32,0.45,0.45 r=0.05 color=#8a7f70
+        tube strutS pts=0.04,-2.3,-0.10 -0.15,-0.9,-0.35 -0.32,0.45,-0.45 r=0.05 color=#8a7f70
+      group winch at=3.6,5.6,0 color=#7d6a4d mat=wood label="Kraihaspel"
+        mirror z
+          box post size=0.13,1.3,0.13 at=0,-0.45,0.42
+          tube knee pts=0,-1.02,0.40 0.20,-0.35,0.40 0.02,0.10,0.40 r=0.03
+        box cross size=0.15,0.12,1.12 at=0,0.22,0
+        cyl axle r=0.03 h=1.05 axis=z color=#4a4a4c mat=cast
+        cyl drum r=0.16 h=0.62 axis=z color=#6f5a3d
+        cyl flange1 r=0.21 h=0.035 axis=z at=0,0,0.30 color=#5d4b32
+        cyl flange2 r=0.21 h=0.035 axis=z at=0,0,-0.30 color=#5d4b32
+        gear pinion teeth=11 r=0.13 h=0.07 axis=z at=0,0,0.38 color=#c9a870 mat=wood
+        box rackboard size=0.05,0.95,0.02 at=0.21,-0.32,0.375 color=#6b5a40
+        box rack size=0.03,0.85,0.05 at=0.175,-0.32,0.38 color=#b09468
+        box pawl size=0.035,0.16,0.03 at=0.24,0.10,0.345 rot=0,0,25 color=#4a4a4c mat=cast
+        cyl socket1 r=0.032 h=0.07 axis=z at=0.09,0.09,-0.345 color=#3b3b3e mat=cast
+        cyl socket2 r=0.032 h=0.07 axis=z at=-0.09,-0.09,-0.345 color=#3b3b3e mat=cast
+      tube chainup pts=3.6,5.74,0.16 3.2,6.95,0.16 2.8,8.3,0.16 2.55,9.55,0.16 r=0.015 color=#3a3a3c mat=darkmetal
+      tube chainfall pts=3.6,5.5,0.34 3.75,5.05,0.34 3.9,4.62,0.34 r=0.015 color=#3a3a3c mat=darkmetal
+      repeat 5 step=0.055,-0.185,0 at=3.66,5.42,0.34
+        cyl link r=0.022 h=0.012 hole=0.013 axis=z color=#4a4a4c mat=darkmetal
+      box boltplate size=0.10,0.02,0.09 at=3.92,4.55,0.34 color=#4a4a4c mat=cast
+      cyl boltring r=0.05 h=0.025 hole=0.03 axis=z at=3.92,4.60,0.34 color=#4a4a4c mat=cast
+      cyl handspike r=0.028 h=1.5 at=3.85,5.3,0.52 rot=0,0,-20 color=#8a6a45 mat=wood
+      sphere knob r=0.045 at=4.10,6.0,0.52 color=#8a6a45 mat=wood
+      group ropecoil at=4.2,4.62,0.28
+        cyl coil1 r=0.17 h=0.06 hole=0.10 axis=y color=#c8b28c mat=fabric
+        cyl coil2 r=0.145 h=0.06 hole=0.085 axis=y at=0,0.06,0 color=#bfa887 mat=fabric
+        cyl hookpin r=0.014 h=0.14 axis=y at=0,-0.10,0 color=#4a4a4c mat=cast
+      repeat 4 step=0.06,-0.22,0.02 at=4.02,5.8,0.10
+        sphere lichen r=0.035 scale=1,0.45,1 color=#8fa878 mat=matte
+    group interior_floors label="Innenböden: Steinboden, Mehlboden, Binden, Treppe, Säcke"
+      # ================= Erdgeschoss im Sockel =================
+      cyl gfloor r=2.55 h=0.06 axis=y at=0,0.03,0 color=#5a4433 mat=wood
+      repeat 20 step=0,0,0 rotstep=0,18,0 at=0,0.063,0
+        box gseam size=2.2,0.005,0.02 at=1.3,0,0 color=#46362a mat=wood
+      box skid size=1.1,0.08,0.75 at=1.9,0.07,-0.9 rot=0,0.3,0 color=#7a5c3a mat=wood
+      box plank1 size=1.0,0.05,0.24 at=-0.9,0.085,1.7 color=#8f6f4a mat=wood
+      box plank2 size=0.9,0.05,0.22 at=-0.82,0.135,1.74 rot=0,0.08,0 color=#a8865a mat=wood
+      # ================= Mehlboden / Bindenboden y=2.30 =================
+      repeat 6 step=0,0,0 rotstep=0,60,0 at=0,2.09,0
+        box bbeam size=2.7,0.30,0.25 at=1.35,0,0 color=#6e5236 mat=wood shell=1
+        box bdog size=0.07,0.38,0.11 at=1.2,0.02,0 color=#3d3d3f mat=darkmetal
+      cyl bring r=2.7 h=0.30 hole=2.5 axis=y at=0,2.09,0 color=#6a4f33 mat=wood shell=1
+      cyl bdeck r=2.7 h=0.06 axis=y at=0,2.27,0 color=#8f6f4a mat=wood
+      repeat 24 step=0,0,0 rotstep=0,15,0 at=0,2.303,0
+        box bseam size=2.3,0.006,0.022 at=1.42,0,0 color=#6b5236 mat=wood
+      box bhatch size=0.85,0.025,0.85 at=-1.5,2.315,0 color=#241c14 mat=wood
+      box bcurb1 size=0.95,0.06,0.05 at=-1.5,2.345,0.45 color=#b08d5f mat=wood
+      box bcurb2 size=0.95,0.06,0.05 at=-1.5,2.345,-0.45 color=#b08d5f mat=wood
+      box bcurb3 size=0.05,0.06,0.95 at=-1.95,2.345,0 color=#b08d5f mat=wood
+      box bcurb4 size=0.05,0.06,0.95 at=-1.05,2.345,0 color=#b08d5f mat=wood
+      cone bspill r=0.15 h=0.1 axis=y at=-0.9,2.36,-0.6 color=#d9b56a mat=matte
+      box bdust size=0.7,0.008,0.05 at=-0.5,2.334,-1.2 color=#ddd2b8 mat=matte
+      # ================= vier Getreidebinden auf dem Bindenboden =================
+      repeat 2 step=0,0,1.25 at=0,2.33,-1.55
+        repeat 2 step=1.2,0,0
+          group bin shell=1 color=#9a7a50 mat=wood label="Getreidebinde"
+            box wallN size=1.0,1.1,0.05 at=0,0.55,-0.525 color=#9a7a50 mat=wood
+            box wallS size=1.0,1.1,0.05 at=0,0.55,0.525 color=#96764c mat=wood
+            box wallE size=0.05,1.1,1.0 at=0.475,0.55,0 color=#93744c mat=wood
+            box wallW size=0.05,1.1,1.0 at=-0.475,0.55,0 color=#93744c mat=wood
+            box rimN size=1.06,0.05,0.07 at=0,1.125,-0.525 color=#7a5c3a mat=wood
+            box rimS size=1.06,0.05,0.07 at=0,1.125,0.525 color=#7a5c3a mat=wood
+            box rimE size=0.07,0.05,1.06 at=0.475,1.125,0 color=#7a5c3a mat=wood
+            box rimW size=0.07,0.05,1.06 at=-0.475,1.125,0 color=#7a5c3a mat=wood
+            box post1 size=0.07,1.1,0.07 at=0.475,0.55,0.525 color=#8a6a45 mat=wood
+            box post2 size=0.07,1.1,0.07 at=-0.475,0.55,0.525 color=#8a6a45 mat=wood
+            box gate size=0.4,0.45,0.03 at=0.22,0.32,0.55 color=#c9a870 mat=wood
+            box groove1 size=0.03,0.52,0.015 at=0.02,0.32,0.552 color=#6e5236 mat=wood
+            box groove2 size=0.03,0.52,0.015 at=0.42,0.32,0.552 color=#6e5236 mat=wood
+            sphere knob r=0.03 at=0.22,0.6,0.575 color=#4a4a4c mat=darkmetal
+            sphere wheat r=0.4 scale=1,0.55,1.1 at=0,0.85,0 color=#d9b56a mat=matte
+      # ================= Steinboden y=4.40, mehlbestaeubt =================
+      repeat 6 step=0,0,0 rotstep=0,60,0 at=0,4.19,0
+        box sbeam size=2.7,0.30,0.25 at=1.35,0,0 color=#7a5c3a mat=wood shell=1
+        box sdog size=0.07,0.38,0.11 at=1.2,0.02,0 color=#3d3d3f mat=darkmetal
+      cyl sring r=2.7 h=0.30 hole=2.5 axis=y at=0,4.19,0 color=#6e5236 mat=wood shell=1
+      cyl sdeck r=2.7 h=0.06 axis=y at=0,4.37,0 color=#cfc4ae mat=wood
+      repeat 26 step=0,0,0 rotstep=0,13.85,0 at=0,4.403,0
+        box sseam size=2.3,0.006,0.02 at=1.42,0,0 color=#b3a78c mat=wood
+      box fdust1 size=0.9,0.005,0.55 at=0.7,4.404,0.4 color=#e9e1cc mat=matte
+      box fdust2 size=0.6,0.005,0.4 at=-0.4,4.404,-1.3 rot=0,0.4,0 color=#e5dcc4 mat=matte
+      box shatch size=0.9,0.025,0.9 at=-1.5,4.415,0 color=#1c1712 mat=wood
+      box scurb1 size=1.0,0.06,0.05 at=-1.5,4.45,0.48 color=#b08d5f mat=wood
+      box scurb2 size=1.0,0.06,0.05 at=-1.5,4.45,-0.48 color=#b08d5f mat=wood
+      box scurb3 size=0.05,0.06,1.0 at=-1.98,4.45,0 color=#b08d5f mat=wood
+      box scurb4 size=0.05,0.06,1.0 at=-1.02,4.45,0 color=#b08d5f mat=wood
+      box shatchdoor size=0.88,0.04,0.88 at=-0.35,4.44,1.15 rot=0,0.12,0.04 color=#b08d5f mat=wood
+      cyl shandle r=0.05 h=0.02 hole=0.032 axis=y at=-0.1,4.465,1.35 color=#4a4a4c mat=darkmetal
+      box sdust size=0.95,0.008,0.05 at=-1.5,4.484,0.52 color=#e9e1cc mat=matte
+      # ================= Treppe, Lauf 1: Boden -> Bindenboden =================
+      repeat 10 step=0,0.23,0.26 at=2.35,0.115,-1.5
+        box tread size=0.8,0.05,0.30 at=0,0,0 color=#a8865a mat=wood
+        box riser size=0.8,0.19,0.03 at=0,-0.12,-0.135 color=#8f6f4a mat=wood
+        box nose size=0.8,0.035,0.06 at=0,0.028,0.155 color=#c2a273 mat=wood
+      tube str1a pts=2.73,0.1,-1.6,2.73,2.3,0.95 r=0.055 color=#7a5c3a mat=wood
+      tube str1b pts=1.97,0.1,-1.6,1.97,2.3,0.95 r=0.055 color=#7a5c3a mat=wood
+      tube rail1 pts=1.97,0.95,-1.5,1.97,3.2,0.95 r=0.035 color=#8a6a45 mat=wood
+      repeat 6 step=0,0.23,0.26 at=1.97,0.55,-1.38
+        cyl bal1 r=0.022 h=0.8 axis=y at=0,0,0 color=#8a6a45 mat=wood
+      box landing size=0.5,0.06,0.45 at=2.25,2.33,1.15 color=#a8865a mat=wood shell=1
+      cyl lpost1 r=0.05 h=2.3 axis=y at=2.42,1.15,1.32 color=#7a5c3a mat=wood
+      cyl lpost2 r=0.05 h=2.3 axis=y at=2.08,1.15,1.32 color=#7a5c3a mat=wood
+      # ================= Treppe, Lauf 2: Bindenboden -> Steinboden =================
+      repeat 9 step=0,0.2333,-0.25 at=2.45,2.42,1.05
+        box tread2 size=0.8,0.05,0.30 at=0,0,0 color=#a8865a mat=wood
+        box riser2 size=0.8,0.19,0.03 at=0,-0.12,0.135 color=#8f6f4a mat=wood
+        box nose2 size=0.8,0.035,0.06 at=0,0.028,-0.155 color=#c2a273 mat=wood
+      tube str2a pts=2.83,2.35,1.15,2.83,4.35,-1.05 r=0.055 color=#7a5c3a mat=wood
+      tube str2b pts=2.07,2.35,1.15,2.07,4.35,-1.05 r=0.055 color=#7a5c3a mat=wood
+      tube rail2 pts=2.07,3.25,1.05,2.07,4.35,-0.85 r=0.035 color=#8a6a45 mat=wood
+      repeat 5 step=0,0.2333,-0.25 at=2.07,2.75,0.95
+        cyl bal2 r=0.022 h=0.95 axis=y at=0,0,0 color=#8a6a45 mat=wood
+      # ================= Jutesaecke, eine offen mit Getreide =================
+      lathe sack1 pts=0,0.10 0.06,0.19 0.14,0.24 0.22,0.22 0.30,0.13 0.34,0.05 axis=y smooth=1 at=1.55,0.05,-0.55 color=#b39a6b mat=fabric
+      cyl tie1 r=0.05 h=0.035 hole=0.03 axis=y at=1.55,0.39,-0.55 color=#7d6845 mat=fabric
+      lathe sack2 pts=0,0.10 0.06,0.19 0.14,0.24 0.22,0.22 0.30,0.13 0.34,0.05 axis=y smooth=1 at=1.2,0.05,-1.05 rot=0,0.4,0 color=#ac9264 mat=fabric
+      cyl tie2 r=0.05 h=0.035 hole=0.03 axis=y at=1.2,0.39,-1.05 color=#7d6845 mat=fabric
+      lathe sack3 pts=0,0.10 0.06,0.19 0.14,0.24 0.22,0.22 0.30,0.13 0.34,0.05 axis=y smooth=1 at=1.35,0.26,-1.5 rot=0,0,1.35 color=#b39a6b mat=fabric
+      cone spill r=0.16 h=0.12 axis=y at=0.95,0.08,-1.5 color=#d9b56a mat=matte
+      # ================= Mehlschaufel und Sieb an der Binde =================
+      tube shhandle pts=1.05,0.06,0.4,0.85,1.3,0.18 r=0.025 color=#a8865a mat=wood
+      box shblade size=0.2,0.28,0.04 at=1.02,0.17,0.37 rot=0.3,0,0.15 color=#b08d5f mat=wood
+      cyl sieve r=0.26 h=0.05 hole=0.22 axis=y at=0.55,0.32,0.35 rot=1.0,0,0.15 color=#9a7b52 mat=wood
+      cyl smesh r=0.22 h=0.012 axis=y at=0.55,0.33,0.36 rot=1.0,0,0.15 color=#cfc4ae mat=matte
+      # ================= Steinkranten-Werkzeug auf dem Steinboden =================
+      tube bill pts=0.5,4.45,0.4,1.3,4.45,0.75 r=0.03 color=#8a6a45 mat=wood
+      box billtip size=0.16,0.04,0.07 at=1.38,4.45,0.79 rot=0,0.5,0 color=#b8b8ba mat=brushed
+      tube hamhandle pts=-0.3,4.45,0.6,0.25,4.45,0.85 r=0.028 color=#8a6a45 mat=wood
+      box hamhead size=0.08,0.07,0.22 at=0.32,4.46,0.88 color=#4a4a4c mat=darkmetal
+  mech
+    # Fluegelkreuz: Hauptbewegung, Master-Rotor, Drehachse x durch die Nabe
+    rotor sails axis=x at=-2.6,10.55,0
+    # Windwelle mit Bremsscheibe dreht starr mit den Fluegeln; Lager, Stuetzen und Bremsteile bleiben fest
+    rotor windshaft_brake_wheel axis=x at=-1.9,10.55,0 of=sails ratio=1 skip=pillow,pillowcap,grease1,grease2,oiler1,sidebeamL,sidebeamR,kneeL,kneeR,tailpost,tailcross,gudgeon,breastbeam,pbolt1,pbolt2
+    # Bremsscheibe (r=1.15) kaemmt ins Bunkerrad (r=0.95): Kegelradpaar, 90 Grad umgelenkt
+    rotor upright_shaft_gears axis=y of=windshaft_brake_wheel ratio=-1.21 skip=capbeam,capplate,capcone,pivotsphere,oilcup,footbeam,stepplate,stepcup,oilbox,rope,cleat
+    # Steinrad (stone nut, r=0.30) auf der Quantwelle, getrieben vom grossen Zahnrad (r=1.35); Lager, Bruecke und Stellteile bleiben fest
+    rotor stonenut1 axis=z at=-1.5,5.20,1.55 in=millstone_drive claim=0.4 of=upright_shaft_gears ratio=4.5 skip=bridge,crane,brgspindle,brgquant,merrimet1,merrimet2,nut1,nut2,tenterscrew,handwheel,oiler2,nutpost
+    # Laeuferstein dreht ueber dem festen Bodenstein
+    rotor runner1 axis=z at=-1.5,4.80,2.05 in=millstone_drive claim=0.8 of=stonenut1 ratio=1 skip=stonenut,tyre1,tyre2,nutseat,nutstrap,nutset,quant,quantpinion,nutpost,bridge,crane,brgspindle,brgquant,merrimet1,merrimet2,nut1,nut2,tenterscrew,handwheel,oiler2,chip1,chip2,chip3,bedstone,bedfurrow1,bedfurrow2,bedeye,bedbeamA,bedbeamB,strapA1,strapA2,strapB1,wedge1,wedge2,wedge3,vat,spout,flourpile,flour
+    # Riemenscheibe am Regler-Stumpf; nur Scheibe und Stumpf drehen, Lager und statischer Riemen bleiben fest
+    rotor qpulley1 axis=x at=-0.74,4.84,2.34 in=governor_tenter claim=0.1 of=stonenut1 ratio=1 skip=belt2,qbearing,qpost,qfoot
+    # Fliehkraftregler (r=0.065) dreht schneller als die Scheibe (r=0.1)
+    rotor gov1 axis=y at=-0.19,4.97,1.94 in=governor_tenter claim=0.32 of=qpulley1 ratio=1.5 skip=ped,bolt,govPad,collarlink,spin1,govlvr,rshaft,fpost,fbase,slever,spin4,bridgelink,stain1,belt1,cshaft,cpulley,pinion
+    # echter Riemen von der Scheibe zum Regler, ersetzt die statischen Riemen
+    chain beltgov of=qpulley1 ra=0.1 a=-0.74,4.84,2.34 b=-0.19,4.97,1.94 rb=0.065 axis=y pitch=0.03 belt=1
+    # Schuettelrinne ruehrt das Korn in den Mahlgang
+    sway shoe of=stonenut1 dir=0,1,0 by=0.02 phase=0
+  anim
+    step "Hollaendische Windmuehle im Schnitt: Fluegel, Koenigswelle und Mahlgang" 5
+      run turns=2
+      hide belt1
+      hide belt2
+      camera view=38,9 zoom=0.85 on=whole
+    step "Das Fluegelkreuz dreht Windwelle und Bremsscheibe" 4
+      run turns=2
+      camera view=40,10.5 zoom=1.5 on=sails
+    step "Die Bremsscheibe greift ins Bunkerrad und treibt die Koenigswelle an" 4
+      run turns=2
+      camera view=40,8.5 zoom=1.9 on=upright_shaft_gears
+    step "Das grosse Zahnrad treibt den Steintrieb: der Laeuferstein mahlt auf dem Bodenstein" 4
+      run turns=2
+      camera view=40,5 zoom=2.1 on=millstone_drive
+    step "Fliehkraftregler und Schuettelrinne regeln den Getreidenachlauf" 4
+      run turns=2
+      camera view=40,5.5 zoom=2.2 on=governor_tenter
+    step "Der ganze Mahlprozess im Ueberblick" 4
+      run turns=2
+      camera view=32,10 zoom=0.9 on=whole
