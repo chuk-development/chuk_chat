@@ -1,0 +1,50 @@
+canvas paper
+title "How a helicopter lifts off"
+model heli 860 480 view=-32,16
+  cyl pad r=3.4 h=0.12 at=0,-0.06,0 color=gray
+  box h1 size=0.16,0.02,2.2 at=-0.55,0.07,0 color=white
+  box h2 size=0.16,0.02,2.2 at=0.55,0.07,0 color=white
+  box hbar size=1.26,0.02,0.16 at=0,0.07,0 color=white
+  group heli label="Helicopter"
+    loft fus sections=-2.5,0.3,0.45,1.15 -1.9,0.85,0.9,1.25 -0.9,1.05,1.0,1.3 0.2,1.0,1.0,1.3 1.1,0.75,0.85,1.3 1.7,0.5,0.65,1.35 axis=x color=white label="Fuselage"
+    loft belly sections=-2.2,0.28,0.4,0.95 -1.5,0.8,0.7,1.0 -0.5,1.0,0.75,1.0 0.6,0.95,0.75,1.0 1.4,0.6,0.6,1.05 axis=x color=navy
+    box wind size=0.75,0.55,0.85 at=-1.55,1.6,0 round=0.12 color=sky mat=glass label="Cockpit"
+    box win size=1.5,0.34,1.04 at=-0.35,1.55,0 color=sky mat=glass
+    cyl boom r=0.2 r2=0.13 h=2.4 axis=x at=2.9,1.45,0 color=navy label="Tail boom"
+    wing fin root=1.1 tip=0.55 span=0.95 sweep=0.5 thick=0.08 rot=90,0,0 at=3.95,1.45,0 color=navy label="Tail fin"
+    wing lfin root=0.7 tip=0.35 span=0.5 sweep=0.3 thick=0.07 rot=-90,0,0 at=3.95,1.35,0 color=navy
+    group tailrot at=4.2,1.95,0.18 label="Tail rotor"
+      fan tr blades=2 r=0.6 h=0.05 axis=z color=dark
+      cyl trhub r=0.07 h=0.12 axis=z color=steel
+    cyl mast r=0.07 h=0.55 axis=y at=-0.3,2.05,0 color=darkmetal
+    group rotor at=-0.3,2.4,0 label="Main rotor"
+      fan mr blades=2 r=3.1 h=0.07 axis=y color=dark
+      cyl hub r=0.16 h=0.22 axis=y color=steel
+      tube stab pts=-0.95,0.12,0 0.95,0.12,0 r=0.03 color=darkmetal
+      tube stab2 pts=0,0.12,-0.95 0,0.12,0.95 r=0.03 color=darkmetal
+    mirror z
+      tube skid pts=-1.7,0.06,0.78 1.5,0.06,0.78 r=0.05 color=darkmetal label="Skid"
+      tube strut1 pts=-0.95,0.8,0.74 -0.95,0.08,0.78 r=0.04 color=darkmetal
+      tube strut2 pts=0.65,0.8,0.74 0.65,0.08,0.78 r=0.04 color=darkmetal
+    tube crossbar pts=-1.6,0.12,0.78 -1.6,0.12,-0.78 r=0.04 color=darkmetal
+    sphere lamp r=0.13 at=-2.35,0.95,0 color=yellow label="Searchlight"
+    sphere cam r=0.15 at=-1.85,0.62,0 color=dark label="Camera"
+    cyl ant r=0.02 h=0.35 at=0.6,2.0,0 color=dark
+  anim
+    step "Engine spools up the main rotor" 2.5
+      camera view=-30,20 zoom=1.5 on=rotor
+      spin rotor turns=2 axis=y
+    step "Blades are angled wings: they throw air down" 2
+      spin rotor turns=4 axis=y
+      spin tailrot turns=6 axis=z
+      pulse rotor
+    step "Downwash pushes up - the helicopter lifts off" 2.5
+      move heli by=0,1.9,0
+      camera view=-35,14 zoom=1
+      spin rotor turns=3 axis=y
+      spin tailrot turns=5 axis=z
+    step "Hovering - the tail rotor stops the spin" 1.8
+      camera view=-28,18 zoom=1.1
+      spin rotor turns=2 axis=y
+      spin tailrot turns=3 axis=z
+note "Tilt the rotor disc forward and the lift pulls the helicopter in any direction." color=yellow

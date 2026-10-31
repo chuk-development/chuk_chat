@@ -8,7 +8,6 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-import cutout
 KEY = (HERE.parent.parent / '_scratch/rtgfx/.melious_key').read_text().strip()
 URL = 'https://api.melious.ai/v1/chat/completions'
 WEB = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120 Safari/537.36'}
@@ -103,64 +102,66 @@ def fence(t):
 
 
 def run(a):
+    """A 3D model is always generated. Images are only references for the model."""
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
-    log = {}
-    plan = json.loads(re.search(r'\{.*\}', llm(a.model, f'Request: {a.request}\n\nAnswer as JSON only: {{"subject": "english name of the physical thing to show, or empty when the request is about an abstract process", "query": "image search words that find one clean photo of it, whole object, side or three quarter view, plain white background"}}', effort='low', tokens=3000), re.S).group())
-    log['plan'] = plan
-    (out / 'plan.json').write_text(json.dumps(plan))
+    plan = json.loads(re.search(r'\{.*\}', llm(a.model, f'Request: {a.request}\n\nAnswer as JSON only: {{"subject": "english name of the physical thing, or empty for an abstract topic", "query": "image search words for one clean photo that shows it whole", "animate": true or false}}', effort='low', tokens=3000), re.S).group())
+    refs_img = []
     if a.ctx:
-        source = Image.open(a.ctx).convert('RGB')
-        box = llm(a.model, [{'type': 'text', 'text': f'Request: {a.request}\nFind the one physical object the request is about in this screenshot. Ignore page decoration, text and graphics. Read the pixel numbers of the red grid. Answer as JSON only: {{"box":[x0,y0,x1,y1]}} in those pixels, tight around the object.'}, uri(jpg(grid(source), 1000))], effort='high', tokens=8000)
-        b = json.loads(re.search(r'\{.*\}', box, re.S).group())['box']
-        k = max(source.size) / 1000
-        crop = source.crop(tuple(int(v * k) for v in b))
-        crop.save(out / 'source.png')
+        shot = Image.open(a.ctx).convert('RGB')
+        reply = llm(a.model, [{'type': 'text', 'text': f'Request: {a.request}\nFind the physical object in this screenshot. Ignore decoration. Read the pixel numbers of the red grid. Answer as JSON only: {{"box":[x0,y0,x1,y1]}} tight around the object.'}, uri(jpg(grid(shot), 1000))], effort='high', tokens=8000)
+        b = json.loads(re.search(r'\{.*\}', reply, re.S).group())['box']
+        k = max(shot.size) / 1000
+        crop = shot.crop(tuple(int(v * k) for v in b))
+        crop.save(out / 'reference.png')
+        refs_img = [crop]
     elif plan.get('subject'):
-        urls = search(plan['query']) + search(plan['subject'] + ' photo') + commons(plan['subject'])
+        urls = search(plan['query']) + commons(plan['subject'])
         with cf.ThreadPoolExecutor(8) as ex:
-            images = [i for i in ex.map(fetch, urls[:24]) if i][:8]
-        if not images:
-            raise RuntimeError('no images')
-        sheet(images).save(out / 'candidates.jpg')
-        pick = llm(a.model, [{'type': 'text', 'text': f'Request: {a.request}\nPick the picture that shows the true object best: one whole object, nothing cut off, plain background, no people, no text, no watermark, a real photo if possible. Answer with the number only.'}, uri(jpg(sheet(images), 1400))], effort='low', tokens=3000)
-        m = re.search(r'\d+', pick)
-        k = int(m.group()) - 1 if m else 0
-        images[k if 0 <= k < len(images) else 0].save(out / 'source.png')
-    else:
-        return None
-    log['plain'], log['fill'] = [round(float(x), 2) for x in cutout.cut(out / 'source.png', out / 'cut.png', force_model=bool(a.ctx))]
-    picture = Image.open(out / 'cut.png')
-    system = (HERE / 'PROMPT_PHOTO.md').read_text()
-    note = ' This picture comes from the screenshot of the user. It is the real thing. Where a part is in the picture is where it really is.' if a.ctx else ''
-    text = llm(a.model, [{'type': 'text', 'text': a.request + note}, uri(jpg(grid(picture), 1000))], system=system)
-    scene = fence(text)
-    # The model gives pixels of the grid picture. The engine wants shares of 1000.
-    gw, gh = grid(picture).size
+            images = [i for i in ex.map(fetch, urls[:16]) if i][:8]
+        if images:
+            sheet(images).save(out / 'candidates.jpg')
+            pick = llm(a.model, [{'type': 'text', 'text': f'Request: {a.request}\nWhich picture shows the real object best, whole and clear? Answer with one number.'}, uri(jpg(sheet(images), 1400))], effort='low', tokens=3000)
+            m = re.search(r'\d+', pick)
+            k = int(m.group()) - 1 if m else 0
+            refs_img = [images[k if 0 <= k < len(images) else 0]]
+            refs_img[0].save(out / 'reference.png')
+    system = (HERE / 'PROMPT.md').read_text() + (HERE / 'PROMPT_PLUS.md').read_text()
+    text = a.request
+    if plan.get('animate') or a.film:
+        text += ' This needs an `anim` block.'
+    if refs_img:
+        text += ' The image is your reference. Build a detailed 3D model from Chalk parts that matches it.'
+    content = [{'type': 'text', 'text': text}] + [uri(jpg(i, 1400)) for i in refs_img]
+    env = dict(**__import__('os').environ)
 
-    def share(m):
-        b = [float(v) for v in m.group(2).split(',')]
-        return f'{m.group(1)}box={b[0] * 1000 / gw:.0f},{b[1] * 1000 / gh:.0f},{b[2] * 1000 / gw:.0f},{b[3] * 1000 / gh:.0f}'
+    def draft(i):
+        reply = llm(a.model, content, system=system)
+        f = out / f'd{i}.chalk'
+        f.write_text(fence(reply))
+        p = subprocess.run(['node', str(HERE / 'cli.mjs'), str(f), str((out / f'd{i}.svg').resolve())], capture_output=True, text=True, env=env)
+        subprocess.run(['python3', str(HERE / 'shot.py'), str((out / f'd{i}.svg').resolve())], capture_output=True)
+        issues = sum(1 for l in p.stdout.split('\n') if l.startswith(('line ', 'model ', 'label ')) and 'parts visible' not in l)
+        return i, issues, p.stdout[-300:] + p.stderr[-200:]
 
-    scene = re.sub(r'(region\s+\S+\s+)box=([\d.,]+)', share, scene)
-    (out / 'scene.chalk').write_text(scene)
-    # Cut each region out of the picture, so a moved part has its real outline.
-    from rembg import new_session, remove
-    session = new_session('u2net')
-    W, H = picture.size
-    for rid, box in re.findall(r'region\s+(\S+)\s+box=([\d,]+)', scene):
-        b = [int(v) for v in box.split(',')]
-        c = picture.crop((b[0] * W // 1000, b[1] * H // 1000, max(b[2] * W // 1000, b[0] * W // 1000 + 4), max(b[3] * H // 1000, b[1] * H // 1000 + 4))).convert('RGB')
-        remove(c, session=session).save(out / f'region_{rid}.png')
-    log['seconds_to_scene'] = round(time.time() - t0, 1)
-    env = dict(**__import__('os').environ, CHALK_CTX=str(out.resolve()))
-    p = subprocess.run(['node', str(HERE / 'cli.mjs'), str(out / 'scene.chalk'), str((out / 'scene.svg').resolve())], capture_output=True, text=True, env=env)
-    log['feedback'] = p.stdout[-400:] + p.stderr[-300:]
+    with cf.ThreadPoolExecutor(3) as ex:
+        drafts = [d for d in ex.map(draft, range(3)) if (out / f'd{d[0]}.png').exists()]
+    ask = [{'type': 'text', 'text': f'Request: {a.request}\nThe first image is the reference, if there is one. Then come the numbered results. Which result looks most like the real thing, with the right parts in the right place? Answer with one number from 1 to {len(drafts)}.'}]
+    ask += [uri(jpg(i, 900)) for i in refs_img] + [uri((out / f'd{d[0]}.png').read_bytes(), 'image/png') for d in drafts]
+    m = re.search(r'\d+', llm(a.model, ask, effort='low', tokens=3000))
+    k = int(m.group()) - 1 if m else 0
+    pick = drafts[k if 0 <= k < len(drafts) else 0]
+    fewest = min(d[1] for d in drafts)
+    if pick[1] > fewest + 2:
+        pick = min(drafts, key=lambda d: d[1])
+    (out / 'scene.chalk').write_text((out / f'd{pick[0]}.chalk').read_text())
+    log = {'plan': plan, 'seconds_to_scene': round(time.time() - t0, 1), 'issues': [d[1] for d in drafts], 'picked': pick[0], 'feedback': pick[2][-200:]}
+    subprocess.run(['node', str(HERE / 'cli.mjs'), str(out / 'scene.chalk'), str((out / 'scene.svg').resolve())], capture_output=True, env=env)
     subprocess.run(['python3', str(HERE / 'shot.py'), str((out / 'scene.svg').resolve())], capture_output=True)
     if a.film:
         v = subprocess.run(['node', str(HERE / 'video.mjs'), str(out / 'scene.chalk'), str((out / 'film.mp4').resolve()), '15'], capture_output=True, text=True, env=env)
-        log['film'] = v.stdout.strip()[-80:] + v.stderr[-200:]
+        log['film'] = v.stdout.strip()[-70:] + v.stderr[-150:]
     (out / 'log.json').write_text(json.dumps(log, indent=1))
     return log
 

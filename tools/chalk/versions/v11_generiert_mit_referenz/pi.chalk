@@ -1,0 +1,46 @@
+canvas paper
+title "Kamera an den Raspberry Pi 5"
+model pi 860 460 view=-20,40
+  box board size=8.5,0.16,5.6 color=pcb label="Raspberry Pi 5"
+  cyl h1 r=0.24 h=0.18 at=-3.9,0.12,-2.45 color=#c9b62a
+  cyl h2 r=0.24 h=0.18 at=3.9,0.12,-2.45 color=#c9b62a
+  cyl h3 r=0.24 h=0.18 at=-3.9,0.12,2.45 color=#c9b62a
+  cyl h4 r=0.24 h=0.18 at=3.9,0.12,2.45 color=#c9b62a
+  header gpio n=20 rows=2 pitch=0.254 pinh=0.75 at=-0.5,0.2,-2.42 color=black label="GPIO"
+  header fan n=4 rows=1 pitch=0.254 pinh=0.4 at=2.7,0.18,-2.42 color=white label="Fan"
+  header poe n=4 rows=1 pitch=0.254 pinh=0.4 at=2.6,0.18,1.6 color=black label="PoE"
+  box ram size=1.1,0.12,1.0 at=-1.2,0.16,-1.3 color=dark label="RAM"
+  box soc size=1.7,0.1,1.7 at=-1.2,0.15,0.4 color=alu label="Broadcom SoC"
+  chip rp1 size=1.3,0.12,1.3 at=1.7,0.16,-0.2 pins=0 color=dark label="RP1"
+  box pmic size=0.9,0.1,0.7 at=-3.2,0.15,1.1 color=dark
+  box uctl size=0.8,0.1,0.8 at=2.3,0.15,0.7 color=dark
+  repeat 5 step=0.28,0,0 at=-2.6,0.14,-0.4
+    box cap size=0.16,0.12,0.24 color=gray
+  port pw type=usbc at=-3.6,0.25,2.75 color=steel label="Strom"
+  port hd1 type=hdmi at=-2.2,0.3,2.75 color=steel label="HDMI"
+  port hd2 type=hdmi at=-0.7,0.3,2.75 color=steel
+  port u2 type=usb rot=0,90,0 at=4.25,0.35,-1.7 color=steel label="USB 2"
+  port u3 type=usb rot=0,90,0 at=4.25,0.35,0.9 color=steel label="USB 3"
+  port eth type=ethernet rot=0,90,0 at=4.2,0.5,2.3 color=steel label="Ethernet"
+  port pcie type=fpc rot=0,90,0 at=-4.2,0.2,0.2 color=plastic label="PCIe"
+  group camconn at=0.9,0,2.3 label="Kamera (CAM)"
+    box cbody size=0.95,0.22,0.6 at=0,0.19,0 color=#a9743f
+    box latch size=1.0,0.06,0.64 at=0,0.33,0 color=dark
+  group dispconn at=2.4,0,2.3 label="Display (DISP)"
+    box dbody size=0.95,0.22,0.6 at=0,0.19,0 color=#a9743f
+    box dlatch size=1.0,0.06,0.64 at=0,0.33,0 color=dark
+  tube cable pts=0.9,0.42,2.3 0.9,1.1,2.8 0.2,1.7,3.2 r=0.42 flat=6 color=gray label="Kamera-Kabel"
+  anim
+    step "Schwarze Klammer am CAM-Anschluss hochklappen" 1.8
+      camera view=-25,28 zoom=2.4 on=camconn
+      move latch by=0,0.24,0
+      pulse latch
+    step "Kabel einstecken – Kontakte zur Platine" 2.2
+      move cable from=0,2.4,1.6
+      pulse cable
+    step "Klammer zudrücken – das Kabel sitzt fest" 1.6
+      move latch by=0,-0.24,0
+      pulse latch
+    step "Fertig – Kamera in den Einstellungen aktivieren" 1.6
+      camera view=-20,40 zoom=1
+note "Der DISP-Anschluss daneben funktioniert genau gleich – für das offizielle Display." color=yellow

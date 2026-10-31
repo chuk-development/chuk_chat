@@ -1,0 +1,27 @@
+canvas dark
+title "So ändern Zahnräder die Drehzahl"
+model gears 860 460 view=24,18
+  gearpair gp teeth1=12 teeth2=36 module=0.1 h=0.3 color1=darkmetal color2=darkmetal
+  cyl shaft1 r=0.12 h=1.4 axis=z at=-1.2,0,-0.55 color=black
+  cyl shaft2 r=0.22 h=1.4 axis=z at=1.2,0,-0.55 color=black
+  sphere oil1 r=0.1 at=-1.2,0.63,0.17 color=orange
+  sphere oil2 r=0.07 at=-0.85,0.5,0.17 color=orange
+  sphere oil3 r=0.13 at=1.2,1.84,0.17 color=orange
+  sphere oil4 r=0.09 at=0.75,1.68,0.17 color=orange
+  sphere oil5 r=0.08 at=1.65,1.72,0.17 color=orange
+  sphere drop1 r=0.07 at=-1.05,-0.6,0.17 color=orange
+  tube oilbridge pts=-0.2,0.12,0.17 0.2,0.12,0.17 r=0.06 color=orange
+  anim
+    step "Das kleine Zahnrad treibt an" 2
+      drive gp turns=1
+    step "36 Zähne statt 12: das große Rad dreht nur ein Drittel so schnell" 2.5
+      drive gp turns=2
+    step "Drehzahl runter, Drehmoment rauf" 2
+      camera view=10,20 zoom=1.6
+      drive gp turns=1
+    step "Umgekehrt wird das große Rad schnell" 2
+      camera view=24,18 zoom=1
+      drive gp turns=1
+row gap=40
+  note "Übersetzung 1:3 – eine Umdrehung klein wird eine Drittel-Drehung groß." color=orange
+  note "Was an Drehzahl verloren geht, kommt als Kraft zurück." color=gray

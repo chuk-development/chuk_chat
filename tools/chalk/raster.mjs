@@ -237,7 +237,22 @@ export function buildParts(model, errors) {
   for (const k of expandKits(model.kids.filter((c) => c.cmd !== 'anim'))) walk(k, IDENT, {}, null);
   markGround(parts);
   fixPivots(parts);
-  if (!model.kv.explode && !model.kids.some((c) => c.cmd === 'anim')) parts.repaired = snapFloating(parts.filter((p) => !p.ground && !p.link && !p.noSnap));
+  if (!model.kv.explode) {
+    // Things that move as one must hold together. Each moved group is repaired on
+    // its own, so a helicopter stays whole and is not pulled down to its pad.
+    const anim = model.kids.find((c) => c.cmd === 'anim');
+    const moved = new Set();
+    if (anim) for (const s of anim.kids) for (const op of s.kids) if (op.cmd === 'move' || op.cmd === 'show' || op.cmd === 'hide') moved.add(op.args[0]);
+    const free = (p) => !p.ground && !p.link && !p.noSnap;
+    parts.repaired = [];
+    const taken = new Set();
+    for (const id of moved) {
+      const set = parts.filter((p) => free(p) && p.path.includes(id) && !taken.has(p));
+      set.forEach((p) => taken.add(p));
+      if (set.length > 1) parts.repaired.push(...snapFloating(set));
+    }
+    parts.repaired.push(...snapFloating(parts.filter((p) => free(p) && !taken.has(p))));
+  }
   return parts;
 }
 
