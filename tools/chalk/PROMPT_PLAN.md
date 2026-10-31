@@ -28,6 +28,8 @@ Answer with JSON only:
 
 Things that turn: each wheel, rotor, fan or gear is its own round unit with one true axis. It holds nothing that stands still. Plan the correct axis: a tail fan of a helicopter turns across the boom, through the fin. A side rod never joins a wheel group.
 
+Chains, belts and meshing gears are built later by the engine from numbers. Plan their position in `motion`, with the centre and radius of each wheel, and do not plan them as assemblies.
+
 `cut`: if the inside must be seen (engine, pump, heart), write "z>0": this removes the front half of the skin. Then the inside assemblies matter most, plan them in full depth. Otherwise null.
 
 Rules for boxes: they are the real position in the object. Neighbour boxes must touch or overlap a little, so the object holds together. Check all boxes against "size". `static: true` only for a stand that stays when the object moves. `view`: yaw -180 to 180, pitch 5 to 35, the most telling three-quarter view. Yaw 0 looks at the +z side. Yaw 40 shows the -x end (the front) and the +z side. Default yaw 35.

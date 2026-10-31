@@ -18,6 +18,7 @@
 // `travel track of=w dir=1,0,0 r=1 wrap=0.7` repeats, so sleepers run past for ever.
 import { nums } from './parse.mjs';
 import { poseMatrix, composeMatrix } from './raster.mjs';
+import { along } from './rig.mjs';
 
 const AXES = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] };
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -51,7 +52,7 @@ function reach(parts, id, point) {
   return best;
 }
 
-const JOINTS = ['rotor', 'piston', 'rod', 'couple', 'lift', 'rocker', 'travel', 'fire', 'sway', 'bar'];
+const JOINTS = ['rotor', 'piston', 'rod', 'couple', 'lift', 'rocker', 'travel', 'fire', 'sway', 'bar', 'along'];
 
 // Parts join a rotor by place, so a wheel needs no group of its own.
 function claim(parts, id, kv) {
@@ -97,6 +98,8 @@ export function readMech(model, parts, errors) {
       j.at = nums(kv.at); j.axis = vec(kv.axis) ?? [1, 0, 0]; j.deg = Number(kv.deg ?? 10);
     } else if (k.cmd === 'travel') {
       j.dir = vec(kv.dir) ?? [-1, 0, 0]; j.r = Number(kv.r ?? 1); j.wrap = Number(kv.wrap ?? 0);
+    } else if (k.cmd === 'along') {
+      Object.assign(j, { path: k.path, total: k.total, normal: k.normal, r: Number(kv.r ?? 1), s0: Number(kv.s0 ?? 0) });
     } else if (k.cmd === 'sway') {
       j.at = kv.at ? nums(kv.at) : null; j.axis = vec(kv.axis); j.dir = vec(kv.dir);
       Object.assign(j, { deg: Number(kv.deg ?? 0), by: Number(kv.by ?? 0), phase: Number(kv.phase ?? 0) * Math.PI / 180 });
@@ -177,6 +180,15 @@ export function solve(m, theta) {
     } else if (j.type === 'sway') {
       const v = Math.sin(angleOf(m, j.of, theta) + j.phase);
       out.set(j.id, j.dir ? poseMatrix(scale(j.dir, j.by * v), [0, 0, 0], [1, 0, 0], 0) : poseMatrix([0, 0, 0], j.at, j.axis ?? [0, 0, 1], j.deg * Math.PI / 180 * v));
+    } else if (j.type === 'along') {
+      // A chain link follows the loop at the speed of the wheel rim.
+      const s = (((j.s0 - j.r * angleOf(m, j.of, theta)) % j.total) + j.total) % j.total;
+      const a = along(j.path, j.s0, j.normal), b = along(j.path, s, j.normal);
+      const col = (q) => [q.t, q.n, cross(q.t, q.n)];
+      const [ax, ay, az] = col(a), [bx, by, bz] = col(b);
+      const R = [0, 1, 2].flatMap((c) => [0, 1, 2].map((r) => bx[r] * ax[c] + by[r] * ay[c] + bz[r] * az[c]));
+      const off = [0, 1, 2].map((r) => b.p[r] - (R[r] * a.p[0] + R[r + 3] * a.p[1] + R[r + 6] * a.p[2]));
+      out.set(j.id, [...R, ...off]);
     } else if (j.type === 'bar') {
       const A = j.ja && out.get(j.ja) ? apply(out.get(j.ja), j.a) : j.a;
       const B = j.jb && out.get(j.jb) ? apply(out.get(j.jb), j.b) : j.b;
@@ -243,7 +255,7 @@ function checkMech(m, parts, errors) {
 // Parts that touch at rest are neighbours, a piston slides in its liner and that is fine.
 function sweep(m, parts, errors) {
   const ids = new Set(m.order.map((j) => j.id));
-  const moving = m.order.filter((j) => j.type !== 'travel' && j.type !== 'fire');
+  const moving = m.order.filter((j) => !['travel', 'fire', 'along'].includes(j.type));
   const fixed = parts.filter((p) => !p.path.some((id) => ids.has(id)) && !p.ground && !p.decal && p.mat !== 'glass');
   if (!fixed.length) return;
   const lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
