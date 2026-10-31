@@ -10,7 +10,6 @@ import { timeline, checkTimeline, pose, cameraAt, caption } from './anim.mjs';
 import { readMech } from './mech.mjs';
 
 const FPS = 30;
-const SUB = 4; // Poses per frame, for motion blur.
 const findModel = (n) => (n.cmd === 'model' ? n : n.kids?.map(findModel).find(Boolean));
 const b64 = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength).toString('base64');
 
@@ -64,6 +63,8 @@ export function exportScene(src) {
   });
   let lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
   const grow = (x, y, z) => { lo = [Math.min(lo[0], x), Math.min(lo[1], y), Math.min(lo[2], z)]; hi = [Math.max(hi[0], x), Math.max(hi[1], y), Math.max(hi[2], z)]; };
+  // Poses per frame, for motion blur. Many small groups (chain links) share a budget.
+  const SUB = groups.size > 150 ? 1 : groups.size > 70 ? 2 : 4;
   const frames = tl ? Math.max(1, Math.ceil((tl.total + 1.2) * FPS)) : 1;
   const out = { fps: FPS, frames, title: parsed.kids?.find((c) => c.cmd === 'title')?.args?.[0] ?? '', cut: model.kv.cut ?? null, cap: model.kv.cap ?? null, sub: SUB, groups: [], captions: [], camera: [], tris: 0, parts: parts.length };
   const poses = tl ? Array.from({ length: frames * SUB }, (_, f) => pose(tl, parts, f / FPS / SUB)) : [null];

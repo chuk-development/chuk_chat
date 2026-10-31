@@ -125,6 +125,7 @@ export function readMech(model, parts, errors) {
     if (outer && Math.abs(dot(outer.axis, j.axis)) > 0.99 && j.ratio === 1 && (j.of === outer.id)) { joints.delete(j.id); order.splice(i, 1); }
   }
   const m = { joints, order };
+  m.clear = Boolean(model.kv.clear);
   checkMech(m, parts, errors);
   if (!errors.some((e) => e.startsWith('mech'))) sweep(m, parts, errors);
   return m;
@@ -302,7 +303,11 @@ function sweep(m, parts, errors) {
         if (o && !near.has(o)) hits.set(o, (hits.get(o) ?? 0) + 1);
       }
     }
-    for (const [other, c] of [...hits].sort((x, y) => y[1] - x[1]).slice(0, 2)) if (c > 12) errors.push(`mech: ${j.id} runs through ${other} while it moves (${c} hits). Make room or move the axis`);
+    for (const [other, c] of [...hits].sort((x, y) => y[1] - x[1]).slice(0, 2)) if (c > 12) {
+      // clear=1: a bolt-on that stands in the way goes. Motion is worth more than a bracket.
+      if (m.clear && !fixed.find((p) => p.id === other)?.shell) { for (let i = parts.length - 1; i >= 0; i--) if (parts[i].id === other) parts.splice(i, 1); }
+      else errors.push(`mech: ${j.id} runs through ${other} while it moves (${c} hits). Make room or move the axis`);
+    }
   }
 }
 
