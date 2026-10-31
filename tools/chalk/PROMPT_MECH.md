@@ -13,7 +13,7 @@ You make a 3D model really work. You write one ```chalk fence with a `mech` bloc
     travel track of=w1 dir=1,0,0 r=1 wrap=0.62    # sleepers or road run past without slip. r is the wheel radius of w1. wrap is the repeat distance
     geartrain g at=x,y,z axis=z dir=0 teeth=20,40,15 module=0.05 h=0.1 of=id color=#b9b090   # NEW real gears that mesh, in a line. Gives rotors g0 g1 g2 with true ratios. dir: direction of the line, 0 is +y for axis z
     chain c of=id ra=0.2 a=x,y,z b=x,y,z rb=0.1 axis=z pitch=0.05                            # NEW real chain around two wheels, links run with the wheel. ra is the radius at wheel a. belt=1 gives a belt
-    spokedwheel w at=x,y,z axis=z r=0.34 width=0.025 spokes=32 of=id ratio=1                 # NEW wheel with tyre, rim and spokes
+    spokedwheel w at=x,y,z axis=z r=0.34 width=0.025 spokes=32 of=id ratio=1                 # NEW bicycle or motorcycle wheel with tyre, rim and spokes. Never for a flywheel or pulley
   anim
     step "Caption" 3
       run turns=2                                 # master turns in this step. The machine runs up and down smoothly
