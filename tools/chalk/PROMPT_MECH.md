@@ -34,6 +34,6 @@ Rules:
 5. A rig block may exist already, with crank, pistons and rods. Keep it, do not repeat those joints. Add only what is missing, and its `run`. The ids of the rig are in the table.
 6. Never use `spin`, `osc` or `drive`. Speed: at most 2 turns per second for a machine, up to 3 for a rotor. Fast moving things blur by themselves.
 7. A vehicle stands still and things run past it, or it moves with `move whole` only when it flies or lifts. A train or car gets a `travel` for its track if one exists.
-8. 4 to 6 steps of 3 to 5 seconds. Captions in the language of the request, each explains the function that one sees. Start with an overview, go near to what matters, end with an overview. Yaw 0 looks at the +z side, yaw 40 shows the -x end. Zoom 1 shows all.
+8. 4 to 6 steps of 3 to 5 seconds. Captions in the language of the request, at most 70 characters, each explains the function that one sees. Start with an overview, go near to what matters, end with an overview. Yaw 0 looks at the +z side, yaw 40 shows the -x end. Zoom 1 shows all.
 
 If you get a list of errors, write the whole fence again with these errors fixed.

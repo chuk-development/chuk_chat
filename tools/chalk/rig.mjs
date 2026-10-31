@@ -117,7 +117,7 @@ function blockText(k, f, rows, crown) {
   });
   const spread = (fn) => Math.max(...banks.map((a) => fn(Math.abs(Math.sin(rad(a))), Math.abs(Math.cos(rad(a))))));
   const cw = Math.max(r * 2.2, spread((sn, cs) => sn * low + cs * half + wall)), deep = r * 1.72 + bore * 0.3;
-  const top = Math.max(r * 0.8, Math.min(...banks.map((a) => Math.abs(Math.cos(rad(a))) * low - Math.abs(Math.sin(rad(a))) * half)));
+  const top = Math.max(r * 0.3, Math.min(...banks.map((a) => Math.abs(Math.cos(rad(a))) * (low - bore) - Math.abs(Math.sin(rad(a))) * half - bore * 0.3)));
   for (const t of [-1, 1]) s += box(`case${t + 1}`, [len, top + deep, wall], [mid, (top - deep) / 2, t * cw]);
   for (const t of [-1, 1]) s += box(`end${t + 1}`, [wall, top + deep, cw * 2], [mid + t * len / 2, (top - deep) / 2, 0]);
   s += box('pan', [len, wall, cw * 2], [mid, -deep - bore * 0.8, 0], '#2e3136');

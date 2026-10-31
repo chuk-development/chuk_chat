@@ -147,7 +147,7 @@ def table(frag):
 
 
 def assemble(plan, built):
-    head = f"canvas dark\ntitle \"{plan['title']}\"\nmodel obj 1100 620 keep=1 tidy=1 view={plan['view'][0]},{plan['view'][1]}{' cut=' + plan['cut'] if plan.get('cut') else ''}\n"
+    head = f"canvas dark\ntitle \"{plan['title']}\"\nmodel obj 1100 620 keep=1 tidy=1 clear=1 view={plan['view'][0]},{plan['view'][1]}{' cut=' + plan['cut'] if plan.get('cut') else ''}\n"
     static, moving = [], [plan['form']] if plan['form'] else []
     for a in plan['assemblies']:
         if a['id'] not in built:
@@ -236,7 +236,8 @@ def film(scene, a, plan, model, out, log):
             log.setdefault('mech_errors', []).append(1)
             continue
         i = next((n for n, l in enumerate(lines) if l.strip() == 'anim'), len(lines))
-        joints = [l.strip() for l in lines[:i] if l.strip() and l.strip() != 'mech']
+        known = ('rotor', 'couple', 'lift', 'rocker', 'sway', 'bar', 'travel', 'piston', 'rod', 'fire', 'geartrain', 'chain', 'spokedwheel')
+        joints = [l.strip() for l in lines[:i] if l.strip().split(' ')[0] in known]
         anim = lines[i:]
         body = scene
         if has_rig:
