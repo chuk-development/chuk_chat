@@ -203,3 +203,9 @@ Pattern in the field: the LLM proposes structure, a deterministic engine compute
 - LayoutDSL: a small fine-tuned model on a DSL beats larger LLMs in few-shot use.
 
 Decisions for Chalk: keep free shape, keep the solver. Add (1) an edit loop with patch, compile and probe in place of full rewrites, (2) a pose sweep over the whole turn as a default check, for collisions and lost contact, (3) `find_examples` over verified Chalk snippets, (4) parametric families for gears, chains, wheels, linkages.
+
+## Mechanics engine (v13)
+
+Rule: the model declares, the engine computes. One master angle drives all joints (`mech.mjs`). `rig.mjs` holds families that write parts and joints from a table: `crankshaft`, `cylinder`, `block`, `geartrain`, `chain`, `spokedwheel`. A full-turn sweep reports floating rotors, wrong axes and collisions as numbers. With `clear=1` it removes bolt-ons in the way. Hand-built proof: `tools/chalk/hand/`. GLM films: `tools/chalk/versions/v13_mechanik/`.
+
+Learned: GLM gets kinematics and ratios right. It fails where separate assemblies must agree, so bodies that hold a mechanism come from the same table. Never scale a wrong assembly in silence, send the measured error back.

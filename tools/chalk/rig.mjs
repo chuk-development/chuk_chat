@@ -123,8 +123,9 @@ function blockText(k, f, rows, crown) {
   s += box('pan', [len, wall, cw * 2], [mid, -deep - bore * 0.8, 0], '#2e3136');
   for (const t of [-1, 1]) s += box(`ps${t + 1}`, [len, bore * 0.8, wall], [mid, -deep - bore * 0.4, t * cw], '#2e3136');
   for (const t of [-1, 1]) s += box(`pe${t + 1}`, [wall, bore * 0.8, cw * 2], [mid + t * len / 2, -deep - bore * 0.4, 0], '#2e3136');
-  const plane = rows[0].ang;
-  return { text: s, cut: [...[0, 1, 2].map((c) => -f.u[c] * Math.sin(rad(plane)) + f.v[c] * Math.cos(rad(plane))), 0.0001] };
+  // The cut runs along the first bank. A flat engine opens from above.
+  const plane = rows[0].ang, sign = Math.abs(Math.cos(rad(plane))) < 0.1 ? -1 : 1;
+  return { text: s, cut: [...[0, 1, 2].map((c) => sign * (-f.u[c] * Math.sin(rad(plane)) + f.v[c] * Math.cos(rad(plane)))), 0.0001] };
 }
 
 export function along(path, s, normal) {
