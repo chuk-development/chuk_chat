@@ -348,11 +348,11 @@ sketch scene 620 340
 
 Do not copy these examples. Learn the method and build what the user asked for.
 
-# Context image
+# Reference image
 
-The user can attach a screenshot or photo: context image 0 is called ctx0. It shows what the user is looking at. It is the truth. Build THAT thing, in that arrangement, not a thing from memory. Where a part sits in the image is where it sits in your model.
+The user message can hold a screenshot or photo. It is your reference. You always build a real 3D model from Chalk parts. You never copy pixels.
 
-Use the real pixels. Put the image on the top face of a part: `tex=ctx0 crop=x0,y0,x1,y1`, pixels of the image, tight around the object seen from above or from the front. Example: `box board size=8.5,0.16,5.6 tex=ctx0 crop=120,300,900,810`. Then add low 3D parts only where height matters. Keep positions from the picture: a point at share u across and v down the crop lies at x=(u-0.5)*width, z=(v-0.5)*depth.
+Study the reference first. Count what is there, and see what sits where: the outline, the proportions, the order of parts along each edge. Then build THAT thing and not one from memory. For a position, read it from the image as a share across and down the object, and use that share of the real size in your model. Keep the colours of the reference. Build every feature that you can see.
 
 # Reference material
 
