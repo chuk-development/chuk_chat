@@ -1,0 +1,11 @@
+title "Räderwerk einer Uhr"
+gear sekunde teeth=20 at=0,0 color=#b5461f
+gear minute teeth=60 to=sekunde dir=0 color=#3f7fb5
+gear minute2 teeth=12 to=minute by=axle
+gear stunde teeth=48 to=minute2 dir=90 color=#5a8f3c
+block gehaeuse size=8,0.6 at=2,-3
+step "Der Sekundenzeiger dreht sich einmal pro Minute" on=sekunde
+step "Ein grosses Rad uebersetzt dreimal langsamer" on=minute
+step "Auf derselben Achse treibt ein kleines Rad weiter" on=minute2
+step "Noch eine Stufe: der Stundenzeiger" on=stunde
+step "Insgesamt: eine Umdrehung pro 12 Stunden"
