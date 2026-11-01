@@ -23,9 +23,9 @@ export function parseMini(src) {
     for (const w of words.slice(1)) { const m = w.match(/^(\w+)=(.*)$/); if (m) kv[m[1]] = m[2]; else args.push(w); }
     const cmd = words[0];
     if (cmd === 'title') title = quoted ?? title;
-    else if (cmd === 'step') steps.push({ text: quoted ?? '', on: kv.on, line: i + 1 });
-    else if (['wheel', 'gear', 'piston', 'block'].includes(cmd)) items.push({ cmd, id: args[0], kv, line: i + 1 });
-    else errors.push(`line ${i + 1}: unknown word "${cmd}". Use only title, wheel, gear, piston, block, step`);
+    else if (cmd === 'step') steps.push({ text: quoted ?? '', on: kv.on, plug: kv.plug, glow: kv.glow, line: i + 1 });
+    else if (['wheel', 'gear', 'piston', 'block', 'board', 'chip', 'port', 'pins', 'led', 'plug'].includes(cmd)) items.push({ cmd, id: args[0], kv, line: i + 1 });
+    else errors.push(`line ${i + 1}: unknown word "${cmd}". Use only title, wheel, gear, piston, block, board, chip, port, pins, led, plug, step`);
   });
   return { title, items, steps, errors };
 }
@@ -182,8 +182,107 @@ export function toChalk(m, byId) {
   return `canvas dark\ntitle "${m.title}"\nmodel obj 1100 620 keep=1 view=12,9\n${frame}${body}  mech\n${mech}  anim\n${anim}`;
 }
 
+// Second kit: an electronics board. Parts snap to an edge or to a place on the board.
+const SIDE = { bottom: [[0, 1], 0], right: [[1, 0], 90], top: [[0, -1], 180], left: [[-1, 0], 270] };
+const PORT = { usb: [1.3, 1.45, 1.4], usbc: [0.9, 0.32, 0.75], hdmi: [1.45, 0.35, 0.75], ethernet: [1.6, 1.35, 2.1], jack: [0.6, 0.6, 1.2], sd: [1.2, 0.15, 1.4], fpc: [2.2, 0.28, 0.45], power: [0.9, 1, 1.4] };
+
+function compileBoard(m) {
+  const { items, errors } = m;
+  const b = items.find((p) => p.cmd === 'board');
+  // The model mixes up mm and cm, so the longer edge is always 8.5 and lies along x.
+  const [w0, d0] = String(b.kv.size ?? '8.5,5.6').split(',').map(Number).sort((p, q) => q - p);
+  const W = 8.5, D = 8.5 * d0 / w0;
+  const boxes = [];
+  const claim = (p, x, z, w, d) => {
+    for (const o of boxes) if (Math.abs(o.x - x) < (o.w + w) / 2 && Math.abs(o.z - z) < (o.d + d) / 2) errors.push(`line ${p.line}: ${p.id} overlaps ${o.id}. Move it by at least ${((o.w + w) / W).toFixed(2)} in at= or pos=, or remove it`);
+    boxes.push({ id: p.id, x, z, w, d });
+  };
+  const byId = new Map(items.map((p) => [p.id, p]));
+  const place = (p) => {
+    const [u, v] = String(p.kv.at ?? '0.5,0.5').split(',').map(Number);
+    if (!(u >= 0 && u <= 1 && v >= 0 && v <= 1)) errors.push(`line ${p.line}: ${p.id}: at= uses fractions from 0 to 1`);
+    return [(u - 0.5) * W, (v - 0.5) * D];
+  };
+  const edgeAt = (p, inset) => {
+    const e = SIDE[p.kv.edge];
+    if (!e) { errors.push(`line ${p.line}: ${p.id}: edge= must be top, bottom, left or right`); return null; }
+    const t = Number(p.kv.pos ?? 0.5), [dx, dz] = e[0];
+    return { x: dx ? dx * (W / 2 - inset) : (t - 0.5) * W, z: dz ? dz * (D / 2 - inset) : (t - 0.5) * D, out: e[0], rot: e[1] };
+  };
+  let body = `  group main\n  box ${b.id} size=${f(W, 0.16, D)} round=0.2 color=${b.kv.color ?? '#1f6b45'} mat=pcb\n  scatter smd n=70 size=0.13 area=${f(W * 0.8, D * 0.8)} at=0,0.1,0\n`;
+  let moved = '';
+  for (const p of items) {
+    if (p === b) continue;
+    if (!p.id) { errors.push(`line ${p.line}: ${p.cmd} needs an id`); continue; }
+    if (p.cmd === 'chip') {
+      const [x, z] = place(p), [w, d] = String(p.kv.size ?? '1.2,1.2').split(',').map(Number);
+      p.pos = [x, 0.2, z]; claim(p, x, z, w, d);
+      body += `  group ${p.id} at=${f(x, 0.08, z)}\n    chip ${p.id}c size=${f(w, 0.14, d)} at=0,0.08,0 pins=0 color=${p.kv.color ?? '#17181b'}\n`;
+    } else if (p.cmd === 'led') {
+      const [x, z] = place(p);
+      p.pos = [x, 0.15, z];
+      body += `  group ${p.id} at=${f(x, 0.1, z)}\n    box ${p.id}l size=0.2,0.08,0.12 at=0,0.05,0 round=0 color=${p.kv.color ?? '#46e06a'} mat=light\n`;
+    } else if (p.cmd === 'pins') {
+      const n = Number(p.kv.n ?? 20), L = n * 0.254, q = edgeAt(p, 0.4);
+      if (!q) continue;
+      p.pos = [q.x, 0.3, q.z];
+      body += `  group ${p.id} at=${f(q.x, 0.2, q.z)} rot=0,${q.rot},0\n    header ${p.id}h n=${n} rows=2 pitch=0.254 pinh=0.75 color=black\n`;
+      if (L > W) errors.push(`line ${p.line}: pins: n is too big`);
+    } else if (p.cmd === 'port') {
+      const dims = PORT[p.kv.type];
+      if (!dims) { errors.push(`line ${p.line}: port ${p.id}: type= must be one of ${Object.keys(PORT).join(' ')}`); continue; }
+      p.type = p.kv.type;
+      if (p.kv.edge) {
+        const q = edgeAt(p, dims[2] / 2 - 0.15);
+        if (!q) continue;
+        p.pos = [q.x, 0.08 + dims[1] / 2, q.z]; p.out = q.out; p.rot = q.rot;
+      } else {
+        const [x, z] = place(p);
+        p.pos = [x, 0.08 + dims[1] / 2, z]; p.out = [0, 0]; p.rot = 90;
+      }
+      const across = p.rot % 180 === 0;
+      claim(p, p.pos[0], p.pos[2], across ? dims[0] : dims[2], across ? dims[2] : dims[0]);
+      const look = p.type === 'fpc' ? 'color=#efe9dc mat=plastic' : 'color=#c8ccd0 mat=brushed';
+      body += `  group ${p.id} at=${f(...p.pos)} rot=0,${p.rot},0\n    port ${p.id}p type=${p.type} ${look}\n`;
+      if (p.kv.edge) body += `    box ${p.id}m size=${f(dims[0] * 0.8, dims[1] * 0.68, 0.03)} at=0,0,${(dims[2] / 2 + 0.03).toFixed(3)} round=0 color=#141518 mat=matte\n`;
+    }
+  }
+  body = body.split('\n').map((l, i) => (i && l ? '  ' + l : l)).join('\n');
+  for (const p of items.filter((q) => q.cmd === 'plug')) {
+    const t = byId.get(p.kv.to);
+    if (t?.cmd !== 'port') { errors.push(`line ${p.line}: plug ${p.id}: to= must name a port above this line`); continue; }
+    const c = p.kv.color ?? '#23252a', [ox, oz] = t.out, [x, y, z] = t.pos, dims = PORT[t.type];
+    p.pos = t.pos;
+    if (!ox && !oz) {
+      // A flat cable from above, with the device at its end.
+      body += `  group ${p.id} at=${f(x, y, z)}\n    tube ${p.id}c pts=0,0.1,0 0,1.3,0 -0.3,2.4,0 -1,3.1,0 flat=9 r=0.4 color=#d9d4c5\n    box ${p.id}b size=2.4,0.1,2.4 at=-1.3,3.2,0 color=#1f6b45 mat=pcb\n    cyl ${p.id}l r=0.45 h=0.5 at=-1.3,3.45,0 color=#111214 mat=glass\n`;
+      p.from = [0, 3.5, 0];
+    } else {
+      const s = dims[2] / 2, plugW = dims[0] * 0.7, plugH = dims[1] * 0.6, u = (k) => f(ox * k, 0.4 * Math.max(0, k - s - 2.2), oz * k);
+      body += `  group ${p.id} at=${f(x, y, z)} \n    box ${p.id}h size=${f(ox ? 1 : plugW, plugH, oz ? 1 : plugW)} at=${f(ox * (s + 0.5), 0, oz * (s + 0.5))} round=0.05 color=${c} mat=plastic\n    tube ${p.id}c pts=${u(s + 0.9)} ${u(s + 2.2)} ${u(s + 3.2)} ${u(s + 4.2)} r=${(0.09).toFixed(2)} color=${c} mat=rubber\n`;
+      p.from = [ox * 3, 0, oz * 3];
+    }
+  }
+  const steps = m.steps.length ? m.steps : [{ text: m.title }];
+  let anim = '  anim\n';
+  const plugged = steps.map((s) => s.plug).filter(Boolean);
+  plugged.forEach((id) => { if (byId.get(id)?.cmd !== 'plug') errors.push(`step plug=${id}: no such plug`); });
+  for (const p of items.filter((q) => q.cmd === 'plug' && !plugged.includes(q.id))) errors.push(`plug ${p.id}: no step has plug=${p.id}`);
+  if (errors.length) return { errors, chalk: '', parts: items.length };
+  steps.forEach((s, i) => {
+    const on = s.on ?? s.plug, q = on ? byId.get(on) : null, last = i === steps.length - 1;
+    const anchor = q?.cmd === 'plug' ? byId.get(q.kv.to).id : on;
+    anim += `    step "${s.text}" 3.2\n      camera view=${last ? '-28,36' : `${i % 2 ? 24 : -30},38`} zoom=${q && !last ? 1.7 : last ? 0.72 : 1}${q && !last ? ` on=${anchor}` : ''}\n`;
+    if (s.plug) anim += `      show ${s.plug}\n      move ${s.plug} from=${f(...byId.get(s.plug).from)}\n`;
+    if (s.glow) anim += `      pulse ${s.glow}\n`;
+    else if (on && !s.plug) anim += `      pulse ${on}\n`;
+  });
+  return { errors, parts: items.length, chalk: `canvas dark\ntitle "${m.title}"\nmodel obj 1100 620 keep=1 view=-28,36 fit=main\n${body}${anim}` };
+}
+
 export function compileMini(src) {
   const m = parseMini(src);
+  if (m.items.some((p) => p.cmd === 'board')) return compileBoard(m);
   const byId = layout(m);
   for (const s of m.steps) if (s.on && !byId.has(s.on)) m.errors.push(`line ${s.line}: step on=${s.on}: no such part`);
   if (!byId.size) m.errors.push('no parts');

@@ -1,0 +1,11 @@
+title "Kamera am Raspberry Pi 5"
+board pi size=8.5,5.6
+chip cpu size=1.5,1.5 at=0.35,0.35
+port cam type=fpc at=0.05,0.3
+port pcie type=fpc at=0.05,0.75
+port usbc type=usbc edge=bottom pos=0.15
+plug kabel to=cam
+step "Der Raspberry Pi 5 hat zwei schmale Kamera-Anschlüsse (FPC) an der Kante" on=cam
+step "Der flache Ribbon der Kamera wird mit dem Stecker nach innen eingeführt" plug=kabel
+step "Die Lasche des Anschlusses vorsichtig andrücken, dann sitzt das Band fest" glow=cam
+step "Strom anstecken, das System erkennt die Kamera automatisch" on=usbc
