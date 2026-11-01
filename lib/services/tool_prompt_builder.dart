@@ -1207,19 +1207,20 @@ Never wrap an <artifact> tag inside a markdown code fence (```…```); the parse
   }
 
   /// How an answer starts, and the `:::` blocks `MarkdownMessage` renders
-  /// natively (`lib/utils/answer_blocks_parser.dart`). About 770 tokens.
+  /// natively (`lib/utils/answer_blocks_parser.dart`). About 1000 tokens.
   String _answerFormatSection() {
     return '''
 ## ANSWER FORMAT
 - If the question has a short answer (yes/no, a number, a name, fits/does not fit), the FIRST line of your final answer is that answer in plain Markdown **bold**, e.g. "**Yes, warm white.**". Make any needed tool calls first; never state the short answer before the lookup. Explain below it.
-- Optional blocks, only where they help: a line `::: name` opens one, a line `:::` closes it. No nesting. Most blocks take `tag: label` for a small chip.
+- Optional blocks, only where they help: a line `::: name` opens one, a line of exactly three colons `:::` closes it. No nesting. No Markdown inside block titles. Most blocks take `tag: label` for a small chip.
+- Pick by content. Do not use a block that does not fit; plain headings and bullets are often best. Sequence you do in order: steps. Dated events: timeline. Same-unit numbers: bars. Things to buy, book or visit: cards. Options you explain in sentences: headings and bullets, not cards.
 ::: steps
 1. Step title
 Body text.
 \$ terminal command (copy button)
 ! warning
 :::
-  `::: steps abc` letters them A, B, C.
+  `::: steps abc` letters them A, B, C. Only for real sequences, never for a ranking, a list of options or explanation. No numbered list inside a step. `\$` only for a real shell command.
 ::: timeline Optional title
 *2021-01: Key event (`*` marks it)
 :::
@@ -1233,16 +1234,19 @@ Body text.
 Step 5 | ~1.200 GB | 600B total
 ! note line
 :::
+  Bars: the second field is one short number, same unit in every row. No text values.
 ::: kpi
 82 % | Humidity | droplet
 :::
 ::: tiles
 Chatbot | chat | optional subline
 :::
+  One tile per line: label | icon | subline, all on that line.
   Icons: droplet wind sun cloud rain star users clock euro percent shield cart chart search calendar pin battery sound mic sparkles mountain.
 ::: cards Hotels
 Alpenruhe Panorama
 image: https://example.com/a.jpg
+thumb: https://imgs.example/a-small.jpg
 badge: For your mountain moment
 location: Grindelwald, Switzerland
 rating: 4.8 · 128 reviews
@@ -1253,7 +1257,8 @@ url: https://example.com/a
 action: Details
 ask: Compare
 :::
-  Cards for 2-5 recommendations (stays, products, events). `--` between cards; all keys optional but the title. Only real URLs from tool results.
+  Cards for 2-5 real items (products, stays, restaurants, events). `--` between cards; all keys optional but the title. Title is plain text, no `**`. Facts go in keys, not prose. Only real URLs from tool results.
+  If the reader wants to buy or find an item, the answer is cards with photos, not a table: first call web_search with type:"images" for each item, then put its image_url in `image:` and its thumbnail_url in `thumb:`. Check the title of the hit matches the exact item. `url:` is the product page, `price:` a price from a result. Never invent a price or an image.
 ::: check Optional title
 [x] Done item
 [ ] Open item
@@ -1283,7 +1288,7 @@ Hidden details.
 Active parameters | chart
 button: Fetch current values
 :::
-  Follow-up chips (+ optional filled `button:`), sent as the reader's next message. Only at the END.
+  Follow-up chips (+ optional filled `button:`), sent as the reader's next message. Only at the END. The question goes on the `::: ask` line; each chip is what the reader would say.
 ::: status 2 open · 132 €
 Hetzner | Card declined | 102 € | failed | 16.10. | hetzner.com | Pay https://…
 :::
@@ -1304,7 +1309,7 @@ Hetzner | Card declined | 102 € | failed | 16.10. | hetzner.com | Pay https://
     );
     if (_migratedToSkill('openui')) {
       buffer.writeln(
-        'Rich UI (cards, tables, lists, forms, metrics, follow-up buttons): load the `openui` skill, then write one ```openui-lang fence.',
+        'Interactive UI the `:::` blocks cannot do (forms with inputs, tabs, editable tables): load the `openui` skill, then write one ```openui-lang fence. For cards, lists and follow-ups use the `:::` blocks.',
       );
     }
 

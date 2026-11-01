@@ -148,7 +148,7 @@ Widget _buildAnswerBlock(
   }
 }
 
-/// The frame of a block: a rule on top and an optional small-caps title.
+/// The frame of a block: an optional small-caps title, no rule.
 class _BlockFrame extends StatelessWidget {
   const _BlockFrame({
     required this.title,
@@ -162,13 +162,8 @@ class _BlockFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.only(top: 9),
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: s.textColor.withValues(alpha: 0.85), width: 2),
-        ),
-      ),
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
@@ -420,7 +415,10 @@ class _WarningLine extends StatelessWidget {
 Widget _undatedTimeline(AnswerBlockSegment block, _AnswerBlockStyle s) {
   final List<String> lines = <String>[
     for (final String l in block.lines)
-      if (l.trim().isNotEmpty) l,
+      // `*` marks the key entry of a timeline; as Markdown it would show.
+      // A second `*` on the line makes it italic text, so that stays.
+      if (l.trim().isNotEmpty)
+        l.replaceFirst(RegExp(r'^\s*\*(?=[^\s*])(?![^*]*\*)'), '- '),
   ];
   if (lines.isEmpty) return const SizedBox.shrink();
   final bool isList = lines.any(

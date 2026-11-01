@@ -340,7 +340,8 @@ bool _isPublicImageUrl(String url) {
   final Uri? uri = Uri.tryParse(url);
   if (uri == null || !uri.scheme.toLowerCase().startsWith('https')) return false;
   final String host = uri.host.toLowerCase();
-  if (host.isEmpty) return false;
+  // No dot: a half-typed streaming URL or a name on the local network.
+  if (!host.contains('.')) return false;
   if (host == 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')) {
     return false;
   }
@@ -348,7 +349,6 @@ bool _isPublicImageUrl(String url) {
   // else with a colon in the host is never a public image host; the
   // connect-time check in the loader is the second gate either way.
   if (host.contains(':')) return false;
-  if (!host.contains('.') && RegExp(r'^\d+$').hasMatch(host)) return false;
   final RegExp ipv4 = RegExp(r'^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$');
   final RegExpMatch? m = ipv4.firstMatch(host);
   if (m != null) {
@@ -385,6 +385,7 @@ class _BarsBlock extends StatelessWidget {
           ? const SizedBox.shrink()
           : _ModuleCard(s: s, child: _notePill());
     }
+    final bool comparable = spec.isComparable;
     double max = 0;
     for (final BarRow row in spec.rows) {
       final double? v = row.value;
@@ -399,7 +400,7 @@ class _BarsBlock extends StatelessWidget {
         ),
       for (int i = 0; i < spec.rows.length; i++) ...<Widget>[
         if (i > 0) const SizedBox(height: 14),
-        _row(spec.rows[i], max),
+        comparable ? _row(spec.rows[i], max) : _factRow(spec.rows[i]),
       ],
       if (spec.note.isNotEmpty) ...<Widget>[const SizedBox(height: 12), _notePill()],
     ];
@@ -411,6 +412,25 @@ class _BarsBlock extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: children,
       ),
+    );
+  }
+
+  /// A row with prose as its value: no bar, and the label gets the full width.
+  Widget _factRow(BarRow row) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        s.markdown(row.label, fontWeight: FontWeight.w600),
+        if (row.valueText.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 2),
+          s.markdown(row.valueText, fontSize: s.baseFontSize * 0.95),
+        ],
+        if (row.sub.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 2),
+          s.markdown(row.sub, color: s.muted, fontSize: s.baseFontSize * 0.86),
+        ],
+      ],
     );
   }
 
@@ -822,6 +842,16 @@ class _CardsBlockState extends State<_CardsBlock> {
     final List<AnswerCard> cards = widget.spec.cards;
     if (cards.isEmpty) return const SizedBox.shrink();
     _inheritedFamily = DefaultTextStyle.of(context).style.fontFamily;
+    _anyImage = cards.any(
+      (AnswerCard c) => c.image.isNotEmpty || c.thumb.isNotEmpty,
+    );
+    // Options with text and no picture are a list: a carousel hides all but
+    // one and cuts their text. Priced items stay cards, their page can still
+    // give a photo.
+    if (!_anyImage && !cards.any((AnswerCard c) => c.price.isNotEmpty)) {
+      return _stackedCards(cards);
+    }
+    _anyImage = true;
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints c) {
@@ -857,7 +887,13 @@ class _CardsBlockState extends State<_CardsBlock> {
           children: <Widget>[
             SizedBox(
               height: height,
-              child: PageView.builder(
+              child: ScrollConfiguration(
+                // A mouse drags too: by default only touch does, and a
+                // carousel on the desktop then does not move at all.
+                behavior: ScrollConfiguration.of(context).copyWith(
+                  dragDevices: PointerDeviceKind.values.toSet(),
+                ),
+                child: PageView.builder(
                 controller: _controller,
                 itemCount: cards.length,
                 // padEnds would shrink the pages under our feet; the 5 px
@@ -874,6 +910,7 @@ class _CardsBlockState extends State<_CardsBlock> {
                     ),
                   );
                 },
+                ),
               ),
             ),
             if (cards.length > 1 || widget.spec.label.isNotEmpty) ...<Widget>[
@@ -886,6 +923,141 @@ class _CardsBlockState extends State<_CardsBlock> {
     );
   }
 
+  Widget _stackedCards(List<AnswerCard> cards) {
+    final _AnswerBlockStyle s = widget.s;
+    return _ModuleCard(
+      s: s,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          if (widget.spec.label.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _moduleHead('', widget.spec.label, s),
+            ),
+          for (int i = 0; i < cards.length; i++) ...<Widget>[
+            if (i > 0) const SizedBox(height: 16),
+            _stackedCard(cards[i]),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// One option of the list: every line of its text stays readable.
+  Widget _stackedCard(AnswerCard card) {
+    final _AnswerBlockStyle s = widget.s;
+    final String host = statusDomain(card.url);
+    final Widget titleRow = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        if (host.isNotEmpty) ...<Widget>[
+          SelectionContainer.disabled(
+            child: FaviconImage(
+              host: host,
+              size: 22,
+              borderRadius: 6,
+              fallbackColor: s.muted,
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
+        Expanded(
+          child: Text(
+            card.title,
+            style: _styleFor(s.baseFontSize * 1.05, FontWeight.w700, 1.3)
+                .copyWith(color: s.textColor),
+          ),
+        ),
+        if (card.url.isNotEmpty) ...<Widget>[
+          const SizedBox(width: 8),
+          SelectionContainer.disabled(
+            child: HugeIcon(HugeIcons.arrowRight01, size: 16, color: s.muted),
+          ),
+        ],
+      ],
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        if (card.url.isEmpty)
+          titleRow
+        else
+          InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: () => _openBlockUrl(context, card.url),
+            child: titleRow,
+          ),
+        if (card.badge.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 6),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: _TagChip(tag: card.badge, s: s),
+          ),
+        ],
+        for (final String line in <String>[
+          card.subtitle,
+          card.location,
+          card.rating,
+          ...card.metas,
+        ])
+          if (line.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                line,
+                style: _styleFor(s.baseFontSize * 0.9, FontWeight.w400, 1.35)
+                    .copyWith(color: s.muted),
+              ),
+            ),
+        if (card.body.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 4),
+          s.markdown(
+            card.body,
+            color: s.secondary,
+            fontSize: s.baseFontSize * 0.95,
+          ),
+        ],
+        if (card.chips.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: <Widget>[
+              for (final String chip in card.chips) _cardChip(chip, 280),
+            ],
+          ),
+        ],
+        for (final CardSpecItem spec in card.specs.take(4))
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: _cardSpec(spec),
+          ),
+        if (card.ask.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 8),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: _askButton(card, height: 36),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// True when the carousel shows a picture slot on its cards.
+  bool _anyImage = false;
+
+  bool _hasImageSlot(AnswerCard card) =>
+      _anyImage &&
+      (card.image.isNotEmpty || card.thumb.isNotEmpty || card.url.isNotEmpty);
+
+  /// A short amount is drawn big. A long one (`ab 2.618 € (Go2 Air) / 3.570 €
+  /// (Pro)`) is a sentence and keeps text size, on up to two lines.
+  double _priceSize(String price) =>
+      widget.s.baseFontSize * (price.length <= 18 ? 1.5 : 1.02);
+
   /// Every part of a card is ellipsised to a fixed line count, so the height
   /// is computable: no card overflows, no PageView needs a different height.
   double _carouselHeight(List<AnswerCard> cards, double innerWidth, TextScaler scaler) {
@@ -897,7 +1069,7 @@ class _CardsBlockState extends State<_CardsBlock> {
     double maxCard = 120;
     for (final AnswerCard card in cards) {
       double h = 26; // vertical card padding, plus rounding slack
-      if (card.image.isNotEmpty) {
+      if (_hasImageSlot(card)) {
         h += innerWidth * 0.55 + 12;
       }
       final double titleSize = s.baseFontSize * 1.24;
@@ -911,7 +1083,7 @@ class _CardsBlockState extends State<_CardsBlock> {
           ) *
               lh(titleSize, 1.25) +
           6;
-      if (card.image.isEmpty && card.badge.isNotEmpty) {
+      if (!_hasImageSlot(card) && card.badge.isNotEmpty) {
         h += lh(s.baseFontSize * 0.84, 1.25) + 8 + 10;
       }
       if (card.subtitle.isNotEmpty) {
@@ -926,6 +1098,18 @@ class _CardsBlockState extends State<_CardsBlock> {
       for (int i = 0; i < card.metas.take(3).length; i++) {
         h += lh(s.baseFontSize * 0.9, 1.35) + 2;
       }
+      if (card.body.isNotEmpty) {
+        h +=
+            _lineCount(
+              stripInlineEmphasis(card.body),
+              _styleFor(s.baseFontSize * 0.92, FontWeight.w400, 1.35),
+              innerWidth,
+              scaler,
+              cap: 3,
+            ) *
+                lh(s.baseFontSize * 0.92, 1.35) +
+            4;
+      }
       if (card.chips.isNotEmpty) {
         final int rows = _chipRowCount(card.chips, innerWidth, scaler);
         final double chipHeight = lh(s.baseFontSize * 0.86, 1.2) + 14;
@@ -937,7 +1121,17 @@ class _CardsBlockState extends State<_CardsBlock> {
         h += rows * specHeight + (rows - 1) * 8 + 10;
       }
       if (card.price.isNotEmpty) {
-        h += lh(s.baseFontSize * 1.5, 1.2) + 10;
+        final double size = _priceSize(card.price);
+        h +=
+            _lineCount(
+              card.price,
+              _styleFor(size, FontWeight.w800, 1.2),
+              innerWidth,
+              scaler,
+              cap: 2,
+            ) *
+                lh(size, 1.2) +
+            10;
       }
       if (card.url.isNotEmpty || card.ask.isNotEmpty) {
         h += 46 + 12;
@@ -1009,7 +1203,7 @@ class _CardsBlockState extends State<_CardsBlock> {
     final _AnswerBlockStyle s = widget.s;
 
     final List<Widget> children = <Widget>[
-      if (card.image.isNotEmpty) ...<Widget>[
+      if (_hasImageSlot(card)) ...<Widget>[
         _cardImage(card, innerWidth),
         const SizedBox(height: 12),
       ] else if (card.badge.isNotEmpty) ...<Widget>[
@@ -1052,6 +1246,21 @@ class _CardsBlockState extends State<_CardsBlock> {
       children.addAll(<Widget>[
         const SizedBox(height: 2),
         _line(meta, null, s.baseFontSize * 0.9, 1.35, s.muted),
+      ]);
+    }
+    if (card.body.isNotEmpty) {
+      children.addAll(<Widget>[
+        const SizedBox(height: 4),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          child: Text(
+            stripInlineEmphasis(card.body),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: _styleFor(s.baseFontSize * 0.92, FontWeight.w400, 1.35)
+                .copyWith(color: s.secondary),
+          ),
+        ),
       ]);
     }
     if (card.chips.isNotEmpty) {
@@ -1154,9 +1363,11 @@ class _CardsBlockState extends State<_CardsBlock> {
     final _AnswerBlockStyle s = widget.s;
     String value = price;
     String unit = '';
+    final double size = _priceSize(price);
     for (final String sep in const <String>[' / ', ' · ', ' pro ', ' per ']) {
       final int at = price.indexOf(sep);
-      if (at > 0) {
+      // `248 CHF / Nacht` has a unit; `2.618 € / 3.570 €` has a second price.
+      if (at > 0 && !RegExp(r'\d').hasMatch(price.substring(at))) {
         value = price.substring(0, at);
         unit = price.substring(at);
         break;
@@ -1169,7 +1380,7 @@ class _CardsBlockState extends State<_CardsBlock> {
           children: <InlineSpan>[
             TextSpan(
               text: value,
-              style: _styleFor(s.baseFontSize * 1.5, FontWeight.w800, 1.2)
+              style: _styleFor(size, FontWeight.w800, 1.2)
                   .copyWith(color: s.textColor),
             ),
             if (unit.isNotEmpty)
@@ -1180,7 +1391,7 @@ class _CardsBlockState extends State<_CardsBlock> {
               ),
           ],
         ),
-        maxLines: 1,
+        maxLines: 2,
         overflow: TextOverflow.ellipsis,
       ),
     );
@@ -1225,7 +1436,6 @@ class _CardsBlockState extends State<_CardsBlock> {
 
   Widget _cardImage(AnswerCard card, double innerWidth) {
     final _AnswerBlockStyle s = widget.s;
-    final String url = card.image;
     final Widget placeholder = Container(
       alignment: Alignment.center,
       color: s.tileFill,
@@ -1233,7 +1443,6 @@ class _CardsBlockState extends State<_CardsBlock> {
         child: HugeIcon(HugeIcons.image01, size: 28, color: s.muted),
       ),
     );
-    final bool safeUrl = _isPublicImageUrl(url);
     return SelectionContainer.disabled(
       child: ClipRRect(
         borderRadius: BorderRadius.circular(18),
@@ -1244,7 +1453,19 @@ class _CardsBlockState extends State<_CardsBlock> {
             fit: StackFit.expand,
             children: <Widget>[
               placeholder,
-              if (safeUrl) _CardImage(url: url, fillColor: s.tileFill, iconColor: s.muted),
+              _CardImage(
+                urls: <String>[card.image, card.thumb]
+                    .where(_isPublicImageUrl)
+                    .toList(growable: false),
+                pageUrl: _isPublicImageUrl(card.url) ? card.url : '',
+                // A product photo must show the whole product; a hotel photo
+                // is a scene and fills its frame.
+                fit: card.price.isNotEmpty && !RegExp(r'/\s*[^\d\s]').hasMatch(card.price)
+                    ? BoxFit.contain
+                    : BoxFit.cover,
+                fillColor: s.tileFill,
+                iconColor: s.muted,
+              ),
               if (card.badge.isNotEmpty)
                 Positioned(
                   left: 10,
@@ -1303,10 +1524,11 @@ class _CardsBlockState extends State<_CardsBlock> {
 
   /// The tonal second button ("Vergleichen"): sends `ask: title` as the
   /// reader's next message, so the model knows which card was meant.
-  Widget _askButton(AnswerCard card) {
+  Widget _askButton(AnswerCard card, {double height = 46}) {
     final _AnswerBlockStyle s = widget.s;
     final ValueChanged<String>? send = widget.onFollowUp;
     return _pillButton(
+      height: height,
       label: card.ask,
       fill: s.accent.withValues(alpha: s.dark ? 0.24 : 0.16),
       fg: s.dark ? s.textColor : s.accent,
@@ -1319,13 +1541,14 @@ class _CardsBlockState extends State<_CardsBlock> {
     required Color fill,
     required Color fg,
     required VoidCallback? onTap,
+    double height = 46,
   }) {
     final _AnswerBlockStyle s = widget.s;
     return SizedBox(
-      height: 46,
+      height: height,
       child: Material(
         color: fill,
-        borderRadius: BorderRadius.circular(23),
+        borderRadius: BorderRadius.circular(height / 2),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
@@ -1403,11 +1626,53 @@ class _CardsBlockState extends State<_CardsBlock> {
             ),
           ),
         ),
-        const SizedBox(width: 5),
-        SelectionContainer.disabled(
-          child: HugeIcon(HugeIcons.arrowRight01, size: 15, color: s.muted),
-        ),
+        if (count > 1) ...<Widget>[
+          const SizedBox(width: 4),
+          _pageArrow(HugeIcons.arrowLeft01, _page - 1, count),
+          const SizedBox(width: 4),
+          _pageArrow(HugeIcons.arrowRight01, _page + 1, count),
+        ],
       ],
+    );
+  }
+
+  /// A real button: 32 px, dimmed and inert at the end of the row.
+  Widget _pageArrow(HugeIconData icon, int target, int count) {
+    final _AnswerBlockStyle s = widget.s;
+    final bool enabled = target >= 0 && target < count;
+    final MaterialLocalizations l = MaterialLocalizations.of(context);
+    return SelectionContainer.disabled(
+      child: Material(
+        color: s.tileFill,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: Semantics(
+          button: true,
+          enabled: enabled,
+          excludeSemantics: true,
+          label: target < _page ? l.previousPageTooltip : l.nextPageTooltip,
+          child: InkWell(
+          onTap: enabled
+              ? () => _controller?.animateToPage(
+                    target,
+                    duration: const Duration(milliseconds: 240),
+                    curve: Curves.easeOutCubic,
+                  )
+              : null,
+          child: SizedBox(
+            width: 32,
+            height: 32,
+            child: Center(
+              child: HugeIcon(
+                icon,
+                size: 16,
+                color: enabled ? s.textColor : s.muted.withValues(alpha: 0.4),
+              ),
+            ),
+          ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1428,12 +1693,20 @@ class _CardsBlockState extends State<_CardsBlock> {
 /// apply, as with every other remote image in the app.
 class _CardImage extends StatefulWidget {
   const _CardImage({
-    required this.url,
+    required this.urls,
+    required this.pageUrl,
+    required this.fit,
     required this.fillColor,
     required this.iconColor,
   });
 
-  final String url;
+  /// Image URLs to try in order, already checked by [_isPublicImageUrl].
+  final List<String> urls;
+
+  /// The page of the item. When every URL fails, its `og:image` is tried and
+  /// its site logo is the last resort. Empty when the card has no link.
+  final String pageUrl;
+  final BoxFit fit;
   final Color fillColor;
   final Color iconColor;
 
@@ -1448,42 +1721,65 @@ class _CardImageState extends State<_CardImage> {
 
   static const int _maxBytes = 8 * 1024 * 1024;
 
+  /// A product page is read only far enough to reach its meta tags.
+  static const int _maxPageBytes = 256 * 1024;
+
+  static const Map<String, String> _headers = <String, String>{
+    'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64)',
+  };
+
   Uint8List? _bytes;
   bool _failed = false;
 
-  /// Thrown when the streamed body runs past [_maxBytes]; the catch in
-  /// [_load] turns it into the placeholder.
-  static const _ImageTooLarge _imageTooLarge = _ImageTooLarge();
+  String get _key => '${widget.urls.join('|')}#${widget.pageUrl}';
+
+  /// Waits for the URLs to stop changing: a streaming block rewrites them
+  /// token by token, and each half URL would be a real request.
+  Timer? _settle;
+
   @override
   void initState() {
     super.initState();
-    _load();
+    _schedule();
   }
 
   @override
   void didUpdateWidget(covariant _CardImage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.url != oldWidget.url) {
+    final String old = '${oldWidget.urls.join('|')}#${oldWidget.pageUrl}';
+    if (_key != old) {
       _bytes = null;
       _failed = false;
-      _load();
+      _schedule();
     }
   }
 
-  Future<void> _load() async {
-    final String url = widget.url;
-    // A result that arrives after the url changed must not land: a late
-    // response from the old host must not paint into the new card.
-    bool current() => mounted && widget.url == url;
+  @override
+  void dispose() {
+    _settle?.cancel();
+    super.dispose();
+  }
 
-    final Uint8List? cached = _cache.get(url);
+  void _schedule() {
+    _settle?.cancel();
+    final Uint8List? cached = _cache.get(_key);
     if (cached != null) {
-      if (current()) setState(() => _bytes = cached);
+      _bytes = cached;
       return;
     }
+    _settle = Timer(const Duration(milliseconds: 400), _load);
+  }
+
+  Future<void> _load() async {
+    final String key = _key;
+    // A result that arrives after the urls changed must not land: a late
+    // response from the old host must not paint into the new card.
+    bool current() => mounted && _key == key;
+
     if (kIsWeb) {
       // No public-only client on the web build; the browser resolves and
       // fetches under its own rules, like every other remote image there.
+      if (widget.urls.isEmpty && current()) setState(() => _failed = true);
       return;
     }
     final http.Client? client = publicOnlyHttpClient(isNonPublicIp);
@@ -1492,35 +1788,85 @@ class _CardImageState extends State<_CardImage> {
       return;
     }
     try {
+      for (final String url in widget.urls) {
+        final Uint8List? body = await _fetchImage(client, url);
+        if (body != null) {
+          _cache.put(key, body);
+          if (current()) setState(() => _bytes = body);
+          return;
+        }
+        if (!current()) return;
+      }
+      final String fromPage = await _imageOfPage(client);
+      final Uint8List? body = fromPage.isEmpty || !_isPublicImageUrl(fromPage)
+          ? null
+          : await _fetchImage(client, fromPage);
+      if (body != null) _cache.put(key, body);
+      if (!current()) return;
+      setState(() {
+        _bytes = body;
+        _failed = body == null;
+      });
+    } finally {
+      client.close();
+    }
+  }
+
+  /// The body of [url] when it is an image of a sane size, else null.
+  Future<Uint8List?> _fetchImage(http.Client client, String url) async {
+    final (Uint8List, String?)? body = await _fetch(client, url, _maxBytes);
+    if (body == null) return null;
+    return _looksLikeImage(body.$1, body.$2) ? body.$1 : null;
+  }
+
+  Future<String> _imageOfPage(http.Client client) async {
+    final Uri? page = Uri.tryParse(widget.pageUrl);
+    if (page == null || widget.pageUrl.isEmpty) return '';
+    final (Uint8List, String?)? body = await _fetch(
+      client,
+      widget.pageUrl,
+      _maxPageBytes,
+      truncate: true,
+    );
+    if (body == null) return '';
+    return extractPageImage(
+      utf8.decode(body.$1, allowMalformed: true),
+      page,
+    );
+  }
+
+  /// Reads [url] with [cap] enforced WHILE streaming: an endless body never
+  /// fills memory. Past the cap the read fails, or stops with what it has
+  /// when [truncate] is set. Null on any failure.
+  Future<(Uint8List, String?)?> _fetch(
+    http.Client client,
+    String url,
+    int cap, {
+    bool truncate = false,
+  }) async {
+    try {
+      final http.Request request = http.Request('GET', Uri.parse(url))
+        ..headers.addAll(_headers);
       final http.StreamedResponse response = await client
-          .send(http.Request('GET', Uri.parse(url)))
+          .send(request)
           .timeout(const Duration(seconds: 15));
       final int? declared = response.contentLength;
-      if (response.statusCode != 200 || (declared != null && declared > _maxBytes)) {
-        if (current()) setState(() => _failed = true);
-        return;
+      if (response.statusCode != 200 ||
+          (!truncate && declared != null && declared > cap)) {
+        return null;
       }
-      // Read the body with the cap enforced WHILE streaming: an endless
-      // body never fills memory, it fails the load instead.
       final BytesBuilder buffer = BytesBuilder(copy: false);
       await for (final List<int> chunk
           in response.stream.timeout(const Duration(seconds: 15))) {
         buffer.add(chunk);
-        if (buffer.length > _maxBytes) {
-          throw _imageTooLarge;
+        if (buffer.length > cap) {
+          if (truncate) break;
+          return null;
         }
       }
-      final Uint8List body = buffer.takeBytes();
-      if (!_looksLikeImage(body, response.headers['content-type'])) {
-        if (current()) setState(() => _failed = true);
-        return;
-      }
-      _cache.put(url, body);
-      if (current()) setState(() => _bytes = body);
+      return (buffer.takeBytes(), response.headers['content-type']);
     } catch (_) {
-      if (current()) setState(() => _failed = true);
-    } finally {
-      client.close();
+      return null;
     }
   }
 
@@ -1567,12 +1913,12 @@ class _CardImageState extends State<_CardImage> {
   @override
   Widget build(BuildContext context) {
     if (_bytes != null) {
-      return Image.memory(_bytes!, fit: BoxFit.cover);
+      return Image.memory(_bytes!, fit: widget.fit);
     }
-    if (kIsWeb && !_failed) {
+    if (kIsWeb && !_failed && widget.urls.isNotEmpty) {
       return Image.network(
-        widget.url,
-        fit: BoxFit.cover,
+        widget.urls.first,
+        fit: widget.fit,
         errorBuilder: (BuildContext context, Object error, StackTrace? stack) =>
             _placeholder(),
       );
@@ -1580,20 +1926,25 @@ class _CardImageState extends State<_CardImage> {
     return _placeholder();
   }
 
+  /// While loading the plain tile; after a failure the site's logo, so a
+  /// shop that blocks every image still reads as that shop.
   Widget _placeholder() {
+    final String host = _failed ? statusDomain(widget.pageUrl) : '';
     return Container(
       alignment: Alignment.center,
       color: widget.fillColor,
       child: SelectionContainer.disabled(
-        child: HugeIcon(HugeIcons.image01, size: 28, color: widget.iconColor),
+        child: host.isEmpty
+            ? HugeIcon(HugeIcons.image01, size: 28, color: widget.iconColor)
+            : FaviconImage(
+                host: host,
+                size: 48,
+                borderRadius: 12,
+                fallbackColor: widget.iconColor,
+              ),
       ),
     );
   }
-}
-
-/// Thrown when a card image body runs past the size cap mid-stream.
-class _ImageTooLarge implements Exception {
-  const _ImageTooLarge();
 }
 
 // ---------------------------------------------------------------------------
