@@ -21,6 +21,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
@@ -372,6 +373,16 @@ class ArtifactStorageService {
           return const <ArtifactDocument>[];
         }
         rethrow;
+      } on http.ClientException catch (error) {
+        // Offline is a normal state here, and most callers do not wait for
+        // this read. Without this it surfaced as an uncaught error on every
+        // chat open with no network.
+        if (kDebugMode) {
+          debugPrint('[loadArtifactsForChat] offline: ${error.runtimeType}');
+        }
+        return List<ArtifactDocument>.from(
+          _cacheByChatId[chatId] ?? const <ArtifactDocument>[],
+        );
       }
 
       final docs = await _documentsFromRows(response, userId: user.id);
@@ -1274,6 +1285,14 @@ class ArtifactStorageService {
       }
       if (kDebugMode) {
         debugPrint('[rollbackArtifactsForMessages] select failed: $error');
+      }
+      return;
+    } on http.ClientException catch (error) {
+      // Offline: same outcome as a failed select above, nothing to roll back.
+      if (kDebugMode) {
+        debugPrint(
+          '[rollbackArtifactsForMessages] offline: ${error.runtimeType}',
+        );
       }
       return;
     }

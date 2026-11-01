@@ -193,8 +193,8 @@ class ChatMessageListItem extends StatelessWidget {
         isLastAiMessage &&
         (data.isStreamingMessage || runtime.isSending.value);
     if (wrapForStream) {
-      return RepaintBoundary(
-        child: ValueListenableBuilder<StreamingLive?>(
+      return _rowBoundary(
+        ValueListenableBuilder<StreamingLive?>(
           valueListenable: runtime.streamingLive,
           builder: (context, live, _) {
             final bool matches = live != null && live.index == index;
@@ -220,10 +220,20 @@ class ChatMessageListItem extends StatelessWidget {
     final Widget bubble = runId == null || data.isStreamingMessage
         ? answer
         : AgentsQuietRunFold(runId: runId, child: answer);
-    return RepaintBoundary(
-      child: data.isUser && uiKey == flyInKey
+    return _rowBoundary(
+      data.isUser && uiKey == flyInKey
           ? MessageFlyIn(key: ValueKey<String>('flyin_$uiKey'), child: bubble)
           : bubble,
     );
   }
+
+  /// One layer and one [TickerMode] per row.
+  ///
+  /// Every implicit animation listens to the nearest TickerMode's notifier,
+  /// and `removeListener` scans that list. With one notifier for the whole
+  /// app, tearing down rows was quadratic: over half of the "open long chat"
+  /// frame went to `ChangeNotifier.removeListener`. See docs/PERFORMANCE.md.
+  static Widget _rowBoundary(Widget child) => RepaintBoundary(
+    child: TickerMode(enabled: true, child: child),
+  );
 }

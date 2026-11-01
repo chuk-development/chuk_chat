@@ -55,7 +55,9 @@ class ComposerInputRow extends StatelessWidget {
           maintainSize: true,
           maintainState: true,
           maintainAnimation: true,
-          child: child,
+          // A keystroke and the caret blink repaint the field only, not the
+          // icons of the composer around it.
+          child: RepaintBoundary(child: child),
         ),
         if (isRecording)
           Positioned.fill(
