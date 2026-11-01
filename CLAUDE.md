@@ -516,6 +516,8 @@ actually loads before committing. See `docs/MCP_CONNECTORS.md`.
 | `docs/DATABASE.md` | Supabase tables, schema |
 | `docs/COMMON_TASKS.md` | Adding services, pages, features |
 | `docs/GOTCHAS.md` | **CRITICAL** — bugs to avoid |
+| `docs/ANSWER_BLOCKS.md` | The `:::` answer UI: parser repairs, how cards draw, card images, `scripts/answer_replay.sh` (real answers to PNG, headless) |
+| `docs/PERFORMANCE.md` | Phone and emulator benchmarks, the every-screen crawler, ranked hops, `scripts/perf_bench.sh` |
 | `docs/ASSISTANT_SURFACE.md` | Android assistant surface: assist role, overlay, device tools, the pinned model |
 | `docs/MCP_CONNECTORS.md` | Remote MCP connectors: the OAuth flow, storage, tool naming |
 | `docs/CHAT_PAYLOAD_FORMAT.md` | Chat payload v3 (no duplicates), compression frame, envelope `v:"2"`, old-client behaviour, the one-time migration behind the blocking maintenance screen |

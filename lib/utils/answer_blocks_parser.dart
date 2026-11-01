@@ -90,7 +90,25 @@ const Map<String, AnswerBlockKind> _kBlockNames = <String, AnswerBlockKind>{
 };
 
 final RegExp _openRe = RegExp(r'^ {0,3}:::\s*([A-Za-z][\w-]*)[ \t]*(.*)$');
-final RegExp _closeRe = RegExp(r'^ {0,3}:::\s*$');
+
+/// `::` closes too: models drop a colon, and an open block then swallows the
+/// rest of the answer as cards.
+final RegExp _closeRe = RegExp(r'^ {0,3}:{2,}\s*$');
+
+/// Block names models invent for a callout. They draw as the matching alert.
+const Map<String, String> _kAlertAliases = <String, String>{
+  'note': 'NOTE',
+  'info': 'NOTE',
+  'hinweis': 'NOTE',
+  'tip': 'TIP',
+  'tipp': 'TIP',
+  'important': 'IMPORTANT',
+  'wichtig': 'IMPORTANT',
+  'warning': 'WARNING',
+  'warnung': 'WARNING',
+  'achtung': 'WARNING',
+  'caution': 'CAUTION',
+};
 
 /// A closing marker that is still being typed (`:` or `::`).
 final RegExp _partialCloseRe = RegExp(r'^ {0,3}:{1,2}\s*$');
@@ -196,10 +214,34 @@ List<AnswerSegment> splitAnswerBlocks(String text) {
         body.removeLast();
       }
 
+      final String? alias = _kAlertAliases[name];
+      if (alias != null) {
+        // `:::Wichtig: text` uses the marker as a lead-in: drop the colon.
+        final String lead = arg.replaceFirst(RegExp(r'^:\s*'), '');
+        flush();
+        out.add(
+          AnswerBlockSegment(
+            kind: AnswerBlockKind.alert,
+            arg: alias,
+            lines: List<String>.unmodifiable(<String>[
+              if (lead.isNotEmpty) lead,
+              ...body,
+            ]),
+            closed: closed,
+          ),
+        );
+        i = j;
+        continue;
+      }
+
       final AnswerBlockKind? kind = _kBlockNames[name];
       if (kind == null) {
-        // Unknown block: plain Markdown, without the marker lines.
-        if (arg.isNotEmpty) {
+        // Unknown block: plain Markdown, without the marker lines. `:::Kurz:
+        // text` uses the marker as a lead-in, so the word stays with its text.
+        if (arg.startsWith(':')) {
+          buf.writeln('${open.group(1)!}$arg');
+          buf.writeln();
+        } else if (arg.isNotEmpty) {
           buf.writeln(arg);
           buf.writeln();
         }
@@ -727,7 +769,29 @@ class BarsSpec {
 
   /// Optional small label chip above the title (`tag: BF16 · nur Gewichte`).
   final String tag;
+
+  /// True when bar lengths mean something: the values are short numbers. A
+  /// value like `2× RCE, PHP 5.4–8.5` is prose with a digit in it; its "bar"
+  /// would compare nothing, and its width crushes the label to one letter
+  /// per line. Such a block draws as fact rows.
+  bool get isComparable {
+    if (rows.any((BarRow r) => r.valueText.length > _kBarValueMaxChars)) {
+      return false;
+    }
+    // `N/A` has no number and draws without a bar. A value with a digit that
+    // does not start with a number is prose.
+    if (rows.any(
+      (BarRow r) => r.value != null && !_barNumberRe.hasMatch(r.valueText),
+    )) {
+      return false;
+    }
+    final int numeric = rows.where((BarRow r) => r.value != null).length;
+    return numeric >= (rows.length < 2 ? rows.length : 2);
+  }
 }
+
+const int _kBarValueMaxChars = 24;
+final RegExp _barNumberRe = RegExp(r'^[~≈<>≤≥\s]*(?:ca\.\s*)?[-−]?[\d$€£]');
 
 BarsSpec parseBars(String arg, List<String> lines) {
   final List<BarRow> rows = <BarRow>[];
@@ -850,6 +914,17 @@ TilesSpec parseTiles(String arg, List<String> lines) {
       continue;
     }
     String body = line.startsWith('- ') ? line.substring(2).trim() : line;
+    // A line with no `|` under a tile that has its icon: the model put the
+    // subline on its own line. It is that tile's subline, not a new tile.
+    if (!line.startsWith('- ') &&
+        !body.contains('|') &&
+        tiles.isNotEmpty &&
+        tiles.last.icon.isNotEmpty &&
+        tiles.last.sub.isEmpty) {
+      final IconTile last = tiles.removeLast();
+      tiles.add(IconTile(label: last.label, icon: last.icon, sub: body));
+      continue;
+    }
     final List<String> parts = body.split('|').map((p) => p.trim()).toList();
     final String label = parts.isNotEmpty ? parts[0] : '';
     if (label.isEmpty) continue;
@@ -911,6 +986,8 @@ class AnswerCard {
     this.ask = '',
     this.specs = const <CardSpecItem>[],
     this.image = '',
+    this.thumb = '',
+    this.body = '',
     this.badge = '',
     this.price = '',
     this.url = '',
@@ -932,6 +1009,13 @@ class AnswerCard {
   final String ask;
   final List<CardSpecItem> specs;
   final String image;
+
+  /// Fallback image, for a shop that refuses a direct fetch of [image]: the
+  /// `thumbnail_url` of an image search, which the search engine hosts.
+  final String thumb;
+
+  /// Free text under the title, Markdown, not limited to one line.
+  final String body;
   final String badge;
   final String price;
   final String url;
@@ -950,6 +1034,7 @@ class CardsSpec {
 
 const List<String> _kCardKeys = <String>[
   'image',
+  'thumb',
   'badge',
   'subtitle',
   'location',
@@ -961,6 +1046,57 @@ const List<String> _kCardKeys = <String>[
   'action',
 ];
 
+/// A plain `Label: value` line in a card, drawn as a fact line.
+final RegExp _factLineRe = RegExp(r'^[\p{L}][\p{L} -]{0,20}:\s', unicode: true);
+
+/// Drops `**` and `__`. The title of a card is drawn as plain text, so a
+/// marker left in it shows literally (`**COSMIC** (System76)`).
+String stripInlineEmphasis(String s) =>
+    s.replaceAll('**', '').replaceAll('__', '').trim();
+
+bool _isCardKeyLine(String line) {
+  final int colon = line.indexOf(':');
+  if (colon <= 0) return false;
+  final String key = line.substring(0, colon).trim().toLowerCase();
+  return _kCardKeys.contains(key) ||
+      key == 'chips' ||
+      key == 'meta' ||
+      key == 'specs';
+}
+
+/// The longest plain line that may start a new card after a key line.
+const int _kCardTitleMaxChars = 60;
+
+/// A title is a name, not a phrase.
+const int _kCardTitleMaxWords = 4;
+
+/// Reads the product image of a shop page: `og:image`, `twitter:image`, then
+/// the `image` of JSON-LD. Returns an absolute https URL, or ''.
+String extractPageImage(String html, Uri page) {
+  for (final RegExp re in <RegExp>[
+    RegExp(
+      r'''<meta[^>]+(?:property|name)=["'](?:og:image(?::secure_url)?|twitter:image)["'][^>]+content=["']([^"']+)["']''',
+      caseSensitive: false,
+    ),
+    RegExp(
+      r'''<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["'](?:og:image(?::secure_url)?|twitter:image)["']''',
+      caseSensitive: false,
+    ),
+    RegExp(r'''"image"\s*:\s*\[?\s*"([^"]+)"'''),
+  ]) {
+    for (final RegExpMatch m in re.allMatches(html)) {
+      final String clean = m.group(1)!
+          .replaceAll('&amp;', '&')
+          .replaceAll(r'\/', '/');
+      final Uri? resolved = Uri.tryParse(clean);
+      if (resolved == null) continue;
+      final Uri absolute = page.resolveUri(resolved);
+      if (absolute.scheme == 'https') return absolute.toString();
+    }
+  }
+  return '';
+}
+
 AnswerCard _parseCardRecord(List<String> record) {
   String title = '';
   String subtitle = '';
@@ -969,11 +1105,13 @@ AnswerCard _parseCardRecord(List<String> record) {
   String ask = '';
   final List<CardSpecItem> specs = <CardSpecItem>[];
   String image = '';
+  String thumb = '';
   String badge = '';
   String price = '';
   String url = '';
   String action = '';
   final List<String> metas = <String>[];
+  final List<String> bodyLines = <String>[];
   final List<String> chips = <String>[];
 
   for (final String raw in record) {
@@ -998,6 +1136,9 @@ AnswerCard _parseCardRecord(List<String> record) {
       switch (key) {
         case 'image':
           image = value;
+          continue;
+        case 'thumb':
+          thumb = value;
           continue;
         case 'badge':
           badge = value;
@@ -1045,10 +1186,14 @@ AnswerCard _parseCardRecord(List<String> record) {
       continue;
     }
     if (title.isEmpty) {
-      title = line.startsWith('- ') ? line.substring(2).trim() : line;
-    } else {
-      // An extra plain line: read it as a fact line.
+      title = stripInlineEmphasis(
+        line.startsWith('- ') ? line.substring(2).trim() : line,
+      );
+    } else if (_factLineRe.hasMatch(line)) {
       metas.add(line);
+    } else {
+      // An extra plain line: the card's free text.
+      bodyLines.add(line);
     }
   }
   return AnswerCard(
@@ -1059,6 +1204,8 @@ AnswerCard _parseCardRecord(List<String> record) {
     ask: ask,
     specs: List<CardSpecItem>.unmodifiable(specs),
     image: image,
+    thumb: thumb,
+    body: bodyLines.join('\n'),
     badge: badge,
     price: price,
     url: url,
@@ -1071,19 +1218,36 @@ AnswerCard _parseCardRecord(List<String> record) {
 CardsSpec parseCards(String arg, List<String> lines) {
   final List<List<String>> records = <List<String>>[];
   List<String> current = <String>[];
+  bool sawKey = false;
 
   void flushRecord() {
     if (current.any((l) => l.trim().isNotEmpty)) {
       records.add(current);
     }
     current = <String>[];
+    sawKey = false;
   }
 
-  for (final String line in lines) {
+  for (int i = 0; i < lines.length; i++) {
+    final String line = lines[i];
     final String t = line.trim();
     if (t == '--' || t == '---' || t.isEmpty) {
       flushRecord();
       continue;
+    }
+    if (_isCardKeyLine(t)) {
+      sawKey = true;
+    } else if (sawKey &&
+        i + 1 < lines.length &&
+        lines[i + 1].trim().isNotEmpty &&
+        t.length <= _kCardTitleMaxChars &&
+        t.split(RegExp(r'\s+')).length <= _kCardTitleMaxWords &&
+        !t.contains(',') &&
+        !t.endsWith('.') &&
+        !_factLineRe.hasMatch(t)) {
+      // A short name with more lines under it, after the keys, is the next
+      // card's title: the model forgot the `--`. A last line is the body.
+      flushRecord();
     }
     current.add(line);
   }
@@ -1161,8 +1325,15 @@ AskSpec parseAsk(String arg, List<String> lines) {
     chips.add(label);
     icons.add(icon);
   }
+  // No question on the opening line, but the first line is one: it is the
+  // heading, not something the reader wants to send.
+  String question = arg.trim();
+  if (question.isEmpty && chips.length > 1 && chips.first.endsWith('?')) {
+    question = chips.removeAt(0);
+    icons.removeAt(0);
+  }
   return AskSpec(
-    question: arg.trim(),
+    question: question,
     chips: List<String>.unmodifiable(chips),
     chipIcons: List<String>.unmodifiable(icons),
     buttons: List<String>.unmodifiable(buttons),

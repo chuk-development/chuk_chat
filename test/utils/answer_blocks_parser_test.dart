@@ -420,7 +420,7 @@ void main() {
       ]);
       expect(spec.cards, hasLength(1));
       expect(spec.cards[0].title, 'Title line');
-      expect(spec.cards[0].metas, <String>['Some fact without a key']);
+      expect(spec.cards[0].body, 'Some fact without a key');
     });
 
     test('cards: a known key with an empty value is dropped', () {
@@ -754,8 +754,9 @@ void main() {
       final int end = prompt.indexOf(last, start);
       final String section = prompt.substring(start, end + last.length);
       // 18 block kinds incl. the Figma visual library (check, term, grid,
-      // sizes, quote, more); one short example each, nothing more.
-      expect(TokenEstimator.estimateTokens(section), lessThan(800));
+      // sizes, quote, more); one short example each, plus the rules that
+      // stop the misuse seen in real answers (2026-11-01 audit).
+      expect(TokenEstimator.estimateTokens(section), lessThan(1100));
     });
   });
 }
