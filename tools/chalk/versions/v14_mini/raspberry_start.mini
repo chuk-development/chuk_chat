@@ -1,0 +1,15 @@
+title "Raspberry Pi in Betrieb nehmen"
+board pi size=8.5,5.6
+port hdmi type=hdmi edge=bottom pos=0.45
+port usbc type=usbc edge=bottom pos=0.15
+port usb1 type=usb edge=right pos=0.3
+port usb2 type=usb edge=right pos=0.6
+port sd type=sd edge=left pos=0.5
+plug monitor to=hdmi
+plug keyboard to=usb1
+plug power to=usbc
+step "Zuerst die microSD-Karte mit dem Betriebssystem einstecken" on=sd
+step "Den Monitor per HDMI-Kabel anschliessen" plug=monitor
+step "Tastatur an den USB-Anschluss" plug=keyboard
+step "Zum Schluss Strom anstecken - der Pi startet von selbst" plug=power
+step "Der Bildschirm zeigt den Desktop - fertig!" glow=hdmi

@@ -18,7 +18,7 @@ def main(out, request):
     out = Path(out); out.mkdir(parents=True, exist_ok=True)
     system = (HERE / 'PROMPT_MINI.md').read_text()
     t0, note, r = time.time(), '', {}
-    for i in range(3):
+    for i in range(5):
         src = fence(llm(MODEL, request + note, system=system, effort='low', tokens=6000))
         (out / 'scene.mini').write_text(src)
         r = json.loads(subprocess.run(['node', str(HERE / 'mini.mjs'), str(out / 'scene.mini'), str(out / 'scene.chalk')], capture_output=True, text=True).stdout)

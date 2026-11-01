@@ -218,6 +218,8 @@ Run: `python3 tools/chalk/mini.py <dir> "<request>"`, then `render3d.py <dir>/sc
 
 Measured with GLM 5.3 Flash, 2 runs of 8 machines: 8 of 8 clean in both runs, at most 2 rounds, 1 to 3 s per machine, about 40 s for a draft film. The forge took 17 to 45 min. Films: `tools/chalk/versions/v14_mini/`.
 
+Second kit for boards (Raspberry Pi, Arduino): `board`, `chip`, `port`, `pins`, `led`, `plug`. Parts snap to an edge or a fraction of the board. Overlaps go back to the model as errors. Sizes are normalized, because the model mixes up mm and cm.
+
 Limits: all axes are parallel (one plane), so no bevel gear, no helicopter, no body shape. A block can lie behind a moving part. The kit explains a mechanism, it does not show the real look of the object.
 
 Found on the way: `axis=x|z` shapes and the first cap of `cyl` had faces turned inward, which made them dark in every earlier film. Fixed in `geom.mjs`.

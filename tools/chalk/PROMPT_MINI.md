@@ -37,3 +37,19 @@ step "Auf derselben Achse sitzt ein kleines Rad" on=klein
 step "Am Ende: langsam, aber neunmal so stark" on=ab
 step "Jede Stufe tauscht Tempo gegen Kraft"
 ```
+
+Second kit, for electronics. Use it for a board such as a Raspberry Pi, and never mix it with the machine kit. Positions are fractions of the board: at=0,0 is the top left corner, at=1,1 the bottom right corner.
+
+  board ID size=8.5,5.6                    # always first. Real proportions, in cm
+  chip ID size=1.5,1.5 at=0.4,0.5          # flat chip
+  port ID type=usb edge=right pos=0.3      # socket on an edge. pos: 0 to 1 along the edge. edge: top bottom left right
+  port ID type=fpc at=0.05,0.5             # flat socket on the board surface, for a camera or display ribbon
+  pins ID n=20 edge=top                    # pin header
+  led ID at=0.1,0.1 color=#46e06a          # small light
+  plug ID to=PORT                          # the thing that goes in. On an edge port: a plug with a cable. On fpc: a ribbon with a camera
+  step "Sentence" on=ID                    # camera goes to ID
+  step "Sentence" plug=ID                  # the plug arrives. Every plug needs one such step
+  step "Sentence" glow=ID                  # ID lights up. The last step has no on=
+
+Port types: usb usbc hdmi ethernet jack sd fpc power.
+Build the real board layout from what you know. At most 10 parts: only those that the viewer needs. An fpc socket is 2.2 long along the board edge, so use one, not two.
