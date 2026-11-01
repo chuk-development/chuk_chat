@@ -89,7 +89,11 @@ class MobileLayout {
   /// Space the chat body reserves at the top so its first row starts below
   /// the floating bar: status-bar inset + the bar's content.
   ///
-  /// `paddingOf`, not `of`: see [isPhone].
+  /// `viewPaddingOf`, not `of` or `paddingOf`: `padding` changes while the
+  /// keyboard rises, `viewPadding` does not. See [isPhone].
   static double chromeInset(BuildContext context) =>
-      MediaQuery.paddingOf(context).top + 8 + headerContentHeight(context) + 10;
+      MediaQuery.viewPaddingOf(context).top +
+      8 +
+      headerContentHeight(context) +
+      10;
 }

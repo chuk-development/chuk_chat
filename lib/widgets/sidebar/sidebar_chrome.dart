@@ -214,6 +214,9 @@ class _SbCardState extends State<SbCard> {
         ? BorderRadius.circular(widget.radius!)
         : SbCardShape.of(context) ?? BorderRadius.circular(kSbCardRadius);
 
+    // Each card has its own TickerMode (below): see ChatMessageListItem. 120
+    // chats hold 240 of these, and one shared notifier made each unmount scan
+    // all of them.
     Widget card = AnimatedScale(
       scale: _pressed ? 0.985 : 1,
       duration: const Duration(milliseconds: 130),
@@ -280,10 +283,13 @@ class _SbCardState extends State<SbCard> {
     }
 
     return RepaintBoundary(
-      child: MouseRegion(
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
-        child: card,
+      child: TickerMode(
+        enabled: true,
+        child: MouseRegion(
+          onEnter: (_) => setState(() => _hovered = true),
+          onExit: (_) => setState(() => _hovered = false),
+          child: card,
+        ),
       ),
     );
   }

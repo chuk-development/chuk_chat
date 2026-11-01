@@ -81,7 +81,11 @@ start() {
   # WiFi emulation (netsimd) burn CPU for nothing here, and audio has no use.
   local guard=()
   command -v memguard-allow >/dev/null && guard=(memguard-allow 8G)
-  setsid "${guard[@]}" "$EMULATOR" -avd "$AVD" -gpu "$GPU_MODE" -accel on \
+  # tcmalloc in the emulator keeps freed multi-GB blocks. Disk writes in the
+  # guest (an APK install) allocate those, so without this the process grew
+  # to 18 GB RSS over a session with hw.ramSize at 4 GB. See docs/PERFORMANCE.md.
+  TCMALLOC_AGGRESSIVE_DECOMMIT=t TCMALLOC_RELEASE_RATE=10 \
+  setsid "${guard[@]}" "$EMULATOR" -avd "$AVD" -no-window -no-snapshot -gpu "$GPU_MODE" -accel on \
     -no-boot-anim -no-metrics -no-audio -feature -Bluetooth \
     ${AGENTS_AVD_EXTRA:-} >"$LOG" 2>&1 < /dev/null &
   wait_boot

@@ -916,9 +916,12 @@ class _MessengerShellState extends State<MessengerShell>
     // (which buttons apply) and the control panel all read from it.
     return AnimatedBuilder(
       animation: _roster,
-      builder: (context, _) => LayoutBuilder(
-        builder: (context, constraints) {
-          final double width = constraints.maxWidth;
+      // sizeOf, not a LayoutBuilder: the shell only needs the width, and a
+      // LayoutBuilder here ran on every keyboard frame and rebuilt both
+      // halves, the sidebar and its whole chat list included.
+      builder: (context, _) => Builder(
+        builder: (context) {
+          final double width = MediaQuery.sizeOf(context).width;
           final bool phone = MobileLayout.isPhoneWidth(width);
           _isPhone = phone;
           final agent = _selectedAgent;
@@ -1121,6 +1124,13 @@ class _MessengerShellState extends State<MessengerShell>
     // would therefore keep its composer and its last messages under the
     // keyboard, and nothing inside it could react, because the inset it reads
     // is already zero.
+    //
+    // Built here, not in the builders below: the LayoutBuilder runs on every
+    // keyboard frame, also while this half is hidden behind the Chat half,
+    // and a new widget each time would rebuild the thread host with it.
+    final Widget idleThread = Offstage(
+      child: ExcludeFocus(child: _buildThread(phone: true)),
+    );
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final Size openSize = Size(constraints.maxWidth, constraints.maxHeight);
@@ -1133,9 +1143,7 @@ class _MessengerShellState extends State<MessengerShell>
             final Widget chatLayer = agent == null
                 // No agent selected: the thread view still has to exist, because
                 // it is what builds the transport.
-                ? Offstage(
-                    child: ExcludeFocus(child: _buildThread(phone: true)),
-                  )
+                ? idleThread
                 : Offstage(
                     // Onstage from the frame the thread is asked for, not from the
                     // first frame of the travel: that way the one expensive build

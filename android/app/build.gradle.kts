@@ -98,6 +98,11 @@ android {
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "dev.chuk.chat"
+        // scripts/perf_bench.sh installs its benchmark app NEXT TO the real
+        // one (dev.chuk.chat.perf). Never set this for a build that ships.
+        (project.findProperty("benchIdSuffix") as String?)?.let {
+            applicationIdSuffix = it
+        }
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = maxOf(flutter.minSdkVersion, 23)

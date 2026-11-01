@@ -661,7 +661,11 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     // this much space at the top, or its first row starts hidden behind the
     // bar. Height = safe-area inset + the bar's own padded content
     // (8 + 48 + 6 == 62, see _buildFloatingTopBar).
-    final double topBarInset = MediaQuery.paddingOf(context).top + 62;
+    //
+    // viewPaddingOf, not paddingOf: `padding.bottom` falls to 0 while the
+    // keyboard rises, and that would rebuild this whole screen, the sidebar
+    // included, on the first frames of every keyboard animation.
+    final double topBarInset = MediaQuery.viewPaddingOf(context).top + 62;
 
     final Widget mainContent = GestureDetector(
       behavior: HitTestBehavior.translucent,

@@ -2,6 +2,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -164,6 +165,12 @@ class DeveloperOptionsService {
         return;
       }
       rethrow;
+    } on http.ClientException catch (error) {
+      // Offline: the local value stands. The callers do not wait for this
+      // save, so a rethrow would be an uncaught error.
+      if (kDebugMode) {
+        debugPrint('[DeveloperOptions] save offline: ${error.runtimeType}');
+      }
     }
   }
 

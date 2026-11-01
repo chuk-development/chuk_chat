@@ -409,7 +409,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
   // Messenger mode: the thread opens at its bottom (see ChatScrollMixin).
   @override
-  bool get anchoredTranscript => widget.messengerMode;
+  // Every chat, not only the Agents thread. The plain list opened a chat by
+  // walking to its bottom, row by row: the cost of opening grew with the chat.
+  bool get anchoredTranscript => true;
 
   // Agents: the thread saves its model only when it changed (see
   // ChatModelSelectionMixin).
@@ -3034,6 +3036,38 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     bool isRegenerate = false,
     bool applyDictation = false,
   }) async {
+    // One at a time. The artifact rollback below awaits the network, so a
+    // second tap on Retry got past the streaming guard, cut the list, and the
+    // first run came back with a stale index: a RangeError, or two sends.
+    // Per chat: an edit waiting in chat A must not swallow a Retry in chat B.
+    final String? chatId = _activeChatId;
+    if (!_submittingEdits.add(chatId)) return;
+    try {
+      await _submitEditedMessage(
+        index,
+        newText,
+        removeFollowingAssistant: removeFollowingAssistant,
+        clearMessagesBelow: clearMessagesBelow,
+        attachedFilesOverride: attachedFilesOverride,
+        isRegenerate: isRegenerate,
+        applyDictation: applyDictation,
+      );
+    } finally {
+      _submittingEdits.remove(chatId);
+    }
+  }
+
+  final Set<String?> _submittingEdits = <String?>{};
+
+  Future<void> _submitEditedMessage(
+    int index,
+    String newText, {
+    required bool removeFollowingAssistant,
+    required bool clearMessagesBelow,
+    required List<AttachedFile>? attachedFilesOverride,
+    required bool isRegenerate,
+    required bool applyDictation,
+  }) async {
     if (index < 0 || index >= _messages.length) return;
     if (_streamingHandler.isStreaming || _streamingHandler.isSending) {
       showSnackBar('Please wait');
@@ -3715,28 +3749,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     Widget itemBuilder(BuildContext context, int i) => rowBuilder(context, i);
 
-    if (widget.messengerMode) {
-      // The pin room comes and goes; the bottom of the thread does not.
-      transcriptBottomInset = padding.bottom - pinnedExtraSpace;
-      return buildAnchoredTranscript(
-        split: resolveTranscriptSplit(),
-        itemCount: itemCount,
-        padding: padding,
-        itemBuilder: itemBuilder,
-        scrollCacheExtent: cacheExtent,
-        addAutomaticKeepAlives: false,
-      );
-    }
-    return ListView.builder(
-      controller: scrollController,
-      padding: padding,
+    // The pin room comes and goes; the bottom of the thread does not.
+    transcriptBottomInset = padding.bottom - pinnedExtraSpace;
+    return buildAnchoredTranscript(
+      split: resolveTranscriptSplit(),
       itemCount: itemCount,
-      addAutomaticKeepAlives: false,
-      // Each item already wraps itself in a RepaintBoundary below; letting
-      // the list add a second one around it doubled the layers for no gain.
-      addRepaintBoundaries: false,
-      scrollCacheExtent: cacheExtent,
+      padding: padding,
       itemBuilder: itemBuilder,
+      scrollCacheExtent: cacheExtent,
+      addAutomaticKeepAlives: false,
     );
   }
 
@@ -3753,10 +3774,17 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // subtree — composer, list, mode selector — during the layout phase of
     // every animation frame, for a value (the width) that never changes.
     //
-    // sizeOf/paddingOf subscribe to one aspect each; MediaQuery.of would
+    // sizeOf/viewPaddingOf subscribe to one aspect each; MediaQuery.of would
     // subscribe to viewInsets too and bring the per-frame rebuild back.
+    //
+    // Not paddingOf: `padding.bottom` falls from the gesture bar to 0 over
+    // the first frames of the keyboard, and each step would rebuild this
+    // screen. The focus says the same thing once, and the composer's own
+    // SafeArea still follows the padding frame by frame.
     final double availableWidth = MediaQuery.sizeOf(context).width;
-    final double bottomPadding = MediaQuery.paddingOf(context).bottom;
+    final double bottomPadding = composerFocusNode.hasFocus
+        ? 0
+        : MediaQuery.viewPaddingOf(context).bottom;
 
     const double effectiveHorizontalPadding = _kHorizontalPaddingSmall;
     final double maxPossibleChatContentWidth = math.max(

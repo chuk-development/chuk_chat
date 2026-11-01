@@ -305,7 +305,9 @@ class _SidebarMobileState extends State<SidebarMobile>
     // Use the real device safe-area inset instead of a magic 40.0 — a fixed
     // value puts the first block under the dynamic island / camera notch on
     // devices with larger top insets.
-    final EdgeInsets viewPadding = MediaQuery.paddingOf(context);
+    // viewPaddingOf: see root_wrapper_mobile.dart. The sidebar sits behind
+    // the chat while the keyboard moves and has no reason to rebuild.
+    final EdgeInsets viewPadding = MediaQuery.viewPaddingOf(context);
 
     // Both bars are cards that float over the list, not bands that box it
     // in: the chats run past them on every side, and the panel keeps its
