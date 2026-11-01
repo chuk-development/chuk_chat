@@ -1,0 +1,11 @@
+title "Kolbenpumpe"
+gear motor teeth=14 at=0,0 color=#b5461f
+gear gross teeth=42 to=motor dir=0 color=#3f7fb5
+gear klein teeth=12 to=gross by=axle
+gear trieb teeth=36 to=klein dir=90
+piston kolben to=trieb dir=180
+step "Der Elektromotor dreht das kleine Zahnrad" on=motor
+step "Über Zahnräder wird die Drehung übersetzt" on=gross
+step "Das grosse Triebrad dreht langsam" on=trieb
+step "Der Kolben pumpt das Wasser" on=kolben
+step "Drehung wird zu Auf und Ab"

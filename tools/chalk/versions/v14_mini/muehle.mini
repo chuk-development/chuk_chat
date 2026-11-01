@@ -1,0 +1,12 @@
+title "Windmühle"
+wheel rotor r=2 blades=4 at=0,0 color=#8a5a2b
+wheel welle r=0.5 to=rotor by=axle
+gear klein teeth=12 to=welle by=axle
+gear gross teeth=36 to=klein dir=90 color=#6b6b6b
+wheel mahlstein r=1.2 to=gross by=axle color=#9e9e9e
+block gebaeude size=6,4 at=0,-4.5 color=#c9b18a
+step "Der Wind drückt gegen die Flügel und dreht sie" on=rotor
+step "Die Welle überträgt die Drehung nach unten" on=welle
+step "Ein Zahnrad übersetzt die Drehung" on=klein
+step "Der Mahlstein dreht mit und mahlt das Korn" on=mahlstein
+step "Windkraft wird zu Mahlkraft"

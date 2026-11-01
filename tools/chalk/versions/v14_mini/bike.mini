@@ -1,0 +1,9 @@
+title "Fahrradantrieb"
+gear pedal teeth=20 at=0,0 color=#b5461f
+gear kette teeth=12 to=pedal by=chain dir=0 dist=4
+wheel rad r=1 to=kette by=axle blades=6 color=#3f7fb5
+block boden size=8,0.4 at=2,-2.2
+step "Du trittst in die Pedale: das grosse Kettenblatt dreht" on=pedal
+step "Die Kette uebertraegt die Kraft nach hinten" on=kette
+step "Das kleine Ritzel auf der Achse treibt das Rad an" on=rad
+step "Kleine Umdrehung vorne, viele Umdrehungen hinten: schnell vorwaerts"

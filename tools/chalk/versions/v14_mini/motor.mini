@@ -1,0 +1,11 @@
+title "Zweizylinder-Motor"
+wheel kurbel r=1 at=0,0 color=#555555
+wheel gewicht r=0.5 to=kurbel by=axle color=#333333
+piston zyl1 to=kurbel dir=90 color=#b5461f
+piston zyl2 to=kurbel dir=270 color=#3f7fb5
+block gehaeuse size=6,0.6 at=0,-2.2
+step "Die Kurbelwelle dreht und trägt zwei versetzte Kurbelzapfen" on=kurbel
+step "Zylinder 1 zieht den Kolben nach unten und leistet Arbeit" on=zyl1
+step "Zylinder 2 arbeitet versetzt, wenn Zylinder 1 ausatmet" on=zyl2
+step "So entsteht eine gleichmässige Drehbewegung ohne Totpunkt" on=gewicht
+step "Zwei Zylinder teilen sich die Arbeit und glätten den Lauf"

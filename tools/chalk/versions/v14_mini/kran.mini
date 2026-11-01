@@ -1,0 +1,12 @@
+title "Seilwinde mit Untersetzung"
+wheel motor r=0.5 at=0,0 color=#b5461f
+gear klein teeth=12 to=motor by=axle
+gear gross teeth=48 to=klein dir=0
+wheel trommel r=1.2 to=gross by=axle blades=6 color=#3f7fb5
+block last size=1.5,1 on=trommel side=bottom
+block sockel size=8,0.5 at=2,-3
+step "Der Motor dreht schnell, hat aber wenig Kraft" on=motor
+step "Ein kleines Zahnrad sitzt auf der Motorachse" on=klein
+step "Es treibt ein grosses Zahnrad an: 1 zu 4 langsamer" on=gross
+step "Auf derselben Achse wickelt sich die Trommel auf" on=trommel
+step "Langsame Drehung, vierfache Kraft hebt die Last"

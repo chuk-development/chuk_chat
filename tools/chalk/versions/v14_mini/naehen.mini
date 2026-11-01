@@ -1,0 +1,9 @@
+title "Nähmaschine"
+wheel antrieb r=1 at=0,0
+wheel kurbel r=0.5 to=antrieb by=axle
+piston stange to=kurbel dir=90
+block gehaeuse size=6,0.8 at=0,-2.5
+step "Das Rad dreht sich rundherum" on=antrieb
+step "Die Kurbel auf derselben Achse ist kleiner" on=kurbel
+step "Der Kolben wandelt die Drehung in Auf und Ab" on=stange
+step "So bewegt sich die Nadel auf und ab"

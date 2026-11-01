@@ -37,6 +37,8 @@ class Mesh {
       const p = f([this.t[i], this.t[i + 1], this.t[i + 2]]);
       this.t[i] = p[0]; this.t[i + 1] = p[1]; this.t[i + 2] = p[2];
     }
+    // A swap of two axes is a mirror. Keep the faces outward.
+    if (f.mirror) for (let i = 0; i < this.t.length; i += 9) for (let c = 0; c < 3; c++) { const v = this.t[i + 3 + c]; this.t[i + 3 + c] = this.t[i + 6 + c]; this.t[i + 6 + c] = v; }
     return this;
   }
 }
@@ -52,25 +54,26 @@ function revolve(profile, seg) {
       m.quad(ring(y0, r0, a0), ring(y0, r0, a1), ring(y1, r1, a1), ring(y1, r1, a0));
     }
   }
-  const capProfile = (y, r) => {
+  const capProfile = (y, r, first) => {
     if (r <= 1e-6) return;
     for (let s = 0; s < seg; s++) {
       const a0 = (s / seg) * Math.PI * 2, a1 = ((s + 1) / seg) * Math.PI * 2;
-      m.tri([0, y, 0], ring(y, r, a0), ring(y, r, a1));
+      if (first) m.tri([0, y, 0], ring(y, r, a1), ring(y, r, a0));
+      else m.tri([0, y, 0], ring(y, r, a0), ring(y, r, a1));
     }
   };
   // A closed profile is a ring. It has no end faces, the hole stays open.
   const first = profile[0], end = profile.at(-1);
   const closed = first[0] === end[0] && first[1] === end[1];
-  if (!closed) capProfile(...profile[0]);
+  if (!closed) capProfile(...profile[0], true);
   if (!closed) capProfile(...profile.at(-1));
   return m;
 }
 
 const axisTo = (axis) => {
-  if (axis === 'x') return ([x, y, z]) => [y, x, z];
-  if (axis === 'z') return ([x, y, z]) => [x, z, y];
-  return (p) => p;
+  const f = axis === 'x' ? ([x, y, z]) => [y, x, z] : axis === 'z' ? ([x, y, z]) => [x, z, y] : (p) => p;
+  f.mirror = axis === 'x' || axis === 'z';
+  return f;
 };
 
 function box([w, h, d]) {
