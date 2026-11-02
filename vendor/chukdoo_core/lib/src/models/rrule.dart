@@ -165,7 +165,7 @@ class RRuleHelper {
         for (final day in config.byDay!) {
           final dayOffset = _weekdayToInt(day) - weekStart.weekday;
           final adjusted = dayOffset >= 0 ? dayOffset : dayOffset + 7;
-          final occurrence = _addDays(weekStart, adjusted);
+          final occurrence = _addDays(weekStart, adjusted, eventStart);
 
           if (occurrence.isAfter(rangeEnd)) continue;
           if (config.until != null && occurrence.isAfter(config.until!)) {
@@ -194,7 +194,8 @@ class RRuleHelper {
           }
           count++;
         }
-        current = _addInterval(weekStart, config.frequency, config.interval);
+        current = _addInterval(
+            weekStart, config.frequency, config.interval, eventStart);
       } else {
         final dateKey =
             '${current.year}-${current.month.toString().padLeft(2, '0')}-${current.day.toString().padLeft(2, '0')}';
@@ -236,7 +237,8 @@ class RRuleHelper {
             }
           }
         } else {
-          current = _addInterval(current, config.frequency, config.interval);
+          current = _addInterval(
+              current, config.frequency, config.interval, eventStart);
         }
       }
     }
@@ -292,62 +294,42 @@ class RRuleHelper {
     // before the range and reaches into it is still walked.
     final steps = days ~/ stepDays - 1;
     if (steps <= 0) return start;
-    return _addDays(start, steps * stepDays);
+    return _addDays(start, steps * stepDays, start);
   }
 
   /// [days] calendar days later at the same wall-clock time. Adding a
   /// `Duration` counts 24-hour blocks, so across a daylight-saving switch a
   /// 17:00 series moved to 16:00 or 18:00.
-  static DateTime _addDays(DateTime d, int days) => d.isUtc
-      ? DateTime.utc(
-          d.year,
-          d.month,
-          d.day + days,
-          d.hour,
-          d.minute,
-          d.second,
-          d.millisecond,
-          d.microsecond,
-        )
-      : DateTime(
-          d.year,
-          d.month,
-          d.day + days,
-          d.hour,
-          d.minute,
-          d.second,
-          d.millisecond,
-          d.microsecond,
-        );
+  ///
+  /// The time comes from [anchor] (the series start), not from [d]: a date
+  /// that fell into the skipped hour of a spring-forward switch is moved by
+  /// `DateTime`, and copying its time would carry that shift into every later
+  /// occurrence.
+  static DateTime _addDays(DateTime d, int days, DateTime anchor) =>
+      _at(d.year, d.month, d.day + days, anchor);
+
+  /// The date y-m-d at [anchor]'s wall-clock time, in [anchor]'s zone kind.
+  static DateTime _at(int y, int m, int day, DateTime anchor) => anchor.isUtc
+      ? DateTime.utc(y, m, day, anchor.hour, anchor.minute, anchor.second,
+          anchor.millisecond, anchor.microsecond)
+      : DateTime(y, m, day, anchor.hour, anchor.minute, anchor.second,
+          anchor.millisecond, anchor.microsecond);
 
   static DateTime _addInterval(
     DateTime date,
     RecurrenceFrequency freq,
     int interval,
+    DateTime anchor,
   ) {
     switch (freq) {
       case RecurrenceFrequency.daily:
-        return _addDays(date, interval);
+        return _addDays(date, interval, anchor);
       case RecurrenceFrequency.weekly:
-        return _addDays(date, 7 * interval);
+        return _addDays(date, 7 * interval, anchor);
       case RecurrenceFrequency.monthly:
-        return DateTime(
-          date.year,
-          date.month + interval,
-          date.day,
-          date.hour,
-          date.minute,
-          date.second,
-        );
+        return _at(date.year, date.month + interval, date.day, anchor);
       case RecurrenceFrequency.yearly:
-        return DateTime(
-          date.year + interval,
-          date.month,
-          date.day,
-          date.hour,
-          date.minute,
-          date.second,
-        );
+        return _at(date.year + interval, date.month, date.day, anchor);
     }
   }
 
