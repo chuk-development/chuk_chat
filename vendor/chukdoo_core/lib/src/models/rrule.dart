@@ -145,7 +145,7 @@ class RRuleHelper {
     if (config == null) return [eventStart];
 
     final occurrences = <DateTime>[];
-    var current = eventStart;
+    var current = _skipToRange(eventStart, config, rangeStart);
     var count = 0;
     final maxIterations = 1000;
     var iterations = 0;
@@ -165,7 +165,7 @@ class RRuleHelper {
         for (final day in config.byDay!) {
           final dayOffset = _weekdayToInt(day) - weekStart.weekday;
           final adjusted = dayOffset >= 0 ? dayOffset : dayOffset + 7;
-          final occurrence = weekStart.add(Duration(days: adjusted));
+          final occurrence = _addDays(weekStart, adjusted);
 
           if (occurrence.isAfter(rangeEnd)) continue;
           if (config.until != null && occurrence.isAfter(config.until!)) {
@@ -260,6 +260,66 @@ class RRuleHelper {
     return occurrences.isNotEmpty ? occurrences.first : null;
   }
 
+  /// Moves a daily or weekly series forward by whole intervals to just
+  /// before [rangeStart]. The walk below stops after 1000 steps from where it
+  /// starts, so a daily series older than about three years never reached
+  /// the visible range and vanished. A COUNT series has to be counted from
+  /// its first occurrence and is not skipped.
+  static DateTime _skipToRange(
+    DateTime start,
+    RecurrenceConfig config,
+    DateTime rangeStart,
+  ) {
+    if (config.count != null || !start.isBefore(rangeStart)) return start;
+    final int stepDays;
+    switch (config.frequency) {
+      case RecurrenceFrequency.daily:
+        stepDays = config.interval;
+      case RecurrenceFrequency.weekly:
+        stepDays = 7 * config.interval;
+      default:
+        return start;
+    }
+    if (stepDays <= 0) return start;
+    final startDay = DateTime.utc(start.year, start.month, start.day);
+    final rangeDay = DateTime.utc(
+      rangeStart.year,
+      rangeStart.month,
+      rangeStart.day,
+    );
+    final days = rangeDay.difference(startDay).inDays;
+    // One step short of the range, so a weekly BYDAY week that starts
+    // before the range and reaches into it is still walked.
+    final steps = days ~/ stepDays - 1;
+    if (steps <= 0) return start;
+    return _addDays(start, steps * stepDays);
+  }
+
+  /// [days] calendar days later at the same wall-clock time. Adding a
+  /// `Duration` counts 24-hour blocks, so across a daylight-saving switch a
+  /// 17:00 series moved to 16:00 or 18:00.
+  static DateTime _addDays(DateTime d, int days) => d.isUtc
+      ? DateTime.utc(
+          d.year,
+          d.month,
+          d.day + days,
+          d.hour,
+          d.minute,
+          d.second,
+          d.millisecond,
+          d.microsecond,
+        )
+      : DateTime(
+          d.year,
+          d.month,
+          d.day + days,
+          d.hour,
+          d.minute,
+          d.second,
+          d.millisecond,
+          d.microsecond,
+        );
+
   static DateTime _addInterval(
     DateTime date,
     RecurrenceFrequency freq,
@@ -267,9 +327,9 @@ class RRuleHelper {
   ) {
     switch (freq) {
       case RecurrenceFrequency.daily:
-        return date.add(Duration(days: interval));
+        return _addDays(date, interval);
       case RecurrenceFrequency.weekly:
-        return date.add(Duration(days: 7 * interval));
+        return _addDays(date, 7 * interval);
       case RecurrenceFrequency.monthly:
         return DateTime(
           date.year,
