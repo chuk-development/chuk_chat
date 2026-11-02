@@ -1,0 +1,16 @@
+name: chukdoo_core
+description: >-
+  Pure-Dart core for talking to a chukdoo account from outside the app:
+  end-to-end encryption compatible with the app, device pairing, the device
+  RPC client, entity mappers, recurrence expansion and a transport-agnostic
+  tool layer (used by chukdoo_mcp and chuk_chat).
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  cryptography: ^2.7.0
+  http: ^1.2.0
+  uuid: ^4.5.0

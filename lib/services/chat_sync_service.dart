@@ -5,6 +5,7 @@ import 'package:chuk_chat/services/chat_preload_service.dart';
 import 'package:chuk_chat/services/chat_storage_mutations.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
+import 'package:chuk_chat/services/chukdoo/chukdoo_connector.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/mcp/mcp_sync_service.dart';
@@ -234,6 +235,9 @@ class ChatSyncService {
     // Piggyback the MCP connector pull on the same online + signed-in + keyed
     // tick. Fire-and-forget so a slow reconcile never holds up chat sync.
     unawaited(McpSyncService.pullAndReconcile());
+    // Same for the built-in Chukdoo connector: a connect or disconnect on
+    // another install reaches this one here. Throttled inside.
+    unawaited(ChukdooConnector.instance.pull());
 
     _isSyncing = true;
     final stopwatch = Stopwatch()..start();

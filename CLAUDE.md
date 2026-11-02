@@ -506,6 +506,18 @@ icon, and `ai.todoist.net` gave Todoist none. A reliable choice is
 `https://www.google.com/s2/favicons?domain=<brand.com>&sz=128`. Check the icon
 actually loads before committing. See `docs/MCP_CONNECTORS.md`.
 
+**Built-in Chukdoo connector** (not MCP): pairs with the user's Chukdoo
+account by code, credentials synced end-to-end encrypted via the
+`chukdoo_connectors` table, tools `chukdoo_*` (`ToolType.chukdoo`). Code in
+`lib/services/chukdoo/`, package `vendor/chukdoo_core` (source of truth:
+`chukdoo/packages/chukdoo_core`). Needs `CHUKDOO_SUPABASE_URL` and
+`CHUKDOO_SUPABASE_ANON_KEY` in `.env` / CI secrets, else the row is hidden.
+Details: `docs/MCP_CONNECTORS.md`, section "Chukdoo".
+
+**Supabase migrations:** never `supabase db push`. Apply the SQL through the
+Management API query endpoint; the steps are in `docs/DATABASE.md`
+("Applying a migration to production").
+
 ## Docs Index
 
 | Doc | Topic |

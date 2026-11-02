@@ -348,6 +348,34 @@ class AppLocalizations {
       _get('mcpNoAnswerDetail').replaceAll('{reason}', reason);
   String mcpHostErrorDetail(String reason) =>
       _get('mcpHostErrorDetail').replaceAll('{reason}', reason);
+
+  // ── Chukdoo connector ──
+  String get chukdooConnectorSubtitle => _get('chukdooConnectorSubtitle');
+  String get chukdooConnectorDescription => _get('chukdooConnectorDescription');
+  String get chukdooConnect => _get('chukdooConnect');
+  String get chukdooDisconnect => _get('chukdooDisconnect');
+  String get chukdooCancel => _get('chukdooCancel');
+  String get chukdooConnected => _get('chukdooConnected');
+  String chukdooToolsCount(int count) =>
+      _get('chukdooToolsCount').replaceAll('{count}', '$count');
+  String get chukdooPairTitle => _get('chukdooPairTitle');
+  String get chukdooPairHint => _get('chukdooPairHint');
+  String get chukdooPairWaiting => _get('chukdooPairWaiting');
+  String chukdooPairExpires(String time) =>
+      _get('chukdooPairExpires').replaceAll('{time}', time);
+  String get chukdooCodeCopied => _get('chukdooCodeCopied');
+  String get chukdooCopyCode => _get('chukdooCopyCode');
+  String get chukdooConnectedNotice => _get('chukdooConnectedNotice');
+  String get chukdooDisconnectedNotice => _get('chukdooDisconnectedNotice');
+  String get chukdooRevoked => _get('chukdooRevoked');
+  String get chukdooSyncedNote => _get('chukdooSyncedNote');
+  String chukdooPairedSince(String date) =>
+      _get('chukdooPairedSince').replaceAll('{date}', date);
+  String get chukdooTools => _get('chukdooTools');
+  String get chukdooPairStartFailed => _get('chukdooPairStartFailed');
+  String get chukdooDisconnectFailed => _get('chukdooDisconnectFailed');
+  String get chukdooDisconnectConfirmTitle => _get('chukdooDisconnectConfirmTitle');
+  String get chukdooDisconnectConfirmBody => _get('chukdooDisconnectConfirmBody');
   String get loadingToolSettings => _get('loadingToolSettings');
   String get noToolsRegistered => _get('noToolsRegistered');
   String get catSearchWeb => _get('catSearchWeb');

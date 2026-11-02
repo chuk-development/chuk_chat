@@ -189,6 +189,16 @@ content         TEXT NOT NULL     -- AES-GCM envelope
 The handle is the name the AI uses (`todo-app`). The app resolves it to the
 row id on the client and never sends it to the server as a filter.
 
+### chukdoo_connectors
+The encrypted cloud copy of the built-in Chukdoo connector
+(`lib/services/chukdoo/chukdoo_connector_sync.dart`). Owner-only RLS
+(`(select auth.uid()) = user_id`), no anon access.
+```sql
+user_id     UUID PRIMARY KEY REFERENCES auth.users ON DELETE CASCADE
+ciphertext  TEXT NOT NULL      -- AES-GCM envelope of a ChukdooRecord
+updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+```
+
 ## Storage RLS Policies
 
 ### images bucket
@@ -268,6 +278,26 @@ Located in `migrations/` folder:
 | `free_messages.sql` | Add free messages to existing profiles | For existing deployments |
 | `project_files_markdown.sql` | Add markdown column | For existing projects deployments |
 | `image_gen_settings.sql` | Add image gen settings | For existing deployments |
+
+### Applying a migration to production
+
+New migrations live in `supabase/migrations/`. **Never run `supabase db
+push` or `supabase migration up --linked`**: the remote migration history
+does not match the local file names, so the CLI would replay everything.
+Apply the SQL through the Management API instead:
+
+- `POST https://api.supabase.com/v1/projects/xooposctxswumvgtyqlg/database/query`
+  with body `{"query": "<sql>"}` (project "Chuk Chat").
+- Token: the Supabase CLI login in the Linux keyring (Secret Service,
+  attribute `service='Supabase CLI'`, value may carry a
+  `go-keyring-base64:` prefix). Read it in-process (Python `secretstorage`),
+  never print it.
+- Send a `User-Agent` such as `SupabaseCLI/2.72.8`, or Cloudflare answers 403
+  (error 1010).
+- Check the result with a query on `information_schema.columns` and
+  `pg_policies` through the same endpoint.
+- The table must exist in production before client code that uses it lands
+  on master (a push to master deploys the web app).
 
 ## Encryption
 

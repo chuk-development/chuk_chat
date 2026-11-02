@@ -83,9 +83,12 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          CHUKDOO_SUPABASE_URL: ${{ secrets.CHUKDOO_SUPABASE_URL }}
+          CHUKDOO_SUPABASE_ANON_KEY: ${{ secrets.CHUKDOO_SUPABASE_ANON_KEY }}
         run: |
-          printf 'SUPABASE_URL=%s\nSUPABASE_ANON_KEY=%s\n' \
-            "$SUPABASE_URL" "$SUPABASE_ANON_KEY" > .env
+          printf 'SUPABASE_URL=%s\nSUPABASE_ANON_KEY=%s\nCHUKDOO_SUPABASE_URL=%s\nCHUKDOO_SUPABASE_ANON_KEY=%s\n' \
+            "$SUPABASE_URL" "$SUPABASE_ANON_KEY" \
+            "$CHUKDOO_SUPABASE_URL" "$CHUKDOO_SUPABASE_ANON_KEY" > .env
 
       - name: Write signing config
         if: inputs.lane != 'screenshots' && inputs.lane != 'upload_metadata'

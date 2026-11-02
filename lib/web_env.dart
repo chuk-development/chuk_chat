@@ -2,3 +2,5 @@
 // Default empty values - overwritten by Dockerfile.web during Docker builds
 const String webSupabaseUrl = '';
 const String webSupabaseAnonKey = '';
+const String webChukdooSupabaseUrl = '';
+const String webChukdooSupabaseAnonKey = '';

@@ -22,6 +22,7 @@ void main() {
       final catalogueIds = {
         for (final e in firstPartyConnectors()) e.id,
         for (final e in kMcpCatalogue) e.id,
+        ...kBuiltInConnectorIds,
       };
       for (final id in kBundledMcpIcons) {
         expect(

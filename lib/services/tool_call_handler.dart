@@ -17,6 +17,8 @@ import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/tool_enforcer.dart';
 import 'package:chuk_chat/services/tool_executor.dart';
 import 'package:chuk_chat/services/tool_prompt_builder.dart';
+import 'package:chuk_chat/services/chukdoo/chukdoo_connector.dart';
+import 'package:chuk_chat/services/chukdoo/chukdoo_tool_bridge.dart';
 import 'package:chuk_chat/services/mcp/mcp_availability.dart';
 import 'package:chuk_chat/services/mcp/mcp_service.dart';
 import 'package:chuk_chat/services/mcp/mcp_sync_service.dart';
@@ -508,6 +510,12 @@ class ToolCallHandler {
         return McpSyncService.pullAndReconcile();
       }),
     );
+    // The built-in Chukdoo connector works the same way: its tools follow
+    // the connector state, and a connector paired on another install of the
+    // account is pulled in from the encrypted cloud copy.
+    watchChukdooConnector(_toolExecutor);
+    syncChukdooTools(_toolExecutor);
+    unawaited(ChukdooConnector.instance.pull(force: true));
     unawaited(_toolExecutor.loadPreferences());
     unawaited(platform_tools.initPlatformServices());
     // Fire-and-forget: until it lands only built-ins are in the catalog,
@@ -1156,7 +1164,9 @@ class ToolCallHandler {
       final usedFactBearingTool = session.toolCalls.any(
         (tc) =>
             tc.status != ToolCallStatus.error &&
-            !_nonFactualToolNames.contains(tc.name),
+            !_nonFactualToolNames.contains(tc.name) &&
+            // The user's own Chukdoo data: nothing to check against sources.
+            !ChukdooConnector.isChukdooTool(tc.name),
       );
       // Not after the tools shut: the verify pass invites new tool calls,
       // and the forced final answer is the end of the turn.
@@ -1438,7 +1448,9 @@ class ToolCallHandler {
     final startedThisRound = <String>{};
     if (enforceResult.validCalls.length > 1 &&
         enforceResult.validCalls.every(
-          (call) => _readOnlyToolNames.contains(call.name),
+          (call) =>
+              _readOnlyToolNames.contains(call.name) ||
+              ChukdooConnector.instance.isReadOnlyTool(call.name),
         )) {
       for (final call in enforceResult.validCalls) {
         // A call whose arguments did not parse is reported below instead of
@@ -1898,9 +1910,11 @@ class ToolCallHandler {
         .map((t) => t.toJson())
         .firstOrNull;
     final unconnectedMcpServers = unconnectedCatalogueEntries();
-    final connectedMcpServerNames = McpService.connections.value
-        .map((c) => c.name)
-        .toList();
+    final connectedMcpServerNames = [
+      ...McpService.connections.value.map((c) => c.name),
+      if (ChukdooConnector.instance.state.value.connected)
+        ChukdooConnector.displayName,
+    ];
 
     // web_search and web_crawl are always available in discovery mode.
     // web_search handles image search too (type="images") so the AI can

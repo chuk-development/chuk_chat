@@ -108,6 +108,67 @@ injection relies on. One token, two consumers.
 > forwarded to a user-hosted backend, never held server-side. Keep this working
 > until that backend ships; do not build new server-side credential consumers.
 
+## Chukdoo (built-in connector, not MCP)
+
+The first row of the list ("Built in", or under "Connected" once paired) is
+the user's Chukdoo account (tasks, calendars and events, notes, habits). It
+is not an MCP server: it uses the vendored `vendor/chukdoo_core` package
+(source of truth: `chukdoo/packages/chukdoo_core`, see its
+`docs/AI_ACCESS.md`) and talks to the chukdoo Supabase project directly.
+
+- **Pairing.** Connect opens a pairing request (`PairingClient.start`,
+  device kind `chuk_chat`, name `Chuk Chat`) and shows the code
+  `XXXXX-XXXXX`. The user types it in Chukdoo -> Settings -> AI access ->
+  Pair a device and approves. The app polls (`waitForApproval`) and gets a
+  device token plus the chukdoo data key, sealed to this app. Cancel or
+  leaving the page stops the polling at once (`_CancellableClient`).
+- **Storage.** The credentials are the connector. Local copy: secure
+  storage, key `chukdoo_connector_v1_<user id>`. Cloud copy: table
+  `chukdoo_connectors` (one row per user, AES-256-GCM envelope made with the
+  chuk_chat key, migration `20261102000000_chukdoo_connectors.sql`). Both
+  hold a `ChukdooRecord`: the credentials or a tombstone
+  (`disconnected` / `revoked`) with `updated_at`. On every pull the newer
+  record wins, so a connect or a disconnect on one install reaches all of
+  them. Pulls run when `ToolCallHandler` starts and on the chat sync tick
+  (throttled to once a minute).
+- **Tools.** `ToolType.chukdoo`, names `chukdoo_<tool>` (`chukdoo_list_todos`,
+  ...), registered by `lib/services/chukdoo/chukdoo_tool_bridge.dart` from the
+  connector state and routed in `ToolExecutor.execute`. The hard deletes
+  (`delete_todo`, `delete_note`, `delete_event`, `delete_habit`) are held back
+  until the tool loop has a per-call approval step (`isOfferedChukdooTool`,
+  bead chuk_chat-e4a7); `update_note` is offered without `content` (which
+  replaces the whole body), `append` stays. `find_tools` finds
+  them by English and German tags (todo, aufgaben, termin, notiz, ...). Read-
+  only tools may run in parallel; Chukdoo results do not trigger the
+  `[VERIFY]` pass. The prompt lists "Chukdoo" with the connected servers.
+- **Disconnect** calls `device_unpair` (best effort), then writes a
+  `disconnected` tombstone locally and to the cloud.
+- **Revoked device.** A tool call rejected with the device-token error
+  (`code 28000` / `invalid device token`; a bare gateway 401 does not count,
+  so do not switch to `isUnauthorized`) first re-reads the cloud copy: a
+  newer pairing there is adopted instead. Otherwise it writes a `revoked`
+  tombstone: the tools go away, the
+  model is told to ask the user to connect again, and the page shows
+  "Chukdoo access was removed in the Chukdoo app".
+- **Sign-out** drops the local copy; the cloud copy brings it back on the
+  next sign-in. A password change seals the cloud copy again with the new
+  key (`PasswordChangeService`).
+- **Config.** `CHUKDOO_SUPABASE_URL` and `CHUKDOO_SUPABASE_ANON_KEY` (chukdoo's
+  own project URL and anon key): `--dart-define` (run.sh, build.sh,
+  scripts/build-release.sh, CI from the GitHub secrets of the same names,
+  codemagic vars), `lib/web_env.dart` (Dockerfile.web build args), or the
+  desktop `.env`. Either value empty = the row is hidden
+  (`lib/services/chukdoo/chukdoo_config.dart`).
+- **Tests.** `test/services/chukdoo/chukdoo_connector_test.dart`,
+  `test/pages/chukdoo_connector_page_test.dart`.
+- **Pairing fails with "Could not reach Chukdoo" / DNS errors / HTTP 521?**
+  The chukdoo Supabase project (ref `lmgbdpefnannvkcdkdup`, free plan) is
+  paused after inactivity; on 2026-11-02 it was `INACTIVE` and its host did
+  not resolve. Check `GET https://api.supabase.com/v1/projects/<ref>` and
+  restore with `POST .../v1/projects/<ref>/restore` (same token and
+  User-Agent as in `docs/DATABASE.md`), then wait for `ACTIVE_HEALTHY`
+  (a few minutes).
+
 ## Adding a connector to the catalogue
 
 Add an entry to `kMcpCatalogue` with an `id`, a name, the endpoint and a
