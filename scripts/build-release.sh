@@ -30,6 +30,8 @@ echo "Building version: $VERSION"
 # Common dart-defines (desktop/web)
 DART_DEFINES_DESKTOP="--dart-define=SUPABASE_URL=$SUPABASE_URL \
     --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+    --dart-define=CHUKDOO_SUPABASE_URL=${CHUKDOO_SUPABASE_URL:-} \
+    --dart-define=CHUKDOO_SUPABASE_ANON_KEY=${CHUKDOO_SUPABASE_ANON_KEY:-} \
     --dart-define=FEATURE_PROJECTS=false \
     --dart-define=FEATURE_IMAGE_GEN=true \
     --dart-define=FEATURE_VOICE_MODE=false \
@@ -38,6 +40,8 @@ DART_DEFINES_DESKTOP="--dart-define=SUPABASE_URL=$SUPABASE_URL \
 # Android dart-defines (different feature flags)
 DART_DEFINES_MOBILE="--dart-define=SUPABASE_URL=$SUPABASE_URL \
     --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+    --dart-define=CHUKDOO_SUPABASE_URL=${CHUKDOO_SUPABASE_URL:-} \
+    --dart-define=CHUKDOO_SUPABASE_ANON_KEY=${CHUKDOO_SUPABASE_ANON_KEY:-} \
     --dart-define=FEATURE_PROJECTS=false \
     --dart-define=FEATURE_IMAGE_GEN=true \
     --dart-define=FEATURE_VOICE_MODE=false \

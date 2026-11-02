@@ -26,7 +26,11 @@ import 'package:chuk_chat/widgets/settings_search_bar.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:chuk_chat/pages/chukdoo_connector_page.dart';
 import 'package:chuk_chat/services/agents/agents_chat_core.dart';
+import 'package:chuk_chat/services/chukdoo/chukdoo_connector.dart';
+import 'package:chuk_chat/services/chukdoo/chukdoo_tool_bridge.dart'
+    show isOfferedChukdooTool;
 import 'package:chuk_chat/services/mcp/mcp_catalogue.dart';
 import 'package:chuk_chat/services/mcp/mcp_connection.dart';
 import 'package:chuk_chat/services/mcp/mcp_icon_cache.dart';
@@ -182,6 +186,7 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
         listenable: Listenable.merge(<Listenable>[
           McpService.connecting,
           McpService.checking,
+          ChukdooConnector.instance.state,
         ]),
         builder: (context, _) => ValueListenableBuilder<Set<String>>(
         valueListenable: McpService.unreachable,
@@ -230,6 +235,21 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
                     )
                     .toList(growable: false);
 
+          // The built-in Chukdoo connector: hidden when the build has no
+          // chukdoo project, listed with the connected ones once paired.
+          final AppLocalizations strings = _stringsOf(context);
+          final chukdoo = ChukdooConnector.instance.state.value;
+          final bool showChukdoo =
+              ChukdooConnector.isAvailable &&
+              (_query.isEmpty ||
+                  'chukdoo'.contains(_query) ||
+                  strings.chukdooConnectorSubtitle.toLowerCase().contains(
+                    _query,
+                  ));
+          final Widget? chukdooRow = showChukdoo
+              ? _chukdooRow(strings, chukdoo)
+              : null;
+
           return SettingsListView(
             extraHeaderInset: kSettingsSearchBarHeight,
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
@@ -245,10 +265,17 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
                 const SizedBox(height: 20),
               ],
 
-              if (visibleConnections.isNotEmpty) ...[
+              if (chukdooRow != null && !chukdoo.connected) ...[
+                const ExpressiveSectionHeader('Built in'),
+                ExpressiveGroup(children: [chukdooRow]),
+              ],
+
+              if (visibleConnections.isNotEmpty ||
+                  (chukdooRow != null && chukdoo.connected)) ...[
                 const ExpressiveSectionHeader('Connected'),
                 ExpressiveGroup(
                   children: [
+                    if (chukdooRow != null && chukdoo.connected) chukdooRow,
                     for (final connection in visibleConnections)
                       if (agentsChatCore)
                         _agentsRow(
@@ -400,6 +427,34 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
       ),
       trailing: trailing.isEmpty ? null : ExpressiveBadge(trailing),
       onTap: onTap,
+    );
+  }
+
+  /// The built-in Chukdoo connector's row: the same look as an MCP row,
+  /// opening its own page.
+  Widget _chukdooRow(AppLocalizations strings, ChukdooConnectorState state) {
+    return ExpressiveRow(
+      title: ChukdooConnector.displayName,
+      subtitle: state.revoked && !state.connected
+          ? strings.chukdooRevoked
+          : strings.chukdooConnectorSubtitle,
+      leading: McpConnectorIcon(
+        assetPath: bundledIconAsset(kChukdooConnectorId),
+        name: ChukdooConnector.displayName,
+        size: 42,
+      ),
+      trailing: ExpressiveBadge(
+        state.connected
+            ? strings.chukdooToolsCount(
+                ChukdooConnector.instance.specs
+                    .where((s) => isOfferedChukdooTool(s.name))
+                    .length,
+              )
+            : strings.chukdooConnect,
+      ),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => const ChukdooConnectorPage()),
+      ),
     );
   }
 

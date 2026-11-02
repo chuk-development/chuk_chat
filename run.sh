@@ -470,6 +470,12 @@ if [ -n "$VOICE_TOKEN_URL" ]; then
   DART_DEFINES="$DART_DEFINES --dart-define=VOICE_TOKEN_URL=$VOICE_TOKEN_URL"
 fi
 
+# The chukdoo project the built-in Chukdoo connector pairs with (.env or the
+# shell). Either one empty = the connector stays hidden. Passed through, never echoed.
+if [ -n "$CHUKDOO_SUPABASE_URL" ] && [ -n "$CHUKDOO_SUPABASE_ANON_KEY" ]; then
+  DART_DEFINES="$DART_DEFINES --dart-define=CHUKDOO_SUPABASE_URL=$CHUKDOO_SUPABASE_URL --dart-define=CHUKDOO_SUPABASE_ANON_KEY=$CHUKDOO_SUPABASE_ANON_KEY"
+fi
+
 # PLATFORM_MOBILE / PLATFORM_DESKTOP are deliberately not set: with neither
 # defined, kAutoDetectPlatform picks the right layout from the runtime device.
 # Setting one here would force the wrong UI on the other target.

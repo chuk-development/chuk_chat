@@ -15,6 +15,7 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/skills/skill_registry.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/mcp/mcp_availability.dart';
+import 'package:chuk_chat/services/chukdoo/chukdoo_connector.dart';
 import 'package:chuk_chat/services/mcp/mcp_service.dart';
 import 'package:chuk_chat/services/tool_registry.dart' as registry;
 import 'package:chuk_chat/tool_handlers/calculate_handler.dart' as calculate;
@@ -510,6 +511,11 @@ class ToolExecutor {
 
     if (tool.type == ToolType.mcp) {
       final result = await McpService.call(toolName, args);
+      return ToolExecutionResult(output: result.text, isError: result.isError);
+    }
+
+    if (tool.type == ToolType.chukdoo) {
+      final result = await ChukdooConnector.instance.callTool(toolName, args);
       return ToolExecutionResult(output: result.text, isError: result.isError);
     }
 

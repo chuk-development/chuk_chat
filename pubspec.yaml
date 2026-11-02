@@ -132,6 +132,11 @@ dependencies:
     path: vendor/openui_core
   openui:
     path: vendor/openui
+  # Pairing, credentials and the tool layer of the built-in Chukdoo
+  # connector. Pure Dart. Source of truth is chukdoo/packages/chukdoo_core;
+  # see vendor/chukdoo_core/README.md before changing it.
+  chukdoo_core:
+    path: vendor/chukdoo_core
 
   # --- Agents platform -------------------------------------------------------
   # Everything below came in with the Agents tree. Nothing above depends on it;

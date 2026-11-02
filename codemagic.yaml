@@ -14,6 +14,8 @@ workflows:
       vars:
         SUPABASE_URL: $SUPABASE_URL
         SUPABASE_ANON_KEY: $SUPABASE_ANON_KEY
+        CHUKDOO_SUPABASE_URL: $CHUKDOO_SUPABASE_URL
+        CHUKDOO_SUPABASE_ANON_KEY: $CHUKDOO_SUPABASE_ANON_KEY
       # iOS signing (add these in Codemagic dashboard)
       ios_signing:
         distribution_type: ad_hoc  # or 'app_store' for App Store
@@ -40,6 +42,8 @@ workflows:
           flutter build ipa --release \
             --dart-define=SUPABASE_URL=$SUPABASE_URL \
             --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+            --dart-define=CHUKDOO_SUPABASE_URL=$CHUKDOO_SUPABASE_URL \
+            --dart-define=CHUKDOO_SUPABASE_ANON_KEY=$CHUKDOO_SUPABASE_ANON_KEY \
             --dart-define=FEATURE_PROJECTS=true \
             --dart-define=FEATURE_IMAGE_GEN=true \
             --dart-define=FEATURE_VOICE_MODE=true \
@@ -70,6 +74,8 @@ workflows:
       vars:
         SUPABASE_URL: $SUPABASE_URL
         SUPABASE_ANON_KEY: $SUPABASE_ANON_KEY
+        CHUKDOO_SUPABASE_URL: $CHUKDOO_SUPABASE_URL
+        CHUKDOO_SUPABASE_ANON_KEY: $CHUKDOO_SUPABASE_ANON_KEY
 
     triggering:
       events:
@@ -87,6 +93,8 @@ workflows:
           flutter build macos --release \
             --dart-define=SUPABASE_URL=$SUPABASE_URL \
             --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+            --dart-define=CHUKDOO_SUPABASE_URL=$CHUKDOO_SUPABASE_URL \
+            --dart-define=CHUKDOO_SUPABASE_ANON_KEY=$CHUKDOO_SUPABASE_ANON_KEY \
             --dart-define=FEATURE_PROJECTS=true \
             --dart-define=FEATURE_IMAGE_GEN=true \
             --dart-define=FEATURE_VOICE_MODE=true

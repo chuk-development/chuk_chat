@@ -53,6 +53,7 @@ class ClientTool {
 enum ToolType {
   builtin, // Built-in tools (calculator, time, weather, etc.)
   mcp, // Tools a connected remote MCP server offers
+  chukdoo, // Tools of the built-in Chukdoo connector (paired chukdoo account)
 }
 
 /// Tool categories for grouping and enabling/disabling.

@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:chuk_chat/services/agents/agent_mail_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/chukdoo/chukdoo_connector.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/multiplex_session.dart';
@@ -168,6 +169,10 @@ class AuthService {
       // to the user who just left. Cleared first, so a failing teardown
       // below cannot leave them behind.
       MarkdownMessage.clearCaches();
+      // So is the Chukdoo connector's local copy (device token and the
+      // chukdoo data key). The encrypted cloud copy stays and comes back
+      // with the next sign-in.
+      await ChukdooConnector.instance.forgetLocal(userId);
       // So is the opened mail key (docs/AGENT_MAIL.md §3.1).
       AgentMailService.instance.forgetKey();
       // Tear down the multiplexed /v2/ws connection so the new user (or

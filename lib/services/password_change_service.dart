@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/chukdoo/chukdoo_connector.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/password_revision_service.dart';
 import 'package:chuk_chat/services/storage/agents_chat_store.dart';
@@ -80,6 +81,18 @@ class PasswordChangeService {
         }
       }
 
+      // The Chukdoo connector's cloud copy is sealed with the same key. Take
+      // the newest record first (the local copy is missing after a fresh
+      // sign-in): a row left under the old key is unreadable for every
+      // install, so the change waits until the read works.
+      if (!await ChukdooConnector.instance.pullForRekey()) {
+        throw const PasswordChangeException(
+          'Could not read the Chukdoo connector to re-encrypt it. Check the '
+          'connection and try again.',
+        );
+      }
+      final chukdooSnapshot = ChukdooConnector.instance.recordSnapshot();
+
       // Load system prompt snapshot for migration
       String? systemPromptSnapshot;
       try {
@@ -93,6 +106,7 @@ class PasswordChangeService {
         await _rotateEncryptionForPasswordChange(
           chatsSnapshot: chatsSnapshot,
           agentsSnapshot: agentsSnapshot,
+          chukdooSnapshot: chukdooSnapshot,
           systemPromptSnapshot: systemPromptSnapshot,
           fromPassword: trimmedCurrent,
           toPassword: trimmedNew,
@@ -116,6 +130,7 @@ class PasswordChangeService {
         final restored = await _tryRestoreEncryption(
           chatsSnapshot: chatsSnapshot,
           agentsSnapshot: agentsSnapshot,
+          chukdooSnapshot: chukdooSnapshot,
           systemPromptSnapshot: systemPromptSnapshot,
           currentPassword: trimmedNew,
           previousPassword: trimmedCurrent,
@@ -128,6 +143,7 @@ class PasswordChangeService {
         final restored = await _tryRestoreEncryption(
           chatsSnapshot: chatsSnapshot,
           agentsSnapshot: agentsSnapshot,
+          chukdooSnapshot: chukdooSnapshot,
           systemPromptSnapshot: systemPromptSnapshot,
           currentPassword: trimmedNew,
           previousPassword: trimmedCurrent,
@@ -160,6 +176,7 @@ class PasswordChangeService {
   Future<void> _rotateEncryptionForPasswordChange({
     required List<StoredChat> chatsSnapshot,
     required List<AgentsCloudThread>? agentsSnapshot,
+    required Map<String, dynamic>? chukdooSnapshot,
     required String? systemPromptSnapshot,
     required String fromPassword,
     required String toPassword,
@@ -173,6 +190,7 @@ class PasswordChangeService {
         if (agentsSnapshot != null) {
           await AgentsChatStore.reencryptCloudThreads(agentsSnapshot);
         }
+        await ChukdooConnector.instance.remirror(chukdooSnapshot);
 
         // Re-encrypt system prompt with new key if it exists
         if (systemPromptSnapshot != null && systemPromptSnapshot.isNotEmpty) {
@@ -185,6 +203,10 @@ class PasswordChangeService {
         if (agentsSnapshot != null) {
           await AgentsChatStore.reencryptCloudThreads(agentsSnapshot);
         }
+        await ChukdooConnector.instance.remirror(
+          chukdooSnapshot,
+          strict: false,
+        );
 
         // Rollback system prompt to old key if it exists
         if (systemPromptSnapshot != null && systemPromptSnapshot.isNotEmpty) {
@@ -197,6 +219,7 @@ class PasswordChangeService {
   Future<bool> _tryRestoreEncryption({
     required List<StoredChat> chatsSnapshot,
     required List<AgentsCloudThread>? agentsSnapshot,
+    required Map<String, dynamic>? chukdooSnapshot,
     required String? systemPromptSnapshot,
     required String currentPassword,
     required String previousPassword,
@@ -205,6 +228,7 @@ class PasswordChangeService {
       await _rotateEncryptionForPasswordChange(
         chatsSnapshot: chatsSnapshot,
         agentsSnapshot: agentsSnapshot,
+        chukdooSnapshot: chukdooSnapshot,
         systemPromptSnapshot: systemPromptSnapshot,
         fromPassword: currentPassword,
         toPassword: previousPassword,

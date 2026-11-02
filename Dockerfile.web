@@ -18,12 +18,18 @@ COPY . .
 
 ARG SUPABASE_URL
 ARG SUPABASE_ANON_KEY
+# The chukdoo project the built-in Chukdoo connector pairs with. Empty hides
+# the connector (lib/services/chukdoo/chukdoo_config.dart).
+ARG CHUKDOO_SUPABASE_URL=""
+ARG CHUKDOO_SUPABASE_ANON_KEY=""
 ARG BUILD_TIMESTAMP=""
 
 # Generate web environment config (dart-define can be unreliable with dart2js)
 RUN echo "// GENERATED - DO NOT EDIT" > lib/web_env.dart && \
     echo "const String webSupabaseUrl = '${SUPABASE_URL}';" >> lib/web_env.dart && \
-    echo "const String webSupabaseAnonKey = '${SUPABASE_ANON_KEY}';" >> lib/web_env.dart
+    echo "const String webSupabaseAnonKey = '${SUPABASE_ANON_KEY}';" >> lib/web_env.dart && \
+    echo "const String webChukdooSupabaseUrl = '${CHUKDOO_SUPABASE_URL}';" >> lib/web_env.dart && \
+    echo "const String webChukdooSupabaseAnonKey = '${CHUKDOO_SUPABASE_ANON_KEY}';" >> lib/web_env.dart
 
 # FEATURE_PROJECTS and FEATURE_IMAGE_GEN were removed: nothing in lib/ reads
 # them. --no-wasm-dry-run skips a compatibility scan this build does not use.

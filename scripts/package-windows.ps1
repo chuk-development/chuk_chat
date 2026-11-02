@@ -32,6 +32,8 @@ if (-not $SkipBuild) {
     flutter build windows --release `
         --dart-define=SUPABASE_URL=$SUPABASE_URL `
         --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY `
+        --dart-define=CHUKDOO_SUPABASE_URL=$env:CHUKDOO_SUPABASE_URL `
+        --dart-define=CHUKDOO_SUPABASE_ANON_KEY=$env:CHUKDOO_SUPABASE_ANON_KEY `
         --dart-define=FEATURE_PROJECTS=true `
         --dart-define=FEATURE_IMAGE_GEN=true `
         --dart-define=FEATURE_VOICE_MODE=true `
