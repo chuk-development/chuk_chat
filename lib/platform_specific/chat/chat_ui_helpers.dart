@@ -20,6 +20,7 @@ import 'package:chuk_chat/services/artifact_context_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/current_user.dart';
 import 'package:chuk_chat/services/model_capabilities_service.dart';
+import 'package:chuk_chat/services/provider_resolution_service.dart';
 import 'package:chuk_chat/services/workspace_message_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/ui/expressive/bubble_shape.dart'
@@ -434,31 +435,21 @@ class ChatUiHelpers {
     );
     if (prefsSlug != null && prefsSlug.isNotEmpty) return prefsSlug;
 
-    // Third fallback: use the static in-memory providers list — survives
-    // network glitches.
-    final providers = ModelSelectionDropdown.availableProvidersForModel(
-      modelId,
-    );
-    return providers.isNotEmpty ? providers.first.slug : null;
+    // Nothing stored: the cheapest provider from the model catalogue.
+    return ProviderResolutionService.cheapestSlugFor(modelId);
   }
 
-  /// Ensure provider slug is available for the current model.
+  /// Ensure provider slug is available for the current model. Resolves the
+  /// Auto marker; never returns it.
   static Future<String?> ensureProviderSlug(
     String selectedModelId,
     String? currentSlug,
   ) async {
     if (selectedModelId.isEmpty) return null;
-    String? slug = (currentSlug != null && currentSlug.isNotEmpty)
+    final String? slug = (currentSlug != null && currentSlug.isNotEmpty)
         ? currentSlug
         : await loadProviderSlugForModel(selectedModelId);
-    if (slug == null || slug.isEmpty) return null;
-    if (slug == kAutoCheapestProviderSlug) {
-      return ModelSelectionDropdown.resolveProviderSlugForSend(
-        selectedModelId,
-        slug,
-      );
-    }
-    return slug;
+    return ProviderResolutionService.resolveForSend(selectedModelId, slug);
   }
 
   /// Load system prompt from preferences.

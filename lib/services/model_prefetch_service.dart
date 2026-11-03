@@ -13,7 +13,10 @@ import 'package:chuk_chat/services/user_preferences_service.dart';
 class ModelPrefetchService {
   const ModelPrefetchService._();
 
-  static bool _isPrefetching = false;
+  /// The fetch in flight. A second caller waits for it instead of returning
+  /// at once with nothing fetched (the old `_isPrefetching` flag did that,
+  /// so a send that needed the catalogue got an empty answer).
+  static Future<void>? _inFlight;
 
   /// Timeout duration for HTTP requests in the prefetch service.
   /// Short timeout (3s) - we prefer using cached data over waiting for slow network.
@@ -27,13 +30,25 @@ class ModelPrefetchService {
   /// - Uses short timeout (3s) to avoid blocking
   /// - Skips network fetch if cache is valid (< 24h old)
   /// - Fails silently - cached data will be used as fallback
-  static Future<void> prefetch() async {
-    if (_isPrefetching) return;
-    _isPrefetching = true;
+  ///
+  /// [force] fetches even when the cache is still valid: a model added on the
+  /// server after the last fetch is otherwise missing for up to 24 hours.
+  static Future<void> prefetch({bool force = false}) {
+    final Future<void>? running = _inFlight;
+    if (running != null && !force) return running;
+    final Future<void> next = (running ?? Future<void>.value())
+        .catchError((Object _) {})
+        .then((_) => _prefetch(force: force));
+    _inFlight = next;
+    return next.whenComplete(() {
+      if (identical(_inFlight, next)) _inFlight = null;
+    });
+  }
 
+  static Future<void> _prefetch({required bool force}) async {
     try {
       // Check if we have valid cached models - skip fetch if so
-      final cacheValid = await ModelCacheService.isCacheValid();
+      final cacheValid = !force && await ModelCacheService.isCacheValid();
       if (cacheValid) {
         if (kDebugMode) {
           debugPrint('📦 [ModelPrefetch] Cache valid, skipping network fetch');
@@ -105,8 +120,6 @@ class ModelPrefetchService {
       }
       // Hydrate capabilities from any existing disk cache on failure too.
       await ModelCapabilitiesService.initialize();
-    } finally {
-      _isPrefetching = false;
     }
   }
 }

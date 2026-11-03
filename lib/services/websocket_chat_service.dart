@@ -6,6 +6,7 @@ import 'package:chuk_chat/models/chat_stream_event.dart';
 import 'package:chuk_chat/services/agents/agents_chat_transport.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/services/multiplex_connection.dart';
+import 'package:chuk_chat/services/provider_resolution_service.dart';
 import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/services/tool_result_cache_registry.dart';
@@ -185,6 +186,14 @@ class WebSocketChatService {
     String? chatId,
     List<Map<String, dynamic>>? tools,
   }) async* {
+    // Last guard: the Auto marker is the reader's choice, not a provider the
+    // server knows. Every send path resolves it earlier; one that forgot
+    // must still not ship it.
+    if (ProviderResolutionService.isAuto(providerSlug)) {
+      providerSlug =
+          await ProviderResolutionService.resolveForSend(modelId, providerSlug) ??
+          '';
+    }
     if (kDebugMode) {
       debugPrint('📤 [Multiplex] chat -> $modelId via $providerSlug');
     }

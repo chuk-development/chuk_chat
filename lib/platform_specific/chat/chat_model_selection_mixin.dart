@@ -16,9 +16,11 @@
 
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show kDebugMode, mapEquals;
+import 'package:flutter/foundation.dart'
+    show kDebugMode, mapEquals, visibleForTesting;
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/core/model_selection_events.dart';
 import 'package:chuk_chat/model_selector_page.dart';
 import 'package:chuk_chat/pages/agent_model_page.dart';
 import 'package:chuk_chat/platform_specific/chat/model_provider_resolution_mixin.dart';
@@ -27,6 +29,7 @@ import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/services/chat_model_selection_service.dart';
 import 'package:chuk_chat/services/model_cache_service.dart';
 import 'package:chuk_chat/services/model_prefetch_service.dart';
+import 'package:chuk_chat/services/provider_resolution_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/widgets/chat_mode_selector.dart';
@@ -114,10 +117,34 @@ mixin ChatModelSelectionMixin<W extends StatefulWidget>
   /// account-wide mode, so dropping that model knows to put the mode back.
   bool _ownModelApplied = false;
 
+  /// Fires when a provider pin changes (model screen, another device).
+  StreamSubscription<void>? _modelSettingsSubscription;
+
   @override
   void initState() {
     super.initState();
     ChatModelSelectionService.instance.addListener(_onAgentModelChanged);
+    _modelSettingsSubscription = ModelSelectionEventBus().refreshStream.listen(
+      (_) => unawaited(onModelSettingsChanged().catchError((Object _) {})),
+    );
+  }
+
+  /// A provider was pinned, unpinned or set to Auto somewhere. The composer's
+  /// model menu and the provider of the model on screen follow at once.
+  ///
+  /// Before, only the provider was reloaded. The menu list was rebuilt only
+  /// when the model screen was opened from the composer, so a model enabled
+  /// through the settings was missing from the menu until some unrelated
+  /// action rebuilt it.
+  @visibleForTesting
+  Future<void> onModelSettingsChanged() async {
+    if (!mounted) return;
+    if (selectedModelId.isNotEmpty) {
+      // Skip the dropdown mapping (may be stale); read the prefs directly.
+      await loadProviderSlugForModel(selectedModelId, forceFromPrefs: true);
+    }
+    if (!mounted) return;
+    await refreshPickedModels();
   }
 
   @override
@@ -135,6 +162,7 @@ mixin ChatModelSelectionMixin<W extends StatefulWidget>
 
   @override
   void dispose() {
+    _modelSettingsSubscription?.cancel();
     ChatModelSelectionService.instance.removeListener(_onAgentModelChanged);
     super.dispose();
   }
@@ -198,7 +226,7 @@ mixin ChatModelSelectionMixin<W extends StatefulWidget>
   Future<String?> _currentProviderFor(String modelId) async {
     final String? shown = selectedProviderSlug;
     if (modelId == selectedModelId && shown != null && shown.isNotEmpty) {
-      return ModelSelectionDropdown.resolveProviderSlugForSend(modelId, shown);
+      return ProviderResolutionService.resolveForSend(modelId, shown);
     }
     return AgentModel.providerFor(modelId);
   }

@@ -128,3 +128,21 @@ How to measure (the files stay in the repo):
   image) on port 5556 keeps a benchmark install away from the app another
   agent is testing. Do not run `flutter drive` on the owner's phone: it
   replaces his installed app and its login.
+
+## "Auto (cheapest)" provider is a marker, not a provider
+
+- `kAutoCheapestProviderSlug` (`__auto_cheapest__`) is stored when the reader
+  picks Auto. The server does not know it. Resolve it only through
+  `ProviderResolutionService.resolveForSend` (`lib/services/provider_resolution_service.dart`),
+  which reads the model catalogue from `ModelCacheService` and fetches it once
+  (`ModelPrefetchService.prefetch(force: true)`) when the model is missing.
+- Never resolve providers through `ModelSelectionDropdown` state: that widget is
+  not built anywhere any more, so its lists are always empty. That is why every
+  send with Auto failed with "No provider is configured" until 2026-11-03.
+- `MessageCompositionService.prepareMessage` and the multiplex send both run the
+  resolver again as a last guard. Tests: `test/services/provider_resolution_service_test.dart`.
+- The composer's model menu (`pickedModels`) rebuilds on
+  `ModelSelectionEventBus().refreshStream` in `ChatModelSelectionMixin`. The model
+  screen writes its fresh `/v1/models_info` payload to `ModelCacheService`, so a
+  newly enabled model has its name and providers at once.
+  Test: `test/services/composer_model_menu_sync_test.dart`.

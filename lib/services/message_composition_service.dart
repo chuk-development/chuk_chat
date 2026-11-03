@@ -1,6 +1,7 @@
 // lib/services/message_composition_service.dart
 import 'dart:math' as math;
 import 'package:chuk_chat/models/chat_model.dart';
+import 'package:chuk_chat/services/provider_resolution_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/input_validator.dart';
 import 'package:chuk_chat/utils/token_estimator.dart';
@@ -131,7 +132,13 @@ class MessageCompositionService {
     }
 
     // Get provider slug for the model
-    final String? providerSlug = await getProviderSlug();
+    // Every caller's answer goes through the resolver once more: a resend or
+    // a continuation hands over the stored choice, which can be the Auto
+    // marker, and the server only knows real provider slugs.
+    final String? providerSlug = await ProviderResolutionService.resolveForSend(
+      selectedModelId,
+      await getProviderSlug(),
+    );
     if (providerSlug == null || providerSlug.isEmpty) {
       return MessageCompositionResult.error(
         'No provider is configured for $selectedModelId. '

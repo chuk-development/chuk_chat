@@ -206,43 +206,10 @@ class ModelSelectionDropdown extends StatefulWidget {
     return null;
   }
 
-  /// Static, in-memory list of providers known for [modelId]. Survives
-  /// network glitches because it is hydrated from the cached models list
-  /// fetched at startup. Returns an empty list if the model is unknown.
-  static List<ModelProviderSummary> availableProvidersForModel(String modelId) {
-    final cached = _cachedAvailableProviders[modelId];
-    if (cached != null && cached.isNotEmpty) return cached;
-    for (final _ModelSelectionDropdownState state in _activeStates) {
-      final list = state._availableProviders[modelId];
-      if (list != null && list.isNotEmpty) {
-        _cachedAvailableProviders[modelId] = list;
-        return list;
-      }
-    }
-    return const <ModelProviderSummary>[];
-  }
-
-  /// Pick the cheapest provider for [modelId] by completion (output) price.
-  /// Returns null if no providers are known.
-  static ModelProviderSummary? cheapestProviderForModel(String modelId) {
-    final providers = availableProvidersForModel(modelId);
-    if (providers.isEmpty) return null;
-    ModelProviderSummary best = providers.first;
-    for (final p in providers.skip(1)) {
-      if (p.completionPrice < best.completionPrice) {
-        best = p;
-      }
-    }
-    return best;
-  }
-
-  /// Resolve [savedSlug] (which may be [kAutoCheapestProviderSlug]) to a
-  /// concrete provider slug for the given [modelId]. Returns null if the
-  /// model has no known providers and the slug is the auto marker.
-  static String? resolveProviderSlugForSend(String modelId, String savedSlug) {
-    if (savedSlug != kAutoCheapestProviderSlug) return savedSlug;
-    return cheapestProviderForModel(modelId)?.slug;
-  }
+  // Provider resolution for a send (incl. the Auto marker) lives in
+  // `ProviderResolutionService`. It reads the model catalogue, not this
+  // widget's state: this widget is no longer mounted anywhere, and a lookup
+  // through it always came back empty.
 
   /// Show a model selection bottom sheet.
   /// Used when the compact model selector is hidden (e.g., user is typing)

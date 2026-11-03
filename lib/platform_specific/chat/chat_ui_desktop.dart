@@ -32,7 +32,6 @@ import 'package:chuk_chat/services/tts_audio_service.dart';
 import 'package:chuk_chat/voice/voice_transcript_migration.dart';
 import 'package:chuk_chat/services/dictation_tracker.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
-import 'package:chuk_chat/core/model_selection_events.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/services/artifact_tag_processor.dart';
@@ -332,7 +331,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   String? _pendingWorkspaceId;
 
   bool _isLoadingChat = false; // Loading indicator for chat switching
-  StreamSubscription<void>? _providerRefreshSubscription;
   final StreamingManager _streamingManager = StreamingManager();
 
   // Computed property - checks if CURRENT chat is streaming
@@ -578,15 +576,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _modelSelectionListener,
     );
 
-    // Listen for provider changes from model selector page
-    _providerRefreshSubscription = ModelSelectionEventBus().refreshStream
-        .listen((_) {
-          // Reload provider slug when settings are changed —
-          // skip dropdown cache (may be stale) and read from prefs directly
-          unawaited(
-            loadProviderSlugForModel(selectedModelId, forceFromPrefs: true),
-          );
-        });
+    // Provider changes from the model screen: ChatModelSelectionMixin.
   }
 
   @override
@@ -736,7 +726,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     _autoSaveTimer?.cancel();
     _audioVisualizerTimer?.cancel();
     _audioHandler.onLevelsChanged = null;
-    _providerRefreshSubscription?.cancel();
     scrollController.removeListener(onScrollChanged);
     TtsAudioService.activeText.removeListener(_onSpeechPlaybackChanged);
     _composerCaretFollower.dispose();
