@@ -6,6 +6,7 @@ import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:chuk_chat/services/chat_model_selection_service.dart';
+import 'package:chuk_chat/services/provider_resolution_service.dart';
 
 /// Shared model → provider-slug resolution for the desktop and mobile chat UIs.
 ///
@@ -129,20 +130,27 @@ mixin ModelProviderResolutionMixin<T extends StatefulWidget> on State<T> {
   }
 
   /// Resolve the provider slug to actually send with, falling back through the
-  /// cache, prefs, and the static in-memory providers list, and resolving the
-  /// "auto cheapest" sentinel at send time. Returns null if nothing resolves.
+  /// cache, prefs, and the model catalogue, and resolving the "auto cheapest"
+  /// marker at send time. Never returns the marker. Returns null only if no
+  /// provider at all is known for the model.
   Future<String?> ensureProviderSlugForCurrentModel() async {
     final chatId = modelSelectionChatId;
     if (chatId != null) {
       final choice = await ChatModelSelectionService.instance.load(chatId);
-      if (choice != null) return choice.providerSlug;
+      if (choice != null) {
+        return ProviderResolutionService.resolveForSend(
+          choice.modelId,
+          choice.providerSlug,
+        );
+      }
       if (!mounted || modelSelectionChatId != chatId) return null;
     }
-    if (selectedModelId.isEmpty) return null;
+    final String modelId = selectedModelId;
+    if (modelId.isEmpty) return null;
 
     // Re-read the mode's provider at send time: the cached slug can be stale
     // when the provider was changed in settings while this chat stayed open.
-    String? slug = await modeProviderSlugFor(selectedModelId);
+    String? slug = await modeProviderSlugFor(modelId);
     if (!mounted) return null;
     if (slug != null && selectedProviderSlug != slug) {
       setState(() {
@@ -154,45 +162,21 @@ mixin ModelProviderResolutionMixin<T extends StatefulWidget> on State<T> {
         : null;
 
     if (slug == null) {
-      await loadProviderSlugForModel(selectedModelId);
+      await loadProviderSlugForModel(modelId);
+      if (!mounted) return null;
       slug = selectedProviderSlug;
     }
 
-    // Third fallback: the dropdown/prefs lookups can both fail after a
-    // network glitch (cache cleared / Supabase request timing out). Use the
-    // static in-memory providers list known for the model — it survives
-    // transient network issues because it was hydrated at startup.
-    if (slug == null || slug.isEmpty) {
-      final providers = ModelSelectionDropdown.availableProvidersForModel(
-        selectedModelId,
-      );
-      if (providers.isNotEmpty) {
-        final fallback = providers.first.slug;
-        if (kDebugMode) {
-          debugPrint(
-            'Provider fallback: using $fallback for $selectedModelId (cache miss)',
-          );
-        }
-        if (mounted && selectedProviderSlug != fallback) {
-          setState(() {
-            selectedProviderSlug = fallback;
-          });
-        }
-        slug = fallback;
-      }
+    // Auto, or nothing stored at all (prefs unreachable after a network
+    // glitch): the cheapest provider from the model catalogue. The stored
+    // choice is left as it is, so Auto stays Auto for the next send.
+    final String? resolved = await ProviderResolutionService.resolveForSend(
+      modelId,
+      slug,
+    );
+    if (kDebugMode && (slug == null || slug.isEmpty) && resolved != null) {
+      debugPrint('Provider fallback: cheapest for $modelId (nothing stored)');
     }
-
-    if (slug == null || slug.isEmpty) return null;
-
-    // Resolve "auto" sentinel at send time so the cheapest current provider
-    // is used without overwriting the user's preference.
-    if (slug == kAutoCheapestProviderSlug) {
-      final resolved = ModelSelectionDropdown.resolveProviderSlugForSend(
-        selectedModelId,
-        slug,
-      );
-      return (resolved != null && resolved.isNotEmpty) ? resolved : null;
-    }
-    return slug;
+    return resolved;
   }
 }

@@ -20,6 +20,7 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
+import 'package:chuk_chat/services/model_cache_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/per_model_system_prompt_service.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
@@ -498,6 +499,21 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
       if (response.statusCode == 200) {
         stopApiAvailabilityPolling();
         final List<dynamic> modelsJson = json.decode(response.body);
+        // This is the freshest catalogue in the app. Store it, so the
+        // composer's model menu can name a model enabled here and the send
+        // can resolve its Auto provider without fetching again.
+        try {
+          await ModelCacheService.saveAvailableModels(
+            modelsJson
+                .whereType<Map<String, dynamic>>()
+                .map((entry) => Map<String, dynamic>.from(entry))
+                .toList(growable: false),
+          );
+        } catch (error) {
+          if (kDebugMode) {
+            debugPrint('Model catalogue cache write failed: $error');
+          }
+        }
         final List<CustomModelInfo> fetchedModels = modelsJson
             .map((json) => CustomModelInfo.fromJson(json))
             .toList();
@@ -1568,7 +1584,7 @@ class _ModePickerPanel extends StatelessWidget {
 
   /// Below this available width the two cards stack instead of sitting side
   /// by side — the narrow settings pane never squeezes them into a strip.
-  static const double _sideBySideMinWidth = 460;
+  static const double _sideBySideMinWidth = 760;
 
   const _ModePickerPanel({
     required this.models,
@@ -1616,14 +1632,128 @@ class _ModePickerPanel extends StatelessWidget {
     final bool hasProviderChoice = data.providers.length > 1;
     final bool hasSingleProvider = data.providers.length == 1;
 
+    CustomModelInfo? model;
+    for (final m in models) {
+      if (m.id == data.modelId) {
+        model = m;
+        break;
+      }
+    }
+    ModelProviderInfo? provider;
+    for (final p in data.providers) {
+      if (p.slug == data.providerSlug) {
+        provider = p;
+        break;
+      }
+    }
+
+    final Widget divider = Divider(
+      height: 1,
+      color: theme.colorScheme.outlineVariant.withValues(alpha: 0.45),
+    );
+
+    final List<Widget> rows = <Widget>[
+      _settingRow(
+        context,
+        icon: Icons.psychology_alt_outlined,
+        label: 'Model',
+        value: data.modelName == null
+            ? 'Loading…'
+            : ChatModeSelector.stripLabPrefix(data.modelName!),
+        valueLeading: model == null
+            ? null
+            : buildIconWidget(model.iconUrl, Icons.psychology_alt, size: 16),
+        onTap: (anchor) => _pick<String>(
+          anchor,
+          hintText: 'Search models',
+          title: '${data.title} · Model',
+          onSelected: data.onPickModel,
+          options: [
+            for (final m in models)
+              PickerOption<String>(
+                value: m.id,
+                label: ChatModeSelector.stripLabPrefix(m.name),
+                selected: m.id == data.modelId,
+                leading: buildIconWidget(
+                  m.iconUrl,
+                  Icons.psychology_alt,
+                  size: 18,
+                ),
+              ),
+          ],
+        ),
+      ),
+      if (hasProviderChoice || hasSingleProvider)
+        _settingRow(
+          context,
+          icon: Icons.dns_outlined,
+          label: 'Provider',
+          value: provider?.name ??
+              (hasSingleProvider ? data.providers.first.name : 'Auto'),
+          valueLeading: () {
+            final ModelProviderInfo? shown =
+                provider ?? (hasSingleProvider ? data.providers.first : null);
+            return shown == null
+                ? null
+                : buildIconWidget(shown.iconUrl, Icons.business, size: 16);
+          }(),
+          // One provider: nothing to choose, so the row is not a control.
+          onTap: !hasProviderChoice
+              ? null
+              : (anchor) => _pick<String>(
+                  anchor,
+                  hintText: 'Search providers',
+                  title: '${data.title} · Provider',
+                  onSelected: data.onPickProvider,
+                  options: [
+                    for (final p in data.providers)
+                      PickerOption<String>(
+                        value: p.slug,
+                        label: p.name,
+                        // The price is what tells two providers apart.
+                        subtitle:
+                            '${p.pricing.formatTokenPrice(p.pricing.prompt)} in · '
+                            '${p.pricing.formatTokenPrice(p.pricing.completion)} out',
+                        selected: p.slug == data.providerSlug,
+                        leading: buildIconWidget(
+                          p.iconUrl,
+                          Icons.business,
+                          size: 18,
+                        ),
+                      ),
+                  ],
+                ),
+        ),
+      if (canReason)
+        _settingRow(
+          context,
+          icon: Icons.tune_rounded,
+          label: 'Reasoning',
+          value: ChatModeService.reasoningLabel(data.reasoningEffort),
+          onTap: (anchor) => _pick<String>(
+            anchor,
+            title: '${data.title} · Reasoning',
+            onSelected: data.onPickReasoning,
+            options: [
+              for (final level in data.reasoningLevels)
+                PickerOption<String>(
+                  value: level,
+                  label: ChatModeService.reasoningLabel(level),
+                  selected: level == data.reasoningEffort,
+                ),
+            ],
+          ),
+        ),
+    ];
+
     return Container(
       decoration: BoxDecoration(
         color: m3.surfaceContainer,
         borderRadius: BorderRadius.circular(20),
       ),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
@@ -1642,210 +1772,97 @@ class _ModePickerPanel extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 2),
-          _labelledRow(context, 'Model', _modelMenu(context, data)),
-          if (hasProviderChoice)
-            _labelledRow(context, 'Provider', _providerMenu(context, data))
-          else if (hasSingleProvider)
-            _labelledRow(
-              context,
-              'Provider',
-              _staticValue(context, data.providers.first.name),
-            ),
-          if (canReason)
-            _labelledRow(context, 'Reasoning', _reasoningMenu(context, data)),
+          const SizedBox(height: 8),
+          for (int i = 0; i < rows.length; i++) ...[divider, rows[i]],
         ],
       ),
     );
   }
 
-  /// A settings-style row inside a mode card: a quiet label on the left, its
-  /// control on the right. The two columns line up across the rows so the two
-  /// cards read as clean matched columns.
-  Widget _labelledRow(BuildContext context, String label, Widget control) {
-    final theme = Theme.of(context);
-    final m3 = theme.m3;
-    return Padding(
-      padding: const EdgeInsets.only(top: 10),
-      child: Row(
-        children: [
-          Expanded(
-            flex: 2,
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: m3.onSurfaceVariant,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            flex: 3,
-            child: Align(alignment: Alignment.centerRight, child: control),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// A read-only value on the right of a labelled row, for a model that offers
-  /// exactly one provider (nothing to choose).
-  Widget _staticValue(BuildContext context, String text) {
-    final theme = Theme.of(context);
-    return Text(
-      text,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      textAlign: TextAlign.right,
-      style: theme.textTheme.bodyMedium?.copyWith(
-        color: theme.colorScheme.onSurface,
-        fontWeight: FontWeight.w600,
-      ),
-    );
-  }
-
-  Widget _providerMenu(BuildContext context, _ModeRowData data) {
-    String label = data.providerSlug;
-    for (final provider in data.providers) {
-      if (provider.slug == data.providerSlug) {
-        label = provider.name;
-        break;
-      }
-    }
-    if (label.isEmpty) label = 'Auto';
-    return _menuPill<String>(
-      context,
-      label: label,
-      hintText: 'Search providers',
-      title: '${data.title} · Provider',
-      onSelected: data.onPickProvider,
-      options: [
-        for (final provider in data.providers)
-          PickerOption<String>(
-            value: provider.slug,
-            label: provider.name,
-            // The price is what tells two providers of one model apart.
-            subtitle:
-                '${provider.pricing.formatTokenPrice(provider.pricing.prompt)} in · '
-                '${provider.pricing.formatTokenPrice(provider.pricing.completion)} out',
-            selected: provider.slug == data.providerSlug,
-            leading: buildIconWidget(
-              provider.iconUrl,
-              Icons.business,
-              size: 18,
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _modelMenu(BuildContext context, _ModeRowData data) {
-    final label = data.modelName == null
-        ? 'Loading…'
-        : ChatModeSelector.stripLabPrefix(data.modelName!);
-    return _menuPill<String>(
-      context,
-      label: label,
-      hintText: 'Search models',
-      title: '${data.title} · Model',
-      onSelected: data.onPickModel,
-      options: [
-        for (final model in models)
-          PickerOption<String>(
-            value: model.id,
-            label: ChatModeSelector.stripLabPrefix(model.name),
-            selected: model.id == data.modelId,
-            leading: buildIconWidget(
-              model.iconUrl,
-              Icons.psychology_alt,
-              size: 18,
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _reasoningMenu(BuildContext context, _ModeRowData data) {
-    return _menuPill<String>(
-      context,
-      label: ChatModeService.reasoningLabel(data.reasoningEffort),
-      subtle: true,
-      title: '${data.title} · Reasoning',
-      onSelected: data.onPickReasoning,
-      options: [
-        for (final level in data.reasoningLevels)
-          PickerOption<String>(
-            value: level,
-            label: ChatModeService.reasoningLabel(level),
-            selected: level == data.reasoningEffort,
-          ),
-      ],
-    );
-  }
-
-  /// The closed control: a pill with the current value and a down arrow. It
-  /// opens the shared picker, anchored to itself — a plain popup menu grew
-  /// from the row's left edge and, with forty models in it, was thrown to the
-  /// top of the window with no way to search.
-  Widget _menuPill<T>(
+  /// One full-width row of a mode card, built like the Provider row of the
+  /// model cards below: icon, label, the value at the right end, a down
+  /// arrow. The whole row is the tap target. The value gets all the width
+  /// the label leaves, so a long model name is not squeezed into a pill.
+  Widget _settingRow(
     BuildContext context, {
+    required IconData icon,
     required String label,
-    required List<PickerOption<T>> options,
-    required ValueChanged<T> onSelected,
-    String? hintText,
-    String? title,
-    bool subtle = false,
+    required String value,
+    Widget? valueLeading,
+    void Function(BuildContext anchor)? onTap,
   }) {
     final theme = Theme.of(context);
     final m3 = theme.m3;
     return Builder(
       builder: (anchorContext) => InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: () async {
-          final T? picked = await showSearchablePicker<T>(
-            anchorContext,
-            options: options,
-            hintText: hintText,
-            title: title,
-          );
-          if (picked != null) onSelected(picked);
-        },
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap == null ? null : () => onTap(anchorContext),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 240),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: m3.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(999),
-            ),
+          constraints: const BoxConstraints(minHeight: 52),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 14),
             child: Row(
-              mainAxisSize: MainAxisSize.min,
               children: [
-                Flexible(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: m3.onSurfaceVariant,
-                      fontWeight: subtle ? FontWeight.w500 : FontWeight.w600,
-                    ),
+                AppIcon(icon, size: 21, color: m3.onSurfaceVariant),
+                const SizedBox(width: 12),
+                Text(label, style: theme.textTheme.bodyMedium),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      if (valueLeading != null) ...[
+                        valueLeading,
+                        const SizedBox(width: 6),
+                      ],
+                      Flexible(
+                        child: Text(
+                          value,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.right,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: m3.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 2),
-                AppIcon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: m3.onSurfaceVariant,
-                  size: 20,
-                ),
+                const SizedBox(width: 8),
+                // No arrow on a row that opens nothing.
+                if (onTap != null)
+                  AppIcon(
+                    Icons.keyboard_arrow_down_rounded,
+                    size: 20,
+                    color: m3.onSurfaceVariant,
+                  )
+                else
+                  const SizedBox(width: 20),
               ],
             ),
           ),
         ),
       ),
     );
+  }
+
+  /// Opens the shared searchable picker, anchored to the row.
+  Future<void> _pick<T>(
+    BuildContext anchor, {
+    required List<PickerOption<T>> options,
+    required ValueChanged<T> onSelected,
+    String? hintText,
+    String? title,
+  }) async {
+    final T? picked = await showSearchablePicker<T>(
+      anchor,
+      options: options,
+      hintText: hintText,
+      title: title,
+    );
+    if (picked != null) onSelected(picked);
   }
 }
 

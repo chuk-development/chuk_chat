@@ -57,7 +57,6 @@ import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/title_generation_service.dart';
 import 'package:chuk_chat/services/tool_call_handler.dart';
 import 'package:chuk_chat/services/app_lifecycle_service.dart';
-import 'package:chuk_chat/core/model_selection_events.dart';
 import 'package:chuk_chat/widgets/composer_caret_follower.dart';
 import 'package:chuk_chat/widgets/composer_recording.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
@@ -376,7 +375,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   late final VoidCallback _modelSelectionListener;
 
   // Stream subscriptions
-  StreamSubscription<void>? _providerRefreshSubscription;
 
   // Network and UI state
   bool _isOffline = false;
@@ -906,14 +904,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       _modelSelectionListener,
     );
 
-    // Provider refresh listener
-    _providerRefreshSubscription = ModelSelectionEventBus().refreshStream
-        .listen((_) {
-          // Skip dropdown cache (may be stale) and read from prefs directly
-          unawaited(
-            loadProviderSlugForModel(selectedModelId, forceFromPrefs: true),
-          );
-        });
+    // Provider changes from the model screen: ChatModelSelectionMixin.
 
     // Network status listener
     _networkStatusListener = () {
@@ -1139,7 +1130,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // in-flight snapshot to disk.
     _streamingHandler.dispose();
     persistenceHandler.dispose();
-    _providerRefreshSubscription?.cancel();
     NetworkStatusService.isOnlineListenable.removeListener(
       _networkStatusListener,
     );
