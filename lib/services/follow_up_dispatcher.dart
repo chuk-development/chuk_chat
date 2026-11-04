@@ -155,11 +155,12 @@ class FollowUpDispatcher {
       await FollowUpParkingService.save(chatId, const <String>[]);
       return (queued: 0, waiting: false);
     }
-    // Taken off the park first: a second pass, or the screen opening the
-    // chat, must not send them a second time.
-    await FollowUpParkingService.save(chatId, const <String>[]);
-
+    // The chat is read first: if the read throws, the texts stay parked
+    // for the next pass. Then they leave the park before they are queued,
+    // so the screen opening the chat does not send them a second time
+    // ([_running] already keeps a second pass out).
     final chat = await loadChat(chatId);
+    await FollowUpParkingService.save(chatId, const <String>[]);
     final messages = chat?.messages.toList() ?? <ChatMessage>[];
     String modelId = '';
     String provider = '';

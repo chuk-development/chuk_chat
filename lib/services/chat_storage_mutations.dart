@@ -8,7 +8,7 @@ import 'package:chuk_chat/models/stored_chat.dart';
 import 'package:chuk_chat/services/chat_preload_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/chat_storage_sync.dart'
-    show deserializePayloadAsync, encodeChatPayloadAsync;
+    show deserializePayloadAsync, encodeChatPayloadPair;
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -67,15 +67,16 @@ class ChatStorageMutations {
     }
 
     final updatedChat = chat.copyWith(customName: newName, title: newName);
-    final payload = await encodeChatPayloadAsync(
+    // The cloud copy is neutralized; the cache keeps the outbox state.
+    final payloads = await encodeChatPayloadPair(
       updatedChat.messages,
       newName,
-      forCloud: true,
     );
+    final payload = payloads.local;
 
     // Encrypt BOTH payload AND title (title is used for fast sidebar loading)
     final encryptedPayload = await EncryptionService.encryptChatPayload(
-      payload,
+      payloads.cloud,
     );
     final encryptedTitle = await EncryptionService.encrypt(newName);
 
@@ -136,13 +137,14 @@ class ChatStorageMutations {
     if (user == null) return;
 
     for (final chat in chats) {
-      final payload = await encodeChatPayloadAsync(
+      // The cloud copy is neutralized; the cache keeps the outbox state.
+      final payloads = await encodeChatPayloadPair(
         chat.messages,
         chat.customName,
-        forCloud: true,
       );
+      final payload = payloads.local;
       final encryptedPayload = await EncryptionService.encryptChatPayload(
-        payload,
+        payloads.cloud,
       );
 
       final updatedRows = await SupabaseService.client

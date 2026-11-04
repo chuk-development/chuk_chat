@@ -2181,6 +2181,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     double? tps,
   ) async {
     _voice?.completeTurn(chatId, index, content);
+    // The turn is over (done, cut, stopped, failed): its payload must not
+    // be queued later by another send of this chat.
+    _sendsInFlight.remove(chatId);
     if (kDebugMode) {
       debugPrint(
         '✅ [FinalizeMessage] chatId: $chatId, index: $index, _activeChatId: $_activeChatId',
@@ -2451,6 +2454,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     final String chatId = _activeChatId!;
     final String modelId = selectedModelId;
     final String provider = selectedProviderSlug ?? '';
+    // The chat as it is now: the awaits below may see a chat switch.
+    final List<Map<String, String>> before = _messages
+        .map(Map<String, String>.from)
+        .toList();
     final String? systemPrompt = await _resolveSystemPromptForSend();
     String queueId;
     try {
@@ -2477,17 +2484,34 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       }
       return;
     }
-    if (!mounted) return;
-    setState(() {
-      _messages.add(
-        OfflineSendBridge.voiceBubble(
-          queueId: queueId,
-          durationMs: durationMs,
-          modelId: modelId,
-          provider: provider,
+    final Map<String, String> bubble = OfflineSendBridge.voiceBubble(
+      queueId: queueId,
+      durationMs: durationMs,
+      modelId: modelId,
+      provider: provider,
+    );
+    final List<Map<String, String>>? offScreen =
+        OfflineSendBridge.voiceBubbleOffScreen(
+          chatId: chatId,
+          activeChatId: _activeChatId,
+          mounted: mounted,
+          before: before,
+          bubble: bubble,
+        );
+    if (offScreen != null) {
+      // Another chat is on screen now: the bubble goes into the chat that
+      // started the queue, never into the list on screen.
+      unawaited(
+        persistenceHandler.persistChat(
+          messages: offScreen,
+          chatId: chatId,
+          isOffline: true,
+          silent: true,
         ),
       );
-    });
+      return;
+    }
+    setState(() => _messages.add(bubble));
     unawaited(
       persistenceHandler.persistChat(
         messages: _messages,
@@ -3296,6 +3320,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       return;
     }
     final String? chatIdAtStart = _activeChatId;
+    // An edit, resend or outbox send is not the fresh send whose payload
+    // may still be recorded: it must never queue that one.
+    if (chatIdAtStart != null) _sendsInFlight.remove(chatIdAtStart);
 
     setState(() {
       // Past the guard: the edit goes through. Voice keys first, they
@@ -3458,6 +3485,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     // Resolve system prompt with workspace context (if any)
     final resolvedSystemPrompt = await _resolveSystemPromptForSend();
+    _sendsInFlight.remove(chatId);
 
     // Send using streaming handler with preserved model/provider and attached files
     await _streamingHandler.sendMessage(
@@ -3582,6 +3610,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     runtime.isSending.value = true;
     ChatStorageService.activeMessageChatId = chatId;
     ChatStorageService.selectedChatId ??= chatId;
+    // A continue is never queued; no older payload may be either.
+    _sendsInFlight.remove(chatId);
 
     final continuationKey = ChatUiHelpers.stableUiKey(
       _messages[request.messageIndex],

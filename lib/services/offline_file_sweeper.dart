@@ -77,6 +77,16 @@ class OfflineFileSweeper {
     instance._running = null;
   }
 
+  /// [path] in one form for comparing: a saved path joins with `/`, while
+  /// a directory listing on Windows joins with a backslash. Without this a
+  /// named recording would look orphaned there and be deleted.
+  @visibleForTesting
+  static String pathKey(String path) {
+    final String slashed = path.replaceAll('\\', '/');
+    final String collapsed = slashed.replaceAll(RegExp('/{2,}'), '/');
+    return collapsed.replaceAll('/./', '/');
+  }
+
   /// Users swept in this app run.
   final Set<String> _swept = <String>{};
   Future<int>? _running;
@@ -104,7 +114,7 @@ class OfflineFileSweeper {
       final Set<String> images = <String>{};
       for (final r in mine) {
         final Object? path = r.sendPayload['voicePath'];
-        if (path is String && path.isNotEmpty) voice.add(path);
+        if (path is String && path.isNotEmpty) voice.add(pathKey(path));
         final String text = jsonEncode(r.sendPayload);
         for (final m in ImageStorageService.offlinePathPattern.allMatches(
           text,
@@ -115,7 +125,9 @@ class OfflineFileSweeper {
 
       final DateTime cutoff = now().subtract(grace);
       for (final f in await voiceFiles(userId)) {
-        if (voice.contains(f.path) || f.modified.isAfter(cutoff)) continue;
+        if (voice.contains(pathKey(f.path)) || f.modified.isAfter(cutoff)) {
+          continue;
+        }
         await deleteVoice(f.path);
         deleted++;
       }

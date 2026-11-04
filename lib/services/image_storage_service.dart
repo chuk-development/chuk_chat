@@ -834,6 +834,17 @@ class ImageStorageService {
     }
   }
 
+  /// The offline image id of the file at [path] (`<id>.enc`), or null when
+  /// it is not one. Splits on both separators: a listing on Windows joins
+  /// with a backslash, so a split on `/` alone matched no file there.
+  @visibleForTesting
+  static String? offlineIdOfFile(String path) {
+    final String name = path.split(RegExp(r'[/\\]')).last;
+    if (!name.endsWith('.enc')) return null;
+    final String id = name.substring(0, name.length - '.enc'.length);
+    return _offlineSegment.hasMatch(id) ? id : null;
+  }
+
   /// Every offline image of [userId] that still has its file (not uploaded
   /// yet), as offline paths with the time the file was written. For the
   /// startup sweep of images no outbox row names.
@@ -845,10 +856,8 @@ class ImageStorageService {
     if (_offlineWeb) {
       try {
         for (final e in await offlineBlobs.list(_offlineKey(userId, ''))) {
-          final String name = e.key.split('/').last;
-          if (!name.endsWith('.enc')) continue;
-          final String id = name.substring(0, name.length - '.enc'.length);
-          if (!_offlineSegment.hasMatch(id)) continue;
+          final String? id = offlineIdOfFile(e.key);
+          if (id == null) continue;
           out.add((path: '$offlineScheme$userId/$id', modified: e.modified));
         }
       } catch (_) {}
@@ -860,10 +869,9 @@ class ImageStorageService {
     try {
       if (!await dir.exists()) return const [];
       await for (final entity in dir.list(followLinks: false)) {
-        if (entity is! File || !entity.path.endsWith('.enc')) continue;
-        final String name = entity.path.split('/').last;
-        final String id = name.substring(0, name.length - '.enc'.length);
-        if (!_offlineSegment.hasMatch(id)) continue;
+        if (entity is! File) continue;
+        final String? id = offlineIdOfFile(entity.path);
+        if (id == null) continue;
         out.add((
           path: '$offlineScheme$userId/$id',
           modified: await entity.lastModified(),

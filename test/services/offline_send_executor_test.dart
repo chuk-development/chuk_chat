@@ -6,6 +6,8 @@
 // a break before is a retryable network failure, a chat streaming on
 // screen is left alone, and the payload's settings reach the request.
 
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:chuk_chat/models/chat_message.dart';
@@ -13,7 +15,7 @@ import 'package:chuk_chat/models/chat_stream_event.dart';
 import 'package:chuk_chat/models/queued_message.dart';
 import 'package:chuk_chat/models/stored_chat.dart';
 import 'package:chuk_chat/services/chat_storage_sync.dart'
-    show neutralizeOutboxState;
+    show encodeChatPayloadPair, neutralizeOutboxState;
 import 'package:chuk_chat/services/offline_send_executor.dart';
 
 QueuedMessage _row(String id, Map<String, dynamic> payload) => QueuedMessage(
@@ -205,6 +207,45 @@ void main() {
       expect(maps[1].keys, unorderedEquals(['role', 'text']));
       expect(maps[2]['status'], 'interrupted');
       expect(maps[3]['status'], 'sent');
+    });
+
+    test('the cache copy keeps the outbox state, the cloud copy not',
+        () async {
+      final messages = [
+        ChatMessage(role: 'user', text: 'hi'),
+        ChatMessage(role: 'assistant', text: 'yo'),
+        ChatMessage(
+          role: 'user',
+          text: 'waiting',
+          status: ChatMessageStatus.pending,
+          queueId: 'q-1',
+        ),
+      ];
+      final pair = await encodeChatPayloadPair(messages, null);
+      expect(pair.local, contains('"queueId":"q-1"'));
+      expect(pair.local, contains('"status":"pending"'));
+      expect(pair.cloud, isNot(contains('q-1')));
+      expect(pair.cloud, isNot(contains('pending')));
+    });
+
+    test('with nothing waiting both copies are one encoding', () async {
+      final pair = await encodeChatPayloadPair([
+        ChatMessage(role: 'user', text: 'hi'),
+      ], 'name');
+      expect(identical(pair.local, pair.cloud), isTrue);
+    });
+
+    test('cloud writes never hand the neutral copy to the cache', () {
+      // Every cloud write encodes the pair; a single `forCloud` encoding
+      // there would also land in the cache and drop the queue ids.
+      for (final path in [
+        'lib/services/chat_storage_crud.dart',
+        'lib/services/chat_storage_mutations.dart',
+      ]) {
+        final src = File(path).readAsStringSync();
+        expect(src, isNot(contains('forCloud: true')), reason: path);
+        expect(src, contains('encodeChatPayloadPair('), reason: path);
+      }
     });
   });
 }

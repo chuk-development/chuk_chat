@@ -15,6 +15,8 @@
 //    it builds a controller, binds it and reconnects with no code. The
 //    app-wide [AgentsOutboxFlusher] then flushes every thread on `paired`;
 //  * once nothing is left, it unbinds and closes its socket again;
+//  * a link of its own that died (closed, error) is dropped and built anew
+//    on the next look while work is left;
 //  * the moment a thread view binds its own controller, this one steps
 //    back and closes its socket: two sockets for one device displace each
 //    other on the relay.
@@ -126,6 +128,7 @@ class AgentsBackgroundLink {
 
   AgentsRelayController? _own;
   bool _busy = false;
+  bool _detached = false;
   Timer? _timer;
 
   void _attach() {
@@ -140,6 +143,7 @@ class AgentsBackgroundLink {
   }
 
   void _detach() {
+    _detached = true;
     _timer?.cancel();
     _timer = null;
     _slot.removeListener(_onSlot);
@@ -172,14 +176,23 @@ class AgentsBackgroundLink {
   /// One look: open the link when work waits, close it when it is done.
   @visibleForTesting
   Future<void> check() async {
-    if (_busy) return;
+    if (_busy || _detached) return;
     _busy = true;
     try {
       final AgentsRelayController? own = _own;
       if (own != null) {
-        // Ours is up: keep it while work is left, also while it reconnects.
-        if (!await _hasWork()) _release();
-        return;
+        // Ours is up: keep it while work is left. A dead one (the socket
+        // closed, or a reconnect that failed through its state and did not
+        // throw) never comes back by itself: drop it, and build a fresh one
+        // below when work is still left.
+        final AgentsRelayPhase phase = own.state.value.phase;
+        final bool down =
+            phase == AgentsRelayPhase.closed || phase == AgentsRelayPhase.error;
+        if (!down) {
+          if (!await _hasWork()) _release();
+          return;
+        }
+        _release();
       }
       if (_slot.value != null) return; // A thread view holds the link.
       if (!_online()) return;
@@ -188,9 +201,10 @@ class AgentsBackgroundLink {
       if (!await _hasWork()) return;
       final AgentsStoredPairing? pairing = await _loadPairing();
       if (pairing == null) return;
+      if (_detached) return;
       final AgentsRelayController controller = await _build();
-      if (_slot.value != null) {
-        // A view came up while this one was built.
+      if (_detached || _slot.value != null) {
+        // Stopped, or a view came up while this one was built.
         unawaited(controller.dispose());
         return;
       }

@@ -100,6 +100,22 @@ void main() {
       expect((await queue.listAll()).single.userId, 'u2');
     });
 
+    test('wipeUser also removes rows with no owner', () async {
+      OutboxCipher.useFake(userId: null, withKey: false);
+      await queue.enqueue(chatId: 'c', sendPayload: {'messageText': 'anon'});
+      OutboxCipher.useFake(userId: 'u1');
+      await queue.enqueue(chatId: 'c', sendPayload: {'i': 1});
+      await queue.enqueue(chatId: 'c', sendPayload: {'i': 2}, userId: 'u2');
+      final all = await queue.listAll();
+      expect(all.where((r) => r.userId == null), hasLength(1));
+
+      final gone = await queue.wipeUser('u1');
+      expect(gone, hasLength(2));
+      // The next account finds nothing to claim.
+      expect(await queue.claimLegacyRows('u2'), 0);
+      expect((await queue.listAll()).single.userId, 'u2');
+    });
+
     test('recoverInterrupted puts preparing/sending back to queued', () async {
       final a = await queue.enqueue(chatId: 'c', sendPayload: {'i': 1});
       final b = await queue.enqueue(chatId: 'c', sendPayload: {'i': 2});

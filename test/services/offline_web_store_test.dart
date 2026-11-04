@@ -59,6 +59,7 @@ void main() {
       blobs = _MemBlobs();
       VoiceSpoolService.forceWeb = true;
       VoiceSpoolService.blobs = blobs;
+      VoiceSpoolService.useFakeCipher();
     });
 
     tearDown(VoiceSpoolService.reset);
@@ -70,6 +71,8 @@ void main() {
       expect(VoiceSpoolService.isSupported, isTrue);
       expect(await VoiceSpoolService.exists(path), isTrue);
       expect(await VoiceSpoolService.read(path), wav);
+      // IndexedDB holds the sealed bytes, not the WAV.
+      expect(blobs.data.values.single, isNot(wav));
 
       final listed = await VoiceSpoolService.listFiles('u1');
       expect(listed.single.path, path);
@@ -153,6 +156,7 @@ void main() {
     setUp(() async {
       tmp = await Directory.systemTemp.createTemp('offline_list_test');
       VoiceSpoolService.baseDir = () async => tmp.path;
+      VoiceSpoolService.useFakeCipher();
       ImageStorageService.offlineRootOverride = () async => '${tmp.path}/img';
     });
 
@@ -184,5 +188,13 @@ void main() {
       final listed = await ImageStorageService.listOfflineImages(_user);
       expect(listed.map((f) => f.path), ['offline://img/$_user/aaaa-1111']);
     });
+  });
+
+  test('an offline image file name is read on Windows paths too', () {
+    String? id(String path) => ImageStorageService.offlineIdOfFile(path);
+    expect(id(r'C:\App\offline_images\u1\ab-12.enc'), 'ab-12');
+    expect(id('/a/offline_images/u1/ab.enc'), 'ab');
+    expect(id(r'C:\x\ab.enc.promoted'), isNull);
+    expect(id(r'C:\x\a.b.enc'), isNull);
   });
 }

@@ -15,6 +15,7 @@ void main() {
   setUp(() async {
     tmp = await Directory.systemTemp.createTemp('voice_spool_test');
     VoiceSpoolService.baseDir = () async => tmp.path;
+    VoiceSpoolService.useFakeCipher();
   });
 
   tearDown(() async {
@@ -28,10 +29,60 @@ void main() {
     final path = await VoiceSpoolService.saveWav(wav, userId: 'u1');
 
     expect(path, startsWith('${tmp.path}/voice_spool/u1/'));
-    expect(path, endsWith('.wav'));
+    expect(path, endsWith(VoiceSpoolService.sealedSuffix));
     expect(File(path).existsSync(), isTrue);
     expect(await VoiceSpoolService.read(path), wav);
     expect(await VoiceSpoolService.exists(path), isTrue);
+  });
+
+  test('the file on disk is sealed, never the plain WAV', () async {
+    final wav = Uint8List.fromList(List<int>.generate(64, (i) => i));
+    final path = await VoiceSpoolService.saveWav(wav, userId: 'u1');
+    final onDisk = File(path).readAsBytesSync();
+    expect(onDisk, isNot(wav));
+    expect(onDisk.first, 0x53); // the fake cipher's mark
+    expect(await VoiceSpoolService.read(path), wav);
+  });
+
+  test('without a key the recording waits in memory, then is sealed',
+      () async {
+    VoiceSpoolService.useFakeCipher(withKey: false);
+    final wav = Uint8List.fromList([9, 8, 7]);
+    final path = await VoiceSpoolService.saveWav(wav, userId: 'u1');
+
+    expect(File(path).existsSync(), isFalse); // nothing plain on disk
+    expect(VoiceSpoolService.isPending(path), isTrue);
+    expect(await VoiceSpoolService.exists(path), isTrue);
+    expect(await VoiceSpoolService.read(path), wav);
+    expect(await VoiceSpoolService.sealPending(), 0); // still no key
+
+    VoiceSpoolService.useFakeCipher();
+    expect(await VoiceSpoolService.sealPending(), 1);
+    expect(VoiceSpoolService.isPending(path), isFalse);
+    expect(File(path).readAsBytesSync().first, 0x53);
+    expect(await VoiceSpoolService.read(path), wav);
+  });
+
+  test('a recording waiting for the key goes with delete and wipe', () async {
+    VoiceSpoolService.useFakeCipher(withKey: false);
+    final a = await VoiceSpoolService.saveWav(Uint8List.fromList([1]));
+    final b = await VoiceSpoolService.saveWav(
+      Uint8List.fromList([2]),
+      userId: 'u2',
+    );
+    await VoiceSpoolService.delete(a);
+    expect(await VoiceSpoolService.exists(a), isFalse);
+    await VoiceSpoolService.wipeUser('u2');
+    expect(await VoiceSpoolService.exists(b), isFalse);
+  });
+
+  test('listFiles finds sealed recordings', () async {
+    final path = await VoiceSpoolService.saveWav(
+      Uint8List.fromList([1]),
+      userId: 'u1',
+    );
+    final listed = await VoiceSpoolService.listFiles('u1');
+    expect(listed.map((f) => f.path), [path]);
   });
 
   test('no user id goes to the anon folder', () async {

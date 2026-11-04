@@ -21,6 +21,7 @@ void main() {
   setUp(() async {
     tmp = await Directory.systemTemp.createTemp('voice_handler_test');
     VoiceSpoolService.baseDir = () async => tmp.path;
+    VoiceSpoolService.useFakeCipher();
   });
 
   tearDown(() async {

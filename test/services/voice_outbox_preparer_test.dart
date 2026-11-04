@@ -52,6 +52,7 @@ void main() {
   setUp(() async {
     tmp = await Directory.systemTemp.createTemp('voice_prep_test');
     VoiceSpoolService.baseDir = () async => tmp.path;
+    VoiceSpoolService.useFakeCipher();
     applied = <String>[];
     VoiceOutboxPreparer.accessToken = () async => 'token';
     VoiceOutboxPreparer.applyTranscript = (chatId, queueId, text) async {
