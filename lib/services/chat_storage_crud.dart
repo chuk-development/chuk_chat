@@ -12,6 +12,7 @@ import 'package:chuk_chat/services/chat_storage_sync.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
+import 'package:chuk_chat/services/prompt_cache/prompt_context.dart';
 import 'package:chuk_chat/services/storage/agents_chat_store.dart';
 import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -940,7 +941,12 @@ class ChatStorageCrud {
         messageId: m['messageId'] as String?,
         // AGENTS: the Agents transcript carries these timings; upstream's
         // save drops them, so they are kept only with FEATURE_AGENTS on.
-        sentAt: ChatOrigin.agentsEnabled ? m['sentAt']?.toString() : null,
+        // A user message keeps `sentAt` in every build: its `[Sent: …]`
+        // line for the model is made from it, and the line must be the
+        // same after a reload (prompt_context.dart).
+        sentAt: ChatOrigin.agentsEnabled || role == 'user'
+            ? m['sentAt']?.toString()
+            : null,
         startedAt: ChatOrigin.agentsEnabled ? m['startedAt']?.toString() : null,
         generationMs: ChatOrigin.agentsEnabled
             ? m['generationMs']?.toString()
@@ -954,6 +960,12 @@ class ChatStorageCrud {
         // A dictated message keeps its voice bubble (no audio is stored).
         inputMode: m['inputMode'] as String?,
         voiceDurationMs: m['voiceDurationMs']?.toString(),
+        // The turn's prompt context: the one this app session just sent
+        // (in memory, keyed by `sentAt`) wins over the stored one, because a
+        // resend or edit of the message replaces it.
+        modelContext: role == 'user'
+            ? PromptContextLedger.storedContextOf(m)
+            : null,
       );
     }).toList();
   }
@@ -1012,8 +1024,8 @@ class ChatStorageCrud {
     return name != null && name.isNotEmpty ? name : null;
   }
 
-  /// The plaintext payload of a chat (v3). The one encoding for the cache
-  /// and the cloud.
+  /// The plaintext payload of a chat (v3) as the cache keeps it. A cloud
+  /// write takes [encodeChatPayloadPair] instead.
   static Future<String> _payloadJson(
     List<ChatMessage> messages,
     String? customName,
@@ -1359,10 +1371,12 @@ class ChatStorageCrud {
     // A chat saved locally first may already carry a name and a star.
     final local = ChatStorageState.chatsById[effectiveChatId];
     final customName = _customNameOf(local);
-    final payloadJson = await _payloadJson(messages, customName);
+    // The cloud copy is neutralized; the cache keeps the outbox state.
+    final payloads = await encodeChatPayloadPair(messages, customName);
+    final payloadJson = payloads.local;
 
     final encryptedPayload = await EncryptionService.encryptChatPayload(
-      payloadJson,
+      payloads.cloud,
     );
 
     // Extract and encrypt title separately for fast sidebar loading
@@ -1602,9 +1616,14 @@ class ChatStorageCrud {
       await ChatDirtyStore.markSynced(user.id, chatId, rev);
       return existingChat;
     }
-    final payloadJson = await _payloadJson(messages, normalizedCustomName);
+    // The cloud copy is neutralized; the cache keeps the outbox state.
+    final payloads = await encodeChatPayloadPair(
+      messages,
+      normalizedCustomName,
+    );
+    final payloadJson = payloads.local;
     final encryptedPayload = await EncryptionService.encryptChatPayload(
-      payloadJson,
+      payloads.cloud,
     );
 
     // Extract and encrypt title separately for fast sidebar loading

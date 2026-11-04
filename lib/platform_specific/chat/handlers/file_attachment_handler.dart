@@ -11,6 +11,7 @@ import 'package:chuk_chat/constants/file_constants.dart';
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
+import 'package:chuk_chat/services/offline_image_preparer.dart';
 import 'package:chuk_chat/utils/file_upload_validator.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/scanned_pdf_pages.dart';
 
@@ -29,6 +30,13 @@ class FileAttachmentHandler {
   /// while one is already open. The picker can take a moment to appear, so
   /// rapid taps on the add button would otherwise stack multiple pickers.
   bool _isPicking = false;
+
+  /// Uploads images kept offline once the network is back.
+  late final OfflineAttachmentWatcher _offlineWatcher =
+      OfflineAttachmentWatcher(
+        attachments: () => _attachedFiles,
+        onChanged: () => onUpdate?.call(),
+      );
 
   List<AttachedFile> get attachedFiles => _attachedFiles;
   bool get hasAttachments => _attachedFiles.isNotEmpty;
@@ -328,14 +336,16 @@ class FileAttachmentHandler {
     }
   }
 
-  /// Upload image from bytes (web)
+  /// Compress, encrypt and upload an image. With a bad network the image is
+  /// kept encrypted on the device instead (an `offline://img/` path) and
+  /// uploaded later; it is never dropped for that reason.
   Future<void> _uploadEncryptedImageFromBytes(
     Uint8List imageBytes,
     String fileName,
     String fileId,
   ) async {
     try {
-      final String storagePath = await ImageStorageService.uploadEncryptedImage(
+      final String storagePath = await OfflineImageAttach.uploadOrKeep(
         imageBytes,
       );
 
@@ -346,6 +356,18 @@ class FileAttachmentHandler {
           isUploading: false,
         );
         onUpdate?.call();
+      }
+      if (ImageStorageService.isOfflinePath(storagePath)) {
+        if (index == -1) {
+          // Removed while it was being stored: do not leave the file behind.
+          unawaited(
+            ImageStorageService.deleteOfflineImage(
+              storagePath,
+            ).catchError((_) {}),
+          );
+        } else {
+          _offlineWatcher.track();
+        }
       }
     } catch (error) {
       onError?.call('Failed to upload image "$fileName": $error');
@@ -428,6 +450,11 @@ class FileAttachmentHandler {
   void clearAll() {
     _attachedFiles.clear();
     onUpdate?.call();
+  }
+
+  /// Stops listening for the network. Call from the owner's dispose.
+  void dispose() {
+    _offlineWatcher.dispose();
   }
 
   /// Get files with markdown content (successfully uploaded)

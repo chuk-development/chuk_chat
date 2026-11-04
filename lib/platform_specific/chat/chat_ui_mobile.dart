@@ -41,6 +41,10 @@ import 'package:chuk_chat/services/chat_reaction_service.dart';
 import 'package:chuk_chat/widgets/messenger_typing_indicator.dart';
 import 'package:chuk_chat/widgets/agent_activity/agents_live_status.dart';
 import 'package:chuk_chat/services/offline_send_coordinator.dart';
+import 'package:chuk_chat/services/follow_up_dispatcher.dart';
+import 'package:chuk_chat/services/follow_up_parking_service.dart';
+import 'package:chuk_chat/services/offline_retry_manager.dart';
+import 'package:chuk_chat/platform_specific/chat/offline_send_bridge.dart';
 import 'package:chuk_chat/services/mcp/mcp_availability.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
 import 'package:chuk_chat/services/agents/agents_thread_composer.dart';
@@ -66,6 +70,8 @@ import 'package:chuk_chat/platform_specific/chat/chat_scroll_mixin.dart';
 import 'package:chuk_chat/utils/unread_rows.dart';
 import 'package:chuk_chat/widgets/unread_jump_pill.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_message_edit_mixin.dart';
+import 'package:chuk_chat/platform_specific/chat/outbox_screen_turn.dart';
+import 'package:chuk_chat/services/offline_send_executor.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_model_selection_mixin.dart';
 import 'package:chuk_chat/platform_specific/chat/model_provider_resolution_mixin.dart';
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
@@ -242,12 +248,26 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         ModelProviderResolutionMixin,
         ChatModelSelectionMixin,
         ChatMessageEditMixin,
+        OutboxScreenTurnMixin,
         RegenVariantSeedMixin<ChukChatUIMobile>
     implements ChatDebugSnapshot {
   // Controllers and basic state
   @override
   final TextEditingController composerController = TextEditingController();
   final List<Map<String, String>> _messages = [];
+
+  // --- Outbox on screen (docs/OFFLINE_SEND.md) ---
+
+  @override
+  bool outboxTurnRunningFor(String chatId) =>
+      _streamingHandler.isSending ||
+      _streamingHandler.isStreaming ||
+      _isSendingMessage ||
+      OfflineSendExecutor.isTurnRunning(chatId);
+
+  @override
+  Future<void> outboxReloadFromStorage(String chatId) =>
+      _onOutboxChangedChat(chatId);
 
   /// The Agents thread shares one decode cache across mounts; chuk_chat's
   /// screen keeps its own (see [MessageRenderCache]).
@@ -388,6 +408,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   /// the single slot alone lost the first of two messages.
   final List<String> _queuedFollowUps = <String>[];
 
+  /// The payload of the send now streaming, per chat. A send that never
+  /// reaches the server goes into the offline outbox with it.
+  final Map<String, OfflineSendPayload> _sendsInFlight =
+      <String, OfflineSendPayload>{};
+
+  /// Reloads the open chat when the offline outbox wrote into it.
+  StreamSubscription<OfflineRetryEvent>? _outboxSub;
+
   /// Messenger mode only: the message the next send quotes, per chat.
   final Map<String, ChatReply> _replyDrafts = <String, ChatReply>{};
 
@@ -495,6 +523,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // loadSavedModelPreference in _loadInitialData's post-frame pass — the
     // single entry point, so startup writes and picked-model refreshes run
     // only once.
+    _outboxSub = OfflineSendBridge.listen(_onOutboxChangedChat);
     _loadInitialData();
   }
 
@@ -690,7 +719,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       }
       ..onStreamInterrupted = _markAssistantMessageInterrupted
       ..onStreamTick = _persistStreamTick
-      ..onPaymentRequired = _showPaymentRequiredDialog;
+      ..onPaymentRequired = _showPaymentRequiredDialog
+      ..onSendNotAccepted = _onSendNotAccepted;
   }
 
   /// Periodic snapshot persistence — writes the current streamed body of
@@ -1080,7 +1110,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         composerController.clear();
         messageActionsHandler.cancelEdit();
         if (widget.messengerMode) _resetThreadTransientState();
+        // Follow-ups typed in the chat being left stay parked under it and
+        // go out from there (FollowUpDispatcher), never into the next chat.
+        _pendingMessageText = null;
+        _queuedFollowUps.clear();
       });
+      FollowUpDispatcher.instance.kick();
 
       if (kDebugMode) {
         debugPrint(
@@ -1116,6 +1151,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   @override
   void dispose() {
     AgentsThreadComposer.detach(_agentsThreadSend); // AGENTS
+    _outboxSub?.cancel();
+    _fileHandler.dispose();
     WidgetsBinding.instance.removeObserver(_viewInsetRepin);
     AppLifecycleService.instance.removeOnResumeCallback(_handleAppResumed);
     AppLifecycleService.instance.removeOnPauseCallback(_handleAppPaused);
@@ -1369,6 +1406,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     if (_mayFocusOnLoad && !sidebarWasExpanded && !widget.isSidebarExpanded) {
       composerFocusNode.requestFocus();
     }
+    // Follow-ups typed during a turn that the app did not live to send.
+    unawaited(_restoreParkedFollowUps(chat.id));
   }
 
   Future<void> _loadChatByIdAsync(
@@ -1651,6 +1690,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     if (!mounted || result == null) return;
 
     if (!result.success) {
+      // Offline or the transcription could not connect: the recording is
+      // on disk. It waits in the outbox and is transcribed and sent later.
+      final String? saved = result.savedPath;
+      if (result.queueable && saved != null) {
+        await _queueVoiceRecording(saved, result.durationMs);
+        return;
+      }
       if (!sessionLookupFailed) {
         showSnackBar(result.error ?? l.transcriptionFailed);
       }
@@ -2135,6 +2181,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     double? tps,
   ) async {
     _voice?.completeTurn(chatId, index, content);
+    // The turn is over (done, cut, stopped, failed): its payload must not
+    // be queued later by another send of this chat.
+    _sendsInFlight.remove(chatId);
     if (kDebugMode) {
       debugPrint(
         '✅ [FinalizeMessage] chatId: $chatId, index: $index, _activeChatId: $_activeChatId',
@@ -2333,6 +2382,216 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     } else {
       _pendingMessageText = null;
     }
+    _parkFollowUps();
+  }
+
+  // --- OFFLINE OUTBOX (docs/OFFLINE_SEND.md) ---
+
+  /// The document attachments of a send as JSON (file name + markdown), or
+  /// null when there are none.
+  String? _documentsJsonFor(List<AttachedFile> files) {
+    final docs = files
+        .where((f) => !f.isImage && f.markdownContent != null)
+        .map(
+          (f) => {
+            'fileName': f.fileName,
+            'markdownContent': f.markdownContent!,
+          },
+        )
+        .toList();
+    return docs.isEmpty ? null : jsonEncode(docs);
+  }
+
+  /// Puts [payload] into the outbox, marks the bubble at [userIdx] as
+  /// waiting and drops the placeholder, then saves the chat on this device.
+  Future<bool> _queueForLater(
+    OfflineSendPayload payload, {
+    required int userIdx,
+    required int placeholderIdx,
+    bool kick = false,
+  }) async {
+    var ok = true;
+    try {
+      final queueId = await OfflineSendCoordinator.enqueue(
+        payload,
+        kick: kick,
+      );
+      void mark() => OfflineSendBridge.markQueued(
+        _messages,
+        userIdx: userIdx,
+        placeholderIdx: placeholderIdx,
+        queueId: queueId,
+      );
+      mounted ? setState(mark) : mark();
+    } catch (e) {
+      ok = false;
+      if (kDebugMode) {
+        debugPrint('[Mobile-Send] enqueue failed: ${e.runtimeType}');
+      }
+      void fail() => OfflineSendBridge.markEnqueueFailed(
+        _messages,
+        userIdx: userIdx,
+        placeholderIdx: placeholderIdx,
+        error: e.toString(),
+      );
+      mounted ? setState(fail) : fail();
+    }
+    unawaited(
+      persistenceHandler.persistChat(
+        messages: _messages,
+        chatId: payload.chatId,
+        isOffline: true,
+      ),
+    );
+    return ok;
+  }
+
+  /// A recording that could not be transcribed now: a voice bubble that
+  /// waits, and a voice row in the outbox (docs/OFFLINE_SEND.md).
+  Future<void> _queueVoiceRecording(String path, int? durationMs) async {
+    final bool isNewChat = _activeChatId == null;
+    _activeChatId ??= _uuid.v4();
+    final String chatId = _activeChatId!;
+    final String modelId = selectedModelId;
+    final String provider = selectedProviderSlug ?? '';
+    // The chat as it is now: the awaits below may see a chat switch.
+    final List<Map<String, String>> before = _messages
+        .map(Map<String, String>.from)
+        .toList();
+    final String? systemPrompt = await _resolveSystemPromptForSend();
+    String queueId;
+    try {
+      queueId = await OfflineSendCoordinator.enqueueVoice(
+        OfflineSendPayload(
+          chatId: chatId,
+          messageText: '',
+          modelId: modelId,
+          providerSlug: provider,
+          systemPrompt: systemPrompt,
+          reasoningEffort: clampedReasoningEffort(modelId, provider),
+          voicePath: path,
+          voiceDurationMs: durationMs,
+          autoSend: widget.autoSendVoiceTranscription,
+        ),
+        kick: NetworkStatusService.isOnline,
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[Mobile-Voice] enqueue failed: ${e.runtimeType}');
+      }
+      if (mounted) {
+        showSnackBar(AppLocalizations.of(context)!.transcriptionFailed);
+      }
+      return;
+    }
+    final Map<String, String> bubble = OfflineSendBridge.voiceBubble(
+      queueId: queueId,
+      durationMs: durationMs,
+      modelId: modelId,
+      provider: provider,
+    );
+    final List<Map<String, String>>? offScreen =
+        OfflineSendBridge.voiceBubbleOffScreen(
+          chatId: chatId,
+          activeChatId: _activeChatId,
+          mounted: mounted,
+          before: before,
+          bubble: bubble,
+        );
+    if (offScreen != null) {
+      // Another chat is on screen now: the bubble goes into the chat that
+      // started the queue, never into the list on screen.
+      unawaited(
+        persistenceHandler.persistChat(
+          messages: offScreen,
+          chatId: chatId,
+          isOffline: true,
+          silent: true,
+        ),
+      );
+      return;
+    }
+    setState(() => _messages.add(bubble));
+    unawaited(
+      persistenceHandler.persistChat(
+        messages: _messages,
+        chatId: chatId,
+        isOffline: true,
+      ),
+    );
+    if (isNewChat) widget.onChatIdChanged(chatId);
+    scrollChatToBottom(force: true);
+  }
+
+  /// The streaming handler's hook: the send failed on the network before
+  /// the server accepted it. Queue it instead of showing an error.
+  Future<bool> _onSendNotAccepted(String chatId, int placeholderIndex) async {
+    final payload = _sendsInFlight.remove(chatId);
+    if (payload == null || _activeChatId != chatId) return false;
+    final userIdx = placeholderIndex - 1;
+    if (userIdx < 0 ||
+        userIdx >= _messages.length ||
+        _messages[userIdx]['sender'] != 'user') {
+      return false;
+    }
+    final ok = await _queueForLater(
+      payload,
+      userIdx: userIdx,
+      placeholderIdx: placeholderIndex,
+      kick: true,
+    );
+    if (!ok) return false;
+    _isSendingMessage = false;
+    ChatStorageService.isMessageOperationInProgress = false;
+    _drainPendingMessage();
+    return true;
+  }
+
+  /// The outbox wrote into [chatId] (a reply, a transcript, an uploaded
+  /// image, a deleted row). The open chat reloads from storage unless a
+  /// turn runs, which saves its own list and would be overwritten.
+  Future<void> _onOutboxChangedChat(String chatId) async {
+    if (chatId != _activeChatId) return;
+    if (_isSendingMessage || _isCurrentChatStreaming) return;
+    final chat = await ChatStorageService.loadFullChat(chatId);
+    if (!mounted || chat == null || !chat.isFullyLoaded) return;
+    if (chatId != _activeChatId || _isSendingMessage || _isCurrentChatStreaming) {
+      return;
+    }
+    setState(() {
+      _messages
+        ..clear()
+        ..addAll(chat.messages.map(ChatUiHelpers.messageToRawMap));
+      _messageRenderCache.clear();
+    });
+  }
+
+  /// Follow-ups typed while a reply streams are parked on disk, so a kill
+  /// or a thread switch does not lose them.
+  void _parkFollowUps() {
+    final chatId = _activeChatId;
+    if (chatId == null) return;
+    final texts = <String>[
+      ?_pendingMessageText,
+      ..._queuedFollowUps,
+    ];
+    unawaited(FollowUpParkingService.save(chatId, texts));
+  }
+
+  /// Restores parked follow-ups of the chat just opened and sends them.
+  Future<void> _restoreParkedFollowUps(String chatId) async {
+    final parked = await FollowUpParkingService.load(chatId);
+    if (parked.isEmpty || !mounted || _activeChatId != chatId) return;
+    if (_pendingMessageText != null) return;
+    setState(() {
+      _pendingMessageText = parked.first;
+      _queuedFollowUps
+        ..clear()
+        ..addAll(parked.skip(1));
+    });
+    if (!_isSendingMessage && !_isCurrentChatStreaming) {
+      _drainPendingMessage();
+    }
   }
 
   /// If a message was queued while the AI was streaming, inject it into the
@@ -2356,6 +2615,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         offset: pending.length,
       );
     });
+    _parkFollowUps();
     unawaited(sendMessage());
   }
 
@@ -2399,6 +2659,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         } else {
           queue();
         }
+        _parkFollowUps();
         composerController.clear();
         if (kDebugMode) {
           debugPrint(
@@ -2558,9 +2819,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         'reasoning': '',
         'modelId': selectedModelId,
         'provider': selectedProviderSlug ?? '',
-        // Messenger mode: the send time. The bubble no longer draws it, but
-        // the reaction key and the roster's newest-message time read it.
-        if (widget.messengerMode) 'sentAt': DateTime.now().toIso8601String(),
+        // The send time. The bubble no longer draws it, but the reaction
+        // key, the roster's newest-message time and the model's
+        // `[Sent: …]` line (prompt_context.dart) read it.
+        'sentAt': DateTime.now().toIso8601String(),
       };
       // A dictated message draws as a voice bubble (no audio is stored).
       // Only a composer send was dictated: a voice-call task and an OpenUI
@@ -2644,71 +2906,46 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     if (voiceText == null) composerFocusNode.requestFocus();
     pinMessageToTop();
 
-    // ── Offline short-circuit ──────────────────────────────────────
-    // If offline, enqueue the send, flip the user bubble to pending, drop
-    // the AI placeholder, persist and bail.  The retry manager replays the
-    // send when the network returns.
-    if (!NetworkStatusService.isOnline) {
+    // ── Offline outbox (docs/OFFLINE_SEND.md) ──────────────────────
+    // Offline, behind rows that already wait in this chat, or with an
+    // image that is only in the offline store: the send goes into the
+    // outbox. The user bubble shows "waiting", the AI placeholder goes,
+    // the chat is saved, and the outbox sends it once it can.
+    final String? documentsForQueue = _documentsJsonFor(
+      attachedFilesForApi,
+    );
+    final String? attachedFilesForQueue = attachedFilesForApi.isEmpty
+        ? null
+        : jsonEncode(attachedFilesForApi.map((f) => f.toJson()).toList());
+    if (OfflineSendBridge.mustQueue(
+      chatIdForThisMessage,
+      imagePaths: imageDataUrls,
+    )) {
       // Resolve the system prompt the same way the online path does, so the
-      // offline replay later behaves identically (workspace context, etc.).
+      // replay later behaves identically (workspace context, etc.).
       final resolvedSystemPrompt = await _resolveSystemPromptForSend();
-      try {
-        final queueId = await OfflineSendCoordinator.enqueue(
-          OfflineSendPayload(
-            chatId: chatIdForThisMessage,
-            messageText: validationResult.aiPromptContent ?? displayMessageText,
-            modelId: selectedModelId,
-            providerSlug: selectedProviderSlug ?? '',
-            systemPrompt: resolvedSystemPrompt,
-            imagesJson: imageDataUrls != null && imageDataUrls.isNotEmpty
-                ? jsonEncode(imageDataUrls)
-                : null,
-            maxTokens: validationResult.maxResponseTokens ?? 512,
-            reasoningEffort: clampedReasoningEffort(
-              selectedModelId,
-              selectedProviderSlug,
-            ),
-          ),
-        );
-        if (mounted) {
-          setState(() {
-            final userIdx = placeholderIndex - 1;
-            if (userIdx >= 0 && userIdx < _messages.length) {
-              _messages[userIdx]['status'] = 'pending';
-              _messages[userIdx]['queueId'] = queueId;
-            }
-            if (placeholderIndex >= 0 &&
-                placeholderIndex < _messages.length &&
-                _messages[placeholderIndex]['text'] == 'Thinking...') {
-              _messages.removeAt(placeholderIndex);
-            }
-          });
-        }
-      } catch (e) {
-        if (kDebugMode) {
-          debugPrint('[Mobile-Send] enqueue failed: $e');
-        }
-        if (mounted) {
-          setState(() {
-            final userIdx = placeholderIndex - 1;
-            if (userIdx >= 0 && userIdx < _messages.length) {
-              _messages[userIdx]['status'] = 'failed';
-              _messages[userIdx]['lastError'] = e.toString();
-            }
-            if (placeholderIndex >= 0 &&
-                placeholderIndex < _messages.length &&
-                _messages[placeholderIndex]['text'] == 'Thinking...') {
-              _messages.removeAt(placeholderIndex);
-            }
-          });
-        }
-      }
-      unawaited(
-        persistenceHandler.persistChat(
-          messages: _messages,
-          chatId: chatIdForThisMessage,
-          isOffline: true,
+      final payload = OfflineSendPayload(
+        chatId: chatIdForThisMessage,
+        messageText: validationResult.aiPromptContent ?? displayMessageText,
+        modelId: selectedModelId,
+        providerSlug: selectedProviderSlug ?? '',
+        systemPrompt: resolvedSystemPrompt,
+        imagesJson: imageDataUrls != null && imageDataUrls.isNotEmpty
+            ? jsonEncode(imageDataUrls)
+            : null,
+        attachmentsJson: documentsForQueue,
+        attachedFilesJson: attachedFilesForQueue,
+        maxTokens: validationResult.maxResponseTokens,
+        reasoningEffort: clampedReasoningEffort(
+          selectedModelId,
+          selectedProviderSlug,
         ),
+      );
+      await _queueForLater(
+        payload,
+        userIdx: placeholderIndex - 1,
+        placeholderIdx: placeholderIndex,
+        kick: NetworkStatusService.isOnline,
       );
       // Propagate the new chat ID to the parent so chat-switch behavior
       // stays consistent. Without this the parent thinks selection is
@@ -2829,6 +3066,25 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         );
       }
     }
+    // Kept until the turn ends: a send that never reaches the server goes
+    // into the outbox with exactly these values ([_onSendNotAccepted]).
+    _sendsInFlight[chatIdForThisMessage] = OfflineSendPayload(
+      chatId: chatIdForThisMessage,
+      messageText: validationResult.aiPromptContent ?? displayMessageText,
+      modelId: selectedModelId,
+      providerSlug: selectedProviderSlug ?? '',
+      systemPrompt: resolvedSystemPrompt,
+      imagesJson: imageDataUrls != null && imageDataUrls.isNotEmpty
+          ? jsonEncode(imageDataUrls)
+          : null,
+      attachmentsJson: documentsForQueue,
+      attachedFilesJson: attachedFilesForQueue,
+      maxTokens: validationResult.maxResponseTokens,
+      reasoningEffort: clampedReasoningEffort(
+        selectedModelId,
+        selectedProviderSlug,
+      ),
+    );
     // The turn is under way: a voice task learns which row answers it.
     onVoiceTurnStarted?.call(chatIdForThisMessage, placeholderIndex);
     // NOTE: _isSendingMessage is cleared in _finalizeAiMessage() when streaming completes,
@@ -2997,6 +3253,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // Explicit cancel discards any queued follow-up message too.
     _pendingMessageText = null;
     _queuedFollowUps.clear();
+    _parkFollowUps();
 
     if (_isCurrentChatStreaming) {
       // Stream is active - cancel via handler
@@ -3064,6 +3321,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       return;
     }
     final String? chatIdAtStart = _activeChatId;
+    // An edit, resend or outbox send is not the fresh send whose payload
+    // may still be recorded: it must never queue that one.
+    if (chatIdAtStart != null) _sendsInFlight.remove(chatIdAtStart);
 
     setState(() {
       // Past the guard: the edit goes through. Voice keys first, they
@@ -3226,6 +3486,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     // Resolve system prompt with workspace context (if any)
     final resolvedSystemPrompt = await _resolveSystemPromptForSend();
+    _sendsInFlight.remove(chatId);
 
     // Send using streaming handler with preserved model/provider and attached files
     await _streamingHandler.sendMessage(
@@ -3350,6 +3611,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     runtime.isSending.value = true;
     ChatStorageService.activeMessageChatId = chatId;
     ChatStorageService.selectedChatId ??= chatId;
+    // A continue is never queued; no older payload may be either.
+    _sendsInFlight.remove(chatId);
 
     final continuationKey = ChatUiHelpers.stableUiKey(
       _messages[request.messageIndex],

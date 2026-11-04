@@ -62,6 +62,7 @@ import 'package:chuk_chat/services/settings/mobile_chat_preferences.dart';
 import 'package:chuk_chat/widgets/messenger_typing_indicator.dart';
 import 'package:chuk_chat/widgets/message_bubble/web_search_sources.dart';
 import 'package:chuk_chat/widgets/message_bubble/voice_message_bubble.dart';
+import 'package:chuk_chat/widgets/message_bubble/outbox_status_line.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
 import 'package:chuk_chat/widgets/document_viewer.dart';
 import 'package:chuk_chat/widgets/app_notification.dart';
@@ -214,6 +215,7 @@ class MessageBubble extends StatefulWidget {
     this.userMessageActions = const <MessageBubbleAction>[],
     this.useSharedSelectionArea = false,
     this.status,
+    this.queueId,
     this.lastError,
     this.onRetryPending,
     this.onContinueGeneration,
@@ -350,10 +352,15 @@ class MessageBubble extends StatefulWidget {
   /// behaves like [ChatMessageStatus.sent].
   final ChatMessageStatus? status;
 
+  /// The offline outbox row of this (user) message. The status line under
+  /// the bubble reads the row's state by this id.
+  final String? queueId;
+
   /// Last error text shown in the failed-status tooltip.
   final String? lastError;
 
-  /// Called when the user taps the inline retry button on a failed message.
+  /// Retry for a pending/failed message that has no outbox row (an Agents
+  /// outbox entry). A message with a row retries that row itself.
   final VoidCallback? onRetryPending;
 
   /// Called when the user taps the inline "Continue generation" button on

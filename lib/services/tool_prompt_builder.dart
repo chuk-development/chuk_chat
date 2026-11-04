@@ -1,5 +1,6 @@
 import 'package:chuk_chat/models/skill.dart';
 import 'package:chuk_chat/services/mcp/mcp_catalogue.dart';
+import 'package:chuk_chat/services/prompt_cache/prompt_context.dart';
 
 /// Builds system prompts with tool calling protocol for LLM.
 ///
@@ -40,10 +41,13 @@ class ToolPromptBuilder {
   ///
   /// [notesToolDef] and [askUserToolDef] are tool definitions that bypass
   /// discovery mode and are always shown in the prompt.
+  ///
+  /// The result must be the same for every request of a chat (the prompt
+  /// cache keys on it), so nothing here depends on the clock, on the pass of
+  /// the tool loop, on the tools discovered so far or on the skills loaded:
+  /// those reach the model as messages (prompt_context.dart).
   String buildToolProtocolSection({
     required List<Map<String, dynamic>> tools,
-    bool isToolResult = false,
-    List<Map<String, dynamic>>? discoveredTools,
     String? soulText,
     String? userInfoText,
     String? memoryText,
@@ -61,43 +65,17 @@ class ToolPromptBuilder {
     Map<String, dynamic>? artifactSchemaToolDef,
     Map<String, dynamic>? skillToolDef,
     List<Skill> skillCatalog = const [],
-    List<Skill> activeSkills = const [],
     List<Map<String, dynamic>> extraAlwaysAvailableTools = const [],
     bool nativeToolCalling = false,
   }) {
     _catalogSkillNames = skillCatalog.map((s) => s.name).toSet();
     final buffer = StringBuffer();
 
-    // Current date
-    final now = DateTime.now();
-    const months = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
-    ];
-    const weekdays = [
-      'Monday',
-      'Tuesday',
-      'Wednesday',
-      'Thursday',
-      'Friday',
-      'Saturday',
-      'Sunday',
-    ];
+    // No date here: the system prompt must not change during a chat, or the
+    // provider's prompt cache misses on the whole history. Each user message
+    // carries its own `[Sent: …]` line instead (prompt_context.dart).
     buffer.writeln();
-    buffer.writeln(
-      'Today is ${weekdays[now.weekday - 1]}, '
-      '${months[now.month - 1]} ${now.day}, ${now.year}.',
-    );
+    buffer.writeln(kSentStampSystemLine);
 
     // Identity system -- always injected (Soul > User > Memory).
     buffer.writeln(_buildIdentitySection(soulText, userInfoText, memoryText));
@@ -123,8 +101,6 @@ class ToolPromptBuilder {
       );
     } else if (tools.isNotEmpty) {
       buffer.writeln();
-      final hasDiscoveredTools =
-          discoveredTools != null && discoveredTools.isNotEmpty;
 
       // Tools that bypass discovery and are always shown.
       List<Map<String, dynamic>> alwaysAvailableTools = [];
@@ -166,28 +142,9 @@ class ToolPromptBuilder {
       }
       alwaysAvailableTools = _dedupeToolsByName(alwaysAvailableTools);
 
-      if (discoveryMode && hasDiscoveredTools) {
-        final findToolDef = tools
-            .where((t) => t['name'] == 'find_tools')
-            .toList();
-        // Collect names of tools not yet discovered so the AI knows
-        // what else is available via find_tools.
-        final shownNames = <String>{
-          'find_tools',
-          ...alwaysAvailableTools.map((t) => t['name']?.toString() ?? ''),
-          ...discoveredTools.map((t) => t['name']?.toString() ?? ''),
-        };
-        final undiscoveredNames = tools
-            .map((t) => t['name']?.toString() ?? '')
-            .where((n) => n.isNotEmpty && !shownNames.contains(n))
-            .toList();
-        buffer.writeln(
-          _buildToolProtocol(
-            [...findToolDef, ...alwaysAvailableTools, ...discoveredTools],
-            undiscoveredToolNames: undiscoveredNames,
-          ),
-        );
-      } else if (discoveryMode) {
+      // Discovered tools are not listed here: their definitions arrive as
+      // the find_tools result, so this listing stays the same all chat.
+      if (discoveryMode) {
         // Extract all tool names so the AI sees what's available.
         // Order: commonly used tools first for better AI discoverability.
         const toolDisplayOrder = <String>[
@@ -266,27 +223,22 @@ class ToolPromptBuilder {
       );
     }
 
-    // Skills, emitted once after the three-branch dispatch above rather than
-    // inside each branch. Catalog first (level 1: name + description), then
-    // the bodies of whatever is active (level 2) — last, so they sit closest
-    // to the model's answer.
+    // Skills, emitted once after the branch dispatch above rather than inside
+    // each branch. Only the catalog (level 1: name + description): a loaded
+    // body (level 2) is a `<skill_content>` message in the conversation.
     if (skillCatalog.isNotEmpty) {
       buffer.writeln(_buildSkillsCatalog(skillCatalog, native: nativeToolCalling));
     }
-    for (final skill in activeSkills) {
-      buffer.writeln(_buildActiveSkillSection(skill));
-    }
-
     // After tool results come back the model is prompted again to continue.
     // Without guidance it re-runs the full discovery protocol and narrates the
     // plan a second time ("I'll generate…" → tool runs → "Done, shown above"),
     // which reads to the user as several separate answers for one request.
-    // Steer the continuation pass toward a single, final reply. (Previously the
-    // `isToolResult` flag was threaded all the way here but never used.)
-    if (isToolResult && tools.isNotEmpty) {
+    // Always present (not only on tool-result passes): a block that appears
+    // on pass 2 changes the system prompt and misses the prompt cache.
+    if (tools.isNotEmpty) {
       buffer.writeln();
       buffer.writeln(
-        'CONTINUATION — you already have the tool results above:\n'
+        'AFTER TOOL RESULTS — when the tool results you asked for are above:\n'
         '- Generated images and downloaded file cards are ALREADY shown to '
         'the user. Other tool output is NOT: the user sees only what you '
         'write, so present the data they need yourself (a <map>, <chart> or '
@@ -295,7 +247,9 @@ class ToolPromptBuilder {
         '- Do NOT re-announce your plan or narrate what you are "about to" do '
         '(no "I\'ll generate…", "Let me…", "Now I will…") — that step is done.\n'
         '- If the results fully satisfy the request, reply ONCE with a short '
-        'final answer. Only call another tool if genuinely more work remains.',
+        'final answer. Only call another tool if genuinely more work remains. '
+        'A loaded skill is the exception: it is a setup step, so do the work '
+        'it describes.',
       );
     }
 
@@ -399,11 +353,23 @@ class ToolPromptBuilder {
     List<McpCatalogueEntry> unconnected,
     List<String> connectedNames, {
     bool native = false,
+  }) => mcpServersSection(
+    unconnected.map((e) => e.id).toList(),
+    connectedNames,
+    native: native,
+  );
+
+  /// The MCP SERVERS block from catalogue ids. Also the body of a
+  /// `[connectors updated]` note.
+  static String mcpServersSection(
+    List<String> unconnectedIds,
+    List<String> connectedNames, {
+    bool native = false,
   }) {
     final connected = connectedNames.isEmpty
         ? 'none'
         : connectedNames.join(', ');
-    final ids = unconnected.map((e) => e.id).join(', ');
+    final ids = unconnectedIds.join(', ');
     final connectedLine = native
         ? 'Connected (their tools are available to call directly): $connected'
         : 'Connected (their tools are available via find_tools): $connected';
@@ -462,10 +428,10 @@ class ToolPromptBuilder {
       ..writeln()
       ..writeln(
         'Load a skill BEFORE doing the work it describes, not after. Loading '
-        'is cheap; guessing a format is not. The full instructions appear in '
-        'your next system prompt under "## ACTIVE SKILL" and stay there for '
-        'the rest of the conversation. Loading a skill is a SETUP step — it '
-        'is never the answer by itself.',
+        'is cheap; guessing a format is not. The full instructions then '
+        'arrive as a <skill_content name="..."> message in the conversation '
+        'and stay valid for the rest of it. Loading a skill is a SETUP step '
+        '— it is never the answer by itself.',
       )
       ..writeln();
     for (final skill in skills) {
@@ -474,15 +440,55 @@ class ToolPromptBuilder {
     return buffer.toString();
   }
 
-  /// Level 2: the body of an activated skill, injected verbatim.
-  String _buildActiveSkillSection(Skill skill) {
-    return '\n## ACTIVE SKILL: ${skill.name}\n\n${skill.body}\n';
+  /// The data part of the identity section: the SOUL, USER and MEMORY
+  /// headings with their texts. Also the body of a `[memory updated]` note.
+  static String identityDataSection(
+    String? soulText,
+    String? userInfoText,
+    String? memoryText,
+  ) {
+    final buffer = StringBuffer();
+
+    // ── Soul (personality / tone / boundaries) ──
+    buffer.writeln();
+    buffer.writeln('## SOUL');
+    buffer.writeln();
+    final soul = soulText?.trim() ?? '';
+    if (soul.isEmpty) {
+      buffer.writeln('_(No soul defined yet.)_');
+    } else {
+      buffer.writeln(soul);
+    }
+
+    // ── User (facts about the human) ──
+    buffer.writeln();
+    buffer.writeln('## USER');
+    buffer.writeln();
+    final user = userInfoText?.trim() ?? '';
+    if (user.isEmpty) {
+      buffer.writeln('_(No user info saved yet.)_');
+    } else {
+      buffer.writeln(user);
+    }
+
+    // ── Memory (long-term knowledge, free text) ──
+    buffer.writeln();
+    buffer.writeln('## MEMORY');
+    buffer.writeln();
+    final memory = memoryText?.trim() ?? '';
+    if (memory.isEmpty) {
+      buffer.writeln('_(No memories saved yet.)_');
+    } else {
+      buffer.writeln(memory);
+    }
+    return buffer.toString();
   }
 
   /// Build the full identity section: Soul, User, Memory.
   ///
   /// You have full read/write access to all three via the **notes** tool.
-  /// These are re-read every message cycle so updates take effect immediately.
+  /// The texts are the chat's snapshot (prompt_context.dart); a change during
+  /// the chat reaches the model as a `[memory updated]` note instead.
   String _buildIdentitySection(
     String? soulText,
     String? userInfoText,
@@ -496,8 +502,11 @@ class ToolPromptBuilder {
     buffer.writeln();
     buffer.writeln(
       'You have three persistent stores that survive across conversations. '
-      'They are re-read every message. You can update all three via the '
-      '**notes** tool which is always available (no discovery needed).',
+      'The copy below was taken when this chat started. When one changes '
+      'later, a user message starts with a [memory updated] note that holds '
+      'the new text, and that note replaces the copy below. You can update '
+      'all three via the **notes** tool which is always available (no '
+      'discovery needed).',
     );
     buffer.writeln();
     buffer.writeln('### HARD RULE — TOOL NAME');
@@ -583,38 +592,7 @@ class ToolPromptBuilder {
       'diff in your reply unless the user asks.',
     );
 
-    // ── Soul (personality / tone / boundaries) ──
-    buffer.writeln();
-    buffer.writeln('## SOUL');
-    buffer.writeln();
-    final soul = soulText?.trim() ?? '';
-    if (soul.isEmpty) {
-      buffer.writeln('_(No soul defined yet.)_');
-    } else {
-      buffer.writeln(soul);
-    }
-
-    // ── User (facts about the human) ──
-    buffer.writeln();
-    buffer.writeln('## USER');
-    buffer.writeln();
-    final user = userInfoText?.trim() ?? '';
-    if (user.isEmpty) {
-      buffer.writeln('_(No user info saved yet.)_');
-    } else {
-      buffer.writeln(user);
-    }
-
-    // ── Memory (long-term knowledge, free text) ──
-    buffer.writeln();
-    buffer.writeln('## MEMORY');
-    buffer.writeln();
-    final memory = memoryText?.trim() ?? '';
-    if (memory.isEmpty) {
-      buffer.writeln('_(No memories saved yet.)_');
-    } else {
-      buffer.writeln(memory);
-    }
+    buffer.write(identityDataSection(soulText, userInfoText, memoryText));
 
     return buffer.toString();
   }

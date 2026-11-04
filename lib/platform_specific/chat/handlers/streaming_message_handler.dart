@@ -18,6 +18,7 @@ import 'package:chuk_chat/services/tool_image_result_service.dart';
 import 'package:chuk_chat/services/tool_result_cache_registry.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/services/streaming_foreground_service.dart';
 import 'package:chuk_chat/services/round_content_block_service.dart';
 import 'package:chuk_chat/models/chat_model.dart';
@@ -102,6 +103,13 @@ class StreamingMessageHandler {
   onStreamTick;
 
   Function()? onPaymentRequired;
+
+  /// The send failed before the server accepted it (no frame came back) on
+  /// a network error, after the pass's own reconnect retries. The host
+  /// moves the message into the offline outbox and answers true; then this
+  /// handler only ends the turn, without an error text in the chat
+  /// (docs/OFFLINE_SEND.md). False or null: the normal error path runs.
+  Future<bool> Function(String chatId, int placeholderIndex)? onSendNotAccepted;
 
   bool _isStreaming = false;
   bool _isSending = false;
@@ -278,11 +286,25 @@ class StreamingMessageHandler {
         .map((m) => Map<String, dynamic>.from(m))
         .toList();
 
+    // The send time stored on this turn's user message (the last user row;
+    // the list already holds it): its `[Sent: …]` line. None for a
+    // "continue generation" turn, which sends no user message of its own.
+    String? turnSentAt;
+    if (continuePriorText == null) {
+      for (var i = messages.length - 1; i >= 0; i--) {
+        if (messages[i]['sender'] == 'user') {
+          turnSentAt = messages[i]['sentAt'];
+          break;
+        }
+      }
+    }
+
     late ToolLoopSession toolSession;
     late final String initialSystemPrompt;
     try {
       toolSession = toolCallHandler.createSession(
         initialUserMessage: aiPromptContent,
+        userSentAt: turnSentAt,
         history: apiHistory,
         accessToken: accessToken,
         discoveryContextKey: chatId,
@@ -496,6 +518,7 @@ class StreamingMessageHandler {
       required List<Map<String, dynamic>> history,
       required String? systemPrompt,
       List<String>? passImages,
+      int? turnHistoryIndex,
       int currentPass = 0,
       int reconnectRetries = 0,
       int cacheMissRetries = 0,
@@ -579,6 +602,8 @@ class StreamingMessageHandler {
         // on every pass; empty (prompt-based) when native mode is off.
         tools: toolCallHandler.nativeToolDefinitions(toolSession),
         toolChoice: ToolCallHandler.nativeToolChoice(toolSession),
+        requestPass: currentPass + 1,
+        turnHistoryIndex: turnHistoryIndex,
         // A retry REPLACES the last answer, so the host drops the turn being
         // retried instead of storing the same question again. Only the first
         // pass says so: later passes of the same turn are continuations, and
@@ -792,7 +817,9 @@ class StreamingMessageHandler {
                   chatId,
                 );
 
-                final next = loopResult.nextStep!;
+                // Later passes carry the turn's images in its own history
+                // entry, not on the pass message (prompt cache, order).
+                final next = loopResult.nextStep!.withTurnImages(images);
                 await _updateForegroundNotification(
                   title: 'Generating response...',
                   content: 'AI is continuing the response',
@@ -803,7 +830,8 @@ class StreamingMessageHandler {
                   message: next.message,
                   history: next.history,
                   systemPrompt: next.systemPrompt,
-                  passImages: images,
+                  passImages: next.passImages,
+                  turnHistoryIndex: next.turnUserIndex,
                   currentPass: currentPass + 1,
                 );
                 return;
@@ -861,6 +889,7 @@ class StreamingMessageHandler {
                 // Reset the tool session for a clean retry
                 final retrySession = toolCallHandler.createSession(
                   initialUserMessage: aiPromptContent,
+                  userSentAt: turnSentAt,
                   history: apiHistory,
                   accessToken: accessToken,
                   discoveryContextKey: chatId,
@@ -887,7 +916,7 @@ class StreamingMessageHandler {
                 }
 
                 await startStreamingPass(
-                  message: aiPromptContent,
+                  message: retrySession.firstPassMessage,
                   history: apiHistory,
                   systemPrompt: retryPrompt,
                   passImages: images,
@@ -1034,7 +1063,7 @@ class StreamingMessageHandler {
           _activeToolLoopFuture = completionFuture;
           unawaited(completionFuture);
         },
-        onError: (errorMessage, {String? code}) {
+        onError: (errorMessage, {String? code}) async {
           // Read (and clear) the text this pass had streamed when it was cut
           // off, before any early return, so a stale copy never leaks into a
           // later error of the same chat.
@@ -1057,6 +1086,7 @@ class StreamingMessageHandler {
                 history: history,
                 systemPrompt: systemPrompt,
                 passImages: passImages,
+                turnHistoryIndex: turnHistoryIndex,
                 currentPass: currentPass,
                 reconnectRetries: reconnectRetries,
                 cacheMissRetries: cacheMissRetries + 1,
@@ -1123,6 +1153,7 @@ class StreamingMessageHandler {
                 history: history,
                 systemPrompt: systemPrompt,
                 passImages: passImages,
+                turnHistoryIndex: turnHistoryIndex,
                 currentPass: currentPass,
                 reconnectRetries: reconnectRetries + 1,
               );
@@ -1131,6 +1162,26 @@ class StreamingMessageHandler {
           }
 
           finalizeStaleToolState();
+
+          // Never reached the server: queue it instead of failing. Only the
+          // first pass of a fresh send; a regenerate or continue, or a later
+          // tool pass, is not a message the outbox can replay.
+          if (currentPass == 0 &&
+              !regenerate &&
+              continuePriorText == null &&
+              !ChatOrigin.isAgentsThread(chatId) &&
+              !_streamingManager.serverAccepted(chatId) &&
+              (isReconnectable ||
+                  NetworkStatusService.isNetworkError(errorMessage)) &&
+              onSendNotAccepted != null &&
+              await onSendNotAccepted!(chatId, placeholderIndex)) {
+            _markStreamFinalized();
+            _isStreaming = false;
+            _isSending = false;
+            onUpdateUI?.call();
+            unawaited(_releaseForegroundKeepAlive());
+            return;
+          }
 
           if (errorMessage == '__PAYMENT_REQUIRED__') {
             final paymentMessage =
@@ -1253,7 +1304,7 @@ class StreamingMessageHandler {
 
     try {
       await startStreamingPass(
-        message: aiPromptContent,
+        message: toolSession.firstPassMessage,
         history: apiHistory,
         systemPrompt: initialSystemPrompt,
         passImages: images,
@@ -1262,6 +1313,20 @@ class StreamingMessageHandler {
       if (_isDisposed) return;
       if (kDebugMode) {
         debugPrint('Failed to start stream: $error');
+      }
+      if (!regenerate &&
+          continuePriorText == null &&
+          !ChatOrigin.isAgentsThread(activeChatId) &&
+          NetworkStatusService.isNetworkError(error) &&
+          onSendNotAccepted != null &&
+          await onSendNotAccepted!(activeChatId, placeholderIndex)) {
+        finalizeStaleToolState();
+        _markStreamFinalized();
+        _isStreaming = false;
+        _isSending = false;
+        onUpdateUI?.call();
+        await _releaseForegroundKeepAlive();
+        return;
       }
       const failureMessage = 'Failed to start streaming. Please try again.';
       if (onMessageFinalize != null) {

@@ -203,6 +203,10 @@ class MultiplexConnection {
   /// confirmed one.
   int get authRefreshFailures => _authRefreshFailures;
 
+  /// Called after every successful handshake. Set once by the offline
+  /// outbox; a static hook keeps this file free of outbox imports.
+  static void Function()? onAuthenticated;
+
   /// Establish (or reuse) the connection and perform the auth handshake.
   /// Idempotent — concurrent callers share one in-flight handshake.
   Future<void> ensureReady() {
@@ -357,6 +361,11 @@ class MultiplexConnection {
     if (kDebugMode) {
       debugPrint('🔌 [Multiplex] /v2/ws ready');
     }
+    // The server is reachable and knows us: a good moment to flush the
+    // offline outbox (docs/OFFLINE_SEND.md).
+    try {
+      onAuthenticated?.call();
+    } catch (_) {}
   }
 
   // ---------------------------------------------------------------------

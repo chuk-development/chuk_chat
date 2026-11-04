@@ -800,6 +800,10 @@ def build_runtime(
         # until a skill exists, and a skill dropped into the workspace between
         # sessions then needs no re-wiring.
         register_skill_tool(registry, library)
+        # A compaction that folds a skill body away leaves a reload note; the
+        # library must then send the body again on the next `skill` call.
+        if ladder is not None:
+            ladder.on_skill_dropped = library.forget
         # ``propose_skill`` (docs/WIRE_CONTRACT.md, "Skill proposals"): the
         # agent drafts a skill from the task it just finished; the executor's
         # sink shows it to the user, and only the user's accept writes it to
