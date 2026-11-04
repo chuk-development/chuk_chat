@@ -163,6 +163,7 @@ class _OutboxStatusLineState extends State<OutboxStatusLine> {
         ? (loc?.messageFailed ?? 'Failed to send')
         : (loc?.outboxWaitingForNetwork ?? 'Waiting for network');
     final VoidCallback? retry = widget.onRetryFallback;
+    final String? queueId = widget.queueId;
     return _line(
       context,
       icon: failed ? Icons.error_outline : Icons.schedule,
@@ -177,6 +178,14 @@ class _OutboxStatusLineState extends State<OutboxStatusLine> {
             key: const ValueKey<String>('outbox_retry'),
             label: loc?.messageRetry ?? 'Retry',
             onTap: _busy ? null : retry,
+          ),
+        // A waiting message with a queue id but no chat outbox row is an
+        // Agents prompt (or a row already gone): Delete drops it.
+        if (queueId != null && queueId.isNotEmpty)
+          _OutboxAction(
+            key: const ValueKey<String>('outbox_delete'),
+            label: loc?.outboxDelete ?? 'Delete',
+            onTap: _busy ? null : () => _discard(queueId),
           ),
       ],
     );
@@ -209,7 +218,13 @@ class _OutboxStatusLineState extends State<OutboxStatusLine> {
           label: label,
           color: muted,
           tooltip: label,
-          actions: [if (_isLongPending(row)) retryAction(retryLabel)],
+          // A row that waits long gets both ways out: send now, or drop it.
+          actions: [
+            if (_isLongPending(row)) ...[
+              retryAction(retryLabel),
+              deleteAction,
+            ],
+          ],
         );
       case OutboxState.preparing:
         final String label = row.isVoice

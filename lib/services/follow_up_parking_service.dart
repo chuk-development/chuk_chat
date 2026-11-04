@@ -85,6 +85,21 @@ abstract final class FollowUpParkingService {
     return const <String>[];
   }
 
+  /// The chats of the signed-in user that have parked follow-ups.
+  static Future<List<String>> parkedChats() async {
+    final user = OutboxCipher.currentUserId();
+    if (user == null) return const <String>[];
+    final head = '$prefix$user.';
+    try {
+      return <String>[
+        for (final k in await keys(head))
+          if (k.length > head.length) k.substring(head.length),
+      ];
+    } catch (_) {
+      return const <String>[];
+    }
+  }
+
   /// Sign-out: deletes every parked list of [userId].
   static Future<void> wipeUser(String userId) async {
     try {

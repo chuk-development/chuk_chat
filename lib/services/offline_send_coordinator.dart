@@ -44,6 +44,7 @@ class OfflineSendPayload {
     this.voicePath,
     this.voiceDurationMs,
     this.autoSend = true,
+    this.resolvePromptAtSend = false,
   });
 
   factory OfflineSendPayload.fromJson(Map<String, dynamic> json) {
@@ -63,6 +64,7 @@ class OfflineSendPayload {
           ? json['voiceDurationMs'] as int
           : null,
       autoSend: json['autoSend'] as bool? ?? true,
+      resolvePromptAtSend: json['resolvePromptAtSend'] == true,
     );
   }
 
@@ -96,6 +98,10 @@ class OfflineSendPayload {
   /// Off: the row is held with the transcript until the user sends it.
   final bool autoSend;
 
+  /// The row was queued with no system prompt (a follow-up the app parked
+  /// while no screen held the chat): it is resolved at send time.
+  final bool resolvePromptAtSend;
+
   Map<String, dynamic> toJson() => <String, dynamic>{
     'chatId': chatId,
     'messageText': messageText,
@@ -113,6 +119,7 @@ class OfflineSendPayload {
     if (voicePath != null && voicePath!.isNotEmpty) 'voicePath': voicePath,
     if (voiceDurationMs != null) 'voiceDurationMs': voiceDurationMs,
     if (!autoSend) 'autoSend': false,
+    if (resolvePromptAtSend) 'resolvePromptAtSend': true,
   };
 
   List<String>? get images {
@@ -268,9 +275,25 @@ class OfflineSendCoordinator {
     final row = await OfflineQueueService.instance.getById(queueId);
     await OfflineQueueService.instance.remove(queueId);
     if (row == null) {
+      // An Agents prompt, or a bubble whose row is already gone: the entry
+      // (if any) and the bubble both go.
+      String? chatId;
       await _bestEffort(() async {
+        chatId = (await AgentsTaskOutbox.findByLocalId(queueId))?.sessionKey;
         await AgentsTaskOutbox.discardByLocalId(queueId);
       });
+      chatId ??= ChatStorageService.selectedChatId;
+      final String? target = chatId;
+      if (target != null && target.isNotEmpty) {
+        await _bestEffort(() => removeQueuedMessage(target, queueId));
+        OfflineRetryManager.instance.notify(
+          OfflineRetryEvent(
+            type: OfflineRetryEventType.discarded,
+            queueId: queueId,
+            chatId: target,
+          ),
+        );
+      }
       return;
     }
     await OfflineRetryManager.instance.runCleanup([row]);

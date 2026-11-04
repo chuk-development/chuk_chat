@@ -355,8 +355,13 @@ class OfflineRetryManager with WidgetsBindingObserver {
   /// it ends. [reason] is for the debug log only.
   void kick(String reason) {
     if (kDebugMode) debugPrint('[OfflineRetry] kick ($reason)');
+    onKick?.call(reason);
     unawaited(_drain(manual: reason == 'manual'));
   }
+
+  /// Runs on every [kick] (start, resume, back online, server connect, a
+  /// tick, a Retry). The follow-up dispatcher and the file sweep ride on it.
+  void Function(String reason)? onKick;
 
   /// Manual Retry of one row: back to queued, then flush.
   Future<void> retryRow(String queueId) async {

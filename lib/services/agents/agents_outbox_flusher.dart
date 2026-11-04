@@ -13,6 +13,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import 'package:chuk_chat/platform_config.dart';
+import 'package:chuk_chat/services/agents/agents_background_link.dart';
 import 'package:chuk_chat/services/agents/agents_queued_marks.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
@@ -20,7 +21,7 @@ import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import 'package:chuk_chat/services/agents/agents_task_outbox.dart';
 
 class AgentsOutboxFlusher {
-  AgentsOutboxFlusher._(this._source, this._tick);
+  AgentsOutboxFlusher._(this._source, this._tick, [this._inbound]);
 
   static AgentsOutboxFlusher? _instance;
 
@@ -34,6 +35,7 @@ class AgentsOutboxFlusher {
     _instance ??= AgentsOutboxFlusher._(
       AgentsRelayLink.instance.controller,
       _defaultTick,
+      AgentsRelayLink.instance.inbound,
     ).._attach();
   }
 
@@ -43,9 +45,11 @@ class AgentsOutboxFlusher {
   static AgentsOutboxFlusher startForTest(
     ValueListenable<AgentsRelayController?> source, {
     Duration tick = _defaultTick,
+    Stream<AgentsRelayInbound>? inbound,
   }) {
     stopForTest();
-    return _instance = AgentsOutboxFlusher._(source, tick).._attach();
+    return _instance = AgentsOutboxFlusher._(source, tick, inbound)
+      .._attach();
   }
 
   @visibleForTesting
@@ -56,18 +60,38 @@ class AgentsOutboxFlusher {
 
   final ValueListenable<AgentsRelayController?> _source;
   final Duration _tick;
+  final Stream<AgentsRelayInbound>? _inbound;
+  StreamSubscription<AgentsRelayInbound>? _inboundSub;
   AgentsRelayController? _watched;
   bool _wasPaired = false;
   Timer? _timer;
 
   void _attach() {
     _source.addListener(_onController);
+    _inboundSub = _inbound?.listen(_onInbound);
     _onController();
   }
 
   void _detach() {
     _source.removeListener(_onController);
+    _inboundSub?.cancel();
+    _inboundSub = null;
     _unwatch();
+  }
+
+  /// The host's `task_ack` for ANY thread. A thread view clears the record
+  /// of its own thread; a prompt the app-wide flush sent into another thread
+  /// has no view listening, and without this its record would stay, be sent
+  /// again on every pairing and finally show as failed although it arrived.
+  void _onInbound(AgentsRelayInbound event) {
+    if (event is! AgentsRelayTaskAck) return;
+    final String? sessionKey = event.sessionKey;
+    unawaited(
+      (sessionKey == null || sessionKey.isEmpty
+              ? AgentsPendingTasks.clearAnywhere(event.taskId)
+              : AgentsPendingTasks.clear(sessionKey, event.taskId))
+          .catchError((Object _) {}),
+    );
   }
 
   void _unwatch() {
@@ -100,6 +124,11 @@ class AgentsOutboxFlusher {
     final bool paired = controller.state.value.isPaired;
     if (paired && !_wasPaired) {
       unawaited(flushAllVia(controller));
+      // No thread view holds this link (the background link opened it), so
+      // nobody else sends the tasks the host never acknowledged.
+      if (AgentsBackgroundLink.owns(controller)) {
+        unawaited(resendAllVia(controller));
+      }
       // A send that failed waits out its backoff, and nothing else would look
       // at the queue again while no thread view is mounted.
       _timer?.cancel();
@@ -136,6 +165,33 @@ class AgentsOutboxFlusher {
       if (kDebugMode) debugPrint('[agents-outbox] flushAll failed: $error');
       return 0;
     }
+  }
+
+  /// Sends again, in every thread, the tasks the host never acknowledged,
+  /// with their original `task_id`. Never throws. Returns how many went out.
+  static Future<int> resendAllVia(AgentsRelayController controller) async {
+    var sent = 0;
+    try {
+      for (final String sessionKey in await AgentsPendingTasks.sessionKeys()) {
+        sent += await AgentsPendingTasks.resend(sessionKey, (task) async {
+          if (!controller.state.value.isPaired) {
+            throw StateError('the link went down during the re-send');
+          }
+          AgentsRunLedger.instance.taskSent(sessionKey, task.taskId);
+          await controller.sendTask(
+            task.prompt,
+            sessionKey: sessionKey,
+            modelId: task.modelId,
+            providerSlug: task.providerSlug,
+            reasoningEffort: task.reasoningEffort,
+            taskId: task.taskId,
+          );
+        });
+      }
+    } catch (error) {
+      if (kDebugMode) debugPrint('[agents-pending] resendAll failed: $error');
+    }
+    return sent;
   }
 
   /// Sends one queued prompt into the thread it was typed in.

@@ -125,12 +125,17 @@ void main() {
 
     expect(find.text('Waiting for network'), findsOneWidget);
     expect(find.text('Retry'), findsOneWidget);
-    expect(delete, findsNothing);
+    // A stuck queued row can also be dropped (not only a failed one).
+    expect(delete, findsOneWidget);
 
     await tester.tap(retry);
     await tester.pump();
     expect(retried, <String>['q1']);
     expect(fallbackRetries, 0);
+
+    await tester.tap(delete);
+    await tester.pump();
+    expect(discarded, <String>['q1']);
   });
 
   testWidgets('preparing voice: transcribing with a spinner', (tester) async {
@@ -215,12 +220,27 @@ void main() {
 
     expect(find.text('Waiting for network'), findsOneWidget);
     expect(findIcon(Icons.schedule), findsOneWidget);
-    expect(delete, findsNothing);
+    // An Agents prompt waits with no chat outbox row: Delete drops it.
+    expect(delete, findsOneWidget);
 
     await tester.tap(retry);
     await tester.pump();
     expect(fallbackRetries, 1);
     expect(retried, isEmpty);
+
+    await tester.tap(delete);
+    await tester.pump();
+    expect(discarded, <String>['agents-entry']);
+  });
+
+  testWidgets('queued but not long pending: no actions yet', (tester) async {
+    setRows(<QueuedMessage>[row('q1')]);
+    await pumpLine(tester, line());
+
+    expect(find.text('Waiting for network'), findsOneWidget);
+    expect(retry, findsNothing);
+    expect(delete, findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 
   testWidgets('a sent message whose row is gone draws nothing', (

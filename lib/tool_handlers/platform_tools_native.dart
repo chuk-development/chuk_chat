@@ -4,6 +4,7 @@ import 'package:chuk_chat/services/approval_config.dart';
 import 'package:chuk_chat/services/bash_sandbox.dart';
 import 'package:chuk_chat/services/device_services.dart';
 import 'package:chuk_chat/services/github_oauth.dart';
+import 'package:chuk_chat/services/headless_turn_scope.dart';
 import 'package:chuk_chat/services/google_oauth.dart';
 import 'package:chuk_chat/services/slack_oauth.dart';
 import 'package:chuk_chat/utils/tool_helpers.dart';
@@ -547,10 +548,17 @@ Future<String> executeDevice(Map<String, dynamic> args) async {
         'email_draft, platform_info, distance';
   }
 
+  // A background (headless) turn has no screen for another app's editor
+  // or for a permission prompt.
+  final String? blocked = HeadlessTurnScope.blockedDeviceAction(action);
+  if (blocked != null) return blocked;
+
   try {
     switch (action.toLowerCase()) {
       case 'get_location':
-        final result = await _deviceServices.getCurrentLocation();
+        final result = await _deviceServices.getCurrentLocation(
+          mayAskPermission: !HeadlessTurnScope.isActive,
+        );
         if (result['success'] != true) {
           return 'Error: ${result['error']}';
         }

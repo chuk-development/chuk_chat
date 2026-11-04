@@ -13,7 +13,13 @@ Agents view. Nothing is lost, also not after an app restart.
 | Encryption at rest | `lib/services/offline_outbox_cipher.dart` |
 | Flush, triggers, backoff, preparers | `lib/services/offline_retry_manager.dart` |
 | Payload schema, enqueue, Retry, Delete, sign-out wipe | `lib/services/offline_send_coordinator.dart` |
-| Headless send of one row | `lib/services/offline_send_executor.dart` |
+| Routing of one row (screen, headless) | `lib/services/offline_send_executor.dart` |
+| Send on the open chat screen | `lib/platform_specific/chat/outbox_screen_turn.dart` |
+| Headless send with the full tool loop | `lib/platform_specific/chat/headless_chat_turn.dart`, `lib/services/headless_turn_scope.dart` |
+| Follow-ups of a chat no screen holds | `lib/services/follow_up_dispatcher.dart` |
+| Startup sweep of orphan files | `lib/services/offline_file_sweeper.dart` |
+| Web byte store (IndexedDB) | `lib/services/offline_blob_store*.dart`, `lib/services/offline_blob_handle.dart` |
+| Agents link with no thread view | `lib/services/agents/agents_background_link.dart` |
 | Voice: recording file, transcription step | `lib/services/voice_spool_service.dart`, `lib/services/voice_outbox_preparer.dart` |
 | Images: offline image store, upload step | `lib/services/image_storage_service.dart` (`offline://img/`), `lib/services/offline_image_preparer.dart` |
 | Follow-ups typed during a reply | `lib/services/follow_up_parking_service.dart` |
@@ -71,7 +77,7 @@ order. The first signed-in user claims the rows without owner and seals them
 
 | State | Meaning | Bubble |
 |-------|---------|--------|
-| `queued` | Waits for the next flush or its backoff time | Clock, "Waiting for network". Retry after 2 min |
+| `queued` | Waits for the next flush or its backoff time | Clock, "Waiting for network". Retry and Delete after 2 min |
 | `preparing` | A preparer runs | "Transcribing…" (voice) or "Uploading…" (images) |
 | `sending` | The request is on its way | "Sending…" |
 | `failed` | Gave up. Never retried by itself | Error icon, "Failed to send", Retry, Delete |
@@ -106,8 +112,9 @@ re-sent by itself, because the server may already bill the turn. The normal
 error shows, and the user can retry.
 
 Follow-ups that the user types while a reply streams are kept in memory as
-before, and also parked on disk. When the app restarts (or the user comes
-back to the thread), the open chat restores and sends them.
+before, and also parked on disk. The open chat sends them when its turn
+ends; a chat that no screen holds any more sends them through the outbox
+(see "Follow-ups" below).
 
 ## When the outbox is flushed
 
@@ -141,8 +148,8 @@ start.
 |------|--------|
 | Network error, 5xx, 429 | `queued`, one attempt more, next try after 5 s, 15 s, 30 s, 1 min, 2 min, 5 min, 10 min, 15 min. After that: `failed` |
 | Other error (4xx, bad payload, chat not found) | `failed` at once |
-| Server had accepted the request | `failed` at once (no double billing) |
-| No session, no key, chat streaming on screen | `queued`, no attempt counted |
+| Server had accepted the request | Sent. What the turn wrote (also an error text after acceptance) is the answer, like a send on screen. Never sent again by itself (no double billing) |
+| No session, no key, a turn of the chat runs (also between two tool passes) | `queued`, no attempt counted |
 | The device is offline | The flush does not start; a manual Retry probes once |
 | Voice: recording file missing, empty transcript | `failed` |
 | Image: offline file missing | `failed` |
@@ -150,24 +157,75 @@ start.
 Retry puts a row back to `queued` with attempts cleared and flushes. Delete
 removes the row, its files and its bubble.
 
-## The headless send
+## How one row is sent (with tools)
 
-`OfflineSendExecutor` sends without a chat screen. It uses the history before
-the queued message (only delivered messages), the queued system prompt,
-images, model, provider and reasoning effort. The response budget comes from
-the model's limits at flush time; when they are not loaded yet, a queued
-budget above 512 is kept, else 4096.
+`OfflineSendExecutor.execute` picks the path. Both run the full tool loop,
+so the answer is the one a normal send gives.
 
-It does not run tools. The tool loop needs the mounted chat screen (tool
-executor, approval cards, MCP sessions). The answer is a plain answer; the
-user can regenerate in the chat for a tool-using one.
+1. **The chat is open on a screen** (`OutboxScreen`, mixed into both chat
+   screens by `OutboxScreenTurnMixin`). The screen reloads the chat from
+   storage (a preparer may have written a transcript or an image path), and
+   when the queued bubble is the LAST message and no turn runs, it sends the
+   bubble through the Retry path (`submitEditedMessage`). The user sees it
+   stream. When the turn ends: the server accepted it (any frame back, tool
+   calls, content blocks) → success. It never reached the server → the error
+   row goes, the bubble waits again (`OutboxScreenRules.restoreWaiting`) and
+   the row is retried with backoff.
+2. **Otherwise: headless** (`HeadlessChatTurn`). It runs the mobile screen's
+   `StreamingMessageHandler` with no screen, on a copy of the chat up to the
+   queued message (only delivered messages) plus a placeholder. The handler's
+   callbacks fill the placeholder (text, reasoning, tool calls, content
+   blocks, tool images, `interrupted`). At the end the placeholder is written
+   right after its question; later queued messages stay after it. The chat's
+   `ChatRuntime.isSending` is true for the whole turn, so the screen (and the
+   executor) treat the chat as busy, also between two tool passes.
 
-The reply is written right after its question, the bubble loses its waiting
-state, and the chat is saved on the device and then synced. The open chat
-screen listens to the outbox events (`OfflineSendBridge.listen`) and reloads
-the chat from storage. It does not reload while its own turn runs, and the
-executor leaves a chat alone while it streams on screen, so neither
-overwrites the other.
+The settings come from the same places as on screen: the user settings
+(`AppThemeService`: tool calling, discovery, history options), the queued
+system prompt (or, for a row queued with `resolvePromptAtSend`, the prompt
+resolved at send time), model, provider, reasoning effort and images.
+
+### Tools with no screen
+
+The headless turn runs in `HeadlessTurnScope` (a zone value):
+
+- `artifact_manager` and `typst_compile` take the queued chat from the scope,
+  not the chat that is open on screen.
+- `device` actions that open another app's screen (`create_calendar_event`,
+  `sms_draft`, `email_draft`) return a tool error ("needs the app open on
+  screen"). `get_location` does not ask for a missing permission; it returns
+  a tool error instead. Nothing waits for a screen that is not there.
+- `ask_user` and `request_mcp_server` only return text the bubble renders,
+  so they work as on screen.
+
+The plain request (no tools) in `OfflineSendExecutor` is only the fallback
+when no tool path is installed (its unit tests).
+
+The open chat screen listens to the outbox events (`OfflineSendBridge.listen`)
+and reloads the chat from storage after a headless send. It does not reload
+while its own turn runs.
+
+## Follow-ups
+
+Follow-ups typed while a reply streams stay in the screen's memory and are
+parked on disk per chat (`FollowUpParkingService`). When the user leaves the
+chat, the screen drops them from memory (they never go into the next chat),
+and `FollowUpDispatcher` takes over: once the chat's turn is over (and 3 s
+more, so the answer's save lands first) and no screen shows the chat, each
+parked follow-up becomes an outbox row with a waiting bubble at the end of
+the chat, in order, and leaves the park. The dispatcher runs on every outbox
+kick (start, resume, back online, server connect), on a chat switch and when
+a screen goes away, and polls every 3 s while a parked chat waits. A chat on
+screen restores and sends its own parked follow-ups when it is opened.
+
+## Files a crash left behind
+
+`OfflineFileSweeper` runs once per app run and user, on the first outbox kick
+with a key. It lists the user's voice recordings (and the `anon` folder) and
+offline images. A file that a row names is kept at any age. A file no row
+names is deleted when it is older than 6 hours (a newer one may belong to a
+recording or a composer that is still open). If any row of the user cannot
+be opened, nothing is deleted. Promotion markers (`.promoted`) are kept.
 
 ## Voice
 
@@ -201,22 +259,46 @@ An Agents prompt that cannot reach the host waits in `AgentsTaskOutbox`:
 
 - An entry is never deleted after its attempts run out. It is marked failed
   and kept for Retry.
+- A task that went to the socket but was never confirmed by the host
+  (`AgentsPendingTasks`) is not dropped after 3 sends either: it becomes a
+  failed outbox entry under the SAME task id, the bubble shows Retry and
+  Delete, and a Retry is the same task to the host (it dedupes).
+- A `task_ack` for any thread clears that thread's record app-wide
+  (`AgentsOutboxFlusher`), so a task that arrived is never shown as failed.
 - The host task id is minted at enqueue time and sent with every flush, so
   the host dedupes a double flush.
 - `AgentsOutboxFlusher` flushes every thread on each `paired` transition,
   also with no thread view mounted.
+- With no thread view holding a link, `AgentsBackgroundLink` opens one when
+  work waits (a due entry or an unconfirmed task), a user is signed in and a
+  pairing is stored: it builds the controller (`agents_relay_factory.dart`),
+  binds it and reconnects with no code. The flusher sends the queue and
+  re-sends unconfirmed tasks. The link closes when nothing is left, and
+  steps back at once when a thread view binds its own controller (a view
+  unbinds its controller when it goes away). Checks every 15 s and on every
+  outbox change or network change.
 - Images in Agents are not sent yet (no attachment frame). The text goes out
   and the user sees "Images are not supported in Agents yet".
 
+## Web
+
+Web has no file system. The outbox rows live in SharedPreferences as
+before; voice recordings and offline images live in IndexedDB
+(`OfflineBlobStore`, database `chuk_offline_outbox`, store `blobs`, value
+`[bytes, writtenAtMs]`) under the same layout as the native files: a
+recording path is `idb:voice_spool/<user>/<uuid>.wav`, an offline image key
+is `offline_images/<user>/<id>.enc` (and `.promoted`). So voice and images
+are kept and sent later on web too. A browser without IndexedDB falls back
+to the old behaviour (voice transcribed live only, no offline images).
+
 ## Known limits
 
-- The headless send does not run tools (see above).
 - A row of the chat outbox whose bubble was replaced by a cloud copy from
   another device is matched by its text; if it is not found, the question is
   added again with the reply.
 - In an Agents thread, a full host replay can replace the local bubble of a
   queued voice message; the row itself stays and is sent.
-- The Agents relay is connected by a thread view. If no thread view was ever
-  mounted since start, nothing connects, so nothing flushes.
-- Follow-ups are restored when their chat is opened, not in the background.
-- Web has no offline image store and no voice spool.
+- The screen path takes a row only when its bubble is the last message;
+  earlier rows of the open chat go out headless and the screen reloads.
+- A headless turn that the app is killed in the middle of goes back to
+  `queued` at start and is sent again (the server may have billed the first).

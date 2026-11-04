@@ -47,6 +47,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 import 'package:chuk_chat/services/agents/agents_backoff.dart';
+import 'package:chuk_chat/services/agents/agents_queued_marks.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/offline_outbox_cipher.dart';
 
@@ -465,6 +466,8 @@ class AgentsTaskOutbox {
     String? localId,
     String? taskId,
     DateTime? createdAt,
+    bool failed = false,
+    String? lastError,
   }) {
     final DateTime created = (createdAt ?? now()).toUtc();
     _seq = (_seq + 1) & 0xffffff;
@@ -482,6 +485,8 @@ class AgentsTaskOutbox {
       modelId: modelId,
       providerSlug: providerSlug,
       reasoningEffort: reasoningEffort,
+      failed: failed,
+      lastError: lastError,
     );
     return _edit(sessionKey, (List<OutboxTask> tasks) async {
       tasks.add(task);
@@ -992,8 +997,7 @@ class AgentsPendingTasks {
   /// The attempt is counted and the record rewritten BEFORE [send] is called,
   /// because a send that is lost is exactly the case this exists for: it
   /// reports success and the frame is gone. A task that is out of attempts is
-  /// skipped and dropped, so the run's own pre-run rule can report it as a
-  /// message that did not arrive.
+  /// skipped and kept as a failed outbox entry with Retry ([mayRetry]).
   ///
   /// Stops at the first failure — the socket that just refused one frame will
   /// refuse the next — and leaves the rest recorded. Returns how many went out.
@@ -1027,22 +1031,83 @@ class AgentsPendingTasks {
   }
 
   /// True when [taskId] may go out once more, and false once it has used up
-  /// [maxAttempts]. A task that is out of attempts is REMOVED here, so the
-  /// caller can say "this did not arrive" exactly once.
-  static Future<bool> mayRetry(String sessionKey, String taskId) =>
-      AgentsTaskOutbox._locked(() async {
+  /// [maxAttempts] (or is not recorded). A task that is out of attempts is
+  /// taken off this record and KEPT as a failed outbox entry under the same
+  /// `task_id` ([keepAsFailed]): the bubble offers Retry and Delete, and a
+  /// Retry is still the same task to the host, which dedupes it. Nothing the
+  /// user typed is dropped (bead chuk_chat-9hgx).
+  static Future<bool> mayRetry(String sessionKey, String taskId) async {
+    final (bool may, PendingTask? exhausted) = await AgentsTaskOutbox._locked(
+      () async {
         final (List<PendingTask> tasks, List<String> locked, bool failed) =
             await _loadRow(sessionKey);
-        if (failed) return false;
+        if (failed) return (false, null);
         final int index = tasks.indexWhere(
           (PendingTask t) => t.taskId == taskId,
         );
-        if (index < 0) return false;
+        if (index < 0) return (false, null);
         if (tasks[index].attempts >= maxAttempts) {
-          tasks.removeAt(index);
+          final PendingTask gone = tasks.removeAt(index);
           await _save(sessionKey, tasks, locked);
-          return false;
+          return (false, gone);
         }
-        return true;
-      });
+        return (true, null);
+      },
+    );
+    if (exhausted != null) await keepAsFailed(exhausted);
+    return may;
+  }
+
+  /// The error a task that was sent but never confirmed shows.
+  static const String notConfirmedError =
+      'Your computer did not confirm this message.';
+
+  /// [task] went out [maxAttempts] times and the host never confirmed it: it
+  /// becomes a failed outbox entry under its own `task_id`, and its bubble
+  /// is marked so it offers Retry. Never throws.
+  static Future<void> keepAsFailed(PendingTask task) async {
+    try {
+      final OutboxTask entry = await AgentsTaskOutbox.enqueue(
+        sessionKey: task.sessionKey,
+        prompt: task.prompt,
+        modelId: task.modelId,
+        providerSlug: task.providerSlug,
+        reasoningEffort: task.reasoningEffort,
+        taskId: task.taskId,
+        failed: true,
+        lastError: notConfirmedError,
+      );
+      await AgentsQueuedMarks.markQueued(
+        sessionKey: task.sessionKey,
+        prompt: task.prompt,
+        queueId: entry.localId,
+      );
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('[agents-pending] could not keep the task: $error');
+      }
+    }
+  }
+
+  /// Clears [taskId] in whatever thread records it (a `task_ack` from a host
+  /// that leaves the session key off).
+  static Future<void> clearAnywhere(String taskId) async {
+    for (final String key in await sessionKeys()) {
+      await clear(key, taskId);
+    }
+  }
+
+  /// The threads that have tasks with no `task_ack`.
+  static Future<List<String>> sessionKeys() async {
+    try {
+      return <String>[
+        for (final String key in await AgentsTaskOutbox._listKeys(
+          kPendingTaskPrefix,
+        ))
+          key.substring(kPendingTaskPrefix.length),
+      ];
+    } catch (_) {
+      return const <String>[];
+    }
+  }
 }
