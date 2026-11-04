@@ -851,12 +851,13 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                   _isSending = false;
                 });
               }
-              _finalizeAiMessage(placeholderIndex, errorText);
-              if (errorBlocksJson != null &&
-                  placeholderIndex >= 0 &&
-                  placeholderIndex < _messages.length) {
-                _messages[placeholderIndex]['contentBlocks'] = errorBlocksJson;
-              }
+              // The error blocks go in before the fold, so a regenerate's
+              // archived variant keeps the interrupted text and error block.
+              _finalizeAiMessage(
+                placeholderIndex,
+                errorText,
+                contentBlocks: errorBlocksJson,
+              );
               _persistChatWithId(chatIdForStream);
             } else {
               _persistBackgroundAssistant(chatIdForStream, placeholderIndex, {
@@ -2240,12 +2241,13 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                   _isSending = false;
                 });
               }
-              _finalizeAiMessage(placeholderIndex, errorText);
-              if (errorBlocksJson != null &&
-                  placeholderIndex >= 0 &&
-                  placeholderIndex < _messages.length) {
-                _messages[placeholderIndex]['contentBlocks'] = errorBlocksJson;
-              }
+              // The error blocks go in before the fold, so a regenerate's
+              // archived variant keeps the interrupted text and error block.
+              _finalizeAiMessage(
+                placeholderIndex,
+                errorText,
+                contentBlocks: errorBlocksJson,
+              );
               if (mounted) {
                 AppNotifications.show(
                   context,
@@ -2489,11 +2491,15 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
   /// writes the cloud right after, with the fields it adds after this call
   /// (content blocks, tool images). A caller with nothing to add passes
   /// [commit] true.
+  ///
+  /// [contentBlocks], when given, is written onto the message before the
+  /// regenerate fold, so the archived variant carries it too.
   void _finalizeAiMessage(
     int index,
     String content, {
     String? reasoning,
     double? tps,
+    String? contentBlocks,
     bool commit = false,
   }) {
     _voice?.completeTurn(_activeChatId, index, content);
@@ -2527,6 +2533,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         message['text'] = content;
         message['reasoning'] = reasoning ?? '';
         if (tps != null) message['tps'] = tps.toString();
+        if (contentBlocks != null) message['contentBlocks'] = contentBlocks;
         foldRegenVariantOnto(message);
         _messages[index] = message;
         _isSending = false;
@@ -2538,6 +2545,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       message['text'] = content;
       message['reasoning'] = reasoning ?? '';
       if (tps != null) message['tps'] = tps.toString();
+      if (contentBlocks != null) message['contentBlocks'] = contentBlocks;
       foldRegenVariantOnto(message);
       _messages[index] = message;
       _isSending = false;

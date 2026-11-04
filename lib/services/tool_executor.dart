@@ -514,20 +514,27 @@ class ToolExecutor {
   /// Runs [run] and, when it has not finished after [timeout], returns an
   /// error result instead: `Error: tool call timed out after <n>ms`. A hung
   /// network call or a lost reply then costs one failed tool result, not the
-  /// whole turn. The abandoned future keeps running; its result is dropped.
+  /// whole turn. [onTimeout] runs when the limit fires, so a tool that can
+  /// be cancelled (MCP) stops its in-flight request; any other abandoned
+  /// future keeps running and its result is dropped.
   @visibleForTesting
   static Future<ToolExecutionResult> runWithTimeout(
     Future<ToolExecutionResult> Function() run,
-    Duration? timeout,
-  ) {
+    Duration? timeout, {
+    void Function()? onTimeout,
+  }) {
     final future = run();
     if (timeout == null) return future;
     return future.timeout(
       timeout,
-      onTimeout: () => ToolExecutionResult(
-        output: 'Error: tool call timed out after ${timeout.inMilliseconds}ms',
-        isError: true,
-      ),
+      onTimeout: () {
+        onTimeout?.call();
+        return ToolExecutionResult(
+          output:
+              'Error: tool call timed out after ${timeout.inMilliseconds}ms',
+          isError: true,
+        );
+      },
     );
   }
 
@@ -536,9 +543,18 @@ class ToolExecutor {
     Map<String, dynamic> args, {
     String? accessToken,
   }) {
+    final Completer<void> deadline = Completer<void>();
     return runWithTimeout(
-      () => _executeUntimed(toolName, args, accessToken: accessToken),
+      () => _executeUntimed(
+        toolName,
+        args,
+        accessToken: accessToken,
+        abortTrigger: deadline.future,
+      ),
       timeoutFor(toolName),
+      onTimeout: () {
+        if (!deadline.isCompleted) deadline.complete();
+      },
     );
   }
 
@@ -546,6 +562,7 @@ class ToolExecutor {
     String toolName,
     Map<String, dynamic> args, {
     String? accessToken,
+    Future<void>? abortTrigger,
   }) async {
     final tool = _tools[toolName];
     if (tool == null) {
@@ -566,7 +583,11 @@ class ToolExecutor {
     }
 
     if (tool.type == ToolType.mcp) {
-      final result = await McpService.call(toolName, args);
+      final result = await McpService.call(
+        toolName,
+        args,
+        abortTrigger: abortTrigger,
+      );
       return ToolExecutionResult(output: result.text, isError: result.isError);
     }
 

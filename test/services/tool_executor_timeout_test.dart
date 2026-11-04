@@ -22,6 +22,31 @@ void main() {
     expect(result.output, 'Error: tool call timed out after 50ms');
   });
 
+  // Regression: the deadline used to drop the result and leave the MCP
+  // request running. onTimeout is how execute() aborts it.
+  test('the deadline fires onTimeout so the tool can be cancelled', () async {
+    var fired = 0;
+    final never = Completer<ToolExecutionResult>();
+    final result = await ToolExecutor.runWithTimeout(
+      () => never.future,
+      const Duration(milliseconds: 50),
+      onTimeout: () => fired++,
+    );
+    expect(result.isError, isTrue);
+    expect(fired, 1);
+  });
+
+  test('a tool that finishes in time does not fire onTimeout', () async {
+    var fired = 0;
+    final result = await ToolExecutor.runWithTimeout(
+      () async => const ToolExecutionResult(output: 'ok', isError: false),
+      const Duration(seconds: 5),
+      onTimeout: () => fired++,
+    );
+    expect(result.output, 'ok');
+    expect(fired, 0);
+  });
+
   test('a tool that finishes in time keeps its result', () async {
     final result = await ToolExecutor.runWithTimeout(
       () async => const ToolExecutionResult(output: 'ok', isError: false),
