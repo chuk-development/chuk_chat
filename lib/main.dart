@@ -55,6 +55,9 @@ import 'package:chuk_chat/services/notifications/agents_notifications.dart';
 import 'package:chuk_chat/services/offline_queue_service.dart';
 import 'package:chuk_chat/services/offline_retry_manager.dart';
 import 'package:chuk_chat/services/offline_send_executor.dart';
+import 'package:chuk_chat/services/agents/agents_outbox_flusher.dart';
+import 'package:chuk_chat/services/offline_image_preparer.dart';
+import 'package:chuk_chat/services/voice_outbox_preparer.dart';
 import 'package:chuk_chat/services/onboarding_tour_controller.dart';
 import 'package:chuk_chat/services/session_manager_service.dart';
 import 'package:chuk_chat/services/session_recovery.dart';
@@ -202,9 +205,16 @@ Future<void> main() async {
     }
   }
   if (offlineQueueReady) {
-    OfflineRetryManager.instance.init();
+    // Steps that run before a queued send (docs/OFFLINE_SEND.md): voice
+    // transcription, then the upload of images kept on the device.
+    VoiceOutboxPreparer.register();
+    OfflineImagePreparer.register();
     OfflineSendExecutor.register();
+    OfflineRetryManager.instance.init();
   }
+  // Agents: the queued prompts go out on every `paired` transition, app-wide,
+  // not only while a thread view is mounted. A no-op with FEATURE_AGENTS off.
+  AgentsOutboxFlusher.start();
 
   // Ensure clean window close on Linux desktop (see window_close_service_io.dart).
   unawaited(initializeWindowCloseHandler());

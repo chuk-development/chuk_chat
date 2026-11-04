@@ -172,11 +172,14 @@ class ChatMessageListItem extends StatelessWidget {
           ? () => onSwitchVariant(data.variantIndex + 1)
           : null,
       status: data.status,
+      queueId: data.isUser ? data.queueId : null,
       lastError: data.lastError,
       onRetryPending:
           data.isUser &&
               (data.status == ChatMessageStatus.pending ||
                   data.status == ChatMessageStatus.failed)
+          // Used only when the message has no outbox row (Agents); a row
+          // retries itself through OfflineSendCoordinator.retryRow.
           ? () => OfflineRetryManager.instance.retryNow()
           : null,
       onContinueGeneration: onContinueGeneration,

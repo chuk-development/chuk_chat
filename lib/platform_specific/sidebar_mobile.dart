@@ -563,6 +563,7 @@ class _SidebarMobileState extends State<SidebarMobile>
       selected: isSelected,
       locked: isLocked,
       streaming: isStreaming,
+      outboxChatId: chat.id,
       onTap: isLocked
           ? () => showLockedSidebarChatDialog(accentColor: accentColor)
           : onTap,

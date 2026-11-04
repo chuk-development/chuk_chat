@@ -222,6 +222,36 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     );
   }
 
+  /// A dictated message whose recording waits in the outbox: no text yet.
+  bool get _isVoiceSavedOffline =>
+      widget.isVoiceInput &&
+      widget.message.trim().isEmpty &&
+      OutboxStatusLine.applies(widget.status, widget.queueId);
+
+  Widget _buildVoiceSavedOffline(Color foreground) {
+    final loc = AppLocalizations.of(context);
+    final Color color = foreground.withValues(alpha: .8);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        AppIcon(Icons.mic, size: 16, color: color),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            loc?.voiceSavedOffline ??
+                'Recording saved — will transcribe when online',
+            style: TextStyle(
+              fontSize: 14,
+              fontStyle: FontStyle.italic,
+              color: color,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildUserBubble(BuildContext context) {
     const bool isUserMessage = true;
     const bool alignRight = true;
@@ -268,19 +298,23 @@ extension _MessageBubbleLayout on _MessageBubbleState {
       border: Border.all(color: iconFgColor.withValues(alpha: .3)),
     );
 
-    final Widget userText = Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: _buildClassicLayout(
-        iconFgColor: bubbleTextColor,
-        accentColor: accentColor,
-        bgColor: bgColor,
-        isUserMessage: isUserMessage,
-        alignRight: alignRight,
-        hasInfoStatusBar: false,
-        hasVisibleToolCalls: false,
-      ),
-    );
+    // A voice message saved offline has no transcript yet: say what
+    // happens to the recording in place of the empty text.
+    final Widget userText = _isVoiceSavedOffline
+        ? _buildVoiceSavedOffline(bubbleTextColor)
+        : Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: _buildClassicLayout(
+              iconFgColor: bubbleTextColor,
+              accentColor: accentColor,
+              bgColor: bgColor,
+              isUserMessage: isUserMessage,
+              alignRight: alignRight,
+              hasInfoStatusBar: false,
+              hasVisibleToolCalls: false,
+            ),
+          );
     final bool hasUserActions = widget.userMessageActions.isNotEmpty;
     // A dictated message: the voice bubble owns the tap (open / fold the
     // transcript) and shows the action bar while it is open.
@@ -340,8 +374,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
             if (!hideEmptyUserBubble) userBubble,
             if (!widget.messengerMode && hasUserActions && _showUserActions)
               _buildUserActionButtons(iconFgColor),
-            if (widget.status == ChatMessageStatus.failed ||
-                widget.status == ChatMessageStatus.pending)
+            if (OutboxStatusLine.applies(widget.status, widget.queueId))
               _buildStatusIndicator(context),
           ],
         ),
