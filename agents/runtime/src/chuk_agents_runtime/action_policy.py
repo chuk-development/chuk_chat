@@ -37,9 +37,100 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
+
+# -- shell command rules ("approve and remember", research C2, item 9) --------
+
+#: Launchers stripped so the remembered prefix is the real command
+#: (``sudo git push`` remembers ``git push``). Mirrors the safety floor.
+_CMD_LAUNCHERS = frozenset(
+    {"sudo", "env", "nice", "nohup", "stdbuf", "setsid", "time", "command", "doas", "exec"}
+)
+#: Most prefix tokens a rule keeps, and most rules per agent.
+MAX_PREFIX_TOKENS = 12
+MAX_COMMAND_RULES = 200
+
+
+def canonical_command_tokens(command: str) -> tuple[str, ...]:
+    """The command as canonical tokens: ``shlex`` split, launchers and
+    ``VAR=value`` assignments stripped, so ``/bin/bash`` and ``bash`` and
+    ``sudo bash`` all canonicalize to the same leading program. An unparsable
+    command canonicalizes to an empty tuple (it matches no rule)."""
+    try:
+        tokens = shlex.split(command, comments=False, posix=True)
+    except ValueError:
+        return ()
+    idx = 0
+    while idx < len(tokens) and (tokens[idx] in _CMD_LAUNCHERS or "=" in tokens[idx]):
+        idx += 1
+    out: list[str] = []
+    for token in tokens[idx:]:
+        out.append(token)
+        if len(out) >= MAX_PREFIX_TOKENS:
+            break
+    if out:
+        # The program is matched by its basename, so ``/usr/bin/git`` == ``git``.
+        head = out[0].rsplit("/", 1)[-1]
+        out[0] = head or out[0]
+    return tuple(out)
+
+
+def command_prefix_tokens(prefix: Any) -> tuple[str, ...]:
+    """The token prefix the app asked to remember (a string like ``git push``
+    or a list of tokens). ``()`` for anything unusable."""
+    if isinstance(prefix, (list, tuple)):
+        items = [str(p) for p in prefix if isinstance(p, (str, int, float))]
+        text = " ".join(items)
+    elif isinstance(prefix, str):
+        text = prefix
+    else:
+        return ()
+    tokens = canonical_command_tokens(text)
+    return tokens[:MAX_PREFIX_TOKENS]
+
+
+def prefix_matches(command: str, prefix: tuple[str, ...]) -> bool:
+    """True when ``command``'s canonical tokens start with ``prefix``."""
+    if not prefix:
+        return False
+    tokens = canonical_command_tokens(command)
+    return len(tokens) >= len(prefix) and tokens[: len(prefix)] == prefix
+
+
+@dataclass(frozen=True)
+class CommandRules:
+    """One agent's remembered command prefixes (item 9). A command is allowed
+    when its canonical tokens start with any stored prefix."""
+
+    prefixes: tuple[tuple[str, ...], ...] = ()
+
+    def allowed(self, command: str) -> bool:
+        return any(prefix_matches(command, prefix) for prefix in self.prefixes)
+
+    def remembered(self, prefix: Any) -> "CommandRules":
+        tokens = command_prefix_tokens(prefix)
+        if not tokens or tokens in self.prefixes:
+            return self
+        listed = (*self.prefixes, tokens)[-MAX_COMMAND_RULES:]
+        return CommandRules(prefixes=listed)
+
+    def to_stored(self) -> list[list[str]]:
+        return [list(p) for p in self.prefixes]
+
+    @classmethod
+    def from_stored(cls, raw: Any) -> "CommandRules":
+        if not isinstance(raw, list):
+            return cls()
+        out: list[tuple[str, ...]] = []
+        for item in raw:
+            if isinstance(item, list) and all(isinstance(t, str) for t in item) and item:
+                tokens = tuple(item)[:MAX_PREFIX_TOKENS]
+                if tokens not in out:
+                    out.append(tokens)
+        return cls(prefixes=tuple(out[-MAX_COMMAND_RULES:]))
 
 # -- classes --------------------------------------------------------------------
 
@@ -73,7 +164,11 @@ SCOPE_ONCE = "once"
 SCOPE_AGENT = "always_this_agent"
 SCOPE_SITE = "always_this_site"
 SCOPE_DENY = "deny"
-SCOPES: tuple[str, ...] = (SCOPE_ONCE, SCOPE_AGENT, SCOPE_SITE, SCOPE_DENY)
+#: "Approve and remember" for a shell command (research C2, item 9,
+#: docs/WIRE_CONTRACT.md "Shell command rules"): allow every command whose
+#: token prefix matches the one the user approved (e.g. ``git push``).
+SCOPE_PREFIX = "always_this_prefix"
+SCOPES: tuple[str, ...] = (SCOPE_ONCE, SCOPE_AGENT, SCOPE_SITE, SCOPE_PREFIX, SCOPE_DENY)
 
 #: The ``action`` of an ``approval_request`` for a class that has no older
 #: action name of its own (``publish`` keeps ``herenow_publish``).
@@ -394,6 +489,10 @@ class ActionApprovals:
     ask: Callable[[ActionRequest], Any] | None
     remember: Callable[[str, str, str], None] | None = None
     site: Callable[[], str] | None = None
+    #: ``prefix_allowed(command)``: whether the user already approved this
+    #: command's token prefix for this agent (item 9). Read by the safety
+    #: floor to lift a soft stop. ``None`` = nothing was ever remembered.
+    prefix_allowed: Callable[[str], bool] | None = None
     #: ``True`` while the run drives the user's own browser (the add-on): the
     #: extra :data:`USER_BROWSER_ACT_TOOLS` then ask too.
     user_browser: bool = False
@@ -573,8 +672,13 @@ __all__ = [
     "SCOPE_AGENT",
     "SCOPE_DENY",
     "SCOPE_ONCE",
+    "SCOPE_PREFIX",
     "SCOPE_SITE",
     "SEND_EXTERNAL",
+    "CommandRules",
+    "canonical_command_tokens",
+    "command_prefix_tokens",
+    "prefix_matches",
     "SITE_CLASSES",
     "USER_BROWSER_ACT_TOOLS",
     "ActionApprovals",

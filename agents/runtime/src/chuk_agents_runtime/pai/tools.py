@@ -82,6 +82,10 @@ class CallRecord:
     #: The loop gave up on the call before it started; it must never run.
     closed: bool = False
     lock: threading.Lock = field(default_factory=threading.Lock)
+    #: UI-only metadata a tool returned under ``_ui`` (a diff for the app's
+    #: card). Taken off the result, so the model and the stored row never
+    #: carry it; the loop puts it on the live ``tool`` frame.
+    ui: Any = None
 
     def begin(self) -> bool:
         """Called on the worker thread right before the handler. ``False``
@@ -99,6 +103,16 @@ class CallRecord:
                 return False
             self.closed = True
             return True
+
+
+def split_ui(result: Any, record: CallRecord | None = None) -> Any:
+    """Take the ``_ui`` key off a dict result (into ``record.ui``)."""
+    if isinstance(result, dict) and "_ui" in result:
+        result = dict(result)
+        ui = result.pop("_ui")
+        if record is not None:
+            record.ui = ui
+    return result
 
 
 def tool_definition(registry: ToolRegistry, name: str, **overrides: Any) -> ToolDefinition:
@@ -220,7 +234,7 @@ class RegistryToolset(AbstractToolset[Any]):
                 except Exception:  # noqa: BLE001 — a status sink never fails a call
                     pass
             try:
-                result = registry.dispatch(name, args)
+                result = split_ui(registry.dispatch(name, args), record)
                 record.result = result
                 return result
             finally:
@@ -236,5 +250,6 @@ __all__ = [
     "RegistryToolset",
     "TOOL_RETRIES",
     "UNSET",
+    "split_ui",
     "tool_definition",
 ]

@@ -350,6 +350,31 @@ showing.
 The app matches on `id` when the host echoes one, else on `name`, and only ever
 updates a connector it already has. A frame never creates one.
 
+`warnings` (optional, additive, 2026-11-04) lists what the stdio package check
+found that did not stop the start: a package without an exact version
+(`npx -y foo`, `foo@latest`, `uvx foo>=1`) or a source that is not the
+registry (`github:`, `git+`, a URL). The check runs before an `npx` / `bunx` /
+`pnpm dlx` / `uvx` / `pipx run` server starts, offline, in
+`RT/mcp_package_check.py`. A refused launch (a known malicious package, a
+name on the user's deny list, a near copy of a popular server's name such as
+`@modelcontextprotocol/server-filesytem`) is not a warning: the server never
+starts and the row carries `"error": "refused to start: <reason>"` with
+`error_kind: "other"`. An app that does not know `warnings` ignores it.
+
+#### MCP behaviour on the host (no frame change)
+
+- **Background reconnect.** A session that drops after a good handshake is
+  dialled again in the background: waits of 0.5, 1, 2, 4, 8, 16, 30, 30, 30,
+  30 s, at most 10 tries per outage, stop at the first success or when the
+  session's manager closes. The tools come back without waiting for the next
+  task. A server that never answered is not retried this way.
+- **Server instructions.** The `instructions` string of the server's
+  `initialize` result goes to the model once per session, in the first good
+  result of that server's tools, as the field `server_instructions`. It is
+  attributed (`<mcp_server_instructions server='name'>`), marked as untrusted
+  third-party text, and cut at 32 KB. It never enters the system prompt, so a
+  server that connects late does not break the prompt cache.
+
 ### `mcp_credentials` (NEW, executor → app)
 
 The return half of the forward payload above. It lives in this section because
@@ -780,6 +805,14 @@ not part of this change).
   string the loop could not parse, the string is sent as it is.
 - `command` (kept for old apps): `arguments.command` for `run_command`,
   `arguments.code` for `run_python`. Absent for other tools. Never a JSON blob.
+- `description` (NEW, `run_command` / `python` only): the model's own 5-10 word
+  active-voice label for the call (`arguments.description`, required in the
+  schema). The app shows it while the call streams, before the result is known
+  (research item 40). Absent on an older client.
+- `ui` (NEW, live only): tool metadata for the app's card that the model never
+  saw and the stored row does not keep — currently `{"diff": "<unified diff>"}`
+  for `edit_file` and `{"diffs": [{"path","diff"}]}` for `apply_patch`. A
+  replay has no `ui`; the app redraws the card from the stored result.
 - `result` (NEW): the tool result as one text, the same text the model got
   (`_as_text(content)` of the stored `tool` row).
 - `exit_code`, `stdout`, `stderr`, `timed_out`: projected from the result when
@@ -867,6 +900,9 @@ as an answer with nothing attached.
 - `file`: the whole frame, `data` included (base64; `MAX_FILE_BYTES`, 8 MB,
   already caps a frame). A file the model sent is a file the user must be able
   to open again after a reinstall.
+  `send_file_to_user` takes `paths` (up to 4) next to `path` (2026-11-04).
+  Each file is still its own `file` frame, in the order given, so nothing
+  changes on the wire; one failed file does not stop the others.
 - `approval_request`: the request fields as sent. The outcome is patched into
   the SAME row once known, by the executor, in `approval_decision` (the user
   answered) or when the gate gives up:
@@ -928,6 +964,68 @@ blocked on the answer, so the app shows the prompt over that conversation and
 never over the one the user happens to be looking at. A persisted row keeps it,
 so a replayed request carries it too. Absent on an old host: the app then
 falls back to the thread the socket is bound to, as before.
+
+
+## Subagents: fork, settled note, output schema, stall, external CLIs (DS #44, #57, Hermes H47/H48)
+
+Additive. `delegate_task` (`RT/subagents.py`) takes new optional arguments,
+and the `subagent_state` event (inside the `subagent` frame) gains optional
+fields. An old app ignores them; an old host never sends them.
+
+Tool arguments (top level = default for every task; a task item can set its
+own value):
+
+| Argument | Meaning |
+|----------|---------|
+| `fork` | `true`: the child starts with a copy of the parent's conversation (its system row first, then every row; an unanswered tool call, such as the `delegate_task` call itself, is cut). The child uses the same model factory, and the child loop adds no system prompt of its own, so the provider's prompt cache of the parent is reused. Refused when there is no parent history, and for an external backend. |
+| `output_schema` | A JSON schema (object, or the same as a JSON string). The answer is parsed (one code fence or surrounding prose is stripped) and validated. On a miss the child gets ONE correction turn in the same session, with the errors and the schema. Then the raw text comes back with `schema_valid: false`. An unusable schema is refused before any child starts. |
+| `backend` (task item only) | `native` (default), or `claude` / `codex` when offered. The field is described in the tool schema only when at least one external backend is on. |
+
+`subagent_state` (and the tool result per child), new optional fields:
+
+```json
+{"type": "subagent_state", "subagent_id": "sa_…", "title": "…",
+ "state": "queued|running|succeeded|failed|cancelled|stalled",
+ "forked": true?, "backend": "codex"?,
+ "schema_valid": true?, "output": {…}?,
+ "stall_note": "no progress for 450s"?, "partial": true?}
+```
+
+- `stalled` is a new terminal state. A child with no event (no text, no tool
+  call) for `stall_idle_s` (default 450 s), or past `child_timeout_s` (default
+  off), is interrupted. `result` is its final answer if it got one out, else
+  the tail of its streamed text (max 4,000 chars), else "tools used: …". A
+  child that ignores the interrupt (one long blocking command) is settled as
+  `stalled` after `stall_grace_s` (default 120 s); its late return does not
+  change the record, and its branch is not merged. A child that keeps working
+  is never touched. The app should draw `stalled` like `failed` with the
+  partial text; an old app shows the unknown state as text.
+- `output` is present only when `schema_valid` is `true`.
+
+"Subagent settled" note (model context, not a frame): a child that settles
+while no `delegate_task` call is waiting for it (`wait: false`, or a wait that
+ran out) queues ONE context row for the parent, drained with the other context
+rows after the next tool round: role `user` (DB label `subagent`), content
+`[subagent settled] <title> (<id>) is <state>. …` plus the summary JSON (max
+2,000 chars). The model no longer has to poll `subagent_control`.
+
+External CLI backends (`RT/acp_runner.py`). Only when the agent's
+`external_agents` permission is on; the executor then probes the agent's
+sandbox with `command -v claude` / `command -v codex` at task start and offers
+what it finds. The child's own sandbox is built as for a native child and
+probed again. One non-interactive run:
+
+- `claude -p <prompt> --output-format json --permission-mode acceptEdits`;
+  `result` is the answer, `is_error` the outcome, `usage` the tokens.
+- `codex exec --json --skip-git-repo-check --sandbox workspace-write <prompt>`;
+  the last `agent_message` item is the answer, `turn.completed.usage` the
+  tokens, `turn.failed` an error.
+
+The answer becomes the child's result (schema check, git merge and settled
+note as for a native child). A missing CLI, an error or the 30-minute timeout
+is a `failed` child with the reason in `error`. Stop reaches a CLI run only
+when its command returns. The CLI uses the user's own login in the sandbox and
+bills that account.
 
 
 ## Fragments: payloads larger than one relay frame (bead chuk_chat-zhhd)
@@ -1093,6 +1191,24 @@ the shape of the `auto` frame above:
   open card with that `approval_id` and never offer Allow again. An app
   without this change draws the frame as a decided card or ignores it.
 
+### Shell command rules ("approve and remember", research C2, item 9)
+
+A future `run_command` approval card may let the user allow a command and
+remember it (codex-style). The decision then carries `remember_prefix`, the
+command token prefix to remember (e.g. `git push`), with `scope:
+"always_this_prefix"`. The host stores it per agent (`command_rules` in
+`agent_permissions.json`) and matches it against a command's **canonical
+tokens** (`shlex` split, launchers `sudo` / `env VAR=` stripped, the program by
+its basename): a command whose tokens start with a stored prefix is allowed. A
+remembered prefix lifts a soft safety-floor stop; it never lifts a hard deny.
+
+Host/runtime pieces (implemented): `action_policy.CommandRules`,
+`canonical_command_tokens`, `prefix_matches`, `SCOPE_PREFIX`;
+`ActionApprovals.prefix_allowed`; `AgentPermissionsStore.command_rules` /
+`remember_command_prefix`; `ActionApprovalsBridge.prefix_allowed_for` /
+`remember_prefix`; `protocol.approval_decision_payload(remember_prefix=)`;
+`Executor._resolve_approval` stores it. The Flutter card is NOT built yet.
+
 ### Host side (implemented)
 
 `request_takeover` lives in `chuk_agents_runtime.takeover` (deferred behind
@@ -1168,7 +1284,9 @@ Table `automations` in the executor state SQLite file, next to `runs`:
 
 Persisted. On host start every `active` watcher is started again and the
 scheduler picks up `next_fire_at` as it is (a fire time missed while the host
-was down fires once at the next tick, then the schedule continues).
+was down fires once at the next tick, then the schedule continues; since
+2026-11-04 only inside the catch-up window, see "Automation guards and
+schedule targets").
 
 ### Frames
 
@@ -1509,6 +1627,132 @@ Row fields (in events, `automation_list` and `automation_saved`), additive:
 6. Strings (de/en) for the new kinds, "no change", "next check", the notify
    switch and the errors from `automation_saved`.
 
+## Automation guards and schedule targets (research H37-H40, DeepSeek 43)
+
+Python side IMPLEMENTED 2026-11-04. Additive: an older app ignores the new
+fields and event names; an older row reads as `created_by: "user"`, target
+`this_session`, default catch-up window, no incident. App side: NOT built yet
+(list at the end). Python: `chuk_agents_runtime.automations` (constants,
+`SPEC_HELP`, `catch_up_window`, `is_transient_failure`, `parse_target`,
+`target_session_key`), `chuk_agents_host.automations` (store columns,
+`_guard_create`, `_skip_missed`, `_guard_failure`), executor
+(`_automation_backend`, `_finish_automation`, `submit_task`), host
+(`_agent_key` maps a derived chat to its owner).
+
+### No recursion
+
+A run with `origin: "automation"` (a fired schedule, watcher, URL watch or
+mail trigger) cannot set up new automations. Its tool list has no
+`schedule_task`, `start_watcher`, `watch_url`, `watch_mail` (list, pause,
+resume and cancel stay), and the host refuses such a call too. Allowed only
+when the user said so:
+
+- per row: `allow_chaining: true` on `automation_create` / `automation_update`
+  (only the app can set it; the model cannot);
+- per agent: the host's `chaining_allowed(session_key)` hook (not wired to a
+  setting yet; default off).
+
+A row made by such a run carries `created_by: "automation"`.
+
+### Caps
+
+- At most 50 automations per agent (rows of one owning `session_key` that are
+  not cancelled), for the model and the app alike. Error: `this agent already
+  has 50 automations, the limit; cancel one first`.
+- The model's `schedule_task` may repeat at most every 5 minutes (`every`
+  and the shortest gap of a cron). The app may go down to 60 s (the old
+  floor). `watch_url` keeps its 15-minute floor.
+
+### Catch-up window
+
+A due fire that is late (host asleep, off, unprovisioned) runs late only
+inside its window: half the period, clamped to 2 min .. 2 h (a daily job: 2 h;
+hourly: 30 min). A one-shot (`at` / `in`) has 2 h. Per row the app can set
+`catch_up` (seconds or `"30m"` / `"6h"`; `0` = never late; `null` = the
+default) and the row stores `catch_up_seconds`. Past the window the
+occurrence is skipped: the row moves to its next time (a spent one-shot is
+`done`), `skipped_count` and `last_skip_at` go up, `last_error` says why,
+and one `automation` event goes out (new name):
+
+```json
+{"type": "automation", "event": "skipped", "id": "<id>", ...row fields..., "missed_at": <unix seconds>}
+```
+
+This replaces the old rule "a missed fire time fires once at the next tick"
+for fires older than the window.
+
+### Retry after a transient failure
+
+A schedule run that failed because the network was not there before the
+model answered (the executor checks the exception chain: connect errors,
+DNS, "network is unreachable"; never after any token was billed) runs again
+after 5, then 15, then 30 minutes (`retry_at`, `retry_count`). Nobody is told
+while a retry is pending. A retry is not a new occurrence: it does not move
+`next_fire_at` or `fire_count`, and a regular fire that is due first wins.
+Its `fired` event has `reason: "retry"`. One event per armed retry (new name):
+
+```json
+{"type": "automation", "event": "retry", "id": "<id>", ...row fields..., "retry_at": <unix seconds>}
+```
+
+After the third retry the next failure is told as usual. Watchers, URL
+watches and mail triggers do not retry (their payload is gone).
+
+### One alert per incident
+
+A failed run is told once per distinct error. The same error again (digest of
+the text with digits folded) is quiet (`incident_count` counts it); a
+different error is told at once; a successful run closes the incident.
+
+`done.automation_result` (extended, additive; now also for a failed run of
+any row, not only `on_change`):
+
+```json
+{"changed": false, "retry_at": <unix seconds>?, "repeated_error": true?}
+```
+
+`changed: false` already means "no toast, no push" to the host and "fold
+this run" to the app. The `result` event carries the same keys.
+
+### Schedule target
+
+`schedule_task(..., target?)` and `automation_create` / `automation_update`
+(`target`, schedule only):
+
+| target | the fired run goes to |
+|---|---|
+| `this_session` (default) | the owning chat, as before |
+| `new_once` | one chat of its own, `<owner>#auto-<id>`, made on the first fire and reused |
+| `new` | a new chat per fire, `<owner>#auto-<id>-<n>` (n = fire number from 1) |
+
+The row stays the owner's (`session_key` = owner; the derived chat's tools
+list and control the owner's rows). The host maps a derived key to its
+owner for the agent's box, workspace, permissions, budget and calls. A run
+in a new chat has no last run, so it takes the owner's model / provider /
+effort (`meta.mode_session_key`). The `fired` event carries
+`run_session_key` (additive) when the run is in another chat; the row
+fields carry `target` when it is not `this_session`.
+
+Row fields added to every `automation` event and list entry: `created_by`
+(`user` | `agent` | `automation`), and when set: `target`,
+`allow_chaining`, `catch_up_seconds`, `retry_at`, `retry_count`,
+`last_skip_at`, `skipped_count`, `incident_count`.
+
+### Spec help in tool errors
+
+A spec, target or interval the tool cannot take answers with an error that
+ends in `SPEC_HELP`: a copyable list of valid forms (`'0 9 * * 1-5'`,
+`'30 7 * * *'`, `'every 30m'`, `'at 2026-09-06T09:00'`, `'in 10m'`, the three
+targets). The model's next try copies a working form.
+
+### App side (NOT built)
+
+1. Show a derived chat (`run_session_key`, key with `#auto-`) as its own
+   thread under the agent, titled with the automation name.
+2. Editor: target picker, catch-up field, "Runs may set up automations"
+   switch (`allow_chaining`).
+3. Card: `skipped` and `retry` events; "skipped N", "retry at".
+
 ## Secrets (API keys the model never sees)
 
 Proposed 2026-09-05 by session cowork-26 (cowork-secrets). Additive. Python
@@ -1630,6 +1874,79 @@ envelope (see `docs/SUPABASE_SCHEMA.md`), owner-only RLS. A fresh install
 signs in, pulls the rows, decrypts, and forwards the set on its first
 provision.
 
+## File tools: read, edit, patch and the read-before-edit guard (research items 32-35)
+
+IMPLEMENTED runtime-side: `chuk_agents_runtime.file_edit` (paginated read,
+`edit_file`, the `EditGuard`), `chuk_agents_runtime.file_patch` (`apply_patch`,
+Codex format; it ports `deepseek-harness/packages/fs/fs-patch`, Apache-2.0,
+note kept in the file header). The tools are ordinary `tool` frames; the app
+needs no new frame.
+
+### Tools (model side)
+
+- `read_file(path, offset=1, limit=2000, max_bytes?)` — returns a window of
+  numbered lines. `offset` is a 1-based line number, `limit` the line count. The
+  result carries `content`, `start_line`, `end_line`, `total_lines`,
+  `truncated`, and a `footer`: either `(Showing lines a-b of T. Use offset=b+1
+  to continue.)` or `(End of file - total T lines)`. A line over 2000 chars is
+  cut with a note. An `offset` past the end is a clear error that names the line
+  count. Reading a file also records its version for the guard below.
+- `edit_file(path, old_string, new_string, replace_all=false)` — replaces
+  literal text. Rejects an empty `old_string` and `old_string == new_string`.
+  With `replace_all=false`, `old_string` must appear exactly once, else
+  `old_string matched N times in <path>; provide a more specific old_string or
+  set replace_all to true`; a miss is `old_string was not found in <path>`. CRLF
+  files are matched in LF form and written back as CRLF. The unified diff rides
+  the `tool` frame as `ui.diff` (UI only; the model never sees it).
+- `apply_patch(patch)` — one Codex-format envelope (`*** Begin Patch` …
+  `*** End Patch`) with `*** Add File:`, `*** Update File:` (with `@@` context
+  and `+`/`-` lines), `*** Delete File:` and `*** Move to:`. The matcher runs
+  four fuzzy passes per anchor (exact, right-strip, both-strip, Unicode
+  punctuation normalization). All operations are preflighted in memory; if any
+  fails, nothing is written and the error is `Patch rejected before any change
+  (N problems): …`. Diffs ride the frame as `ui.diffs`.
+
+`edit_file` and `apply_patch` are deferred (found with `search_tools`) to keep
+the per-round tool budget; the loop still runs one when the model calls it by
+name without searching.
+
+### Read-before-edit guard (research item 34)
+
+Per session the runtime keeps the observed version (mtime, size, sha256) of
+every file the agent read or wrote.
+
+- `edit_file`, `apply_patch` (Update/Delete), and `write_file` over an
+  **existing** file require a prior read (or an own write) of that file, and the
+  version must be unchanged. The messages are `cannot modify X: file has not
+  been read — read the file, then retry` and `cannot modify X: file changed
+  since it was read — re-read the file, then retry`.
+- `write_file` to a path the agent has not seen is a create and is free.
+  Appending (`append: true`) is exempt (it adds, it does not overwrite).
+
+## Safety floor (research H23-H25, from Hermes)
+
+IMPLEMENTED runtime-side: `chuk_agents_runtime.safety_floor.SafetyFloor`, wired
+into `run_command`, the file tools and `apply_patch`. The agent runs on the
+user's real machine, so a small set of actions is stopped before it runs,
+whatever the approval mode. Matching is on parsed tokens (`shlex`), not raw
+substrings.
+
+- **Hard deny** (never allowed, returns `{"ok": false, "blocked": true,
+  "error": "blocked by the safety floor: …"}`): `rm -rf` of `/`, `~` or
+  `$HOME`; `mkfs*`; `dd` to a block device (`/dev/sd*`, `/dev/nvme*`, …); the
+  classic fork bomb; `chmod -R 777 /`; and deleting the agent's own install or
+  state directory.
+- **Soft stop** (needs an explicit approval; the error says so): writing under
+  `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.config/gh`, `~/.netrc`, or any `.env`
+  file, and reading a `.env` file. `shutdown` / `reboot` are a soft stop unless
+  the host allows them. A soft stop is lifted when the user has remembered this
+  command's token prefix (see "Shell command rules"); a hard deny never is.
+
+The file tools call the same floor before a write (`check_path_write`) or a
+`.env` read (`check_path_read`), so a protected path is blocked whether the
+agent reaches it through the shell or through `write_file` / `edit_file` /
+`apply_patch`.
+
 ## Interactive shell and background commands (session cowork-75, "cowork-terminal")
 
 Proposed 2026-09-05 by session cowork-75. Additive. Python side:
@@ -1676,11 +1993,26 @@ process; the caps below bound only what travels back to the model):
   Returns the screen after a short settle, so one call = one interaction.
 - `shell_list()` — this task's sessions with `running` / `foreground`.
 - `shell_kill(name)` — kill the session and what runs in it.
-- `run_command(command, timeout=120, background=false, cwd?)` — `background`
-  is NEW. `true`: start detached, return `{job_id, log_path, pid}` at once;
-  `timeout` is ignored. The job keeps running after the turn, after the run,
-  and while the app is closed. Fallback cap: 24 h, then it is killed
-  (`timed_out`).
+- `run_command(description, command, timeout=120, background=false, cwd?)` —
+  `description` is NEW and **required in the schema**: a 5-10 word active-voice
+  label (`Run the unit tests`) the app shows while the call streams (research
+  item 40). A present-but-blank value is rejected; an absent one still runs (an
+  older client), it just carries no label. `background` `true`: start detached,
+  return `{job_id, log_path, pid}` at once; `timeout` is ignored. The job keeps
+  running after the turn, the run and while the app is closed. Fallback cap 24 h.
+  - **Foreground result markers** (research items 5 / 27): a foreground
+    `run_command` / `python` result adds `stopped` (`"timeout"` while running,
+    `null` otherwise), `timeout_ms`, and keeps `exit_code` as the LAST key so a
+    reader can anchor on it. A non-zero exit is a normal result (the model
+    decides how to react); the `tool` frame's `status` is still `error` for a
+    non-zero exit, unchanged, so the app's card colour does not change.
+  - **Foreground timeout moves to a job** (research item 38): instead of
+    killing a command that runs past its `timeout`, the runtime (when a job
+    manager is present) returns `{moved_to_background: true, job_id, log_path,
+    output_so_far, timeout_ms}` and the command keeps running as a background
+    job. The model is woken when it ends, exactly like `background: true`.
+- `python(description, code, timeout=120)` — `description` is required in the
+  schema, same rule as `run_command`. The result carries the same markers.
 - `job_status(job_id?)` — `{job_id, command, state, exit_code, started_at,
   finished_at, log_path, log_lines}`; `state` is `running` | `finished` |
   `failed` | `cancelled` | `timed_out`. Without `job_id`: every job of this
@@ -1755,6 +2087,21 @@ automations manager, `kind: job` goes to the executor's job router. The router:
    `<id>.woken` is woken by (4). `.woken` is written by the router after a
    successful (3) or (4), and a job with `.woken` is never woken again — a
    trigger line and a sweep for the same job tell the model once.
+7. **Wake cap** (DeepSeek harness `maxConsecutiveWakes`, IMPLEMENTED
+   2026-11-04, `chuk_agents_executor.shell.MAX_CONSECUTIVE_WAKES`, default 5).
+   At most 5 wake tasks (4) in a row per session. A user task (a `task`
+   frame) sets the count back to 0; a wake that goes into a live run (3)
+   does not count. Past the cap a wake starts no task: its text waits and
+   the next run of the session (the user's) gets it as a `context` row, the
+   job is marked `.woken`, and the router persists and sends a notice
+   instead (additive event name):
+   ```json
+   {"type": "job", "event": "wake_capped", "job_id": "<id>", "session_key": "<key>",
+    "consecutive_wakes": 5, "max_consecutive_wakes": 5, "at": <unix seconds>}
+   ```
+   The app may show "Background job finished; the agent waits for you". An
+   older app ignores the event name; the `finished` frame of the job still
+   came before it.
 
 Rate limits and the 16 KB payload cap of the automations do not apply: a job
 ends once, and the tail is read from the log, not from the trigger line.
@@ -1938,7 +2285,10 @@ App → host, `skills_list` (request) / host → app `skills_list` (reply):
 {"type": "skills_list",
  "skills": [ {"name": "<name>", "description": "<level-1 text>",
               "source": "builtin" | "workspace", "enabled": true | false,
-              "path": "<host path of the SKILL.md>"} ],
+              "path": "<host path of the SKILL.md>",
+              "model_invocable": true | false,
+              "use_count": <loads so far>,
+              "last_used_at": <epoch seconds> | null} ],
  "errors": [ "<a SKILL.md the host could not load, or a refused control>" ]}
 ```
 
@@ -1960,6 +2310,36 @@ App → host, `skill_control`:
 Answered with a fresh `skills_list` (same request stream). An unknown name or
 action changes nothing; the reply still carries the list, plus the reason in
 `errors` (`no skill named 'x'`, `unknown action 'x': use enable or disable`).
+
+- `model_invocable` (added 2026-11-04, additive) is `false` when the
+  SKILL.md frontmatter says `disable-model-invocation: true`. Such a skill is
+  not in the model's catalogue and the `skill` tool refuses it; only the user
+  can start it. `use_count` / `last_used_at` come from the usage table
+  `skill_usage(name, use_count, last_used_at, first_seen_at)` in the same
+  database, bumped on every load. An older app ignores the three fields.
+
+### Agent side: catalogue, support files, curator (2026-11-04)
+
+Not on the wire, listed so the app side knows what the agent sees.
+
+- **Catalogue as a hashed message (DS #47).** The `# Skills` block in the
+  system prompt is the one the session was seeded with; it is no longer
+  rewritten in a stored session prompt, so the prefix cache survives a skill
+  change. When the current catalogue hashes differently from what the session
+  last saw (the newest `skill_catalog` row, else the block in the system
+  prompt), ONE user-role row `role_tag = "skill_catalog"` follows the task's
+  prompt: `<skill_catalog hash="<16 hex>">…</skill_catalog>` plus "this list
+  replaces the list in your system prompt". No change, no row.
+- **Support files (Hermes H4).** When a skill loads, its body message names
+  its base directory (`skills/<dir>/` for a workspace skill) and lists up to
+  50 files under `references/`, `scripts/`, `templates/`, `assets/`. The
+  model reads one with `read_file` when a step needs it.
+- **Curator (Hermes H5).** With `AGENTS_SKILL_CURATOR_DAYS=<n>` set on the
+  host, at most once a day after a task, a workspace skill unused for `n` days
+  moves to `skills/.archive/<dir>-<UTC stamp>/`. Never deleted (restorable:
+  `chuk_agents_runtime.skill_curator.restore_skill`). Seed skills and skills
+  with `pinned: true` in the frontmatter are never archived. A skill nobody
+  used yet starts its clock when the curator first sees it. Off by default.
 
 ### Device persistence
 
@@ -2065,6 +2445,45 @@ Host → app, the terminal answer (same request stream):
   `status` is that decision. Redraw the card as decided.
 - `scrubbed: true`: secrets or personal data were removed from the edits.
 - `not_found`: an unknown id (`errors: ["no skill proposal 'sp_x'"]`).
+
+### Skill updates and the background review (2026-11-04, additive)
+
+Python side IMPLEMENTED 2026-11-04 (`skill_proposals.prepare_patch`,
+`background_review`, `Executor._start_learning`). App side: not yet; an older
+app shows an update card as a plain proposal (same fields), which is safe —
+the accept still re-checks the file on the host.
+
+- The `skill_proposal` frame now always carries `"kind": "create" | "patch"`.
+  `patch` is a new version of the existing skill `name`: `body` is the full
+  new body, `description` the new (or unchanged) description. The app should
+  title it "Update skill" and may hide the name field (a name edit is ignored
+  for a patch).
+- Optional `"origin": "review"`: the card came from the background review,
+  not from the agent's own `propose_skill`. Such a card is persisted only (it
+  is made after the run's `done`), so the app sees it on the next replay of
+  the thread.
+- **Read-before-write.** The agent offers a patch with
+  `propose_skill(update=true)`, and only for a skill it loaded with the
+  `skill` tool in this conversation, whose SKILL.md is still the text it
+  loaded. The draft stores `base_sha256`, the hash of the file it replaces.
+  On accept the host re-reads the file; if it changed (or is gone) the result
+  is `"status": "stale"` with a reason in `errors`, nothing is written, and
+  the proposal is closed (a repeat answers `already_decided`). A saved patch
+  keeps the skill's own frontmatter (its flags) and replaces only the
+  `description` line and the body; the result carries `"kind": "patch"`.
+- **Background review (Hermes H1).** With `AGENTS_BACKGROUND_REVIEW=1` on the
+  host, after a finished user task of at least 3 model rounds, a cheap clone
+  of the model reads a digest of that task (user and assistant text, tool
+  calls by name, tool results cut to 300 characters) plus the CURRENT text of
+  every skill the task loaded, under Hermes' "do not capture" rules. It may
+  offer ONE skill (new, or a patch of a loaded skill pinned to the hash it
+  read) through this same card path. It never writes a skill, and it is
+  skipped when the task already called `propose_skill`. Memory candidates it
+  names are not applied (no approval path for memory yet); they are counted
+  in the host log only. Off by default; its model calls are cost lines of
+  kind `aux` on the finished run.
+
+`skill_proposal_result.status` gains `stale`.
 
 ### App work list (implemented)
 
@@ -2476,9 +2895,10 @@ value. A change applies **from the next task**, never in the middle of a run.
 | `secrets_env` | bool | `true` | `false`: no secret reaches the sandbox as an environment variable (every per-command variable is dropped in `BaseEnvironment.run` while the run's snapshot says off, for every backend), `list_secrets` lists nothing, and `request_secrets` returns an error that says the permission is off; no `secret_request` is sent. It is part of the container key, so the box is rebuilt: a tmux server, a background job or a file in `/tmp` of the old box cannot keep a value. With the local backend the agent's own tmux sessions (`cw-task-*`, never the user's) and running jobs are ended at the run start instead. The host agent's automation watchers are restarted without secrets at once. Masking stays on: the result scrubber is built from the vault's values whatever the permission. |
 | `workspace_mount` | `"rw"` \| `"ro"` | `"rw"` | `"ro"`: the workspace is bound read-only (`-v <ws>:/workspace:ro`). The browser profile moves to `/tmp` (`AGENTS_BROWSER_PROFILE`). This limits the agent's commands; the host's own writes (the git journal, the memory files) still land in the directory. |
 | `user_browser` | bool | `false` | `true` (and `network` on): this agent drives the browser add-on on the user's computer (`agents-extension-mcp`) instead of the sandbox browser. Per agent. The old host-wide `AGENTS_BROWSER_TARGET=user_browser` / `browser.target` only sets the default for agents the user never switched. |
+| `external_agents` | bool | `false` | `true`: `delegate_task` may run a task with the user's own `claude` (Claude Code) or `codex` CLI instead of the built-in agent, when that CLI is installed in the sandbox (section "Subagents: fork, settled note, output schema, stall, external CLIs"). Off by default: the CLI bills the user's own account. Enforced by the executor, so it holds for every backend. |
 
 The local backend (`--sandbox local`) runs on the host itself and can enforce
-`secrets_env` and `user_browser` only. The reply says so in `enforced`, and the
+`secrets_env`, `user_browser` and `external_agents` only. The reply says so in `enforced`, and the
 app greys those switches out with "Not enforced on this host".
 
 With `AGENTS_LOCAL_ISOLATION=bwrap` (or `auto`) and a working `bwrap`, every
@@ -2561,9 +2981,11 @@ Host → app, `agent_permissions` (the answer to both, one terminal frame):
 ```json
 {"type": "agent_permissions", "agent_id": "<agent id>",
  "permissions": {"sudo": true, "network": false, "secrets_env": true,
-                 "workspace_mount": "rw", "user_browser": false}?,
+                 "workspace_mount": "rw", "user_browser": false,
+                 "external_agents": false}?,
  "enforced": {"sudo": true, "network": true, "secrets_env": true,
-              "workspace_mount": true, "user_browser": true},
+              "workspace_mount": true, "user_browser": true,
+              "external_agents": true},
  "applies_from": "next_task",
  "error": "<why the request was refused>"?}
 ```
@@ -2837,7 +3259,8 @@ password):
 
 ```json
 {"type": "approval_decision", "approval_id": "<id>", "approved": true,
- "scope": "once" | "always_this_agent" | "always_this_site" | "deny"}
+ "scope": "once" | "always_this_agent" | "always_this_site" | "always_this_prefix" | "deny",
+ "remember_prefix": "git push"?}
 ```
 
 - `approved: true` plus a `scope` from the request's `options` is that scope.

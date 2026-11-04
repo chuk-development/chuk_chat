@@ -45,6 +45,7 @@ from chuk_agents_runtime.action_policy import (
     SCOPE_SITE,
     ActionPolicy,
     ActionPolicyError,
+    CommandRules,
 )
 from chuk_agents_sandbox import (
     PERMISSION_KEYS,
@@ -118,6 +119,7 @@ class AgentPermissionsStore:
         self._log = log or (lambda _msg: None)
         self._lock = threading.Lock()
         self._approvals: dict[str, ActionPolicy] = {}
+        self._command_rules: dict[str, CommandRules] = {}
         self._budgets: dict[str, float] = {}
         self._overrides: dict[str, dict[str, Any]] = self._load()
 
@@ -156,6 +158,31 @@ class AgentPermissionsStore:
         """The agent's per-action approval policy (the defaults when unset)."""
         with self._lock:
             return self._approvals.get(agent_id) or ActionPolicy()
+
+    def command_rules(self, agent_id: str) -> CommandRules:
+        """The agent's remembered command prefixes (item 9; empty when none)."""
+        with self._lock:
+            return self._command_rules.get(agent_id) or CommandRules()
+
+    def remember_command_prefix(self, agent_id: str, prefix: Any) -> CommandRules | None:
+        """Store an 'approve and remember' command prefix. Returns the new
+        rules, or ``None`` when nothing changed (an empty or duplicate prefix)."""
+        with self._lock:
+            before = self._command_rules.get(agent_id)
+            current = before or CommandRules()
+            rules = current.remembered(prefix)
+            if rules == current:
+                return None
+            self._command_rules[agent_id] = rules
+            try:
+                self._save_locked()
+            except OSError:
+                if before is None:
+                    self._command_rules.pop(agent_id, None)
+                else:
+                    self._command_rules[agent_id] = before
+                raise
+        return rules
 
     def budget(self, agent_id: str) -> float:
         """The agent's weekly budget in euro; 0 = none."""
@@ -271,6 +298,14 @@ class AgentPermissionsStore:
                     self._approvals[agent_id] = ActionPolicy.from_stored(values)
                 except ActionPolicyError as exc:
                     self._log(f"[permissions] dropped the approvals of {agent_id!r}: {exc}")
+        command_rules = raw.get("command_rules") if isinstance(raw, dict) else None
+        if isinstance(command_rules, dict):
+            for agent_id, values in command_rules.items():
+                if not isinstance(agent_id, str):
+                    continue
+                rules = CommandRules.from_stored(values)
+                if rules.prefixes:
+                    self._command_rules[agent_id] = rules
         budgets = raw.get("budgets") if isinstance(raw, dict) else None
         if isinstance(budgets, dict):
             for agent_id, value in budgets.items():
@@ -310,6 +345,13 @@ class AgentPermissionsStore:
         }
         if approvals:
             document["approvals"] = approvals
+        command_rules = {
+            agent: rules.to_stored()
+            for agent, rules in self._command_rules.items()
+            if rules.to_stored()
+        }
+        if command_rules:
+            document["command_rules"] = command_rules
         if self._budgets:
             document["budgets"] = dict(self._budgets)
         body = json.dumps(document, indent=2, sort_keys=True)
@@ -531,6 +573,27 @@ class ActionApprovalsBridge:
                 self._on_change(key, policy)
             except Exception as exc:  # noqa: BLE001 — telling the app is best effort
                 self._log(f"[approvals] could not announce a change: {type(exc).__name__}")
+
+    def prefix_allowed_for(self, session_key: str) -> Callable[[str], bool]:
+        """A live check the safety floor uses (item 9): whether the agent
+        already approved a command's token prefix."""
+        key = self._agent_key(session_key)
+
+        def allowed(command: str) -> bool:
+            return self._store.command_rules(key).allowed(command)
+
+        return allowed
+
+    def remember_prefix(self, session_key: str, prefix: Any) -> None:
+        """Store an 'approve and remember' command prefix for this agent."""
+        key = self._agent_key(session_key)
+        try:
+            rules = self._store.remember_command_prefix(key, prefix)
+        except OSError as exc:
+            self._log(f"[approvals] could not save a command rule: {type(exc).__name__}")
+            return
+        if rules is not None:
+            self._log(f"[approvals] {key}: remembered command prefix")
 
 
 class BudgetBridge:

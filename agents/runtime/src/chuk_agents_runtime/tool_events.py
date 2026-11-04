@@ -64,6 +64,7 @@ def tool_event_fields(
     started_at: float | None = None,
     completed_at: float | None = None,
     raised: bool = False,
+    ui: Any = None,
 ) -> dict[str, Any]:
     """The fields of one ``tool`` event, minus ``type`` / ``replay`` / ``mid``
     (the transport adds those).
@@ -86,12 +87,20 @@ def tool_event_fields(
         command = arguments.get(command_key)
         if isinstance(command, str):
             fields["command"] = command
+        # The model's own 5-10 word line for the card (research item 40).
+        description = arguments.get("description")
+        if isinstance(description, str) and description.strip():
+            fields["description"] = description.strip()[:200]
     fields["result"] = result_text(result)
     if isinstance(result, dict):
         for key in _PROJECTED:
             if key in result:
                 fields[key] = result[key]
     fields["status"] = tool_status(result, raised=raised)
+    if isinstance(ui, dict) and ui:
+        # UI-only metadata (``edit_file`` / ``apply_patch`` diff). Live only:
+        # the model never saw it and the stored row does not keep it.
+        fields["ui"] = ui
     if started_at is not None:
         fields["started_at"] = float(started_at)
     if completed_at is not None:

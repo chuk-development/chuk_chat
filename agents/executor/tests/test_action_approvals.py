@@ -346,3 +346,26 @@ def _drive_scoped(controller, endpoint, request_id, *, scope, timeout=25.0):
                         events.append(payload)
                         return events
     return events
+
+
+class _PrefixHook(_Hook):
+    def __init__(self) -> None:
+        super().__init__()
+        self.prefixes: list[tuple[str, str]] = []
+
+    def prefix_allowed_for(self, session_key):
+        return lambda command: False
+
+    def remember_prefix(self, session_key: str, prefix) -> None:
+        self.prefixes.append((session_key, prefix))
+
+
+def test_remember_prefix_on_a_decision_reaches_the_hook(tmp_path):
+    hook = _PrefixHook()
+    executor = _executor(tmp_path, hook=hook)
+    _ask(
+        executor,
+        _mail_request(),
+        {"approved": True, "scope": "once", "remember_prefix": "git push"},
+    )
+    assert ("thread-1", "git push") in hook.prefixes

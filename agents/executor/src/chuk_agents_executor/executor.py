@@ -105,6 +105,7 @@ from chuk_agents_runtime.agent_mail import (
     NoSandbox,
     valid_id,
 )
+from chuk_agents_runtime.automations import is_transient_failure
 from chuk_agents_runtime.memory_hindsight import bank_id_for_workspace
 from chuk_agents_runtime.telemetry import get_tracer
 from chuk_agents_runtime.telemetry import run_scope as trace_run_scope
@@ -128,11 +129,18 @@ from chuk_agents_runtime.takeover import (
     host_of,
 )
 from chuk_agents_runtime.runtime import SKILLS_DIRNAME
+from chuk_agents_runtime.acp_runner import detect_backends
 from chuk_agents_runtime.skill_proposals import (
     SkillDraft,
     SkillProposalStore,
     decide_skill_proposal,
 )
+from chuk_agents_runtime.background_review import (
+    MIN_ITERATIONS as REVIEW_MIN_ITERATIONS,
+    run_background_review,
+)
+from chuk_agents_runtime.skill_curator import curate_skills
+from chuk_agents_runtime.skills import load_skills
 from chuk_agents_runtime.cost import (
     BUDGET_EXCEEDED,
     BUDGET_OK,
@@ -264,6 +272,32 @@ def budget_refusal_text(*, spent: float, budget: float, interactive: bool) -> st
 
 def light_context_enabled() -> bool:
     return os.environ.get(LIGHT_CONTEXT_ENV, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+#: The background review (Hermes H1): after a finished task of at least
+#: ``REVIEW_MIN_ITERATIONS`` rounds, a cheap clone of the model reads the task
+#: and may offer ONE skill (new, or an update of a skill the task loaded)
+#: through the ``skill_proposal`` card. Off unless the operator opts in.
+BACKGROUND_REVIEW_ENV = "AGENTS_BACKGROUND_REVIEW"
+
+#: The skill curator (Hermes H5): archive workspace skills unused for this
+#: many days (never deletes; seeds and ``pinned`` skills are kept). Unset or
+#: not a positive number = off. Runs at most once per ``CURATOR_INTERVAL_SECONDS``.
+SKILL_CURATOR_DAYS_ENV = "AGENTS_SKILL_CURATOR_DAYS"
+CURATOR_INTERVAL_SECONDS = 86_400.0
+
+
+def background_review_enabled() -> bool:
+    return os.environ.get(BACKGROUND_REVIEW_ENV, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def skill_curator_days() -> float | None:
+    raw = os.environ.get(SKILL_CURATOR_DAYS_ENV, "").strip()
+    try:
+        days = float(raw)
+    except ValueError:
+        return None
+    return days if days > 0 else None
 
 
 #: Model rounds of a restricted mail run: read, note, maybe a draft, archive.
@@ -435,11 +469,24 @@ class _SkillProposalSink:
     proposals"): store the draft, persist the ``skill_proposal`` frame in the
     thread (so a replay shows the card), stream it live."""
 
-    def __init__(self, executor: "Executor", request_id: str, run: "_Run", session_key: str) -> None:
+    def __init__(
+        self,
+        executor: "Executor",
+        request_id: str,
+        run: "_Run",
+        session_key: str,
+        *,
+        live: bool = True,
+        origin: str | None = None,
+    ) -> None:
         self._executor = executor
         self._request_id = request_id
         self._run = run
         self._session_key = session_key
+        # A background review runs after the ``done``: its card is persisted
+        # for the replay only, never sent on the closed stream.
+        self._live = live
+        self._origin = origin
 
     def submit(self, draft: SkillDraft, *, skills_root: str) -> dict:
         executor = self._executor
@@ -456,10 +503,13 @@ class _SkillProposalSink:
             name=draft.name,
             description=draft.description,
             body=draft.body,
+            kind=draft.kind,
+            origin=self._origin,
         )
         mid = executor._persist_event(self._session_key, payload)
         store.set_event_mid(proposal_id, mid)
-        executor._event(self._request_id, payload)
+        if self._live:
+            executor._event(self._request_id, payload)
         return {"ok": True, "proposal_id": proposal_id}
 
 
@@ -877,8 +927,12 @@ class _PendingApproval:
     #: request without classes, whose answer is only yes or no.
     options: tuple[str, ...] = ()
     #: What the user's answer covered (``once`` / ``always_this_agent`` /
-    #: ``always_this_site`` / ``deny``), set with the decision.
+    #: ``always_this_site`` / ``always_this_prefix`` / ``deny``), set with the
+    #: decision.
     scope: str = "once"
+    #: The thread this approval belongs to, so a ``remember_prefix`` on the
+    #: decision (item 9) is stored for the right agent.
+    session_key: str | None = None
 
     def decide(self, approved: bool, scope: Any = None) -> bool:
         """Record a decision; False when one was already recorded. ``scope``
@@ -2127,6 +2181,12 @@ class Executor:
             run.provider or HOST_DEFAULT,
             run.reasoning_effort or HOST_DEFAULT,
         )
+        # A user task resets the job wake cap of its session
+        # (docs/WIRE_CONTRACT.md, "The wake-up", 7).
+        try:
+            self._jobs.user_task(run.session_key)
+        except Exception:  # noqa: BLE001 — bookkeeping must not refuse a task
+            pass
         self._enqueue_run(run)
 
     def _run_in_flight(self, session_key: str, prompt: str) -> "_Run | None":
@@ -2195,6 +2255,17 @@ class Executor:
                 store.close()
         except Exception:  # noqa: BLE001 — no history, host default
             last = None
+        if not last and isinstance(meta.get("mode_session_key"), str) and meta["mode_session_key"]:
+            # A schedule with target ``new_once`` / ``new`` fires into a chat
+            # with no history: it runs in the mode of the chat that owns it.
+            try:
+                store = StateStore(self._db_path)
+                try:
+                    last = store.latest_run(str(meta["mode_session_key"]))
+                finally:
+                    store.close()
+            except Exception:  # noqa: BLE001 — no history, host default
+                last = None
         if last:
             model = last.get("model") or None
             provider = last.get("provider") or None
@@ -3964,7 +4035,9 @@ class Executor:
             action = req if isinstance(req, ActionRequest) else None
             publish = action.publish if action is not None else req
             approval_id = uuid4().hex
-            pending = _PendingApproval(options=tuple(action.options) if action else ())
+            pending = _PendingApproval(
+                options=tuple(action.options) if action else (), session_key=session_key
+            )
             with self._approvals_lock:
                 self._approvals[approval_id] = pending
             if publish is not None:
@@ -4088,6 +4161,17 @@ class Executor:
                 tool, args, lambda: self._user_browser_tabs_text(session_key or "")
             )
 
+        def prefix_allowed(command: str) -> bool:
+            # Item 9: a command whose token prefix the user remembered for this
+            # agent lifts a soft safety-floor stop. No host policy = nothing
+            # remembered = always False.
+            if hook is None or not hasattr(hook, "prefix_allowed_for"):
+                return False
+            try:
+                return hook.prefix_allowed_for(key)(command)
+            except Exception:  # noqa: BLE001 — an unreadable store denies
+                return False
+
         return ActionApprovals(
             policy=policy,
             ask=self._make_approval_gate(request_id, kill, session_key),
@@ -4095,6 +4179,7 @@ class Executor:
             site=site,
             user_browser=user_browser,
             site_for=site_for if user_browser else None,
+            prefix_allowed=prefix_allowed,
         )
 
     def _user_browser_tabs_text(self, session_key: str) -> str | None:
@@ -4213,6 +4298,20 @@ class Executor:
             return  # a decision for a publish that already ended: no-op
         if not pending.decide(payload.get("approved") is True, payload.get("scope")):
             return  # the host already resolved it (a takeover's "auto")
+        # Item 9: store an 'approve and remember' command prefix for the agent.
+        remember_prefix = payload.get("remember_prefix")
+        if (
+            pending.approved
+            and isinstance(remember_prefix, str)
+            and remember_prefix.strip()
+            and self._action_approvals is not None
+            and hasattr(self._action_approvals, "remember_prefix")
+            and pending.session_key
+        ):
+            try:
+                self._action_approvals.remember_prefix(pending.session_key, remember_prefix)
+            except Exception:  # noqa: BLE001 — a save failure never fails the decision
+                logger.debug("remember_prefix failed", exc_info=True)
         self._close_approval(
             pending,
             approved=pending.approved,
@@ -4873,7 +4972,7 @@ class Executor:
             self._record_run(run, failed=message)
             # A failed automation run still ends on the host: its result
             # event goes out and its reported result is dropped.
-            automation_result = self._finish_automation(run, ok=False)
+            automation_result = self._finish_automation(run, ok=False, error=message, exc=exc)
             self._terminal(request_id, _run_error(run, message))
             # The run is over once its terminal went out: drop it from the
             # registry now, so a replay that races the hook below reports idle.
@@ -4984,6 +5083,118 @@ class Executor:
                 automation_result=automation_result,
             ),
         )
+        # After the ``done``: the optional background review and the skill
+        # curator (docs/WIRE_CONTRACT.md, "Skill proposals"). Both are opt-in
+        # and run on a daemon thread, so the user never waits for them.
+        self._start_learning(run, request_id, session_key, reason, result.iterations)
+
+    # -- background review + curator (Hermes H1, H5) ------------------------
+    def _start_learning(
+        self, run: _Run, request_id: str, session_key: str, reason: str, iterations: int
+    ) -> None:
+        review = (
+            background_review_enabled()
+            and reason == StopReason.FINISHED.value
+            and run.profile is None
+            and run.origin not in UNATTENDED_ORIGINS
+            and int(iterations or 0) >= REVIEW_MIN_ITERATIONS
+        )
+        curator_days = skill_curator_days()
+        curate = curator_days is not None and (
+            time.time() - getattr(self, "_curated_at", 0.0) >= CURATOR_INTERVAL_SECONDS
+        )
+        if not (review or curate):
+            return
+        if curate:
+            self._curated_at = time.time()
+        workspace = self._workspace_for(session_key)
+        if not workspace:
+            return
+        root = str(Path(workspace) / SKILLS_DIRNAME)
+
+        def work() -> None:
+            if curate:
+                self._run_curator(root, curator_days)
+            if review:
+                self._run_background_review(run, request_id, session_key, root)
+
+        threading.Thread(target=work, name="skill-learning", daemon=True).start()
+
+    def _run_curator(self, root: str, days: float) -> None:
+        try:
+            report = curate_skills(
+                root,
+                SkillSettingsStore(self._db_path),
+                seed_root=self._skills_seed_root,
+                unused_days=days,
+            )
+            if report["archived"] or report["errors"]:
+                logger.info(
+                    "skill curator: %d archived, %d errors",
+                    len(report["archived"]),
+                    len(report["errors"]),
+                )
+        except Exception as exc:  # noqa: BLE001 — housekeeping must not crash a thread
+            logger.info("skill curator failed: %s", type(exc).__name__)
+
+    def _run_background_review(
+        self, run: _Run, request_id: str, session_key: str, root: str
+    ) -> None:
+        client = None
+        try:
+            client = self._model_factory()
+            clone = getattr(client, "cheap_clone", None)
+            model = clone() if callable(clone) else client
+            if model is not client:
+                close = getattr(client, "close", None)
+                if callable(close):
+                    close()
+                client = model
+            try:
+                model = metered(model, self._usage_sink(run), kind=LINE_AUX)
+            except Exception:  # noqa: BLE001 — unmetered is better than no review
+                pass
+            store = StateStore(self._db_path)
+            try:
+                sid = store.resolve_session(session_key)
+                rows = (
+                    [{"role_tag": m.role, "content": m.content} for m in store.get_conversation(sid)]
+                    if sid is not None
+                    else []
+                )
+            finally:
+                store.close()
+            settings = SkillSettingsStore(self._db_path)
+            report = run_background_review(
+                model,
+                rows,
+                skills_root=root,
+                sink=_SkillProposalSink(
+                    self, request_id, run, session_key, live=False, origin="review"
+                ),
+                catalog=load_skills(root, settings=settings).catalog(),
+                vault=(
+                    self._secret_scrubber.scrub_obj
+                    if self._secret_scrubber is not None
+                    else None
+                ),
+            )
+            logger.info(
+                "background review: ran=%s proposal=%s memory_candidates=%d errors=%d",
+                report.ran,
+                bool(report.proposal),
+                len(report.memory_candidates),
+                len(report.errors),
+            )
+        except Exception as exc:  # noqa: BLE001 — the review is optional
+            logger.info("background review failed: %s", type(exc).__name__)
+        finally:
+            close = getattr(client, "close", None) if client is not None else None
+            if callable(close):
+                try:
+                    close()
+                except Exception:  # noqa: BLE001
+                    pass
 
     def _automation_backend(self, run: _Run, session_key: str):
         """The automation tools' backend for this run, bound to its session.
@@ -4992,12 +5203,20 @@ class Executor:
         if self._automations is None:
             return None
         backend = self._automations.bound(session_key)
+        # The run's origin decides whether its model may set up automations
+        # (docs/WIRE_CONTRACT.md, "Automation guards"): a run an automation
+        # started may not, unless the user allowed it.
+        with_origin = getattr(backend, "with_origin", None)
+        if callable(with_origin):
+            backend = with_origin(run.origin)
         attach = getattr(backend, "for_run", None)
         if run.automation_id and callable(attach):
             backend = attach(run.run_id, run.automation_id)
         return backend
 
-    def _finish_automation(self, run: _Run, *, ok: bool) -> dict | None:
+    def _finish_automation(
+        self, run: _Run, *, ok: bool, error: str | None = None, exc: BaseException | None = None
+    ) -> dict | None:
         """Ask the host whether a fired ``on_change`` run counts as a change.
         ``None`` for every other run (and for a host without the hook)."""
         if not run.automation_id or run.origin != "automation":
@@ -5009,7 +5228,19 @@ class Executor:
         if not callable(finish):
             return None
         try:
-            outcome = finish(run.run_id, run.automation_id, ok=ok)
+            if ok:
+                outcome = finish(run.run_id, run.automation_id, ok=ok)
+            else:
+                # The guards (retry ladder, one alert per incident) need the
+                # error and whether it was the network before the model
+                # answered. An older host hook takes ``ok`` only.
+                transient = is_transient_failure(exc, model_answered=bool(run.cost))
+                try:
+                    outcome = finish(
+                        run.run_id, run.automation_id, ok=ok, error=error, transient=transient
+                    )
+                except TypeError:
+                    outcome = finish(run.run_id, run.automation_id, ok=ok)
         except Exception:  # noqa: BLE001 — bookkeeping must not mask a result
             logger.warning("automation result failed run=%s", run.run_id, exc_info=True)
             return None
@@ -5018,6 +5249,11 @@ class Executor:
         out: dict = {"changed": bool(outcome.get("changed", True))}
         if outcome.get("summary"):
             out["summary"] = str(outcome["summary"])
+        # Additive (docs/WIRE_CONTRACT.md, "Automation guards").
+        if outcome.get("retry_at") is not None:
+            out["retry_at"] = outcome["retry_at"]
+        if outcome.get("repeated_error"):
+            out["repeated_error"] = True
         return out
 
     # -- agent mail (docs/AGENT_MAIL.md §7) --------------------------------
@@ -5799,6 +6035,12 @@ class Executor:
                 kind = "other"
             config = getattr(connection, "config", None)
             client_id = str(((getattr(config, "oauth", None) or {}).get("client_id")) or "")
+            # The stdio package check (mcp_package_check): an unpinned version
+            # or a non-registry source. A refused launch is an ``error``.
+            try:
+                warnings = [str(w) for w in (getattr(connection, "warnings", None) or [])]
+            except Exception:  # noqa: BLE001
+                warnings = []
             servers.append(
                 {
                     "id": entry.get("id"),
@@ -5818,6 +6060,7 @@ class Executor:
                     # a sign-in it has since replaced (a frame that was in
                     # flight across a Reconnect).
                     **({"client_id": client_id} if client_id else {}),
+                    **({"warnings": warnings} if warnings else {}),
                 }
             )
         return servers
@@ -6192,7 +6435,23 @@ class Executor:
         )
         if self._subagent_limits is not None:
             config.limits = self._subagent_limits
+        # External coding CLIs as a subagent backend (docs/WIRE_CONTRACT.md,
+        # "Subagents"): only with the agent's ``external_agents`` permission
+        # on, and only the CLIs that are installed where the children run.
+        if parent_policy is not None and getattr(parent_policy, "external_agents", False):
+            config.acp_backends = self._acp_backends(session_key)
         return config
+
+    def _acp_backends(self, session_key: str) -> tuple[str, ...]:
+        """The ``claude`` / ``codex`` CLIs found in the session's sandbox. The
+        children are built from the same image, so the parent's box answers
+        for them. A failed probe offers nothing."""
+        try:
+            env = self._environment_for(session_key)
+            return detect_backends(env)
+        except Exception:  # noqa: BLE001 — no box, no external backends
+            logger.info("external agent probe failed for session=%s", session_key)
+            return ()
 
     def _bind_trace_scrubber(self) -> None:
         """Hand the run tracer this executor's secret scrubber.
