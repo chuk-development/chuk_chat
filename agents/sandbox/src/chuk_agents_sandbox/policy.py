@@ -162,6 +162,11 @@ DEFAULT_POLICY = SandboxPolicy()
 _ENFORCED_BY_KIND: dict[str, frozenset[str]] = {
     "docker": frozenset(PERMISSION_KEYS),
     "local": frozenset({"secrets_env", "user_browser"}),
+    # Local commands inside bubblewrap (``AGENTS_LOCAL_ISOLATION``): the
+    # network namespace and the read-only bind make ``network`` and
+    # ``workspace_mount`` real. ``sudo`` is not: bwrap's ``no_new_privs``
+    # forbids it whatever the switch says.
+    "local-bwrap": frozenset({"secrets_env", "user_browser", "network", "workspace_mount"}),
 }
 
 
@@ -170,6 +175,54 @@ def enforced_permissions(kind: str) -> dict[str, bool]:
     An unknown backend enforces nothing it cannot prove."""
     enforced = _ENFORCED_BY_KIND.get(kind, frozenset({"user_browser"}))
     return {key: key in enforced for key in PERMISSION_KEYS}
+
+#: ``--pids-limit`` of every agent container: a fork bomb stops here, a
+#: browser with its renderers stays well below it.
+PIDS_LIMIT = 512
+
+#: Capabilities the box keeps when ``sudo`` is on, after ``--cap-drop ALL``:
+#: what root needs to install packages and run the entrypoint's uid remap
+#: (chown, setuid/setgid to drop to the agent user, signals). Not kept:
+#: ``NET_RAW`` (raw sockets, ARP/ICMP spoofing), ``MKNOD``, ``SYS_CHROOT``,
+#: ``SETFCAP``, ``SETPCAP``.
+SUDO_CAPS = (
+    "CHOWN",
+    "DAC_OVERRIDE",
+    "FOWNER",
+    "FSETID",
+    "SETUID",
+    "SETGID",
+    "KILL",
+    "NET_BIND_SERVICE",
+    "AUDIT_WRITE",
+)
+
+#: Capabilities the box keeps with ``sudo`` off. The entrypoint runs as root
+#: once (uid remap, sudoers removal, workspace chown); agent commands run as
+#: the agent user through ``docker exec -u`` and never need one.
+NO_SUDO_CAPS = ("CHOWN", "DAC_OVERRIDE", "FOWNER", "SETUID", "SETGID")
+
+
+def hardening_run_args(policy: SandboxPolicy) -> tuple[str, ...]:
+    """``docker run`` hardening for every agent container (research item 37):
+    ``--cap-drop ALL`` plus the few capabilities the policy needs back,
+    ``--pids-limit`` and, with ``sudo`` off, ``no-new-privileges`` (already in
+    :meth:`SandboxPolicy.docker_run_args`).
+
+    Not in the container key on purpose: an existing box keeps working and
+    gets these flags the next time it is rebuilt (a policy or image change).
+
+    The cloud metadata address (169.254.169.254) cannot be blocked from a
+    ``docker run`` flag: that needs a host firewall rule, e.g.
+    ``iptables -I DOCKER-USER -d 169.254.169.254 -j REJECT`` (root, once per
+    host). With ``network`` off there is no route to it at all."""
+    keep = SUDO_CAPS if policy.sudo else NO_SUDO_CAPS
+    args = ["--cap-drop", "ALL"]
+    for cap in keep:
+        args += ["--cap-add", cap]
+    args += ["--pids-limit", str(PIDS_LIMIT)]
+    return tuple(args)
+
 
 #: The container key a container from before the policy label was created
 #: with. Such a container ran with every permission, so it matches the default.

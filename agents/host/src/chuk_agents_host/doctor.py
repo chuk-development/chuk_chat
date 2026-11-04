@@ -91,6 +91,40 @@ def check_docker(binary: str = "docker") -> Check:
     return Check("docker", True, "the daemon answers")
 
 
+def check_local_isolation() -> Check:
+    """Can local commands run inside bubblewrap (research item 37)? Only a
+    failure when ``AGENTS_LOCAL_ISOLATION=bwrap`` asks for it and the probe
+    fails: then commands run with no fence at all."""
+    from chuk_agents_sandbox.bwrap import (
+        ISOLATION_BWRAP,
+        ISOLATION_ENV_VAR,
+        ISOLATION_NONE,
+        bwrap_usable,
+        resolve_isolation,
+    )
+
+    mode = resolve_isolation()
+    usable = bwrap_usable()
+    if mode == ISOLATION_NONE:
+        hint = (
+            f"set {ISOLATION_ENV_VAR}=bwrap to fence local commands"
+            if usable
+            else "install bubblewrap (apt install bubblewrap) to fence local commands"
+        )
+        return Check("local isolation", True, "off (commands run unfenced on this machine)", hint)
+    if usable:
+        return Check("local isolation", True, f"bwrap ({mode}): read-only /, own /tmp and PIDs")
+    if mode == ISOLATION_BWRAP:
+        return Check(
+            "local isolation",
+            False,
+            "bwrap was asked for but is missing or cannot create namespaces",
+            "install bubblewrap, or allow unprivileged user namespaces "
+            "(kernel.apparmor_restrict_unprivileged_userns=0)",
+        )
+    return Check("local isolation", True, "auto: bwrap not usable here, commands run unfenced")
+
+
 def check_image(binary: str = "docker") -> tuple[Check, str]:
     """Is the image this host would run actually on the machine?"""
     from chuk_agents_sandbox.docker import BASE_IMAGE, IMAGE_ENV_VAR, default_image
@@ -215,6 +249,7 @@ def run_checks(
     docker = check_docker(binary)
     checks.append(docker)
     if not docker.ok:
+        checks.append(check_local_isolation())
         checks.append(
             Check(
                 "browser",

@@ -86,6 +86,18 @@ logger = logging.getLogger(__name__)
 
 # -- token accounting ---------------------------------------------------------
 
+
+def _positive_int(value: Any) -> int | None:
+    """``value`` as a positive int, else ``None`` (catalogue fields may be
+    missing, ``null``, a float or a string)."""
+    if isinstance(value, bool):
+        return None
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number > 0 else None
+
 DEFAULT_CONTEXT_LENGTH = 128_000
 DEFAULT_RESERVED_OUTPUT = 4_096
 
@@ -502,6 +514,25 @@ class LadderConfig:
     @property
     def effective_input_budget(self) -> int:
         return max(1, self.context_length - self.reserved_output)
+
+    @classmethod
+    def for_model(
+        cls, context_length: int | None, max_output_tokens: int | None = None
+    ) -> "LadderConfig":
+        """The ladder for a model with this context window (bead B18).
+
+        ``context_length`` unknown (``None`` / not positive): the 128k default.
+        ``max_output_tokens`` is what the request may spend on the answer (the
+        client's ``max_tokens`` cap, else the catalogue's
+        ``max_completion_tokens``). Reserved for output, but never more than a
+        quarter of the window: some providers report the whole window as the
+        output cap, which would leave nothing for the input."""
+        ctx = _positive_int(context_length)
+        if ctx is None:
+            return cls()
+        quarter = max(1, ctx // 4)
+        out = _positive_int(max_output_tokens) or DEFAULT_RESERVED_OUTPUT
+        return cls(context_length=ctx, reserved_output=min(out, quarter))
 
     @property
     def tail_budget(self) -> int:

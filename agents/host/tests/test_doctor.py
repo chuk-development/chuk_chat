@@ -140,3 +140,29 @@ def test_quick_skips_the_container_probe(monkeypatch, tmp_path, quick):
     )
     doctor.run_checks(str(tmp_path), deep=not quick)
     assert called == ([] if quick else ["img:1"])
+
+
+def test_local_isolation_asked_for_but_missing_is_a_failure(monkeypatch):
+    import chuk_agents_sandbox.bwrap as bw
+
+    monkeypatch.setenv(bw.ISOLATION_ENV_VAR, "bwrap")
+    monkeypatch.setattr(bw, "bwrap_usable", lambda refresh=False: False)
+    check = doctor.check_local_isolation()
+    assert not check.ok and "bubblewrap" in check.fix
+
+
+def test_local_isolation_off_is_fine_and_says_how_to_turn_it_on(monkeypatch):
+    import chuk_agents_sandbox.bwrap as bw
+
+    monkeypatch.delenv(bw.ISOLATION_ENV_VAR, raising=False)
+    monkeypatch.setattr(bw, "bwrap_usable", lambda refresh=False: True)
+    check = doctor.check_local_isolation()
+    assert check.ok and "AGENTS_LOCAL_ISOLATION=bwrap" in check.fix
+
+
+def test_no_docker_reports_the_local_isolation(monkeypatch):
+    monkeypatch.setattr(
+        doctor, "check_docker", lambda binary="docker": doctor.Check("docker", False, "no daemon")
+    )
+    names = [c.name for c in doctor.run_checks("/tmp/does-not-exist")]
+    assert "local isolation" in names

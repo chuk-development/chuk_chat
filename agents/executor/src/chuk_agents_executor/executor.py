@@ -2818,6 +2818,13 @@ class Executor:
                 body["container_id"] = str(container_id)[:12]
         if workspace:
             body["workspace"] = str(workspace)
+        # ``--sandbox auto`` fell back to local (bead B10): the app must be
+        # able to say that this agent runs without a container.
+        if getattr(env, "sandbox_fallback", False) is True:
+            body["fallback"] = True
+            body["requested"] = "auto"
+        if not container and getattr(env, "isolated", False) is True:
+            body["isolation"] = "bwrap"
         return body
 
     def _handle_skills_frame(self, kind: str, request_id: str, payload: dict) -> None:
@@ -4029,13 +4036,17 @@ class Executor:
                 with self._waiting_user(request_id):
                     while True:
                         if kill.interrupted() or kill.estop_engaged():
-                            self._close_approval(pending, approved=False, reason=APPROVAL_STOPPED)
-                            return answer(False)
+                            if self._expire_approval(
+                                request_id, pending, payload, reason=APPROVAL_STOPPED
+                            ):
+                                return answer(False)
                         if pending.event.wait(self._poll):
                             return answer(pending.approved)
                         if time.monotonic() >= deadline:
-                            self._close_approval(pending, approved=False, reason=APPROVAL_TIMEOUT)
-                            return answer(False)
+                            if self._expire_approval(
+                                request_id, pending, payload, reason=APPROVAL_TIMEOUT
+                            ):
+                                return answer(False)
             finally:
                 with self._approvals_lock:
                     self._approvals.pop(approval_id, None)
@@ -4105,6 +4116,34 @@ class Executor:
             if run.session_key == session_key:
                 logger.info("user browser stop: stopping run %s", run.request_id)
                 run.kill.interrupt()
+
+    def _expire_approval(
+        self, request_id: str, pending: _PendingApproval, payload: dict, *, reason: str
+    ) -> bool:
+        """Close a wait that nobody answered: a timeout or a stop (bead B11).
+
+        Records the deny (so a late ``approval_decision`` is a no-op), patches
+        the stored row and sends the same ``approval_request`` again with
+        ``decision: "denied"`` and ``decision_reason`` (``timeout`` /
+        ``stopped``) — the shape the takeover's ``auto`` path already sends —
+        so the app closes the card instead of offering Allow on a dead
+        request. False when the user's answer won the race: the caller then
+        reads that answer on its next poll."""
+        if not pending.decide(False):
+            return False
+        self._close_approval(pending, approved=False, reason=reason)
+        pending.event.set()
+        try:
+            self._event(
+                request_id,
+                {
+                    **payload,
+                    **approval_outcome_fields(approved=False, reason=reason, at=time.time()),
+                },
+            )
+        except Exception:  # noqa: BLE001 — a dead stream must not keep the run waiting
+            logger.debug("approval close frame not sent", exc_info=True)
+        return True
 
     def _close_approval(
         self,
@@ -4293,16 +4332,21 @@ class Executor:
             with self._waiting_user(request_id):
                 while True:
                     if kill.interrupted() or kill.estop_engaged():
-                        self._close_approval(pending, approved=False, reason=APPROVAL_STOPPED)
-                        return {"status": TAKEOVER_STOPPED}
+                        if self._expire_approval(
+                            request_id, pending, payload, reason=APPROVAL_STOPPED
+                        ):
+                            return {"status": TAKEOVER_STOPPED}
                     if pending.event.wait(self._poll):
                         return {
                             "status": TAKEOVER_DONE if pending.approved else TAKEOVER_SKIPPED
                         }
                     now = time.monotonic()
                     if now >= deadline:
-                        self._close_approval(pending, approved=False, reason=APPROVAL_TIMEOUT)
-                        return {"status": TAKEOVER_TIMEOUT}
+                        if self._expire_approval(
+                            request_id, pending, payload, reason=APPROVAL_TIMEOUT
+                        ):
+                            return {"status": TAKEOVER_TIMEOUT}
+                        continue  # the user's answer won the race; read it next
                     if now < next_poll:
                         continue
                     next_poll = now + TAKEOVER_POLL_SECONDS

@@ -401,3 +401,32 @@ def test_the_runs_row_records_the_effective_effort_after_a_clamp(tmp_path, caplo
     notes = [r.getMessage() for r in caplog.records if "not supported by the model" in r.getMessage()]
     assert len(notes) == 1
     assert "medium" in notes[0] and "high" in notes[0]
+
+
+def test_selected_and_default_clients_carry_the_catalogue_window():
+    """Bead B18: the context ladder of a run is sized from the model the
+    task runs on, so its client must know the catalogue's window."""
+    from chuk_agents_runtime.runtime import ladder_config_for
+
+    from chuk_agents_executor.backend import make_backend_model_select, resolve_backend_model_wiring
+
+    catalogue = [
+        {
+            "id": "big/model",
+            "providers": [
+                {"slug": "p", "pricing": {"completion": "1"}, "context_length": 1_000_000,
+                 "max_completion_tokens": 64_000},
+            ],
+        },
+    ]
+    select = make_backend_model_select(_fake_session(), catalogue)
+    client = select("big/model", "p")
+    assert client.context_length == 1_000_000
+    assert ladder_config_for(client).context_length == 1_000_000
+    factory, _ = resolve_backend_model_wiring(
+        _fake_session(), models=catalogue, preferred_model_id="big/model"
+    )
+    default = factory()
+    assert default.context_length == 1_000_000 and default.max_output_tokens == 64_000
+    for c in (client, default):
+        c.close()

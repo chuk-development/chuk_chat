@@ -43,6 +43,8 @@ from .lifecycle import (
     reap_orphans,
     remove_container,
 )
+from .bwrap import ISOLATION_ENV_VAR, bwrap_usable, resolve_isolation
+from .child_env import child_env
 from .local import LocalEnvironment
 from .policy import (
     DEFAULT_POLICY,
@@ -53,10 +55,16 @@ from .policy import (
     PolicyError,
     SandboxPolicy,
     enforced_permissions,
+    hardening_run_args,
 )
 from .result import Environment, ProcessResult
 
 __all__ = [
+    "ISOLATION_ENV_VAR",
+    "bwrap_usable",
+    "child_env",
+    "hardening_run_args",
+    "resolve_isolation",
     "BaseEnvironment",
     "DEFAULT_MAX_OUTPUT_CHARS",
     "LocalEnvironment",

@@ -127,6 +127,18 @@ class SandboxConfig:
             "falls back to ``local``."
         ),
     )
+    local_isolation: str = setting(
+        "none",
+        env="AGENTS_LOCAL_ISOLATION",
+        choices=("none", "bwrap", "auto"),
+        doc=(
+            "How the ``local`` backend fences a command. ``bwrap`` runs each "
+            "one in bubblewrap: read-only system, private /tmp and PIDs, no "
+            "network when the agent's network permission is off. Background "
+            "jobs and the terminal then end with their command. ``auto`` uses "
+            "bwrap when it works here, ``none`` never."
+        ),
+    )
     image: str = setting(
         "",
         env="AGENTS_SANDBOX_IMAGE",

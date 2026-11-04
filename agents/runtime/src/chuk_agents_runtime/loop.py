@@ -56,7 +56,7 @@ from .context import (
     total_tokens_from_usage,
 )
 from .registry import ToolRegistry
-from .state import StateStore
+from .state import UNKNOWN_OUTCOME_RESULT, StateStore
 from .tool_events import tool_event_fields
 from .tools import FINISH_TOOL
 from .telemetry import get_tracer, set_round
@@ -438,9 +438,7 @@ STOP_SETTLE_S = 10.0
 
 #: The row of a call that started and did not finish inside the settle time.
 #: It may have had its effect: the model must check, not repeat it blindly.
-STOPPED_TOOL_RESULT = (
-    "stopped while running; the outcome is unknown. Verify it before you retry."
-)
+STOPPED_TOOL_RESULT = UNKNOWN_OUTCOME_RESULT
 
 
 @dataclass
