@@ -245,9 +245,30 @@ Code: `lib/services/prompt_cache/`, test:
 - **Native tool passes send those images as refs** when the server still
   holds all of them (`WebSocketChatService.foldTurnImageRefs`): the entry
   goes up with its text only, plus `image_cache_refs`, and the server's
-  `attach_turn_images` puts them back on the same entry (same anchor rule,
-  `toolLoopTurnIndex` = `tool_loop_turn_index`), after the text. The
-  provider bytes do not change. Not folded, so sent in full: a pass with a
+  `attach_turn_images` puts them back on the same entry, after the text.
+  The provider bytes do not change.
+- **The turn's entry is named, not guessed.** Every native pass sends
+  `turn_history_index` = `ToolLoopStep.turnUserIndex` (the send paths pass
+  `next.turnUserIndex` as `turnHistoryIndex`; `WebSocketChatService.turnAnchor`).
+  The server uses that entry and, when the caps dropped it, guesses
+  nothing. Without the field (old client, other path) both sides use one
+  fallback rule (`toolLoopTurnIndex` = `tool_loop_turn_index`): skip the
+  trailing loop (`tool_calls` turns, `tool` results, synthetic user
+  messages), then take the nearest user message before the first call that
+  is not synthetic. Synthetic = starts with `<skill_content`, `[skill `
+  (dropped-skill marker), `Tool Results:` (text-protocol results, recovery
+  and `[VERIFY]` notes) or `kForcedFinalAnswerNote`. Not synthetic:
+  `[memory updated]` / `[connectors updated]` / `[skills updated]`, because
+  those notes head the turn's own message (`renderUserTurnForModel`). The
+  prefix list is `syntheticUserPrefixes` here and `SYNTHETIC_USER_PREFIXES`
+  on the server: keep them identical.
+- **Text parts are stripped only at the outer edges** on the server
+  (`history_content_blocks`): leading whitespace of the first non-blank
+  text part, trailing of the last; inner parts keep every character
+  (`"hello "` + `" world"` keeps its space). One text part = the string
+  form = `message`. The app builds turn text already trimmed
+  (`renderUserTurnForModel`), so both forms are the same bytes; never
+  trim single parts in the app either. Not folded, so sent in full: a pass with a
   `message` (prompt-based mode; the server would add a new user turn), an
   image-only entry (the server drops it), text after an image, a missing
   ref. The server resolves image refs only for the current turn, so an
