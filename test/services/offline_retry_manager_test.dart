@@ -67,7 +67,7 @@ void main() {
       expect(remaining.attemptCount, greaterThanOrEqualTo(1));
     });
 
-    test('retryable error defers (stays in queue, no lastError)', () async {
+    test('retryable error defers (stays queued with a backoff time)', () async {
       final id = await OfflineQueueService.instance.enqueue(
         chatId: 'c',
         sendPayload: {'i': 1},
@@ -83,11 +83,11 @@ void main() {
 
       final remaining = await OfflineQueueService.instance.getById(id);
       expect(remaining, isNotNull);
-      // Backoff config = 3 retries → attempt_count grows by 1 from
-      // incrementAttempts after the backoff exhausts. lastError is null
-      // because deferred path doesn't call markFailed.
-      expect(remaining!.lastError, isNull);
-      expect(remaining.attemptCount, greaterThanOrEqualTo(1));
+      // One attempt per flush; the row waits for its backoff time, still
+      // queued, with the error kept for the UI.
+      expect(remaining!.state, OutboxState.queued);
+      expect(remaining.attemptCount, 1);
+      expect(remaining.nextAttemptAt, greaterThan(0));
     });
 
     test('emits events for success and failure', () async {

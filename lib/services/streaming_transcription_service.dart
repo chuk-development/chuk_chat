@@ -42,6 +42,16 @@ class StreamingTranscriptionService {
   bool _isConnected = false;
   bool _disposed = false;
 
+  /// Set once the socket was up and then went away (error, close, or a
+  /// chunk that could not be sent). The server then lacks part of the
+  /// audio, so the caller must upload its own full copy over HTTP instead.
+  bool _dropped = false;
+
+  /// Whether the socket broke after it was ready. See [_dropped].
+  bool get hasDropped => _dropped;
+
+  /// Whether the socket is up and has every chunk sent to it so far.
+  bool get isHealthy => _isConnected && !_dropped && !_disposed;
 
   /// Construct the WebSocket URL from the HTTP API base URL.
   static Uri get _wsUrl {
@@ -118,12 +128,19 @@ class StreamingTranscriptionService {
   /// Send a PCM audio chunk to the server.
   ///
   /// Call this for every [Uint8List] chunk emitted by the recorder's
-  /// `startStream()`. No-op if not connected.
+  /// `startStream()`. When the socket is gone the chunk is not sent and the
+  /// session is marked [hasDropped]; the caller keeps its own copy of every
+  /// chunk and falls back to an HTTP upload of the whole recording.
   void sendAudioChunk(Uint8List pcmData) {
-    if (!_isConnected || _channel == null || _disposed) return;
+    if (_disposed) return;
+    if (!_isConnected || _channel == null) {
+      _dropped = true;
+      return;
+    }
     try {
       _channel!.sink.add(pcmData);
     } catch (e) {
+      _dropped = true;
       if (kDebugMode) {
         debugPrint('StreamingTranscription: sendAudioChunk error: $e');
       }
@@ -213,11 +230,13 @@ class StreamingTranscriptionService {
     if (kDebugMode) {
       debugPrint('StreamingTranscription: WS error: $error');
     }
+    if (_isConnected) _dropped = true;
     _isConnected = false;
     _completeWithError('WebSocket error: $error');
   }
 
   void _onDone() {
+    if (_isConnected) _dropped = true;
     _isConnected = false;
     _completeWithError('WebSocket closed unexpectedly');
   }

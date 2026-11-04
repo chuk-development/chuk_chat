@@ -166,4 +166,29 @@ void main() {
       expect(ToolTurnSignals.fromMeta(meta).indicatesTruncated, isTrue);
     },
   );
+
+  group('offline outbox: did the server accept the request?', () {
+    test('a locally made error alone is not acceptance', () async {
+      final run = await start('accept-none');
+      run.controller.add(
+        const ErrorEvent('lost', code: StreamErrorCodes.connectionLost),
+      );
+      await settle();
+      expect(run.errors, isNotEmpty);
+      expect(manager.serverAccepted('accept-none'), isFalse);
+    });
+
+    test('any server frame before the error is acceptance', () async {
+      final run = await start('accept-meta');
+      run.controller.add(const MetaEvent({'model': 'm'}));
+      run.controller.add(
+        const ErrorEvent('lost', code: StreamErrorCodes.connectionLost),
+      );
+      await settle();
+      expect(manager.serverAccepted('accept-meta'), isTrue);
+      // A new send in the chat starts from scratch.
+      await start('accept-meta');
+      expect(manager.serverAccepted('accept-meta'), isFalse);
+    });
+  });
 }

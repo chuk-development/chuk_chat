@@ -1024,8 +1024,8 @@ class ChatStorageCrud {
     return name != null && name.isNotEmpty ? name : null;
   }
 
-  /// The plaintext payload of a chat (v3). The one encoding for the cache
-  /// and the cloud.
+  /// The plaintext payload of a chat (v3) as the cache keeps it. A cloud
+  /// write takes [encodeChatPayloadPair] instead.
   static Future<String> _payloadJson(
     List<ChatMessage> messages,
     String? customName,
@@ -1371,10 +1371,12 @@ class ChatStorageCrud {
     // A chat saved locally first may already carry a name and a star.
     final local = ChatStorageState.chatsById[effectiveChatId];
     final customName = _customNameOf(local);
-    final payloadJson = await _payloadJson(messages, customName);
+    // The cloud copy is neutralized; the cache keeps the outbox state.
+    final payloads = await encodeChatPayloadPair(messages, customName);
+    final payloadJson = payloads.local;
 
     final encryptedPayload = await EncryptionService.encryptChatPayload(
-      payloadJson,
+      payloads.cloud,
     );
 
     // Extract and encrypt title separately for fast sidebar loading
@@ -1614,9 +1616,14 @@ class ChatStorageCrud {
       await ChatDirtyStore.markSynced(user.id, chatId, rev);
       return existingChat;
     }
-    final payloadJson = await _payloadJson(messages, normalizedCustomName);
+    // The cloud copy is neutralized; the cache keeps the outbox state.
+    final payloads = await encodeChatPayloadPair(
+      messages,
+      normalizedCustomName,
+    );
+    final payloadJson = payloads.local;
     final encryptedPayload = await EncryptionService.encryptChatPayload(
-      payloadJson,
+      payloads.cloud,
     );
 
     // Extract and encrypt title separately for fast sidebar loading
