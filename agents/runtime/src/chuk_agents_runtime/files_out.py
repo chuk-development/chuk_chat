@@ -25,6 +25,7 @@ which is what makes the executor's own second size gate safe to add.
 
 from __future__ import annotations
 
+import json
 import mimetypes
 import re
 from collections.abc import Callable
@@ -50,27 +51,25 @@ DEFAULT_MIME = "application/octet-stream"
 NAME_CAP = 120
 _UNSAFE_NAME = re.compile(r"[^A-Za-z0-9._\- ()\[\]]+")
 
+#: Most files one call may send. A deliverable is a short list ("the report
+#: and its CSV"), never a folder dump; past four the agent should zip.
+MAX_FILES_PER_CALL = 4
+
 SEND_FILE_SCHEMA = {
     "type": "object",
     "description": (
-        "Send a file from the workspace to the user, so it appears in the chat "
-        "as a download. Use it for anything you produced that the user needs to "
-        "have: a CSV, a PDF, an image, a screenshot, a converted video. The file "
-        "must already exist; write it first."
+        "Send files you produced (CSV, PDF, image, video) to the user as "
+        "downloads. Write them first. One file: `path`; up to 4: `paths`."
     ),
     "properties": {
-        "path": {
-            "type": "string",
-            "description": "File path, relative to the workspace or absolute.",
+        "path": {"type": "string", "description": "Workspace-relative or absolute."},
+        "paths": {
+            "type": "array",
+            "items": {"type": "string"},
+            "maxItems": MAX_FILES_PER_CALL,
         },
-        "name": {
-            "type": "string",
-            "description": (
-                "Name to show the user. Defaults to the file's own name."
-            ),
-        },
+        "name": {"type": "string", "description": "Shown name (one file only)."},
     },
-    "required": ["path"],
 }
 
 
@@ -121,11 +120,7 @@ def make_send_file_handler(
 ):
     """Build the ``send_file_to_user`` handler around one sink."""
 
-    def send_file_to_user(path: str, name: str | None = None) -> dict:
-        text_path = (path if isinstance(path, str) else str(path or "")).strip()
-        if not text_path:
-            return {"ok": False, "error": "path is empty"}
-
+    def send_one(text_path: str, name: str | None) -> dict:
         try:
             fetched = fetch_bytes(env, text_path, max_bytes=max_bytes)
         except TransferError as exc:
@@ -158,7 +153,61 @@ def make_send_file_handler(
             "bytes": sent.size,
         }
 
+    def send_file_to_user(
+        path: str | None = None,
+        name: str | None = None,
+        paths: list | None = None,
+    ) -> dict:
+        wanted = _collect_paths(path, paths)
+        if not wanted:
+            return {"ok": False, "error": "path is empty"}
+        if len(wanted) > MAX_FILES_PER_CALL:
+            return {
+                "ok": False,
+                "error": (
+                    f"too many files: {len(wanted)} (max {MAX_FILES_PER_CALL} "
+                    "per call). Zip them into one archive, or send them in "
+                    "several calls."
+                ),
+            }
+        if len(wanted) == 1 and paths is None:
+            # The one-file shape is unchanged, so old callers read the same result.
+            return send_one(wanted[0], name)
+        # Each file is its own `file` event, one after the other; one failure
+        # does not stop the rest, the result says which ones arrived.
+        results = [
+            send_one(item, name if len(wanted) == 1 else None) for item in wanted
+        ]
+        sent = sum(1 for r in results if r.get("ok"))
+        return {"ok": sent == len(results), "sent": sent, "files": results}
+
     return send_file_to_user
+
+
+def _collect_paths(path, paths) -> list[str]:
+    """``path`` and ``paths`` merged, blanks dropped, duplicates removed (in order)."""
+    raw: list = []
+    if path is not None:
+        raw.append(path)
+    if isinstance(paths, (list, tuple)):
+        raw.extend(paths)
+    elif isinstance(paths, str):
+        # Some models send the array as its JSON text.
+        text = paths.strip()
+        try:
+            decoded = json.loads(text) if text.startswith("[") else None
+        except ValueError:
+            decoded = None
+        if isinstance(decoded, list):
+            raw.extend(decoded)
+        else:
+            raw.append(text)
+    out: list[str] = []
+    for item in raw:
+        text = (item if isinstance(item, str) else str(item or "")).strip()
+        if text and text not in out:
+            out.append(text)
+    return out
 
 
 def register_send_file(
@@ -186,6 +235,7 @@ def register_send_file(
 __all__ = [
     "DEFAULT_MIME",
     "MAX_FILE_BYTES",
+    "MAX_FILES_PER_CALL",
     "NAME_CAP",
     "FileSink",
     "SentFile",

@@ -28,7 +28,9 @@ from .clock import clock_messages
 from .context import AuxSummarizer, ContextLadder, LadderConfig
 from .environment import Environment, LocalEnvironment
 from .chat_documents import DocumentStore, register_document_tool
+from .file_edit import EditGuard, observations_for
 from .files_out import FileSink
+from .safety_floor import SafetyFloor
 from .action_policy import ActionApprovals
 from .herenow import ApprovalGate, HereNowConfig, register_herenow_tools
 from .loop import AgentLoop, IterationBudget, KillSwitch, LoopResult
@@ -59,14 +61,18 @@ from .automations import AutomationBackend, register_automation_tools
 from .calls import CallBackend, register_call_tools
 from .takeover import TakeoverBackend, register_takeover_tool
 from .skill_proposals import SkillProposalSink, register_propose_skill_tool
+from .project_rules import ProjectRules
 from .skills import SkillLibrary, SkillSettingsStore, load_skills, register_skill_tool
 from .state import StateStore
+from .acp_runner import make_acp_runner
 from .subagents import (
+    NATIVE_BACKEND,
     ActivityMonitor,
     ChildContext,
     ChildRunner,
     SubagentLimits,
     SubagentSupervisor,
+    loop_history,
     register_subagent_tools,
 )
 from .shell_tools import JobManager, register_job_tools, register_shell_tools
@@ -121,6 +127,10 @@ class SubagentConfig:
     runtime_kwargs: dict[str, Any] = field(default_factory=dict)
     #: Set by :func:`build_runtime` so the caller can shut the tree down.
     supervisor: SubagentSupervisor | None = None
+    #: External CLI backends a task may pick (``claude``, ``codex``;
+    #: :mod:`chuk_agents_runtime.acp_runner`). The executor fills it only when
+    #: the agent's ``external_agents`` permission is on AND the CLI was found.
+    acp_backends: tuple[str, ...] = ()
 
 
 class _ChildStreamingModel:
@@ -144,15 +154,58 @@ class _ChildStreamingModel:
         return response
 
 
+def _with_catalog_delta(
+    clock: Callable[[], list[dict]],
+    library: SkillLibrary,
+    store: StateStore,
+    session_key: str | None,
+) -> Callable[[], list[dict]]:
+    """The clock provider plus the skill catalogue delta of this session.
+
+    The provider runs right after the task's prompt row is written, so the
+    session is the one named by ``session_key`` or, without one, the session
+    of the newest row. A failure here costs the delta, never the run."""
+
+    def provider() -> list[dict]:
+        messages = list(clock() or [])
+        try:
+            sid = store.resolve_session(session_key) if session_key else None
+            if sid is None:
+                row = store._conn().execute(
+                    "SELECT session_id FROM messages ORDER BY id DESC LIMIT 1"
+                ).fetchone()
+                sid = int(row[0]) if row is not None else None
+            if sid is not None:
+                rows = [
+                    {"role_tag": m.role, "content": m.content}
+                    for m in store.get_conversation(sid)
+                ]
+                messages.extend(library.catalog_delta(rows))
+        except Exception:  # noqa: BLE001 — the delta is best effort
+            pass
+        return messages
+
+    return provider
+
+
 def make_child_runner(config: SubagentConfig) -> ChildRunner:
     """The default :class:`~chuk_agents_runtime.subagents.ChildRunner`: a full runtime.
 
     One child = one environment built from its own task id, one database, one
     loop. The environment is released in a ``finally`` — a leaked child container
     outlives the run that made it.
+
+    A task with ``backend`` set to an enabled external CLI (``claude`` /
+    ``codex``) goes to :func:`chuk_agents_runtime.acp_runner.make_acp_runner`
+    instead; ``fork_history`` is written into the child's empty session first.
     """
+    acp = make_acp_runner(config.env_factory) if config.acp_backends else None
 
     def run(ctx: ChildContext) -> LoopResult:
+        if ctx.backend != NATIVE_BACKEND:
+            if acp is None or ctx.backend not in config.acp_backends:
+                raise RuntimeError(f"subagent backend {ctx.backend!r} is not enabled")
+            return acp(ctx)
         factory = config.env_factory or (lambda task_id: LocalEnvironment())
         env = factory(ctx.task_id)
         try:
@@ -170,6 +223,7 @@ def make_child_runner(config: SubagentConfig) -> ChildRunner:
                 max_iterations=config.max_iterations,
                 version_workspace=config.version_workspace,
                 runtime_kwargs=config.runtime_kwargs,
+                acp_backends=config.acp_backends,
             )
             loop = build_runtime(
                 _ChildStreamingModel(config.model_factory(), ctx.emit),
@@ -201,6 +255,8 @@ def make_child_runner(config: SubagentConfig) -> ChildRunner:
                 **config.runtime_kwargs,
             )
             ctx.on_loop(loop)
+            if ctx.fork_history:
+                seed_fork_history(loop.store, ctx.session_key, ctx.fork_history)
             try:
                 return loop.run(ctx.session_key, ctx.prompt)
             finally:
@@ -227,6 +283,21 @@ def make_child_runner(config: SubagentConfig) -> ChildRunner:
                     pass
 
     return run
+
+
+def seed_fork_history(store: StateStore, session_key: str, rows: list[dict]) -> bool:
+    """Write the parent's rows into a child's session, once (``fork=true``).
+
+    Only an empty session is seeded: a follow-up turn (the schema correction)
+    reuses the same session and must not get the history twice. The parent's
+    system row comes first, so the child loop adds no system prompt of its
+    own and the prefix the provider cached for the parent stays the same."""
+    session_id = store.route(session_key)
+    if store.get_conversation(session_id):
+        return False
+    for row in rows:
+        store.append_message(session_id, str(row.get("role") or "user"), dict(row))
+    return True
 
 
 #: Tools that reach the internet from the HOST process, not from the sandbox
@@ -271,6 +342,19 @@ def model_limits(model: Any) -> tuple[int | None, int | None]:
         current = getattr(current, "inner", None) or getattr(current, "_inner", None)
         seen += 1
     return None, None
+
+
+def _self_dirs(workspace: str | None) -> tuple[str, ...]:
+    """Directories the agent must never delete (research H25): its own install
+    (the package tree) and its per-workspace state (``.agents``)."""
+    dirs: list[str] = []
+    try:
+        dirs.append(str(Path(__file__).resolve().parent))
+    except Exception:  # noqa: BLE001 — a frozen build may hide the path
+        pass
+    if workspace:
+        dirs.append(str(Path(workspace) / ".agents"))
+    return tuple(dirs)
 
 
 def ladder_config_for(model: Any) -> LadderConfig:
@@ -472,6 +556,22 @@ def build_runtime(
         else None
     )
     registry = JournalingRegistry(git_workspace, observer=tool_observer)
+    # Project rules (Hermes H33): the AGENTS.md / CLAUDE.md of a directory the
+    # agent first works in, appended once to that tool's RESULT (never to the
+    # frozen system prompt, so the prefix cache stays valid).
+    if workspace and include_tool_docs:
+        registry.add_result_augmenter(
+            ProjectRules(
+                workspace,
+                sandbox_root=getattr(env, "root", None)
+                if isinstance(getattr(env, "root", None), str)
+                else None,
+                # The registry's secret filter, read at call time.
+                result_filter=lambda text: (
+                    registry.result_filter(text) if registry.result_filter else text
+                ),
+            ).augment
+        )
     # Background jobs (docs/WIRE_CONTRACT.md, "Interactive shell and background
     # commands"): ``run_command(background=true)`` + ``job_*``. Needs no tmux,
     # only the environment; the wake-up is the host's job.
@@ -480,6 +580,20 @@ def build_runtime(
         session_key=shell_session_key,
         workspace=workspace,
         secrets_env=secrets.env if secrets is not None else None,
+    )
+    # Read-before-edit guard, per session (research items 32-35): it keeps the
+    # observed version (mtime+size+sha256) of every file the agent read or
+    # wrote, so edit_file / apply_patch and an overwrite of an existing file
+    # need a prior read, and a stale version is refused.
+    edit_guard = EditGuard(env, observations_for(shell_session_key))
+    # The safety floor (research H23-H25, docs/WIRE_CONTRACT.md "Safety floor"):
+    # the agent runs on the user's real machine, so a catastrophic command or a
+    # write to ~/.ssh / a .env is stopped before it runs, whatever the approval
+    # mode. The agent's own install/state dirs are protected from deletion; an
+    # allowed command prefix (research C2) lifts a soft stop, never a hard one.
+    safety_floor = SafetyFloor(
+        self_dirs=_self_dirs(workspace),
+        prefix_allowed=(action_approvals.prefix_allowed if action_approvals is not None else None),
     )
     register_builtin_tools(
         registry,
@@ -490,6 +604,8 @@ def build_runtime(
         media_mount=media_mount,
         secrets=secrets,
         jobs=jobs,
+        guard=edit_guard,
+        floor=safety_floor,
     )
     register_job_tools(registry, jobs)
     register_workspace_tools(registry, git_workspace)
@@ -611,6 +727,7 @@ def build_runtime(
             # The parent's own Stop reaches the children: stopping a run must
             # stop the sandboxes it opened, not orphan them.
             parent_kill=kill,
+            backends=subagents.acp_backends,
         )
         subagents.supervisor = supervisor
         register_subagent_tools(registry, supervisor)
@@ -667,7 +784,9 @@ def build_runtime(
         # agent drafts a skill from the task it just finished; the executor's
         # sink shows it to the user, and only the user's accept writes it to
         # ``root``. ``None`` (no host, no app to ask) registers nothing.
-        register_propose_skill_tool(registry, skill_proposals, skills_root=root)
+        register_propose_skill_tool(
+            registry, skill_proposals, skills_root=root, library=library
+        )
 
     # The agent's permissions (docs/WIRE_CONTRACT.md, "Agent permissions"):
     # with the network switched off, the host fetches nothing for the agent
@@ -805,10 +924,23 @@ def build_runtime(
         token_budget=token_budget,
         kill_switch=kill,
         system_prompt=prompt,
+        # The skill catalogue is NOT rewritten in a stored system prompt any
+        # more (DS #47): a changed catalogue arrives as one hashed
+        # ``skill_catalog`` message after the task's prompt (see the clock
+        # provider below), so the cached prefix of a long session survives.
         system_prompt_upgrade=(
-            lambda saved: library.upgrade_catalog(upgrade_research_instructions(saved))
+            upgrade_research_instructions
         ) if include_tool_docs else None,
-        context_providers=[library.pending_context, *(context_providers or [])],
+        context_providers=[
+            library.pending_context,
+            # "[subagent settled]" rows for children nobody waited on (DS #44).
+            *(
+                [subagents.supervisor.pending_context]
+                if subagents is not None and subagents.supervisor is not None
+                else []
+            ),
+            *(context_providers or []),
+        ],
         context_ladder=ladder,
         # The debug "copy raw context" tap (off by default): fired each round with
         # the exact outbound payload and the ladder's stats. Unset -> not wired.
@@ -825,7 +957,13 @@ def build_runtime(
         # and time zone, made fresh for each task and appended after its
         # prompt, so "today" and "tomorrow" are right in a session that
         # started days ago. Only with the built-in contract, which explains it.
-        clock_provider=clock_messages if include_tool_docs else None,
+        # The skill catalogue delta rides along (``SkillLibrary.catalog_delta``):
+        # appended after the prompt, only when the list changed.
+        clock_provider=(
+            _with_catalog_delta(clock_messages, library, store, shell_session_key)
+            if include_tool_docs
+            else None
+        ),
         # Store writes pass the secret scrubber too (docs/WIRE_CONTRACT.md,
         # "Secrets"): a key the USER typed into the prompt, or one a model
         # echoes, is masked before it becomes a row. The same filter the
@@ -867,4 +1005,7 @@ def build_runtime(
     # and the tool-search decision, which is what the executor logs.
     loop.mcp = manager
     loop.tool_search = decision
+    if subagents is not None and subagents.supervisor is not None:
+        # ``fork=true`` copies the history of the run that calls it.
+        subagents.supervisor.history_provider = lambda: loop_history(loop)
     return loop

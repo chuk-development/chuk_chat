@@ -469,6 +469,205 @@ def next_fire(spec: dict[str, Any], *, after: float) -> float | None:
     raise AutomationSpecError("a spec needs one of: cron, every, at")
 
 
+# -- guards (research H37-H40: no recursion, caps, catch-up, retries) -------------
+
+#: Automations one agent (one owning ``session_key``) may hold that are not
+#: cancelled. A runaway "set up another job" loop stops here.
+MAX_AUTOMATIONS_PER_AGENT = 50
+#: The shortest repeat the MODEL may set (``schedule_task``). The user (the
+#: app's ``automation_create`` / ``automation_update``) may go down to
+#: :data:`MIN_INTERVAL_SECONDS`. Every run costs credits.
+MIN_AGENT_INTERVAL_SECONDS = 5 * 60
+#: A missed occurrence (host asleep, off, unprovisioned) fires late only
+#: inside this window after its due time: half the period, clamped. Past it
+#: the occurrence is skipped and the row notes it (``last_skip_at``).
+MIN_CATCH_UP_SECONDS = 2 * 60
+MAX_CATCH_UP_SECONDS = 2 * 3600
+#: A one-shot (``at`` / ``in``) has no period: it uses the upper clamp.
+ONE_SHOT_CATCH_UP_SECONDS = MAX_CATCH_UP_SECONDS
+#: Re-runs of a schedule whose run failed for a transient reason before the
+#: model answered (network not back after a wake): after 5, 15, 30 minutes.
+RETRY_LADDER_SECONDS = (5 * 60, 15 * 60, 30 * 60)
+
+#: ``created_by`` of a row: the app (the user), the model in a user run, or
+#: the model in a run an automation started.
+CREATED_BY_USER = "user"
+CREATED_BY_AGENT = "agent"
+CREATED_BY_AUTOMATION = "automation"
+
+#: Where a fired schedule runs (DeepSeek harness ``target``).
+TARGET_THIS_SESSION = "this_session"
+TARGET_NEW_ONCE = "new_once"
+TARGET_NEW = "new"
+TARGETS = (TARGET_THIS_SESSION, TARGET_NEW_ONCE, TARGET_NEW)
+#: The separator of a derived session key (``<owner>#auto-<id>[-<n>]``). The
+#: host maps such a key back to its owner for the agent's box and permissions.
+DERIVED_SESSION_MARK = "#auto-"
+
+#: Copyable help for a spec the tool could not read. It goes into the error
+#: text, so the model's next try can copy a working form.
+SPEC_HELP = (
+    "Valid spec forms (copy one): "
+    "'0 9 * * 1-5' (cron: minute hour day-of-month month day-of-week, local time; "
+    "this one = 09:00 Monday to Friday), "
+    "'30 7 * * *' (every day at 07:30), "
+    "'0 */2 * * *' (every 2 hours, on the hour), "
+    "'every 30m' / 'every 2h' / 'every 1d' (repeat), "
+    "'at 2026-09-06T09:00' (once, local time), "
+    "'in 10m' (once, 10 minutes from now). "
+    "target: 'this_session' (default, runs in this chat), 'new_once' (one new "
+    "chat, reused by every run), 'new' (a new chat per run)."
+)
+
+
+def schedule_period(spec: dict[str, Any], *, now: float | None = None) -> float | None:
+    """Seconds between two fires of a repeating spec, ``None`` for a one-shot.
+
+    For a cron spec: the shortest gap among the next few fires, so ``*/5 9 *
+    * *`` counts as 5 minutes, not as one day."""
+    if "every" in spec:
+        return float(spec["every"])
+    if "cron" in spec:
+        base = time.time() if now is None else float(now)
+        fires: list[float] = []
+        cursor = base
+        for _ in range(6):
+            nxt = next_fire(spec, after=cursor)
+            if nxt is None:
+                break
+            fires.append(nxt)
+            cursor = nxt
+        gaps = [b - a for a, b in zip(fires, fires[1:]) if b > a]
+        return min(gaps) if gaps else None
+    return None
+
+
+def check_agent_interval(spec: dict[str, Any], *, now: float | None = None) -> None:
+    """Raise when a spec the MODEL set repeats faster than
+    :data:`MIN_AGENT_INTERVAL_SECONDS`."""
+    period = schedule_period(spec, now=now)
+    if period is not None and period < MIN_AGENT_INTERVAL_SECONDS:
+        raise AutomationSpecError(
+            f"a schedule you set may repeat at most every {MIN_AGENT_INTERVAL_SECONDS // 60} "
+            "minutes (every run costs the user credits); the user can set a tighter one "
+            "in the app. For fast polling write a watcher script (start_watcher) that "
+            "calls agents_hooks.trigger() only on a change. " + SPEC_HELP
+        )
+
+
+def catch_up_window(spec: dict[str, Any], override: float | None = None, *, now: float | None = None) -> float:
+    """How late a missed occurrence may still fire (seconds after its due
+    time). ``override`` (the row's ``catch_up_seconds``) wins when it is a
+    non-negative number."""
+    if isinstance(override, (int, float)) and not isinstance(override, bool) and override >= 0:
+        return float(override)
+    period = schedule_period(spec, now=now)
+    if period is None:
+        return float(ONE_SHOT_CATCH_UP_SECONDS)
+    return float(min(MAX_CATCH_UP_SECONDS, max(MIN_CATCH_UP_SECONDS, period / 2)))
+
+
+def parse_catch_up(value: Any) -> float | None:
+    """The app's ``catch_up`` field: seconds, ``'30m'`` / ``'2h'``, or
+    ``None`` / empty for the default window."""
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    if isinstance(value, bool):
+        raise AutomationSpecError("catch_up must be a duration")
+    if isinstance(value, (int, float)):
+        if value < 0:
+            raise AutomationSpecError("catch_up must not be negative")
+        return float(value)
+    text = str(value).strip()
+    if text == "0":
+        return 0.0
+    return float(_parse_duration(text))
+
+
+def parse_target(value: Any, default: str = TARGET_THIS_SESSION) -> str:
+    """``this_session`` / ``new_once`` / ``new`` (``None`` or empty = ``default``)."""
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return default
+    text = str(value).strip().lower().replace("-", "_")
+    if text in ("session", "this", "same"):
+        text = TARGET_THIS_SESSION
+    if text not in TARGETS:
+        raise AutomationSpecError(
+            "target must be 'this_session', 'new_once' or 'new'. " + SPEC_HELP
+        )
+    return text
+
+
+def target_session_key(owner: str, automation_id: str, target: str, fire_number: int) -> str:
+    """The session a fire of ``target`` runs in. ``fire_number`` counts from 1."""
+    if target == TARGET_NEW_ONCE:
+        return f"{owner}{DERIVED_SESSION_MARK}{automation_id}"
+    if target == TARGET_NEW:
+        return f"{owner}{DERIVED_SESSION_MARK}{automation_id}-{int(fire_number)}"
+    return owner
+
+
+def owner_session_key(session_key: str) -> str:
+    """The owning session of a derived key; any other key is itself."""
+    if not isinstance(session_key, str):
+        return session_key
+    head, mark, _tail = session_key.partition(DERIVED_SESSION_MARK)
+    return head if mark and head else session_key
+
+
+#: Exception class names that mean "the network was not there": the request
+#: never reached the model provider, so a re-run is spend-neutral.
+_TRANSIENT_NAMES = (
+    "ConnectError",
+    "ConnectTimeout",
+    "ConnectionError",
+    "ConnectionRefusedError",
+    "ConnectionResetError",
+    "NetworkError",
+    "gaierror",
+    "TimeoutException",
+    "ReadTimeout",
+    "RemoteProtocolError",
+)
+_TRANSIENT_TEXT = (
+    "network is unreachable",
+    "name or service not known",
+    "temporary failure in name resolution",
+    "connection refused",
+    "no route to host",
+    "nodename nor servname",
+)
+
+
+def is_transient_failure(exc: BaseException | None, *, model_answered: bool = False) -> bool:
+    """True when a run failed because the network was not there yet (the PC
+    just woke, Wi-Fi not back), before the model answered. Walks the cause
+    chain. A failure after the model answered is never transient here: a
+    re-run would bill the user again."""
+    if exc is None or model_answered:
+        return False
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if getattr(current, "transient", False) is True:
+            return True
+        if type(current).__name__ in _TRANSIENT_NAMES:
+            return True
+        text = str(current).lower()
+        if any(marker in text for marker in _TRANSIENT_TEXT):
+            return True
+        current = current.__cause__ or current.__context__
+    return False
+
+
+def error_digest(message: Any) -> str:
+    """A stable key for "the same error again": digits folded (ids, ports,
+    times), whitespace collapsed, case folded."""
+    text = re.sub(r"\d+", "#", " ".join(str(message or "").split()).casefold())
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
 # -- payload cap --------------------------------------------------------------
 
 
@@ -612,6 +811,9 @@ class AutomationBackend(Protocol):
     # ``wants_result() -> bool`` — this run is a fired ``on_change``
     # automation, so ``automation_result`` is offered.
     # ``record_result(changed, summary) -> dict`` — what that tool reports.
+    # ``schedule(..., target=...)`` — ``this_session`` / ``new_once`` / ``new``.
+    # ``can_create() -> bool`` — ``False`` in a run an automation started
+    # while the user did not allow chaining: the creating tools stay out.
 
 
 # -- tool schemas -------------------------------------------------------------
@@ -628,7 +830,7 @@ SCHEDULE_TASK_SCHEMA = {
         "When it fires, a new task with `prompt` starts "
         "in this same conversation and the user is notified when it ends. "
         "`spec` is one of: a 5-field cron ('0 9 * * 1-5'), 'every 5m' / "
-        "'every 2h' (60 s minimum), 'at 2026-09-06T09:00' (once) or "
+        "'every 2h' (5 minutes minimum), 'at 2026-09-06T09:00' (once) or "
         "'in 10m' (once, 10 minutes from now). For polling faster than a "
         "minute write a watcher script instead (start_watcher). A reminder by "
         "call ('remind me in 10 minutes by calling me') is spec 'in 10m' with "
@@ -644,6 +846,16 @@ SCHEDULE_TASK_SCHEMA = {
             "description": "What the fired task should do, written to your future self.",
         },
         "name": {"type": "string", "description": "Short label for the user."},
+        "target": {
+            "type": "string",
+            "enum": list(TARGETS),
+            "description": (
+                "Where each run happens. 'this_session' (default): in this chat. "
+                "'new_once': in one new chat of its own, reused by every run (keeps "
+                "this chat clean, e.g. a daily briefing). 'new': a fresh chat per run "
+                "(runs that must not see each other)."
+            ),
+        },
         "notify": {
             "type": "string",
             "enum": list(NOTIFY_MODES),
@@ -845,9 +1057,25 @@ def _takes_notify(method: Any) -> bool:
     return "notify" in params or any(p.kind is p.VAR_KEYWORD for p in params.values())
 
 
+def _takes_kwarg(method: Any, name: str) -> bool:
+    try:
+        params = inspect.signature(method).parameters
+    except (TypeError, ValueError):
+        return False
+    return name in params or any(p.kind is p.VAR_KEYWORD for p in params.values())
+
+
+def _with_help(message: str) -> str:
+    return message if SPEC_HELP in message else f"{message}. {SPEC_HELP}"
+
+
 def make_schedule_task_handler(backend: AutomationBackend):
     def schedule_task(
-        spec: str, prompt: str, name: str | None = None, notify: str | None = None
+        spec: str,
+        prompt: str,
+        name: str | None = None,
+        notify: str | None = None,
+        target: str | None = None,
     ) -> dict:
         if not isinstance(prompt, str) or not prompt.strip():
             return _error("prompt must not be empty")
@@ -855,15 +1083,25 @@ def make_schedule_task_handler(backend: AutomationBackend):
             parsed = parse_schedule_spec(spec)
             repeating = "cron" in parsed or "every" in parsed
             mode = parse_notify(notify, NOTIFY_ON_CHANGE if repeating else NOTIFY_ALWAYS)
+            where = parse_target(target)
+            # The model's floor (research H37): 5 minutes. The user may set less
+            # in the app; this tool is the model's way in.
+            check_agent_interval(parsed)
         except AutomationSpecError as exc:
-            return _error(str(exc))
-        if mode == NOTIFY_ALWAYS or (notify is None and not _takes_notify(backend.schedule)):
-            # The old three-argument call: a backend without ``notify`` works
-            # (it keeps its own default when the caller named no mode).
-            return with_local_times(backend.schedule(parsed, prompt.strip(), _clean_name(name)))
-        return with_local_times(
-            backend.schedule(parsed, prompt.strip(), _clean_name(name), notify=mode)
-        )
+            return _error(_with_help(str(exc)))
+        kwargs: dict[str, Any] = {}
+        if not (mode == NOTIFY_ALWAYS or (notify is None and not _takes_notify(backend.schedule))):
+            kwargs["notify"] = mode
+        if where != TARGET_THIS_SESSION:
+            if not _takes_kwarg(backend.schedule, "target"):
+                return _error("this host cannot run a schedule in a new chat; use target 'this_session'")
+            kwargs["target"] = where
+        # The old three-argument call stays for a backend without ``notify``
+        # (it keeps its own default when the caller named no mode).
+        result = backend.schedule(parsed, prompt.strip(), _clean_name(name), **kwargs)
+        if isinstance(result, dict) and result.get("ok") is False and "spec" in str(result.get("error", "")):
+            result = {**result, "error": _with_help(str(result["error"]))}
+        return with_local_times(result)
 
     return schedule_task
 
@@ -964,22 +1202,35 @@ def register_automation_tools(registry: ToolRegistry, backend: AutomationBackend
     """
     if backend is None:
         return
+    # A run an automation started may not set up new automations unless the
+    # user allowed it (research H37): the creating tools are left out, and the
+    # host refuses the call too. ``can_create`` is duck-typed; a backend
+    # without it creates as before.
+    probe = getattr(backend, "can_create", None)
+    try:
+        answer = probe() if callable(probe) else True
+    except Exception:  # noqa: BLE001 — a broken probe creates nothing
+        answer = False
+    # Only an explicit ``False`` hides the tools; the host refuses anyway.
+    creating = answer is not False
     # Deferred behind ``search_tools`` (bead chuk_chat-b3g4): rarely needed,
     # and a call the model makes without searching still runs (the loop
     # dispatches it and records the discovery).
     tools = (
-        ("schedule_task", SCHEDULE_TASK_SCHEMA, make_schedule_task_handler(backend)),
-        ("start_watcher", START_WATCHER_SCHEMA, make_start_watcher_handler(backend)),
-        ("list_automations", LIST_AUTOMATIONS_SCHEMA, make_list_automations_handler(backend)),
-        ("pause_automation", PAUSE_AUTOMATION_SCHEMA, make_control_handler(backend, "pause")),
-        ("resume_automation", RESUME_AUTOMATION_SCHEMA, make_control_handler(backend, "resume")),
-        ("cancel_automation", CANCEL_AUTOMATION_SCHEMA, make_control_handler(backend, "cancel")),
+        ("schedule_task", SCHEDULE_TASK_SCHEMA, make_schedule_task_handler(backend), True),
+        ("start_watcher", START_WATCHER_SCHEMA, make_start_watcher_handler(backend), True),
+        ("list_automations", LIST_AUTOMATIONS_SCHEMA, make_list_automations_handler(backend), False),
+        ("pause_automation", PAUSE_AUTOMATION_SCHEMA, make_control_handler(backend, "pause"), False),
+        ("resume_automation", RESUME_AUTOMATION_SCHEMA, make_control_handler(backend, "resume"), False),
+        ("cancel_automation", CANCEL_AUTOMATION_SCHEMA, make_control_handler(backend, "cancel"), False),
     )
-    for name, schema, handler in tools:
+    for name, schema, handler, creates in tools:
+        if creates and not creating:
+            continue
         registry.register(name, schema, handler, deferrable=True)
-    if callable(getattr(backend, "watch_url", None)):
+    if creating and callable(getattr(backend, "watch_url", None)):
         registry.register("watch_url", WATCH_URL_SCHEMA, make_watch_url_handler(backend), deferrable=True)
-    if callable(getattr(backend, "watch_mail", None)):
+    if creating and callable(getattr(backend, "watch_mail", None)):
         registry.register("watch_mail", WATCH_MAIL_SCHEMA, make_watch_mail_handler(backend), deferrable=True)
     wants = getattr(backend, "wants_result", None)
     try:
@@ -1020,11 +1271,25 @@ class RecordingBackend:
     calls: list[tuple] = field(default_factory=list)
     result_wanted: bool = False
     results: list[tuple[bool, str]] = field(default_factory=list)
+    #: ``False`` acts as the backend of a run an automation started.
+    creating: bool = True
+
+    def can_create(self) -> bool:
+        return self.creating
 
     def schedule(
-        self, spec: dict[str, Any], prompt: str, name: str | None, notify: str = NOTIFY_ALWAYS
+        self,
+        spec: dict[str, Any],
+        prompt: str,
+        name: str | None,
+        notify: str = NOTIFY_ALWAYS,
+        target: str = TARGET_THIS_SESSION,
     ) -> dict:
-        self.calls.append(("schedule", spec, prompt, name) + ((notify,) if notify != NOTIFY_ALWAYS else ()))
+        self.calls.append(
+            ("schedule", spec, prompt, name)
+            + ((notify,) if notify != NOTIFY_ALWAYS else ())
+            + ((target,) if target != TARGET_THIS_SESSION else ())
+        )
         row = {
             "ok": True,
             "id": f"a{len(self.rows) + 1}",
@@ -1034,6 +1299,7 @@ class RecordingBackend:
             "prompt": prompt,
             "state": STATE_ACTIVE,
             "notify": notify,
+            "target": target,
             "next_fire_at": next_fire(spec, after=0.0),
         }
         self.rows.append(row)

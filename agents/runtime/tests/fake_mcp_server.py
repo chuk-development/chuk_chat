@@ -22,7 +22,13 @@ _initializations = {"n": 0}
 
 
 def build_server(name: str = "fake") -> MCPServer:
-    server = MCPServer(name, version="1.0.0")
+    server = MCPServer(
+        name,
+        version="1.0.0",
+        # Server instructions (the `initialize` result), for the test that
+        # they reach the model attributed and marked untrusted.
+        instructions=os.environ.get("FAKE_MCP_INSTRUCTIONS") or None,
+    )
 
     @server.tool(description="Echo the text back, uppercased.")
     def shout(text: str) -> str:
