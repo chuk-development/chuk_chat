@@ -586,6 +586,12 @@ class ChatUiHelpers {
     if (message.generationMs != null && message.generationMs!.isNotEmpty) {
       map['generationMs'] = message.generationMs!;
     }
+    // What the model was told around a user message (prompt snapshot,
+    // notes, loaded skills): the next request rebuilds the same bytes from
+    // it, so the prompt cache keeps hitting (prompt_context.dart).
+    if (message.modelContext != null && message.modelContext!.isNotEmpty) {
+      map['modelContext'] = message.modelContext!;
+    }
     // Preserve local delivery status + offline-queue id so a message that was
     // pending/failed/interrupted keeps its state (and "Continue generation"
     // affordance) across reload instead of silently reverting to "sent".

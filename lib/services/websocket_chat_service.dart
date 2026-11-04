@@ -1,10 +1,12 @@
-import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
 import 'package:chuk_chat/models/chat_stream_event.dart';
 import 'package:chuk_chat/services/agents/agents_chat_transport.dart';
-import 'package:chuk_chat/services/image_storage_service.dart';
+import 'package:chuk_chat/services/chat_history_builder.dart';
+import 'package:chuk_chat/services/model_capabilities_service.dart';
+import 'package:chuk_chat/services/prompt_cache/image_budget.dart';
+import 'package:chuk_chat/services/prompt_cache/prompt_context.dart';
 import 'package:chuk_chat/services/multiplex_connection.dart';
 import 'package:chuk_chat/services/provider_resolution_service.dart';
 import 'package:chuk_chat/services/multiplex_session.dart';
@@ -87,6 +89,8 @@ class WebSocketChatService {
     String? toolChoice,
     bool regenerate = false,
     bool modelSelectionCaptured = false,
+    String? requestPurpose,
+    int? requestPass,
   }) {
     if (usesAgentsTransport(chatId)) {
       return AgentsChatTransport.sendStreamingChat(
@@ -121,6 +125,8 @@ class WebSocketChatService {
       chatId: chatId,
       tools: tools,
       toolChoice: toolChoice,
+      requestPurpose: requestPurpose,
+      requestPass: requestPass,
     );
   }
 
@@ -138,6 +144,8 @@ class WebSocketChatService {
     String? chatId,
     List<Map<String, dynamic>>? tools,
     String? toolChoice,
+    String? requestPurpose,
+    int? requestPass,
   }) async* {
     // One connection carries everything. When [chatId] is supplied the
     // multiplex routes through [MultiplexSession.chatForChat] (single
@@ -170,6 +178,8 @@ class WebSocketChatService {
       chatId: chatId,
       tools: tools,
       toolChoice: toolChoice,
+      requestPurpose: requestPurpose,
+      requestPass: requestPass,
     );
   }
 
@@ -190,6 +200,8 @@ class WebSocketChatService {
     String? chatId,
     List<Map<String, dynamic>>? tools,
     String? toolChoice,
+    String? requestPurpose,
+    int? requestPass,
   }) async* {
     // Last guard: the Auto marker is the reader's choice, not a provider the
     // server knows. Every send path resolves it earlier; one that forgot
@@ -211,6 +223,16 @@ class WebSocketChatService {
       'provider_slug': providerSlug,
       'max_tokens': maxTokens,
       'temperature': temperature,
+      // Request metadata for the server (cache affinity, logs). The server
+      // strips it before the upstream call. A hash of the chat id only,
+      // nothing about the user.
+      'x_chuk': xChukMetadata(
+        purpose:
+            requestPurpose ??
+            (toolChoice == 'none' ? 'final' : 'chat'),
+        chatId: chatId,
+        pass: requestPass,
+      ),
     };
 
     // Native tool calling: OpenAI-format function defs the model may call this
@@ -229,8 +251,26 @@ class WebSocketChatService {
       payload['message_cache_id'] = registry.register(message);
     }
 
+    // The turn's own images, loaded the same way as history images (same
+    // bytes, same type label), so the next turn's history repeats them.
+    final base64Images = images == null || images.isEmpty
+        ? const <String>[]
+        : await _convertImagesToBase64(images);
+
     if (history != null && history.isNotEmpty) {
-      payload['history'] = _foldHistoryRefs(history, registry);
+      // History images: provider limits, oldest cut first in large steps,
+      // then loaded (ImageBudget keeps the history byte-stable).
+      final budgeted = await ImageBudget.apply(
+        history,
+        limits: ImageBudget.limitsFor(modelId),
+        textOnly:
+            ModelCapabilitiesService.supportsImageInputKnownSync(modelId) ==
+            false,
+        pendingCount: base64Images.length,
+        pendingChars: base64Images.fold<int>(0, (sum, i) => sum + i.length),
+        resolve: ChatHistoryBuilder.resolveImageDataUrl,
+      );
+      payload['history'] = _foldHistoryRefs(budgeted, registry);
     }
     if (systemPrompt != null && systemPrompt.isNotEmpty) {
       payload['system_prompt'] = systemPrompt;
@@ -238,38 +278,35 @@ class WebSocketChatService {
     if (reasoningEffort != null) {
       payload['reasoning_effort'] = reasoningEffort;
     }
-    if (images != null && images.isNotEmpty) {
-      final base64Images = await _convertImagesToBase64(images);
-      if (base64Images.isNotEmpty) {
-        // Images are the heaviest payload and, because history is text-only,
-        // get re-sent on every tool pass. Send each in full ONCE (tagged with a
-        // parallel cache id so the server stores it), then reference it by id on
-        // later passes — turning megabytes of repeated base64 into a short ref.
-        final fullImages = <String>[];
-        final fullImageIds = <String>[];
-        final imageRefs = <String>[];
-        for (final img in base64Images) {
-          final ref = registry.refFor(img);
-          if (ref != null) {
-            imageRefs.add(ref);
-          } else {
-            fullImages.add(img);
-            fullImageIds.add(registry.register(img));
-          }
+    if (base64Images.isNotEmpty) {
+      // Images are the heaviest payload and, because history is text-only,
+      // get re-sent on every tool pass. Send each in full ONCE (tagged with a
+      // parallel cache id so the server stores it), then reference it by id on
+      // later passes — turning megabytes of repeated base64 into a short ref.
+      final fullImages = <String>[];
+      final fullImageIds = <String>[];
+      final imageRefs = <String>[];
+      for (final img in base64Images) {
+        final ref = registry.refFor(img);
+        if (ref != null) {
+          imageRefs.add(ref);
+        } else {
+          fullImages.add(img);
+          fullImageIds.add(registry.register(img));
         }
-        if (fullImages.isNotEmpty) {
-          payload['images'] = fullImages;
-          payload['image_cache_ids'] = fullImageIds;
-        }
-        if (imageRefs.isNotEmpty) {
-          payload['image_cache_refs'] = imageRefs;
-        }
-        if (kDebugMode) {
-          debugPrint(
-            '🖼️ [Multiplex] images: ${fullImages.length} full + '
-            '${imageRefs.length} cached refs',
-          );
-        }
+      }
+      if (fullImages.isNotEmpty) {
+        payload['images'] = fullImages;
+        payload['image_cache_ids'] = fullImageIds;
+      }
+      if (imageRefs.isNotEmpty) {
+        payload['image_cache_refs'] = imageRefs;
+      }
+      if (kDebugMode) {
+        debugPrint(
+          '🖼️ [Multiplex] images: ${fullImages.length} full + '
+          '${imageRefs.length} cached refs',
+        );
       }
     }
 
@@ -367,22 +404,14 @@ class WebSocketChatService {
     final base64Images = <String>[];
 
     for (final path in imagePaths) {
-      try {
-        // Check if already a Base64 data URL (legacy support)
-        if (path.startsWith('data:image/')) {
-          base64Images.add(path);
-          continue;
-        }
-
-        // Storage path - download, decrypt, and convert to Base64
-        final bytes = await ImageStorageService.downloadAndDecryptImage(path);
-        final base64 = base64Encode(bytes);
-        base64Images.add('data:image/jpeg;base64,$base64');
-      } catch (e) {
-        if (kDebugMode) {
-          debugPrint('⚠️ Failed to convert image to Base64: $path - $e');
-        }
-        // Skip failed images
+      // A data URL as it is; a storage path downloaded, decrypted and
+      // labelled with its real type. Labelling every image image/jpeg made
+      // the turn's bytes differ from the same image in the next history.
+      final dataUrl = await ChatHistoryBuilder.resolveImageDataUrl(path);
+      if (dataUrl != null) {
+        base64Images.add(dataUrl);
+      } else if (kDebugMode) {
+        debugPrint('⚠️ Failed to convert an image to Base64');
       }
     }
 

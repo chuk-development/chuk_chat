@@ -12,10 +12,10 @@ class UsageLogEntry {
     required this.totalCostUsd,
     required this.creditsDeductedEur,
     required this.createdAt,
-    this.cacheReadTokens = 0,
-    this.cacheWriteTokens = 0,
-    this.cacheReadCostUsd = 0,
-    this.cacheWriteCostUsd = 0,
+    this.cacheReadTokens,
+    this.cacheWriteTokens,
+    this.cacheReadCostUsd,
+    this.cacheWriteCostUsd,
     this.promptCostUsd = 0,
     this.completionCostUsd = 0,
   });
@@ -28,16 +28,20 @@ class UsageLogEntry {
   final double totalCostUsd;
   final double creditsDeductedEur;
   final DateTime? createdAt;
-  final int cacheReadTokens;
-  final int cacheWriteTokens;
-  final double cacheReadCostUsd;
-  final double cacheWriteCostUsd;
+
+  /// Cache read / write counts and costs. Null when the provider did not
+  /// report them: unknown is not the same as 0 and is shown as "—".
+  final int? cacheReadTokens;
+  final int? cacheWriteTokens;
+  final double? cacheReadCostUsd;
+  final double? cacheWriteCostUsd;
   final double promptCostUsd;
   final double completionCostUsd;
 
   int get textTokens => promptTokens + completionTokens;
 
-  int get cachedTokens => cacheReadTokens + cacheWriteTokens;
+  /// Read + write, null when neither is known.
+  int? get cachedTokens => sumKnownInts([cacheReadTokens, cacheWriteTokens]);
 
   bool get isMediaRequest =>
       promptTokens == 0 && completionTokens == 0 && totalTokens > 0;
@@ -59,10 +63,10 @@ class UsageLogEntry {
       totalCostUsd: _parseDouble(row['total_cost_usd']),
       creditsDeductedEur: _parseDouble(row['credits_deducted_eur']),
       createdAt: _parseDateTime(row['created_at']),
-      cacheReadTokens: _parseInt(row['cache_read_tokens']),
-      cacheWriteTokens: _parseInt(row['cache_write_tokens']),
-      cacheReadCostUsd: _parseDouble(row['cache_read_cost_usd']),
-      cacheWriteCostUsd: _parseDouble(row['cache_write_cost_usd']),
+      cacheReadTokens: _parseNullableInt(row['cache_read_tokens']),
+      cacheWriteTokens: _parseNullableInt(row['cache_write_tokens']),
+      cacheReadCostUsd: _parseNullableDouble(row['cache_read_cost_usd']),
+      cacheWriteCostUsd: _parseNullableDouble(row['cache_write_cost_usd']),
       promptCostUsd: _parseDouble(row['prompt_cost_usd']),
       completionCostUsd: _parseDouble(row['completion_cost_usd']),
     );
@@ -107,10 +111,10 @@ class UsageOverview {
     required this.totalCreditsAllocated,
     required this.creditsRemaining,
     required this.creditsLastRenewedPeriod,
-    this.totalCacheReadTokens = 0,
-    this.totalCacheWriteTokens = 0,
-    this.totalCacheReadCostUsd = 0,
-    this.totalCacheWriteCostUsd = 0,
+    this.totalCacheReadTokens,
+    this.totalCacheWriteTokens,
+    this.totalCacheReadCostUsd,
+    this.totalCacheWriteCostUsd,
     this.totalPromptCostUsd = 0,
     this.totalCompletionCostUsd = 0,
   });
@@ -126,10 +130,11 @@ class UsageOverview {
   final double totalCostUsd;
   final double totalCreditsEur;
 
-  final int totalCacheReadTokens;
-  final int totalCacheWriteTokens;
-  final double totalCacheReadCostUsd;
-  final double totalCacheWriteCostUsd;
+  /// Sums over the entries that report the value; null when none does.
+  final int? totalCacheReadTokens;
+  final int? totalCacheWriteTokens;
+  final double? totalCacheReadCostUsd;
+  final double? totalCacheWriteCostUsd;
 
   final double totalPromptCostUsd;
   final double totalCompletionCostUsd;
@@ -179,10 +184,18 @@ class UsageLogsService {
       int totalMediaRequests = 0;
       double totalCostUsd = 0;
       double totalCreditsEur = 0;
-      int totalCacheReadTokens = 0;
-      int totalCacheWriteTokens = 0;
-      double totalCacheReadCostUsd = 0;
-      double totalCacheWriteCostUsd = 0;
+      final int? totalCacheReadTokens = sumKnownInts(
+        entries.map((e) => e.cacheReadTokens),
+      );
+      final int? totalCacheWriteTokens = sumKnownInts(
+        entries.map((e) => e.cacheWriteTokens),
+      );
+      final double? totalCacheReadCostUsd = sumKnownDoubles(
+        entries.map((e) => e.cacheReadCostUsd),
+      );
+      final double? totalCacheWriteCostUsd = sumKnownDoubles(
+        entries.map((e) => e.cacheWriteCostUsd),
+      );
       double totalPromptCostUsd = 0;
       double totalCompletionCostUsd = 0;
 
@@ -195,10 +208,6 @@ class UsageLogsService {
         }
         totalCostUsd += entry.totalCostUsd;
         totalCreditsEur += entry.creditsDeductedEur;
-        totalCacheReadTokens += entry.cacheReadTokens;
-        totalCacheWriteTokens += entry.cacheWriteTokens;
-        totalCacheReadCostUsd += entry.cacheReadCostUsd;
-        totalCacheWriteCostUsd += entry.cacheWriteCostUsd;
         totalPromptCostUsd += entry.promptCostUsd;
         totalCompletionCostUsd += entry.completionCostUsd;
       }
@@ -405,6 +414,30 @@ class _MutableModelSummary {
 
     return bestProvider;
   }
+}
+
+/// The sum of the known values; null when every value is null (unknown).
+int? sumKnownInts(Iterable<int?> values) {
+  int? sum;
+  for (final value in values) {
+    if (value != null) sum = (sum ?? 0) + value;
+  }
+  return sum;
+}
+
+/// The sum of the known values; null when every value is null (unknown).
+double? sumKnownDoubles(Iterable<double?> values) {
+  double? sum;
+  for (final value in values) {
+    if (value != null) sum = (sum ?? 0) + value;
+  }
+  return sum;
+}
+
+int? _parseNullableInt(dynamic value) {
+  if (value == null) return null;
+  if (value is String && int.tryParse(value) == null) return null;
+  return _parseInt(value);
 }
 
 int _parseInt(dynamic value) {

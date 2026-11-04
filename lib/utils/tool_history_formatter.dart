@@ -1,12 +1,13 @@
 import 'dart:convert';
 
+import 'package:chuk_chat/services/prompt_cache/prompt_context.dart';
 import 'package:chuk_chat/utils/tool_sanitizer.dart';
 import 'package:chuk_chat/voice/voice_playback_context.dart';
 
-// Per-result and per-message caps for prior tool-call context. Past tool
-// results bloat fast (search results often >10k chars each), so cap
-// aggressively while still preserving enough to be useful as context.
-const int _maxResultChars = 4000;
+// Per-message cap for prior tool-call context. Past tool results bloat fast
+// (search results often >10k chars each). Each result is cut to the same
+// head + tail as in the tool loop ([capToolResultForModel]); both caps only
+// depend on the stored message, so the block is the same on every turn.
 const int _maxTotalChars = 16000;
 
 /// Builds the assistant `content` string for one stored message, optionally
@@ -78,10 +79,7 @@ String _buildPreviousToolResultsBlock(String? toolCallsJson) {
     final args = raw['arguments'];
     final argsStr = args is Map ? jsonEncode(args) : '';
 
-    final sanitized = sanitizeResultForModel(result);
-    final truncated = sanitized.length > _maxResultChars
-        ? '${sanitized.substring(0, _maxResultChars)}... [truncated]'
-        : sanitized;
+    final truncated = capToolResultForModel(sanitizeResultForModel(result));
 
     final line = argsStr.isEmpty
         ? '[$name] result: $truncated'

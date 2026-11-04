@@ -437,11 +437,38 @@ class ToolExecutor {
   /// always knows they exist and can instruct the user to connect.  The tool
   /// executor returns a helpful "please connect" message when an unconnected
   /// tool is called.
+  /// The enabled tools in a fixed order: built-ins in the order of
+  /// `builtinTools` (tool_registry.dart), then every other tool (MCP,
+  /// Chukdoo) by name. The order is part of the request prefix (`tools[]`):
+  /// map insertion order changed when an MCP server reconnected and
+  /// re-registered its tools, and the provider's prompt cache then missed on
+  /// the whole history.
   List<ClientTool> get allTools {
-    return _tools.values.where((tool) {
+    final enabled = _tools.values.where((tool) {
       if (tool.name == 'find_tools') return true; // Always available
       return isToolEnabled(tool.name);
     }).toList();
+    enabled.sort(compareToolsForPrompt);
+    return enabled;
+  }
+
+  static Map<String, int>? _builtinOrder;
+
+  /// The fixed tool order of [allTools].
+  @visibleForTesting
+  static int compareToolsForPrompt(ClientTool a, ClientTool b) {
+    final order = _builtinOrder ??= <String, int>{
+      for (var i = 0; i < registry.builtinTools.length; i++)
+        registry.builtinTools[i].name: i,
+    };
+    final ai = a.type == ToolType.builtin ? order[a.name] : null;
+    final bi = b.type == ToolType.builtin ? order[b.name] : null;
+    if (ai != null && bi != null) return ai.compareTo(bi);
+    if (ai != null) return -1;
+    if (bi != null) return 1;
+    final byType = a.type.index.compareTo(b.type.index);
+    if (byType != 0) return byType;
+    return a.name.compareTo(b.name);
   }
 
   /// Check if a specific tool is available (enabled + connected).
@@ -1108,15 +1135,13 @@ class ToolExecutor {
   /// Activates a skill.
   ///
   /// Deliberately returns a short acknowledgement rather than the skill body.
-  /// The body is injected into the NEXT system prompt rebuild (which the tool
-  /// loop performs every round anyway) under `## ACTIVE SKILL`. Returning it
-  /// here instead would look simpler but is broken: tool results are truncated
-  /// to 4000 chars when they are replayed into the next user turn
-  /// (`tool_history_formatter.dart`), so a skill would silently lose most of
-  /// itself as soon as the user sent another message.
-  ///
-  /// This mirrors `find_tools`, which also returns names and lets the prompt
-  /// rebuild carry the full payload.
+  /// The tool loop sends the body once, as a `<skill_content>` user message
+  /// right after this round's tool results, and stores it with the turn
+  /// (prompt_context.dart). Returning it here instead would look simpler but
+  /// is broken: tool results are capped to a head and a tail when they go
+  /// into the history, so a skill would lose most of itself. It never goes
+  /// into the system prompt either: a system prompt that changes mid-chat
+  /// misses the prompt cache on the whole history.
   String _executeSkill(Map<String, dynamic> args) {
     final requested = (args['name'] as String? ?? '').trim();
     if (requested.isEmpty) {
@@ -1142,8 +1167,9 @@ class ToolExecutor {
       // First line is the scrape target, mirroring find_tools' `TOOL: <name>`.
       ..writeln('SKILL: ${skill.name}')
       ..writeln(
-        'Loaded. Full instructions are now in your system prompt under '
-        '"## ACTIVE SKILL: ${skill.name}".',
+        'Loaded. Its full instructions are in the '
+        '<skill_content name="${skill.name}"> message of this conversation '
+        '(it follows these tool results the first time).',
       )
       // The CONTINUATION block tells the model to give a final answer once
       // tool results satisfy the request. After a bare ack a model can read

@@ -137,8 +137,9 @@ void main() {
         'toolCalls': toolCallsJson,
       });
 
-      expect(result, contains('[truncated]'));
-      expect(result!.length, lessThan(longResult.length + 1000));
+      // Head + tail in code points, the same cut as the tool loop.
+      expect(result, contains('[... tool result middle pruned ...]'));
+      expect(result!.length, lessThan(longResult.length));
     });
 
     test('includes reasoning when includeReasoning=true', () {
