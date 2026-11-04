@@ -129,10 +129,17 @@ def child_env(
 #: Bash that unsets every exported credential-looking or internal name. Runs
 #: inside the login shell that seeds the session snapshot (``init_session``),
 #: so a profile that exports an API key does not put it into every command.
+#:
+#: Bash 3.2 compatible (the macOS ``/bin/bash``): no ``${var^^}``, which is
+#: bash 4 and fails there with "bad substitution". ``nocasematch`` (bash 3.1)
+#: makes the ``case`` match without case, with no fork per name; the shell's
+#: own setting is put back afterwards.
 SCRUB_SNIPPET = (
+    "__cw_nc=0; shopt -q nocasematch && __cw_nc=1; shopt -s nocasematch; "
     "for __cw_n in $(compgen -e); do "
-    "case \"${__cw_n^^}\" in "
+    "case \"$__cw_n\" in "
     "*KEY*|*TOKEN*|*SECRET*|*PASSW*|*CREDENTIAL*|*AUTH*|*COOKIE*|*SESSION*|"
     "AGENTS_*|CHUK_*|COWORK_*|CLAUDE*) unset -v \"$__cw_n\" 2>/dev/null;; "
-    "esac; done; unset -v __cw_n"
+    "esac; done; "
+    "[ \"$__cw_nc\" = 1 ] || shopt -u nocasematch; unset -v __cw_n __cw_nc"
 )

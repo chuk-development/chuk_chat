@@ -114,6 +114,23 @@ def test_the_report_prints_the_fix_for_a_failure():
     assert "-> build it" in body
 
 
+def test_the_report_prints_the_hint_of_a_passing_check(monkeypatch):
+    import chuk_agents_sandbox.bwrap as bw
+
+    monkeypatch.delenv(bw.ISOLATION_ENV_VAR, raising=False)
+    monkeypatch.setattr(bw, "bwrap_usable", lambda refresh=False: True)
+    lines: list[str] = []
+    code = doctor.print_report(
+        [doctor.check_local_isolation(), doctor.Check("estop", True, "clear")],
+        out=lambda *a: lines.append(" ".join(str(x) for x in a)),
+    )
+    body = "\n".join(lines)
+    assert code == 0
+    assert "-> set AGENTS_LOCAL_ISOLATION=bwrap" in body
+    # A passing check without a hint prints no arrow line.
+    assert body.count("->") == 1
+
+
 @pytest.mark.parametrize("quick", [True, False])
 def test_quick_skips_the_container_probe(monkeypatch, tmp_path, quick):
     monkeypatch.setattr(

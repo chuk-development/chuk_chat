@@ -17,6 +17,7 @@ class _FakeServer {
   final HttpServer _server;
   final List<WebSocket> _sockets = <WebSocket>[];
   final List<String> cancelled = <String>[];
+  final List<String> tools = <String>[];
   List<Map<String, dynamic>> Function(String reqId) chatReply = (_) => [];
 
   static Future<_FakeServer> start() async {
@@ -45,6 +46,8 @@ class _FakeServer {
               }
             case 'cancel':
               cancelled.add(frame['req_id'] as String);
+            case 'tool':
+              tools.add(frame['req_id'] as String);
             default:
               break;
           }
@@ -180,6 +183,33 @@ void main() {
       expect(e.detail, 'tool call timed out after 200ms');
       await Future<void>.delayed(const Duration(milliseconds: 100));
       expect(server.cancelled, hasLength(1));
+    },
+  );
+
+  test(
+    'a tool call that times out during the handshake is never sent',
+    () async {
+      final Completer<String?> token = Completer<String?>();
+      final MultiplexConnection slow = MultiplexConnection(
+        baseUrl: server.baseUrl,
+        accessTokenProvider: () => token.future,
+      );
+      addTearDown(slow.dispose);
+      Object? failure;
+      final Future<void> call = slow
+          .tool(
+            tool: 'brave_search',
+            payload: const {},
+            timeout: const Duration(milliseconds: 50),
+          )
+          .then<void>((_) {}, onError: (Object e) => failure = e);
+      await call;
+      expect((failure! as MultiplexException).code, 'timeout');
+      // The handshake finishes only after the caller gave up.
+      token.complete('token');
+      await slow.ensureReady();
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      expect(server.tools, isEmpty);
     },
   );
 

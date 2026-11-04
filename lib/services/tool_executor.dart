@@ -499,10 +499,15 @@ class ToolExecutor {
     'generate_image': Duration(seconds: 180),
   };
 
-  /// The limit for [toolName]; null for MCP tools, which keep their own
-  /// 60-second limit in the MCP client.
-  Duration? timeoutFor(String toolName) {
-    if (_tools[toolName]?.type == ToolType.mcp) return null;
+  /// Outer limit for MCP tools. The MCP client's own 60-second timeout
+  /// covers only sending the request, not reading the reply (a plain body or
+  /// an SSE stream that never sends the matching event). This limit sits a
+  /// little above it, so the client's clearer error still wins when it fires.
+  static const Duration mcpToolTimeout = Duration(seconds: 75);
+
+  /// The limit for [toolName].
+  Duration timeoutFor(String toolName) {
+    if (_tools[toolName]?.type == ToolType.mcp) return mcpToolTimeout;
     return _toolTimeouts[toolName] ?? defaultToolTimeout;
   }
 

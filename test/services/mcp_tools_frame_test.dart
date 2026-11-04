@@ -144,4 +144,32 @@ void main() {
     expect(applied, 1);
     expect((await McpService.store.load()).single.tools, isEmpty);
   });
+
+  test('a host error never keeps the connector API key', () async {
+    await McpService.store.upsert(
+      const McpConnection(
+        id: 'svc',
+        name: 'Service',
+        url: 'https://svc.example/mcp',
+        auth: McpAuth.apiKey,
+      ),
+    );
+    await McpService.store.setApiCredentials('svc', <String, String>{
+      'service_token': 'secret123value',
+    });
+    await McpService.applyToolsFrame(<String, dynamic>{
+      'servers': <Map<String, dynamic>>[
+        {
+          'id': 'svc',
+          'connected': false,
+          'tools': [],
+          'error':
+              'GET https://svc.example/mcp?service_token=secret123value: 500',
+        },
+      ],
+    });
+    final String error = (await McpService.store.load()).single.lastError!;
+    expect(error, isNot(contains('secret123value')));
+    expect(error, contains('service_token=[redacted]'));
+  });
 }

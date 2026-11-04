@@ -3,7 +3,11 @@ the host's credentials, and a timeout is SIGTERM first, SIGKILL later."""
 
 from __future__ import annotations
 
+import os
+import subprocess
 import time
+
+import pytest
 
 from chuk_agents_runtime import child_env as rt_child_env
 from chuk_agents_runtime.environment import LocalEnvironment
@@ -46,3 +50,34 @@ def test_the_two_copies_agree():
     }
     assert not rt_child_env.is_allowed("GH_TOKEN")
     assert rt_child_env.is_allowed("LC_ALL")
+
+
+@pytest.mark.parametrize("module", ["chuk_agents_runtime.child_env"])
+def test_the_scrub_snippet_runs_on_bash_3_2(module):
+    """macOS ships bash 3.2: no ``${var^^}``. The scrub must still drop names
+    in any case, keep the rest, and leave ``nocasematch`` as it found it."""
+    import importlib
+
+    snippet = importlib.import_module(module).SCRUB_SNIPPET
+    assert "^^" not in snippet and ",," not in snippet
+    script = (
+        f"{snippet}; "
+        'echo "lower=${my_api_key-unset} mixed=${Github_Token-unset} '
+        'keep=${KEEP_ME-unset}"; shopt -q nocasematch && echo nc=on || echo nc=off'
+    )
+    env = {
+        "PATH": os.environ["PATH"],
+        "my_api_key": "s1",
+        "Github_Token": "s2",
+        "KEEP_ME": "yes",
+    }
+    out = subprocess.run(
+        ["bash", "--norc", "--noprofile", "-c", script],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=True,
+    )
+    assert out.stderr == ""
+    assert "lower=unset mixed=unset keep=yes" in out.stdout
+    assert "nc=off" in out.stdout

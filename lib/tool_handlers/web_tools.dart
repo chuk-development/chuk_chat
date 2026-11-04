@@ -181,6 +181,13 @@ Future<_CrawlContext> _crawlForContext({
 /// Set `type: "images"` to get real photo URLs instead of web pages —
 /// pass one of the returned image_url values to `fetch_image` to display
 /// the photo inline. Never fall back to generate_image* for real subjects.
+/// The first lines of a search result: [heading], then the untrusted-content
+/// notice, then a blank line. Titles, descriptions and snippets below it come
+/// from external sites and can carry text written to steer the model.
+/// The heading stays on the first line, so the source chips still parse.
+String searchResultsHeader(String heading) =>
+    '$heading\n$kUntrustedWebContentNotice\n\n';
+
 Future<String> executeWebSearch({
   required String? serverHttpUrl,
   required Map<String, String> serverHeaders,
@@ -297,7 +304,9 @@ Future<String> executeWebSearch({
       return 'No results found for: $query';
     }
 
-    final buffer = StringBuffer('Search results for "$query":\n\n');
+    final buffer = StringBuffer(
+      searchResultsHeader('Search results for "$query":'),
+    );
     final topUrlToTitle = <String, String>{};
     for (int i = 0; i < results.length && i < searchCount; i++) {
       final r = results[i];
@@ -464,7 +473,9 @@ Future<String> executeImageSearch({
       return 'No image results found for: $query';
     }
 
-    final buffer = StringBuffer('Image search results for "$query":\n\n');
+    final buffer = StringBuffer(
+      searchResultsHeader('Image search results for "$query":'),
+    );
     for (int i = 0; i < results.length && i < searchCount; i++) {
       final r = results[i];
       if (r is! Map) continue;
@@ -596,7 +607,9 @@ Future<String> executeNewsSearch({
       return 'No news results found for: $query';
     }
 
-    final buffer = StringBuffer('News results for "$query":\n\n');
+    final buffer = StringBuffer(
+      searchResultsHeader('News results for "$query":'),
+    );
     for (int i = 0; i < results.length && i < searchCount; i++) {
       final r = results[i];
       if (r is! Map) continue;

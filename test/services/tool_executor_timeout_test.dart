@@ -2,6 +2,7 @@
 
 import 'dart:async';
 
+import 'package:chuk_chat/models/client_tool.dart';
 import 'package:chuk_chat/services/tool_call_handler.dart';
 import 'package:chuk_chat/services/tool_executor.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -30,7 +31,7 @@ void main() {
     expect(result.isError, isFalse);
   });
 
-  test('no limit (MCP) waits for the tool', () async {
+  test('no limit waits for the tool', () async {
     final result = await ToolExecutor.runWithTimeout(() async {
       await Future<void>.delayed(const Duration(milliseconds: 30));
       return const ToolExecutionResult(output: 'late', isError: false);
@@ -43,13 +44,29 @@ void main() {
     expect(ToolExecutor.defaultToolTimeout, const Duration(seconds: 120));
     expect(executor.timeoutFor('calculate'), ToolExecutor.defaultToolTimeout);
     expect(
-      executor.timeoutFor('fetch_files')!,
+      executor.timeoutFor('fetch_files'),
       greaterThan(const Duration(minutes: 3)),
     );
     expect(
-      executor.timeoutFor('generate_image')!,
+      executor.timeoutFor('generate_image'),
       greaterThan(const Duration(seconds: 120)),
     );
+  });
+
+  test('MCP tools get a finite outer limit above the client 60 s', () {
+    final executor = ToolExecutor()
+      ..registerTool(
+        ClientTool(
+          name: 'mcp_svc__search',
+          description: 'Svc: search',
+          parameters: const <String, dynamic>{},
+          type: ToolType.mcp,
+        ),
+      );
+    final limit = executor.timeoutFor('mcp_svc__search');
+    expect(limit, ToolExecutor.mcpToolTimeout);
+    expect(limit, greaterThan(const Duration(seconds: 60)));
+    expect(limit, lessThan(ToolExecutor.defaultToolTimeout));
   });
 
   test('execute still runs a normal tool', () async {

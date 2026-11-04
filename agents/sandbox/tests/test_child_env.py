@@ -343,3 +343,34 @@ def test_docker_exec_gets_plain_output_vars_and_secret_names_only(tmp_path, monk
     argv = captured["argv"]
     assert "NO_COLOR=1" in argv and "TERM=dumb" in argv
     assert "MY_API_KEY" in argv and "MY_API_KEY=v" not in " ".join(argv)
+
+
+@pytest.mark.parametrize("module", ["chuk_agents_sandbox.child_env"])
+def test_the_scrub_snippet_runs_on_bash_3_2(module):
+    """macOS ships bash 3.2: no ``${var^^}``. The scrub must still drop names
+    in any case, keep the rest, and leave ``nocasematch`` as it found it."""
+    import importlib
+
+    snippet = importlib.import_module(module).SCRUB_SNIPPET
+    assert "^^" not in snippet and ",," not in snippet
+    script = (
+        f"{snippet}; "
+        'echo "lower=${my_api_key-unset} mixed=${Github_Token-unset} '
+        'keep=${KEEP_ME-unset}"; shopt -q nocasematch && echo nc=on || echo nc=off'
+    )
+    env = {
+        "PATH": os.environ["PATH"],
+        "my_api_key": "s1",
+        "Github_Token": "s2",
+        "KEEP_ME": "yes",
+    }
+    out = subprocess.run(
+        ["bash", "--norc", "--noprofile", "-c", script],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=True,
+    )
+    assert out.stderr == ""
+    assert "lower=unset mixed=unset keep=yes" in out.stdout
+    assert "nc=off" in out.stdout
