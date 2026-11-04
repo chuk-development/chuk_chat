@@ -199,6 +199,12 @@ class ChatMessage {
   /// skills loaded in this turn. Rebuilding the history from it gives the
   /// bytes that were sent, so the provider's prompt cache keeps hitting. Never
   /// shown. An older app ignores the field.
+  ///
+  /// Bounded in storage (`PromptContextLedger.storedContextOf`): the snapshot
+  /// is stored once per chat, a later change only as the fields that changed
+  /// (`stateDiff`), a skill body the transcript holds is not stored twice,
+  /// and a transcript over the replay budget (never replayed) keeps only its
+  /// size and skill names. Older, unbounded values still load.
   final String? modelContext;
 
   /// [generationMs] as a duration, or null when it was never recorded or
