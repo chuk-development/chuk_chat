@@ -80,7 +80,7 @@ jobs:
 
       - name: Base image
         id: base
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: agents/sandbox/docker
           file: agents/sandbox/docker/Dockerfile
@@ -97,7 +97,7 @@ jobs:
       # produced.
       - name: Browser image
         if: inputs.browser != false
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: agents/sandbox/docker
           file: agents/sandbox/docker/Dockerfile.browser
