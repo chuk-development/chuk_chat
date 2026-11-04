@@ -18,6 +18,7 @@ import 'package:chuk_chat/services/tool_image_result_service.dart';
 import 'package:chuk_chat/services/tool_result_cache_registry.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/services/streaming_foreground_service.dart';
 import 'package:chuk_chat/services/round_content_block_service.dart';
 import 'package:chuk_chat/models/chat_model.dart';
@@ -102,6 +103,13 @@ class StreamingMessageHandler {
   onStreamTick;
 
   Function()? onPaymentRequired;
+
+  /// The send failed before the server accepted it (no frame came back) on
+  /// a network error, after the pass's own reconnect retries. The host
+  /// moves the message into the offline outbox and answers true; then this
+  /// handler only ends the turn, without an error text in the chat
+  /// (docs/OFFLINE_SEND.md). False or null: the normal error path runs.
+  Future<bool> Function(String chatId, int placeholderIndex)? onSendNotAccepted;
 
   bool _isStreaming = false;
   bool _isSending = false;
@@ -1052,7 +1060,7 @@ class StreamingMessageHandler {
           _activeToolLoopFuture = completionFuture;
           unawaited(completionFuture);
         },
-        onError: (errorMessage, {String? code}) {
+        onError: (errorMessage, {String? code}) async {
           // Read (and clear) the text this pass had streamed when it was cut
           // off, before any early return, so a stale copy never leaks into a
           // later error of the same chat.
@@ -1149,6 +1157,26 @@ class StreamingMessageHandler {
           }
 
           finalizeStaleToolState();
+
+          // Never reached the server: queue it instead of failing. Only the
+          // first pass of a fresh send; a regenerate or continue, or a later
+          // tool pass, is not a message the outbox can replay.
+          if (currentPass == 0 &&
+              !regenerate &&
+              continuePriorText == null &&
+              !ChatOrigin.isAgentsThread(chatId) &&
+              !_streamingManager.serverAccepted(chatId) &&
+              (isReconnectable ||
+                  NetworkStatusService.isNetworkError(errorMessage)) &&
+              onSendNotAccepted != null &&
+              await onSendNotAccepted!(chatId, placeholderIndex)) {
+            _markStreamFinalized();
+            _isStreaming = false;
+            _isSending = false;
+            onUpdateUI?.call();
+            unawaited(_releaseForegroundKeepAlive());
+            return;
+          }
 
           if (errorMessage == '__PAYMENT_REQUIRED__') {
             final paymentMessage =
@@ -1280,6 +1308,20 @@ class StreamingMessageHandler {
       if (_isDisposed) return;
       if (kDebugMode) {
         debugPrint('Failed to start stream: $error');
+      }
+      if (!regenerate &&
+          continuePriorText == null &&
+          !ChatOrigin.isAgentsThread(activeChatId) &&
+          NetworkStatusService.isNetworkError(error) &&
+          onSendNotAccepted != null &&
+          await onSendNotAccepted!(activeChatId, placeholderIndex)) {
+        finalizeStaleToolState();
+        _markStreamFinalized();
+        _isStreaming = false;
+        _isSending = false;
+        onUpdateUI?.call();
+        await _releaseForegroundKeepAlive();
+        return;
       }
       const failureMessage = 'Failed to start streaming. Please try again.';
       if (onMessageFinalize != null) {

@@ -110,11 +110,18 @@ class _EncodeArgs {
 /// The v3 payload JSON of [messages], encoded off the UI isolate when the
 /// chat is long. The one encoding for the cloud, the cache and the digests
 /// that compare them.
+///
+/// [forCloud]: the copy for `encrypted_chats`. A user message still in the
+/// offline outbox (`pending`/`failed`) loses its status and queue id there,
+/// so other devices see a plain message instead of one they cannot send
+/// (docs/OFFLINE_SEND.md). The local cache keeps the real state.
 Future<String> encodeChatPayloadAsync(
   List<ChatMessage> messages,
-  String? customName,
-) async {
+  String? customName, {
+  bool forCloud = false,
+}) async {
   final maps = messages.map((m) => m.toJson()).toList();
+  if (forCloud) neutralizeOutboxState(maps);
   var chars = 0;
   for (final m in messages) {
     chars +=
@@ -128,6 +135,51 @@ Future<String> encodeChatPayloadAsync(
     return encodeChatPayload(maps, customName: customName);
   }
   return compute(_encodeChatPayloadIsolate, _EncodeArgs(maps, customName));
+}
+
+/// The two copies of a chat's payload: [local] for the cache, with the
+/// outbox state, and [cloud] for `encrypted_chats`, with it neutralized
+/// ([encodeChatPayloadAsync] `forCloud`). They are one string when no user
+/// message waits in the outbox. A cloud write must never put the [cloud]
+/// copy into the cache: the waiting bubbles would lose their queue id.
+Future<({String local, String cloud})> encodeChatPayloadPair(
+  List<ChatMessage> messages,
+  String? customName,
+) async {
+  final String local = await encodeChatPayloadAsync(messages, customName);
+  if (!hasOutboxState(messages)) return (local: local, cloud: local);
+  final String cloud = await encodeChatPayloadAsync(
+    messages,
+    customName,
+    forCloud: true,
+  );
+  return (local: local, cloud: cloud);
+}
+
+/// Whether a user message in [messages] waits in the offline outbox
+/// (`pending` or `failed`), so its cloud copy differs from the local one.
+bool hasOutboxState(List<ChatMessage> messages) => messages.any(
+  (m) =>
+      m.role == 'user' &&
+      (m.status == ChatMessageStatus.pending ||
+          m.status == ChatMessageStatus.failed),
+);
+
+/// Strips the outbox state from user messages in [maps] (in place): a
+/// `pending` or `failed` user message becomes a plain message. Old clients
+/// read that as a sent message, which is what they did before the outbox.
+void neutralizeOutboxState(List<Map<String, dynamic>> maps) {
+  for (final m in maps) {
+    final role = m['role'] ?? m['sender'];
+    if (role != 'user') continue;
+    final status = m['status'];
+    if (status == 'pending' || status == 'failed') {
+      m
+        ..remove('status')
+        ..remove('queueId')
+        ..remove('lastError');
+    }
+  }
 }
 
 /// [json] (a payload of any version) as a v3 payload JSON. A v3 input is

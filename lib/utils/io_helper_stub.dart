@@ -10,6 +10,8 @@ class File {
   Future<bool> exists() async => false;
   bool existsSync() => false;
   Future<int> length() async => 0;
+  Future<DateTime> lastModified() async =>
+      DateTime.fromMillisecondsSinceEpoch(0);
   int lengthSync() => 0;
   Future<Uint8List> readAsBytes() async => Uint8List(0);
   Uint8List readAsBytesSync() => Uint8List(0);
@@ -31,6 +33,8 @@ class Directory {
   bool existsSync() => false;
   Future<Directory> create({bool recursive = false}) async => this;
   Future<void> delete({bool recursive = false}) async {}
+  Stream<Object> list({bool recursive = false, bool followLinks = true}) =>
+      const Stream<Object>.empty();
 }
 
 /// Stub Platform class for web

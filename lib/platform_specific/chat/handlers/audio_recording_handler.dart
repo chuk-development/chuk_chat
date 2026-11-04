@@ -12,8 +12,12 @@ import 'package:chuk_chat/utils/permission_handler_stub.dart'
 import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart';
 import 'package:chuk_chat/services/dictation_tracker.dart';
+import 'package:chuk_chat/services/network_status_service.dart';
+import 'package:chuk_chat/services/offline_outbox_cipher.dart';
 import 'package:chuk_chat/services/streaming_transcription_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/voice_spool_service.dart';
+import 'package:chuk_chat/utils/exponential_backoff.dart';
 
 enum AudioRecordingChange { started, stopped, failed, busy }
 
@@ -176,31 +180,18 @@ class AudioRecordingHandler {
     }
   }
 
-  /// Transcribe the last recorded audio.
-  ///
-  /// If the WebSocket was upgraded mid-recording, the server already has
-  /// the audio — this only waits for the Whisper result. Otherwise the
-  /// buffered PCM is wrapped as WAV and uploaded via HTTP.
-  Future<TranscriptionResult> _transcribeLastRecording({
-    required ChatApiService apiService,
-    required String accessToken,
-  }) async {
-    _isTranscribingAudio = true;
-
-    if (_isStreamingMode && _streamingService != null) {
-      return _transcribeStreaming();
-    }
-    return _transcribeBufferedPcm(
-      apiService: apiService,
-      accessToken: accessToken,
-    );
-  }
-
   /// Stops the active recording, resolves authentication, and transcribes it.
   ///
   /// Desktop and mobile supply their own session lookup but share the state
-  /// transitions here. A null result means no recording was eligible or the
-  /// session lookup failed before transcription started.
+  /// transitions here. A null result means no recording was eligible.
+  ///
+  /// The whole recording is written to [VoiceSpoolService] BEFORE any
+  /// transcription attempt, so a bad connection never loses it. When the
+  /// transcription cannot run for a network reason (offline, no token, the
+  /// socket dropped and the upload failed) the result is
+  /// [TranscriptionResult.queueable] with the [TranscriptionResult.savedPath]
+  /// kept on disk: the caller queues it in the outbox. On success, and on a
+  /// hard failure (4xx, empty transcript), the file is deleted again.
   Future<TranscriptionResult?> stopAndTranscribe({
     required ChatApiService apiService,
     required Future<String?> Function() getAccessToken,
@@ -215,36 +206,268 @@ class AudioRecordingHandler {
       _resetAudioLevels();
       onStateChanged?.call();
 
-      final accessToken = await getAccessToken();
-      if (accessToken == null || accessToken.isEmpty) {
+      final int durationMs = _recordingClock.elapsedMilliseconds;
+      final StreamingTranscriptionService? streamingService = _streamingService;
+      final bool wasStreaming = _isStreamingMode && streamingService != null;
+      _streamingService = null;
+      _isStreamingMode = false;
+
+      // The full recording, also in streaming mode (_handlePcmChunk keeps a
+      // copy of every chunk). Cleared only after it is on disk.
+      final Uint8List pcm = _pcmBuffer.toBytes();
+      if (pcm.isEmpty) {
         _pcmBuffer.clear();
-        final streamingService = _streamingService;
-        _streamingService = null;
-        _isStreamingMode = false;
-        _isTranscribingAudio = false;
         await streamingService?.abort();
         onStateChanged?.call();
-        return TranscriptionResult(success: false, error: 'Session expired');
+        return TranscriptionResult(success: false, error: 'No audio');
       }
 
       _isTranscribingAudio = true;
       onStateChanged?.call();
-      final result = await _transcribeLastRecording(
-        apiService: apiService,
-        accessToken: accessToken,
+
+      final Uint8List wav = _pcmToWav(
+        pcm,
+        sampleRate: _sampleRate,
+        channels: _channels,
       );
+      final String? savedPath = await _spool(wav);
+      _pcmBuffer.clear();
+
+      TranscriptionResult? result;
+      try {
+        final accessToken = await getAccessToken();
+        // Known offline with the recording on disk: queue it at once instead
+        // of waiting for an upload that cannot work (up to 60 s).
+        final bool skipNetwork =
+            savedPath != null && !NetworkStatusService.isOnline;
+        if (accessToken == null || accessToken.isEmpty || skipNetwork) {
+          await streamingService?.abort();
+          result = await finishWav(
+            wav: wav,
+            savedPath: savedPath,
+            durationMs: durationMs,
+            accessToken: null,
+            upload: (bytes, token) => _upload(apiService, bytes, token),
+          );
+        } else {
+          if (wasStreaming && streamingService.isHealthy) {
+            result = await _transcribeStreaming(
+              streamingService,
+              savedPath: savedPath,
+              durationMs: durationMs,
+            );
+          } else {
+            await streamingService?.abort();
+          }
+          // No socket, the socket dropped, or it failed for a network
+          // reason: upload the saved recording over HTTP instead.
+          result ??= await finishWav(
+            wav: wav,
+            savedPath: savedPath,
+            durationMs: durationMs,
+            accessToken: accessToken,
+            upload: (bytes, token) => _upload(apiService, bytes, token),
+            refreshToken: () => _freshToken(accessToken),
+          );
+        }
+      } finally {
+        _isTranscribingAudio = false;
+      }
+
       final String? text = result.text;
       if (result.success && text != null && text.isNotEmpty) {
         // The composer gets this text next; the send marks it as dictated.
         DictationTracker.instance.record(
           text,
-          duration: _recordingClock.elapsed,
+          duration: Duration(milliseconds: durationMs),
         );
       }
       onStateChanged?.call();
       return result;
     } finally {
       _isChangingRecordingState = false;
+    }
+  }
+
+  /// Saves [wav] to the voice spool. Null on web or when the write fails;
+  /// the recording then lives only in memory, as before.
+  Future<String?> _spool(Uint8List wav) async {
+    if (!VoiceSpoolService.isSupported) return null;
+    try {
+      return await VoiceSpoolService.saveWav(
+        wav,
+        userId: OutboxCipher.currentUserId(),
+      );
+    } catch (error) {
+      if (kDebugMode) debugPrint('Voice spool write failed: $error');
+      return null;
+    }
+  }
+
+  static Future<String> _upload(
+    ChatApiService apiService,
+    Uint8List wav,
+    String accessToken,
+  ) async {
+    final transcription = await apiService.transcribeAudioBytes(
+      bytes: wav,
+      filename: 'recording.wav',
+      accessToken: accessToken,
+    );
+    return transcription.text;
+  }
+
+  /// A fresh access token after a 401, or null when there is none.
+  ///
+  /// The access token aged out while the app sat open. That is a stale
+  /// token, not a revoked account: refresh it and retry once. Signing the
+  /// user out here throws away a perfectly good session over a routine
+  /// token rotation.
+  static Future<String?> _freshToken(String staleToken) async {
+    try {
+      final session = await SupabaseService.refreshSession();
+      final String? fresh = session?.accessToken;
+      if (fresh == null || fresh.isEmpty || fresh == staleToken) return null;
+      return fresh;
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Transcription token refresh failed: $error');
+      }
+      return null;
+    }
+  }
+
+  /// Whether [error] means "the network or the service is not reachable
+  /// right now" (retry later) rather than "this request is wrong".
+  @visibleForTesting
+  static bool isQueueableError(Object error) {
+    if (error is TranscriptionException) {
+      final int? code = error.statusCode;
+      if (code != null) {
+        return code == 408 || code == 429 || code >= 500;
+      }
+    }
+    if (error is TimeoutException || error is SocketException) return true;
+    return NetworkStatusService.isNetworkError(error) ||
+        ExponentialBackoff.shouldRetryError(error);
+  }
+
+  /// The HTTP path for a recording already built as [wav] and (when
+  /// [savedPath] is set) already on disk. Decides whether the file is kept
+  /// (queueable) or deleted. [accessToken] null means no session right now.
+  ///
+  /// Static and free of the recorder so tests can drive it.
+  @visibleForTesting
+  static Future<TranscriptionResult> finishWav({
+    required Uint8List wav,
+    required String? savedPath,
+    required int durationMs,
+    required String? accessToken,
+    required Future<String> Function(Uint8List wav, String token) upload,
+    Future<String?> Function()? refreshToken,
+  }) async {
+    TranscriptionResult queued(String reason) {
+      if (savedPath == null) {
+        return TranscriptionResult(
+          success: false,
+          error: reason,
+          durationMs: durationMs,
+        );
+      }
+      return TranscriptionResult(
+        success: false,
+        error: reason,
+        savedPath: savedPath,
+        durationMs: durationMs,
+        queueable: true,
+      );
+    }
+
+    Future<TranscriptionResult> hardFailure(String message) async {
+      if (savedPath != null) await VoiceSpoolService.delete(savedPath);
+      return TranscriptionResult(
+        success: false,
+        error: message,
+        durationMs: durationMs,
+      );
+    }
+
+    Future<TranscriptionResult> fromText(String raw) async {
+      final String text = raw.trim();
+      if (text.isEmpty) return hardFailure('No text found');
+      if (savedPath != null) await VoiceSpoolService.delete(savedPath);
+      return TranscriptionResult(
+        success: true,
+        text: text,
+        durationMs: durationMs,
+      );
+    }
+
+    if (accessToken == null || accessToken.isEmpty) {
+      return savedPath == null
+          ? TranscriptionResult(
+              success: false,
+              error: 'Session expired',
+              durationMs: durationMs,
+            )
+          : queued('Offline');
+    }
+
+    try {
+      return await fromText(await upload(wav, accessToken));
+    } on TranscriptionException catch (error) {
+      if (error.statusCode == 401) {
+        final String? fresh = await refreshToken?.call();
+        if (fresh == null) {
+          // The token could not be renewed now (often: no network). Keep
+          // the recording; the outbox retries with a new session.
+          return savedPath == null
+              ? hardFailure('Session expired. Please try again.')
+              : queued('Session expired');
+        }
+        try {
+          return await fromText(await upload(wav, fresh));
+        } catch (retryError) {
+          if (kDebugMode) {
+            debugPrint('Transcription retry after refresh failed: $retryError');
+          }
+          if (isQueueableError(retryError)) return queued('Offline');
+          return hardFailure('Session expired. Please try again.');
+        }
+      }
+      if (isQueueableError(error)) {
+        return savedPath == null
+            ? TranscriptionResult(
+                success: false,
+                error: error.statusCode == 502
+                    ? 'Service unavailable'
+                    : error.message,
+                durationMs: durationMs,
+              )
+            : queued('Offline');
+      }
+      return hardFailure(
+        error.message.isNotEmpty ? error.message : 'Transcription failed',
+      );
+    } on TimeoutException {
+      return savedPath == null
+          ? TranscriptionResult(
+              success: false,
+              error: 'Timed out',
+              durationMs: durationMs,
+            )
+          : queued('Timed out');
+    } catch (error) {
+      if (isQueueableError(error)) {
+        return savedPath == null
+            ? TranscriptionResult(
+                success: false,
+                error: 'Error: $error',
+                durationMs: durationMs,
+              )
+            : queued('Offline');
+      }
+      return hardFailure('Error: $error');
     }
   }
 
@@ -261,17 +484,16 @@ class AudioRecordingHandler {
 
   void _handlePcmChunk(Uint8List data) {
     _computeAmplitudeFromPcm(data);
-    // If WS is live forward the chunk directly; otherwise keep it in the
-    // buffer so nothing is lost while the WS is still connecting (or in
-    // case it never connects).
+    // Every chunk is kept, also while the socket is live: the full recording
+    // is saved to disk at stop, and it is the HTTP fallback when the socket
+    // drops mid-recording.
+    _pcmBuffer.add(data);
     if (_isStreamingMode && _streamingService != null) {
       _streamingService!.sendAudioChunk(data);
-    } else {
-      _pcmBuffer.add(data);
     }
   }
 
-  /// Connect the WebSocket in the background. On success, flush any PCM
+  /// Connect the WebSocket in the background. On success, send the PCM
   /// buffered since mic press and switch future chunks to the live path.
   Future<void> _tryConnectStreaming(String accessToken) async {
     StreamingTranscriptionService? service;
@@ -293,11 +515,10 @@ class AudioRecordingHandler {
         return;
       }
 
-      // Flush buffered audio before flipping the flag, so chunks that arrive
-      // after the flip (but before this method finishes) go to the socket
-      // and are not re-appended to the buffer.
+      // Send the buffered audio and flip the flag with no await in between,
+      // so no chunk can fall between the two. The buffer itself stays: it
+      // is the full recording that is saved at stop.
       final Uint8List buffered = _pcmBuffer.toBytes();
-      _pcmBuffer.clear();
       _streamingService = service;
       _isStreamingMode = true;
 
@@ -306,7 +527,7 @@ class AudioRecordingHandler {
       }
       if (kDebugMode) {
         debugPrint(
-          'WS ready — flushed ${buffered.length} buffered PCM bytes, '
+          'WS ready — sent ${buffered.length} buffered PCM bytes, '
           'forwarding live',
         );
       }
@@ -317,158 +538,51 @@ class AudioRecordingHandler {
     }
   }
 
-  Future<TranscriptionResult> _transcribeStreaming() async {
-    final service = _streamingService;
-    if (service == null) {
-      _isTranscribingAudio = false;
-      _isStreamingMode = false;
-      return TranscriptionResult(success: false, error: 'No streaming session');
-    }
-
-    try {
-      final result = await service.finishAndTranscribe();
-
-      _streamingService = null;
-      _isStreamingMode = false;
-      _isTranscribingAudio = false;
-      _pcmBuffer.clear();
-
-      if (result == null) {
-        return TranscriptionResult(success: false, error: 'No response');
-      }
-      if (result.containsKey('error')) {
-        return TranscriptionResult(
-          success: false,
-          error: result['error'] as String,
-        );
-      }
-
-      final text = (result['text'] as String?)?.trim() ?? '';
-      if (text.isEmpty) {
-        return TranscriptionResult(success: false, error: 'No text found');
-      }
-      return TranscriptionResult(success: true, text: text);
-    } catch (error) {
-      _streamingService = null;
-      _isStreamingMode = false;
-      _isTranscribingAudio = false;
-      return TranscriptionResult(success: false, error: 'Error: $error');
-    }
-  }
-
-  Future<TranscriptionResult> _transcribeBufferedPcm({
-    required ChatApiService apiService,
-    required String accessToken,
+  /// Waits for the socket's transcript. Returns null when the socket broke
+  /// or failed for a network reason: the caller then uploads the saved
+  /// recording over HTTP.
+  Future<TranscriptionResult?> _transcribeStreaming(
+    StreamingTranscriptionService service, {
+    required String? savedPath,
+    required int durationMs,
   }) async {
-    final Uint8List pcm = _pcmBuffer.toBytes();
-    _pcmBuffer.clear();
-
-    if (pcm.isEmpty) {
-      _isTranscribingAudio = false;
-      return TranscriptionResult(success: false, error: 'No audio');
+    Map<String, dynamic>? result;
+    try {
+      result = await service.finishAndTranscribe();
+    } catch (error) {
+      if (kDebugMode) debugPrint('WS transcription error: $error');
+      return null;
     }
-
-    final Uint8List wav = _pcmToWav(
-      pcm,
-      sampleRate: _sampleRate,
-      channels: _channels,
+    if (result == null || service.hasDropped) return null;
+    final Object? error = result['error'];
+    if (error != null) {
+      final String message = '$error';
+      if (isQueueableError(message) ||
+          message.contains('WebSocket') ||
+          message.contains('timed out')) {
+        return null;
+      }
+      if (savedPath != null) await VoiceSpoolService.delete(savedPath);
+      return TranscriptionResult(
+        success: false,
+        error: message,
+        durationMs: durationMs,
+      );
+    }
+    final text = (result['text'] as String?)?.trim() ?? '';
+    if (savedPath != null) await VoiceSpoolService.delete(savedPath);
+    if (text.isEmpty) {
+      return TranscriptionResult(
+        success: false,
+        error: 'No text found',
+        durationMs: durationMs,
+      );
+    }
+    return TranscriptionResult(
+      success: true,
+      text: text,
+      durationMs: durationMs,
     );
-
-    try {
-      final transcription = await apiService.transcribeAudioBytes(
-        bytes: wav,
-        filename: 'recording.wav',
-        accessToken: accessToken,
-      );
-      final String text = transcription.text.trim();
-      _isTranscribingAudio = false;
-
-      if (text.isEmpty) {
-        return TranscriptionResult(success: false, error: 'No text found');
-      }
-      return TranscriptionResult(success: true, text: text);
-    } on TranscriptionException catch (error) {
-      if (error.statusCode == 401) {
-        // The access token aged out while the app sat open. That is a stale
-        // token, not a revoked account: refresh it and retry once. Signing
-        // the user out here (as this used to do) throws away a perfectly
-        // good session over a routine token rotation.
-        final TranscriptionResult? retried = await _retryTranscribeAfterRefresh(
-          apiService: apiService,
-          wav: wav,
-          staleToken: accessToken,
-        );
-        _isTranscribingAudio = false;
-        return retried ??
-            TranscriptionResult(
-              success: false,
-              error: 'Session expired. Please try again.',
-            );
-      }
-      _isTranscribingAudio = false;
-      switch (error.statusCode) {
-        case 502:
-          return TranscriptionResult(
-            success: false,
-            error: 'Service unavailable',
-          );
-        default:
-          final String message = error.message.isNotEmpty
-              ? error.message
-              : 'Transcription failed';
-          return TranscriptionResult(success: false, error: message);
-      }
-    } on TimeoutException {
-      _isTranscribingAudio = false;
-      return TranscriptionResult(success: false, error: 'Timed out');
-    } catch (error) {
-      _isTranscribingAudio = false;
-      return TranscriptionResult(success: false, error: 'Error: $error');
-    }
-  }
-
-  /// Refresh the Supabase access token and replay the upload once.
-  ///
-  /// Returns the successful result, or null when the retry is impossible or
-  /// fails again. Either way the user stays signed in — a stale token is a
-  /// retryable condition, never a logout.
-  Future<TranscriptionResult?> _retryTranscribeAfterRefresh({
-    required ChatApiService apiService,
-    required Uint8List wav,
-    required String staleToken,
-  }) async {
-    String? freshToken;
-    try {
-      final session = await SupabaseService.refreshSession();
-      freshToken = session?.accessToken;
-    } catch (error) {
-      if (kDebugMode) {
-        debugPrint('Transcription token refresh failed: $error');
-      }
-      return null;
-    }
-    if (freshToken == null ||
-        freshToken.isEmpty ||
-        freshToken == staleToken) {
-      return null;
-    }
-    try {
-      final transcription = await apiService.transcribeAudioBytes(
-        bytes: wav,
-        filename: 'recording.wav',
-        accessToken: freshToken,
-      );
-      final String text = transcription.text.trim();
-      if (text.isEmpty) {
-        return TranscriptionResult(success: false, error: 'No text found');
-      }
-      return TranscriptionResult(success: true, text: text);
-    } catch (error) {
-      if (kDebugMode) {
-        debugPrint('Transcription retry after refresh failed: $error');
-      }
-      return null;
-    }
   }
 
   /// Wrap raw PCM-16 LE mono samples in a minimal WAV (RIFF) container so
@@ -579,5 +693,24 @@ class TranscriptionResult {
   final String? text;
   final String? error;
 
-  TranscriptionResult({required this.success, this.text, this.error});
+  /// The recording on disk ([VoiceSpoolService]). Set only when
+  /// [queueable]; the caller then owns the file (queue it or delete it).
+  final String? savedPath;
+
+  /// Length of the recording.
+  final int? durationMs;
+
+  /// The transcription could not run for a network reason, and the
+  /// recording is kept at [savedPath]. The caller queues it in the outbox
+  /// instead of showing an error.
+  final bool queueable;
+
+  TranscriptionResult({
+    required this.success,
+    this.text,
+    this.error,
+    this.savedPath,
+    this.durationMs,
+    this.queueable = false,
+  });
 }

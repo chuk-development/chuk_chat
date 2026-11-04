@@ -33,8 +33,9 @@ import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/agents_replay_loader.dart';
 import 'package:chuk_chat/services/agents/agents_resume_trace.dart';
-import 'package:chuk_chat/services/agents/agents_queued_marks.dart';
 import 'package:chuk_chat/services/agents/agents_task_outbox.dart';
+import 'package:chuk_chat/services/agents/agents_outbox_flusher.dart';
+import 'package:chuk_chat/services/agents/agents_chat_transport.dart';
 import 'package:chuk_chat/services/mcp/mcp_service.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import 'package:chuk_chat/services/agents/agents_run_cost.dart'; // F1
@@ -270,6 +271,9 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   AgentsRelayController? _controller;
   StreamSubscription<AgentsRelayInbound>? _inboundSub;
 
+  /// What a send of this thread could not do (images left out).
+  StreamSubscription<AgentsSendNotice>? _sendNoticeSub;
+
   final AgentsRelayLink _link = AgentsRelayLink.instance;
   final AgentsRunLedger _ledger = AgentsRunLedger.instance;
   final AgentsReplayLoader _loader = AgentsReplayLoader.instance;
@@ -475,6 +479,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     // survives reconnects. It carries only what this view still owns: the
     // approval prompt and the live `run_ack`.
     _inboundSub = _link.inbound.listen(_onInbound);
+    _sendNoticeSub = AgentsChatTransport.notices.listen(_onSendNotice);
     _loader.attach();
     // ── skill proposals ──
     // The cards at the end of the thread read the app-wide source, which
@@ -604,8 +609,15 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     AgentsBudgetNotices.instance.removeListener(_onBudgetNotices); // F1
     _userBrowserService.removeListener(_onUserBrowserChanged); // own browser
     _controller?.state.removeListener(_onStateChanged);
+    // The link must not keep pointing at a controller that is disposed
+    // below: the background link (AgentsBackgroundLink) only opens a link
+    // of its own while none is bound.
+    if (_controller != null && identical(_link.controller.value, _controller)) {
+      _link.unbind();
+    }
     _startupState.dispose();
     _inboundSub?.cancel();
+    _sendNoticeSub?.cancel();
     _storeSub?.cancel();
     _controller?.dispose();
     _hostController.dispose();
@@ -963,10 +975,13 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       //
       // The same closure is what the Retry button runs: while a host is on the
       // other end, "retry" means "send the backlog now", not "reconnect".
-      OfflineRetryManager.instance.registerFlush(
-        widget.threadKey,
-        () => _flushOutbox(controller),
-      );
+      //
+      // Retry is a user action, so it also takes back what gave up on its
+      // own: a failed entry of this thread is pending again first.
+      OfflineRetryManager.instance.registerFlush(widget.threadKey, () async {
+        await AgentsTaskOutbox.requeueFailed(widget.threadKey);
+        return _flushOutbox(controller);
+      });
       // The prompts queued while the link was down — the open thread's and
       // every other thread's — go out through ONE flushAll. It runs on every
       // paired notification, not only the transition: a prompt queued in the
@@ -1009,16 +1024,16 @@ class AgentsThreadViewState extends State<AgentsThreadView>
 
   /// Sends what the user typed while the host was unreachable.
   ///
-  /// Nothing is retried forever: [AgentsTaskOutbox] gives up on an entry after
-  /// its own attempt cap, so one prompt the host will never take cannot block
-  /// the queue behind it.
+  /// Nothing is retried forever: [AgentsTaskOutbox] marks an entry failed
+  /// after its own attempt cap (and keeps it), so one prompt the host will
+  /// never take cannot block the queue behind it.
   Future<int> _flushOutbox(AgentsRelayController controller) async {
     final String sessionKey = widget.threadKey;
     if (sessionKey.isEmpty) return 0;
     try {
       final int sent = await AgentsTaskOutbox.flush(
         sessionKey,
-        (task) => _sendQueuedTask(controller, task),
+        (task) => AgentsOutboxFlusher.sendQueued(controller, task),
       );
       if (sent > 0 && kDebugMode) {
         debugPrint(
@@ -1036,67 +1051,13 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     }
   }
 
-  /// Sends one queued prompt into the thread it was typed in.
-  ///
-  /// The outbox drops the entry as soon as this returns, and a returned
-  /// `send()` is no proof the host has the prompt: a socket whose host
-  /// restarted, or a half-open one, takes the frame and nobody reads it. So
-  /// the prompt is first handed to [AgentsPendingTasks] under a `task_id`,
-  /// the same record a live send writes. That record is cleared only by the
-  /// host's `task_ack` (or the run's own output) and is re-sent with the same
-  /// id on the next pairing ([_resendUnacknowledged]); the host dedupes on the
-  /// id, so a copy that did arrive is not run twice. The id is derived from the
-  /// queue entry, so two flushes of one entry are one task to the host too.
-  Future<void> _sendQueuedTask(
-    AgentsRelayController controller,
-    OutboxTask task,
-  ) async {
-    final String taskId = _taskIdForQueued(task);
-    await AgentsPendingTasks.record(
-      sessionKey: task.sessionKey,
-      taskId: taskId,
-      prompt: task.prompt,
-      modelId: task.modelId,
-      providerSlug: task.providerSlug,
-      reasoningEffort: task.reasoningEffort,
-    );
-    _ledger.taskSent(task.sessionKey, taskId);
-    await controller.sendTask(
-      task.prompt,
-      sessionKey: task.sessionKey,
-      modelId: task.modelId,
-      providerSlug: task.providerSlug,
-      reasoningEffort: task.reasoningEffort,
-      taskId: taskId,
-    );
-    // It is on the wire and tracked until the host acknowledges it: the
-    // bubble stops saying "waiting" and stops offering Retry.
-    await AgentsQueuedMarks.clearMark(
-      sessionKey: task.sessionKey,
-      queueId: task.localId,
-    );
-  }
-
-  /// The wire contract caps `task_id` at 64 characters.
-  static String _taskIdForQueued(OutboxTask task) {
-    final String id = 'o-${task.localId}';
-    return id.length <= 64 ? id : id.substring(0, 64);
-  }
-
   /// Every thread's queued prompts, each into the conversation it was typed
   /// in — not only this view's. The paired transition and the watchdog (a
-  /// backed-off send coming due) dial in here; the per-session claim inside
-  /// [AgentsTaskOutbox.flush] makes a double run harmless.
+  /// backed-off send coming due) dial in here. [AgentsOutboxFlusher] does the
+  /// same app-wide; the per-session claim inside [AgentsTaskOutbox.flush] and
+  /// the stored `task_id` of every entry make a double run harmless.
   Future<void> _flushAllThreads(AgentsRelayController controller) async {
-    try {
-      await AgentsTaskOutbox.flushAll(
-        (task) => _sendQueuedTask(controller, task),
-      );
-    } catch (error) {
-      if (kDebugMode) {
-        debugPrint('[agents-outbox] flushAll failed: $error');
-      }
-    }
+    await AgentsOutboxFlusher.flushAllVia(controller);
   }
 
   /// Sends every task of this thread the host has not acknowledged again.
@@ -1112,9 +1073,8 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   /// is never run twice — and the app paints nothing for a `duplicate`, so the
   /// thread never grows a second bubble either.
   ///
-  /// Nothing is retried for ever: a task that has used up its attempts is
-  /// dropped from the record, and the ledger's own pre-run rule is what tells
-  /// the reader the message did not arrive.
+  /// Nothing is retried for ever: a task that has used up its attempts
+  /// becomes a failed outbox entry, and its bubble offers Retry and Delete.
   Future<void> _resendUnacknowledged(AgentsRelayController controller) async {
     final String sessionKey = widget.threadKey;
     if (sessionKey.isEmpty) return;
@@ -2002,6 +1962,23 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       }
     } finally {
       _browserViewOpen = false;
+    }
+  }
+
+  /// Tells the user what a send of this thread left out. Agents has no
+  /// attachment frame yet, so an image is not sent; the text is, and the user
+  /// must know the image was not.
+  void _onSendNotice(AgentsSendNotice notice) {
+    if (!mounted || notice.sessionKey != widget.threadKey) return;
+    switch (notice.kind) {
+      case AgentsSendNoticeKind.imagesNotSupported:
+        final String text =
+            AppLocalizations.of(context)?.agentsImagesNotSupported ??
+            'Images are not supported in Agents yet. Your text was sent '
+                'without the image.';
+        ScaffoldMessenger.maybeOf(context)
+          ?..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(text)));
     }
   }
 
