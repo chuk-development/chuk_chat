@@ -8,7 +8,14 @@
 // what Agents forwards to the Python agent: the live client, the OAuth sign-in
 // and tool discovery all run host-side, not on the device.
 
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
+
 import 'package:chuk_chat/services/mcp/mcp_catalogue.dart';
+
+/// The longest tool name providers accept (`^[a-zA-Z0-9_-]{1,64}$`).
+const int kMcpMaxToolName = 64;
 
 /// How a connection proves who it is.
 enum McpAuth {
@@ -220,10 +227,26 @@ class McpConnection {
 
   /// The name a model sees for [tool] on this server. Prefixed, because two
   /// servers may both offer `search`, and capped at 64 characters.
+  ///
+  /// A name that is already clean and fits is returned as is, so saved
+  /// names do not change. When sanitising or the 64-character cap loses
+  /// information, `_` + 8 hex characters of sha256(`id/tool`) are appended,
+  /// so `get design/context` and `get_design_context` (or two long names
+  /// with the same first 64 characters) cannot collide. Same idea as
+  /// `tool_name` in `agents/runtime/.../mcp_client.py`.
   String toolNameFor(String tool) {
-    final sanitized = tool.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
-    final full = '${id}_$sanitized';
-    return full.length <= 64 ? full : full.substring(0, 64);
+    final raw = '${id}_$tool';
+    final sanitized = raw.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+    if (sanitized == raw && raw.length <= kMcpMaxToolName) return raw;
+    final digest = sha256
+        .convert(utf8.encode('$id/$tool'))
+        .toString()
+        .substring(0, 8);
+    final keep = kMcpMaxToolName - digest.length - 1;
+    final stem = sanitized.length <= keep
+        ? sanitized
+        : sanitized.substring(0, keep);
+    return '${stem}_$digest';
   }
 
   /// The shape the Python agent needs to reach this server (WS-D forwards it

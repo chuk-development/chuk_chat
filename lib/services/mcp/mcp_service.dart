@@ -50,7 +50,14 @@ import 'package:chuk_chat/services/mcp/mcp_connection.dart';
 // Only the call path below uses the device-side client; `show` keeps its
 // McpTool from clashing with the one in mcp_connection.dart.
 import 'package:chuk_chat/services/mcp/mcp_client.dart'
-    show McpCallResult, McpClient, McpException, McpUnauthorized;
+    show
+        McpCallResult,
+        McpClient,
+        McpException,
+        McpServerInfo,
+        McpUnauthorized,
+        kMcpMaxInstructionsBytes,
+        wrapMcpInstructions;
 import 'package:chuk_chat/services/mcp/chuk_mcp_mirror.dart';
 import 'package:chuk_chat/services/mcp/mcp_connector_sync.dart';
 import 'package:chuk_chat/services/mcp/mcp_oauth.dart';
@@ -59,6 +66,7 @@ import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/mcp/mcp_probe_control.dart';
+import 'package:chuk_chat/services/mcp/mcp_redact.dart';
 import 'package:chuk_chat/services/mcp/mcp_store.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
@@ -605,11 +613,14 @@ class McpService {
         connection: connection,
       );
     } on McpAuthException catch (e) {
-      return McpConnectResult(McpConnectStatus.failed, message: e.message);
+      return McpConnectResult(
+        McpConnectStatus.failed,
+        message: redactMcpSecrets(e.message),
+      );
     } catch (e) {
       return McpConnectResult(
         McpConnectStatus.failed,
-        message: 'Could not save the connector: $e',
+        message: redactMcpSecrets('Could not save the connector: $e'),
       );
     } finally {
       _setMember(connecting, id, false);
@@ -692,7 +703,7 @@ class McpService {
     } catch (e) {
       return McpConnectResult(
         McpConnectStatus.failed,
-        message: 'Could not save the connector: $e',
+        message: redactMcpSecrets('Could not save the connector: $e'),
       );
     }
   }
@@ -1296,7 +1307,8 @@ class McpService {
           for (final Object? tool in toolsRaw)
             if (tool is Map) McpTool.fromJson(Map<String, dynamic>.from(tool)),
       ];
-      final String error = '${row['error'] ?? ''}'.trim();
+      // The host's error text can echo a request; mask credentials.
+      final String error = redactMcpSecrets('${row['error'] ?? ''}'.trim());
       // Structural, from the host: `auth` / `network` / `other`. An older
       // host sends none, which reads as `other`.
       final McpErrorKind? kind = error.isEmpty
@@ -1476,7 +1488,8 @@ class McpService {
     }
 
     try {
-      await client.initialize();
+      final info = await client.initialize();
+      _rememberInstructions(target.connection.id, info);
       return await client.callTool(target.tool, arguments);
     } on McpUnauthorized {
       return McpCallResult(
@@ -1486,9 +1499,56 @@ class McpService {
         isError: true,
       );
     } on McpException catch (e) {
-      return McpCallResult(text: e.message, isError: true);
+      return McpCallResult(
+        text: redactMcpSecrets(
+          e.message,
+          secrets: mcpSecretsOf(
+            client.endpoint,
+            accessToken: client.accessToken,
+          ),
+        ),
+        isError: true,
+      );
+    } catch (e) {
+      // Transport errors (ClientException, SocketException, timeouts) carry
+      // the request URL, which for an API-key connector holds the key.
+      return McpCallResult(
+        text: redactMcpSecrets(
+          '${target.connection.name} could not be reached: $e',
+          secrets: mcpSecretsOf(
+            client.endpoint,
+            accessToken: client.accessToken,
+          ),
+        ),
+        isError: true,
+      );
     }
   }
+
+  static final Map<String, String> _instructionsById = <String, String>{};
+
+  static void _rememberInstructions(String connectionId, McpServerInfo info) {
+    final wrapped = info.untrustedInstructions;
+    if (wrapped == null) {
+      _instructionsById.remove(connectionId);
+    } else {
+      _instructionsById[connectionId] = wrapped;
+    }
+  }
+
+  /// The `instructions` the server behind [connectionId] sent in its last
+  /// initialize on this device, capped at [kMcpMaxInstructionsBytes] and
+  /// wrapped as untrusted data (see [wrapMcpInstructions]). Null when the
+  /// server sent none or has not been initialised here yet. Not yet fed to
+  /// the prompt; the prompt builder can read it from here.
+  static String? instructionsFor(String connectionId) =>
+      _instructionsById[connectionId];
+
+  @visibleForTesting
+  static void debugRememberInstructions(
+    String connectionId,
+    McpServerInfo info,
+  ) => _rememberInstructions(connectionId, info);
 
   /// A client for [connection], with whatever credential it needs. Null when
   /// the record cannot produce one — the caller then says so to the reader

@@ -91,8 +91,13 @@ class AgentsActionApprovalCard extends StatelessWidget {
               _header(theme, l),
               ..._details(context, theme, l),
               const SizedBox(height: 12),
-              if (picked == null)
+              if (picked == null && !request.isDecided)
                 _buttons(scheme, l, name)
+              else if (picked == null)
+                // The host closed the request itself (timeout, Stop, or it
+                // decided on its own): never offer Allow for it again
+                // (docs/WIRE_CONTRACT.md, "Closed by timeout or stop").
+                _closed(theme, l)
               else
                 _decided(theme, l, name, picked),
             ],
@@ -363,6 +368,46 @@ class AgentsActionApprovalCard extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  /// The line for a request the host closed without the user's answer.
+  Widget _closed(ThemeData theme, AppLocalizations? l) {
+    final ColorScheme scheme = theme.colorScheme;
+    final bool approved = request.isApproved;
+    return Row(
+      key: const ValueKey<String>('agents-approval-closed'),
+      children: <Widget>[
+        HugeIcon(
+          approved ? HugeIcons.checkmarkCircle02 : HugeIcons.cancel01,
+          size: 18,
+          color: approved ? scheme.primary : scheme.onSurfaceVariant,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            closedLabel(l, request),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// What a request the host closed says: "Timed out", "Stopped", or the
+  /// plain outcome for any other reason.
+  static String closedLabel(
+    AppLocalizations? l,
+    AgentsRelayApprovalRequest request,
+  ) {
+    if (request.isApproved) return l?.approvalClosedAllowed ?? 'Allowed';
+    return switch (request.decisionReason) {
+      'timeout' => l?.approvalClosedTimedOut ?? 'Timed out. Not allowed.',
+      'stopped' => l?.approvalClosedStopped ?? 'Stopped. Not allowed.',
+      _ => l?.approvalDecidedDenied ?? 'Denied',
+    };
   }
 
   /// The button text of one option, as the contract words it.

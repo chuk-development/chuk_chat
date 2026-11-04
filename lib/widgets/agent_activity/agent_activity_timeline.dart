@@ -194,8 +194,22 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
     });
   }
 
+  /// Whether any step of the round failed. Set in [build].
+  bool _hasError = false;
+
+  /// Open while the round runs; once it settles it folds to one line, unless
+  /// a step failed: then it stays open so the failure is not hidden.
   bool get _isExpanded =>
-      _expandedOverride ?? (widget.isRunning && !widget.liveDots);
+      _expandedOverride ??
+      ((widget.isRunning && !widget.liveDots) ||
+          (!widget.isRunning && _hasError));
+
+  static bool _anyError(Iterable<AgentActivityEntry> entries) {
+    for (final e in entries) {
+      if (e.hasError || _anyError(e.children)) return true;
+    }
+    return false;
+  }
 
   /// The header is the typing dots right now.
   bool get _showsDots => widget.liveDots && widget.isRunning;
@@ -214,6 +228,9 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
     final entries = steps == null
         ? buildAgentActivityEntries(widget.toolCalls)
         : buildAgentActivityEntriesFromSteps(steps);
+    _hasError =
+        _anyError(entries) ||
+        widget.toolCalls.any((c) => c.status == ToolCallStatus.error);
     // A settled round with neither a step nor a model line has nothing to
     // show. A RUNNING one still does: the header is what tells the reader
     // the turn is alive and how long it has been waiting, and at that point

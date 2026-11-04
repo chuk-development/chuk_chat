@@ -364,6 +364,32 @@ void main() {
       expect(findIcon(Icons.search), findsNothing);
     });
 
+    testWidgets('a finished turn with a failed step stays open', (tester) async {
+      await _pumpTimeline(
+        tester,
+        calls: [
+          _call('web_search', arguments: {'query': 'a'}, endSecond: 2),
+          _call(
+            'web_search',
+            arguments: {'query': 'b'},
+            status: ToolCallStatus.error,
+            endSecond: 13,
+          ),
+        ],
+        now: _t0.add(const Duration(minutes: 1)),
+      );
+
+      expect(find.text('Worked for 13s'), findsOneWidget);
+      // Open by default: the failure must not hide behind a folded header.
+      expect(findIcon(Icons.keyboard_arrow_right), findsNothing);
+      expect(find.textContaining('Search failed', findRichText: true), findsOneWidget);
+
+      // The reader can still fold it.
+      await tester.tap(find.text('Worked for 13s'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Search failed', findRichText: true), findsNothing);
+    });
+
     testWidgets('tapping the header opens and closes it', (tester) async {
       await _pumpTimeline(
         tester,

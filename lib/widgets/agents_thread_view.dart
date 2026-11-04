@@ -1635,6 +1635,13 @@ class AgentsThreadViewState extends State<AgentsThreadView>
             (event.isDecided || !_ledger.isRunning(widget.threadKey))) {
           return;
         }
+        // The host closed the wait itself (timeout, Stop): the SAME request
+        // comes back decided. Close the open card; never prompt for it
+        // (docs/WIRE_CONTRACT.md, "Closed by timeout or stop", bead B11).
+        if (event.isDecided) {
+          _onApprovalClosed(event);
+          return;
+        }
         setState(() {
           _approval = event;
           _approvalPreviousDraft = previousDraft;
@@ -1930,6 +1937,21 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       _approvalDecision = null;
       _takeoverVisited = false;
       _takeoverContinuing = false;
+    });
+    _syncWaitingForUser();
+  }
+
+  /// The host closed [event] without the user's answer (timeout, Stop) and
+  /// sent it again, decided. The open card for that id loses its buttons and
+  /// says why; a card the user already answered keeps the answer. A closing
+  /// frame for a card not on screen changes nothing.
+  void _onApprovalClosed(AgentsRelayApprovalRequest event) {
+    final AgentsRelayApprovalRequest? current = _approval;
+    if (current == null || current.approvalId != event.approvalId) return;
+    if (_approvalDecision != null) return;
+    setState(() {
+      _approval = event;
+      _approvalDecision = event.isApproved;
     });
     _syncWaitingForUser();
   }
@@ -2832,7 +2854,8 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   /// The agent moved on after an answered card: the card has said what the
   /// answer covered long enough.
   void _clearAnsweredActionApproval() {
-    if (_approvalScope == null) return;
+    // An answered card, or one the host closed (timeout, Stop).
+    if (_approvalScope == null && !(_approval?.isDecided ?? false)) return;
     _clearActionApproval();
   }
 
@@ -3059,7 +3082,14 @@ class AgentsThreadViewState extends State<AgentsThreadView>
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      decision ? 'Published' : 'Denied',
+                      decision
+                          ? 'Published'
+                          : (request.isDecided
+                                ? AgentsActionApprovalCard.closedLabel(
+                                    AppLocalizations.of(context),
+                                    request,
+                                  )
+                                : 'Denied'),
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: decision
                             ? theme.colorScheme.primary

@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import 'package:chuk_chat/services/multiplex_tool_proxy.dart';
 import 'package:chuk_chat/utils/json_helpers.dart';
+import 'package:chuk_chat/utils/untrusted_content.dart';
 
 // Two crawled pages was too thin — portals disagree, and the operator's
 // own site fell outside the window. The fetches run together, so reading
@@ -347,6 +348,7 @@ Future<String> executeWebSearch({
         );
 
         buffer.writeln('Auto-fetched page context:');
+        buffer.writeln(kUntrustedWebContentNotice);
         buffer.writeln();
 
         for (int i = 0; i < crawled.length; i++) {
@@ -703,12 +705,27 @@ Future<String> executeWebCrawl({
       return 'No content found at: $url';
     }
 
-    final header = 'Content from $url';
-    final truncNote = truncated ? '\n\n[Content truncated]' : '';
-    return '$header\n\n$content$truncNote';
+    return formatWebCrawlResult(
+      url: url,
+      content: content,
+      truncated: truncated,
+    );
   } on TimeoutException {
     return 'Web crawl timed out. Please try again.';
   } catch (e) {
     return 'Web crawl failed: $e';
   }
+}
+
+/// The text `web_crawl` hands the model. The first line stays
+/// `Content from <url>` (the source chips parse it); the fetched page is
+/// marked as untrusted data before it starts.
+String formatWebCrawlResult({
+  required String url,
+  required String content,
+  required bool truncated,
+}) {
+  final truncNote = truncated ? '\n\n[Content truncated]' : '';
+  return 'Content from $url\n$kUntrustedWebContentNotice\n\n'
+      '$content$truncNote';
 }

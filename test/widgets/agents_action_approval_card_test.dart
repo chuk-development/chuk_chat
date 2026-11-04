@@ -69,7 +69,11 @@ AgentsRelayApprovalRequest _request({
     'browser_tool': 'browser_click',
     'element': 'Buy now',
   },
+  String? decision,
+  String? decisionReason,
 }) => AgentsRelayApprovalRequest(
+  decision: decision,
+  decisionReason: decisionReason,
   approvalId: id,
   action: 'action_approval',
   path: '',
@@ -196,6 +200,28 @@ void main() {
       expect(find.text('Allow once'), findsNothing);
       expect(find.text('Allowed always for Ada'), findsOneWidget);
     });
+
+    // B11: the host closed the wait itself and sent the request again.
+    for (final (String reason, String en, String de) in <(String, String, String)>[
+      ('timeout', 'Timed out. Not allowed.', 'Zeit abgelaufen. Nicht erlaubt.'),
+      ('stopped', 'Stopped. Not allowed.', 'Gestoppt. Nicht erlaubt.'),
+    ]) {
+      testWidgets('closed by $reason: no buttons, says why', (tester) async {
+        final request = _request(decision: 'denied', decisionReason: reason);
+        await pumpCard(tester, request);
+        expect(find.text('Allow once'), findsNothing);
+        expect(find.text('Deny'), findsNothing);
+        expect(
+          find.byKey(const ValueKey<String>('agents-approval-closed')),
+          findsOneWidget,
+        );
+        expect(find.text(en), findsOneWidget);
+
+        await pumpCard(tester, request, locale: const Locale('de'));
+        expect(find.text(de), findsOneWidget);
+        expect(find.text('Einmal erlauben'), findsNothing);
+      });
+    }
 
     testWidgets('German', (tester) async {
       await pumpCard(tester, _request(), locale: const Locale('de'));
@@ -342,6 +368,116 @@ void main() {
       expect(find.text('Denied'), findsOneWidget);
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump(const Duration(minutes: 2));
+    });
+
+    testWidgets('a timed-out request closes its open card: no buttons', (
+      tester,
+    ) async {
+      final controller = await pumpPaired(tester);
+      final ledger = AgentsRunLedger.instance;
+      ledger.begin('thread-1');
+      controller.emit(_request(id: 'ap-t'));
+      await tester.pump();
+      expect(find.text('Allow once'), findsOneWidget);
+      expect(ledger.runFor('thread-1')!.waitingForUser, isTrue);
+
+      // A closing frame for another id changes nothing.
+      controller.emit(
+        _request(id: 'ap-other', decision: 'denied', decisionReason: 'timeout'),
+      );
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Allow once'), findsOneWidget);
+
+      controller.emit(
+        _request(id: 'ap-t', decision: 'denied', decisionReason: 'timeout'),
+      );
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Allow once'), findsNothing);
+      expect(find.text('Deny'), findsNothing);
+      expect(find.text('Timed out. Not allowed.'), findsOneWidget);
+      expect(ledger.runFor('thread-1')!.waitingForUser, isFalse);
+      expect(controller.approvalDecisions, isEmpty);
+
+      // The agent moves on: the closed card goes, like an answered one.
+      controller.emit(const AgentsRelayTool('browser_click', result: 'ok'));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(
+        find.byKey(const ValueKey<String>('agents-approval-card')),
+        findsNothing,
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(minutes: 2));
+    });
+
+    testWidgets('a closing frame never replaces the user\'s answer', (
+      tester,
+    ) async {
+      final controller = await pumpPaired(tester);
+      AgentsRunLedger.instance.begin('thread-1');
+      controller.emit(_request(id: 'ap-u'));
+      await tester.pump();
+      await tester.tap(find.text('Allow once'));
+      await tester.pump(const Duration(milliseconds: 400));
+      controller.emit(
+        _request(id: 'ap-u', decision: 'denied', decisionReason: 'stopped'),
+      );
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Allowed once'), findsOneWidget);
+      expect(find.text('Stopped. Not allowed.'), findsNothing);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(minutes: 2));
+    });
+
+    testWidgets('a stopped publish closes its bar: no Publish button', (
+      tester,
+    ) async {
+      final controller = await pumpPaired(tester);
+      AgentsRunLedger.instance.begin('thread-1');
+      AgentsRelayApprovalRequest publish({String? decision, String? reason}) =>
+          AgentsRelayApprovalRequest(
+            approvalId: 'ap-p',
+            action: 'herenow_publish',
+            path: 'site',
+            name: 'site',
+            fileCount: 1,
+            totalBytes: 10,
+            baseUrl: 'here.now',
+            public: false,
+            sessionKey: 'thread-1',
+            decision: decision,
+            decisionReason: reason,
+          );
+      controller.emit(publish());
+      await tester.pump();
+      // The title plus the Publish button.
+      expect(find.textContaining('Publish'), findsNWidgets(2));
+      controller.emit(publish(decision: 'denied', reason: 'stopped'));
+      await tester.pump(const Duration(milliseconds: 400));
+      // Only the title is left: no button to press.
+      expect(find.textContaining('Publish'), findsOneWidget);
+      expect(find.text('Stopped. Not allowed.'), findsOneWidget);
+      expect(controller.approvalDecisions, isEmpty);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(minutes: 2));
+    });
+
+    test('the ledger closes the open line instead of adding a second', () {
+      final ledger = AgentsRunLedger.instance;
+      ledger.begin('thread-1');
+      ledger.approval('thread-1', _request(id: 'ap-l'));
+      ledger.approval(
+        'thread-1',
+        _request(id: 'ap-l', decision: 'denied', decisionReason: 'timeout'),
+      );
+      final lines = ledger
+          .runFor('thread-1')!
+          .toolCalls
+          .where((c) => c.arguments['approvalId'] == 'ap-l')
+          .toList();
+      expect(lines, hasLength(1));
+      expect(lines.single.arguments['decision'], 'Denied');
+      expect(lines.single.arguments['options'], isNull);
+      expect(lines.single.arguments['decision_reason'], 'timeout');
     });
 
     testWidgets('an old publish keeps its bar and sends no scope', (
