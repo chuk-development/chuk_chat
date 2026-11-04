@@ -1332,7 +1332,13 @@ class McpService {
       // was in flight across a Reconnect) says nothing about the new one.
       final String frameClient = '${row['client_id'] ?? ''}';
       if (frameClient.isNotEmpty) {
-        final McpSecrets? record = await store.secretsFor(target.id);
+        McpSecrets? record;
+        try {
+          record = await store.secretsFor(target.id);
+        } catch (e) {
+          // Storage failed: do not stop the frame for the other connectors.
+          if (kDebugMode) debugPrint('⚠️ [Mcp] client_id lookup failed: $e');
+        }
         final String ours = record?.credentials.clientId ?? '';
         if (ours.isNotEmpty && ours != frameClient) continue;
       }
