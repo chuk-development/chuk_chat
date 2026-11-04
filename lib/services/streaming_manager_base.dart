@@ -14,6 +14,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/models/chat_stream_event.dart';
 import 'package:chuk_chat/models/stream_phase.dart';
+import 'package:chuk_chat/services/chat_turn_stats.dart';
 import 'package:chuk_chat/utils/stream_error_sanitizer.dart';
 import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/services/streaming_chat_service.dart';
@@ -410,6 +411,10 @@ abstract class StreamingManagerBase {
     } else if (event is TpsEvent) {
       // Store TPS metric for later use in onComplete
       activeStream.tps = event.tokensPerSecond;
+      ChatTurnStats.instance.recordTps(chatId, event.tokensPerSecond);
+    } else if (event is UsageEvent) {
+      // The stats row under the composer reads it; the last frame wins.
+      ChatTurnStats.instance.recordUsage(chatId, event.usage);
     } else if (event is ToolCallsEvent) {
       // Native tool calls, assembled server-side. Collected here and read by
       // the tool loop after completion via getNativeToolCalls.
@@ -487,7 +492,6 @@ abstract class StreamingManagerBase {
       // don't remove from map, just record the completion timestamp.
       completeStream(chatId);
     }
-    // UsageEvent is ignored (just logging)
   }
 
   /// Handle stream close asynchronously

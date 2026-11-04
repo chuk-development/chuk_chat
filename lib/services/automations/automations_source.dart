@@ -230,6 +230,9 @@ class AutomationsSource extends ChangeNotifier {
     required String prompt,
     String? name,
     bool notifyOnChange = false,
+    String target = kAutomationTargetThisSession,
+    bool allowChaining = false,
+    Object? catchUp,
   }) => _save(
     (control, requestId) => control.sendAutomationCreate(<String, dynamic>{
       ...automationCreateFrame(
@@ -239,6 +242,9 @@ class AutomationsSource extends ChangeNotifier {
         prompt: prompt,
         name: name,
         notifyOnChange: notifyOnChange,
+        target: target,
+        allowChaining: allowChaining,
+        catchUp: catchUp,
       ),
       'request_id': requestId,
     }),

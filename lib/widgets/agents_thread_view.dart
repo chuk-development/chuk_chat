@@ -40,6 +40,11 @@ import 'package:chuk_chat/services/mcp/mcp_service.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import 'package:chuk_chat/services/agents/agents_run_cost.dart'; // F1
 import 'package:chuk_chat/services/agents/agents_thread_composer.dart'; // F1
+import 'package:chuk_chat/services/agents/agents_command_prefix.dart';
+import 'package:chuk_chat/services/agents/agents_thread_modes.dart';
+import 'package:chuk_chat/widgets/agents_mode_bar.dart';
+import 'package:chuk_chat/widgets/agents_plan_review_card.dart';
+import 'package:chuk_chat/widgets/agents_question_card.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart'; // F1
 import 'package:chuk_chat/services/agents/agents_shell_status.dart';
 import 'package:chuk_chat/services/notifications/agents_notifications.dart';
@@ -499,6 +504,8 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     _automations.attach();
     _automations.addListener(_onAutomationsChanged);
     AgentsBudgetNotices.instance.addListener(_onBudgetNotices); // F1
+    // Agent modes: goal, plan, todo, questions, sandbox fallback.
+    AgentsThreadModes.instance.addListener(_onModesChanged);
     // ── own browser ──
     _userBrowserService = AgentsPermissionsService.instance..attach();
     _userBrowserService.addListener(_onUserBrowserChanged);
@@ -607,6 +614,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     _loader.removeListener(_onLoaderChanged);
     _automations.removeListener(_onAutomationsChanged);
     AgentsBudgetNotices.instance.removeListener(_onBudgetNotices); // F1
+    AgentsThreadModes.instance.removeListener(_onModesChanged);
     _userBrowserService.removeListener(_onUserBrowserChanged); // own browser
     _controller?.state.removeListener(_onStateChanged);
     // The link must not keep pointing at a controller that is disposed
@@ -1759,6 +1767,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
         _onBrowserTarget(event);
       // ── end own browser ──
       case AgentsRelayUser():
+      case AgentsRelayContext():
       case AgentsRelayDebugContext():
       case AgentsRelayRoomTurn():
       case AgentsRelayRoomDone():
@@ -1937,7 +1946,8 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     if (key.isEmpty) return;
     final bool waiting =
         (_approval != null && _approvalDecision == null) ||
-        _secretRequest != null;
+        _secretRequest != null ||
+        (AgentsThreadModes.instance.questionOf(key)?.isAnswerable ?? false);
     _ledger.setWaitingForUser(key, waiting);
   }
 
@@ -2373,6 +2383,8 @@ class AgentsThreadViewState extends State<AgentsThreadView>
         agentsTitle: widget.title,
         topInset: desktopTopInset,
         transcriptFooter: takeover,
+        composerAbove: _composerAbove(dense: true),
+        composerSeat: _composerSeat(context, dense: true),
         unreadSince: widget.unreadSince,
         onUnreadSeen: widget.onUnreadSeen,
       );
@@ -2386,6 +2398,8 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       // Action-required bars remain below the header and own their inset.
       topInset: _hasBarAboveChat ? 0 : widget.topInset,
       transcriptFooter: takeover,
+      composerAbove: _composerAbove(dense: false),
+      composerSeat: _composerSeat(context, dense: false),
       agentsTitle: widget.title,
       unreadSince: widget.unreadSince,
       onUnreadSeen: widget.onUnreadSeen,
@@ -2692,7 +2706,6 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   /// approval card, a budget refusal, a budget warning. Null when there is
   /// none, so the screen keeps no empty footer.
   Widget? _transcriptCards(BuildContext context, {required bool dense}) {
-    final AgentsRelayApprovalRequest? approval = _approval;
     final AgentsBudgetWarning? warning = AgentsBudgetNotices.instance.forThread(
       widget.threadKey,
     );
@@ -2735,15 +2748,10 @@ class AgentsThreadViewState extends State<AgentsThreadView>
           onRunAnyway: refusal.prompt == null ? null : _runAnyway,
           onChangeBudget: _openBudgetSheet,
         ),
-      if (approval != null && approval.hasOptions && !approval.isTakeover)
-        AgentsActionApprovalCard(
-          request: approval,
-          agentName: widget.title ?? widget.agent?.name ?? '',
-          decision: _approvalScope,
-          dense: dense,
-          previousDraft: _approvalPreviousDraft,
-          onSelect: _decideActionApproval,
-        ),
+      // An answered question, as the user's own bubble, while its run goes
+      // on (the in-time answer is not a transcript row of its own).
+      if (_answeredQuestion() case final AgentsQuestionRequest answered)
+        AgentsQuestionAnsweredBubble(request: answered),
       // ── skill proposals ──
       // "Save as skill?" The run does not wait on it, so it stays after the
       // run ended until the user answers (docs/WIRE_CONTRACT.md, "Skill
@@ -2804,7 +2812,27 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       return;
     }
     final bool approved = option != AgentsRelayApprovalRequest.scopeDeny;
-    _decideApproval(approved, scope: option);
+    AgentsThreadModes.instance.approvalAnswered(
+      request.sessionKey ?? widget.threadKey,
+      request.approvalId,
+    );
+    if (option == AgentsRelayApprovalRequest.scopeAlwaysPrefix) {
+      // "Always allow git push": the typed decision has no remember_prefix,
+      // so the frame goes out whole (docs/WIRE_CONTRACT.md, "Shell command
+      // rules").
+      unawaited(
+        AgentsThreadModes.instance.sendApprovalDecision(
+          approvalId: request.approvalId,
+          approved: true,
+          scope: option,
+          rememberPrefix: approvalCommandPrefix(request),
+        ),
+      );
+      setState(() => _approvalDecision = true);
+      _syncWaitingForUser();
+    } else {
+      _decideApproval(approved, scope: option);
+    }
     _ledger.decideApproval(
       request.sessionKey ?? widget.threadKey,
       request.approvalId,
@@ -2814,6 +2842,124 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     );
     setState(() => _approvalScope = option);
   }
+
+  // ── agent modes ──────────────────────────────────────────────────────────
+
+  void _onModesChanged() {
+    if (!mounted) return;
+    setState(() {});
+    _syncWaitingForUser();
+  }
+
+  /// The latest question of this thread, once answered, while its run goes
+  /// on. Null otherwise.
+  AgentsQuestionRequest? _answeredQuestion() {
+    final AgentsQuestionRequest? q = AgentsThreadModes.instance.questionOf(
+      widget.threadKey,
+    );
+    if (q == null || !q.isAnswered || q.answers.isEmpty) return null;
+    return _ledger.isRunning(widget.threadKey) ? q : null;
+  }
+
+  /// The goal strip, the todo card, the plan-mode chip and the sandbox
+  /// banner, above the composer.
+  Widget? _composerAbove({required bool dense}) {
+    if (widget.threadKey.isEmpty) return null;
+    return AgentsModeBar(
+      threadKey: widget.threadKey,
+      dense: dense,
+      onGoalControlFailed: () {
+        if (!mounted) return;
+        AppNotifications.show(
+          context,
+          AppLocalizations.of(context)?.agentsNotConnected ??
+              'Not connected to your computer. Try again when it is back.',
+          duration: const Duration(seconds: 3),
+        );
+      },
+    );
+  }
+
+  /// What takes the composer's seat while the run waits on the user: a plan
+  /// review, a per-action approval, or a question. Null keeps the composer.
+  Widget? _composerSeat(BuildContext context, {required bool dense}) {
+    if (widget.threadKey.isEmpty) return null;
+    final AgentsRelayApprovalRequest? approval = _approval;
+    if (approval != null && approval.hasOptions && !approval.isTakeover) {
+      if (approval.isPlanReview) {
+        return AgentsPlanReviewCard(
+          key: ValueKey<String>('plan-review-${approval.approvalId}'),
+          request: approval,
+          decision: _approvalDecision,
+          dense: dense,
+          maxPlanHeight: dense ? 360 : 240,
+          onDecide: _decidePlanReview,
+        );
+      }
+      return AgentsActionApprovalCard(
+        key: ValueKey<String>('approval-${approval.approvalId}'),
+        request: approval,
+        agentName: widget.title ?? widget.agent?.name ?? '',
+        decision: _approvalScope,
+        dense: dense,
+        previousDraft: _approvalPreviousDraft,
+        onSelect: _decideActionApproval,
+        // Enter / Esc on a desktop keyboard.
+        keyboardShortcuts: dense,
+      );
+    }
+    final AgentsQuestionRequest? question = AgentsThreadModes.instance
+        .questionOf(widget.threadKey);
+    if (question != null && question.isAnswerable) {
+      return AgentsQuestionCard(
+        key: ValueKey<String>('question-${question.questionId}'),
+        request: question,
+        dense: dense,
+        onVisible: (bool visible) => unawaited(
+          AgentsThreadModes.instance.setAskVisible(
+            question.questionId,
+            visible,
+          ),
+        ),
+        onSubmit: (List<AgentsQuestionAnswer> answers) =>
+            AgentsThreadModes.instance.answerQuestion(question, answers),
+      );
+    }
+    return null;
+  }
+
+  /// Approve / Keep planning on a plan review. Once only.
+  void _decidePlanReview(bool approved, String? feedback) {
+    final AgentsRelayApprovalRequest? request = _approval;
+    if (request == null || _approvalDecision != null) return;
+    final AgentsRelayController? controller = _controller;
+    if (controller == null || !controller.state.value.isPaired) {
+      AppNotifications.show(
+        context,
+        AppLocalizations.of(context)?.agentsNotConnected ??
+            'Not connected to your computer. Try again when it is back.',
+        duration: const Duration(seconds: 3),
+      );
+      return;
+    }
+    AgentsThreadModes.instance.approvalAnswered(
+      request.sessionKey ?? widget.threadKey,
+      request.approvalId,
+    );
+    unawaited(
+      AgentsThreadModes.instance.sendApprovalDecision(
+        approvalId: request.approvalId,
+        approved: approved,
+        feedback: approved ? null : feedback,
+      ),
+    );
+    setState(() {
+      _approvalDecision = approved;
+      _approvalScope = approved ? 'approve' : 'keep_planning';
+    });
+    _syncWaitingForUser();
+  }
+  // ── end agent modes ──
 
   /// Takes a per-action approval card off the thread, answered or not: the
   /// run ended, so nothing waits on it any more.

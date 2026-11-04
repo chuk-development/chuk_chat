@@ -1,7 +1,10 @@
 // lib/widgets/diff_widget.dart
 import 'dart:math';
 
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 
@@ -55,6 +58,55 @@ const int _kCoarseRowsPerSide = 120;
 
 /// Word diff runs only when tokens(a) × tokens(b) stays below this budget.
 const int _kMaxWordCells = 250000;
+
+/// A diff card draws at most this many rows before "Show all" (harness
+/// `DiffBlock`: 9 rows, then fold). Folded-context markers count as rows.
+@visibleForTesting
+const int kDiffCollapsedRows = 9;
+
+/// Lines added and removed between [before] and [after], counted the way
+/// the diff card counts them. Memoised: a collapsed tool row asks for the
+/// same pair on every repaint.
+({int added, int removed}) diffChangeCount(String before, String after) {
+  final String key = '${before.hashCode}:${after.hashCode}:'
+      '${before.length}:${after.length}';
+  final cached = _changeCountCache[key];
+  if (cached != null) return cached;
+  final r = _DiffWidgetState._computeDiff(before, after);
+  if (_changeCountCache.length > 64) _changeCountCache.clear();
+  return _changeCountCache[key] = (added: r.added, removed: r.removed);
+}
+
+final Map<String, ({int added, int removed})> _changeCountCache =
+    <String, ({int added, int removed})>{};
+
+final RegExp _resultDiffRegex = RegExp(
+  r'<\s*diff\s*>([\s\S]*?)<\s*/\s*diff\s*>',
+  caseSensitive: false,
+);
+
+/// The summed change count of every `<diff>{before, after}</diff>` block in a
+/// tool result, or null when the result carries none.
+({int added, int removed})? diffChangeCountInResult(String? result) {
+  if (result == null || !result.contains('diff')) return null;
+  int added = 0;
+  int removed = 0;
+  bool any = false;
+  for (final RegExpMatch match in _resultDiffRegex.allMatches(result)) {
+    try {
+      final Object? data = jsonDecode(match.group(1)!);
+      if (data is! Map) continue;
+      final counts = diffChangeCount(
+        data['before'] as String? ?? '',
+        data['after'] as String? ?? '',
+      );
+      added += counts.added;
+      removed += counts.removed;
+      any = true;
+    } catch (_) {}
+  }
+  return any ? (added: added, removed: removed) : null;
+}
 
 /// Result of one diff run. Computed once per (before, after) pair.
 class _DiffResult {
@@ -118,6 +170,9 @@ class DiffWidget extends StatefulWidget {
 
 class _DiffWidgetState extends State<DiffWidget> {
   bool _expanded = true;
+
+  /// The reader asked for every row, past [kDiffCollapsedRows].
+  bool _showAll = false;
   late _DiffResult _diff;
 
   @override
@@ -514,7 +569,10 @@ class _DiffWidgetState extends State<DiffWidget> {
                       'Large change, shown without line matching',
                       isDark,
                     ),
-                  for (final entry in folded)
+                  for (final entry
+                      in _showAll || folded.length <= kDiffCollapsedRows
+                          ? folded
+                          : folded.take(kDiffCollapsedRows))
                     if (entry is int)
                       _buildFold(entry, isDark)
                     else if (entry is _Truncated)
@@ -526,11 +584,46 @@ class _DiffWidgetState extends State<DiffWidget> {
                       )
                     else
                       _buildLine(entry as _DiffLine, isDark),
+                  if (!_showAll && folded.length > kDiffCollapsedRows)
+                    _buildShowAll(folded.length, isDark),
                 ],
               ),
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  /// The row under a cut card: "Show all 24 rows".
+  Widget _buildShowAll(int total, bool isDark) {
+    final l10n = AppLocalizations.of(context);
+    final String label =
+        l10n?.toolActivityText('diffShowAll').replaceAll('{n}', '$total') ??
+        'Show all $total rows';
+    final Color fg = Theme.of(context).colorScheme.onSurface.withValues(
+      alpha: 0.7,
+    );
+    return InkWell(
+      key: const ValueKey<String>('diff-show-all'),
+      onTap: () => setState(() => _showAll = true),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AppIcon(Icons.keyboard_arrow_down, size: 14, color: fg),
+            const SizedBox(width: 4),
+            Text(
+              label.startsWith('toolActivity_') ? 'Show all $total rows' : label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: fg,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

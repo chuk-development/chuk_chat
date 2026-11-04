@@ -15,6 +15,7 @@
 // It runs inside [HeadlessTurnScope], so a tool that needs the screen fails
 // with a clear tool error, and the chat-scoped tools work on this chat.
 
+import 'package:chuk_chat/services/chat_turn_stats.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -223,6 +224,10 @@ abstract final class HeadlessChatTurn {
             reply['text'] = content;
             reply['reasoning'] = reasoning;
             if (tps != null) reply['tps'] = tps.toString();
+            final String? usage = ChatTurnStats.instance
+                .usageOf(c)
+                ?.encode();
+            if (usage != null) reply['usage'] = usage;
           }
       ..onToolCallsUpdate = (int i, List<ToolCall> calls, String c) {
         noteAccepted();

@@ -426,6 +426,13 @@ class AgentsChatTransport {
           // "Automations"); the strip and the page read the source.
           ledger.automation(sessionKey, event);
 
+        case AgentsRelayContext():
+          // A row nobody typed, written during the run: a chip on its answer.
+          if (!event.replay &&
+              (event.sessionKey == null || event.sessionKey == sessionKey)) {
+            ledger.context(sessionKey, event);
+          }
+
         case AgentsRelayAutomationList():
         case AgentsRelayDocuments():
         case AgentsRelaySkillsList():

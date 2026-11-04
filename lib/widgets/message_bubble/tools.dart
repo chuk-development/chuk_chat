@@ -255,7 +255,35 @@ extension _MessageBubbleTools on _MessageBubbleState {
       if (_hasModelInfo && (widget.modelProvider?.isNotEmpty ?? false))
         widget.modelProvider!,
       if (_shouldShowTps) '${widget.tps!.toStringAsFixed(1)} tok/s',
+      // Token usage rides with the model line: both are for a reader who
+      // asked to see what the answer cost (the "Show model info" switch).
+      if (_hasModelInfo) ?_usageFooterPart(),
     ].where((part) => part.trim().isNotEmpty).toList();
+  }
+
+  /// "1.2k in · 340 out · 1.0k cached" for the meta line, or null when the
+  /// reply's usage is unknown. An unknown cache count is left out, never 0.
+  String? _usageFooterPart() {
+    final TurnUsage? usage = widget.usage;
+    if (usage == null) return null;
+    final AppLocalizations? l10n = AppLocalizations.of(context);
+    String t(String key, String english, int n) {
+      final String? text = l10n?.toolActivityText(key);
+      final String pattern = text == null || text.startsWith('toolActivity_')
+          ? english
+          : text;
+      return pattern.replaceAll('{n}', compactTokenCount(n));
+    }
+
+    final List<String> parts = <String>[
+      if (usage.promptTokens != null)
+        t('tokensIn', '{n} in', usage.promptTokens!),
+      if (usage.completionTokens != null)
+        t('tokensOut', '{n} out', usage.completionTokens!),
+      if (usage.cachedTokens != null)
+        t('tokensCached', '{n} cached', usage.cachedTokens!),
+    ];
+    return parts.isEmpty ? null : parts.join(' · ');
   }
 
   Widget _buildMetaFooter() {
@@ -553,6 +581,14 @@ extension _MessageBubbleTools on _MessageBubbleState {
     final bool hasDiffResult =
         toolCall.result != null && _diffBlockRegex.hasMatch(toolCall.result!);
     final bool suppressArgs = toolCall.name == 'notes' && hasDiffResult;
+    // A shell result draws as a terminal that prints its own command line,
+    // so the command is not repeated as an argument above it.
+    final bool terminal = _isTerminalCall(toolCall);
+    if (terminal) {
+      args.remove('command');
+      args.remove('cmd');
+      args.remove('exit_code');
+    }
 
     if (codeArg != null) {
       sections.add(_buildToolSection(label: 'code', body: codeArg, mono: true));
@@ -724,7 +760,31 @@ extension _MessageBubbleTools on _MessageBubbleState {
     );
   }
 
+  /// Shell and code calls whose result reads as terminal output.
+  bool _isTerminalCall(ToolCall toolCall) {
+    final ToolActivityCategory category = toolActivityCategoryOf(
+      toolCall.name,
+    );
+    return category == ToolActivityCategory.commands ||
+        category == ToolActivityCategory.code;
+  }
+
   List<Widget> _buildToolResultSections(ToolCall toolCall, String result) {
+    if (_isTerminalCall(toolCall) && !_diffBlockRegex.hasMatch(result)) {
+      final ShellResult? shell = shellResultOf(toolCall);
+      if (shell != null) {
+        return <Widget>[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: TerminalBlock(
+              command: shell.command,
+              output: shell.output,
+              exitCode: shell.exitCode,
+            ),
+          ),
+        ];
+      }
+    }
     // Extract and render any <diff> blocks inline in the expanded result area.
     final diffWidgets = <Widget>[];
     for (final match in _diffBlockRegex.allMatches(result)) {
@@ -974,4 +1034,11 @@ extension _MessageBubbleTools on _MessageBubbleState {
       ),
     ];
   }
+}
+
+/// 950 -> "950", 1234 -> "1.2k", 1500000 -> "1.5M".
+String compactTokenCount(int n) {
+  if (n < 1000) return '$n';
+  if (n < 1000000) return '${(n / 1000).toStringAsFixed(1)}k';
+  return '${(n / 1000000).toStringAsFixed(1)}M';
 }

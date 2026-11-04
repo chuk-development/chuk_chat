@@ -7,6 +7,32 @@
 
 part of '../message_bubble.dart';
 
+/// Narrowest and widest ratio (width / height) a lone image is drawn at.
+const double kSingleImageMinAspect = 1 / 4;
+const double kSingleImageMaxAspect = 4;
+
+/// The box a single image in a message is drawn in: its own ratio held to
+/// [kSingleImageMinAspect]..[kSingleImageMaxAspect], [maxWidth] wide, and
+/// narrower when the height would pass [maxHeight] (the ratio stays). The
+/// image fills it with [BoxFit.cover].
+Size singleImageBox({
+  required double maxWidth,
+  required double aspectRatio,
+  double? maxHeight,
+}) {
+  final double ratio = aspectRatio.clamp(
+    kSingleImageMinAspect,
+    kSingleImageMaxAspect,
+  );
+  double width = maxWidth;
+  double height = width / ratio;
+  if (maxHeight != null && height > maxHeight) {
+    height = maxHeight;
+    width = height * ratio;
+  }
+  return Size(width, height);
+}
+
 /// Cached image thumbnail that decodes once and caches the bytes
 class _CachedImageThumbnail extends StatefulWidget {
   const _CachedImageThumbnail({
@@ -185,10 +211,17 @@ class _CachedImageThumbnailState extends State<_CachedImageThumbnail>
     // back to the placeholder square; in default mode it is always the fixed
     // tile height.
     final double renderHeight;
+    double renderWidth = widget.width;
     if (widget.naturalAspect && _aspectRatio != null && _aspectRatio! > 0) {
-      final double natural = widget.width / _aspectRatio!;
-      final double cap = widget.maxNaturalHeight ?? double.infinity;
-      renderHeight = natural > cap ? cap : natural;
+      // The ratio is held to 1:4 .. 4:1 and the image covers that box, so a
+      // 1:10 strip or a 10:1 panorama cannot take over the thread.
+      final Size box = singleImageBox(
+        maxWidth: widget.width,
+        aspectRatio: _aspectRatio!,
+        maxHeight: widget.maxNaturalHeight,
+      );
+      renderWidth = box.width;
+      renderHeight = box.height;
     } else {
       renderHeight = widget.height;
     }
@@ -281,7 +314,7 @@ class _CachedImageThumbnailState extends State<_CachedImageThumbnail>
             borderRadius: BorderRadius.circular(widget.borderRadius),
             child: Image.memory(
               _cachedBytes!,
-              width: widget.width,
+              width: renderWidth,
               height: renderHeight,
               fit: widget.fit,
               // Only constrain cacheWidth to preserve aspect ratio during

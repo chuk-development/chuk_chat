@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:chuk_chat/utils/favicon.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
+import 'package:chuk_chat/constants.dart' show kRadiusMd;
 
 /// One parsed hit from a web_search result.
 class WebSearchSource {
@@ -192,12 +193,12 @@ class _SourceCard extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(kRadiusMd),
           onTap: onTap,
           child: Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(kRadiusMd),
               border: Border.all(color: border),
               color: textColor.withValues(alpha: 0.02),
             ),

@@ -44,6 +44,12 @@ import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/models/agents_room.dart';
+import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/services/agents/agents_derived_threads.dart';
+import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
+import 'package:chuk_chat/services/agents/agents_thread_modes.dart';
+import 'package:chuk_chat/widgets/agents_wait_label.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agent_read_marks.dart';
 import 'package:chuk_chat/services/agents/thread_preview_store.dart';
@@ -215,6 +221,8 @@ class _MobileAgentListState extends State<MobileAgentList> {
     // Idempotent; the desktop shell loads the same pins, and the local read
     // answers before the remote merge lands.
     unawaited(RosterPins.instance.load());
+    // The chats automations made, stored on this device.
+    unawaited(AgentsDerivedThreads.instance.load());
   }
 
   @override
@@ -403,6 +411,10 @@ class _MobileAgentListState extends State<MobileAgentList> {
         _profiles,
         RosterPins.instance,
         ThreadPreviewStore.instance,
+        // The "waits on you" labels and the automation chats.
+        AgentsThreadModes.instance,
+        AgentsRunLedger.instance,
+        AgentsDerivedThreads.instance,
       ]),
       builder: (BuildContext context, Widget? _) => _buildList(context),
     );
@@ -700,6 +712,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
                               profiles: _profiles,
                               pinned: RosterPins.instance.isPinned(agent.id),
                               padded: padded,
+                              waitKind: agentsWaitKindFor(agent),
                               onTap: !padded || agent.threads.isEmpty
                                   ? null
                                   : (Rect rect) {
@@ -728,11 +741,44 @@ class _MobileAgentListState extends State<MobileAgentList> {
                           maintainState: true,
                           child: buildRow(padded: true),
                         );
-                        if (_searching || !_animate) return row;
+                        // Chats an automation made of its own: one thread
+                        // each, under the owning agent.
+                        final List<AgentsDerivedThread> derived =
+                            <AgentsDerivedThread>[
+                              for (final AgentsThreadInfo t in agent.threads)
+                                ...AgentsDerivedThreads.instance.forOwner(
+                                  t.key,
+                                ),
+                            ];
+                        final Widget withDerived = derived.isEmpty
+                            ? row
+                            : Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                mainAxisSize: MainAxisSize.min,
+                                children: <Widget>[
+                                  row,
+                                  for (final AgentsDerivedThread t in derived)
+                                    MobileDerivedThreadRow(
+                                      key: ValueKey<String>(
+                                        'mobile-derived-${t.key}',
+                                      ),
+                                      thread: t,
+                                      now: _now(),
+                                      selected:
+                                          t.key == widget.selectedThreadKey,
+                                      waitKind: agentsWaitKindForKeys(
+                                        <String>[t.key],
+                                      ),
+                                      onTap: () =>
+                                          widget.onSelect(agent.id, t.key),
+                                    ),
+                                ],
+                              );
+                        if (_searching || !_animate) return withDerived;
                         return StaggeredItem(
                           key: ValueKey<String>('stagger-${agent.id}'),
                           index: index,
-                          child: row,
+                          child: withDerived,
                         );
                       },
                     ),
@@ -925,9 +971,14 @@ class MobileAgentRow extends StatelessWidget {
     this.profiles,
     this.pinned = false,
     this.padded = true,
+    this.waitKind,
   });
 
   final AgentsAgent agent;
+
+  /// What the agent waits on the user for. Shown in place of the time, and
+  /// the row is highlighted, so a waiting agent is found at a glance.
+  final AgentsWaitKind? waitKind;
   final DateTime now;
   final bool selected;
   final bool unread;
@@ -1022,7 +1073,7 @@ class MobileAgentRow extends StatelessWidget {
             onLongPress: onLongPress == null
                 ? null
                 : () => onLongPress!(rowContext),
-            color: unread
+            color: unread || waitKind != null
                 ? accent.withValues(alpha: 0.13)
                 : selected
                 ? scheme.primary.withValues(alpha: 0.08)
@@ -1067,7 +1118,10 @@ class MobileAgentRow extends StatelessWidget {
                                 color: scheme.onSurfaceVariant,
                               ),
                             ],
-                            if (time.isNotEmpty) ...<Widget>[
+                            if (waitKind != null) ...<Widget>[
+                              const SizedBox(width: 8),
+                              AgentsWaitPill(kind: waitKind!),
+                            ] else if (time.isNotEmpty) ...<Widget>[
                               const SizedBox(width: 8),
                               Text(
                                 time,
@@ -1128,6 +1182,94 @@ class MobileAgentRow extends StatelessWidget {
                 ],
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One chat an automation made of its own (target `new_once` / `new`),
+/// indented under the agent that owns it. A tap opens that chat.
+class MobileDerivedThreadRow extends StatelessWidget {
+  const MobileDerivedThreadRow({
+    super.key,
+    required this.thread,
+    required this.now,
+    required this.onTap,
+    this.selected = false,
+    this.waitKind,
+  });
+
+  final AgentsDerivedThread thread;
+  final DateTime now;
+  final VoidCallback onTap;
+  final bool selected;
+  final AgentsWaitKind? waitKind;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    final TextTheme text = Theme.of(context).textTheme;
+    final AppLocalizations l =
+        AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));
+    final String time = mobileTimeLabel(thread.lastActivity, now: now);
+    return Semantics(
+      identifier: 'mobile-derived-thread-${thread.key}',
+      button: true,
+      selected: selected,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(72, 0, 12, 2),
+        child: MorphTap(
+          onTap: onTap,
+          color: selected
+              ? scheme.primary.withValues(alpha: 0.08)
+              : Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(kRadiusLg),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: Row(
+            children: <Widget>[
+              HugeIcon(
+                HugeIcons.clock01,
+                size: 16,
+                color: scheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Text(
+                      thread.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      l.agentsDerivedThreadSubtitle,
+                      maxLines: 1,
+                      style: text.labelSmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (waitKind != null)
+                AgentsWaitPill(kind: waitKind!)
+              else if (time.isNotEmpty)
+                Text(
+                  time,
+                  style: text.labelMedium?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+            ],
           ),
         ),
       ),

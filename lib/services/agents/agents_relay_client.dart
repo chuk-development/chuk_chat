@@ -46,7 +46,9 @@ import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
 import 'package:chuk_chat/services/agents/agents_reconnect.dart';
 import 'package:chuk_chat/services/agents/agents_resume_trace.dart';
 import 'package:chuk_chat/services/agents/agents_run_cost.dart'; // F1: cost
+import 'package:chuk_chat/services/agents/agents_thread_modes.dart';
 import 'package:chuk_chat/services/agents/agents_controller_session.dart';
+import 'package:chuk_chat/services/agents/agents_derived_threads.dart';
 import 'package:chuk_chat/services/agents/agents_cloud_relay.dart'
     show AgentsCloudRelayAddress;
 import 'package:chuk_chat/services/agents/agents_heal_channel.dart';
@@ -347,9 +349,28 @@ class AgentsRelayDelta extends AgentsRelayInbound {
 /// live client wrote it locally; a reconnecting or reinstalled client did not,
 /// so replay must carry both sides of the thread. [replay] is always true here.
 class AgentsRelayUser extends AgentsRelayInbound {
-  const AgentsRelayUser(this.text, {this.replay = true, this.mid, this.sentAt});
+  const AgentsRelayUser(
+    this.text, {
+    this.replay = true,
+    this.mid,
+    this.sentAt,
+    this.source,
+    this.answerToPendingQuestion,
+  });
   final String text;
   final DateTime? sentAt;
+
+  /// Who wrote this row when the user did not (docs/WIRE_CONTRACT.md, "Typed
+  /// source on synthetic rows"): `goal`, `schedule`, `job`, `mail`, ... Null
+  /// for a prompt the user typed.
+  final String? source;
+
+  /// The pending question this row answers (`answer_to_pending_question`),
+  /// when the user answered after the wait ran out.
+  final String? answerToPendingQuestion;
+
+  /// True when nobody typed this row: it renders as a chip.
+  bool get isSynthetic => source != null;
 
   /// Always true: a user event exists only in a replay stream.
   final bool replay;
@@ -357,6 +378,45 @@ class AgentsRelayUser extends AgentsRelayInbound {
   /// The message-store row id of this turn — the replay cursor. See
   /// [AgentsRelayDelta.mid].
   final int? mid;
+}
+
+/// A runtime row with a typed source (docs/WIRE_CONTRACT.md, "Typed source
+/// on synthetic rows"): the plan rules, a loaded skill, a settled subagent,
+/// a goal wrap-up. Live while a run writes it, and replayed in order.
+class AgentsRelayContext extends AgentsRelayInbound {
+  const AgentsRelayContext({
+    required this.source,
+    required this.text,
+    this.sessionKey,
+    this.replay = false,
+    this.mid,
+    this.sentAt,
+  });
+
+  /// `goal`, `schedule`, `job`, `skill`, `mail`, `subagent`, `review`,
+  /// `plan` (and `time`, which the host neither replays nor streams).
+  final String source;
+  final String text;
+  final String? sessionKey;
+  final bool replay;
+  final int? mid;
+  final DateTime? sentAt;
+
+  /// Null when the frame names no source: there would be nothing to label.
+  static AgentsRelayContext? fromPayload(Map<String, dynamic> payload) {
+    final Object? source = payload['source'];
+    if (source is! String || source.isEmpty) return null;
+    final Object? text = payload['text'] ?? payload['content'];
+    final Object? key = payload['session_key'];
+    return AgentsRelayContext(
+      source: source,
+      text: text is String ? text : '',
+      sessionKey: key is String && key.isNotEmpty ? key : null,
+      replay: payload['replay'] == true,
+      mid: AgentsRelayTool._asInt(payload['mid']),
+      sentAt: epochSecondsToDateTime(payload['created_at']),
+    );
+  }
 }
 
 /// A reasoning delta — the model's thinking, which is a separate channel from
@@ -1319,7 +1379,23 @@ class AgentsRelayApprovalRequest extends AgentsRelayInbound {
     this.details,
     this.decisionScope,
     // ── end F1 ──
+    this.plan,
   });
+
+  /// The [action] of a plan from plan mode (docs/WIRE_CONTRACT.md, "Plan
+  /// mode"): Approve / Keep planning, with an optional feedback text.
+  static const String planReviewAction = 'plan_review';
+
+  /// The scope of "Always allow `git push`" on a shell command approval
+  /// (docs/WIRE_CONTRACT.md, "Shell command rules").
+  static const String scopeAlwaysPrefix = 'always_this_prefix';
+
+  /// The plan's markdown, on a plan review only.
+  final String? plan;
+
+  /// True for a plan review rather than an action approval.
+  bool get isPlanReview =>
+      action == planReviewAction || actionClass == planReviewAction;
 
   // ── F1: approvals + cost ──
   /// The [action] of a per-action approval (docs/WIRE_CONTRACT.md,
@@ -1461,6 +1537,7 @@ class AgentsRelayApprovalRequest extends AgentsRelayInbound {
           : null,
       decisionScope: _nonEmpty(payload['decision_scope']),
       // ── end F1 ──
+      plan: payload['plan'] is String ? payload['plan'] as String : null,
     );
   }
 
@@ -2712,8 +2789,12 @@ class AgentsRelayClient
     final herenow = _hereNowStore == null
         ? null
         : await _hereNowStore.forwardPayload();
+    // Plan mode (docs/WIRE_CONTRACT.md, "Plan mode"): the composer's toggle
+    // rides once, on the next task; absent leaves the host's state alone.
+    final bool? plan = AgentsThreadModes.instance.takePlanFlag(sessionKey);
     await _sendFramePayload(<String, dynamic>{
       'type': 'task',
+      'plan': ?plan,
       'prompt': prompt,
       'session_key': sessionKey,
       // The app's id for this send. It rides only when the caller has one, so
@@ -3384,6 +3465,9 @@ class AgentsRelayClient
     final replay = payload['replay'] == true;
     // The replay cursor. Every replayed event carries it; a live event may.
     final mid = AgentsRelayTool._asInt(payload['mid']);
+    // Agent modes (goal, plan, todo, questions) and the inbox's "waits on
+    // you": a store of their own, fed beside the switch below.
+    AgentsThreadModes.instance.ingest(payload);
     switch (payload['type']) {
       case 'host_route':
         final trust = _establishedTrust;
@@ -3432,14 +3516,27 @@ class AgentsRelayClient
         // it locally). Surfaced so a reconnected/reinstalled client rebuilds both
         // sides of the thread.
         final text = payload['text'] ?? payload['content'] ?? '';
+        final Object? source = payload['source'];
+        final Object? answerTo = payload['answer_to_pending_question'];
         _inbound.add(
           AgentsRelayUser(
             '$text',
             replay: replay,
             mid: mid,
             sentAt: epochSecondsToDateTime(payload['created_at']),
+            source: source is String && source.isNotEmpty ? source : null,
+            answerToPendingQuestion: answerTo is String && answerTo.isNotEmpty
+                ? answerTo
+                : null,
           ),
         );
+      case 'context':
+        // A row nobody typed (a goal round, a loaded skill, a settled
+        // subagent, the plan rules): a chip, never a user bubble.
+        final AgentsRelayContext? context = AgentsRelayContext.fromPayload(
+          payload,
+        );
+        if (context != null) _inbound.add(context);
       case 'reasoning':
         final text = payload['text'] ?? payload['reasoning'] ?? '';
         _inbound.add(
@@ -3511,6 +3608,9 @@ class AgentsRelayClient
         final request = AgentsRelaySecretRequest.fromPayload(payload);
         if (request != null) _inbound.add(request);
       case 'automation':
+        // A fire in a chat of its own (`run_session_key`): the inbox lists
+        // that chat as a thread of the owning agent.
+        AgentsDerivedThreads.instance.ingestAutomation(payload);
         final automation = AgentsRelayAutomation.fromPayload(payload);
         if (automation != null) _inbound.add(automation);
       case 'automation_list':

@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:chuk_chat/models/stream_phase.dart';
 import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/services/settings/tool_detail_service.dart';
 import 'package:chuk_chat/widgets/agent_activity/agent_activity_model.dart';
 import 'package:chuk_chat/widgets/agent_activity/agent_activity_timeline.dart';
 import '../helpers/icon_finder.dart';
@@ -45,6 +46,7 @@ Future<void> _pumpTimeline(
   StreamPhase? phase,
   DateTime? startedAt,
   Duration? finalDuration,
+  ToolDetailMode toolDetailMode = ToolDetailMode.standard,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -59,6 +61,7 @@ Future<void> _pumpTimeline(
           phase: phase,
           startedAt: startedAt,
           finalDuration: finalDuration,
+          toolDetailMode: toolDetailMode,
         ),
       ),
     ),
@@ -345,8 +348,11 @@ void main() {
 
       expect(find.text('Working for 10s'), findsOneWidget);
       expect(findIcon(Icons.keyboard_arrow_down), findsOneWidget);
+      // The two consecutive calls are one group row (Standard: closed),
+      // badged with the category of its first call.
       expect(findIcon(Icons.search), findsOneWidget);
-      expect(findIcon(Icons.language), findsOneWidget);
+      expect(find.text('Searched the web and called tools'), findsOneWidget);
+      expect(findIcon(Icons.language), findsNothing);
     });
 
     testWidgets('once finished it folds to one line', (tester) async {
@@ -409,18 +415,44 @@ void main() {
       expect(findIcon(Icons.search), findsNothing);
     });
 
-    testWidgets('every search gets its own line', (tester) async {
+    testWidgets('consecutive searches fold into one group row', (tester) async {
+      final calls = [
+        _call('web_search', arguments: {'query': 'a'}, endSecond: 2),
+        _call('web_search', arguments: {'query': 'b'}, endSecond: 3),
+        _call('web_search', arguments: {'query': 'c'}, endSecond: 4),
+      ];
+      await _pumpTimeline(
+        tester,
+        calls: calls,
+        initiallyExpanded: true,
+        now: _t0.add(const Duration(seconds: 4)),
+      );
+
+      // One row, no count in the title.
+      expect(find.text('Searched the web'), findsOneWidget);
+      expect(findIcon(Icons.search), findsOneWidget);
+
+      // A tap opens it: every search keeps its own line under it.
+      await tester.tap(find.text('Searched the web'));
+      await tester.pump();
+      expect(findIcon(Icons.search), findsNWidgets(4));
+    });
+
+    testWidgets('Verbose shows every step of a group without a tap', (
+      tester,
+    ) async {
       await _pumpTimeline(
         tester,
         calls: [
           _call('web_search', arguments: {'query': 'a'}, endSecond: 2),
           _call('web_search', arguments: {'query': 'b'}, endSecond: 3),
-          _call('web_search', arguments: {'query': 'c'}, endSecond: 4),
         ],
-        initiallyExpanded: true,
         now: _t0.add(const Duration(seconds: 4)),
+        toolDetailMode: ToolDetailMode.verbose,
       );
 
+      // Verbose keeps the settled turn open and the group open.
+      expect(find.text('Searched the web'), findsOneWidget);
       expect(findIcon(Icons.search), findsNWidgets(3));
     });
 
@@ -471,6 +503,7 @@ void main() {
         initiallyExpanded: true,
         now: _t0.add(const Duration(seconds: 4)),
         onStepTap: tapped.add,
+        toolDetailMode: ToolDetailMode.verbose,
       );
 
       await tester.tap(findIcon(Icons.language));

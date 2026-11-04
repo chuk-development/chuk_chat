@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:chuk_chat/env_loader.dart';
 import 'package:chuk_chat/services/agents/agent_read_marks.dart';
+import 'package:chuk_chat/widgets/text_shimmer.dart';
 
 /// Runs before every test file.
 ///
@@ -10,10 +11,15 @@ import 'package:chuk_chat/services/agents/agent_read_marks.dart';
 /// write still waiting on a timer, so tests write at once; the one test that
 /// checks the delay sets it back itself.
 ///
+/// The running-text shimmer repeats while a step runs, so `pumpAndSettle`
+/// would never settle on a running turn. Tests draw the still text; the
+/// shimmer's own test turns it back on.
+///
 /// The `.env` file is never loaded in a test: a developer machine has one and
 /// CI has none, and a test must see the same app in both places.
 Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   EnvLoader.skipFileForTests();
   AgentReadMarks.persistDelay = Duration.zero;
+  TextShimmer.enabled = false;
   await testMain();
 }

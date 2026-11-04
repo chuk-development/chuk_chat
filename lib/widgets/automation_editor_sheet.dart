@@ -80,7 +80,15 @@ class _AutomationEditorFormState extends State<AutomationEditorForm> {
   late final TextEditingController _alias;
   late final TextEditingController _prompt;
   late final TextEditingController _name;
+  late final TextEditingController _catchUp;
   late bool _onChange;
+
+  /// Where a fired schedule run goes (docs/WIRE_CONTRACT.md, "Schedule
+  /// target").
+  late String _target;
+
+  /// Runs of this automation may set up automations ("No recursion").
+  late bool _allowChaining;
 
   /// The field that failed the local check, and why.
   String? _fieldError;
@@ -112,6 +120,9 @@ class _AutomationEditorFormState extends State<AutomationEditorForm> {
     _prompt = TextEditingController(text: a?.prompt ?? '');
     _name = TextEditingController(text: a?.name ?? '');
     _onChange = a?.notifiesOnChange ?? false;
+    _target = a?.target ?? kAutomationTargetThisSession;
+    _allowChaining = a?.allowChaining ?? false;
+    _catchUp = TextEditingController(text: catchUpText(a?.catchUpSeconds));
   }
 
   @override
@@ -125,6 +136,7 @@ class _AutomationEditorFormState extends State<AutomationEditorForm> {
       _alias,
       _prompt,
       _name,
+      _catchUp,
     ]) {
       c.dispose();
     }
@@ -212,6 +224,16 @@ class _AutomationEditorFormState extends State<AutomationEditorForm> {
     });
     final Object? spec = _validSpec(l);
     if (spec == null) return;
+    final Object? catchUp;
+    try {
+      catchUp = parseCatchUp(_catchUp.text);
+    } on FormatException {
+      setState(() {
+        _fieldKey = 'catch_up';
+        _fieldError = l.automationErrCatchUp;
+      });
+      return;
+    }
     final AutomationSaveResult result;
     if (_editing) {
       final Map<String, dynamic>? frame = automationUpdateFrame(
@@ -220,6 +242,10 @@ class _AutomationEditorFormState extends State<AutomationEditorForm> {
         prompt: _prompt.text,
         name: _name.text,
         notifyOnChange: _onChange,
+        target: _kind == 'schedule' ? _target : null,
+        allowChaining: _allowChaining,
+        catchUp: catchUp,
+        catchUpSet: true,
       );
       if (frame == null) {
         setState(() => _hostError = l.automationNothingChanged);
@@ -236,6 +262,9 @@ class _AutomationEditorFormState extends State<AutomationEditorForm> {
         prompt: _prompt.text,
         name: _name.text,
         notifyOnChange: _onChange,
+        target: _kind == 'schedule' ? _target : kAutomationTargetThisSession,
+        allowChaining: _allowChaining,
+        catchUp: catchUp,
       );
     }
     if (!mounted) return;
@@ -455,6 +484,61 @@ class _AutomationEditorFormState extends State<AutomationEditorForm> {
               key: 'name',
               controller: _name,
               label: l.automationNameLabel,
+            ),
+            // A schedule can run in a chat of its own.
+            if (_kind == 'schedule') ...<Widget>[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 4, 4, 6),
+                child: Text(
+                  l.automationTargetLabel,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              ConnectedGroup(
+                key: const ValueKey<String>('automation-target'),
+                margin: EdgeInsets.zero,
+                labels: <String>[
+                  l.automationTargetThis,
+                  l.automationTargetNewOnce,
+                  l.automationTargetNew,
+                ],
+                selected: kAutomationTargets
+                    .indexOf(_target)
+                    .clamp(0, kAutomationTargets.length - 1),
+                onSelected: (int i) => setState(() {
+                  _target = kAutomationTargets[i];
+                  _hostError = null;
+                }),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+                child: Text(
+                  l.automationTargetHelp,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+            _field(
+              key: 'catch_up',
+              controller: _catchUp,
+              label: l.automationCatchUpLabel,
+              help: l.automationCatchUpHelp,
+            ),
+            ExpressiveSwitchRow(
+              key: const ValueKey<String>('automation-chaining'),
+              title: l.automationChaining,
+              subtitle: l.automationChainingHelp,
+              value: _allowChaining,
+              onChanged: _saving
+                  ? null
+                  : (bool v) => setState(() {
+                      _allowChaining = v;
+                      _hostError = null;
+                    }),
             ),
             ExpressiveSwitchRow(
               key: const ValueKey<String>('automation-notify'),

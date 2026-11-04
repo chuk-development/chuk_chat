@@ -105,7 +105,42 @@ void main() {
       find.text('Large change, shown without line matching'),
       findsOneWidget,
     );
+    // The card stops after kDiffCollapsedRows rows; "Show all" opens it.
+    await tester.tap(find.byKey(const ValueKey<String>('diff-show-all')));
+    await tester.pump();
     expect(find.textContaining('more removed lines'), findsOneWidget);
     expect(find.textContaining('more added lines'), findsOneWidget);
+  });
+
+  testWidgets('a card over 9 rows folds behind Show all', (tester) async {
+    final before = List.generate(30, (i) => 'line $i').join('\n');
+    final after = List.generate(30, (i) => i.isEven ? 'line $i' : 'LINE $i')
+        .join('\n');
+    await pump(tester, DiffWidget(before: before, after: after));
+
+    expect(find.byKey(const ValueKey<String>('diff-show-all')), findsOneWidget);
+    expect(find.textContaining('Show all'), findsOneWidget);
+    expect(find.textContaining('LINE 29'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey<String>('diff-show-all')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey<String>('diff-show-all')), findsNothing);
+    expect(find.textContaining('LINE 29', findRichText: true), findsOneWidget);
+  });
+
+  testWidgets('a small card has no Show all row', (tester) async {
+    await pump(tester, const DiffWidget(before: 'a\nb', after: 'a\nc'));
+    expect(find.byKey(const ValueKey<String>('diff-show-all')), findsNothing);
+  });
+
+  test('diffChangeCountInResult sums every diff block', () {
+    const String result =
+        'Saved.\n<diff>{"before":"a\\nb","after":"a\\nc\\nd"}</diff>';
+    final counts = diffChangeCountInResult(result);
+    expect(counts, isNotNull);
+    expect(counts!.added, 2);
+    expect(counts.removed, 1);
+    expect(diffChangeCountInResult('no diff here'), isNull);
+    expect(diffChangeCountInResult(null), isNull);
   });
 }

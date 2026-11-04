@@ -42,11 +42,13 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/services/agents/media_index.dart';
 import 'package:chuk_chat/services/agents/thread_preview_store.dart';
+import 'package:chuk_chat/services/agents/agents_context_rows.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/automations/automation_ledger.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import 'package:chuk_chat/services/agents/agents_run_cost.dart'; // F1: cost
+import 'package:chuk_chat/services/agents/agents_thread_modes.dart';
 
 /// Prefix of the per-session replay cursor key in SharedPreferences.
 const String kReplayCursorPrefix = 'cowork.replay_cursor.';
@@ -359,11 +361,28 @@ class AgentsReplayLoader extends ChangeNotifier {
         _closeAiRow(draft);
         draft.rows.add(<String, String>{
           'sender': 'user',
-          'text': text,
+          // A late answer to a pending question reads as what the user
+          // picked, not as the host's wrapper.
+          'text': event.answerToPendingQuestion == null
+              ? text
+              : (pendingAnswerSummary(text) ?? text),
           'reasoning': '',
           if (event.sentAt != null) 'sentAt': event.sentAt!.toIso8601String(),
+          // A prompt nobody typed (a goal round, a schedule, a mail): stored
+          // as a user row, drawn as a chip (docs/WIRE_CONTRACT.md, "Typed
+          // source on synthetic rows").
+          if (event.source != null)
+            'inputMode': '$kAgentsSourceInputModePrefix${event.source}',
         });
         _noteMid(draft, mid);
+
+      case AgentsRelayContext(:final replay):
+        if (!replay) return;
+        // A runtime row with a source rides on the answer it belongs to, as
+        // one synthetic call the list item draws as a chip.
+        final draft = _draftFor();
+        _openAiRow(draft).aiToolCalls.add(contextCallFromRelay(event));
+        _noteMid(draft, event.mid);
 
       case AgentsRelayDelta(:final replay, :final text, :final mid):
         if (!replay) return;

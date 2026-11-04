@@ -47,6 +47,9 @@ import 'package:chuk_chat/services/offline_retry_manager.dart';
 import 'package:chuk_chat/platform_specific/chat/offline_send_bridge.dart';
 import 'package:chuk_chat/services/mcp/mcp_availability.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
+import 'package:chuk_chat/utils/composer_focus_policy.dart';
+import 'package:chuk_chat/services/chat_turn_stats.dart';
+import 'package:chuk_chat/widgets/chat_stats_row.dart';
 import 'package:chuk_chat/services/agents/agents_thread_composer.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
@@ -191,6 +194,14 @@ class ChukChatUIMobile extends StatefulWidget {
   /// [messengerMode].
   final Widget? transcriptFooter;
 
+  /// AGENTS: drawn right above the composer (the goal strip, the todo card,
+  /// the plan-mode chip, the sandbox banner). See [messengerMode].
+  final Widget? composerAbove;
+
+  /// AGENTS: takes the composer's seat while it is set (a question card or
+  /// an approval the run waits on). See [messengerMode].
+  final Widget? composerSeat;
+
   /// The agent's name (agents_thread_view passes it). The voice call uses it
   /// as the agent's name, as on the desktop. Agents's; see [messengerMode].
   final String? agentsTitle;
@@ -229,6 +240,8 @@ class ChukChatUIMobile extends StatefulWidget {
     this.messengerMode = false,
     this.hostRunActive = false,
     this.transcriptFooter,
+    this.composerAbove,
+    this.composerSeat,
     this.agentsTitle,
     this.unreadSince,
     this.onUnreadSeen,
@@ -379,14 +392,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   /// either: the keyboard belongs to the tap on the composer. With a hardware
   /// keyboard (a desktop window narrow enough for this layout) the focus
   /// costs nothing and stays.
-  bool get _mayAutoFocusComposer =>
-      !kIsWeb &&
-      defaultTargetPlatform != TargetPlatform.android &&
-      defaultTargetPlatform != TargetPlatform.iOS;
+  bool get _mayAutoFocusComposer => mayAutoFocusComposer();
 
-  /// [_mayAutoFocusComposer] for the Agents thread only. Upstream's chat
-  /// (messenger mode off) keeps its own focus rule unchanged.
-  bool get _mayFocusOnLoad => !widget.messengerMode || _mayAutoFocusComposer;
+  /// The same rule for every chat, the plain one included: no phone chat
+  /// opens the keyboard by itself (`composer_focus_policy.dart`).
+  bool get _mayFocusOnLoad => _mayAutoFocusComposer;
 
   /// Workspaces are hidden in upstream's chat ([kFeatureWorkspaces] is off)
   /// but the Agents composer offers them, as the original app did.
@@ -1610,7 +1620,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       debugPrint('🆕 [NewChat] After setState, _activeChatId: $_activeChatId');
     }
     scrollChatToBottom(force: true);
-    if (!widget.isSidebarExpanded) {
+    if (_mayFocusOnLoad && !widget.isSidebarExpanded) {
       composerFocusNode.requestFocus();
     }
 
@@ -2227,6 +2237,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         message['text'] = content;
         message['reasoning'] = reasoning;
         if (tps != null) message['tps'] = tps.toString();
+        final String? usage = ChatTurnStats.instance.usageOf(chatId)?.encode();
+        if (usage != null) message['usage'] = usage;
         // Clear any prior `interrupted` flag — a clean finalize means the
         // assistant body is complete now, so we drop the Continue button.
         if (message['status'] == 'interrupted') {
@@ -2289,6 +2301,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         fullMessages[index]['text'] = content;
         fullMessages[index]['reasoning'] = reasoning;
         if (tps != null) fullMessages[index]['tps'] = tps.toString();
+        final String? usage = ChatTurnStats.instance.usageOf(chatId)?.encode();
+        if (usage != null) fullMessages[index]['usage'] = usage;
         if (fullMessages[index]['status'] == 'interrupted') {
           fullMessages[index].remove('status');
         }
@@ -2903,7 +2917,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     });
 
     final int placeholderIndex = _messages.length - 1;
-    if (voiceText == null) composerFocusNode.requestFocus();
+    // A phone closes the keyboard after a send, so the answer has the
+    // screen; a hardware keyboard keeps the focus for the next message.
+    if (voiceText == null) {
+      if (_mayAutoFocusComposer) {
+        composerFocusNode.requestFocus();
+      } else {
+        composerFocusNode.unfocus();
+      }
+    }
     pinMessageToTop();
 
     // ── Offline outbox (docs/OFFLINE_SEND.md) ──────────────────────
@@ -4276,11 +4298,16 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                _buildSearchBar(
-                                  isCompactMode: isCompactModeForModelDropdown,
-                                  theme: theme,
-                                  iconFg: iconFg,
-                                ),
+                                // AGENTS: mode bar, then the composer or the
+                                // card that takes its seat.
+                                ?widget.composerAbove,
+                                widget.composerSeat ??
+                                    _buildSearchBar(
+                                      isCompactMode:
+                                          isCompactModeForModelDropdown,
+                                      theme: theme,
+                                      iconFg: iconFg,
+                                    ),
                                 // Gone while the keyboard is up: with half
                                 // the screen taken by keys, the line is one
                                 // more thing between the field and the
@@ -4294,6 +4321,18 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                 if (!composerFocusNode.hasFocus &&
                                     MediaQuery.viewInsetsOf(context).bottom <
                                         80) ...[
+                                  // tok/s, cache hit, context ring of the
+                                  // last reply; hidden on narrow phones.
+                                  if (!widget.messengerMode &&
+                                      _messages.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: ChatStatsRow(
+                                        chatId: _activeChatId,
+                                        modelId: selectedModelId,
+                                        providerSlug: selectedProviderSlug,
+                                      ),
+                                    ),
                                   const SizedBox(height: 8),
                                   Text(
                                     AppLocalizations.of(context)!.aiDisclaimer,
@@ -4558,7 +4597,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                   scrollController: _composerScrollController,
                                   style: TextStyle(
                                     color: theme.colorScheme.onSurface,
-                                    fontSize: 15,
+                                    fontSize: composerFontSize(),
                                     height: 1.35,
                                   ),
                                   minLines: 1,
@@ -4572,7 +4611,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                     hintStyle: TextStyle(
                                       color: theme.colorScheme.onSurface
                                           .withValues(alpha: 0.5),
-                                      fontSize: 15,
+                                      fontSize: composerFontSize(),
                                     ),
                                     filled: false,
                                     border: InputBorder.none,

@@ -21,6 +21,7 @@ import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/utils/format_bytes.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
+import 'package:chuk_chat/constants.dart' show kRadiusSm, kRadiusXs;
 
 typedef AttachmentRemoveCallback = void Function(String fileId);
 typedef AttachmentCopyCallback = Future<void> Function(AttachedFile file);
@@ -195,7 +196,7 @@ class _ImageAttachmentCard extends StatelessWidget {
                         ),
                         decoration: BoxDecoration(
                           color: cs.scrim.withValues(alpha: 0.6),
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(kRadiusXs),
                         ),
                         child: Text(
                           formatBytes(file.fileSizeBytes!),
@@ -482,7 +483,7 @@ class _DocumentAttachmentTile extends StatelessWidget {
                           ),
                           decoration: BoxDecoration(
                             color: cs.scrim.withValues(alpha: 0.6),
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: BorderRadius.circular(kRadiusXs),
                           ),
                           child: Text(
                             formatBytes(file.fileSizeBytes!),
@@ -861,7 +862,7 @@ class _DocumentPreviewDialogState extends State<_DocumentPreviewDialog> {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
               decoration: BoxDecoration(
                 color: textColor.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(kRadiusSm),
               ),
               child: Text(
                 loadingState == PdfLoadingState.loading

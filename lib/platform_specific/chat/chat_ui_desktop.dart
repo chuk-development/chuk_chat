@@ -22,6 +22,9 @@ import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/chat_history_builder.dart';
 import 'package:chuk_chat/services/mcp/mcp_availability.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
+import 'package:chuk_chat/services/chat_turn_stats.dart';
+import 'package:chuk_chat/widgets/chat_stats_row.dart';
+import 'package:chuk_chat/widgets/chat_turn_rail.dart';
 import 'package:chuk_chat/services/agents/agents_thread_composer.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/offline_send_coordinator.dart';
@@ -97,6 +100,8 @@ import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_binding.dart';
 import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_call_button.dart';
 import 'package:chuk_chat/platform_specific/chat/voice/voice_turn_queue.dart';
 import 'package:chuk_chat/voice/voice_call_models.dart' show VoiceTurn;
+import 'package:chuk_chat/services/shortcut_registry.dart';
+import 'package:chuk_chat/widgets/shortcuts_dialog.dart';
 
 part 'desktop_send_logic.dart';
 
@@ -157,6 +162,14 @@ class ChukChatUIDesktop extends StatefulWidget {
   /// thread sets it ([agentsThread]).
   final Widget? transcriptFooter;
 
+  /// AGENTS: drawn right above the composer, inside its column (the goal
+  /// strip, the todo card, the plan-mode chip, the sandbox banner).
+  final Widget? composerAbove;
+
+  /// AGENTS: takes the composer's seat while it is set (a question card or
+  /// an approval the run waits on). The composer comes back when it goes.
+  final Widget? composerSeat;
+
   /// When the reader last had this thread open, before this visit. Rows the
   /// agent wrote after it are new; a pill jumps to the first one while it is
   /// off screen (bead chuk_chat-f5wd). Null: no pill.
@@ -196,6 +209,8 @@ class ChukChatUIDesktop extends StatefulWidget {
     this.agentsTitle,
     this.topInset = 0,
     this.transcriptFooter,
+    this.composerAbove,
+    this.composerSeat,
     this.unreadSince,
     this.onUnreadSeen,
   });
@@ -467,8 +482,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         // keep working whether they simulate Cmd+V or use NSTextInputClient
         // directly.
 
+        // Ctrl+/ (Cmd+/): the shortcut list.
+        if (AppShortcuts.matches(AppShortcuts.showShortcuts, event)) {
+          unawaited(showShortcutsDialog(context));
+          return KeyEventResult.handled;
+        }
+
         // Escape: cancel editing mode
-        if (event.logicalKey == LogicalKeyboardKey.escape &&
+        if (AppShortcuts.matches(AppShortcuts.cancelEdit, event) &&
             messageActionsHandler.isEditing) {
           cancelEditMessage();
           return KeyEventResult.handled;
@@ -477,7 +498,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         // Up in an empty composer edits the last own message (the Agents
         // desktop, docs/DESIGN.md §14.7).
         if (widget.agentsThread &&
-            event.logicalKey == LogicalKeyboardKey.arrowUp &&
+            AppShortcuts.matches(AppShortcuts.editLast, event) &&
             composerController.text.isEmpty &&
             !messageActionsHandler.isEditing &&
             !_isStreaming) {
@@ -2003,6 +2024,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     });
   }
 
+  /// The turn rail's row keys (plain chats, wide windows).
+  final ChatTurnRailController _turnRail = ChatTurnRailController();
+
   // ── unread pill (bead chuk_chat-f5wd) ──
   final GlobalKey _firstUnreadKey = GlobalKey(debugLabel: 'first unread row');
 
@@ -2086,10 +2110,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             ? () => _continueGenerationAt(i)
             : null,
       );
+      // A user row carries the turn rail's key, so a tick can find it.
+      final Widget railed = !widget.agentsThread && data.isUser
+          ? KeyedSubtree(key: _turnRail.keyFor(i), child: item)
+          : item;
       // The first row the reader has not seen carries the unread pill's key.
       return i == firstUnreadIndex
-          ? KeyedSubtree(key: _firstUnreadKey, child: item)
-          : item;
+          ? KeyedSubtree(key: _firstUnreadKey, child: railed)
+          : railed;
     }
 
     Widget itemBuilder(BuildContext context, int i) => rowBuilder(context, i);
@@ -2381,6 +2409,23 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                             ),
                           ),
                         ),
+                      // One tick per user message on the right edge; hidden
+                      // under 900 px by the rail itself.
+                      if (!isChatEmpty && !widget.agentsThread)
+                        Positioned.fill(
+                          key: const ValueKey<String>('desktop-turn-rail'),
+                          child: ChatTurnRail(
+                            messages: _messages,
+                            topPadding: widget.topInset + 12,
+                            bottomPadding: inputAreaTotalHeight + 12,
+                            onTickTap: (int index) => scrollToTurn(
+                              _turnRail,
+                              index: index,
+                              itemCount: _messages.length,
+                              controller: scrollController,
+                            ),
+                          ),
+                        ),
                       // "N new": jumps to the first unread row (bead
                       // chuk_chat-f5wd).
                       if (_unreadPillCount > 0)
@@ -2459,10 +2504,23 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                               child: Column(
                                 mainAxisSize: MainAxisSize.min, // Crucial for column inside AnimatedPositioned/Center
                                 children: [
+                                  // AGENTS: mode bar, then the composer or
+                                  // the card that takes its seat.
+                                  ?widget.composerAbove,
                                   // Search Bar (attachment bar is now inside)
-                                  _buildSearchBar(
-                                    isCompactMode: widget.isCompactMode,
-                                  ),
+                                  widget.composerSeat ??
+                                      _buildSearchBar(
+                                        isCompactMode: widget.isCompactMode,
+                                      ),
+                                  if (!isChatEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: ChatStatsRow(
+                                        chatId: _activeChatId,
+                                        modelId: selectedModelId,
+                                        providerSlug: selectedProviderSlug,
+                                      ),
+                                    ),
                                   const SizedBox(height: 8),
                                   Text(
                                     AppLocalizations.of(context)!.aiDisclaimer,
@@ -2657,6 +2715,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                               color: iconFg,
                               fontWeight: FontWeight.w600,
                               height: 1.4,
+                              // 16 on the web, or mobile Safari zooms in.
+                              fontSize: kIsWeb ? 16 : null,
                             ),
                             decoration: InputDecoration(
                               hintText: messageActionsHandler.isEditing
@@ -2857,6 +2917,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               spinnerSize: 20,
               spinnerStroke: 2.5,
               semanticsId: 'desktop_send_button',
+              sendTooltip: AppShortcuts.tooltip(
+                'Send',
+                AppShortcuts.send,
+              ),
             ),
           ),
         ],

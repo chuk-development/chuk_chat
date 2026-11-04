@@ -32,6 +32,8 @@ import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/widgets/agent_activity/agent_activity_model.dart';
 import 'package:chuk_chat/widgets/agent_activity/agent_activity_timeline.dart';
 import 'package:chuk_chat/widgets/agent_activity/agents_live_status.dart';
+import 'package:chuk_chat/widgets/agent_activity/tool_activity_category.dart';
+import 'package:chuk_chat/widgets/terminal_block.dart';
 import 'package:chuk_chat/services/agents/agents_approval_grants.dart';
 import 'package:chuk_chat/widgets/agents_approval_row.dart';
 import 'package:chuk_chat/models/artifact.dart';
@@ -83,6 +85,10 @@ import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/utils/json_helpers.dart';
+import 'package:chuk_chat/utils/secret_mask.dart';
+import 'package:chuk_chat/widgets/masked_secret_text.dart';
+import 'package:chuk_chat/widgets/message_feedback.dart';
+import 'package:chuk_chat/models/turn_usage.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 part 'message_bubble/models.dart';
@@ -190,6 +196,8 @@ class MessageBubble extends StatefulWidget {
     this.modelLabel,
     this.modelProvider,
     this.tps,
+    this.usage,
+    this.feedbackId,
     this.isEditing = false,
     this.initialEditText,
     this.onSubmitEdit,
@@ -282,6 +290,15 @@ class MessageBubble extends StatefulWidget {
   final String? modelLabel;
   final String? modelProvider;
   final double? tps; // Tokens per second metric
+
+  /// Token usage of this answer (prompt, completion, cached), when the
+  /// server reported it. Null on older answers and while streaming.
+  final TurnUsage? usage;
+
+  /// The stored id of this answer (`messageId` of the message map), which
+  /// keys the reader's thumbs verdict. Null: no thumbs, because a verdict on
+  /// a message without a lasting id could not be found again after a reload.
+  final String? feedbackId;
   final bool isEditing;
   final String? initialEditText;
   final ValueChanged<String>? onSubmitEdit;
