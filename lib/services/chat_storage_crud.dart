@@ -1016,8 +1016,9 @@ class ChatStorageCrud {
   /// and the cloud.
   static Future<String> _payloadJson(
     List<ChatMessage> messages,
-    String? customName,
-  ) => encodeChatPayloadAsync(messages, customName);
+    String? customName, {
+    bool forCloud = false,
+  }) => encodeChatPayloadAsync(messages, customName, forCloud: forCloud);
 
   /// The digest that tells two saves of a chat apart: over the messages as
   /// they are in memory, not over the stored encoding, so it is computed
@@ -1359,7 +1360,11 @@ class ChatStorageCrud {
     // A chat saved locally first may already carry a name and a star.
     final local = ChatStorageState.chatsById[effectiveChatId];
     final customName = _customNameOf(local);
-    final payloadJson = await _payloadJson(messages, customName);
+    final payloadJson = await _payloadJson(
+      messages,
+      customName,
+      forCloud: true,
+    );
 
     final encryptedPayload = await EncryptionService.encryptChatPayload(
       payloadJson,
@@ -1602,7 +1607,11 @@ class ChatStorageCrud {
       await ChatDirtyStore.markSynced(user.id, chatId, rev);
       return existingChat;
     }
-    final payloadJson = await _payloadJson(messages, normalizedCustomName);
+    final payloadJson = await _payloadJson(
+      messages,
+      normalizedCustomName,
+      forCloud: true,
+    );
     final encryptedPayload = await EncryptionService.encryptChatPayload(
       payloadJson,
     );

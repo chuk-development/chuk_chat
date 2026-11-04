@@ -67,7 +67,11 @@ class ChatStorageMutations {
     }
 
     final updatedChat = chat.copyWith(customName: newName, title: newName);
-    final payload = await encodeChatPayloadAsync(updatedChat.messages, newName);
+    final payload = await encodeChatPayloadAsync(
+      updatedChat.messages,
+      newName,
+      forCloud: true,
+    );
 
     // Encrypt BOTH payload AND title (title is used for fast sidebar loading)
     final encryptedPayload = await EncryptionService.encryptChatPayload(
@@ -135,6 +139,7 @@ class ChatStorageMutations {
       final payload = await encodeChatPayloadAsync(
         chat.messages,
         chat.customName,
+        forCloud: true,
       );
       final encryptedPayload = await EncryptionService.encryptChatPayload(
         payload,

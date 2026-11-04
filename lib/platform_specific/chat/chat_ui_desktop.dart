@@ -25,6 +25,9 @@ import 'package:chuk_chat/services/chat_runtime_registry.dart';
 import 'package:chuk_chat/services/agents/agents_thread_composer.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/offline_send_coordinator.dart';
+import 'package:chuk_chat/services/offline_retry_manager.dart';
+import 'package:chuk_chat/services/follow_up_parking_service.dart';
+import 'package:chuk_chat/platform_specific/chat/offline_send_bridge.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -333,6 +336,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   bool _isLoadingChat = false; // Loading indicator for chat switching
   final StreamingManager _streamingManager = StreamingManager();
 
+  /// Reloads the open chat when the offline outbox wrote into it.
+  StreamSubscription<OfflineRetryEvent>? _outboxSub;
+
   // Computed property - checks if CURRENT chat is streaming
   bool get _isStreaming =>
       _activeChatId != null && _streamingManager.isStreaming(_activeChatId!);
@@ -418,6 +424,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     // loadSavedModelPreference in the post-frame pass below — the single
     // entry point, so startup writes and picked-model refreshes run once.
     _audioHandler = AudioRecordingHandler();
+    _outboxSub = OfflineSendBridge.listen(_onOutboxChangedChat);
     messageActionsHandler = MessageActionsHandler()
       ..onShowSnackBar = showSnackBar
       ..onSpeak = _speakMessage
@@ -713,6 +720,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   @override
   void dispose() {
     AgentsThreadComposer.detach(_agentsThreadSend); // AGENTS
+    _outboxSub?.cancel();
+    _fileHandler.dispose();
     // CRITICAL: Clear loading lock if we're disposed while loading
     // This prevents the flag from getting stuck
     if (_isLoadingChat) {
@@ -1150,6 +1159,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     });
     scrollChatToBottom(animate: false, force: true);
     Future.delayed(Duration.zero, () => composerFocusNode.requestFocus());
+    // A follow-up typed during a turn that the app did not live to send.
+    final String? loadedId = _activeChatId;
+    if (loadedId != null) unawaited(_restoreParkedFollowUp(loadedId));
     stopwatch.stop();
     unawaited(
       DiagnosticsLogService.timing(
@@ -1485,9 +1497,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         final session = SupabaseService.auth.currentSession;
         if (session != null) return session.accessToken;
         sessionLookupFailed = true;
-        if (mounted) {
-          showSnackBar(AppLocalizations.of(context)!.sessionExpired);
-        }
         return null;
       },
       onStateChanged: () {
@@ -1498,6 +1507,17 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     if (!mounted || result == null) return;
 
     if (!result.success) {
+      // Offline or the transcription could not connect: the recording is
+      // on disk. It waits in the outbox and is transcribed and sent later.
+      final String? saved = result.savedPath;
+      if (result.queueable && saved != null) {
+        await _queueVoiceRecording(saved, result.durationMs);
+        return;
+      }
+      if (sessionLookupFailed) {
+        showSnackBar(AppLocalizations.of(context)!.sessionExpired);
+        return;
+      }
       if (!sessionLookupFailed) {
         showSnackBar(
           result.error ?? AppLocalizations.of(context)!.transcriptionFailed,
@@ -1789,6 +1809,56 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   }
 
   /// Persist chat with a specific chatId (for background streaming to correct chat)
+  /// A recording that could not be transcribed now: a voice bubble that
+  /// waits, and a voice row in the outbox (docs/OFFLINE_SEND.md).
+  Future<void> _queueVoiceRecording(String path, int? durationMs) async {
+    final bool isNewChat = _activeChatId == null;
+    _activeChatId ??= _uuid.v4();
+    final String chatId = _activeChatId!;
+    final String modelId = selectedModelId;
+    final String provider = selectedProviderSlug ?? '';
+    final String? systemPrompt = await _resolveSystemPromptForSend();
+    String queueId;
+    try {
+      queueId = await OfflineSendCoordinator.enqueueVoice(
+        OfflineSendPayload(
+          chatId: chatId,
+          messageText: '',
+          modelId: modelId,
+          providerSlug: provider,
+          systemPrompt: systemPrompt,
+          reasoningEffort: clampedReasoningEffort(modelId, provider),
+          voicePath: path,
+          voiceDurationMs: durationMs,
+          autoSend: widget.autoSendVoiceTranscription,
+        ),
+        kick: NetworkStatusService.isOnline,
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[Desktop-Voice] enqueue failed: ${e.runtimeType}');
+      }
+      if (mounted) {
+        showSnackBar(AppLocalizations.of(context)!.transcriptionFailed);
+      }
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _messages.add(
+        OfflineSendBridge.voiceBubble(
+          queueId: queueId,
+          durationMs: durationMs,
+          modelId: modelId,
+          provider: provider,
+        ),
+      );
+    });
+    _persistChatWithId(chatId);
+    if (isNewChat) widget.onChatIdChanged(chatId);
+    scrollChatToBottom(force: true);
+  }
+
   void _persistChatWithId(String chatId, {bool commit = true}) {
     if (_messages.isEmpty) return;
     unawaited(

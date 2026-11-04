@@ -889,6 +889,19 @@ class AppLocalizations {
   String get messagePending => _get('messagePending');
   String get messageFailed => _get('messageFailed');
   String get messageRetry => _get('messageRetry');
+  String get outboxWaitingForNetwork => _get('outboxWaitingForNetwork');
+  String get outboxUploading => _get('outboxUploading');
+  String get outboxTranscribing => _get('outboxTranscribing');
+  String get outboxSending => _get('outboxSending');
+  String get outboxDelete => _get('outboxDelete');
+  String get outboxSend => _get('outboxSend');
+  String get outboxTranscriptReady => _get('outboxTranscriptReady');
+  String get voiceSavedOffline => _get('voiceSavedOffline');
+  String get imageSavedOffline => _get('imageSavedOffline');
+  String get outboxQueuedSnack => _get('outboxQueuedSnack');
+  String outboxPendingCount(int count) =>
+      _get('outboxPendingCount').replaceAll('{count}', count.toString());
+  String get agentsImagesNotSupported => _get('agentsImagesNotSupported');
 
   // ── Onboarding ─────────────────────────────────────────────
   String get onboardingReplayTile => _get('onboardingReplayTile');

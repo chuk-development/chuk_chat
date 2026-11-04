@@ -851,6 +851,22 @@ const Map<String, String> stringsDe = {
   'messagePending': 'Wird gesendet sobald online',
   'messageFailed': 'Senden fehlgeschlagen',
   'messageRetry': 'Erneut versuchen',
+  'outboxWaitingForNetwork': 'Wartet auf Netzwerk',
+  'outboxUploading': 'Wird hochgeladen…',
+  'outboxTranscribing': 'Wird transkribiert…',
+  'outboxSending': 'Wird gesendet…',
+  'outboxDelete': 'Löschen',
+  'outboxSend': 'Senden',
+  'outboxTranscriptReady': 'Transkript bereit',
+  'voiceSavedOffline':
+      'Aufnahme gespeichert – wird transkribiert, sobald du online bist',
+  'imageSavedOffline':
+      'Bild gespeichert – wird hochgeladen, sobald du online bist',
+  'outboxQueuedSnack':
+      'Keine Verbindung. Die Nachricht wird gesendet, sobald das Netz wieder da ist.',
+  'outboxPendingCount': '{count} warten auf Versand',
+  'agentsImagesNotSupported':
+      'Bilder werden in Agents noch nicht unterstützt. Dein Text wurde ohne Bild gesendet.',
 
   // ── Onboarding ─────────────────────────────────────────────
   'onboardingReplayTile': 'Onboarding erneut anzeigen',
