@@ -227,6 +227,27 @@ def test_update_of_a_skill_changed_since_load_is_refused(tmp_path):
     assert reply["ok"] is False and "changed since you loaded it" in reply["error"]
 
 
+def test_loading_a_changed_skill_again_refreshes_its_hash_and_body(tmp_path):
+    """CodeRabbit: the refusal says "load it again", but a second ``skill``
+    call returned ``already_active`` and kept the stale hash and body."""
+    root = tmp_path / "skills"
+    _skill(root, "deploy")
+    library = load_skills(root)
+    library.activate("deploy")
+    library.pending_context()  # the first body went out
+    _skill(root, "deploy", body="# Edited by the user\n\nnew step")
+    again = library.activate("deploy")
+    assert again["status"] == "reloaded"
+    blocks = library.pending_context()
+    assert any("new step" in str(b.get("content")) for b in blocks)
+    # Unchanged since: a third load is a plain no-op.
+    assert library.activate("deploy")["status"] == "already_active"
+    store, sink = _store_sink(tmp_path, root)
+    propose = make_propose_skill_handler(sink, skills_root=root, library=library)
+    reply = propose("deploy", "", "# v2\n\nstep", update=True)
+    assert reply["ok"] is True
+
+
 def test_a_stale_update_is_closed_without_writing(tmp_path):
     root = tmp_path / "skills"
     _skill(root, "deploy")

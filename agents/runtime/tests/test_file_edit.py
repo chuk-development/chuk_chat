@@ -141,3 +141,45 @@ def test_write_file_create_is_free_but_overwrite_needs_a_read(env_reg):
     assert refused["ok"] is False and "has not been read" in refused["error"]
     reg.dispatch("read_file", {"path": "other.txt"})
     assert reg.dispatch("write_file", {"path": "other.txt", "content": "x\n"})["ok"] is True
+
+
+def test_stat_version_works_with_bsd_stat_and_shasum(tmp_path, monkeypatch):
+    """CodeRabbit: GNU ``stat -c`` / ``sha256sum`` do not exist on macOS, so
+    every existing file had no version there and every edit was refused."""
+    import os
+    import stat as _stat
+
+    from chuk_agents_runtime import LocalEnvironment
+    from chuk_agents_runtime.file_edit import stat_version as _stat_version
+
+    shims = tmp_path / "bin"
+    shims.mkdir()
+    real_stat = "/usr/bin/stat" if os.path.exists("/usr/bin/stat") else "stat"
+    real_sha = "/usr/bin/sha256sum" if os.path.exists("/usr/bin/sha256sum") else "sha256sum"
+    scripts = {
+        # BSD stat: no -c; -f FORMAT FILE
+        "stat": f'#!/bin/bash\n[ "$1" = "-c" ] && {{ echo "stat: illegal option -- c" >&2; exit 1; }}\n'
+        f'[ "$1" = "-f" ] && exec {real_stat} -c %Y "$3"\nexit 1\n',
+        "sha256sum": "#!/bin/bash\nexit 127\n",
+        "shasum": f'#!/bin/bash\nshift 2\nexec {real_sha} "$@"\n',
+    }
+    for name, body in scripts.items():
+        path = shims / name
+        path.write_text(body)
+        path.chmod(path.stat().st_mode | _stat.S_IEXEC)
+
+    class _Mac(LocalEnvironment):
+        def run_bash(self, cmd, **kw):
+            return super().run_bash(f"PATH={shims}:$PATH\n{cmd}", **kw)
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "f.txt").write_text("hello\n")
+    version = _stat_version(_Mac(), "f.txt")
+    assert version is not None
+    assert version.size == 6
+    assert version.sha256 == "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03"
+    assert version.mtime.strip()
+    assert _stat_version(_Mac(), "missing.txt") is None
+    # GNU tools give the same size and hash.
+    gnu = _stat_version(LocalEnvironment(), "f.txt")
+    assert (gnu.size, gnu.sha256) == (version.size, version.sha256)

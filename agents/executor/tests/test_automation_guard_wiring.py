@@ -79,3 +79,45 @@ def test_an_old_host_hook_without_error_still_works():
     old = Old()
     assert Executor._finish_automation(SimpleNamespace(_automations=old), _run(), ok=False, error="e") is None
     assert old.calls == [False]
+
+
+def test_a_failure_after_the_model_answered_is_never_transient():
+    """CodeRabbit: ``run.cost`` is only set on success, so the failure path
+    must get the spend signal from the loop instead."""
+
+    class ReadTimeout(Exception):
+        pass
+
+    manager = _Manager({"changed": False})
+    fake = SimpleNamespace(_automations=manager)
+    Executor._finish_automation(
+        fake, _run(), ok=False, error="e", exc=ReadTimeout("x"), model_answered=True
+    )
+    assert manager.calls[0][4] is False
+    # Before any answer the same error is still transient.
+    manager2 = _Manager({"changed": False})
+    Executor._finish_automation(
+        SimpleNamespace(_automations=manager2), _run(), ok=False, error="e",
+        exc=ReadTimeout("x"), model_answered=False,
+    )
+    assert manager2.calls[0][4] is True
+
+
+def test_run_was_billed_reads_the_loop_and_the_usage_lines(tmp_path):
+    fake = SimpleNamespace(_db_path=str(tmp_path / "state.db"))
+    quiet = SimpleNamespace(model_answered=False, tokens_spent=0)
+    assert Executor._run_was_billed(fake, _run(run_id=None), quiet) is False
+    answered = SimpleNamespace(model_answered=True, tokens_spent=0)
+    assert Executor._run_was_billed(fake, _run(run_id=None), answered) is True
+    spent = SimpleNamespace(model_answered=False, tokens_spent=12)
+    assert Executor._run_was_billed(fake, _run(run_id=None), spent) is True
+    # No loop spend, but an aux call of the run wrote a usage line: billed.
+    from chuk_agents_runtime.state import StateStore
+
+    store = StateStore(fake._db_path)
+    try:
+        assert Executor._run_was_billed(fake, _run(run_id="r1"), quiet) is False
+        store.add_usage_line(session_key="s", kind="aux", run_id="r1", prompt_tokens=10)
+    finally:
+        store.close()
+    assert Executor._run_was_billed(fake, _run(run_id="r1"), quiet) is True

@@ -392,3 +392,101 @@ def test_an_external_backend_cannot_fork(tmp_path):
     )
     out = sup.delegate([{"prompt": "x", "backend": "claude", "fork": True}])
     assert out["ok"] is False and "native" in out["error"]
+
+
+# -- CodeRabbit follow-ups -------------------------------------------------
+
+
+def test_a_fast_waited_child_never_queues_a_settled_note(tmp_path):
+    """The waiter is registered before the child's thread starts: a child that
+    settles before ``wait_for`` runs must not also leave a context note."""
+    sup = _supervisor(tmp_path, lambda ctx: _done("instant"))
+    original = sup.wait_for
+
+    def slow_wait(ids, timeout=None):
+        # Let the child settle first, the way a fast child beats the waiter.
+        _wait_until(lambda: sup.live_count() == 0)
+        return original(ids, timeout=timeout)
+
+    sup.wait_for = slow_wait  # type: ignore[method-assign]
+    for _ in range(5):
+        out = sup.delegate("compute")
+        assert out["waited"] is True
+    assert sup.pending_context() == []
+    # The registration is released after the wait: no id stays "waited".
+    assert sup._waiting == {}
+
+
+def test_an_external_backend_correction_carries_the_brief_and_its_answer(tmp_path):
+    calls: list[ChildContext] = []
+
+    def runner(ctx):
+        calls.append(ctx)
+        return _done("three apples") if not ctx.followup else _done('{"count": 3}')
+
+    sup = _supervisor(tmp_path, runner, backends=("claude",))
+    out = sup.delegate(
+        [{"prompt": "count the apples in basket.txt", "backend": "claude", "output_schema": SCHEMA}]
+    )
+    assert out["subagents"][0]["schema_valid"] is True
+    follow = calls[1].prompt
+    assert "count the apples in basket.txt" in follow
+    assert "three apples" in follow
+    assert "output schema" in follow
+
+
+def test_a_native_correction_stays_short(tmp_path):
+    calls: list[ChildContext] = []
+
+    def runner(ctx):
+        calls.append(ctx)
+        return _done("three apples") if not ctx.followup else _done('{"count": 3}')
+
+    sup = _supervisor(tmp_path, runner)
+    sup.delegate([{"prompt": "count the apples", "output_schema": SCHEMA}])
+    assert "count the apples" not in calls[1].prompt  # the session has the brief
+
+
+class _FakeGit:
+    enabled = True
+
+    def __init__(self, root):
+        self.root = root
+        self.released: list[str] = []
+        self.merged: list[str] = []
+
+    def create_worktree(self, branch):
+        from chuk_agents_runtime.workspace_git import WorktreeInfo
+
+        path = self.root / branch.replace("/", "_")
+        path.mkdir(parents=True, exist_ok=True)
+        return WorktreeInfo(branch=branch, path=str(path), base="abc")
+
+    def release_worktree(self, worktree, keep_branch=True):
+        self.released.append(worktree.branch)
+
+    def merge_worktree(self, worktree, message=""):
+        self.merged.append(worktree.branch)
+        self.released.append(worktree.branch)
+        return {"ok": True}
+
+
+def test_a_child_settled_by_the_stall_monitor_releases_its_worktree_on_return(tmp_path):
+    release = threading.Event()
+
+    def runner(ctx):
+        release.wait(WAIT_S)  # ignores the interrupt
+        return _done("late")
+
+    git = _FakeGit(tmp_path / "wt")
+    limits = SubagentLimits(stall_idle_s=0.1, heartbeat_s=0.05, stall_grace_s=0.2)
+    sup = _supervisor(tmp_path, runner, limits=limits, git=git)
+    child = sup.delegate("block")["subagents"][0]
+    assert child["state"] == "stalled"
+    assert git.released == []  # still winding down: not touched yet
+    release.set()
+    assert _wait_until(lambda: len(git.released) == 1)
+    assert git.merged == []  # a stalled child is never merged
+    record = sup.get(child["subagent_id"])
+    assert record.state is SubagentState.STALLED
+    assert "kept on branch" in (record.merge_note or "")

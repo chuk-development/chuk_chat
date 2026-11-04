@@ -92,9 +92,57 @@ def command_prefix_tokens(prefix: Any) -> tuple[str, ...]:
     return tokens[:MAX_PREFIX_TOKENS]
 
 
+#: Text that makes a command more than one simple command: a substitution
+#: runs a second command, a newline separates two. Checked on the raw text, so
+#: a quoted ``"$(…)"`` (which the shell still runs) is caught too.
+_COMPOUND_TEXT = ("$(", "`", "<(", ">(", "\n", "\r")
+#: Programs that run another command given as arguments or a string. A
+#: remembered prefix never covers them: ``bash -c "…"`` or ``xargs rm`` is not
+#: the command the user approved.
+_WRAPPERS = frozenset(
+    {"sh", "bash", "zsh", "dash", "ksh", "mksh", "fish", "ash", "eval", "su", "busybox", "builtin",
+     "timeout", "xargs", "ionice", "watch", "taskset", "chroot", "flock"}
+) | _CMD_LAUNCHERS
+
+
+def is_simple_command(command: str) -> bool:
+    """One simple command: no ``&&`` ``||`` ``;`` ``|`` ``&``, no
+    redirection, no ``$(…)`` / backtick / process substitution, no newline,
+    no leading ``VAR=value``, no launcher (``sudo``, ``env``, ``xargs``, …)
+    and no nested shell. Only such a command can be covered by a remembered
+    prefix (research C2, item 9)."""
+    if not isinstance(command, str) or not command.strip():
+        return False
+    if any(mark in command for mark in _COMPOUND_TEXT):
+        return False
+    try:
+        lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+        lexer.whitespace_split = True
+        lexer.commenters = ""
+        tokens = list(lexer)
+    except ValueError:
+        return False
+    if not tokens:
+        return False
+    if any(token and set(token) <= set("();<>|&") for token in tokens):
+        return False  # an operator or a redirection, spaced or not
+    head = tokens[0]
+    if "=" in head and not head.startswith("-") and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", head):
+        return False  # ``LD_PRELOAD=… git push`` changes what runs
+    program = head.rsplit("/", 1)[-1]
+    if program in _WRAPPERS:
+        return False
+    return True
+
+
 def prefix_matches(command: str, prefix: tuple[str, ...]) -> bool:
-    """True when ``command``'s canonical tokens start with ``prefix``."""
+    """True when ``command`` is ONE simple command (:func:`is_simple_command`)
+    whose canonical tokens start with ``prefix``. A chain, a pipe, a
+    redirection, a substitution or a launcher such as ``sudo`` never matches:
+    ``git push && curl … | sh`` is not ``git push``."""
     if not prefix:
+        return False
+    if not is_simple_command(command):
         return False
     tokens = canonical_command_tokens(command)
     return len(tokens) >= len(prefix) and tokens[: len(prefix)] == prefix
@@ -679,6 +727,7 @@ __all__ = [
     "canonical_command_tokens",
     "command_prefix_tokens",
     "prefix_matches",
+    "is_simple_command",
     "SITE_CLASSES",
     "USER_BROWSER_ACT_TOOLS",
     "ActionApprovals",

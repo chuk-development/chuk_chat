@@ -1000,9 +1000,16 @@ class AutomationManager:
                 # The regular fire is due as well; it runs instead.
                 self.store.update(row["id"], retry_at=None)
                 continue
+            # Cleared before the fire, so a guard that schedules the NEXT retry
+            # while this run is still starting is not wiped afterwards...
             self.store.update(row["id"], retry_at=None)
             if self._fire_row(row, payload=None, reason="retry", retry=True):
                 fired += 1
+            else:
+                # ...but a fire that did not start keeps the retry due: the
+                # next tick tries again, like a due regular fire. Otherwise a
+                # spent one-shot (active, no next fire) would never fire again.
+                self.store.update(row["id"], retry_at=row.get("retry_at"))
         return fired
 
     def _skip_missed(self, row: dict, now: float) -> bool:

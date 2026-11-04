@@ -2009,8 +2009,12 @@ process; the caps below bound only what travels back to the model):
   - **Foreground timeout moves to a job** (research item 38): instead of
     killing a command that runs past its `timeout`, the runtime (when a job
     manager is present) returns `{moved_to_background: true, job_id, log_path,
-    output_so_far, timeout_ms}` and the command keeps running as a background
-    job. The model is woken when it ends, exactly like `background: true`.
+    stderr_path, output_so_far, timeout_ms}` and the command keeps running as a
+    background job. The model is woken when it ends, exactly like
+    `background: true`. The job is the SAME process: a foreground command runs
+    as an adoptable job from the start (in the shell's directory, with its
+    exports, functions and aliases; a command that ends in time hands its new
+    directory and state back), so a timeout never starts it a second time.
 - `python(description, code, timeout=120)` — `description` is required in the
   schema, same rule as `run_command`. The result carries the same markers.
 - `job_status(job_id?)` — `{job_id, command, state, exit_code, started_at,

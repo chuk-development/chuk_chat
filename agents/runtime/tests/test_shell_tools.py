@@ -162,9 +162,15 @@ def test_run_command_background_delegates_to_the_job_manager_or_refuses():
     # Without a manager the flag is refused with a message, not an exception.
     none = make_run_command_handler(RecordingEnv(), None, None)("sleep 5", background=True)
     assert none["ok"] is False and "background" in none["error"]
-    # The foreground path is unchanged.
-    fg = make_run_command_handler(RecordingEnv(stdout="hi\n"), None, jobs)("echo hi")
+    # The foreground runs as an adoptable job on the same environment; a
+    # command that ends in time gives a plain foreground result.
+    fg_env = RecordingEnv(stdout="hi\n")
+    fg_jobs = JobManager(fg_env, workspace="/ws", new_id=lambda: "j00000002")
+    fg = make_run_command_handler(fg_env, None, fg_jobs)("echo hi")
     assert fg["exit_code"] == 0 and fg["stdout"] == "hi\n"
+    # A job manager on another environment is not used for the foreground.
+    plain = make_run_command_handler(RecordingEnv(stdout="hi\n"), None, jobs)("echo hi")
+    assert plain["exit_code"] == 0 and plain["stdout"] == "hi\n"
 
 
 def test_shell_and_job_tools_register_and_hide_without_tmux():

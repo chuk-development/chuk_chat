@@ -329,25 +329,35 @@ def make_run_command_handler(
                     "error": "background jobs are not available in this runtime; run it in the foreground",
                 }
             return jobs.start(command, cwd=cwd or None)
-        result = env.run_bash(command, timeout=timeout, **_secret_env(secrets))
-        if result.timed_out and jobs is not None:
-            # Research item 38: a foreground timeout does not kill the work; it
-            # moves to a background job. The original process was stopped by
-            # the sandbox timeout, so the command is relaunched detached and
-            # the output captured so far is returned with the handle.
-            started = jobs.start(command, cwd=cwd or None)
-            if started.get("ok"):
+        secret_kw = _secret_env(secrets)
+        if (
+            jobs is not None
+            and callable(getattr(jobs, "run_foreground", None))
+            and getattr(jobs, "env", env) is env
+        ):
+            # Research item 38: a foreground command runs as an adoptable job.
+            # Past its timeout the SAME process becomes a background job; it is
+            # never stopped and started a second time (a second ``git push`` /
+            # ``curl -X POST`` / ``>>`` append would apply its effects twice).
+            outcome = jobs.run_foreground(command, timeout=timeout, env=secret_kw.get("env"))
+            if outcome is not None and outcome.get("moved"):
                 return {
                     "moved_to_background": True,
-                    "job_id": started.get("job_id"),
-                    "log_path": started.get("log_path"),
-                    "output_so_far": _join_streams(result.stdout, result.stderr),
+                    "job_id": outcome.get("job_id"),
+                    "log_path": outcome.get("log_path"),
+                    "stderr_path": outcome.get("stderr_path"),
+                    "output_so_far": _join_streams(outcome.get("stdout", ""), outcome.get("stderr", "")),
                     "timeout_ms": int(timeout) * 1000,
                     "note": (
-                        "The command ran past its timeout and moved to a background job. "
-                        "You are woken when it ends; job_status / job_output show it meanwhile."
+                        "The command ran past its timeout and keeps running as a background job "
+                        "(the same process, not started again). You are woken when it ends; "
+                        "job_status / job_output show it meanwhile (stderr is in stderr_path)."
                     ),
                 }
+            if outcome is not None:
+                return _shell_result(outcome["result"], timeout)
+            # The job could not be set up, so the command never ran: run it plainly.
+        result = env.run_bash(command, timeout=timeout, **secret_kw)
         return _shell_result(result, timeout)
 
     return run_command

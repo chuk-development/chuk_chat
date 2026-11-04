@@ -111,3 +111,31 @@ def test_apply_hunks_pure():
         "*** Begin Patch\n*** Update File: x\n@@\n a\n-b\n+B\n c\n*** End Patch\n"
     )[0].hunks)
     assert failure is None and after == "a\nB\nc\n"
+
+
+def test_move_reports_a_failed_source_delete(tmp_path, monkeypatch):
+    """CodeRabbit: the ``rm`` of the moved file's source was not checked, so a
+    failed delete was reported as a clean move."""
+    from chuk_agents_runtime.environment import ProcessResult
+
+    class _NoDelete(LocalEnvironment):
+        def run_bash(self, cmd, **kw):
+            if cmd.startswith("rm -f -- "):
+                return ProcessResult(1, "", "rm: cannot remove: Read-only file system")
+            return super().run_bash(cmd, **kw)
+
+    monkeypatch.chdir(tmp_path)
+    env = _NoDelete()
+    reg = ToolRegistry()
+    register_builtin_tools(reg, env, guard=EditGuard(env))
+    (tmp_path / "old.txt").write_text("one\ntwo\n")
+    reg.dispatch("read_file", {"path": "old.txt"})
+    patch = (
+        "*** Begin Patch\n*** Update File: old.txt\n*** Move to: new.txt\n"
+        "@@\n one\n-two\n+TWO\n*** End Patch\n"
+    )
+    out = reg.dispatch("apply_patch", {"patch": patch})
+    assert out["ok"] is False
+    assert "Read-only file system" in out["error"] and "new.txt" in out["error"]
+    assert not any(r.get("moved_to") for r in out["applied"])
+    assert (tmp_path / "old.txt").exists() and (tmp_path / "new.txt").exists()

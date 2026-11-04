@@ -113,3 +113,30 @@ def test_build_runtime_wires_rules_into_the_tool_result(tmp_path):
     assert any("src rule" in t for t in tool_texts)
     system = second[0]["content"]
     assert "src rule" not in system
+
+
+def test_a_rules_file_symlinked_outside_the_workspace_is_never_read(tmp_path):
+    ws = tmp_path / "ws"
+    (ws / "repo" / "sub").mkdir(parents=True)
+    secret = tmp_path / "credentials"
+    secret.write_text("aws_secret_access_key=TOPSECRET")
+    (ws / "repo" / "AGENTS.md").symlink_to(secret)
+    # a relative link out of the workspace (``../.env`` shape)
+    (tmp_path / ".env").write_text("API_KEY=ALSOSECRET")
+    (ws / "repo" / "sub" / "CLAUDE.md").symlink_to("../../../.env")
+    (ws / "repo" / "sub" / "x.py").write_text("print(1)")
+    rules = ProjectRules(ws)
+    out = rules.augment("read_file", {"path": "repo/sub/x.py"}, {"ok": True})
+    text = out.get(RESULT_KEY, "") if isinstance(out, dict) else ""
+    assert "TOPSECRET" not in text and "ALSOSECRET" not in text
+
+
+def test_a_rules_file_symlinked_inside_the_workspace_is_read(tmp_path):
+    ws = tmp_path / "ws"
+    (ws / "repo").mkdir(parents=True)
+    (ws / "shared.md").write_text("shared rule: use tabs")
+    (ws / "repo" / "AGENTS.md").symlink_to(ws / "shared.md")
+    (ws / "repo" / "x.py").write_text("print(1)")
+    rules = ProjectRules(ws)
+    out = rules.augment("read_file", {"path": "repo/x.py"}, {"ok": True})
+    assert "shared rule" in out[RESULT_KEY]

@@ -131,6 +131,9 @@ def reconnect_delays(
 DEFAULT_RECONNECT_DELAYS = tuple(reconnect_delays())
 
 
+_FRAME_TAG = re.compile(r"<(?=\s*/?\s*mcp_server_instructions\b)", re.IGNORECASE)
+
+
 def frame_instructions(server: str, text: str | None) -> str | None:
     """A server's instructions as the model sees them: attributed, marked as
     untrusted, cut at :data:`INSTRUCTIONS_CAP` bytes. ``None`` for none."""
@@ -142,6 +145,10 @@ def frame_instructions(server: str, text: str | None) -> str | None:
         body = raw[:INSTRUCTIONS_CAP].decode("utf-8", errors="ignore") + (
             f"\n…[cut at {INSTRUCTIONS_CAP} bytes]"
         )
+    # A hostile server must not close the frame early (``</mcp_server_instructions>``)
+    # and have the rest read as unattributed text: defuse the tag, as
+    # project_rules and skills do for their untrusted text.
+    body = _FRAME_TAG.sub("&lt;", body)
     return (
         INSTRUCTIONS_NOTE.format(server=server)
         + f"\n<mcp_server_instructions server={server!r}>\n{body}\n"

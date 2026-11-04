@@ -128,3 +128,39 @@ def test_a_later_success_clears_the_failure(tmp_path):
     loop = AgentLoop(model, reg, store)
     result = loop.run("s", "write it")
     assert "Not done" not in result.final_answer
+
+
+def test_repeat_note_is_stored_after_every_tool_row_of_the_turn(tmp_path):
+    """CodeRabbit: a repeat note written between two tool results of one turn
+    breaks the call/result pairing a strict provider requires."""
+    reg = ToolRegistry()
+    reg.register(
+        "echo",
+        {"type": "object", "properties": {"v": {"type": "string"}}},
+        lambda v="": {"ok": True, "echo": v},
+    )
+    model = MockModelClient(
+        [
+            tool_call_response(
+                ("echo", {"v": "a"}), ("echo", {"v": "a"}), ("echo", {"v": "a"}), ("echo", {"v": "b"})
+            ),
+            "done",
+        ]
+    )
+    store = _store(tmp_path)
+    loop = AgentLoop(model, reg, store)
+    assert loop.model_answered is False
+    result = loop.run("s", "go")
+    assert loop.model_answered is True
+    rows = [m.content for m in store.get_conversation(result.session_id)]
+    roles = [r.get("role") for r in rows]
+    note_at = next(
+        i for i, r in enumerate(rows)
+        if r.get("role") == "user" and "repeating the exact same tool call" in str(r.get("content"))
+    )
+    call_at = next(i for i, r in enumerate(rows) if r.get("role") == "assistant" and r.get("tool_calls"))
+    tool_rows = [i for i, role in enumerate(roles) if role == "tool"]
+    assert len(tool_rows) == 4
+    # assistant(calls) -> 4 tool rows, contiguous -> then the note
+    assert tool_rows == list(range(call_at + 1, call_at + 5))
+    assert note_at > tool_rows[-1]
