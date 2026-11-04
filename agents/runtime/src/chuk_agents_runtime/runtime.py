@@ -60,6 +60,10 @@ from .agent_mail import MailBinding, register_agent_mail_tools
 from .automations import AutomationBackend, register_automation_tools
 from .calls import CallBackend, register_call_tools
 from .takeover import TakeoverBackend, register_takeover_tool
+from .ask_user import QuestionBackend, register_ask_user_tool
+from .goal import GoalController, register_goal_tools
+from .plan_mode import PlanMode, register_plan_tool
+from .todo import register_todo_tool
 from .skill_proposals import SkillProposalSink, register_propose_skill_tool
 from .project_rules import ProjectRules
 from .skills import SkillLibrary, SkillSettingsStore, load_skills, register_skill_tool
@@ -424,6 +428,11 @@ def build_runtime(
     action_approvals: ActionApprovals | None = None,
     light_context: bool = False,
     skill_proposals: SkillProposalSink | None = None,
+    goal: GoalController | None = None,
+    plan_mode: PlanMode | None = None,
+    todo_sink: Callable[[list[dict]], None] | None = None,
+    questions: QuestionBackend | None = None,
+    context_observer: Callable[[dict], None] | None = None,
 ) -> AgentLoop:
     """Assemble the loop. ``system_prompt`` is the operator *persona*: the
     behaviour contract is prepended from :mod:`chuk_agents_runtime.prompt` and the live
@@ -640,6 +649,15 @@ def build_runtime(
     # registers nothing. Deferred: it is rare, and the prompt names it.
     register_takeover_tool(registry, takeover)
 
+    # The agent modes (docs/WIRE_CONTRACT.md, "Goal mode", "Plan mode", "Todo
+    # list", "Questions to the user"). All deferred, so the declared tool
+    # list and its bytes do not change: ``exit_plan_mode`` is registered
+    # whether plan mode is on or not (prefix cache). ``None`` registers
+    # nothing; the todo list needs only a session.
+    register_goal_tools(registry, goal)
+    register_plan_tool(registry, plan_mode)
+    register_ask_user_tool(registry, questions)
+
     if enable_terminal:
         # The interactive shell (docs/WIRE_CONTRACT.md, "Interactive shell and
         # background commands"): ``shell_start`` / ``shell_read`` /
@@ -690,6 +708,8 @@ def build_runtime(
         # builds a fresh runtime per task, and without the store every task
         # blocked on the aux model to fold the same middle again.
         ladder.summary_store = store
+    # ``todo_write`` (docs/WIRE_CONTRACT.md, "Todo list"): per session.
+    register_todo_tool(registry, store, shell_session_key, todo_sink)
     if file_sink is not None and shell_session_key:
         register_document_tool(registry, DocumentStore(db_path, shell_session_key), file_sink)
     if enable_chat_search:
@@ -939,8 +959,18 @@ def build_runtime(
                 if subagents is not None and subagents.supervisor is not None
                 else []
             ),
+            # The goal's wrap-up after a goal round marked it complete /
+            # blocked: one row, then a last step without tools.
+            *([goal.pending_context] if goal is not None else []),
             *(context_providers or []),
         ],
+        # The plan-mode rules, once per task while plan mode is on: an
+        # appended row, never a system prompt change (prefix cache).
+        task_context_providers=(
+            [plan_mode.state.task_context] if plan_mode is not None else None
+        ),
+        # Typed context rows (``source``) as live ``context`` frames.
+        context_observer=context_observer,
         context_ladder=ladder,
         # The debug "copy raw context" tap (off by default): fired each round with
         # the exact outbound payload and the ladder's stats. Unset -> not wired.

@@ -131,3 +131,13 @@ def test_the_thread_names_its_own_coworker(tmp_path):
 def test_a_coworker_named_after_its_automation_is_not_repeated():
     title, _ = completion_text(RunLabels(coworker="Wahlradar", automation=AUTOMATION))
     assert title == AUTOMATION
+
+
+def test_a_blocked_goal_says_the_agent_needs_you():
+    from chuk_agents_host.notification_text import RunLabels, approval_text, completion_text
+
+    labels = RunLabels(coworker="Ada")
+    title, body = completion_text(labels, goal_blocked=True)
+    assert title == "Ada needs you" and "goal is blocked" in body
+    assert "review the plan" in approval_text(labels, action_class="plan_review")[1]
+    assert "answer a question" in approval_text(labels, action_class="ask_user")[1]

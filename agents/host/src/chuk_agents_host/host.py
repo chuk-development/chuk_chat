@@ -1916,9 +1916,17 @@ class LocalHost:
             # ends as the note on the mail, which the app shows. No toast and
             # no push.
             return
+        goal = summary.get("goal") if isinstance(summary, dict) else None
+        if isinstance(goal, dict) and goal.get("continues") is True:
+            # docs/WIRE_CONTRACT.md, "Goal mode": the next goal round is
+            # already queued. One notification when the goal ends, not one
+            # per round.
+            self._log(f"goal {goal.get('id')}: round {goal.get('rounds_started')} done, continuing")
+            return
         attached = self._controller_attached()
-        # ``automation``, ``job`` and ``mail`` runs are unattended by definition.
-        automation = origin in ("automation", "job", ORIGIN_MAIL)
+        # ``automation``, ``job``, ``mail`` and ``goal`` runs are unattended
+        # by definition.
+        automation = origin in ("automation", "job", ORIGIN_MAIL, "goal")
         if attached and not automation:
             # The user is (supposedly) watching. Hold the announcement until the
             # app confirms it rendered the ``done`` (``run_ack``); if that never

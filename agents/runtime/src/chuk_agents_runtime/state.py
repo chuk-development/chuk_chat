@@ -30,6 +30,7 @@ from typing import Any
 from .cost import cost_block
 from .search import ensure_fts_schema, register_functions, search_messages
 from .sqlite_tuning import tune_connection
+from .sources import REPLAYED_CONTEXT_SOURCES, valid_source
 from .tool_events import tool_event_fields
 
 _SCHEMA = """
@@ -164,6 +165,18 @@ CREATE TABLE IF NOT EXISTS usage_lines (
     cached_tokens     INTEGER NOT NULL DEFAULT 0,
     cost_eur          REAL,
     created_at        REAL NOT NULL
+);
+
+-- Per-session state of the agent modes (docs/WIRE_CONTRACT.md, "Goal mode",
+-- "Plan mode", "Todo list"): one JSON document per (session_key, kind). The
+-- goal's armed flag is NOT stored here: it is process-local on purpose, so a
+-- restarted host never resumes a goal on its own.
+CREATE TABLE IF NOT EXISTS session_features (
+    session_key TEXT NOT NULL,
+    kind        TEXT NOT NULL,
+    data        TEXT NOT NULL,
+    updated_at  REAL NOT NULL,
+    PRIMARY KEY (session_key, kind)
 );
 
 CREATE INDEX IF NOT EXISTS idx_usage_lines_run ON usage_lines(run_id);
@@ -834,7 +847,28 @@ class StateStore:
             # recall) or any other runtime row carries a wire role of ``user``
             # inside, but it was never the user's message and must not replay
             # as one. ``event`` rows were emitted above.
+            # Typed synthetic rows (docs/WIRE_CONTRACT.md, "Typed source on
+            # synthetic rows") are the exception: a runtime row with a source
+            # the app draws as a chip (a goal round's wrap-up, a skill load, a
+            # settled subagent) replays as a ``context`` event. Never the
+            # ``[clock]`` row: one per task is noise.
             if message.role not in ("user", "assistant"):
+                source = message.content.get("source")
+                if (
+                    message.role != "system"
+                    and message.content.get("role") == "user"
+                    and source in REPLAYED_CONTEXT_SOURCES
+                ):
+                    events.append(
+                        {
+                            "type": "context",
+                            "source": source,
+                            "text": _as_text(message.content.get("content")),
+                            "replay": True,
+                            "mid": message.id,
+                            "created_at": message.created_at,
+                        }
+                    )
                 continue
             content = message.content
             role = content.get("role")
@@ -843,15 +877,22 @@ class StateStore:
             # ``mid`` is the row id, so the client can persist a cursor.
             mid = message.id
             if role == "user":
-                events.append(
-                    {
-                        "type": "user",
-                        "text": _as_text(content.get("content")),
-                        "replay": True,
-                        "mid": mid,
-                        "created_at": message.created_at,
-                    }
-                )
+                event = {
+                    "type": "user",
+                    "text": _as_text(content.get("content")),
+                    "replay": True,
+                    "mid": mid,
+                    "created_at": message.created_at,
+                }
+                # A prompt nobody typed (a fired schedule, a goal round, a
+                # job wake, a mail) names where it came from; a late answer
+                # to an ask_user question names the call it answers.
+                if valid_source(content.get("source")):
+                    event["source"] = content["source"]
+                answer = content.get("answer_to_pending_question")
+                if isinstance(answer, str) and answer:
+                    event["answer_to_pending_question"] = answer
+                events.append(event)
                 continue
             # assistant
             # The turn's thinking comes first, as it did live: the app renders
@@ -1282,6 +1323,75 @@ class StateStore:
             )
 
         self._write(op)
+
+    # -- per-session feature state (goal, plan mode, todo list) -------------
+
+    def load_feature(self, session_key: str, kind: str) -> dict | None:
+        """The stored ``kind`` document of ``session_key``, or ``None``."""
+        row = self._conn().execute(
+            "SELECT data FROM session_features WHERE session_key=? AND kind=?",
+            (session_key, kind),
+        ).fetchone()
+        if row is None:
+            return None
+        try:
+            data = json.loads(row["data"])
+        except ValueError:
+            return None
+        return data if isinstance(data, dict) else None
+
+    def save_feature(self, session_key: str, kind: str, data: dict | None) -> None:
+        """Replace the ``kind`` document of ``session_key``; ``None`` deletes it."""
+
+        def op(cur: sqlite3.Cursor) -> None:
+            if data is None:
+                cur.execute(
+                    "DELETE FROM session_features WHERE session_key=? AND kind=?",
+                    (session_key, kind),
+                )
+                return
+            cur.execute(
+                "INSERT INTO session_features(session_key, kind, data, updated_at) "
+                "VALUES (?, ?, ?, ?) ON CONFLICT(session_key, kind) DO UPDATE SET "
+                "data=excluded.data, updated_at=excluded.updated_at",
+                (session_key, kind, json.dumps(data), time.time()),
+            )
+
+        self._write(op)
+
+    def update_feature(self, session_key: str, kind: str, fn) -> Any:
+        """Read-modify-write ``kind`` in ONE write transaction: ``fn(current)``
+        returns ``(new_document_or_None, result)``; ``result`` is returned.
+        Used for the goal's compare-and-set, so two writers never both win."""
+
+        def op(cur: sqlite3.Cursor) -> Any:
+            row = cur.execute(
+                "SELECT data FROM session_features WHERE session_key=? AND kind=?",
+                (session_key, kind),
+            ).fetchone()
+            current = None
+            if row is not None:
+                try:
+                    loaded = json.loads(row["data"])
+                    current = loaded if isinstance(loaded, dict) else None
+                except ValueError:
+                    current = None
+            new, result = fn(current)
+            if new is None:
+                cur.execute(
+                    "DELETE FROM session_features WHERE session_key=? AND kind=?",
+                    (session_key, kind),
+                )
+            else:
+                cur.execute(
+                    "INSERT INTO session_features(session_key, kind, data, updated_at) "
+                    "VALUES (?, ?, ?, ?) ON CONFLICT(session_key, kind) DO UPDATE SET "
+                    "data=excluded.data, updated_at=excluded.updated_at",
+                    (session_key, kind, json.dumps(new), time.time()),
+                )
+            return result
+
+        return self._write(op)
 
     def load_subagent(self, subagent_id: str) -> dict | None:
         row = self._conn().execute(

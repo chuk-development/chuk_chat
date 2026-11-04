@@ -62,7 +62,7 @@ unlocked to transfer pairing; a successful JWT login alone does not unlock it.
 
 | type | fields | notes |
 |---|---|---|
-| `task` | `prompt`, `session_key`, `task_id`? (NEW), `model`?, `provider`?, `reasoning_effort`?, `mcp_servers`?, `herenow`?, `debug`?, `regenerate`? | Existing. Field names are `model` and `provider` (NOT `model_id` / `provider_slug`). There is no `fast_mode` field; Fast mode is a model + `reasoning_effort` chosen by the app. `task_id` is NEW and optional — see "Task acknowledgement". |
+| `task` | `prompt`, `session_key`, `task_id`? (NEW), `model`?, `provider`?, `reasoning_effort`?, `mcp_servers`?, `herenow`?, `debug`?, `regenerate`?, `plan`? (see "Plan mode") | Existing. Field names are `model` and `provider` (NOT `model_id` / `provider_slug`). There is no `fast_mode` field; Fast mode is a model + `reasoning_effort` chosen by the app. `task_id` is NEW and optional — see "Task acknowledgement". |
 | `stop` | `session_key` | Existing. It is sent ONLY for an explicit user stop (bead cowork-gnr8). A stream subscription that is merely cancelled — the reader leaves the thread, the chat page is rebuilt or disposed, the app goes to the background, one stream replaces the next — must NOT produce a `stop`: a controller that goes away leaves its runs going and the results wait in the store. The executor answers with a `stop_ack` listing the run request ids it fired at (`[]` = nothing matched); that frame carries no `session_key`, so the app cannot route it per thread and does not surface it. The terminal `done` with `reason: "interrupted"` is what ends the run for the app. |
 | `replay` | `session_key`, `after_id`? (int, default 0), `before_id`? (int), `limit`? (int) | `after_id` is NEW. Replay only the messages with `mid > after_id`. `0` replays the full history (fresh install). `limit` / `before_id`: see "Replay paging" (Bead cowork-axx). |
 | `run_ack` | `run_id` | NEW. The app sends it after it rendered a live `done`. The host marks the run as seen (`runs.seen_at`), so a later replay does not flag it `while_away`, and it can skip a push notification. The host waits for it at most 15 s (`AGENTS_RUN_ACK_TIMEOUT_SECONDS`) after a `done` that ended with an app attached; no ack in that window and the run is announced as finished while away (desktop toast + cloud push, once per run) — Bead cowork-sq3. |
@@ -4055,3 +4055,233 @@ host code. Additive: nothing above changes. Product spec and server API:
   attachments of a readable mail into `mail-attachments/<id>/` in the
   workspace (each directory opened without following a symlink). Never for
   `unknown` mail.
+
+## Agent modes: goal, plan, todo list, questions, typed sources (DeepSeek 41, 45, 46, 51, 52, 2026-11-04)
+
+Five runtime features from the DeepSeek harness review
+(`docs/research/DEEPSEEK_HARNESS_IDEAS.md`). Everything here is additive: an
+older app ignores the new frames and fields, an older host never sends them.
+Code: `RT/goal.py`, `RT/plan_mode.py`, `RT/todo.py`, `RT/ask_user.py`,
+`RT/sources.py`, `EX/goal_driver.py`, `EX/executor.py` (`_mode_bindings`).
+All new tools are deferred behind `search_tools` (prompt budget,
+`test_prompt_budget.py`); a direct call by exact name still runs.
+
+State of the three modes is per session in the `session_features` table
+(`session_key`, `kind` = `goal` / `plan` / `todo`, JSON `data`). The goal's
+armed flag is NOT stored (see below).
+
+### `run_state` (extended)
+
+The replay header carries the mode state of the thread, each field only when
+it applies:
+
+```json
+{"type": "run_state", ...,
+ "goal": {<goal view>}?, "plan_mode": true?, "todos": [<todo item>]?,
+ "source": "goal" | "schedule" | "job" | "mail"?}
+```
+
+`source` names the origin of the run in flight when nobody typed its prompt.
+
+### Goal mode (DS 41)
+
+One durable completion objective per session. The model sets it with
+`set_goal(objective, max_rounds?)` and changes it with
+`update_goal(goal_id, revision, action, objective?, max_rounds?, blocked_reason?)`
+(`get_goal()` reads it). `goal_id` + `revision` are compare-and-set: a stale
+pair is refused with the current values. Actions: `edit`, `pause`, `resume`,
+`complete`, `blocked`, `clear`.
+
+- **phase** (durable): `active`, `paused`, `blocked`, `complete`.
+- **activation** (process-local): `armed` / `disarmed`. A new goal is armed. A
+  host restart arms nothing, so **a goal always comes back disarmed** and never
+  continues on its own. The user resumes it: the `goal_control` frame below,
+  or "continue" in a chat turn (the model then calls `update_goal` `resume`).
+- **rounds.** After every run of the session that ends `finished` while the
+  goal is active and armed, the host submits one more task of the same
+  session, origin `goal`, whose prompt is:
+
+  ```text
+  <goal_round>
+  Objective: "<objective>"
+  Goal: id <id>, revision <revision>
+  Round: <n>/<max_rounds>
+
+  Continue working toward the objective in this same session. ... call
+  update_goal with action complete. If work remains, leave the goal active
+  for the next round. Use action blocked only when the same concrete blocking
+  condition has stopped you for 3 rounds in a row; ...
+  </goal_round>
+  ```
+
+  No round starts while another run of the session is queued (the user's work
+  goes first; its end asks again). The cap is `max_rounds`, default 50
+  (`AGENTS_GOAL_MAX_ROUNDS`, at most 500). At the cap the goal becomes
+  `blocked` with `blocked_reason.code` `round-limit`.
+- **blocked.** In a goal round `blocked` is accepted only when the same
+  blocker (token overlap >= 60 %) was reported in 3 consecutive rounds;
+  before that the call returns an error "Not blocked yet: ... 1 of 3" and the
+  goal stays active. In a turn the user started, `blocked` is accepted at once.
+- **wrap-up.** When a goal round marks the goal `complete` or `blocked`, the
+  next model step gets a `<goal_complete>` / `<goal_blocked>` context row
+  (`source: goal`) and no tools: one final report with evidence, then `done`.
+- **stops.** A stopped goal round (`interrupted`, `estop`, `timeout`) pauses
+  the goal. Any other end that is not `finished` only disarms it.
+- `pause` / `resume` from the model need a run the user started (origin `app`).
+
+Executor → app, `goal` (persisted as an event row, so a replay carries it;
+the app keeps the last one per thread):
+
+```json
+{"type": "goal", "session_key": "<key>",
+ "goal": null | {"id": "g_…", "revision": 3, "objective": "…",
+   "phase": "active" | "paused" | "blocked" | "complete",
+   "activation": "armed" | "disarmed",
+   "rounds_started": 4, "max_rounds": 50,
+   "blocked_reason": {"code": "model-reported" | "round-limit", "message": "…"}?,
+   "needs_user": false, "updated_at": 1730700000.0}}
+```
+
+`needs_user: true` (phase `blocked`) is the inbox's "needs you" for the
+thread. The same view is in `run_state.goal`, and in `done.goal` with two
+more fields: `continues` (the next round is already queued) and `waiting`
+(a queued user run goes first). The host's run summary carries the same
+`goal`: while `continues` is true the host sends no notification for the
+round; a run that ends the goal notifies once, and a blocked goal says
+"<Agent> needs you" / "The goal is blocked. Open the app to see what it needs."
+
+App → executor, `goal_control` (answered with one terminal `goal` frame,
+with `error` when the action was refused):
+
+```json
+{"type": "goal_control", "session_key": "<key>", "action": "pause" | "resume" | "clear"}
+```
+
+`resume` of an idle thread starts the next round at once.
+
+### Plan mode (DS 46)
+
+While plan mode is on the agent explores and plans and changes nothing. The
+rules (the harness text, `PLAN_RULES` in `RT/plan_mode.py`) reach the model as
+ONE appended context row per task, `source: plan`, right after the prompt.
+The system prompt and the tool list do not change (prefix cache);
+`exit_plan_mode` is registered whether plan mode is on or not.
+
+- Switch on: `task.plan: true`, or a prompt that starts with `/plan `
+  (the prefix is removed before the prompt is stored). Switch off:
+  `task.plan: false`, or `/plan off …`. Absent = no change. Applied when the
+  run starts. Executor → app `{"type": "plan_mode", "session_key", "active": bool}`
+  (persisted) on every change; `run_state.plan_mode: true` while on.
+- `exit_plan_mode(plan)` shows the plan for review and blocks the run (at
+  most 30 min):
+
+  ```json
+  {"type": "approval_request", "approval_id": "…", "action": "plan_review",
+   "kind": "plan_review", "action_class": "plan_review",
+   "options": ["approve", "keep_planning"], "summary": "<first # heading>",
+   "plan": "<markdown>", "session_key": "<key>",
+   "path": "", "name": "", "file_count": 0, "total_bytes": 0, "base_url": "", "public": false}
+  ```
+
+  The answer is the normal `approval_decision`: `approved: true` = Approve
+  (plan mode goes off, `plan_mode` frame, the agent carries the plan out);
+  `approved: false` = Keep planning, with an optional free-text
+  `"feedback": "…"` (at most 4,000 characters) that the model gets as the tool
+  error. A timeout or a stop closes the card like any approval
+  (`decision_reason` `timeout` / `stopped`); the agent stays in plan mode.
+  The pending push says "Open the app to review the plan."
+
+### Todo list (DS 51)
+
+`todo_write(todos: [{content, status}])` replaces the WHOLE list. `status` is
+`pending`, `in_progress` or `completed`; items are unique and non-empty
+(at most 50, 300 characters); while any item is not completed exactly one is
+`in_progress`. The tool result is
+`Updated todo list: N pending, N in progress, N completed`.
+
+Executor → app, `todo` (persisted; the last one is the sticky card):
+
+```json
+{"type": "todo", "session_key": "<key>",
+ "todos": [{"content": "Run the tests", "status": "in_progress"}],
+ "counts": {"pending": 1, "in_progress": 1, "completed": 2}}
+```
+
+`run_state.todos` holds the latest list.
+
+### Questions to the user: timed `ask_user` (DS 45)
+
+`ask_user(questions, timeout?)`. Each question:
+`{id, question, header?, options?: [{label, description?}], multi_select?}`.
+Ids are unique per call. A recommended option comes first and its label ends
+with `(Recommended)` (the tool refuses it anywhere else). `timeout` is seconds,
+default 120; `-1` waits until the user answers.
+
+Executor → app, `question_request` (persisted; sent again on every status
+change; `question_id` is the tool call id):
+
+```json
+{"type": "question_request", "question_id": "call_0", "session_key": "<key>",
+ "questions": [...], "timeout_seconds": 120,
+ "status": "open" | "answered" | "pending" | "stopped", "answers": [...]?}
+```
+
+App → executor (control frames, no terminal):
+
+```json
+{"type": "question_answer", "question_id": "call_0", "session_key": "<key>",
+ "answers": [{"id": "db", "selected": ["SQLite (Recommended)"], "custom": "…"?}]}
+{"type": "ask_visible", "question_id": "call_0", "visible": true}
+```
+
+- The wait counts down only while the card is NOT on screen: the app sends
+  `ask_visible` `true` when it shows the card and `false` when it hides it.
+- Skip: an answer item with empty `selected` and no `custom` (a missing item
+  counts as one). The model reads it as "continue without it, do not ask
+  again, it is not permission". Labels that were not offered are dropped;
+  without `multi_select` only the first one counts.
+- Answered in time: the tool returns `{"answers": [...]}`.
+- Timeout: `status: pending`, the run goes on, and the tool returns
+  `{"pending": true, "callId": "call_0", "message": "No answer batch arrived
+  before the timeout. This is pending, not a skipped answer. ..."}`. The card
+  stays answerable. A later `question_answer` starts a new turn of the thread
+  (origin `answer`) whose prompt is
+  `<answer_to_pending_question callId="call_0">{callId, questions, answers}</answer_to_pending_question>`;
+  that user row carries `answer_to_pending_question: "call_0"` (also on the
+  replayed `user` event). A pending question survives a host restart through
+  its stored row.
+- The pending push says "Open the app to answer a question."
+
+### Typed source on synthetic rows (DS 52)
+
+A user-role row nobody typed carries `source`, in the store and on the wire:
+`goal`, `schedule` (a fired schedule or watcher), `job` (a background job
+wake), `skill` (a loaded skill, the skill catalogue), `mail`, `time` (the
+`[clock]` row), `subagent` (a settled-subagent note), `review` (the
+background review's `skill_proposal`), `plan` (plan-mode rules).
+
+- The prompt row of a run started by an automation, a job, a mail or a goal
+  round: replayed `user` event with `source` (absent = typed by the user).
+- Runtime rows (role `context`, `skill`, `subagent`, ...) with a source:
+  replayed as
+  `{"type": "context", "source": "<source>", "text": "…", "mid": n, "replay": true, "created_at": …}`
+  and streamed live as `{"type": "context", "source", "text", "mid", "session_key"}`
+  when they are written during a run. `time` is stored but neither replayed
+  nor streamed (one per task is noise).
+- `skill_proposal` from the background review: `source: "review"` next to
+  `origin: "review"`.
+
+### App work list (NOT built)
+
+1. Goal card over the thread from `goal` / `run_state.goal`: objective,
+   round `n/max`, phase; "Resume" when `activation` is `disarmed` or phase is
+   `paused` / `blocked` (`goal_control` resume), "Pause", "Clear". Inbox:
+   `needs_user` = "Needs you".
+2. Plan mode toggle in the composer (`task.plan`), a "Plan mode" chip while
+   `plan_mode` is on; the `plan_review` card renders `plan` as markdown with
+   Approve / Keep planning (+ a feedback field).
+3. Sticky todo card from the last `todo` frame.
+4. Question card from `question_request`: `(Recommended)` preselected, skip
+   per question, `ask_visible` on show / hide, still answerable when
+   `pending`.
+5. Chips for `user.source` and `context` events.

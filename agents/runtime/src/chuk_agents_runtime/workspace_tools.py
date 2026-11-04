@@ -96,9 +96,9 @@ class JournalingRegistry(ToolRegistry):
     def add_result_augmenter(self, fn: Callable[[str, dict | None, Any], Any]) -> None:
         self.result_augmenters.append(fn)
 
-    def dispatch(self, name: str, args: dict | None = None) -> Any:
+    def dispatch(self, name: str, args: dict | None = None, *, call_id: str | None = None) -> Any:
         started = time.perf_counter()
-        result = super().dispatch(name, args)
+        result = super().dispatch(name, args, call_id=call_id)
         for augment in self.result_augmenters:
             try:
                 result = augment(name, args, result)

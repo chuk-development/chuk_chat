@@ -142,7 +142,9 @@ class SupabaseNotifier:
             return False
         failed = bool(summary.get("error")) or str(summary.get("reason") or "") == "failed"
         labels = self.labels(summary)
-        title, body = completion_text(labels, failed=failed)
+        goal = summary.get("goal")
+        goal_blocked = isinstance(goal, dict) and goal.get("needs_user") is True
+        title, body = completion_text(labels, failed=failed, goal_blocked=goal_blocked)
         record = self._record(
             run_id=run_id,
             agent_id=self._agent_id(),

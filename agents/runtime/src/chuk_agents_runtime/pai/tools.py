@@ -234,7 +234,7 @@ class RegistryToolset(AbstractToolset[Any]):
                 except Exception:  # noqa: BLE001 — a status sink never fails a call
                     pass
             try:
-                result = split_ui(registry.dispatch(name, args), record)
+                result = split_ui(registry.dispatch(name, args, call_id=call_id), record)
                 record.result = result
                 return result
             finally:

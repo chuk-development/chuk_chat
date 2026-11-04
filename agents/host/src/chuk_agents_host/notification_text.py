@@ -66,9 +66,15 @@ class RunLabels:
         return f"{self.who}: {automation}"
 
 
-def completion_text(labels: RunLabels, *, failed: bool = False) -> tuple[str, str]:
+def completion_text(
+    labels: RunLabels, *, failed: bool = False, goal_blocked: bool = False
+) -> tuple[str, str]:
     """Title and body for a run that ended. The body says what happened; it
-    never asks the user to finish something the host already finished."""
+    never asks the user to finish something the host already finished.
+    ``goal_blocked`` (docs/WIRE_CONTRACT.md, "Goal mode"): the run ended a
+    goal as blocked, so the user must act."""
+    if goal_blocked:
+        return (f"{labels.who} needs you", "The goal is blocked. Open the app to see what it needs.")
     if failed:
         return (labels.headline, "The run did not finish. Open the app to see what happened.")
     return (labels.headline, "The answer is ready. Open the app to read it.")
@@ -82,6 +88,9 @@ _APPROVAL_BODIES = {
     "send_external": "Open the app to allow or deny sending a mail.",
     "mcp_destructive": "Open the app to allow or deny a connector action.",
     "browser_act": "Open the app to allow or deny a browser action.",
+    # docs/WIRE_CONTRACT.md, "Plan mode" and "Questions to the user".
+    "plan_review": "Open the app to review the plan.",
+    "ask_user": "Open the app to answer a question.",
 }
 
 
