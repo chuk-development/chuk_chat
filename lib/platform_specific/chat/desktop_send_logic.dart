@@ -388,8 +388,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       final ToolCallHandler toolCallHandler = ToolCallHandler.forChat(
         _activeChatId,
       );
+      // The edited message's stored send time: its `[Sent: …]` line.
+      final String? turnSentAt = _messages[index]['sentAt'];
       var toolSession = toolCallHandler.createSession(
         initialUserMessage: messageForSend,
+        userSentAt: turnSentAt,
         history: conversationHistory,
         accessToken: accessToken,
         discoveryContextKey: _activeChatId,
@@ -462,6 +465,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           // every pass; empty (prompt-based) when native mode is off.
           tools: toolCallHandler.nativeToolDefinitions(toolSession),
           toolChoice: ToolCallHandler.nativeToolChoice(toolSession),
+          requestPass: currentPass + 1,
           // A retry REPLACES the last answer, so the host drops the turn being
           // retried instead of storing the same question again. Only the first
           // pass says so: the later passes of the same turn are continuations,
@@ -601,13 +605,17 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     chatIdForStream,
                   );
 
-                  final next = loopResult.nextStep!;
+                  // Later passes carry the turn's images in its own history
+                  // entry, not on the pass message (prompt cache, order).
+                  final next = loopResult.nextStep!.withTurnImages(
+                    imagesForResend,
+                  );
                   await Future<void>.delayed(Duration.zero);
                   await startStreamPass(
                     message: next.message,
                     history: next.history,
                     passSystemPrompt: next.systemPrompt,
-                    passImages: imagesForResend,
+                    passImages: next.passImages,
                     currentPass: currentPass + 1,
                   );
                   return;
@@ -634,6 +642,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
                   toolSession = toolCallHandler.createSession(
                     initialUserMessage: messageForSend,
+                    userSentAt: turnSentAt,
                     history: conversationHistory,
                     accessToken: accessToken,
                     discoveryContextKey: chatIdForStream,
@@ -655,7 +664,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                   if (!mounted) return;
 
                   await startStreamPass(
-                    message: messageForSend,
+                    message: toolSession.firstPassMessage,
                     history: conversationHistory,
                     passSystemPrompt: retryPrompt,
                     passImages: imagesForResend,
@@ -889,7 +898,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
       try {
         await startStreamPass(
-          message: messageForSend,
+          message: toolSession.firstPassMessage,
           history: conversationHistory,
           passSystemPrompt: initialSystemPrompt,
           passImages: imagesForResend,
@@ -1710,8 +1719,13 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       final ToolCallHandler toolCallHandler = ToolCallHandler.forChat(
         chatIdForStream,
       );
+      // The user message's stored send time: its `[Sent: …]` line.
+      final String? turnSentAt = isContinuation
+          ? null
+          : _messages[placeholderIndex - 1]['sentAt'];
       var toolSession = toolCallHandler.createSession(
         initialUserMessage: aiPromptContent,
+        userSentAt: turnSentAt,
         history: apiHistory,
         accessToken: accessToken,
         discoveryContextKey: chatIdForStream,
@@ -1792,6 +1806,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           // every pass; empty (prompt-based) when native mode is off.
           tools: toolCallHandler.nativeToolDefinitions(toolSession),
           toolChoice: ToolCallHandler.nativeToolChoice(toolSession),
+          requestPass: currentPass + 1,
         );
 
         await _streamingManager.startStream(
@@ -1923,13 +1938,17 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                       chatIdForStream,
                     );
 
-                    final next = loopResult.nextStep!;
+                    // Later passes carry the turn's images in its own history
+                    // entry, not on the pass message (prompt cache, order).
+                    final next = loopResult.nextStep!.withTurnImages(
+                      imageDataUrls,
+                    );
                     await Future<void>.delayed(Duration.zero);
                     await startStreamPass(
                       message: next.message,
                       history: next.history,
                       passSystemPrompt: next.systemPrompt,
-                      passImages: imageDataUrls,
+                      passImages: next.passImages,
                       currentPass: currentPass + 1,
                     );
                     return;
@@ -1963,6 +1982,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
                     toolSession = toolCallHandler.createSession(
                       initialUserMessage: aiPromptContent,
+                      userSentAt: turnSentAt,
                       history: apiHistory,
                       accessToken: accessToken,
                       discoveryContextKey: chatIdForStream,
@@ -1989,7 +2009,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     if (!mounted) return;
 
                     await startStreamPass(
-                      message: aiPromptContent,
+                      message: toolSession.firstPassMessage,
                       history: apiHistory,
                       passSystemPrompt: retryPrompt,
                       passImages: imageDataUrls,
@@ -2287,7 +2307,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       onVoiceTurnStarted?.call(chatIdForStream, placeholderIndex);
       try {
         await startStreamPass(
-          message: aiPromptContent,
+          message: toolSession.firstPassMessage,
           history: apiHistory,
           passSystemPrompt: initialSystemPrompt,
           passImages: imageDataUrls,

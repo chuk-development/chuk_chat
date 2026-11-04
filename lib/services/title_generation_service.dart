@@ -557,6 +557,8 @@ Rules:
         // [generateAndApplyTitle] via
         // [MultiplexSession.waitForChatStreamIdle].
         chatId: null,
+        // Request metadata (`x_chuk.purpose`): not a chat turn.
+        requestPurpose: 'title',
       )) {
         switch (event) {
           case ContentEvent(:final text):
