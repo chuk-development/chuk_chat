@@ -61,7 +61,7 @@ from chuk_agents_executor import (
     frame_to_b64,
     resolve_backend_model_wiring,
 )
-from chuk_agents_executor.protocol import USER_BROWSER, browser_target
+from chuk_agents_executor.protocol import AUTOMATION_UPDATE_KEYS, USER_BROWSER, browser_target
 from chuk_agents_executor.user_browser import (
     PANEL_ORIGIN,
     RESUME_CAPABILITY as USER_BROWSER_RESUME_CAPABILITY,
@@ -2128,7 +2128,7 @@ class LocalHost:
         automation_id = payload.get("id")
         if not isinstance(automation_id, str) or not automation_id:
             return {"ok": False, "error": "id is required"}
-        changes = {k: payload[k] for k in ("name", "prompt", "spec", "notify") if k in payload}
+        changes = {k: payload[k] for k in AUTOMATION_UPDATE_KEYS if k in payload}
         return manager.update(None, automation_id, changes)
 
     def _on_agent_frame(self, payload: dict) -> list[dict] | dict:

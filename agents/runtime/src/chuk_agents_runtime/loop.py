@@ -537,6 +537,10 @@ class _ActiveRun:
     #: Write / send / delete calls that failed in this run, by (tool, target):
     #: ``(tool, target, error)``. A later success of the same pair clears it.
     failed_actions: dict[tuple[str, str], str] = field(default_factory=dict)
+    #: Repeat-guard notes of the current turn. Written only after every tool
+    #: row of the turn is stored: a user row between two tool results breaks
+    #: the call/result pairing a strict provider requires.
+    pending_notes: list[str] = field(default_factory=list)
 
 
 class _PendingRecall:
@@ -672,6 +676,10 @@ class AgentLoop:
         self._budget = budget or IterationBudget(max_iterations)
         self._token_budget = token_budget
         self._tokens_spent = 0
+        #: True once any model request of this loop got an answer back (a
+        #: first stream event or a finished response). A failure after that
+        #: was billed: the automation guard must not re-run it as transient.
+        self._model_answered = False
         self._kill = kill_switch or KillSwitch()
         self._system_prompt = system_prompt
         self._system_prompt_upgrade = system_prompt_upgrade
@@ -739,6 +747,11 @@ class AgentLoop:
     @property
     def tokens_spent(self) -> int:
         return self._tokens_spent
+
+    @property
+    def model_answered(self) -> bool:
+        """Whether a model request already answered (and so was billed)."""
+        return self._model_answered or self._tokens_spent > 0
 
     @property
     def token_budget(self) -> int | None:
@@ -1120,6 +1133,7 @@ class AgentLoop:
                                 if streaming:
                                     await self._stream_request(node, run, mapper)
                                 node = await run.next(node)
+                                self._model_answered = True
                             except (RunCancelled, asyncio.CancelledError):
                                 raise
                             except Exception as exc:
@@ -1288,6 +1302,7 @@ class AgentLoop:
                     async for event in stream:
                         if mapper.first_event_ms is None:
                             deadline.reschedule(None)
+                        self._model_answered = True
                         mapper.feed(event)
         except TimeoutError as exc:
             raise FirstEventTimeout(FIRST_EVENT_TIMEOUT_S) from exc
@@ -1655,9 +1670,7 @@ class AgentLoop:
                     text = REPEAT_DETAILED.format(
                         tool=call.tool_name, count=count, arguments=preview
                     )
-                self._append(
-                    active.session_id, "context", {"role": "user", "content": f"[runtime] {text}"}
-                )
+                active.pending_notes.append(f"[runtime] {text}")
             if self._is_mutating(call.tool_name):
                 target = _call_target(args)
                 pair = (call.tool_name, target)
@@ -1711,6 +1724,13 @@ class AgentLoop:
                         else STOPPED_TOOL_RESULT
                     )
                 self._write_tool_row(active, call, None, tools_used)
+        self._flush_notes(active)
+
+    def _flush_notes(self, active: _ActiveRun) -> None:
+        """Store the turn's queued repeat-guard notes, after its tool rows."""
+        notes, active.pending_notes = active.pending_notes, []
+        for note in notes:
+            self._append(active.session_id, "context", {"role": "user", "content": note})
 
     def _trace_tool_start(self, call: ToolCallPart) -> None:
         tracer = get_tracer()

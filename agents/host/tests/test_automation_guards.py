@@ -244,3 +244,52 @@ def test_old_rows_read_as_user_rows(tmp_path):
     assert row["created_by"] == "user" and row["target"] == "this_session"
     state = StateStore(str(tmp_path / "state.db"))
     state.close()
+
+
+def test_a_retry_whose_fire_fails_stays_due_and_a_one_shot_still_fires(tmp_path):
+    """CodeRabbit: ``retry_at`` was cleared before the fire, so a fire that did
+    not start (host not ready) dropped the retry; a spent one-shot then stayed
+    ``active`` with nothing due, forever."""
+    host, clock = _Host(), _Clock()
+    m = _manager(tmp_path, host, clock)
+    row = m.schedule(S, "in 10m", "remind me", None)
+    assert row["ok"]
+    clock.now = row["next_fire_at"]
+    assert m.run_scheduler_once() == 1
+    outcome = m.finish_run("run-1", row["id"], ok=False, error="ConnectError", transient=True)
+    retry_at = outcome["retry_at"]
+    clock.now = retry_at
+    working_fire = m._fire
+    m._fire = lambda *a: None  # the host cannot start a run right now
+    assert m.run_scheduler_once() == 0
+    stored = m.store.get(row["id"])
+    assert stored["retry_at"] == retry_at  # still due
+    assert stored["state"] == "active"
+    m._fire = working_fire
+    assert m.run_scheduler_once() == 1
+    assert host.fired[-1][2]["reason"] == "retry"
+    assert m.store.get(row["id"])["retry_at"] is None
+
+
+def test_an_update_forwards_allow_chaining_catch_up_and_target(tmp_path):
+    """CodeRabbit: the host and the app helper dropped the new update keys."""
+    from chuk_agents_executor.protocol import automation_update_payload
+    from chuk_agents_host.host import LocalHost
+
+    m = _manager(tmp_path, _Host(), _Clock())
+    row = m.create({"session_key": S, "kind": "schedule", "spec": "every 1h", "prompt": "p"})
+    payload = automation_update_payload(
+        automation_id=row["id"], allow_chaining=True, catch_up="30m", target="new"
+    )
+    assert payload["allow_chaining"] is True and payload["catch_up"] == "30m" and payload["target"] == "new"
+    out = LocalHost._save_automation(m, "automation_update", payload)
+    assert out["ok"] is True, out
+    stored = m.store.get(row["id"])
+    assert stored["allow_chaining"] == 1
+    assert stored["target"] == "new"
+    assert stored["catch_up_seconds"] == 1800
+    # Only one of the new keys: not "nothing to change".
+    only = LocalHost._save_automation(
+        m, "automation_update", automation_update_payload(automation_id=row["id"], allow_chaining=False)
+    )
+    assert only["ok"] is True and m.store.get(row["id"])["allow_chaining"] == 0

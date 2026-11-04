@@ -100,8 +100,21 @@ def _quoted(env: Environment, path: str) -> str:
 def stat_version(env: Environment, path: str) -> FileVersion | None:
     """The version of a regular file, or ``None`` when it does not exist."""
     q = _quoted(env, path)
+    # Portable: GNU ``stat -c`` / ``sha256sum`` first, then the BSD/macOS
+    # ``stat -f`` / ``shasum -a 256`` (the local backend runs on the host, which
+    # may be a Mac), then ``openssl``. The size comes from ``wc -c`` everywhere.
+    # The mtime only has to compare equal on the same machine, so its format
+    # may differ per platform; without any ``stat`` it is empty and the size
+    # and hash still tell a change.
     result = env.run_bash(
-        f"test -f {q} || exit 3; stat -c '%y|%s' -- {q} && sha256sum -- {q}",
+        f"test -f {q} || exit 3; "
+        f"__m=$(stat -c '%y' -- {q} 2>/dev/null || stat -f '%Fm' {q} 2>/dev/null "
+        f"|| stat -f '%m' {q} 2>/dev/null); "
+        f"__s=$(wc -c < {q} | tr -d ' \\t') || exit 4; "
+        f"__h=$( {{ sha256sum -- {q} 2>/dev/null || shasum -a 256 {q} 2>/dev/null "
+        f"|| openssl dgst -sha256 -r {q} 2>/dev/null; }} | awk '{{print $1}}'); "
+        "[ -n \"$__h\" ] || exit 4; "
+        "printf '%s|%s\\n%s\\n' \"$__m\" \"$__s\" \"$__h\"",
         timeout=60,
         internal=True,
     )

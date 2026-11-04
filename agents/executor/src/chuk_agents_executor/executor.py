@@ -116,6 +116,7 @@ from chuk_agents_runtime.action_policy import (
     ActionDecision,
     ActionPolicy,
     ActionRequest,
+    SCOPE_PREFIX,
     parse_scope,
     user_browser_policy,
 )
@@ -956,6 +957,10 @@ class _SecretsOff:
         raise PermissionError(SECRETS_OFF_MESSAGE)
 
 
+#: The tools whose approval may remember a command prefix (item 9).
+_SHELL_APPROVAL_TOOLS = frozenset({"run_command"})
+
+
 @dataclass
 class _PendingApproval:
     """One in-flight publish approval: the worker waits on ``event``, the serve
@@ -982,6 +987,9 @@ class _PendingApproval:
     #: The thread this approval belongs to, so a ``remember_prefix`` on the
     #: decision (item 9) is stored for the right agent.
     session_key: str | None = None
+    #: The tool the request is about (an action request's ``tool``), so a
+    #: ``remember_prefix`` is only stored for a shell command approval.
+    tool: str = ""
     #: A plan review's "Keep planning" text (docs/WIRE_CONTRACT.md, "Plan mode").
     feedback: str = ""
 
@@ -4166,7 +4174,9 @@ class Executor:
             publish = action.publish if action is not None else req
             approval_id = uuid4().hex
             pending = _PendingApproval(
-                options=tuple(action.options) if action else (), session_key=session_key
+                options=tuple(action.options) if action else (),
+                session_key=session_key,
+                tool=str(action.tool or "") if action else "",
             )
             with self._approvals_lock:
                 self._approvals[approval_id] = pending
@@ -4432,9 +4442,15 @@ class Executor:
         if not pending.decide(payload.get("approved") is True, payload.get("scope")):
             return  # the host already resolved it (a takeover's "auto")
         # Item 9: store an 'approve and remember' command prefix for the agent.
+        # Only when the card was a shell command approval that OFFERED the
+        # prefix scope and the user picked it: a decision never reaches further
+        # than what the card showed (``parse_scope``). A stray prefix on a
+        # ``once`` mail approval must not lift the safety floor for good.
         remember_prefix = payload.get("remember_prefix")
         if (
             pending.approved
+            and pending.scope == SCOPE_PREFIX
+            and pending.tool in _SHELL_APPROVAL_TOOLS
             and isinstance(remember_prefix, str)
             and remember_prefix.strip()
             and self._action_approvals is not None
@@ -5483,7 +5499,9 @@ class Executor:
             self._record_run(run, failed=message)
             # A failed automation run still ends on the host: its result
             # event goes out and its reported result is dropped.
-            automation_result = self._finish_automation(run, ok=False, error=message, exc=exc)
+            automation_result = self._finish_automation(
+                run, ok=False, error=message, exc=exc, model_answered=self._run_was_billed(run, loop)
+            )
             self._after_run_goal(run, "failed")
             self._terminal(request_id, _run_error(run, message))
             # The run is over once its terminal went out: drop it from the
@@ -5736,8 +5754,39 @@ class Executor:
             backend = attach(run.run_id, run.automation_id)
         return backend
 
+    def _run_was_billed(self, run: _Run, loop: Any) -> bool:
+        """Whether a failed run already got a model answer (and so cost the
+        user money): the loop saw a response or spent tokens, or an aux or
+        browser call of the run wrote a usage line. ``run.cost`` is only set
+        on the success path, so it cannot tell."""
+        try:
+            if bool(getattr(loop, "model_answered", False)):
+                return True
+            if int(getattr(loop, "tokens_spent", 0) or 0) > 0:
+                return True
+        except Exception:  # noqa: BLE001 — unknown counts as billed below
+            return True
+        if run.cost:
+            return True
+        if not run.run_id:
+            return False
+        try:
+            store = StateStore(self._db_path)
+            try:
+                return bool(store.usage_lines(run.run_id))
+            finally:
+                store.close()
+        except Exception:  # noqa: BLE001 — unreadable: do not risk a second bill
+            return True
+
     def _finish_automation(
-        self, run: _Run, *, ok: bool, error: str | None = None, exc: BaseException | None = None
+        self,
+        run: _Run,
+        *,
+        ok: bool,
+        error: str | None = None,
+        exc: BaseException | None = None,
+        model_answered: bool | None = None,
     ) -> dict | None:
         """Ask the host whether a fired ``on_change`` run counts as a change.
         ``None`` for every other run (and for a host without the hook)."""
@@ -5756,7 +5805,8 @@ class Executor:
                 # The guards (retry ladder, one alert per incident) need the
                 # error and whether it was the network before the model
                 # answered. An older host hook takes ``ok`` only.
-                transient = is_transient_failure(exc, model_answered=bool(run.cost))
+                answered = bool(run.cost) if model_answered is None else bool(model_answered or run.cost)
+                transient = is_transient_failure(exc, model_answered=answered)
                 try:
                     outcome = finish(
                         run.run_id, run.automation_id, ok=ok, error=error, transient=transient

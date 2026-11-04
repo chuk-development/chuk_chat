@@ -405,9 +405,20 @@ def apply_patch(env: Environment, guard: EditGuard, patch: str, floor: object | 
                 if failed:
                     return _write_failure(item.move_to, failed, results)
                 q = __import__("shlex").quote(workspace_path(env, item.path))
-                env.run_bash(f"rm -f -- {q}", timeout=30, internal=True)
-                guard.seen.put(guard.key(item.path), None)
+                out = env.run_bash(f"rm -f -- {q}", timeout=30, internal=True)
                 guard.observe(item.move_to)
+                if not out.ok:
+                    # The new file landed, the old one is still there: say so
+                    # instead of reporting a clean move.
+                    results.append({"path": item.move_to, "op": "add", "copied_from": item.path})
+                    return _write_failure(
+                        item.path,
+                        "the moved file was written to "
+                        f"{item.move_to}, but removing the source failed: "
+                        + (out.stderr or out.stdout or "rm failed").strip(),
+                        results,
+                    )
+                guard.seen.put(guard.key(item.path), None)
                 results.append({"path": item.path, "op": "update", "moved_to": item.move_to})
                 diffs.append({"path": item.move_to, "diff": unified_diff(item.move_to, item.before or "", item.after or "")})
             else:

@@ -156,10 +156,21 @@ class ProjectRules:
         while current != self._host_root and self._host_root in current.parents:
             for filename in RULES_FILENAMES:
                 path = current / filename
-                if path.is_file():
+                if path.is_file() and self._inside(path):
                     files.append(path)
             current = current.parent
         return files
+
+    def _inside(self, path: Path) -> bool:
+        """True when ``path``'s real location (every symlink followed) is a
+        file inside the workspace. A rules file that is a symlink to
+        ``~/.aws/credentials`` or ``../.env`` must never reach the model."""
+        try:
+            real = path.resolve(strict=True)
+            real.relative_to(self._host_root)
+        except (OSError, ValueError, RuntimeError):
+            return False
+        return real.is_file()
 
     def rules_for(self, directory: Path) -> str:
         """The block for a directory seen for the first time, or ``""``."""
@@ -173,9 +184,13 @@ class ProjectRules:
             ident = path.as_posix()
             if ident in self._sent_files:
                 continue
+            # Check again at read time and read the resolved path, so a link
+            # swapped in after the walk cannot point the read outside.
+            if not self._inside(path):
+                continue
             try:
-                data = path.read_bytes()
-            except OSError:
+                data = path.resolve(strict=True).read_bytes()
+            except (OSError, RuntimeError):
                 continue
             if not data.strip():
                 continue

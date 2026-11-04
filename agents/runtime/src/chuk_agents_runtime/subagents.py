@@ -55,6 +55,7 @@ leave versioning on.
 from __future__ import annotations
 
 import json
+import logging
 import re
 import threading
 import time
@@ -69,6 +70,8 @@ from .loop import KillSwitch, LoopResult, StopReason
 from .registry import ToolRegistry
 from .state import StateStore
 from .workspace_git import GitWorkspace, WorktreeInfo
+
+logger = logging.getLogger(__name__)
 
 # -- limits ----------------------------------------------------------------
 
@@ -622,11 +625,15 @@ class SubagentSupervisor:
         try:
             for spec in specs:
                 records.append(
-                    self._start(spec, fork_history=history if spec.fork else None)
+                    self._start(
+                        spec, fork_history=history if spec.fork else None, awaited=wait
+                    )
                 )
         except Exception as exc:  # noqa: BLE001 — a half-open batch is worse
             for record in records:
                 self.cancel(record.subagent_id)
+            if wait:
+                self._release_waiters([r.subagent_id for r in records])
             return {
                 "ok": False,
                 "error": f"could not start the batch: {type(exc).__name__}: {exc}",
@@ -645,7 +652,12 @@ class SubagentSupervisor:
 
         budget = self._limits.max_wait_s if timeout is None else float(timeout)
         budget = min(budget, self._limits.max_wait_s)
-        finished = self.wait_for([r.subagent_id for r in records], timeout=budget)
+        try:
+            finished = self.wait_for([r.subagent_id for r in records], timeout=budget)
+        finally:
+            # The registration ``_start`` made (before the thread ran) ends
+            # with this wait; a child still running later gets its note.
+            self._release_waiters([r.subagent_id for r in records])
         pending = [r for r in finished if not r.state.terminal]
         out: dict[str, Any] = {
             "ok": True,
@@ -669,8 +681,21 @@ class SubagentSupervisor:
         except Exception:  # noqa: BLE001 — refuse the fork, never the run
             return []
 
+    def _release_waiters(self, subagent_ids: Sequence[str]) -> None:
+        with self._cond:
+            for sid in subagent_ids:
+                left = self._waiting.get(sid, 0) - 1
+                if left > 0:
+                    self._waiting[sid] = left
+                else:
+                    self._waiting.pop(sid, None)
+
     def _start(
-        self, spec: TaskSpec, *, fork_history: list[dict] | None = None
+        self,
+        spec: TaskSpec,
+        *,
+        fork_history: list[dict] | None = None,
+        awaited: bool = False,
     ) -> SubagentRecord:
         prompt, title = spec.prompt, spec.title
         self._counter += 1
@@ -741,6 +766,11 @@ class SubagentSupervisor:
 
         with self._cond:
             self._live[subagent_id] = live
+            # A waited child is registered as waited BEFORE its thread runs: a
+            # fast child that settles first must not also queue a
+            # "[subagent settled]" note (its result is in the tool result).
+            if awaited:
+                self._waiting[subagent_id] = self._waiting.get(subagent_id, 0) + 1
             self._cond.notify_all()
         self._start_pulse()
         self._emit_state(record)
@@ -809,9 +839,18 @@ class SubagentSupervisor:
             if live.kill.interrupted() or live.stall_note:
                 break
             turns += 1
+            prompt = correction_prompt(schema, errors)
+            if live.ctx.backend != NATIVE_BACKEND:
+                # An external CLI runner is one-shot (no session to continue):
+                # without the brief and its own answer the correction has
+                # nothing to correct, and the turn is billed to the user's CLI.
+                previous = _cap(result.final_answer or "", RESULT_TEXT_CAP)
+                prompt = (
+                    f"{live.ctx.prompt}\n\nYour previous answer:\n{previous}\n\n{prompt}"
+                )
             followup = replace(
                 live.ctx,
-                prompt=correction_prompt(schema, errors),
+                prompt=prompt,
                 fork_history=None,
                 followup=True,
             )
@@ -869,8 +908,19 @@ class SubagentSupervisor:
             # The stall monitor may already have settled a child that did not
             # wind down in its grace time; its late return changes nothing.
             if live.finished:
-                return
-            live.finished = True
+                release = live.git_deferred
+                live.git_deferred = False
+            else:
+                release = None
+                live.finished = True
+                # Settled by the stall monitor while the driver still runs:
+                # its late return releases the worktree (set under the lock,
+                # so that return cannot slip in before the flag).
+                live.git_deferred = not collect_git and live.worktree is not None
+        if release is not None:
+            if release:
+                self._release_deferred_worktree(live)
+            return
         record = live.record
         record.state = state
         record.finished_at = time.time()
@@ -889,6 +939,24 @@ class SubagentSupervisor:
         self._persist(live, force=True)
         self._emit_state(record)
         self._maybe_notice(record)
+
+    def _release_deferred_worktree(self, live: "_LiveChild") -> None:
+        """The stall monitor settled this child without touching git; its
+        driver has returned now, so the worktree is released (the branch and
+        its work are kept, nothing is merged)."""
+        worktree = live.worktree
+        if self._git is None or worktree is None:
+            return
+        try:
+            self._git.release_worktree(worktree, keep_branch=True)
+        except Exception:  # noqa: BLE001 — cleanup must not fail the driver
+            logger.debug("worktree release failed", exc_info=True)
+            return
+        live.record.merge_note = (
+            f"not merged ({live.record.state.value}); the work is kept on branch "
+            f"{worktree.branch}"
+        )
+        self._persist(live, force=True)
 
     def _finish_stalled(
         self,
@@ -1006,13 +1074,7 @@ class SubagentSupervisor:
         try:
             return self._wait_loop(wanted, deadline)
         finally:
-            with self._cond:
-                for sid in wanted:
-                    left = self._waiting.get(sid, 0) - 1
-                    if left > 0:
-                        self._waiting[sid] = left
-                    else:
-                        self._waiting.pop(sid, None)
+            self._release_waiters(wanted)
 
     def _wait_loop(
         self, wanted: list[str], deadline: float | None
@@ -1280,6 +1342,9 @@ class _LiveChild:
     stall_note: str | None = None
     stalled_at: float | None = None
     finished: bool = False
+    #: Settled by the stall monitor without git (``collect_git=False``): the
+    #: worktree is released when the driver finally returns.
+    git_deferred: bool = False
     finish_lock: threading.Lock = field(default_factory=threading.Lock)
     _text: list[str] = field(default_factory=list)
     _text_len: int = 0

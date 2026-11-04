@@ -5,6 +5,8 @@ decision that reaches the host's store and stops the next ask."""
 
 from __future__ import annotations
 
+import pytest
+
 import threading
 import time
 from types import SimpleNamespace
@@ -360,12 +362,42 @@ class _PrefixHook(_Hook):
         self.prefixes.append((session_key, prefix))
 
 
-def test_remember_prefix_on_a_decision_reaches_the_hook(tmp_path):
+def _shell_request() -> ActionRequest:
+    return ActionRequest(
+        "send_external",
+        "run_command",
+        "Run git push",
+        {"command": "git push"},
+        options=("once", "always_this_prefix", "deny"),
+    )
+
+
+def test_remember_prefix_on_a_prefix_decision_reaches_the_hook(tmp_path):
     hook = _PrefixHook()
     executor = _executor(tmp_path, hook=hook)
     _ask(
         executor,
-        _mail_request(),
-        {"approved": True, "scope": "once", "remember_prefix": "git push"},
+        _shell_request(),
+        {"approved": True, "scope": "always_this_prefix", "remember_prefix": "git push"},
     )
     assert ("thread-1", "git push") in hook.prefixes
+
+
+@pytest.mark.parametrize(
+    "request_factory, decision",
+    [
+        # a once approval of a mail with a stray prefix
+        (_mail_request, {"approved": True, "scope": "once", "remember_prefix": "git push"}),
+        # a prefix scope the mail card never offered
+        (_mail_request, {"approved": True, "scope": "always_this_prefix", "remember_prefix": "git push"}),
+        # a shell card, but the user picked once
+        (_shell_request, {"approved": True, "scope": "once", "remember_prefix": "git push"}),
+        # a deny never remembers
+        (_shell_request, {"approved": False, "scope": "always_this_prefix", "remember_prefix": "git push"}),
+    ],
+)
+def test_remember_prefix_is_ignored_outside_a_shell_prefix_decision(tmp_path, request_factory, decision):
+    hook = _PrefixHook()
+    executor = _executor(tmp_path, hook=hook)
+    _ask(executor, request_factory(), decision)
+    assert hook.prefixes == []

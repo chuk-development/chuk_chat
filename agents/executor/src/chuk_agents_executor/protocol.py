@@ -980,11 +980,19 @@ def automation_create_payload(
     return payload
 
 
+#: The fields an ``automation_update`` may change (docs/WIRE_CONTRACT.md,
+#: "Automation guards" adds the last three).
+AUTOMATION_UPDATE_KEYS: tuple[str, ...] = (
+    "name", "prompt", "spec", "notify", "allow_chaining", "catch_up", "target",
+)
+
+
 def automation_update_payload(*, automation_id: str, **changes: Any) -> dict[str, Any]:
-    """App -> host: change ``name`` / ``prompt`` / ``spec`` / ``notify`` of one
-    automation. Only the given keys change."""
+    """App -> host: change ``name`` / ``prompt`` / ``spec`` / ``notify`` /
+    ``allow_chaining`` / ``catch_up`` / ``target`` of one automation. Only the
+    given keys change."""
     payload: dict[str, Any] = {"type": "automation_update", "id": automation_id}
-    for key in ("name", "prompt", "spec", "notify"):
+    for key in AUTOMATION_UPDATE_KEYS:
         if key in changes:
             payload[key] = changes[key]
     return payload

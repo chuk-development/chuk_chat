@@ -54,7 +54,7 @@ import re
 import sqlite3
 import time
 from collections.abc import Iterable, Iterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from .registry import ToolRegistry
@@ -405,6 +405,21 @@ class SkillLibrary:
     def loaded_hash(self, name: str) -> str | None:
         return self._loaded_hash.get(name)
 
+    def _read_current(self, key: str, skill: Skill) -> tuple[Skill, str] | None:
+        """The skill as its file reads now, with the file's hash. ``None``
+        when there is no file, it cannot be read or it no longer parses (the
+        loaded copy then stays)."""
+        if not skill.path:
+            return None
+        try:
+            text = Path(skill.path).read_text(encoding="utf-8", errors="replace")
+            fresh = parse_skill(text, path=skill.path)
+        except (OSError, SkillError):
+            return None
+        if fresh.name != key:
+            return None
+        return replace(fresh, pinned=skill.pinned), text_sha256(text)
+
     def activate(self, name: str, *, by_user: bool = False) -> dict:
         """Load one skill. ``by_user`` is the app's own start of a skill (a
         slash command); the model's ``skill`` tool never sets it, so a
@@ -423,17 +438,30 @@ class SkillLibrary:
                 "error": f"no skill named {key!r}",
                 "available": self.names(),
             }
+        current = self._read_current(key, skill)
         if key in self._active:
+            # "Load it again" after the file changed (skill_proposals refuses
+            # an update against a stale hash): take the new body and hash.
+            if current is not None and current[1] != self._loaded_hash.get(key):
+                self.skills[key], self._loaded_hash[key] = current
+                if key not in self._pending:
+                    self._pending.append(key)
+                return {
+                    "ok": True,
+                    "skill": key,
+                    "status": "reloaded",
+                    "note": (
+                        "The file changed since you loaded it. Its current "
+                        "instructions are now in your context, below this result."
+                    ),
+                }
             return {"ok": True, "skill": key, "status": "already_active"}
         self._active.append(key)
         self._pending.append(key)
-        if skill.path:
-            try:
-                self._loaded_hash[key] = text_sha256(
-                    Path(skill.path).read_text(encoding="utf-8", errors="replace")
-                )
-            except OSError:
-                pass
+        if current is not None:
+            # The body the model gets and the hash an update is checked
+            # against come from the same read.
+            self.skills[key], self._loaded_hash[key] = current
         if self.settings is not None:
             try:
                 self.settings.record_use(key)
