@@ -211,7 +211,12 @@ class JobWakeRouter:
                 texts = self._pending.pop(session_key, [])
             if texts:
                 self.delivered_context += len(texts)
-            return [{"role": "user", "content": text, "role_tag": "context"} for text in texts]
+            # ``source: job`` (docs/WIRE_CONTRACT.md, "Typed source on
+            # synthetic rows"): the app draws the wake as a chip.
+            return [
+                {"role": "user", "content": text, "role_tag": "context", "source": "job"}
+                for text in texts
+            ]
 
         return pending_events
 

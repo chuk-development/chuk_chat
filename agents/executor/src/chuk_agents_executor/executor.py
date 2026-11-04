@@ -170,8 +170,37 @@ from .shell import JobWakeRouter
 from . import box_browser as _box_browser
 from . import user_browser as _user_browser
 from .box_browser import TOOLS_FILE, BoxBrowser, box_of
+from chuk_agents_runtime.ask_user import (
+    NO_TIMEOUT as QUESTION_NO_TIMEOUT,
+    clean_answers,
+    late_answer_prompt,
+)
+from chuk_agents_runtime.goal import GoalController
+from chuk_agents_runtime.plan_mode import (
+    DECISION_APPROVE,
+    DECISION_KEEP_PLANNING,
+    DECISION_STOPPED,
+    DECISION_TIMEOUT,
+    PlanMode,
+    PlanState,
+    parse_plan_prefix,
+)
+from chuk_agents_runtime.sources import source_for_origin
+from chuk_agents_runtime.todo import load_todos
+
+from .goal_driver import ORIGIN_GOAL, GoalDriver, default_max_rounds
 from .protocol import (
     ACTION_BROWSER_TAKEOVER,
+    ACTION_PLAN_REVIEW,
+    QUESTION_ANSWERED,
+    QUESTION_OPEN,
+    QUESTION_PENDING,
+    QUESTION_STOPPED,
+    goal_payload,
+    plan_mode_payload,
+    plan_review_request_payload,
+    question_request_payload,
+    todo_payload,
     APPROVAL_AUTO,
     APPROVAL_BY_USER,
     APPROVAL_STOPPED,
@@ -236,11 +265,24 @@ HOST_DEFAULT = "host-default"
 ORIGIN_APP = "app"
 
 #: Runs nobody watches live: the host announces their end itself.
-UNATTENDED_ORIGINS = ("automation", "job", ORIGIN_MAIL)
+UNATTENDED_ORIGINS = ("automation", "job", ORIGIN_MAIL, "goal")
+
+#: A late answer to an ``ask_user`` question that ran out
+#: (docs/WIRE_CONTRACT.md, "Questions to the user"): a new turn of the session.
+ORIGIN_ANSWER = "answer"
+
+#: How long a plan review waits for the user (docs/WIRE_CONTRACT.md, "Plan
+#: mode"). Past it the agent stays in plan mode and says the plan waits.
+PLAN_REVIEW_WAIT_SECONDS = 30 * 60
+
+#: Late-answerable questions kept in memory (oldest dropped first).
+MAX_LATE_QUESTIONS = 200
 
 #: Origins whose task frame carries no ``mcp_servers`` (no app sent it): they
 #: run with the connectors the session already has.
-CONNECTORLESS_ORIGINS = ("automation", ORIGIN_MAIL, _user_browser.PANEL_ORIGIN)
+CONNECTORLESS_ORIGINS = (
+    "automation", ORIGIN_MAIL, _user_browser.PANEL_ORIGIN, "goal", "answer",
+)
 
 #: Origins a lighter context may serve (docs/WIRE_CONTRACT.md, "Cost per run
 #: and weekly budget"): a fired schedule / watcher and a background job wake.
@@ -587,6 +629,13 @@ class _Run:
     # Set once ``_finish_automation`` asked the host. A run ends once, so the
     # host hears it once even when a later step of the run fails.
     automation_finished: bool = False
+    # docs/WIRE_CONTRACT.md, "Plan mode": the task's switch (``True`` on,
+    # ``False`` off, ``None`` no change), applied when the run starts.
+    plan: bool | None = None
+    # docs/WIRE_CONTRACT.md, "Goal mode": the round number of a goal round.
+    goal_round: int | None = None
+    # Typed fields of the prompt row (``answer_to_pending_question``).
+    row_extra: dict | None = None
 
 
 class _PreRunClock:
@@ -933,6 +982,8 @@ class _PendingApproval:
     #: The thread this approval belongs to, so a ``remember_prefix`` on the
     #: decision (item 9) is stored for the right agent.
     session_key: str | None = None
+    #: A plan review's "Keep planning" text (docs/WIRE_CONTRACT.md, "Plan mode").
+    feedback: str = ""
 
     def decide(self, approved: bool, scope: Any = None) -> bool:
         """Record a decision; False when one was already recorded. ``scope``
@@ -945,6 +996,29 @@ class _PendingApproval:
             # A yes whose scope is "deny" is a deny: never approve it.
             self.approved = approved is True and self.scope != "deny"
             return True
+
+
+@dataclass
+class _PendingQuestion:
+    """One ``ask_user`` batch (docs/WIRE_CONTRACT.md, "Questions to the
+    user"). The worker waits on ``event`` while the run waits; after the wait
+    ran out the entry stays (``late``) so a later answer starts a new turn."""
+
+    call_id: str
+    session_key: str
+    questions: list
+    timeout: int
+    payload: dict
+    event: threading.Event = field(default_factory=threading.Event)
+    answers: list | None = None
+    #: The card is on screen (``ask_visible``): the wait does not count down.
+    visible: bool = False
+    #: The wait ran out; the run went on. A later answer becomes a new turn.
+    late: bool = False
+    #: Answered (in time or late) or withdrawn: nothing more to do.
+    closed: bool = False
+    mid: int | None = None
+    lock: threading.Lock = field(default_factory=threading.Lock)
 
 
 class _RfbClientFramer:
@@ -1536,6 +1610,14 @@ class Executor:
         # Guarded because the two threads touch it.
         self._approvals: dict[str, _PendingApproval] = {}
         self._approvals_lock = threading.Lock()
+        # docs/WIRE_CONTRACT.md, "Goal mode": the driver owns the
+        # process-local armed set. A new process arms nothing.
+        self._goal_driver = GoalDriver(self, db_path)
+        self._goal_max_rounds = default_max_rounds()
+        # docs/WIRE_CONTRACT.md, "Questions to the user": open questions by
+        # call id, and the ones that ran out and may still be answered.
+        self._questions: dict[str, _PendingQuestion] = {}
+        self._questions_lock = threading.Lock()
 
         # The live browser view (§9.1), at most one per executor (one agent, one
         # sandbox Chromium). Set on `browser_start`, fed by `browser_data`, torn
@@ -1953,6 +2035,21 @@ class Executor:
             # so there is no request-scoped terminal to send.
             self._resolve_approval(payload)
             return
+        if kind == "goal_control":
+            # The user pauses, resumes or clears the goal (docs/WIRE_CONTRACT.md,
+            # "Goal mode"). Answered with one terminal ``goal`` frame.
+            self._handle_goal_control(request_id, payload)
+            return
+        if kind == "question_answer":
+            # The user's answer to an ``ask_user`` card: wakes the waiting
+            # call, or (after the wait ran out) starts a new turn. A control
+            # frame like approval_decision: no terminal.
+            self._handle_question_answer(payload)
+            return
+        if kind == "ask_visible":
+            # The question card is on screen or not: the wait pauses while it is.
+            self._handle_ask_visible(payload)
+            return
         if kind == "secrets":
             # The user's whole secret set (docs/WIRE_CONTRACT.md, "Secrets"):
             # replace what the vault holds and wake a tool waiting for it. A
@@ -2111,6 +2208,15 @@ class Executor:
             run_id=uuid4().hex,
             started_at=time.time(),
         )
+        # docs/WIRE_CONTRACT.md, "Plan mode": the ``plan`` flag, or a
+        # ``/plan`` prefix (``/plan off`` leaves). Applied when the run starts.
+        raw_plan = payload.get("plan")
+        if isinstance(raw_plan, bool):
+            run.plan = raw_plan
+        switch, stripped = parse_plan_prefix(prompt)
+        if switch is not None:
+            run.plan = switch
+            run.prompt = stripped
         # A run of the same question is already in flight for this session:
         # refuse the copy rather than pay for the same answer twice.
         #
@@ -2301,6 +2407,16 @@ class Executor:
             profile=str(profile) if profile else None,
             mail_message_id=valid_id(meta.get("message_id")),
         )
+        # docs/WIRE_CONTRACT.md, "Goal mode": a goal round knows its number
+        # (the ``blocked`` rule counts rounds).
+        if origin == ORIGIN_GOAL:
+            try:
+                run.goal_round = int(meta.get("goal_round") or 0) or None
+            except (TypeError, ValueError):
+                run.goal_round = None
+        answered = meta.get("answer_to_pending_question")
+        if isinstance(answered, str) and answered:
+            run.row_extra = {"answer_to_pending_question": answered}
         logger.info(
             "automation task accepted request=%s session=%s run=%s automation=%s model=%s",
             run.request_id,
@@ -3108,6 +3224,20 @@ class Executor:
             self._terminal(request_id, marker)
 
     def _run_state_for(self, store: StateStore, session_key: str) -> dict:
+        """``run_state`` with the agent-mode fields (docs/WIRE_CONTRACT.md,
+        "Goal mode", "Plan mode", "Todo list") and the live run's ``source``."""
+        payload = self._run_state_core(store, session_key)
+        payload.update(self._modes_state(store, session_key))
+        with self._runs_lock:
+            live = next(
+                (r for r in self._runs.values() if r.session_key == session_key), None
+            )
+        source = source_for_origin(live.origin) if live is not None else None
+        if source:
+            payload["source"] = source
+        return payload
+
+    def _run_state_core(self, store: StateStore, session_key: str) -> dict:
         """The ``run_state`` header of a replay: ``running`` when a run for the
         session is queued or in flight here, else ``idle``. The registry is the
         live truth; the store covers a run this process recorded but has since
@@ -4296,6 +4426,9 @@ class Executor:
             pending = self._approvals.get(approval_id)
         if pending is None:
             return  # a decision for a publish that already ended: no-op
+        feedback = payload.get("feedback")
+        if isinstance(feedback, str):
+            pending.feedback = feedback.strip()[:4000]
         if not pending.decide(payload.get("approved") is True, payload.get("scope")):
             return  # the host already resolved it (a takeover's "auto")
         # Item 9: store an 'approve and remember' command prefix for the agent.
@@ -4470,6 +4603,361 @@ class Executor:
         finally:
             with self._approvals_lock:
                 self._approvals.pop(approval_id, None)
+
+    # -- agent modes (docs/WIRE_CONTRACT.md, "Goal mode", "Plan mode", ...) --
+    def _mode_bindings(self, run: _Run, request_id: str, session_key: str):
+        """The goal controller, plan mode, todo sink and question backend of
+        one run, and the store they share (closed when the run ends). A
+        restricted mail run gets none of them. Never raises: a failure here
+        costs the modes, never the run."""
+        if run.profile is not None:
+            return None, None, None, None, None
+        try:
+            store = StateStore(self._db_path)
+        except Exception:  # noqa: BLE001
+            return None, None, None, None, None
+        executor = self
+        kill = run.kill
+
+        def goal_changed(view: dict | None) -> None:
+            self._emit_persisted(request_id, session_key, goal_payload(session_key, view))
+
+        goal = GoalController(
+            store=store,
+            session_key=session_key,
+            arming=self._goal_driver.arming,
+            goal_round=run.goal_round if run.origin == ORIGIN_GOAL else None,
+            direct_user=run.origin == ORIGIN_APP,
+            default_max_rounds=self._goal_max_rounds,
+            on_change=goal_changed,
+        )
+        state = PlanState(store, session_key)
+        if run.plan is not None:
+            try:
+                if state.set(run.plan):
+                    self._emit_persisted(
+                        request_id, session_key, plan_mode_payload(session_key, run.plan)
+                    )
+            except Exception:  # noqa: BLE001 — the switch is best effort
+                logger.debug("plan switch failed", exc_info=True)
+
+        class _Review:
+            def review(self, plan: str, title: str) -> dict:
+                return executor._request_plan_review(
+                    request_id, kill, session_key, plan, title
+                )
+
+        plan_mode = PlanMode(
+            state=state,
+            backend=_Review(),
+            on_change=lambda active: self._emit_persisted(
+                request_id, session_key, plan_mode_payload(session_key, active)
+            ),
+        )
+
+        def todo_sink(todos: list[dict]) -> None:
+            self._emit_persisted(request_id, session_key, todo_payload(session_key, todos))
+
+        class _Questions:
+            def ask(self, call_id: str, questions: list[dict], timeout: int) -> dict:
+                return executor._ask_questions(
+                    request_id, kill, session_key, call_id, questions, timeout
+                )
+
+        return store, goal, plan_mode, todo_sink, _Questions()
+
+    def _after_run_goal(self, run: _Run, reason: str) -> dict | None:
+        """Ask the goal driver what follows this run. Never raises."""
+        if run.profile is not None:
+            return None
+        with self._runs_lock:
+            others = any(
+                r.session_key == run.session_key and r.request_id != run.request_id
+                for r in self._runs.values()
+            )
+        try:
+            return self._goal_driver.after_run(
+                run.session_key, reason=reason, origin=run.origin, others_live=others
+            )
+        except Exception:  # noqa: BLE001 — the goal must never fail a run
+            logger.info("goal driver failed", exc_info=True)
+            return None
+
+    def _handle_goal_control(self, request_id: str, payload: dict) -> None:
+        session_key = str(payload.get("session_key") or "default")
+        action = str(payload.get("action") or "")
+        try:
+            view, error = self._goal_driver.control(session_key, action)
+        except Exception as exc:  # noqa: BLE001 — answer, never crash the serve thread
+            view, error = None, f"goal control failed: {type(exc).__name__}"
+        frame = goal_payload(session_key, view)
+        if error:
+            frame["error"] = error
+        self._terminal(request_id, frame)
+
+    def _modes_state(self, store: StateStore, session_key: str) -> dict:
+        """The agent-mode fields of ``run_state``: the goal, plan mode and
+        the latest todo list. Best effort: a store failure leaves them out."""
+        out: dict[str, Any] = {}
+        try:
+            goal = self._goal_driver.view(session_key)
+            if goal is not None:
+                out["goal"] = goal
+            if PlanState(store, session_key).active():
+                out["plan_mode"] = True
+            todos = load_todos(store, session_key)
+            if todos:
+                out["todos"] = todos
+        except Exception:  # noqa: BLE001
+            pass
+        return out
+
+    def _request_plan_review(
+        self, request_id: str, kill: KillSwitch, session_key: str, plan: str, title: str
+    ) -> dict:
+        """Worker-thread half of ``exit_plan_mode``: one ``approval_request``
+        with ``action: plan_review``, then block until the user approves or
+        asks to keep planning, the wait times out, or a stop fires."""
+        approval_id = uuid4().hex
+        pending = _PendingApproval(session_key=session_key)
+        with self._approvals_lock:
+            self._approvals[approval_id] = pending
+        payload = plan_review_request_payload(
+            approval_id=approval_id, plan=plan, title=title, session_key=session_key
+        )
+        pending.mid = self._persist_event(session_key, payload)
+        try:
+            self._event(request_id, payload)
+            self._call_hook(
+                self._on_approval_pending,
+                {
+                    "approval_id": approval_id,
+                    "request_id": request_id,
+                    "action": ACTION_PLAN_REVIEW,
+                    "action_class": ACTION_PLAN_REVIEW,
+                    "session_key": session_key,
+                },
+            )
+            deadline = time.monotonic() + PLAN_REVIEW_WAIT_SECONDS
+            with self._waiting_user(request_id):
+                while True:
+                    if kill.interrupted() or kill.estop_engaged():
+                        if self._expire_approval(
+                            request_id, pending, payload, reason=APPROVAL_STOPPED
+                        ):
+                            return {"decision": DECISION_STOPPED}
+                    if pending.event.wait(self._poll):
+                        if pending.approved:
+                            return {"decision": DECISION_APPROVE}
+                        return {"decision": DECISION_KEEP_PLANNING, "feedback": pending.feedback}
+                    if time.monotonic() >= deadline:
+                        if self._expire_approval(
+                            request_id, pending, payload, reason=APPROVAL_TIMEOUT
+                        ):
+                            return {"decision": DECISION_TIMEOUT}
+        finally:
+            with self._approvals_lock:
+                self._approvals.pop(approval_id, None)
+
+    def _ask_questions(
+        self,
+        request_id: str,
+        kill: KillSwitch,
+        session_key: str,
+        call_id: str,
+        questions: list[dict],
+        timeout: int,
+    ) -> dict:
+        """Worker-thread half of ``ask_user``: one ``question_request``, then
+        wait for the answer batch. The clock runs only while the card is NOT
+        on screen (``ask_visible``). Ran out: the question stays answerable
+        (``pending``) and the run goes on."""
+        if call_id in self._questions:
+            call_id = f"{call_id}-{uuid4().hex[:6]}"
+        payload = question_request_payload(
+            question_id=call_id,
+            questions=questions,
+            timeout_seconds=timeout,
+            session_key=session_key,
+        )
+        pending = _PendingQuestion(
+            call_id=call_id,
+            session_key=session_key,
+            questions=questions,
+            timeout=timeout,
+            payload=payload,
+        )
+        with self._questions_lock:
+            self._questions[call_id] = pending
+            self._trim_questions()
+        pending.mid = self._persist_event(session_key, payload)
+        self._event(request_id, payload)
+        self._call_hook(
+            self._on_approval_pending,
+            {
+                "approval_id": call_id,
+                "request_id": request_id,
+                "action": "ask_user",
+                "action_class": "ask_user",
+                "session_key": session_key,
+            },
+        )
+        remaining = float(timeout)
+        last = time.monotonic()
+        with self._waiting_user(request_id):
+            while True:
+                if kill.interrupted() or kill.estop_engaged():
+                    if self._close_question(pending, QUESTION_STOPPED, request_id=request_id):
+                        return {"stopped": True}
+                if pending.event.wait(self._poll):
+                    return {"answers": list(pending.answers or [])}
+                now = time.monotonic()
+                if not pending.visible:
+                    remaining -= now - last
+                last = now
+                if timeout != QUESTION_NO_TIMEOUT and remaining <= 0:
+                    with pending.lock:
+                        if pending.answers is not None:
+                            continue  # the answer won the race; read it next
+                        pending.late = True
+                    self._patch_question(pending, QUESTION_PENDING)
+                    try:
+                        self._event(request_id, {**payload, "status": QUESTION_PENDING})
+                    except Exception:  # noqa: BLE001
+                        pass
+                    return {"pending": True}
+
+    def _trim_questions(self) -> None:
+        """Bound the late-answerable set (caller holds the lock)."""
+        if len(self._questions) <= MAX_LATE_QUESTIONS:
+            return
+        for key in [k for k, q in self._questions.items() if q.closed or q.late]:
+            if len(self._questions) <= MAX_LATE_QUESTIONS:
+                break
+            self._questions.pop(key, None)
+
+    def _patch_question(self, pending: _PendingQuestion, status: str, answers=None) -> None:
+        if pending.mid is None:
+            return
+        patch: dict[str, Any] = {"status": status}
+        if answers is not None:
+            patch["answers"] = list(answers)
+        try:
+            store = StateStore(self._db_path)
+            try:
+                store.update_event(pending.mid, patch)
+            finally:
+                store.close()
+        except Exception:  # noqa: BLE001 — a stamp, never the answer
+            pass
+
+    def _close_question(
+        self, pending: _PendingQuestion, status: str, *, request_id: str | None = None
+    ) -> bool:
+        with pending.lock:
+            if pending.closed or pending.answers is not None:
+                return False
+            pending.closed = True
+        self._patch_question(pending, status)
+        if request_id:
+            try:
+                self._event(request_id, {**pending.payload, "status": status})
+            except Exception:  # noqa: BLE001
+                pass
+        return True
+
+    def _handle_ask_visible(self, payload: dict) -> None:
+        question_id = payload.get("question_id")
+        if not isinstance(question_id, str):
+            return
+        with self._questions_lock:
+            pending = self._questions.get(question_id)
+        if pending is not None:
+            pending.visible = payload.get("visible") is True
+
+    def _handle_question_answer(self, payload: dict) -> None:
+        """The user's answer batch. In time: the waiting ``ask_user`` call
+        returns it. After the wait ran out: a new turn of the session whose
+        prompt row is tagged ``answer_to_pending_question``."""
+        question_id = payload.get("question_id")
+        if not isinstance(question_id, str) or not question_id:
+            return
+        with self._questions_lock:
+            pending = self._questions.get(question_id)
+        if pending is None:
+            pending = self._stored_pending_question(
+                question_id, str(payload.get("session_key") or "")
+            )
+            if pending is None:
+                return  # unknown or already answered: a no-op
+        answers = clean_answers(payload.get("answers"), pending.questions)
+        with pending.lock:
+            if pending.closed or pending.answers is not None:
+                return
+            pending.answers = answers
+            late = pending.late
+            if late:
+                pending.closed = True
+        self._patch_question(pending, QUESTION_ANSWERED, answers)
+        if not late:
+            pending.event.set()
+            request_id = self.live_request_id(pending.session_key)
+            if request_id:
+                try:
+                    self._event(
+                        request_id,
+                        {**pending.payload, "status": QUESTION_ANSWERED, "answers": answers},
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
+            return
+        with self._questions_lock:
+            self._questions.pop(question_id, None)
+        try:
+            self.submit_task(
+                pending.session_key,
+                late_answer_prompt(question_id, pending.questions, answers),
+                {"origin": ORIGIN_ANSWER, "answer_to_pending_question": question_id},
+            )
+        except Exception:  # noqa: BLE001 — an unprovisioned host loses the turn, not the thread
+            logger.info("late answer for %s could not start a turn", question_id)
+
+    def _stored_pending_question(
+        self, question_id: str, session_key: str
+    ) -> "_PendingQuestion | None":
+        """A question that ran out before this process started (a restart):
+        its persisted ``question_request`` row, if it is still ``pending``."""
+        if not session_key:
+            return None
+        try:
+            store = StateStore(self._db_path)
+            try:
+                sid = store.resolve_session(session_key)
+                if sid is None:
+                    return None
+                for message in reversed(store.get_conversation(sid, include_events=True)):
+                    content = message.content
+                    if (
+                        message.role == "event"
+                        and content.get("type") == "question_request"
+                        and content.get("question_id") == question_id
+                    ):
+                        if content.get("status") != QUESTION_PENDING:
+                            return None
+                        return _PendingQuestion(
+                            call_id=question_id,
+                            session_key=session_key,
+                            questions=list(content.get("questions") or []),
+                            timeout=int(content.get("timeout_seconds") or 0),
+                            payload=dict(content),
+                            late=True,
+                            mid=message.id,
+                        )
+            finally:
+                store.close()
+        except Exception:  # noqa: BLE001
+            return None
+        return None
 
     # -- secrets (docs/WIRE_CONTRACT.md, "Secrets") ------------------------
     def _handle_secrets(self, payload: dict) -> None:
@@ -4849,6 +5337,11 @@ class Executor:
         # a lasting decision. Children get the same binding: a subagent never
         # sends a mail the parent would have had to ask for.
         action_approvals = self._action_approvals_binding(request_id, run.kill, session_key)
+        # The agent modes (docs/WIRE_CONTRACT.md, "Goal mode", "Plan mode",
+        # "Todo list", "Questions to the user"), bound to this run.
+        modes_store, goal, plan_mode, todo_sink, questions = self._mode_bindings(
+            run, request_id, session_key
+        )
         subagents = self._subagent_config(
             request_id, session_key, secrets_access, action_approvals=action_approvals
         )
@@ -4949,6 +5442,16 @@ class Executor:
             # the draft is stored here and shown to the user as a card; only
             # the app's ``skill_proposal_decision`` writes it to disk.
             skill_proposals=self._skill_proposal_sink(request_id, run, session_key),
+            goal=goal,
+            plan_mode=plan_mode,
+            todo_sink=todo_sink,
+            questions=questions,
+            # Typed context rows as live ``context`` frames (docs/WIRE_CONTRACT.md,
+            # "Typed source on synthetic rows"). The row is the store's;
+            # the frame is live only.
+            context_observer=lambda event: self._event(
+                request_id, {**event, "session_key": session_key}
+            ),
         )
 
         clock.lap("runtime_built")
@@ -4960,7 +5463,15 @@ class Executor:
         # reach it through ``phase_observer`` above.
         try:
             # Inside the run's trace scope (``_run_task``).
-            result = loop.run(session_key, prompt, regenerate=run.regenerate)
+            result = loop.run(
+                session_key,
+                prompt,
+                regenerate=run.regenerate,
+                # A prompt nobody typed names its origin (docs/WIRE_CONTRACT.md,
+                # "Typed source on synthetic rows").
+                source=source_for_origin(run.origin),
+                row_extra=run.row_extra,
+            )
         except Exception as exc:  # a crashing loop must not kill the serve thread
             # A model failure the user can act on (no credits, rate limited, a
             # stalled model) carries its own message (loop.ModelServiceError).
@@ -4973,6 +5484,7 @@ class Executor:
             # A failed automation run still ends on the host: its result
             # event goes out and its reported result is dropped.
             automation_result = self._finish_automation(run, ok=False, error=message, exc=exc)
+            self._after_run_goal(run, "failed")
             self._terminal(request_id, _run_error(run, message))
             # The run is over once its terminal went out: drop it from the
             # registry now, so a replay that races the hook below reports idle.
@@ -4994,6 +5506,11 @@ class Executor:
             # Before the terminal below: the last beat must not outlive the run.
             self._stop_beat(request_id)
             env_shim.on_run = None
+            if modes_store is not None:
+                try:
+                    modes_store.close()
+                except Exception:  # noqa: BLE001 — cleanup must not mask a result
+                    pass
             # Children outlive the parent's turn otherwise: a leaked child keeps a
             # container and a model stream alive with nobody reading either.
             if subagents is not None and subagents.supervisor is not None:
@@ -5051,6 +5568,9 @@ class Executor:
         # terminal closes it). The run row is already closed above, so this
         # status counts the turn the user just watched.
         self._push_agent_status(request_id, session_key)
+        # docs/WIRE_CONTRACT.md, "Goal mode": the next round is queued (or
+        # not) before the ``done``, so the ``done`` can say so.
+        goal_state = self._after_run_goal(run, reason)
         self._terminal(
             request_id,
             done_payload(
@@ -5066,6 +5586,7 @@ class Executor:
                 session_key=session_key,
                 cost=run.cost,
                 automation_result=automation_result,
+                goal=goal_state,
             ),
         )
         # The run is over once its terminal went out: drop it from the registry
@@ -5081,6 +5602,7 @@ class Executor:
                 iterations=result.iterations,
                 tokens_spent=result.tokens_spent,
                 automation_result=automation_result,
+                goal=goal_state,
             ),
         )
         # After the ``done``: the optional background review and the skill
@@ -5617,6 +6139,7 @@ class Executor:
         tokens_spent: int = 0,
         error: str | None = None,
         automation_result: dict | None = None,
+        goal: dict | None = None,
     ) -> dict:
         """What the host's ``on_run_finished`` hook receives. No transcript: the
         host decides whether and how to notify; content stays in the store."""
@@ -5641,6 +6164,10 @@ class Executor:
             "automation_result": automation_result,
             # Where the run's time went, one line (bead chuk_chat-4xc5).
             "timing": run.timing,
+            # docs/WIRE_CONTRACT.md, "Goal mode": the goal after this run.
+            # ``continues`` = the next round is queued (the host stays
+            # quiet); ``needs_user`` = blocked, the user must act.
+            "goal": goal,
         }
 
     # -- MCP credential forwarding (§9, §10) -----------------------------

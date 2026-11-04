@@ -56,6 +56,7 @@ from .context import (
     total_tokens_from_usage,
 )
 from .registry import ToolRegistry
+from .sources import REPLAYED_CONTEXT_SOURCES, tag_row, valid_source
 from .state import UNKNOWN_OUTCOME_RESULT, StateStore
 from .tool_events import tool_event_fields, tool_status
 from .tools import FINISH_TOOL
@@ -495,6 +496,9 @@ class _DriveState:
     #: The wrap-up note went out (``WRAP_UP_NOTE``) / the last step had no tools.
     wrap_noted: bool = False
     last_step: bool = False
+    #: A context provider asked for one last step without tools (a goal's
+    #: wrap-up after ``update_goal`` complete / blocked).
+    final_step: bool = False
     #: Why a turn ended with no answer (``length`` / ``content_filter``).
     stop_note: str | None = None
     #: The model this run talks to (built per run for the HTTP route).
@@ -640,6 +644,8 @@ class AgentLoop:
         turn_observer: Callable[[TurnRecord], None] | None = None,
         phase_observer: Callable[[str, str | None], None] | None = None,
         clock_provider: Callable[[], list[dict]] | None = None,
+        task_context_providers: Sequence[Callable[[], list[dict]]] | None = None,
+        context_observer: Callable[[dict], None] | None = None,
         # -- Pydantic AI only -------------------------------------------
         model_settings: ModelSettings | None = None,
         on_delta: Sink | None = None,
@@ -685,6 +691,14 @@ class AgentLoop:
         #: :mod:`chuk_agents_runtime.clock`): made when the task starts and
         #: appended after its prompt. ``None``: no clock row.
         self._clock_provider = clock_provider
+        #: Rows appended once per task, right after its prompt and clock (the
+        #: plan-mode rules, docs/WIRE_CONTRACT.md "Plan mode"). Rows, not the
+        #: system prompt: the cached prefix stays the same bytes.
+        self._task_context_providers = list(task_context_providers or [])
+        #: Told about every typed context row as it is stored, so the app can
+        #: draw its chip live (docs/WIRE_CONTRACT.md, "Typed source on
+        #: synthetic rows"). ``None``: not wired.
+        self._context_observer = context_observer
         self._turn_observer = turn_observer
         #: Told what the run does right now (docs/WIRE_CONTRACT.md,
         #: ``heartbeat.phase``): ``preparing``, ``model`` or ``tool`` + name.
@@ -780,10 +794,29 @@ class AgentLoop:
                 content = self._persist_filter(content)
             except Exception:  # noqa: BLE001
                 content = {
-                    k: (v if k in ("role", "tool_call_id", "name") else None)
+                    k: (v if k in ("role", "tool_call_id", "name", "source") else None)
                     for k, v in content.items()
                 }
-        return self._store.append_message(session_id, role, content)
+        if role not in ("user", "assistant", "tool", "system"):
+            content = tag_row(role, content)
+        mid = self._store.append_message(session_id, role, content)
+        if (
+            self._context_observer is not None
+            and role not in ("user", "assistant", "tool", "system")
+            and content.get("source") in REPLAYED_CONTEXT_SOURCES
+        ):
+            try:
+                self._context_observer(
+                    {
+                        "type": "context",
+                        "source": content["source"],
+                        "text": content.get("content") if isinstance(content.get("content"), str) else "",
+                        "mid": mid,
+                    }
+                )
+            except Exception:  # noqa: BLE001 — a UI sink never fails a run
+                pass
+        return mid
 
     # -- what the model sees ---------------------------------------------
 
@@ -905,7 +938,13 @@ class AgentLoop:
     # -- running ---------------------------------------------------------
 
     def run(
-        self, session_key: str, user_message: str, *, regenerate: bool = False
+        self,
+        session_key: str,
+        user_message: str,
+        *,
+        regenerate: bool = False,
+        source: str | None = None,
+        row_extra: dict | None = None,
     ) -> LoopResult:
         """Run one task to completion. See the module docstring for the rules."""
         store = self._store
@@ -933,8 +972,18 @@ class AgentLoop:
             resolved = prompt() if callable(prompt) else prompt
             if resolved:
                 self._append(session_id, "system", {"role": "system", "content": resolved})
-        self._append(session_id, "user", {"role": "user", "content": user_message})
+        # A prompt nobody typed carries its ``source`` (a goal round, a fired
+        # schedule, a job wake, a mail); ``row_extra`` adds other typed fields
+        # (``answer_to_pending_question``). Neither reaches the model.
+        user_row: dict = {"role": "user", "content": user_message}
+        if valid_source(source):
+            user_row["source"] = source
+        for key, value in (row_extra or {}).items():
+            if key not in ("role", "content") and value is not None:
+                user_row[key] = value
+        self._append(session_id, "user", user_row)
         self._append_clock(session_id)
+        self._append_task_context(session_id)
         pending_recall: _PendingRecall | None = None
         if self._recall_provider is not None and self._recall_wait is not None:
             pending_recall = self._start_recall(user_message)
@@ -1157,7 +1206,8 @@ class AgentLoop:
                                 )
                                 state.reason = StopReason.FINISHED
                                 break
-                            self._drain_context(active.session_id)
+                            if self._drain_context(active.session_id):
+                                state.final_step = True
                             node = await run.next(node)
                             continue
 
@@ -1214,6 +1264,13 @@ class AgentLoop:
                 "context",
                 {"role": "user", "content": WRAP_UP_NOTE.format(left=left)},
             )
+        if state.final_step and not state.last_step:
+            # A provider asked for the closing message now (a goal marked
+            # complete or blocked): its row is stored, the tools go away.
+            state.last_step = True
+            self._tools_enabled = self._toolset.enabled
+            self._toolset.enabled = False
+            return
         if left == 1 and limit >= 3 and not state.last_step:
             state.last_step = True
             self._tools_enabled = self._toolset.enabled
@@ -1474,7 +1531,9 @@ class AgentLoop:
 
         def work() -> Any:
             try:
-                result = registry.dispatch(name, args if isinstance(args, dict) else {})
+                result = registry.dispatch(
+                    name, args if isinstance(args, dict) else {}, call_id=call.tool_call_id
+                )
                 record.result = result
                 return result
             finally:
@@ -1517,7 +1576,9 @@ class AgentLoop:
                 self._phase(PHASE_TOOL, call.tool_name)
                 result = split_ui(
                     self._registry.dispatch(
-                        call.tool_name, args if isinstance(args, dict) else {}
+                        call.tool_name,
+                        args if isinstance(args, dict) else {},
+                        call_id=call.tool_call_id,
                     ),
                     record,
                 )
@@ -1702,12 +1763,34 @@ class AgentLoop:
         except Exception:  # noqa: BLE001 — a UI sink error must not abort a run
             pass
 
-    def _drain_context(self, session_id: int) -> None:
+    def _drain_context(self, session_id: int) -> bool:
+        """Append what the context providers hand over. True when one of the
+        rows asked for a last step without tools (``final_step``)."""
+        final = False
         for provider in self._context_providers:
             for message in provider():
+                if message.get("final_step"):
+                    final = True
                 self._append(
                     session_id,
                     message.get("role_tag", "context"),
+                    {k: v for k, v in message.items() if k not in ("role_tag", "final_step")},
+                )
+        return final
+
+    def _append_task_context(self, session_id: int) -> None:
+        """Append the once-per-task rows (plan mode). Never raises."""
+        for provider in self._task_context_providers:
+            try:
+                messages = list(provider() or [])
+            except Exception:  # noqa: BLE001 — the run goes on without them
+                continue
+            for message in messages:
+                if not isinstance(message, dict) or not message.get("content"):
+                    continue
+                self._append(
+                    session_id,
+                    str(message.get("role_tag") or "context"),
                     {k: v for k, v in message.items() if k != "role_tag"},
                 )
 
