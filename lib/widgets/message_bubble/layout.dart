@@ -1143,18 +1143,23 @@ extension _MessageBubbleLayout on _MessageBubbleState {
 
   /// A user's text as chuk_chat draws it: plain [Text], so taps pass through
   /// to the gesture that opens the actions. Copy lives in those actions.
+  ///
+  /// A pasted credential (API key, token, JWT) is drawn masked with an eye
+  /// toggle (`MaskedSecretText`); copy still copies [widget.message] as sent.
   Widget _buildUserText(String text, Color color) {
-    return Text(
-      text,
-      style: TextStyle(
-        color: color,
-        fontSize: _chatFontSize,
-        fontFamily: resolveChatFontFamily(
-          AppThemeService.instance.chatFontFamily,
-        ),
-        height: 1.38,
+    final TextStyle style = TextStyle(
+      color: color,
+      fontSize: _chatFontSize,
+      fontFamily: resolveChatFontFamily(
+        AppThemeService.instance.chatFontFamily,
       ),
+      height: 1.38,
     );
+    final List<SecretMatch> secrets = findSecrets(text);
+    if (secrets.isNotEmpty) {
+      return MaskedSecretText(text: text, style: style, matches: secrets);
+    }
+    return Text(text, style: style);
   }
 
   /// The quote a reply carries above its own text: a plain bar, the author

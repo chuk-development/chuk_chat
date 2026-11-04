@@ -1,4 +1,5 @@
 // lib/platform_specific/chat/handlers/chat_persistence_handler.dart
+import 'package:chuk_chat/services/chat_turn_stats.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -475,6 +476,10 @@ class ChatPersistenceHandler {
       if (pending.tps != null) {
         messages[pending.messageIndex]['tps'] = pending.tps;
       }
+      final String? usage = ChatTurnStats.instance
+          .usageOf(pending.chatId)
+          ?.encode();
+      if (usage != null) messages[pending.messageIndex]['usage'] = usage;
       if (pending.status != null) {
         messages[pending.messageIndex]['status'] = pending.status;
       }

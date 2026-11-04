@@ -50,6 +50,20 @@ class AgentActivityEntry {
     this.body,
   });
 
+  /// A group of consecutive tool steps, drawn as ONE row ("Searched the
+  /// web and read pages") that opens onto [children]. The title is not
+  /// stored: it depends on whether the calls still run, so the timeline
+  /// asks [groupCalls] when it draws.
+  const AgentActivityEntry.group(List<AgentActivityEntry> steps)
+    : kind = AgentActivityKind.other,
+      label = '',
+      detail = null,
+      children = steps,
+      hasError = false,
+      toolCall = null,
+      sources = const <AgentActivitySource>[],
+      body = null;
+
   final AgentActivityKind kind;
 
   /// Leading text, e.g. `Searched web for` or `Ran 4 searches`.
@@ -79,6 +93,15 @@ class AgentActivityEntry {
   final String? body;
 
   bool get isGroup => children.isNotEmpty;
+
+  /// The calls behind a group row, in order.
+  List<ToolCall> get groupCalls => <ToolCall>[
+    for (final AgentActivityEntry child in children)
+      if (child.toolCall != null) child.toolCall!,
+  ];
+
+  /// Whether this line, or any step behind it, failed.
+  bool get anyError => hasError || children.any((c) => c.anyError);
 
   bool get hasBody => (body?.trim().isNotEmpty ?? false);
 }
@@ -372,6 +395,40 @@ List<AgentActivityEntry> buildAgentActivityEntries(
   }
 
   return entries;
+}
+
+/// Fold every run of two or more consecutive tool steps into one group row.
+///
+/// A thinking note breaks a run, so it stays next to the step it explains.
+/// A single step stays a plain line: one call reads better with its own
+/// query than behind a title. Changing tool category does NOT break a run;
+/// the group title names up to three categories instead (see
+/// `tool_activity_category.dart`).
+List<AgentActivityEntry> groupAgentActivityEntries(
+  List<AgentActivityEntry> entries,
+) {
+  final List<AgentActivityEntry> out = <AgentActivityEntry>[];
+  final List<AgentActivityEntry> run = <AgentActivityEntry>[];
+
+  void flush() {
+    if (run.length >= 2) {
+      out.add(AgentActivityEntry.group(List<AgentActivityEntry>.of(run)));
+    } else {
+      out.addAll(run);
+    }
+    run.clear();
+  }
+
+  for (final AgentActivityEntry entry in entries) {
+    if (entry.toolCall != null && !entry.isGroup) {
+      run.add(entry);
+    } else {
+      flush();
+      out.add(entry);
+    }
+  }
+  flush();
+  return out;
 }
 
 /// Most source chips shown under one step.

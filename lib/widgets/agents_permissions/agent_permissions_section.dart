@@ -13,6 +13,9 @@ import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart'; // own browser
 import 'package:chuk_chat/services/agents/agents_permissions_service.dart';
+import 'package:chuk_chat/services/agents/agents_thread_modes.dart';
+import 'package:chuk_chat/ui/expressive/connected_group.dart';
+import 'package:chuk_chat/widgets/agents_mode_bar.dart';
 import 'package:chuk_chat/ui/expressive/feedback.dart';
 import 'package:chuk_chat/widgets/agents_permissions/agent_approvals_section.dart'; // F1
 import 'package:chuk_chat/widgets/agents_user_browser.dart'; // own browser
@@ -68,6 +71,14 @@ const List<AgentPermissionSpec> kAgentPermissionSpecs = <AgentPermissionSpec>[
     explanation: 'Use the browser add-on on your computer.',
     icon: Icons.laptop_mac,
   ),
+  AgentPermissionSpec(
+    key: AgentPermissions.keyExternalAgents,
+    title: 'External agents',
+    explanation:
+        'Hand tasks to Claude Code or Codex in its sandbox. They use your own '
+        'login and bill your account.',
+    icon: Icons.smart_toy_outlined,
+  ),
 ];
 
 /// The line under the switches while everything is fine.
@@ -117,6 +128,66 @@ class _AgentPermissionsSectionState extends State<AgentPermissionsSection> {
   void initState() {
     super.initState();
     _bind(widget.service ?? AgentsPermissionsService.instance);
+    // The host-wide sandbox block (`agent_permissions.sandbox`).
+    AgentsThreadModes.instance.addListener(_onModesChanged);
+  }
+
+  void _onModesChanged() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _applyPreset(AgentPermissionPreset preset) async {
+    final bool sent = await _service.setSwitches(
+      widget.agentId,
+      kAgentPermissionPresets[preset]!,
+    );
+    if (!mounted || sent) return;
+    setState(() => _phase = _Phase.offline);
+    pillToast(context, 'Not connected to the host');
+  }
+
+  /// Full / Careful / Locked, and Custom when the switches match none.
+  Widget _presets(AgentPermissions permissions, bool editable) {
+    final AppLocalizations l =
+        AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));
+    final AgentPermissionPreset? current = presetOf(permissions);
+    final List<AgentPermissionPreset> presets = AgentPermissionPreset.values;
+    final List<String> labels = <String>[
+      l.permPresetFull,
+      l.permPresetCareful,
+      l.permPresetLocked,
+      if (current == null) l.permPresetCustom,
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        IgnorePointer(
+          ignoring: !editable,
+          child: Opacity(
+            opacity: editable ? 1 : 0.5,
+            child: ConnectedGroup(
+              key: const ValueKey<String>('agent-permission-presets'),
+              margin: EdgeInsets.zero,
+              labels: labels,
+              selected: current == null ? labels.length - 1 : current.index,
+              onSelected: (int i) {
+                if (i >= presets.length) return; // "Custom" is a state.
+                unawaited(_applyPreset(presets[i]));
+              },
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
+          child: Text(
+            l.permPresetHelp,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -130,6 +201,7 @@ class _AgentPermissionsSectionState extends State<AgentPermissionsSection> {
 
   @override
   void dispose() {
+    AgentsThreadModes.instance.removeListener(_onModesChanged);
     _answerTimer?.cancel();
     _service.removeListener(_onChanged);
     super.dispose();
@@ -248,6 +320,12 @@ class _AgentPermissionsSectionState extends State<AgentPermissionsSection> {
             ),
           ),
         ),
+        // No container on this computer: say so before anything else.
+        if (AgentsThreadModes.instance.sandboxFallback) ...<Widget>[
+          const AgentsSandboxBanner(long: true),
+          const SizedBox(height: 8),
+        ],
+        _presets(permissions, editable),
         ExpressiveGroup(
           children: <Widget>[
             for (final AgentPermissionSpec spec in kAgentPermissionSpecs)
@@ -322,11 +400,15 @@ class _AgentPermissionsSectionState extends State<AgentPermissionsSection> {
       identifier: 'agent_permission_${spec.key}',
       child: ExpressiveSwitchRow(
         key: ValueKey<String>('agent-permission-${spec.key}'),
-        title: spec.title,
+        title: spec.key == AgentPermissions.keyExternalAgents
+            ? _l10n.permExternalAgentsTitle
+            : spec.title,
         subtitle: !enforced
             ? kPermissionNotEnforced
             : spec.key == AgentPermissions.keyUserBrowser // own browser
             ? _userBrowserSubtitle(spec)
+            : spec.key == AgentPermissions.keyExternalAgents
+            ? _l10n.permExternalAgentsHelp
             : spec.explanation,
         icon: spec.icon,
         value: permissions.isOn(spec.key),
@@ -336,6 +418,9 @@ class _AgentPermissionsSectionState extends State<AgentPermissionsSection> {
       ),
     );
   }
+
+  AppLocalizations get _l10n =>
+      AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));
 
   // ── own browser ──
   /// "Paired with Chrome", "Add-on not connected", "Ada is using your

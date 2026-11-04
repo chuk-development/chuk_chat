@@ -105,6 +105,7 @@ import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/account_session.dart';
 import 'package:chuk_chat/services/auth_service.dart';
 import 'package:chuk_chat/pages/agents_install_page.dart';
+import 'package:chuk_chat/services/agents/agents_derived_threads.dart';
 import 'package:chuk_chat/services/agents/agent_control_source.dart';
 import 'package:chuk_chat/services/agents/agent_mail_key_handover.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
@@ -645,7 +646,11 @@ class _MessengerShellState extends State<MessengerShell>
     // (or another agent's session) under this agent's identity.
     if (agent == null ||
         agent.threads.isEmpty ||
-        agent.threads.first.key != threadKey) {
+        (agent.threads.first.key != threadKey &&
+            // A chat one of its automations made (`<owner>#auto-<id>`) is
+            // this agent's too.
+            AgentsDerivedThreads.ownerOf(threadKey) !=
+                agent.threads.first.key)) {
       return;
     }
     // A thread opened from behind chuk's chat (a tapped notification): the

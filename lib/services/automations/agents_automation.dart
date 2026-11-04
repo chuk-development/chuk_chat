@@ -31,7 +31,43 @@ class AgentsAutomation {
     this.lastSummary,
     this.lastResultAt,
     this.unchangedCount = 0,
+    this.target = kAutomationTargetThisSession,
+    this.allowChaining = false,
+    this.catchUpSeconds,
+    this.createdBy = 'user',
+    this.retryAt,
+    this.retryCount = 0,
+    this.skippedCount = 0,
+    this.lastSkipAt,
+    this.incidentCount = 0,
   });
+
+  // ── automation guards (docs/WIRE_CONTRACT.md, "Automation guards and
+  // schedule targets") ──
+  /// Where a fired run goes: `this_session`, `new_once` or `new`.
+  final String target;
+
+  /// Runs of this automation may set up automations themselves.
+  final bool allowChaining;
+
+  /// How late a missed fire may still run, in seconds. Null = the host's
+  /// default window; 0 = never late.
+  final int? catchUpSeconds;
+
+  /// `user`, `agent` or `automation`.
+  final String createdBy;
+
+  /// A retry after a network failure is armed for this time.
+  final DateTime? retryAt;
+  final int retryCount;
+
+  /// Occurrences skipped because they were too late.
+  final int skippedCount;
+  final DateTime? lastSkipAt;
+
+  /// The same error again, told once.
+  final int incidentCount;
+  // ── end automation guards ──
 
   /// The host's short handle (`ab12cd34`).
   final String id;
@@ -246,6 +282,21 @@ class AgentsAutomation {
       lastSummary: _text(payload['last_summary']),
       lastResultAt: _epoch(payload['last_result_at']),
       unchangedCount: _int(payload['unchanged_count']) ?? 0,
+      target: switch (payload['target']) {
+        kAutomationTargetNewOnce => kAutomationTargetNewOnce,
+        kAutomationTargetNew => kAutomationTargetNew,
+        _ => kAutomationTargetThisSession,
+      },
+      allowChaining: payload['allow_chaining'] == true,
+      catchUpSeconds: _int(payload['catch_up_seconds']),
+      createdBy: payload['created_by'] is String
+          ? payload['created_by'] as String
+          : 'user',
+      retryAt: _epoch(payload['retry_at']),
+      retryCount: _int(payload['retry_count']) ?? 0,
+      skippedCount: _int(payload['skipped_count']) ?? 0,
+      lastSkipAt: _epoch(payload['last_skip_at']),
+      incidentCount: _int(payload['incident_count']) ?? 0,
     );
   }
 
@@ -275,6 +326,16 @@ class AgentsAutomation {
     if (lastResultAt != null)
       'last_result_at': lastResultAt!.millisecondsSinceEpoch / 1000,
     if (unchangedCount > 0) 'unchanged_count': unchangedCount,
+    if (target != kAutomationTargetThisSession) 'target': target,
+    if (allowChaining) 'allow_chaining': true,
+    if (catchUpSeconds != null) 'catch_up_seconds': catchUpSeconds,
+    if (createdBy != 'user') 'created_by': createdBy,
+    if (retryAt != null) 'retry_at': retryAt!.millisecondsSinceEpoch / 1000,
+    if (retryCount > 0) 'retry_count': retryCount,
+    if (skippedCount > 0) 'skipped_count': skippedCount,
+    if (lastSkipAt != null)
+      'last_skip_at': lastSkipAt!.millisecondsSinceEpoch / 1000,
+    if (incidentCount > 0) 'incident_count': incidentCount,
   };
 
   static int? _int(Object? value) {
@@ -312,6 +373,11 @@ class AgentsAutomation {
       other.notify == notify &&
       other.lastSummary == lastSummary &&
       other.unchangedCount == unchangedCount &&
+      other.target == target &&
+      other.allowChaining == allowChaining &&
+      other.catchUpSeconds == catchUpSeconds &&
+      other.retryAt == retryAt &&
+      other.skippedCount == skippedCount &&
       mapEquals(other.spec, spec);
 
   @override
@@ -476,7 +542,9 @@ Object automationSpecFor(
   }
 }
 
-/// `automation_create` for [sessionKey].
+/// `automation_create` for [sessionKey]. [target], [allowChaining] and
+/// [catchUp] ride only when they differ from the host's defaults, so an
+/// older host sees the frame it always saw. [target] is for a schedule only.
 Map<String, dynamic> automationCreateFrame({
   required String sessionKey,
   required String kind,
@@ -484,6 +552,9 @@ Map<String, dynamic> automationCreateFrame({
   required String prompt,
   String? name,
   bool notifyOnChange = false,
+  String target = kAutomationTargetThisSession,
+  bool allowChaining = false,
+  Object? catchUp,
 }) => <String, dynamic>{
   'type': 'automation_create',
   'session_key': sessionKey,
@@ -492,7 +563,44 @@ Map<String, dynamic> automationCreateFrame({
   'prompt': prompt.trim(),
   if (name != null && name.trim().isNotEmpty) 'name': name.trim(),
   'notify': notifyOnChange ? 'on_change' : 'always',
+  if (kind == 'schedule' && target != kAutomationTargetThisSession)
+    'target': target,
+  if (allowChaining) 'allow_chaining': true,
+  'catch_up': ?catchUp,
 };
+
+/// The three places a fired schedule run can go.
+const String kAutomationTargetThisSession = 'this_session';
+const String kAutomationTargetNewOnce = 'new_once';
+const String kAutomationTargetNew = 'new';
+const List<String> kAutomationTargets = <String>[
+  kAutomationTargetThisSession,
+  kAutomationTargetNewOnce,
+  kAutomationTargetNew,
+];
+
+/// Reads the catch-up field: empty = the host's default (null), `0` = never
+/// late, a number = minutes, or `30m` / `6h` / `90s` as the host takes it.
+/// Returns the wire value (seconds as int, or the text) or throws
+/// [FormatException] for anything else.
+Object? parseCatchUp(String text) {
+  final String t = text.trim().toLowerCase();
+  if (t.isEmpty) return null;
+  final int? minutes = int.tryParse(t);
+  if (minutes != null) {
+    if (minutes < 0) throw const FormatException('negative');
+    return minutes * 60;
+  }
+  if (RegExp(r'^\d+[smhd]$').hasMatch(t)) return t;
+  throw FormatException('not a duration', text);
+}
+
+/// The catch-up window as the field shows it: minutes, or empty.
+String catchUpText(int? seconds) {
+  if (seconds == null) return '';
+  if (seconds % 60 == 0) return '${seconds ~/ 60}';
+  return '${seconds}s';
+}
 
 /// `automation_update` for [before]: only the keys whose value differs from
 /// the row as the host last sent it. Null when nothing changed.
@@ -502,8 +610,27 @@ Map<String, dynamic>? automationUpdateFrame({
   required String prompt,
   required String name,
   required bool notifyOnChange,
+  String? target,
+  bool? allowChaining,
+  Object? catchUp,
+  bool catchUpSet = false,
 }) {
   final frame = <String, dynamic>{'type': 'automation_update', 'id': before.id};
+  if (target != null && before.isSchedule && target != before.target) {
+    frame['target'] = target;
+  }
+  if (allowChaining != null && allowChaining != before.allowChaining) {
+    frame['allow_chaining'] = allowChaining;
+  }
+  // `catch_up: null` puts the host's default back, so it rides only when the
+  // field says something else than the row.
+  if (catchUpSet) {
+    final Object? beforeValue = before.catchUpSeconds;
+    final bool same = catchUp is int
+        ? catchUp == beforeValue
+        : (catchUp == null && beforeValue == null);
+    if (!same) frame['catch_up'] = catchUp;
+  }
   final trimmedName = name.trim();
   if (trimmedName.isNotEmpty && trimmedName != before.name) {
     frame['name'] = trimmedName;

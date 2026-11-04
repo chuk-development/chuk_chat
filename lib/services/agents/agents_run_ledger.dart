@@ -25,8 +25,10 @@ import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/automations/automation_ledger.dart';
+import 'package:chuk_chat/services/agents/agents_context_rows.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_run_cost.dart'; // F1: cost
+import 'package:chuk_chat/services/agents/agents_tool_row_info.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 
 /// The renderer's shape of one host `tool` frame.
@@ -46,6 +48,21 @@ ToolCall toolCallFromRelay(AgentsRelayTool event, {DateTime? now}) {
       'command': event.arguments,
     if (event.exitCode != null) 'exit_code': event.exitCode,
   };
+  // The model's label for the call, when the host sent it at the top level
+  // only (`description`, research item 40).
+  final Object? description = event.raw['description'];
+  if (description is String &&
+      description.trim().isNotEmpty &&
+      arguments['description'] == null) {
+    arguments['description'] = description.trim();
+  }
+  // `+a -r` of a file edit: the `ui` block is live only, so the counts are
+  // kept on the call.
+  final diff = toolUiDiffStat(event.raw['ui']);
+  if (diff != null) {
+    arguments[kToolDiffAddedKey] = diff.added;
+    arguments[kToolDiffRemovedKey] = diff.removed;
+  }
   final startedAt = event.startedAt ?? clock;
   final duration = event.duration;
   final completedAt =
@@ -1149,6 +1166,14 @@ class AgentsRunLedger extends ChangeNotifier {
     }
   }
   // ── end F1 ──
+
+  /// A context row the run wrote (plan rules, a loaded skill, a settled
+  /// subagent): one chip on the run's answer.
+  void context(String sessionKey, AgentsRelayContext event) {
+    final run = _live(sessionKey);
+    run.toolCalls.add(contextCallFromRelay(event));
+    notifyListeners();
+  }
 
   /// Accumulates the model's thinking for the run.
   void reasoning(String sessionKey, String text) {

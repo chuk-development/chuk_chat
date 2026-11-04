@@ -790,6 +790,9 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                       'reasoning': resolvedReasoning,
                       'contentBlocks': ?contentBlocksJson,
                       if (tps != null) 'tps': tps.toString(),
+                      'usage': ?ChatTurnStats.instance
+                          .usageOf(chatIdForStream)
+                          ?.encode(),
                     },
                     foldVariant: true,
                   );
@@ -2114,6 +2117,12 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                       if (tps != null) {
                         _messages[placeholderIndex]['tps'] = tps.toString();
                       }
+                      final String? usageStored = ChatTurnStats.instance
+                          .usageOf(chatIdForStream)
+                          ?.encode();
+                      if (usageStored != null) {
+                        _messages[placeholderIndex]['usage'] = usageStored;
+                      }
                     }
                     if (mounted) {
                       setState(() {
@@ -2136,6 +2145,9 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                         'reasoning': resolvedReasoning,
                         'contentBlocks': ?contentBlocksJson,
                         if (tps != null) 'tps': tps.toString(),
+                        'usage': ?ChatTurnStats.instance
+                            .usageOf(chatIdForStream)
+                            ?.encode(),
                       },
                     );
                   }
@@ -2545,6 +2557,10 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     // Streaming ended: drop the per-token live snapshot so the finalized
     // bubble renders from the persisted message text, not a stale live value.
     final String? finalizingChatId = _activeChatId;
+    // The last reply's token usage, kept with the message for its footer.
+    final String? usageStored = ChatTurnStats.instance
+        .usageOf(finalizingChatId)
+        ?.encode();
     if (finalizingChatId != null) {
       ChatRuntimeRegistry.instance
               .lookup(finalizingChatId)
@@ -2571,6 +2587,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         message['text'] = content;
         message['reasoning'] = reasoning ?? '';
         if (tps != null) message['tps'] = tps.toString();
+        if (usageStored != null) message['usage'] = usageStored;
         if (contentBlocks != null) message['contentBlocks'] = contentBlocks;
         foldRegenVariantOnto(message);
         _messages[index] = message;
@@ -2583,6 +2600,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       message['text'] = content;
       message['reasoning'] = reasoning ?? '';
       if (tps != null) message['tps'] = tps.toString();
+      if (usageStored != null) message['usage'] = usageStored;
       if (contentBlocks != null) message['contentBlocks'] = contentBlocks;
       foldRegenVariantOnto(message);
       _messages[index] = message;

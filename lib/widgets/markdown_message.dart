@@ -29,6 +29,7 @@ import 'package:chuk_chat/widgets/chuk_table_classic.dart';
 import 'package:chuk_chat/utils/favicon.dart';
 import 'package:chuk_chat/widgets/icons/huge_icon.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
+import 'package:chuk_chat/constants.dart' show kRadiusSm, innerRadius;
 
 part 'answer_blocks.dart';
 part 'visual_answer_blocks.dart';
@@ -1542,7 +1543,7 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
       margin: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
         color: widget.backgroundColor,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(kRadiusSm),
         border: Border.all(color: widget.borderColor),
       ),
       child: Column(
@@ -1553,9 +1554,10 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
               color: widget.textColor.withValues(alpha: 0.05),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(7),
-                topRight: Radius.circular(7),
+              // Inside the 1 px border: inner = outer − inset.
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(innerRadius(kRadiusSm, 1)),
+                topRight: Radius.circular(innerRadius(kRadiusSm, 1)),
               ),
             ),
             child: Row(

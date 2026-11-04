@@ -288,12 +288,22 @@ extension _MessageBubbleChrome on _MessageBubbleState {
     dimDisabledIcon: true,
   );
 
+  /// The AI action bar. A finished answer with an id also carries the
+  /// thumbs ([MessageFeedbackButtons]) at its end, in the same pill.
   Widget _buildActionButtons(Color iconFgColor, bool alignRight) =>
       _buildActionBar(
         actions: widget.actions,
         iconFgColor: iconFgColor,
         alignRight: alignRight,
         dimDisabledIcon: false,
+        trailing: widget.isStreamingMessage || widget.feedbackId == null
+            ? null
+            : MessageFeedbackButtons(
+                messageId: widget.feedbackId,
+                iconColor: iconFgColor,
+                modelId: widget.modelLabel,
+                compact: kPlatformMobile,
+              ),
       );
 
   /// Shared pill of icon action buttons behind [_buildUserActionButtons]
@@ -305,6 +315,7 @@ extension _MessageBubbleChrome on _MessageBubbleState {
     required Color iconFgColor,
     required bool alignRight,
     required bool dimDisabledIcon,
+    Widget? trailing,
   }) {
     final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
     return Row(
@@ -330,7 +341,8 @@ extension _MessageBubbleChrome on _MessageBubbleState {
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
-            children: actions.map((action) {
+            children: [
+              ...actions.map((action) {
               return Tooltip(
                 message: action.tooltip,
                 child: IconButton(
@@ -353,7 +365,9 @@ extension _MessageBubbleChrome on _MessageBubbleState {
                   onPressed: action.isEnabled ? action.onPressed : null,
                 ),
               );
-            }).toList(),
+              }),
+              ?trailing,
+            ],
           ),
         ),
       ],

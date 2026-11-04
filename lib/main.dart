@@ -67,6 +67,7 @@ import 'package:chuk_chat/services/session_manager_service.dart';
 import 'package:chuk_chat/services/session_recovery.dart';
 import 'package:chuk_chat/services/settings/theme_controller.dart';
 import 'package:chuk_chat/services/settings/verbose_service.dart';
+import 'package:chuk_chat/services/settings/tool_detail_service.dart';
 import 'package:chuk_chat/services/settings_sync_service.dart';
 import 'package:chuk_chat/services/storage/agents_chat_storage_bootstrap.dart';
 import 'package:chuk_chat/services/agents/agents_chat_core.dart';
@@ -195,6 +196,8 @@ Future<void> main() async {
   // right view. The service is safe to read before this, but an early load
   // avoids a flip on the first paint.
   await VerboseService.instance.load();
+  // The "Tool detail" mode, for the same reason.
+  await ToolDetailService.instance.load();
 
   // Persistent offline queue + retry manager. Await init before wiring
   // retry/executor so the drain loop never observes an uninitialized queue.

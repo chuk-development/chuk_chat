@@ -13,8 +13,10 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/services/agents/agents_command_prefix.dart';
 import 'package:chuk_chat/services/agents/agents_draft_history.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/ui/expressive/huge_icon.dart';
@@ -34,7 +36,13 @@ class AgentsActionApprovalCard extends StatelessWidget {
     this.decision,
     this.dense = false,
     this.previousDraft,
+    this.keyboardShortcuts = false,
   });
+
+  /// Desktop: Enter allows once, Esc denies, while the card is open and the
+  /// focus is not in a text field (docs/DESIGN.md §14.7). Key repeats and an
+  /// IME composition never answer.
+  final bool keyboardShortcuts;
 
   /// The host's request: the class, the one-line summary, the details and
   /// the answers to offer.
@@ -69,8 +77,17 @@ class AgentsActionApprovalCard extends StatelessWidget {
         ? (l?.approvalThisAgent ?? 'this agent')
         : agentName.trim();
     final String? picked = decision;
+    final bool open = picked == null && !request.isDecided;
 
-    return Semantics(
+    return _ApprovalKeys(
+      enabled: keyboardShortcuts && open,
+      onAllowOnce: request.options.contains(_Req.scopeOnce)
+          ? () => onSelect(_Req.scopeOnce)
+          : null,
+      onDeny: request.options.contains(_Req.scopeDeny)
+          ? () => onSelect(_Req.scopeDeny)
+          : null,
+      child: Semantics(
       container: true,
       liveRegion: true,
       child: Container(
@@ -100,9 +117,21 @@ class AgentsActionApprovalCard extends StatelessWidget {
                 _closed(theme, l)
               else
                 _decided(theme, l, name, picked),
+              if (open && keyboardShortcuts)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    l?.approvalKeysHint ?? 'Enter allows once. Esc denies.',
+                    key: const ValueKey<String>('agents-approval-keys-hint'),
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
+      ),
       ),
     );
   }
@@ -250,6 +279,9 @@ class AgentsActionApprovalCard extends StatelessWidget {
           _list(d['files'], basename: true),
         );
       default:
+        // A shell command the safety floor stopped: the command itself.
+        final String? command = _text(d['command']);
+        if (command != null) rows.add(_Quote(text: command, mono: true));
         if (request.action == 'herenow_publish' ||
             request.actionClass == 'publish') {
           final String files = request.fileCount == 1
@@ -359,7 +391,12 @@ class AgentsActionApprovalCard extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            decisionLabel(l, picked, name, request.site),
+            picked == _Req.scopeAlwaysPrefix
+                ? (l?.approvalDecidedAlwaysPrefix(
+                        approvalCommandPrefix(request) ?? '',
+                      ) ??
+                      'Allowed always: ${approvalCommandPrefix(request) ?? ''}')
+                : decisionLabel(l, picked, name, request.site),
             style: theme.textTheme.bodyMedium?.copyWith(
               color: scheme.onSurfaceVariant,
               fontWeight: FontWeight.w600,
@@ -421,9 +458,16 @@ class AgentsActionApprovalCard extends StatelessWidget {
                   'Always allow connector actions for $name')
             : (l?.approvalAlwaysAgent(name) ?? 'Always for $name'),
       _Req.scopeAlwaysSite => l?.approvalAlwaysSite(site) ?? 'Always on $site',
+      _Req.scopeAlwaysPrefix => _prefixLabel(l),
       _Req.scopeDeny => l?.approvalDeny ?? 'Deny',
       _ => option,
     };
+  }
+
+  /// "Always allow git push": the prefix the host will remember.
+  String _prefixLabel(AppLocalizations? l) {
+    final String prefix = approvalCommandPrefix(request) ?? '';
+    return l?.approvalAlwaysPrefix(prefix) ?? 'Always allow $prefix';
   }
 
   /// What an answer covered, for the decided line.
@@ -669,4 +713,88 @@ class _Quote extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Enter = allow once, Esc = deny, while [enabled]. Listens on the hardware
+/// keyboard, so the card answers without taking the focus; a key that lands
+/// in a text field, a repeat and an IME composition are left alone.
+class _ApprovalKeys extends StatefulWidget {
+  const _ApprovalKeys({
+    required this.enabled,
+    required this.child,
+    this.onAllowOnce,
+    this.onDeny,
+  });
+
+  final bool enabled;
+  final VoidCallback? onAllowOnce;
+  final VoidCallback? onDeny;
+  final Widget child;
+
+  @override
+  State<_ApprovalKeys> createState() => _ApprovalKeysState();
+}
+
+class _ApprovalKeysState extends State<_ApprovalKeys> {
+  bool _listening = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(_ApprovalKeys old) {
+    super.didUpdateWidget(old);
+    _sync();
+  }
+
+  @override
+  void dispose() {
+    if (_listening) HardwareKeyboard.instance.removeHandler(_onKey);
+    super.dispose();
+  }
+
+  void _sync() {
+    if (widget.enabled && !_listening) {
+      HardwareKeyboard.instance.addHandler(_onKey);
+      _listening = true;
+    } else if (!widget.enabled && _listening) {
+      HardwareKeyboard.instance.removeHandler(_onKey);
+      _listening = false;
+    }
+  }
+
+  /// True when the focus is in a text field (the user is typing there).
+  static bool _typing() {
+    final BuildContext? focused = FocusManager.instance.primaryFocus?.context;
+    if (focused == null) return false;
+    if (focused.widget is EditableText) return true;
+    return focused.findAncestorStateOfType<EditableTextState>() != null;
+  }
+
+  bool _onKey(KeyEvent event) {
+    if (!mounted || !widget.enabled) return false;
+    if (event is! KeyDownEvent) return false; // never a repeat
+    if (_typing()) return false;
+    final LogicalKeyboardKey key = event.logicalKey;
+    if (key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter) {
+      final VoidCallback? allow = widget.onAllowOnce;
+      if (allow == null) return false;
+      allow();
+      return true;
+    }
+    if (key == LogicalKeyboardKey.escape) {
+      final VoidCallback? deny = widget.onDeny;
+      if (deny == null) return false;
+      deny();
+      return true;
+    }
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

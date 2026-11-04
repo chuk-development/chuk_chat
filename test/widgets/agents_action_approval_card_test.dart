@@ -320,7 +320,7 @@ void main() {
     for (final bool phone in <bool>[false, true]) {
       final String layout = phone ? 'phone' : 'desktop';
 
-      testWidgets('$layout: the card sits in the transcript; an answer sends '
+      testWidgets('$layout: the card takes the composer seat; an answer sends '
           'its scope and the card goes when the agent moves on', (
         tester,
       ) async {
@@ -335,9 +335,12 @@ void main() {
           const ValueKey<String>('agents-approval-card'),
         );
         expect(card, findsOneWidget);
+        // In the composer's seat, not in the scrolling transcript: the run
+        // waits on it, so it stays in reach (and Enter / Esc answer it on a
+        // desktop keyboard).
         expect(
           find.ancestor(of: card, matching: find.byType(CustomScrollView)),
-          findsOneWidget,
+          findsNothing,
         );
         expect(ledger.runFor('thread-1')!.waitingForUser, isTrue);
 

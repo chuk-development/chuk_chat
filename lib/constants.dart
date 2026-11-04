@@ -114,6 +114,48 @@ const double kRadiusDialog = 28.0;
 /// Stadium radius for every button. Buttons are pills app-wide.
 const double kRadiusPill = 999.0;
 
+/* ---------- RADIUS BY HEIGHT ----------
+   The six steps of the corner scale (docs/DESIGN.md §6.1). A surface picks
+   its corner from its height with [radiusForHeight]; a surface inside
+   another one takes [innerRadius], so the two curves stay concentric. */
+const double kRadiusXs = 4.0; // below 20 px: key caps, inline code, tiny marks
+const double kRadiusSm = 8.0; // 20–28 px: compact chips and buttons
+const double kRadiusMd = 12.0; // 32–40 px: buttons, fields, one-line rows
+const double kRadiusLg = 16.0; // code blocks, diffs, grouped content
+const double kRadiusXl = 20.0; // an independent card
+const double kRadiusXxl = 28.0; // a main surface: dialog, panel, composer
+
+/// The scale, smallest first.
+const List<double> kRadiusScale = <double>[
+  kRadiusXs,
+  kRadiusSm,
+  kRadiusMd,
+  kRadiusLg,
+  kRadiusXl,
+  kRadiusXxl,
+];
+
+/// The corner for a control or block of [height] logical pixels.
+///
+/// Below 20 → 4, below 30 → 8, up to 40 → 12, up to 56 → 16, up to 96 →
+/// 20, taller → 28. A tall card stays a card: pass the height the design
+/// gives the element, not the height its content grew to.
+double radiusForHeight(double height) {
+  if (height < 20) return kRadiusXs;
+  if (height < 30) return kRadiusSm;
+  if (height <= 40) return kRadiusMd;
+  if (height <= 56) return kRadiusLg;
+  if (height <= 96) return kRadiusXl;
+  return kRadiusXxl;
+}
+
+/// The corner of a surface inset by [inset] inside a surface with corner
+/// [outer]: `max(0, outer − inset)`. Both arcs then share one centre.
+double innerRadius(double outer, double inset) {
+  final double r = outer - inset;
+  return r < 0 ? 0 : r;
+}
+
 /// One padding, one minimum height and one label style for every button
 /// role — the reason a Save and a Reset side by side look like siblings.
 const EdgeInsets _kButtonPadding = EdgeInsets.symmetric(
