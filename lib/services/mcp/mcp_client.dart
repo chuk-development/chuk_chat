@@ -177,12 +177,12 @@ class McpClient {
   String? get sessionId => _sessionId;
 
   /// Handshake. Returns what the server says about itself.
-  Future<McpServerInfo> initialize() async {
+  Future<McpServerInfo> initialize({Future<void>? abortTrigger}) async {
     final result = await _request('initialize', {
       'protocolVersion': kMcpProtocolVersion,
       'capabilities': <String, dynamic>{},
       'clientInfo': {'name': 'Chuk Chat', 'version': '1.0'},
-    });
+    }, abortTrigger: abortTrigger);
 
     final negotiated = result['protocolVersion'];
     if (negotiated is String && negotiated.isNotEmpty) {
@@ -230,14 +230,19 @@ class McpClient {
   }
 
   /// Run a tool and flatten its content blocks to text.
+  ///
+  /// When [abortTrigger] completes before the reply is in, the HTTP request
+  /// is aborted (also while the reply body is still streaming) and the server
+  /// gets `notifications/cancelled` for it, so it can stop the work.
   Future<McpCallResult> callTool(
     String name,
-    Map<String, dynamic> arguments,
-  ) async {
+    Map<String, dynamic> arguments, {
+    Future<void>? abortTrigger,
+  }) async {
     final result = await _request('tools/call', {
       'name': name,
       'arguments': arguments,
-    });
+    }, abortTrigger: abortTrigger);
 
     final isError = result['isError'] == true;
     final structured = result['structuredContent'];
@@ -294,13 +299,17 @@ class McpClient {
       'authorization': 'Bearer $accessToken',
   };
 
-  Future<void> _notify(String method) async {
+  Future<void> _notify(String method, [Map<String, dynamic>? params]) async {
     try {
       await _http
           .post(
             endpoint,
             headers: _headers(expectsReply: false),
-            body: jsonEncode({'jsonrpc': '2.0', 'method': method}),
+            body: jsonEncode({
+              'jsonrpc': '2.0',
+              'method': method,
+              'params': ?params,
+            }),
           )
           .timeout(timeout);
     } catch (e) {
@@ -310,18 +319,54 @@ class McpClient {
 
   Future<Map<String, dynamic>> _request(
     String method,
-    Map<String, dynamic> params,
-  ) async {
+    Map<String, dynamic> params, {
+    Future<void>? abortTrigger,
+  }) async {
     final id = _nextId++;
-    final request = http.Request('POST', endpoint)
-      ..headers.addAll(_headers(expectsReply: true))
-      ..body = jsonEncode({
-        'jsonrpc': '2.0',
-        'id': id,
-        'method': method,
-        'params': params,
-      });
+    final request =
+        http.AbortableRequest('POST', endpoint, abortTrigger: abortTrigger)
+          ..headers.addAll(_headers(expectsReply: true))
+          ..body = jsonEncode({
+            'jsonrpc': '2.0',
+            'id': id,
+            'method': method,
+            'params': params,
+          });
+    if (abortTrigger == null) return _exchange(request, id);
 
+    // The abort ends the exchange at once, whether or not the transport
+    // honours AbortableRequest. The server is told to stop the work too, so
+    // a timed-out write does not finish later behind the reader's back.
+    final Completer<Map<String, dynamic>> aborted =
+        Completer<Map<String, dynamic>>();
+    var settled = false;
+    unawaited(
+      abortTrigger.then((_) {
+        if (settled) return;
+        settled = true;
+        unawaited(
+          _notify('notifications/cancelled', {
+            'requestId': id,
+            'reason': 'The client stopped waiting for the reply.',
+          }),
+        );
+        aborted.completeError(const McpException('The request was cancelled'));
+      }),
+    );
+    final Future<Map<String, dynamic>> exchange = _exchange(request, id);
+    // The losing side's error is dropped, not left unhandled.
+    unawaited(exchange.then<void>((_) {}, onError: (_) {}));
+    try {
+      return await Future.any(<Future<Map<String, dynamic>>>[
+        exchange,
+        aborted.future,
+      ]);
+    } finally {
+      settled = true;
+    }
+  }
+
+  Future<Map<String, dynamic>> _exchange(http.BaseRequest request, int id) async {
     final http.StreamedResponse response = await _http
         .send(request)
         .timeout(timeout);

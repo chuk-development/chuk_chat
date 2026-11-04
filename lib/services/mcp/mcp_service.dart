@@ -1280,6 +1280,29 @@ class McpService {
     ];
   }
 
+  /// Shown instead of the host's error text when this device cannot read the
+  /// connector's credentials to mask them.
+  @visibleForTesting
+  static const String hiddenHostError =
+      'The host reported an error. Details are hidden.';
+
+  /// [rawError] with every credential of connector [id] masked. When secure
+  /// storage cannot be read, the host text could still carry a secret, so a
+  /// generic text stands in for it; the rest of the frame goes on.
+  static Future<String> _redactHostError(String rawError, String id) async {
+    final List<String> secrets;
+    try {
+      secrets = await _storedSecretValues(id);
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ [MCP] secret lookup for redaction failed: '
+            '${e.runtimeType}');
+      }
+      return hiddenHostError;
+    }
+    return redactMcpSecrets(rawError, secrets: secrets);
+  }
+
   static Future<int> applyToolsFrame(Map<String, dynamic> payload) async {
     final Object? acked = payload['signed_out_ack'];
     if (acked is List && acked.isNotEmpty) {
@@ -1326,10 +1349,7 @@ class McpService {
       final String rawError = '${row['error'] ?? ''}'.trim();
       final String error = rawError.isEmpty
           ? rawError
-          : redactMcpSecrets(
-              rawError,
-              secrets: await _storedSecretValues(target.id),
-            );
+          : await _redactHostError(rawError, target.id);
       // Structural, from the host: `auth` / `network` / `other`. An older
       // host sends none, which reads as `other`.
       final McpErrorKind? kind = error.isEmpty
@@ -1486,10 +1506,21 @@ class McpService {
   }
 
   /// Call [toolName] on the server that offers it, from this device.
+  ///
+  /// When [abortTrigger] completes (the caller's deadline ran out), the
+  /// in-flight request is aborted and the server is told to cancel it; the
+  /// tool is not started at all if the deadline runs out before that.
   static Future<McpCallResult> call(
     String toolName,
-    Map<String, dynamic> arguments,
-  ) async {
+    Map<String, dynamic> arguments, {
+    Future<void>? abortTrigger,
+  }) async {
+    var aborted = false;
+    unawaited(abortTrigger?.then((_) => aborted = true));
+    const McpCallResult cancelled = McpCallResult(
+      text: 'The tool call was cancelled because it took too long.',
+      isError: true,
+    );
     final target = resolve(toolName);
     if (target == null) {
       return const McpCallResult(
@@ -1508,10 +1539,16 @@ class McpService {
       );
     }
 
+    if (aborted) return cancelled;
     try {
-      final info = await client.initialize();
+      final info = await client.initialize(abortTrigger: abortTrigger);
       _rememberInstructions(target.connection.id, info);
-      return await client.callTool(target.tool, arguments);
+      if (aborted) return cancelled;
+      return await client.callTool(
+        target.tool,
+        arguments,
+        abortTrigger: abortTrigger,
+      );
     } on McpUnauthorized {
       return McpCallResult(
         text:
