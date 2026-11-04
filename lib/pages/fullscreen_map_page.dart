@@ -3,6 +3,7 @@
 // header buttons are dropped as the same intent in the other chrome, but its
 // top inset on the info chip is kept — the header floats over the map either
 // way, so the chip needed it.
+import 'package:chuk_chat/utils/browser_user_agent.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -61,7 +62,7 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
   static const String _kOsrmBaseUrl = 'https://router.workspace-osrm.org';
   static const Map<String, String> _kApiHeaders = {
     'Accept': 'application/json',
-    'User-Agent': 'chuk-chat/1.0',
+    'User-Agent': kBrowserUserAgent,
   };
 
   final fm.MapController _fallbackMapController = fm.MapController();

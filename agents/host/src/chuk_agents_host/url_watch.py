@@ -38,7 +38,11 @@ import httpcore
 import httpx
 
 #: Neutral, identity-free (no mail, name, host name or address).
-USER_AGENT = "chuk-agents/1.0"
+#: A plain browser User-Agent. Requests to third-party sites never carry
+#: the product name, a contact address or any other identity.
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
+)
 MAX_BYTES = 2 * 1024 * 1024
 TIMEOUT_SECONDS = 20.0
 MAX_REDIRECTS = 5
