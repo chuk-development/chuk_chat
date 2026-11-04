@@ -149,6 +149,7 @@ class ToolLoopSession {
     this.userSentAt,
     this.promptSnapshot,
     this.promptEffective,
+    this.toolHistory = true,
   }) : turnHistoryStart = history.length,
        firstPassMessage = latestUserMessage;
 
@@ -177,6 +178,16 @@ class ToolLoopSession {
 
   /// What this turn adds to its user message's `modelContext`.
   final TurnPromptContext turnContext = TurnPromptContext();
+
+  /// Whether the chat replays earlier turns' tool rounds (from the history;
+  /// stored in the snapshot when this turn takes it).
+  final bool toolHistory;
+
+  /// Index in [history] of this turn's own user message, once a pass put it
+  /// there; null before. Later passes put the turn's images into this entry
+  /// ([ToolLoopStep.withTurnImages]), and the stored transcript starts
+  /// after it.
+  int? turnUserIndex;
 
   /// The system prompt of this chat, built once per turn and re-sent on
   /// every pass, byte for byte.
@@ -270,11 +281,56 @@ class ToolLoopStep {
     required this.message,
     required this.history,
     required this.systemPrompt,
+    this.turnUserIndex,
+    this.passImages,
   });
 
   final String message;
   final List<Map<String, dynamic>> history;
   final String? systemPrompt;
+
+  /// Index in [history] of the turn's own user message (null when no pass
+  /// put it there yet).
+  final int? turnUserIndex;
+
+  /// The images to send with [message]. Only set by [withTurnImages].
+  final List<String>? passImages;
+
+  /// This step with the turn's images ([images], storage paths or data
+  /// URLs) in the turn's own history entry, in their order, and none sent
+  /// with [message]. Sent with [message], the images landed on the tool
+  /// results (prompt-based mode) or on an empty user message (native mode),
+  /// and the turn's entry differed from the first pass's. When the turn's
+  /// entry is not in [history], the images go with [message] as before.
+  ToolLoopStep withTurnImages(List<String>? images) {
+    if (images == null || images.isEmpty) return this;
+    final index = turnUserIndex;
+    if (index == null || index < 0 || index >= history.length) {
+      return ToolLoopStep(
+        message: message,
+        history: history,
+        systemPrompt: systemPrompt,
+        turnUserIndex: turnUserIndex,
+        passImages: images,
+      );
+    }
+    final entry = history[index];
+    final content = entry['content'];
+    final out = List<Map<String, dynamic>>.of(history);
+    out[index] = <String, dynamic>{
+      ...entry,
+      'content': userContentWithImages(
+        content is String ? content : '',
+        images,
+      ),
+    };
+    return ToolLoopStep(
+      message: message,
+      history: out,
+      systemPrompt: systemPrompt,
+      turnUserIndex: index,
+    );
+  }
 }
 
 /// One segment in the model's interleaved output for a single round.
@@ -632,6 +688,7 @@ class ToolCallHandler {
       userSentAt: userSentAt,
       promptSnapshot: historyContext?.snapshot,
       promptEffective: historyContext?.effective,
+      toolHistory: historyContext?.toolHistory ?? true,
       history: _cloneHistory(history),
       accessToken: accessToken,
       enforcer: enforcer,
@@ -701,8 +758,18 @@ class ToolCallHandler {
           ChukdooConnector.displayName,
       ],
       mcpUnconnected: unconnectedCatalogueEntries().map((e) => e.id).toList(),
+      skills: _liveSkillCatalog()
+          .map((s) => SkillCatalogEntry(s.name, s.description))
+          .toList(),
     );
   }
+
+  /// The skills catalog as it is now: empty when the `skill` tool is not
+  /// registered (that build emits no catalog).
+  List<Skill> _liveSkillCatalog() =>
+      _toolExecutor.allTools.any((t) => t.name == 'skill')
+      ? SkillRegistry.all
+      : const <Skill>[];
 
   /// Takes the chat's snapshot (first request) or compares the inputs with
   /// it and writes a tagged note for each change, then renders the turn's
@@ -711,12 +778,18 @@ class ToolCallHandler {
     if (session._contextPrepared) return;
     session._contextPrepared = true;
     final notes = <String>[];
+    // The user text as this turn sends it (with document bodies, before the
+    // notes and the `[Sent: …]` line). Stored, so the next turn replays
+    // exactly this, not the display text (dropped in storage when equal).
+    final sentText = session.latestUserMessage.trim();
+    if (sentText.isNotEmpty) session.turnContext.sent = sentText;
     if (session.toolCallingEnabled) {
       final current = await _currentPromptState(session);
       final snapshot = session.promptSnapshot;
       if (snapshot == null) {
-        session.promptSnapshot = current;
-        session.turnContext.snapshot = current;
+        final taken = current.withExtras(toolHistory: session.toolHistory);
+        session.promptSnapshot = taken;
+        session.turnContext.snapshot = taken;
       } else {
         final before = session.promptEffective ?? snapshot;
         if (!before.sameIdentityAs(current)) {
@@ -726,6 +799,9 @@ class ToolCallHandler {
           notes.add(
             connectorsUpdatedNote(current, native: session.nativeToolCalling),
           );
+        }
+        if (!_effectiveSkills(before).sameSkillsAs(current)) {
+          notes.add(skillsUpdatedNote(current));
         }
         if (notes.isNotEmpty) {
           session.turnContext.notes.addAll(notes);
@@ -754,6 +830,31 @@ class ToolCallHandler {
             'the copies in the system prompt.\n'
             '${ToolPromptBuilder.identityDataSection(state.soul, state.user, state.memory)}'
         .trimRight();
+  }
+
+  /// [state] with its skills catalog; an unrecorded one (an older snapshot)
+  /// counts as the live catalog, so it gives no note.
+  PromptState _effectiveSkills(PromptState state) => state.skills != null
+      ? state
+      : state.withExtras(
+          skills: _liveSkillCatalog()
+              .map((s) => SkillCatalogEntry(s.name, s.description))
+              .toList(),
+        );
+
+  /// The note that replaces the skills list of the system prompt.
+  @visibleForTesting
+  static String skillsUpdatedNote(PromptState state) {
+    final skills = state.skills ?? const <SkillCatalogEntry>[];
+    if (skills.isEmpty) {
+      return '[skills updated] No skills are available any more. Do not '
+          'load the skills listed in the system prompt.';
+    }
+    return [
+      '[skills updated] This list replaces the skills list of the system '
+          'prompt. Load a skill with the `skill` tool as described there.',
+      for (final skill in skills) '- ${skill.name}: ${skill.description}',
+    ].join('\n');
   }
 
   /// The note that replaces the MCP SERVERS block of the system prompt.
@@ -843,6 +944,7 @@ class ToolCallHandler {
       nextStep: ToolLoopStep(
         message: kForcedFinalAnswerNote,
         history: _stepHistory(session),
+        turnUserIndex: session.turnUserIndex,
         systemPrompt: await _systemPromptFor(session),
       ),
       interimContent: '',
@@ -1024,6 +1126,7 @@ class ToolCallHandler {
       // empty, so nothing is added twice.
       final priorUser = session.latestUserMessage.trim();
       if (priorUser.isNotEmpty) {
+        _noteTurnUserEntry(session, priorUser);
         session.history.add({'role': 'user', 'content': priorUser});
       }
     } else {
@@ -1071,6 +1174,7 @@ class ToolCallHandler {
           nextStep: ToolLoopStep(
             message: retryMessage,
             history: _stepHistory(session),
+            turnUserIndex: session.turnUserIndex,
             systemPrompt: await _systemPromptFor(session),
           ),
           interimContent: '',
@@ -1104,6 +1208,7 @@ class ToolCallHandler {
           nextStep: ToolLoopStep(
             message: retryMessage,
             history: _stepHistory(session),
+            turnUserIndex: session.turnUserIndex,
             systemPrompt: await _systemPromptFor(session),
           ),
           interimContent: displayContent,
@@ -1132,6 +1237,7 @@ class ToolCallHandler {
           nextStep: ToolLoopStep(
             message: retryMessage,
             history: _stepHistory(session),
+            turnUserIndex: session.turnUserIndex,
             systemPrompt: await _systemPromptFor(session),
           ),
           // Preserve interim "I'm checking..." text in the UI while the loop
@@ -1179,6 +1285,7 @@ class ToolCallHandler {
           nextStep: ToolLoopStep(
             message: retryMessage,
             history: _stepHistory(session),
+            turnUserIndex: session.turnUserIndex,
             systemPrompt: await _systemPromptFor(session),
           ),
           interimContent: displayContent,
@@ -1209,6 +1316,7 @@ class ToolCallHandler {
           nextStep: ToolLoopStep(
             message: retryMessage,
             history: _stepHistory(session),
+            turnUserIndex: session.turnUserIndex,
             systemPrompt: await _systemPromptFor(session),
           ),
           interimContent: '',
@@ -1282,6 +1390,7 @@ class ToolCallHandler {
           nextStep: ToolLoopStep(
             message: factCheckMessage,
             history: _stepHistory(session),
+            turnUserIndex: session.turnUserIndex,
             systemPrompt: await _systemPromptFor(session),
           ),
           // Suppress the candidate in the UI for now — the verify pass either
@@ -1398,6 +1507,7 @@ class ToolCallHandler {
         nextStep: ToolLoopStep(
           message: nextMessage,
           history: _stepHistory(session),
+          turnUserIndex: session.turnUserIndex,
           systemPrompt: await _systemPromptFor(session),
         ),
         interimContent: _stripToolCallBlocks(cleanedContent),
@@ -1687,6 +1797,7 @@ class ToolCallHandler {
       nextStep: ToolLoopStep(
         message: nextMessage,
         history: _stepHistory(session),
+        turnUserIndex: session.turnUserIndex,
         systemPrompt: await _systemPromptFor(session),
       ),
       // Preserve all non-tool text from this pass (before/after tool blocks)
@@ -1859,6 +1970,7 @@ class ToolCallHandler {
   }) {
     final userText = session.latestUserMessage.trim();
     if (userText.isNotEmpty) {
+      _noteTurnUserEntry(session, userText);
       session.history.add({'role': 'user', 'content': userText});
     }
 
@@ -2090,7 +2202,19 @@ class ToolCallHandler {
           .where((t) => t.name == 'skill')
           .map((t) => t.toJson())
           .firstOrNull;
-      skillCatalog = SkillRegistry.all;
+      // From the chat's snapshot: a catalog change reaches the model as a
+      // `[skills updated]` note on the next user message.
+      final frozen = snapshot.skills;
+      skillCatalog = frozen == null
+          ? SkillRegistry.all
+          : [
+              for (final entry in frozen)
+                Skill(
+                  name: entry.name,
+                  description: entry.description,
+                  body: '',
+                ),
+            ];
     }
 
     // When memory is disabled (skipIdentity), exclude the `notes` tool from
@@ -2366,7 +2490,41 @@ class ToolCallHandler {
   List<Map<String, dynamic>> _stepHistory(ToolLoopSession session) {
     // Repair the tool pairing before every request: one orphan or unanswered
     // tool call and the upstream answers 400 for the whole turn.
-    return validateToolPairing(_cloneHistory(session.history));
+    final step = validateToolPairing(_cloneHistory(session.history));
+    _recordTranscript(session, step);
+    return step;
+  }
+
+  /// Marks the entry about to be appended at the end of the history as the
+  /// turn's own user message, when it is the first pass's message.
+  void _noteTurnUserEntry(ToolLoopSession session, String content) {
+    if (session.turnUserIndex != null) return;
+    if (content != session.firstPassMessage.trim()) return;
+    session.turnUserIndex = session.history.length;
+  }
+
+  /// Stores, with the turn's user message, what the next pass sends after
+  /// that message: the [step] history from the turn's user entry on, then
+  /// the pass's own user message ([ToolLoopSession.latestUserMessage],
+  /// which the server appends). The last one recorded is the turn's last
+  /// request, so the next turn's history replays it byte for byte
+  /// (`TurnPromptContext.transcript`).
+  void _recordTranscript(
+    ToolLoopSession session,
+    List<Map<String, dynamic>> step,
+  ) {
+    final userIndex = session.turnUserIndex;
+    if (userIndex == null || userIndex >= step.length) return;
+    final transcript = <Map<String, dynamic>>[
+      for (final entry in step.sublist(userIndex + 1))
+        Map<String, dynamic>.from(entry),
+    ];
+    final message = session.latestUserMessage.trim();
+    if (message.isNotEmpty) {
+      transcript.add({'role': 'user', 'content': message});
+    }
+    session.turnContext.transcript = transcript;
+    PromptContextLedger.put(session.userSentAt, session.turnContext);
   }
 
   /// The skill bodies queued in this round, in load order, and clears them.

@@ -104,6 +104,23 @@ String renderUserTurnForModel({
   return parts.join('\n\n');
 }
 
+/// The multimodal content of a user message: its text, then one
+/// `image_url` part per image reference (storage path or data URL), in
+/// order. The send resolves the references (`ImageBudget`). One function for
+/// the history and for the turn's own entry on later passes of a turn, so
+/// both have the same shape.
+List<Map<String, dynamic>> userContentWithImages(
+  String text,
+  List<String> imageRefs,
+) => <Map<String, dynamic>>[
+  if (text.isNotEmpty) {'type': 'text', 'text': text},
+  for (final url in imageRefs)
+    {
+      'type': 'image_url',
+      'image_url': {'url': url},
+    },
+];
+
 /// The user-role message that carries an activated skill's instructions.
 String skillContentMessage(String name, String body) =>
     '<skill_content name="$name">\n${body.trim()}\n</skill_content>';
@@ -114,9 +131,34 @@ bool historyHasSkillContent(List<Map<String, dynamic>> history, String name) {
   for (final entry in history) {
     if (entry['role'] != 'user') continue;
     final content = entry['content'];
-    if (content is String && content.startsWith(marker)) return true;
+    // `contains`, not `startsWith`: in prompt-based mode the body rides
+    // inside the tool-results message of its round.
+    if (content is String && content.contains(marker)) return true;
   }
   return false;
+}
+
+/// The row left where a skill body is no longer sent (a turn whose tool
+/// rounds are not replayed any more). The model then knows to load it again;
+/// the `skill` tool sends the body again because the history no longer
+/// holds it ([historyHasSkillContent]).
+String skillDroppedMarker(String name) =>
+    '[skill $name was loaded earlier; call skill again if needed]';
+
+/// One entry of the skills catalog as the system prompt lists it.
+class SkillCatalogEntry {
+  const SkillCatalogEntry(this.name, this.description);
+  final String name;
+  final String description;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SkillCatalogEntry &&
+      other.name == name &&
+      other.description == description;
+
+  @override
+  int get hashCode => Object.hash(name, description);
 }
 
 /// The parts of the system prompt that can change while a chat runs. Frozen
@@ -130,6 +172,8 @@ class PromptState {
     this.memory = '',
     this.mcpConnected = const <String>[],
     this.mcpUnconnected = const <String>[],
+    this.skills,
+    this.toolHistory,
   });
 
   /// Whether the identity section (soul, user info, memory) is on.
@@ -143,6 +187,43 @@ class PromptState {
 
   /// Catalogue ids of the servers that can be connected.
   final List<String> mcpUnconnected;
+
+  /// The skills catalog (name + description). Null: not recorded (a
+  /// snapshot from before the catalog was frozen); the live catalog is used.
+  final List<SkillCatalogEntry>? skills;
+
+  /// Snapshot only: whether earlier turns' tool rounds are replayed in the
+  /// history of this chat (the `includeToolResultsInHistory` setting when
+  /// the chat started). Frozen, so the history form never flips mid-chat.
+  final bool? toolHistory;
+
+  /// A copy with [skills] and [toolHistory] replaced.
+  PromptState withExtras({
+    List<SkillCatalogEntry>? skills,
+    bool? toolHistory,
+  }) => PromptState(
+    identity: identity,
+    soul: soul,
+    user: user,
+    memory: memory,
+    mcpConnected: mcpConnected,
+    mcpUnconnected: mcpUnconnected,
+    skills: skills ?? this.skills,
+    toolHistory: toolHistory ?? this.toolHistory,
+  );
+
+  /// Equal catalogs. An unrecorded catalog ([skills] null) never differs:
+  /// there is nothing to compare against.
+  bool sameSkillsAs(PromptState other) {
+    final a = skills;
+    final b = other.skills;
+    if (a == null || b == null) return true;
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
 
   bool sameIdentityAs(PromptState other) =>
       identity == other.identity &&
@@ -161,6 +242,12 @@ class PromptState {
     if (memory.isNotEmpty) 'memory': memory,
     if (mcpConnected.isNotEmpty) 'mcp': mcpConnected,
     if (mcpUnconnected.isNotEmpty) 'mcpAvailable': mcpUnconnected,
+    if (skills != null)
+      'skills': [
+        for (final s in skills!)
+          <String, String>{'n': s.name, 'd': s.description},
+      ],
+    'toolHistory': ?toolHistory,
   };
 
   static PromptState? fromJson(Object? raw) {
@@ -175,6 +262,16 @@ class PromptState {
       memory: raw['memory']?.toString() ?? '',
       mcpConnected: strings(raw['mcp']),
       mcpUnconnected: strings(raw['mcpAvailable']),
+      skills: raw['skills'] is List
+          ? [
+              for (final e in raw['skills'] as List)
+                if (e is Map && e['n'] is String)
+                  SkillCatalogEntry(e['n'] as String, e['d']?.toString() ?? ''),
+            ]
+          : null,
+      toolHistory: raw['toolHistory'] is bool
+          ? raw['toolHistory'] as bool
+          : null,
     );
   }
 
@@ -203,6 +300,8 @@ class TurnPromptContext {
     this.state,
     List<String>? notes,
     List<SkillContent>? skills,
+    this.sent,
+    this.transcript,
   }) : notes = notes ?? <String>[],
        skills = skills ?? <SkillContent>[];
 
@@ -218,8 +317,42 @@ class TurnPromptContext {
   /// Skills loaded during this turn, in load order.
   final List<SkillContent> skills;
 
+  /// The user text this turn sent, before its notes and `[Sent: …]` line,
+  /// when it differs from the stored display text (a turn with documents:
+  /// `Document: … User query: …`). In storage, each document body is a
+  /// [kDocBodyMarkerStart] marker that points into the message's
+  /// attachments ([PromptContextLedger.storedContextOf]).
+  String? sent;
+
+  /// Everything this turn's tool loop sent after its user message, in the
+  /// form it was sent: native assistant `tool_calls` + `tool` messages with
+  /// the capped results, `<skill_content>` messages, the prompt-based
+  /// rounds and the user message of the last pass. Null for a one-pass
+  /// turn. The next turn's history replays it as it is, so it starts with
+  /// this turn's last request, byte for byte.
+  List<Map<String, dynamic>>? transcript;
+
   bool get isEmpty =>
-      snapshot == null && state == null && notes.isEmpty && skills.isEmpty;
+      snapshot == null &&
+      state == null &&
+      notes.isEmpty &&
+      skills.isEmpty &&
+      sent == null &&
+      (transcript == null || transcript!.isEmpty);
+
+  /// The names of the skills whose bodies the [transcript] carries.
+  List<String> get transcriptSkillNames {
+    final names = <String>[];
+    final pattern = RegExp(r'<skill_content name="([^"]+)">');
+    for (final entry in transcript ?? const <Map<String, dynamic>>[]) {
+      final content = entry['content'];
+      if (entry['role'] != 'user' || content is! String) continue;
+      for (final m in pattern.allMatches(content)) {
+        if (!names.contains(m.group(1)!)) names.add(m.group(1)!);
+      }
+    }
+    return names;
+  }
 
   String encode() => jsonEncode(<String, dynamic>{
     'v': 1,
@@ -231,6 +364,8 @@ class TurnPromptContext {
         for (final s in skills)
           <String, String>{'name': s.name, 'body': s.body},
       ],
+    'sent': ?sent,
+    if (transcript != null && transcript!.isNotEmpty) 'transcript': transcript,
   });
 
   /// Null for a missing or unreadable value: an old message, or one from a
@@ -253,6 +388,13 @@ class TurnPromptContext {
                     SkillContent(s['name'] as String, s['body'] as String),
               ]
             : null,
+        sent: decoded['sent'] is String ? decoded['sent'] as String : null,
+        transcript: decoded['transcript'] is List
+            ? [
+                for (final e in decoded['transcript'] as List)
+                  if (e is Map) Map<String, dynamic>.from(e),
+              ]
+            : null,
       );
     } catch (_) {
       return null;
@@ -265,10 +407,18 @@ class TurnPromptContext {
 /// (an [Expando], so nothing extra goes over the wire) by
 /// `ChatHistoryBuilder.build` and read by the tool loop's `createSession`.
 class HistoryPromptContext {
-  const HistoryPromptContext({this.snapshot, this.effective});
+  const HistoryPromptContext({
+    this.snapshot,
+    this.effective,
+    this.toolHistory = true,
+  });
 
   final PromptState? snapshot;
   final PromptState? effective;
+
+  /// Whether this history replays earlier turns' tool rounds. A chat that
+  /// takes its snapshot now stores it ([PromptState.toolHistory]).
+  final bool toolHistory;
 
   static final Expando<HistoryPromptContext> _byHistory =
       Expando<HistoryPromptContext>('HistoryPromptContext');
@@ -322,7 +472,83 @@ class PromptContextLedger {
     return null;
   }
 
+  /// The `modelContext` to store on [message]: [contextOf], with the
+  /// turn's sent text dropped when it equals the display text, and each
+  /// document body in it replaced by a marker that points into the
+  /// message's `attachments` (the bodies are stored there already).
+  static String? storedContextOf(Map<String, dynamic> message) {
+    final raw = contextOf(message);
+    final context = TurnPromptContext.decode(raw);
+    if (context == null || context.sent == null) return raw;
+    final display = message['text']?.toString().trim() ?? '';
+    if (context.sent!.trim() == display) {
+      context.sent = null;
+    } else {
+      context.sent = compactDocBodies(
+        context.sent!,
+        documentBodies(message['attachments']?.toString()),
+      );
+    }
+    return context.isEmpty ? null : context.encode();
+  }
+
   static void clearForTesting() => _bySentAt.clear();
+}
+
+// ─── Document bodies in the sent text ───────────────────────────────────
+
+/// Start and end of a document-body marker in a stored sent text. Private
+/// use code points: they never come from a keyboard or a converted file.
+const String kDocBodyMarkerStart = '\u{E000}doc:';
+const String kDocBodyMarkerEnd = '\u{E001}';
+
+/// The markdown bodies of a message's document attachments, in order.
+List<String> documentBodies(String? attachmentsJson) {
+  if (attachmentsJson == null || attachmentsJson.trim().isEmpty) {
+    return const <String>[];
+  }
+  try {
+    final decoded = jsonDecode(attachmentsJson);
+    if (decoded is! List) return const <String>[];
+    return [
+      for (final entry in decoded)
+        if (entry is Map &&
+            entry['markdownContent'] is String &&
+            (entry['markdownContent'] as String).isNotEmpty)
+          entry['markdownContent'] as String,
+    ];
+  } catch (_) {
+    return const <String>[];
+  }
+}
+
+/// [sent] with each of [bodies] (first occurrence) replaced by a marker.
+/// Unchanged when the text already holds a marker character.
+String compactDocBodies(String sent, List<String> bodies) {
+  if (sent.contains('\u{E000}') || sent.contains('\u{E001}')) return sent;
+  var out = sent;
+  for (var i = 0; i < bodies.length; i++) {
+    final at = out.indexOf(bodies[i]);
+    if (at < 0) continue;
+    out = out.replaceRange(
+      at,
+      at + bodies[i].length,
+      '$kDocBodyMarkerStart$i$kDocBodyMarkerEnd',
+    );
+  }
+  return out;
+}
+
+/// The inverse of [compactDocBodies].
+String expandDocBodies(String sent, List<String> bodies) {
+  if (!sent.contains(kDocBodyMarkerStart)) return sent;
+  return sent.replaceAllMapped(
+    RegExp('\u{E000}doc:(\\d+)\u{E001}', unicode: true),
+    (m) {
+      final i = int.parse(m.group(1)!);
+      return i < bodies.length ? bodies[i] : m.group(0)!;
+    },
+  );
 }
 
 // ─── Tool results ────────────────────────────────────────────────────────

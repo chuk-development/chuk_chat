@@ -605,13 +605,17 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     chatIdForStream,
                   );
 
-                  final next = loopResult.nextStep!;
+                  // Later passes carry the turn's images in its own history
+                  // entry, not on the pass message (prompt cache, order).
+                  final next = loopResult.nextStep!.withTurnImages(
+                    imagesForResend,
+                  );
                   await Future<void>.delayed(Duration.zero);
                   await startStreamPass(
                     message: next.message,
                     history: next.history,
                     passSystemPrompt: next.systemPrompt,
-                    passImages: imagesForResend,
+                    passImages: next.passImages,
                     currentPass: currentPass + 1,
                   );
                   return;
@@ -1902,13 +1906,17 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                       chatIdForStream,
                     );
 
-                    final next = loopResult.nextStep!;
+                    // Later passes carry the turn's images in its own history
+                    // entry, not on the pass message (prompt cache, order).
+                    final next = loopResult.nextStep!.withTurnImages(
+                      imageDataUrls,
+                    );
                     await Future<void>.delayed(Duration.zero);
                     await startStreamPass(
                       message: next.message,
                       history: next.history,
                       passSystemPrompt: next.systemPrompt,
-                      passImages: imageDataUrls,
+                      passImages: next.passImages,
                       currentPass: currentPass + 1,
                     );
                     return;

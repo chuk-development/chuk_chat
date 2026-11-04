@@ -283,14 +283,18 @@ class WebSocketChatService {
       // get re-sent on every tool pass. Send each in full ONCE (tagged with a
       // parallel cache id so the server stores it), then reference it by id on
       // later passes — turning megabytes of repeated base64 into a short ref.
+      //
+      // All by reference or all in full, never mixed: the server puts the
+      // referenced images before the full ones, so a mixed request would
+      // change their order against the turn's history entry.
       final fullImages = <String>[];
       final fullImageIds = <String>[];
       final imageRefs = <String>[];
-      for (final img in base64Images) {
-        final ref = registry.refFor(img);
-        if (ref != null) {
-          imageRefs.add(ref);
-        } else {
+      final refs = [for (final img in base64Images) registry.refFor(img)];
+      if (refs.every((ref) => ref != null)) {
+        imageRefs.addAll(refs.whereType<String>());
+      } else {
+        for (final img in base64Images) {
           fullImages.add(img);
           fullImageIds.add(registry.register(img));
         }

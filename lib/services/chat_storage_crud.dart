@@ -963,7 +963,9 @@ class ChatStorageCrud {
         // The turn's prompt context: the one this app session just sent
         // (in memory, keyed by `sentAt`) wins over the stored one, because a
         // resend or edit of the message replaces it.
-        modelContext: role == 'user' ? PromptContextLedger.contextOf(m) : null,
+        modelContext: role == 'user'
+            ? PromptContextLedger.storedContextOf(m)
+            : null,
       );
     }).toList();
   }
