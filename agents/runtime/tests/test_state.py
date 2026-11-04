@@ -211,6 +211,46 @@ def test_fail_run_and_orphan_sweep(tmp_path):
     assert store.sweep_orphan_runs() == 0
 
 
+def test_the_orphan_sweep_answers_every_unanswered_call(tmp_path):
+    """Research item 58: a crash between a tool call and its result leaves a
+    call without a row. The sweep writes the unknown-outcome row, so the next
+    turn verifies instead of repeating, and no provider sees an orphan call."""
+    from chuk_agents_runtime.state import UNKNOWN_OUTCOME_RESULT
+
+    store = StateStore(str(tmp_path / "s.db"))
+    sid = store.route("session-A")
+    # An older, finished turn with its own answered call: left alone.
+    store.append_message(sid, "assistant", {
+        "role": "assistant", "content": "",
+        "tool_calls": [{"id": "old", "type": "function",
+                        "function": {"name": "read_file", "arguments": "{}"}}],
+    })
+    store.append_message(sid, "tool", {"role": "tool", "tool_call_id": "old",
+                                       "name": "read_file", "content": "ok"})
+    store.begin_run("run-1", sid, "session-A", "do it")
+    store.append_message(sid, "user", {"role": "user", "content": "do it"})
+    store.append_message(sid, "assistant", {
+        "role": "assistant", "content": "",
+        "tool_calls": [
+            {"id": "c1", "type": "function", "function": {"name": "run_command", "arguments": "{}"}},
+            {"id": "c2", "type": "function", "function": {"name": "mail_send", "arguments": "{}"}},
+        ],
+    })
+    store.append_message(sid, "tool", {"role": "tool", "tool_call_id": "c1",
+                                       "name": "run_command", "content": "done"})
+    # ... and the host died before c2 reported back.
+    assert store.sweep_orphan_runs() == 1
+
+    rows = [m.content for m in store.get_conversation(sid) if m.role == "tool"]
+    assert [r["tool_call_id"] for r in rows] == ["old", "c1", "c2"]
+    assert rows[-1]["name"] == "mail_send"
+    assert rows[-1]["content"] == UNKNOWN_OUTCOME_RESULT
+    assert "Verify it before you retry" in UNKNOWN_OUTCOME_RESULT
+    # A second sweep finds nothing to do and writes nothing twice.
+    assert store.sweep_orphan_runs() == 0
+    assert len([m for m in store.get_conversation(sid) if m.role == "tool"]) == 3
+
+
 def test_begin_run_records_the_model_the_task_asked_for(tmp_path):
     """A run must be provable afterwards: what model / provider / reasoning
     effort the task named (docs/WIRE_CONTRACT.md), NULL meaning the host default."""

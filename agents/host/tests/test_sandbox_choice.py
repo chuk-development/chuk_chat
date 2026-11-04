@@ -9,7 +9,7 @@ false). A host started with no flags could therefore never browse.
 from __future__ import annotations
 
 import chuk_agents_host.cli as cli_mod
-from chuk_agents_host.cli import resolve_sandbox_kind
+from chuk_agents_host.cli import resolve_sandbox, resolve_sandbox_kind
 
 
 def test_auto_takes_docker_when_the_daemon_answers(monkeypatch):
@@ -20,6 +20,19 @@ def test_auto_takes_docker_when_the_daemon_answers(monkeypatch):
 def test_auto_falls_back_to_local_without_docker(monkeypatch):
     monkeypatch.setattr("chuk_agents_sandbox.docker_available", lambda: False)
     assert resolve_sandbox_kind("auto") == "local"
+
+
+def test_the_auto_fallback_is_flagged_and_logged(monkeypatch):
+    """Bead B10: the fallback stays, but never silently."""
+    monkeypatch.setattr("chuk_agents_sandbox.docker_available", lambda: False)
+    lines: list[str] = []
+    assert resolve_sandbox("auto", log=lines.append) == ("local", True)
+    assert lines and "WARNING" in lines[0] and "without a container" in lines[0]
+    monkeypatch.setattr("chuk_agents_sandbox.docker_available", lambda: True)
+    lines.clear()
+    assert resolve_sandbox("auto", log=lines.append) == ("docker", False)
+    assert resolve_sandbox("local", log=lines.append) == ("local", False)
+    assert lines == []
 
 
 def test_a_broken_daemon_is_local_not_a_crash(monkeypatch):

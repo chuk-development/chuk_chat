@@ -24,7 +24,7 @@ import os
 import threading
 import time
 from pathlib import Path
-from typing import Callable, Iterable
+from typing import Any, Callable, Iterable
 
 from chuk_agents_runtime import DEFAULT_MODEL_ID, StateStore, SupabaseSession, fetch_models_info
 from chuk_agents_runtime import mcp_client
@@ -207,6 +207,8 @@ class LocalHost:
         provider_slug: str | None = None,
         reasoning_effort: str | None = None,
         sandbox_kind: str = "local",
+        # ``--sandbox auto`` found no docker and fell back to local (bead B10).
+        sandbox_fallback: bool = False,
         host_addr: str = "127.0.0.1",
         agent_name: str | None = None,
         supabase_url: str | None = None,
@@ -256,6 +258,7 @@ class LocalHost:
         self._provider_slug = provider_slug
         self._reasoning_effort = reasoning_effort
         self._sandbox_kind = sandbox_kind
+        self._sandbox_fallback = bool(sandbox_fallback) and sandbox_kind != "docker"
         # The image every container of this host runs. ``AGENTS_SANDBOX_IMAGE``
         # still wins; with nothing set the browser image is taken when it is
         # built on this machine, because it is the base image plus the watchable
@@ -612,6 +615,11 @@ class LocalHost:
         to be an "unknown tool" deep inside a run (bead cowork-3i5c).
         """
         if self._sandbox_kind != "docker":
+            if self._sandbox_fallback:
+                return (
+                    f"{self._sandbox_kind} — FALLBACK: --sandbox auto found no docker "
+                    "(no container, so no isolation and no watchable browser)"
+                )
             return f"{self._sandbox_kind} (no container, so no watchable browser)"
         if self._browser_mcp:
             return f"docker {self._sandbox_image} (browser ready)"
@@ -1232,7 +1240,10 @@ class LocalHost:
             # The local backend enforces ``secrets_env`` only (it runs on the
             # host itself); the docker one enforces every permission.
             environment = make_environment(
-                "local", workdir=workdir, policy_provider=self._permissions.provider_for(key)
+                "local",
+                workdir=workdir,
+                policy_provider=self._permissions.provider_for(key),
+                sandbox_fallback=self._sandbox_fallback,
             )
         self._environments[key] = environment
         return environment
@@ -2194,13 +2205,42 @@ class LocalHost:
             permissions_payload(
                 agent_id,
                 self._permissions.get(key),
-                enforced=enforced_permissions(
-                    "docker" if self._containers is not None else "local"
-                ),
+                enforced=self._enforced_permissions(),
                 approvals=approvals,
                 budget_weekly=self._permissions.budget(key),
             )
+            | {"sandbox": self.sandbox_status()}
         )
+
+    def _local_kind(self) -> str:
+        """``local`` or ``local-bwrap``: whether this host's local commands
+        run inside bubblewrap (``AGENTS_LOCAL_ISOLATION``)."""
+        from chuk_agents_sandbox.bwrap import wants_bwrap
+
+        try:
+            return "local-bwrap" if wants_bwrap() else "local"
+        except Exception:  # noqa: BLE001 — a failed probe is plain local
+            return "local"
+
+    def _enforced_permissions(self) -> dict[str, bool]:
+        return enforced_permissions(
+            "docker" if self._containers is not None else self._local_kind()
+        )
+
+    def sandbox_status(self) -> dict[str, Any]:
+        """The host-wide sandbox fact the app shows (docs/WIRE_CONTRACT.md,
+        "Sandbox fallback", bead B10): the backend in force, what was asked
+        for, and whether ``auto`` had to fall back to local."""
+        if self._containers is not None:
+            kind = "docker"
+        elif self._sandbox_kind == "docker":
+            kind = "docker"
+        else:
+            kind = self._local_kind()
+        body: dict[str, Any] = {"kind": kind, "fallback": self._sandbox_fallback}
+        if self._sandbox_fallback:
+            body["requested"] = "auto"
+        return body
 
     def _on_permissions_frame(self, payload: dict) -> dict:
         """``agent_permissions_get`` / ``_set`` (docs/WIRE_CONTRACT.md, "Agent
@@ -2212,9 +2252,10 @@ class LocalHost:
             self._permissions,
             payload,
             key_for=self._permission_key,
-            enforced=enforced_permissions("docker" if self._containers is not None else "local"),
+            enforced=self._enforced_permissions(),
             log=self._log,
         )
+        reply["sandbox"] = self.sandbox_status()
         self._attach_user_browser_status(payload, reply)
         if after is not None:
             self._send_host_payload(reply)

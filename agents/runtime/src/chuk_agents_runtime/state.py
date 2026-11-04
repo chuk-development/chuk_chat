@@ -216,6 +216,14 @@ RUN_TIMING_COLUMNS: tuple[str, ...] = (
 
 #: Run states (the ``runs.state`` column).
 RUN_RUNNING = "running"
+
+#: The result of a call that started and never reported back: a Stop that did
+#: not settle, or a crash (``sweep_orphan_runs``). It may have had its effect,
+#: so the model must check before it repeats it. ``loop.STOPPED_TOOL_RESULT``
+#: is this text.
+UNKNOWN_OUTCOME_RESULT = (
+    "stopped while running; the outcome is unknown. Verify it before you retry."
+)
 RUN_FINISHED = "finished"
 RUN_FAILED = "failed"
 #: A limit (steps, iteration budget, token budget) ended the run before the
@@ -278,6 +286,66 @@ def _close_open_approvals(
         )
         count += 1
     return count
+
+
+def _close_orphan_calls(
+    cur: sqlite3.Cursor, session_id: int, first_mid: Any, started_at: float
+) -> int:
+    """Write an unknown-outcome ``tool`` row for every call of a cut-off run
+    that has none. The rows land after the run's last row, which is right
+    after the unanswered turn: a crash ends the run there. Returns the count."""
+    if first_mid is not None:
+        rows = cur.execute(
+            "SELECT role, content FROM messages WHERE session_id=? AND id>? "
+            "AND role<>'event' ORDER BY id",
+            (session_id, int(first_mid)),
+        ).fetchall()
+    else:
+        rows = cur.execute(
+            "SELECT role, content FROM messages WHERE session_id=? AND created_at>=? "
+            "AND role<>'event' ORDER BY id",
+            (session_id, started_at),
+        ).fetchall()
+    calls: list[tuple[str, str]] = []
+    answered: set[str] = set()
+    for row in rows:
+        try:
+            content = json.loads(row["content"])
+        except ValueError:
+            continue
+        if not isinstance(content, dict):
+            continue
+        if row["role"] == "tool":
+            answered.add(str(content.get("tool_call_id") or ""))
+        elif row["role"] == "assistant":
+            for call in content.get("tool_calls") or []:
+                if not isinstance(call, dict) or not call.get("id"):
+                    continue
+                fn = call.get("function") or {}
+                calls.append((str(call["id"]), str(fn.get("name", "")) if isinstance(fn, dict) else ""))
+    written = 0
+    now = time.time()
+    for call_id, name in calls:
+        if call_id in answered:
+            continue
+        answered.add(call_id)
+        cur.execute(
+            "INSERT INTO messages(session_id, role, content, created_at) VALUES (?, 'tool', ?, ?)",
+            (
+                session_id,
+                json.dumps(
+                    {
+                        "role": "tool",
+                        "tool_call_id": call_id,
+                        "name": name,
+                        "content": UNKNOWN_OUTCOME_RESULT,
+                    }
+                ),
+                now,
+            ),
+        )
+        written += 1
+    return written
 
 
 def _tool_rows_after(conversation: list[Message], index: int) -> list[Message]:
@@ -1167,12 +1235,24 @@ class StateStore:
 
     def sweep_orphan_runs(self, *, reason: str = "host_restarted") -> int:
         """On host start: a run still ``running`` was cut off by a crash or a
-        restart. Close it as failed so it never shows as live. Returns the count."""
+        restart. Close it as failed so it never shows as live. Returns the count.
+
+        Every tool call of such a run that has no result row gets one now,
+        with :data:`UNKNOWN_OUTCOME_RESULT` (research item 58): the call may
+        have run before the crash, so the next turn must verify, not repeat
+        it — and the stored conversation never holds a call without its
+        result, which a provider would refuse."""
 
         def op(cur: sqlite3.Cursor) -> int:
-            orphaned = cur.execute(
-                "SELECT DISTINCT session_id FROM runs WHERE state=?", (RUN_RUNNING,)
+            runs = cur.execute(
+                "SELECT session_id, first_mid, started_at FROM runs WHERE state=?",
+                (RUN_RUNNING,),
             ).fetchall()
+            orphaned = {int(row["session_id"]) for row in runs}
+            for row in runs:
+                _close_orphan_calls(
+                    cur, int(row["session_id"]), row["first_mid"], float(row["started_at"])
+                )
             cur.execute(
                 "UPDATE runs SET state=?, reason=?, finished_at=? WHERE state=?",
                 (RUN_FAILED, reason, time.time(), RUN_RUNNING),
@@ -1180,8 +1260,8 @@ class StateStore:
             count = int(cur.rowcount)
             # Their publish approvals died with them (docs/WIRE_CONTRACT.md,
             # cowork-266): never replay one as a prompt for a run that is over.
-            for row in orphaned:
-                _close_open_approvals(cur, int(row["session_id"]), "stopped", None)
+            for session_id in orphaned:
+                _close_open_approvals(cur, session_id, "stopped", None)
             return count
 
         return int(self._write(op))

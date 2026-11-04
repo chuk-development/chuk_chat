@@ -257,6 +257,28 @@ def _withhold_tools(registry: ToolRegistry, names: Sequence[str]) -> None:
         registry._deferred.discard(name)
 
 
+def model_limits(model: Any) -> tuple[int | None, int | None]:
+    """``(context_length, max_output_tokens)`` of a model client, looking
+    through wrappers (``inner``) to the client that knows them. ``None`` for
+    a figure no layer reports (a mock, an old client)."""
+    seen = 0
+    current = model
+    while current is not None and seen < 6:
+        ctx = getattr(current, "context_length", None)
+        if isinstance(ctx, int) and not isinstance(ctx, bool) and ctx > 0:
+            out = getattr(current, "max_output_tokens", None)
+            return ctx, out if isinstance(out, int) and not isinstance(out, bool) else None
+        current = getattr(current, "inner", None) or getattr(current, "_inner", None)
+        seen += 1
+    return None, None
+
+
+def ladder_config_for(model: Any) -> LadderConfig:
+    """The context ladder for ``model``: its real window when the catalogue
+    gave one, else the 128k default (bead B18)."""
+    return LadderConfig.for_model(*model_limits(model))
+
+
 def build_runtime(
     model: ModelClient,
     *,
@@ -435,7 +457,9 @@ def build_runtime(
     seam the executor uses to hand a finished job's output to a running turn.
     """
     env = environment or LocalEnvironment()
-    ladder_config = context_config or LadderConfig()
+    # The ladder fits the model's real window (bead B18): a 1M model is not
+    # compacted at 128k, a 32k model is compacted before it overflows.
+    ladder_config = context_config or ladder_config_for(model)
     # The one place a third-party MCP token may live in this process (§10). Empty
     # until an OAuth flow completes; memory only, redacted repr, never journaled.
     stash = CredentialStash()

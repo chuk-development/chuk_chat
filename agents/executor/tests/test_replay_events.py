@@ -198,3 +198,62 @@ def test_a_timed_out_approval_is_recorded_as_denied_timeout(tmp_path, monkeypatc
     assert row["decision"] == "denied"
     assert row["decision_reason"] == "timeout"
     store.close()
+
+
+def test_a_timed_out_approval_sends_the_request_again_closed(tmp_path, monkeypatch):
+    """Bead B11: after a timeout the app gets the same ``approval_request``
+    again with ``decision`` / ``decision_reason``, so it can close the card.
+    A late tap on Allow is then a no-op."""
+    import chuk_agents_executor.executor as executor_module
+
+    monkeypatch.setattr(executor_module, "APPROVAL_WAIT_SECONDS", 0.05)
+    db_path = str(tmp_path / "state.db")
+    channel = paired_channel()
+    _, executor_ep = loopback_pair()
+    executor = _executor(tmp_path, db_path, channel, executor_ep)
+    sent: list[dict] = []
+    executor._event = lambda rid, payload: sent.append(payload)  # type: ignore[method-assign]
+
+    gate = executor._make_approval_gate("req-1", _no_kill(), "thread-1")
+    assert gate(_publish_request()) is False
+
+    assert [p["type"] for p in sent] == ["approval_request", "approval_request"]
+    first, closed = sent
+    assert "decision" not in first
+    assert closed["approval_id"] == first["approval_id"]
+    assert closed["action"] == first["action"]
+    assert closed["decision"] == "denied"
+    assert closed["decision_reason"] == "timeout"
+    assert closed["decided_at"] > 0
+    # A late decision for the closed request changes nothing.
+    executor._resolve_approval({"approval_id": first["approval_id"], "approved": True})
+    store = StateStore(db_path)
+    (row,) = store.replay_events(store.route("thread-1"))
+    assert row["decision"] == "denied" and row["decision_reason"] == "timeout"
+    store.close()
+
+
+def test_a_stopped_approval_sends_the_request_again_closed(tmp_path):
+    db_path = str(tmp_path / "state.db")
+    channel = paired_channel()
+    _, executor_ep = loopback_pair()
+    executor = _executor(tmp_path, db_path, channel, executor_ep)
+    sent: list[dict] = []
+    executor._event = lambda rid, payload: sent.append(payload)  # type: ignore[method-assign]
+    stop = threading.Event()
+    kill = SimpleNamespace(interrupted=stop.is_set, estop_engaged=lambda: False)
+
+    gate = executor._make_approval_gate("req-1", kill, "thread-1")
+    outcome: list[bool] = []
+    worker = threading.Thread(target=lambda: outcome.append(gate(_publish_request())))
+    worker.start()
+    deadline = time.monotonic() + 5
+    while not sent and time.monotonic() < deadline:
+        time.sleep(0.01)
+    stop.set()
+    worker.join(5)
+    assert outcome == [False]
+    assert len(sent) == 2
+    assert sent[1]["approval_id"] == sent[0]["approval_id"]
+    assert sent[1]["decision"] == "denied"
+    assert sent[1]["decision_reason"] == "stopped"

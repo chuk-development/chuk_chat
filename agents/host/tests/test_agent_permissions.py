@@ -450,6 +450,25 @@ def test_the_local_host_reports_what_it_cannot_enforce(tmp_path):
             {"type": "agent_permissions_get", "agent_id": host_agent_id(HOST_DEVICE_ID)}
         )
         assert reply["enforced"] == enforced_permissions("local")
+        assert reply["sandbox"] == {"kind": "local", "fallback": False}
+    finally:
+        host._roster.close()
+        host._coworker_names.close()
+
+
+def test_the_host_reports_the_auto_fallback_to_the_app(tmp_path, monkeypatch):
+    """Bead B10: ``--sandbox auto`` without docker is local, and says so."""
+    monkeypatch.delenv("AGENTS_LOCAL_ISOLATION", raising=False)
+    host = _host(tmp_path, sandbox_kind="local", sandbox_fallback=True)
+    try:
+        reply = host._on_agent_frame(
+            {"type": "agent_permissions_get", "agent_id": host_agent_id(HOST_DEVICE_ID)}
+        )
+        assert reply["sandbox"] == {"kind": "local", "fallback": True, "requested": "auto"}
+        assert reply["enforced"]["network"] is False
+        assert "FALLBACK" in host.sandbox_summary
+        env = host._environment_for(host_agent_id(HOST_DEVICE_ID))
+        assert env.sandbox_fallback is True
     finally:
         host._roster.close()
         host._coworker_names.close()

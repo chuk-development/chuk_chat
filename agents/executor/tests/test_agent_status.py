@@ -30,7 +30,7 @@ def _model() -> MockModelClient:
     )
 
 
-def _build(tmp_path, workdir, model_factory=_model):
+def _build(tmp_path, workdir, model_factory=_model, **env_kw):
     channel = paired_channel()
     controller_ep, executor_ep = loopback_pair()
     executor = Executor(
@@ -38,7 +38,7 @@ def _build(tmp_path, workdir, model_factory=_model):
         endpoint=executor_ep,
         opener=channel.executor.opener,
         sealer=channel.executor.sealer,
-        environment=LocalEnvironment(workdir=str(workdir)),
+        environment=LocalEnvironment(workdir=str(workdir), **env_kw),
         db_path=str(tmp_path / "state.db"),
         model_factory=model_factory,
         workspace=str(workdir),
@@ -77,6 +77,23 @@ def test_a_session_that_never_ran_reports_no_figures(tmp_path):
     # work, and the app shows which box that is.
     assert status["sandbox"]["kind"] == "local"
     assert status["sandbox"]["workspace"] == str(workdir)
+    assert "fallback" not in status["sandbox"]
+
+
+def test_status_reports_the_auto_fallback_to_local(tmp_path):
+    """Bead B10: ``--sandbox auto`` without docker runs local; the app must
+    be able to show it."""
+    workdir = tmp_path / "ws"
+    workdir.mkdir()
+    executor, controller = _build(tmp_path, workdir, sandbox_fallback=True)
+    executor.start()
+    try:
+        status = _status(controller, "fresh")
+    finally:
+        executor.stop()
+    assert status["sandbox"]["kind"] == "local"
+    assert status["sandbox"]["fallback"] is True
+    assert status["sandbox"]["requested"] == "auto"
 
 
 def test_status_reports_the_model_the_run_used(tmp_path):

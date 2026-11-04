@@ -44,6 +44,15 @@ A sent email, a POST to an API, a package installed on the host are recorded in
 the journal but are not reverted by a rollback. Anything surfacing this in a UI
 must say so.
 
+**Whose repo** (bead B14): a fresh workspace gets the agent's own ``.git``.
+A workspace that already is the USER's repo is never committed into: the
+agent keeps its checkpoints in a private git dir, ``.agents/git``
+(``GIT_DIR`` + ``GIT_WORK_TREE``), so the user's index, refs and history stay
+as they were. ``.agents/`` is added to the user's ``info/exclude`` (a local,
+uncommitted file) so their ``git add -A`` never sweeps the agent's objects.
+A ``.git`` the agent made earlier (its identity is in the local config) keeps
+working in place.
+
 **Where git runs**: on the filesystem this process sees, in ``root``. That is
 the same assumption :mod:`chuk_agents_runtime.memory` and :mod:`chuk_agents_runtime.skills`
 already make about the workspace path; with a container sandbox the workspace is
@@ -87,6 +96,11 @@ GIT_TIMEOUT_S = 60
 JOURNAL_DIRNAME = ".agents"
 JOURNAL_FILENAME = "journal.jsonl"
 JOURNAL_PATH = f"{JOURNAL_DIRNAME}/{JOURNAL_FILENAME}"
+
+#: The agent's own git directory when the workspace is the user's repo (bead
+#: B14). Checkpoints go here (``GIT_DIR`` + ``GIT_WORK_TREE``), never into the
+#: user's ``.git``: the user's index, refs and history stay untouched.
+PRIVATE_GIT_DIR = f"{JOURNAL_DIRNAME}/git"
 
 DEFAULT_AUTHOR_NAME = "Agents Agent"
 DEFAULT_AUTHOR_EMAIL = "agent@cowork.local"
@@ -243,6 +257,9 @@ class GitWorkspace:
         self._enabled = False
         self._git_dir: Path | None = None
         self._common_dir: Path | None = None
+        # Set when the agent keeps its checkpoints in a private git directory
+        # because ``root`` is the user's own repo (bead B14).
+        self._private_dir: Path | None = None
         # Coarse, reentrant, and shared by every instance on this repo in the
         # process: the parent's own journaling, a subagent thread merging its
         # branch back, and a tool thread a Stop abandoned in the previous task
@@ -307,22 +324,45 @@ class GitWorkspace:
     def enabled(self) -> bool:
         return self._enabled
 
+    @property
+    def private(self) -> bool:
+        """True when the checkpoints live in ``.agents/git`` because the
+        workspace is a repo of the user's own (bead B14)."""
+        return self._private_dir is not None
+
     # -- git plumbing ------------------------------------------------------
 
     def _git(
         self, *args: str, timeout: int = GIT_TIMEOUT_S
     ) -> subprocess.CompletedProcess:
-        return self._git_in(self.root, *args, timeout=timeout)
+        extra = None
+        if self._private_dir is not None:
+            # The agent's own repo over the user's files: the user's ``.git``
+            # is never read or written by these calls.
+            extra = {
+                "GIT_DIR": str(self._private_dir),
+                "GIT_WORK_TREE": str(self.root.resolve()),
+            }
+        return self._git_in(self.root, *args, timeout=timeout, extra_env=extra)
 
     def _git_in(
         self,
         cwd: str | os.PathLike,
         *args: str,
         timeout: int = GIT_TIMEOUT_S,
+        extra_env: dict[str, str] | None = None,
     ) -> subprocess.CompletedProcess:
         """The same git, run in another checkout of the same repo — a subagent's
-        worktree."""
-        env = dict(os.environ)
+        worktree. A worktree finds its git directory through its ``.git`` file,
+        so it never gets ``GIT_DIR``."""
+        env = {
+            k: v
+            for k, v in os.environ.items()
+            # Inherited git plumbing would point these calls at another repo.
+            if k not in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR")
+        }
+        if extra_env:
+            env.update(extra_env)
         env.update(
             {
                 # Deterministic: the agent's repo must not depend on, or be
@@ -352,9 +392,25 @@ class GitWorkspace:
             return False
 
         try:
-            # "Already a repo" is the normal case from the second start on, and
-            # adopting a repo the user already had is legitimate too.
-            if not (self.root / ".git").exists():
+            # Three cases (bead B14):
+            # 1. ``.agents/git`` exists: the agent's private repo from an
+            #    earlier start, over a repo of the user's.
+            # 2. ``.git`` exists and is the agent's own (its identity is in the
+            #    local config; also true for a subagent worktree of it): keep
+            #    using it, exactly as before.
+            # 3. ``.git`` exists and belongs to the user: never commit into it.
+            #    The agent gets a private git dir over the same files.
+            # No repo at all: the agent makes its own ``.git``, as before.
+            created = False
+            private = self.root / PRIVATE_GIT_DIR
+            if private.is_dir():
+                self._private_dir = private.resolve()
+            elif (self.root / ".git").exists():
+                if not self._is_own_repo():
+                    if not self._init_private(private):
+                        return False
+                    created = True
+            else:
                 if self._git("init", "-q").returncode != 0:
                     return False
                 # Written into our own repo so it works outside this process
@@ -362,6 +418,7 @@ class GitWorkspace:
                 # `_git` switches off, so a host without one still commits.
                 self._git("config", "--local", "user.name", self._author[0])
                 self._git("config", "--local", "user.email", self._author[1])
+                created = True
 
             git_dir = self._git("rev-parse", "--absolute-git-dir")
             if git_dir.returncode != 0:
@@ -377,9 +434,17 @@ class GitWorkspace:
                 else self._git_dir
             )
 
-            gitignore = self.root / ".gitignore"
-            if not gitignore.exists():
-                gitignore.write_text(GITIGNORE_BODY, encoding="utf-8")
+            if self._private_dir is not None:
+                # The user's tree gets no .gitignore of ours: the patterns go
+                # into the private repo's own exclude file instead.
+                self._ensure_private_excludes()
+            elif created:
+                # Only a repo the agent just made gets a .gitignore. An adopted
+                # checkout (a subagent worktree) already carries it, and a file
+                # written here would end up in a merge back.
+                gitignore = self.root / ".gitignore"
+                if not gitignore.exists():
+                    gitignore.write_text(GITIGNORE_BODY, encoding="utf-8")
 
             journal = self.root / self.journal_path
             journal.parent.mkdir(parents=True, exist_ok=True)
@@ -392,6 +457,82 @@ class GitWorkspace:
         if self._git("rev-parse", "--verify", "-q", "HEAD").returncode != 0:
             self._commit("agents: workspace initialised", [])
         return True
+
+    def _is_own_repo(self) -> bool:
+        """True when ``root/.git`` is a repo the agent made: its local config
+        carries the agent identity (written at ``init``). A subagent worktree
+        of such a repo reads the same config. A user's repo does not."""
+        probe = self._git("config", "--local", "--get", "user.email")
+        if probe.returncode != 0:
+            return False
+        return probe.stdout.strip() in {self._author[1], DEFAULT_AUTHOR_EMAIL}
+
+    def _init_private(self, private: Path) -> bool:
+        """Create ``.agents/git`` for a workspace that is the user's repo."""
+        try:
+            private.parent.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            return False
+        done = self._git_in(
+            self.root,
+            "--git-dir",
+            str(private),
+            "init",
+            "-q",
+            extra_env={"GIT_WORK_TREE": str(self.root.resolve())},
+        )
+        if done.returncode != 0:
+            return False
+        self._private_dir = private.resolve()
+        self._git("config", "--local", "user.name", self._author[0])
+        self._git("config", "--local", "user.email", self._author[1])
+        self._hide_from_user_repo()
+        return True
+
+    def _ensure_private_excludes(self) -> None:
+        """The private repo must never commit itself, and keeps the media
+        patterns a fresh workspace has in its .gitignore."""
+        if self._private_dir is None:
+            return
+        exclude = self._private_dir / "info" / "exclude"
+        marker = f"/{PRIVATE_GIT_DIR}/"
+        try:
+            existing = exclude.read_text(encoding="utf-8") if exclude.exists() else ""
+            if marker in existing.splitlines():
+                return
+            exclude.parent.mkdir(parents=True, exist_ok=True)
+            with exclude.open("a", encoding="utf-8") as handle:
+                if existing and not existing.endswith("\n"):
+                    handle.write("\n")
+                handle.write(f"# Agents private checkpoints (bead B14)\n{marker}\n")
+                handle.write(GITIGNORE_BODY)
+        except OSError:
+            return
+
+    def _hide_from_user_repo(self) -> None:
+        """Keep ``.agents/`` out of the user's ``git status`` and ``git add -A``.
+
+        Written to the user's ``info/exclude``: a local file, never committed,
+        not the index, refs or history. Without it a ``git add -A`` of the user
+        would sweep the agent's whole object store into the user's repo."""
+        try:
+            probe = self._git_in(
+                self.root, "rev-parse", "--path-format=absolute", "--git-common-dir"
+            )
+            if probe.returncode != 0 or not probe.stdout.strip():
+                return
+            exclude = Path(probe.stdout.strip()) / "info" / "exclude"
+            line = f"/{JOURNAL_DIRNAME}/"
+            existing = exclude.read_text(encoding="utf-8") if exclude.exists() else ""
+            if line in existing.splitlines():
+                return
+            exclude.parent.mkdir(parents=True, exist_ok=True)
+            with exclude.open("a", encoding="utf-8") as handle:
+                if existing and not existing.endswith("\n"):
+                    handle.write("\n")
+                handle.write(f"{line}\n")
+        except (OSError, subprocess.SubprocessError):
+            return
 
     def _last_seq(self) -> int:
         """Resume numbering across process restarts: the journal is the record,

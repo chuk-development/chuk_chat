@@ -1067,9 +1067,31 @@ the SAME request again, live, decided:
 ```
 
 The app then shows "<Agent> continues" and removes the card with the run's
-next frame. Every other closing (timeout, stop) needs no frame: the card goes
-away when the run ends. `auto` joins `user` / `timeout` / `stopped` as a
-valid `decision_reason` in `protocol.py`.
+next frame. `auto` joins `user` / `timeout` / `stopped` as a valid
+`decision_reason` in `protocol.py`.
+
+### Closed by timeout or stop (IMPLEMENTED, bead B11)
+
+Every approval wait (publish, per-action class, browser takeover) that ends
+without an answer sends the SAME `approval_request` again, live, decided, in
+the shape of the `auto` frame above:
+
+```json
+{"type": "approval_request", "approval_id": "<same id>", "session_key": "<key>",
+ "action": "<same action>", "decision": "denied",
+ "decision_reason": "timeout" | "stopped", "decided_at": <unix seconds>, ...}
+```
+
+- `timeout`: `APPROVAL_WAIT_SECONDS` (600 s) or `TAKEOVER_WAIT_SECONDS`
+  (900 s) went by. `stopped`: Stop or ESTOP during the wait.
+- The executor records the deny first, so a late `approval_decision` for that
+  id is a no-op. If the user's answer arrives in the same instant, the
+  answer wins and no closing frame is sent.
+- The stored row carries the same outcome fields, so a replay shows the same
+  closed card.
+- App: on a live `approval_request` with `decision`, close (or replace) the
+  open card with that `approval_id` and never offer Allow again. An app
+  without this change draws the frame as a decided card or ignores it.
 
 ### Host side (implemented)
 
@@ -1576,7 +1598,19 @@ names the user has set, every one `"set"`.
 - The values are passed as environment variables to the child process of
   `run_command` and `python` only (`subprocess` env locally, `docker exec -e
   NAME` with the value in the client's environment in the container backend —
-  never on a command line). The sandbox's session snapshot (`declare -px`) is
+  never on a command line).
+- A local command does NOT inherit the host process environment (bead B9).
+  It gets an allowlist (`PATH`, `HOME`, `USER`, `LANG`, `LC_*`, `TZ`,
+  `SHELL`, `TMPDIR`, `XDG_*`, proxies, ...), minus every name that matches
+  `KEY|TOKEN|SECRET|PASSW|CREDENTIAL|AUTH|COOKIE|SESSION` and every
+  `AGENTS_*` / `CHUK_*` / `COWORK_*` / `CLAUDE*` name, plus the granted
+  secrets above, plus `NO_COLOR=1 TERM=dumb PAGER=cat GIT_PAGER=cat`
+  (`chuk_agents_sandbox.child_env`). The login shell that seeds the session
+  snapshot unsets the same names, so a profile that exports a key does not
+  put it into every command. The local terminal gets its own tmux server
+  (`TMUX_TMPDIR` in the sandbox's temp root), never the user's.
+- A timeout or a Stop sends SIGTERM to the command's process group and
+  SIGKILL 3 s later. The sandbox's session snapshot (`declare -px`) is
   written after the names are unset, so a value never lands in the snapshot
   file and never leaks into the next command's shell.
 - One scrubber, in two places: the tool registry's dispatch result (what the
@@ -2446,6 +2480,51 @@ value. A change applies **from the next task**, never in the middle of a run.
 The local backend (`--sandbox local`) runs on the host itself and can enforce
 `secrets_env` and `user_browser` only. The reply says so in `enforced`, and the
 app greys those switches out with "Not enforced on this host".
+
+With `AGENTS_LOCAL_ISOLATION=bwrap` (or `auto`) and a working `bwrap`, every
+local command runs in bubblewrap (`chuk_agents_sandbox.bwrap`): `/` read-only,
+fresh `/dev` and `/proc`, a private `/tmp` per agent, its own PID namespace,
+the workspace writable (or read-only with `workspace_mount: ro`) and
+`--unshare-net` with `network: false`. `enforced` then also says true for
+`network` and `workspace_mount` (key `local-bwrap` in
+`enforced_permissions`). `sudo` never works inside (`no_new_privs`). Off by
+default: background jobs and the tmux terminal end with the command that
+started them. `agents-host doctor` reports the probe.
+
+Every docker box is created with `--cap-drop ALL`, a few capabilities added
+back (with `sudo`: `CHOWN DAC_OVERRIDE FOWNER FSETID SETUID SETGID KILL
+NET_BIND_SERVICE AUDIT_WRITE`; without: `CHOWN DAC_OVERRIDE FOWNER SETUID
+SETGID` for the root entrypoint only) and `--pids-limit 512`
+(`policy.hardening_run_args`). A box from before keeps its flags until it is
+rebuilt. The cloud metadata address `169.254.169.254` is NOT blocked by a
+docker flag (none exists); with `network: true` the host needs a firewall
+rule such as `iptables -I DOCKER-USER -d 169.254.169.254 -j REJECT`.
+
+### Sandbox fallback (IMPLEMENTED, bead B10)
+
+`--sandbox auto` (the default) takes docker when the daemon answers and falls
+back to `local` when it does not. The fallback stays, but it is never silent:
+the host logs a warning and the banner says `FALLBACK`. The app gets it in two
+frames it already reads:
+
+- `agent_permissions` (every reply and push) carries a host-wide `sandbox`
+  block:
+
+  ```json
+  "sandbox": {"kind": "docker" | "local" | "local-bwrap",
+              "fallback": true | false, "requested": "auto"?}
+  ```
+
+  `fallback: true` means the user asked for `auto`, there is no docker, and the
+  agent runs its commands on the host without a container. `requested` is
+  present only with `fallback: true`.
+- `agent_status.sandbox` (§ "Agent status") gets `"fallback": true,
+  "requested": "auto"` on such a host, and `"isolation": "bwrap"` when local
+  commands run in bubblewrap. `kind` keeps its two old values.
+
+App (later): show a warning row under the permissions ("No container on this
+computer: the agent works directly on it") when `fallback` is true. An older
+app ignores the fields.
 
 ### Capability
 

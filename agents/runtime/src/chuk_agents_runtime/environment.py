@@ -17,6 +17,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
+from .child_env import child_env
+
 
 @dataclass
 class ProcessResult:
@@ -81,27 +83,59 @@ class LocalEnvironment:
         del internal  # nothing observes a local run
         start = time.monotonic()
         try:
-            proc = subprocess.run(
+            proc = subprocess.Popen(
                 ["bash", "-c", cmd],
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                timeout=timeout,
-                # The secrets ride the child's environment only: nothing here
-                # keeps a shell alive, so nothing outlives this call.
-                env={**os.environ, **env} if env else None,
+                # Own process group, so a timeout reaches the whole tree.
+                start_new_session=True,
+                # An allowlist of the host environment plus the granted secrets
+                # (bead B9); nothing here keeps a shell alive, so nothing
+                # outlives this call.
+                env=child_env(env),
             )
-        except subprocess.TimeoutExpired as exc:
+            out, err = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            terminate_group(proc)
+            out, err = proc.communicate()
             return ProcessResult(
                 exit_code=124,
-                stdout=exc.stdout or "" if isinstance(exc.stdout, str) else "",
-                stderr=exc.stderr or "" if isinstance(exc.stderr, str) else "",
+                stdout=out or "",
+                stderr=err or "",
                 duration_s=time.monotonic() - start,
                 timed_out=True,
             )
         return ProcessResult(
             exit_code=proc.returncode,
-            stdout=proc.stdout,
-            stderr=proc.stderr,
+            stdout=out,
+            stderr=err,
             duration_s=time.monotonic() - start,
             timed_out=False,
         )
+
+
+#: SIGTERM first, then SIGKILL after this many seconds (research item 36).
+KILL_GRACE_S = 3.0
+
+
+def terminate_group(proc: subprocess.Popen, grace: float = KILL_GRACE_S) -> None:
+    """SIGTERM the process group of ``proc`` (started with
+    ``start_new_session``), SIGKILL what is left after ``grace`` seconds."""
+    import signal
+
+    try:
+        os.killpg(proc.pid, signal.SIGTERM)
+    except (ProcessLookupError, PermissionError):
+        proc.kill()
+        return
+    try:
+        proc.wait(timeout=grace)
+    except subprocess.TimeoutExpired:
+        pass
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
+    if proc.poll() is None:
+        proc.kill()

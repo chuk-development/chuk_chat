@@ -454,16 +454,38 @@ def resolve_sandbox_kind(choice: str) -> str:
     inside the image. So ``auto`` takes docker whenever the daemon answers, and
     only falls back to local when it does not (bead cowork-3i5c).
     """
+    return resolve_sandbox(choice)[0]
+
+
+def resolve_sandbox(
+    choice: str, *, log: Callable[[str], None] | None = None
+) -> tuple[str, bool]:
+    """``(kind, fallback)``: the backend, and whether ``auto`` had to fall back
+    to ``local`` because docker did not answer (bead B10).
+
+    The fallback is kept (a host without docker must still work), but it is
+    never silent: ``log`` gets a warning, and the host reports
+    ``sandbox.fallback: true`` to the app (docs/WIRE_CONTRACT.md, "Sandbox
+    fallback"), so the user sees that the agent runs on this machine without
+    a container."""
     if choice != "auto":
-        return choice
+        return choice, False
     try:
         from chuk_agents_sandbox import docker_available
-    except Exception:  # noqa: BLE001 — a missing backend is just "local"
-        return "local"
-    try:
-        return "docker" if docker_available() else "local"
-    except Exception:  # noqa: BLE001 — a broken daemon is just "local"
-        return "local"
+
+        kind = "docker" if docker_available() else "local"
+    except Exception:  # noqa: BLE001 — a missing or broken backend is just "local"
+        kind = "local"
+    if kind == "docker":
+        return kind, False
+    if log is not None:
+        log(
+            "WARNING: --sandbox auto found no docker daemon; the agent runs its "
+            "commands on THIS machine, without a container (no sudo/network/"
+            "workspace fence, no watchable browser). Start docker or pass "
+            "--sandbox local to choose this on purpose."
+        )
+    return kind, True
 
 
 def _start_tracing(args: argparse.Namespace) -> None:
@@ -496,13 +518,15 @@ def _start_tracing(args: argparse.Namespace) -> None:
 
 
 def _build_host(args: argparse.Namespace) -> LocalHost:
+    sandbox_kind, sandbox_fallback = resolve_sandbox(args.sandbox, log=_log)
     host = LocalHost(
         port=args.port,
         workspace_dir=args.workspace,
         model_id=args.model,
         provider_slug=getattr(args, "provider", None),
         reasoning_effort=getattr(args, "reasoning_effort", None),
-        sandbox_kind=resolve_sandbox_kind(args.sandbox),
+        sandbox_kind=sandbox_kind,
+        sandbox_fallback=sandbox_fallback,
         agent_name=args.agent_name,
         supabase_url=args.supabase_url,
         anon_key=args.anon_key,

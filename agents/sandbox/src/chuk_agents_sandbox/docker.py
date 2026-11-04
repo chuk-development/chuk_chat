@@ -57,7 +57,8 @@ from .lifecycle import (
     label_args,
     remove_container,
 )
-from .policy import DEFAULT_CONTAINER_KEY, LABEL_POLICY, SandboxPolicy
+from .child_env import FIXED
+from .policy import DEFAULT_CONTAINER_KEY, LABEL_POLICY, SandboxPolicy, hardening_run_args
 from .result import ProcessResult
 
 #: The image ``install.sh`` builds (``sandbox/docker/Dockerfile``).
@@ -640,6 +641,7 @@ class DockerEnvironment(BaseEnvironment):
         # No sudo -> no-new-privileges; no network -> ``--network none``. The
         # default policy adds nothing, so a default box is created as before.
         argv += list(policy.docker_run_args())
+        argv += list(hardening_run_args(policy))
         tail = [*self._extra_run_args, self._image, "sleep", "infinity"]
         gpu = list(self._box_setup()[1])
 
@@ -721,6 +723,11 @@ class DockerEnvironment(BaseEnvironment):
         # The value rides in ``env=`` on the Popen below.
         for name in env or ():
             argv += ["-e", name]
+        # Plain text for a model, not a terminal (bead B9). Not secret, so
+        # these may ride on the command line.
+        for name, value in FIXED.items():
+            if name not in (env or {}):
+                argv += ["-e", f"{name}={value}"]
         argv += [container, "bash"]
         if login:
             argv.append("-l")
