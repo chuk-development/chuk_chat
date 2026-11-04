@@ -126,6 +126,8 @@ from .coworker_templates import seed_persona, template_seed
 from .secrets_key import mail_key_at_rest_key, mcp_grants_at_rest_key, secrets_at_rest_key
 from .seed_skills import seed_skills_dir, seed_workspace_skills
 from .desktop_notify import DesktopNotifier
+from chuk_agents_runtime.automations import owner_session_key
+
 from .automations import AutomationManager
 from .calls import CallService
 from .notification_text import DEFAULT_COWORKER, coworker_name
@@ -1177,7 +1179,10 @@ class LocalHost:
             return False
 
     def _agent_key(self, session_key: str) -> str:
-        """The agent a session key belongs to: itself, or this host's agent."""
+        """The agent a session key belongs to: itself, or this host's agent.
+        A chat a schedule opened (``<owner>#auto-<id>``, docs/WIRE_CONTRACT.md,
+        "Automation guards") belongs to its owner's agent."""
+        session_key = owner_session_key(session_key)
         return session_key if self._is_own_coworker(session_key) else self._agent.id
 
     def _agent_keys(self, session_keys: Iterable[str]) -> dict[str, str]:
@@ -1193,8 +1198,11 @@ class LocalHost:
             }
         except Exception:  # noqa: BLE001 — an unreadable roster is not a new agent
             coworkers = set()
+        owners = {key: owner_session_key(key) for key in keys}
         return {
-            key: key if key and key not in primary and key in coworkers else self._agent.id
+            key: owners[key]
+            if owners[key] and owners[key] not in primary and owners[key] in coworkers
+            else self._agent.id
             for key in keys
         }
 
@@ -2423,6 +2431,7 @@ class LocalHost:
         call. A registered agent is its own session key; any other key is
         this host's own agent (``host:<device id>``). Never the roster
         codename: the fallback is the generic label."""
+        session_key = owner_session_key(session_key)
         agent_id = (
             session_key if self._is_own_coworker(session_key) else host_agent_id(self._device_id)
         )

@@ -27,6 +27,11 @@ carries. The backends enforce it at the one place they can:
     the container key, so the box is rebuilt when it changes.
 ``user_browser``
     Not enforced here: the executor reads it when it picks the browser target.
+``external_agents``
+    Not enforced here: the executor reads it when it wires subagents. ``True``
+    lets ``delegate_task`` hand a task to a ``claude`` / ``codex`` CLI that is
+    installed in the sandbox (``chuk_agents_runtime.acp_runner``). Off by
+    default: the CLI bills the user's own account.
 
 The container-level part of a policy is written onto the container as the
 ``cowork.policy`` label. A container whose label does not match the policy of
@@ -49,8 +54,17 @@ WORKSPACE_RO = "ro"
 WORKSPACE_MODES = (WORKSPACE_RW, WORKSPACE_RO)
 
 #: Every permission key, in the order the app shows them.
-PERMISSION_KEYS = ("sudo", "network", "secrets_env", "workspace_mount", "user_browser")
-_BOOL_KEYS = frozenset({"sudo", "network", "secrets_env", "user_browser"})
+PERMISSION_KEYS = (
+    "sudo",
+    "network",
+    "secrets_env",
+    "workspace_mount",
+    "user_browser",
+    "external_agents",
+)
+_BOOL_KEYS = frozenset(
+    {"sudo", "network", "secrets_env", "user_browser", "external_agents"}
+)
 
 #: Label with the container-level part of the policy (see ``container_key``).
 LABEL_POLICY = "cowork.policy"
@@ -74,6 +88,7 @@ class SandboxPolicy:
     secrets_env: bool = True
     workspace_mount: str = WORKSPACE_RW
     user_browser: bool = False
+    external_agents: bool = False
 
     def __post_init__(self) -> None:
         for name in _BOOL_KEYS:
@@ -161,19 +176,23 @@ DEFAULT_POLICY = SandboxPolicy()
 #: files; of the sandbox permissions it can only keep secrets out.
 _ENFORCED_BY_KIND: dict[str, frozenset[str]] = {
     "docker": frozenset(PERMISSION_KEYS),
-    "local": frozenset({"secrets_env", "user_browser"}),
+    "local": frozenset({"secrets_env", "user_browser", "external_agents"}),
     # Local commands inside bubblewrap (``AGENTS_LOCAL_ISOLATION``): the
     # network namespace and the read-only bind make ``network`` and
     # ``workspace_mount`` real. ``sudo`` is not: bwrap's ``no_new_privs``
     # forbids it whatever the switch says.
-    "local-bwrap": frozenset({"secrets_env", "user_browser", "network", "workspace_mount"}),
+    "local-bwrap": frozenset(
+        {"secrets_env", "user_browser", "external_agents", "network", "workspace_mount"}
+    ),
 }
 
 
 def enforced_permissions(kind: str) -> dict[str, bool]:
     """``{permission: enforced}`` for a sandbox backend (``docker`` / ``local``).
     An unknown backend enforces nothing it cannot prove."""
-    enforced = _ENFORCED_BY_KIND.get(kind, frozenset({"user_browser"}))
+    enforced = _ENFORCED_BY_KIND.get(
+        kind, frozenset({"user_browser", "external_agents"})
+    )
     return {key: key in enforced for key in PERMISSION_KEYS}
 
 #: ``--pids-limit`` of every agent container: a fork bomb stops here, a

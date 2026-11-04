@@ -83,14 +83,27 @@ class JournalingRegistry(ToolRegistry):
         super().__init__()
         self._workspace = workspace
         self._observer = observer
+        #: ``(name, args, result) -> result`` hooks run on every result before
+        #: it is journaled (e.g. :class:`chuk_agents_runtime.project_rules.
+        #: ProjectRules` appending a directory's AGENTS.md). A hook that
+        #: raises is skipped; the call's own result stands.
+        self.result_augmenters: list[Callable[[str, dict | None, Any], Any]] = []
 
     @property
     def workspace(self) -> GitWorkspace | None:
         return self._workspace
 
+    def add_result_augmenter(self, fn: Callable[[str, dict | None, Any], Any]) -> None:
+        self.result_augmenters.append(fn)
+
     def dispatch(self, name: str, args: dict | None = None) -> Any:
         started = time.perf_counter()
         result = super().dispatch(name, args)
+        for augment in self.result_augmenters:
+            try:
+                result = augment(name, args, result)
+            except Exception:  # noqa: BLE001 — an augmenter never fails a call
+                pass
         timed_record(self._workspace, name, args, result, started)
         if self._observer is not None:
             try:

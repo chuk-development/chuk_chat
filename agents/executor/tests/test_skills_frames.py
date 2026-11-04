@@ -107,6 +107,9 @@ def test_skill_control_flips_the_switch_and_answers_with_the_list(tmp_path):
                     "source": "workspace",
                     "enabled": False,
                     "path": str(root / "deploy" / "SKILL.md"),
+                    "model_invocable": True,
+                    "use_count": 0,
+                    "last_used_at": None,
                 }
             ],
             "errors": [],

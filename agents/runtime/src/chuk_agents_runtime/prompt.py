@@ -231,6 +231,16 @@ Mobbin | Update payment method | | due Last chance | 18.10. | mobbin.com
   the user did not clearly ask for it, ask first, then do it.
 """
 
+#: How the model points at a file in the workspace (DeepSeek harness item 49).
+#: The app turns an angle-bracket path into a tap target; the ``#L`` suffix
+#: opens the file at that line range. Part of the per-agent workspace block, so
+#: it is as stable as the workspace path and costs nothing on the cache.
+WORKSPACE_LINK_RULE = (
+    "Link a workspace file as <path> or, for lines, <src/app.py#L24-L30>; "
+    "no backticks around it."
+)
+
+
 def _base_section(title: str, next_title: str) -> str:
     """The body of one ``# title`` section of :data:`BASE_INSTRUCTIONS`, up to
     (not including) ``# next_title``."""
@@ -517,7 +527,8 @@ def build_system_prompt(
             "# Workspace\n\n"
             f"Your working directory is `{workspace}`. Use relative paths inside it. "
             "Your notes: `notes/`. Scratch: `tmp/` (clean it up). Your searchable "
-            "history: `transcript/` (read-only)."
+            "history: `transcript/` (read-only).\n\n"
+            + WORKSPACE_LINK_RULE
         )
     if skills and skills.strip():
         parts.append(skills.strip())
