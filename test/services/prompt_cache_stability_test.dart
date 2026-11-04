@@ -11,11 +11,13 @@ import 'dart:convert';
 import 'package:chuk_chat/models/chat_message.dart';
 import 'package:chuk_chat/models/chat_stream_event.dart' show NativeToolCall;
 import 'package:chuk_chat/models/client_tool.dart';
+import 'package:chuk_chat/models/skill.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
 import 'package:chuk_chat/services/chat_history_builder.dart';
 import 'package:chuk_chat/services/mcp/mcp_catalogue.dart';
 import 'package:chuk_chat/services/prompt_cache/image_budget.dart';
 import 'package:chuk_chat/services/prompt_cache/prompt_context.dart';
+import 'package:chuk_chat/services/skills/skill_registry.dart';
 import 'package:chuk_chat/services/tool_call_handler.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -77,8 +79,9 @@ Map<String, String> _persistAndReload(Map<String, String> map) {
     text: map['text'] ?? '',
     images: map['images'],
     toolCalls: map['toolCalls'],
+    attachments: map['attachments'],
     sentAt: map['sentAt'],
-    modelContext: isUser ? PromptContextLedger.contextOf(map) : null,
+    modelContext: isUser ? PromptContextLedger.storedContextOf(map) : null,
   );
   return ChatUiHelpers.messageToRawMap(
     ChatMessage.fromJson(jsonDecode(jsonEncode(message.toJson()))),
@@ -109,10 +112,13 @@ void main() {
     String text,
     String sentAt, {
     String chatId = 'chat-1',
+    bool includeToolResults = true,
+    String? pendingText,
   }) async {
     final history = await ChatHistoryBuilder.build(
       messages: messages,
-      pendingUserText: text,
+      pendingUserText: pendingText ?? text,
+      includeToolResults: includeToolResults,
     );
     final session = handler.createSession(
       initialUserMessage: text,
@@ -432,6 +438,299 @@ void main() {
       );
       executor.unregisterTool('mcp_a_list');
       executor.unregisterTool('mcp_b_search');
+    });
+  });
+
+  group('the next turn starts with the last request of the turn before', () {
+    /// Runs turn 1 to its end: one native tool round, then the answer.
+    /// Returns turn 1's last request.
+    Future<CacheRequest> toolTurn(
+      Map<String, String> user, {
+      bool includeToolResults = true,
+    }) async {
+      final (session, _) = await startTurn(
+        [user],
+        user['text']!,
+        user['sentAt']!,
+        includeToolResults: includeToolResults,
+      );
+      final round = await handler.processAssistantResponse(
+        session: session,
+        content: '',
+        reasoning: '',
+        nativeToolCalls: [calc('c-1')],
+      );
+      final last = nextRequest(session, round);
+      final done = await handler.processAssistantResponse(
+        session: session,
+        content: 'It is 4.',
+        reasoning: '',
+      );
+      expect(done.shouldContinue, isFalse);
+      return last;
+    }
+
+    List<Map<String, String>> reloadTurn(Map<String, String> user) => [
+      _persistAndReload(user),
+      _persistAndReload({
+        'sender': 'ai',
+        'text': 'It is 4.',
+        'toolCalls': jsonEncode([
+          {
+            'id': 'c-1',
+            'name': 'calculate',
+            'arguments': {'expression': '2+2'},
+            'status': 'completed',
+            'result': '4',
+          },
+        ]),
+      }),
+    ];
+
+    test('native tool rounds are replayed as they were sent', () async {
+      final user1 = _user('what is 2+2', _sentAt1);
+      final last = await toolTurn(user1);
+      final stored = reloadTurn(user1);
+      PromptContextLedger.clearForTesting();
+
+      final (_, second) = await startTurn(
+        [...stored, _user('and 3+3?', _sentAt2)],
+        'and 3+3?',
+        _sentAt2,
+      );
+      expectPrefixStable(last, second);
+      final text = jsonEncode(second.history);
+      expect(text, isNot(contains('<previous_tool_results>')));
+      expect(second.history[1]['tool_calls'], isNotNull);
+      expect(second.history[2]['role'], 'tool');
+    });
+
+    test('a forced final pass is replayed with its note', () async {
+      final user1 = _user('go', _sentAt1);
+      final (session, _) = await startTurn([user1], 'go', _sentAt1);
+      final r1 = await handler.processAssistantResponse(
+        session: session,
+        content: '',
+        reasoning: '',
+        nativeToolCalls: [calc('c-1')],
+      );
+      expect(r1.shouldContinue, isTrue);
+      session.finalAnswerRequested = true;
+      final r2 = await handler.processAssistantResponse(
+        session: session,
+        content: '',
+        reasoning: '',
+        nativeToolCalls: [calc('c-2')],
+      );
+      final last = nextRequest(session, r2);
+      expect(last.message, kForcedFinalAnswerNote);
+      await handler.processAssistantResponse(
+        session: session,
+        content: 'Done.',
+        reasoning: '',
+      );
+      final stored = [
+        _persistAndReload(user1),
+        _persistAndReload({'sender': 'ai', 'text': 'Done.'}),
+      ];
+      PromptContextLedger.clearForTesting();
+      final (_, second) = await startTurn(
+        [...stored, _user('thanks', _sentAt2)],
+        'thanks',
+        _sentAt2,
+      );
+      expectPrefixStable(last, second);
+    });
+
+    test('tool results off: the form is frozen for the chat', () async {
+      final user1 = _user('what is 2+2', _sentAt1);
+      await toolTurn(user1, includeToolResults: false);
+      final stored = reloadTurn(user1);
+      PromptContextLedger.clearForTesting();
+
+      // The setting is switched on later: the chat keeps its form.
+      final (_, second) = await startTurn(
+        [...stored, _user('and 3+3?', _sentAt2)],
+        'and 3+3?',
+        _sentAt2,
+      );
+      final text = jsonEncode(second.history);
+      expect(text, isNot(contains('tool_calls')));
+      expect(text, isNot(contains('<previous_tool_results>')));
+      expect(second.history.last['content'], 'It is 4.');
+    });
+
+    test('a turn with documents replays what it sent', () async {
+      const body = 'line one\nline two';
+      final user1 = {
+        ..._user('Documents: "a.txt"\n\nsummarize', _sentAt1),
+        'attachments': jsonEncode([
+          {'fileName': 'a.txt', 'markdownContent': body},
+        ]),
+      };
+      const sent =
+          'Document: "a.txt"\n```\n$body\n```\n\nUser query: summarize';
+      // The send paths pass the composer input as the pending text.
+      final (_, first) = await startTurn(
+        [user1],
+        sent,
+        _sentAt1,
+        pendingText: 'summarize',
+      );
+      final stored = [
+        _persistAndReload(user1),
+        _persistAndReload({'sender': 'ai', 'text': 'Two lines.'}),
+      ];
+      PromptContextLedger.clearForTesting();
+      // The body is stored once (in the attachments), not twice.
+      expect(stored.first['modelContext'], isNot(contains('line two')));
+
+      final (_, second) = await startTurn(
+        [...stored, _user('thanks', _sentAt2)],
+        'thanks',
+        _sentAt2,
+      );
+      expectPrefixStable(first, second);
+      expect(second.history.first['content'], contains('User query:'));
+    });
+
+    test('the turn\'s images go into its own entry on later passes', () {
+      const step = ToolLoopStep(
+        message: '',
+        history: [
+          {'role': 'user', 'content': 'look'},
+          {'role': 'assistant', 'content': 'ok'},
+        ],
+        systemPrompt: 's',
+        turnUserIndex: 0,
+      );
+      final next = step.withTurnImages(['u/a.enc', 'u/b.enc']);
+      expect(next.passImages, isNull);
+      expect(
+        jsonEncode(next.history.first['content']),
+        jsonEncode(userContentWithImages('look', ['u/a.enc', 'u/b.enc'])),
+      );
+      // The same shape the history gives the message in later turns.
+      expect(step.history.first['content'], 'look');
+      const noEntry = ToolLoopStep(
+        message: 'x',
+        history: [],
+        systemPrompt: 's',
+      );
+      expect(noEntry.withTurnImages(['u/a.enc']).passImages, ['u/a.enc']);
+    });
+
+    test(
+      'rounds over the budget are dropped in steps, skills leave a marker',
+      () async {
+        // Turns whose transcripts are each a quarter of the budget.
+        final big = 'x' * (ChatHistoryBuilder.transcriptBudgetChars ~/ 4);
+        List<Map<String, String>> chat(int turns) => [
+          for (var i = 0; i < turns; i++) ...[
+            {
+              ..._user(
+                'q$i',
+                '2026-11-04T10:${(i % 60).toString().padLeft(2, '0')}:00',
+              ),
+              'modelContext': TurnPromptContext(
+                snapshot: i == 0 ? const PromptState(toolHistory: true) : null,
+                transcript: [
+                  {'role': 'tool', 'tool_call_id': 't$i', 'content': big},
+                  {
+                    'role': 'user',
+                    'content': skillContentMessage('s$i', 'body $i'),
+                  },
+                ],
+              ).encode(),
+            },
+            {'sender': 'ai', 'text': 'a$i'},
+          ],
+        ];
+        var previous = await ChatHistoryBuilder.build(
+          messages: chat(1),
+          pendingUserText: '',
+        );
+        var cuts = 0;
+        for (var turns = 2; turns <= 16; turns++) {
+          final next = await ChatHistoryBuilder.build(
+            messages: chat(turns),
+            pendingUserText: '',
+          );
+          var stable = true;
+          for (var i = 0; i < previous.length; i++) {
+            if (jsonEncode(next[i]) != jsonEncode(previous[i])) {
+              stable = false;
+              break;
+            }
+          }
+          if (!stable) cuts++;
+          previous = next;
+        }
+        expect(cuts, lessThanOrEqualTo(8));
+        expect(cuts, greaterThan(0));
+        final text = jsonEncode(previous);
+        expect(text, contains(skillDroppedMarker('s0')));
+        expect(text, isNot(contains('body 0')));
+        expect(text, contains('body 15'));
+        expect(
+          text.length,
+          lessThan(ChatHistoryBuilder.transcriptBudgetChars * 2),
+        );
+      },
+    );
+  });
+
+  group('the skills catalog', () {
+    setUp(() {
+      if (!handler.toolExecutor.allTools.any((t) => t.name == 'skill')) {
+        handler.toolExecutor.registerTool(
+          ClientTool(name: 'skill', description: 'Load a skill'),
+        );
+      }
+    });
+    tearDown(SkillRegistry.resetForTest);
+
+    test('is frozen with the snapshot; a change is a note', () async {
+      final user1 = _user('hello', _sentAt1);
+      final (_, first) = await startTurn([user1], 'hello', _sentAt1);
+      final stored = [
+        _persistAndReload(user1),
+        _persistAndReload({'sender': 'ai', 'text': 'Hi!'}),
+      ];
+      PromptContextLedger.clearForTesting();
+
+      SkillRegistry.setUserSkills(const [
+        Skill(
+          name: 'brand-new-skill',
+          description: 'Does a new thing.',
+          body: 'step 1',
+          source: SkillSource.user,
+        ),
+      ]);
+      final (_, second) = await startTurn(
+        [...stored, _user('next', _sentAt2)],
+        'next',
+        _sentAt2,
+      );
+      expectPrefixStable(first, second);
+      expect(second.system, isNot(contains('brand-new-skill')));
+      expect(second.message, startsWith('[skills updated]'));
+      expect(second.message, contains('- brand-new-skill: Does a new thing.'));
+    });
+
+    test('an unchanged catalog gives no note', () async {
+      final user1 = _user('hello', _sentAt1);
+      await startTurn([user1], 'hello', _sentAt1);
+      final stored = [
+        _persistAndReload(user1),
+        _persistAndReload({'sender': 'ai', 'text': 'Hi!'}),
+      ];
+      final (_, second) = await startTurn(
+        [...stored, _user('next', _sentAt2)],
+        'next',
+        _sentAt2,
+      );
+      expect(second.message, isNot(contains('[skills updated]')));
     });
   });
 

@@ -828,7 +828,7 @@ def _two_tasks(result_chars: int) -> tuple[list[dict], int]:
 
 
 def test_a_new_task_drops_the_big_tool_traffic_of_earlier_tasks():
-    messages, turn_start = _two_tasks(result_chars=8_000)
+    messages, turn_start = _two_tasks(result_chars=20_000)
     out = ContextLadder(config=LadderConfig()).prepare(messages, turn_start=turn_start)
     before = out[: out.index({"role": "user", "content": "second task"})]
     assert all(m.get("role") != "tool" for m in before)
@@ -844,7 +844,7 @@ def test_small_tool_traffic_of_earlier_tasks_stays_for_the_cache():
 
 
 def test_the_old_task_rule_can_be_turned_off():
-    messages, turn_start = _two_tasks(result_chars=8_000)
+    messages, turn_start = _two_tasks(result_chars=20_000)
     config = LadderConfig(old_task_tools_drop_tokens=0)
     out = ContextLadder(config=config).prepare(messages, turn_start=turn_start)
     assert sum(1 for m in out if m.get("role") == "tool") == 5
@@ -853,7 +853,7 @@ def test_the_old_task_rule_can_be_turned_off():
 def test_the_old_task_cut_keeps_the_prefix_up_to_the_previous_prompt():
     """The payload of the next task starts with the payload the current task
     sent up to its own prompt: the cache keeps that part."""
-    messages, turn_start = _two_tasks(result_chars=8_000)
+    messages, turn_start = _two_tasks(result_chars=20_000)
     first = ContextLadder(config=LadderConfig()).prepare(messages, turn_start=turn_start)
     head = first[: first.index({"role": "user", "content": "second task"}) + 1]
     later = messages + [

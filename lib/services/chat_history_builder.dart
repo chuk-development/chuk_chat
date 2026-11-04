@@ -68,13 +68,39 @@ class ChatHistoryBuilder {
     bool includeToolResults = true,
   }) async {
     final List<Map<String, dynamic>> history = <Map<String, dynamic>>[];
-    // The text each entry was made from, before the `[Sent: …]` line and the
-    // notes: what the pending-turn check compares against.
-    final List<String?> rawTexts = <String?>[];
-
     final bool shouldIncludeImages = includeRecentImages || includeAllImages;
+
+    // The stored context of every user message, read once.
+    final contexts = <TurnPromptContext?>[
+      for (final message in messages)
+        message['sender'] == 'user'
+            ? TurnPromptContext.decode(PromptContextLedger.contextOf(message))
+            : null,
+    ];
     PromptState? snapshot;
-    PromptState? effective;
+    for (final context in contexts) {
+      if (context?.snapshot != null) {
+        snapshot = context!.snapshot;
+        break;
+      }
+    }
+    PromptState? effective = snapshot;
+    // Frozen per chat with the snapshot: whether earlier turns' tool rounds
+    // are replayed. A chat without one follows the setting.
+    final bool replayTools = snapshot?.toolHistory ?? includeToolResults;
+    final Set<int> droppedTranscripts = replayTools
+        ? _droppedTranscripts(contexts)
+        : const <int>{};
+
+    // The pending-turn check: the last user message's entries, and whether
+    // anything answered it.
+    var lastUserGroupStart = -1;
+    var lastUserTexts = const <String>[];
+    var lastIsUser = false;
+    // Whether the user message before the next assistant message had its
+    // tool rounds replayed: that assistant message then carries no
+    // flattened `<previous_tool_results>` block.
+    var roundsReplayed = false;
 
     for (var i = 0; i < messages.length; i++) {
       final message = messages[i];
@@ -82,21 +108,22 @@ class ChatHistoryBuilder {
       final String? text = message['text'];
 
       if (sender == 'user') {
-        // Document attachments live in `message['attachments']` (their markdown
-        // body), never in `message['text']` — which stores only the display
-        // line ("Documents: foo.txt"). Fold the bodies back in so an attached
-        // file stays in context for every later turn, not just the turn it was
-        // sent on. Without this, "solve it" three turns later reaches a model
-        // that can no longer see the document.
-        final String userText = _foldAttachmentsIntoText(message, text);
-        final context = TurnPromptContext.decode(
-          PromptContextLedger.contextOf(message),
-        );
-        if (context?.snapshot != null && snapshot == null) {
-          snapshot = context!.snapshot;
-          effective = context.snapshot;
-        }
+        final context = contexts[i];
         if (context?.state != null) effective = context!.state;
+        // Document attachments live in `message['attachments']` (their
+        // markdown body), never in `message['text']` — which stores only the
+        // display line ("Documents: foo.txt"). Fold the bodies back in so an
+        // attached file stays in context for every later turn, not just the
+        // turn it was sent on. A turn that stored what it sent replays
+        // exactly that (`Document: … User query: …`).
+        final String foldedText = _foldAttachmentsIntoText(message, text);
+        final String? sentText = context?.sent == null
+            ? null
+            : expandDocBodies(
+                context!.sent!,
+                documentBodies(message['attachments']),
+              ).trim();
+        final String userText = sentText ?? foldedText;
 
         final bool hasImages =
             message['images'] != null && message['images']!.isNotEmpty;
@@ -106,56 +133,149 @@ class ChatHistoryBuilder {
           notes: context?.notes ?? const <String>[],
         );
 
+        final groupStart = history.length;
+        var added = false;
         if (shouldIncludeImages && hasImages) {
-          final content = <Map<String, dynamic>>[];
-          if (modelText.isNotEmpty) {
-            content.add({'type': 'text', 'text': modelText});
-          }
-          // The storage path, not the bytes: the send applies the
-          // provider's limits first and loads only the images it keeps
-          // (ImageBudget.apply, called by WebSocketChatService).
-          for (final url in _imageUrls(message['images']!)) {
-            content.add({
-              'type': 'image_url',
-              'image_url': {'url': url},
-            });
-          }
+          final content = userContentWithImages(
+            modelText,
+            _imageUrls(message['images']!),
+          );
           if (content.isNotEmpty) {
             history.add({'role': 'user', 'content': content});
-            rawTexts.add(userText.trim());
+            added = true;
           }
         } else if (userText.trim().isNotEmpty) {
           history.add({'role': 'user', 'content': modelText});
-          rawTexts.add(userText.trim());
+          added = true;
         }
-        for (final skill in context?.skills ?? const <SkillContent>[]) {
-          history.add({
-            'role': 'user',
-            'content': skillContentMessage(skill.name, skill.body),
-          });
-          rawTexts.add(null);
+
+        final transcript = context?.transcript;
+        roundsReplayed = false;
+        if (replayTools &&
+            transcript != null &&
+            transcript.isNotEmpty &&
+            !droppedTranscripts.contains(i)) {
+          // The turn's tool rounds as they were sent. They hold its skill
+          // bodies at the place they were loaded.
+          for (final entry in transcript) {
+            history.add(_cloneEntry(entry));
+          }
+          roundsReplayed = true;
+        } else if (transcript != null &&
+            transcript.isNotEmpty &&
+            droppedTranscripts.contains(i)) {
+          // Rounds no longer replayed (token budget): a marker row for each
+          // skill they loaded, so the model knows to load it again.
+          final names = <String>[
+            ...context!.transcriptSkillNames,
+            for (final skill in context.skills)
+              if (!context.transcriptSkillNames.contains(skill.name))
+                skill.name,
+          ];
+          for (final name in names) {
+            history.add({'role': 'user', 'content': skillDroppedMarker(name)});
+          }
+        } else {
+          for (final skill in context?.skills ?? const <SkillContent>[]) {
+            history.add({
+              'role': 'user',
+              'content': skillContentMessage(skill.name, skill.body),
+            });
+          }
+        }
+        if (added || history.length > groupStart) {
+          lastUserGroupStart = groupStart;
+          final display = (text ?? '').trim();
+          // A message with attachments displays "<attachments line>\n\n
+          // <input>" (MessageCompositionService); the callers pass the input.
+          final split = display.indexOf('\n\n');
+          final hasAttachments =
+              (message['attachments']?.isNotEmpty ?? false) || hasImages;
+          lastUserTexts = <String>[
+            foldedText.trim(),
+            display,
+            ?sentText,
+            if (hasAttachments && split >= 0)
+              display.substring(split + 2).trim(),
+          ];
+          lastIsUser = true;
         }
       } else if (sender == 'ai' || sender == 'assistant') {
         // Prior tool calls + results ride along so a follow-up question that
-        // needs the same data does not re-run the tools.
+        // needs the same data does not re-run the tools. A turn whose rounds
+        // were replayed above already holds them.
         final assistantContent = formatAssistantContent(
           message,
           includeReasoning: includeReasoning,
-          includeToolResults: includeToolResults,
+          includeToolResults: replayTools && !roundsReplayed,
         );
+        roundsReplayed = false;
         if (assistantContent == null) continue;
         history.add({'role': 'assistant', 'content': assistantContent});
-        rawTexts.add(null);
+        lastIsUser = false;
       }
     }
 
-    _dropPendingUserTurn(history, rawTexts, pendingUserText);
+    // Removes the turn being sent right now if the caller's list already
+    // contained it. Mobile appends the user bubble to its message list for
+    // the UI and then hands that same list over; desktop builds the history
+    // first. A *trailing* user message can only be the pending turn, because
+    // anything said earlier has an assistant entry after it. All of its
+    // entries go (a stale context of a resent message may have added rounds
+    // or skills after it).
+    final pending = pendingUserText.trim();
+    if (pending.isNotEmpty &&
+        lastIsUser &&
+        lastUserGroupStart >= 0 &&
+        lastUserTexts.contains(pending)) {
+      history.removeRange(lastUserGroupStart, history.length);
+    }
+
     HistoryPromptContext.attach(
       history,
-      HistoryPromptContext(snapshot: snapshot, effective: effective),
+      HistoryPromptContext(
+        snapshot: snapshot,
+        effective: effective,
+        toolHistory: replayTools,
+      ),
     );
     return history;
   }
+
+  /// Characters of replayed tool rounds a history may carry. Over it, the
+  /// rounds of the oldest turns are no longer replayed, cut in steps of
+  /// half the budget, so the cut point (one prompt-cache miss) moves rarely.
+  @visibleForTesting
+  static const int transcriptBudgetChars = 200000;
+
+  /// The indexes of the user messages whose tool rounds are not replayed.
+  /// Depends on the stored transcripts alone: the same chat gives the same
+  /// set, and the set only grows when the total passes the next step.
+  static Set<int> _droppedTranscripts(List<TurnPromptContext?> contexts) {
+    final sizes = <int, int>{};
+    var total = 0;
+    for (var i = 0; i < contexts.length; i++) {
+      final transcript = contexts[i]?.transcript;
+      if (transcript == null || transcript.isEmpty) continue;
+      final size = jsonEncode(transcript).length;
+      sizes[i] = size;
+      total += size;
+    }
+    if (total <= transcriptBudgetChars) return const <int>{};
+    const step = transcriptBudgetChars ~/ 2;
+    final cut = step * ((total - transcriptBudgetChars + step - 1) ~/ step);
+    final dropped = <int>{};
+    var before = 0;
+    for (final entry in sizes.entries) {
+      if (before >= cut) break;
+      dropped.add(entry.key);
+      before += entry.value;
+    }
+    return dropped;
+  }
+
+  static Map<String, dynamic> _cloneEntry(Map<String, dynamic> entry) =>
+      jsonDecode(jsonEncode(entry)) as Map<String, dynamic>;
 
   /// Prepends any document attachments' markdown bodies to a user turn's text,
   /// mirroring how [MessageCompositionService] builds the prompt on send. The
@@ -206,33 +326,6 @@ class ChatHistoryBuilder {
 
     final String docBlock = sections.join('\n\n');
     return displayText.isEmpty ? docBlock : '$docBlock\n\n$displayText';
-  }
-
-  /// Removes the turn being sent right now if the caller's list already
-  /// contained it.
-  ///
-  /// Mobile appends the user bubble to its message list for the UI and then
-  /// hands that same list over; desktop builds the history first. Rather than
-  /// depend on callers getting the ordering right, the invariant is enforced
-  /// here: a *trailing* user entry can only be the pending turn, because
-  /// anything said earlier has an assistant entry after it. The same text
-  /// legitimately sent twice in a row therefore keeps its answered copy.
-  ///
-  /// Compared on the text before the `[Sent: …]` line and the notes
-  /// ([rawTexts]), which the pending text does not carry yet.
-  static void _dropPendingUserTurn(
-    List<Map<String, dynamic>> history,
-    List<String?> rawTexts,
-    String pendingUserText,
-  ) {
-    final pending = pendingUserText.trim();
-    if (pending.isEmpty || history.isEmpty) return;
-
-    final last = history.last;
-    if (last['role'] == 'user' && rawTexts.last == pending) {
-      history.removeLast();
-      rawTexts.removeLast();
-    }
   }
 
   /// Plain text of a history entry, for both the bare-string and the

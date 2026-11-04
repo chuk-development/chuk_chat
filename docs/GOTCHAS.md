@@ -219,8 +219,26 @@ Code: `lib/services/prompt_cache/`, test:
   `final`; hash = first 16 hex of sha256(chat id), never the id or the user).
   The server strips it.
 - Usage: unknown cache counts stay null and show as "—", never 0.
-- Known remaining breaks: a turn with document attachments sends
-  `Document … User query: …` but replays the display text, so the next turn
-  misses from that user message; the previous turn's native tool rounds are
-  replayed flattened (`<previous_tool_results>`), so a new turn misses from
-  the previous assistant message on.
+- **A turn replays exactly what it sent.** `TurnPromptContext.sent` is the
+  user text as sent (`Document: … User query: …`); in storage each document
+  body is a private-use marker pointing into `attachments`
+  (`PromptContextLedger.storedContextOf`). `transcript` is everything the
+  tool loop sent after the user message (native `tool_calls` + `tool`
+  messages with the capped results, `<skill_content>`, prompt-based rounds,
+  the last pass's own user message), recorded on every continuation
+  (`_stepHistory`). The next turn replays it as it is, so it starts with the
+  previous turn's last request; that assistant message then gets no
+  `<previous_tool_results>` block (only old messages without a transcript
+  do).
+- **Tool-round replay is frozen per chat** (`PromptState.toolHistory` in the
+  snapshot, from `includeToolResultsInHistory` at the chat's first request).
+  Off: earlier turns replay text only, never flipping mid-chat. Over
+  `ChatHistoryBuilder.transcriptBudgetChars` (200k chars) the oldest turns'
+  rounds are dropped in steps of half the budget; each skill they loaded
+  leaves `[skill <name> was loaded earlier; call skill again if needed]`.
+- **The skills catalog is in the snapshot** (`PromptState.skills`); a change
+  is a `[skills updated]` note on the next user message.
+- **Images of the turn on later passes** go into the turn's own history
+  entry (`ToolLoopStep.withTurnImages`), never with `message` (that put them
+  on the tool results). The first pass sends the turn's images all by
+  reference or all in full, never mixed: the server puts refs first.

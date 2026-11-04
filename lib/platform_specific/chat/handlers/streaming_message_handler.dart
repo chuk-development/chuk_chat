@@ -807,7 +807,9 @@ class StreamingMessageHandler {
                   chatId,
                 );
 
-                final next = loopResult.nextStep!;
+                // Later passes carry the turn's images in its own history
+                // entry, not on the pass message (prompt cache, order).
+                final next = loopResult.nextStep!.withTurnImages(images);
                 await _updateForegroundNotification(
                   title: 'Generating response...',
                   content: 'AI is continuing the response',
@@ -818,7 +820,7 @@ class StreamingMessageHandler {
                   message: next.message,
                   history: next.history,
                   systemPrompt: next.systemPrompt,
-                  passImages: images,
+                  passImages: next.passImages,
                   currentPass: currentPass + 1,
                 );
                 return;
