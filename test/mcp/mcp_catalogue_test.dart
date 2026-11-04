@@ -87,14 +87,41 @@ void main() {
       expect(connection.toolNameFor('search'), 'figma_search');
     });
 
-    test('drop what a tool name may not contain', () {
-      expect(connection.toolNameFor('get design/context'),
+    test('drop what a tool name may not contain, plus a hash', () {
+      final name = connection.toolNameFor('get design/context');
+      expect(name, matches(RegExp(r'^figma_get_design_context_[0-9a-f]{8}$')));
+    });
+
+    test('clean names that fit stay unchanged', () {
+      expect(connection.toolNameFor('get_design_context'),
           'figma_get_design_context');
+      final fits = 'x' * (64 - 'figma_'.length);
+      expect(connection.toolNameFor(fits), 'figma_$fits');
     });
 
     test('stay within the 64 characters a tool name may have', () {
       final long = connection.toolNameFor('x' * 100);
       expect(long.length, 64);
+      expect(long, matches(RegExp(r'^[a-zA-Z0-9_-]{1,64}$')));
+    });
+
+    test('sanitised names do not collide with clean ones', () {
+      expect(connection.toolNameFor('get design/context'),
+          isNot(connection.toolNameFor('get_design_context')));
+      expect(connection.toolNameFor('get design/context'),
+          isNot(connection.toolNameFor('get design.context')));
+    });
+
+    test('long names with the same 64-char prefix do not collide', () {
+      final a = connection.toolNameFor('${'y' * 80}_alpha');
+      final b = connection.toolNameFor('${'y' * 80}_beta');
+      expect(a.length, 64);
+      expect(b.length, 64);
+      expect(a, isNot(b));
+    });
+
+    test('are stable across calls', () {
+      expect(connection.toolNameFor('a b'), connection.toolNameFor('a b'));
     });
   });
 

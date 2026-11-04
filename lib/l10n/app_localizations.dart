@@ -1172,6 +1172,9 @@ class AppLocalizations {
   String approvalDecidedAlwaysSite(String site) =>
       _get('approvalDecidedAlwaysSite').replaceAll('{site}', site);
   String get approvalDecidedDenied => _get('approvalDecidedDenied');
+  String get approvalClosedTimedOut => _get('approvalClosedTimedOut');
+  String get approvalClosedStopped => _get('approvalClosedStopped');
+  String get approvalClosedAllowed => _get('approvalClosedAllowed');
   String approvalRowApproved(String what) =>
       _get('approvalRowApproved').replaceAll('{what}', what);
   String approvalRowDenied(String what) =>
