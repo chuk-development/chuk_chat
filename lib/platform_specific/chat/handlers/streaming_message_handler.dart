@@ -518,6 +518,7 @@ class StreamingMessageHandler {
       required List<Map<String, dynamic>> history,
       required String? systemPrompt,
       List<String>? passImages,
+      int? turnHistoryIndex,
       int currentPass = 0,
       int reconnectRetries = 0,
       int cacheMissRetries = 0,
@@ -602,6 +603,7 @@ class StreamingMessageHandler {
         tools: toolCallHandler.nativeToolDefinitions(toolSession),
         toolChoice: ToolCallHandler.nativeToolChoice(toolSession),
         requestPass: currentPass + 1,
+        turnHistoryIndex: turnHistoryIndex,
         // A retry REPLACES the last answer, so the host drops the turn being
         // retried instead of storing the same question again. Only the first
         // pass says so: later passes of the same turn are continuations, and
@@ -829,6 +831,7 @@ class StreamingMessageHandler {
                   history: next.history,
                   systemPrompt: next.systemPrompt,
                   passImages: next.passImages,
+                  turnHistoryIndex: next.turnUserIndex,
                   currentPass: currentPass + 1,
                 );
                 return;
@@ -1083,6 +1086,7 @@ class StreamingMessageHandler {
                 history: history,
                 systemPrompt: systemPrompt,
                 passImages: passImages,
+                turnHistoryIndex: turnHistoryIndex,
                 currentPass: currentPass,
                 reconnectRetries: reconnectRetries,
                 cacheMissRetries: cacheMissRetries + 1,
@@ -1149,6 +1153,7 @@ class StreamingMessageHandler {
                 history: history,
                 systemPrompt: systemPrompt,
                 passImages: passImages,
+                turnHistoryIndex: turnHistoryIndex,
                 currentPass: currentPass,
                 reconnectRetries: reconnectRetries + 1,
               );

@@ -426,6 +426,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         required List<Map<String, dynamic>> history,
         required String? passSystemPrompt,
         List<String>? passImages,
+        int? turnHistoryIndex,
         int currentPass = 0,
       }) async {
         if (_isSendOperationCancelled(sendOperationId)) {
@@ -466,6 +467,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           tools: toolCallHandler.nativeToolDefinitions(toolSession),
           toolChoice: ToolCallHandler.nativeToolChoice(toolSession),
           requestPass: currentPass + 1,
+          turnHistoryIndex: turnHistoryIndex,
           // A retry REPLACES the last answer, so the host drops the turn being
           // retried instead of storing the same question again. Only the first
           // pass says so: the later passes of the same turn are continuations,
@@ -616,6 +618,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     history: next.history,
                     passSystemPrompt: next.systemPrompt,
                     passImages: next.passImages,
+                    turnHistoryIndex: next.turnUserIndex,
                     currentPass: currentPass + 1,
                   );
                   return;
@@ -1773,6 +1776,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         required List<Map<String, dynamic>> history,
         required String? passSystemPrompt,
         List<String>? passImages,
+        int? turnHistoryIndex,
         int currentPass = 0,
       }) async {
         if (_isSendOperationCancelled(sendOperationId)) {
@@ -1813,6 +1817,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           tools: toolCallHandler.nativeToolDefinitions(toolSession),
           toolChoice: ToolCallHandler.nativeToolChoice(toolSession),
           requestPass: currentPass + 1,
+          turnHistoryIndex: turnHistoryIndex,
         );
 
         await _streamingManager.startStream(
@@ -1955,6 +1960,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                       history: next.history,
                       passSystemPrompt: next.systemPrompt,
                       passImages: next.passImages,
+                      turnHistoryIndex: next.turnUserIndex,
                       currentPass: currentPass + 1,
                     );
                     return;

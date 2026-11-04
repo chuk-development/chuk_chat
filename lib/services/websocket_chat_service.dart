@@ -73,6 +73,10 @@ class WebSocketChatService {
   ///
   /// [regenerate] and [modelSelectionCaptured] are Agents-only send flags and
   /// are ignored on the hosted path.
+  ///
+  /// [turnHistoryIndex]: on a tool-loop pass, the index in [history] of the
+  /// turn's own user message (`ToolLoopStep.turnUserIndex`). The server puts
+  /// the turn's re-sent images back on that entry (`turn_history_index`).
   static Stream<ChatStreamEvent> sendStreamingChat({
     required String accessToken,
     required String message,
@@ -91,6 +95,7 @@ class WebSocketChatService {
     bool modelSelectionCaptured = false,
     String? requestPurpose,
     int? requestPass,
+    int? turnHistoryIndex,
   }) {
     if (usesAgentsTransport(chatId)) {
       return AgentsChatTransport.sendStreamingChat(
@@ -127,6 +132,7 @@ class WebSocketChatService {
       toolChoice: toolChoice,
       requestPurpose: requestPurpose,
       requestPass: requestPass,
+      turnHistoryIndex: turnHistoryIndex,
     );
   }
 
@@ -146,6 +152,7 @@ class WebSocketChatService {
     String? toolChoice,
     String? requestPurpose,
     int? requestPass,
+    int? turnHistoryIndex,
   }) async* {
     // One connection carries everything. When [chatId] is supplied the
     // multiplex routes through [MultiplexSession.chatForChat] (single
@@ -180,6 +187,7 @@ class WebSocketChatService {
       toolChoice: toolChoice,
       requestPurpose: requestPurpose,
       requestPass: requestPass,
+      turnHistoryIndex: turnHistoryIndex,
     );
   }
 
@@ -202,6 +210,7 @@ class WebSocketChatService {
     String? toolChoice,
     String? requestPurpose,
     int? requestPass,
+    int? turnHistoryIndex,
   }) async* {
     // Last guard: the Auto marker is the reader's choice, not a provider the
     // server knows. Every send path resolves it earlier; one that forgot
@@ -275,8 +284,16 @@ class WebSocketChatService {
       // the server still holds every one of them, send them as refs: the
       // server puts them back on that same entry, after its text, so the
       // provider gets the same bytes and only our upload shrinks.
+      //
+      // The entry is the one the tool loop named ([turnHistoryIndex]), sent
+      // as `turn_history_index` so the server picks the same one. Without
+      // a name both sides use the same rule ([toolLoopTurnIndex]).
+      final turnIndex = message.trim().isEmpty
+          ? turnAnchor(budgeted, turnHistoryIndex)
+          : null;
+      if (turnIndex != null) payload['turn_history_index'] = turnIndex;
       final turnRefs = base64Images.isEmpty
-          ? foldTurnImageRefs(budgeted, message, registry)
+          ? foldTurnImageRefs(budgeted, message, registry, turnIndex: turnIndex)
           : null;
       if (turnRefs != null) {
         payload['image_cache_refs'] = turnRefs.refs;
@@ -387,12 +404,52 @@ class WebSocketChatService {
     }
   }
 
+  /// Starts of the user messages the tool loop adds itself: a skill body
+  /// after a round's results ([skillContentMessage]), the row left for a
+  /// dropped one ([skillDroppedMarker]), a text-protocol result or recovery
+  /// note (`Tool Results:`), the forced-final note
+  /// (`kForcedFinalAnswerNote`). Never the turn's own message. A
+  /// `[memory updated]` / `[connectors updated]` / `[skills updated]` note
+  /// is not one of them: it heads the turn's own user message
+  /// ([renderUserTurnForModel]). Same list as the server's
+  /// `SYNTHETIC_USER_PREFIXES` (`chat/history_repair.py`).
+  static const List<String> syntheticUserPrefixes = <String>[
+    '<skill_content',
+    '[skill ',
+    'Tool Results:',
+    'The tool limit for this turn is reached.',
+  ];
+
+  /// True for a user message the tool loop added, not the user's turn.
+  @visibleForTesting
+  static bool isSyntheticUserMessage(Map<String, dynamic> message) {
+    if (message['role'] != 'user') return false;
+    final content = message['content'];
+    var text = '';
+    if (content is String) {
+      text = content;
+    } else if (content is List) {
+      for (final part in content) {
+        if (part is Map && part['type'] == 'text') {
+          final t = part['text'];
+          if (t is String && t.trim().isNotEmpty) {
+            text = t;
+            break;
+          }
+        }
+      }
+    }
+    final head = text.trimLeft();
+    return syntheticUserPrefixes.any(head.startsWith);
+  }
+
   /// Index of the user message that opened the native tool loop at the end
   /// of [history], or null. The same rule as the server's
-  /// `tool_loop_turn_index` (`chat/history_repair.py`): the loop is the
-  /// trailing run of assistant `tool_calls` turns, `tool` results and user
-  /// messages that come right after results (`<skill_content>`); the turn
-  /// is the user message right before its first `tool_calls` turn.
+  /// `tool_loop_turn_index` (`chat/history_repair.py`) without a named
+  /// turn: the loop is the trailing run of assistant `tool_calls` turns,
+  /// `tool` results and synthetic user messages ([isSyntheticUserMessage]);
+  /// the turn is the nearest user message before its first `tool_calls`
+  /// turn that is not synthetic.
   @visibleForTesting
   static int? toolLoopTurnIndex(List<Map<String, dynamic>> history) {
     bool isCallTurn(Map<String, dynamic> m) {
@@ -404,29 +461,33 @@ class WebSocketChatService {
     int? firstCall;
     while (i > 0) {
       final msg = history[i - 1];
-      final role = msg['role'];
-      if (role == 'tool') {
+      if (msg['role'] == 'tool' || isSyntheticUserMessage(msg)) {
         i -= 1;
       } else if (isCallTurn(msg)) {
         firstCall = i - 1;
         i -= 1;
-      } else if (role == 'user') {
-        var k = i - 1;
-        while (k > 0 && history[k - 1]['role'] == 'user') {
-          k -= 1;
-        }
-        if (k > 0 && history[k - 1]['role'] == 'tool') {
-          i = k;
-        } else {
-          break;
-        }
       } else {
         break;
       }
     }
-    if (firstCall == null || firstCall == 0) return null;
-    final anchor = firstCall - 1;
-    return history[anchor]['role'] == 'user' ? anchor : null;
+    if (firstCall == null) return null;
+    var anchor = firstCall - 1;
+    while (anchor >= 0 && isSyntheticUserMessage(history[anchor])) {
+      anchor -= 1;
+    }
+    if (anchor < 0 || history[anchor]['role'] != 'user') return null;
+    return anchor;
+  }
+
+  /// The turn's own entry in [history] on a native tool pass: [named] (the
+  /// tool loop's `turnUserIndex`) when it points at a user message, else
+  /// null; without a name, [toolLoopTurnIndex]. A wrong name is never
+  /// replaced by a guess, the same as on the server.
+  @visibleForTesting
+  static int? turnAnchor(List<Map<String, dynamic>> history, int? named) {
+    if (named == null) return toolLoopTurnIndex(history);
+    if (named < 0 || named >= history.length) return null;
+    return history[named]['role'] == 'user' ? named : null;
   }
 
   /// On a native tool pass (empty [message]), move the turn's images out of
@@ -434,9 +495,11 @@ class WebSocketChatService {
   /// all of them (they went up in full, with cache ids, on pass 1). Returns
   /// null when that is not safe; the history then goes up as it is.
   ///
-  /// The server's `attach_turn_images` puts ref images back on the same
-  /// entry ([toolLoopTurnIndex]), after its text, so the provider request is
-  /// byte-identical. That holds only when:
+  /// [turnIndex] is the turn's entry ([turnAnchor], sent as
+  /// `turn_history_index`); without it [toolLoopTurnIndex] picks it. The
+  /// server's `attach_turn_images` puts ref images back on that same entry,
+  /// after its text, so the provider request is byte-identical. That holds
+  /// only when:
   /// - the message is empty (else the server puts them on a new user turn,
   ///   so prompt-based passes keep the full images);
   /// - the images are a trailing run after the text, as
@@ -452,11 +515,13 @@ class WebSocketChatService {
   foldTurnImageRefs(
     List<Map<String, dynamic>> history,
     String message,
-    ToolResultCacheRegistry registry,
-  ) {
+    ToolResultCacheRegistry registry, {
+    int? turnIndex,
+  }) {
     if (message.trim().isNotEmpty) return null;
-    final anchor = toolLoopTurnIndex(history);
-    if (anchor == null) return null;
+    final anchor = turnIndex ?? toolLoopTurnIndex(history);
+    if (anchor == null || anchor < 0 || anchor >= history.length) return null;
+    if (history[anchor]['role'] != 'user') return null;
     final entry = history[anchor];
     final content = entry['content'];
     if (content is! List) return null;
