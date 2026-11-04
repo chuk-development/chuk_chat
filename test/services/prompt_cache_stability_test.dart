@@ -262,11 +262,12 @@ void main() {
       'a skill activation appends <skill_content>, message 0 stays',
       () async {
         // The `skill` tool only registers with FEATURE_SKILLS; register it
-        // here when the build left it out.
+        // here when the build left it out, and remove it again after.
         if (!handler.toolExecutor.allTools.any((t) => t.name == 'skill')) {
           handler.toolExecutor.registerTool(
             ClientTool(name: 'skill', description: 'Load a skill'),
           );
+          addTearDown(() => handler.toolExecutor.unregisterTool('skill'));
         }
         final (session, first) = await startTurn(
           [_user('weather in Kiel', _sentAt1)],
@@ -681,14 +682,21 @@ void main() {
   });
 
   group('the skills catalog', () {
+    var addedSkillTool = false;
     setUp(() {
-      if (!handler.toolExecutor.allTools.any((t) => t.name == 'skill')) {
+      addedSkillTool = !handler.toolExecutor.allTools.any(
+        (t) => t.name == 'skill',
+      );
+      if (addedSkillTool) {
         handler.toolExecutor.registerTool(
           ClientTool(name: 'skill', description: 'Load a skill'),
         );
       }
     });
-    tearDown(SkillRegistry.resetForTest);
+    tearDown(() {
+      if (addedSkillTool) handler.toolExecutor.unregisterTool('skill');
+      SkillRegistry.resetForTest();
+    });
 
     test('is frozen with the snapshot; a change is a note', () async {
       final user1 = _user('hello', _sentAt1);

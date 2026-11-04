@@ -270,7 +270,26 @@ class WebSocketChatService {
         pendingChars: base64Images.fold<int>(0, (sum, i) => sum + i.length),
         resolve: ChatHistoryBuilder.resolveImageDataUrl,
       );
-      payload['history'] = _foldHistoryRefs(budgeted, registry);
+      // On a native tool pass the turn's images sit on its own history
+      // entry (cache-stable placement), resolved to full data URLs. When
+      // the server still holds every one of them, send them as refs: the
+      // server puts them back on that same entry, after its text, so the
+      // provider gets the same bytes and only our upload shrinks.
+      final turnRefs = base64Images.isEmpty
+          ? foldTurnImageRefs(budgeted, message, registry)
+          : null;
+      if (turnRefs != null) {
+        payload['image_cache_refs'] = turnRefs.refs;
+        if (kDebugMode) {
+          debugPrint(
+            '🖼️ [Multiplex] turn images: ${turnRefs.refs.length} cached refs',
+          );
+        }
+      }
+      payload['history'] = _foldHistoryRefs(
+        turnRefs?.history ?? budgeted,
+        registry,
+      );
     }
     if (systemPrompt != null && systemPrompt.isNotEmpty) {
       payload['system_prompt'] = systemPrompt;
@@ -366,6 +385,114 @@ class WebSocketChatService {
       }
       if (!shouldRetry) break;
     }
+  }
+
+  /// Index of the user message that opened the native tool loop at the end
+  /// of [history], or null. The same rule as the server's
+  /// `tool_loop_turn_index` (`chat/history_repair.py`): the loop is the
+  /// trailing run of assistant `tool_calls` turns, `tool` results and user
+  /// messages that come right after results (`<skill_content>`); the turn
+  /// is the user message right before its first `tool_calls` turn.
+  @visibleForTesting
+  static int? toolLoopTurnIndex(List<Map<String, dynamic>> history) {
+    bool isCallTurn(Map<String, dynamic> m) {
+      final calls = m['tool_calls'];
+      return m['role'] == 'assistant' && calls is List && calls.isNotEmpty;
+    }
+
+    var i = history.length;
+    int? firstCall;
+    while (i > 0) {
+      final msg = history[i - 1];
+      final role = msg['role'];
+      if (role == 'tool') {
+        i -= 1;
+      } else if (isCallTurn(msg)) {
+        firstCall = i - 1;
+        i -= 1;
+      } else if (role == 'user') {
+        var k = i - 1;
+        while (k > 0 && history[k - 1]['role'] == 'user') {
+          k -= 1;
+        }
+        if (k > 0 && history[k - 1]['role'] == 'tool') {
+          i = k;
+        } else {
+          break;
+        }
+      } else {
+        break;
+      }
+    }
+    if (firstCall == null || firstCall == 0) return null;
+    final anchor = firstCall - 1;
+    return history[anchor]['role'] == 'user' ? anchor : null;
+  }
+
+  /// On a native tool pass (empty [message]), move the turn's images out of
+  /// its history entry into `image_cache_refs` when the server still holds
+  /// all of them (they went up in full, with cache ids, on pass 1). Returns
+  /// null when that is not safe; the history then goes up as it is.
+  ///
+  /// The server's `attach_turn_images` puts ref images back on the same
+  /// entry ([toolLoopTurnIndex]), after its text, so the provider request is
+  /// byte-identical. That holds only when:
+  /// - the message is empty (else the server puts them on a new user turn,
+  ///   so prompt-based passes keep the full images);
+  /// - the images are a trailing run after the text, as
+  ///   `userContentWithImages` builds them;
+  /// - text remains (an image-only entry would be dropped by the server);
+  /// - every image is an inline data URL with a fresh registry ref.
+  ///
+  /// The server resolves image refs only for the current turn. An older
+  /// turn's images in later history go up in full on each request; the
+  /// provider bytes matter more than our upload, so they keep their place.
+  @visibleForTesting
+  static ({List<Map<String, dynamic>> history, List<String> refs})?
+  foldTurnImageRefs(
+    List<Map<String, dynamic>> history,
+    String message,
+    ToolResultCacheRegistry registry,
+  ) {
+    if (message.trim().isNotEmpty) return null;
+    final anchor = toolLoopTurnIndex(history);
+    if (anchor == null) return null;
+    final entry = history[anchor];
+    final content = entry['content'];
+    if (content is! List) return null;
+
+    final kept = <Map<String, dynamic>>[];
+    final refs = <String>[];
+    var hasText = false;
+    for (final part in content) {
+      if (part is! Map) return null;
+      if (part['type'] == 'image_url') {
+        final image = part['image_url'];
+        final url = image is Map ? image['url'] : image;
+        if (url is! String || !url.startsWith('data:image/')) return null;
+        final ref = registry.refFor(url);
+        if (ref == null) return null;
+        refs.add(ref);
+      } else {
+        // Text after an image: the server would put the images after it.
+        if (refs.isNotEmpty) return null;
+        final text = part['text'];
+        if (part['type'] == 'text' && text is String && text.trim().isNotEmpty) {
+          hasText = true;
+        }
+        kept.add(Map<String, dynamic>.from(part));
+      }
+    }
+    if (refs.isEmpty || !hasText) return null;
+
+    // One text part goes as a plain string: the server makes the same text
+    // block of it, and a large one can then fold into a `cache_ref` too.
+    final Object newContent = kept.length == 1 && kept.single['type'] == 'text'
+        ? kept.single['text'] as String
+        : kept;
+    final out = List<Map<String, dynamic>>.of(history);
+    out[anchor] = <String, dynamic>{...entry, 'content': newContent};
+    return (history: out, refs: refs);
   }
 
   /// Replace large `history` entries whose content was already uploaded (and

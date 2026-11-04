@@ -109,7 +109,13 @@ class ChatHistoryBuilder {
 
       if (sender == 'user') {
         final context = contexts[i];
-        if (context?.state != null) effective = context!.state;
+        if (context?.state != null) {
+          effective = context!.state;
+        } else if (context?.stateDiff != null) {
+          effective = (effective ?? const PromptState()).applyDiff(
+            context!.stateDiff!,
+          );
+        }
         // Document attachments live in `message['attachments']` (their
         // markdown body), never in `message['text']` — which stores only the
         // display line ("Documents: foo.txt"). Fold the bodies back in so an
@@ -161,13 +167,13 @@ class ChatHistoryBuilder {
             history.add(_cloneEntry(entry));
           }
           roundsReplayed = true;
-        } else if (transcript != null &&
-            transcript.isNotEmpty &&
+        } else if (context != null &&
+            context.hasTranscript &&
             droppedTranscripts.contains(i)) {
           // Rounds no longer replayed (token budget): a marker row for each
           // skill they loaded, so the model knows to load it again.
           final names = <String>[
-            ...context!.transcriptSkillNames,
+            ...context.transcriptSkillNames,
             for (final skill in context.skills)
               if (!context.transcriptSkillNames.contains(skill.name))
                 skill.name,
@@ -246,7 +252,7 @@ class ChatHistoryBuilder {
   /// rounds of the oldest turns are no longer replayed, cut in steps of
   /// half the budget, so the cut point (one prompt-cache miss) moves rarely.
   @visibleForTesting
-  static const int transcriptBudgetChars = 200000;
+  static const int transcriptBudgetChars = kTranscriptBudgetChars;
 
   /// The indexes of the user messages whose tool rounds are not replayed.
   /// Depends on the stored transcripts alone: the same chat gives the same
@@ -255,9 +261,9 @@ class ChatHistoryBuilder {
     final sizes = <int, int>{};
     var total = 0;
     for (var i = 0; i < contexts.length; i++) {
-      final transcript = contexts[i]?.transcript;
-      if (transcript == null || transcript.isEmpty) continue;
-      final size = jsonEncode(transcript).length;
+      // A stored stub of rounds too large to keep counts with its size.
+      final size = contexts[i]?.transcriptSize ?? 0;
+      if (size <= 0) continue;
       sizes[i] = size;
       total += size;
     }

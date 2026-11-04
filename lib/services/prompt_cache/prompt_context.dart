@@ -275,6 +275,41 @@ class PromptState {
     );
   }
 
+  /// The fields of this state that differ from [base], as JSON (the keys
+  /// of [toJson], each with its value, also when it is empty). Stored
+  /// instead of the whole state on a user message with notes, so soul, user
+  /// info and memory are not stored again for every change. [toolHistory]
+  /// is a snapshot-only field and never part of a diff. Null when the
+  /// difference cannot be written as a diff (a recorded catalog that became
+  /// unrecorded); store the whole state then.
+  Map<String, dynamic>? diffFrom(PromptState base) {
+    if (skills == null && base.skills != null) return null;
+    final diff = <String, dynamic>{};
+    if (identity != base.identity) diff['identity'] = identity;
+    if (soul != base.soul) diff['soul'] = soul;
+    if (user != base.user) diff['user'] = user;
+    if (memory != base.memory) diff['memory'] = memory;
+    if (!_sameList(mcpConnected, base.mcpConnected)) diff['mcp'] = mcpConnected;
+    if (!_sameList(mcpUnconnected, base.mcpUnconnected)) {
+      diff['mcpAvailable'] = mcpUnconnected;
+    }
+    if (skills != null && (base.skills == null || !sameSkillsAs(base))) {
+      diff['skills'] = [
+        for (final s in skills!)
+          <String, String>{'n': s.name, 'd': s.description},
+      ];
+    }
+    return diff;
+  }
+
+  /// This state with the fields of [diff] ([diffFrom]) replaced, without
+  /// [toolHistory] (snapshot only, like a whole stored state).
+  PromptState applyDiff(Map<String, dynamic> diff) {
+    final merged = <String, dynamic>{...toJson(), ...diff}
+      ..remove('toolHistory');
+    return PromptState.fromJson(merged) ?? this;
+  }
+
   static bool _sameList(List<String> a, List<String> b) {
     if (a.length != b.length) return false;
     for (var i = 0; i < a.length; i++) {
@@ -286,9 +321,39 @@ class PromptState {
 
 /// A skill body that was loaded in a turn.
 class SkillContent {
-  const SkillContent(this.name, this.body);
+  const SkillContent(this.name, this.body, {this.inTranscript = false});
   final String name;
   final String body;
+
+  /// Storage only: the body is not written, because the turn's transcript
+  /// holds it as a `<skill_content>` block; decoding takes it from there.
+  final bool inTranscript;
+}
+
+/// Characters of replayed tool rounds a history may carry
+/// (`ChatHistoryBuilder.transcriptBudgetChars`). A single turn's transcript
+/// over it is never replayed, so storage keeps only its size and skill names.
+const int kTranscriptBudgetChars = 200000;
+
+/// The body of the first `<skill_content name="[name]">` block in the user
+/// entries of [transcript] ([skillContentMessage] reversed), or null.
+String? skillBodyFromTranscript(
+  List<Map<String, dynamic>> transcript,
+  String name,
+) {
+  final open = '<skill_content name="$name">\n';
+  const close = '\n</skill_content>';
+  for (final entry in transcript) {
+    final content = entry['content'];
+    if (entry['role'] != 'user' || content is! String) continue;
+    final at = content.indexOf(open);
+    if (at < 0) continue;
+    final start = at + open.length;
+    final end = content.indexOf(close, start);
+    if (end < 0) return null;
+    return content.substring(start, end);
+  }
+  return null;
 }
 
 /// What the model was told around one user message, stored on that message
@@ -302,14 +367,31 @@ class TurnPromptContext {
     List<SkillContent>? skills,
     this.sent,
     this.transcript,
+    this.stateDiff,
+    this.transcriptChars,
+    this.transcriptSkills,
   }) : notes = notes ?? <String>[],
        skills = skills ?? <SkillContent>[];
 
   /// Set on the user message whose request took the chat's snapshot.
   PromptState? snapshot;
 
-  /// The state after this message's notes; set when [notes] is not empty.
+  /// The state after this message's notes; set when [notes] is not empty
+  /// and the change cannot be stored as [stateDiff]. Older payloads always
+  /// store the whole state here.
   PromptState? state;
+
+  /// The state after this message's notes, as the fields that changed
+  /// against the state before it ([PromptState.diffFrom]); the history
+  /// builder applies it to the state it has reached at this message.
+  Map<String, dynamic>? stateDiff;
+
+  /// Storage only, for a [transcript] over [kTranscriptBudgetChars]: such
+  /// rounds are never replayed, so only their size (`jsonEncode` length,
+  /// for the replay budget) and the names of the skills they loaded are
+  /// stored; [transcript] is then null.
+  int? transcriptChars;
+  List<String>? transcriptSkills;
 
   /// Tagged notes sent at the head of this user message.
   final List<String> notes;
@@ -335,13 +417,28 @@ class TurnPromptContext {
   bool get isEmpty =>
       snapshot == null &&
       state == null &&
+      stateDiff == null &&
       notes.isEmpty &&
       skills.isEmpty &&
       sent == null &&
-      (transcript == null || transcript!.isEmpty);
+      !hasTranscript;
+
+  /// Whether this turn recorded tool rounds ([transcript], or only their
+  /// size when they were too large to store).
+  bool get hasTranscript =>
+      (transcript != null && transcript!.isNotEmpty) ||
+      (transcriptChars ?? 0) > 0;
+
+  /// The size of the tool rounds for the replay budget.
+  int get transcriptSize => transcript != null && transcript!.isNotEmpty
+      ? jsonEncode(transcript).length
+      : transcriptChars ?? 0;
 
   /// The names of the skills whose bodies the [transcript] carries.
   List<String> get transcriptSkillNames {
+    if (transcript == null || transcript!.isEmpty) {
+      return List<String>.of(transcriptSkills ?? const <String>[]);
+    }
     final names = <String>[];
     final pattern = RegExp(r'<skill_content name="([^"]+)">');
     for (final entry in transcript ?? const <Map<String, dynamic>>[]) {
@@ -358,15 +455,51 @@ class TurnPromptContext {
     'v': 1,
     if (snapshot != null) 'snapshot': snapshot!.toJson(),
     if (state != null) 'state': state!.toJson(),
+    'stateDiff': ?stateDiff,
     if (notes.isNotEmpty) 'notes': notes,
     if (skills.isNotEmpty)
       'skills': [
         for (final s in skills)
-          <String, String>{'name': s.name, 'body': s.body},
+          <String, String>{'name': s.name, if (!s.inTranscript) 'body': s.body},
       ],
     'sent': ?sent,
     if (transcript != null && transcript!.isNotEmpty) 'transcript': transcript,
+    if ((transcript == null || transcript!.isEmpty) &&
+        (transcriptChars ?? 0) > 0) ...{
+      'transcriptChars': transcriptChars,
+      if (transcriptSkills != null && transcriptSkills!.isNotEmpty)
+        'transcriptSkills': transcriptSkills,
+    },
   });
+
+  /// Bounds what a turn stores, without changing what it replays:
+  /// - a transcript over [kTranscriptBudgetChars] is never replayed (the
+  ///   replay budget always drops it), so only its size and skill names
+  ///   are kept;
+  /// - a skill body that the kept transcript carries word for word is not
+  ///   stored a second time.
+  void compactForStorage() {
+    final rounds = transcript;
+    if (rounds == null || rounds.isEmpty) return;
+    final size = jsonEncode(rounds).length;
+    if (size > kTranscriptBudgetChars) {
+      transcriptSkills = transcriptSkillNames;
+      transcriptChars = size;
+      transcript = null;
+      return;
+    }
+    for (var i = 0; i < skills.length; i++) {
+      final skill = skills[i];
+      if (skill.inTranscript) continue;
+      if (skillBodyFromTranscript(rounds, skill.name) == skill.body.trim()) {
+        skills[i] = SkillContent(
+          skill.name,
+          skill.body.trim(),
+          inTranscript: true,
+        );
+      }
+    }
+  }
 
   /// Null for a missing or unreadable value: an old message, or one from a
   /// newer format, is sent as a plain message.
@@ -377,23 +510,41 @@ class TurnPromptContext {
       if (decoded is! Map || decoded['v'] != 1) return null;
       final notes = decoded['notes'];
       final skills = decoded['skills'];
+      final transcript = decoded['transcript'] is List
+          ? [
+              for (final e in decoded['transcript'] as List)
+                if (e is Map) Map<String, dynamic>.from(e),
+            ]
+          : null;
+      SkillContent? skillOf(Object? s) {
+        if (s is! Map || s['name'] is! String) return null;
+        final name = s['name'] as String;
+        if (s['body'] is String) return SkillContent(name, s['body'] as String);
+        // Stored without its body: the transcript carries it.
+        final body = transcript == null
+            ? null
+            : skillBodyFromTranscript(transcript, name);
+        return body == null
+            ? null
+            : SkillContent(name, body, inTranscript: true);
+      }
+
+      final transcriptSkills = decoded['transcriptSkills'];
       return TurnPromptContext(
         snapshot: PromptState.fromJson(decoded['snapshot']),
         state: PromptState.fromJson(decoded['state']),
         notes: notes is List ? notes.map((e) => e.toString()).toList() : null,
-        skills: skills is List
-            ? [
-                for (final s in skills)
-                  if (s is Map && s['name'] is String && s['body'] is String)
-                    SkillContent(s['name'] as String, s['body'] as String),
-              ]
-            : null,
+        skills: skills is List ? [...skills.map(skillOf).nonNulls] : null,
         sent: decoded['sent'] is String ? decoded['sent'] as String : null,
-        transcript: decoded['transcript'] is List
-            ? [
-                for (final e in decoded['transcript'] as List)
-                  if (e is Map) Map<String, dynamic>.from(e),
-              ]
+        transcript: transcript,
+        stateDiff: decoded['stateDiff'] is Map
+            ? Map<String, dynamic>.from(decoded['stateDiff'] as Map)
+            : null,
+        transcriptChars: decoded['transcriptChars'] is int
+            ? decoded['transcriptChars'] as int
+            : null,
+        transcriptSkills: transcriptSkills is List
+            ? transcriptSkills.map((e) => e.toString()).toList()
             : null,
       );
     } catch (_) {
@@ -476,19 +627,24 @@ class PromptContextLedger {
   /// turn's sent text dropped when it equals the display text, and each
   /// document body in it replaced by a marker that points into the
   /// message's `attachments` (the bodies are stored there already).
+  /// Large tool rounds and skill bodies are bounded
+  /// ([TurnPromptContext.compactForStorage]).
   static String? storedContextOf(Map<String, dynamic> message) {
     final raw = contextOf(message);
     final context = TurnPromptContext.decode(raw);
-    if (context == null || context.sent == null) return raw;
-    final display = message['text']?.toString().trim() ?? '';
-    if (context.sent!.trim() == display) {
-      context.sent = null;
-    } else {
-      context.sent = compactDocBodies(
-        context.sent!,
-        documentBodies(message['attachments']?.toString()),
-      );
+    if (context == null) return raw;
+    if (context.sent != null) {
+      final display = message['text']?.toString().trim() ?? '';
+      if (context.sent!.trim() == display) {
+        context.sent = null;
+      } else {
+        context.sent = compactDocBodies(
+          context.sent!,
+          documentBodies(message['attachments']?.toString()),
+        );
+      }
     }
+    context.compactForStorage();
     return context.isEmpty ? null : context.encode();
   }
 

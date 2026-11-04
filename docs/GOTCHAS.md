@@ -242,3 +242,21 @@ Code: `lib/services/prompt_cache/`, test:
   entry (`ToolLoopStep.withTurnImages`), never with `message` (that put them
   on the tool results). The first pass sends the turn's images all by
   reference or all in full, never mixed: the server puts refs first.
+- **Native tool passes send those images as refs** when the server still
+  holds all of them (`WebSocketChatService.foldTurnImageRefs`): the entry
+  goes up with its text only, plus `image_cache_refs`, and the server's
+  `attach_turn_images` puts them back on the same entry (same anchor rule,
+  `toolLoopTurnIndex` = `tool_loop_turn_index`), after the text. The
+  provider bytes do not change. Not folded, so sent in full: a pass with a
+  `message` (prompt-based mode; the server would add a new user turn), an
+  image-only entry (the server drops it), text after an image, a missing
+  ref. The server resolves image refs only for the current turn, so an
+  older turn's images in later history still go up in full each request.
+- **`modelContext` is bounded in storage** (`storedContextOf` ->
+  `TurnPromptContext.compactForStorage`) without changing the replay: a
+  note's state is a `stateDiff` against the state before it (old payloads
+  keep a whole `state`); a skill body the transcript carries is stored once
+  (decode takes it back from the `<skill_content>` block); a transcript over
+  `kTranscriptBudgetChars` is always dropped by the replay budget, so only
+  `transcriptChars` (its `jsonEncode` length, for the budget) and
+  `transcriptSkills` (for the marker rows) are kept.

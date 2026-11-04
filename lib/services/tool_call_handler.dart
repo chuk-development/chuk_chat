@@ -805,7 +805,15 @@ class ToolCallHandler {
         }
         if (notes.isNotEmpty) {
           session.turnContext.notes.addAll(notes);
-          session.turnContext.state = current;
+          // Only what changed against the state the history builder has
+          // reached here (`before`): soul, user info and memory are not
+          // stored again with every change.
+          final diff = current.diffFrom(before);
+          if (diff != null) {
+            session.turnContext.stateDiff = diff;
+          } else {
+            session.turnContext.state = current;
+          }
         }
       }
     }
