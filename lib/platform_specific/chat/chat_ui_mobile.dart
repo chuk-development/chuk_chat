@@ -2558,9 +2558,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         'reasoning': '',
         'modelId': selectedModelId,
         'provider': selectedProviderSlug ?? '',
-        // Messenger mode: the send time. The bubble no longer draws it, but
-        // the reaction key and the roster's newest-message time read it.
-        if (widget.messengerMode) 'sentAt': DateTime.now().toIso8601String(),
+        // The send time. The bubble no longer draws it, but the reaction
+        // key, the roster's newest-message time and the model's
+        // `[Sent: …]` line (prompt_context.dart) read it.
+        'sentAt': DateTime.now().toIso8601String(),
       };
       // A dictated message draws as a voice bubble (no audio is stored).
       // Only a composer send was dictated: a voice-call task and an OpenUI

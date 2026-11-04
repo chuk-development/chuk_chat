@@ -78,6 +78,7 @@ class ChatMessage {
     this.activeVariant,
     this.inputMode,
     this.voiceDurationMs,
+    this.modelContext,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -107,6 +108,7 @@ class ChatMessage {
       activeVariant: parseFlexibleInt(json['activeVariant']),
       inputMode: json['inputMode'] as String?,
       voiceDurationMs: json['voiceDurationMs']?.toString(),
+      modelContext: json['modelContext'] as String?,
     );
   }
 
@@ -191,6 +193,14 @@ class ChatMessage {
   /// Length of the dictation in whole milliseconds, when it is known.
   final String? voiceDurationMs;
 
+  /// User messages: what the model was told around this message, as JSON
+  /// (`TurnPromptContext`, lib/services/prompt_cache/prompt_context.dart):
+  /// the chat's prompt snapshot, `[memory updated]` style notes and the
+  /// skills loaded in this turn. Rebuilding the history from it gives the
+  /// bytes that were sent, so the provider's prompt cache keeps hitting. Never
+  /// shown. An older app ignores the field.
+  final String? modelContext;
+
   /// [generationMs] as a duration, or null when it was never recorded or
   /// cannot be read.
   Duration? get workedFor {
@@ -236,6 +246,7 @@ class ChatMessage {
     int? activeVariant,
     String? inputMode,
     String? voiceDurationMs,
+    String? modelContext,
   }) {
     return ChatMessage(
       role: role ?? this.role,
@@ -263,6 +274,7 @@ class ChatMessage {
       activeVariant: activeVariant ?? this.activeVariant,
       inputMode: inputMode ?? this.inputMode,
       voiceDurationMs: voiceDurationMs ?? this.voiceDurationMs,
+      modelContext: modelContext ?? this.modelContext,
     );
   }
 
@@ -301,5 +313,7 @@ class ChatMessage {
     if (inputMode != null && inputMode!.isNotEmpty) 'inputMode': inputMode,
     if (voiceDurationMs != null && voiceDurationMs!.isNotEmpty)
       'voiceDurationMs': voiceDurationMs,
+    if (modelContext != null && modelContext!.isNotEmpty)
+      'modelContext': modelContext,
   };
 }

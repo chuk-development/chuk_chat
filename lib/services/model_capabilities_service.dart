@@ -157,6 +157,15 @@ class ModelCapabilitiesService {
     return _visionSupportCache[modelId] ?? false;
   }
 
+  /// Whether the catalog says [modelId] takes image input: true or false
+  /// when the catalog knows the model, null when it does not (cold start,
+  /// unknown model). The image budget only blanks images on a known `false`.
+  static bool? supportsImageInputKnownSync(String modelId) {
+    if (modelId.isEmpty) return null;
+    if (!_isInitialized) unawaited(initialize());
+    return _visionSupportCache[modelId];
+  }
+
   /// Whether [modelId] can reason at all. Permissive default: an unknown model
   /// keeps a reasoning control, matching prior behaviour.
   static bool supportsReasoningSync(String modelId) {

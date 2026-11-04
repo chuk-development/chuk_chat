@@ -56,6 +56,8 @@ class AgentsToolCallHandler implements ToolCallHandler {
     bool discoveryMode = true,
     bool skipIdentity = false,
     bool nativeToolCalling = false,
+    // The host owns the prompt: the message goes as it is, no `[Sent: …]`.
+    String? userSentAt,
   }) {
     return ToolLoopSession(
       latestUserMessage: initialUserMessage,
