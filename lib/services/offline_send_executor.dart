@@ -11,10 +11,14 @@
 // and reasoning effort, and a response budget computed from the model's
 // limits at flush time.
 //
-// What it does NOT do: tool calls. The tool loop lives in the chat screen
-// (it needs the tool executor, approval cards and MCP sessions of a mounted
-// screen). A headless send without tools gives a plain answer; the user can
-// regenerate in the chat to get a tool-using one.
+// Tools: the executor itself sends a plain request. The real send is one of
+// two paths that run the full tool loop, the same as a send on screen:
+//  * the chat is open on a screen ([OutboxScreen]): the screen sends the row
+//    through its own send path, so the user sees it stream;
+//  * otherwise [toolTurn] (`HeadlessChatTurn`) runs the screen's streaming
+//    handler with no screen.
+// The plain path below is only the fallback when no tool path is installed
+// (unit tests of the executor itself).
 
 import 'dart:async';
 
@@ -22,6 +26,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:chuk_chat/models/chat_stream_event.dart';
 import 'package:chuk_chat/models/queued_message.dart';
+import 'package:chuk_chat/services/chat_runtime_registry.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/message_composition_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
@@ -59,8 +64,48 @@ class OfflineSendRequest {
   final String? reasoningEffort;
 }
 
+/// A chat screen that can send an outbox row through its own send path, so
+/// a queued message of the chat in view goes out with the full tool loop
+/// and streams on screen (docs/OFFLINE_SEND.md).
+abstract interface class OutboxScreen {
+  /// The chat the screen shows now, or null.
+  String? get outboxChatId;
+
+  /// Sends [queued] on screen and reports how it ended. Null when the screen
+  /// cannot take it now (the row is not the last message of the chat, or a
+  /// turn runs): the headless path sends it instead.
+  Future<SendExecutorResult?> sendOutboxRow(
+    QueuedMessage queued,
+    OfflineSendPayload payload,
+  );
+}
+
 class OfflineSendExecutor {
   OfflineSendExecutor._();
+
+  static final Set<OutboxScreen> _screens = <OutboxScreen>{};
+
+  /// A chat screen comes up. It answers [OutboxScreen.outboxChatId] live.
+  static void registerScreen(OutboxScreen screen) => _screens.add(screen);
+
+  /// A chat screen goes away.
+  static void unregisterScreen(OutboxScreen screen) => _screens.remove(screen);
+
+  /// The mounted screen that shows [chatId], or null.
+  static OutboxScreen? screenFor(String chatId) {
+    for (final OutboxScreen s in _screens) {
+      if (s.outboxChatId == chatId) return s;
+    }
+    return null;
+  }
+
+  /// The full tool-loop send with no screen (`HeadlessChatTurn.run`).
+  /// Installed at app start; null in unit tests of the plain path.
+  static Future<SendExecutorResult> Function(
+    QueuedMessage queued,
+    OfflineSendPayload payload,
+  )?
+  toolTurn;
 
   static bool _registered = false;
 
@@ -94,12 +139,16 @@ class OfflineSendExecutor {
     }
   }
 
-  static bool _defaultBusy(String chatId) {
+  static bool _defaultBusy(String chatId) => isTurnRunning(chatId);
+
+  /// Whether a turn of [chatId] runs now: a stream is open, or a send is in
+  /// flight (also between two tool passes, when no stream is open).
+  static bool isTurnRunning(String chatId) {
     try {
-      return StreamingManager().isStreaming(chatId);
-    } catch (_) {
-      return false;
-    }
+      if (StreamingManager().isStreaming(chatId)) return true;
+    } catch (_) {}
+    return ChatRuntimeRegistry.instance.lookup(chatId)?.isSending.value ??
+        false;
   }
 
   static Stream<ChatStreamEvent> _defaultStream(OfflineSendRequest r) =>
@@ -132,8 +181,19 @@ class OfflineSendExecutor {
     );
   }
 
+  /// The stored chat, through the [loadChat] seam.
+  static Future<StoredChat?> readChat(String chatId) => loadChat(chatId);
+
+  /// Saves the chat on the device and syncs it, through the [saveChat] seam.
+  static Future<void> writeChat(
+    String chatId,
+    List<Map<String, dynamic>> maps,
+  ) => saveChat(chatId, maps);
+
   @visibleForTesting
   static void resetSeams() {
+    _screens.clear();
+    toolTurn = null;
     accessToken = _defaultAccessToken;
     stream = _defaultStream;
     isChatBusy = _defaultBusy;
@@ -175,6 +235,20 @@ class OfflineSendExecutor {
     return -1;
   }
 
+  /// [map] (a stored user message) as delivered: the waiting marks go, and
+  /// an empty text (a voice bubble) takes [text].
+  static Map<String, dynamic> delivered(
+    Map<String, dynamic> map,
+    String text,
+  ) {
+    final out = Map<String, dynamic>.of(map)
+      ..remove('status')
+      ..remove('queueId')
+      ..remove('lastError');
+    if ((out['text'] as String?)?.isNotEmpty != true) out['text'] = text;
+    return out;
+  }
+
   /// Response budget: the model's limits when known, else the queued value
   /// when it is better than the old 512 default, else [fallbackMaxTokens].
   static int budgetFor({
@@ -211,6 +285,19 @@ class OfflineSendExecutor {
       if (isChatBusy(payload.chatId)) {
         return const SendExecutorResult.deferred('chat busy');
       }
+
+      // The chat is on screen: its own send path, with tools, streaming.
+      final OutboxScreen? screen = screenFor(payload.chatId);
+      if (screen != null) {
+        final SendExecutorResult? onScreen = await screen.sendOutboxRow(
+          queued,
+          payload,
+        );
+        if (onScreen != null) return onScreen;
+      }
+      // No screen: the same tool loop, headless.
+      final turn = toolTurn;
+      if (turn != null) return await turn(queued, payload);
 
       final chat = await loadChat(payload.chatId);
       if (chat == null || !chat.isFullyLoaded) {
@@ -308,13 +395,7 @@ class OfflineSendExecutor {
         maps.add({'role': 'user', 'text': payload.messageText});
         idx = maps.length - 1;
       } else {
-        maps[idx] = Map<String, dynamic>.of(maps[idx])
-          ..remove('status')
-          ..remove('queueId')
-          ..remove('lastError')
-          ..['text'] = (maps[idx]['text'] as String?)?.isNotEmpty == true
-              ? maps[idx]['text']
-              : payload.messageText;
+        maps[idx] = delivered(maps[idx], payload.messageText);
       }
       final reply = ChatMessage(
         role: 'assistant',

@@ -41,6 +41,7 @@ import 'package:chuk_chat/services/chat_reaction_service.dart';
 import 'package:chuk_chat/widgets/messenger_typing_indicator.dart';
 import 'package:chuk_chat/widgets/agent_activity/agents_live_status.dart';
 import 'package:chuk_chat/services/offline_send_coordinator.dart';
+import 'package:chuk_chat/services/follow_up_dispatcher.dart';
 import 'package:chuk_chat/services/follow_up_parking_service.dart';
 import 'package:chuk_chat/services/offline_retry_manager.dart';
 import 'package:chuk_chat/platform_specific/chat/offline_send_bridge.dart';
@@ -69,6 +70,8 @@ import 'package:chuk_chat/platform_specific/chat/chat_scroll_mixin.dart';
 import 'package:chuk_chat/utils/unread_rows.dart';
 import 'package:chuk_chat/widgets/unread_jump_pill.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_message_edit_mixin.dart';
+import 'package:chuk_chat/platform_specific/chat/outbox_screen_turn.dart';
+import 'package:chuk_chat/services/offline_send_executor.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_model_selection_mixin.dart';
 import 'package:chuk_chat/platform_specific/chat/model_provider_resolution_mixin.dart';
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
@@ -245,12 +248,26 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         ModelProviderResolutionMixin,
         ChatModelSelectionMixin,
         ChatMessageEditMixin,
+        OutboxScreenTurnMixin,
         RegenVariantSeedMixin<ChukChatUIMobile>
     implements ChatDebugSnapshot {
   // Controllers and basic state
   @override
   final TextEditingController composerController = TextEditingController();
   final List<Map<String, String>> _messages = [];
+
+  // --- Outbox on screen (docs/OFFLINE_SEND.md) ---
+
+  @override
+  bool outboxTurnRunningFor(String chatId) =>
+      _streamingHandler.isSending ||
+      _streamingHandler.isStreaming ||
+      _isSendingMessage ||
+      OfflineSendExecutor.isTurnRunning(chatId);
+
+  @override
+  Future<void> outboxReloadFromStorage(String chatId) =>
+      _onOutboxChangedChat(chatId);
 
   /// The Agents thread shares one decode cache across mounts; chuk_chat's
   /// screen keeps its own (see [MessageRenderCache]).
@@ -1093,7 +1110,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         composerController.clear();
         messageActionsHandler.cancelEdit();
         if (widget.messengerMode) _resetThreadTransientState();
+        // Follow-ups typed in the chat being left stay parked under it and
+        // go out from there (FollowUpDispatcher), never into the next chat.
+        _pendingMessageText = null;
+        _queuedFollowUps.clear();
       });
+      FollowUpDispatcher.instance.kick();
 
       if (kDebugMode) {
         debugPrint(

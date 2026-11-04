@@ -26,6 +26,7 @@ import 'package:chuk_chat/services/agents/agents_thread_composer.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/offline_send_coordinator.dart';
 import 'package:chuk_chat/services/offline_retry_manager.dart';
+import 'package:chuk_chat/services/follow_up_dispatcher.dart';
 import 'package:chuk_chat/services/follow_up_parking_service.dart';
 import 'package:chuk_chat/platform_specific/chat/offline_send_bridge.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
@@ -50,6 +51,8 @@ import 'package:chuk_chat/platform_specific/chat/chat_scroll_mixin.dart';
 import 'package:chuk_chat/utils/unread_rows.dart';
 import 'package:chuk_chat/widgets/unread_jump_pill.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_message_edit_mixin.dart';
+import 'package:chuk_chat/platform_specific/chat/outbox_screen_turn.dart';
+import 'package:chuk_chat/services/offline_send_executor.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_model_selection_mixin.dart';
 import 'package:chuk_chat/platform_specific/chat/model_provider_resolution_mixin.dart';
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
@@ -208,12 +211,23 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         ModelProviderResolutionMixin,
         ChatModelSelectionMixin,
         ChatMessageEditMixin,
+        OutboxScreenTurnMixin,
         RegenVariantSeedMixin<ChukChatUIDesktop>
     implements ChatDebugSnapshot {
   // RENAMED STATE
   @override
   final TextEditingController composerController = TextEditingController();
   final List<Map<String, String>> _messages = [];
+
+  // --- Outbox on screen (docs/OFFLINE_SEND.md) ---
+
+  @override
+  bool outboxTurnRunningFor(String chatId) =>
+      _isSending || _isStreaming || OfflineSendExecutor.isTurnRunning(chatId);
+
+  @override
+  Future<void> outboxReloadFromStorage(String chatId) =>
+      _onOutboxChangedChat(chatId);
   String? _activeChatId;
   final ScrollController _composerScrollController = ScrollController();
   late final ComposerCaretFollower _composerCaretFollower;
@@ -680,6 +694,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       }
 
       if (widget.agentsThread) _resetThreadTransientState();
+      // A follow-up typed in the chat being left stays parked under it and
+      // goes out from there (FollowUpDispatcher), never into the next chat.
+      _pendingMessageText = null;
+      FollowUpDispatcher.instance.kick();
       _loadChatById(widget.selectedChatId);
       // Trigger rebuild to reflect new chat's streaming status
       // _isStreaming getter will automatically check the new _activeChatId

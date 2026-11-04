@@ -12,6 +12,7 @@ import 'package:chuk_chat/models/artifact.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/headless_turn_scope.dart';
 import 'package:chuk_chat/services/skills/skill_registry.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/mcp/mcp_availability.dart';
@@ -843,6 +844,7 @@ class ToolExecutor {
             serverHttpUrl: serverHttpUrl,
             accessToken: accessToken,
             chatId:
+                HeadlessTurnScope.chatId ??
                 currentChatId ??
                 ChatStorageService.selectedChatId ??
                 ChatStorageService.activeMessageChatId,
@@ -866,7 +868,9 @@ class ToolExecutor {
     //   2. `ChatStorageService.selectedChatId` — parent widget state.
     //   3. `ChatStorageService.activeMessageChatId` — set by the resend
     //      path and mirrored by the send path for the same reason.
+    // 0. A headless turn (an outbox send with no screen) names its own chat.
     final chatId =
+        HeadlessTurnScope.chatId ??
         currentChatId ??
         ChatStorageService.selectedChatId ??
         ChatStorageService.activeMessageChatId;

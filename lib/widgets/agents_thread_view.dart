@@ -609,6 +609,12 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     AgentsBudgetNotices.instance.removeListener(_onBudgetNotices); // F1
     _userBrowserService.removeListener(_onUserBrowserChanged); // own browser
     _controller?.state.removeListener(_onStateChanged);
+    // The link must not keep pointing at a controller that is disposed
+    // below: the background link (AgentsBackgroundLink) only opens a link
+    // of its own while none is bound.
+    if (_controller != null && identical(_link.controller.value, _controller)) {
+      _link.unbind();
+    }
     _startupState.dispose();
     _inboundSub?.cancel();
     _sendNoticeSub?.cancel();
@@ -1067,9 +1073,8 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   /// is never run twice — and the app paints nothing for a `duplicate`, so the
   /// thread never grows a second bubble either.
   ///
-  /// Nothing is retried for ever: a task that has used up its attempts is
-  /// dropped from the record, and the ledger's own pre-run rule is what tells
-  /// the reader the message did not arrive.
+  /// Nothing is retried for ever: a task that has used up its attempts
+  /// becomes a failed outbox entry, and its bubble offers Retry and Delete.
   Future<void> _resendUnacknowledged(AgentsRelayController controller) async {
     final String sessionKey = widget.threadKey;
     if (sessionKey.isEmpty) return;
