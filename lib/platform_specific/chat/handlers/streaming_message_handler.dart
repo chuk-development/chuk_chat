@@ -1173,6 +1173,26 @@ class StreamingMessageHandler {
               ? errorMessage
               : '$salvaged\n\n$errorMessage';
 
+          // In content-block mode the bubble hides the flat text, so the cut
+          // pass and the error need their own block (earlier passes are
+          // already in [contentBlocks]). Same order as the success path:
+          // blocks first, then finalize.
+          final withNote = RoundContentBlockService.withInterruptionNote(
+            contentBlocks,
+            interruptedText: stripToolCallBlocksForDisplay(interruptedPartial),
+            errorNote: errorMessage,
+          );
+          if (withNote != null) {
+            contentBlocks
+              ..clear()
+              ..addAll(withNote);
+            onContentBlocksUpdate?.call(
+              placeholderIndex,
+              encodeBlocks(),
+              chatId,
+            );
+          }
+
           if (onMessageFinalize != null) {
             onMessageFinalize!(
               placeholderIndex,

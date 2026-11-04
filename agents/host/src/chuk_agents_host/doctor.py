@@ -278,7 +278,9 @@ def print_report(checks: list[Check], out: Callable[..., None] = print) -> int:
     width = max(len(c.name) for c in checks)
     for check in checks:
         out(f"    [{check.mark}] {check.name.ljust(width)}  {check.detail}")
-        if not check.ok and check.fix:
+        # A passing check can carry a hint too (local isolation off): show
+        # it. Every other passing check has an empty fix, so nothing changes.
+        if check.fix:
             out(f"           {' ' * width}  -> {check.fix}")
     failed = [c for c in checks if not c.ok]
     out("")

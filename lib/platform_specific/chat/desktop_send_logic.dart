@@ -810,9 +810,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           onError: (errorMessage, {String? code}) {
             // Text this turn had already written, plus the cut pass (idle
             // timeout, close without `done`). It stays above the error.
+            final interruptedPartial = _streamingManager
+                .takeInterruptedPartial(chatIdForStream);
             final keptText = _keptTextOnError(
               accumulatedText.toString(),
-              _streamingManager.takeInterruptedPartial(chatIdForStream),
+              interruptedPartial,
             );
             if (errorMessage == '__PAYMENT_REQUIRED__') {
               final paymentMessage =
@@ -838,6 +840,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
             final errorText = keptText.isEmpty
                 ? 'Error: $errorMessage'
                 : '$keptText\n\nError: $errorMessage';
+            final errorBlocksJson = _errorContentBlocksJson(
+              contentBlocks,
+              interruptedPartial,
+              errorMessage,
+            );
             if (_activeChatId == chatIdForStream) {
               if (mounted) {
                 setState(() {
@@ -845,11 +852,17 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                 });
               }
               _finalizeAiMessage(placeholderIndex, errorText);
+              if (errorBlocksJson != null &&
+                  placeholderIndex >= 0 &&
+                  placeholderIndex < _messages.length) {
+                _messages[placeholderIndex]['contentBlocks'] = errorBlocksJson;
+              }
               _persistChatWithId(chatIdForStream);
             } else {
               _persistBackgroundAssistant(chatIdForStream, placeholderIndex, {
                 'text': errorText,
                 'reasoning': '',
+                'contentBlocks': ?errorBlocksJson,
               });
             }
           },
@@ -1130,6 +1143,24 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
   String _keptTextOnError(String accumulated, String? interruptedPartial) {
     final partial = stripToolCallBlocksForDisplay(interruptedPartial ?? '');
     return '$accumulated$partial'.trim();
+  }
+
+  /// The content blocks to store for a turn a stream error cut off, or null
+  /// when the turn has none. [blocks] gets one text block with the cut pass
+  /// ([interruptedPartial], raw) and the error, so the bubble shows them in
+  /// content-block mode too. Earlier passes are already in [blocks].
+  String? _errorContentBlocksJson(
+    List<ContentBlock> blocks,
+    String? interruptedPartial,
+    String errorMessage,
+  ) {
+    final withNote = RoundContentBlockService.withInterruptionNote(
+      blocks,
+      interruptedText: stripToolCallBlocksForDisplay(interruptedPartial ?? ''),
+      errorNote: 'Error: $errorMessage',
+    );
+    if (withNote == null) return null;
+    return jsonEncode(withNote.map((b) => b.toJson()).toList());
   }
 
   /// Show dialog when API returns 402 (free messages exhausted)
@@ -2108,9 +2139,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           onError: (errorMessage, {String? code}) async {
             // Read before any await: the text this turn had already written,
             // plus the cut pass (idle timeout, close without `done`).
+            final interruptedPartial = _streamingManager
+                .takeInterruptedPartial(chatIdForStream);
             final keptText = _keptTextOnError(
               accumulatedText2.toString(),
-              _streamingManager.takeInterruptedPartial(chatIdForStream),
+              interruptedPartial,
             );
             if (kDebugMode) {
               debugPrint(
@@ -2192,6 +2225,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
             final errorText = keptText.isEmpty
                 ? 'Error: $errorMessage'
                 : '$keptText\n\nError: $errorMessage';
+            final errorBlocksJson = _errorContentBlocksJson(
+              contentBlocks2,
+              interruptedPartial,
+              errorMessage,
+            );
             if (_activeChatId == chatIdForStream) {
               if (placeholderIndex >= 0 &&
                   placeholderIndex < _messages.length) {
@@ -2203,6 +2241,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                 });
               }
               _finalizeAiMessage(placeholderIndex, errorText);
+              if (errorBlocksJson != null &&
+                  placeholderIndex >= 0 &&
+                  placeholderIndex < _messages.length) {
+                _messages[placeholderIndex]['contentBlocks'] = errorBlocksJson;
+              }
               if (mounted) {
                 AppNotifications.show(
                   context,
@@ -2214,6 +2257,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
             } else {
               _persistBackgroundAssistant(chatIdForStream, placeholderIndex, {
                 'text': errorText,
+                'contentBlocks': ?errorBlocksJson,
               });
             }
           },

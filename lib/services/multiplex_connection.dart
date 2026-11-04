@@ -992,6 +992,20 @@ class MultiplexConnection {
       return;
     }
 
+    // The caller may have given up while the handshake ran: a tool call
+    // that timed out, or a request cancelled by [cancel], is no longer in
+    // the maps. Writing its frame now would let the server act on a call
+    // the caller was already told is dead.
+    final pendingId = frame['req_id'] as String;
+    if (toolCompleter != null &&
+        !identical(_toolCompleters[pendingId], toolCompleter)) {
+      return;
+    }
+    if (controller != null &&
+        !identical(_chatControllers[pendingId], controller)) {
+      return;
+    }
+
     final ch = _channel;
     if (ch == null) {
       final reqId = frame['req_id'] as String;

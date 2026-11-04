@@ -1267,6 +1267,19 @@ class McpService {
   /// Matched on the device's own connector id when the host echoed one, else on
   /// the name. A server the device does not know is ignored: the frame reports,
   /// it never creates a connector.
+  /// Every credential value this device holds for connector [id]: the
+  /// API-key parameters and the OAuth tokens and client secret. Fed to
+  /// [redactMcpSecrets] so error text from the host never keeps them.
+  static Future<List<String>> _storedSecretValues(String id) async {
+    final McpSecrets? record = await store.secretsFor(id);
+    return <String>[
+      ...(await store.apiCredentialsFor(id)).values,
+      ?record?.tokens.accessToken,
+      ?record?.tokens.refreshToken,
+      ?record?.credentials.clientSecret,
+    ];
+  }
+
   static Future<int> applyToolsFrame(Map<String, dynamic> payload) async {
     final Object? acked = payload['signed_out_ack'];
     if (acked is List && acked.isNotEmpty) {
@@ -1307,8 +1320,16 @@ class McpService {
           for (final Object? tool in toolsRaw)
             if (tool is Map) McpTool.fromJson(Map<String, dynamic>.from(tool)),
       ];
-      // The host's error text can echo a request; mask credentials.
-      final String error = redactMcpSecrets('${row['error'] ?? ''}'.trim());
+      // The host's error text can echo a request; mask credentials. The
+      // connector's own values are masked by value too: an API-key connector
+      // can use any parameter name, which no pattern can know.
+      final String rawError = '${row['error'] ?? ''}'.trim();
+      final String error = rawError.isEmpty
+          ? rawError
+          : redactMcpSecrets(
+              rawError,
+              secrets: await _storedSecretValues(target.id),
+            );
       // Structural, from the host: `auth` / `network` / `other`. An older
       // host sends none, which reads as `other`.
       final McpErrorKind? kind = error.isEmpty

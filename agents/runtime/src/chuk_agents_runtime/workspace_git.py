@@ -516,12 +516,14 @@ class GitWorkspace:
         not the index, refs or history. Without it a ``git add -A`` of the user
         would sweep the agent's whole object store into the user's repo."""
         try:
-            probe = self._git_in(
-                self.root, "rev-parse", "--path-format=absolute", "--git-common-dir"
-            )
+            # No ``--path-format=absolute``: it needs Git 2.31, and on an older
+            # Git the probe failed and nothing was excluded. The plain answer
+            # is relative to ``root`` (``-C``) or absolute; ``root / value``
+            # handles both.
+            probe = self._git_in(self.root, "rev-parse", "--git-common-dir")
             if probe.returncode != 0 or not probe.stdout.strip():
                 return
-            exclude = Path(probe.stdout.strip()) / "info" / "exclude"
+            exclude = Path(self.root) / probe.stdout.strip() / "info" / "exclude"
             line = f"/{JOURNAL_DIRNAME}/"
             existing = exclude.read_text(encoding="utf-8") if exclude.exists() else ""
             if line in existing.splitlines():

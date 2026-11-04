@@ -173,6 +173,25 @@ def test_a_user_repo_is_never_committed_into(tmp_path):
     assert ".agents/git" not in tracked
 
 
+def test_the_user_repo_hides_agents_dir_on_git_older_than_2_31(tmp_path, monkeypatch):
+    """``rev-parse --path-format`` exists only since Git 2.31. Emulate an older
+    Git that rejects it: ``.agents/`` must still land in ``info/exclude``."""
+    root = _user_repo(tmp_path)
+    real = GitWorkspace._git_in
+
+    def old_git(self, cwd, *args, **kwargs):
+        if any(a.startswith("--path-format") for a in args):
+            return subprocess.CompletedProcess(args, 129, "", "unknown option")
+        return real(self, cwd, *args, **kwargs)
+
+    monkeypatch.setattr(GitWorkspace, "_git_in", old_git)
+    workspace = GitWorkspace.open(root)
+    assert workspace is not None and workspace.enabled and workspace.private
+    exclude = (root / ".git" / "info" / "exclude").read_text(encoding="utf-8")
+    assert "/.agents/" in exclude.splitlines()
+    assert ".agents" not in _git(root, "status", "--porcelain")
+
+
 def test_the_private_repo_is_found_again_after_a_restart(tmp_path):
     root = _user_repo(tmp_path)
     first = GitWorkspace.open(root)
