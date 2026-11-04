@@ -100,6 +100,7 @@ def test_defaults_allow_everything_but_the_users_browser(tmp_path):
         "secrets_env": True,
         "workspace_mount": "rw",
         "user_browser": False,
+        "external_agents": False,
     }
     assert not (tmp_path / FILE_NAME).exists()  # nothing written for a read
 
@@ -535,3 +536,35 @@ def test_switching_the_host_agents_secrets_off_restarts_its_watchers(tmp_path):
     finally:
         host._roster.close()
         host._coworker_names.close()
+
+
+# -- command rules ("approve and remember", item 9) --------------------------
+
+
+def test_command_prefix_rules_persist_and_match(tmp_path):
+    from chuk_agents_host.agent_permissions import AgentPermissionsStore, FILE_NAME
+
+    store = AgentPermissionsStore(tmp_path / FILE_NAME)
+    rules = store.remember_command_prefix("host:dev", "git push")
+    assert rules is not None
+    assert store.command_rules("host:dev").allowed("git push origin main") is True
+    assert store.command_rules("host:dev").allowed("git status") is False
+    # A duplicate changes nothing.
+    assert store.remember_command_prefix("host:dev", "git push") is None
+    # Reloaded from disk.
+    again = AgentPermissionsStore(tmp_path / FILE_NAME)
+    assert again.command_rules("host:dev").allowed("sudo git push") is True
+
+
+def test_bridge_prefix_allowed_and_remember(tmp_path):
+    from chuk_agents_host.agent_permissions import (
+        ActionApprovalsBridge,
+        AgentPermissionsStore,
+        FILE_NAME,
+    )
+
+    store = AgentPermissionsStore(tmp_path / FILE_NAME)
+    bridge = ActionApprovalsBridge(store, lambda sk: "host:dev")
+    assert bridge.prefix_allowed_for("s1")("git push") is False
+    bridge.remember_prefix("s1", "git push")
+    assert bridge.prefix_allowed_for("s1")("git push origin main") is True

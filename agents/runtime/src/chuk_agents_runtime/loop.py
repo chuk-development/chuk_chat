@@ -57,7 +57,7 @@ from .context import (
 )
 from .registry import ToolRegistry
 from .state import UNKNOWN_OUTCOME_RESULT, StateStore
-from .tool_events import tool_event_fields
+from .tool_events import tool_event_fields, tool_status
 from .tools import FINISH_TOOL
 from .telemetry import get_tracer, set_round
 
@@ -353,7 +353,7 @@ from .pai.approvals import ApprovalPolicy  # noqa: E402
 from .pai.convert import found_tools, response_to_row, rows_to_messages, tool_call_args  # noqa: E402
 from .pai.events import PASS_BREAK, PassJoiner, StreamMapper  # noqa: E402
 from .pai.model import LEGACY_DETAILS_KEY, LegacyClientModel, is_legacy  # noqa: E402
-from .pai.tools import TOOL_RETRIES, UNSET, CallRecord, RegistryToolset  # noqa: E402
+from .pai.tools import TOOL_RETRIES, UNSET, CallRecord, RegistryToolset, split_ui  # noqa: E402
 
 disable_banner()
 
@@ -430,6 +430,48 @@ LIMIT_STOP_NOTE = (
 #: Reasons that mean "a limit ended the run", not "the work is done".
 LIMIT_REASONS = frozenset({"max_iterations", "budget_exhausted", "token_budget_exhausted"})
 
+#: Consecutive identical calls at which the run gets an advisory context row
+#: (research item 23, from deepseek-harness ``repeat-tool-reminder``). Advice
+#: only: the call still runs. A new task (a new user message) starts at zero.
+REPEAT_THRESHOLDS = (3, 5, 8)
+REPEAT_ARGS_PREVIEW = 500
+REPEAT_GENTLE = (
+    "You are repeating the exact same tool call with identical arguments. "
+    "Carefully analyze the previous result before calling again: if the task is "
+    "not complete, try a different approach or different arguments instead of "
+    "repeating the call."
+)
+REPEAT_DETAILED = (
+    "Repeated tool call detected:\n"
+    "- tool: {tool}\n"
+    "- consecutive_calls: {count}\n"
+    "- arguments: {arguments}\n"
+    "The repeated calls are not making progress. Do not call this tool with "
+    "these exact arguments again. Inspect the latest result and choose a "
+    "different action, different arguments, or finish the task if enough "
+    "evidence has been gathered."
+)
+
+#: Tools whose failure the user must hear about (research H29): they write,
+#: send or delete. Class tools of the approval policy (mail, publish, a
+#: destructive connector tool) count too; a shell command does not (a
+#: non-zero exit is a normal result).
+MUTATING_TOOLS = frozenset(
+    {
+        "write_file",
+        "edit_file",
+        "apply_patch",
+        "send_file_to_user",
+        "mail_send",
+        "mail_reply",
+        "herenow_publish",
+    }
+)
+#: Argument keys that name what a mutating call acts on, in order.
+_TARGET_KEYS = ("path", "to", "id", "name")
+FAILED_FOOTER_HEAD = "Not done: {n} action(s) in this task failed and did not take effect:"
+FAILED_FOOTER_ERROR_CHARS = 160
+
 #: How long a Stop waits for a call that had started to finish on its thread,
 #: so its row holds the real result. The executor kills the sandbox process on
 #: the same Stop, so a command returns at once; a web call, a publish or an MCP
@@ -484,6 +526,13 @@ class _ActiveRun:
     recall: "_PendingRecall | None" = None
     #: Milliseconds the run waited for that recall (``recall_wait``).
     recall_waited_ms: float = 0.0
+    #: The repeat-call guard (research item 23): the key of the last call
+    #: (name + key-sorted JSON arguments) and how many times in a row it came.
+    repeat_key: str | None = None
+    repeat_count: int = 0
+    #: Write / send / delete calls that failed in this run, by (tool, target):
+    #: ``(tool, target, error)``. A later success of the same pair clears it.
+    failed_actions: dict[tuple[str, str], str] = field(default_factory=dict)
 
 
 class _PendingRecall:
@@ -907,6 +956,14 @@ class AgentLoop:
             reason, final_answer, iterations, note = _run_blocking(
                 self._drive(active, timings, tools_used)
             )
+            footer = self._failed_footer(active, final_answer)
+            if footer:
+                final_answer = f"{final_answer.rstrip()}\n\n{footer}"
+                if self._on_delta is not None:
+                    try:
+                        self._on_delta(f"\n\n{footer}")
+                    except Exception:  # noqa: BLE001 — a UI sink never fails a run
+                        pass
         finally:
             self._active = None
             if pending_recall is not None:
@@ -1458,8 +1515,11 @@ class AgentLoop:
                 # ``rows_to_messages`` adds keeps the next call from being
                 # refused again. A tool behind an approval is never run here.
                 self._phase(PHASE_TOOL, call.tool_name)
-                result = self._registry.dispatch(
-                    call.tool_name, args if isinstance(args, dict) else {}
+                result = split_ui(
+                    self._registry.dispatch(
+                        call.tool_name, args if isinstance(args, dict) else {}
+                    ),
+                    record,
                 )
             elif self._registry.has(call.tool_name):
                 # A real tool Pydantic AI refused this turn (a deferred tool
@@ -1498,8 +1558,81 @@ class AgentLoop:
                 result_chars=len(str(result)),
                 text=tracer.text(str(result) if result is not None else None),
             )
-        self._emit_tool(call, result, started_at=started_at, completed_at=completed_at, raised=raised)
+        self._emit_tool(
+            call,
+            result,
+            started_at=started_at,
+            completed_at=completed_at,
+            raised=raised,
+            ui=record.ui if record is not None else None,
+        )
+        self._track_call(active, call, result, raised=raised)
         tools_used.append(call.tool_name)
+
+    def _track_call(
+        self, active: _ActiveRun, call: ToolCallPart, result: Any, *, raised: bool
+    ) -> None:
+        """After one call: the repeat guard and the failed-action ledger.
+        Never raises into the run."""
+        try:
+            args = tool_call_args(call)
+            canonical = json.dumps(args, sort_keys=True, ensure_ascii=False, default=str)
+            key = f"{call.tool_name}\x00{canonical}"
+            if key == active.repeat_key:
+                active.repeat_count += 1
+            else:
+                active.repeat_key = key
+                active.repeat_count = 1
+            count = active.repeat_count
+            if count in REPEAT_THRESHOLDS:
+                if count == REPEAT_THRESHOLDS[0]:
+                    text = REPEAT_GENTLE
+                else:
+                    preview = canonical
+                    if len(preview) > REPEAT_ARGS_PREVIEW:
+                        preview = preview[:REPEAT_ARGS_PREVIEW] + "..."
+                    text = REPEAT_DETAILED.format(
+                        tool=call.tool_name, count=count, arguments=preview
+                    )
+                self._append(
+                    active.session_id, "context", {"role": "user", "content": f"[runtime] {text}"}
+                )
+            if self._is_mutating(call.tool_name):
+                target = _call_target(args)
+                pair = (call.tool_name, target)
+                declined = isinstance(result, dict) and result.get("declined") is True
+                if not declined and (raised or tool_status(result) == "error"):
+                    # A real failure the user must hear about (research H29). A
+                    # user decline or a policy deny is a choice, not a silent
+                    # failure, so it never lands in the footer.
+                    active.failed_actions[pair] = _error_text(result)
+                else:
+                    active.failed_actions.pop(pair, None)
+        except Exception:  # noqa: BLE001 — a guard never breaks a run
+            logger.debug("call tracking failed", exc_info=True)
+
+    def _is_mutating(self, name: str) -> bool:
+        if name in MUTATING_TOOLS:
+            return True
+        rule = self._policy.rules.get(name)
+        return rule is not None and rule.action_class is not None
+
+    def _failed_footer(self, active: _ActiveRun, answer: str | None) -> str | None:
+        """The footer for failed actions the answer does not name, or None."""
+        if not answer or not active.failed_actions:
+            return None
+        missing = [
+            (tool, target, error)
+            for (tool, target), error in active.failed_actions.items()
+            if not ((target and target in answer) or tool in answer)
+        ]
+        if not missing:
+            return None
+        lines = [FAILED_FOOTER_HEAD.format(n=len(missing))]
+        for tool, target, error in missing:
+            where = f" {target}" if target else ""
+            lines.append(f"- {tool}{where}: {error}" if error else f"- {tool}{where}")
+        return "\n".join(lines)
 
     def _close_calls(
         self, active: _ActiveRun, calls: list[ToolCallPart], tools_used: list[str]
@@ -1538,6 +1671,7 @@ class AgentLoop:
         started_at: float,
         completed_at: float,
         raised: bool,
+        ui: Any = None,
     ) -> None:
         if self._tool_event_observer is None:
             return
@@ -1551,6 +1685,7 @@ class AgentLoop:
                     started_at=started_at,
                     completed_at=completed_at,
                     raised=raised,
+                    ui=ui,
                 )
             )
         except Exception:  # noqa: BLE001 — a UI sink error must not abort a run
@@ -1774,6 +1909,32 @@ class AgentLoop:
 
 
 # -- helpers -------------------------------------------------------------------
+
+
+def _call_target(args: Any) -> str:
+    """What a mutating call acts on (its path, recipient, id), as text."""
+    if not isinstance(args, dict):
+        return ""
+    for key in _TARGET_KEYS:
+        value = args.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()[:200]
+        if isinstance(value, list) and value and all(isinstance(v, str) for v in value):
+            return ", ".join(value)[:200]
+    return ""
+
+
+def _error_text(result: Any) -> str:
+    text = ""
+    if isinstance(result, dict):
+        value = result.get("error")
+        text = value if isinstance(value, str) else ""
+    elif isinstance(result, str):
+        text = result
+    text = " ".join(text.split())
+    if len(text) > FAILED_FOOTER_ERROR_CHARS:
+        text = text[: FAILED_FOOTER_ERROR_CHARS - 1] + "…"
+    return text
 
 
 def _calls(response: ModelResponse) -> list[ToolCallPart]:

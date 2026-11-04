@@ -463,7 +463,7 @@ def action_approval_request_payload(
 
 
 def approval_decision_payload(
-    *, approval_id: str, approved: bool, scope: str | None = None
+    *, approval_id: str, approved: bool, scope: str | None = None, remember_prefix: str | None = None
 ) -> dict[str, Any]:
     """App -> executor: the user's answer to one ``approval_request``.
 
@@ -471,14 +471,17 @@ def approval_decision_payload(
     a decision that arrives after the run already ended, matches nothing and is
     a no-op). ``approved`` True publishes; False (or no answer) does not.
     ``scope`` (per-action approvals, additive) is one of the request's
-    ``options``: ``once``, ``always_this_agent``, ``always_this_site`` or
-    ``deny``. Absent means ``once`` for a yes.
+    ``options``: ``once``, ``always_this_agent``, ``always_this_site``,
+    ``always_this_prefix`` or ``deny``. Absent means ``once`` for a yes.
+    ``remember_prefix`` (item 9, additive) is the command token prefix the user
+    chose to remember (e.g. ``git push``); the host stores it for the agent.
     """
     return {
         "type": "approval_decision",
         "approval_id": approval_id,
         "approved": bool(approved),
         **({"scope": scope} if scope else {}),
+        **({"remember_prefix": remember_prefix} if remember_prefix else {}),
     }
 
 
@@ -929,18 +932,32 @@ def skills_list_request_payload() -> dict[str, Any]:
 
 
 def skill_proposal_payload(
-    *, proposal_id: str, agent_id: str, name: str, description: str, body: str
+    *,
+    proposal_id: str,
+    agent_id: str,
+    name: str,
+    description: str,
+    body: str,
+    kind: str = "create",
+    origin: str | None = None,
 ) -> dict[str, Any]:
     """Host -> app, on the run's stream and persisted for replay: the agent
-    offers to save a skill (docs/WIRE_CONTRACT.md, "Skill proposals")."""
-    return {
+    offers to save a skill (docs/WIRE_CONTRACT.md, "Skill proposals").
+    ``kind`` is ``create`` (a new skill) or ``patch`` (a new version of the
+    skill ``name``); ``origin`` is ``review`` for a background review's
+    proposal and absent for the agent's own ``propose_skill``."""
+    payload: dict[str, Any] = {
         "type": "skill_proposal",
         "proposal_id": proposal_id,
         "agent_id": agent_id,
         "name": name,
         "description": description,
         "body": body,
+        "kind": kind,
     }
+    if origin:
+        payload["origin"] = origin
+    return payload
 
 
 def skill_proposal_decision_payload(
