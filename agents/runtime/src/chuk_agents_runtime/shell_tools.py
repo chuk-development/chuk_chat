@@ -293,7 +293,11 @@ class JobManager:
             f"D=$1; ID={job_id}; T=$2\n"
             'echo $$ > "$D/$ID.pid"\n'
             f"{cd_line}"
-            f'timeout --signal=TERM -k 10 {self.timeout_s} bash "$D/$ID.cmd" > "$D/$ID.log" 2>&1\n'
+            # ``timeout`` makes its own process group, so a signal to this
+            # wrapper's group never reaches the command: forward it.
+            "trap 'kill -TERM -- \"-$tp\" 2>/dev/null; wait \"$tp\" 2>/dev/null; exit 143' TERM INT HUP\n"
+            f'timeout --signal=TERM -k 10 {self.timeout_s} bash "$D/$ID.cmd" > "$D/$ID.log" 2>&1 &\n'
+            'tp=$!; wait "$tp"\n'
             "rc=$?\n"
             'if [ -e "$D/$ID.cancelled" ]; then exit 0; fi\n'
             'echo $rc > "$D/$ID.exit"\n'
@@ -315,12 +319,26 @@ class JobManager:
             f"D=$1; ID={job_id}; T=$2\n"
             'echo $$ > "$D/$ID.pid"\n'
             'cd "$3" 2>/dev/null\n'
+            # A stop or a cancel signals this wrapper's group. ``timeout`` makes
+            # its own group, so the signal is forwarded to it. The command's
+            # EXIT trap still writes the state (bash runs it on TERM); once the
+            # command ended the plaintext snapshot is removed.
+            "trap 'kill -TERM -- \"-$tp\" 2>/dev/null; wait \"$tp\" 2>/dev/null; "
+            'rm -f "$D/$ID.env" "$D/$ID.state"; exit 143\' TERM INT HUP\n'
             'export __CW_ENV_FILE="$D/$ID.env" __CW_STATE_FILE="$D/$ID.state"\n'
-            f'timeout --signal=TERM -k 10 {self.timeout_s} bash "$D/$ID.cmd" > "$D/$ID.log" 2> "$D/$ID.err"\n'
+            f'timeout --signal=TERM -k 10 {self.timeout_s} bash "$D/$ID.cmd" > "$D/$ID.log" 2> "$D/$ID.err" &\n'
+            'tp=$!; wait "$tp"\n'
             "rc=$?\n"
             'if [ -e "$D/$ID.cancelled" ]; then rm -f "$D/$ID.env" "$D/$ID.state"; exit 0; fi\n'
             'echo $rc > "$D/$ID.exit"\n'
-            '[ -e "$D/$ID.notify" ] || exit 0\n'
+            # Not adopted: the caller loads the state and removes every file of
+            # the job. When the caller never comes (it was stopped, its shell
+            # died), the snapshot of its exports must not stay on disk in plain
+            # text: wait a bounded time for the caller, then remove it.
+            'if [ ! -e "$D/$ID.notify" ]; then\n'
+            '  i=0; while [ -e "$D/$ID.exit" ] && [ $i -lt 600 ]; do sleep 0.1; i=$((i+1)); done\n'
+            '  rm -f "$D/$ID.env" "$D/$ID.state"; exit 0\n'
+            'fi\n'
             # Adopted: the caller never loads this state. The snapshot holds
             # the caller's exports in plain text; it must not stay on disk.
             'rm -f "$D/$ID.env" "$D/$ID.state"\n'
@@ -404,7 +422,11 @@ class JobManager:
             + f"__cw_i={job_id}; "
             # A stop of the caller stops the command too, unless it was adopted.
             + "__cw_stop() { [ -e \"$__cw_d/$__cw_i.notify\" ] || { __cw_p=$(cat \"$__cw_d/$__cw_i.pid\" 2>/dev/null); "
-            + '[ -n "$__cw_p" ] && kill -TERM -- "-$__cw_p" 2>/dev/null; }; exit 130; }; '
+            + '[ -n "$__cw_p" ] && kill -TERM -- "-$__cw_p" 2>/dev/null; '
+            # The stopped command's EXIT trap may still write the state file:
+            # remove the plaintext snapshot once the process group is gone.
+            + '( sleep 1; [ -n "$__cw_p" ] && kill -KILL -- "-$__cw_p" 2>/dev/null; '
+            + 'rm -f "$__cw_d/$__cw_i.env" "$__cw_d/$__cw_i.state" ) >/dev/null 2>&1 & }; exit 130; }; '
             + "trap __cw_stop TERM INT HUP; "
             + f"__cw_end=$(( $(date +%s) + {max(1, int(timeout))} )); __cw_n=0; "
             + 'while [ ! -e "$__cw_d/$__cw_i.exit" ] && [ "$(date +%s)" -lt "$__cw_end" ]; do '
@@ -595,6 +617,9 @@ class JobManager:
             + 'kill -TERM -- "-$__pid" 2>/dev/null || kill -TERM "$__pid" 2>/dev/null; '
             + "for __i in 1 2 3 4 5 6 7 8 9 10; do kill -0 \"$__pid\" 2>/dev/null || break; sleep 0.5; done; "
             + 'kill -KILL -- "-$__pid" 2>/dev/null; kill -KILL "$__pid" 2>/dev/null; '
+            # A killed foreground job's EXIT trap writes the caller's exports
+            # to ``.state``; nobody loads it after a cancel, so remove it.
+            + f'rm -f "$__cw_d/{job_id}.env" "$__cw_d/{job_id}.state"; '
             + f'echo 143 > "$__cw_d/{job_id}.exit"; echo cancelled'
         )
         result = self.env.run_bash(script, timeout=60)

@@ -339,6 +339,34 @@ def test_cancel_kills_the_group_and_writes_no_trigger(tmp_path):
     assert jobs.cancel(job_id)["state"] == "already finished"
 
 
+def test_a_cancelled_foreground_job_leaves_no_shell_state_in_plain_text(tmp_path):
+    # The command's EXIT trap writes the caller's exports to ``.state`` even on
+    # TERM. Nobody loads it after a cancel, so it must not stay on disk.
+    jobs = JobManager(LocalEnvironment(), session_key="thread-1", workspace=str(tmp_path))
+    marker = tmp_path / "still-running"
+    moved = jobs.run_foreground(f"export TOKEN_X=abc; sleep 2; touch {marker}", timeout=1)
+    assert moved is not None and moved.get("moved") is True
+    job_id = moved["job_id"]
+    assert jobs.cancel(job_id)["state"] == "cancelled"
+    # ``timeout`` runs the command in its own process group: the cancel must
+    # still reach it, or it finishes later and writes the state after all.
+    time.sleep(2.5)
+    assert not marker.exists()
+    jobs_dir = tmp_path / ".agents/jobs"
+    assert not (jobs_dir / f"{job_id}.state").exists()
+    assert not (jobs_dir / f"{job_id}.env").exists()
+
+
+def test_cancel_reaches_the_command_under_timeout(tmp_path):
+    jobs = JobManager(LocalEnvironment(), session_key="thread-1", workspace=str(tmp_path))
+    marker = tmp_path / "still-running"
+    job_id = jobs.start(f"sleep 1.5; touch {marker}", cwd=str(tmp_path))["job_id"]
+    time.sleep(0.3)
+    assert jobs.cancel(job_id)["state"] == "cancelled"
+    time.sleep(2)
+    assert not marker.exists()
+
+
 def test_a_found_tmux_is_kept_for_the_next_task_of_the_sandbox():
     """The manager is built per task; the probe was a ``docker exec`` before
     every task's first model call (bead chuk_chat-5o8j). A "yes" is kept for

@@ -40,7 +40,7 @@ from .file_edit import EditGuard, FileObservations
 from .file_edit import edit_file as _edit_file
 from .file_edit import read_window
 from .file_patch import apply_patch as _apply_patch
-from .safety_floor import SafetyFloor
+from .safety_floor import FloorVerdict, SafetyFloor
 from .files_out import FileSink, register_send_file
 from .media import WorkspaceMount, register_media_tools
 from .registry import ToolRegistry
@@ -319,7 +319,10 @@ def make_run_command_handler(
                 "error": "description must not be blank: give a short 5-10 word label for this command",
             }
         if floor is not None:
-            verdict = floor.check_command(command)
+            try:
+                verdict = floor.check_command(command)
+            except Exception:  # noqa: BLE001 — RecursionError and friends: fail closed
+                verdict = FloorVerdict("the safety floor could not check this command", hard=False)
             if verdict is not None:
                 return {"ok": False, "blocked": True, "error": verdict.message()}
         if background:
