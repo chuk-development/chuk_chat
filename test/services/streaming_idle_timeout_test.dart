@@ -2,8 +2,8 @@
 // and for a chuk_chat chat in the Agents build.
 //
 // No event of any kind for 60 seconds ends the stream: an error with the
-// `idle_timeout` code when nothing had arrived, a completion with the partial
-// content when something had. An Agents thread replaces this with a log-only
+// `idle_timeout` code, whether or not content had arrived. Partial content is
+// parked for `takeInterruptedPartial`, never saved as a complete answer. An Agents thread replaces this with a log-only
 // silence watch; that side is pinned by streaming_silence_test.dart.
 
 import 'dart:async';
@@ -123,15 +123,20 @@ void main() {
     await dispose(tester, 'idle-cancel');
   });
 
-  testWidgets('partial content is completed, not thrown away', (tester) async {
+  testWidgets('partial content is an idle_timeout error, and the text is '
+      'kept', (tester) async {
     await start('idle-partial');
 
     input.add(const ContentEvent('half an answer'));
     await tester.pump();
     await tester.pump(const Duration(seconds: 61));
 
-    expect(errors, isEmpty);
-    expect(completions, <String>['half an answer']);
+    // Not saved as a complete answer (B3).
+    expect(completions, isEmpty);
+    expect(errorCodes, <String?>[StreamErrorCodes.idleTimeout]);
+    expect(manager.isStreaming('idle-partial'), isFalse);
+    // The cut text waits for the error handler's salvage path.
+    expect(manager.takeInterruptedPartial('idle-partial'), 'half an answer');
 
     await dispose(tester, 'idle-partial');
   });

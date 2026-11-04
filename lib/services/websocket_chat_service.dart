@@ -84,6 +84,7 @@ class WebSocketChatService {
     String? reasoningEffort,
     String? chatId,
     List<Map<String, dynamic>>? tools,
+    String? toolChoice,
     bool regenerate = false,
     bool modelSelectionCaptured = false,
   }) {
@@ -119,6 +120,7 @@ class WebSocketChatService {
       reasoningEffort: reasoningEffort,
       chatId: chatId,
       tools: tools,
+      toolChoice: toolChoice,
     );
   }
 
@@ -135,6 +137,7 @@ class WebSocketChatService {
     String? reasoningEffort,
     String? chatId,
     List<Map<String, dynamic>>? tools,
+    String? toolChoice,
   }) async* {
     // One connection carries everything. When [chatId] is supplied the
     // multiplex routes through [MultiplexSession.chatForChat] (single
@@ -166,6 +169,7 @@ class WebSocketChatService {
       reasoningEffort: reasoningEffort,
       chatId: chatId,
       tools: tools,
+      toolChoice: toolChoice,
     );
   }
 
@@ -185,6 +189,7 @@ class WebSocketChatService {
     String? reasoningEffort,
     String? chatId,
     List<Map<String, dynamic>>? tools,
+    String? toolChoice,
   }) async* {
     // Last guard: the Auto marker is the reader's choice, not a provider the
     // server knows. Every send path resolves it earlier; one that forgot
@@ -212,6 +217,9 @@ class WebSocketChatService {
     // turn. The backend forwards them upstream and streams back tool_calls.
     if (tools != null && tools.isNotEmpty) {
       payload['tools'] = tools;
+      // `none` on the forced final pass: the same tools[] (so the prompt
+      // cache still hits) but the model may only answer.
+      if (toolChoice != null) payload['tool_choice'] = toolChoice;
     }
 
     // Cache a large message server-side under a client-issued id so later

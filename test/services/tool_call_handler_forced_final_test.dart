@@ -170,7 +170,9 @@ void main() {
       );
       expect(result.shouldContinue, isTrue);
       expect(result.nextStep!.message, kForcedFinalAnswerNote);
-      expect(handler.nativeToolDefinitions(session), isEmpty);
+      // Shut tools keep tools[] (prompt cache) and send tool_choice none.
+      expect(handler.nativeToolDefinitions(session), isNotEmpty);
+      expect(ToolCallHandler.nativeToolChoice(session), 'none');
       expect(session.toolCalls, hasLength(kMaxToolRoundsPerTurn));
       // The unrun call is not recorded, so every tool_call_id stays paired.
       final last = result.nextStep!.history.last;
@@ -309,7 +311,9 @@ void main() {
       expect(result.shouldContinue, isTrue);
       expect(result.nextStep!.message, kForcedFinalAnswerNote);
       expect(session.toolCalls, isEmpty);
-      expect(handler.nativeToolDefinitions(session), isEmpty);
+      // Shut tools keep tools[] (prompt cache) and send tool_choice none.
+      expect(handler.nativeToolDefinitions(session), isNotEmpty);
+      expect(ToolCallHandler.nativeToolChoice(session), 'none');
     });
 
     test('a model that never stops asking ends with the text it wrote, '

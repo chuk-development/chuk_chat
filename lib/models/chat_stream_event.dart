@@ -18,8 +18,11 @@ sealed class ChatStreamEvent {
   const factory ChatStreamEvent.tps(double tokensPerSecond) = TpsEvent;
   const factory ChatStreamEvent.toolCalls(List<NativeToolCall> calls) =
       ToolCallsEvent;
-  const factory ChatStreamEvent.error(String message, {String? code}) =
-      ErrorEvent;
+  const factory ChatStreamEvent.error(
+    String message, {
+    String? code,
+    String? errorClass,
+  }) = ErrorEvent;
   const factory ChatStreamEvent.heartbeat({int seq, double? elapsedSeconds}) =
       HeartbeatEvent;
   const factory ChatStreamEvent.done() = DoneEvent;
@@ -111,7 +114,18 @@ class ErrorEvent extends ChatStreamEvent {
   /// raised locally rather than by the server.
   final String? code;
 
-  const ErrorEvent(this.message, {this.code});
+  /// Coarse failure class from the server's `class` field (`auth`, `quota`,
+  /// `rate_limit`, `context_window_exceeded`, `invalid_request`, `server`).
+  /// Null on older servers and for locally raised errors.
+  final String? errorClass;
+
+  const ErrorEvent(this.message, {this.code, this.errorClass});
+
+  /// Whether this error means the user is out of credits or free messages:
+  /// the server's `billing` code, or the `quota` class. The UI then shows
+  /// the upgrade dialog instead of an error line.
+  bool get isPaymentRequired =>
+      code == StreamErrorCodes.billing || errorClass == 'quota';
 }
 
 /// Proof of life: the host says the run behind this stream is still running.
@@ -176,6 +190,18 @@ abstract final class StreamErrorCodes {
   /// The event stream itself raised.
   static const String streamFailure = 'stream_failure';
 
+  /// The server says the provider stream broke before it finished. What
+  /// arrived is a cut answer, not a complete one.
+  static const String upstreamInterrupted = 'upstream_interrupted';
+
+  /// The event stream closed without a `done` frame. Raised locally by
+  /// `StreamingManager`; the content so far is a cut answer.
+  static const String streamInterrupted = 'stream_interrupted';
+
+  /// Out of credits or free messages. Not retryable; the UI shows the
+  /// upgrade dialog (see [ErrorEvent.isPaymentRequired]).
+  static const String billing = 'billing';
+
   /// Failures worth re-issuing the pass for.
   ///
   /// [upstreamStatus] is deliberately absent: a rejection is not transient,
@@ -189,5 +215,7 @@ abstract final class StreamErrorCodes {
     connectionLost,
     idleTimeout,
     streamFailure,
+    upstreamInterrupted,
+    streamInterrupted,
   };
 }

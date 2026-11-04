@@ -95,8 +95,10 @@ class StreamingManager extends StreamingManagerBase {
   /// fires for almost every real timeout, and it used to report no code at
   /// all, so callers that branch on the code never saw an idle timeout.
   ///
-  /// Partial content is kept: a stream that stopped halfway is completed with
-  /// what already arrived rather than thrown away.
+  /// Partial content is not saved as a complete answer: a stream that stopped
+  /// halfway is an error too, with [StreamErrorCodes.idleTimeout]. The cut
+  /// text is parked for [takeInterruptedPartial], so the UI shows it next to
+  /// the error and the turn can be retried or continued.
   Timer _startIdleTimer({
     required String chatId,
     required ActiveStream stream,
@@ -116,16 +118,19 @@ class StreamingManager extends StreamingManagerBase {
         );
       }
       final content = stream.contentBuffer.toString();
-      if (content.isEmpty) {
-        onError(emptyMessage, code: StreamErrorCodes.idleTimeout);
-      } else {
-        onComplete(content, stream.reasoningBuffer.toString(), stream.tps);
-      }
+      recordInterruptedPartial(chatId, content);
       // Close the connection as completeStream does. cleanupStream only drops
       // the map entry, so a late event of this dead stream would otherwise
-      // land in the next stream of the same chat.
+      // land in the next stream of the same chat. Done before onError, as the
+      // ErrorEvent path does, so the UI does not rebuild on a live entry.
       unawaited(stream.subscription.cancel());
       cleanupStream(chatId);
+      onError(
+        content.isEmpty
+            ? emptyMessage
+            : 'The response stopped before it finished. Please try again.',
+        code: StreamErrorCodes.idleTimeout,
+      );
     });
   }
 

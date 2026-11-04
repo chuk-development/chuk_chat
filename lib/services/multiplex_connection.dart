@@ -763,11 +763,30 @@ class MultiplexConnection {
         final message = code == kCacheMissErrorCode
             ? '$kCacheMissErrorCode: $detail'
             : detail;
-        ctrl.add(ChatStreamEvent.error(message, code: code));
+        // Newer servers add a coarse `class` (auth, quota, rate_limit, ...).
+        final errorClass = data['class']?.toString();
+        ctrl.add(
+          ChatStreamEvent.error(message, code: code, errorClass: errorClass),
+        );
         // Don't close yet — server still owes us `done`. If it never
         // arrives the transport-failure path will close us.
         break;
+      case 'timing':
+        // Older servers carry `finish_reason` only on the `timing` frame of
+        // phase `complete`. Lift it into a meta event so the tool loop's
+        // truncation and tool-use signals work on those servers too.
+        final finishReason = finishReasonFromTimingFrame(data);
+        if (finishReason != null) {
+          ctrl.add(ChatStreamEvent.meta({'finish_reason': finishReason}));
+        }
+        break;
       case 'done':
+        // Newer servers repeat `finish_reason` on `done`, as `data` or at the
+        // top level of the frame.
+        final finishReason = finishReasonFromDoneFrame(data);
+        if (finishReason != null) {
+          ctrl.add(ChatStreamEvent.meta({'finish_reason': finishReason}));
+        }
         ctrl.add(const ChatStreamEvent.done());
         _chatControllers.remove(reqId);
         unawaited(ctrl.close());
@@ -776,6 +795,33 @@ class MultiplexConnection {
         // Ignore unknown frame kinds.
         break;
     }
+  }
+
+  /// The `finish_reason` of a `timing` frame of phase `complete`, or null.
+  @visibleForTesting
+  static String? finishReasonFromTimingFrame(Map<String, dynamic> frame) {
+    final data = frame['data'];
+    if (data is! Map) return null;
+    if (data['phase'] != 'complete') return null;
+    return _nonEmptyString(data['finish_reason']);
+  }
+
+  /// The `finish_reason` a `done` frame carries, or null (older servers send
+  /// a bare `done`).
+  @visibleForTesting
+  static String? finishReasonFromDoneFrame(Map<String, dynamic> frame) {
+    final data = frame['data'];
+    if (data is Map) {
+      final fromData = _nonEmptyString(data['finish_reason']);
+      if (fromData != null) return fromData;
+    }
+    return _nonEmptyString(frame['finish_reason']);
+  }
+
+  static String? _nonEmptyString(Object? value) {
+    if (value is! String) return null;
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
   }
 
   void _dispatchTool(
@@ -846,11 +892,19 @@ class MultiplexConnection {
     return controller.stream;
   }
 
+  /// How long a server tool call may take before it is given up.
+  static const Duration defaultToolTimeout = Duration(seconds: 120);
+
   /// Open a single-shot tool call. Resolves with the `result.data` map
   /// or rejects with [MultiplexException].
+  ///
+  /// A call with no answer after [timeout] is cancelled on the server and
+  /// rejects with code `timeout` and the text
+  /// `tool call timed out after <n>ms`, so a lost frame cannot hang the turn.
   Future<Map<String, dynamic>> tool({
     required String tool,
     required Map<String, dynamic> payload,
+    Duration timeout = defaultToolTimeout,
   }) {
     final reqId = _newReqId();
     final completer = Completer<Map<String, dynamic>>();
@@ -863,7 +917,18 @@ class MultiplexConnection {
       'payload': payload,
     }, toolCompleter: completer));
 
-    return completer.future;
+    final timer = Timer(timeout, () {
+      if (completer.isCompleted) return;
+      _toolCompleters.remove(reqId);
+      _sendCancel(reqId);
+      completer.completeError(
+        MultiplexException(
+          'tool call timed out after ${timeout.inMilliseconds}ms',
+          code: 'timeout',
+        ),
+      );
+    });
+    return completer.future.whenComplete(timer.cancel);
   }
 
   /// Cancel an in-flight request. Idempotent; safe to call after the
