@@ -4,15 +4,25 @@
 // written here BEFORE any transcription attempt, so a bad connection, a
 // crash or an app restart never loses it. Design: docs/OFFLINE_SEND.md.
 //
-// Layout: <applicationSupportDir>/voice_spool/<userId or 'anon'>/<uuid>.wav
+// Layout: <applicationSupportDir>/voice_spool/<userId or 'anon'>/<uuid>.wav.enc
+//
+// A recording is the user's message, so it is sealed at rest with the chat
+// key (`EncryptionService.encryptBytes`, as the offline images). When no key
+// can be loaded, the recording is NOT written in plaintext: it is kept in
+// memory under its final path and written, sealed, as soon as a key is
+// there ([sealPending], also at every outbox flush). If the app dies before
+// that, the recording is lost and its row fails with "recording missing".
 //
 // Web has no file system: there the recordings live in IndexedDB
 // ([OfflineBlobStore]) under the same layout, and a path is
 // `idb:voice_spool/<user>/<uuid>.wav`. A browser without IndexedDB throws
 // [UnsupportedError], and the caller falls back to the old in-memory path.
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
+import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/offline_blob_handle.dart';
 import 'package:chuk_chat/utils/io_helper.dart' show Directory, File;
 import 'package:chuk_chat/utils/path_provider_stub.dart'
@@ -56,38 +66,118 @@ abstract final class VoiceSpoolService {
     return '$base/$_folder/${_safeUser(userId)}';
   }
 
-  /// Writes [wav] to a new file and returns its absolute path. The write is
-  /// flushed to disk before this returns.
+  /// The suffix of a sealed recording.
+  static const String sealedSuffix = '.wav.enc';
+
+  /// Test seam: seals the bytes of a recording, or null when no key can be
+  /// loaded.
+  @visibleForTesting
+  static Future<Uint8List?> Function(Uint8List wav) seal = _defaultSeal;
+
+  /// Test seam: opens bytes written by [seal].
+  @visibleForTesting
+  static Future<Uint8List> Function(Uint8List sealed) open = _defaultOpen;
+
+  static Future<Uint8List?> _defaultSeal(Uint8List wav) async {
+    if (!EncryptionService.hasKey && !await EncryptionService.tryLoadKey()) {
+      return null;
+    }
+    return Uint8List.fromList(
+      utf8.encode(await EncryptionService.encryptBytes(wav)),
+    );
+  }
+
+  static Future<Uint8List> _defaultOpen(Uint8List sealed) =>
+      EncryptionService.decryptBytes(utf8.decode(sealed));
+
+  /// Recordings saved while no key could be loaded, by their final path.
+  /// They never touch the disk in plaintext.
+  static final Map<String, Uint8List> _pending = <String, Uint8List>{};
+
+  /// Whether a recording waits in memory for the key.
+  @visibleForTesting
+  static bool isPending(String path) => _pending.containsKey(path);
+
+  /// Saves [wav] as a new recording and returns its path. With a key the
+  /// sealed bytes are on disk (flushed) before this returns; without one
+  /// they wait in memory until [sealPending] can write them.
   static Future<String> saveWav(Uint8List wav, {String? userId}) async {
     if (!isSupported) {
       throw UnsupportedError('Voice spool is not supported on web');
     }
+    final String name = '${_uuid.v4()}$sealedSuffix';
+    final String path;
     if (_web) {
-      final key = '$_folder/${_safeUser(userId)}/${_uuid.v4()}.wav';
-      await blobs.put(key, wav);
-      return '$webScheme$key';
+      path = '$webScheme$_folder/${_safeUser(userId)}/$name';
+    } else {
+      path = '${await _userDir(userId)}/$name';
     }
-    final dir = await _userDir(userId);
-    await Directory(dir).create(recursive: true);
-    final path = '$dir/${_uuid.v4()}.wav';
-    await File(path).writeAsBytes(wav, flush: true);
+    final Uint8List? sealed = await seal(wav);
+    if (sealed == null) {
+      _pending[path] = wav;
+      if (kDebugMode) debugPrint('[VoiceSpool] kept in memory until the key');
+      return path;
+    }
+    await _write(path, sealed);
     if (kDebugMode) {
-      debugPrint('[VoiceSpool] saved ${wav.length} bytes');
+      debugPrint('[VoiceSpool] saved ${wav.length} bytes (sealed)');
     }
+    // A key is there now: earlier recordings that waited for it go too.
+    if (_pending.isNotEmpty) await sealPending();
     return path;
   }
 
-  /// Reads a saved recording. Throws when the file is missing.
+  static Future<void> _write(String path, Uint8List bytes) async {
+    if (_web) {
+      await blobs.put(_webKey(path), bytes);
+      return;
+    }
+    final int cut = path.lastIndexOf('/');
+    if (cut > 0) {
+      await Directory(path.substring(0, cut)).create(recursive: true);
+    }
+    await File(path).writeAsBytes(bytes, flush: true);
+  }
+
+  /// Writes the recordings that waited for the key, sealed. Returns how
+  /// many were written. No-op while no key can be loaded.
+  static Future<int> sealPending() async {
+    if (_pending.isEmpty) return 0;
+    var n = 0;
+    for (final String path in _pending.keys.toList()) {
+      final Uint8List? wav = _pending[path];
+      if (wav == null) continue;
+      final Uint8List? sealed = await seal(wav);
+      if (sealed == null) break;
+      try {
+        await _write(path, sealed);
+        // Only now: a failed write keeps it in memory for the next try.
+        _pending.remove(path);
+        n++;
+      } catch (e) {
+        if (kDebugMode) debugPrint('[VoiceSpool] seal write failed: $e');
+      }
+    }
+    return n;
+  }
+
+  /// Reads a saved recording (opened when sealed). Throws when it is
+  /// missing.
   static Future<Uint8List> read(String path) async {
     if (!isSupported) {
       throw UnsupportedError('Voice spool is not supported on web');
     }
+    final Uint8List? held = _pending[path];
+    if (held != null) return held;
+    final Uint8List raw;
     if (_web) {
       final bytes = await blobs.get(_webKey(path));
       if (bytes == null) throw StateError('recording is missing');
-      return bytes;
+      raw = bytes;
+    } else {
+      raw = await File(path).readAsBytes();
     }
-    return File(path).readAsBytes();
+    return path.endsWith(sealedSuffix) ? open(raw) : raw;
   }
 
   static String _webKey(String path) =>
@@ -96,6 +186,7 @@ abstract final class VoiceSpoolService {
   /// Whether the recording at [path] still exists.
   static Future<bool> exists(String path) async {
     if (!isSupported || path.isEmpty) return false;
+    if (_pending.containsKey(path)) return true;
     if (_web) {
       try {
         return await blobs.exists(_webKey(path));
@@ -113,6 +204,7 @@ abstract final class VoiceSpoolService {
   /// Deletes a saved recording. A missing file is not an error.
   static Future<void> delete(String path) async {
     if (!isSupported || path.isEmpty) return;
+    _pending.remove(path);
     try {
       if (_web) {
         await blobs.delete(_webKey(path));
@@ -137,6 +229,7 @@ abstract final class VoiceSpoolService {
       for (final String folder in <String>{_safeUser(userId), 'anon'}) {
         try {
           for (final e in await blobs.list('$_folder/$folder/')) {
+            if (!_isRecording(e.key)) continue;
             out.add((path: '$webScheme${e.key}', modified: e.modified));
           }
         } catch (_) {}
@@ -148,7 +241,7 @@ abstract final class VoiceSpoolService {
       try {
         if (!await dir.exists()) continue;
         await for (final entity in dir.list(followLinks: false)) {
-          if (entity is! File || !entity.path.endsWith('.wav')) continue;
+          if (entity is! File || !_isRecording(entity.path)) continue;
           out.add((path: entity.path, modified: await entity.lastModified()));
         }
       } catch (e) {
@@ -158,9 +251,19 @@ abstract final class VoiceSpoolService {
     return out;
   }
 
-  /// Sign-out: deletes every recording of [userId].
+  /// A recording file: sealed, or a plaintext `.wav` of an older build.
+  static bool _isRecording(String path) =>
+      path.endsWith(sealedSuffix) || path.endsWith('.wav');
+
+  /// Sign-out: deletes every recording of [userId], also one that still
+  /// waits in memory for the key.
   static Future<void> wipeUser(String userId) async {
     if (!isSupported) return;
+    final String folder = '/$_folder/${_safeUser(userId)}/';
+    _pending.removeWhere(
+      (String path, _) => path.contains(folder) ||
+          path.startsWith('$webScheme${folder.substring(1)}'),
+    );
     try {
       if (_web) {
         await blobs.deletePrefix('$_folder/${_safeUser(userId)}/');
@@ -173,10 +276,30 @@ abstract final class VoiceSpoolService {
     }
   }
 
+  /// Test seam: a stand-in cipher (no real key). [withKey] false acts as
+  /// "no key can be loaded".
+  @visibleForTesting
+  static void useFakeCipher({bool withKey = true}) {
+    seal = (Uint8List wav) async => withKey
+        ? Uint8List.fromList(<int>[0x53, for (final b in wav) b ^ 0x5a])
+        : null;
+    open = (Uint8List sealed) async {
+      if (sealed.isEmpty || sealed.first != 0x53) {
+        throw StateError('not sealed');
+      }
+      return Uint8List.fromList(<int>[
+        for (final b in sealed.skip(1)) b ^ 0x5a,
+      ]);
+    };
+  }
+
   @visibleForTesting
   static void reset() {
     baseDir = _defaultBaseDir;
     forceWeb = null;
     blobs = const OfflineBlobHandle();
+    seal = _defaultSeal;
+    open = _defaultOpen;
+    _pending.clear();
   }
 }

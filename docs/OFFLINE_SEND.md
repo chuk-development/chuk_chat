@@ -54,15 +54,23 @@ key) is kept and marked locked. It is not sent and not deleted.
 
 The Agents outbox (`kv_cache`, keys `agents.task_outbox.*`) is sealed the same
 way. Follow-ups are sealed in `kv_cache` under `outbox.followups.<user>.<chat>`.
-Voice recordings are WAV files in `voice_spool/<user>/`. Offline images are
+Voice recordings are sealed with the same key (`EncryptionService.encryptBytes`)
+and written as `voice_spool/<user>/<uuid>.wav.enc` (web: the same key in
+IndexedDB). A recording is never written in plaintext: when no key can be
+loaded, it stays in memory under its final path and is written, sealed, as
+soon as a key is there (the next save with a key, or the next flush,
+`VoiceSpoolService.sealPending`). If the app dies before that, the recording
+is lost and its row fails with "recording missing". Offline images are
 already encrypted files in `offline_images/<user>/`.
 
 ### Owner and sign-out
 
 Every row has a `user_id`. The flush only touches rows of the signed-in user.
 An explicit sign-out (`AuthService.signOut`) calls
-`OfflineSendCoordinator.wipeUser`: it deletes the user's rows, their voice
-files and offline images, the parked follow-ups and the Agents outbox. A
+`OfflineSendCoordinator.wipeUser`: it deletes the user's rows, every row
+with no owner (version 1 rows, rows queued before a session was known; the
+next account must never claim and send them), their voice files and offline
+images, the parked follow-ups and the Agents outbox. A
 session that expires (no explicit sign-out) wipes nothing; the rows wait for
 the same user.
 
@@ -89,7 +97,9 @@ when online" in place of the text.
 The bubble keeps `status: pending` and the `queueId` in the chat. The cloud
 copy of the chat does not: a `pending` or `failed` user message is synced as a
 plain message (`neutralizeOutboxState` in `chat_storage_sync.dart`), because
-other devices cannot send it. Old clients read it as a sent message, which is
+other devices cannot send it. Every cloud write (save, update, rename,
+re-encrypt) encodes both copies with `encodeChatPayloadPair`: the neutral one
+goes to `encrypted_chats`, the local cache keeps the one with the state. Old clients read it as a sent message, which is
 what they did before.
 
 ## When a message goes into the outbox
@@ -103,9 +113,14 @@ what they did before.
    `StreamingManagerBase.serverAccepted`. This covers mobile
    (`StreamingMessageHandler.onSendNotAccepted`) and desktop
    (`desktop_send_logic.dart`). Only the first pass of a fresh send is
-   queued; a regenerate, a continue or a later tool pass is not.
+   queued; a regenerate, a continue or a later tool pass is not. The mobile
+   screen keeps the payload of a fresh send only until its turn ends; an
+   edit, a resend, an outbox send or a continue drops it first, so they never
+   queue an older message.
 5. A voice recording cannot be transcribed (offline, no session, the
-   transcription socket and the upload fail on the network).
+   transcription socket and the upload fail on the network). The voice
+   bubble goes into the chat that started the recording, also when the user
+   switched chats while it was queued (`OfflineSendBridge.voiceBubbleOffScreen`).
 
 A send that fails AFTER the server accepted it is never queued and never
 re-sent by itself, because the server may already bill the turn. The normal
@@ -216,13 +231,18 @@ parked follow-up becomes an outbox row with a waiting bubble at the end of
 the chat, in order, and leaves the park. The dispatcher runs on every outbox
 kick (start, resume, back online, server connect), on a chat switch and when
 a screen goes away, and polls every 3 s while a parked chat waits. A chat on
-screen restores and sends its own parked follow-ups when it is opened.
+screen restores and sends its own parked follow-ups when it is opened (on
+desktop also on the fast path for a chat already in the cache). The
+dispatcher reads the chat before it takes the follow-ups off the park, so a
+failed read loses nothing.
 
 ## Files a crash left behind
 
 `OfflineFileSweeper` runs once per app run and user, on the first outbox kick
 with a key. It lists the user's voice recordings (and the `anon` folder) and
-offline images. A file that a row names is kept at any age. A file no row
+offline images. A file that a row names is kept at any age; paths are
+compared with `/` and `\` as one separator, because a directory listing on
+Windows joins with `\`. A file no row
 names is deleted when it is older than 6 hours (a newer one may belong to a
 recording or a composer that is still open). If any row of the user cannot
 be opened, nothing is deleted. Promotion markers (`.promoted`) are kept.
@@ -231,8 +251,9 @@ be opened, nothing is deleted. Promotion markers (`.promoted`) are kept.
 
 1. The recorder keeps every PCM chunk in memory, also while it streams to
    the transcription socket. A dropped socket loses nothing.
-2. On stop, the WAV is written to `voice_spool/<user>/` BEFORE any
-   transcription attempt. The buffer is only cleared after the file exists.
+2. On stop, the WAV is sealed and written to `voice_spool/<user>/` BEFORE
+   any transcription attempt (with no key: held in memory, see
+   "Encryption"). The buffer is only cleared after the file exists.
 3. Transcription works: the file is deleted, the text goes to the composer
    as before.
 4. Transcription cannot connect: the result is `queueable`. The screen adds
@@ -275,8 +296,10 @@ An Agents prompt that cannot reach the host waits in `AgentsTaskOutbox`:
   binds it and reconnects with no code. The flusher sends the queue and
   re-sends unconfirmed tasks. The link closes when nothing is left, and
   steps back at once when a thread view binds its own controller (a view
-  unbinds its controller when it goes away). Checks every 15 s and on every
-  outbox change or network change.
+  unbinds its controller when it goes away). A controller of its own that
+  died (`closed`, or `error` after a reconnect that failed) is dropped and a
+  fresh one is built on the same look while work is left. Checks every 15 s
+  and on every outbox change or network change.
 - Images in Agents are not sent yet (no attachment frame). The text goes out
   and the user sees "Images are not supported in Agents yet".
 
@@ -286,7 +309,7 @@ Web has no file system. The outbox rows live in SharedPreferences as
 before; voice recordings and offline images live in IndexedDB
 (`OfflineBlobStore`, database `chuk_offline_outbox`, store `blobs`, value
 `[bytes, writtenAtMs]`) under the same layout as the native files: a
-recording path is `idb:voice_spool/<user>/<uuid>.wav`, an offline image key
+recording path is `idb:voice_spool/<user>/<uuid>.wav.enc` (sealed bytes), an offline image key
 is `offline_images/<user>/<id>.enc` (and `.promoted`). So voice and images
 are kept and sent later on web too. A browser without IndexedDB falls back
 to the old behaviour (voice transcribed live only, no offline images).

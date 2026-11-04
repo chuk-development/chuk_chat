@@ -265,13 +265,17 @@ class OfflineQueueService {
     await _emit();
   }
 
+  /// Sign-out: the rows of [userId] and the rows with no owner go (see the
+  /// native store).
   Future<List<QueuedMessage>> wipeUser(String userId) async {
     final rows = await _readRaw();
+    bool gone(Map<String, dynamic> r) =>
+        r['user_id'] == userId || r['user_id'] == null;
     final removed = rows
-        .where((r) => r['user_id'] == userId)
+        .where(gone)
         .map((r) => QueuedMessage.fromRow(r, payloadOverride: const {}))
         .toList(growable: false);
-    rows.removeWhere((r) => r['user_id'] == userId);
+    rows.removeWhere(gone);
     await _writeRaw(rows);
     await _emit();
     return removed;

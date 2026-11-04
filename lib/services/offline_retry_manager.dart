@@ -28,6 +28,7 @@ import 'package:chuk_chat/services/offline_outbox_cipher.dart';
 import 'package:chuk_chat/services/offline_queue_service.dart';
 import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/voice_spool_service.dart';
 import 'package:chuk_chat/utils/exponential_backoff.dart';
 
 /// Outcome of a send executor call.
@@ -496,6 +497,10 @@ class OfflineRetryManager with WidgetsBindingObserver {
     if (user != null) {
       await queue.claimLegacyRows(user);
       await queue.sealPlaintextRows(user);
+      // Recordings that waited in memory for the key go to disk, sealed.
+      try {
+        await VoiceSpoolService.sealPending();
+      } catch (_) {}
     }
     final pending = await queue.listAll(userId: user);
     // The bubbles and the badge follow the signed-in user's rows; the user

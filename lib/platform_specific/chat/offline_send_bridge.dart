@@ -91,6 +91,26 @@ abstract final class OfflineSendBridge {
     return row != null && row.state != OutboxState.failed;
   }
 
+  /// After the awaits of a voice queue: the list to save, silently, under
+  /// [chatId] when the screen no longer shows that chat (the user switched
+  /// chats, or the screen went away), or null when the bubble goes into
+  /// the live list. [before] is the chat as it was when the queue started;
+  /// the live list may hold another chat by now, and saving it under
+  /// [chatId] would overwrite that chat's history.
+  static List<Map<String, String>>? voiceBubbleOffScreen({
+    required String chatId,
+    required String? activeChatId,
+    required bool mounted,
+    required List<Map<String, String>> before,
+    required Map<String, String> bubble,
+  }) {
+    if (mounted && activeChatId == chatId) return null;
+    return <Map<String, String>>[
+      for (final m in before) Map<String, String>.from(m),
+      bubble,
+    ];
+  }
+
   /// The user bubble of a voice message whose recording is saved but not
   /// transcribed yet. Its text arrives with the transcript.
   static Map<String, String> voiceBubble({

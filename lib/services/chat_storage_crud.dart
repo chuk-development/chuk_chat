@@ -1012,13 +1012,12 @@ class ChatStorageCrud {
     return name != null && name.isNotEmpty ? name : null;
   }
 
-  /// The plaintext payload of a chat (v3). The one encoding for the cache
-  /// and the cloud.
+  /// The plaintext payload of a chat (v3) as the cache keeps it. A cloud
+  /// write takes [encodeChatPayloadPair] instead.
   static Future<String> _payloadJson(
     List<ChatMessage> messages,
-    String? customName, {
-    bool forCloud = false,
-  }) => encodeChatPayloadAsync(messages, customName, forCloud: forCloud);
+    String? customName,
+  ) => encodeChatPayloadAsync(messages, customName);
 
   /// The digest that tells two saves of a chat apart: over the messages as
   /// they are in memory, not over the stored encoding, so it is computed
@@ -1360,14 +1359,12 @@ class ChatStorageCrud {
     // A chat saved locally first may already carry a name and a star.
     final local = ChatStorageState.chatsById[effectiveChatId];
     final customName = _customNameOf(local);
-    final payloadJson = await _payloadJson(
-      messages,
-      customName,
-      forCloud: true,
-    );
+    // The cloud copy is neutralized; the cache keeps the outbox state.
+    final payloads = await encodeChatPayloadPair(messages, customName);
+    final payloadJson = payloads.local;
 
     final encryptedPayload = await EncryptionService.encryptChatPayload(
-      payloadJson,
+      payloads.cloud,
     );
 
     // Extract and encrypt title separately for fast sidebar loading
@@ -1607,13 +1604,14 @@ class ChatStorageCrud {
       await ChatDirtyStore.markSynced(user.id, chatId, rev);
       return existingChat;
     }
-    final payloadJson = await _payloadJson(
+    // The cloud copy is neutralized; the cache keeps the outbox state.
+    final payloads = await encodeChatPayloadPair(
       messages,
       normalizedCustomName,
-      forCloud: true,
     );
+    final payloadJson = payloads.local;
     final encryptedPayload = await EncryptionService.encryptChatPayload(
-      payloadJson,
+      payloads.cloud,
     );
 
     // Extract and encrypt title separately for fast sidebar loading

@@ -983,6 +983,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
     scrollChatToBottom(animate: false, force: true);
     Future.delayed(Duration.zero, () => composerFocusNode.requestFocus());
+    // The cached fast path ends here, not in [_loadChatByIdAsync]: a
+    // follow-up parked for this chat goes out from here too.
+    unawaited(_restoreParkedFollowUp(chatId));
   }
 
   Future<void> _loadChatByIdAsync(String? chatId) async {
@@ -1835,6 +1838,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     final String chatId = _activeChatId!;
     final String modelId = selectedModelId;
     final String provider = selectedProviderSlug ?? '';
+    // The chat as it is now: the awaits below may see a chat switch.
+    final List<Map<String, String>> before = _messages
+        .map(Map<String, String>.from)
+        .toList();
     final String? systemPrompt = await _resolveSystemPromptForSend();
     String queueId;
     try {
@@ -1861,17 +1868,27 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       }
       return;
     }
-    if (!mounted) return;
-    setState(() {
-      _messages.add(
-        OfflineSendBridge.voiceBubble(
-          queueId: queueId,
-          durationMs: durationMs,
-          modelId: modelId,
-          provider: provider,
-        ),
-      );
-    });
+    final Map<String, String> bubble = OfflineSendBridge.voiceBubble(
+      queueId: queueId,
+      durationMs: durationMs,
+      modelId: modelId,
+      provider: provider,
+    );
+    final List<Map<String, String>>? offScreen =
+        OfflineSendBridge.voiceBubbleOffScreen(
+          chatId: chatId,
+          activeChatId: _activeChatId,
+          mounted: mounted,
+          before: before,
+          bubble: bubble,
+        );
+    if (offScreen != null) {
+      // Another chat is on screen now: the bubble goes into the chat that
+      // started the queue, never into the list on screen.
+      _persistChatWithIdAndMessages(chatId, offScreen);
+      return;
+    }
+    setState(() => _messages.add(bubble));
     _persistChatWithId(chatId);
     if (isNewChat) widget.onChatIdChanged(chatId);
     scrollChatToBottom(force: true);

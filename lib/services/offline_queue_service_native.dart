@@ -386,19 +386,19 @@ class OfflineQueueService {
     await _emit();
   }
 
-  /// Sign-out: deletes every row of [userId]. Returns the removed rows so
-  /// the caller can delete their files (voice recordings, image blobs).
+  /// Sign-out: deletes every row of [userId], and every row with no owner
+  /// (version 1 rows, rows queued before a session was known): the next
+  /// account on this device must never claim and send them. Returns the
+  /// removed rows so the caller can delete their files (voice recordings,
+  /// image blobs).
   Future<List<QueuedMessage>> wipeUser(String userId) async {
     final db = await _open();
-    final rows = await db.query(
-      _table,
-      where: 'user_id = ?',
-      whereArgs: [userId],
-    );
+    const String where = 'user_id = ? OR user_id IS NULL';
+    final rows = await db.query(_table, where: where, whereArgs: [userId]);
     final removed = rows
         .map((r) => QueuedMessage.fromRow(r, payloadOverride: const {}))
         .toList(growable: false);
-    await db.delete(_table, where: 'user_id = ?', whereArgs: [userId]);
+    await db.delete(_table, where: where, whereArgs: [userId]);
     await _emit();
     return removed;
   }

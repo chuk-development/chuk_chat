@@ -69,15 +69,18 @@ void main() {
 
   AgentsBackgroundLink start({
     AgentsStoredPairing? pairing,
+    bool noPairing = false,
     AccountSession? session = _session,
+    bool reconnectFails = false,
   }) => AgentsBackgroundLink.startForTest(
     slot: slot,
     build: () async {
-      final c = FakeRelayController();
+      final c = FakeRelayController()..reconnectFails = reconnectFails;
       built.add(c);
       return c;
     },
-    loadPairing: () async => pairing ?? _pairing,
+    // [noPairing]: no pairing stored on this device.
+    loadPairing: () async => noPairing ? null : (pairing ?? _pairing),
     session: () => session,
     hasWork: AgentsBackgroundLink.hasQueuedWork,
   );
@@ -120,6 +123,34 @@ void main() {
     final noSession = start(session: null);
     await noSession.check();
     expect(built, isEmpty);
+
+    // Work and a session, but no pairing stored on this device.
+    AgentsBackgroundLink.stopForTest();
+    final noPairing = start(noPairing: true);
+    await noPairing.check();
+    expect(built, isEmpty);
+    expect(slot.value, isNull);
+  });
+
+  test('a link of its own that died is dropped and built anew', () async {
+    await AgentsTaskOutbox.enqueue(sessionKey: 't', prompt: 'x');
+    final link = start(reconnectFails: true);
+    await link.check();
+    // The reconnect failed through its state (error), with no throw.
+    final first = built.single;
+    expect(identical(slot.value, first), isTrue);
+
+    await link.check();
+    expect(built, hasLength(2));
+    expect(AgentsBackgroundLink.owns(first), isFalse);
+    expect(identical(slot.value, built.last), isTrue);
+
+    // A socket that closed after pairing is replaced the same way.
+    built.last.set(const AgentsRelayState(phase: AgentsRelayPhase.closed));
+    await link.check();
+    expect(built, hasLength(3));
+    expect(built[2].reconnectCalls, 1);
+    expect(identical(slot.value, built[2]), isTrue);
   });
 
   test('a bound thread view link is left alone', () async {

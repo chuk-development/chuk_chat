@@ -130,6 +130,14 @@ void main() {
     expect(saved, isNull);
   });
 
+  test('a chat read that throws leaves the follow-ups parked', () async {
+    FollowUpDispatcher.loadChat = (id) async => throw StateError('db locked');
+    await FollowUpParkingService.save('c1', ['not lost']);
+    expect(await settleAndRun(), 0);
+    expect(await FollowUpParkingService.load('c1'), ['not lost']);
+    expect(enqueued, isEmpty);
+  });
+
   test('without a user nothing happens', () async {
     await FollowUpParkingService.save('c1', ['x']);
     OutboxCipher.useFake(userId: null);

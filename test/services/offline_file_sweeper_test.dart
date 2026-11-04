@@ -82,6 +82,18 @@ void main() {
     expect(deletedImages, ['offline://img/u1/orphan']);
   });
 
+  test('a Windows listing still matches the saved path', () async {
+    rows = [
+      _row('q1', {'voicePath': r'C:\App\support/voice_spool/u1/kept.wav.enc'}),
+    ];
+    voice = [
+      (path: r'C:\App\support/voice_spool/u1\kept.wav.enc', modified: old),
+      (path: r'C:\App\support/voice_spool/u1\orphan.wav.enc', modified: old),
+    ];
+    expect(await OfflineFileSweeper.instance.sweep('u1'), 1);
+    expect(deletedVoice, [r'C:\App\support/voice_spool/u1\orphan.wav.enc']);
+  });
+
   test('a row that cannot be opened stops the sweep', () async {
     rows = [_row('q1', {}, locked: true)];
     voice = [(path: '/s/u1/orphan.wav', modified: old)];
