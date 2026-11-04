@@ -318,9 +318,12 @@ class JobManager:
             'export __CW_ENV_FILE="$D/$ID.env" __CW_STATE_FILE="$D/$ID.state"\n'
             f'timeout --signal=TERM -k 10 {self.timeout_s} bash "$D/$ID.cmd" > "$D/$ID.log" 2> "$D/$ID.err"\n'
             "rc=$?\n"
-            'if [ -e "$D/$ID.cancelled" ]; then exit 0; fi\n'
+            'if [ -e "$D/$ID.cancelled" ]; then rm -f "$D/$ID.env" "$D/$ID.state"; exit 0; fi\n'
             'echo $rc > "$D/$ID.exit"\n'
             '[ -e "$D/$ID.notify" ] || exit 0\n'
+            # Adopted: the caller never loads this state. The snapshot holds
+            # the caller's exports in plain text; it must not stay on disk.
+            'rm -f "$D/$ID.env" "$D/$ID.state"\n'
             "to=false; [ $rc -eq 124 ] && to=true\n"
             "printf '{\"kind\":\"job\",\"job_id\":\"%s\",\"session_key\":%s,"
             "\"exit_code\":%d,\"timed_out\":%s,\"ts\":%s}\\n' "
@@ -362,7 +365,7 @@ class JobManager:
         dump = '{ declare -px; declare -f; alias; } 2>/dev/null'
         body = (
             "shopt -s expand_aliases 2>/dev/null\n"
-            'source "$__CW_ENV_FILE" 2>/dev/null\n'
+            'source "$__CW_ENV_FILE" 2>/dev/null; rm -f "$__CW_ENV_FILE"\n'
             "trap '__cw_rc=$?; __cw_sf=$__CW_STATE_FILE; unset -v __CW_ENV_FILE __CW_STATE_FILE; "
             + forget.replace("'", "")
             + dump

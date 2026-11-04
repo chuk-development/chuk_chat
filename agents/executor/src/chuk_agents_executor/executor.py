@@ -278,6 +278,11 @@ PLAN_REVIEW_WAIT_SECONDS = 30 * 60
 
 #: Late-answerable questions kept in memory (oldest dropped first).
 MAX_LATE_QUESTIONS = 200
+#: The longest an ``ask_user`` card on screen (``ask_visible``) pauses the
+#: wait. A dead app (crashed, killed in the background, socket gone) never
+#: sends ``visible: false``; without this cap the run would hold the session's
+#: one worker until ``RUN_MAX_SECONDS``.
+MAX_VISIBLE_PAUSE_SECONDS = 30 * 60.0
 
 #: Origins whose task frame carries no ``mcp_servers`` (no app sent it): they
 #: run with the connectors the session already has.
@@ -1019,8 +1024,10 @@ class _PendingQuestion:
     payload: dict
     event: threading.Event = field(default_factory=threading.Event)
     answers: list | None = None
-    #: The card is on screen (``ask_visible``): the wait does not count down.
+    #: The card is on screen (``ask_visible``): the wait does not count down,
+    #: for at most ``MAX_VISIBLE_PAUSE_SECONDS`` from ``visible_since``.
     visible: bool = False
+    visible_since: float | None = None
     #: The wait ran out; the run went on. A later answer becomes a new turn.
     late: bool = False
     #: Answered (in time or late) or withdrawn: nothing more to do.
@@ -2248,7 +2255,9 @@ class Executor:
         # one run at a time, so a second run of a session waits rather than
         # interleaving its history writes with the first. This rule refuses the
         # duplicate outright; it does not change that ordering for anything else.
-        live = self._run_in_flight(str(session_key), prompt)
+        # Compare the prompt the run stores (``/plan`` prefix stripped): a
+        # re-sent ``/plan add login`` must match the run asking ``add login``.
+        live = self._run_in_flight(str(session_key), run.prompt)
         if live is not None:
             logger.warning(
                 "duplicate task refused request=%s session=%s: the same prompt "
@@ -3143,6 +3152,9 @@ class Executor:
         stream with an ``error`` instead of killing the serve loop.
         """
         session_key = str(payload.get("session_key", "default"))
+        # The client that showed a question card may be gone; the countdown
+        # runs again until the reconnected app reports the card visible.
+        self._reset_question_visibility(session_key)
         # The replay cursor (docs/WIRE_CONTRACT.md): a client that already holds
         # the thread up to a message id asks only for what came after it.
         try:
@@ -4828,7 +4840,7 @@ class Executor:
                 if pending.event.wait(self._poll):
                     return {"answers": list(pending.answers or [])}
                 now = time.monotonic()
-                if not pending.visible:
+                if not self._question_paused(pending, now):
                     remaining -= now - last
                 last = now
                 if timeout != QUESTION_NO_TIMEOUT and remaining <= 0:
@@ -4888,8 +4900,36 @@ class Executor:
             return
         with self._questions_lock:
             pending = self._questions.get(question_id)
-        if pending is not None:
-            pending.visible = payload.get("visible") is True
+        if pending is None:
+            return
+        visible = payload.get("visible") is True
+        with pending.lock:
+            if visible and not pending.visible:
+                # The pause cap counts from the switch to visible; a repeated
+                # ``visible: true`` does not extend it.
+                pending.visible_since = time.monotonic()
+            elif not visible:
+                pending.visible_since = None
+            pending.visible = visible
+
+    @staticmethod
+    def _question_paused(pending: _PendingQuestion, now: float) -> bool:
+        """The card is on screen and the visible pause has not hit its cap."""
+        with pending.lock:
+            if not pending.visible:
+                return False
+            since = pending.visible_since
+        return since is None or now - since < MAX_VISIBLE_PAUSE_SECONDS
+
+    def _reset_question_visibility(self, session_key: str) -> None:
+        """A replay is a (re)connecting client: no card of this session is on
+        screen until the app says so again with a fresh ``ask_visible``."""
+        with self._questions_lock:
+            pendings = [q for q in self._questions.values() if q.session_key == session_key]
+        for pending in pendings:
+            with pending.lock:
+                pending.visible = False
+                pending.visible_since = None
 
     def _handle_question_answer(self, payload: dict) -> None:
         """The user's answer batch. In time: the waiting ``ask_user`` call

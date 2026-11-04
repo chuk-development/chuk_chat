@@ -12,9 +12,11 @@ stopped before it runs, whatever the approval mode:
   ``~/.aws``, ``~/.gnupg``, ``~/.config/gh``, ``~/.netrc`` and any ``.env``
   file. Writing to them, and reading a ``.env``, must ask first.
 
-Matching is on tokens (``shlex``), not raw substrings, so a path inside a
-string literal or a comment does not trip it. A command the shell cannot parse
-is NOT blocked here (the sandbox switches are the control for the exotic case);
+Matching is on shell tokens (quoting as the shell reads it), not raw
+substrings, so a path inside a string literal or a comment does not trip it,
+and a quoted or escaped operator (``';'``, ``\\;``) does not split a command.
+A command the shell cannot parse is NOT blocked here (the sandbox switches
+are the control for the exotic case);
 the clear, catastrophic shapes are caught token by token.
 """
 
@@ -23,7 +25,6 @@ from __future__ import annotations
 import os
 import posixpath
 import re
-import shlex
 from dataclasses import dataclass, field
 
 
@@ -209,7 +210,7 @@ class SafetyFloor:
         i = 0
         while i < len(segment):
             word = segment[i]
-            if word in _REDIRECTS:
+            if _is_redirect(word):
                 scan.simple = False  # a redirect is never covered by a prefix
                 target = segment[i + 1] if i + 1 < len(segment) else ""
                 if ">" in word and target and not target.isdigit():
@@ -426,24 +427,268 @@ _LAUNCHER_SPECS: dict[str, _LauncherSpec] = {
 }
 
 
+class ShellToken(str):
+    """One shell word. ``op`` is ``True`` only for a run of control or
+    redirection characters (``;`` ``&&`` ``|`` ``>`` ``(`` …) that the shell
+    itself sees as an operator: unquoted and not escaped. A quoted or escaped
+    ``';'`` / ``\\;`` is a plain word (``op`` is ``False``), as in the shell."""
+
+    op: bool
+
+    def __new__(cls, text: str, op: bool = False) -> "ShellToken":
+        obj = super().__new__(cls, text)
+        obj.op = op
+        return obj
+
+
 def shell_tokens(command: str) -> list[str] | None:
     """``command`` as shell words, with the control operators (``;`` ``&&``
     ``|`` ``(`` ``>`` …) as words of their own even without spaces around
     them (``a;rm`` is three words). A newline separates commands like ``;``.
-    ``None`` when the shell could not parse it either (an open quote)."""
+
+    Quoting follows the shell: single quotes, double quotes (``\\`` escapes
+    only ``$``, a backtick, ``"``, ``\\`` and a newline), ``$'…'`` ANSI-C strings,
+    ``$"…"``, a backslash outside quotes, and ``#`` at the start of a word
+    begins a comment. ``$(…)`` and backticks stay inside their word (their
+    text is checked on its own, see :func:`_substitutions`). Each token is a
+    :class:`ShellToken`, so a caller can tell a real operator from a quoted
+    one. ``None`` when the shell could not parse it either (an open quote)."""
     try:
-        lexer = shlex.shlex(command.replace("\n", " ; "), posix=True, punctuation_chars=True)
-        lexer.whitespace_split = True
-        lexer.commenters = ""
-        return list(lexer)
+        return _lex(command)
     except ValueError:
         return None
 
 
+def _is_op(token: str) -> bool:
+    """``token`` is an operator the shell sees. A :class:`ShellToken` carries
+    its provenance; a plain string (old callers) falls back to its characters."""
+    op = getattr(token, "op", None)
+    if op is not None:
+        return bool(op)
+    return bool(token) and set(token) <= _PUNCT
+
+
 def is_separator(token: str) -> bool:
     """A control operator between two simple commands (``;`` ``&&`` ``|``
-    ``(`` ``)`` ``<(`` …), not a redirection."""
-    return bool(token) and set(token) <= _PUNCT and token not in _REDIRECTS
+    ``(`` ``)`` ``<(`` …), not a redirection. A quoted or escaped operator
+    character is an argument, not a separator."""
+    return _is_op(token) and token not in _REDIRECTS
+
+
+def _is_redirect(token: str) -> bool:
+    return _is_op(token) and token in _REDIRECTS
+
+
+def _lex(s: str) -> list[str]:
+    tokens: list[str] = []
+    buf: list[str] = []
+    in_word = False
+    n = len(s)
+    i = 0
+
+    def flush() -> None:
+        nonlocal buf, in_word
+        if in_word:
+            tokens.append(ShellToken("".join(buf)))
+        buf = []
+        in_word = False
+
+    while i < n:
+        c = s[i]
+        if c in " \t\r":
+            flush()
+            i += 1
+            continue
+        if c == "\n":
+            flush()
+            tokens.append(ShellToken(";", op=True))
+            i += 1
+            continue
+        if c in _PUNCT:
+            flush()
+            j = i
+            while j < n and s[j] in _PUNCT:
+                j += 1
+            tokens.append(ShellToken(s[i:j], op=True))
+            i = j
+            continue
+        if c == "#" and not in_word:
+            j = s.find("\n", i)
+            i = n if j == -1 else j
+            continue
+        if c == "\\":
+            if i + 1 < n and s[i + 1] == "\n":
+                i += 2  # line continuation
+                continue
+            in_word = True
+            if i + 1 >= n:
+                buf.append("\\")
+                i += 1
+            else:
+                buf.append(s[i + 1])
+                i += 2
+            continue
+        in_word = True
+        if c == "'":
+            j = s.find("'", i + 1)
+            if j == -1:
+                raise ValueError("open single quote")
+            buf.append(s[i + 1 : j])
+            i = j + 1
+            continue
+        if c == '"':
+            i = _lex_double(s, i + 1, buf)
+            continue
+        if c == "$" and i + 1 < n:
+            nxt = s[i + 1]
+            if nxt == "'":
+                i = _lex_ansi_c(s, i + 2, buf)
+                continue
+            if nxt == '"':
+                i = _lex_double(s, i + 2, buf)
+                continue
+            if nxt == "(":
+                j = _skip_paren(s, i + 1)
+                buf.append(s[i:j])
+                i = j
+                continue
+        if c == "`":
+            j = _skip_backtick(s, i)
+            buf.append(s[i:j])
+            i = j
+            continue
+        buf.append(c)
+        i += 1
+    flush()
+    return tokens
+
+
+def _lex_double(s: str, i: int, buf: list[str]) -> int:
+    """Read a double-quoted string from ``i`` (after the quote) into ``buf``;
+    returns the index after the closing quote."""
+    n = len(s)
+    while i < n:
+        c = s[i]
+        if c == '"':
+            return i + 1
+        if c == "\\" and i + 1 < n:
+            nxt = s[i + 1]
+            if nxt == "\n":
+                pass
+            elif nxt in '$`"\\':
+                buf.append(nxt)
+            else:
+                buf.append(c + nxt)
+            i += 2
+            continue
+        if c == "$" and i + 1 < n and s[i + 1] == "(":
+            j = _skip_paren(s, i + 1)
+            buf.append(s[i:j])
+            i = j
+            continue
+        if c == "`":
+            j = _skip_backtick(s, i)
+            buf.append(s[i:j])
+            i = j
+            continue
+        buf.append(c)
+        i += 1
+    raise ValueError("open double quote")
+
+
+_ANSI_SIMPLE = {
+    "a": "\a", "b": "\b", "e": "\x1b", "E": "\x1b", "f": "\f", "n": "\n",
+    "r": "\r", "t": "\t", "v": "\v", "\\": "\\", "'": "'", '"': '"', "?": "?",
+}
+
+
+def _lex_ansi_c(s: str, i: int, buf: list[str]) -> int:
+    """Read a ``$'…'`` string from ``i`` (after the quote) into ``buf`` with
+    its escapes decoded (``$'\\x2f'`` is ``/``); returns the index after it."""
+    n = len(s)
+    while i < n:
+        c = s[i]
+        if c == "'":
+            return i + 1
+        if c != "\\" or i + 1 >= n:
+            buf.append(c)
+            i += 1
+            continue
+        e = s[i + 1]
+        i += 2
+        if e in _ANSI_SIMPLE:
+            buf.append(_ANSI_SIMPLE[e])
+        elif e in "01234567":
+            j = i - 1
+            while j < n and j < i + 2 and s[j] in "01234567":
+                j += 1
+            buf.append(chr(int(s[i - 1 : j], 8) & 0xFF))
+            i = j
+        elif e in "xuU":
+            width = {"x": 2, "u": 4, "U": 8}[e]
+            j = i
+            while j < n and j < i + width and s[j] in "0123456789abcdefABCDEF":
+                j += 1
+            if j == i:
+                buf.append("\\" + e)
+            else:
+                try:
+                    buf.append(chr(int(s[i:j], 16)))
+                except (ValueError, OverflowError):
+                    buf.append("\ufffd")
+                i = j
+        elif e == "c" and i < n:
+            buf.append(chr(ord(s[i]) & 0x1F))
+            i += 1
+        else:
+            buf.append("\\" + e)
+    raise ValueError("open $' quote")
+
+
+def _skip_paren(s: str, i: int) -> int:
+    """``s[i]`` is the ``(`` of ``$(``; returns the index after its ``)``,
+    honouring quotes and nesting inside."""
+    n = len(s)
+    depth = 1
+    j = i + 1
+    while j < n:
+        c = s[j]
+        if c == "\\":
+            j += 2
+        elif c == "'":
+            k = s.find("'", j + 1)
+            if k == -1:
+                raise ValueError("open single quote")
+            j = k + 1
+        elif c == '"':
+            j = _lex_double(s, j + 1, [])
+        elif c == "`":
+            j = _skip_backtick(s, j)
+        elif c == "(":
+            depth += 1
+            j += 1
+        elif c == ")":
+            depth -= 1
+            j += 1
+            if depth == 0:
+                return j
+        else:
+            j += 1
+    raise ValueError("open $(")
+
+
+def _skip_backtick(s: str, i: int) -> int:
+    """``s[i]`` is an opening backtick; returns the index after its pair."""
+    n = len(s)
+    j = i + 1
+    while j < n:
+        if s[j] == "\\":
+            j += 2
+            continue
+        if s[j] == "`":
+            return j + 1
+        j += 1
+    raise ValueError("open backtick")
 
 
 def _substitutions(command: str) -> list[str]:
@@ -549,4 +794,4 @@ def _split_segments(tokens: list[str]) -> list[list[str]]:
     return segments
 
 
-__all__ = ["FloorVerdict", "SafetyFloor", "PROTECTED_REL", "is_separator", "shell_tokens"]
+__all__ = ["FloorVerdict", "SafetyFloor", "PROTECTED_REL", "ShellToken", "is_separator", "shell_tokens"]
