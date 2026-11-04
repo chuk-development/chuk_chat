@@ -172,7 +172,8 @@ void main() {
       expect(ctx.getTps(), equals(35.0));
     });
 
-    test('stream close (no DoneEvent) also preserves content', () async {
+    test('stream close (no DoneEvent) is an error that keeps the partial '
+        'text', () async {
       final ctx = await startTestStream();
 
       ctx.controller.add(const ContentEvent('Partial response'));
@@ -182,10 +183,13 @@ void main() {
       await ctx.controller.close();
       await Future.delayed(Duration.zero);
 
-      // Content should still be available
-      expect(manager.hasCompletedStream('chat-1'), isTrue);
-      expect(manager.getBufferedContent('chat-1'), equals('Partial response'));
-      expect(ctx.isCompleted(), isTrue);
+      // A cut answer is not a complete one: an error, not a completion.
+      expect(ctx.isCompleted(), isFalse);
+      expect(ctx.getError(), isNotNull);
+      expect(manager.isStreaming('chat-1'), isFalse);
+      // The cut text is kept for the error handler, once.
+      expect(manager.takeInterruptedPartial('chat-1'), 'Partial response');
+      expect(manager.takeInterruptedPartial('chat-1'), isNull);
     });
 
     test('consumeCompletedStream removes the entry', () async {

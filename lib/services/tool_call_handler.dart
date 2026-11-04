@@ -16,6 +16,7 @@ import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/tool_enforcer.dart';
 import 'package:chuk_chat/services/tool_executor.dart';
+import 'package:chuk_chat/services/tool_pairing_validator.dart';
 import 'package:chuk_chat/services/tool_prompt_builder.dart';
 import 'package:chuk_chat/services/chukdoo/chukdoo_connector.dart';
 import 'package:chuk_chat/services/chukdoo/chukdoo_tool_bridge.dart';
@@ -701,10 +702,13 @@ class ToolCallHandler {
   /// is off or the session is not in native mode — the prompt-based path then
   /// applies. Mirrors the prompt build: `notes` is withheld when memory is
   /// disabled so it can never be invoked to overwrite/delete memory.
+  ///
+  /// Once the tools are shut ([ToolLoopSession.toolsShut]) the list stays the
+  /// same and [nativeToolChoice] says `none` instead. Dropping `tools[]` for
+  /// the forced final pass changed the request prefix, so the provider's
+  /// prompt cache missed on the whole history.
   List<Map<String, dynamic>> nativeToolDefinitions(ToolLoopSession session) {
-    if (!session.toolCallingEnabled ||
-        !session.nativeToolCalling ||
-        session.toolsShut) {
+    if (!session.toolCallingEnabled || !session.nativeToolCalling) {
       return const <Map<String, dynamic>>[];
     }
     return _toolExecutor.allTools
@@ -717,8 +721,19 @@ class ToolCallHandler {
         .toList();
   }
 
+  /// The `tool_choice` for the next request: `none` once the tools are shut in
+  /// a native session (the model may only answer), else null (the server's
+  /// default, `auto`).
+  ///
+  /// Static on purpose: `AgentsToolCallHandler` implements this class as an
+  /// interface, and a new instance member would break it.
+  static String? nativeToolChoice(ToolLoopSession session) {
+    if (!session.toolCallingEnabled || !session.nativeToolCalling) return null;
+    return session.toolsShut ? 'none' : null;
+  }
+
   /// The forced final pass. Sets [ToolLoopSession.toolsClosed] (the next
-  /// request carries no tool definitions) and continues with
+  /// request keeps its tool definitions with `tool_choice: none`) and continues with
   /// [kForcedFinalAnswerNote] as the user turn. This round's calls are not
   /// run and, for a native round, not recorded: the history then ends with
   /// the previous round's complete tool results, which keeps every
@@ -915,7 +930,18 @@ class ToolCallHandler {
     // message WITH its tool_calls so the upstream sees a valid function-calling
     // history. A turn with no native calls (a final text answer, or a
     // prompt-based model) falls through to the existing text path unchanged.
-    final isNativeToolTurn = nativeToolCalls.isNotEmpty;
+    //
+    // A reply cut off at the token limit (`finish_reason` `length`) may end in
+    // the middle of a tool call's arguments. Running such calls would act on
+    // half a JSON object, so none of them run: the round is kept as plain
+    // text and the "continue" pass below asks the model to finish.
+    final bool truncatedNativeRound =
+        nativeToolCalls.isNotEmpty &&
+        (turnSignals?.indicatesTruncated ?? false) &&
+        session.truncatedCompletionRecoveryAttempts <
+            _maxTruncatedCompletionRecoveryAttempts;
+    final isNativeToolTurn =
+        nativeToolCalls.isNotEmpty && !truncatedNativeRound;
 
     if (isNativeToolTurn) {
       // Record the user turn now — native turns skip the plain history append,
@@ -936,9 +962,14 @@ class ToolCallHandler {
       );
     }
 
-    final parsedCalls = isNativeToolTurn
-        ? _nativeCallsToParsed(nativeToolCalls)
-        : parseToolCalls(cleanedContent);
+    final List<Map<String, dynamic>> parsedCalls;
+    if (isNativeToolTurn) {
+      parsedCalls = _nativeCallsToParsed(session, nativeToolCalls);
+    } else if (truncatedNativeRound) {
+      parsedCalls = const <Map<String, dynamic>>[];
+    } else {
+      parsedCalls = parseToolCalls(cleanedContent);
+    }
     if (parsedCalls.isEmpty) {
       final displayContent = _stripToolCallBlocks(cleanedContent);
       final markerInContent = hasToolCallStartMarker(cleanedContent);
@@ -991,11 +1022,19 @@ class ToolCallHandler {
 
       if (shouldRetryAfterTruncatedCompletion) {
         session.truncatedCompletionRecoveryAttempts++;
-        const retryMessage =
-            'Tool Results:\n'
-            '[INFO] The previous response was cut off by the token limit.\n\n'
-            'Continue from where you stopped and complete the response for '
-            'the user. Do not restart from the beginning.';
+        final retryMessage = truncatedNativeRound
+            ? 'Tool Results:\n'
+                  '[INFO] The previous response was cut off by the token '
+                  'limit while it was writing tool calls. None of those '
+                  'calls were run.\n\n'
+                  'If tools are still needed, call them again with complete '
+                  'arguments. Otherwise continue and complete the response '
+                  'for the user. Do not restart from the beginning.'
+            : 'Tool Results:\n'
+                  '[INFO] The previous response was cut off by the token '
+                  'limit.\n\n'
+                  'Continue from where you stopped and complete the response '
+                  'for the user. Do not restart from the beginning.';
 
         session.latestUserMessage = retryMessage;
         return ToolLoopResult.continueWith(
@@ -1313,6 +1352,7 @@ class ToolCallHandler {
     for (final rejected in enforceResult.rejectedCalls) {
       session.toolCalls.add(
         ToolCall(
+          id: rejected.callId,
           name: rejected.name,
           arguments: rejected.arguments,
           result: 'Rejected: ${rejected.reason}',
@@ -1551,14 +1591,40 @@ class ToolCallHandler {
       // results ARE the model's next input, not a synthetic user turn.
       // tool_call_id matches the assistant tool_calls id (the enforcer keeps
       // the provider's native id), which is what the stateless upstream needs.
+      //
+      // Calls the enforcer rejected (unknown tool, bad find_tools query) are
+      // part of the round too, each with a `Rejected: <reason>` result.
+      // Leaving them out meant the model never heard that they failed and
+      // waited for, or repeated, a call that would never run. All calls keep
+      // the order the model wrote them in.
+      final validById = <String, EnforcedToolCall>{
+        for (final call in enforceResult.validCalls) call.callId: call,
+      };
+      final rejectedById = <String, RejectedToolCall>{
+        for (final rejected in enforceResult.rejectedCalls)
+          if (rejected.callId != null) rejected.callId!: rejected,
+      };
+      final resultById = <String, String>{
+        for (final result in modelResults) result.callId: result.result,
+        for (final rejected in rejectedById.values)
+          rejected.callId!: 'Rejected: ${rejected.reason}',
+      };
+      final orderedIds = <String>[
+        for (final parsed in parsedCalls)
+          if (validById.containsKey(parsed['id']) ||
+              rejectedById.containsKey(parsed['id']))
+            parsed['id'] as String,
+      ];
       final assistantToolCalls = <Map<String, dynamic>>[
-        for (final call in enforceResult.validCalls)
+        for (final id in orderedIds)
           {
-            'id': call.callId,
+            'id': id,
             'type': 'function',
             'function': {
-              'name': call.name,
-              'arguments': jsonEncode(call.arguments),
+              'name': validById[id]?.name ?? rejectedById[id]!.name,
+              'arguments': jsonEncode(
+                validById[id]?.arguments ?? rejectedById[id]!.arguments,
+              ),
             },
           },
       ];
@@ -1568,11 +1634,11 @@ class ToolCallHandler {
         'content': interim.isEmpty ? null : interim,
         'tool_calls': assistantToolCalls,
       });
-      for (final result in modelResults) {
+      for (final id in orderedIds) {
         session.history.add({
           'role': 'tool',
-          'tool_call_id': result.callId,
-          'content': result.result,
+          'tool_call_id': id,
+          'content': resultById[id] ?? kUnansweredToolCallResult,
         });
       }
       nextMessage = '';
@@ -1693,8 +1759,23 @@ class ToolCallHandler {
   /// parse it defensively — providers occasionally emit malformed or truncated
   /// JSON, in which case the call runs with empty args rather than crashing the
   /// whole turn.
-  List<Map<String, dynamic>> _nativeCallsToParsed(List<NativeToolCall> calls) {
+  ///
+  /// Every call gets an id that is unique in this conversation: a missing id
+  /// gets one, and an id already used (twice in this round, or the server's
+  /// fallback `call_<n>` repeating every round) gets a `_2`, `_3`, ... suffix.
+  /// Two calls with one id overwrote each other in the running and result
+  /// maps. The new id is used for the assistant `tool_calls` and the tool
+  /// result alike, so the model sees a matching pair.
+  List<Map<String, dynamic>> _nativeCallsToParsed(
+    ToolLoopSession session,
+    List<NativeToolCall> calls,
+  ) {
+    final usedIds = _usedToolCallIds(session);
     return calls.map((call) {
+      final id = uniqueToolCallId(
+        call.id.trim().isNotEmpty ? call.id.trim() : 'call_${usedIds.length}',
+        usedIds,
+      );
       Map<String, dynamic> args = <String, dynamic>{};
       final raw = call.arguments.trim();
       if (raw.isNotEmpty) {
@@ -1728,12 +1809,31 @@ class ToolCallHandler {
       return <String, dynamic>{
         'name': call.name,
         'arguments': args,
-        // Carry the provider's native tool-call id so the enforcer uses it as
-        // the callId — the assistant.tool_calls[].id and role:"tool"
-        // tool_call_id then echo exactly what the provider issued.
-        if (call.id.isNotEmpty) 'id': call.id,
+        // Carry the provider's native tool-call id (made unique above) so the
+        // enforcer uses it as the callId — the assistant.tool_calls[].id and
+        // role:"tool" tool_call_id then match.
+        'id': id,
       };
     }).toList();
+  }
+
+  /// Tool-call ids already used in [session]: in its history and its calls.
+  Set<String> _usedToolCallIds(ToolLoopSession session) {
+    final used = <String>{};
+    for (final message in session.history) {
+      final calls = message['tool_calls'];
+      if (calls is List) {
+        for (final call in calls) {
+          if (call is Map && call['id'] != null) {
+            used.add(call['id'].toString());
+          }
+        }
+      }
+    }
+    for (final call in session.toolCalls) {
+      used.add(call.id);
+    }
+    return used;
   }
 
   void _appendRoundToHistory(
@@ -2273,7 +2373,9 @@ class ToolCallHandler {
       turnStart: session.turnHistoryStart,
       promptToolResultIndices: indices,
     );
-    return _cloneHistory(session.history);
+    // Repair the tool pairing before every request: one orphan or unanswered
+    // tool call and the upstream answers 400 for the whole turn.
+    return validateToolPairing(_cloneHistory(session.history));
   }
 
   List<Map<String, dynamic>> _cloneHistory(List<Map<String, dynamic>> history) {

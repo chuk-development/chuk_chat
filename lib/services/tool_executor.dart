@@ -486,7 +486,58 @@ class ToolExecutor {
 
   // ─── Tool execution (dispatch to handlers) ──────────────────────────────
 
+  /// How long one tool call may run before the turn moves on without it.
+  static const Duration defaultToolTimeout = Duration(seconds: 120);
+
+  /// Tools whose own deadlines are longer than [defaultToolTimeout]. The
+  /// outer limit sits above the inner one, so the tool's own, clearer error
+  /// wins when it fires.
+  static const Map<String, Duration> _toolTimeouts = <String, Duration>{
+    // Three-minute call deadline in file_fetch_tools.dart.
+    'fetch_files': Duration(seconds: 200),
+    // 120 s request timeout in image_tools.dart, plus the download.
+    'generate_image': Duration(seconds: 180),
+  };
+
+  /// The limit for [toolName]; null for MCP tools, which keep their own
+  /// 60-second limit in the MCP client.
+  Duration? timeoutFor(String toolName) {
+    if (_tools[toolName]?.type == ToolType.mcp) return null;
+    return _toolTimeouts[toolName] ?? defaultToolTimeout;
+  }
+
+  /// Runs [run] and, when it has not finished after [timeout], returns an
+  /// error result instead: `Error: tool call timed out after <n>ms`. A hung
+  /// network call or a lost reply then costs one failed tool result, not the
+  /// whole turn. The abandoned future keeps running; its result is dropped.
+  @visibleForTesting
+  static Future<ToolExecutionResult> runWithTimeout(
+    Future<ToolExecutionResult> Function() run,
+    Duration? timeout,
+  ) {
+    final future = run();
+    if (timeout == null) return future;
+    return future.timeout(
+      timeout,
+      onTimeout: () => ToolExecutionResult(
+        output: 'Error: tool call timed out after ${timeout.inMilliseconds}ms',
+        isError: true,
+      ),
+    );
+  }
+
   Future<ToolExecutionResult> execute(
+    String toolName,
+    Map<String, dynamic> args, {
+    String? accessToken,
+  }) {
+    return runWithTimeout(
+      () => _executeUntimed(toolName, args, accessToken: accessToken),
+      timeoutFor(toolName),
+    );
+  }
+
+  Future<ToolExecutionResult> _executeUntimed(
     String toolName,
     Map<String, dynamic> args, {
     String? accessToken,

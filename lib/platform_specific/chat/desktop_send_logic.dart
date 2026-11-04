@@ -461,6 +461,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           // Native tool calling: enabled tools as OpenAI function defs, sent on
           // every pass; empty (prompt-based) when native mode is off.
           tools: toolCallHandler.nativeToolDefinitions(toolSession),
+          toolChoice: ToolCallHandler.nativeToolChoice(toolSession),
           // A retry REPLACES the last answer, so the host drops the turn being
           // retried instead of storing the same question again. Only the first
           // pass says so: the later passes of the same turn are continuations,
@@ -807,6 +808,12 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
             );
           },
           onError: (errorMessage, {String? code}) {
+            // Text this turn had already written, plus the cut pass (idle
+            // timeout, close without `done`). It stays above the error.
+            final keptText = _keptTextOnError(
+              accumulatedText.toString(),
+              _streamingManager.takeInterruptedPartial(chatIdForStream),
+            );
             if (errorMessage == '__PAYMENT_REQUIRED__') {
               final paymentMessage =
                   'You have used all free messages. Please subscribe to continue chatting.';
@@ -828,17 +835,20 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
               return;
             }
 
+            final errorText = keptText.isEmpty
+                ? 'Error: $errorMessage'
+                : '$keptText\n\nError: $errorMessage';
             if (_activeChatId == chatIdForStream) {
               if (mounted) {
                 setState(() {
                   _isSending = false;
                 });
               }
-              _finalizeAiMessage(placeholderIndex, 'Error: $errorMessage');
+              _finalizeAiMessage(placeholderIndex, errorText);
               _persistChatWithId(chatIdForStream);
             } else {
               _persistBackgroundAssistant(chatIdForStream, placeholderIndex, {
-                'text': 'Error: $errorMessage',
+                'text': errorText,
                 'reasoning': '',
               });
             }
@@ -1112,6 +1122,14 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       _streamingManager.setBackgroundMessages(chatId, target);
     }
     _persistChatWithIdAndMessages(chatId, target, commit: commit);
+  }
+
+  /// The text to keep above a stream error: what earlier passes of the turn
+  /// wrote ([accumulated]) plus the cut pass ([interruptedPartial], raw, with
+  /// tool-call markup), or empty when there is none.
+  String _keptTextOnError(String accumulated, String? interruptedPartial) {
+    final partial = stripToolCallBlocksForDisplay(interruptedPartial ?? '');
+    return '$accumulated$partial'.trim();
   }
 
   /// Show dialog when API returns 402 (free messages exhausted)
@@ -1741,6 +1759,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           // Native tool calling: enabled tools as OpenAI function defs, sent on
           // every pass; empty (prompt-based) when native mode is off.
           tools: toolCallHandler.nativeToolDefinitions(toolSession),
+          toolChoice: ToolCallHandler.nativeToolChoice(toolSession),
         );
 
         await _streamingManager.startStream(
@@ -2087,6 +2106,12 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
             );
           },
           onError: (errorMessage, {String? code}) async {
+            // Read before any await: the text this turn had already written,
+            // plus the cut pass (idle timeout, close without `done`).
+            final keptText = _keptTextOnError(
+              accumulatedText2.toString(),
+              _streamingManager.takeInterruptedPartial(chatIdForStream),
+            );
             if (kDebugMode) {
               debugPrint(
                 'Stream error for chat $chatIdForStream: $errorMessage',
@@ -2164,7 +2189,9 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
               // Fall through to normal error display below.
             }
 
-            final errorText = 'Error: $errorMessage';
+            final errorText = keptText.isEmpty
+                ? 'Error: $errorMessage'
+                : '$keptText\n\nError: $errorMessage';
             if (_activeChatId == chatIdForStream) {
               if (placeholderIndex >= 0 &&
                   placeholderIndex < _messages.length) {

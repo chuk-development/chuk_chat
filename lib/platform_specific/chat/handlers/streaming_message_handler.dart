@@ -21,6 +21,7 @@ import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/streaming_foreground_service.dart';
 import 'package:chuk_chat/services/round_content_block_service.dart';
 import 'package:chuk_chat/models/chat_model.dart';
+import 'package:chuk_chat/utils/retry_backoff.dart';
 import 'package:chuk_chat/utils/tool_parser.dart';
 
 /// Handles message streaming and sending
@@ -577,6 +578,7 @@ class StreamingMessageHandler {
         // Native tool calling: the enabled tools as OpenAI function defs. Sent
         // on every pass; empty (prompt-based) when native mode is off.
         tools: toolCallHandler.nativeToolDefinitions(toolSession),
+        toolChoice: ToolCallHandler.nativeToolChoice(toolSession),
         // A retry REPLACES the last answer, so the host drops the turn being
         // retried instead of storing the same question again. Only the first
         // pass says so: later passes of the same turn are continuations, and
@@ -1033,6 +1035,11 @@ class StreamingMessageHandler {
           unawaited(completionFuture);
         },
         onError: (errorMessage, {String? code}) {
+          // Read (and clear) the text this pass had streamed when it was cut
+          // off, before any early return, so a stale copy never leaks into a
+          // later error of the same chat.
+          final interruptedPartial =
+              _streamingManager.takeInterruptedPartial(chatId) ?? '';
           if (_isDisposed) return;
 
           // A referenced tool result is no longer cached server-side. Drop the
@@ -1105,11 +1112,11 @@ class StreamingMessageHandler {
                 title: 'Reconnecting...',
                 content: 'Retrying connection',
               );
-              // Exponential backoff: 700ms, 1.4s, 2.8s. Gives a flapping
-              // mobile link progressively more time to recover instead of
-              // hammering it with a single fixed-delay retry.
-              final backoffMs = 700 * (1 << reconnectRetries);
-              await Future<void>.delayed(Duration(milliseconds: backoffMs));
+              // Exponential backoff: ~700ms, 1.4s, 2.8s, with ±10 % jitter
+              // and a cap. Gives a flapping mobile link progressively more
+              // time to recover instead of hammering it, and the jitter keeps
+              // many clients that lost the same server from retrying in step.
+              await Future<void>.delayed(reconnectBackoff(reconnectRetries));
               if (_isDisposed) return;
               await startStreamingPass(
                 message: message,
@@ -1154,9 +1161,13 @@ class StreamingMessageHandler {
           // five tool calls and streamed half an answer was reduced to one
           // sentence — the work was gone and there was nothing to continue
           // from. The error is appended as a trailing note instead.
+          //
+          // The text of the pass that was cut off (idle timeout, stream closed
+          // without `done`, upstream broke) is kept too: it used to be saved
+          // as a complete answer, and now it stands above the error instead.
           final salvaged = mergeAccumulatedWithFinal(
             accumulated: accumulatedText.toString(),
-            finalText: '',
+            finalText: stripToolCallBlocksForDisplay(interruptedPartial),
           );
           final finalizedText = salvaged.isEmpty
               ? errorMessage

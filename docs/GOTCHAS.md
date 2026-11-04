@@ -146,3 +146,29 @@ How to measure (the files stay in the repo):
   screen writes its fresh `/v1/models_info` payload to `ModelCacheService`, so a
   newly enabled model has its name and providers at once.
   Test: `test/services/composer_model_menu_sync_test.dart`.
+
+## Stream end, finish_reason and tool-call ids (2026-11-04)
+
+- **A hosted stream that ends without `done` is an error, not an answer.**
+  The idle timeout (`idle_timeout`), a close without `done`
+  (`stream_interrupted`) and the server's `upstream_interrupted` all go to
+  `onError`. The cut text is parked in the StreamingManager; the error
+  handlers read it once with `takeInterruptedPartial(chatId)` and keep it
+  above the error. An Agents thread still completes on close (its transport
+  owns the terminal events).
+- **Out of credits is the error code `billing`** (or class `quota`), not
+  HTTP 402. `StreamingManagerBase` maps both to `kPaymentRequiredError`
+  (`__PAYMENT_REQUIRED__`), which opens the upgrade dialog on mobile
+  (`onPaymentRequired`) and desktop (`_showPaymentRequiredDialog`).
+- **`finish_reason` reaches the tool loop as a `MetaEvent`.** Old servers
+  send it only on the `timing` frame of phase `complete`, new ones on a
+  `meta` frame and on `done`; `multiplex_connection.dart` reads all three.
+  Meta events merge into `latestMeta`, they do not replace it.
+- **Native tool-call ids are made unique per conversation** before a round
+  runs (`_nativeCallsToParsed`), and `validateToolPairing`
+  (`lib/services/tool_pairing_validator.dart`) repairs the history before
+  every request. Two calls with one id used to overwrite each other.
+- **Shut tools keep `tools[]` and send `tool_choice: "none"`**
+  (`ToolCallHandler.nativeToolChoice`), so the prompt cache still hits.
+  `nativeToolChoice` is static because `AgentsToolCallHandler` implements
+  `ToolCallHandler` as an interface: a new instance member breaks it.

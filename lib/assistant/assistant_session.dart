@@ -26,6 +26,29 @@ enum AssistantPhase {
   error,
 }
 
+/// The history to send with [message].
+///
+/// The server appends a non-empty `message` as the last user turn itself
+/// (`api_server/routers/ai/multiplex.py`, after the history loop). The session
+/// records the transcript in its history before the first pass, so sending
+/// both put the same question in front of the model twice. When the history
+/// ends with that very user turn and [message] is not empty, the turn is left
+/// out of the history. Later passes send an empty message (the tool results
+/// are the input) and keep the full history.
+@visibleForTesting
+List<Map<String, dynamic>> assistantRequestHistory(
+  List<Map<String, dynamic>> history,
+  String message,
+) {
+  final copy = List<Map<String, dynamic>>.from(history);
+  if (message.isEmpty || copy.isEmpty) return copy;
+  final last = copy.last;
+  if (last['role'] == 'user' && last['content'] == message) {
+    copy.removeLast();
+  }
+  return copy;
+}
+
 /// The whole assistant turn: endpointed microphone, transcription through the
 /// API proxy, one hard-wired model with native tool calls, and device tools.
 ///
@@ -312,7 +335,7 @@ class AssistantSession extends ChangeNotifier {
       message: message,
       modelId: kAssistantModelId,
       providerSlug: kAssistantProviderSlug,
-      history: List<Map<String, dynamic>>.from(_history),
+      history: assistantRequestHistory(_history, message),
       maxTokens: kAssistantMaxTokens,
       temperature: 0.3,
       reasoningEffort: kAssistantReasoningEffort,
