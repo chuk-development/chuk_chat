@@ -54,7 +54,14 @@ import 'package:chuk_chat/services/notification_service.dart';
 import 'package:chuk_chat/services/notifications/agents_notifications.dart';
 import 'package:chuk_chat/services/offline_queue_service.dart';
 import 'package:chuk_chat/services/offline_retry_manager.dart';
+import 'package:chuk_chat/platform_specific/chat/headless_chat_turn.dart';
+import 'package:chuk_chat/services/follow_up_dispatcher.dart';
+import 'package:chuk_chat/services/offline_file_sweeper.dart';
 import 'package:chuk_chat/services/offline_send_executor.dart';
+import 'package:chuk_chat/services/agents/agents_background_link.dart';
+import 'package:chuk_chat/services/agents/agents_outbox_flusher.dart';
+import 'package:chuk_chat/services/offline_image_preparer.dart';
+import 'package:chuk_chat/services/voice_outbox_preparer.dart';
 import 'package:chuk_chat/services/onboarding_tour_controller.dart';
 import 'package:chuk_chat/services/session_manager_service.dart';
 import 'package:chuk_chat/services/session_recovery.dart';
@@ -202,9 +209,28 @@ Future<void> main() async {
     }
   }
   if (offlineQueueReady) {
-    OfflineRetryManager.instance.init();
+    // Steps that run before a queued send (docs/OFFLINE_SEND.md): voice
+    // transcription, then the upload of images kept on the device.
+    VoiceOutboxPreparer.register();
+    OfflineImagePreparer.register();
     OfflineSendExecutor.register();
+    // A queued message goes out with the full tool loop, also with no chat
+    // screen (docs/OFFLINE_SEND.md).
+    HeadlessChatTurn.install();
+    // Follow-ups of a chat no screen holds go out through the outbox, and
+    // files a crash left behind are swept once a key is there.
+    OfflineRetryManager.instance.onKick = (String reason) {
+      if (reason == 'follow-up') return;
+      FollowUpDispatcher.instance.kick();
+      OfflineFileSweeper.instance.sweepOnce();
+    };
+    OfflineRetryManager.instance.init();
   }
+  // Agents: the queued prompts go out on every `paired` transition, app-wide,
+  // not only while a thread view is mounted. A no-op with FEATURE_AGENTS off.
+  AgentsOutboxFlusher.start();
+  // And when no thread view holds a link, one is opened for the queue.
+  AgentsBackgroundLink.start();
 
   // Ensure clean window close on Linux desktop (see window_close_service_io.dart).
   unawaited(initializeWindowCloseHandler());

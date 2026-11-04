@@ -25,6 +25,10 @@ import 'package:chuk_chat/services/chat_runtime_registry.dart';
 import 'package:chuk_chat/services/agents/agents_thread_composer.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/offline_send_coordinator.dart';
+import 'package:chuk_chat/services/offline_retry_manager.dart';
+import 'package:chuk_chat/services/follow_up_dispatcher.dart';
+import 'package:chuk_chat/services/follow_up_parking_service.dart';
+import 'package:chuk_chat/platform_specific/chat/offline_send_bridge.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -47,6 +51,8 @@ import 'package:chuk_chat/platform_specific/chat/chat_scroll_mixin.dart';
 import 'package:chuk_chat/utils/unread_rows.dart';
 import 'package:chuk_chat/widgets/unread_jump_pill.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_message_edit_mixin.dart';
+import 'package:chuk_chat/platform_specific/chat/outbox_screen_turn.dart';
+import 'package:chuk_chat/services/offline_send_executor.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_model_selection_mixin.dart';
 import 'package:chuk_chat/platform_specific/chat/model_provider_resolution_mixin.dart';
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
@@ -205,12 +211,23 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         ModelProviderResolutionMixin,
         ChatModelSelectionMixin,
         ChatMessageEditMixin,
+        OutboxScreenTurnMixin,
         RegenVariantSeedMixin<ChukChatUIDesktop>
     implements ChatDebugSnapshot {
   // RENAMED STATE
   @override
   final TextEditingController composerController = TextEditingController();
   final List<Map<String, String>> _messages = [];
+
+  // --- Outbox on screen (docs/OFFLINE_SEND.md) ---
+
+  @override
+  bool outboxTurnRunningFor(String chatId) =>
+      _isSending || _isStreaming || OfflineSendExecutor.isTurnRunning(chatId);
+
+  @override
+  Future<void> outboxReloadFromStorage(String chatId) =>
+      _onOutboxChangedChat(chatId);
   String? _activeChatId;
   final ScrollController _composerScrollController = ScrollController();
   late final ComposerCaretFollower _composerCaretFollower;
@@ -333,6 +350,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   bool _isLoadingChat = false; // Loading indicator for chat switching
   final StreamingManager _streamingManager = StreamingManager();
 
+  /// Reloads the open chat when the offline outbox wrote into it.
+  StreamSubscription<OfflineRetryEvent>? _outboxSub;
+
   // Computed property - checks if CURRENT chat is streaming
   bool get _isStreaming =>
       _activeChatId != null && _streamingManager.isStreaming(_activeChatId!);
@@ -418,6 +438,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     // loadSavedModelPreference in the post-frame pass below — the single
     // entry point, so startup writes and picked-model refreshes run once.
     _audioHandler = AudioRecordingHandler();
+    _outboxSub = OfflineSendBridge.listen(_onOutboxChangedChat);
     messageActionsHandler = MessageActionsHandler()
       ..onShowSnackBar = showSnackBar
       ..onSpeak = _speakMessage
@@ -673,6 +694,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       }
 
       if (widget.agentsThread) _resetThreadTransientState();
+      // A follow-up typed in the chat being left stays parked under it and
+      // goes out from there (FollowUpDispatcher), never into the next chat.
+      _pendingMessageText = null;
+      FollowUpDispatcher.instance.kick();
       _loadChatById(widget.selectedChatId);
       // Trigger rebuild to reflect new chat's streaming status
       // _isStreaming getter will automatically check the new _activeChatId
@@ -713,6 +738,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   @override
   void dispose() {
     AgentsThreadComposer.detach(_agentsThreadSend); // AGENTS
+    _outboxSub?.cancel();
+    _fileHandler.dispose();
     // CRITICAL: Clear loading lock if we're disposed while loading
     // This prevents the flag from getting stuck
     if (_isLoadingChat) {
@@ -956,6 +983,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
     scrollChatToBottom(animate: false, force: true);
     Future.delayed(Duration.zero, () => composerFocusNode.requestFocus());
+    // The cached fast path ends here, not in [_loadChatByIdAsync]: a
+    // follow-up parked for this chat goes out from here too.
+    unawaited(_restoreParkedFollowUp(chatId));
   }
 
   Future<void> _loadChatByIdAsync(String? chatId) async {
@@ -1150,6 +1180,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     });
     scrollChatToBottom(animate: false, force: true);
     Future.delayed(Duration.zero, () => composerFocusNode.requestFocus());
+    // A follow-up typed during a turn that the app did not live to send.
+    final String? loadedId = _activeChatId;
+    if (loadedId != null) unawaited(_restoreParkedFollowUp(loadedId));
     stopwatch.stop();
     unawaited(
       DiagnosticsLogService.timing(
@@ -1485,9 +1518,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         final session = SupabaseService.auth.currentSession;
         if (session != null) return session.accessToken;
         sessionLookupFailed = true;
-        if (mounted) {
-          showSnackBar(AppLocalizations.of(context)!.sessionExpired);
-        }
         return null;
       },
       onStateChanged: () {
@@ -1498,6 +1528,17 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     if (!mounted || result == null) return;
 
     if (!result.success) {
+      // Offline or the transcription could not connect: the recording is
+      // on disk. It waits in the outbox and is transcribed and sent later.
+      final String? saved = result.savedPath;
+      if (result.queueable && saved != null) {
+        await _queueVoiceRecording(saved, result.durationMs);
+        return;
+      }
+      if (sessionLookupFailed) {
+        showSnackBar(AppLocalizations.of(context)!.sessionExpired);
+        return;
+      }
       if (!sessionLookupFailed) {
         showSnackBar(
           result.error ?? AppLocalizations.of(context)!.transcriptionFailed,
@@ -1789,6 +1830,70 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   }
 
   /// Persist chat with a specific chatId (for background streaming to correct chat)
+  /// A recording that could not be transcribed now: a voice bubble that
+  /// waits, and a voice row in the outbox (docs/OFFLINE_SEND.md).
+  Future<void> _queueVoiceRecording(String path, int? durationMs) async {
+    final bool isNewChat = _activeChatId == null;
+    _activeChatId ??= _uuid.v4();
+    final String chatId = _activeChatId!;
+    final String modelId = selectedModelId;
+    final String provider = selectedProviderSlug ?? '';
+    // The chat as it is now: the awaits below may see a chat switch.
+    final List<Map<String, String>> before = _messages
+        .map(Map<String, String>.from)
+        .toList();
+    final String? systemPrompt = await _resolveSystemPromptForSend();
+    String queueId;
+    try {
+      queueId = await OfflineSendCoordinator.enqueueVoice(
+        OfflineSendPayload(
+          chatId: chatId,
+          messageText: '',
+          modelId: modelId,
+          providerSlug: provider,
+          systemPrompt: systemPrompt,
+          reasoningEffort: clampedReasoningEffort(modelId, provider),
+          voicePath: path,
+          voiceDurationMs: durationMs,
+          autoSend: widget.autoSendVoiceTranscription,
+        ),
+        kick: NetworkStatusService.isOnline,
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[Desktop-Voice] enqueue failed: ${e.runtimeType}');
+      }
+      if (mounted) {
+        showSnackBar(AppLocalizations.of(context)!.transcriptionFailed);
+      }
+      return;
+    }
+    final Map<String, String> bubble = OfflineSendBridge.voiceBubble(
+      queueId: queueId,
+      durationMs: durationMs,
+      modelId: modelId,
+      provider: provider,
+    );
+    final List<Map<String, String>>? offScreen =
+        OfflineSendBridge.voiceBubbleOffScreen(
+          chatId: chatId,
+          activeChatId: _activeChatId,
+          mounted: mounted,
+          before: before,
+          bubble: bubble,
+        );
+    if (offScreen != null) {
+      // Another chat is on screen now: the bubble goes into the chat that
+      // started the queue, never into the list on screen.
+      _persistChatWithIdAndMessages(chatId, offScreen);
+      return;
+    }
+    setState(() => _messages.add(bubble));
+    _persistChatWithId(chatId);
+    if (isNewChat) widget.onChatIdChanged(chatId);
+    scrollChatToBottom(force: true);
+  }
+
   void _persistChatWithId(String chatId, {bool commit = true}) {
     if (_messages.isEmpty) return;
     unawaited(

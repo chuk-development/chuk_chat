@@ -1,3 +1,4 @@
+import 'package:chuk_chat/utils/browser_user_agent.dart';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -347,7 +348,8 @@ void main() {
       expect(r.roadsFailed, 0);
       expect(r.requests, 1 + 3 * kAutobahnServices.length);
       for (final h in api.headers) {
-        expect(h['User-Agent'], 'chuk-chat/1.0');
+        expect(h['User-Agent'], kBrowserUserAgent);
+        expect(h['User-Agent']!.toLowerCase(), isNot(contains('chuk')));
         expect(h.keys.map((k) => k.toLowerCase()), isNot(contains('from')));
       }
     });

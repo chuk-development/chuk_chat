@@ -59,6 +59,17 @@ abstract class StreamingManagerBase {
   String? takeInterruptedPartial(String chatId) =>
       _interruptedPartials.remove(chatId);
 
+  /// Chats whose current (or last) stream received at least one frame from
+  /// the server other than an error. Survives the stream's cleanup until the
+  /// next [startStream] for the chat, so an error handler can still ask.
+  final Set<String> _serverAccepted = <String>{};
+
+  /// Whether the server had already accepted the last request in [chatId]:
+  /// it sent a frame (meta, heartbeat, a token). A send that broke after
+  /// that must not be re-sent by itself (docs/OFFLINE_SEND.md): the server
+  /// may already bill the turn. A locally made error frame does not count.
+  bool serverAccepted(String chatId) => _serverAccepted.contains(chatId);
+
   /// Whether the app is currently in the background
   bool get isAppInBackground => _isAppInBackground;
 
@@ -187,6 +198,7 @@ abstract class StreamingManagerBase {
     // Cancel existing stream for this chat if any
     await cancelStream(chatId);
     _interruptedPartials.remove(chatId);
+    _serverAccepted.remove(chatId);
 
     // Note: the foreground service is started only when the app goes to
     // background — see onAppLifecycleChanged(). This avoids showing a
@@ -378,6 +390,7 @@ abstract class StreamingManagerBase {
     // Diagnostics for the silence log. Nothing branches on them.
     activeStream.lastEventAt = DateTime.now();
     activeStream.eventCount++;
+    if (event is! ErrorEvent) _serverAccepted.add(chatId);
 
     // First-event stamp, idle-timer reset and TTFT measurement (io only).
     onEventBookkeeping(

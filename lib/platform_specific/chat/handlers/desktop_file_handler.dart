@@ -10,6 +10,7 @@ import 'package:chuk_chat/constants/file_constants.dart';
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
+import 'package:chuk_chat/services/offline_image_preparer.dart';
 import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/scanned_pdf_pages.dart';
 
@@ -53,6 +54,13 @@ class DesktopFileHandler {
   /// The picker can take a moment to appear on Linux, so rapid taps on the
   /// add button would otherwise stack multiple picker windows.
   bool _isPicking = false;
+
+  /// Uploads images kept offline once the network is back.
+  late final OfflineAttachmentWatcher _offlineWatcher =
+      OfflineAttachmentWatcher(
+        attachments: () => attachedFiles,
+        onChanged: () => onUpdate?.call(),
+      );
 
   void initialize(ChatApiService apiService) {
     _chatApiService = apiService;
@@ -175,7 +183,9 @@ class DesktopFileHandler {
       final Uint8List imageBytes = await file.readAsBytes();
 
       // Upload to encrypted storage (compression + encryption happens inside)
-      final String storagePath = await ImageStorageService.uploadEncryptedImage(
+      // With a bad network the image is kept encrypted on the device (an
+      // `offline://img/` path) and uploaded later, never dropped.
+      final String storagePath = await OfflineImageAttach.uploadOrKeep(
         imageBytes,
       );
 
@@ -188,6 +198,7 @@ class DesktopFileHandler {
         );
       }
       onUpdate?.call();
+      _afterStore(storagePath, stillAttached: index != -1);
 
       if (kDebugMode) {
         debugPrint(
@@ -325,7 +336,9 @@ class DesktopFileHandler {
     String fileId,
   ) async {
     try {
-      final String storagePath = await ImageStorageService.uploadEncryptedImage(
+      // With a bad network the image is kept encrypted on the device (an
+      // `offline://img/` path) and uploaded later, never dropped.
+      final String storagePath = await OfflineImageAttach.uploadOrKeep(
         imageBytes,
       );
 
@@ -337,6 +350,7 @@ class DesktopFileHandler {
         );
       }
       onUpdate?.call();
+      _afterStore(storagePath, stillAttached: index != -1);
 
       if (kDebugMode) {
         debugPrint(
@@ -352,6 +366,19 @@ class DesktopFileHandler {
 
       attachedFiles.removeWhere((f) => f.id == fileId);
       onUpdate?.call();
+    }
+  }
+
+  /// Watches an offline image that is still attached, or deletes one whose
+  /// attachment was removed while it was being stored.
+  void _afterStore(String storagePath, {required bool stillAttached}) {
+    if (!ImageStorageService.isOfflinePath(storagePath)) return;
+    if (stillAttached) {
+      _offlineWatcher.track();
+    } else {
+      unawaited(
+        ImageStorageService.deleteOfflineImage(storagePath).catchError((_) {}),
+      );
     }
   }
 
@@ -430,7 +457,10 @@ class DesktopFileHandler {
   /// Clear all attachments.
   void clearAll() {
     for (final file in attachedFiles) {
-      if (file.encryptedImagePath != null) {
+      // An offline image may already belong to a queued message; the outbox
+      // deletes it when that message is gone.
+      if (file.encryptedImagePath != null &&
+          !ImageStorageService.isOfflinePath(file.encryptedImagePath!)) {
         unawaited(
           ImageStorageService.deleteEncryptedImage(
             file.encryptedImagePath!,
@@ -439,5 +469,10 @@ class DesktopFileHandler {
       }
     }
     attachedFiles.clear();
+  }
+
+  /// Stops listening for the network. Call from the owner's dispose.
+  void dispose() {
+    _offlineWatcher.dispose();
   }
 }

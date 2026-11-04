@@ -68,6 +68,10 @@ MAX_CATALOG_DESCRIPTION_CHARS = 300
 #: name only — still loadable with the ``skill`` tool, just without the blurb.
 MAX_CATALOG_CHARS = 6_000
 MAX_BODY_CHARS = 40_000
+#: The head of a loaded skill body row (:meth:`SkillLibrary.pending_context`).
+#: The context ladder finds skill rows by it: a summary that folds one away
+#: leaves a reload note in its place.
+SKILL_BODY_PREFIX = "## ACTIVE SKILL: "
 MAX_SKILLS = 100
 
 SKILL_FILENAME = "SKILL.md"
@@ -477,6 +481,14 @@ class SkillLibrary:
             ),
         }
 
+    def forget(self, name: str) -> None:
+        """Mark ``name`` as not loaded any more: the context ladder folded its
+        body away. The next ``skill`` call sends the body again instead of
+        answering ``already_active``."""
+        key = (name or "").strip()
+        if key in self._active:
+            self._active.remove(key)
+
     def pending_context(self) -> list[dict]:
         """Drain the bodies activated since the last call, as conversation
         messages. The loop appends them after the tool results."""
@@ -499,7 +511,7 @@ class SkillLibrary:
                     "role_tag": "skill",
                     "role": "user",
                     "content": (
-                        f"## ACTIVE SKILL: {skill.name}\n\n"
+                        f"{SKILL_BODY_PREFIX}{skill.name}\n\n"
                         "Loaded because you called the `skill` tool. These are "
                         "instructions for you, not a message from the user. "
                         "They stay in force for the rest of this "

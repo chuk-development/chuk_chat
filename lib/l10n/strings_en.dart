@@ -843,6 +843,20 @@ const Map<String, String> stringsEn = {
   'messagePending': 'Will send when online',
   'messageFailed': 'Failed to send',
   'messageRetry': 'Retry',
+  'outboxWaitingForNetwork': 'Waiting for network',
+  'outboxUploading': 'Uploading…',
+  'outboxTranscribing': 'Transcribing…',
+  'outboxSending': 'Sending…',
+  'outboxDelete': 'Delete',
+  'outboxSend': 'Send',
+  'outboxTranscriptReady': 'Transcript ready',
+  'voiceSavedOffline': 'Recording saved — will transcribe when online',
+  'imageSavedOffline': 'Image saved — will upload when online',
+  'outboxQueuedSnack':
+      'No connection. The message will be sent when the network is back.',
+  'outboxPendingCount': '{count} waiting to send',
+  'agentsImagesNotSupported':
+      'Images are not supported in Agents yet. Your text was sent without the image.',
 
   // ── Onboarding ─────────────────────────────────────────────
   'onboardingReplayTile': 'Show onboarding again',

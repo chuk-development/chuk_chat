@@ -103,6 +103,19 @@ class AgentsChatTransport {
     return DateTime.now().difference(at) <= _stopIntentWindow;
   }
 
+  static final StreamController<AgentsSendNotice> _notices =
+      StreamController<AgentsSendNotice>.broadcast();
+
+  /// Things a send could not do that the user must hear about, for a widget
+  /// with a [BuildContext] to show. This service has none.
+  static Stream<AgentsSendNotice> get notices => _notices.stream;
+
+  /// Raises [notice] from outside a send (the offline queue drops images of
+  /// an Agents prompt the same way a live send does).
+  static void notify(AgentsSendNotice notice) {
+    if (!_notices.isClosed) _notices.add(notice);
+  }
+
   /// True while the user's stop for [sessionKey] is still on record. Test seam.
   @visibleForTesting
   static bool hasStopIntent(String sessionKey) =>
@@ -155,13 +168,21 @@ class AgentsChatTransport {
 
     if (images != null && images.isNotEmpty) {
       // No image channel on `sendTask` yet: the frame carries a prompt, not
-      // attachments. Dropped loudly rather than silently mangled.
+      // attachments. The text still goes out, and the user is TOLD the image
+      // did not: [notices] is what the thread view turns into a snackbar.
       if (kDebugMode) {
         debugPrint(
-          '[agents-adapter] dropping ${images.length} image(s): the relay has '
-          'no image channel yet',
+          '[agents-adapter] sending without ${images.length} image(s): the '
+          'relay has no image channel yet',
         );
       }
+      _notices.add(
+        AgentsSendNotice(
+          kind: AgentsSendNoticeKind.imagesNotSupported,
+          sessionKey: sessionKey,
+          count: images.length,
+        ),
+      );
     }
 
     final out = StreamController<ChatStreamEvent>();
@@ -625,6 +646,7 @@ class AgentsChatTransport {
             sessionKey,
             selectedRoute,
             reasoningEffort: reasoningEffort,
+            taskId: wireTaskId,
           ),
         );
         emit(
@@ -714,12 +736,16 @@ class AgentsChatTransport {
           );
           // Same as the no-controller case: a socket that refused the frame
           // has not lost the prompt, it has only delayed it.
+          // It keeps the id this send was given: if the frame did slip out
+          // before the socket failed, the flush is a `duplicate` to the host,
+          // not a second run.
           unawaited(
             _queueAndMark(
               message,
               sessionKey,
               selectedRoute,
               reasoningEffort: reasoningEffort,
+              taskId: wireTaskId,
             ),
           );
           emit(
@@ -848,6 +874,7 @@ Future<OutboxTask?> _queueForLater(
   String sessionKey,
   Future<ChatModelSelection> selectedRoute, {
   String? reasoningEffort,
+  String? taskId,
 }) async {
   try {
     ChatModelSelection? route;
@@ -863,6 +890,7 @@ Future<OutboxTask?> _queueForLater(
       modelId: route?.modelId,
       providerSlug: route?.providerSlug,
       reasoningEffort: route?.reasoningEffort ?? reasoningEffort,
+      taskId: taskId,
     );
   } catch (error) {
     if (kDebugMode) {
@@ -885,12 +913,14 @@ Future<void> _queueAndMark(
   String sessionKey,
   Future<ChatModelSelection> selectedRoute, {
   String? reasoningEffort,
+  String? taskId,
 }) async {
   final OutboxTask? task = await _queueForLater(
     message,
     sessionKey,
     selectedRoute,
     reasoningEffort: reasoningEffort,
+    taskId: taskId,
   );
   if (task == null) return;
   await AgentsQueuedMarks.markQueued(
@@ -898,4 +928,29 @@ Future<void> _queueAndMark(
     prompt: message,
     queueId: task.localId,
   );
+}
+
+/// What kind of [AgentsSendNotice] it is.
+enum AgentsSendNoticeKind {
+  /// The send carried images. Agents has no attachment frame yet, so the
+  /// text went out without them.
+  imagesNotSupported,
+}
+
+/// One thing a send could not do, for the thread view to tell the user.
+@immutable
+class AgentsSendNotice {
+  const AgentsSendNotice({
+    required this.kind,
+    required this.sessionKey,
+    this.count = 0,
+  });
+
+  final AgentsSendNoticeKind kind;
+
+  /// The thread the send was for. A view shows only its own thread's notices.
+  final String sessionKey;
+
+  /// How many items it is about (images left out).
+  final int count;
 }

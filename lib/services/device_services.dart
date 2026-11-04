@@ -82,7 +82,12 @@ class DeviceServices {
   ///
   /// Returns structured error on platforms without GPS hardware
   /// (Linux, Windows).
-  Future<Map<String, dynamic>> getCurrentLocation() async {
+  ///
+  /// [mayAskPermission] false (a background turn with no screen): a missing
+  /// permission is reported as an error instead of being asked for.
+  Future<Map<String, dynamic>> getCurrentLocation({
+    bool mayAskPermission = true,
+  }) async {
     if (Platform.isLinux || Platform.isWindows) {
       return {
         'success': false,
@@ -101,6 +106,14 @@ class DeviceServices {
       }
 
       var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied && !mayAskPermission) {
+        return {
+          'success': false,
+          'error':
+              'Location permission is not granted yet. It can only be '
+              'asked for with the app open on screen.',
+        };
+      }
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {

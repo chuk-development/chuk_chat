@@ -75,7 +75,7 @@ void main() {
     });
   });
 
-  group('ToolPromptBuilder continuation guidance (isToolResult)', () {
+  group('ToolPromptBuilder continuation guidance', () {
     final tools = <Map<String, dynamic>>[
       {
         'name': 'generate_image',
@@ -84,23 +84,22 @@ void main() {
       },
     ];
 
-    test('adds continuation block on post-tool-result passes', () {
+    test('the after-tool-results block is always in the prompt', () {
+      // It used to be added on tool-result passes only, which made pass 2's
+      // system prompt differ from pass 1's: a prompt cache miss on the whole
+      // history.
       final builder = ToolPromptBuilder(discoveryMode: true);
-      final section = builder.buildToolProtocolSection(
-        tools: tools,
-        isToolResult: true,
-      );
-      expect(section, contains('CONTINUATION'));
+      final section = builder.buildToolProtocolSection(tools: tools);
+      expect(section, contains('AFTER TOOL RESULTS'));
       expect(section, contains('ALREADY shown to the user'));
     });
 
-    test('omits continuation block on the initial pass', () {
-      final builder = ToolPromptBuilder(discoveryMode: true);
-      final section = builder.buildToolProtocolSection(
-        tools: tools,
-        isToolResult: false,
-      );
-      expect(section, isNot(contains('CONTINUATION —')));
+    test('the prompt holds no date', () {
+      final section = ToolPromptBuilder(
+        discoveryMode: true,
+      ).buildToolProtocolSection(tools: tools);
+      expect(section, isNot(contains('Today is')));
+      expect(section, contains('[Sent:'));
     });
   });
 
@@ -158,30 +157,22 @@ void main() {
   group('ToolPromptBuilder skills catalog', () {
     String build({
       required bool discoveryMode,
-      List<Map<String, dynamic>>? discoveredTools,
       List<Skill> catalog = const [_testSkill],
-      List<Skill> active = const [],
     }) {
       return ToolPromptBuilder(
         discoveryMode: discoveryMode,
       ).buildToolProtocolSection(
         tools: _tools,
-        discoveredTools: discoveredTools,
         skillToolDef: _skillToolDef,
         skillCatalog: catalog,
-        activeSkills: active,
       );
     }
 
-    test('is emitted in all three prompt branches', () {
+    test('is emitted in every prompt branch', () {
       // The catalog lives after the branch dispatch precisely so no branch
       // can forget it.
       final branches = <String, String>{
         'discovery, names only': build(discoveryMode: true),
-        'discovery, post-find_tools': build(
-          discoveryMode: true,
-          discoveredTools: [_tools[1]],
-        ),
         'full protocol': build(discoveryMode: false),
       };
 
@@ -230,38 +221,20 @@ void main() {
   });
 
   group('ToolPromptBuilder active skill bodies', () {
-    String build({List<Skill> active = const []}) =>
-        ToolPromptBuilder(discoveryMode: false).buildToolProtocolSection(
-          tools: _tools,
-          skillToolDef: _skillToolDef,
-          skillCatalog: const [_testSkill],
-          activeSkills: active,
-        );
-
-    test('injects the body verbatim under a per-skill heading', () {
-      final section = build(active: const [_testSkill]);
-
-      expect(section, contains('## ACTIVE SKILL: weather-cards'));
-      expect(section, contains('UNIQUE-BODY-MARKER'));
-    });
-
-    test('injects no body when nothing is active', () {
-      final section = build();
+    test('a loaded body never goes into the system prompt', () {
+      // It is a <skill_content> message in the conversation instead
+      // (prompt_context.dart), so the system prompt stays the same all chat.
+      final section = ToolPromptBuilder(discoveryMode: false)
+          .buildToolProtocolSection(
+            tools: _tools,
+            skillToolDef: _skillToolDef,
+            skillCatalog: const [_testSkill],
+          );
 
       expect(section, contains('## SKILLS'));
-      // The catalog preamble names "## ACTIVE SKILL" to tell the model where
-      // a body will appear, so assert on the heading form specifically.
-      expect(section, isNot(contains('## ACTIVE SKILL:')));
+      expect(section, contains('<skill_content'));
+      expect(section, isNot(contains('## ACTIVE SKILL')));
       expect(section, isNot(contains('UNIQUE-BODY-MARKER')));
-    });
-
-    test('body comes after the catalog so it sits closest to the answer', () {
-      final section = build(active: const [_testSkill]);
-
-      expect(
-        section.indexOf('## ACTIVE SKILL'),
-        greaterThan(section.indexOf('## SKILLS')),
-      );
     });
   });
 
@@ -434,23 +407,6 @@ void main() {
             'skills must SHRINK the base prompt: $without -> $with_ tokens '
             '(delta ${with_ - without})',
       );
-    });
-
-    test('an active body is charged only once it is loaded', () {
-      String build(List<Skill> active) =>
-          ToolPromptBuilder(discoveryMode: false).buildToolProtocolSection(
-            tools: _tools,
-            skillToolDef: _skillToolDef,
-            skillCatalog: kBuiltinSkills,
-            activeSkills: active,
-          );
-
-      final idle = TokenEstimator.estimateTokens(build(const []));
-      final loaded = TokenEstimator.estimateTokens(
-        build([kBuiltinSkills.first]),
-      );
-
-      expect(loaded, greaterThan(idle));
     });
   });
 }

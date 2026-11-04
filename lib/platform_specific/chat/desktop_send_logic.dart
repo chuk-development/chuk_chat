@@ -388,8 +388,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       final ToolCallHandler toolCallHandler = ToolCallHandler.forChat(
         _activeChatId,
       );
+      // The edited message's stored send time: its `[Sent: …]` line.
+      final String? turnSentAt = _messages[index]['sentAt'];
       var toolSession = toolCallHandler.createSession(
         initialUserMessage: messageForSend,
+        userSentAt: turnSentAt,
         history: conversationHistory,
         accessToken: accessToken,
         discoveryContextKey: _activeChatId,
@@ -423,6 +426,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         required List<Map<String, dynamic>> history,
         required String? passSystemPrompt,
         List<String>? passImages,
+        int? turnHistoryIndex,
         int currentPass = 0,
       }) async {
         if (_isSendOperationCancelled(sendOperationId)) {
@@ -462,6 +466,8 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           // every pass; empty (prompt-based) when native mode is off.
           tools: toolCallHandler.nativeToolDefinitions(toolSession),
           toolChoice: ToolCallHandler.nativeToolChoice(toolSession),
+          requestPass: currentPass + 1,
+          turnHistoryIndex: turnHistoryIndex,
           // A retry REPLACES the last answer, so the host drops the turn being
           // retried instead of storing the same question again. Only the first
           // pass says so: the later passes of the same turn are continuations,
@@ -601,13 +607,18 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     chatIdForStream,
                   );
 
-                  final next = loopResult.nextStep!;
+                  // Later passes carry the turn's images in its own history
+                  // entry, not on the pass message (prompt cache, order).
+                  final next = loopResult.nextStep!.withTurnImages(
+                    imagesForResend,
+                  );
                   await Future<void>.delayed(Duration.zero);
                   await startStreamPass(
                     message: next.message,
                     history: next.history,
                     passSystemPrompt: next.systemPrompt,
-                    passImages: imagesForResend,
+                    passImages: next.passImages,
+                    turnHistoryIndex: next.turnUserIndex,
                     currentPass: currentPass + 1,
                   );
                   return;
@@ -634,6 +645,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
                   toolSession = toolCallHandler.createSession(
                     initialUserMessage: messageForSend,
+                    userSentAt: turnSentAt,
                     history: conversationHistory,
                     accessToken: accessToken,
                     discoveryContextKey: chatIdForStream,
@@ -655,7 +667,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                   if (!mounted) return;
 
                   await startStreamPass(
-                    message: messageForSend,
+                    message: toolSession.firstPassMessage,
                     history: conversationHistory,
                     passSystemPrompt: retryPrompt,
                     passImages: imagesForResend,
@@ -889,7 +901,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
       try {
         await startStreamPass(
-          message: messageForSend,
+          message: toolSession.firstPassMessage,
           history: conversationHistory,
           passSystemPrompt: initialSystemPrompt,
           passImages: imagesForResend,
@@ -1020,6 +1032,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
   Future<void> _cancelCurrentOperation() async {
     // Explicit cancel discards any queued follow-up message too.
     _pendingMessageText = null;
+    _parkFollowUp();
 
     if (_isStreaming) {
       // Stream is active - cancel via existing method
@@ -1275,6 +1288,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           } else {
             _pendingMessageText = text;
           }
+          _parkFollowUp();
           composerController.clear();
           if (kDebugMode) {
             debugPrint(
@@ -1615,7 +1629,10 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       // bubble to "pending", remove the "Thinking..." placeholder, persist
       // and bail out before contacting the WebSocket.  The retry manager
       // will replay the send once connectivity returns.
-      if (!NetworkStatusService.isOnline) {
+      if (OfflineSendBridge.mustQueue(
+        _activeChatId!,
+        imagePaths: imageDataUrls,
+      )) {
         final userMsgIndex = placeholderIndex - 1;
         final enqueued = await _enqueueOfflineSend(
           chatId: _activeChatId!,
@@ -1630,6 +1647,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
               : null,
           maxTokens: maxResponseTokens,
           reasoningEffort: clampedReasoningEffort(modelIdForSend, providerSlug),
+          kick: NetworkStatusService.isOnline,
         );
         ChatStorageService.isMessageOperationInProgress = false;
         if (enqueued) return;
@@ -1710,8 +1728,13 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       final ToolCallHandler toolCallHandler = ToolCallHandler.forChat(
         chatIdForStream,
       );
+      // The user message's stored send time: its `[Sent: …]` line.
+      final String? turnSentAt = isContinuation
+          ? null
+          : _messages[placeholderIndex - 1]['sentAt'];
       var toolSession = toolCallHandler.createSession(
         initialUserMessage: aiPromptContent,
+        userSentAt: turnSentAt,
         history: apiHistory,
         accessToken: accessToken,
         discoveryContextKey: chatIdForStream,
@@ -1753,6 +1776,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         required List<Map<String, dynamic>> history,
         required String? passSystemPrompt,
         List<String>? passImages,
+        int? turnHistoryIndex,
         int currentPass = 0,
       }) async {
         if (_isSendOperationCancelled(sendOperationId)) {
@@ -1792,6 +1816,8 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           // every pass; empty (prompt-based) when native mode is off.
           tools: toolCallHandler.nativeToolDefinitions(toolSession),
           toolChoice: ToolCallHandler.nativeToolChoice(toolSession),
+          requestPass: currentPass + 1,
+          turnHistoryIndex: turnHistoryIndex,
         );
 
         await _streamingManager.startStream(
@@ -1923,13 +1949,18 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                       chatIdForStream,
                     );
 
-                    final next = loopResult.nextStep!;
+                    // Later passes carry the turn's images in its own history
+                    // entry, not on the pass message (prompt cache, order).
+                    final next = loopResult.nextStep!.withTurnImages(
+                      imageDataUrls,
+                    );
                     await Future<void>.delayed(Duration.zero);
                     await startStreamPass(
                       message: next.message,
                       history: next.history,
                       passSystemPrompt: next.systemPrompt,
-                      passImages: imageDataUrls,
+                      passImages: next.passImages,
+                      turnHistoryIndex: next.turnUserIndex,
                       currentPass: currentPass + 1,
                     );
                     return;
@@ -1963,6 +1994,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
                     toolSession = toolCallHandler.createSession(
                       initialUserMessage: aiPromptContent,
+                      userSentAt: turnSentAt,
                       history: apiHistory,
                       accessToken: accessToken,
                       discoveryContextKey: chatIdForStream,
@@ -1989,7 +2021,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     if (!mounted) return;
 
                     await startStreamPass(
-                      message: aiPromptContent,
+                      message: toolSession.firstPassMessage,
                       history: apiHistory,
                       passSystemPrompt: retryPrompt,
                       passImages: imageDataUrls,
@@ -2185,7 +2217,12 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
             // and just flips to a "pending" state; AI placeholder is removed.
             // If enqueue itself fails, fall through to the normal error
             // display path so the user always gets feedback.
+            // Only a first pass the server never answered: once it sent a
+            // frame it may bill the turn, and a replay would run it twice
+            // (docs/OFFLINE_SEND.md). Then the normal error path runs.
             if (NetworkStatusService.isNetworkError(errorMessage) &&
+                currentPass == 0 &&
+                !_streamingManager.serverAccepted(chatIdForStream) &&
                 _activeChatId == chatIdForStream) {
               final userMsgIndex = placeholderIndex - 1;
               bool enqueued = false;
@@ -2206,6 +2243,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     modelIdForSend,
                     providerSlug,
                   ),
+                  kick: true,
                 );
               } catch (error) {
                 if (kDebugMode) {
@@ -2287,7 +2325,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       onVoiceTurnStarted?.call(chatIdForStream, placeholderIndex);
       try {
         await startStreamPass(
-          message: aiPromptContent,
+          message: toolSession.firstPassMessage,
           history: apiHistory,
           passSystemPrompt: initialSystemPrompt,
           passImages: imageDataUrls,
@@ -2575,6 +2613,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     } else {
       _pendingMessageText = null;
     }
+    _parkFollowUp();
     if (composerController.text.trim().isEmpty) {
       composerController.text = pending;
       composerController.selection = TextSelection.collapsed(
@@ -2594,6 +2633,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     } else {
       _pendingMessageText = null;
     }
+    _parkFollowUp();
 
     if (kDebugMode) {
       debugPrint(
@@ -2628,7 +2668,13 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     String? imagesJson,
     required int maxTokens,
     String? reasoningEffort,
+    bool kick = false,
   }) async {
+    // Documents and the original attachment list ride on the user bubble.
+    final Map<String, String>? userMsg =
+        userMsgIndex >= 0 && userMsgIndex < _messages.length
+        ? _messages[userMsgIndex]
+        : null;
     final payload = OfflineSendPayload(
       chatId: chatId,
       messageText: messageText,
@@ -2636,13 +2682,15 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       providerSlug: providerSlug,
       systemPrompt: systemPrompt,
       imagesJson: imagesJson,
+      attachmentsJson: userMsg?['attachments'],
+      attachedFilesJson: userMsg?['attachedFilesJson'],
       maxTokens: maxTokens,
       reasoningEffort: reasoningEffort,
     );
 
     String queueId;
     try {
-      queueId = await OfflineSendCoordinator.enqueue(payload);
+      queueId = await OfflineSendCoordinator.enqueue(payload, kick: kick);
     } catch (e) {
       if (kDebugMode) {
         debugPrint('[Desktop-Send] enqueue failed: $e');
@@ -2652,20 +2700,52 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
     if (!mounted) return true;
     setState(() {
-      if (userMsgIndex >= 0 && userMsgIndex < _messages.length) {
-        _messages[userMsgIndex]['status'] = 'pending';
-        _messages[userMsgIndex]['queueId'] = queueId;
-      }
-      // Drop the trailing "Thinking..." placeholder — no AI reply will come
-      // until the queued send is replayed.
-      if (placeholderIndex >= 0 &&
-          placeholderIndex < _messages.length &&
-          _messages[placeholderIndex]['text'] == 'Thinking...') {
-        _messages.removeAt(placeholderIndex);
-      }
+      OfflineSendBridge.markQueued(
+        _messages,
+        userIdx: userMsgIndex,
+        placeholderIdx: placeholderIndex,
+        queueId: queueId,
+      );
       _isSending = false;
     });
     _persistChatWithId(chatId);
     return true;
+  }
+
+  // --- OFFLINE OUTBOX (docs/OFFLINE_SEND.md) ---
+
+  /// The follow-up typed while a reply streams is parked on disk, so a kill
+  /// or a thread switch does not lose it.
+  void _parkFollowUp() {
+    final chatId = _activeChatId;
+    if (chatId == null) return;
+    unawaited(
+      FollowUpParkingService.save(chatId, <String>[?_pendingMessageText]),
+    );
+  }
+
+  /// Restores a parked follow-up of the chat just opened and sends it.
+  Future<void> _restoreParkedFollowUp(String chatId) async {
+    final parked = await FollowUpParkingService.load(chatId);
+    if (parked.isEmpty || !mounted || _activeChatId != chatId) return;
+    if (_pendingMessageText != null) return;
+    setState(() => _pendingMessageText = parked.join('\n\n'));
+    if (!_isSending && !_isStreaming) _drainPendingMessage();
+  }
+
+  /// The outbox wrote into [chatId] (a reply, a transcript, an uploaded
+  /// image, a deleted row). The open chat reloads from storage unless a
+  /// turn runs, which saves its own list and would be overwritten.
+  Future<void> _onOutboxChangedChat(String chatId) async {
+    if (chatId != _activeChatId || _isSending || _isStreaming) return;
+    final chat = await ChatStorageService.loadFullChat(chatId);
+    if (!mounted || chat == null || !chat.isFullyLoaded) return;
+    if (chatId != _activeChatId || _isSending || _isStreaming) return;
+    setState(() {
+      _messages
+        ..clear()
+        ..addAll(chat.messages.map(_messageToRawMap));
+      _messageRenderCache.clear();
+    });
   }
 }
