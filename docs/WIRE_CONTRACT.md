@@ -1928,24 +1928,80 @@ every file the agent read or wrote.
 IMPLEMENTED runtime-side: `chuk_agents_runtime.safety_floor.SafetyFloor`, wired
 into `run_command`, the file tools and `apply_patch`. The agent runs on the
 user's real machine, so a small set of actions is stopped before it runs,
-whatever the approval mode. Matching is on parsed tokens (`shlex`), not raw
-substrings.
+whatever the approval mode.
+
+**The floor is defense in depth. The sandbox is the real boundary.** The floor
+reads shell text, and shell text can always hide intent (a script file, a
+program that deletes files without a recursive flag, an interpreter). The
+floor stops the clear, catastrophic shapes and the common accidents. It does
+not make an unsandboxed agent safe. Do not remove a sandbox control because
+the floor exists.
+
+Matching is on shell tokens as bash reads them, not on raw substrings. The
+tokenizer reads quotes, `$'…'`, escapes, comments, here-documents (`<<`,
+`<<-`, quoted delimiters) and here-strings (`<<<`). A carriage return is part
+of a word, as in bash. The floor follows `$(…)`, backticks, `bash -c`,
+`eval`, `trap` strings, `alias` values, `env -S`, `watch`, `su -c`,
+`script -c`, launchers (`sudo`, `pkexec`, `runuser`, `systemd-run`,
+`unshare`, `setsid`, `chroot`, `xargs` …) and code that a shell reads from a
+here-document, a here-string or a pipe from `echo` / `printf`. It resolves
+`~`, `$HOME`, plain variable assignments in the same command (`R=rm; $R`),
+`for` loop values, brace expansion, `cd` in the same chain and globs.
 
 - **Hard deny** (never allowed, returns `{"ok": false, "blocked": true,
-  "error": "blocked by the safety floor: …"}`): `rm -rf` of `/`, `~` or
-  `$HOME`; `mkfs*`; `dd` to a block device (`/dev/sd*`, `/dev/nvme*`, …); the
-  classic fork bomb; `chmod -R 777 /`; and deleting the agent's own install or
-  state directory.
-- **Soft stop** (needs an explicit approval; the error says so): writing under
-  `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.config/gh`, `~/.netrc`, or any `.env`
-  file, and reading a `.env` file. `shutdown` / `reboot` are a soft stop unless
-  the host allows them. A soft stop is lifted when the user has remembered this
-  command's token prefix (see "Shell command rules"); a hard deny never is.
+  "error": "blocked by the safety floor: …"}`):
+  - a recursive delete (`rm -r`, `find -delete`, `find -exec rm`, an unknown
+    program with `-r`, `mv`) of `/`, a top-level system directory (`/bin`
+    `/boot` `/etc` `/home` `/lib*` `/opt` `/root` `/sbin` `/srv` `/usr`
+    `/var`), or a directory that holds the home or an agent directory. Globs
+    count by what they can match: `~/*`, `/*/`, `/h*` are a hit. GNU
+    abbreviations (`--r`, `--recur`) count as `--recursive`.
+  - `mkfs*`, `mke2fs` and other filesystem makers.
+  - a write to a block device: `dd of=`, a redirect, a write command (`cp`,
+    `tee`), `wipefs`, `blkdiscard`, `sgdisk`, `mkswap` (`/dev/sd*`, `hd*`,
+    `vd*`, `xvd*`, `nvme*`, `mmcblk*`, `dm-*`, `md*`, `loop*`, `disk/*`,
+    `mapper/*`).
+  - a fork bomb with any function name.
+  - `chmod -R` that makes `/`, a system directory or the home writable by
+    others (`777`, `0777`, `o+w`, `a+rwx`), and `chown -R` of `/` or a system
+    directory.
+  - deleting or writing the agent's own install or state directory, also one
+    file in it (`check_path_write` too).
+- **Soft stop** (needs an explicit approval; the error says so):
+  - writing under `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.config/gh`, `~/.netrc`
+    (also `sed -i`, `perl -i`, `rsync`, a relative `.ssh` path, `cd ~` then a
+    relative path);
+  - reading a private key or credentials file there (`~/.ssh/id_*`,
+    `~/.aws/credentials`, `~/.config/gh/hosts.yml`, `~/.netrc`). Public keys,
+    `known_hosts` and `~/.ssh/config` are free to read;
+  - any `.env` / `.env.*` file named by any program, also through a glob
+    (`.en?`, `.env*`) or braces (`{.env,x}`), except `echo`, `printf`, `ls`
+    and similar programs that do not read files;
+  - a recursive delete of a target the floor cannot resolve (`rm -rf "$DIR"`,
+    `~user`, `$(…)`);
+  - a shell that reads code from a pipe the floor cannot see (`curl … | sh`);
+  - an alias for a destructive program (`alias x='rm -rf'`);
+  - `shutdown` / `reboot`, unless the host allows them.
+
+  A soft stop is lifted when the user has remembered this command's token
+  prefix (see "Shell command rules"), but only for one simple command. A hard
+  deny never is.
+- **Fail closed.** A command the floor cannot parse with certainty (an open
+  quote, nesting deeper than 50 quote levels or 8 shell levels, more than
+  100 000 characters, too much work) never passes silently. A catastrophic
+  shape visible anywhere in the raw text is a hard deny. Anything else is a
+  soft stop. The check is linear in the length of the command. An error
+  inside the floor is a soft stop in `run_command`.
 
 The file tools call the same floor before a write (`check_path_write`) or a
-`.env` read (`check_path_read`), so a protected path is blocked whether the
-agent reaches it through the shell or through `write_file` / `edit_file` /
-`apply_patch`.
+read (`check_path_read`: a `.env`, a private key, a credentials file), so a
+protected path is blocked whether the agent reaches it through the shell or
+through `write_file` / `edit_file` / `apply_patch`.
+
+The persistent shell keeps aliases and functions between calls
+(`shopt -s expand_aliases`, a tested sandbox feature). The floor therefore
+checks an alias value and a function body when they are defined, not only
+when they are called.
 
 ## Interactive shell and background commands (session cowork-75, "cowork-terminal")
 
