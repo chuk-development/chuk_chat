@@ -72,6 +72,38 @@ def floor(tmp_path):
         "bash -c \"bash -c 'rm -rf /'\"",
         # a soft stop first must not hide a hard deny later
         "cat .env; rm -rf /",
+        # quoted / escaped targets are still the target (CodeRabbit)
+        'rm -rf "/"',
+        "rm -rf '/'",
+        "rm -rf \\/",
+        'rm -rf "$HOME"',
+        "r\\m -rf /",
+        "'rm' -rf /",
+        # a quoted or escaped operator is an argument, not a separator
+        "rm -rf ';' ~",
+        "rm -rf '&&' ~",
+        "rm -rf '>' ~",
+        "rm -rf \\; ~",
+        "rm -rf ';' /",
+        "rm -rf '&&' /",
+        "rm -rf '>' /",
+        "rm -rf \\; /",
+        "rm -rf \"|\" /",
+        "rm -rf \\&\\& /",
+        # ANSI-C and locale quoting
+        "rm -rf $'/'",
+        "rm -rf $'\\x2f'",
+        "rm -rf $'\\057'",
+        "rm -rf $'\\u002f'",
+        "$'rm' -rf /",
+        'rm -rf $"/"',
+        # the content of a quoted shell string is still checked
+        "bash -c 'x; rm -rf /'",
+        'bash -c "x && rm -rf ~"',
+        "bash -c $'x\\nrm -rf /'",
+        "sh -c \"echo ';'; rm -rf /\"",
+        # quotes inside a substitution inside double quotes
+        'echo "$(echo ")")"; rm -rf /',
     ],
 )
 def test_catastrophic_commands_are_hard_denied(floor, command):
@@ -101,6 +133,11 @@ def test_an_ordinary_command_passes(floor):
     assert floor.check_command("timeout 5 make test") is None
     assert floor.check_command("bash -c 'echo hi'") is None
     assert floor.check_command("find . -name '*.pyc' -exec rm {} \\;") is None
+    assert floor.check_command("echo 'a;b'") is None
+    assert floor.check_command("echo 'rm -rf /'") is None
+    assert floor.check_command('echo "x; rm -rf /"') is None
+    assert floor.check_command("echo hi # ; rm -rf /") is None
+    assert floor.check_command("grep -e '>' -e '|' notes.txt") is None
 
 
 @pytest.mark.parametrize(
@@ -255,3 +292,28 @@ def test_a_remembered_prefix_covers_the_simple_command():
     assert rules.allowed("git push") is True
     assert rules.allowed("git push origin 'feature;x'") is True
     assert rules.allowed("/usr/bin/git push --force-with-lease") is True
+
+
+# -- tokenizer ----------------------------------------------------------------
+
+
+def test_quoted_and_escaped_operators_are_words_not_separators():
+    from chuk_agents_runtime.safety_floor import is_separator, shell_tokens
+
+    toks = shell_tokens("echo 'a;b' x\\;y \\; \"&&\" ; ls")
+    assert toks == ["echo", "a;b", "x;y", ";", "&&", ";", "ls"]
+    assert [is_separator(t) for t in toks] == [False, False, False, False, False, True, False]
+    # ``rm\\ -rf`` is ONE word in the shell (a program named "rm -rf"), not rm.
+    assert shell_tokens("rm\\ -rf /") == ["rm -rf", "/"]
+    assert shell_tokens("a;b") == ["a", ";", "b"]
+    assert [is_separator(t) for t in shell_tokens("a;b")] == [False, True, False]
+
+
+def test_ansi_c_and_double_quote_escapes():
+    from chuk_agents_runtime.safety_floor import shell_tokens
+
+    assert shell_tokens("echo $'a\\tb' $'\\x41\\101' $'it\\'s'") == ["echo", "a\tb", "AA", "it's"]
+    assert shell_tokens('echo "a\\"b\\$c\\d"') == ["echo", 'a"b$c\\d']
+    assert shell_tokens("echo 'open") is None
+    assert shell_tokens('echo "$(echo ")")" x') == ["echo", '$(echo ")")', "x"]
+    assert shell_tokens("a # b ; c\nd") == ["a", ";", "d"]

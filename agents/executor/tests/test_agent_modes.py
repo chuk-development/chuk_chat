@@ -308,6 +308,59 @@ def test_the_wait_pauses_while_the_card_is_visible(tmp_path):
     assert _tool_result(tmp_path, "ask_user") == {"answers": [{"id": "db", "selected": []}]}
 
 
+def test_a_visible_card_pauses_the_wait_only_up_to_the_cap(tmp_path, monkeypatch):
+    """A dead app never sends ``visible: false``: after the cap the clock runs
+    again and the question goes ``pending`` instead of holding the run."""
+    import chuk_agents_executor.executor as executor_mod
+
+    monkeypatch.setattr(executor_mod, "MAX_VISIBLE_PAUSE_SECONDS", 0.5)
+    executor, controller = _start(tmp_path, [_ask(timeout=1), "ok"])
+
+    def on_event(event):
+        if event.get("type") == "question_request" and event["status"] == "open":
+            controller.send_payload(ask_visible_payload(question_id=event["question_id"], visible=True))
+
+    started = time.monotonic()
+    try:
+        events = _drive(controller, controller.send_task("storage", session_key=KEY), on_event=on_event)
+    finally:
+        executor.stop()
+    statuses = [e["status"] for e in events if e.get("type") == "question_request"]
+    assert statuses == ["open", "pending"]
+    assert time.monotonic() - started < 15.0
+
+
+def test_a_replay_ends_the_visible_pause(tmp_path):
+    """A replay is a reconnecting client; the old card is not on screen."""
+    from chuk_agents_executor.executor import _PendingQuestion
+
+    executor, _controller = _start(tmp_path, ["ok"])
+    try:
+        pending = _PendingQuestion(
+            call_id="q1", session_key=KEY, questions=[], timeout=60, payload={}
+        )
+        other = _PendingQuestion(
+            call_id="q2", session_key="other", questions=[], timeout=60, payload={}
+        )
+        with executor._questions_lock:
+            executor._questions["q1"] = pending
+            executor._questions["q2"] = other
+        executor._handle_ask_visible({"question_id": "q1", "visible": True})
+        executor._handle_ask_visible({"question_id": "q2", "visible": True})
+        since = pending.visible_since
+        assert pending.visible is True and since is not None
+        # A repeated ``visible: true`` does not extend the cap.
+        executor._handle_ask_visible({"question_id": "q1", "visible": True})
+        assert pending.visible_since == since
+        assert executor._question_paused(pending, time.monotonic()) is True
+        executor._reset_question_visibility(KEY)
+        assert pending.visible is False and pending.visible_since is None
+        assert executor._question_paused(pending, time.monotonic()) is False
+        assert other.visible is True, "only the replayed session is reset"
+    finally:
+        executor.stop()
+
+
 # -- goal mode --------------------------------------------------------------------------
 
 
