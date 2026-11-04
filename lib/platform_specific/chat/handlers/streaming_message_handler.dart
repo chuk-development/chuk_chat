@@ -278,11 +278,25 @@ class StreamingMessageHandler {
         .map((m) => Map<String, dynamic>.from(m))
         .toList();
 
+    // The send time stored on this turn's user message (the last user row;
+    // the list already holds it): its `[Sent: …]` line. None for a
+    // "continue generation" turn, which sends no user message of its own.
+    String? turnSentAt;
+    if (continuePriorText == null) {
+      for (var i = messages.length - 1; i >= 0; i--) {
+        if (messages[i]['sender'] == 'user') {
+          turnSentAt = messages[i]['sentAt'];
+          break;
+        }
+      }
+    }
+
     late ToolLoopSession toolSession;
     late final String initialSystemPrompt;
     try {
       toolSession = toolCallHandler.createSession(
         initialUserMessage: aiPromptContent,
+        userSentAt: turnSentAt,
         history: apiHistory,
         accessToken: accessToken,
         discoveryContextKey: chatId,
@@ -579,6 +593,7 @@ class StreamingMessageHandler {
         // on every pass; empty (prompt-based) when native mode is off.
         tools: toolCallHandler.nativeToolDefinitions(toolSession),
         toolChoice: ToolCallHandler.nativeToolChoice(toolSession),
+        requestPass: currentPass + 1,
         // A retry REPLACES the last answer, so the host drops the turn being
         // retried instead of storing the same question again. Only the first
         // pass says so: later passes of the same turn are continuations, and
@@ -792,7 +807,9 @@ class StreamingMessageHandler {
                   chatId,
                 );
 
-                final next = loopResult.nextStep!;
+                // Later passes carry the turn's images in its own history
+                // entry, not on the pass message (prompt cache, order).
+                final next = loopResult.nextStep!.withTurnImages(images);
                 await _updateForegroundNotification(
                   title: 'Generating response...',
                   content: 'AI is continuing the response',
@@ -803,7 +820,7 @@ class StreamingMessageHandler {
                   message: next.message,
                   history: next.history,
                   systemPrompt: next.systemPrompt,
-                  passImages: images,
+                  passImages: next.passImages,
                   currentPass: currentPass + 1,
                 );
                 return;
@@ -861,6 +878,7 @@ class StreamingMessageHandler {
                 // Reset the tool session for a clean retry
                 final retrySession = toolCallHandler.createSession(
                   initialUserMessage: aiPromptContent,
+                  userSentAt: turnSentAt,
                   history: apiHistory,
                   accessToken: accessToken,
                   discoveryContextKey: chatId,
@@ -887,7 +905,7 @@ class StreamingMessageHandler {
                 }
 
                 await startStreamingPass(
-                  message: aiPromptContent,
+                  message: retrySession.firstPassMessage,
                   history: apiHistory,
                   systemPrompt: retryPrompt,
                   passImages: images,
@@ -1253,7 +1271,7 @@ class StreamingMessageHandler {
 
     try {
       await startStreamingPass(
-        message: aiPromptContent,
+        message: toolSession.firstPassMessage,
         history: apiHistory,
         systemPrompt: initialSystemPrompt,
         passImages: images,
