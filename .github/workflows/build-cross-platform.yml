@@ -562,6 +562,9 @@ jobs:
           tar -czf ~/rpmbuild/SOURCES/chuk-chat-${VER}.tar.gz -C rpm-src .
 
           cat > ~/rpmbuild/SPECS/chuk-chat.spec <<EOF
+          # Prebuilt Flutter bundle: no debuginfo split. The runner image has
+          # no eu-strip (elfutils), so find-debuginfo would fail %install.
+          %global debug_package %{nil}
           Name:           chuk-chat
           Version:        ${VER}
           Release:        1%{?dist}
@@ -980,6 +983,9 @@ jobs:
           EOF
           tar -czf ~/rpmbuild/SOURCES/chuk-chat-${VER}.tar.gz -C rpm-src .
           cat > ~/rpmbuild/SPECS/chuk-chat.spec <<EOF
+          # Prebuilt Flutter bundle: no debuginfo split. The runner image has
+          # no eu-strip (elfutils), so find-debuginfo would fail %install.
+          %global debug_package %{nil}
           Name:           chuk-chat
           Version:        ${VER}
           Release:        1%{?dist}
