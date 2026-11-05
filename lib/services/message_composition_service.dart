@@ -335,6 +335,7 @@ class MessageCompositionService {
       history: apiHistory,
       currentMessage: aiPromptContent,
       systemPrompt: systemPrompt,
+      modelId: selectedModelId,
     );
 
     int maxResponseTokens = 512; // Default
@@ -343,17 +344,12 @@ class MessageCompositionService {
         providerLimits!.contextLength! > 0) {
       final int contextLength = providerLimits.contextLength!;
 
-      // Check if prompt exceeds context length
-      if (promptTokens >= contextLength) {
-        return _TokenLimits.error(
-          'Too much context for this model '
-          '($promptTokens vs $contextLength token limit). '
-          'Clear history or shorten your message.',
-        );
-      }
-
-      // Calculate max response tokens
-      final int availableForCompletion = contextLength - promptTokens;
+      // No hard stop when the prompt is over the window: the send compacts
+      // the chat first (ChatCompaction, docs/GOTCHAS.md "Chat compaction"),
+      // which frees the room. The answer budget then is the model's cap.
+      final int availableForCompletion = promptTokens >= contextLength
+          ? contextLength
+          : contextLength - promptTokens;
       final int completionCap =
           providerLimits.maxCompletionTokens != null &&
               providerLimits.maxCompletionTokens! > 0
@@ -396,21 +392,15 @@ class _MessageContent {
   });
 }
 
-/// Internal class for token limits
+/// Internal class for token limits. Always valid now: an over-long prompt
+/// is compacted by the send instead of refused (ChatCompaction).
 class _TokenLimits {
   final bool isValid;
-  final String? errorMessage;
   final int? maxResponseTokens;
 
-  const _TokenLimits({
-    required this.isValid,
-    this.errorMessage,
-    this.maxResponseTokens,
-  });
+  String? get errorMessage => null;
 
-  factory _TokenLimits.error(String message) {
-    return _TokenLimits(isValid: false, errorMessage: message);
-  }
+  const _TokenLimits({required this.isValid, this.maxResponseTokens});
 
   factory _TokenLimits.success(int maxResponseTokens) {
     return _TokenLimits(isValid: true, maxResponseTokens: maxResponseTokens);

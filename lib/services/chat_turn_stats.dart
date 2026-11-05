@@ -8,6 +8,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'package:chuk_chat/models/turn_usage.dart';
+import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/model_cache_service.dart';
 
 /// The last reply's numbers in one chat.
@@ -46,6 +47,45 @@ class ChatTurnStats extends ChangeNotifier {
   /// The last usage in [chatId], or null.
   TurnUsage? usageOf(String? chatId) => of(chatId)?.usage;
 
+  /// Reads the usage stored on the last answer of a chat (`message['usage']`
+  /// after a reload). The app's reader looks in the loaded chats; tests set
+  /// their own.
+  static TurnUsage? Function(String chatId) storedUsageReader =
+      _readStoredUsage;
+
+  static TurnUsage? _readStoredUsage(String chatId) {
+    final messages = ChatStorageService.getChatById(chatId)?.messagesOrNull;
+    if (messages == null) return null;
+    return lastStoredUsage(messages.map((m) => (m.role, m.usage)));
+  }
+
+  /// The usage of the last answer in [messages] (`(role, usage)` pairs),
+  /// or null when the last answer has none.
+  @visibleForTesting
+  static TurnUsage? lastStoredUsage(Iterable<(String, String?)> messages) {
+    TurnUsage? last;
+    var seen = false;
+    for (final (role, usage) in messages) {
+      if (role == 'user') continue;
+      seen = true;
+      last = TurnUsage.tryDecode(usage);
+    }
+    return seen ? last : null;
+  }
+
+  /// What the stats row shows for [chatId]: the live numbers of this app
+  /// session, else the usage stored on the chat's last answer, so the row
+  /// is not empty after a restart. Never used to stamp a new answer: a
+  /// reply without usage must not inherit the one before it.
+  ChatTurnStatsEntry? displayOf(String? chatId) {
+    if (chatId == null) return null;
+    final live = _byChat[chatId];
+    if (live != null && !live.isEmpty) return live;
+    final stored = storedUsageReader(chatId);
+    if (stored == null) return live;
+    return ChatTurnStatsEntry(usage: stored);
+  }
+
   /// Record the speed of the reply that is running in [chatId].
   void recordTps(String chatId, double tps) {
     if (!tps.isFinite || tps <= 0) return;
@@ -69,8 +109,9 @@ class ChatTurnStats extends ChangeNotifier {
   /// Move the numbers of [fromChatId] to [toChatId] (a new chat gets its id
   /// after the first reply started).
   void rename(String fromChatId, String toChatId) {
+    if (fromChatId == toChatId) return;
     final ChatTurnStatsEntry? entry = _byChat.remove(fromChatId);
-    if (entry == null || fromChatId == toChatId) return;
+    if (entry == null) return;
     _put(toChatId, entry);
   }
 

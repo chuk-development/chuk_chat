@@ -625,6 +625,15 @@ class ChatUiHelpers {
         message.voiceDurationMs!.isNotEmpty) {
       map['voiceDurationMs'] = message.voiceDurationMs!;
     }
+    // The reply's token usage and a compaction summary survive reload.
+    final String? usage = message.usage;
+    if (usage != null && usage.isNotEmpty) {
+      map['usage'] = usage;
+    }
+    final String? compactSummary = message.compactSummary;
+    if (compactSummary != null && compactSummary.isNotEmpty) {
+      map['compactSummary'] = compactSummary;
+    }
     return map;
   }
 

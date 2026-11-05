@@ -24,6 +24,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
@@ -509,6 +510,20 @@ class AgentsThreadModes extends ChangeNotifier {
 
   AgentsSandboxInfo? _sandbox;
 
+  /// The wait labels the inbox showed before the app closed, per thread
+  /// ([loadWaits]). Only the label is kept, nothing the user wrote. A thread
+  /// the host has spoken about since ([_liveKeys]) reads its live state
+  /// instead, so a stale label goes the moment the replay or a frame lands.
+  final Map<String, AgentsWaitKind> _storedWaits = <String, AgentsWaitKind>{};
+
+  /// Threads with at least one mode frame in this app session.
+  final Set<String> _liveKeys = <String>{};
+
+  bool _waitsLoaded = false;
+
+  /// Where [_storedWaits] lives. Labels only; a few bytes per thread.
+  static const String waitsPrefsKey = 'agents_thread_waits_v1';
+
   AgentsGoal? goalOf(String key) => _goals[key];
 
   /// What the host says about plan mode in [key].
@@ -552,6 +567,12 @@ class AgentsThreadModes extends ChangeNotifier {
   /// What [key] waits on the user for, or null. A plan review beats an
   /// approval, an approval beats a question, a question beats a blocked goal.
   AgentsWaitKind? waitKindOf(String key) {
+    final AgentsWaitKind? live = _liveWaitKindOf(key);
+    if (live != null || _liveKeys.contains(key)) return live;
+    return _storedWaits[key];
+  }
+
+  AgentsWaitKind? _liveWaitKindOf(String key) {
     final Map<String, bool>? approvals = _openApprovals[key];
     if (approvals != null && approvals.isNotEmpty) {
       return approvals.values.any((bool plan) => plan)
@@ -615,7 +636,86 @@ class AgentsThreadModes extends ChangeNotifier {
       default:
         return;
     }
-    if (changed) notifyListeners();
+    if (key != null) _liveKeys.add(key);
+    if (changed) {
+      notifyListeners();
+      _saveWaits();
+    }
+  }
+
+  // ── wait labels across restarts ──
+
+  /// Reads the labels stored at the last change. Safe to call often.
+  Future<void> loadWaits() async {
+    if (_waitsLoaded) return;
+    _waitsLoaded = true;
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final Map<String, AgentsWaitKind> stored = decodeWaits(
+        prefs.getString(waitsPrefsKey),
+      );
+      if (stored.isEmpty) return;
+      stored.removeWhere((String key, _) => _liveKeys.contains(key));
+      _storedWaits.addAll(stored);
+      notifyListeners();
+    } catch (_) {
+      // No preferences (a widget test): the labels start empty.
+    }
+  }
+
+  /// Every thread that waits now: the live state where the host has spoken,
+  /// the stored label elsewhere.
+  @visibleForTesting
+  Map<String, AgentsWaitKind> currentWaits() {
+    final Set<String> keys = <String>{
+      ..._openApprovals.keys,
+      ..._questions.keys,
+      ..._goals.keys,
+      ..._storedWaits.keys,
+    };
+    return <String, AgentsWaitKind>{
+      for (final String key in keys)
+        if (waitKindOf(key) case final AgentsWaitKind kind) key: kind,
+    };
+  }
+
+  void _saveWaits() {
+    if (!_waitsLoaded) return; // Never overwrite labels not read yet.
+    final String encoded = encodeWaits(currentWaits());
+    unawaited(() async {
+      try {
+        final SharedPreferences prefs = await SharedPreferences.getInstance();
+        await prefs.setString(waitsPrefsKey, encoded);
+      } catch (_) {
+        // Kept in memory; the next change writes again.
+      }
+    }());
+  }
+
+  /// `{"<thread key>": "<kind name>"}`.
+  @visibleForTesting
+  static String encodeWaits(Map<String, AgentsWaitKind> waits) =>
+      jsonEncode(<String, String>{
+        for (final MapEntry<String, AgentsWaitKind> e in waits.entries)
+          e.key: e.value.name,
+      });
+
+  /// [encodeWaits]'s output back; unknown kinds and broken input are dropped.
+  @visibleForTesting
+  static Map<String, AgentsWaitKind> decodeWaits(String? raw) {
+    if (raw == null || raw.isEmpty) return <String, AgentsWaitKind>{};
+    try {
+      final Object? decoded = jsonDecode(raw);
+      if (decoded is! Map) return <String, AgentsWaitKind>{};
+      return <String, AgentsWaitKind>{
+        for (final MapEntry<dynamic, dynamic> e in decoded.entries)
+          if (e.key is String && (e.key as String).isNotEmpty)
+            for (final AgentsWaitKind kind in AgentsWaitKind.values)
+              if (kind.name == e.value) e.key as String: kind,
+      };
+    } catch (_) {
+      return <String, AgentsWaitKind>{};
+    }
   }
 
   bool _setGoal(String key, Object? raw) {
@@ -735,6 +835,7 @@ class AgentsThreadModes extends ChangeNotifier {
     if (open == null || open.remove(approvalId) == null) return;
     if (open.isEmpty) _openApprovals.remove(key);
     notifyListeners();
+    _saveWaits();
   }
 
   // ── frames out ──
@@ -806,7 +907,9 @@ class AgentsThreadModes extends ChangeNotifier {
       answers: List<AgentsQuestionAnswer>.unmodifiable(answers),
     );
     _askVisibleSent.remove(request.questionId);
+    _liveKeys.add(request.sessionKey);
     notifyListeners();
+    _saveWaits();
     return true;
   }
 
@@ -838,6 +941,9 @@ class AgentsThreadModes extends ChangeNotifier {
     _runSource.clear();
     _openApprovals.clear();
     _askVisibleSent.clear();
+    _storedWaits.clear();
+    _liveKeys.clear();
+    _waitsLoaded = false;
     _sandbox = null;
     _send = _sendOverRelay;
     notifyListeners();

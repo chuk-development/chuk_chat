@@ -98,6 +98,11 @@ Future<(FakeHost, AgentsPermissionsService)> _section(
   WidgetTester tester, {
   Locale locale = const Locale('en'),
 }) async {
+  // Tall enough for every permission row (six since external agents), so
+  // the "Allow again" button under the browser switch is on screen.
+  tester.view.physicalSize = const Size(800, 1400);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
   final FakeHost host = FakeHost();
   final AgentsPermissionsService service = host.service();
   addTearDown(service.dispose);

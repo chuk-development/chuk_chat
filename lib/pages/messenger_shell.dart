@@ -211,7 +211,8 @@ class MessengerShell extends StatefulWidget {
   final VoidCallback? onSignOut;
 
   /// The app's theme controller. Kept as the bridge `main.dart` and
-  /// `auth_gate.dart` still take (see HANDOVER_2026-09-05_SHELL_SETTINGS);
+  /// `auth_gate.dart` still take (see
+  /// docs/notes/archived/2026-09-05-handover-shell-settings-cowork-5c.md);
   /// chuk's settings surfaces write the theme through [shellConfig].
   final ThemeController? themeController;
 

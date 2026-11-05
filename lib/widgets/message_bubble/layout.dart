@@ -896,6 +896,13 @@ extension _MessageBubbleLayout on _MessageBubbleState {
           closeCurrentRound();
           final p = block.sandboxArtifact;
           if (p != null) segments.add(_RenderSegment.sandboxArtifact(p));
+        case ContentBlockType.steer:
+          // A message the user sent while the turn ran: it splits the
+          // rounds, the same way it split the model's work.
+          final s = block.text?.trim() ?? '';
+          if (s.isEmpty) break;
+          closeCurrentRound();
+          segments.add(_RenderSegment.steer(s));
       }
     }
 
@@ -1042,7 +1049,9 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     int statusRoundIndex = -1;
     for (int i = 0; i < segments.length && !agentsLive; i++) {
       final s = segments[i];
-      if (s.isText || s.isSandboxArtifact || !s.hasContent) continue;
+      if (s.isText || s.isSandboxArtifact || s.isSteer || !s.hasContent) {
+        continue;
+      }
       // A round the reader never sees cannot carry the status: with tool
       // calls switched off, a tools-only round renders nothing at all.
       final bool rendersSomething =
@@ -1061,6 +1070,10 @@ extension _MessageBubbleLayout on _MessageBubbleState {
             bgColor: bgColor,
           ),
         );
+        hasRenderedMainContent = true;
+      } else if (seg.steer case final String steer) {
+        children.add(_buildSteerNote(steer, iconFgColor, bgColor));
+        children.add(const SizedBox(height: _kBlockGap));
         hasRenderedMainContent = true;
       } else if (seg.isSandboxArtifact) {
         // A file the agent produced is its own message, hung after the
@@ -1139,6 +1152,31 @@ extension _MessageBubbleLayout on _MessageBubbleState {
       return trimmed.substring(separatorIndex + 2).trim();
     }
     return text;
+  }
+
+  /// A steer inside the answer: the user's message, right-aligned in the
+  /// user-bubble fill, a little smaller than a real user bubble.
+  Widget _buildSteerNote(String text, Color iconFgColor, Color bgColor) {
+    final Color accentColor = Theme.of(context).colorScheme.primary;
+    final Color fill = accentColor.withValues(alpha: .8);
+    final Color textColor = readableOnFill(
+      Color.alphaBlend(fill, bgColor),
+      iconFgColor,
+    );
+    return Align(
+      key: const ValueKey<String>('message-steer-note'),
+      alignment: Alignment.centerRight,
+      child: Container(
+        margin: const EdgeInsets.only(left: 48, top: 4, bottom: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: fill,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: iconFgColor.withValues(alpha: .3)),
+        ),
+        child: _buildUserText(text, textColor),
+      ),
+    );
   }
 
   /// A user's text as chuk_chat draws it: plain [Text], so taps pass through

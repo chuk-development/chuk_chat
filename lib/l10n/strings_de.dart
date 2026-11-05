@@ -38,6 +38,10 @@ const Map<String, String> stringsDe = {
       'description. Halt die Beschreibung kurz — sie kostet in jeder '
       'Nachricht. Optional: allowed-tools, license, compatibility, metadata.',
   'skillSaveFailed': 'Skill konnte nicht gespeichert werden',
+  'assistantSurface': 'Assistent',
+  'assistantSurfaceSubtitle':
+      'Chuk Chat als Geräte-Assistent: über jeder App, liest den Bildschirm, '
+      'startet die Navigation',
   'developerOptions': 'Entwickleroptionen',
   'developerOptionsSubtitle': 'Diagnose-Logs und Debug-Werkzeuge',
   'modelSelection': 'Modellauswahl',
@@ -99,6 +103,19 @@ const Map<String, String> stringsDe = {
   'fontFamilyArimo': 'Arimo (Serifenlos)',
   'fontFamilyMerriweather': 'Merriweather (Serifen)',
   'fontFamilyJetBrainsMono': 'JetBrains Mono',
+  'themePresets': 'Vorlagen',
+  'themePresetPack': 'Design-Paket',
+  'themePresetPackSubtitle':
+      'Einen ganzen Look auf einmal anwenden, darunter fein abstimmen.',
+  'themePresetCustom': 'Eigenes',
+  'themeContrast': 'Kontrast',
+  'themeContrastStrength': 'Stärke der Abgrenzung',
+  'themeContrastSubtitle':
+      'Wie stark sich Karten und Umrisse vom Hintergrund abheben. '
+      'Höher ist schärfer.',
+  'themeFonts': 'Schriften',
+  'interfaceFont': 'Oberflächen-Schrift',
+  'interfaceFontSubtitle': 'Menüs, Einstellungen und Schaltflächen.',
   // ── Downloads-Seite ────────────────────────────────────────
   'downloads': 'Downloads',
   'downloadsSubtitle':
@@ -706,6 +723,44 @@ const Map<String, String> stringsDe = {
   // ── Chat UI ────────────────────────────────────────────────
   'askMeAnything': 'Frag mich alles',
   'queuedLabel': 'In Warteschlange',
+  // ── Composer (queue, steer, menu, secret warning) ──
+  'composerSteerLabel': 'Lenken',
+  'composerSteerPending': 'Lenken, beim nächsten Schritt',
+  'composerQueueEdit': 'Bearbeiten',
+  'composerQueueSave': 'Speichern',
+  'composerQueueRemove': 'Entfernen',
+  'composerQueueSteerNow': 'Jetzt zum Lenken senden',
+  'composerQueueTitle': 'Wartet auf das Senden',
+  'composerBusyModeTitle': 'Während einer Antwort',
+  'composerBusyModeQueue': 'Warteschlange',
+  'composerBusyModeSteer': 'Lenken',
+  'composerBusyModeHelp': 'Was Enter tut, solange eine Antwort läuft. Strg+Enter tut das andere. Lenken fügt deine Nachricht beim nächsten Schritt in die laufende Antwort ein.',
+  'composerSecretTitle': 'Diese Nachricht enthält offenbar einen API-Schlüssel',
+  'composerSecretBody': 'Der Schlüssel geht an den Modellanbieter und bleibt in diesem Chat. Trotzdem senden?',
+  'composerSecretSend': 'Trotzdem senden',
+  'composerSecretEdit': 'Bearbeiten',
+  'composerMenuSkills': 'Skills',
+  'composerMenuModes': 'Modi',
+  'composerMenuCommands': 'Befehle',
+  'composerMenuFiles': 'Dateien',
+  'composerMenuAgents': 'Agenten',
+  'composerMenuWorkspaces': 'Workspaces',
+  'composerMenuChats': 'Chats',
+  'composerMenuNoMatch': 'Keine Treffer',
+  'composerMenuHint': 'Enter wählt, Tab öffnet, Esc schließt',
+  'composerCmdCompact': 'Chat kompakter machen',
+  'composerCompactRunning': 'Frühere Nachrichten werden zusammengefasst...',
+  'composerCompactDone': 'Frühere Nachrichten zusammengefasst',
+  'composerCompactNothing': 'Noch nichts zum Zusammenfassen',
+  'composerCompactBusy': 'Warte zuerst, bis die Antwort fertig ist',
+  'composerCompactFailed': 'Der Chat konnte nicht zusammengefasst werden',
+  'composerCmdModel': 'Modell wechseln',
+  'composerCmdExport': 'Chat exportieren',
+  'composerCmdNewChat': 'Neuer Chat',
+  'composerModePlan': 'Planmodus',
+  'composerModePlanDetail': 'Erst planen, dann vor dem Handeln fragen',
+  'composerQuestionTitle': 'Frage',
+  // ── end Composer ──
   'queuedMessagesCount': '{count} Nachrichten in der Warteschlange',
   'editYourMessage': 'Nachricht bearbeiten...',
   'addMessageOrDocs': 'Nachricht oder Dokumente senden',
@@ -807,6 +862,22 @@ const Map<String, String> stringsDe = {
       'Wird der KI zu Beginn jedes Chats in diesem Projekt gesendet.',
   'projectLatestChats': 'Neueste Chats',
   'projectNoChatsHint': 'Starte einen neuen Chat mit diesem Projekt.',
+  'workspacePersonaComplete':
+      'Anweisungen als ganzen Prompt senden',
+  'workspacePersonaCompleteSubtitle':
+      'Die App fügt keine Tool-Anleitung, kein Gedächtnis und keinen Modell-Prompt hinzu. Gilt für neue Chats.',
+  'workspacePersonaRuntimeContext':
+      'Der KI die Uhrzeit sagen',
+  'workspacePersonaRuntimeContextSubtitle':
+      'Jede Nachricht trägt die Zeit, zu der sie gesendet wurde. Gilt für neue Chats.',
+  'chatReferenceAction':
+      'Chat referenzieren',
+  'chatReferenceSearchHint':
+      'Chats suchen',
+  'chatReferenceEmpty':
+      'Keine anderen Chats',
+  'chatReferenceLoadFailed':
+      'Dieser Chat konnte nicht geladen werden',
   'projectNewChat': 'Neuer Chat',
   'projectFileCountSingular': '{count} Datei',
   'projectFileCountPlural': '{count} Dateien',
@@ -1119,7 +1190,10 @@ const Map<String, String> stringsDe = {
   'automationQuietOne': 'seit 1 Lauf still',
   'automationQuietMany': 'seit {count} Läufen still',
   'automationNextCheck': 'nächste Prüfung {when}',
+  'automationSkipped': '{count} ausgelassen',
+  'automationRetryAt': 'neuer Versuch {when}',
   'automationNoChange': 'Keine Änderung',
+  'chatCompactedDivider': 'Frühere Nachrichten zusammengefasst',
   'automationLastResult': 'Letztes Ergebnis',
   'costHeading': 'Kosten',
   'costThisThread': 'Dieser Thread',
@@ -1617,4 +1691,20 @@ const Map<String, String> stringsDe = {
   'automationErrCatchUp': 'Gib Minuten ein oder eine Zeit wie 30m oder 6h.',
   'agentsDerivedThreadSubtitle': 'Automations-Chat',
   // ── end Agents modes ──
+  // ── Spreadsheet preview ──
+  'spreadsheetLoading': 'Tabelle wird gelesen…',
+  'spreadsheetEmpty': 'Dieses Blatt ist leer.',
+  'spreadsheetTruncated': 'Nur die ersten {cells} Zellen werden angezeigt.',
+  'spreadsheetNotShown': 'In dieser Vorschau nicht angezeigt: {features}.',
+  'spreadsheetFeatureCharts': 'Diagramme',
+  'spreadsheetFeatureImages': 'Bilder',
+  'spreadsheetFeatureConditionalFormatting': 'bedingte Formatierung',
+  'spreadsheetFeaturePivotTables': 'Pivot-Tabellen',
+  'spreadsheetFeatureMacros': 'Makros',
+  'spreadsheetErrorTooLarge': 'Diese Datei ist zu groß für die Vorschau (Grenze 16 MB).',
+  'spreadsheetErrorXls': 'Alte .xls-Dateien können nicht angezeigt werden. Speichere die Datei als .xlsx oder .csv und hänge sie erneut an.',
+  'spreadsheetErrorTimeout': 'Das Lesen der Datei hat zu lange gedauert. Die Vorschau wurde abgebrochen.',
+  'spreadsheetErrorInvalid': 'Diese Datei kann nicht als Tabelle gelesen werden.',
+  'spreadsheetReadOnly': 'Nur lesen',
+  // ── end Spreadsheet preview ──
 };

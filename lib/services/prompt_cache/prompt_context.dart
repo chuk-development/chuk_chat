@@ -174,6 +174,8 @@ class PromptState {
     this.mcpUnconnected = const <String>[],
     this.skills,
     this.toolHistory,
+    this.complete,
+    this.runtimeContext,
   });
 
   /// Whether the identity section (soul, user info, memory) is on.
@@ -197,10 +199,26 @@ class PromptState {
   /// the chat started). Frozen, so the history form never flips mid-chat.
   final bool? toolHistory;
 
-  /// A copy with [skills] and [toolHistory] replaced.
+  /// Snapshot only: the chat's workspace persona sends its system prompt
+  /// raw, without the tool protocol section (`Workspace.personaComplete`).
+  /// Frozen with the snapshot, so a later toggle never rewrites message 0.
+  /// Null (older snapshot, or no workspace): off.
+  final bool? complete;
+
+  /// Snapshot only: whether user messages carry their `[Sent: …]` line
+  /// (`Workspace.includeRuntimeContext`). Frozen, so the history form never
+  /// flips mid-chat. Null (older snapshot): on.
+  final bool? runtimeContext;
+
+  /// Whether the `[Sent: …]` line is on for this snapshot.
+  bool get runtimeContextOn => runtimeContext ?? true;
+
+  /// A copy with [skills], [toolHistory] and the persona flags replaced.
   PromptState withExtras({
     List<SkillCatalogEntry>? skills,
     bool? toolHistory,
+    bool? complete,
+    bool? runtimeContext,
   }) => PromptState(
     identity: identity,
     soul: soul,
@@ -210,6 +228,8 @@ class PromptState {
     mcpUnconnected: mcpUnconnected,
     skills: skills ?? this.skills,
     toolHistory: toolHistory ?? this.toolHistory,
+    complete: complete ?? this.complete,
+    runtimeContext: runtimeContext ?? this.runtimeContext,
   );
 
   /// Equal catalogs. An unrecorded catalog ([skills] null) never differs:
@@ -248,6 +268,10 @@ class PromptState {
           <String, String>{'n': s.name, 'd': s.description},
       ],
     'toolHistory': ?toolHistory,
+    // Written only when they differ from the default, so a snapshot of a
+    // chat without a persona stores exactly what it stored before.
+    if (complete == true) 'complete': true,
+    if (runtimeContext == false) 'runtimeContext': false,
   };
 
   static PromptState? fromJson(Object? raw) {
@@ -271,6 +295,10 @@ class PromptState {
           : null,
       toolHistory: raw['toolHistory'] is bool
           ? raw['toolHistory'] as bool
+          : null,
+      complete: raw['complete'] is bool ? raw['complete'] as bool : null,
+      runtimeContext: raw['runtimeContext'] is bool
+          ? raw['runtimeContext'] as bool
           : null,
     );
   }
@@ -303,10 +331,13 @@ class PromptState {
   }
 
   /// This state with the fields of [diff] ([diffFrom]) replaced, without
-  /// [toolHistory] (snapshot only, like a whole stored state).
+  /// [toolHistory], [complete] and [runtimeContext] (snapshot only, like a
+  /// whole stored state).
   PromptState applyDiff(Map<String, dynamic> diff) {
     final merged = <String, dynamic>{...toJson(), ...diff}
-      ..remove('toolHistory');
+      ..remove('toolHistory')
+      ..remove('complete')
+      ..remove('runtimeContext');
     return PromptState.fromJson(merged) ?? this;
   }
 

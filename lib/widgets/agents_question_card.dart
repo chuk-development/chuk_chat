@@ -13,6 +13,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
@@ -27,6 +28,7 @@ class AgentsQuestionCard extends StatefulWidget {
     required this.onSubmit,
     this.onVisible,
     this.dense = false,
+    this.keyboardShortcuts = false,
   });
 
   final AgentsQuestionRequest request;
@@ -38,6 +40,10 @@ class AgentsQuestionCard extends StatefulWidget {
   /// `ask_visible`: true when the card shows, false when it goes.
   final ValueChanged<bool>? onVisible;
   final bool dense;
+
+  /// Enter confirms the page (Next, or Send on the last one). The card takes
+  /// the focus when it appears, so Enter works at once (idea 66).
+  final bool keyboardShortcuts;
 
   @override
   State<AgentsQuestionCard> createState() => _AgentsQuestionCardState();
@@ -165,6 +171,29 @@ class _AgentsQuestionCardState extends State<AgentsQuestionCard> {
         AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));
     final AgentsQuestion q = _questions[_page.clamp(0, _questions.length - 1)];
     final bool last = _page >= _questions.length - 1;
+    final Widget card = _buildCard(context, theme, scheme, l, q, last);
+    if (!widget.keyboardShortcuts) return card;
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        const SingleActivator(LogicalKeyboardKey.enter): () {
+          if (!_sending) _next();
+        },
+        const SingleActivator(LogicalKeyboardKey.numpadEnter): () {
+          if (!_sending) _next();
+        },
+      },
+      child: Focus(autofocus: true, child: card),
+    );
+  }
+
+  Widget _buildCard(
+    BuildContext context,
+    ThemeData theme,
+    ColorScheme scheme,
+    AppLocalizations l,
+    AgentsQuestion q,
+    bool last,
+  ) {
     return Semantics(
       container: true,
       liveRegion: true,

@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/stream_phase.dart';
 import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/services/agents/agents_context_rows.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
@@ -127,13 +128,25 @@ class AgentsLiveStatus {
     final String reasoning = ledgerReasoning.isNotEmpty
         ? ledgerReasoning
         : fallbackReasoning.trim();
-    final List<ToolCall> calls = (run != null && run.toolCalls.isNotEmpty)
-        ? run.toolCalls
-        : fallbackCalls;
+    // Context rows (a loaded skill, the plan rules) are chips, not steps
+    // ([contextRows]).
+    final List<ToolCall> calls = splitAgentsContext(
+      (run != null && run.toolCalls.isNotEmpty) ? run.toolCalls : fallbackCalls,
+    ).rest;
     return <AgentActivityStep>[
       if (reasoning.isNotEmpty) AgentActivityStep.reasoning(reasoning),
       for (final ToolCall call in calls) AgentActivityStep.tool(call),
     ];
+  }
+
+  /// The rows nobody typed that this turn wrote so far (a loaded skill, the
+  /// plan rules, a settled subagent), in order. The bubble draws them as
+  /// chips while the run is live; once the run ends the message holds them
+  /// and the list item draws the same chips (`splitAgentsContext`).
+  List<({String source, String text})> contextRows() {
+    final AgentsRun? run = _run();
+    if (run == null) return const <({String source, String text})>[];
+    return splitAgentsContext(run.toolCalls).context;
   }
 
   /// The status right now.

@@ -254,6 +254,8 @@ const List<String> _canonicalStringKeys = <String>[
   'inputMode',
   'voiceDurationMs',
   'modelContext',
+  'usage',
+  'compactSummary',
 ];
 
 // ─── v3 message encoding ────────────────────────────────────────────────

@@ -9,10 +9,12 @@
 import 'dart:convert';
 
 import 'package:chuk_chat/models/chat_message.dart';
-import 'package:chuk_chat/models/chat_stream_event.dart' show NativeToolCall;
+import 'package:chuk_chat/models/chat_stream_event.dart';
 import 'package:chuk_chat/models/client_tool.dart';
 import 'package:chuk_chat/models/skill.dart';
+import 'package:chuk_chat/models/workspace_model.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
+import 'package:chuk_chat/services/chat_compaction.dart';
 import 'package:chuk_chat/services/chat_history_builder.dart';
 import 'package:chuk_chat/services/mcp/mcp_catalogue.dart';
 import 'package:chuk_chat/services/prompt_cache/image_budget.dart';
@@ -82,6 +84,8 @@ Map<String, String> _persistAndReload(Map<String, String> map) {
     attachments: map['attachments'],
     sentAt: map['sentAt'],
     modelContext: isUser ? PromptContextLedger.storedContextOf(map) : null,
+    usage: isUser ? null : map['usage'],
+    compactSummary: isUser ? map['compactSummary'] : null,
   );
   return ChatUiHelpers.messageToRawMap(
     ChatMessage.fromJson(jsonDecode(jsonEncode(message.toJson()))),
@@ -114,6 +118,8 @@ void main() {
     String chatId = 'chat-1',
     bool includeToolResults = true,
     String? pendingText,
+    Workspace? workspace,
+    String? baseSystemPrompt,
   }) async {
     final history = await ChatHistoryBuilder.build(
       messages: messages,
@@ -126,10 +132,11 @@ void main() {
       history: history,
       accessToken: 'test-token',
       discoveryContextKey: chatId,
+      baseSystemPrompt: baseSystemPrompt,
       toolCallingEnabled: true,
       discoveryMode: false,
       nativeToolCalling: true,
-    );
+    )..applyWorkspace(workspace);
     final system = await handler.buildInitialSystemPrompt(session);
     return (
       session,
@@ -219,6 +226,38 @@ void main() {
         nativeToolCalls: [calc('c-2')],
       );
       expectPrefixStable(second, nextRequest(session, result2));
+    });
+
+    test('a repeat note goes into the result once and stays', () async {
+      final (session, first) = await startTurn(
+        [_user('what time is it', _sentAt1)],
+        'what time is it',
+        _sentAt1,
+      );
+      NativeToolCall time(String id) =>
+          NativeToolCall(id: id, name: 'get_time', arguments: '{}');
+      var previous = first;
+      final requests = <CacheRequest>[];
+      for (var i = 1; i <= 4; i++) {
+        final result = await handler.processAssistantResponse(
+          session: session,
+          content: '',
+          reasoning: '',
+          nativeToolCalls: [time('t-$i')],
+        );
+        final next = nextRequest(session, result);
+        expectPrefixStable(previous, next);
+        requests.add(next);
+        previous = next;
+      }
+      String toolContent(CacheRequest r, String id) =>
+          r.history.lastWhere((m) => m['tool_call_id'] == id)['content']
+              as String;
+      expect(toolContent(requests[1], 't-2'), isNot(contains('[REPEAT NOTE]')));
+      expect(toolContent(requests[2], 't-3'), contains('[REPEAT NOTE]'));
+      expect(toolContent(requests[3], 't-4'), isNot(contains('[REPEAT NOTE]')));
+      // The note of the 3rd call is re-sent unchanged on the next pass.
+      expect(toolContent(requests[3], 't-3'), toolContent(requests[2], 't-3'));
     });
 
     test('a memory change during the turn (notes tool write)', () async {
@@ -681,6 +720,127 @@ void main() {
     );
   });
 
+  group('workspace persona flags', () {
+    Workspace persona({bool complete = false, bool runtime = true}) =>
+        Workspace(
+          id: 'ws-1',
+          name: 'Persona',
+          customSystemPrompt: 'You are Ada.',
+          createdAt: DateTime.utc(2026, 11, 1),
+          updatedAt: DateTime.utc(2026, 11, 1),
+          complete: complete,
+          includeRuntimeContext: runtime,
+        );
+
+    List<Map<String, String>> reload(List<Map<String, String>> maps) {
+      final out = maps.map(_persistAndReload).toList();
+      PromptContextLedger.clearForTesting();
+      return out;
+    }
+
+    test('complete sends the prompt raw and stays frozen when toggled off',
+        () async {
+      final user1 = _user('hello', _sentAt1);
+      final (_, first) = await startTurn(
+        [user1],
+        'hello',
+        _sentAt1,
+        workspace: persona(complete: true),
+        baseSystemPrompt: 'You are Ada.',
+      );
+      expect(first.system, 'You are Ada.');
+      // Native tools still go in tools[].
+      expect(first.tools, isNotEmpty);
+
+      final stored = reload([
+        user1,
+        {'sender': 'ai', 'text': 'Hi.'},
+      ]);
+      final user2 = _user('more', _sentAt2);
+      final (_, second) = await startTurn(
+        [...stored, user2],
+        'more',
+        _sentAt2,
+        workspace: persona(),
+        baseSystemPrompt: 'You are Ada.',
+      );
+      expectPrefixStable(first, second);
+    });
+
+    test('without complete the tool protocol follows the prompt', () async {
+      final (_, first) = await startTurn(
+        [_user('hello', _sentAt1)],
+        'hello',
+        _sentAt1,
+        workspace: persona(),
+        baseSystemPrompt: 'You are Ada.',
+      );
+      expect(first.system, startsWith('You are Ada.'));
+      expect(first.system.length, greaterThan('You are Ada.'.length));
+    });
+
+    test('runtime context off drops the [Sent: …] line for the whole chat',
+        () async {
+      final user1 = _user('hello', _sentAt1);
+      final (_, first) = await startTurn(
+        [user1],
+        'hello',
+        _sentAt1,
+        workspace: persona(runtime: false),
+      );
+      expect(first.message, 'hello');
+
+      // Turned back on mid-chat: the snapshot holds, history and the new
+      // message stay without the line.
+      final stored = reload([
+        user1,
+        {'sender': 'ai', 'text': 'Hi.'},
+      ]);
+      final user2 = _user('more', _sentAt2);
+      final (_, second) = await startTurn(
+        [...stored, user2],
+        'more',
+        _sentAt2,
+        workspace: persona(),
+      );
+      expectPrefixStable(first, second);
+      expect(second.message, 'more');
+    });
+
+    test('a chat that started with the line keeps it when turned off',
+        () async {
+      final user1 = _user('hello', _sentAt1);
+      final (_, first) = await startTurn([user1], 'hello', _sentAt1);
+      final stored = reload([
+        user1,
+        {'sender': 'ai', 'text': 'Hi.'},
+      ]);
+      final user2 = _user('more', _sentAt2);
+      final (_, second) = await startTurn(
+        [...stored, user2],
+        'more',
+        _sentAt2,
+        workspace: persona(runtime: false),
+      );
+      expectPrefixStable(first, second);
+      expect(second.message, contains('[Sent: Wed 2026-11-04 14:40]'));
+    });
+
+    test('flags round-trip the snapshot JSON; defaults write nothing', () {
+      const plain = PromptState(identity: true);
+      expect(plain.toJson().containsKey('complete'), isFalse);
+      expect(plain.toJson().containsKey('runtimeContext'), isFalse);
+      final flagged = plain.withExtras(complete: true, runtimeContext: false);
+      final back = PromptState.fromJson(flagged.toJson())!;
+      expect(back.complete, isTrue);
+      expect(back.runtimeContextOn, isFalse);
+      // Snapshot-only: never carried by a diff application.
+      final applied = back.applyDiff(const {'memory': 'x'});
+      expect(applied.complete, isNull);
+      expect(applied.runtimeContext, isNull);
+    });
+  });
+
   group('the skills catalog', () {
     var addedSkillTool = false;
     setUp(() {
@@ -845,6 +1005,102 @@ void main() {
         ImageBudget.limitsFor('deepseek/deepseek-v4-flash-0731').maxImages,
         50,
       );
+    });
+  });
+
+  group('chat compaction', () {
+    const sentAt3 = '2026-11-04T15:00:00.000002';
+    const sentAt4 = '2026-11-04T15:10:00.000003';
+
+    Map<String, String> ai(String text) => {'sender': 'ai', 'text': text};
+
+    test('the summary request repeats the chat prefix, later turns extend '
+        'the compacted request', () async {
+      final messages = <Map<String, String>>[
+        _user('first question ${'a' * 400}', _sentAt1),
+        ai('first answer ${'b' * 400}'),
+        _user('second question', _sentAt2),
+        ai('second answer'),
+      ];
+      final (session, before) = await startTurn(messages, 'third', sentAt3);
+
+      List<Map<String, dynamic>>? sentHistory;
+      String? sentInstruction;
+      final outcome = await ChatCompaction.maybeCompact(
+        messages: messages,
+        end: messages.length,
+        estimatedPromptTokens: 0,
+        budget: const CompactionBudget(threshold: 1, retain: 1),
+        madeAt: messages.length,
+        summaryModelId: 'm',
+        summaryProviderSlug: 'p',
+        force: true,
+        buildHistory: (starts) => ChatHistoryBuilder.build(
+          messages: messages,
+          pendingUserText: 'third',
+          messageStarts: starts,
+        ),
+        send:
+            ({
+              required String instruction,
+              required List<Map<String, dynamic>> history,
+              required String modelId,
+              required String providerSlug,
+            }) {
+              sentHistory = history;
+              sentInstruction = instruction;
+              return Stream<ChatStreamEvent>.fromIterable(const [
+                ChatStreamEvent.content('## Primary Request and Intent\n- q'),
+                ChatStreamEvent.done(),
+              ]);
+            },
+      );
+      expect(outcome.compacted, isTrue, reason: outcome.reason);
+      expect(outcome.tailStart, 2);
+      expect(sentInstruction, ChatCompaction.instruction);
+      // A byte prefix of the chat's own request history.
+      for (var i = 0; i < sentHistory!.length; i++) {
+        expect(jsonEncode(sentHistory![i]), jsonEncode(before.history[i]));
+      }
+      expect(sentHistory!.length, lessThan(before.history.length));
+
+      // The compacted request: same system prompt and tools, the summary
+      // first, then the kept tail exactly as before.
+      PromptContextLedger.clearForTesting();
+      final (_, after) = await startTurn(messages, 'third', sentAt3);
+      expect(after.system, before.system);
+      expect(jsonEncode(after.tools), jsonEncode(before.tools));
+      expect(
+        after.history.first['content'],
+        startsWith('This is an automatically generated checkpoint'),
+      );
+      final tail = before.history.sublist(sentHistory!.length);
+      expect(
+        jsonEncode(after.history.sublist(1)),
+        jsonEncode(tail),
+        reason: 'the tail must keep its bytes',
+      );
+
+      // Next turn after save + reload: an exact extension.
+      final third = _user('third', sentAt3);
+      final stored = <Map<String, String>>[
+        for (final m in messages) _persistAndReload(m),
+        _persistAndReload(third),
+        _persistAndReload(ai('third answer')),
+      ];
+      final (_, next) = await startTurn(
+        [...stored, _user('fourth', sentAt4)],
+        'fourth',
+        sentAt4,
+      );
+      expectPrefixStable(after, next);
+      // And again: the history does not move.
+      final (_, again) = await startTurn(
+        [...stored, _user('fourth', sentAt4)],
+        'fourth',
+        sentAt4,
+      );
+      expect(jsonEncode(again.history), jsonEncode(next.history));
     });
   });
 

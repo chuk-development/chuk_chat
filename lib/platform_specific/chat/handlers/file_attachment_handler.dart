@@ -446,6 +446,13 @@ class FileAttachmentHandler {
     onUpdate?.call();
   }
 
+  /// Adds a document that is ready as it is (no upload), e.g. a chat
+  /// reference snapshot (ChatReferenceService).
+  void addReadyFile(AttachedFile file) {
+    _attachedFiles.add(file);
+    onUpdate?.call();
+  }
+
   /// Clear all attachments
   void clearAll() {
     _attachedFiles.clear();

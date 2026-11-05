@@ -31,6 +31,7 @@ import 'package:chuk_chat/widgets/chat_document_view.dart';
 import 'package:chuk_chat/widgets/encrypted_image_widget.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
 import 'package:chuk_chat/widgets/nice_snackbar.dart';
+import 'package:chuk_chat/widgets/spreadsheet/spreadsheet_viewer.dart';
 
 /// The three segments, in the order the switch shows them.
 const List<String> kMediaSegments = <String>['Pictures', 'Files', 'Pages'];
@@ -446,6 +447,10 @@ Future<void> _openFile(BuildContext context, MediaEntry entry) async {
   if (!context.mounted) return;
   final String ext = _extensionOf(entry.name);
   final String mime = entry.mime.toLowerCase().split(';').first.trim();
+  if (SpreadsheetViewer.handles(entry.name)) {
+    await SpreadsheetViewer.open(context, fileName: entry.name, bytes: bytes);
+    return;
+  }
   if (ext == 'pdf' || mime == 'application/pdf') {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(

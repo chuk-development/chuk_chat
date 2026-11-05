@@ -4,7 +4,7 @@ import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 
 /// The type of a content block within an AI response.
-enum ContentBlockType { text, toolCalls, reasoning, sandboxArtifact }
+enum ContentBlockType { text, toolCalls, reasoning, sandboxArtifact, steer }
 
 /// Payload for a [ContentBlockType.sandboxArtifact] block.
 ///
@@ -96,10 +96,18 @@ class ContentBlock {
   const ContentBlock.sandboxArtifact(SandboxArtifactPayload payload)
     : this._(type: ContentBlockType.sandboxArtifact, sandboxArtifact: payload);
 
+  /// A message the user sent while the turn ran, which the tool loop handed
+  /// to the model between two rounds (a "steer",
+  /// lib/services/composer/follow_up_queue.dart). Drawn as a small user
+  /// bubble at the place it went in. Display only: what the model read is
+  /// stored in the turn's prompt transcript, not here.
+  const ContentBlock.steer(String text)
+    : this._(type: ContentBlockType.steer, text: text);
+
   final ContentBlockType type;
 
-  /// The text content (for [ContentBlockType.text] and
-  /// [ContentBlockType.reasoning] blocks).
+  /// The text content (for [ContentBlockType.text],
+  /// [ContentBlockType.reasoning] and [ContentBlockType.steer] blocks).
   final String? text;
 
   /// The tool calls (for [ContentBlockType.toolCalls] blocks).

@@ -242,6 +242,11 @@ class ChatPersistenceHandler {
     // from the local save on, whether or not the cloud write below lands.
     // Silent mode is used when persisting old chat in background after user moved to new chat
     if (!silent && (chatIdAtStart == null || chatIdAtStart != local.id)) {
+      // The reply's tok/s and usage were recorded under the id the stream
+      // ran with; the stats row reads the chat's real id from now on.
+      if (chatIdAtStart != null) {
+        ChatTurnStats.instance.rename(chatIdAtStart, local.id);
+      }
       onChatIdAssigned?.call(local.id);
     }
 

@@ -582,9 +582,29 @@ extension _MessageBubbleImages on _MessageBubbleState {
       spacing: 8,
       runSpacing: 8,
       children: attachments.map((attachment) {
+        final bool sheet = SpreadsheetViewer.isSentSpreadsheetName(
+          attachment.fileName,
+        );
         return InkWell(
+          key: ValueKey<String>('attachment-chip-${attachment.fileName}'),
           borderRadius: kBorderRadiusRow,
           onTap: () {
+            // A spreadsheet opens in the table viewer. Only the server's
+            // Markdown of the file is kept, so its tables are the cells.
+            final SpreadsheetDocument? doc = sheet
+                ? SpreadsheetViewer.sentDocument(
+                    attachment.fileName,
+                    attachment.markdownContent,
+                  )
+                : null;
+            if (doc != null) {
+              SpreadsheetViewer.openSent(
+                context,
+                fileName: attachment.fileName,
+                document: doc,
+              );
+              return;
+            }
             // Open document viewer
             Navigator.of(context).push(
               MaterialPageRoute(
@@ -611,7 +631,11 @@ extension _MessageBubbleImages on _MessageBubbleState {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  AppIcon(Icons.description, size: 18, color: iconColor),
+                  AppIcon(
+                    sheet ? Icons.table_chart_outlined : Icons.description,
+                    size: 18,
+                    color: iconColor,
+                  ),
                   const SizedBox(width: 6),
                   Flexible(
                     child: Text(

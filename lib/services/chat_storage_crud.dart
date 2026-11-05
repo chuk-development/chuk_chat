@@ -966,6 +966,13 @@ class ChatStorageCrud {
         modelContext: role == 'user'
             ? PromptContextLedger.storedContextOf(m)
             : null,
+        // The reply's token usage: the meta line, the stats row and the
+        // context estimate read it after a reload.
+        usage: role == 'user' ? null : m['usage']?.toString(),
+        // The summary of everything before this message (compaction).
+        compactSummary: role == 'user'
+            ? m['compactSummary']?.toString()
+            : null,
       );
     }).toList();
   }

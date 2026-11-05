@@ -725,6 +725,42 @@ class AppLocalizations {
   // ── Chat UI ────────────────────────────────────────────────
   String get askMeAnything => _get('askMeAnything');
   String get queuedLabel => _get('queuedLabel');
+  String get composerSteerLabel => _get('composerSteerLabel');
+  String get composerSteerPending => _get('composerSteerPending');
+  String get composerQueueEdit => _get('composerQueueEdit');
+  String get composerQueueSave => _get('composerQueueSave');
+  String get composerQueueRemove => _get('composerQueueRemove');
+  String get composerQueueSteerNow => _get('composerQueueSteerNow');
+  String get composerQueueTitle => _get('composerQueueTitle');
+  String get composerBusyModeTitle => _get('composerBusyModeTitle');
+  String get composerBusyModeQueue => _get('composerBusyModeQueue');
+  String get composerBusyModeSteer => _get('composerBusyModeSteer');
+  String get composerBusyModeHelp => _get('composerBusyModeHelp');
+  String get composerSecretTitle => _get('composerSecretTitle');
+  String get composerSecretBody => _get('composerSecretBody');
+  String get composerSecretSend => _get('composerSecretSend');
+  String get composerSecretEdit => _get('composerSecretEdit');
+  String get composerMenuSkills => _get('composerMenuSkills');
+  String get composerMenuModes => _get('composerMenuModes');
+  String get composerMenuCommands => _get('composerMenuCommands');
+  String get composerMenuFiles => _get('composerMenuFiles');
+  String get composerMenuAgents => _get('composerMenuAgents');
+  String get composerMenuWorkspaces => _get('composerMenuWorkspaces');
+  String get composerMenuChats => _get('composerMenuChats');
+  String get composerMenuNoMatch => _get('composerMenuNoMatch');
+  String get composerMenuHint => _get('composerMenuHint');
+  String get composerCmdCompact => _get('composerCmdCompact');
+  String get composerCompactRunning => _get('composerCompactRunning');
+  String get composerCompactDone => _get('composerCompactDone');
+  String get composerCompactNothing => _get('composerCompactNothing');
+  String get composerCompactBusy => _get('composerCompactBusy');
+  String get composerCompactFailed => _get('composerCompactFailed');
+  String get composerCmdModel => _get('composerCmdModel');
+  String get composerCmdExport => _get('composerCmdExport');
+  String get composerCmdNewChat => _get('composerCmdNewChat');
+  String get composerModePlan => _get('composerModePlan');
+  String get composerModePlanDetail => _get('composerModePlanDetail');
+  String get composerQuestionTitle => _get('composerQuestionTitle');
   String queuedMessagesCount(String count) =>
       _get('queuedMessagesCount').replaceAll('{count}', count);
   String get editYourMessage => _get('editYourMessage');
@@ -836,6 +872,14 @@ class AppLocalizations {
   String get projectInstructionsSubtitle => _get('projectInstructionsSubtitle');
   String get projectLatestChats => _get('projectLatestChats');
   String get projectNoChatsHint => _get('projectNoChatsHint');
+  String get workspacePersonaComplete => _get('workspacePersonaComplete');
+  String get workspacePersonaCompleteSubtitle => _get('workspacePersonaCompleteSubtitle');
+  String get workspacePersonaRuntimeContext => _get('workspacePersonaRuntimeContext');
+  String get workspacePersonaRuntimeContextSubtitle => _get('workspacePersonaRuntimeContextSubtitle');
+  String get chatReferenceAction => _get('chatReferenceAction');
+  String get chatReferenceSearchHint => _get('chatReferenceSearchHint');
+  String get chatReferenceEmpty => _get('chatReferenceEmpty');
+  String get chatReferenceLoadFailed => _get('chatReferenceLoadFailed');
   String get projectNewChat => _get('projectNewChat');
   String projectFileCount(int count) => _get(
     count == 1 ? 'projectFileCountSingular' : 'projectFileCountPlural',
@@ -1119,7 +1163,12 @@ class AppLocalizations {
       _get('automationQuietMany').replaceAll('{count}', count);
   String automationNextCheck(String when) =>
       _get('automationNextCheck').replaceAll('{when}', when);
+  String automationSkipped(String count) =>
+      _get('automationSkipped').replaceAll('{count}', count);
+  String automationRetryAt(String when) =>
+      _get('automationRetryAt').replaceAll('{when}', when);
   String get automationNoChange => _get('automationNoChange');
+  String get chatCompactedDivider => _get('chatCompactedDivider');
   String get automationLastResult => _get('automationLastResult');
   String get costHeading => _get('costHeading');
   String get costThisThread => _get('costThisThread');
@@ -1557,6 +1606,26 @@ class AppLocalizations {
   String get automationErrCatchUp => _get('automationErrCatchUp');
   String get agentsDerivedThreadSubtitle => _get('agentsDerivedThreadSubtitle');
   // ── end Agents modes ──
+  // ── Spreadsheet preview ──
+  String get spreadsheetLoading => _get('spreadsheetLoading');
+  String get spreadsheetEmpty => _get('spreadsheetEmpty');
+  String spreadsheetTruncated(String cells) =>
+      _get('spreadsheetTruncated').replaceAll('{cells}', cells);
+  String spreadsheetNotShown(String features) =>
+      _get('spreadsheetNotShown').replaceAll('{features}', features);
+  String get spreadsheetFeatureCharts => _get('spreadsheetFeatureCharts');
+  String get spreadsheetFeatureImages => _get('spreadsheetFeatureImages');
+  String get spreadsheetFeatureConditionalFormatting =>
+      _get('spreadsheetFeatureConditionalFormatting');
+  String get spreadsheetFeaturePivotTables =>
+      _get('spreadsheetFeaturePivotTables');
+  String get spreadsheetFeatureMacros => _get('spreadsheetFeatureMacros');
+  String get spreadsheetErrorTooLarge => _get('spreadsheetErrorTooLarge');
+  String get spreadsheetErrorXls => _get('spreadsheetErrorXls');
+  String get spreadsheetErrorTimeout => _get('spreadsheetErrorTimeout');
+  String get spreadsheetErrorInvalid => _get('spreadsheetErrorInvalid');
+  String get spreadsheetReadOnly => _get('spreadsheetReadOnly');
+  // ── end Spreadsheet preview ──
 }
 
 class _AppLocalizationsDelegate

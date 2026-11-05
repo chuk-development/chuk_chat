@@ -9,11 +9,13 @@ import 'package:chuk_chat/models/skill.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/services/agents/agents_tool_call_handler.dart';
+import 'package:chuk_chat/services/composer/follow_up_queue.dart';
 import 'package:chuk_chat/services/per_model_system_prompt_service.dart';
 import 'package:chuk_chat/services/prompt_cache/prompt_context.dart';
 import 'package:chuk_chat/services/skills/skill_registry.dart';
 import 'package:chuk_chat/services/skills/skills_catalog_service.dart';
 import 'package:chuk_chat/services/storage/chat_origin.dart';
+import 'package:chuk_chat/models/workspace_model.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/tool_enforcer.dart';
 import 'package:chuk_chat/services/tool_executor.dart';
@@ -133,6 +135,49 @@ Object? _canonicalJson(Object? value) {
   return value;
 }
 
+/// Counts of identical calls (same name, same key-sorted arguments) in one
+/// turn at which the loop appends [repeatCallAdvisory] to the result. Advice
+/// only: the call still runs (or, for a read-only lookup, is answered from
+/// the held result as before).
+@visibleForTesting
+const List<int> kRepeatCallAdvisoryThresholds = <int>[3, 5, 8];
+
+/// Most characters of the canonical arguments quoted in the detailed note.
+const int _kRepeatAdvisoryArgsPreview = 500;
+
+/// The note for the [count]th identical call of [name] in this turn, or null
+/// when [count] is not one of [kRepeatCallAdvisoryThresholds]. The first
+/// threshold gets a gentle hint, later ones name the tool and arguments.
+/// The text goes into the tool result once, when it enters the history, so
+/// every later pass re-sends the same bytes.
+@visibleForTesting
+String? repeatCallAdvisory(
+  String name,
+  Map<String, dynamic> arguments,
+  int count,
+) {
+  if (!kRepeatCallAdvisoryThresholds.contains(count)) return null;
+  if (count == kRepeatCallAdvisoryThresholds.first) {
+    return '[REPEAT NOTE] You are repeating the exact same tool call with '
+        'identical arguments. Carefully analyze the previous result before '
+        'calling again: if the task is not complete, try a different approach '
+        'or different arguments instead of repeating the call.';
+  }
+  String args = jsonEncode(_canonicalJson(arguments));
+  if (args.length > _kRepeatAdvisoryArgsPreview) {
+    final int more = args.length - _kRepeatAdvisoryArgsPreview;
+    args = '${args.substring(0, _kRepeatAdvisoryArgsPreview)}… (+$more more chars)';
+  }
+  return '[REPEAT NOTE] Repeated tool call detected:\n'
+      '- tool: $name\n'
+      '- identical_calls: $count\n'
+      '- arguments: $args\n'
+      'The repeated calls are not making progress. Do not call this tool with '
+      'these exact arguments again. Inspect the latest result and choose a '
+      'different action, different arguments, or finish the task if enough '
+      'evidence has been gathered.';
+}
+
 class ToolLoopSession {
   ToolLoopSession({
     required this.latestUserMessage,
@@ -192,6 +237,29 @@ class ToolLoopSession {
   /// The system prompt of this chat, built once per turn and re-sent on
   /// every pass, byte for byte.
   String? frozenSystemPrompt;
+
+  /// The chat's workspace persona sends its system prompt raw
+  /// (`Workspace.personaComplete`). Set by the send path before
+  /// [ToolCallHandler.buildInitialSystemPrompt]; read into the chat's
+  /// snapshot at its first request, after that the snapshot's value holds.
+  bool personaComplete = false;
+
+  /// The chat's workspace wants the `[Sent: …]` line on user messages
+  /// (`Workspace.includeRuntimeContext`). Same freezing as
+  /// [personaComplete].
+  bool includeRuntimeContext = true;
+
+  /// Whether this turn's user message carries its `[Sent: …]` line: the
+  /// snapshot's frozen value; without a snapshot (tool calling off) always
+  /// on, the same rule the history builder uses.
+  bool get runtimeContextOn => promptSnapshot?.runtimeContextOn ?? true;
+
+  /// Takes the persona flags of the chat's [workspace] (null: none, the
+  /// defaults). Call before [ToolCallHandler.buildInitialSystemPrompt].
+  void applyWorkspace(Workspace? workspace) {
+    personaComplete = workspace?.complete ?? false;
+    includeRuntimeContext = workspace?.includeRuntimeContext ?? true;
+  }
 
   bool _contextPrepared = false;
   final List<Map<String, dynamic>> history;
@@ -718,9 +786,11 @@ class ToolCallHandler {
   Future<String> buildInitialSystemPrompt(ToolLoopSession session) async {
     await _prepareTurnContext(session);
     if (!session.toolCallingEnabled) {
+      final base = session.baseSystemPrompt?.trim() ?? '';
+      // A complete persona is the whole system prompt, as written.
+      if (session.personaComplete && base.isNotEmpty) return base;
       // Even when tools are disabled the per-model prompt should still apply,
       // so route through the merge helper rather than returning the raw base.
-      final base = session.baseSystemPrompt?.trim() ?? '';
       final merged = await _applyPerModelPrompt(
         base: base,
         modelId: session.modelId,
@@ -787,7 +857,11 @@ class ToolCallHandler {
       final current = await _currentPromptState(session);
       final snapshot = session.promptSnapshot;
       if (snapshot == null) {
-        final taken = current.withExtras(toolHistory: session.toolHistory);
+        final taken = current.withExtras(
+          toolHistory: session.toolHistory,
+          complete: session.personaComplete ? true : null,
+          runtimeContext: session.includeRuntimeContext ? null : false,
+        );
         session.promptSnapshot = taken;
         session.turnContext.snapshot = taken;
       } else {
@@ -819,7 +893,7 @@ class ToolCallHandler {
     }
     final rendered = renderUserTurnForModel(
       text: session.latestUserMessage,
-      sentAt: session.userSentAt,
+      sentAt: session.runtimeContextOn ? session.userSentAt : null,
       notes: notes,
     );
     session.latestUserMessage = rendered;
@@ -1599,6 +1673,21 @@ class ToolCallHandler {
     }
     onToolCallsUpdated?.call(_cloneToolCalls(session.toolCalls));
 
+    // How many identical calls (this one included) the turn has made, per
+    // call of this round. The counter lives in the session, so it starts
+    // over with every user turn.
+    final identicalCount = <String, int>{};
+    {
+      final running = <String, int>{};
+      for (final prior in session.toolCalls) {
+        if (prior.arguments.containsKey(_kMalformedArgumentsKey)) continue;
+        final key = toolCallIdentityKey(prior.name, prior.arguments);
+        final n = (running[key] ?? 0) + 1;
+        running[key] = n;
+        if (identical(uiCallsById[prior.id], prior)) identicalCount[prior.id] = n;
+      }
+    }
+
     final modelResults = <ToolCallResult>[];
     // Snapshot the session.producedBlocks length BEFORE this round's tool
     // calls so we can slice off only the blocks added in this round and
@@ -1700,13 +1789,22 @@ class ToolCallHandler {
       uiCall.status = isError ? ToolCallStatus.error : ToolCallStatus.completed;
       onToolCallsUpdated?.call(_cloneToolCalls(session.toolCalls));
 
+      // The repeat note goes after the cap, so it is never pruned away,
+      // and only here, so the history keeps it byte for byte.
+      final int? repeats = identicalCount[call.callId];
+      final String? advisory = repeats == null
+          ? null
+          : repeatCallAdvisory(call.name, call.arguments, repeats);
+      final String capped = capToolResultForModel(
+        sanitizeResultForModel(rawResult),
+      );
       modelResults.add(
         ToolCallResult(
           callId: call.callId,
           name: call.name,
           // Capped once, here: this text is what the history keeps and
           // every later pass re-sends.
-          result: capToolResultForModel(sanitizeResultForModel(rawResult)),
+          result: advisory == null ? capped : '$capped\n\n$advisory',
           isError: isError,
         ),
       );
@@ -1778,6 +1876,17 @@ class ToolCallHandler {
           'content': skillContentMessage(skill.name, skill.body),
         });
       }
+      // A steer the user sent while this turn ran goes in here, as a user
+      // message after the round (lib/services/composer/follow_up_queue.dart).
+      // The history entry is what the model reads; the transcript stores it
+      // byte for byte. The block only draws it in the answer, at this place.
+      for (final steer in SteerInbox.take(session.discoveryContextKey)) {
+        session.history.add({
+          'role': 'user',
+          'content': SteerInbox.messageFor(steer.text),
+        });
+        session.producedBlocks.add(ContentBlock.steer(steer.text));
+      }
       nextMessage = '';
       session.latestUserMessage = '';
     } else {
@@ -1785,9 +1894,14 @@ class ToolCallHandler {
         for (final skill in _takePendingSkillContents(session))
           skillContentMessage(skill.name, skill.body),
       ];
+      final steers = SteerInbox.take(session.discoveryContextKey);
+      for (final steer in steers) {
+        session.producedBlocks.add(ContentBlock.steer(steer.text));
+      }
       nextMessage = [
         enforcer.buildResultMessage(modelResults),
         ...skillMessages,
+        for (final steer in steers) SteerInbox.messageFor(steer.text),
       ].join('\n\n');
       session.latestUserMessage = nextMessage;
     }
@@ -2110,6 +2224,12 @@ class ToolCallHandler {
     final modelId = session.modelId;
     final snapshot = session.promptSnapshot ?? const PromptState();
     final identityOn = snapshot.identity;
+
+    // A complete persona (frozen in the snapshot) is the whole system
+    // prompt: no tool protocol, identity or per-model blocks. Native tools
+    // still go in `tools[]`.
+    final rawBase = baseSystemPrompt?.trim() ?? '';
+    if (snapshot.complete == true && rawBase.isNotEmpty) return rawBase;
 
     String? soulText;
     String? userInfoText;

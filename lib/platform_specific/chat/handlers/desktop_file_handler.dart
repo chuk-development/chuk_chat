@@ -454,6 +454,13 @@ class DesktopFileHandler {
     onScrollToBottom?.call();
   }
 
+  /// Adds a document that is ready as it is (no upload), e.g. a chat
+  /// reference snapshot (ChatReferenceService).
+  void addReadyFile(AttachedFile file) {
+    attachedFiles.add(file);
+    onUpdate?.call();
+  }
+
   /// Clear all attachments.
   void clearAll() {
     for (final file in attachedFiles) {

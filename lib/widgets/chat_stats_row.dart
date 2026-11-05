@@ -91,7 +91,9 @@ class _ChatStatsRowState extends State<ChatStatsRow> {
           child: ListenableBuilder(
             listenable: _stats,
             builder: (BuildContext context, _) {
-              final ChatTurnStatsEntry? entry = _stats.of(widget.chatId);
+              final ChatTurnStatsEntry? entry = _stats.displayOf(
+                widget.chatId,
+              );
               if (entry == null || entry.isEmpty) {
                 return const SizedBox.shrink();
               }

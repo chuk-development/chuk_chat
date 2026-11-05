@@ -69,6 +69,16 @@ class ResealJob {
   String get key => isFile ? 'file:$id' : 'project:$id';
 }
 
+/// The sealed fields of a `projects` row after a merge. The persona flags
+/// are in their envelope string form (`Workspace.encodePersonaFlag`).
+typedef ProjectFields = ({
+  String name,
+  String? description,
+  String? customSystemPrompt,
+  String? personaComplete,
+  String? personaRuntimeContext,
+});
+
 /// Service for managing workspace workspaces, chat assignments, and file attachments
 class WorkspaceStorageService {
   static const String bucketName = 'workspace-files';
@@ -84,7 +94,18 @@ class WorkspaceStorageService {
     'name',
     'description',
     'custom_system_prompt',
+    // Persona flags: envelope only, no plaintext column exists (the
+    // missing column reads as null, which is the clean state). String form
+    // `'1'` / `'0'`, absent = default (`Workspace.encodePersonaFlag`).
+    kPersonaCompleteField,
+    kPersonaRuntimeContextField,
   ];
+
+  /// Envelope key of `Workspace.complete`.
+  static const String kPersonaCompleteField = 'persona_complete';
+
+  /// Envelope key of `Workspace.includeRuntimeContext`.
+  static const String kPersonaRuntimeContextField = 'include_runtime_context';
 
   /// `project_files` columns whose values live in `encrypted_meta`.
   @visibleForTesting
@@ -350,6 +371,8 @@ class WorkspaceStorageService {
     required String name,
     String? description,
     String? customSystemPrompt,
+    String? personaComplete,
+    String? personaRuntimeContext,
   }) async => <String, dynamic>{
     'name': kEncryptedPlaceholder,
     'description': null,
@@ -359,6 +382,8 @@ class WorkspaceStorageService {
         'name': name,
         'description': description,
         'custom_system_prompt': customSystemPrompt,
+        kPersonaCompleteField: personaComplete,
+        kPersonaRuntimeContextField: personaRuntimeContext,
       },
       table: _projectsTable,
       rowId: rowId,
@@ -387,15 +412,21 @@ class WorkspaceStorageService {
   /// description or prompt clears it (null). Throws when the new name is
   /// empty, or when no new name is given and the current one is only the
   /// placeholder (sealing it would destroy the real, sealed name).
+  /// The persona flags ride along in their envelope string form
+  /// (`Workspace.encodePersonaFlag`): a given flag replaces the current one,
+  /// an absent one keeps it.
   @visibleForTesting
-  static ({String name, String? description, String? customSystemPrompt})
-  mergeProjectFields({
+  static ProjectFields mergeProjectFields({
     required String currentName,
     String? currentDescription,
     String? currentCustomSystemPrompt,
+    String? currentPersonaComplete,
+    String? currentPersonaRuntimeContext,
     String? name,
     String? description,
     String? customSystemPrompt,
+    bool? complete,
+    bool? includeRuntimeContext,
   }) {
     final String mergedName;
     if (name != null) {
@@ -415,7 +446,21 @@ class WorkspaceStorageService {
       customSystemPrompt: _blankToNull(
         customSystemPrompt ?? currentCustomSystemPrompt,
       ),
+      personaComplete: complete == null
+          ? _normalizedFlag(currentPersonaComplete, byDefault: false)
+          : Workspace.encodePersonaFlag(complete, byDefault: false),
+      personaRuntimeContext: includeRuntimeContext == null
+          ? _normalizedFlag(currentPersonaRuntimeContext, byDefault: true)
+          : Workspace.encodePersonaFlag(includeRuntimeContext, byDefault: true),
     );
+  }
+
+  /// A stored persona flag in its canonical envelope form (null = default).
+  static String? _normalizedFlag(String? stored, {required bool byDefault}) {
+    final parsed = Workspace.parsePersonaFlag(stored);
+    return parsed == null
+        ? null
+        : Workspace.encodePersonaFlag(parsed, byDefault: byDefault);
   }
 
   /// True when [error] says the `encrypted_meta` column is not there yet
@@ -487,12 +532,13 @@ class WorkspaceStorageService {
   /// changed since the last load. Throws a [StateError] when the row cannot
   /// be opened: sealing over it would destroy its sealed values.
   @visibleForTesting
-  static Future<({String name, String? description, String? customSystemPrompt})>
-  mergeProjectUpdate(
+  static Future<ProjectFields> mergeProjectUpdate(
     Map<String, dynamic> fetched, {
     String? name,
     String? description,
     String? customSystemPrompt,
+    bool? complete,
+    bool? includeRuntimeContext,
   }) async {
     final read = await resolveSealedRow(
       fetched,
@@ -505,9 +551,14 @@ class WorkspaceStorageService {
       currentName: read.row['name'] as String,
       currentDescription: read.row['description'] as String?,
       currentCustomSystemPrompt: read.row['custom_system_prompt'] as String?,
+      currentPersonaComplete: read.row[kPersonaCompleteField] as String?,
+      currentPersonaRuntimeContext:
+          read.row[kPersonaRuntimeContextField] as String?,
       name: name,
       description: description,
       customSystemPrompt: customSystemPrompt,
+      complete: complete,
+      includeRuntimeContext: includeRuntimeContext,
     );
   }
 
@@ -594,6 +645,15 @@ class WorkspaceStorageService {
               'custom_system_prompt': _blankToNull(
                 row['custom_system_prompt'] as String?,
               ),
+              // Envelope-only; a re-seal must not drop them.
+              kPersonaCompleteField: ?_normalizedFlag(
+                row[kPersonaCompleteField] as String?,
+                byDefault: false,
+              ),
+              kPersonaRuntimeContextField: ?_normalizedFlag(
+                row[kPersonaRuntimeContextField] as String?,
+                byDefault: true,
+              ),
             },
     );
   }
@@ -640,6 +700,8 @@ class WorkspaceStorageService {
             name: values['name']!,
             description: values['description'],
             customSystemPrompt: values['custom_system_prompt'],
+            personaComplete: values[kPersonaCompleteField],
+            personaRuntimeContext: values[kPersonaRuntimeContextField],
           );
     final table = (from ?? SupabaseService.client.from)(job.table);
     final written = await applyResealGuards(
@@ -895,9 +957,15 @@ class WorkspaceStorageService {
     final name = row['name'] as String;
     final description = row['description'] as String?;
     final prompt = row['custom_system_prompt'] as String?;
+    final complete =
+        Workspace.parsePersonaFlag(row[kPersonaCompleteField]) ?? false;
+    final runtime =
+        Workspace.parsePersonaFlag(row[kPersonaRuntimeContextField]) ?? true;
     if (workspace.name == name &&
         workspace.description == description &&
-        workspace.customSystemPrompt == prompt) {
+        workspace.customSystemPrompt == prompt &&
+        workspace.complete == complete &&
+        workspace.includeRuntimeContext == runtime) {
       return false;
     }
     _projectsById[id] = Workspace.fromJson({
@@ -905,6 +973,8 @@ class WorkspaceStorageService {
       'name': name,
       'description': description,
       'custom_system_prompt': prompt,
+      'persona_complete': complete,
+      'include_runtime_context': runtime,
     });
     return true;
   }
@@ -1178,6 +1248,8 @@ class WorkspaceStorageService {
     String? name,
     String? description,
     String? customSystemPrompt,
+    bool? complete,
+    bool? includeRuntimeContext,
   }) async {
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
@@ -1185,7 +1257,11 @@ class WorkspaceStorageService {
     }
 
     try {
-      if (name == null && description == null && customSystemPrompt == null) {
+      if (name == null &&
+          description == null &&
+          customSystemPrompt == null &&
+          complete == null &&
+          includeRuntimeContext == null) {
         throw ArgumentError('At least one field must be updated');
       }
       // One envelope holds all three fields: merge the change over the row
@@ -1196,6 +1272,8 @@ class WorkspaceStorageService {
         name: name,
         description: description,
         customSystemPrompt: customSystemPrompt,
+        complete: complete,
+        includeRuntimeContext: includeRuntimeContext,
       );
 
       final updated = await SupabaseService.client
@@ -1206,6 +1284,8 @@ class WorkspaceStorageService {
               name: merged.name,
               description: merged.description,
               customSystemPrompt: merged.customSystemPrompt,
+              personaComplete: merged.personaComplete,
+              personaRuntimeContext: merged.personaRuntimeContext,
             ),
           )
           .eq('id', workspaceId)
@@ -1219,6 +1299,8 @@ class WorkspaceStorageService {
           'name': merged.name,
           'description': merged.description,
           'custom_system_prompt': merged.customSystemPrompt,
+          kPersonaCompleteField: merged.personaComplete,
+          kPersonaRuntimeContextField: merged.personaRuntimeContext,
         }),
         'chatIds': existingProject?.chatIds ?? [],
         'files': existingProject?.files.map((f) => f.toJson()).toList() ?? [],

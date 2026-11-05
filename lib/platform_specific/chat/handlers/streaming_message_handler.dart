@@ -5,6 +5,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import 'package:chuk_chat/models/chat_stream_event.dart';
+import 'package:chuk_chat/services/chat_compaction.dart';
+import 'package:chuk_chat/services/chat_compaction_runner.dart';
 import 'package:chuk_chat/services/chat_history_builder.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
@@ -14,6 +16,7 @@ import 'package:chuk_chat/services/streaming_manager.dart';
 import 'package:chuk_chat/services/artifact_tag_processor.dart';
 import 'package:chuk_chat/services/message_composition_service.dart';
 import 'package:chuk_chat/services/tool_call_handler.dart';
+import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/tool_image_result_service.dart';
 import 'package:chuk_chat/services/tool_result_cache_registry.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -103,6 +106,13 @@ class StreamingMessageHandler {
   onStreamTick;
 
   Function()? onPaymentRequired;
+
+  /// A "continue generation" turn compacted the chat: its rows are a copy,
+  /// so the host puts the stored summary ([ChatCompaction.fieldKey], JSON
+  /// [CompactionRecord]) on its own row at [index] of chat [chatId]. A
+  /// normal send writes into the host's list directly and does not call
+  /// this.
+  void Function(String chatId, int index, String record)? onCompactionStored;
 
   /// The send failed before the server accepted it (no frame came back) on
   /// a network error, after the pass's own reconnect retries. The host
@@ -215,7 +225,7 @@ class StreamingMessageHandler {
     }
 
     // Build API history (with optional images and reasoning)
-    final List<Map<String, dynamic>> apiHistory = await _buildApiHistory(
+    List<Map<String, dynamic>> apiHistory = await _buildApiHistory(
       messages,
       userInput,
       includeRecentImages: includeRecentImagesInHistory,
@@ -300,7 +310,7 @@ class StreamingMessageHandler {
     }
 
     late ToolLoopSession toolSession;
-    late final String initialSystemPrompt;
+    late String initialSystemPrompt;
     try {
       toolSession = toolCallHandler.createSession(
         initialUserMessage: aiPromptContent,
@@ -316,6 +326,9 @@ class StreamingMessageHandler {
         // to the prompt-based scheme (its stream manager does not consume
         // native tool_calls frames).
         nativeToolCalling: !kIsWeb,
+      );
+      toolSession.applyWorkspace(
+        WorkspaceStorageService.getWorkspaceForChat(chatId),
       );
       initialSystemPrompt = await toolCallHandler.buildInitialSystemPrompt(
         toolSession,
@@ -335,6 +348,82 @@ class StreamingMessageHandler {
       onUpdateUI?.call();
       await _releaseForegroundKeepAlive();
       return;
+    }
+
+    // Long chat: summarize the older turns first (docs/GOTCHAS.md, "Chat
+    // compaction"). Replaces the old hard "Too much context" stop. A send,
+    // a resend and a regenerate end with the user row before the
+    // placeholder; a "continue generation" turn's rows end with the answer
+    // it continues (the placeholder), and they may be read-only, so it
+    // compacts a copy and hands the summary to the host.
+    final bool continuing = continuePriorText != null;
+    final List<Map<String, String>> compactRows = continuing
+        ? messages.map(Map<String, String>.from).toList()
+        : messages;
+    final int compactEnd = continuing
+        ? compactRows.length
+        : placeholderIndex - 1;
+    final bool canCompact = continuing
+        ? compactEnd >= 2 && placeholderIndex == compactRows.length - 1
+        : compactEnd >= 1 &&
+              compactEnd < messages.length &&
+              messages[compactEnd]['sender'] == 'user';
+    if (canCompact) {
+      Future<List<Map<String, dynamic>>> buildBefore([List<int>? starts]) =>
+          ChatHistoryBuilder.build(
+            messages: compactRows.sublist(0, compactEnd),
+            pendingUserText: userInput,
+            includeRecentImages: includeRecentImagesInHistory,
+            includeAllImages: includeAllImagesInHistory,
+            includeReasoning: includeReasoningInHistory,
+            includeToolResults: includeToolResultsInHistory,
+            messageStarts: starts,
+          );
+      final compaction = await ChatCompactionRunner.beforeSend(
+        messages: compactRows,
+        end: compactEnd,
+        chatId: chatId,
+        modelId: selectedModelId,
+        providerSlug: providerSlug,
+        accessToken: accessToken,
+        systemPrompt: initialSystemPrompt,
+        tools: toolCallHandler.nativeToolDefinitions(toolSession),
+        history: apiHistory,
+        pendingMessage: toolSession.firstPassMessage,
+        buildHistory: buildBefore,
+      );
+      final int? tailStart = compaction.tailStart;
+      if (compaction.compacted && tailStart != null) {
+        if (tailStart < capturedMessagesSnapshot.length) {
+          capturedMessagesSnapshot[tailStart] = Map<String, dynamic>.from(
+            compactRows[tailStart],
+          );
+        }
+        final String? record = compactRows[tailStart][ChatCompaction.fieldKey];
+        if (continuing && record != null) {
+          onCompactionStored?.call(chatId, tailStart, record);
+        }
+        onUpdateUI?.call();
+        apiHistory = await buildBefore();
+        toolSession = toolCallHandler.createSession(
+          initialUserMessage: aiPromptContent,
+          userSentAt: turnSentAt,
+          history: apiHistory,
+          accessToken: accessToken,
+          discoveryContextKey: chatId,
+          baseSystemPrompt: effectiveSystemPrompt,
+          modelId: selectedModelId,
+          toolCallingEnabled: toolCallingEnabled,
+          discoveryMode: toolDiscoveryMode,
+          nativeToolCalling: !kIsWeb,
+        );
+        toolSession.applyWorkspace(
+          WorkspaceStorageService.getWorkspaceForChat(chatId),
+        );
+        initialSystemPrompt = await toolCallHandler.buildInitialSystemPrompt(
+          toolSession,
+        );
+      }
     }
     const int kMaxStreamingPasses = 20;
     // Weak / flapping mobile links drop the multiplex WS mid-turn (see the
@@ -898,6 +987,9 @@ class StreamingMessageHandler {
                   toolCallingEnabled: toolCallingEnabled,
                   discoveryMode: toolDiscoveryMode,
                   nativeToolCalling: !kIsWeb,
+                );
+                retrySession.applyWorkspace(
+                  WorkspaceStorageService.getWorkspaceForChat(chatId),
                 );
                 final retryPrompt = await toolCallHandler
                     .buildInitialSystemPrompt(retrySession);

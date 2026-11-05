@@ -6,12 +6,14 @@ import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
 import 'package:chuk_chat/services/agents/agents_context_rows.dart';
 import 'package:chuk_chat/services/agents/agents_run_cost.dart';
+import 'package:chuk_chat/services/chat_compaction.dart';
 import 'package:chuk_chat/services/chat_runtime.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
 import 'package:chuk_chat/services/dictation_tracker.dart';
 import 'package:chuk_chat/services/offline_retry_manager.dart';
 import 'package:chuk_chat/widgets/agents_context_chip.dart';
 import 'package:chuk_chat/widgets/agents_quiet_run_fold.dart';
+import 'package:chuk_chat/widgets/compaction_divider.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/widgets/message_fly_in.dart';
 
@@ -266,10 +268,24 @@ class ChatMessageListItem extends StatelessWidget {
     final Widget bubble = runId == null || data.isStreamingMessage
         ? answer
         : AgentsQuietRunFold(runId: runId, child: answer);
+    final Widget row = data.isUser && uiKey == flyInKey
+        ? MessageFlyIn(key: ValueKey<String>('flyin_$uiKey'), child: bubble)
+        : bubble;
+    // The first message a compaction kept: the turns above it reach the
+    // model as a summary only (lib/services/chat_compaction.dart).
+    final bool compactedHere =
+        data.isUser &&
+        index > 0 &&
+        CompactionRecord.decode(messages[index][ChatCompaction.fieldKey]) !=
+            null;
     return _rowBoundary(
-      data.isUser && uiKey == flyInKey
-          ? MessageFlyIn(key: ValueKey<String>('flyin_$uiKey'), child: bubble)
-          : bubble,
+      compactedHere
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[const CompactionDivider(), row],
+            )
+          : row,
     );
   }
 

@@ -1,7 +1,7 @@
 """The pairing URI and its terminal QR code.
 
 One string carries everything a phone needs to reach a host that is waiting to
-pair (docs/PLAN_2026-09-09_CLOUD_PAIRING_TRANSPORT.md, "Pairing UX")::
+pair (docs/notes/implemented/2026-09-09-plan-cloud-pairing-transport.md, "Pairing UX")::
 
     cowork://pair?c=<pairing channel>&k=<pairing code>&r=<relay base url>
 
