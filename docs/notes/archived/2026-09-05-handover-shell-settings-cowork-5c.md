@@ -13,7 +13,7 @@ chuk_chat's two settings surfaces are live in `app/lib/pages/`:
 `pages/settings/theme_settings_page.dart` are gone; `_p4_pending/` is empty and
 deleted. The section map, the per-page decisions and why `account_settings_page`
 and `system_prompt_page` were dropped rather than adapted are written up in
-`HANDOVER_2026-09-04_FLUTTER_ALIGN.md`, section "P4-rest: what the section map
+`docs/notes/archived/2026-09-04-handover-flutter-align.md`, section "P4-rest: what the section map
 decided".
 
 `MessengerShell._openSettings` opens chuk's hub. It needs an `AppShellConfig`
@@ -69,7 +69,7 @@ layout — the `AppBar` in `messenger_shell.dart` disappears, the four top-right
 actions move into chuk's floating `Positioned` row, **including the Copy full
 chat button that currently lives in that AppBar**), `cowork-8y2` (AppShellConfig
 handed down instead of the static), and `pages/agents_shell_state.dart` with the
-`AgentsShellHost` mixin. Plan detail: `PLAN_2026-09-04_AGENTS_CHUK_ALIGN.md`,
+`AgentsShellHost` mixin. Plan detail: `docs/notes/archived/2026-09-04-plan-agents-chuk-align.md`,
 WS-1.
 
 ## File ownership held by this session

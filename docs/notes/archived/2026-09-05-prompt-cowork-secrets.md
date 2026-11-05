@@ -7,7 +7,7 @@ Session-Namen (ListAgents) und "Auftrag gelesen"; danach alle Meldungen an cowor
 ## Lesen
 1. docs/COORDINATION.md: Kopf + Abschnitt "STAND 2026-09-05 08:40" + letzte 20 Log-Zeilen.
 2. docs/WIRE_CONTRACT.md komplett (Frame-Formen, additive Regel).
-3. docs/HANDOVER_2026-09-05_PYTHON.md (Layout, Commit-Regeln, Suiten), docs/HANDOVER_2026-09-05_MCP_cowork-47.md
+3. docs/notes/archived/2026-09-05-handover-python.md (Layout, Commit-Regeln, Suiten), docs/notes/archived/2026-09-05-handover-mcp-cowork-47.md
    (wie Geheimnisse heute vom Geraet zum Host wandern: mcp_servers/mcp_credentials, Spiegel in Supabase,
    EncryptionService), docs/SUPABASE_SCHEMA.md, docs/PRODUCT_PHILOSOPHY.md.
 4. Python: agent/src/chuk_agents_runtime/{tools.py,registry.py,loop.py}, executor/src/chuk_agents_executor/{executor.py
@@ -75,6 +75,6 @@ Keys managen. E2E-verschluesselt in Supabase, E2E zum Python-Host."
 - Host-Neustart nur nach GO von cowork-76 (gebuendelt). App-Instanz haelt eine andere Session (kein Hot Reload).
 - Keine UI-Automation/Screenshots ohne 'Bildschirm frei' vom User.
 - Subagenten nur Opus 5, einer gleichzeitig; bei 429 60 s warten.
-- Kontext: ab 550k stoppen, Handover docs/HANDOVER_2026-09-05_SECRETS.md. Beads: `bd create` fuer den Auftrag
+- Kontext: ab 550k stoppen, Handover docs/notes/archived/2026-09-05-handover-secrets.md. Beads: `bd create` fuer den Auftrag
   (Epic + Python/Dart-Kinder), claimen, schliessen. Status an cowork-76 in 3-5 Zeilen mit Testzahlen; nie gruen
   melden, was du nicht gesehen hast. Antworte dem User knapp auf Deutsch; Code-Kommentare ASD-STE100.

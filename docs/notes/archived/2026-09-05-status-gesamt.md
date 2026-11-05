@@ -49,7 +49,7 @@ Braucht "Bildschirm frei" vom User (Sessions bedienen die App nur nach Ansage) u
 | cowork-qk7 | Skills-Seite vom Host | 18 |
 | cowork-hza | Connector-Status aus chuk-Spiegel | 18 |
 | cowork-6x2 | Mobile-Ansicht (Grok-Bot) | c6 |
-| cowork-3sn | Secrets-Tresor, 5-Schritte-Nachweis (docs/HANDOVER_2026-09-05_SECRETS.md) | 26 |
+| cowork-3sn | Secrets-Tresor, 5-Schritte-Nachweis (docs/notes/archived/2026-09-05-handover-secrets.md) | 26 |
 | cowork-266 | Karten nach Replay, Browser-Screenshots | f5 |
 | cowork-2n1 | Logout-Fix Live-Repro | 9e |
 | cowork-fjf | Copy-Debug-Chat in der laufenden App | offen |
@@ -84,4 +84,4 @@ Braucht "Bildschirm frei" vom User (Sessions bedienen die App nur nach Ansage) u
 
 ## 6. Sessions und Handover-Docs
 Fertig: 13 (VNC), 49 (Python-Kern), 98 (Chat-UI-Import), 5c (Shell/Model/Sidebar), f7 (Shell-Rest, P8-Review), 9e (Logout), 94 (Automations), 75 (Terminal), 47 (Adapter/MCP), 84 (Tool-Karten), b5 (Reasoning/Memory). Aktiv bzw. in Bereitschaft: af (Account/Agent), 18 (Skills/Connector-Sync), f5 (Browser + Backlog), a4 (Storage), 26 (Secrets), c6 (Mobile, haelt App), 76/7b (Koordinator).
-Docs: docs/COORDINATION.md, docs/WIRE_CONTRACT.md, docs/HANDOVER_2026-09-04_FLUTTER_ALIGN.md, docs/HANDOVER_2026-09-05_PYTHON.md, docs/HANDOVER_2026-09-05_ADAPTER_MCP_cowork-47.md, docs/HANDOVER_2026-09-05_SHELL_SETTINGS_cowork-5c.md, docs/HANDOVER_2026-09-05_SHELL_cowork-shell.md, docs/HANDOVER_2026-09-05_SECRETS.md, docs/HANDOVER_2026-09-05_AUTOMATIONS.md, docs/HANDOVER_2026-09-05_TERMINAL.md, docs/HANDOVER_2026-09-05_WORKSPACE_MEMORY.md, docs/HANDOVER_2026-09-05_SKILLS.md, docs/HANDTEST_MCP_OAUTH.md, docs/SUPABASE_SCHEMA.md, docs/PLAN_2026-09-04_AGENTS_CHUK_ALIGN.md, docs/PRODUCT_PHILOSOPHY.md, docs/MOBILE_GROKBOT_STRUCTURE.md.
+Docs: docs/COORDINATION.md, docs/WIRE_CONTRACT.md, docs/notes/archived/2026-09-04-handover-flutter-align.md, docs/notes/archived/2026-09-05-handover-python.md, docs/notes/archived/2026-09-05-handover-adapter-mcp-cowork-47.md, docs/notes/archived/2026-09-05-handover-shell-settings-cowork-5c.md, docs/notes/archived/2026-09-05-handover-shell-cowork-shell.md, docs/notes/archived/2026-09-05-handover-secrets.md, docs/notes/archived/2026-09-05-handover-automations.md, docs/notes/archived/2026-09-05-handover-terminal.md, docs/notes/archived/2026-09-05-handover-workspace-memory.md, docs/notes/archived/2026-09-05-handover-skills.md, docs/HANDTEST_MCP_OAUTH.md, docs/SUPABASE_SCHEMA.md, docs/notes/archived/2026-09-04-plan-agents-chuk-align.md, docs/PRODUCT_PHILOSOPHY.md, docs/MOBILE_GROKBOT_STRUCTURE.md.

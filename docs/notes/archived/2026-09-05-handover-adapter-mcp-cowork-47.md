@@ -1,7 +1,7 @@
 # Handover — cowork-47, adapter / replay / MCP, 2026-09-05
 
 Second handover. The first,
-`docs/HANDOVER_2026-09-05_MCP_cowork-47.md`, covers the MCP OAuth work in
+`docs/notes/archived/2026-09-05-handover-mcp-cowork-47.md`, covers the MCP OAuth work in
 detail and is still accurate; this one covers the adapter, the replay loader and
 what happened after it.
 
@@ -95,7 +95,7 @@ Three rules, each with a test:
   tables chuk_chat uses. Reassigned away from me.
 - **P7 rest (notifications, app side) and P8 (Opus review of the whole Flutter
   side)** were assigned to me and never started. Plan:
-  `docs/PLAN_2026-09-04_AGENTS_CHUK_ALIGN.md` §WS-7. The host side exists
+  `docs/notes/archived/2026-09-04-plan-agents-chuk-align.md` §WS-7. The host side exists
   (`host/notify.py`, `desktop_notify.py`, `supabase/functions/notify-run`); the
   app has `notification_service.dart` as a no-op stub from the import, and the
   real port belongs in `services/notifications/local_notifications.dart` with the

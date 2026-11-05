@@ -260,7 +260,7 @@ SUPABASE_ANON_KEY     # Your Supabase anonymous key
 
 ## CI/CD Integration
 
-The GitHub Actions workflow `.github/workflows/release-linux.yml` uses Fastlane to build all Linux packages automatically on release tags.
+The GitHub Actions workflow `.github/workflows/build-cross-platform.yml` builds the Linux packages on a release (see `docs/RELEASE_PIPELINE.md`).
 
 ### Manual Workflow Trigger
 

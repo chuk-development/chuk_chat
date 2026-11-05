@@ -9,7 +9,7 @@ Session-Namen (ListAgents) und "Auftrag gelesen"; danach alle Meldungen an cowor
    Auftraege Secrets (cowork-26) und Automations (cowork-94), mit denen du dich abstimmst).
 2. docs/WIRE_CONTRACT.md komplett, besonders die Sektionen "Tool events and timestamps", "Persisted ... events",
    "Secrets", "Automations".
-3. docs/HANDOVER_2026-09-05_PYTHON.md, docs/HANDOVER_2026-09-05_REASONING_TOOLFRAMES.md.
+3. docs/notes/archived/2026-09-05-handover-python.md, docs/notes/archived/2026-09-05-handover-reasoning-toolframes.md.
 4. Python: agent/src/chuk_agents_runtime/{tools.py (run_command/run_python ueber env.run_bash), environment.py,
    registry.py, prompt.py}, executor/src/chuk_agents_executor/{executor.py (_env_shim, tool_event_observer),
    environment.py, sandbox/ (base/local/docker)}, host/src/chuk_agents_host/host.py. Wie der Docker-Sandbox gebaut
@@ -73,6 +73,6 @@ beantworten; ein Hintergrund-Job `sleep 20 && echo done` weckt den Agenten (runs
 - Dart: keine Aenderung noetig (Tool-Karten generisch). Falls doch: Ansage.
 - Host-Neustart und Image-Rebuild nur nach GO von cowork-76 (gebuendelt). Keine UI-Automation ohne 'Bildschirm frei'.
 - Subagenten nur Opus 5, einer gleichzeitig; bei 429 60 s warten.
-- Kontext: ab 550k stoppen, Handover docs/HANDOVER_2026-09-05_TERMINAL.md. Beads: `bd create` (Epic + Kinder),
+- Kontext: ab 550k stoppen, Handover docs/notes/archived/2026-09-05-handover-terminal.md. Beads: `bd create` (Epic + Kinder),
   claimen, schliessen. Status an cowork-76 in 3-5 Zeilen mit Testzahlen; nie gruen melden, was du nicht gesehen
   hast. Antworte dem User knapp auf Deutsch; Code-Kommentare ASD-STE100.

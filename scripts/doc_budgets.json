@@ -1,0 +1,9 @@
+{
+  "_comment": "Word ceilings for the standing docs, checked by test/repo_checks/doc_budget_test.dart. Words = whitespace-separated tokens, as `wc -w` counts them. Set on 2026-11-05 at the size of that day plus 5 % headroom. When a doc goes over: move content to the tier that owns it (docs/AGENTS.md), condense, or raise the ceiling here with the reason in the commit message.",
+  "budgets": {
+    "CLAUDE.md": 6100,
+    "docs/AGENTS.md": 635,
+    "docs/CONVENTIONS.md": 985,
+    "docs/GOTCHAS.md": 2285
+  }
+}

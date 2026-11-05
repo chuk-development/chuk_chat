@@ -177,7 +177,7 @@ reduziertem Funktionsumfang, ehrlich benannt.
 
 ## 4. Was das für Agents ändert
 
-Gegenüber `docs/PLAN_2026-09-08_BROWSER_EXTENSION.md`:
+Gegenüber `docs/notes/implemented/2026-09-08-plan-browser-extension.md`:
 
 1. **Transport wird Native Messaging**, wenn Agent und Browser auf einer
    Maschine liegen. Der Loopback-WebSocket in der Flutter-App entfällt dort

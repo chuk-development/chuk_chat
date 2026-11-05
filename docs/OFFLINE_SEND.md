@@ -236,6 +236,21 @@ desktop also on the fast path for a chat already in the cache). The
 dispatcher reads the chat before it takes the follow-ups off the park, so a
 failed read loses nothing.
 
+Both screens hold the follow-ups in one `ComposerFollowUps`
+(`lib/services/composer/composer_follow_ups.dart`); the queue dock above
+the composer draws them (edit, remove, "send now as steer"). A busy send is
+either queued (a new turn after the reply) or a steer: `SteerInbox` hands
+it to the running tool loop, which adds it as a user message after the
+round (`ToolCallHandler`, next to the skill bodies), and the answer shows
+it as a small user bubble at that place (`ContentBlock.steer`). A steer the
+turn did not take (no further pass) becomes a queued message when the turn
+ends.
+Agents threads always queue. A queued message goes out through the
+voice-task path (`voiceText`), so a draft in the composer is never
+overwritten. Stop (button or Esc twice within 500 ms) puts the queue back
+into the composer instead of dropping it. If the outbox refuses a send that
+was never accepted, the draft comes back into the composer.
+
 ## Files a crash left behind
 
 `OfflineFileSweeper` runs once per app run and user, on the first outbox kick

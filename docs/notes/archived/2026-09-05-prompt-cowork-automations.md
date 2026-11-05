@@ -7,8 +7,8 @@ Session-Namen (ListAgents) und "Auftrag gelesen"; danach alle Meldungen an cowor
 ## Lesen
 1. docs/COORDINATION.md: Kopf + Abschnitt "STAND 2026-09-05 08:40" + letzte 20 Log-Zeilen.
 2. docs/WIRE_CONTRACT.md komplett (run_state, replay, done, Detachment-Regel, Events 266).
-3. docs/HANDOVER_2026-09-05_PYTHON.md, docs/HANDOVER_2026-09-05_REPLAY_EVENTS_266.md,
-   docs/HANDOVER_2026-09-05_REASONING_TOOLFRAMES.md, docs/PLAN_2026-09-04_AGENTS_CHUK_ALIGN.md §WS-7
+3. docs/notes/archived/2026-09-05-handover-python.md, docs/notes/archived/2026-09-05-handover-replay-events-266.md,
+   docs/notes/archived/2026-09-05-handover-reasoning-toolframes.md, docs/notes/archived/2026-09-04-plan-agents-chuk-align.md §WS-7
    (Notifications: host/notify.py, desktop_notify.py — ein Trigger-Run muss den User benachrichtigen).
 4. Python: executor/src/chuk_agents_executor/executor.py (_accept_task, Worker-Queue pro Session, _run_task, Frames),
    agent/src/chuk_agents_runtime/{tools.py,registry.py,state.py (runs-Tabelle)}, host/src/chuk_agents_host/{host.py,serve.py}.
@@ -77,6 +77,6 @@ fertig, aber das Script triggert ihn spaeter selbst — via Hook."
   Watcher-Script im Sandbox, das nach 10 s triggert, und der resultierende Task in der Host-DB (runs-Row) — das
   ist dein Definition-of-Done-Beweis, mit Log-Auszug ins Handover.
 - Subagenten nur Opus 5, einer gleichzeitig; bei 429 60 s warten.
-- Kontext: ab 550k stoppen, Handover docs/HANDOVER_2026-09-05_AUTOMATIONS.md. Beads: `bd create` (Epic + Kinder),
+- Kontext: ab 550k stoppen, Handover docs/notes/archived/2026-09-05-handover-automations.md. Beads: `bd create` (Epic + Kinder),
   claimen, schliessen. Status an cowork-76 in 3-5 Zeilen mit Testzahlen; nie gruen melden, was du nicht gesehen
   hast. Antworte dem User knapp auf Deutsch; Code-Kommentare ASD-STE100.

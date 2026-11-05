@@ -481,7 +481,7 @@ Spezialfall (Transkript-Sprung).
 
 ## 10. Was wir uebernehmen
 
-Konkret, gegen `docs/PLAN_2026-09-08_BROWSER_EXTENSION.md` und den
+Konkret, gegen `docs/notes/implemented/2026-09-08-plan-browser-extension.md` und den
 Nachtrag aus der Vorrecherche:
 
 1. **Die Erweiterung wird ein dummes CDP-Rohr.** Ein `cdp.call`-Kommando mit

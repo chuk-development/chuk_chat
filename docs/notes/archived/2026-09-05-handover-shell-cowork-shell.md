@@ -167,7 +167,7 @@ the shell off stage and muted its tickers), three finders are scoped to the
 
 # Part 2 — P8 review + fix pass (bead cowork-4wd, same session)
 
-`docs/REVIEW_2026-09-05_FLUTTER_P8.md` holds the Opus-5 review (review-only
+`docs/notes/archived/2026-09-05-review-flutter-p8.md` holds the Opus-5 review (review-only
 subagent, scope `app/lib` minus `third_party/**`, `browser_view_page.dart` and
 the chuk-verbatim manifest files) and, per finding, a **Status** line written
 after the fix pass. 15 findings: 3 HIGH, 6 MEDIUM, 6 LOW. Fixed with a test
@@ -211,7 +211,7 @@ Nothing committed.
 # Part 3 — entry notes for the next session (beads cowork-4ih, cowork-817)
 
 Both beads are the user's, P1, and were NOT started here (context budget).
-Read `HANDOVER_2026-09-05_SHELL_SETTINGS_cowork-5c.md` first: 5c looked at
+Read `docs/notes/archived/2026-09-05-handover-shell-settings-cowork-5c.md` first: 5c looked at
 chuk's account page and dropped it for want of the services below.
 
 **cowork-4ih — credits in the footer, Account settings 1:1 chuk.**

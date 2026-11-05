@@ -161,7 +161,7 @@ session's WIP). `ruff` clean on all changed Python. MCP sweep: 16 PASS / 14 auth
 default-deny + GCM + replay + pairing + reconnect vectors green; host binds localhost only;
 blind sealed relay; no published container ports; x11vnc localhost-only. Streaming: 14
 incremental deltas live. here.now approval: 13 tests. All documented in
-`docs/SESSION_2026-09-04_BROWSER_VNC_STREAMING.md` §8–§9.
+`docs/notes/archived/2026-09-04-session-browser-vnc-streaming.md` §8–§9.
 
 ---
 
@@ -243,7 +243,7 @@ independent-credential design so mid-session re-provision is rarely needed at al
 ## 6. Prompt for the next agent
 
 > Continue the agents project at `/home/user/git/cowork` (branch `agents`). Read
-> `docs/HANDOFF_2026-09-04_NATIVE_TOOLCALLS_AND_AUTH.md` first, then `bd ready`.
+> `docs/notes/archived/2026-09-04-handover-native-toolcalls-and-auth.md` first, then `bd ready`.
 > The host + Flutter app are running live (see §1 of that handoff; restart commands there).
 > Native OpenAI tool calls are done and live-verified; the chat UI, VNC live view, and the
 > reconnect watchdog are done. The machine is RAM-constrained — prefix pytest with
@@ -269,4 +269,4 @@ Dart: `app/lib/widgets/{browser_view_page,agents_thread_view,agent_run_views}.da
 Skill: `skills/youtube-transcript/SKILL.md`.
 Tests added: `agent/tests/test_backend.py` (+3), `agent/tests/test_registry.py` (+2),
 `agent/tests/live_native_probe.py`, `agent/tests/live_streaming_probe.py`.
-Docs: this file + `docs/SESSION_2026-09-04_BROWSER_VNC_STREAMING.md` §8–§9.
+Docs: this file + `docs/notes/archived/2026-09-04-session-browser-vnc-streaming.md` §8–§9.

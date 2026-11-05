@@ -96,7 +96,7 @@ inbox → chat → back, tablet 660 px. Shell diff is applied; bead
 
 # Part 2 — P7 app-side notifications (bead cowork-o3j, same session)
 
-Spec: `docs/PLAN_2026-09-04_AGENTS_CHUK_ALIGN.md` WS-7 ("App:", reopen flow,
+Spec: `docs/notes/archived/2026-09-04-plan-agents-chuk-align.md` WS-7 ("App:", reopen flow,
 anti-duplicate rule). Host side was already done (`host/notify.py`,
 `host/desktop_notify.py`, `supabase/functions/notify-run`, schema in
 `docs/SUPABASE_SCHEMA.md`).
