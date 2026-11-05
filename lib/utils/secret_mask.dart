@@ -57,7 +57,13 @@ const List<SecretPattern> kSecretPatterns = <SecretPattern>[
   SecretPattern('huggingface', '${_lb}hf_[A-Za-z0-9]{30,}$_rb'),
   SecretPattern('aws', '${_lb}AKIA[0-9A-Z]{16}$_rb'),
   SecretPattern('google', '${_lb}AIza[0-9A-Za-z_\\-]{35}$_rb'),
-  SecretPattern('slack', '${_lb}xox[bp]-[0-9A-Za-z\\-]{10,}$_rb'),
+  // Bot, user, app, refresh (`xoxe-`, `xoxe.xoxp-`), legacy and session.
+  SecretPattern(
+    'slack',
+    '${_lb}xox[abeprs](?:\\.xox[bp])?-[0-9A-Za-z\\-]{10,}$_rb',
+  ),
+  // Stripe secret and restricted keys, live and test mode.
+  SecretPattern('stripe', '$_lb[sr]k_(?:live|test)_[0-9A-Za-z]{16,}$_rb'),
   SecretPattern(
     'jwt',
     '${_lb}eyJ[A-Za-z0-9_\\-]{10,}\\.eyJ[A-Za-z0-9_\\-]{10,}\\.[A-Za-z0-9_\\-]{10,}$_rb',

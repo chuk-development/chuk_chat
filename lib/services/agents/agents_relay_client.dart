@@ -2791,7 +2791,45 @@ class AgentsRelayClient
         : await _hereNowStore.forwardPayload();
     // Plan mode (docs/WIRE_CONTRACT.md, "Plan mode"): the composer's toggle
     // rides once, on the next task; absent leaves the host's state alone.
+    // It is put back when the frame never left, so the wish is not lost.
     final bool? plan = AgentsThreadModes.instance.takePlanFlag(sessionKey);
+    try {
+      await _sendTaskFrame(
+        plan: plan,
+        prompt: prompt,
+        sessionKey: sessionKey,
+        taskId: taskId,
+        modelId: modelId,
+        providerSlug: providerSlug,
+        reasoningEffort: reasoningEffort,
+        mcpServers: mcpServers,
+        herenow: herenow,
+        debug: debug,
+        regenerate: regenerate,
+        budgetOverride: budgetOverride,
+      );
+    } catch (_) {
+      if (plan != null) {
+        AgentsThreadModes.instance.restorePlanFlag(sessionKey, plan);
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> _sendTaskFrame({
+    required bool? plan,
+    required String prompt,
+    required String sessionKey,
+    required String? taskId,
+    required String? modelId,
+    required String? providerSlug,
+    required String? reasoningEffort,
+    required List<Map<String, dynamic>> mcpServers,
+    required Object? herenow,
+    required bool debug,
+    required bool regenerate,
+    required bool budgetOverride,
+  }) async {
     await _sendFramePayload(<String, dynamic>{
       'type': 'task',
       'plan': ?plan,

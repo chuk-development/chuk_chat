@@ -17,6 +17,7 @@ import 'package:chuk_chat/services/agents/agents_pairing.dart';
 import 'package:chuk_chat/services/agents/agents_host_session.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_run_cost.dart';
+import 'package:chuk_chat/services/agents/agents_thread_modes.dart';
 import 'package:chuk_chat/services/herenow/herenow_store.dart';
 import 'package:chuk_chat/services/mcp/mcp_store.dart';
 
@@ -681,6 +682,33 @@ void main() {
     await replay;
     await settle();
     expect(host.received.where((m) => m['type'] == 'replay'), hasLength(1));
+  });
+
+  // M3: the plan toggle rides once on the next task. A task whose frame
+  // never left must not use it up.
+  test('a task that fails to send keeps the plan wish for the next', () async {
+    final (client, host, _) = await paired();
+    AgentsThreadModes.instance.reset();
+    addTearDown(() async {
+      AgentsRelayClient.debugBeforeSeal = null;
+      AgentsThreadModes.instance.reset();
+      await client.dispose();
+    });
+    AgentsThreadModes.instance.setPlanWanted('thread-p', true);
+    AgentsRelayClient.debugBeforeSeal = (payload) async {
+      if (payload['type'] == 'task') throw StateError('Not paired');
+    };
+    await expectLater(
+      client.sendTask('first', sessionKey: 'thread-p'),
+      throwsStateError,
+    );
+    expect(AgentsThreadModes.instance.planToggleOf('thread-p'), isTrue);
+    AgentsRelayClient.debugBeforeSeal = null;
+    await client.sendTask('second', sessionKey: 'thread-p');
+    await Future<void>.delayed(Duration.zero);
+    final task = host.received.singleWhere((m) => m['type'] == 'task');
+    expect(task['prompt'], 'second');
+    expect(task['plan'], isTrue);
   });
 
   test('sendTask seals {type:task,prompt}; the host opens it', () async {

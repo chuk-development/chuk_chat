@@ -93,4 +93,73 @@ abstract final class ClientRequestIds {
 
   /// Drops a base no turn took (the send did not start).
   static void disarm(String chatId) => _armed.remove(chatId);
+
+  // ── The user's Retry of an unfinished turn ──────────────────────────
+  //
+  // A screen turn can end while the server still holds its request: the
+  // socket died after the server took it (`connection_lost`), or the answer
+  // was still being written (`request_pending`). The server finishes that
+  // run and bills it. When the user then retries the same message, the
+  // retry must ask with the SAME ids, so the server answers it from its
+  // record instead of running (and billing) the turn again (bead
+  // chuk_chat-3e67). A changed message gets `client_request_id_conflict`
+  // and the send layer re-sends once with a fresh id.
+
+  /// Most kept bases. The oldest goes first.
+  static const int maxKeptForRetry = 32;
+
+  static final Map<String, String> _keptForRetry = <String, String>{};
+
+  static String _retryKey(String chatId, String messageKey) =>
+      '$chatId\u0000$messageKey';
+
+  /// The key of one user message for [keepForRetry]: its `messageId`, else
+  /// its send time, else its text. Null when the row has none of these.
+  static String? messageKeyOf(Map<String, Object?>? userMessage) {
+    if (userMessage == null) return null;
+    for (final String field in const <String>['messageId', 'sentAt', 'text']) {
+      final Object? value = userMessage[field];
+      if (value is String && value.isNotEmpty) return '$field:$value';
+    }
+    return null;
+  }
+
+  /// The turn of [chatId] for the user message [messageKey] ended with an
+  /// error after which the server may still answer [base]'s ids. Kept only
+  /// for the codes in `StreamErrorCodes.resendSameId`.
+  static void keepForRetry(String chatId, String? messageKey, String base) {
+    if (chatId.isEmpty || messageKey == null || base.isEmpty) return;
+    final String key = _retryKey(chatId, messageKey);
+    _keptForRetry.remove(key);
+    _keptForRetry[key] = base;
+    while (_keptForRetry.length > maxKeptForRetry) {
+      _keptForRetry.remove(_keptForRetry.keys.first);
+    }
+  }
+
+  /// The base [keepForRetry] kept for this message, taken (a base is used
+  /// by one retry), or null.
+  static String? takeForRetry(String? chatId, String? messageKey) {
+    if (chatId == null || messageKey == null) return null;
+    return _keptForRetry.remove(_retryKey(chatId, messageKey));
+  }
+
+  /// Pass-level re-sends of one pass under the same id (a socket drop).
+  static const int maxPassResends = 3;
+
+  /// Whether a pass that failed with [code] after [retries] re-sends is
+  /// asked again under the same id: only for the failures in [sameIdCodes]
+  /// (the server still runs the request or answers a re-send from its
+  /// record, so nothing is billed twice), at most [maxPassResends] times.
+  static bool resendPassOnSameId(
+    String? code,
+    int retries,
+    Set<String> sameIdCodes,
+  ) => code != null && sameIdCodes.contains(code) && retries < maxPassResends;
+
+  /// Tests only.
+  static void debugReset() {
+    _armed.clear();
+    _keptForRetry.clear();
+  }
 }

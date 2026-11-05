@@ -82,6 +82,82 @@ void main() {
       expect(ClientRequestIds.isValid('$long-p20'), isTrue);
     });
 
+    // Bead chuk_chat-3e67: the user's Retry of a turn the server may still
+    // hold asks with that turn's ids.
+    test('a kept base goes to one Retry of the same message only', () {
+      ClientRequestIds.debugReset();
+      final Map<String, String> row = <String, String>{
+        'sender': 'user',
+        'text': 'hi',
+        'sentAt': '2026-11-05T10:00:00Z',
+      };
+      final String? key = ClientRequestIds.messageKeyOf(row);
+      expect(key, 'sentAt:2026-11-05T10:00:00Z');
+      expect(
+        ClientRequestIds.messageKeyOf(<String, String>{...row, 'messageId': 'm1'}),
+        'messageId:m1',
+      );
+      ClientRequestIds.keepForRetry('chat-1', key, 'c-base');
+      // Another message or another chat does not get it.
+      expect(ClientRequestIds.takeForRetry('chat-1', 'sentAt:other'), isNull);
+      expect(ClientRequestIds.takeForRetry('chat-2', key), isNull);
+      expect(ClientRequestIds.takeForRetry('chat-1', key), 'c-base');
+      // Used once.
+      expect(ClientRequestIds.takeForRetry('chat-1', key), isNull);
+      // Bounded.
+      for (int i = 0; i <= ClientRequestIds.maxKeptForRetry; i++) {
+        ClientRequestIds.keepForRetry('chat-1', 'k$i', 'b$i');
+      }
+      expect(ClientRequestIds.takeForRetry('chat-1', 'k0'), isNull);
+      expect(
+        ClientRequestIds.takeForRetry(
+          'chat-1',
+          'k${ClientRequestIds.maxKeptForRetry}',
+        ),
+        'b${ClientRequestIds.maxKeptForRetry}',
+      );
+    });
+
+    // Bead chuk_chat-074s: a dropped socket re-sends the pass under the
+    // same id, a bounded number of times, and only for the failures the
+    // server de-duplicates.
+    test('a pass is re-sent under the same id only for de-duplicated codes', () {
+      const Set<String> same = StreamErrorCodes.resendSameId;
+      expect(
+        ClientRequestIds.resendPassOnSameId(
+          StreamErrorCodes.connectionLost,
+          0,
+          same,
+        ),
+        isTrue,
+      );
+      expect(
+        ClientRequestIds.resendPassOnSameId(
+          StreamErrorCodes.requestPending,
+          ClientRequestIds.maxPassResends - 1,
+          same,
+        ),
+        isTrue,
+      );
+      expect(
+        ClientRequestIds.resendPassOnSameId(
+          StreamErrorCodes.connectionLost,
+          ClientRequestIds.maxPassResends,
+          same,
+        ),
+        isFalse,
+      );
+      expect(
+        ClientRequestIds.resendPassOnSameId(
+          StreamErrorCodes.upstreamStatus,
+          0,
+          same,
+        ),
+        isFalse,
+      );
+      expect(ClientRequestIds.resendPassOnSameId(null, 0, same), isFalse);
+    });
+
     test('an armed base is taken by one turn; disarm drops it', () {
       ClientRequestIds.arm('chat-1', 'ob-q1');
       expect(ClientRequestIds.take('chat-2'), isNull);

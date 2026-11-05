@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -271,6 +272,7 @@ void main() {
     tearDown(() {
       ChatCompactionRunner.debugSend = null;
       ChatCompactionRunner.debugContextWindow = null;
+      ChatCompactionRunner.debugReset();
     });
 
     test('a switch to a smaller window summarizes with the old model', () async {
@@ -309,8 +311,8 @@ void main() {
         tools: const [],
         history: history,
         pendingMessage: 'q3',
-        buildHistory: (s) => ChatHistoryBuilder.build(
-          messages: list.sublist(0, 4),
+        buildHistory: (rows, s) => ChatHistoryBuilder.build(
+          messages: rows,
           pendingUserText: 'q3',
           messageStarts: s,
         ),
@@ -340,7 +342,7 @@ void main() {
         tools: const [],
         history: const [],
         pendingMessage: 'q2',
-        buildHistory: (s) async => const [],
+        buildHistory: (_, _) async => const [],
       );
       expect(out.status, CompactionStatus.notNeeded);
     });
@@ -372,15 +374,19 @@ void main() {
         accessToken: 't',
         systemPrompt: 'sys',
         tools: const [],
-        buildHistory: (s) => ChatHistoryBuilder.build(
-          messages: list,
+        buildHistory: (rows, s) => ChatHistoryBuilder.build(
+          messages: rows,
           pendingUserText: '',
           messageStarts: s,
         ),
       );
       expect(out.compacted, isTrue, reason: out.reason);
-      // The last user turn stays; the summary sits on it.
+      // The last user turn stays; the summary sits on it (on the copy:
+      // the caller writes it back).
       expect(out.tailStart, 2);
+      expect(list[2][ChatCompaction.fieldKey], isNull);
+      expect(out.messages![2][ChatCompaction.fieldKey], isNotNull);
+      expect(out.writeInto(list), isTrue);
       expect(list[2][ChatCompaction.fieldKey], isNotNull);
       // Only the span before the kept tail went out.
       expect(sentHistory, hasLength(2));
@@ -409,8 +415,8 @@ void main() {
         accessToken: 't',
         systemPrompt: 'sys',
         tools: const [],
-        buildHistory: (s) => ChatHistoryBuilder.build(
-          messages: list,
+        buildHistory: (rows, s) => ChatHistoryBuilder.build(
+          messages: rows,
           pendingUserText: '',
           messageStarts: s,
         ),
@@ -436,8 +442,8 @@ void main() {
         accessToken: 't',
         systemPrompt: 'sys',
         tools: const [],
-        buildHistory: (s) => ChatHistoryBuilder.build(
-          messages: list,
+        buildHistory: (rows, s) => ChatHistoryBuilder.build(
+          messages: rows,
           pendingUserText: '',
           messageStarts: s,
         ),
@@ -446,7 +452,7 @@ void main() {
     });
 
     test('a continue compacts with its answer row as the last row', () async {
-      ChatCompactionRunner.debugContextWindow = (_, _) async => 4000;
+      ChatCompactionRunner.debugContextWindow = (_, _) async => 20000;
       ChatCompactionRunner.debugSend =
           ({
             required instruction,
@@ -456,18 +462,20 @@ void main() {
           }) => _reply('short');
       // The continue's rows end with the answer it continues.
       final rows = <Map<String, String>>[
-        _user('q1 ${'x' * 8000}'),
-        _ai('a1 ${'y' * 8000}'),
+        _user('q1 ${'x' * 16000}'),
+        _ai('a1 ${'y' * 16000}'),
         _user('q2'),
         _ai('a2 partial'),
       ];
       const prompt = 'Continue';
-      Future<List<Map<String, dynamic>>> build([List<int>? s]) =>
-          ChatHistoryBuilder.build(
-            messages: rows,
-            pendingUserText: prompt,
-            messageStarts: s,
-          );
+      Future<List<Map<String, dynamic>>> build(
+        List<Map<String, String>> from, [
+        List<int>? s,
+      ]) => ChatHistoryBuilder.build(
+        messages: from,
+        pendingUserText: prompt,
+        messageStarts: s,
+      );
       final out = await ChatCompactionRunner.beforeSend(
         messages: rows,
         end: rows.length,
@@ -477,12 +485,309 @@ void main() {
         accessToken: 't',
         systemPrompt: 'sys',
         tools: const [],
-        history: await build(),
+        history: await build(rows),
         pendingMessage: prompt,
         buildHistory: build,
+        madeAt: rows.length - 1,
       );
       expect(out.compacted, isTrue, reason: out.reason);
       expect(out.tailStart, 2);
+      // The continued answer (the last row) is measured after the summary.
+      final record = CompactionRecord.decode(
+        out.messages![2][ChatCompaction.fieldKey],
+      )!;
+      expect(record.madeAt, rows.length - 1);
+    });
+
+    // C1: the summary request takes seconds. A chat switch in between
+    // clears the screen's list and fills it with chat B; the summary must
+    // land on chat A only, and the history must come from A.
+    test('a chat switch during the summary request leaves chat B alone', () async {
+      ChatCompactionRunner.debugContextWindow = (_, _) async => 20000;
+      final screen = <Map<String, String>>[
+        {..._user('A q1 ${'x' * 16000}'), 'messageId': 'a1'},
+        {..._ai('A a1 ${'y' * 16000}'), 'messageId': 'a2'},
+        {..._user('A q2'), 'messageId': 'a3'},
+        {..._ai('A a2'), 'messageId': 'a4'},
+        {..._user('A q3'), 'messageId': 'a5'},
+      ];
+      final chatB = <Map<String, String>>[
+        {..._user('B q1'), 'messageId': 'b1'},
+        {..._ai('B a1'), 'messageId': 'b2'},
+        {..._user('B q2'), 'messageId': 'b3'},
+        {..._ai('B a2'), 'messageId': 'b4'},
+      ];
+      ChatCompactionRunner.debugSend =
+          ({
+            required instruction,
+            required history,
+            required modelId,
+            required providerSlug,
+          }) async* {
+            // The user switches to chat B while the summary is written.
+            screen
+              ..clear()
+              ..addAll(chatB.map(Map<String, String>.from));
+            yield ChatStreamEvent.content('short');
+            yield const ChatStreamEvent.done();
+          };
+      final List<List<String>> builtFrom = <List<String>>[];
+      Future<List<Map<String, dynamic>>> build(
+        List<Map<String, String>> rows, [
+        List<int>? s,
+      ]) {
+        builtFrom.add([for (final r in rows) r['text'] ?? '']);
+        return ChatHistoryBuilder.build(
+          messages: rows,
+          pendingUserText: 'A q3',
+          messageStarts: s,
+        );
+      }
+
+      final out = await ChatCompactionRunner.beforeSend(
+        messages: screen,
+        end: 4,
+        chatId: 'chat-A',
+        modelId: 'm',
+        providerSlug: 'p',
+        accessToken: 't',
+        systemPrompt: 'sys',
+        tools: const [],
+        history: await build(screen.sublist(0, 4)),
+        pendingMessage: 'A q3',
+        buildHistory: build,
+      );
+      expect(out.compacted, isTrue, reason: out.reason);
+      // Chat B on screen is untouched, and a write-back is refused.
+      expect(screen.any((m) => m.containsKey(ChatCompaction.fieldKey)), isFalse);
+      expect(out.writeInto(screen), isFalse);
+      expect(screen.any((m) => m.containsKey(ChatCompaction.fieldKey)), isFalse);
+      // Chat A's copy has the summary on its own row, and a rebuild from
+      // the copy is A's history.
+      expect(out.messages!.map((m) => m['messageId']), ['a1', 'a2', 'a3', 'a4']);
+      expect(out.target!['messageId'], 'a3');
+      expect(out.messages![2][ChatCompaction.fieldKey], isNotNull);
+      final rebuilt = await build(out.messages!);
+      expect(jsonEncode(rebuilt), isNot(contains('B q')));
+      for (final rows in builtFrom) {
+        expect(rows.every((t) => t.startsWith('A ')), isTrue);
+      }
+      // Chat A, loaded again, takes it.
+      final chatA = <Map<String, String>>[
+        for (final m in out.messages!)
+          Map<String, String>.from(m)..remove(ChatCompaction.fieldKey),
+      ];
+      expect(out.writeInto(chatA), isTrue);
+      expect(chatA[2][ChatCompaction.fieldKey], out.record);
+    });
+
+    test('a failed compaction backs off, and overflow stops the send', () async {
+      ChatCompactionRunner.debugContextWindow = (_, _) async => 20000;
+      var sends = 0;
+      ChatCompactionRunner.debugSend =
+          ({
+            required instruction,
+            required history,
+            required modelId,
+            required providerSlug,
+          }) {
+            sends++;
+            return Stream<ChatStreamEvent>.fromIterable(<ChatStreamEvent>[
+              const ChatStreamEvent.error('upstream down'),
+            ]);
+          };
+      final list = <Map<String, String>>[
+        _user('q1 ${'x' * 16000}'),
+        _ai('a1 ${'y' * 16000}'),
+        _user('q2'),
+        _ai('a2'),
+        _user('q3'),
+        _ai('a3'),
+        _user('q4'),
+      ];
+      // A long new message: with it the request is over the window.
+      final String big = 'z' * 60000;
+      Future<CompactionOutcome> run(int end) async {
+        Future<List<Map<String, dynamic>>> build(
+          List<Map<String, String>> rows, [
+          List<int>? s,
+        ]) => ChatHistoryBuilder.build(
+          messages: rows,
+          pendingUserText: big,
+          messageStarts: s,
+        );
+        return ChatCompactionRunner.beforeSend(
+          messages: list,
+          end: end,
+          chatId: 'chat-1',
+          modelId: 'm',
+          providerSlug: 'p',
+          accessToken: 't',
+          systemPrompt: 'sys',
+          tools: const [],
+          history: await build(list.sublist(0, end)),
+          pendingMessage: big,
+          buildHistory: build,
+        );
+      }
+
+      final first = await run(4);
+      expect(first.status, CompactionStatus.failed);
+      // Over the window and not compacted: the send must stop.
+      expect(first.overflow, isTrue);
+      expect(first.overflowMessage, contains('Too much context'));
+      expect(sends, 1);
+      // The next sends do not pay for another try at once.
+      final second = await run(6);
+      expect(second.reason, 'backoff');
+      expect(second.overflow, isTrue);
+      expect(sends, 1);
+      // After enough new messages it tries again.
+      list.addAll([_ai('a4'), _user('q5')]);
+      await run(8);
+      expect(sends, 2);
+    });
+
+    test('a send while /compact runs does not start a second summary', () async {
+      ChatCompactionRunner.debugContextWindow = (_, _) async => 20000;
+      final gate = Completer<void>();
+      var sends = 0;
+      ChatCompactionRunner.debugSend =
+          ({
+            required instruction,
+            required history,
+            required modelId,
+            required providerSlug,
+          }) async* {
+            sends++;
+            await gate.future;
+            yield ChatStreamEvent.content('short');
+          };
+      final list = <Map<String, String>>[
+        _user('q1 ${'x' * 16000}'),
+        _ai('a1 ${'y' * 16000}'),
+        _user('q2'),
+        _ai('a2'),
+      ];
+      Future<List<Map<String, dynamic>>> build(
+        List<Map<String, String>> rows,
+        List<int> s,
+      ) => ChatHistoryBuilder.build(
+        messages: rows,
+        pendingUserText: '',
+        messageStarts: s,
+      );
+      final manual = ChatCompactionRunner.compactNow(
+        messages: list,
+        chatId: 'chat-1',
+        modelId: 'm',
+        providerSlug: 'p',
+        accessToken: 't',
+        systemPrompt: 'sys',
+        tools: const [],
+        buildHistory: build,
+      );
+      await pumpEventQueue();
+      expect(ChatCompactionRunner.isRunning('chat-1'), isTrue);
+      final send = await ChatCompactionRunner.beforeSend(
+        messages: list,
+        end: 4,
+        chatId: 'chat-1',
+        modelId: 'm',
+        providerSlug: 'p',
+        accessToken: 't',
+        systemPrompt: 'sys',
+        tools: const [],
+        history: await build(list, <int>[]),
+        pendingMessage: 'q3',
+        buildHistory: build,
+      );
+      expect(send.reason, 'busy');
+      gate.complete();
+      expect((await manual).compacted, isTrue);
+      expect(sends, 1);
+      expect(ChatCompactionRunner.isRunning('chat-1'), isFalse);
+    });
+  });
+
+  group('sizing and bounds', () {
+    test('a start past the history end is clamped, not a RangeError', () async {
+      final list = <Map<String, String>>[
+        _user('q1 ${'x' * 4000}'),
+        _ai('a1 ${'y' * 4000}'),
+        _user('q2'),
+      ];
+      List<Map<String, dynamic>>? sent;
+      final out = await ChatCompaction.maybeCompact(
+        messages: list,
+        end: 3,
+        estimatedPromptTokens: 999999,
+        budget: const CompactionBudget(threshold: 10, retain: 1),
+        madeAt: 3,
+        summaryModelId: 'm',
+        summaryProviderSlug: 'p',
+        buildHistory: (starts) async {
+          starts.addAll(<int>[0, 1, 99]);
+          return <Map<String, dynamic>>[
+            {'role': 'user', 'content': 'q1 ${'x' * 4000}'},
+            {'role': 'assistant', 'content': 'a1 ${'y' * 4000}'},
+          ];
+        },
+        send:
+            ({
+              required instruction,
+              required history,
+              required modelId,
+              required providerSlug,
+            }) {
+              sent = history;
+              return _reply('short');
+            },
+      );
+      expect(out.compacted, isTrue, reason: out.reason);
+      expect(sent, hasLength(2));
+    });
+
+    test('a span over the summarizing window loses its oldest turns', () {
+      final prefix = <Map<String, dynamic>>[
+        {'role': 'user', 'content': ChatCompaction.summaryMessage('old')},
+        {'role': 'user', 'content': 'q1 ${'a ' * 3000}'},
+        {'role': 'assistant', 'content': 'a1 ${'b ' * 3000}'},
+        {'role': 'user', 'content': 'q2'},
+        {'role': 'assistant', 'content': 'a2'},
+      ];
+      final fitted = ChatCompaction.fitPrefix(prefix, limit: 500);
+      // The prior checkpoint stays, the cut lands on a user entry.
+      expect(fitted.first, same(prefix.first));
+      expect(fitted.map((e) => e['content']), contains('q2'));
+      expect(fitted.any((e) => '${e['content']}'.startsWith('q1')), isFalse);
+      expect(ChatCompaction.fitPrefix(prefix, limit: 1), isEmpty);
+      expect(ChatCompaction.fitPrefix(prefix, limit: 1 << 30), same(prefix));
+    });
+
+    test('message size counts replayed tool rounds and images', () {
+      final plain = _user('hi');
+      final transcript = <Map<String, dynamic>>[
+        {'role': 'tool', 'content': 'r' * 8000},
+      ];
+      final withRounds = {
+        ...plain,
+        'modelContext': jsonEncode({'v': 1, 'transcript': transcript}),
+      };
+      expect(
+        ChatCompaction.messageTokens(withRounds) -
+            ChatCompaction.messageTokens(plain),
+        greaterThanOrEqualTo(2000),
+      );
+      final withImages = {
+        ...plain,
+        'images': jsonEncode(['images/a.jpg', 'images/b.jpg']),
+      };
+      expect(
+        ChatCompaction.messageTokens(withImages) -
+            ChatCompaction.messageTokens(plain),
+        2 * kUnknownImageTokens,
+      );
     });
   });
 

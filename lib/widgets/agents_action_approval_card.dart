@@ -40,8 +40,9 @@ class AgentsActionApprovalCard extends StatelessWidget {
   });
 
   /// Desktop: Enter allows once, Esc denies, while the card is open and the
-  /// focus is not in a text field (docs/DESIGN.md §14.7). Key repeats and an
-  /// IME composition never answer.
+  /// focus is in the card (docs/DESIGN.md §14.7). A key typed anywhere
+  /// else (the composer, chuk's chat in front of a hidden Agents half)
+  /// never answers.
   final bool keyboardShortcuts;
 
   /// The host's request: the class, the one-line summary, the details and
@@ -348,7 +349,13 @@ class AgentsActionApprovalCard extends StatelessWidget {
   }
 
   Widget _buttons(ColorScheme scheme, AppLocalizations? l, String name) {
-    final List<String> options = request.options;
+    // No "Always allow …" without a prefix the app can stand behind (a
+    // shell or a wrapper never gets one, see agents_command_prefix.dart).
+    final bool prefix = approvalCommandPrefix(request) != null;
+    final List<String> options = <String>[
+      for (final String o in request.options)
+        if (o != _Req.scopeAlwaysPrefix || prefix) o,
+    ];
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -715,10 +722,13 @@ class _Quote extends StatelessWidget {
   }
 }
 
-/// Enter = allow once, Esc = deny, while [enabled]. Listens on the hardware
-/// keyboard, so the card answers without taking the focus; a key that lands
-/// in a text field, a repeat and an IME composition are left alone.
-class _ApprovalKeys extends StatefulWidget {
+/// Enter = allow once, Esc = deny, while [enabled] and the focus is in the
+/// card (scoped like the question card's keys, never a global keyboard
+/// handler: a key typed anywhere else, or with the Agents half hidden
+/// behind chuk's chat, must not answer an approval). The card takes the
+/// focus when it appears and nothing else in its scope holds it; a hidden
+/// half sits under `ExcludeFocus`, so it never can.
+class _ApprovalKeys extends StatelessWidget {
   const _ApprovalKeys({
     required this.enabled,
     required this.child,
@@ -732,69 +742,23 @@ class _ApprovalKeys extends StatefulWidget {
   final Widget child;
 
   @override
-  State<_ApprovalKeys> createState() => _ApprovalKeysState();
-}
-
-class _ApprovalKeysState extends State<_ApprovalKeys> {
-  bool _listening = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _sync();
+  Widget build(BuildContext context) {
+    if (!enabled) return child;
+    final VoidCallback? allow = onAllowOnce;
+    final VoidCallback? deny = onDeny;
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        if (allow != null) ...<ShortcutActivator, VoidCallback>{
+          const SingleActivator(LogicalKeyboardKey.enter): allow,
+          const SingleActivator(LogicalKeyboardKey.numpadEnter): allow,
+        },
+        const SingleActivator(LogicalKeyboardKey.escape): ?deny,
+      },
+      child: Focus(
+        key: const ValueKey<String>('agents-approval-keys'),
+        autofocus: true,
+        child: child,
+      ),
+    );
   }
-
-  @override
-  void didUpdateWidget(_ApprovalKeys old) {
-    super.didUpdateWidget(old);
-    _sync();
-  }
-
-  @override
-  void dispose() {
-    if (_listening) HardwareKeyboard.instance.removeHandler(_onKey);
-    super.dispose();
-  }
-
-  void _sync() {
-    if (widget.enabled && !_listening) {
-      HardwareKeyboard.instance.addHandler(_onKey);
-      _listening = true;
-    } else if (!widget.enabled && _listening) {
-      HardwareKeyboard.instance.removeHandler(_onKey);
-      _listening = false;
-    }
-  }
-
-  /// True when the focus is in a text field (the user is typing there).
-  static bool _typing() {
-    final BuildContext? focused = FocusManager.instance.primaryFocus?.context;
-    if (focused == null) return false;
-    if (focused.widget is EditableText) return true;
-    return focused.findAncestorStateOfType<EditableTextState>() != null;
-  }
-
-  bool _onKey(KeyEvent event) {
-    if (!mounted || !widget.enabled) return false;
-    if (event is! KeyDownEvent) return false; // never a repeat
-    if (_typing()) return false;
-    final LogicalKeyboardKey key = event.logicalKey;
-    if (key == LogicalKeyboardKey.enter ||
-        key == LogicalKeyboardKey.numpadEnter) {
-      final VoidCallback? allow = widget.onAllowOnce;
-      if (allow == null) return false;
-      allow();
-      return true;
-    }
-    if (key == LogicalKeyboardKey.escape) {
-      final VoidCallback? deny = widget.onDeny;
-      if (deny == null) return false;
-      deny();
-      return true;
-    }
-    return false;
-  }
-
-  @override
-  Widget build(BuildContext context) => widget.child;
 }

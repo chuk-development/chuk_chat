@@ -31,6 +31,28 @@ void main() {
     expect(notified, 3);
   });
 
+  // H2: a reply that brings no usage must not inherit the last one (the
+  // send paths stamp `usageOf` at finalize, and the compaction estimate
+  // anchors on it).
+  test('beginTurn drops the previous reply usage', () {
+    stats.recordUsage('a', <String, dynamic>{
+      'prompt_tokens': 90000,
+      'completion_tokens': 10,
+    });
+    stats.recordUsage('b', <String, dynamic>{
+      'prompt_tokens': 5,
+      'completion_tokens': 1,
+    });
+    stats.beginTurn('a');
+    expect(stats.usageOf('a'), isNull);
+    expect(stats.usageOf('b')!.promptTokens, 5);
+    stats.recordUsage('a', <String, dynamic>{
+      'prompt_tokens': 7,
+      'completion_tokens': 2,
+    });
+    expect(stats.usageOf('a')!.promptTokens, 7);
+  });
+
   test('ignores empty usage and non-positive tps', () {
     stats.recordUsage('a', <String, dynamic>{});
     stats.recordTps('a', 0);

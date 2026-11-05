@@ -2816,31 +2816,88 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       request.sessionKey ?? widget.threadKey,
       request.approvalId,
     );
-    if (option == AgentsRelayApprovalRequest.scopeAlwaysPrefix) {
-      // "Always allow git push": the typed decision has no remember_prefix,
-      // so the frame goes out whole (docs/WIRE_CONTRACT.md, "Shell command
-      // rules").
-      unawaited(
-        AgentsThreadModes.instance.sendApprovalDecision(
-          approvalId: request.approvalId,
-          approved: true,
-          scope: option,
-          rememberPrefix: approvalCommandPrefix(request),
-        ),
-      );
-      setState(() => _approvalDecision = true);
-      _syncWaitingForUser();
-    } else {
-      _decideApproval(approved, scope: option);
-    }
-    _ledger.decideApproval(
+    void record() => _ledger.decideApproval(
       request.sessionKey ?? widget.threadKey,
       request.approvalId,
       approved: approved,
       scope: option,
       site: request.site,
     );
+    if (option == AgentsRelayApprovalRequest.scopeAlwaysPrefix) {
+      // "Always allow git push": the typed decision has no remember_prefix,
+      // so the frame goes out whole (docs/WIRE_CONTRACT.md, "Shell command
+      // rules"). The run records the answer once the frame left.
+      setState(() {
+        _approvalDecision = true;
+        _approvalScope = option;
+      });
+      _syncWaitingForUser();
+      unawaited(
+        _sendWholeApprovalDecision(
+          request,
+          approved: true,
+          scope: option,
+          rememberPrefix: approvalCommandPrefix(request),
+          onSent: record,
+        ),
+      );
+      return;
+    }
+    _decideApproval(approved, scope: option);
+    record();
     setState(() => _approvalScope = option);
+  }
+
+  /// Sends a whole `approval_decision` frame (the fields the typed
+  /// controller method lacks). The card already shows the answer; when the
+  /// frame cannot be sent the answer is taken back, the approval waits on
+  /// the user again and the user learns why, so the host never waits on an
+  /// answer that never left.
+  Future<void> _sendWholeApprovalDecision(
+    AgentsRelayApprovalRequest request, {
+    required bool approved,
+    String? scope,
+    String? rememberPrefix,
+    String? feedback,
+    bool planReview = false,
+    VoidCallback? onSent,
+  }) async {
+    final bool ok = await AgentsThreadModes.instance.sendApprovalDecision(
+      approvalId: request.approvalId,
+      approved: approved,
+      scope: scope,
+      rememberPrefix: rememberPrefix,
+      feedback: feedback,
+    );
+    if (ok) {
+      onSent?.call();
+      return;
+    }
+    _reopenApproval(request, planReview: planReview);
+  }
+
+  /// An answer to [request] did not leave: the card is open again.
+  void _reopenApproval(
+    AgentsRelayApprovalRequest request, {
+    bool planReview = false,
+  }) {
+    AgentsThreadModes.instance.approvalReopened(
+      request.sessionKey ?? widget.threadKey,
+      request.approvalId,
+      planReview: planReview,
+    );
+    if (!mounted || _approval?.approvalId != request.approvalId) return;
+    setState(() {
+      _approvalDecision = null;
+      _approvalScope = null;
+    });
+    _syncWaitingForUser();
+    AppNotifications.show(
+      context,
+      AppLocalizations.of(context)?.approvalNotConnected ??
+          'Not connected to your computer. Try again when it is back.',
+      duration: const Duration(seconds: 3),
+    );
   }
 
   // ── agent modes ──────────────────────────────────────────────────────────
@@ -2946,18 +3003,19 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       request.sessionKey ?? widget.threadKey,
       request.approvalId,
     );
-    unawaited(
-      AgentsThreadModes.instance.sendApprovalDecision(
-        approvalId: request.approvalId,
-        approved: approved,
-        feedback: approved ? null : feedback,
-      ),
-    );
     setState(() {
       _approvalDecision = approved;
       _approvalScope = approved ? 'approve' : 'keep_planning';
     });
     _syncWaitingForUser();
+    unawaited(
+      _sendWholeApprovalDecision(
+        request,
+        approved: approved,
+        feedback: approved ? null : feedback,
+        planReview: true,
+      ),
+    );
   }
   // ── end agent modes ──
 

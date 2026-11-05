@@ -28,6 +28,32 @@ group in `prompt_cache_stability_test.dart`.
   user instruction (8 sections), `x_chuk.purpose = compact`. A summary that
   is not smaller than the span it replaces is rejected; a failed compaction
   sends the turn as it is.
+- **Never the live list.** `beforeSend` / `compactNow` only read the rows
+  they get and summarize a copy of `0..end-1` (the request takes seconds;
+  a chat switch refills the screen's list with another chat). The send
+  rebuilds its history from `CompactionOutcome.messages` and writes the
+  record back with `writeInto`, which checks the row is the same message
+  (`ChatCompaction.sameMessage`: `messageId`, else sender + text +
+  `sentAt`). Desktop `_storeCompaction` writes to the screen's list only
+  when it still shows the chat, else to the turn's background snapshot or
+  the stored chat (`ChatCompactionRunner.applyToStored`); mobile hands the
+  row to `onCompactionStored` (same check) and the turn's own snapshot
+  carries it. Test: "a chat switch during the summary request leaves chat
+  B alone".
+- **Failures cost money, so they back off.** A failed automatic
+  compaction is not tried again before the chat has
+  `failureBackoffMessages` (4) more messages. When the request does not fit
+  the window (estimate >= W) and nothing was compacted, the send stops with
+  `ChatCompaction.overflowError` ("Too much context …") instead of going
+  out blind. A span larger than the summarizing model's window loses its
+  oldest turns first (`fitPrefix`, a prior checkpoint stays). One summary
+  per chat at a time: a send while `/compact` runs (or the reverse) gets
+  `busy` (`ChatCompactionRunner.isRunning`).
+- **Tail size** (`messageTokens`) counts text, documents, the turn's
+  replayed tool rounds (`modelContext` transcript) and its images.
+- **Usage is per turn.** Every send calls `ChatTurnStats.beginTurn`, so an
+  answer without usage never stores (and the estimate never anchors on)
+  the reply before it.
 - **Model switch (17):** when the last answer came from a model with a larger
   window, that model writes the summary (its prefix is cached, the history
   fits it). Threshold and tail come from the new model.
@@ -40,9 +66,10 @@ group in `prompt_cache_stability_test.dart`.
 - **Resend, regenerate and continue compact too.** Desktop
   `_submitEditedMessage` runs `beforeSend` with `end` = the edited
   message (and recomputes the answer budget after a compaction); a
-  continue compacts a copy of its history rows (`end` = their length, the
-  last row is the answer it continues) and copies the summary onto the
-  chat's own row at `tailStart`. Mobile resend/regenerate pass the live
+  continue compacts its history rows (`end` = their length, the last row
+  is the answer it continues, `madeAt` = `end - 1` so that answer's next
+  usage counts) and the summary goes onto the chat's own row at
+  `tailStart`. Mobile resend/regenerate pass the live
   list (user row before the placeholder), the continue goes through
   `StreamingMessageHandler.onCompactionStored`. The headless outbox turn
   (`headless_chat_turn.dart`) compacts like a send: its rows end with the

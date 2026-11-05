@@ -38,6 +38,7 @@ import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/models/chat_reply.dart';
 import 'package:chuk_chat/services/chat_compaction.dart';
+import 'package:chuk_chat/services/chat_compaction_runner.dart';
 import 'package:chuk_chat/platform_specific/chat/manual_compaction.dart';
 import 'package:chuk_chat/services/chat_model_selection_service.dart';
 import 'package:chuk_chat/services/chat_reaction_service.dart';
@@ -361,9 +362,22 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       ),
     );
     if (!mounted) return;
-    if (outcome.compacted && _activeChatId == chatId) {
-      setState(() {});
-      unawaited(persistChat());
+    if (outcome.compacted) {
+      // The summary goes onto the chat it was made for: the screen's list
+      // when it still shows that chat (same row), else the stored chat.
+      if (_activeChatId == chatId && outcome.writeInto(_messages)) {
+        setState(() {});
+        unawaited(persistChat());
+      } else {
+        final rows = ChatCompactionRunner.applyToStored(chatId, outcome);
+        if (rows != null) {
+          unawaited(persistenceHandler.persistChat(
+            messages: rows,
+            chatId: chatId,
+            silent: true,
+          ));
+        }
+      }
     }
     showSnackBar(switch (outcome.status) {
       CompactionStatus.compacted => l.composerCompactDone,
@@ -853,11 +867,19 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       ..onCompactionStored = _storeCompactionSummary;
   }
 
-  /// A "continue generation" turn compacted the chat on a copy of its rows:
-  /// put the summary on this screen's row too, so the turn's save keeps it.
-  void _storeCompactionSummary(String chatId, int index, String record) {
+  /// A turn compacted a copy of the chat's rows: put the summary on this
+  /// screen's row too, so the turn's save keeps it. Only when the screen
+  /// still shows [chatId] and the row at [index] is the summarized message
+  /// ([row]); otherwise the turn's own snapshot carries it to storage.
+  void _storeCompactionSummary(
+    String chatId,
+    int index,
+    Map<String, String> row,
+  ) {
     if (!mounted || _activeChatId != chatId) return;
-    if (index < 0 || index >= _messages.length) return;
+    final String? record = row[ChatCompaction.fieldKey];
+    if (record == null || index < 0 || index >= _messages.length) return;
+    if (!ChatCompaction.sameMessage(_messages[index], row)) return;
     setState(() {
       _messages[index] = Map<String, String>.from(_messages[index])
         ..[ChatCompaction.fieldKey] = record;
@@ -2727,15 +2749,22 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   /// queued message goes out as its own turn. It is sent as given (the
   /// voice-task path), so a draft in the composer is never touched (bead
   /// cowork-vc1l).
-  void _drainPendingMessage() {
-    _followUps.onTurnEnded();
-    if (!_followUps.hasQueued || !mounted) return;
+  ///
+  /// [turnChatId] is the chat whose turn ended, taken at the first call; a
+  /// retry for a chat the screen no longer shows does nothing, and a
+  /// screen that is gone touches nothing.
+  void _drainPendingMessage([String? turnChatId, bool retry = false]) {
+    if (!mounted) return;
+    final String? chatId = retry ? turnChatId : _activeChatId;
+    if (_activeChatId != chatId) return;
+    if (!retry) _followUps.onTurnEnded();
+    if (!_followUps.hasQueued) return;
     if (_isSendingMessage || _isCurrentChatStreaming) {
       // The send of the turn is still closing; try again shortly.
       if (_drainRetries++ < 20) {
         Future<void>.delayed(
           const Duration(milliseconds: 250),
-          _drainPendingMessage,
+          () => _drainPendingMessage(chatId, true),
         );
       }
       return;

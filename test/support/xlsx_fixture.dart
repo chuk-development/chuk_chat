@@ -119,3 +119,42 @@ Uint8List buildXlsx(
   if (chart) add('xl/charts/chart1.xml', '<chartSpace/>');
   return ZipEncoder().encodeBytes(archive);
 }
+
+/// A one-sheet .xlsx whose worksheet is [sheetXml] as given (no shared
+/// strings), for crafted input: forged cell references, odd markup.
+Uint8List buildRawXlsx(String sheetXml) {
+  final Archive archive = Archive();
+  void add(String name, String text) =>
+      archive.addFile(ArchiveFile.bytes(name, utf8.encode(text)));
+  add(
+    'xl/workbook.xml',
+    '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        '<sheets><sheet name="S" sheetId="1" r:id="rId1"/></sheets></workbook>',
+  );
+  add(
+    'xl/_rels/workbook.xml.rels',
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
+        '</Relationships>',
+  );
+  add('xl/worksheets/sheet1.xml', sheetXml);
+  return Uint8List.fromList(ZipEncoder().encode(archive));
+}
+
+/// [zip] with the uncompressed size of every entry rewritten to [size], in
+/// the local headers and the central directory: a zip that lies about how
+/// large its parts are.
+Uint8List forgeZipSizes(Uint8List zip, int size) {
+  final Uint8List out = Uint8List.fromList(zip);
+  final ByteData data = ByteData.sublistView(out);
+  for (int i = 0; i + 30 <= out.length; i++) {
+    final int sig = data.getUint32(i, Endian.little);
+    if (sig == 0x04034b50) {
+      data.setUint32(i + 22, size, Endian.little);
+    } else if (sig == 0x02014b50 && i + 46 <= out.length) {
+      data.setUint32(i + 24, size, Endian.little);
+    }
+  }
+  return out;
+}

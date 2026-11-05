@@ -175,6 +175,33 @@ void main() {
       await third.loadWaits();
       expect(third.waitKindOf('t1'), isNull);
     });
+
+    // L6: the labels are kept per user and leave the device at sign-out.
+    test('labels are per user and go at sign-out', () async {
+      String? user = 'user-a';
+      AgentsThreadModes.userIdReader = () => user;
+      addTearDown(() => AgentsThreadModes.userIdReader = () => null);
+      final AgentsThreadModes modes = AgentsThreadModes(send: (_) async {});
+      await modes.loadWaits();
+      modes.ingest(<String, dynamic>{
+        'type': 'approval_request',
+        'session_key': 't1',
+        'approval_id': 'ap1',
+      });
+      await Future<void>.delayed(Duration.zero);
+
+      user = 'user-b';
+      final AgentsThreadModes other = AgentsThreadModes(send: (_) async {});
+      await other.loadWaits();
+      expect(other.waitKindOf('t1'), isNull);
+
+      await modes.clearForSignOut('user-a');
+      expect(modes.waitKindOf('t1'), isNull);
+      user = 'user-a';
+      final AgentsThreadModes again = AgentsThreadModes(send: (_) async {});
+      await again.loadWaits();
+      expect(again.waitKindOf('t1'), isNull);
+    });
   });
 
   group('(f) automation skipped / retry', () {

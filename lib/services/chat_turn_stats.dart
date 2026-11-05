@@ -86,6 +86,14 @@ class ChatTurnStats extends ChangeNotifier {
     return ChatTurnStatsEntry(usage: stored);
   }
 
+  /// A new turn starts in [chatId]: the numbers of the reply before it are
+  /// dropped, so a reply that gets no usage of its own never stores (or
+  /// anchors a compaction estimate on) the previous reply's usage. The
+  /// stats row shows the stored usage of the last answer meanwhile.
+  void beginTurn(String chatId) {
+    if (_byChat.remove(chatId) != null) notifyListeners();
+  }
+
   /// Record the speed of the reply that is running in [chatId].
   void recordTps(String chatId, double tps) {
     if (!tps.isFinite || tps <= 0) return;

@@ -13,6 +13,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:chuk_chat/services/supabase_service.dart';
+
 /// The reasons a reader can pick, in the order the sheet shows them.
 /// The ids are the wire values.
 enum FeedbackCategory {
@@ -102,7 +104,19 @@ class MessageFeedbackStore extends ChangeNotifier {
 
   static final MessageFeedbackStore instance = MessageFeedbackStore._();
 
+  /// The legacy key (no owner). Its rows go to the first signed-in user
+  /// that loads them; every user's own rows live under [prefsKeyFor].
   static const String prefsKey = 'message_feedback_v1';
+
+  /// The preference key of [userId]'s verdicts.
+  static String prefsKeyFor(String? userId) => '$prefsKey:${userId ?? 'anon'}';
+
+  /// The signed-in user. Tests set their own.
+  static String? Function() userIdReader = _currentUserId;
+
+  static String? _currentUserId() => SupabaseService.isInitialized
+      ? SupabaseService.auth.currentUser?.id
+      : null;
 
   /// Oldest entries are dropped above this. A few hundred short JSON rows
   /// stay well inside the SharedPreferences budget (CLAUDE.md, ~200 KB).
@@ -117,15 +131,52 @@ class MessageFeedbackStore extends ChangeNotifier {
   Future<void>? _loading;
   bool _loaded = false;
 
+  /// The user whose verdicts [_entries] holds.
+  String? _owner;
+
   bool get isLoaded => _loaded;
 
-  /// Read the stored entries once. Safe to call many times.
-  Future<void> ensureLoaded() => _loading ??= _load();
+  /// Read the signed-in user's stored entries once. Safe to call many
+  /// times; another user signing in reads theirs.
+  Future<void> ensureLoaded() {
+    final String? user = userIdReader();
+    if (_loading != null && user != _owner) {
+      _entries.clear();
+      _loading = null;
+      _loaded = false;
+    }
+    _owner = user;
+    return _loading ??= _load(user);
+  }
 
-  Future<void> _load() async {
+  /// Sign-out: the verdicts leave memory and this device's storage.
+  Future<void> clearForSignOut(String? userId) async {
+    _entries.clear();
+    _loading = null;
+    _loaded = false;
+    _owner = null;
+    notifyListeners();
     try {
       final SharedPreferences prefs = await SharedPreferences.getInstance();
-      final String? raw = prefs.getString(prefsKey);
+      await prefs.remove(prefsKeyFor(userId));
+      await prefs.remove(prefsKey);
+    } catch (error) {
+      if (kDebugMode) debugPrint('MessageFeedbackStore clear failed: $error');
+    }
+  }
+
+  Future<void> _load(String? user) async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      String? raw = prefs.getString(prefsKeyFor(user));
+      final String? legacy = prefs.getString(prefsKey);
+      if (legacy != null && user != null) {
+        // Rows from before the per-user key: the first signed-in user
+        // claims them, once.
+        raw ??= legacy;
+        await prefs.setString(prefsKeyFor(user), raw);
+        await prefs.remove(prefsKey);
+      }
       if (raw != null && raw.isNotEmpty) {
         final Object? decoded = jsonDecode(raw);
         if (decoded is List) {
@@ -175,7 +226,7 @@ class MessageFeedbackStore extends ChangeNotifier {
   Future<void> _persist() async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.setString(
-      prefsKey,
+      prefsKeyFor(_owner),
       jsonEncode(<Map<String, dynamic>>[
         for (final MessageFeedback fb in _entries.values) fb.toJson(),
       ]),
@@ -188,5 +239,6 @@ class MessageFeedbackStore extends ChangeNotifier {
     _entries.clear();
     _loading = null;
     _loaded = false;
+    _owner = null;
   }
 }

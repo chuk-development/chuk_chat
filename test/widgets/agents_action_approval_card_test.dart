@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -13,6 +14,7 @@ import 'package:chuk_chat/services/agents/agents_replay_loader.dart';
 import 'package:chuk_chat/services/agents/agents_run_cost.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import 'package:chuk_chat/services/agents/agents_thread_composer.dart';
+import 'package:chuk_chat/services/agents/agents_thread_modes.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/settings/verbose_service.dart';
@@ -114,6 +116,53 @@ void main() {
       );
       await tester.pump();
     }
+
+    // H1: the keys are scoped to the card. Enter typed in another field,
+    // or with the card in a half that cannot take the focus, answers
+    // nothing.
+    testWidgets('Enter / Esc answer only with the focus in the card', (
+      tester,
+    ) async {
+      final picked = <String>[];
+      final FocusNode other = FocusNode();
+      addTearDown(other.dispose);
+      Widget build({required bool hidden}) => _app(
+        Column(
+          children: <Widget>[
+            Focus(focusNode: other, child: const SizedBox(height: 10)),
+            ExcludeFocus(
+              excluding: hidden,
+              child: AgentsActionApprovalCard(
+                request: _request(),
+                agentName: 'Ada',
+                keyboardShortcuts: true,
+                onSelect: picked.add,
+              ),
+            ),
+          ],
+        ),
+      );
+      // Hidden (like the Agents half behind chuk's chat): nothing answers.
+      await tester.pumpWidget(build(hidden: true));
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      expect(picked, isEmpty);
+      // Visible, but the focus is elsewhere: still nothing.
+      await tester.pumpWidget(build(hidden: false));
+      other.requestFocus();
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      expect(picked, isEmpty);
+      // The focus in the card: Enter allows once, Esc denies.
+      Focus.of(
+        tester.element(find.text('Allow once')),
+      ).requestFocus();
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      expect(picked, <String>['once', 'deny']);
+    });
 
     testWidgets('one button per option, in order, with the contract words', (
       tester,
@@ -358,6 +407,49 @@ void main() {
         await tester.pump(const Duration(minutes: 2));
       });
     }
+
+    // M4: "Always allow <prefix>" goes out as a whole frame. When that
+    // frame cannot be sent, the card must not stay decided (the host would
+    // wait for ever): the answer is taken back and the card is open again.
+    testWidgets('a prefix answer that cannot be sent opens the card again', (
+      tester,
+    ) async {
+      final controller = await pumpPaired(tester);
+      AgentsThreadModes.instance.sender = (Map<String, dynamic> _) async =>
+          throw StateError('Not paired');
+      addTearDown(AgentsThreadModes.instance.reset);
+      AgentsRunLedger.instance.begin('thread-1');
+      controller.emit(
+        _request(
+          id: 'ap-p',
+          actionClass: 'run_command',
+          options: const <String>['once', 'always_this_prefix', 'deny'],
+          summary: 'Run a command',
+          site: null,
+          details: const <String, dynamic>{
+            'command': 'git push origin master',
+          },
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      final Finder prefix = find.byKey(
+        const ValueKey<String>('agents-approval-option-always_this_prefix'),
+      );
+      expect(prefix, findsOneWidget);
+      await tester.tap(prefix);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      // Open again, waiting on the user, and the user is told why.
+      expect(prefix, findsOneWidget);
+      expect(
+        AgentsThreadModes.instance.waitKindOf('thread-1'),
+        AgentsWaitKind.approval,
+      );
+      expect(find.textContaining('Not connected'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(minutes: 2));
+    });
 
     testWidgets('Deny says no with scope deny', (tester) async {
       final controller = await pumpPaired(tester);
