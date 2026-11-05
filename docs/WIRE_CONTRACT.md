@@ -4774,6 +4774,15 @@ sha256 and answers `complete: true, blob_id, path:
 mismatch: `ok: false, error: "..."` (on a mismatch the upload is dropped:
 send it again from chunk 0).
 
+A chunk of an upload that is already finished (same `upload_id`, `size` and
+`sha256`) gets the same complete ack again, with `already_complete: true`.
+This happens when the app lost the complete ack and sends a chunk again. The
+host keeps a small in-memory map of recent finished uploads next to its
+records, so it can answer also when the record is gone. The app takes every
+ack with `complete: true` as success. When every chunk is acked and no ack
+says `complete`, the app sends the file again from chunk 0 under a new
+`upload_id`.
+
 ### `task.attachments` (additive)
 
 ```json
@@ -4868,12 +4877,22 @@ in.
 All frames are sealed. The app sends three frames to the host. The host
 answers each frame with one terminal `login_vault` frame.
 
+Every app frame carries a `request_id` (a string of 1 to 128 characters,
+fresh for each frame). The host copies it into its `login_vault` reply. The
+app takes a reply as the answer to its frame only when the `request_id` is
+the same. Thus the reply to a `login_vault_list` cannot answer a
+`login_vault_set` that is in flight at the same time. An old host sends no
+`request_id`. Then the app sends one frame at a time, and it takes a reply
+to a set only if the reply has `saved` or `error`, and a reply to a delete
+only if the reply has `deleted` or `error`.
+
 `login_vault_set` (app to host). The host adds a login, or updates the login
 with the same `origin` and `username`:
 
 ```json
 {
   "type": "login_vault_set",
+  "request_id": "lv-1762300000000000-0",
   "origin": "https://github.com",
   "username": "octo@example.com",
   "password": "...",
@@ -4891,13 +4910,13 @@ with the same `origin` and `username`:
 `login_vault_delete` (app to host):
 
 ```json
-{ "type": "login_vault_delete", "id": "3f9c0a1b2c3d4e5f" }
+{ "type": "login_vault_delete", "id": "3f9c0a1b2c3d4e5f", "request_id": "lv-1762300000000000-1" }
 ```
 
 `login_vault_list` (app to host):
 
 ```json
-{ "type": "login_vault_list" }
+{ "type": "login_vault_list", "request_id": "lv-1762300000000000-2" }
 ```
 
 `login_vault` (host to app, terminal). It always holds the full public list:
@@ -4905,6 +4924,7 @@ with the same `origin` and `username`:
 ```json
 {
   "type": "login_vault",
+  "request_id": "lv-1762300000000000-0",
   "entries": [
     {
       "id": "3f9c0a1b2c3d4e5f",
@@ -4922,6 +4942,8 @@ with the same `origin` and `username`:
 }
 ```
 
+- `request_id` is the `request_id` of the app frame. It is absent when the
+  app frame had none.
 - `saved` is present only after `login_vault_set`.
 - `deleted` is present only after `login_vault_delete`.
 - `error` is a short text for the user. Examples: `origin must be

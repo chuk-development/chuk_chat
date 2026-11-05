@@ -311,8 +311,19 @@ offline images. A file that a row names is kept at any age; paths are
 compared with `/` and `\` as one separator, because a directory listing on
 Windows joins with `\`. A file no row
 names is deleted when it is older than 6 hours (a newer one may belong to a
-recording or a composer that is still open). If any row of the user cannot
-be opened, nothing is deleted. Promotion markers (`.promoted`) are kept.
+recording or a composer that is still open). If any chat-queue row of the
+user cannot be opened, nothing is deleted. Promotion markers (`.promoted`)
+are kept.
+
+The Agents outbox is read row by row. A row that cannot be opened does not
+stop the sweep: the paths of the readable rows still count, and offline
+images and sealed Agents files stay for 14 days instead of 6 hours, because
+the unreadable row may name them. Voice files keep the 6 hours (an Agents
+prompt never names one). Sealed Agents files (`agents-att://<user>/<id>`)
+are swept too: a file that no outbox row names and that the blob index no
+longer points at goes after the grace. The blob index keeps the newest 300
+uploads; a sealed file that falls out of it is deleted at once, unless an
+outbox row names it or an outbox row cannot be opened.
 
 ## Voice
 

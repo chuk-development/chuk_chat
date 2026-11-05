@@ -169,6 +169,80 @@ void main() {
       expect(done.blobId, isNotEmpty);
     });
 
+    test('a lost final ack: the chunk goes again and the host\'s '
+        '"already complete" answer is success', () async {
+      // Review of b8e3343c, finding 8. The ack that said complete is lost;
+      // the resent chunk is answered with the finished file's record, as the
+      // host does for an upload_id it already finished.
+      final AgentsUploadedAttachment done = await AgentsAttachmentUploader(
+        send: honestHost(
+          drop: (f, attempt) => f['index'] == 1 && attempt == 1,
+          answer: (f, attempt) => f['index'] == 1 && attempt >= 2
+              ? <String, dynamic>{
+                  'type': 'attachment_ack',
+                  'upload_id': f['upload_id'],
+                  'index': 1,
+                  'received': 2,
+                  'count': 2,
+                  'complete': true,
+                  'already_complete': true,
+                  'blob_id': f['upload_id'],
+                  'path': '.agents/inbox/x/a',
+                  'kind': 'file',
+                }
+              : null,
+        ),
+        acks: acks.stream,
+        ackTimeout: const Duration(milliseconds: 20),
+      ).upload(
+        AgentsOutgoingAttachment(
+          name: 'a',
+          mime: 'x/y',
+          bytes: bytesOf(kAgentsChunkBytes + 5),
+        ),
+        sessionKey: 's',
+      );
+      expect(sent.map((f) => f['upload_id']).toSet(), hasLength(1));
+      expect(sent.where((f) => f['index'] == 1), hasLength(2));
+      expect(done.blobId, sent.first['upload_id']);
+      expect(done.path, '.agents/inbox/x/a');
+    });
+
+    test('every chunk acked but never complete: the file starts over', () async {
+      // The host lost the upload (an error ack was lost, the chunk went into
+      // a fresh upload): the file goes again under a new id.
+      int round = 0;
+      String? firstId;
+      final AgentsUploadedAttachment done = await AgentsAttachmentUploader(
+        send: honestHost(
+          answer: (f, _) {
+            firstId ??= f['upload_id'] as String;
+            if (f['upload_id'] != firstId) return null;
+            round++;
+            return <String, dynamic>{
+              'type': 'attachment_ack',
+              'ok': true,
+              'upload_id': f['upload_id'],
+              'index': f['index'],
+              'received': 1,
+              'count': f['count'],
+              'complete': false,
+            };
+          },
+        ),
+        acks: acks.stream,
+      ).upload(
+        AgentsOutgoingAttachment(
+          name: 'a',
+          mime: 'x/y',
+          bytes: bytesOf(kAgentsChunkBytes + 5),
+        ),
+        sessionKey: 's',
+      );
+      expect(round, 2);
+      expect(done.blobId, isNot(firstId));
+    });
+
     test('an ok:false is retried', () async {
       await AgentsAttachmentUploader(
         send: honestHost(

@@ -1828,6 +1828,8 @@ const Map<String, String> stringsEn = {
   'webhookNoAutomation': 'No task on this host',
   'webhookMerged': '{count} calls merged',
   'webhookFailed': 'Could not change the webhook.',
+  'webhookRollbackFailed':
+      'The unused webhook URL is not removed yet. The app tries again later.',
   // ── end webhooks ──
   // ── feedback ──
   'feedbackRemoveRating': 'Remove rating',

@@ -32,6 +32,12 @@ Map<String, dynamic> _entry({bool totp = false}) => <String, dynamic>{
   'last_used_at': null,
 };
 
+/// [frame] without its `request_id` (a fresh one per request).
+Map<String, dynamic> _bare(Map<String, dynamic> frame) {
+  expect(frame['request_id'], isA<String>());
+  return Map<String, dynamic>.of(frame)..remove('request_id');
+}
+
 void main() {
   late AgentsReplyFrames bus;
   late _Host host;
@@ -81,7 +87,7 @@ void main() {
       'entries': <Object>[_entry(totp: true)],
     };
     final reply = await vault.refresh();
-    expect(host.frames.single, <String, dynamic>{'type': 'login_vault_list'});
+    expect(_bare(host.frames.single), <String, dynamic>{'type': 'login_vault_list'});
     expect(reply.ok, isTrue);
     expect(vault.loaded, isTrue);
     final e = vault.entries.single;
@@ -106,7 +112,7 @@ void main() {
       totpSecret: 'JBSWY3DPEHPK3PXP',
       label: 'work',
     );
-    expect(host.frames.single, <String, dynamic>{
+    expect(_bare(host.frames.single), <String, dynamic>{
       'type': 'login_vault_set',
       'origin': 'https://github.com',
       'username': 'octo@example.com',
@@ -155,7 +161,7 @@ void main() {
       'deleted': 'abc',
     };
     final reply = await vault.delete('abc');
-    expect(host.frames.single, <String, dynamic>{
+    expect(_bare(host.frames.single), <String, dynamic>{
       'type': 'login_vault_delete',
       'id': 'abc',
     });
@@ -187,6 +193,128 @@ void main() {
       replies: bus,
     );
     expect((await offline.refresh()).error, kLoginVaultNotConnected);
+  });
+
+  group('reply matching (review of b8e3343c, finding 1)', () {
+    test('a list reply with another request_id never answers a save', () async {
+      // The host answers the save with a refusal; before that, the reply to
+      // a refresh sent earlier (another id) lands.
+      final save = vault.save(
+        origin: 'https://github.com',
+        username: 'octo',
+        password: 'pw',
+      );
+      await Future<void>.delayed(Duration.zero);
+      final String id = host.frames.single['request_id'] as String;
+      expect(id, isNotEmpty);
+      bus.add(<String, dynamic>{
+        'type': 'login_vault',
+        'entries': <Object>[_entry()],
+        'request_id': 'lv-someone-else',
+      });
+      bus.add(<String, dynamic>{
+        'type': 'login_vault',
+        'entries': <Object>[],
+        'error': 'the host refused it',
+        'request_id': id,
+      });
+      final reply = await save;
+      expect(reply.ok, isFalse);
+      expect(reply.error, 'the host refused it');
+    });
+
+    test('an old host: a bare list does not count as saved or deleted', () async {
+      final save = vault.save(
+        origin: 'https://github.com',
+        username: 'octo',
+        password: 'pw',
+      );
+      await Future<void>.delayed(Duration.zero);
+      bus.add(<String, dynamic>{
+        'type': 'login_vault',
+        'entries': <Object>[_entry()],
+      });
+      bus.add(<String, dynamic>{
+        'type': 'login_vault',
+        'entries': <Object>[],
+        'error': 'password is required',
+      });
+      expect((await save).error, 'password is required');
+
+      final delete = vault.delete('3f9c0a1b2c3d4e5f');
+      await Future<void>.delayed(Duration.zero);
+      bus.add(<String, dynamic>{
+        'type': 'login_vault',
+        'entries': <Object>[_entry()],
+      });
+      bus.add(<String, dynamic>{
+        'type': 'login_vault',
+        'entries': <Object>[],
+        'deleted': '3f9c0a1b2c3d4e5f',
+      });
+      final deleted = await delete;
+      expect(deleted.ok, isTrue);
+      expect(deleted.deleted, '3f9c0a1b2c3d4e5f');
+    });
+
+    test('an old host: requests go out one at a time', () async {
+      final refresh = vault.refresh();
+      final save = vault.save(
+        origin: 'https://github.com',
+        username: 'octo',
+        password: 'pw',
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(host.frames, hasLength(1));
+      expect(host.frames.single['type'], 'login_vault_list');
+      bus.add(<String, dynamic>{
+        'type': 'login_vault',
+        'entries': <Object>[_entry()],
+      });
+      await refresh;
+      await Future<void>.delayed(Duration.zero);
+      expect(host.frames, hasLength(2));
+      expect(host.frames.last['type'], 'login_vault_set');
+      bus.add(<String, dynamic>{
+        'type': 'login_vault',
+        'entries': <Object>[_entry()],
+        'saved': _entry(),
+      });
+      expect((await save).saved?.id, '3f9c0a1b2c3d4e5f');
+    });
+
+    test('a host that echoes ids lets requests overlap', () async {
+      host.reply = (Map<String, dynamic> f) => <String, dynamic>{
+        'type': 'login_vault',
+        'entries': <Object>[_entry()],
+        if (f['type'] == 'login_vault_set') 'saved': _entry(),
+        'request_id': f['request_id'],
+      };
+      await vault.refresh();
+      host.reply = null;
+      final a = vault.refresh();
+      final b = vault.delete('3f9c0a1b2c3d4e5f');
+      await Future<void>.delayed(Duration.zero);
+      expect(host.frames.skip(1), hasLength(2));
+      final ids = <String>[
+        for (final f in host.frames.skip(1)) f['request_id'] as String,
+      ];
+      expect(ids.toSet(), hasLength(2));
+      // Answered out of order: each request still gets its own reply.
+      bus.add(<String, dynamic>{
+        'type': 'login_vault',
+        'entries': <Object>[],
+        'deleted': '3f9c0a1b2c3d4e5f',
+        'request_id': ids[1],
+      });
+      bus.add(<String, dynamic>{
+        'type': 'login_vault',
+        'entries': <Object>[],
+        'request_id': ids[0],
+      });
+      expect((await b).deleted, '3f9c0a1b2c3d4e5f');
+      expect((await a).ok, isTrue);
+    });
   });
 
   test('a malformed entry is dropped', () {

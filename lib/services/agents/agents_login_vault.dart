@@ -158,8 +158,11 @@ class AgentsLoginVault extends ChangeNotifier {
   bool get loaded => _loaded;
 
   /// `login_vault_list`.
-  Future<AgentsLoginVaultReply> refresh() =>
-      _request(<String, dynamic>{'type': 'login_vault_list'});
+  Future<AgentsLoginVaultReply> refresh() => _request(
+    <String, dynamic>{'type': 'login_vault_list'},
+    // An old host's untagged answer: any `login_vault` frame is a list.
+    legacyAccepts: (_) => true,
+  );
 
   /// `login_vault_set`. [password] and [totpSecret] go into the frame and
   /// nowhere else. [totpSecret]: [keepTotp] leaves the key out (the host
@@ -174,31 +177,88 @@ class AgentsLoginVault extends ChangeNotifier {
     String? label,
   }) {
     final String? totp = totpSecret?.trim();
-    return _request(<String, dynamic>{
-      'type': 'login_vault_set',
-      'origin': origin.trim(),
-      'username': username.trim(),
-      'password': password,
-      if (removeTotp)
-        'totp_secret': null
-      else if (totp != null && totp.isNotEmpty)
-        'totp_secret': totp,
-      if (label != null) 'label': label.trim(),
-    });
+    return _request(
+      <String, dynamic>{
+        'type': 'login_vault_set',
+        'origin': origin.trim(),
+        'username': username.trim(),
+        'password': password,
+        if (removeTotp)
+          'totp_secret': null
+        else if (totp != null && totp.isNotEmpty)
+          'totp_secret': totp,
+        if (label != null) 'label': label.trim(),
+      },
+      // An old host's untagged answer to a set says `saved` or `error`; a
+      // bare list is the answer to some other frame.
+      legacyAccepts: (Map<String, dynamic> r) =>
+          r['saved'] != null || r['error'] != null,
+    );
   }
 
   /// `login_vault_delete`.
-  Future<AgentsLoginVaultReply> delete(String id) =>
-      _request(<String, dynamic>{'type': 'login_vault_delete', 'id': id});
+  Future<AgentsLoginVaultReply> delete(String id) => _request(
+    <String, dynamic>{'type': 'login_vault_delete', 'id': id},
+    legacyAccepts: (Map<String, dynamic> r) =>
+        r['deleted'] != null || r['error'] != null,
+  );
 
-  Future<AgentsLoginVaultReply> _request(Map<String, dynamic> frame) async {
+  int _seq = 0;
+
+  /// True once a reply carried a `request_id`: this host echoes it, so
+  /// requests may overlap.
+  bool _hostEchoes = false;
+
+  /// The tail of the serialised requests (an old host only, see [_request]).
+  /// Null when none is in flight. Never a future made ahead of time: one
+  /// made in another zone (the constructor's) would run its callbacks there.
+  Future<void>? _chain;
+
+  /// Sends [frame] tagged with a fresh `request_id` and waits for the reply
+  /// that echoes it. A reply with another id is someone else's answer.
+  ///
+  /// An old host answers without an id. Then requests go out one at a time
+  /// (the only reply in flight is ours), and a reply counts only when
+  /// [legacyAccepts] says it has the shape of our answer: a list reply that
+  /// lands while a save waits must not read as "saved".
+  Future<AgentsLoginVaultReply> _request(
+    Map<String, dynamic> frame, {
+    required bool Function(Map<String, dynamic> reply) legacyAccepts,
+  }) {
+    if (_hostEchoes) return _requestNow(frame, legacyAccepts);
+    final Future<void>? previous = _chain;
+    final Future<AgentsLoginVaultReply> mine = previous == null
+        ? _requestNow(frame, legacyAccepts)
+        : previous.then((_) => _requestNow(frame, legacyAccepts));
+    final Future<void> tail = mine.then<void>((_) {}, onError: (_) {});
+    _chain = tail;
+    tail.whenComplete(() {
+      if (identical(_chain, tail)) _chain = null;
+    });
+    return mine;
+  }
+
+  Future<AgentsLoginVaultReply> _requestNow(
+    Map<String, dynamic> frame,
+    bool Function(Map<String, dynamic> reply) legacyAccepts,
+  ) async {
+    final String requestId =
+        'lv-${DateTime.now().microsecondsSinceEpoch}-${_seq++}';
     final Map<String, dynamic> payload;
     try {
       payload = await _replies.request(
-        frame,
+        <String, dynamic>{...frame, 'request_id': requestId},
         replyType: 'login_vault',
         send: _sendFrame,
         timeout: timeout,
+        matches: (Map<String, dynamic> reply) {
+          final Object? echoed = reply['request_id'];
+          if (echoed is String && echoed.isNotEmpty) {
+            _hostEchoes = true;
+            return echoed == requestId;
+          }
+          return legacyAccepts(reply);
+        },
       );
     } on AgentsReplyTimeout {
       if (kDebugMode) debugPrint('[login-vault] no reply');
@@ -225,6 +285,8 @@ class AgentsLoginVault extends ChangeNotifier {
   void clear() {
     _entries = const <AgentsLoginEntry>[];
     _loaded = false;
+    // The next host may be an old one again.
+    _hostEchoes = false;
     notifyListeners();
   }
 }

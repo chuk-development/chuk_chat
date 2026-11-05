@@ -28,12 +28,16 @@ class WebhooksSection extends StatefulWidget {
     this.sessionKey,
     this.service,
     this.source,
+    this.rollback,
   });
 
   /// Only the webhooks of this thread's agent; null shows all of them.
   final String? sessionKey;
   final AgentsWebhooksService? service;
   final AutomationsSource? source;
+
+  /// Null = [WebhookRollbackQueue.instance].
+  final WebhookRollbackQueue? rollback;
 
   @override
   State<WebhooksSection> createState() => WebhooksSectionState();
@@ -51,7 +55,17 @@ class WebhooksSectionState extends State<WebhooksSection> {
   void initState() {
     super.initState();
     _source.addListener(_changed);
-    unawaited(reload());
+    unawaited(_settleRollbacks());
+  }
+
+  /// Server webhooks a failed create could not delete go now, and a late
+  /// host row for one of them is cancelled; then the list is read.
+  Future<void> _settleRollbacks() async {
+    final WebhookRollbackQueue queue =
+        widget.rollback ?? WebhookRollbackQueue.instance;
+    queue.attach(_source);
+    await queue.retryDeletes(_service);
+    await reload();
   }
 
   @override
@@ -100,9 +114,21 @@ class WebhooksSectionState extends State<WebhooksSection> {
     try {
       final AgentsWebhook saved = await _service.setEnabled(hook.id, enabled);
       final AgentsAutomation? a = _automationOf(hook);
+      String? action;
       if (a != null) {
-        if (!enabled && a.isActive) await _source.control(a.id, 'pause');
-        if (enabled && a.isPaused) await _source.control(a.id, 'resume');
+        if (!enabled && a.isActive) action = 'pause';
+        if (enabled && a.isPaused) action = 'resume';
+      }
+      if (a != null && action != null && !await _source.control(a.id, action)) {
+        // The host was not told: put the server webhook back as it was, so
+        // the switch, the server and the host agree again.
+        try {
+          await _service.setEnabled(hook.id, hook.enabled);
+        } on AgentsWebhookException {
+          // Shown as failed below; the next reload shows the server's state.
+        }
+        if (mounted) pillToast(context, l.webhookFailed);
+        return;
       }
       if (!mounted) return;
       setState(() {
@@ -143,7 +169,12 @@ class WebhooksSectionState extends State<WebhooksSection> {
     setState(() {});
     try {
       final AgentsAutomation? a = _automationOf(hook);
-      if (a != null) await _source.control(a.id, 'cancel');
+      if (a != null && !await _source.control(a.id, 'cancel')) {
+        // The automation still runs on the host: keep its server webhook, or
+        // the row would point at a URL that is gone.
+        if (mounted) pillToast(context, l.webhookFailed);
+        return;
+      }
       await _service.delete(hook.id);
       if (!mounted) return;
       setState(() {

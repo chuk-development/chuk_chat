@@ -34,7 +34,7 @@ List<TriggerItem> _items({List<String> picked = const <String>[]}) =>
         label: 'New chat',
         group: TriggerGroup.commands,
         icon: Icons.edit,
-        onPicked: () => (picked as List<String>).add('new'),
+        onPicked: () => picked.add('new'),
       ),
     ];
 

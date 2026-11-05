@@ -288,7 +288,7 @@ class AutomationsSource extends ChangeNotifier {
         if (_pendingSaves.remove(pending)) {
           _orphanedSaves.add(DateTime.now());
         }
-        return const AutomationSaveResult.failed(
+        return const AutomationSaveResult.noAnswer(
           'The host did not answer. Check the connection and try again.',
         );
       },

@@ -43,9 +43,25 @@ def login_vault_payload(vault: SecretsVault | None, **extra: Any) -> dict:
     return {"type": LOGIN_VAULT_REPLY, "entries": entries, **extra}
 
 
+#: The longest ``request_id`` the host echoes back.
+MAX_REQUEST_ID = 128
+
+
 def handle_login_vault_frame(vault: SecretsVault | None, kind: str, payload: dict) -> dict:
     """Apply one app frame and return the terminal reply. Never raises; an
-    error is a reply with ``error`` (and the unchanged list)."""
+    error is a reply with ``error`` (and the unchanged list).
+
+    The app tags each frame with a ``request_id``; the reply echoes it, so the
+    app can tell the answer to its save from the answer to a list it sent at
+    the same time (docs/WIRE_CONTRACT.md, "Login vault for the browser")."""
+    reply = _apply_login_vault_frame(vault, kind, payload)
+    request_id = payload.get("request_id") if isinstance(payload, dict) else None
+    if isinstance(request_id, str) and 0 < len(request_id) <= MAX_REQUEST_ID:
+        reply["request_id"] = request_id
+    return reply
+
+
+def _apply_login_vault_frame(vault: SecretsVault | None, kind: str, payload: dict) -> dict:
     if vault is None:
         return login_vault_payload(None, error="this host keeps no login vault")
     if not isinstance(payload, dict):

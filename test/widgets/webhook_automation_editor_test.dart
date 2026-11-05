@@ -10,6 +10,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
@@ -89,7 +90,11 @@ void main() {
     }),
   );
 
+  late WebhookRollbackQueue rollback;
+
   setUp(() {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    rollback = WebhookRollbackQueue(prefsKey: 'test_webhook_rollback');
     requests = <http.Request>[];
     source.reset();
     AgentsRelayLink.instance.reset();
@@ -99,6 +104,7 @@ void main() {
   });
 
   tearDown(() {
+    rollback.detachForTest();
     source.reset();
     AgentsRelayLink.instance.reset();
     AgentsRelayClient.automationSavedSink = savedBefore;
@@ -350,6 +356,7 @@ void main() {
                 sessionKey: 'thread-1',
                 service: api(),
                 source: source,
+                rollback: rollback,
               ),
             ],
           ),
@@ -395,6 +402,93 @@ void main() {
       );
     });
   }
+
+  Future<void> pumpRows(WidgetTester tester) async {
+    size(tester, 1280);
+    AgentsRelayClient.automationSavedSink!(<String, dynamic>{
+      'type': 'automation_saved',
+      'ok': true,
+      'automation': _automation(),
+    });
+    await tester.pumpWidget(
+      app(
+        ListView(
+          children: <Widget>[
+            WebhooksSection(
+              sessionKey: 'thread-1',
+              service: api(),
+              source: source,
+              rollback: rollback,
+            ),
+          ],
+        ),
+      ),
+    );
+    for (int i = 0; i < 4; i++) {
+      await tester.pump();
+    }
+  }
+
+  testWidgets('a pause the host was not told rolls the switch back', (
+    tester,
+  ) async {
+    await pumpRows(tester);
+    controller.sendError = StateError('socket gone');
+    await tester.tap(
+      find.byKey(const ValueKey<String>('webhook-enabled-$_hookId')),
+    );
+    for (int i = 0; i < 6; i++) {
+      await tester.pump();
+    }
+    // Off on the server, the control failed, on again on the server.
+    expect(requests.map((r) => r.method), <String>['GET', 'PATCH', 'PATCH']);
+    expect(jsonDecode(requests[1].body), <String, dynamic>{'enabled': false});
+    expect(jsonDecode(requests[2].body), <String, dynamic>{'enabled': true});
+    expect(
+      tester
+          .widget<Switch>(
+            find.byKey(const ValueKey<String>('webhook-enabled-$_hookId')),
+          )
+          .value,
+      isTrue,
+    );
+    expect(find.text('Could not change the webhook.'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('a cancel the host was not told keeps the server webhook', (
+    tester,
+  ) async {
+    await pumpRows(tester);
+    controller.sendError = StateError('socket gone');
+    await tester.tap(
+      find.byKey(const ValueKey<String>('webhook-delete-$_hookId')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey<String>('webhook-delete-confirm')),
+    );
+    for (int i = 0; i < 6; i++) {
+      await tester.pump();
+    }
+    expect(requests.where((r) => r.method == 'DELETE'), isEmpty);
+    expect(
+      find.byKey(const ValueKey<String>('webhook-row-$_hookId')),
+      findsOne,
+    );
+    expect(find.text('Could not change the webhook.'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('opening the list deletes a queued rollback first', (
+    tester,
+  ) async {
+    await rollback.addDelete('dead-hook');
+    await pumpRows(tester);
+    expect(requests.first.method, 'DELETE');
+    expect(requests.first.url.path, '/v1/agents/webhooks/dead-hook');
+    expect(await rollback.pendingDeletes(), isEmpty);
+  });
 
   test('a webhook fire is told apart and its merged count read', () {
     final wake = parseAutomationWake(

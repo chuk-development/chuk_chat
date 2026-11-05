@@ -461,6 +461,7 @@ class _AutomationEditorFormState extends State<AutomationEditorForm> {
       service: widget.webhooks,
       deviceId: widget.hostDeviceId,
       createAutomation: webhookCreatorFor(_source),
+      source: _source,
     );
     if (!mounted) return;
     // The secret has gone to the host; the form forgets it.
@@ -979,7 +980,11 @@ class _WebhookFields {
 /// app's words, a host refusal in the host's.
 String webhookErrorText(AppLocalizations l, WebhookCreateResult result) {
   final String? code = result.serverCode;
-  if (code == null) return result.error ?? l.webhookFailed;
+  if (code == null) {
+    final String text = result.error ?? l.webhookFailed;
+    // The server webhook of the failed create is still there: say so.
+    return result.rollbackFailed ? '$text\n${l.webhookRollbackFailed}' : text;
+  }
   return switch (code) {
     'too_many_webhooks' => l.webhookErrTooMany,
     AgentsWebhookException.network => l.webhookErrNetwork,

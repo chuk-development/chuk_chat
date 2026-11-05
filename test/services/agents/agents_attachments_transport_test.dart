@@ -262,4 +262,47 @@ void main() {
     );
     expect(controller.tasks, isEmpty);
   });
+
+  test('a queued prompt whose file is gone fails at once and says why', () async {
+    // Review of b8e3343c, finding 7: a user-fixable upload error is not
+    // retried until the attempts run out.
+    AgentsAttachmentPaths.readerOverride = (String path, int index) async =>
+        throw AgentsAttachmentException(
+          AgentsAttachmentFailure.missing,
+          name: path,
+        );
+    final List<AgentsSendNotice> notices = <AgentsSendNotice>[];
+    final sub = AgentsChatTransport.notices.listen(notices.add);
+    addTearDown(sub.cancel);
+    final OutboxTask task = await AgentsTaskOutbox.enqueue(
+      sessionKey: sessionKey,
+      prompt: 'p',
+      attachments: const <String>['agents-att://u/gone'],
+    );
+    final OutboxTask behind = await AgentsTaskOutbox.enqueue(
+      sessionKey: sessionKey,
+      prompt: 'no files',
+    );
+    final int sent = await AgentsTaskOutbox.flush(
+      sessionKey,
+      (OutboxTask t) => AgentsOutboxFlusher.sendQueued(controller, t),
+    );
+    await drain();
+    // The prompt behind it still went out.
+    expect(sent, 1);
+    expect(controller.tasks, <String>['no files']);
+    final List<OutboxTask> left = await AgentsTaskOutbox.pendingFor(
+      sessionKey,
+    );
+    final OutboxTask failed = left.singleWhere(
+      (OutboxTask t) => t.localId == task.localId,
+    );
+    expect(failed.failed, isTrue);
+    expect(failed.attempts, 1);
+    expect(left.where((OutboxTask t) => t.localId == behind.localId), isEmpty);
+    expect(notices.single.kind, AgentsSendNoticeKind.attachmentsRefused);
+    expect(notices.single.failure, AgentsAttachmentFailure.missing);
+    expect(notices.single.sessionKey, sessionKey);
+    expect(puts, isEmpty);
+  });
 }
