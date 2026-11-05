@@ -29,6 +29,7 @@ from typing import Callable, Iterable
 from chuk_agents_runtime import DEFAULT_MODEL_ID, StateStore, SupabaseSession, fetch_models_info
 from chuk_agents_runtime import mcp_client
 from chuk_agents_runtime.cost import PriceBook
+from chuk_agents_runtime.dashboard import DashboardStore
 from chuk_agents_runtime.agent_mail import ORIGIN_MAIL, ORIGIN_MAIL_UNTRUSTED
 from chuk_agents_runtime.hindsight_service import (
     configure_memory_service,
@@ -285,6 +286,11 @@ class LocalHost:
         self._agents_dir.mkdir(parents=True, exist_ok=True)
         self._roster_path = str(self._workspace / "roster.db")
         self._db_path = str(self._workspace / "executor-state.db")
+        # The user's Home dashboard (docs/DASHBOARD.md): ONE document for the
+        # host, shared by every agent (the task server's executor and every
+        # room member). Every stored change is pushed to the attached apps.
+        self._dashboard = DashboardStore(self._db_path)
+        self._dashboard.add_listener(self._on_dashboard_change)
         # Bead cowork-sq3: a live ``done`` the app never acknowledged. One timer
         # per run, armed when the run ends with an app attached, cancelled by
         # its ``run_ack``; on expiry the run is treated as finished while away
@@ -418,6 +424,8 @@ class LocalHost:
             estop_path=self._estop_path,
             secrets=self._secrets_vault,
             logger=self._log,
+            dashboard=self._dashboard,
+            agent_name_for=self._browser_coworker_name,
         )
 
         # Persistent trust: after the first §15 pairing this file holds the stable
@@ -1420,6 +1428,10 @@ class LocalHost:
             # so a re-provision's fresh price list applies to the next run.
             price_book=lambda: getattr(self, "_price_book", None),
             budget=getattr(self, "_budget", None),
+            # The Home dashboard (docs/DASHBOARD.md): the host's one store, and
+            # the name the user gave each agent, stamped as ``by``.
+            dashboard=self._dashboard,
+            agent_name_for=self._browser_coworker_name,
         )
         built.append(task_server)
         return task_server
@@ -2299,6 +2311,13 @@ class LocalHost:
 
     def _browser_coworker_name(self, session_key: str) -> str:
         return self._call_agent(session_key)[1]
+
+    def _on_dashboard_change(self, document: dict) -> None:
+        """A tool or an app op stored a change: push ``dashboard_state`` to
+        the attached apps (docs/DASHBOARD.md §5). Nobody attached is fine: the
+        app sends ``dashboard_get`` on every attach."""
+        if not self._send_host_payload({"type": "dashboard_state", "dashboard": document}):
+            self._log(f"dashboard version {document.get('version')} not pushed: no app attached")
 
     def _on_user_browser_change(self, _status: dict | None = None) -> None:
         """The add-on came or went, an agent took or left the browser, or

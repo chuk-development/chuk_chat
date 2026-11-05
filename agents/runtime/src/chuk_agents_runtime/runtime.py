@@ -28,6 +28,7 @@ from .clock import clock_messages
 from .context import AuxSummarizer, ContextLadder, LadderConfig
 from .environment import Environment, LocalEnvironment
 from .chat_documents import DocumentStore, register_document_tool
+from .dashboard import DashboardStore, register_dashboard_tool
 from .files_out import FileSink
 from .action_policy import ActionApprovals
 from .herenow import ApprovalGate, HereNowConfig, register_herenow_tools
@@ -318,6 +319,8 @@ def build_runtime(
     action_approvals: ActionApprovals | None = None,
     light_context: bool = False,
     skill_proposals: SkillProposalSink | None = None,
+    dashboard: DashboardStore | None = None,
+    dashboard_by: str | Callable[[], str] | None = None,
 ) -> AgentLoop:
     """Assemble the loop. ``system_prompt`` is the operator *persona*: the
     behaviour contract is prepended from :mod:`chuk_agents_runtime.prompt` and the live
@@ -554,6 +557,11 @@ def build_runtime(
         register_document_tool(registry, DocumentStore(db_path, shell_session_key), file_sink)
     if enable_chat_search:
         register_search_tool(registry, store)
+    # The user's Home dashboard (docs/DASHBOARD.md): ONE store for the host,
+    # handed in by the executor, so every agent writes the same document.
+    # ``dashboard_by`` is the agent's name, stamped on what it changes.
+    if dashboard is not None:
+        register_dashboard_tool(registry, dashboard, by=dashboard_by or "Agent")
 
     kill = kill_switch or KillSwitch(estop_path)
 

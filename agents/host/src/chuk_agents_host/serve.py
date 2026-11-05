@@ -95,6 +95,8 @@ class TaskServer:
         action_approvals=None,
         price_book=None,
         budget=None,
+        dashboard=None,
+        agent_name_for: Callable[[str], str] | None = None,
     ) -> None:
         self._roster = roster
         self._agent_id = agent_id
@@ -175,6 +177,10 @@ class TaskServer:
                 # price list and each agent's weekly budget.
                 price_book=price_book,
                 budget=budget,
+                # The Home dashboard (docs/DASHBOARD.md): the host's one store,
+                # and the agent names stamped as ``by``.
+                dashboard=dashboard,
+                agent_name_for=agent_name_for,
             )
 
         self._supervisor = ExecutorSupervisor(roster, factory)

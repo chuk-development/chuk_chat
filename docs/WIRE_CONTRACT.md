@@ -3553,3 +3553,29 @@ host code. Additive: nothing above changes. Product spec and server API:
   attachments of a readable mail into `mail-attachments/<id>/` in the
   workspace (each directory opened without following a symlink). Never for
   `unknown` mail.
+
+## Dashboard (Home, bead chuk_chat-lgq2.13.1)
+
+The contract is `docs/DASHBOARD.md`: the document, catalogue v1, the tracker
+maths, the `dashboard` tool and the four frames. This section only says where
+the host side lives.
+
+- Frames: app → host `dashboard_get`, `dashboard_op`; host → app
+  `dashboard_state` (the terminal answer, and a push after every stored
+  change, also one made by a tool), `dashboard_error` (a refused op, with its
+  `op_id`). Sealed like every other frame. The relay ledger sees them as
+  frames dispatched to the executor, like every sealed frame.
+- Store: `agents/runtime/src/chuk_agents_runtime/dashboard.py`
+  (`DashboardStore`, tables `dashboard` and `dashboard_ops` in the host's
+  `executor-state.db`, key `user`). The last 200 applied `op_id`s are kept in
+  the same database, so a retried op is not applied twice, also across a host
+  restart. A refused op is not remembered.
+- One store per host: `LocalHost` builds it and hands the same object to the
+  task server's executor and to every room member, so every agent gets the
+  `dashboard` tool on the same document. The host's listener pushes
+  `dashboard_state` through `_send_host_payload` (the ordered path, bead
+  chuk_chat-9i41). Nobody attached: the push is dropped, and the app reads
+  the state again with `dashboard_get` on its next attach.
+- The frames are answered in `Executor._handle_frame`
+  (`handle_dashboard_frame`). An executor that got no store from a host
+  keeps its own in its state database and pushes on its own ordered path.

@@ -173,6 +173,8 @@ class RoomAgentPool:
         secrets: SecretsVault | None = None,
         turn_timeout: float = DEFAULT_TURN_TIMEOUT_SECONDS,
         logger: Callable[[str], None] | None = None,
+        dashboard=None,
+        agent_name_for: Callable[[str], str] | None = None,
     ) -> None:
         self._binding = binding
         self._model_wiring = model_wiring
@@ -187,6 +189,10 @@ class RoomAgentPool:
         self._estop_path = estop_path
         self._secrets = secrets
         self._turn_timeout = turn_timeout
+        # The host's one Home dashboard (docs/DASHBOARD.md): a room member is
+        # an agent of the host, so it writes the same document.
+        self._dashboard = dashboard
+        self._agent_name_for = agent_name_for
         self._log = logger or (lambda _msg: None)
         self._agents: dict[str, _Agent] = {}
         self._lock = threading.RLock()
@@ -310,6 +316,12 @@ class RoomAgentPool:
             ),
             estop_path=self._estop_path,
             secrets=self._secrets,
+            dashboard=self._dashboard,
+            agent_name_for=(
+                (lambda _key, _id=agent_id: self._agent_name_for(_id))
+                if self._agent_name_for is not None
+                else None
+            ),
         )
         try:
             executor.start()

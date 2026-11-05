@@ -1234,6 +1234,8 @@ class Executor:
         action_approvals=None,
         price_book=None,
         budget=None,
+        dashboard=None,
+        agent_name_for: Callable[[str], str] | None = None,
     ) -> None:
         self._name = name
         self._endpoint = endpoint
@@ -1376,6 +1378,20 @@ class Executor:
         # frame is unknown.
         self._calls = calls
         self._on_call_frame = on_call_frame
+        # The user's Home dashboard (docs/DASHBOARD.md): ONE store per host.
+        # The host hands in its own and pushes ``dashboard_state`` itself
+        # after every change. Without one (the tests, a bare executor) the
+        # executor keeps the store in its own state database and pushes on its
+        # own ordered path. ``agent_name_for`` names the agent of a session,
+        # stamped as ``by`` on the widgets its tool changes.
+        self._agent_name_for = agent_name_for
+        self._dashboard_owned = dashboard is None
+        if dashboard is None and db_path and db_path != ":memory:":
+            from chuk_agents_runtime.dashboard import DashboardStore
+
+            dashboard = DashboardStore(db_path)
+            dashboard.add_listener(self._push_dashboard)
+        self._dashboard = dashboard
         # Agent mail (docs/AGENT_MAIL.md §7): the host's mail service.
         # ``client()`` gives the REST client, or ``None`` when the host has no
         # account session or no mailbox; then no mail tool is registered.
@@ -1864,6 +1880,12 @@ class Executor:
         if kind == "stop":
             self._handle_stop(request_id, payload)
             return
+        if kind in ("dashboard_get", "dashboard_op"):
+            # The Home dashboard (docs/DASHBOARD.md §5): answered with one
+            # terminal ``dashboard_state`` or ``dashboard_error``. A stored
+            # op is also pushed to every attached app by the store's listener.
+            self._handle_dashboard_frame(request_id, payload)
+            return
         if kind in ("documents_list", "document_read"):
             from chuk_agents_runtime.chat_documents import DocumentStore, workspace_documents, read_workspace_document
             session_key = str(payload.get("session_key") or "default")
@@ -2259,6 +2281,45 @@ class Executor:
             # saved row or the error, like a list.
             result = answer if isinstance(answer, dict) else {"ok": False, "error": "no answer"}
             self._terminal(request_id, automation_saved_payload(result))
+
+    def _handle_dashboard_frame(self, request_id: str, payload: dict) -> None:
+        store = self._dashboard
+        if store is None:
+            self._terminal(request_id, {
+                "type": "dashboard_error", "op_id": str(payload.get("op_id") or ""),
+                "message": "dashboard not enabled",
+            })
+            return
+        from chuk_agents_runtime.dashboard import handle_dashboard_frame
+
+        try:
+            answer = handle_dashboard_frame(store, payload)
+        except Exception as exc:  # noqa: BLE001 — the serve loop must survive a bad store
+            logger.warning("dashboard frame failed: %s", type(exc).__name__)
+            answer = {"type": "dashboard_error", "op_id": str(payload.get("op_id") or ""),
+                      "message": f"dashboard failed: {type(exc).__name__}"}
+        self._terminal(request_id, answer)
+
+    def _push_dashboard(self, document: dict) -> None:
+        """The executor's own store changed: push ``dashboard_state`` to every
+        attached app on the ordered path (only when the host gave no store)."""
+        with self._codec_lock:
+            sealer = self._sealer
+        try:
+            self.emit_host_payload({"type": "dashboard_state", "dashboard": document}, sealer)
+        except Exception as exc:  # noqa: BLE001 — a push never breaks a write
+            logger.info("dashboard push failed: %s", type(exc).__name__)
+
+    def _dashboard_agent_name(self, session_key: str) -> str:
+        hook = self._agent_name_for
+        if hook is not None:
+            try:
+                name = hook(session_key)
+                if name:
+                    return str(name)
+            except Exception:  # noqa: BLE001 — a name never breaks a run
+                pass
+        return self._name
 
     def _handle_agent_frame(self, request_id: str, payload: dict) -> None:
         hook = self._on_agent_frame
@@ -4774,6 +4835,10 @@ class Executor:
             # the provider that hands a finished job's output to this turn.
             shell_session_key=session_key,
             context_providers=[self._jobs.provider(session_key)],
+            # The Home dashboard (docs/DASHBOARD.md): every agent of the host
+            # gets the same store; ``by`` is this session's agent name.
+            dashboard=self._dashboard,
+            dashboard_by=self._dashboard_agent_name(session_key),
             # A prepared manager the executor owns and closes on stop. When None,
             # build_runtime falls back to reading the workspace mcp.json itself.
             mcp=mcp_manager,
