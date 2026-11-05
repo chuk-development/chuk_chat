@@ -186,7 +186,15 @@ PUBLISH = "publish"
 SEND_EXTERNAL = "send_external"
 MCP_DESTRUCTIVE = "mcp_destructive"
 BROWSER_ACT = "browser_act"
-ACTION_CLASSES: tuple[str, ...] = (PUBLISH, SEND_EXTERNAL, MCP_DESTRUCTIVE, BROWSER_ACT)
+#: Commands and file changes in the agent's own sandbox (``run_command``,
+#: ``python``, ``write_file``, ``edit_file``, ``apply_patch``). Default
+#: ``allow``; the user can set ``ask`` or one of the auto-review modes
+#: (docs/WIRE_CONTRACT.md, "Auto review", DeepSeek research item 31).
+LOCAL_ACTIONS = "local_actions"
+ACTION_CLASSES: tuple[str, ...] = (PUBLISH, SEND_EXTERNAL, MCP_DESTRUCTIVE, BROWSER_ACT, LOCAL_ACTIONS)
+
+#: The tools of :data:`LOCAL_ACTIONS`.
+LOCAL_ACTION_TOOLS = frozenset({"run_command", "python", "write_file", "edit_file", "apply_patch"})
 
 #: The classes whose actions happen on a web site: they offer "always for this
 #: site" and keep a site allow-list.
@@ -197,13 +205,22 @@ SITE_CLASSES = frozenset({BROWSER_ACT})
 MODE_ASK = "ask"
 MODE_ALLOW = "allow"
 MODE_DENY = "deny"
-MODES: tuple[str, ...] = (MODE_ASK, MODE_ALLOW, MODE_DENY)
+#: Auto review (research item 31): a cheap model rates each call; low and an
+#: authorized medium run, anything else asks the user (``review``) or is
+#: refused (``review_strict``). An invalid review always asks.
+MODE_REVIEW = "review"
+MODE_REVIEW_STRICT = "review_strict"
+REVIEW_MODES = frozenset({MODE_REVIEW, MODE_REVIEW_STRICT})
+MODES: tuple[str, ...] = (MODE_ASK, MODE_ALLOW, MODE_DENY, MODE_REVIEW, MODE_REVIEW_STRICT)
+#: The classes that accept the review modes.
+REVIEW_CLASSES = frozenset({LOCAL_ACTIONS})
 
 DEFAULT_MODES: dict[str, str] = {
     PUBLISH: MODE_ASK,
     SEND_EXTERNAL: MODE_ASK,
     MCP_DESTRUCTIVE: MODE_ASK,
     BROWSER_ACT: MODE_ALLOW,
+    LOCAL_ACTIONS: MODE_ALLOW,
 }
 
 # -- decision scopes ------------------------------------------------------------
@@ -438,8 +455,9 @@ def _check_modes(raw: Any) -> dict[str, str]:
     for key, value in raw.items():
         if key not in ACTION_CLASSES:
             raise ActionPolicyError(f"unknown action class {str(key)[:40]!r}")
-        if value not in MODES:
-            raise ActionPolicyError(f"mode of {key} must be ask, allow or deny")
+        if value not in MODES or (value in REVIEW_MODES and key not in REVIEW_CLASSES):
+            allowed = "ask, allow, deny, review or review_strict" if key in REVIEW_CLASSES else "ask, allow or deny"
+            raise ActionPolicyError(f"mode of {key} must be {allowed}")
         out[key] = value
     return out
 
@@ -681,6 +699,39 @@ def describe_mcp(tool: str, server: str, remote_tool: str, args: Mapping[str, An
     )
 
 
+def describe_local(tool: str, args: Mapping[str, Any]) -> ActionRequest:
+    """``local_actions``: the command, the script or the file and a cut
+    preview of what changes."""
+    details: dict[str, Any] = {"local_tool": tool}
+    if tool == "run_command":
+        command = args.get("command")
+        details["command"] = command[:ARGS_CHARS] if isinstance(command, str) else ""
+        summary = f"Run: {_clip(command, 120)}"
+    elif tool == "python":
+        code = args.get("code")
+        details["code"] = code[:ARGS_CHARS] if isinstance(code, str) else ""
+        summary = f"Run a Python script: {_clip(args.get('description') or '', 120)}".rstrip(": ")
+    elif tool == "apply_patch":
+        patch = args.get("patch")
+        text = patch if isinstance(patch, str) else ""
+        details["files"] = [
+            _clip(line.split(":", 1)[1], 160)
+            for line in text.splitlines()
+            if line.startswith(("*** Add File:", "*** Update File:", "*** Delete File:", "*** Move to:"))
+        ][:20]
+        details["preview"] = text[:ARGS_CHARS]
+        summary = f"Change {len(details['files'])} file(s)"
+    else:
+        details["path"] = _clip(args.get("path"), 200)
+        content = args.get("content") if tool == "write_file" else args.get("new_string")
+        details["preview"] = _clip(content, PREVIEW_CHARS) if isinstance(content, str) else ""
+        summary = f"{'Write' if tool == 'write_file' else 'Edit'} {details['path']}"
+    description = args.get("description")
+    if isinstance(description, str) and description.strip():
+        details["description"] = _clip(description, 120)
+    return ActionRequest(LOCAL_ACTIONS, tool, summary, details)
+
+
 def describe_publish(publish: Any) -> ActionRequest:
     """``publish``: the here.now request, with a one-line summary."""
     name = _clip(getattr(publish, "name", "") or getattr(publish, "path", ""))
@@ -699,6 +750,7 @@ CLASS_WORDS = {
     SEND_EXTERNAL: "send this mail",
     MCP_DESTRUCTIVE: "run this connector action",
     BROWSER_ACT: "do this in the browser",
+    LOCAL_ACTIONS: "run this command or change this file",
 }
 
 
@@ -707,6 +759,13 @@ __all__ = [
     "ACTION_CLASSES",
     "BROWSER_ACT",
     "BROWSER_ACT_TOOLS",
+    "LOCAL_ACTIONS",
+    "LOCAL_ACTION_TOOLS",
+    "MODE_REVIEW",
+    "MODE_REVIEW_STRICT",
+    "REVIEW_CLASSES",
+    "REVIEW_MODES",
+    "describe_local",
     "CLASS_WORDS",
     "DEFAULT_MODES",
     "MAIL_SEND_TOOLS",

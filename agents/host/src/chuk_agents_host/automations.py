@@ -26,7 +26,10 @@ Event triggers (docs/WIRE_CONTRACT.md, "Event triggers"): a ``watch_url``
 row fires on a changed page; a ``mail`` row fires when the mail dispatcher
 offers a claimed mail that matches its filter (:meth:`AutomationManager.offer_mail`).
 Both go through the same pending table as a watcher's report, so the rate
-limit and the busy gate apply to them too.
+limit and the busy gate apply to them too. A ``webhook`` row (research H44,
+"Inbound webhooks") fires when the relay forwards a call to its secret URL
+that passes its HMAC check and filter (:meth:`AutomationManager.offer_webhook`);
+a burst is merged into one fire (``debounce_s`` / ``max_wait_s``).
 
 "Notify only on change": a row with ``notify = on_change`` asks the fired run
 to call ``automation_result(changed, summary)``. When the run ends the
@@ -76,6 +79,8 @@ from chuk_agents_runtime.automations import (
     KIND_SCHEDULE,
     KIND_WATCH_URL,
     KIND_WATCHER,
+    KIND_WEBHOOK,
+    MAX_PAYLOAD_BYTES,
     MAX_RESULT_SUMMARY_CHARS,
     NOTIFY_ALWAYS,
     NOTIFY_ON_CHANGE,
@@ -106,13 +111,16 @@ from chuk_agents_runtime.automations import (
     parse_catch_up,
     parse_target,
     parse_watch_url_spec,
+    parse_webhook_spec,
     spec_label,
     summary_digest,
     target_session_key,
+    webhook_matches,
 )
 from chuk_agents_runtime import agents_hooks as _hooks_module
 
 from . import url_watch
+from . import webhooks as _webhooks
 
 #: ``fire(session_key, prompt, meta) -> run_id | None``. ``meta`` carries
 #: ``automation_id`` and ``name``. ``None`` = the host cannot run a task now.
@@ -146,6 +154,12 @@ EVENT_RETRY = "retry"
 
 #: Mails one pending mail trigger collects before it fires.
 MAX_PENDING_MAILS = 10
+#: Webhook events one pending webhook row collects (newest last). The merged
+#: payload is also cut to the payload cap: the oldest events go first.
+MAX_PENDING_WEBHOOK_EVENTS = 20
+#: ``scope(agent_id, device_id) -> outcome | None``: whether a webhook event
+#: addressed to that agent / host is for this host (``None`` = yes).
+WebhookScope = Callable[[str | None, str | None], "str | None"]
 #: An ``automation_result`` that no run end picked up is dropped after this.
 RESULT_TTL_SECONDS = 6 * 3600
 
@@ -432,6 +446,14 @@ def automation_fields(row: dict, *, log_path: str | None = None) -> dict:
         out["target"] = row["target"]
     if row.get("allow_chaining"):
         out["allow_chaining"] = True
+    if row["kind"] == KIND_WEBHOOK:
+        # The signing secret never leaves the host again (not to the app, not
+        # into the model's list); the app sees only that one is set. The
+        # secret URL is the app's: the host never has it.
+        spec = dict(out["spec"])
+        if spec.pop("signing_secret", None):
+            spec["signed"] = True
+        out["spec"] = spec
     if log_path:
         out["log_path"] = log_path
     return out
@@ -460,11 +482,18 @@ class _Watcher:
 
 @dataclass
 class _Pending:
-    """A trigger held back by the rate limit: the last payload wins."""
+    """A trigger held back by the rate limit: the last payload wins.
+
+    A webhook burst also sets ``first_at`` (its first event) and ``due_at``
+    (quiet window or ``max_wait`` from the first event, whichever is
+    earlier): the entry waits until then before the rate limit and the busy
+    gate are asked."""
 
     reason: str
     payload: Any
     folded: int = 0
+    first_at: float | None = None
+    due_at: float | None = None
 
 
 class AutomationManager:
@@ -492,6 +521,7 @@ class AutomationManager:
         allow_private_urls: bool = False,
         chaining_allowed: Callable[[str], bool] | None = None,
         max_per_agent: int = MAX_AUTOMATIONS_PER_AGENT,
+        webhook_scope: WebhookScope | None = None,
     ) -> None:
         self._db_path = db_path
         self._workspace = Path(workspace).expanduser().resolve()
@@ -524,6 +554,11 @@ class AutomationManager:
         # ``on_change`` run reported through ``automation_result``, until the
         # executor ends the run (:meth:`finish_run`).
         self._results: dict[str, dict] = {}
+        # Inbound webhooks (docs/WIRE_CONTRACT.md, "Inbound webhooks"): which
+        # agent / host an event is for, and the double-delivery guard.
+        self._webhook_scope = webhook_scope or (lambda _agent, _device: None)
+        self._seen_events = _webhooks.SeenEvents()
+        self._replays = _webhooks.ReplayGuard()
 
         self.store = AutomationStore(db_path)
         self._dir = self._workspace / AUTOMATIONS_DIRNAME
@@ -801,7 +836,49 @@ class AutomationManager:
             return self.watch_url(session_key, spec, prompt, name, notify, allow_chaining=chaining)
         if kind == KIND_MAIL:
             return self.watch_mail(session_key, spec, prompt, name, notify, allow_chaining=chaining)
+        if kind == KIND_WEBHOOK:
+            return self.watch_webhook(session_key, spec, prompt, name, notify, allow_chaining=chaining)
         return {"ok": False, "error": f"cannot create an automation of kind {kind!r}"}
+
+    def watch_webhook(
+        self,
+        session_key: str,
+        spec: dict,
+        prompt: str,
+        name: str | None,
+        notify: str = NOTIFY_ALWAYS,
+        *,
+        allow_chaining: bool = False,
+    ) -> dict:
+        """A ``webhook`` row (the app only; there is no model tool).
+        ``spec.webhook_id`` is the id of the server webhook the app made
+        (``POST /v1/agents/webhooks``). One live row per server webhook."""
+        session_key = owner_session_key(session_key)
+        try:
+            parsed = parse_webhook_spec(spec)
+            notify = parse_notify(notify)
+        except AutomationSpecError as exc:
+            return {"ok": False, "error": str(exc)}
+        if not isinstance(prompt, str) or not prompt.strip():
+            return {"ok": False, "error": "prompt must not be empty"}
+        existing = self._webhook_row(parsed["webhook_id"])
+        if existing is not None and existing["state"] != STATE_DONE:
+            return {"ok": False, "error": "this webhook already has an automation; change that one"}
+        refused = self._guard_create(session_key, CREATED_BY_USER, None)
+        if refused:
+            return {"ok": False, "error": refused}
+        row = self.store.create(
+            session_key=session_key,
+            kind=KIND_WEBHOOK,
+            name=name or spec_label(parsed),
+            spec=parsed,
+            prompt=prompt.strip(),
+            next_fire_at=None,
+            notify=notify,
+            extra=self._guard_fields(CREATED_BY_USER, None, None, allow_chaining),
+        )
+        self._emit(row, EVENT_CREATED)
+        return {"ok": True, **automation_fields(row)}
 
     def update(self, session_key: str | None, automation_id: str, changes: dict) -> dict:
         """Change ``name`` / ``prompt`` / ``notify`` / ``spec`` of one row
@@ -851,6 +928,15 @@ class AutomationManager:
                     fields.update(spec=parsed, next_fire_at=self._now())
                 elif row["kind"] == KIND_MAIL and isinstance(spec, dict):
                     fields["spec"] = parse_mail_spec(spec.get("from"), spec.get("subject"), spec.get("alias"))
+                elif row["kind"] == KIND_WEBHOOK and isinstance(spec, dict):
+                    # The id stays; a key the app leaves out keeps its value
+                    # (``signing_secret``: "" or null removes it, ``filter``:
+                    # null removes it).
+                    old = {k: v for k, v in (row["spec"] or {}).items() if k != "webhook_id"}
+                    merged = {**old, **{k: v for k, v in spec.items() if k != "webhook_id"}}
+                    fields["spec"] = parse_webhook_spec(
+                        merged, webhook_id=str(row["spec"].get("webhook_id") or "")
+                    )
                 else:
                     return {"ok": False, "error": f"the spec of a {row['kind']} cannot be changed here"}
         except AutomationSpecError as exc:
@@ -1074,7 +1160,9 @@ class AutomationManager:
 
     def _save_triggers(self) -> None:
         with self._lock:
-            pending = {key: {'reason': value.reason, 'payload': value.payload, 'folded': value.folded}
+            pending = {key: {'reason': value.reason, 'payload': value.payload, 'folded': value.folded,
+                             **({'first_at': value.first_at, 'due_at': value.due_at}
+                                if value.due_at is not None else {})}
                        for key, value in self._pending.items()}
             snapshot = (self._trigger_offset, json.dumps(pending))
             if snapshot == self._checkpoint_cache:
@@ -1177,6 +1265,9 @@ class AutomationManager:
                 with self._lock:
                     self._pending.pop(automation_id, None)
                 continue
+            if pending.due_at is not None and now < pending.due_at:
+                # A webhook burst still in its quiet window.
+                continue
             last = float(row.get("last_fired_at") or 0.0)
             if now - last < self._rate_window:
                 continue
@@ -1187,7 +1278,10 @@ class AutomationManager:
                     continue
             except Exception as exc:  # noqa: BLE001 — a broken probe must not stop the schedule
                 self._log(f"[automations] busy probe failed: {type(exc).__name__}: {exc}")
-            if self._fire_row(row, payload=pending.payload, reason=pending.reason, suppressed=pending.folded):
+            merged = pending.folded + 1 if row["kind"] == KIND_WEBHOOK else 0
+            if self._fire_row(
+                row, payload=pending.payload, reason=pending.reason, suppressed=pending.folded, merged=merged
+            ):
                 fired += 1
                 with self._lock:
                     if self._pending.get(automation_id) is pending:
@@ -1196,7 +1290,14 @@ class AutomationManager:
         return fired
 
     def _fire_row(
-        self, row: dict, *, payload: Any, reason: str | None, suppressed: int = 0, retry: bool = False
+        self,
+        row: dict,
+        *,
+        payload: Any,
+        reason: str | None,
+        suppressed: int = 0,
+        retry: bool = False,
+        merged: int = 0,
     ) -> bool:
         automation_id = row["id"]
         notify = row.get("notify") or NOTIFY_ALWAYS
@@ -1207,8 +1308,19 @@ class AutomationManager:
             payload,
             notify=notify,
             last_summary=row.get("last_summary") if notify == NOTIFY_ON_CHANGE else None,
+            merged=merged,
         )
         meta = {"automation_id": automation_id, "name": row["name"], "kind": row["kind"], "reason": reason}
+        # The auto reviewer (docs/WIRE_CONTRACT.md, "Auto review") counts the
+        # prompt of an automation the USER created as the user's words. It
+        # gets this stored copy, never the fired text: that text also carries
+        # the payload, the previous result and the header (security review
+        # C2). An automation the agent or another automation created gives
+        # no copy.
+        user_prompt = row.get("prompt")
+        if (row.get("created_by") or CREATED_BY_USER) == CREATED_BY_USER and isinstance(user_prompt, str):
+            if user_prompt.strip():
+                meta["user_prompt"] = user_prompt.strip()
         target = row.get("target") or TARGET_THIS_SESSION
         # A retry re-runs the occurrence that failed: same chat as that run.
         fire_number = int(row.get("fire_count") or 0) + (0 if retry else 1)
@@ -1273,6 +1385,7 @@ class AutomationManager:
                 self.run_url_checks_once()
             except Exception as exc:  # noqa: BLE001 — the checker must keep running
                 self._log(f"[automations] url checks: {type(exc).__name__}: {exc}")
+
 
     def _default_fetch(self, url: str, etag: str | None, last_modified: str | None) -> url_watch.FetchResult:
         return url_watch.fetch_url(
@@ -1401,6 +1514,102 @@ class AutomationManager:
                 pending.reason = reason
                 pending.payload = value
                 pending.folded += 1
+
+    # -- event triggers: inbound webhooks (research H44) -------------------------------
+
+    def offer_webhook(self, frame: dict) -> str:
+        """A ``webhook_event`` relay frame (docs/WIRE_CONTRACT.md, "Inbound
+        webhooks"). Returns what became of it, one of the ``OUTCOME_*`` words
+        of :mod:`chuk_agents_host.webhooks`: ``queued``, ``filtered``,
+        ``unknown_webhook`` (no row here: another host of the user may own
+        it), ``other_agent`` / ``other_device`` (addressed elsewhere),
+        ``unknown_version``, ``duplicate``, ``replay``, ``paused``, ``bad_signature``,
+        ``too_large`` or ``malformed``. Called on the relay thread; no
+        network."""
+        try:
+            event = _webhooks.decode_event(frame if isinstance(frame, dict) else {})
+        except _webhooks.WebhookFrameError as exc:
+            return exc.reason
+        try:
+            elsewhere = self._webhook_scope(event.agent_id, event.device_id)
+        except Exception:  # noqa: BLE001 — a broken probe takes nothing
+            elsewhere = _webhooks.OUTCOME_OTHER_AGENT
+        if elsewhere:
+            return elsewhere
+        row = self._webhook_row(event.webhook_id)
+        if row is None or row["state"] == STATE_DONE:
+            return _webhooks.OUTCOME_UNKNOWN
+        # A look only: the id is recorded after the state and signature
+        # checks, so a forged frame that reuses a real event id cannot make
+        # the real delivery a "duplicate".
+        if event.event_id in self._seen_events:
+            return _webhooks.OUTCOME_DUPLICATE
+        if row["state"] != STATE_ACTIVE:
+            return _webhooks.OUTCOME_PAUSED
+        spec = row["spec"] or {}
+        secret = spec.get("signing_secret")
+        if secret and not _webhooks.verify_signature(str(secret), event):
+            self._log(f"[automations] webhook {row['id']}: a call with a missing or wrong signature was dropped")
+            self.store.update(row["id"], last_error="a call with a missing or wrong signature was dropped")
+            return _webhooks.OUTCOME_BAD_SIGNATURE
+        if secret:
+            # A captured signed call POSTed again gets a new event_id from the
+            # server; the sender's own (signed) message id gives it away.
+            # Only after the signature passed, so a forger cannot burn ids.
+            message_ids = _webhooks.sender_message_ids(event)
+            if message_ids and self._replays.check_and_add(event.webhook_id, message_ids, self._now()):
+                self._log(f"[automations] webhook {row['id']}: a replayed call was dropped")
+                return _webhooks.OUTCOME_REPLAY
+        if self._seen_events.check_and_add(event.event_id):
+            return _webhooks.OUTCOME_DUPLICATE
+        if not webhook_matches(spec, event.document, event.headers):
+            return _webhooks.OUTCOME_FILTERED
+        self._queue_webhook(row, _webhooks.event_payload(event))
+        self._save_triggers()
+        return _webhooks.OUTCOME_QUEUED
+
+    def _webhook_row(self, webhook_id: str) -> dict | None:
+        found: dict | None = None
+        for row in self.store.list():
+            if row["kind"] == KIND_WEBHOOK and (row["spec"] or {}).get("webhook_id") == webhook_id:
+                # A live row wins over a cancelled one with the same id.
+                if found is None or found["state"] == STATE_DONE:
+                    found = row
+        return found
+
+    def _queue_webhook(self, row: dict, item: dict) -> None:
+        """Collect one event into the row's pending entry (newest last) and
+        set when it may fire: ``debounce_s`` after this event, but at the
+        latest ``max_wait_s`` after the first one of the burst."""
+        spec = row["spec"] or {}
+        debounce = float(spec.get("debounce_s") or 0)
+        max_wait = float(spec.get("max_wait_s") or 0)
+        now = self._now()
+        with self._lock:
+            pending = self._pending.get(row["id"])
+            events: list = []
+            if pending is not None and isinstance(pending.payload, dict):
+                events = list(pending.payload.get("events") or [])
+            events = (events + [item])[-MAX_PENDING_WEBHOOK_EVENTS:]
+            # The merged payload must fit the payload cap with room for the
+            # wrapper; the oldest events go first. The newest always stays
+            # (``cap_payload`` cuts it when it alone is too big).
+            budget = MAX_PAYLOAD_BYTES - 256
+            while len(events) > 1 and len(json.dumps({"events": events}, ensure_ascii=False).encode()) > budget:
+                events.pop(0)
+            first = pending.first_at if pending is not None and pending.first_at is not None else now
+            due = min(now + debounce, first + max_wait)
+            value = {"events": events}
+            if pending is None:
+                self._pending[row["id"]] = _Pending(
+                    reason="webhook", payload=value, first_at=first, due_at=due
+                )
+            else:
+                pending.reason = "webhook"
+                pending.payload = value
+                pending.folded += 1
+                pending.first_at = first
+                pending.due_at = due
 
     # -- "notify only on change" -------------------------------------------------------
 

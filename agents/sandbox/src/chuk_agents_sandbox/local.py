@@ -108,14 +108,19 @@ class LocalEnvironment(BaseEnvironment):
     def _child_env(self, extra: Mapping[str, str] | None) -> dict[str, str]:
         return child_env(extra, extra={"TMUX_TMPDIR": self._tmux_dir})
 
-    def _argv(self, cmd: str, *, login: bool) -> list[str]:
+    def _argv(
+        self, cmd: str, *, login: bool, policy: SandboxPolicy | None = None
+    ) -> list[str]:
         argv = ["bash"]
         if login:
             argv.append("-l")
         argv += ["-c", cmd]
         if self._bwrap is None:
             return argv
-        policy = self.effective_policy
+        # ``policy`` is the widened policy of one escalated call, passed down
+        # for that call only (security review C1); everyone else gets the
+        # environment's own policy.
+        policy = policy or self.effective_policy
         return _bwrap.wrap_argv(
             argv,
             binary=self._bwrap,
@@ -150,8 +155,9 @@ class LocalEnvironment(BaseEnvironment):
         timeout: int = 120,
         stdin: str | None = None,
         env: Mapping[str, str] | None = None,
+        policy: SandboxPolicy | None = None,
     ) -> ProcessResult:
-        argv = self._argv(cmd, login=login)
+        argv = self._argv(cmd, login=login, policy=policy)
         # start_new_session puts the child in its own process group so a timeout
         # can kill the whole tree, not just the top bash.
         proc = subprocess.Popen(

@@ -91,6 +91,9 @@ _APPROVAL_BODIES = {
     # docs/WIRE_CONTRACT.md, "Plan mode" and "Questions to the user".
     "plan_review": "Open the app to review the plan.",
     "ask_user": "Open the app to answer a question.",
+    # docs/WIRE_CONTRACT.md, "Sandbox escalation" and "Auto review".
+    "sandbox_escalation": "Open the app to allow or deny one command with more permissions.",
+    "auto_review": "Open the app to allow or deny a command the reviewer flagged.",
 }
 
 

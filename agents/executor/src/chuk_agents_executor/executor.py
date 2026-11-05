@@ -167,6 +167,7 @@ from chuk_agents_sandbox import DEFAULT_USER, BaseEnvironment, make_environment
 
 from .environment import SandboxEnvironment
 from .secrets import SecretsVault
+from .login_vault import LOGIN_VAULT_FRAMES, handle_login_vault_frame, login_guard
 from .shell import JobWakeRouter
 from . import box_browser as _box_browser
 from . import user_browser as _user_browser
@@ -642,6 +643,9 @@ class _Run:
     goal_round: int | None = None
     # Typed fields of the prompt row (``answer_to_pending_question``).
     row_extra: dict | None = None
+    #: docs/WIRE_CONTRACT.md, "Attachments to Agents": the task's finished
+    #: uploads (inbox metadata); the prompt names their paths.
+    attachments: list | None = None
 
 
 class _PreRunClock:
@@ -957,6 +961,12 @@ class _SecretsOff:
 
     def env(self) -> dict[str, str]:
         return self._vault.env()
+
+    def scrub_values(self) -> dict[str, str]:
+        return self._vault.scrub_values()
+
+    def login_entries(self) -> list[dict]:
+        return self._vault.login_entries()
 
     def request(self, names: list[str], purpose: str) -> dict[str, str]:
         raise PermissionError(SECRETS_OFF_MESSAGE)
@@ -2050,6 +2060,16 @@ class Executor:
             # so there is no request-scoped terminal to send.
             self._resolve_approval(payload)
             return
+        if kind == "attachment_put":
+            # docs/WIRE_CONTRACT.md, "Attachments to Agents": one chunk of a
+            # picture or file; answered with one terminal ``attachment_ack``.
+            self._handle_attachment_put(request_id, payload)
+            return
+        if kind in ("checkpoints_list", "checkpoint_rewind", "thread_fork"):
+            # docs/WIRE_CONTRACT.md, "Checkpoints, rewind and fork". Each is
+            # answered with one terminal frame.
+            self._handle_checkpoint_frame(kind, request_id, payload)
+            return
         if kind == "goal_control":
             # The user pauses, resumes or clears the goal (docs/WIRE_CONTRACT.md,
             # "Goal mode"). Answered with one terminal ``goal`` frame.
@@ -2070,6 +2090,14 @@ class Executor:
             # replace what the vault holds and wake a tool waiting for it. A
             # control frame like approval_decision: no terminal.
             self._handle_secrets(payload)
+            return
+        if kind in LOGIN_VAULT_FRAMES:
+            # The browser login vault (Hermes H32): set / delete / list,
+            # answered with one terminal ``login_vault`` frame that never
+            # holds a password or a TOTP key.
+            self._terminal(
+                request_id, handle_login_vault_frame(self._secrets, kind, payload)
+            )
             return
         if kind in ("automation_control", "automation_list", "automation_create", "automation_update"):
             # The user manages the automations of this host (docs/WIRE_CONTRACT.md,
@@ -2223,6 +2251,26 @@ class Executor:
             run_id=uuid4().hex,
             started_at=time.time(),
         )
+        # docs/WIRE_CONTRACT.md, "Attachments to Agents": finished uploads by
+        # ``blob_id``. An unknown one refuses the task, so the app uploads it
+        # again instead of the agent answering without the file.
+        raw_attachments = payload.get("attachments")
+        if raw_attachments:
+            from .attachments import AttachmentError, AttachmentInbox, row_attachments
+
+            try:
+                workspace_dir = self._workspace_for(str(session_key))
+                if not workspace_dir:
+                    raise AttachmentError("this agent has no workspace for attachments")
+                attached = AttachmentInbox(workspace_dir).resolve_task(raw_attachments)
+            except AttachmentError as exc:
+                self._terminal(
+                    request_id,
+                    {**error_payload(f"attachments: {exc}"), "session_key": str(session_key)},
+                )
+                return
+            run.attachments = attached
+            run.row_extra = {**(run.row_extra or {}), "attachments": row_attachments(attached)}
         # docs/WIRE_CONTRACT.md, "Plan mode": the ``plan`` flag, or a
         # ``/plan`` prefix (``/plan off`` leaves). Applied when the run starts.
         raw_plan = payload.get("plan")
@@ -2434,6 +2482,14 @@ class Executor:
         answered = meta.get("answer_to_pending_question")
         if isinstance(answered, str) and answered:
             run.row_extra = {"answer_to_pending_question": answered}
+        # The prompt of an automation the user created, stored on the row for
+        # the auto reviewer (``auto_review.USER_PROMPT_KEY``). Only the host
+        # sets it, only for ``created_by == "user"``; never read by the model.
+        user_prompt = meta.get("user_prompt")
+        if run.origin == "automation" and isinstance(user_prompt, str) and user_prompt.strip():
+            from chuk_agents_runtime.auto_review import USER_PROMPT_KEY
+
+            run.row_extra = {**(run.row_extra or {}), USER_PROMPT_KEY: user_prompt.strip()[:8_000]}
         logger.info(
             "automation task accepted request=%s session=%s run=%s automation=%s model=%s",
             run.request_id,
@@ -4225,6 +4281,12 @@ class Executor:
                     details=action.details,
                     session_key=session_key,
                 )
+                # Sandbox escalation / auto review cards name their kind on
+                # the top level too (docs/WIRE_CONTRACT.md, "Sandbox
+                # escalation", "Auto review"), like a takeover does.
+                card_kind = (action.details or {}).get("kind")
+                if card_kind in ("sandbox_escalation", "auto_review"):
+                    payload["kind"] = card_kind
             # The row first, the frame second (docs/WIRE_CONTRACT.md,
             # cowork-266): a replay must show the request whatever the socket
             # did, and its outcome is patched into this row below.
@@ -4277,6 +4339,138 @@ class Executor:
                     self._approvals.pop(approval_id, None)
 
         return gate
+
+    # -- checkpoints, rewind, fork (docs/WIRE_CONTRACT.md) ------------------
+    def _handle_attachment_put(self, request_id: str, payload: dict) -> None:
+        from .attachments import AttachmentError, AttachmentInbox
+
+        session_key = str(payload.get("session_key") or "default")
+        upload_id = payload.get("upload_id")
+        workspace_dir = self._workspace_for(session_key)
+        if not workspace_dir:
+            self._terminal(request_id, {"type": "attachment_ack", "upload_id": upload_id,
+                                        "ok": False, "error": "this agent has no workspace"})
+            return
+        try:
+            reply = AttachmentInbox(workspace_dir).put(payload)
+        except AttachmentError as exc:
+            reply = {"type": "attachment_ack", "upload_id": upload_id,
+                     "index": payload.get("index"), "ok": False, "error": str(exc)}
+        except OSError as exc:
+            reply = {"type": "attachment_ack", "upload_id": upload_id,
+                     "index": payload.get("index"), "ok": False, "error": f"store failed: {type(exc).__name__}"}
+        else:
+            reply["ok"] = True
+        reply["session_key"] = session_key
+        self._terminal(request_id, reply)
+
+    def _checkpoint_sink(self, run, session_key: str):
+        """The run's checkpoint hook: store the checkpoint with the run and
+        the user message it answers; drop the refs of the oldest beyond the
+        cap. Best effort: a failure costs the checkpoint, never the call."""
+
+        def sink(checkpoint_id: str, info) -> None:
+            from chuk_agents_runtime.checkpoints import last_user_mid, record_checkpoint
+            from chuk_agents_runtime.workspace_git import GitWorkspace
+
+            try:
+                store = StateStore(self._db_path)
+                try:
+                    _, dropped = record_checkpoint(
+                        store,
+                        session_key,
+                        checkpoint_id=checkpoint_id,
+                        commit=info.commit,
+                        run_id=getattr(run, "run_id", None),
+                        user_mid=last_user_mid(store, session_key),
+                    )
+                finally:
+                    store.close()
+                if dropped:
+                    workspace = GitWorkspace.open(self._workspace_for(session_key))
+                    if workspace is not None and workspace.enabled:
+                        for old in dropped:
+                            workspace.drop_checkpoint(old)
+            except Exception:  # noqa: BLE001
+                logger.debug("checkpoint not stored", exc_info=True)
+
+        return sink
+
+    def _handle_checkpoint_frame(self, kind: str, request_id: str, payload: dict) -> None:
+        from chuk_agents_runtime import checkpoints as _cp
+        from chuk_agents_runtime.workspace_git import REWIND_MODES, REWIND_SAFE, GitWorkspace
+
+        session_key = payload.get("session_key")
+        if not isinstance(session_key, str) or not session_key.strip():
+            self._terminal(request_id, error_payload("session_key is required"))
+            return
+        reply_type = {"checkpoints_list": "checkpoints", "checkpoint_rewind": "checkpoint_rewound",
+                      "thread_fork": "thread_forked"}[kind]
+        base = {"type": reply_type, "session_key": session_key}
+        mode = payload.get("mode") or REWIND_SAFE
+        if kind != "checkpoints_list" and mode not in REWIND_MODES:
+            self._terminal(request_id, {**base, "ok": False, "error": f"mode must be one of {', '.join(REWIND_MODES)}"})
+            return
+        workspace_dir = self._workspace_for(session_key)
+        # One agent workspace is shared by the agent's threads: never move its
+        # files under a running task.
+        busy = kind != "checkpoints_list" and any(
+            self._workspace_for(r.session_key) == workspace_dir for r in self._live_runs()
+        )
+        store = StateStore(self._db_path)
+        try:
+            if kind == "checkpoints_list":
+                items = _cp.list_checkpoints(store, session_key)
+                self._terminal(request_id, {**base, "ok": True, "items": items})
+                return
+            if kind == "checkpoint_rewind":
+                if busy:
+                    self._terminal(request_id, {**base, "ok": False, "error": "busy: a task of this agent is running"})
+                    return
+                item = _cp.find_checkpoint(store, session_key, str(payload.get("checkpoint_id") or ""))
+                if item is None:
+                    self._terminal(request_id, {**base, "ok": False, "error": "no such checkpoint"})
+                    return
+                workspace = GitWorkspace.open(workspace_dir)
+                if workspace is None or not workspace.enabled:
+                    self._terminal(request_id, {**base, "ok": False, "error": "workspace versioning is not enabled"})
+                    return
+                result = workspace.rewind(item["commit"], mode=mode)
+                self._terminal(request_id, {**base, "checkpoint_id": item["id"], "mode": mode, **result})
+                return
+            # thread_fork
+            mid = payload.get("mid")
+            if not isinstance(mid, int) or isinstance(mid, bool):
+                self._terminal(request_id, {**base, "ok": False, "error": "mid must be a message id"})
+                return
+            new_key = payload.get("new_session_key")
+            if not isinstance(new_key, str) or not new_key.strip():
+                new_key = f"{session_key}:fork:{uuid4().hex[:8]}"
+            try:
+                copied = _cp.fork_session(store, session_key, mid, new_key)
+            except _cp.ForkError as exc:
+                self._terminal(request_id, {**base, "ok": False, "error": str(exc)})
+                return
+            checkpoint = _cp.checkpoint_after(store, session_key, mid)
+            out = {**base, "ok": True, "new_session_key": new_key, "mid": mid, "copied": copied}
+            if checkpoint is not None:
+                out["checkpoint_id"] = checkpoint["id"]
+                if payload.get("restore_workspace", True) is not False:
+                    if busy:
+                        out["workspace"] = {"ok": False, "error": "busy: a task of this agent is running"}
+                    else:
+                        workspace = GitWorkspace.open(workspace_dir)
+                        out["workspace"] = (
+                            workspace.rewind(checkpoint["commit"], mode=mode)
+                            if workspace is not None and workspace.enabled
+                            else {"ok": False, "error": "workspace versioning is not enabled"}
+                        )
+            self._terminal(request_id, out)
+        except Exception as exc:  # noqa: BLE001 — answer, never leave the request open
+            logger.warning("checkpoint frame %s failed: %s", kind, type(exc).__name__)
+            self._terminal(request_id, {**base, "ok": False, "error": f"{type(exc).__name__}"})
+        finally:
+            store.close()
 
     def _action_approvals_binding(
         self, request_id: str, kill: KillSwitch, session_key: str | None
@@ -5078,6 +5272,13 @@ class Executor:
             def env(self) -> dict[str, str]:
                 return vault.env()
 
+            def scrub_values(self) -> dict[str, str]:
+                # env plus the login vault's passwords: masked, never in env.
+                return vault.scrub_values()
+
+            def login_entries(self) -> list[dict]:
+                return vault.login_entries()
+
             def request(self, names: list[str], purpose: str) -> dict[str, str]:
                 return executor._request_secrets(
                     request_id, kill, session_key, list(names), purpose
@@ -5445,6 +5646,9 @@ class Executor:
             # tier-2/3 compaction and mem0 extraction by default in production.
             # ``None`` (mock model) keeps tier-1-only behaviour.
             aux_model=hero_model,
+            # docs/WIRE_CONTRACT.md, "Checkpoints, rewind and fork": the run's
+            # first workspace-changing call pins a checkpoint of this thread.
+            checkpoint_sink=self._checkpoint_sink(run, session_key),
             # Off unless the task set ``debug``; ``None`` means zero overhead.
             debug_observer=debug_observer,
             # A scheduled run on a lighter context (no recall, no extraction),
@@ -5517,6 +5721,14 @@ class Executor:
         # The heartbeat was armed when the task was accepted (``_enqueue_run``)
         # and has said ``queued`` / ``preparing`` since; the loop's phases
         # reach it through ``phase_observer`` above.
+        if run.attachments:
+            # docs/WIRE_CONTRACT.md, "Attachments to Agents": the paths go in
+            # the task text; a vision model also gets the pictures.
+            from .attachments import prompt_with_attachments
+
+            prompt = prompt_with_attachments(
+                prompt, run.attachments, vision=getattr(loop, "image_loader", None) is not None
+            )
         try:
             # Inside the run's trace scope (``_run_task``).
             result = loop.run(
@@ -6375,6 +6587,9 @@ class Executor:
                 connection_factory=self._mcp_connection_factory(session_key),
                 tool_cache=self._mcp_tool_cache,
             )
+            # Login vault placeholders are resolved (or refused) here, on the
+            # one path every browser call takes (Hermes H32).
+            manager.call_guard = login_guard(self._secrets, session_key)
             with self._mcp_lock:
                 self._mcp_entry_meta[session_key] = _entry_meta(mcp_servers)
         except Exception:  # noqa: BLE001 — building MCP must never crash a task
