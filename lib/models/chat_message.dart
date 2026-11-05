@@ -81,6 +81,7 @@ class ChatMessage {
     this.modelContext,
     this.usage,
     this.compactSummary,
+    this.hostMid, // checkpoints
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -113,6 +114,7 @@ class ChatMessage {
       modelContext: json['modelContext'] as String?,
       usage: json['usage'] as String?,
       compactSummary: json['compactSummary'] as String?,
+      hostMid: json['hostMid']?.toString(), // checkpoints
     );
   }
 
@@ -226,6 +228,11 @@ class ChatMessage {
   /// whole history.
   final String? compactSummary;
 
+  /// Agents threads: the host's message-store row id (`mid`) of a replayed
+  /// message, so "Fork from here" can name it (docs/WIRE_CONTRACT.md,
+  /// "Checkpoints, rewind and fork"). Null for every other chat.
+  final String? hostMid;
+
   /// [generationMs] as a duration, or null when it was never recorded or
   /// cannot be read.
   Duration? get workedFor {
@@ -274,6 +281,7 @@ class ChatMessage {
     String? modelContext,
     String? usage,
     String? compactSummary,
+    String? hostMid,
   }) {
     return ChatMessage(
       role: role ?? this.role,
@@ -304,6 +312,7 @@ class ChatMessage {
       modelContext: modelContext ?? this.modelContext,
       usage: usage ?? this.usage,
       compactSummary: compactSummary ?? this.compactSummary,
+      hostMid: hostMid ?? this.hostMid,
     );
   }
 
@@ -347,5 +356,6 @@ class ChatMessage {
     if (usage case final String u when u.isNotEmpty) 'usage': u,
     if (compactSummary case final String c when c.isNotEmpty)
       'compactSummary': c,
+    if (hostMid case final String m when m.isNotEmpty) 'hostMid': m,
   };
 }

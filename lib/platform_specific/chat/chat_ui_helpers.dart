@@ -634,6 +634,8 @@ class ChatUiHelpers {
     if (compactSummary != null && compactSummary.isNotEmpty) {
       map['compactSummary'] = compactSummary;
     }
+    final String? hostMid = message.hostMid; // checkpoints
+    if (hostMid != null && hostMid.isNotEmpty) map['hostMid'] = hostMid;
     return map;
   }
 

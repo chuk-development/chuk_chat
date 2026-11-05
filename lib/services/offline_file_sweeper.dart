@@ -19,6 +19,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 import 'package:chuk_chat/models/queued_message.dart';
+import 'package:chuk_chat/services/agents/agents_task_outbox.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/services/offline_outbox_cipher.dart';
 import 'package:chuk_chat/services/offline_queue_service.dart';
@@ -56,6 +57,11 @@ class OfflineFileSweeper {
   @visibleForTesting
   static DateTime Function() now = DateTime.now;
 
+  /// The local attachment paths the queued Agents prompts still name (null:
+  /// a row cannot be opened, so nothing is deleted).
+  static Future<Set<String>?> Function() agentsPaths =
+      AgentsTaskOutbox.attachmentPaths;
+
   static String? _defaultUser() => OutboxCipher.currentUserId();
   static bool _defaultCanOpen() => OutboxCipher.canOpen();
 
@@ -72,6 +78,7 @@ class OfflineFileSweeper {
     deleteVoice = VoiceSpoolService.delete;
     deleteImage = ImageStorageService.deleteOfflineImage;
     now = DateTime.now;
+    agentsPaths = AgentsTaskOutbox.attachmentPaths;
     grace = const Duration(hours: 6);
     instance._swept.clear();
     instance._running = null;
@@ -109,9 +116,16 @@ class OfflineFileSweeper {
           if (r.userId == userId || r.userId == null) r,
       ];
       if (mine.any((r) => r.locked)) return 0;
+      // A queued Agents prompt keeps its pictures offline until they are
+      // uploaded to the host.
+      final Set<String>? agents = await agentsPaths();
+      if (agents == null) return 0;
 
       final Set<String> voice = <String>{};
-      final Set<String> images = <String>{};
+      final Set<String> images = <String>{
+        for (final String p in agents)
+          if (ImageStorageService.isOfflinePath(p)) p,
+      };
       for (final r in mine) {
         final Object? path = r.sendPayload['voicePath'];
         if (path is String && path.isNotEmpty) voice.add(pathKey(path));

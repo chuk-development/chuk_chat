@@ -70,7 +70,18 @@ class OutboxTask {
     this.lastError,
     this.nextAttemptAt,
     this.failed = false,
+    this.attachments = const <String>[],
+    this.blobIds = const <String>[],
   });
+
+  /// The local copies of the files this prompt carries: store refs and
+  /// image paths, all sealed on this device (docs/OFFLINE_SEND.md, "Agents").
+  /// They are uploaded right before the task goes out.
+  final List<String> attachments;
+
+  /// Files the host already holds for this prompt (a task that was sent and
+  /// never confirmed). Sent as they are when [attachments] is empty.
+  final List<String> blobIds;
 
   /// This app's own id for the prompt. The host never sees it; it is how the
   /// queue and the bubble on screen name the same thing.
@@ -135,6 +146,8 @@ class OutboxTask {
     modelId: modelId,
     providerSlug: providerSlug,
     reasoningEffort: reasoningEffort,
+    attachments: attachments,
+    blobIds: blobIds,
     attempts: attempts ?? this.attempts,
     lastError: clearRetryState ? lastError : (lastError ?? this.lastError),
     nextAttemptAt: clearRetryState
@@ -152,6 +165,8 @@ class OutboxTask {
     if (modelId != null) 'modelId': modelId,
     if (providerSlug != null) 'providerSlug': providerSlug,
     if (reasoningEffort != null) 'reasoningEffort': reasoningEffort,
+    if (attachments.isNotEmpty) 'attachments': attachments,
+    if (blobIds.isNotEmpty) 'blobIds': blobIds,
     if (attempts > 0) 'attempts': attempts,
     if (lastError != null) 'lastError': lastError,
     if (nextAttemptAt != null)
@@ -181,6 +196,8 @@ class OutboxTask {
       modelId: raw['modelId'] as String?,
       providerSlug: raw['providerSlug'] as String?,
       reasoningEffort: raw['reasoningEffort'] as String?,
+      attachments: _strings(raw['attachments']),
+      blobIds: _strings(raw['blobIds']),
       attempts: raw['attempts'] is int ? raw['attempts'] as int : 0,
       lastError: raw['lastError'] as String?,
       nextAttemptAt: raw['nextAttemptAt'] is String
@@ -468,6 +485,8 @@ class AgentsTaskOutbox {
     DateTime? createdAt,
     bool failed = false,
     String? lastError,
+    List<String> attachments = const <String>[],
+    List<String> blobIds = const <String>[],
   }) {
     final DateTime created = (createdAt ?? now()).toUtc();
     _seq = (_seq + 1) & 0xffffff;
@@ -487,6 +506,8 @@ class AgentsTaskOutbox {
       reasoningEffort: reasoningEffort,
       failed: failed,
       lastError: lastError,
+      attachments: List<String>.unmodifiable(attachments),
+      blobIds: List<String>.unmodifiable(blobIds),
     );
     return _edit(sessionKey, (List<OutboxTask> tasks) async {
       tasks.add(task);
@@ -759,6 +780,25 @@ class AgentsTaskOutbox {
     return false;
   }
 
+  /// Every local attachment path a queued prompt still names, so the file
+  /// sweeper keeps those files. Null when a row cannot be opened (no key
+  /// yet) or the store cannot be read: then nothing may be deleted.
+  static Future<Set<String>?> attachmentPaths() async {
+    try {
+      final Set<String> out = <String>{};
+      for (final String sessionKey in await _sessionKeys()) {
+        final _OutboxRow row = await _locked(() => _loadRow(sessionKey));
+        if (row.locked.isNotEmpty || row.readFailed) return null;
+        for (final OutboxTask task in row.tasks) {
+          out.addAll(task.attachments);
+        }
+      }
+      return out;
+    } catch (_) {
+      return null;
+    }
+  }
+
   @visibleForTesting
   static Future<void> clearForTest(String sessionKey) => _locked(
     () => _saveRow(sessionKey, _OutboxRow(<OutboxTask>[], <String>[])),
@@ -794,7 +834,12 @@ class PendingTask {
     this.providerSlug,
     this.reasoningEffort,
     this.attempts = 1,
+    this.blobIds = const <String>[],
   });
+
+  /// The `blob_id`s the task named. A re-send names the same files: the host
+  /// keeps an uploaded file in the workspace.
+  final List<String> blobIds;
 
   /// The id on the wire, minted once per SEND. Every re-send of that send
   /// carries this same string, which is the only reason a blind re-send is
@@ -827,6 +872,7 @@ class PendingTask {
     providerSlug: providerSlug,
     reasoningEffort: reasoningEffort,
     attempts: attempts ?? this.attempts,
+    blobIds: blobIds,
   );
 
   Map<String, Object?> toJson() => <String, Object?>{
@@ -838,6 +884,7 @@ class PendingTask {
     if (providerSlug != null) 'providerSlug': providerSlug,
     if (reasoningEffort != null) 'reasoningEffort': reasoningEffort,
     'attempts': attempts,
+    if (blobIds.isNotEmpty) 'blobIds': blobIds,
   };
 
   /// Null for a row this version cannot read — the same rule as [OutboxTask]:
@@ -859,6 +906,7 @@ class PendingTask {
       providerSlug: raw['providerSlug'] as String?,
       reasoningEffort: raw['reasoningEffort'] as String?,
       attempts: raw['attempts'] is int ? raw['attempts'] as int : 1,
+      blobIds: _strings(raw['blobIds']),
     );
   }
 }
@@ -940,6 +988,7 @@ class AgentsPendingTasks {
     String? modelId,
     String? providerSlug,
     String? reasoningEffort,
+    List<String> blobIds = const <String>[],
   }) => AgentsTaskOutbox._locked(() async {
     final DateTime at = AgentsTaskOutbox.now();
     final (List<PendingTask> tasks, List<String> locked, _) =
@@ -961,6 +1010,7 @@ class AgentsPendingTasks {
         modelId: modelId,
         providerSlug: providerSlug,
         reasoningEffort: reasoningEffort,
+        blobIds: List<String>.unmodifiable(blobIds),
       );
       tasks.add(task);
     }
@@ -1016,6 +1066,7 @@ class AgentsPendingTasks {
         modelId: task.modelId,
         providerSlug: task.providerSlug,
         reasoningEffort: task.reasoningEffort,
+        blobIds: task.blobIds,
       );
       try {
         await send(attempt);
@@ -1076,6 +1127,7 @@ class AgentsPendingTasks {
         taskId: task.taskId,
         failed: true,
         lastError: notConfirmedError,
+        blobIds: task.blobIds,
       );
       await AgentsQueuedMarks.markQueued(
         sessionKey: task.sessionKey,
@@ -1111,3 +1163,11 @@ class AgentsPendingTasks {
     }
   }
 }
+
+/// The string entries of a stored list; anything else is dropped.
+List<String> _strings(Object? raw) => raw is List
+    ? List<String>.unmodifiable(<String>[
+        for (final Object? e in raw)
+          if (e is String && e.isNotEmpty) e,
+      ])
+    : const <String>[];

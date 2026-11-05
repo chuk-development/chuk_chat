@@ -25,6 +25,7 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     store.resetForTest();
     MessageFeedbackStore.sendToBackend = null;
+    MessageFeedbackStore.removeFromBackend = null;
     MessageFeedbackStore.userIdReader = () => null;
   });
 

@@ -94,6 +94,10 @@ import 'package:chuk_chat/widgets/masked_secret_text.dart';
 import 'package:chuk_chat/widgets/message_feedback.dart';
 import 'package:chuk_chat/models/turn_usage.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
+import 'package:chuk_chat/services/agents/agents_attachments.dart'
+    show AgentsAttachmentInfo;
+import 'package:chuk_chat/widgets/agents_attachment_chips.dart'
+    show AgentsAttachmentChips;
 
 part 'message_bubble/models.dart';
 part 'message_bubble/layout.dart';
@@ -202,6 +206,7 @@ class MessageBubble extends StatefulWidget {
     this.tps,
     this.usage,
     this.feedbackId,
+    this.feedbackModelId,
     this.isEditing = false,
     this.initialEditText,
     this.onSubmitEdit,
@@ -220,6 +225,7 @@ class MessageBubble extends StatefulWidget {
     this.images,
     this.imageMetas,
     this.attachments,
+    this.agentsAttachments,
     this.imageCostEur,
     this.imageGeneratedAt,
     this.onAskUserAnswer,
@@ -303,6 +309,10 @@ class MessageBubble extends StatefulWidget {
   /// keys the reader's thumbs verdict. Null: no thumbs, because a verdict on
   /// a message without a lasting id could not be found again after a reload.
   final String? feedbackId;
+
+  /// The raw model id of this answer (`modelId` of the message map), sent
+  /// with a thumbs verdict. Null falls back to [modelLabel].
+  final String? feedbackModelId;
   final bool isEditing;
   final String? initialEditText;
   final ValueChanged<String>? onSubmitEdit;
@@ -349,6 +359,10 @@ class MessageBubble extends StatefulWidget {
   /// generated and carries the AI-supplied caption rendered under each image.
   final List<ImageMeta>? imageMetas;
   final List<DocumentAttachment>? attachments; // Document attachments
+
+  /// The files a user sent to an Agents task (a live send's sealed files,
+  /// or the host's replayed list), drawn as rows on the user bubble.
+  final List<AgentsAttachmentInfo>? agentsAttachments;
   final double? imageCostEur;
   final DateTime? imageGeneratedAt;
 

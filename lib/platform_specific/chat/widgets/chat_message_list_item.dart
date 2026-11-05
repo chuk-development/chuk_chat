@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
+import 'package:chuk_chat/services/agents/agents_attachment_store.dart';
+import 'package:chuk_chat/services/agents/agents_attachments.dart'
+    show AgentsAttachmentInfo;
+import 'package:chuk_chat/widgets/agents_attachment_chips.dart';
 import 'package:chuk_chat/models/chat_message.dart' show ChatMessageStatus;
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
@@ -153,6 +157,23 @@ class ChatMessageListItem extends StatelessWidget {
         ? (costSplit?.toolCalls ?? data.toolCalls)
         : contextSplit.rest;
 
+    // AGENTS: the files a user sent to a task. The host's replayed list
+    // wins; a live send's sealed files ride in `images` as store refs and
+    // are drawn as rows, never as broken pictures.
+    final List<AgentsAttachmentInfo> agentsFiles = data.isUser
+        ? AgentsAttachmentChips.forMessage(
+            replayed: messages[index]['agentsAttachments'],
+            paths: data.images,
+          )
+        : const <AgentsAttachmentInfo>[];
+    final bool hostListedFiles =
+        data.isUser && (messages[index]['agentsAttachments'] ?? '').isNotEmpty;
+    final List<String>? bubbleImages = hostListedFiles
+        ? null
+        : data.images
+              ?.where((String p) => !AgentsAttachmentStore.isRef(p))
+              .toList();
+
     MessageBubble buildBubble(String text, String? reasoning) => MessageBubble(
       key: ValueKey<String>(uiKey),
       message: text,
@@ -172,6 +193,9 @@ class ChatMessageListItem extends StatelessWidget {
       tps: data.tps,
       usage: data.usage,
       feedbackId: data.isUser ? null : _nonEmpty(messages[index]['messageId']),
+      feedbackModelId: data.isUser
+          ? null
+          : _nonEmpty(messages[index]['modelId']),
       toolCalls: bubbleCalls,
       showToolCalls: showToolCalls,
       contentBlocks: costSplit == null
@@ -181,11 +205,14 @@ class ChatMessageListItem extends StatelessWidget {
       chatId: activeChatId,
       turnStartedAt: data.turnStartedAt,
       workedFor: data.workedFor,
-      images: data.images,
+      images: bubbleImages == null || bubbleImages.isEmpty
+          ? null
+          : bubbleImages,
       imageMetas: data.imageMetas,
       imageCostEur: data.imageCostEur,
       imageGeneratedAt: data.imageGeneratedAt,
       attachments: data.attachments,
+      agentsAttachments: agentsFiles.isEmpty ? null : agentsFiles,
       actions: actions,
       userMessageActions: userMessageActions,
       isEditing: isEditing,

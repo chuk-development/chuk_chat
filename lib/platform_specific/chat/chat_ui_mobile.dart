@@ -25,6 +25,7 @@
 // (docs/AGENTS_UI_UNIFY.md).
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/services.dart' show HardwareKeyboard;
 
@@ -112,6 +113,7 @@ import 'dart:async';
 import 'package:chuk_chat/platform_specific/chat/handlers/audio_recording_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/file_attachment_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/message_actions_handler.dart';
+import 'package:chuk_chat/widgets/agents_checkpoints_sheet.dart'; // checkpoints
 import 'package:chuk_chat/platform_specific/chat/handlers/chat_persistence_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/streaming_message_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/widgets/mobile_chat_widgets.dart';
@@ -786,6 +788,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     _audioHandler = AudioRecordingHandler();
 
     _fileHandler = FileAttachmentHandler()
+      ..isAgentsThread = (() => ChatOrigin.isAgentsThread(_activeChatId))
       ..initialize(_chatApiService)
       ..onError = showSnackBar
       ..onUpdate = () {
@@ -4161,6 +4164,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
               messageText: data.displayText,
               onEdit: editMessageAt,
               onResendMessage: resendMessageAt,
+              forkFromHere: agentsForkAction(context, _activeChatId, _messages[i]),
             )
           : const <MessageBubbleAction>[];
       // The message the reader just sent carries

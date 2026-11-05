@@ -20,7 +20,7 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
 import 'package:chuk_chat/models/queued_message.dart';
-import 'package:chuk_chat/services/agents/agents_chat_transport.dart';
+import 'package:chuk_chat/services/agents/agents_attachment_store.dart';
 import 'package:chuk_chat/services/agents/agents_task_outbox.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/client_request_ids.dart';
@@ -248,24 +248,16 @@ class OfflineSendCoordinator {
   /// AGENTS: the payload's [OfflineSendPayload.chatId] IS the executor's
   /// `session_key`, so the prompt queues under the key the flush sends it on.
   static Future<String> _enqueueAgentsPrompt(OfflineSendPayload payload) async {
-    final images = payload.images;
-    if (images != null && images.isNotEmpty) {
-      // No image channel to the host yet: the text is queued, and the user
-      // is told the image is not sent (same notice as a live send).
-      AgentsChatTransport.notify(
-        AgentsSendNotice(
-          kind: AgentsSendNoticeKind.imagesNotSupported,
-          sessionKey: payload.chatId,
-          count: images.length,
-        ),
-      );
-    }
+    // The pictures and files stay sealed on this device (offline images,
+    // store refs) and are uploaded to the host right before the task.
+    final List<String> attachments = payload.images ?? const <String>[];
     final OutboxTask task = await AgentsTaskOutbox.enqueue(
       sessionKey: payload.chatId,
       prompt: payload.messageText,
       modelId: payload.modelId.isEmpty ? null : payload.modelId,
       providerSlug: payload.providerSlug.isEmpty ? null : payload.providerSlug,
       reasoningEffort: payload.reasoningEffort,
+      attachments: attachments,
     );
     return task.localId;
   }
@@ -283,6 +275,7 @@ class OfflineSendCoordinator {
       modelId: payload.modelId.isEmpty ? null : payload.modelId,
       providerSlug: payload.providerSlug.isEmpty ? null : payload.providerSlug,
       reasoningEffort: payload.reasoningEffort,
+      attachments: payload.images ?? const <String>[],
     );
     // The bubble now belongs to the Agents outbox entry.
     await editQueuedMessage(row.chatId, row.id, (m) {
@@ -371,6 +364,7 @@ class OfflineSendCoordinator {
     await _bestEffort(() => ImageStorageService.wipeOfflineImages(userId));
     await _bestEffort(() => FollowUpParkingService.wipeUser(userId));
     await _bestEffort(AgentsTaskOutbox.wipeAll);
+    await _bestEffort(() => AgentsAttachmentStore.wipeUser(userId));
   }
 
   static Future<void> _bestEffort(Future<void> Function() f) async {

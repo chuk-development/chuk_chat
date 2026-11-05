@@ -57,8 +57,10 @@ import 'package:chuk_chat/widgets/ask_user_card.dart';
 import 'package:chuk_chat/widgets/automation_card.dart';
 import 'package:chuk_chat/widgets/chat_documents_panel.dart';
 import 'package:chuk_chat/widgets/agents_thread_header.dart';
+import 'package:chuk_chat/widgets/agents_checkpoints_sheet.dart'; // checkpoints
 import 'package:chuk_chat/widgets/agents_takeover_card.dart';
 import 'package:chuk_chat/widgets/agents_action_approval_card.dart'; // F1
+import 'package:chuk_chat/widgets/agents_attachment_chips.dart';
 // ── skill proposals ──
 import 'package:chuk_chat/services/skills/skill_proposals_source.dart';
 import 'package:chuk_chat/widgets/agents_skill_proposal_card.dart';
@@ -1101,6 +1103,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
           providerSlug: task.providerSlug,
           reasoningEffort: task.reasoningEffort,
           taskId: task.taskId,
+          attachments: task.blobIds,
         );
       });
     } catch (error) {
@@ -1975,17 +1978,17 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     }
   }
 
-  /// Tells the user what a send of this thread left out. Agents has no
-  /// attachment frame yet, so an image is not sent; the text is, and the user
-  /// must know the image was not.
+  /// Tells the user what a send of this thread could not do: its files
+  /// cannot go to the host as they are, so nothing was sent.
   void _onSendNotice(AgentsSendNotice notice) {
     if (!mounted || notice.sessionKey != widget.threadKey) return;
     switch (notice.kind) {
-      case AgentsSendNoticeKind.imagesNotSupported:
-        final String text =
-            AppLocalizations.of(context)?.agentsImagesNotSupported ??
-            'Images are not supported in Agents yet. Your text was sent '
-                'without the image.';
+      case AgentsSendNoticeKind.attachmentsRefused:
+        final String text = agentsAttachmentRefusalLabel(
+          AppLocalizations.of(context),
+          notice.failure,
+          name: notice.name,
+        );
         ScaffoldMessenger.maybeOf(context)
           ?..hideCurrentSnackBar()
           ..showSnackBar(SnackBar(content: Text(text)));
@@ -2178,6 +2181,11 @@ class AgentsThreadViewState extends State<AgentsThreadView>
 
   @override
   Widget build(BuildContext context) {
+    // checkpoints: "Wait until <Agent> is done" names the agent.
+    final String? checkpointAgent = widget.agent?.name;
+    if (widget.threadKey.isNotEmpty && checkpointAgent != null) {
+      agentsThreadAgentNames[widget.threadKey] = checkpointAgent;
+    }
     final controller = _controller;
     return ValueListenableBuilder<AgentsRelayState>(
       valueListenable: controller?.state ?? _startupState,
@@ -2232,6 +2240,9 @@ class AgentsThreadViewState extends State<AgentsThreadView>
             if (connected && secretRequest != null)
               _buildSecretRequestBar(context, secretRequest),
             if (showCards) _buildAutomationCards(context, automations),
+            // The files of a send going out to the host, per file.
+            if (widget.threadKey.isNotEmpty)
+              AgentsUploadStrip(sessionKey: widget.threadKey),
             Expanded(key: const ValueKey('persistent-chat'), child: body),
             if (_useDesktopChat(context) &&
                 !connected &&
@@ -2300,9 +2311,33 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       // The shell decides what the menu holds: with no agent selected it
       // is only Copy full chat, whose export still says what the link is
       // doing.
-      menuActions: widget.menuActions,
+      menuActions: <AgentsThreadAction>[
+        ...widget.menuActions,
+        // checkpoints: the thread's pins of the agent's files.
+        if (threadOpen)
+          AgentsThreadAction(
+            icon: Icons.history,
+            tooltip:
+                AppLocalizations.of(context)?.ckTitle ?? 'Checkpoints',
+            onPressed: () => unawaited(openCheckpoints()),
+          ),
+      ],
     );
   }
+
+  // ── checkpoints ──
+  /// Opens the "Checkpoints" sheet of this thread. Public so the phone's
+  /// "…" chip (the shell) can open it.
+  Future<void> openCheckpoints() {
+    final String key = widget.threadKey;
+    if (key.isEmpty) return Future<void>.value();
+    return showAgentsCheckpointsSheet(
+      context,
+      sessionKey: key,
+      agentName: widget.agent?.name ?? '',
+    );
+  }
+  // ── end checkpoints ──
 
   /// One automation reads as itself; several read as a count, because the
   /// chip has room for one name and no more.

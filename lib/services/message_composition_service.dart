@@ -1,6 +1,7 @@
 // lib/services/message_composition_service.dart
 import 'dart:math' as math;
 import 'package:chuk_chat/models/chat_model.dart';
+import 'package:chuk_chat/services/agents/agents_attachment_store.dart';
 import 'package:chuk_chat/services/provider_resolution_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/input_validator.dart';
@@ -198,6 +199,17 @@ class MessageCompositionService {
       final documentFiles = attachedFiles
           .where((f) => f.markdownContent != null)
           .toList();
+      // AGENTS: a file kept sealed on this device for the host (no markdown,
+      // not a picture). It rides with the pictures as a path; the Agents
+      // transport uploads it and the task names it by `blob_id`.
+      final agentsFiles = attachedFiles
+          .where(
+            (f) =>
+                !f.isImage &&
+                f.markdownContent == null &&
+                AgentsAttachmentStore.isRef(f.encryptedImagePath),
+          )
+          .toList();
 
       if (kDebugMode) {
         debugPrint(
@@ -257,6 +269,14 @@ class MessageCompositionService {
         }
       }
 
+      for (final f in agentsFiles) {
+        final String? ref = f.encryptedImagePath;
+        if (ref != null) imageStoragePaths.add(ref);
+      }
+      if (agentsFiles.isNotEmpty && displayMessageText.isEmpty) {
+        displayMessageText = agentsFiles.map((f) => f.fileName).join(', ');
+      }
+
       // Add documents with markdown content
       if (documentFiles.isNotEmpty) {
         final markdownSections = documentFiles
@@ -275,6 +295,8 @@ class MessageCompositionService {
           ? userInput
           : (imageFiles.isNotEmpty
                 ? '1 image attached'
+                : agentsFiles.isNotEmpty
+                ? 'Please look at the attached files.'
                 : 'Please review the uploaded documents.');
 
       if (promptParts.isNotEmpty) {

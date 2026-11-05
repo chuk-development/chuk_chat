@@ -13,6 +13,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import 'package:chuk_chat/platform_config.dart';
+import 'package:chuk_chat/services/agents/agents_attachments.dart';
 import 'package:chuk_chat/services/agents/agents_background_link.dart';
 import 'package:chuk_chat/services/agents/agents_queued_marks.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
@@ -185,6 +186,7 @@ class AgentsOutboxFlusher {
             providerSlug: task.providerSlug,
             reasoningEffort: task.reasoningEffort,
             taskId: task.taskId,
+            attachments: task.blobIds,
           );
         });
       }
@@ -213,6 +215,12 @@ class AgentsOutboxFlusher {
   ) async {
     if (!controller.state.value.isPaired) throw const OutboxSendDeferred();
     final String taskId = task.taskId;
+    // The files go first, sealed on this device until now; the task names
+    // them only once every one of them is complete on the host.
+    final List<String> blobIds = await uploadQueuedAttachments(
+      controller,
+      task,
+    );
     await AgentsPendingTasks.record(
       sessionKey: task.sessionKey,
       taskId: taskId,
@@ -220,6 +228,7 @@ class AgentsOutboxFlusher {
       modelId: task.modelId,
       providerSlug: task.providerSlug,
       reasoningEffort: task.reasoningEffort,
+      blobIds: blobIds,
     );
     AgentsRunLedger.instance.taskSent(task.sessionKey, taskId);
     await controller.sendTask(
@@ -229,6 +238,7 @@ class AgentsOutboxFlusher {
       providerSlug: task.providerSlug,
       reasoningEffort: task.reasoningEffort,
       taskId: taskId,
+      attachments: blobIds,
     );
     // It is on the wire and tracked until the host acknowledges it: the
     // bubble stops saying "waiting" and stops offering Retry.
@@ -236,5 +246,27 @@ class AgentsOutboxFlusher {
       sessionKey: task.sessionKey,
       queueId: task.localId,
     );
+  }
+
+  /// Uploads [task]'s local files and returns their `blob_id`s, or the ids
+  /// the host already holds. A link that cannot take the frames defers the
+  /// entry (no attempt counted); any other failure counts as one.
+  static Future<List<String>> uploadQueuedAttachments(
+    AgentsRelayController controller,
+    OutboxTask task,
+  ) async {
+    if (task.attachments.isEmpty) return task.blobIds;
+    try {
+      return await AgentsAttachmentPaths.upload(
+        controller,
+        sessionKey: task.sessionKey,
+        paths: task.attachments,
+      );
+    } on AgentsAttachmentException catch (error) {
+      if (error.failure == AgentsAttachmentFailure.notSent) {
+        throw const OutboxSendDeferred('attachments could not be sent');
+      }
+      throw StateError('attachments: ${error.failure.name}');
+    }
   }
 }

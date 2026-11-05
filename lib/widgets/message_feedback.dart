@@ -10,6 +10,8 @@ import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/message_feedback_store.dart';
+import 'package:chuk_chat/services/prompt_cache/prompt_context.dart'
+    show chatIdHash;
 import 'package:chuk_chat/ui/components/components.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart' show ExpressiveButton;
 import 'package:chuk_chat/widgets/icons/huge_icon.dart';
@@ -43,12 +45,20 @@ class MessageFeedbackButtons extends StatefulWidget {
     required this.messageId,
     required this.iconColor,
     this.modelId,
+    this.provider,
+    this.chatId,
     this.compact = false,
   });
 
   final String? messageId;
   final Color iconColor;
   final String? modelId;
+
+  /// The provider that answered, sent with the verdict.
+  final String? provider;
+
+  /// The chat the answer is in. Only its hash leaves the device.
+  final String? chatId;
 
   /// The phone sizes of the action bar (smaller padding).
   final bool compact;
@@ -85,9 +95,14 @@ class _MessageFeedbackButtonsState extends State<MessageFeedbackButtons> {
       messageId: id,
       rating: rating,
       modelId: widget.modelId,
+      provider: widget.provider,
+      chatHash: _hashOf(widget.chatId),
       existing: _store.peek(id),
     );
   }
+
+  static String? _hashOf(String? chatId) =>
+      chatId == null || chatId.isEmpty ? null : chatIdHash(chatId);
 
   @override
   Widget build(BuildContext context) {
@@ -163,6 +178,8 @@ Future<MessageFeedback?> showMessageFeedbackSheet(
   required String messageId,
   required FeedbackRating rating,
   String? modelId,
+  String? provider,
+  String? chatHash,
   MessageFeedback? existing,
   MessageFeedbackStore? store,
 }) {
@@ -174,6 +191,8 @@ Future<MessageFeedback?> showMessageFeedbackSheet(
       messageId: messageId,
       rating: rating,
       modelId: modelId,
+      provider: provider,
+      chatHash: chatHash,
       existing: existing != null && existing.rating == rating ? existing : null,
       store: store ?? MessageFeedbackStore.instance,
     ),
@@ -187,6 +206,8 @@ class MessageFeedbackSheet extends StatefulWidget {
     required this.rating,
     required this.store,
     this.modelId,
+    this.provider,
+    this.chatHash,
     this.existing,
   });
 
@@ -194,6 +215,8 @@ class MessageFeedbackSheet extends StatefulWidget {
   final FeedbackRating rating;
   final MessageFeedbackStore store;
   final String? modelId;
+  final String? provider;
+  final String? chatHash;
   final MessageFeedback? existing;
 
   @override
@@ -226,11 +249,21 @@ class _MessageFeedbackSheetState extends State<MessageFeedbackSheet> {
           if (_picked.contains(c)) c,
       ],
       note: _note.text.trim().isEmpty ? null : _note.text.trim(),
-      modelId: widget.modelId,
+      modelId: widget.modelId ?? widget.existing?.modelId,
+      provider: widget.provider ?? widget.existing?.provider,
+      chatHash: widget.chatHash ?? widget.existing?.chatHash,
       createdAt: DateTime.now(),
     );
     await widget.store.save(fb);
     if (mounted) Navigator.of(context).pop(fb);
+  }
+
+  /// Takes the stored verdict back (here and on the server).
+  Future<void> _removeRating() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    await widget.store.remove(widget.messageId);
+    if (mounted) Navigator.of(context).pop();
   }
 
   @override
@@ -330,6 +363,18 @@ class _MessageFeedbackSheetState extends State<MessageFeedbackSheet> {
                   onTap: _submit,
                 ),
               ),
+              if (widget.existing != null) ...<Widget>[
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ExpressiveButton(
+                    key: const ValueKey<String>('feedback-remove'),
+                    label: l10n?.feedbackRemoveRating ?? 'Remove rating',
+                    tonal: true,
+                    onTap: _removeRating,
+                  ),
+                ),
+              ],
             ],
           ),
         ),

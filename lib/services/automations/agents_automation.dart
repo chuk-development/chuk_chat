@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart' show immutable, mapEquals;
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
@@ -128,12 +130,42 @@ class AgentsAutomation {
   /// An incoming agent mail that matches a filter (`{from?, subject?}`).
   bool get isMail => kind == 'mail';
 
+  /// A call to the server's secret URL (`{webhook_id, filter?, debounce_s,
+  /// max_wait_s, signed?}`). docs/WIRE_CONTRACT.md, "Inbound webhooks".
+  bool get isWebhook => kind == kWebhookKind;
+
+  /// The server webhook row id (a uuid), or null.
+  String? get webhookId {
+    final id = spec['webhook_id'];
+    return id is String && id.isNotEmpty ? id : null;
+  }
+
+  /// The host keeps a signing secret for this row (it never sends it back).
+  bool get webhookSigned => spec['signed'] == true;
+
+  /// The webhook filter as the host stored it, or null.
+  Object? get webhookFilter => spec['filter'];
+
+  /// The quiet window of a webhook burst, in seconds.
+  int get webhookDebounce {
+    final v = spec['debounce_s'];
+    return v is num ? v.toInt() : kWebhookDefaultDebounce;
+  }
+
+  /// The longest wait after the first call of a burst, in seconds.
+  int get webhookMaxWait {
+    final v = spec['max_wait_s'];
+    return v is num ? v.toInt() : kWebhookDefaultMaxWait;
+  }
+
   /// What sets it off, in the user's words: `clock` (a schedule), `page` (a
-  /// watched page), `mail` (a mail filter) or `script` (a watcher script).
+  /// watched page), `mail` (a mail filter), `webhook` (a call to a secret
+  /// URL) or `script` (a watcher script).
   String get trigger => switch (kind) {
     'watcher' => 'script',
     'watch_url' => 'page',
     'mail' => 'mail',
+    kWebhookKind => 'webhook',
     _ => 'clock',
   };
 
@@ -200,7 +232,7 @@ class AgentsAutomation {
   /// A short human reading of the spec (`every 5m`, `cron 0 9 * * 1-5`,
   /// `at 2026-09-06 09:00`, `watch poll.py`).
   String get specLabel {
-    if (isWatchUrl || isMail) return _eventSpecLabel;
+    if (isWatchUrl || isMail || isWebhook) return _eventSpecLabel;
     final cron = spec['cron'];
     if (cron is String) return 'cron $cron';
     final every = spec['every'];
@@ -236,6 +268,13 @@ class AgentsAutomation {
         if (mailSubject != null) 'subject "$mailSubject"',
       ];
       return parts.isEmpty ? 'mail' : parts.join(' · ');
+    }
+    if (isWebhook) {
+      return <String>[
+        'webhook',
+        if (webhookFilter != null) 'filtered',
+        if (webhookSigned) 'signed',
+      ].join(' · ');
     }
     return kind;
   }
@@ -465,6 +504,7 @@ const List<String> kCreatableAutomationKinds = <String>[
   'schedule',
   'watch_url',
   'mail',
+  kWebhookKind,
 ];
 
 abstract interface class AgentsAutomationEditControl {
@@ -646,3 +686,190 @@ Map<String, dynamic>? automationUpdateFrame({
   return frame.length <= 2 ? null : frame;
 }
 // ── end F2 ──
+
+// ── webhooks ──
+// The `webhook` kind (docs/WIRE_CONTRACT.md, "Inbound webhooks"). The host
+// checks every value again and refuses a bad one in `automation_saved`; the
+// checks here only say it before the round trip.
+
+/// The automation kind of an inbound webhook.
+const String kWebhookKind = 'webhook';
+
+/// The quiet window of a burst: default and range, in seconds.
+const int kWebhookDefaultDebounce = 10;
+const int kWebhookMaxDebounce = 300;
+
+/// The longest wait after the first call of a burst: default and range.
+const int kWebhookDefaultMaxWait = 300;
+const int kWebhookMaxMaxWait = 3600;
+
+/// The operators of a filter leaf, in the order the form offers them.
+const List<String> kWebhookFilterOps = <String>[
+  'equals',
+  'contains',
+  'in',
+  'regex',
+  'exists',
+];
+
+/// The host's `spec` of a new webhook row. Keys with no value stay off, so
+/// the host applies its own default.
+Map<String, dynamic> webhookSpecFor({
+  required String webhookId,
+  Object? filter,
+  int debounceSeconds = kWebhookDefaultDebounce,
+  int maxWaitSeconds = kWebhookDefaultMaxWait,
+  String? signingSecret,
+}) => <String, dynamic>{
+  'webhook_id': webhookId.trim().toLowerCase(),
+  'filter': ?filter,
+  'debounce_s': debounceSeconds,
+  'max_wait_s': maxWaitSeconds,
+  if (signingSecret != null && signingSecret.isNotEmpty)
+    'signing_secret': signingSecret,
+};
+
+/// True when [secret] is a signing secret the host takes: 8 to 512
+/// printable ASCII characters (no spaces at the ends, no control
+/// characters).
+bool isValidWebhookSecret(String secret) {
+  if (secret.length < 8 || secret.length > 512) return false;
+  return RegExp(r'^[\x21-\x7e](?:[\x20-\x7e]*[\x21-\x7e])?$').hasMatch(secret);
+}
+
+/// Reads a whole-number field in `0..max`; null when it is not one.
+int? parseWebhookSeconds(String text, int max) {
+  final int? value = int.tryParse(text.trim());
+  if (value == null || value < 0 || value > max) return null;
+  return value;
+}
+
+/// One filter leaf from the simple form: [place] is `path` or `header`,
+/// [target] the JSON path (`$.action`) or the header name, [op] one of
+/// [kWebhookFilterOps], [value] the text the user typed. A value that reads
+/// as JSON (`true`, `3`, `"x"`, `["a","b"]`) is used as JSON, else as text.
+/// `in` takes a JSON list or comma separated words; `exists` takes
+/// `true`/`false` (empty = true). Throws [FormatException] with a short
+/// reason for anything the host would refuse.
+Map<String, dynamic> webhookFilterLeaf({
+  required String place,
+  required String target,
+  required String op,
+  required String value,
+}) {
+  final String where = target.trim();
+  if (place == 'path') {
+    if (!RegExp(
+          r'^\$((\.[A-Za-z0-9_-]{1,64})|(\[\d+\]))*$',
+        ).hasMatch(where) ||
+        where.length > 200) {
+      throw const FormatException('path');
+    }
+  } else if (place == 'header') {
+    final String name = where.toLowerCase();
+    if (!RegExp(r'^[a-z0-9-]{1,64}$').hasMatch(name) ||
+        name.contains('signature') ||
+        name.contains('token') ||
+        name.contains('secret')) {
+      throw const FormatException('header');
+    }
+  } else {
+    throw const FormatException('place');
+  }
+  final Object operand;
+  final String raw = value.trim();
+  switch (op) {
+    case 'exists':
+      operand = raw.isEmpty || raw.toLowerCase() == 'true'
+          ? true
+          : (raw.toLowerCase() == 'false'
+                ? false
+                : throw const FormatException('exists'));
+    case 'in':
+      final Object? json = _jsonOrNull(raw);
+      final List<Object?> list = json is List
+          ? json
+          : <Object?>[
+              for (final String part in raw.split(','))
+                if (part.trim().isNotEmpty) part.trim(),
+            ];
+      if (list.isEmpty || list.length > 50) {
+        throw const FormatException('in');
+      }
+      operand = list;
+    case 'regex':
+      if (raw.isEmpty || raw.length > 200) {
+        throw const FormatException('regex');
+      }
+      try {
+        RegExp(raw);
+      } on FormatException {
+        throw const FormatException('regex');
+      }
+      operand = raw;
+    case 'equals':
+    case 'contains':
+      if (raw.isEmpty) throw const FormatException('value');
+      operand = _jsonOrNull(raw) ?? raw;
+    default:
+      throw const FormatException('op');
+  }
+  if (jsonEncode(operand).length > 1000) {
+    throw const FormatException('value');
+  }
+  return <String, dynamic>{
+    place == 'path' ? 'path' : 'header': place == 'path'
+        ? where
+        : where.toLowerCase(),
+    op: operand,
+  };
+}
+
+/// Reads the JSON filter field (`{"all": [...]}`, `{"any": [...]}`,
+/// `{"not": ...}` or a leaf). Empty = no filter (null). Throws
+/// [FormatException] when it is not a JSON object.
+Map<String, dynamic>? parseWebhookFilterJson(String text) {
+  final String raw = text.trim();
+  if (raw.isEmpty) return null;
+  final Object? decoded;
+  try {
+    decoded = jsonDecode(raw);
+  } on FormatException {
+    throw const FormatException('json');
+  }
+  if (decoded is! Map) throw const FormatException('json');
+  return decoded.map((Object? k, Object? v) => MapEntry('$k', v));
+}
+
+Object? _jsonOrNull(String raw) {
+  try {
+    return jsonDecode(raw);
+  } on FormatException {
+    return null;
+  }
+}
+
+/// The `spec` keys of an `automation_update` for webhook row [before]: only
+/// the keys that change. [filter] null with [filterSet] removes the filter;
+/// [secret] `''` removes the secret, a new text replaces it, null keeps it.
+/// Empty when nothing changes.
+Map<String, dynamic> webhookSpecUpdate({
+  required AgentsAutomation before,
+  required Object? filter,
+  required int debounceSeconds,
+  required int maxWaitSeconds,
+  String? secret,
+}) {
+  final Object? oldFilter = before.webhookFilter;
+  final bool filterChanged =
+      jsonEncode(filter) != jsonEncode(oldFilter);
+  return <String, dynamic>{
+    if (filterChanged) 'filter': filter,
+    if (debounceSeconds != before.webhookDebounce)
+      'debounce_s': debounceSeconds,
+    if (maxWaitSeconds != before.webhookMaxWait) 'max_wait_s': maxWaitSeconds,
+    if (secret != null && (secret.isNotEmpty || before.webhookSigned))
+      'signing_secret': secret,
+  };
+}
+// ── end webhooks ──

@@ -106,6 +106,7 @@ import 'package:uuid/uuid.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/audio_recording_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/message_actions_handler.dart';
+import 'package:chuk_chat/widgets/agents_checkpoints_sheet.dart'; // checkpoints
 import 'package:chuk_chat/platform_specific/chat/handlers/chat_persistence_handler.dart';
 import 'package:chuk_chat/utils/desktop_drop_stub.dart'
     if (dart.library.io) 'package:desktop_drop/desktop_drop.dart';
@@ -724,6 +725,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       vsync: this,
     );
     _fileHandler = DesktopFileHandler()
+      ..isAgentsThread = (() => ChatOrigin.isAgentsThread(_activeChatId))
       ..onShowSnackBar = showSnackBar
       ..onUpdate = () {
         if (mounted) setState(() {});
@@ -2043,6 +2045,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       messageText: messageText,
       onEdit: editMessageAt,
       onResendMessage: resendMessageAt,
+      forkFromHere: agentsForkAction(context, _activeChatId, _messages[index]),
     );
   }
 

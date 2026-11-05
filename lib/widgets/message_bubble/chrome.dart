@@ -301,7 +301,9 @@ extension _MessageBubbleChrome on _MessageBubbleState {
             : MessageFeedbackButtons(
                 messageId: widget.feedbackId,
                 iconColor: iconFgColor,
-                modelId: widget.modelLabel,
+                modelId: widget.feedbackModelId ?? widget.modelLabel,
+                provider: widget.modelProvider,
+                chatId: widget.chatId,
                 compact: kPlatformMobile,
               ),
       );

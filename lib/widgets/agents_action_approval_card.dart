@@ -9,12 +9,19 @@
 // offers the answers the host named, in its order: allow once, always for
 // this agent, always on this site, deny. A lasting answer is stored on the
 // host and applies from the next action.
+//
+// Two kinds of the agent's own commands have their own body
+// (docs/WIRE_CONTRACT.md, "Sandbox escalation" and "Auto review"): a
+// `sandbox_escalation` asks to run ONE command with more permissions, an
+// `auto_review` card says what the reviewer model thought. Both offer only
+// Allow once and Deny.
 
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/agents/agents_command_prefix.dart';
 import 'package:chuk_chat/services/agents/agents_draft_history.dart';
@@ -151,7 +158,9 @@ class AgentsActionApprovalCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
           ),
           child: HugeIcon(
-            _iconFor(request.actionClass),
+            _isEscalation
+                ? HugeIcons.shieldAlert
+                : _iconFor(request.actionClass),
             size: 20,
             color: scheme.onSecondaryContainer,
           ),
@@ -181,9 +190,7 @@ class AgentsActionApprovalCard extends StatelessWidget {
                   ),
                 // ── end own browser ──
                 Text(
-                  request.summary ??
-                      l?.approvalTitleFallback ??
-                      'Allow this action?',
+                  _title(l),
                   key: const ValueKey<String>('agents-approval-title'),
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
@@ -214,7 +221,10 @@ class AgentsActionApprovalCard extends StatelessWidget {
       rows.add(_Field(label: label, value: value.trim()));
     }
 
+    if (_isEscalation) return _escalationDetails(theme, l, d);
     switch (request.actionClass) {
+      case 'local_actions':
+        rows.addAll(_localActionRows(theme, l, d));
       case 'send_external':
         if (_text(d['reply_to']) != null) {
           rows.add(
@@ -354,7 +364,9 @@ class AgentsActionApprovalCard extends StatelessWidget {
     final bool prefix = approvalCommandPrefix(request) != null;
     final List<String> options = <String>[
       for (final String o in request.options)
-        if (o != _Req.scopeAlwaysPrefix || prefix) o,
+        if ((o != _Req.scopeAlwaysPrefix || prefix) &&
+            (!_onceOrDenyOnly || o == _Req.scopeOnce || o == _Req.scopeDeny))
+          o,
     ];
     return Wrap(
       spacing: 8,
@@ -429,7 +441,9 @@ class AgentsActionApprovalCard extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            closedLabel(l, request),
+            _onceOrDenyOnly && request.isApproved
+                ? (l?.approvalDecidedOnce ?? 'Allowed once')
+                : closedLabel(l, request),
             style: theme.textTheme.bodyMedium?.copyWith(
               color: scheme.onSurfaceVariant,
               fontWeight: FontWeight.w600,
@@ -501,12 +515,225 @@ class AgentsActionApprovalCard extends StatelessWidget {
   bool get inUserBrowser => request.details?['browser'] == 'user_browser';
   // ── end own browser ──
 
+  // ── esc ──
+  /// The approval's kind: `sandbox_escalation`, `auto_review`, or a takeover
+  /// kind. `details.kind` first; `fromPayload` keeps the top-level `kind` in
+  /// [AgentsRelayApprovalRequest.takeoverKind].
+  String? get _kind {
+    final Object? kind = request.details?['kind'];
+    return kind is String && kind.isNotEmpty ? kind : request.takeoverKind;
+  }
+
+  bool get _isEscalation =>
+      _kind == 'sandbox_escalation' ||
+      request.actionClass == 'sandbox_escalation';
+
+  bool get _isAutoReview => _kind == 'auto_review';
+
+  /// A grant for one call: no "always" on these cards, whatever the host
+  /// listed.
+  bool get _onceOrDenyOnly => _isEscalation || _isAutoReview;
+
+  String _title(AppLocalizations? l) {
+    if (_isEscalation) {
+      return l?.escTitle ?? 'Run one command with more permissions';
+    }
+    final String? summary = request.summary;
+    if (summary != null) return summary;
+    if (request.actionClass == 'local_actions') {
+      return switch (_text(request.details?['local_tool']) ?? request.tool) {
+        'python' => l?.localActionScript ?? 'Run this script?',
+        'write_file' => l?.localActionWrite ?? 'Write this file?',
+        'edit_file' => l?.localActionEdit ?? 'Change this file?',
+        'apply_patch' => l?.localActionPatch ?? 'Apply this patch?',
+        _ => l?.localActionCommand ?? 'Run this command?',
+      };
+    }
+    return l?.approvalTitleFallback ?? 'Allow this action?';
+  }
+
+  /// A withheld permission in words.
+  static String permissionLabel(AppLocalizations? l, String name) =>
+      switch (name) {
+        'network' => l?.escPermNetwork ?? 'Internet',
+        'workspace_write' =>
+          l?.escPermWorkspaceWrite ?? 'Write to the workspace',
+        'sudo' => l?.escPermSudo ?? 'Admin rights (sudo)',
+        _ => name,
+      };
+
+  List<Widget> _escalationDetails(
+    ThemeData theme,
+    AppLocalizations? l,
+    Map<String, dynamic> d,
+  ) {
+    final ColorScheme scheme = theme.colorScheme;
+    final Object? raw = d['permissions'];
+    final List<String> permissions = <String>[
+      if (raw is List)
+        for (final Object? p in raw)
+          if (p is String && p.trim().isNotEmpty) p.trim(),
+    ];
+    final String? justification = _text(d['justification']);
+    final String? command = _text(d['command']);
+    return <Widget>[
+      const SizedBox(height: 10),
+      Padding(
+        padding: const EdgeInsets.only(left: 48),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            if (permissions.isNotEmpty) ...<Widget>[
+              Text(
+                l?.escNeeds ?? 'Needs',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: <Widget>[
+                  for (final String p in permissions)
+                    Container(
+                      key: ValueKey<String>('agents-esc-permission-$p'),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: scheme.secondaryContainer,
+                        borderRadius: BorderRadius.circular(kRadiusSm),
+                      ),
+                      child: Text(
+                        permissionLabel(l, p),
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: scheme.onSecondaryContainer,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+            if (justification != null)
+              Container(
+                key: const ValueKey<String>('agents-esc-justification'),
+                margin: const EdgeInsets.only(top: 8),
+                padding: const EdgeInsets.only(left: 10),
+                decoration: BoxDecoration(
+                  border: Border(
+                    left: BorderSide(color: scheme.outlineVariant, width: 3),
+                  ),
+                ),
+                child: Text(
+                  justification,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurface,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
+            if (command != null)
+              CollapsibleCodeBlock(
+                key: const ValueKey<String>('agents-esc-command'),
+                text: command,
+              ),
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                l?.escOneCall ??
+                    'Only for this one command. The agent\'s permissions do '
+                        'not change.',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ];
+  }
+
+  /// The body of a `local_actions` card (mode `ask` or `auto_review`): the
+  /// reviewer's line, then the command, script, path or files with a
+  /// preview.
+  List<Widget> _localActionRows(
+    ThemeData theme,
+    AppLocalizations? l,
+    Map<String, dynamic> d,
+  ) {
+    final List<Widget> rows = <Widget>[];
+    final Object? review = d['review'];
+    if (_isAutoReview || review is Map) {
+      rows.add(_ReviewLine(text: reviewText(l, review)));
+    }
+    final String? command = _text(d['command']) ?? _text(d['code']);
+    if (command != null) {
+      rows.add(
+        CollapsibleCodeBlock(
+          key: const ValueKey<String>('agents-local-command'),
+          text: command,
+        ),
+      );
+    }
+    final String? path = _text(d['path']);
+    if (path != null) {
+      rows.add(_Field(label: l?.localActionFile ?? 'File', value: path));
+    }
+    final String? files = _list(d['files']);
+    if (files != null) {
+      rows.add(_Field(label: l?.localActionFiles ?? 'Files', value: files));
+    }
+    final String? preview = _text(d['preview']);
+    if (preview != null) {
+      rows.add(
+        CollapsibleCodeBlock(
+          key: const ValueKey<String>('agents-local-preview'),
+          text: preview,
+        ),
+      );
+    }
+    final String? description = _text(d['description']);
+    if (description != null) {
+      rows.add(
+        _Field(label: l?.localActionNote ?? 'Note', value: description),
+      );
+    }
+    return rows;
+  }
+
+  /// "Reviewer: medium risk — reason", or "The reviewer could not decide".
+  static String reviewText(AppLocalizations? l, Object? review) {
+    final String invalid = l?.reviewInvalid ?? 'The reviewer could not decide';
+    if (review is! Map || review['valid'] == false) return invalid;
+    final String? rawRisk = _text(review['risk']);
+    if (rawRisk == null) return invalid;
+    final String risk = switch (rawRisk) {
+      'low' => l?.reviewRiskLow ?? 'low',
+      'medium' => l?.reviewRiskMedium ?? 'medium',
+      'high' => l?.reviewRiskHigh ?? 'high',
+      _ => rawRisk,
+    };
+    final String? reason = _text(review['reason']);
+    if (reason == null) {
+      return l?.reviewLineNoReason(risk) ?? 'Reviewer: $risk risk';
+    }
+    return l?.reviewLine(risk, reason) ?? 'Reviewer: $risk risk — $reason';
+  }
+  // ── end esc ──
+
   /// One glyph per class, from the app's own set (docs/DESIGN.md §5).
   static HugeIconData _iconFor(String? actionClass) => switch (actionClass) {
     'send_external' => HugeIcons.mail01,
     'mcp_destructive' => HugeIcons.puzzle,
     'browser_act' => HugeIcons.globe02,
     'publish' => HugeIcons.share08,
+    'local_actions' => HugeIcons.terminal,
     _ => HugeIcons.alertCircle,
   };
 
@@ -543,6 +770,128 @@ class AgentsActionApprovalCard extends StatelessWidget {
     }
   }
 }
+
+// ── esc ──
+/// The reviewer's verdict on an `auto_review` card.
+class _ReviewLine extends StatelessWidget {
+  const _ReviewLine({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme scheme = theme.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          // One line high, so the glyph sits on the first line of the text.
+          SizedBox(
+            height: 18,
+            child: Center(
+              child: HugeIcon(
+                HugeIcons.shield01,
+                size: 14,
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              text,
+              key: const ValueKey<String>('agents-review-line'),
+              style: theme.textTheme.bodySmall?.copyWith(
+                height: 18 / 12,
+                color: scheme.onSurface,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A command or script in a monospace block, cut to [collapsedLines] lines
+/// with a "Show all" toggle when it is longer.
+class CollapsibleCodeBlock extends StatefulWidget {
+  const CollapsibleCodeBlock({
+    super.key,
+    required this.text,
+    this.collapsedLines = 6,
+  });
+
+  final String text;
+  final int collapsedLines;
+
+  @override
+  State<CollapsibleCodeBlock> createState() => _CollapsibleCodeBlockState();
+}
+
+class _CollapsibleCodeBlockState extends State<CollapsibleCodeBlock> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme scheme = theme.colorScheme;
+    final AppLocalizations? l = AppLocalizations.of(context);
+    final List<String> lines = widget.text.split('\n');
+    final bool long = lines.length > widget.collapsedLines;
+    final String shown = long && !_expanded
+        ? lines.take(widget.collapsedLines).join('\n')
+        : widget.text;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 6),
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(kRadiusMd),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text(
+            shown,
+            key: const ValueKey<String>('agents-code-text'),
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontFamily: 'monospace',
+              fontFamilyFallback: const <String>['Courier'],
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+          if (long)
+            InkWell(
+              key: const ValueKey<String>('agents-code-toggle'),
+              onTap: () => setState(() => _expanded = !_expanded),
+              borderRadius: BorderRadius.circular(kRadiusSm),
+              child: Padding(
+                padding: const EdgeInsets.only(top: 6, bottom: 2),
+                child: Text(
+                  _expanded
+                      ? (l?.escShowLess ?? 'Show less')
+                      : (l?.escShowAll ?? 'Show all'),
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: theme.accentForegroundOn(
+                      scheme.surfaceContainerHighest,
+                    ),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+// ── end esc ──
 
 /// 1024 -> "1.0 KB". A plain binary size, no locale or package dependency.
 String humanApprovalBytes(int bytes) {

@@ -70,10 +70,12 @@ String automationEventText(AgentsRelayAutomation event) {
         'watcher' => 'Watcher started: $what',
         'watch_url' => 'Watching a page: $what',
         'mail' => 'Watching mail: $what',
+        'webhook' => 'Waiting for webhook calls: $what',
         _ => 'Scheduled: $what',
       };
     case 'fired':
       final reason = event.reason;
+      if (reason == 'webhook') return 'Fired by a webhook call: $what';
       return reason == null || reason.isEmpty
           ? 'Fired: $what'
           : 'Fired: $what — $reason';

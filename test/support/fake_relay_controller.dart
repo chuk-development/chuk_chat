@@ -50,6 +50,7 @@ class FakeRelayController implements AgentsRelayController {
 
   /// The `budgetOverride` flag of each task, in order.
   final List<bool> taskBudgetOverrides = <bool>[];
+  final List<List<String>> taskAttachments = <List<String>>[];
 
   /// The `task_id` of every send, in order. Null for a caller that sent none.
   final List<String?> taskIds = <String?>[];
@@ -193,6 +194,7 @@ class FakeRelayController implements AgentsRelayController {
     bool regenerate = false,
     String? taskId,
     bool budgetOverride = false,
+    List<String> attachments = const <String>[],
   }) async {
     tasks.add(prompt);
     taskSessionKeys.add(sessionKey);
@@ -203,6 +205,7 @@ class FakeRelayController implements AgentsRelayController {
     taskRegenerateFlags.add(regenerate);
     taskBudgetOverrides.add(budgetOverride);
     taskIds.add(taskId);
+    taskAttachments.add(attachments);
     final error = taskError;
     if (error != null) throw error;
   }

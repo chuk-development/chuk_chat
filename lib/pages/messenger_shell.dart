@@ -105,6 +105,7 @@ import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/account_session.dart';
 import 'package:chuk_chat/services/auth_service.dart';
 import 'package:chuk_chat/pages/agents_install_page.dart';
+import 'package:chuk_chat/services/agents/agents_checkpoints.dart';
 import 'package:chuk_chat/services/agents/agents_derived_threads.dart';
 import 'package:chuk_chat/services/agents/agent_control_source.dart';
 import 'package:chuk_chat/services/agents/agent_mail_key_handover.dart';
@@ -365,6 +366,8 @@ class _MessengerShellState extends State<MessengerShell>
     super.initState();
     _hostInit();
     _deskInit();
+    // checkpoints: a fork opens its new thread.
+    _forkOpens = AgentsCheckpoints.openRequests.listen(_openForkedThread);
     _push.addStatusListener(_onPushStatus);
     _controller.addListener(_onControllerForBrowser);
     _chatListening = _chatModeAvailable;
@@ -554,8 +557,27 @@ class _MessengerShellState extends State<MessengerShell>
     });
   }
 
+  // ── checkpoints ──
+  StreamSubscription<String>? _forkOpens;
+
+  /// A fork from a message opens its new thread under the agent that owns
+  /// it (docs/WIRE_CONTRACT.md, "Checkpoints, rewind and fork").
+  void _openForkedThread(String key) {
+    if (!mounted) return;
+    final String? owner = AgentsDerivedThreads.instance.byKey(key)?.ownerKey;
+    if (owner == null) return;
+    for (final AgentsAgent agent in _roster.agents) {
+      if (agent.threads.isNotEmpty && agent.threads.first.key == owner) {
+        _select(agent.id, key);
+        return;
+      }
+    }
+  }
+  // ── end checkpoints ──
+
   @override
   void dispose() {
+    unawaited(_forkOpens?.cancel()); // checkpoints
     if (_chatListening) {
       _appMode.removeListener(_onModeChanged);
       _hasComputer.removeListener(_onHasComputerChanged);
@@ -651,6 +673,9 @@ class _MessengerShellState extends State<MessengerShell>
             // A chat one of its automations made (`<owner>#auto-<id>`) is
             // this agent's too.
             AgentsDerivedThreads.ownerOf(threadKey) !=
+                agent.threads.first.key &&
+            // A thread forked from a message is this agent's too.
+            AgentsDerivedThreads.instance.byKey(threadKey)?.ownerKey !=
                 agent.threads.first.key)) {
       return;
     }

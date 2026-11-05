@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/widgets/agents_checkpoints_sheet.dart'; // checkpoints
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/pages/agent_mailbox_page.dart';
 import 'package:chuk_chat/pages/agent_model_page.dart';
+import 'package:chuk_chat/pages/agents_login_vault_page.dart';
 import 'package:chuk_chat/pages/mobile_agent_permissions_page.dart'; // polish
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
@@ -48,6 +50,7 @@ class AgentSettingsView extends StatefulWidget {
     required this.onSkills,
     required this.onConnectors,
     required this.onSecrets,
+    this.onLogins,
     required this.onRooms,
     required this.onSettings,
     this.onDocuments,
@@ -92,6 +95,9 @@ class AgentSettingsView extends StatefulWidget {
       onSettings;
   final VoidCallback? onDocuments, onCopyChat, onBrowser, onDelete, onChat;
 
+  /// Opens the host's login vault. Null pushes [AgentsLoginVaultPage].
+  final VoidCallback? onLogins;
+
   // ── polish ──
   /// Where the Permissions page reads and sends (sandbox switches, approvals,
   /// weekly budget). Defaults to [AgentsPermissionsService.instance].
@@ -116,6 +122,7 @@ class MobileAgentsSettingsPage extends AgentSettingsView {
     required super.onSkills,
     required super.onConnectors,
     required super.onSecrets,
+    super.onLogins,
     required super.onRooms,
     required super.onSettings,
     super.onDocuments,
@@ -312,6 +319,13 @@ class _AgentSettingsViewState extends State<AgentSettingsView> {
                         widget.onSecrets,
                       ),
                       _row(
+                        'Logins',
+                        l.loginVaultTitle,
+                        Icons.login,
+                        widget.onLogins ?? _openLogins,
+                        subtitle: l.loginVaultRowSubtitle,
+                      ),
+                      _row(
                         'Schedules & automations',
                         l.agentsCwSchedules,
                         Icons.schedule_outlined,
@@ -355,6 +369,21 @@ class _AgentSettingsViewState extends State<AgentSettingsView> {
                           Icons.desktop_windows_outlined,
                           widget.onBrowser!,
                           subtitle: l.agentsCwScreenSubtitle,
+                        ),
+                      // checkpoints: the pins of the agent's files.
+                      if (widget.chatId case final String chat)
+                        _row(
+                          'Checkpoints',
+                          l.ckTitle,
+                          Icons.history,
+                          () => unawaited(
+                            showAgentsCheckpointsSheet(
+                              context,
+                              sessionKey: chat,
+                              agentName: agent.name,
+                            ),
+                          ),
+                          subtitle: l.ckIntro,
                         ),
                     ],
                   ),
@@ -507,6 +536,10 @@ class _AgentSettingsViewState extends State<AgentSettingsView> {
 
   /// [id] is the row's fixed English name: it keys the row, so a test or a
   /// tour finds it in every language.
+  void _openLogins() => Navigator.of(context).push<void>(
+    MaterialPageRoute<void>(builder: (_) => const AgentsLoginVaultPage()),
+  );
+
   Widget _row(
     String id,
     String title,

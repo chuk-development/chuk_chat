@@ -2,7 +2,9 @@
 /// "Per-action approvals").
 ///
 /// One row per action class with a three-way choice, Ask / Allow / Deny, and
-/// the host's default named under it. Under "Act in the browser" the sites
+/// the host's default named under it. "Commands and file changes"
+/// (`local_actions`, docs/WIRE_CONTRACT.md, "Auto review") has five choices,
+/// drawn as a list of choice rows: Allow, Ask, Review, Review strict, Deny. Under "Act in the browser" the sites
 /// the user allowed with "Always on (site)", each with a remove action. Shown
 /// only for a host that names `action_approvals`, and only once that host
 /// sent the agent's policy. Every `agent_permissions` frame replaces what
@@ -13,6 +15,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/agents/agents_permissions_service.dart';
 import 'package:chuk_chat/ui/expressive/connected_group.dart';
@@ -103,7 +106,23 @@ class _ClassCard extends StatelessWidget {
   static String modeLabel(AppLocalizations? l, String mode) => switch (mode) {
     AgentApprovals.modeAllow => l?.approvalsModeAllow ?? 'Allow',
     AgentApprovals.modeDeny => l?.approvalsModeDeny ?? 'Deny',
+    AgentApprovals.modeReview => l?.approvalsModeReview ?? 'Review',
+    AgentApprovals.modeReviewStrict =>
+      l?.approvalsModeReviewStrict ?? 'Review strict',
     _ => l?.approvalsModeAsk ?? 'Ask',
+  };
+
+  /// The line under a choice row of `local_actions`.
+  static String modeHelp(AppLocalizations? l, String mode) => switch (mode) {
+    AgentApprovals.modeAllow => l?.approvalsModeAllowHelp ?? 'Runs without asking.',
+    AgentApprovals.modeDeny => l?.approvalsModeDenyHelp ?? 'Never runs.',
+    AgentApprovals.modeReview =>
+      l?.approvalsModeReviewHelp ??
+          'A small model checks each call; it asks you when in doubt.',
+    AgentApprovals.modeReviewStrict =>
+      l?.approvalsModeReviewStrictHelp ??
+          'A small model checks each call and refuses what it flags.',
+    _ => l?.approvalsModeAskHelp ?? 'Asks you before every call.',
   };
 
   static (String, String) words(AppLocalizations? l, String actionClass) =>
@@ -126,6 +145,11 @@ class _ClassCard extends StatelessWidget {
           l?.approvalsPublish ?? 'Publish to the web',
           l?.approvalsPublishHelp ?? 'Put a site on here.now.',
         ),
+        AgentApprovals.classLocalActions => (
+          l?.approvalsLocalActions ?? 'Commands and file changes',
+          l?.approvalsLocalActionsHelp ??
+              'Commands, scripts and file edits in the workspace.',
+        ),
         _ => (actionClass, ''),
       };
 
@@ -134,6 +158,7 @@ class _ClassCard extends StatelessWidget {
     AgentApprovals.classMcpDestructive => HugeIcons.puzzle,
     AgentApprovals.classBrowserAct => HugeIcons.globe02,
     AgentApprovals.classPublish => HugeIcons.share08,
+    AgentApprovals.classLocalActions => HugeIcons.terminal,
     _ => HugeIcons.alertCircle,
   };
 
@@ -227,6 +252,31 @@ class _ClassCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
+          if (actionClass == AgentApprovals.classLocalActions)
+            Opacity(
+              opacity: editable ? 1 : 0.5,
+              child: IgnorePointer(
+                ignoring: !editable,
+                child: Column(
+                  key: ValueKey<String>('agent-approval-mode-$actionClass'),
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    for (final String m in AgentApprovals.localActionModes)
+                      _ChoiceRow(
+                        key: ValueKey<String>(
+                          'agent-approval-choice-$actionClass-$m',
+                        ),
+                        title: modeLabel(l, m),
+                        help: modeHelp(l, m),
+                        selected: m == mode,
+                        onTap: () => unawaited(_pick(context, m)),
+                      ),
+                  ],
+                ),
+              ),
+            )
+          else
           Opacity(
             opacity: editable ? 1 : 0.5,
             child: IgnorePointer(
@@ -288,6 +338,97 @@ class _ClassCard extends StatelessWidget {
                 ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// One choice of a class with more modes than fit a pill: a radio mark, the
+/// mode and one line of help. The whole row is the target.
+class _ChoiceRow extends StatelessWidget {
+  const _ChoiceRow({
+    super.key,
+    required this.title,
+    required this.help,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String title;
+  final String help;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme scheme = theme.colorScheme;
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(kRadiusMd),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              // One text line high, so the mark sits on the title's line.
+              SizedBox(
+                height: 22,
+                width: 22,
+                child: Center(
+                  child: Container(
+                    width: 18,
+                    height: 18,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: selected ? scheme.primary : Colors.transparent,
+                      border: Border.all(
+                        color: selected ? scheme.primary : scheme.outline,
+                        width: 2,
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: selected
+                        ? Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: scheme.onPrimary,
+                            ),
+                          )
+                        : null,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Text(
+                      title,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        height: 22 / 14,
+                        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                    ),
+                    Text(
+                      help,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
