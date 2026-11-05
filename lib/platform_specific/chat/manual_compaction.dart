@@ -33,7 +33,10 @@ class ManualCompactionRequest {
     this.includeToolResults = true,
   });
 
-  /// The screen's own list. On success the summary is written into it.
+  /// The chat's rows at the time of the command. Copied at once and only
+  /// read: the caller writes the summary back with
+  /// [CompactionOutcome.writeInto] after checking the chat is still the
+  /// one on screen.
   final List<Map<String, String>> messages;
   final String chatId;
   final String modelId;
@@ -49,16 +52,22 @@ class ManualCompactionRequest {
   final bool includeToolResults;
 }
 
-/// Runs `/compact` for [request]. One run per chat at a time; a second
-/// call while one runs returns [CompactionStatus.notNeeded] with reason
-/// `busy`.
+/// Runs `/compact` for [request]. One summary per chat at a time (shared
+/// with the send paths, [ChatCompactionRunner.isRunning]); a second call
+/// while one runs returns [CompactionStatus.notNeeded] with reason `busy`.
 Future<CompactionOutcome> runManualCompaction(
   ManualCompactionRequest request,
 ) async {
   final String chatId = request.chatId;
-  if (!_running.add(chatId)) {
+  if (_starting.contains(chatId) || ChatCompactionRunner.isRunning(chatId)) {
     return const CompactionOutcome(CompactionStatus.notNeeded, reason: 'busy');
   }
+  _starting.add(chatId);
+  // A copy, taken now: the screen's list may hold another chat when the
+  // summary comes back.
+  final List<Map<String, String>> rows = <Map<String, String>>[
+    for (final m in request.messages) Map<String, String>.from(m),
+  ];
   try {
     final session =
         await SupabaseService.refreshSession() ??
@@ -70,9 +79,11 @@ Future<CompactionOutcome> runManualCompaction(
         reason: 'no session',
       );
     }
-    Future<List<Map<String, dynamic>>> buildHistory(List<int> starts) =>
-        ChatHistoryBuilder.build(
-          messages: request.messages,
+    Future<List<Map<String, dynamic>>> buildHistory(
+      List<Map<String, String>> messages,
+      List<int> starts,
+    ) => ChatHistoryBuilder.build(
+          messages: messages,
           pendingUserText: '',
           includeRecentImages: request.includeRecentImages,
           includeAllImages: request.includeAllImages,
@@ -83,7 +94,7 @@ Future<CompactionOutcome> runManualCompaction(
     final ToolCallHandler handler = ToolCallHandler.forChat(chatId);
     final ToolLoopSession toolSession = handler.createSession(
       initialUserMessage: '',
-      history: await buildHistory(<int>[]),
+      history: await buildHistory(rows, <int>[]),
       accessToken: accessToken,
       discoveryContextKey: chatId,
       baseSystemPrompt: request.baseSystemPrompt,
@@ -98,7 +109,7 @@ Future<CompactionOutcome> runManualCompaction(
       toolSession,
     );
     return await ChatCompactionRunner.compactNow(
-      messages: request.messages,
+      messages: rows,
       chatId: chatId,
       modelId: request.modelId,
       providerSlug: request.providerSlug,
@@ -113,8 +124,10 @@ Future<CompactionOutcome> runManualCompaction(
     }
     return CompactionOutcome(CompactionStatus.failed, reason: '$error');
   } finally {
-    _running.remove(chatId);
+    _starting.remove(chatId);
   }
 }
 
-final Set<String> _running = <String>{};
+/// Chats whose `/compact` is being set up (session, system prompt) before
+/// the runner takes over.
+final Set<String> _starting = <String>{};

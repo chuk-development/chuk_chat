@@ -24,6 +24,8 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 
 import 'package:chuk_chat/models/chat_stream_event.dart';
+import 'package:chuk_chat/services/prompt_cache/prompt_context.dart';
+import 'package:chuk_chat/utils/image_token_estimator.dart';
 import 'package:chuk_chat/utils/token_estimator.dart';
 
 /// One stored summary: it replaces every message before the message that
@@ -99,13 +101,69 @@ enum CompactionStatus {
 
 @immutable
 class CompactionOutcome {
-  const CompactionOutcome(this.status, {this.tailStart, this.reason});
+  const CompactionOutcome(
+    this.status, {
+    this.tailStart,
+    this.reason,
+    this.record,
+    this.messages,
+    this.overflow = false,
+    this.estimate,
+    this.window,
+  });
 
   final CompactionStatus status;
   final int? tailStart;
   final String? reason;
 
+  /// The encoded [CompactionRecord] written onto `messages[tailStart]`.
+  final String? record;
+
+  /// The compacted copy of the rows before the message being sent
+  /// (`0..end-1`), with [record] on the row at [tailStart]. The send
+  /// rebuilds its history from this copy, never from the screen's live
+  /// list: that list may hold another chat by now.
+  final List<Map<String, String>>? messages;
+
+  /// The request does not fit the model's window and nothing was
+  /// compacted: the send must stop with [ChatCompaction.overflowError]
+  /// instead of going out blind.
+  final bool overflow;
+
+  /// The estimated prompt and the model's window, set with [overflow].
+  final int? estimate;
+  final int? window;
+
+  /// The error the send shows on [overflow].
+  String get overflowMessage =>
+      ChatCompaction.overflowError(estimate ?? 0, window ?? 0);
+
   bool get compacted => status == CompactionStatus.compacted;
+
+  /// The row the summary belongs to (from [messages]), or null.
+  Map<String, String>? get target {
+    final int? i = tailStart;
+    final rows = messages;
+    if (!compacted || i == null || rows == null || i >= rows.length) {
+      return null;
+    }
+    return rows[i];
+  }
+
+  /// Writes [record] onto [live] at [tailStart] when that row is still the
+  /// message it was made for ([ChatCompaction.sameMessage]). False (and
+  /// [live] untouched) when the list holds another chat or the row moved.
+  bool writeInto<V>(List<Map<String, V>> live) {
+    final int? i = tailStart;
+    final String? r = record;
+    final Map<String, String>? t = target;
+    if (i == null || r == null || t == null) return false;
+    if (i >= live.length || !ChatCompaction.sameMessage(live[i], t)) {
+      return false;
+    }
+    live[i] = Map<String, V>.from(live[i])..[ChatCompaction.fieldKey] = r as V;
+    return true;
+  }
 }
 
 /// Sends one summary request and yields its stream. The app's sender is
@@ -189,6 +247,25 @@ class ChatCompaction {
       'it. Continue directly from the messages that follow, without '
       'acknowledging this checkpoint.';
 
+  /// The error a send shows when the chat does not fit the model's window
+  /// and could not be compacted.
+  static String overflowError(int estimate, int window) =>
+      'Too much context for this model ($estimate vs $window token limit). '
+      'Compaction failed. Clear history or shorten your message.';
+
+  /// Whether [a] and [b] are the same chat message: the same `messageId`
+  /// when both carry one, else the same sender, text and send time. A
+  /// stored [fieldKey] does not count.
+  static bool sameMessage(Map<String, Object?> a, Map<String, Object?> b) {
+    if (a['sender'] != b['sender']) return false;
+    final Object? idA = a['messageId'];
+    final Object? idB = b['messageId'];
+    if (idA is String && idA.isNotEmpty && idB is String && idB.isNotEmpty) {
+      return idA == idB;
+    }
+    return a['text'] == b['text'] && a['sentAt'] == b['sentAt'];
+  }
+
   /// The history entry that stands for everything a summary replaced.
   static String summaryMessage(String summary) =>
       '$_preamble\n\n<compacted-summary>\n${summary.trim()}\n'
@@ -232,13 +309,52 @@ class ChatCompaction {
     return -1;
   }
 
-  /// Rough tokens of one UI message (text, document bodies, reasoning is
-  /// not sent). Used to size the tail and the anchored delta.
-  static int messageTokens(Map<String, String> m) {
+  /// Rough tokens of one UI message: text, document bodies, the tool
+  /// rounds its turn replays (`modelContext` transcript) and its images
+  /// (per-model formula, [kUnknownImageTokens] when the size is unknown).
+  /// Reasoning is not sent. Used to size the kept tail.
+  static int messageTokens(Map<String, String> m, {String? modelId}) {
     var chars = (m['text'] ?? '').length;
     chars += (m['attachments'] ?? '').length;
     chars += (m['toolCalls'] ?? '').length ~/ 2;
-    return (chars / 4).ceil() + 8;
+    final String? context = m['modelContext'];
+    if (context != null && context.isNotEmpty) {
+      final TurnPromptContext? decoded = TurnPromptContext.decode(context);
+      if (decoded != null) {
+        final rounds = decoded.transcript;
+        if (rounds != null && rounds.isNotEmpty) {
+          chars += jsonEncode(rounds).length;
+        }
+        chars += (decoded.sent ?? '').length;
+      }
+    }
+    var tokens = (chars / 4).ceil() + 8;
+    final String? images = m['images'];
+    if (images != null && images.isNotEmpty) {
+      tokens += _imageTokens(images, modelId);
+    }
+    return tokens;
+  }
+
+  static int _imageTokens(String raw, String? modelId) {
+    Object? decoded;
+    try {
+      decoded = jsonDecode(raw);
+    } on FormatException {
+      return kUnknownImageTokens;
+    }
+    if (decoded is! List) return 0;
+    var total = 0;
+    for (final Object? image in decoded) {
+      if (image is! String || image.isEmpty) continue;
+      final size = image.startsWith('data:')
+          ? ImageTokenEstimator.dimensionsOfDataUrl(image)
+          : null;
+      total += size == null
+          ? kUnknownImageTokens
+          : ImageTokenEstimator.tokensFor(modelId, size.$1, size.$2);
+    }
+    return total;
   }
 
   /// The estimated prompt size of the next request: the last real usage
@@ -285,12 +401,13 @@ class ChatCompaction {
     List<Map<String, String>> messages, {
     required int end,
     required int retainTokens,
+    String? modelId,
   }) {
     final int from = math.max(1, latestCompactionIndex(messages) + 1);
     int? best;
     var tokens = 0;
-    for (var i = end - 1; i >= from; i--) {
-      tokens += messageTokens(messages[i]);
+    for (var i = math.min(end, messages.length) - 1; i >= from; i--) {
+      tokens += messageTokens(messages[i], modelId: modelId);
       if (messages[i]['sender'] != 'user') continue;
       if (best != null && tokens > retainTokens) break;
       best = i;
@@ -331,10 +448,12 @@ class ChatCompaction {
   /// Compacts [messages] when the next request reaches the trigger.
   ///
   /// [messages] is the chat's list without the message being sent now
-  /// (indexes `0..end-1`). [buildHistory] builds the request history as the
-  /// send would (ChatHistoryBuilder.build with its `messageStarts`), so the
-  /// summary request reuses its bytes. On success the record is written
-  /// into `messages[tailStart]` (the caller persists and rebuilds).
+  /// (indexes `0..end-1`); pass a copy, the record is written into it.
+  /// [buildHistory] builds the request history as the send would
+  /// (ChatHistoryBuilder.build with its `messageStarts`), so the summary
+  /// request reuses its bytes. [summaryWindow] is the summarizing model's
+  /// window: a span that does not fit it loses its oldest turns first. On
+  /// success the record is written into `messages[tailStart]`.
   static Future<CompactionOutcome> maybeCompact({
     required List<Map<String, String>> messages,
     required int end,
@@ -347,6 +466,8 @@ class ChatCompaction {
     buildHistory,
     required CompactionSend send,
     bool force = false,
+    int? summaryWindow,
+    String? systemPrompt,
   }) async {
     if (!force && estimatedPromptTokens < budget.threshold) {
       return const CompactionOutcome(CompactionStatus.notNeeded);
@@ -355,6 +476,7 @@ class ChatCompaction {
       messages,
       end: end,
       retainTokens: budget.retain,
+      modelId: summaryModelId,
     );
     if (tailStart == null) {
       return const CompactionOutcome(
@@ -371,9 +493,31 @@ class ChatCompaction {
       );
     }
     // The summarized span: a byte prefix of the chat's own history.
-    final prefix = history.sublist(0, starts[tailStart]);
+    var prefix = history.sublist(
+      0,
+      math.min(math.max(0, starts[tailStart]), history.length),
+    );
     if (prefix.isEmpty) {
       return const CompactionOutcome(CompactionStatus.notNeeded);
+    }
+    if (summaryWindow != null && summaryWindow > 0) {
+      prefix = fitPrefix(
+        prefix,
+        limit:
+            summaryWindow -
+            math.min<int>(summaryMaxTokens, summaryWindow ~/ 4) -
+            TokenEstimator.estimateTokens(instruction) -
+            (systemPrompt == null
+                ? 0
+                : TokenEstimator.estimateTokens(systemPrompt)),
+        modelId: summaryModelId,
+      );
+      if (prefix.isEmpty) {
+        return const CompactionOutcome(
+          CompactionStatus.failed,
+          reason: 'span does not fit the summarizing model',
+        );
+      }
     }
 
     final buffer = StringBuffer();
@@ -423,16 +567,55 @@ class ChatCompaction {
         reason: 'summary is not smaller ($framed >= $replaced)',
       );
     }
+    final String record = CompactionRecord(
+      summary: summary,
+      madeAt: madeAt,
+      modelId: summaryModelId,
+    ).encode();
     messages[tailStart] = Map<String, String>.from(messages[tailStart])
-      ..[fieldKey] = CompactionRecord(
-        summary: summary,
-        madeAt: madeAt,
-        modelId: summaryModelId,
-      ).encode();
+      ..[fieldKey] = record;
     return CompactionOutcome(
       CompactionStatus.compacted,
       tailStart: tailStart,
+      record: record,
+      messages: messages,
     );
+  }
+
+  /// [prefix] without its oldest turns until it fits [limit] tokens. A
+  /// leading prior checkpoint (the summary message) stays; the cut always
+  /// lands on a user entry, so no tool result loses its call. Empty when
+  /// not even the newest turn fits.
+  @visibleForTesting
+  static List<Map<String, dynamic>> fitPrefix(
+    List<Map<String, dynamic>> prefix, {
+    required int limit,
+    String? modelId,
+  }) {
+    final List<int> sizes = <int>[
+      for (final entry in prefix)
+        TokenEstimator.estimateEntryTokens(entry, modelId: modelId),
+    ];
+    final int total = sizes.fold(0, (a, b) => a + b);
+    if (total <= limit) return prefix;
+    if (limit <= 0) return const <Map<String, dynamic>>[];
+    final Object? first = prefix.first['content'];
+    final bool keepCheckpoint =
+        first is String && first.contains('<compacted-summary>');
+    final int headCount = keepCheckpoint ? 1 : 0;
+    var dropped = 0;
+    for (var cut = headCount; cut < prefix.length; cut++) {
+      if (cut > headCount && prefix[cut]['role'] == 'user') {
+        if (total - dropped <= limit) {
+          return <Map<String, dynamic>>[
+            ...prefix.take(headCount),
+            ...prefix.skip(cut),
+          ];
+        }
+      }
+      dropped += sizes[cut];
+    }
+    return const <Map<String, dynamic>>[];
   }
 
   /// The summary text without thinking blocks and a wrapping

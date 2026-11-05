@@ -16,12 +16,54 @@ void main() {
   group('command prefix', () {
     test('program and subcommand, launchers stripped', () {
       expect(commandPrefixFor('git push origin master'), 'git push');
-      expect(commandPrefixFor('sudo -u root apt install x'), 'apt install');
-      expect(commandPrefixFor('FOO=1 env BAR=2 /usr/bin/npm test'), 'npm test');
+      expect(commandPrefixFor('/usr/bin/npm test'), 'npm test');
       expect(commandPrefixFor('ls -la /tmp'), 'ls');
-      expect(commandPrefixFor('python3 script.py'), 'python3');
       expect(commandPrefixFor('git commit -m "a b" && rm x'), 'git commit');
       expect(commandPrefixFor(''), isNull);
+    });
+
+    // M6: a prefix on a shell, an interpreter or a wrapper would allow any
+    // command; a new line or a command substitution starts a new command.
+    test('never for shells, interpreters and wrappers', () {
+      for (final String command in <String>[
+        'bash -c "rm -rf ~"',
+        'sh x.sh',
+        'zsh',
+        'fish -c ls',
+        'python3 script.py',
+        'python -c "print(1)"',
+        '/usr/bin/python3.12 x.py',
+        'node x.js',
+        'perl -e 1',
+        'ruby x.rb',
+        'php x.php',
+        'env BAR=2 npm test',
+        'FOO=1 npm test',
+        'xargs rm',
+        'eval "\$X"',
+        'exec rm x',
+        'find . -exec rm {} ;',
+        'sudo -u root apt install x',
+        'doas rm x',
+      ]) {
+        expect(commandPrefixFor(command), isNull, reason: command);
+      }
+      expect(commandPrefixFor('git status\nrm -rf /'), 'git status');
+      expect(commandPrefixFor(r'echo $(rm -rf /)'), 'echo');
+      expect(commandPrefixFor('echo `rm -rf /`'), 'echo');
+      // Not even when the host suggests it.
+      expect(
+        approvalCommandPrefix(
+          AgentsRelayApprovalRequest.fromPayload(<String, dynamic>{
+            'approval_id': 'a1',
+            'action': 'action_approval',
+            'tool': 'run_command',
+            'options': <String>['once', 'always_this_prefix', 'deny'],
+            'details': <String, dynamic>{'prefix': 'bash', 'command': 'bash'},
+          })!,
+        ),
+        isNull,
+      );
     });
 
     test('a request offers it only with the scope; host prefix wins', () {

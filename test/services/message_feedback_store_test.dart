@@ -25,6 +25,41 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     store.resetForTest();
     MessageFeedbackStore.sendToBackend = null;
+    MessageFeedbackStore.userIdReader = () => null;
+  });
+
+  // L6: verdicts are kept per user and leave the device at sign-out.
+  test('verdicts are per user and go at sign-out', () async {
+    String? user = 'user-a';
+    MessageFeedbackStore.userIdReader = () => user;
+    await store.save(_fb('a1'));
+    user = 'user-b';
+    await store.ensureLoaded();
+    expect(store.peek('a1'), isNull);
+    await store.save(_fb('b1'));
+    user = 'user-a';
+    await store.ensureLoaded();
+    expect(store.peek('a1'), isNotNull);
+    expect(store.peek('b1'), isNull);
+    await store.clearForSignOut('user-a');
+    expect(store.peek('a1'), isNull);
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString(MessageFeedbackStore.prefsKeyFor('user-a')), isNull);
+    expect(
+      prefs.getString(MessageFeedbackStore.prefsKeyFor('user-b')),
+      isNotNull,
+    );
+  });
+
+  test('old unowned verdicts go to the first signed-in user only', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      MessageFeedbackStore.prefsKey: jsonEncode(<Object>[_fb('old').toJson()]),
+    });
+    MessageFeedbackStore.userIdReader = () => 'user-a';
+    await store.ensureLoaded();
+    expect(store.peek('old'), isNotNull);
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString(MessageFeedbackStore.prefsKey), isNull);
   });
 
   test('the seven category ids are the wire values', () {
@@ -60,7 +95,7 @@ void main() {
     await store.save(_fb('m1', rating: FeedbackRating.down));
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     final List<dynamic> rows = jsonDecode(
-      prefs.getString(MessageFeedbackStore.prefsKey)!,
+      prefs.getString(MessageFeedbackStore.prefsKeyFor(null))!,
     ) as List<dynamic>;
     expect(rows, hasLength(1));
     expect(store.peek('m1')!.rating, FeedbackRating.down);

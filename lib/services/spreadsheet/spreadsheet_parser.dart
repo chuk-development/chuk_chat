@@ -29,6 +29,7 @@ import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:xml/xml.dart';
+import 'package:xml/xml_events.dart';
 
 import 'spreadsheet_runner_io.dart'
     if (dart.library.js_interop) 'spreadsheet_runner_web.dart'
@@ -90,8 +91,16 @@ class SpreadsheetParser {
   static const int maxCells = 250000;
   static const Duration timeout = Duration(seconds: 15);
 
-  /// Upper bound for the unpacked XML of one xlsx, against zip bombs.
-  static const int maxUnpackedBytes = 256 * 1024 * 1024;
+  /// Upper bound for the unpacked XML of one xlsx, against zip bombs. It
+  /// counts the bytes really inflated (the sizes a zip declares can lie),
+  /// and the inflate stops as soon as the bound is passed.
+  static const int maxUnpackedBytes = 64 * 1024 * 1024;
+
+  /// The largest grid Excel itself allows. A cell reference outside it is
+  /// dropped, so a forged `r="XFD2000000000"` cannot make the parser build
+  /// two billion rows.
+  static const int maxSheetRows = 1048576;
+  static const int maxSheetColumns = 16384;
 
   static SpreadsheetFormat? formatFor(String fileName) {
     final int dot = fileName.lastIndexOf('.');
@@ -350,11 +359,11 @@ class SpreadsheetParser {
     } catch (e) {
       throw SpreadsheetParseException(SpreadsheetErrorKind.invalid, '$e');
     }
-    int unpacked = 0;
+    int declared = 0;
     final Set<SpreadsheetFeature> unsupported = <SpreadsheetFeature>{};
     for (final ArchiveFile f in archive.files) {
       if (!f.isFile) continue;
-      unpacked += f.size;
+      declared += f.size;
       final String name = f.name;
       if (name.startsWith('xl/charts/')) {
         unsupported.add(SpreadsheetFeature.charts);
@@ -370,14 +379,35 @@ class SpreadsheetParser {
         unsupported.add(SpreadsheetFeature.macros);
       }
     }
-    if (unpacked > maxUnpackedBytes) {
+    // The declared sizes are a quick first check only.
+    if (declared > maxUnpackedBytes) {
       throw const SpreadsheetParseException(SpreadsheetErrorKind.tooLarge);
     }
 
+    // Every part read counts the bytes it really inflates against one
+    // budget; the inflate stops at the bound.
+    int inflated = 0;
     String? read(String path) {
       final ArchiveFile? f = archive.find(path);
       if (f == null || !f.isFile) return null;
-      return utf8.decode(f.content, allowMalformed: true);
+      final _CappedOutput out = _CappedOutput(maxUnpackedBytes - inflated);
+      try {
+        f.decompress(out);
+      } on _InflateLimitReached {
+        throw const SpreadsheetParseException(SpreadsheetErrorKind.tooLarge);
+      } on SpreadsheetParseException {
+        rethrow;
+      } catch (e) {
+        // A part that inflates past the size it declares, or broken data.
+        throw SpreadsheetParseException(SpreadsheetErrorKind.invalid, '$e');
+      } finally {
+        f.clear();
+      }
+      if (out.exceeded) {
+        throw const SpreadsheetParseException(SpreadsheetErrorKind.tooLarge);
+      }
+      inflated += out.length;
+      return utf8.decode(out.bytes, allowMalformed: true);
     }
 
     final String? workbookXml = read('xl/workbook.xml');
@@ -435,8 +465,9 @@ class SpreadsheetParser {
           );
           continue;
         }
-        final _Densified dense = _densify(_sheetRows(xml, context), budget);
-        truncated = truncated || dense.truncated;
+        final _SparseSheet sparse = _sheetCells(xml, context, budget);
+        final _Densified dense = _densifySparse(sparse.cells, budget);
+        truncated = truncated || sparse.truncated || dense.truncated;
         budget -= dense.cellCount;
         sheets.add(SpreadsheetSheet(name: name, rows: dense.rows));
       }
@@ -452,34 +483,46 @@ class SpreadsheetParser {
     }
   }
 
+  /// The shared strings, read as a stream of events (no DOM of a large
+  /// table): the visible text of each `<si>`, without phonetic runs.
   static List<String> _sharedStrings(String? xml) {
     if (xml == null) return const <String>[];
-    final XmlDocument doc = XmlDocument.parse(xml);
-    return <String>[
-      for (final XmlElement si in doc.descendantElements.where(
-        (e) => e.localName == 'si',
-      ))
-        _textOf(si),
-    ];
-  }
-
-  /// The visible text of an `<si>` / `<is>`: every `<t>`, but not the
-  /// phonetic run (`<rPh>`).
-  static String _textOf(XmlElement element) {
-    final StringBuffer out = StringBuffer();
-    void walk(XmlElement e) {
-      for (final XmlElement child in e.childElements) {
-        if (child.localName == 'rPh') continue;
-        if (child.localName == 't') {
-          out.write(child.innerText);
-        } else {
-          walk(child);
+    final List<String> out = <String>[];
+    StringBuffer? item;
+    int rph = 0;
+    bool inT = false;
+    for (final XmlEvent e in parseEvents(xml)) {
+      if (e is XmlStartElementEvent) {
+        switch (e.localName) {
+          case 'si':
+            item = StringBuffer();
+            rph = 0;
+            inT = false;
+            if (e.isSelfClosing) {
+              out.add('');
+              item = null;
+            }
+          case 'rPh':
+            if (!e.isSelfClosing) rph++;
+          case 't':
+            inT = item != null && rph == 0 && !e.isSelfClosing;
         }
+      } else if (e is XmlEndElementEvent) {
+        switch (e.localName) {
+          case 'si':
+            if (item != null) out.add(item.toString());
+            item = null;
+          case 'rPh':
+            if (rph > 0) rph--;
+          case 't':
+            inT = false;
+        }
+      } else if (inT && item != null) {
+        if (e is XmlTextEvent) item.write(e.value);
+        if (e is XmlCDATAEvent) item.write(e.value);
       }
     }
-
-    walk(element);
-    return out.toString();
+    return out;
   }
 
   static Map<String, String> _relationships(String? xml) {
@@ -495,74 +538,195 @@ class SpreadsheetParser {
     };
   }
 
-  /// Sparse rows of a worksheet: row index -> column index -> text.
-  static List<List<String>> _sheetRows(String xml, _CellContext context) {
-    final XmlDocument doc = XmlDocument.parse(xml);
+  /// The cells of a worksheet, read as a stream of events: row index ->
+  /// column index -> text. Cells outside Excel's grid are dropped, and the
+  /// read stops after [budget] cells with text (the grid cannot show more).
+  static _SparseSheet _sheetCells(
+    String xml,
+    _CellContext context,
+    int budget,
+  ) {
     final Map<int, Map<int, String>> cells = <int, Map<int, String>>{};
+    int stored = 0;
+    bool truncated = false;
     int nextRow = 0;
-    for (final XmlElement row in doc.descendantElements.where(
-      (e) => e.localName == 'row',
-    )) {
-      final int rowIndex =
-          (int.tryParse(row.getAttribute('r') ?? '') ?? (nextRow + 1)) - 1;
-      nextRow = rowIndex + 1;
-      int nextCol = 0;
-      for (final XmlElement c in row.childElements.where(
-        (e) => e.localName == 'c',
-      )) {
-        final int col = _columnOf(c.getAttribute('r')) ?? nextCol;
-        nextCol = col + 1;
-        final String value = _cellText(c, context);
-        if (value.isEmpty) continue;
-        (cells[rowIndex] ??= <int, String>{})[col] = value;
+    int rowIndex = 0;
+    int nextCol = 0;
+    // The cell being read.
+    int? col;
+    String type = 'n';
+    String? style;
+    StringBuffer? value;
+    StringBuffer? inline;
+    bool inV = false;
+    bool inIs = false;
+    bool inT = false;
+    int rph = 0;
+
+    void finishCell() {
+      final int? c = col;
+      col = null;
+      if (c == null) return;
+      final String text = _cellValue(
+        type: type,
+        style: style,
+        value: value?.toString(),
+        inline: inline?.toString(),
+        context: context,
+      );
+      if (text.isEmpty) return;
+      if (rowIndex < 0 ||
+          rowIndex >= maxSheetRows ||
+          c < 0 ||
+          c >= maxSheetColumns) {
+        truncated = true;
+        return;
+      }
+      (cells[rowIndex] ??= <int, String>{})[c] = text;
+      stored++;
+    }
+
+    for (final XmlEvent e in parseEvents(xml)) {
+      if (stored >= budget && budget > 0) {
+        // More text cells than the grid may hold: the rest is cut.
+        if (e is XmlStartElementEvent && e.localName == 'c') {
+          truncated = true;
+          break;
+        }
+      }
+      if (e is XmlStartElementEvent) {
+        switch (e.localName) {
+          case 'row':
+            final int? r = int.tryParse(_attr(e, 'r') ?? '');
+            rowIndex = (r ?? (nextRow + 1)) - 1;
+            nextRow = rowIndex + 1;
+            nextCol = 0;
+          case 'c':
+            final int c = _columnOf(_attr(e, 'r')) ?? nextCol;
+            nextCol = c + 1;
+            col = c;
+            type = _attr(e, 't') ?? 'n';
+            style = _attr(e, 's');
+            value = null;
+            inline = null;
+            rph = 0;
+            if (e.isSelfClosing) finishCell();
+          case 'v':
+            if (col != null && !e.isSelfClosing) {
+              value = StringBuffer();
+              inV = true;
+            }
+          case 'is':
+            if (col != null && !e.isSelfClosing) {
+              inline = StringBuffer();
+              inIs = true;
+            }
+          case 'rPh':
+            if (inIs && !e.isSelfClosing) rph++;
+          case 't':
+            inT = inIs && rph == 0 && !e.isSelfClosing;
+        }
+      } else if (e is XmlEndElementEvent) {
+        switch (e.localName) {
+          case 'c':
+            finishCell();
+          case 'v':
+            inV = false;
+          case 'is':
+            inIs = false;
+          case 'rPh':
+            if (rph > 0) rph--;
+          case 't':
+            inT = false;
+        }
+      } else if (e is XmlTextEvent || e is XmlCDATAEvent) {
+        final String text = e is XmlTextEvent
+            ? e.value
+            : (e as XmlCDATAEvent).value;
+        if (inV) value?.write(text);
+        if (inT) inline?.write(text);
       }
     }
-    if (cells.isEmpty) return const <List<String>>[];
-    final int maxRow = cells.keys.reduce((a, b) => a > b ? a : b);
-    return <List<String>>[
-      for (int r = 0; r <= maxRow; r++) _rowFromMap(cells[r]),
-    ];
+    return _SparseSheet(cells, truncated);
   }
 
-  static List<String> _rowFromMap(Map<int, String>? row) {
-    if (row == null || row.isEmpty) return const <String>[];
-    final int maxCol = row.keys.reduce((a, b) => a > b ? a : b);
-    return <String>[for (int c = 0; c <= maxCol; c++) row[c] ?? ''];
+  static String? _attr(XmlStartElementEvent e, String localName) {
+    for (final XmlEventAttribute a in e.attributes) {
+      if (a.localName == localName) return a.value;
+    }
+    return null;
   }
 
-  static String _cellText(XmlElement c, _CellContext context) {
-    final List<String> shared = context.shared;
-    final String type = c.getAttribute('t') ?? 'n';
-    final XmlElement? v = c.childElements
-        .where((e) => e.localName == 'v')
-        .firstOrNull;
+  /// The shown text of one cell from its type, style and raw parts.
+  static String _cellValue({
+    required String type,
+    required String? style,
+    required String? value,
+    required String? inline,
+    required _CellContext context,
+  }) {
     switch (type) {
       case 'inlineStr':
-        final XmlElement? inline = c.childElements
-            .where((e) => e.localName == 'is')
-            .firstOrNull;
-        return inline == null ? '' : _textOf(inline);
+        return inline ?? '';
       case 's':
-        final int? i = int.tryParse(v?.innerText.trim() ?? '');
+        final List<String> shared = context.shared;
+        final int? i = int.tryParse(value?.trim() ?? '');
         return i != null && i >= 0 && i < shared.length ? shared[i] : '';
       case 'b':
-        final String raw = v?.innerText.trim() ?? '';
+        final String raw = value?.trim() ?? '';
         return raw == '1' ? 'TRUE' : (raw == '0' ? 'FALSE' : raw);
       case 'n':
-        final String raw = v?.innerText ?? '';
-        final int? style = int.tryParse(c.getAttribute('s') ?? '');
-        if (style == null || style < 0 || style >= context.styles.length) {
-          return raw;
-        }
-        final SpreadsheetDateKind kind = context.styles[style];
+        final String raw = value ?? '';
+        final int? s = int.tryParse(style ?? '');
+        if (s == null || s < 0 || s >= context.styles.length) return raw;
+        final SpreadsheetDateKind kind = context.styles[s];
         if (kind == SpreadsheetDateKind.none) return raw;
         final double? serial = double.tryParse(raw.trim());
         if (serial == null) return raw;
         return formatSerialDate(serial, kind, date1904: context.date1904) ??
             raw;
       default:
-        return v?.innerText ?? '';
+        return value ?? '';
     }
+  }
+
+  /// The dense grid of [cells] within [cellLimit] cells. Only the rows and
+  /// columns that fit are built, whatever the coordinates say.
+  static _Densified _densifySparse(
+    Map<int, Map<int, String>> cells,
+    int cellLimit,
+  ) {
+    if (cells.isEmpty || cellLimit <= 0) {
+      return _Densified(const <List<String>>[], 0, cells.isNotEmpty);
+    }
+    int maxRow = 0;
+    int maxCol = 0;
+    cells.forEach((int r, Map<int, String> row) {
+      if (r > maxRow) maxRow = r;
+      for (final int c in row.keys) {
+        if (c > maxCol) maxCol = c;
+      }
+    });
+    bool truncated = false;
+    int width = maxCol + 1;
+    if (width > cellLimit) {
+      width = cellLimit;
+      truncated = true;
+    }
+    int keep = maxRow + 1;
+    if (keep * width > cellLimit) {
+      keep = cellLimit ~/ width;
+      truncated = true;
+    }
+    final List<List<String>> out = <List<String>>[
+      for (int r = 0; r < keep; r++)
+        List<String>.generate(
+          width,
+          (c) => cells[r]?[c] ?? '',
+          growable: false,
+        ),
+    ];
+    return _Densified(out, keep * width, truncated);
   }
 
   // ── Dates ──────────────────────────────────────────────────────────────
@@ -881,5 +1045,73 @@ class _Densified {
 
   final List<List<String>> rows;
   final int cellCount;
+  final bool truncated;
+}
+
+/// Thrown by [_CappedOutput] when an inflate passes its bound.
+class _InflateLimitReached implements Exception {
+  const _InflateLimitReached();
+}
+
+/// Collects inflated bytes up to [limit] and throws past it, so a zip
+/// bomb stops after the bound instead of filling the memory.
+class _CappedOutput extends OutputStream {
+  _CappedOutput(this.limit) : super(byteOrder: ByteOrder.littleEndian);
+
+  final int limit;
+  final OutputMemoryStream _out = OutputMemoryStream();
+  bool exceeded = false;
+
+  Uint8List get bytes => _out.getBytes();
+
+  @override
+  int get length => _out.length;
+
+  void _room(int count) {
+    if (_out.length + count > limit) {
+      exceeded = true;
+      throw const _InflateLimitReached();
+    }
+  }
+
+  @override
+  void clear() => _out.clear();
+
+  @override
+  void flush() => _out.flush();
+
+  @override
+  void writeByte(int value) {
+    _room(1);
+    _out.writeByte(value);
+  }
+
+  @override
+  void writeBytes(List<int> bytes, {int? length}) {
+    _room(length ?? bytes.length);
+    _out.writeBytes(bytes, length: length);
+  }
+
+  @override
+  void writeStream(InputStream stream) {
+    _room(stream.length);
+    _out.writeStream(stream);
+  }
+
+  @override
+  void writeBackReference(int distance, int count) {
+    _room(count);
+    _out.writeBackReference(distance, count);
+  }
+
+  @override
+  Uint8List subset(int start, [int? end]) => _out.subset(start, end);
+}
+
+/// A worksheet's text cells and whether the read stopped early.
+class _SparseSheet {
+  const _SparseSheet(this.cells, this.truncated);
+
+  final Map<int, Map<int, String>> cells;
   final bool truncated;
 }

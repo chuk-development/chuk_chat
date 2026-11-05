@@ -28,6 +28,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 
 // ── models ──────────────────────────────────────────────────────────────────
 
@@ -521,8 +522,24 @@ class AgentsThreadModes extends ChangeNotifier {
 
   bool _waitsLoaded = false;
 
-  /// Where [_storedWaits] lives. Labels only; a few bytes per thread.
+  /// Where [_storedWaits] lived before it was kept per user (no owner).
+  /// Never read again; removed at sign-out.
   static const String waitsPrefsKey = 'agents_thread_waits_v1';
+
+  /// Where [userId]'s [_storedWaits] live. Labels only; a few bytes per
+  /// thread.
+  static String waitsPrefsKeyFor(String? userId) =>
+      '$waitsPrefsKey:${userId ?? 'anon'}';
+
+  /// The signed-in user. Tests set their own.
+  static String? Function() userIdReader = _currentUserId;
+
+  static String? _currentUserId() => SupabaseService.isInitialized
+      ? SupabaseService.auth.currentUser?.id
+      : null;
+
+  /// The user whose labels [_storedWaits] holds.
+  String? _waitsOwner;
 
   AgentsGoal? goalOf(String key) => _goals[key];
 
@@ -563,6 +580,15 @@ class AgentsThreadModes extends ChangeNotifier {
   /// The `plan` value the next task of [key] carries, or null to leave the
   /// key off (no change). Read once per send.
   bool? takePlanFlag(String key) => _planWanted.remove(key);
+
+  /// Puts back a [takePlanFlag] value whose task never left (the send
+  /// threw), so the next task carries it. A newer wish of the user wins.
+  void restorePlanFlag(String key, bool plan) {
+    if (key.isEmpty || _planWanted.containsKey(key)) return;
+    if (plan == planModeOf(key)) return;
+    _planWanted[key] = plan;
+    notifyListeners();
+  }
 
   /// What [key] waits on the user for, or null. A plan review beats an
   /// approval, an approval beats a question, a question beats a blocked goal.
@@ -647,12 +673,15 @@ class AgentsThreadModes extends ChangeNotifier {
 
   /// Reads the labels stored at the last change. Safe to call often.
   Future<void> loadWaits() async {
-    if (_waitsLoaded) return;
+    final String? user = userIdReader();
+    if (_waitsLoaded && user == _waitsOwner) return;
+    if (_waitsLoaded) _storedWaits.clear();
     _waitsLoaded = true;
+    _waitsOwner = user;
     try {
       final SharedPreferences prefs = await SharedPreferences.getInstance();
       final Map<String, AgentsWaitKind> stored = decodeWaits(
-        prefs.getString(waitsPrefsKey),
+        prefs.getString(waitsPrefsKeyFor(user)),
       );
       if (stored.isEmpty) return;
       stored.removeWhere((String key, _) => _liveKeys.contains(key));
@@ -682,10 +711,11 @@ class AgentsThreadModes extends ChangeNotifier {
   void _saveWaits() {
     if (!_waitsLoaded) return; // Never overwrite labels not read yet.
     final String encoded = encodeWaits(currentWaits());
+    final String key = waitsPrefsKeyFor(_waitsOwner);
     unawaited(() async {
       try {
         final SharedPreferences prefs = await SharedPreferences.getInstance();
-        await prefs.setString(waitsPrefsKey, encoded);
+        await prefs.setString(key, encoded);
       } catch (_) {
         // Kept in memory; the next change writes again.
       }
@@ -838,6 +868,24 @@ class AgentsThreadModes extends ChangeNotifier {
     _saveWaits();
   }
 
+  /// An answer to [approvalId] of [key] never reached the host (the send
+  /// failed): the approval waits on the user again.
+  void approvalReopened(
+    String key,
+    String approvalId, {
+    bool planReview = false,
+  }) {
+    if (key.isEmpty || approvalId.isEmpty) return;
+    final Map<String, bool> open = _openApprovals.putIfAbsent(
+      key,
+      () => <String, bool>{},
+    );
+    if (open[approvalId] == planReview) return;
+    open[approvalId] = planReview;
+    notifyListeners();
+    _saveWaits();
+  }
+
   // ── frames out ──
 
   /// `goal_control` pause / resume / clear. False when it could not be sent.
@@ -930,6 +978,19 @@ class AgentsThreadModes extends ChangeNotifier {
     }
   }
 
+  /// Sign-out: the thread states leave memory, and [userId]'s stored wait
+  /// labels (and the old unowned ones) leave this device.
+  Future<void> clearForSignOut(String? userId) async {
+    reset();
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.remove(waitsPrefsKeyFor(userId));
+      await prefs.remove(waitsPrefsKey);
+    } catch (_) {
+      // No preferences (a widget test).
+    }
+  }
+
   /// Test seam.
   @visibleForTesting
   void reset() {
@@ -944,6 +1005,7 @@ class AgentsThreadModes extends ChangeNotifier {
     _storedWaits.clear();
     _liveKeys.clear();
     _waitsLoaded = false;
+    _waitsOwner = null;
     _sandbox = null;
     _send = _sendOverRelay;
     notifyListeners();

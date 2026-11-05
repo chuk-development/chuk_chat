@@ -7,6 +7,7 @@ import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import 'package:chuk_chat/models/chat_stream_event.dart';
 import 'package:chuk_chat/services/chat_compaction.dart';
 import 'package:chuk_chat/services/chat_compaction_runner.dart';
+import 'package:chuk_chat/services/chat_turn_stats.dart';
 import 'package:chuk_chat/services/chat_history_builder.dart';
 import 'package:chuk_chat/services/client_request_ids.dart';
 import 'package:chuk_chat/models/content_block.dart';
@@ -108,12 +109,13 @@ class StreamingMessageHandler {
 
   Function()? onPaymentRequired;
 
-  /// A "continue generation" turn compacted the chat: its rows are a copy,
-  /// so the host puts the stored summary ([ChatCompaction.fieldKey], JSON
-  /// [CompactionRecord]) on its own row at [index] of chat [chatId]. A
-  /// normal send writes into the host's list directly and does not call
-  /// this.
-  void Function(String chatId, int index, String record)? onCompactionStored;
+  /// The turn compacted a copy of chat [chatId]'s rows. [row] is the
+  /// summarized row with its stored summary ([ChatCompaction.fieldKey],
+  /// JSON [CompactionRecord]); the host puts it on its own row at [index]
+  /// only when that row is still the same message
+  /// ([ChatCompaction.sameMessage]) and the host still shows [chatId].
+  void Function(String chatId, int index, Map<String, String> row)?
+  onCompactionStored;
 
   /// The send failed before the server accepted it (no frame came back) on
   /// a network error, after the pass's own reconnect retries. The host
@@ -298,11 +300,29 @@ class StreamingMessageHandler {
     final chatId = activeChatId;
 
     // Request idempotency: an outbox row armed its base for this turn, so
-    // its passes keep the same `client_request_id` across app restarts.
-    // Any other turn gets a fresh base; pass n sends `<base>-p<n>`.
+    // its passes keep the same `client_request_id` across app restarts. A
+    // Retry of a message whose turn ended while the server still held it
+    // (`connection_lost`, `request_pending`) asks with that turn's ids, so
+    // the server answers from its record instead of billing again. Any
+    // other turn gets a fresh base; pass n sends `<base>-p<n>`.
+    Map<String, String>? turnUserRow;
+    if (continuePriorText == null) {
+      for (var i = messages.length - 1; i >= 0; i--) {
+        if (messages[i]['sender'] == 'user') {
+          turnUserRow = messages[i];
+          break;
+        }
+      }
+    }
+    final String? turnMessageKey = ClientRequestIds.messageKeyOf(turnUserRow);
     final String requestBase =
-        ClientRequestIds.take(chatId) ?? ClientRequestIds.freshBase();
+        ClientRequestIds.take(chatId) ??
+        ClientRequestIds.takeForRetry(chatId, turnMessageKey) ??
+        ClientRequestIds.freshBase();
     _turnRequestBase = requestBase;
+    // The usage stamped on this turn's answer is only what this turn
+    // records.
+    ChatTurnStats.instance.beginTurn(chatId);
 
     // The chat picks the tool loop: the host's fold for an Agents thread,
     // upstream's client-side loop for a chuk_chat chat.
@@ -380,30 +400,33 @@ class StreamingMessageHandler {
     // it continues (the placeholder), and they may be read-only, so it
     // compacts a copy and hands the summary to the host.
     final bool continuing = continuePriorText != null;
-    final List<Map<String, String>> compactRows = continuing
-        ? messages.map(Map<String, String>.from).toList()
-        : messages;
     final int compactEnd = continuing
-        ? compactRows.length
+        ? messages.length
         : placeholderIndex - 1;
     final bool canCompact = continuing
-        ? compactEnd >= 2 && placeholderIndex == compactRows.length - 1
+        ? compactEnd >= 2 && placeholderIndex == messages.length - 1
         : compactEnd >= 1 &&
               compactEnd < messages.length &&
               messages[compactEnd]['sender'] == 'user';
     if (canCompact) {
-      Future<List<Map<String, dynamic>>> buildBefore([List<int>? starts]) =>
-          ChatHistoryBuilder.build(
-            messages: compactRows.sublist(0, compactEnd),
-            pendingUserText: userInput,
-            includeRecentImages: includeRecentImagesInHistory,
-            includeAllImages: includeAllImagesInHistory,
-            includeReasoning: includeReasoningInHistory,
-            includeToolResults: includeToolResultsInHistory,
-            messageStarts: starts,
-          );
+      // The runner works on a copy of `0..compactEnd-1` (the live list may
+      // hold another chat when the summary returns); the history is rebuilt
+      // from that copy and the host writes the summary back after checking
+      // the chat and the row ([onCompactionStored]).
+      Future<List<Map<String, dynamic>>> buildBefore(
+        List<Map<String, String>> rows, [
+        List<int>? starts,
+      ]) => ChatHistoryBuilder.build(
+        messages: rows,
+        pendingUserText: userInput,
+        includeRecentImages: includeRecentImagesInHistory,
+        includeAllImages: includeAllImagesInHistory,
+        includeReasoning: includeReasoningInHistory,
+        includeToolResults: includeToolResultsInHistory,
+        messageStarts: starts,
+      );
       final compaction = await ChatCompactionRunner.beforeSend(
-        messages: compactRows,
+        messages: messages,
         end: compactEnd,
         chatId: chatId,
         modelId: selectedModelId,
@@ -414,20 +437,39 @@ class StreamingMessageHandler {
         history: apiHistory,
         pendingMessage: toolSession.firstPassMessage,
         buildHistory: buildBefore,
+        // A continue: the answer it continues is measured again after the
+        // summary.
+        madeAt: continuing ? compactEnd - 1 : compactEnd,
       );
-      final int? tailStart = compaction.tailStart;
-      if (compaction.compacted && tailStart != null) {
-        if (tailStart < capturedMessagesSnapshot.length) {
-          capturedMessagesSnapshot[tailStart] = Map<String, dynamic>.from(
-            compactRows[tailStart],
-          );
-        }
-        final String? record = compactRows[tailStart][ChatCompaction.fieldKey];
-        if (continuing && record != null) {
-          onCompactionStored?.call(chatId, tailStart, record);
-        }
+      if (compaction.overflow) {
+        final String failureMessage = compaction.overflowMessage;
+        onMessageFinalize?.call(
+          placeholderIndex,
+          failureMessage,
+          '',
+          chatId,
+          null,
+        );
+        onShowSnackBar?.call(failureMessage);
+        _markStreamFinalized();
+        _isStreaming = false;
+        _isSending = false;
         onUpdateUI?.call();
-        apiHistory = await buildBefore();
+        await _releaseForegroundKeepAlive();
+        return;
+      }
+      final int? tailStart = compaction.tailStart;
+      final Map<String, String>? target = compaction.target;
+      final List<Map<String, String>>? compactedRows = compaction.messages;
+      if (compaction.compacted &&
+          tailStart != null &&
+          target != null &&
+          compactedRows != null) {
+        // This turn's own snapshot (the background save) carries it too.
+        compaction.writeInto(capturedMessagesSnapshot);
+        onCompactionStored?.call(chatId, tailStart, target);
+        onUpdateUI?.call();
+        apiHistory = await buildBefore(compactedRows);
         toolSession = toolCallHandler.createSession(
           initialUserMessage: aiPromptContent,
           userSentAt: turnSentAt,
@@ -1286,6 +1328,12 @@ class StreamingMessageHandler {
           }
 
           finalizeStaleToolState();
+
+          // The server may still answer this turn's ids: a Retry of the
+          // same message asks with them (bead chuk_chat-3e67).
+          if (code != null && StreamErrorCodes.resendSameId.contains(code)) {
+            ClientRequestIds.keepForRetry(chatId, turnMessageKey, requestBase);
+          }
 
           // Never reached the server: queue it instead of failing. Only the
           // first pass of a fresh send; a regenerate or continue, or a later

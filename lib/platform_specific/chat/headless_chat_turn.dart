@@ -283,6 +283,15 @@ abstract final class HeadlessChatTurn {
       ..onPaymentRequired = () {
         paymentRequired = true;
       }
+      ..onCompactionStored = (String c, int i, Map<String, String> row) {
+        // The handler compacted a copy of the rows: put the summary on the
+        // working row it was made for.
+        final String? record = row[ChatCompaction.fieldKey];
+        if (record == null || i < 0 || i >= working.length) return;
+        if (!ChatCompaction.sameMessage(working[i], row)) return;
+        working[i] = Map<String, String>.from(working[i])
+          ..[ChatCompaction.fieldKey] = record;
+      }
       ..onTurnError = (String c, int i, String error, String? code) {
         turnErrorCode = code;
       }

@@ -15,6 +15,12 @@ void main() {
       'aws': 'AKIAIOSFODNN7EXAMPLE',
       'google': 'AIzaSyA1234567890abcdefghijklmnopqrstuv',
       'slack': 'xoxb-' '1234567890-abcdefghij',
+      'slack app': 'xoxa-' '2-1234567890-abcdefghij',
+      'slack refresh': 'xoxe-' '1-My0xLTEyMzQ1Njc4OTAtYWJj',
+      'slack rotated': 'xoxe.' 'xoxp-1-Mi0yLTEyMzQ1Njc4OTA',
+      'stripe live': 'sk_live_' '51H8abcDEF1234567890ghijKLmn',
+      'stripe test': 'sk_test_' '51H8abcDEF1234567890ghijKLmn',
+      'stripe restricted': 'rk_live_' '51H8abcDEF1234567890ghijKL',
       'jwt': 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U',
     };
     positives.forEach((String name, String key) {

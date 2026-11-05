@@ -200,6 +200,16 @@ runs and bills each id once:
   (`WebSocketChatService.declareStopIntent`), so a detached request stops
   too.
 
+A pass whose socket died (`connection_lost`) or whose answer is still
+being written (`request_pending`) is asked again under the same id, up to
+3 times with backoff, on desktop and mobile alike
+(`ClientRequestIds.resendPassOnSameId`; never in an Agents thread; bead
+chuk_chat-074s). When the turn still ends with one of these codes, its
+base is kept for that user message (`ClientRequestIds.keepForRetry`, keyed
+by `messageId`, else `sentAt`); the user's Retry of the same message takes
+it (`takeForRetry`), so the server answers from its record instead of
+billing the turn twice (bead chuk_chat-3e67).
+
 The base of a turn on screen is random. The base of an outbox row is
 `ob-<row id>`, written into the payload at enqueue (`clientRequestBase`,
 sealed with the row). A screen send that never reached the server keeps its

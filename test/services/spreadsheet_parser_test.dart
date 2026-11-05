@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:chuk_chat/services/spreadsheet/spreadsheet_parser.dart';
+import 'package:chuk_chat/services/spreadsheet/spreadsheet_runner_web.dart'
+    as web;
 
 import '../support/xlsx_fixture.dart';
 
@@ -143,6 +145,76 @@ void main() {
       expect(doc.sheets[1].rows.length, 5);
     });
 
+    // M5: crafted input must stay within the bounds, not build a grid
+    // from forged coordinates or inflate a zip bomb into memory.
+    test('a forged far cell reference builds no giant grid', () {
+      final doc = SpreadsheetParser.parseSync(
+        buildRawXlsx(
+          '<worksheet><sheetData>'
+          '<row r="1"><c r="A1" t="inlineStr"><is><t>head</t></is></c></row>'
+          '<row r="2000000000"><c r="XFD2000000000" t="inlineStr">'
+          '<is><t>far</t></is></c></row>'
+          '<row r="3"><c r="ZZZZZZ3" t="inlineStr"><is><t>wide</t></is></c>'
+          '<c r="B3" t="inlineStr"><is><t>near</t><rPh><t>x</t></rPh></is></c>'
+          '</row>'
+          '</sheetData></worksheet>',
+        ),
+        SpreadsheetFormat.xlsx,
+      );
+      final rows = doc.sheets.single.rows;
+      expect(doc.truncated, isTrue);
+      expect(rows, hasLength(3));
+      expect(rows.first.first, 'head');
+      expect(rows[2][1], 'near');
+    });
+
+    test('a sheet with more text cells than the budget stops reading', () {
+      final StringBuffer xml = StringBuffer('<worksheet><sheetData>');
+      for (int r = 1; r <= 400; r++) {
+        xml.write('<row r="$r"><c r="A$r"><v>$r</v></c></row>');
+      }
+      xml.write('</sheetData></worksheet>');
+      final doc = SpreadsheetParser.parseSync(
+        buildRawXlsx(xml.toString()),
+        SpreadsheetFormat.xlsx,
+        cellLimit: 50,
+      );
+      expect(doc.truncated, isTrue);
+      expect(doc.sheets.single.rows, hasLength(50));
+    });
+
+    test('a zip declaring a huge size is refused', () {
+      final Uint8List forged = forgeZipSizes(
+        buildRawXlsx('<worksheet><sheetData/></worksheet>'),
+        0x7FFFFFF0,
+      );
+      expect(
+        () => SpreadsheetParser.parseSync(forged, SpreadsheetFormat.xlsx),
+        throwsA(
+          isA<SpreadsheetParseException>().having(
+            (e) => e.kind,
+            'kind',
+            SpreadsheetErrorKind.tooLarge,
+          ),
+        ),
+      );
+    });
+
+    test('a zip bomb that hides its size stops at the bound', () {
+      // 80 MB of one byte inflate from a few hundred KB; the zip claims 1 KB
+      // per part, so only the inflate itself can stop it.
+      final String filler = 'a' * (80 * 1024 * 1024);
+      final Uint8List forged = forgeZipSizes(
+        buildRawXlsx('<worksheet><sheetData/>$filler</worksheet>'),
+        1024,
+      );
+      expect(forged.length, lessThan(SpreadsheetParser.maxBytes));
+      expect(
+        () => SpreadsheetParser.parseSync(forged, SpreadsheetFormat.xlsx),
+        throwsA(isA<SpreadsheetParseException>()),
+      );
+    });
+
     test('garbage is invalid', () {
       expect(
         () => SpreadsheetParser.parseSync(
@@ -158,6 +230,41 @@ void main() {
         ),
       );
     });
+  });
+
+  // L5: the web parses on the UI thread, so it takes less.
+  test('the web runner takes smaller files and grids', () async {
+    final Uint8List big = _text('a,b\n' * (web.kWebSpreadsheetMaxBytes ~/ 4 + 1));
+    await expectLater(
+      web.runSpreadsheetParse(
+        big,
+        SpreadsheetFormat.csv,
+        SpreadsheetParser.maxCells,
+        SpreadsheetParser.timeout,
+      ),
+      throwsA(
+        isA<SpreadsheetParseException>().having(
+          (e) => e.kind,
+          'kind',
+          SpreadsheetErrorKind.tooLarge,
+        ),
+      ),
+    );
+    final String csv = List<String>.generate(
+      30000,
+      (i) => '$i,$i,$i',
+    ).join('\n');
+    final doc = await web.runSpreadsheetParse(
+      _text(csv),
+      SpreadsheetFormat.csv,
+      SpreadsheetParser.maxCells,
+      SpreadsheetParser.timeout,
+    );
+    expect(doc.truncated, isTrue);
+    expect(
+      doc.sheets.single.rows.length * 3,
+      lessThanOrEqualTo(web.kWebSpreadsheetMaxCells),
+    );
   });
 
   test('xls is unsupported', () {

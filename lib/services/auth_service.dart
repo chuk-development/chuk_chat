@@ -4,8 +4,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:chuk_chat/services/agents/agent_mail_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chukdoo/chukdoo_connector.dart';
+import 'package:chuk_chat/services/agents/agents_thread_modes.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
+import 'package:chuk_chat/services/message_feedback_store.dart';
 import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/offline_send_coordinator.dart';
 import 'package:chuk_chat/services/password_revision_service.dart';
@@ -187,6 +189,10 @@ class AuthService {
       await MultiplexSession.shutdown();
       // The cached plan belongs to the user who just left.
       UserStatusService.clear();
+      // So do the answer verdicts and the Agents wait labels kept in the
+      // preferences (keyed by user).
+      await MessageFeedbackStore.instance.clearForSignOut(userId);
+      await AgentsThreadModes.instance.clearForSignOut(userId);
       // Web: drop the local plaintext chat cache on logout. The next login
       // (e.g. after a password reset) then starts clean, so chats encrypted
       // with an old key correctly surface as locked. Native intentionally

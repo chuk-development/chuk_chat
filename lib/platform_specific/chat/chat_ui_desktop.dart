@@ -82,7 +82,11 @@ import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart'; // NEW
 import 'package:chuk_chat/services/websocket_chat_service.dart';
+import 'package:chuk_chat/models/chat_stream_event.dart'
+    show StreamErrorCodes;
 import 'package:chuk_chat/services/client_request_ids.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
+import 'package:chuk_chat/utils/retry_backoff.dart';
 import 'package:chuk_chat/services/tool_result_cache_registry.dart';
 import 'package:chuk_chat/services/streaming_manager.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
@@ -492,10 +496,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       ),
     );
     if (!mounted) return;
-    if (outcome.compacted) {
-      if (_activeChatId == chatId) setState(() {});
-      _persistChatWithId(chatId);
-    }
+    if (outcome.compacted) _storeCompaction(chatId, outcome);
     showSnackBar(switch (outcome.status) {
       CompactionStatus.compacted => l.composerCompactDone,
       CompactionStatus.notNeeded =>
