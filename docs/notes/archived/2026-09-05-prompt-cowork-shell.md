@@ -7,9 +7,9 @@ und "Auftrag gelesen", danach alle Meldungen an cowork-76.
 
 ## Lesen, in dieser Reihenfolge
 1. docs/COORDINATION.md — nur Kopf + letzte 40 Log-Zeilen (Regeln, wer was besitzt).
-2. docs/HANDOVER_2026-09-05_SHELL_SETTINGS_cowork-5c.md — KOMPLETT (dein Vorgaenger).
-3. docs/PLAN_2026-09-04_AGENTS_CHUK_ALIGN.md — Abschnitt WS-1 (Shell).
-4. docs/diffs_c6_messenger_shell.md, docs/HANDOVER_2026-09-05_MOBILE.md (Mobile-Layer
+2. docs/notes/archived/2026-09-05-handover-shell-settings-cowork-5c.md — KOMPLETT (dein Vorgaenger).
+3. docs/notes/archived/2026-09-04-plan-agents-chuk-align.md — Abschnitt WS-1 (Shell).
+4. docs/diffs_c6_messenger_shell.md, docs/notes/archived/2026-09-05-handover-mobile.md (Mobile-Layer
    von cowork-c6, schon eingebaut).
 5. `bd show cowork-b6h`, `bd show cowork-8y2` und den hxh-Folgebead (bd ready).
 
@@ -51,7 +51,7 @@ browser_view_page.dart, third_party/**, Python.
 - Signaturaenderungen mit allen Fakes/Tests im selben Schritt; Tree muss zwischen
   Schritten kompilieren.
 - Subagenten: nur Opus 5, einer gleichzeitig. Bei 429: 60 s warten, retry.
-- Kontext: ab 550k stoppen, Handover docs/HANDOVER_2026-09-05_SHELL_cowork-shell.md.
+- Kontext: ab 550k stoppen, Handover docs/notes/archived/2026-09-05-handover-shell-cowork-shell.md.
 - Status-Antworten an cowork-76 in 3-5 Zeilen, mit Testzahlen; nie gruen melden, was du
   nicht gesehen hast. Antworte dem User knapp auf Deutsch.
 - Bug gefunden, nicht sofort gefixt → `bd create`. Fertig → `bd close`.

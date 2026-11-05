@@ -273,6 +273,15 @@ Code: `lib/services/prompt_cache/`, test:
   image-only entry (the server drops it), text after an image, a missing
   ref. The server resolves image refs only for the current turn, so an
   older turn's images in later history still go up in full each request.
+- **The repeat-call note** (`repeatCallAdvisory`) is appended after the cap
+  and stored with the result; never recompute it at send time.
+- **A steer** (`SteerInbox`) replays from the transcript;
+  `ContentBlock.steer` is display only.
+- **The model catalogue is stale-while-revalidate, 10 min**
+  (`ModelCacheService.cacheFreshDuration`, one background refresh at most
+  every 30 s), so its values can change mid-chat. Nothing in the prefix may
+  read it per request; only `supports_vision` does (image placeholders),
+  and a flip there is one accepted miss.
 - **`modelContext` is bounded in storage** (`storedContextOf` ->
   `TurnPromptContext.compactForStorage`) without changing the replay: a
   note's state is a `stateDiff` against the state before it (old payloads
@@ -281,3 +290,8 @@ Code: `lib/services/prompt_cache/`, test:
   `kTranscriptBudgetChars` is always dropped by the replay budget, so only
   `transcriptChars` (its `jsonEncode` length, for the budget) and
   `transcriptSkills` (for the marker rows) are kept.
+
+## Chat compaction (2026-11-05)
+
+See `docs/CHAT_COMPACTION.md`. The summary request continues the chat's
+own prefix byte for byte; never compact Agents threads.

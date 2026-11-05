@@ -147,7 +147,7 @@ is run with the real app once 98's `tokenRefreshed → provisionAccount` and the
 
 - Host-side refresh while detached still rotates the shared pair; the
   `account_session_rotated` frame is the mitigation. The clean end state is an
-  independent host credential (HANDOFF_2026-09-04 §5) — not built.
+  independent host credential (2026-09-04-handover-native-toolcalls-and-auth.md §5) — not built.
 - `mcp_credentials` and `account_session_rotated` have no durable outbox; they
   are re-sent until acked, which is why the ack is defined as "the device sends
   the token back".

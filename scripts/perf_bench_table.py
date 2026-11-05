@@ -1,8 +1,16 @@
 #!/usr/bin/env python3
-"""Prints the table for one or two runs of scripts/perf_bench.sh."""
+"""Prints the table for one or two runs of scripts/perf_bench.sh.
+
+Each run is also compared to the budgets in docs/perf_budgets.json. Lines
+over budget are listed under "budget"; with --strict the script exits 1 when
+any run is over. Usage: perf_bench_table.py [--strict] RUN.jsonl [RUN.jsonl]
+"""
 import json
+import os
 import statistics
 import sys
+
+BUDGETS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "docs", "perf_budgets.json")
 
 
 def load(path):
@@ -85,7 +93,63 @@ def crawl(path):
     print("skipped:", skips)
 
 
-for p in sys.argv[1:]:
+def budget_for(phases, name):
+    for prefix, limits in phases.items():
+        if name.startswith(prefix):
+            return limits
+    return None
+
+
+def check_budgets(path, rows, cold):
+    """Lists every value over its budget; returns how many there are."""
+    if not os.path.exists(BUDGETS):
+        return 0
+    budgets = json.load(open(BUDGETS))
+    over = []
+    for name, row in rows.items():
+        limits = budget_for(budgets.get("phases", {}), name)
+        for metric, limit in (limits or {}).items():
+            value = row.get(metric)
+            if isinstance(value, (int, float)) and value > limit:
+                over.append(f"{name}: {metric} {value} > {limit}")
+    cs = budgets.get("cold_start", {})
+    if cold:
+        am = statistics.median(c[0] for c in cold)
+        shell = statistics.median(c[1] for c in cold)
+        if "am_total_ms" in cs and am > cs["am_total_ms"]:
+            over.append(f"cold start: am TotalTime med {am:.0f} > {cs['am_total_ms']}")
+        if "to_shell_ms" in cs and shell > cs["to_shell_ms"]:
+            over.append(f"cold start: to shell med {shell:.0f} > {cs['to_shell_ms']}")
+    mem = budgets.get("memory", {})
+    rss = os.path.splitext(path)[0] + ".rss"
+    if "avd_rss_mb" in mem and os.path.exists(rss):
+        run = longest = peak = 0
+        for line in open(rss):
+            parts = line.split()
+            mb = int(parts[1]) if len(parts) == 2 and parts[1].isdigit() else 0
+            peak = max(peak, mb)
+            run = run + 1 if mb > mem["avd_rss_mb"] else 0
+            longest = max(longest, run)
+        if longest >= mem.get("seconds_over", 30):
+            over.append(f"AVD RSS over {mem['avd_rss_mb']} MB for {longest} s (peak {peak} MB)")
+        else:
+            print(f"AVD RSS peak {peak} MB (budget {mem['avd_rss_mb']} MB sustained)")
+    if over:
+        print(f"budget: {len(over)} over (docs/perf_budgets.json)")
+        for o in over:
+            print("  OVER", o)
+    else:
+        print("budget: all within docs/perf_budgets.json")
+    return len(over)
+
+
+args = [a for a in sys.argv[1:] if a != "--strict"]
+total_over = 0
+for p in args:
     print("==", p)
-    table(*load(p))
+    rows, cold = load(p)
+    table(rows, cold)
     crawl(p)
+    total_over += check_budgets(p, rows, cold)
+if "--strict" in sys.argv[1:] and total_over:
+    sys.exit(1)

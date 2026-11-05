@@ -161,12 +161,12 @@ independently and points at the sidebar rebuild.
    the laptop-wake gap. Not built: they touch the state transitions in `_set` and
    `dispose`, which I did not want to change without a full test run after.
 4. **cowork-84's tool-card proposal**
-   (`docs/PROPOSAL_2026-09-05_TOOLCARDS_cowork-84.md`) — 84 builds it in my files
+   (`docs/notes/archived/2026-09-05-proposal-toolcards-cowork-84.md`) — 84 builds it in my files
    itself, after cowork-b5's Python tool-frame pass.
 5. **`runtime.py` / `config_token_exchange`** — see the review note above.
 6. **P7 (notifications, app side) and P8 (Opus review of the whole Flutter side)
    were assigned to me and NEVER STARTED.** The plan is
-   `docs/PLAN_2026-09-04_AGENTS_CHUK_ALIGN.md` §WS-7. The host side exists
+   `docs/notes/archived/2026-09-04-plan-agents-chuk-align.md` §WS-7. The host side exists
    (`host/notify.py`, `desktop_notify.py`, `supabase/functions/notify-run`). The
    app has `notification_service.dart` as a no-op stub from the import; the real
    port goes to `services/notifications/local_notifications.dart` with the stub

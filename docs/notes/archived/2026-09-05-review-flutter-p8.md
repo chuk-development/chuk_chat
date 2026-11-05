@@ -26,7 +26,7 @@ No `flutter`, `dart`, `flutter test` or `flutter analyze` was run (one compiler
 at a time on this machine). Everything below was read with `cat` / `sed` /
 `grep` and is quoted from the tree.
 
-Docs read first: `HANDOVER_2026-09-05_CHAT_STORAGE.md`, `_LOGOUT_2n1.md`,
+Docs read first: `docs/notes/archived/2026-09-05-handover-chat-storage.md`, `_LOGOUT_2n1.md`,
 `_MCP_cowork-47.md`, `_REPLAY_EVENTS_266.md`, `_TOOLCARDS_cowork-84.md`,
 `_REASONING_TOOLFRAMES.md`, `_MOBILE.md`, `_SHELL_cowork-shell.md`,
 `_SHELL_SETTINGS_cowork-5c.md`, `WIRE_CONTRACT.md`, `PRODUCT_PHILOSOPHY.md`.
@@ -613,7 +613,7 @@ one the WS-7 handover documents.
 > nothing emits this yet on the real wire."
 
 Session b5 landed the reasoning channel on the host
-(`HANDOVER_2026-09-05_REASONING_TOOLFRAMES.md`, live probe: 11 reasoning
+(`docs/notes/archived/2026-09-05-handover-reasoning-toolframes.md`, live probe: 11 reasoning
 frames) and `WIRE_CONTRACT.md` documents it as emitted. Update the comment.
 
 ---

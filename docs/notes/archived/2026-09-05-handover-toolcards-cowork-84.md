@@ -102,7 +102,7 @@ pending) and `bd close cowork-b45 cowork-al2` after the live check.
   paths with `arguments` (object), `result`, `status`, `started_at`,
   `completed_at`; `done` with `started_at`, `finished_at`, `first_mid`,
   `last_mid`. Python: cowork-b5. App: cowork-47.
-- `docs/PROPOSAL_2026-09-05_TOOLCARDS_cowork-84.md` — the concrete Dart diffs
+- `docs/notes/archived/2026-09-05-proposal-toolcards-cowork-84.md` — the concrete Dart diffs
   for cowork-47's files (relay client, ledger `toolCallFromRelay`, loader
   `generationMs` without `startedAt`, `advanceCursor` on a live `done`).
 - `app/test/services/agents/tool_card_parity_test.dart` — the same scripted

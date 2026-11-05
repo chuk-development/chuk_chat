@@ -3583,7 +3583,7 @@ fresh value with every `agent_permissions_get`, and a push on every change
 
 ### The browser panel (`page_message`, bead chuk_chat-8xsn)
 
-Decided from `docs/PLAN_2026-09-08_BROWSER_EXTENSION.md` §3a: the user's own
+Decided from `docs/notes/implemented/2026-09-08-plan-browser-extension.md` §3a: the user's own
 chat about a page is a **normal task**, with the page as context. No new
 agent tool.
 
