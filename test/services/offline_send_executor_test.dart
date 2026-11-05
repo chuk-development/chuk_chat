@@ -116,7 +116,7 @@ void main() {
     expect(lastRequest!.maxTokens, OfflineSendExecutor.fallbackMaxTokens);
   });
 
-  test('a break after the server answered is accepted (no auto resend)',
+  test('a dropped socket after the server answered goes back to the outbox',
       () async {
     stored = [
       ChatMessage(role: 'user', text: 'q', queueId: 'q1'),
@@ -124,6 +124,27 @@ void main() {
     streamOf(const [
       ContentEvent('partial'),
       ErrorEvent('connection lost', code: StreamErrorCodes.connectionLost),
+    ]);
+    final result = await OfflineSendExecutor.execute(
+      _row('q1', {'chatId': 'chat-1', 'messageText': 'q'}),
+    );
+    // The re-send carries the same client_request_id, so the server answers
+    // it from its record and bills it once.
+    expect(result.success, isFalse);
+    expect(result.accepted, isFalse);
+    expect(result.error, startsWith('network'));
+    expect(lastRequest!.clientRequestId, 'ob-q1-p1');
+    expect(saved, isNull);
+  });
+
+  test('a break the server cannot de-duplicate is accepted (no resend)',
+      () async {
+    stored = [
+      ChatMessage(role: 'user', text: 'q', queueId: 'q1'),
+    ];
+    streamOf(const [
+      ContentEvent('partial'),
+      ErrorEvent('cut', code: StreamErrorCodes.upstreamInterrupted),
     ]);
     final result = await OfflineSendExecutor.execute(
       _row('q1', {'chatId': 'chat-1', 'messageText': 'q'}),

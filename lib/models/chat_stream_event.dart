@@ -22,6 +22,7 @@ sealed class ChatStreamEvent {
     String message, {
     String? code,
     String? errorClass,
+    double? retryAfterSeconds,
   }) = ErrorEvent;
   const factory ChatStreamEvent.heartbeat({int seq, double? elapsedSeconds}) =
       HeartbeatEvent;
@@ -119,7 +120,16 @@ class ErrorEvent extends ChatStreamEvent {
   /// Null on older servers and for locally raised errors.
   final String? errorClass;
 
-  const ErrorEvent(this.message, {this.code, this.errorClass});
+  /// Poll hint of a `duplicate_in_flight` frame (seconds, 1 to 5): the same
+  /// request is still running on the server. Null for every other error.
+  final double? retryAfterSeconds;
+
+  const ErrorEvent(
+    this.message, {
+    this.code,
+    this.errorClass,
+    this.retryAfterSeconds,
+  });
 
   /// Whether this error means the user is out of credits or free messages:
   /// the server's `billing` code, or the `quota` class. The UI then shows
@@ -202,6 +212,40 @@ abstract final class StreamErrorCodes {
   /// upgrade dialog (see [ErrorEvent.isPaymentRequired]).
   static const String billing = 'billing';
 
+  /// Request idempotency (`client_request_id`, api_server CLAUDE.md
+  /// "/v2/ws"). The server still runs the request this id names. Raised by
+  /// the multiplex layer for a `duplicate_in_flight` frame; the send layer
+  /// polls again and never passes it on.
+  static const String duplicateInFlight = 'duplicate_in_flight';
+
+  /// The id names a different request. The send layer re-sends once with a
+  /// fresh id.
+  static const String clientRequestIdConflict = 'client_request_id_conflict';
+
+  /// The server refused the id's form. The send layer re-sends once with a
+  /// fresh id.
+  static const String invalidClientRequestId = 'invalid_client_request_id';
+
+  /// Raised locally: the server answered this id before, but kept only a
+  /// minimal record (`duplicate` with `truncated: true` and no content). The
+  /// answer was billed and cannot be shown; only a new request (new id)
+  /// gives one. Counts as accepted: the server had the request.
+  static const String duplicateUnavailable = 'duplicate_unavailable';
+
+  /// Raised locally: the request still ran on the server after every poll.
+  /// The same id gets the answer later; counts as accepted.
+  static const String requestPending = 'request_pending';
+
+  /// Failures where re-sending the SAME `client_request_id` later is safe:
+  /// the server either still runs the request (detached after the socket
+  /// died) or answers the re-send from its record, so nothing is billed
+  /// twice. The headless outbox turn re-queues such a turn instead of
+  /// storing the error (docs/OFFLINE_SEND.md).
+  static const Set<String> resendSameId = <String>{
+    connectionLost,
+    requestPending,
+  };
+
   /// Failures worth re-issuing the pass for.
   ///
   /// [upstreamStatus] is deliberately absent: a rejection is not transient,
@@ -217,5 +261,8 @@ abstract final class StreamErrorCodes {
     streamFailure,
     upstreamInterrupted,
     streamInterrupted,
+    // The pass re-sends the same id, so the server answers it from its
+    // record once the running request ends.
+    requestPending,
   };
 }

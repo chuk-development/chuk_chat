@@ -29,7 +29,10 @@ import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/streaming_message_handler.dart';
 import 'package:chuk_chat/services/app_theme_service.dart';
+import 'package:chuk_chat/models/chat_stream_event.dart';
+import 'package:chuk_chat/services/chat_compaction.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
+import 'package:chuk_chat/services/client_request_ids.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/headless_turn_scope.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
@@ -162,6 +165,16 @@ abstract final class HeadlessChatTurn {
                 m.effectiveStatus == ChatMessageStatus.failed)))
           ChatUiHelpers.messageToRawMap(m),
     ];
+    // Then the queued message itself, as delivered, the way a screen send
+    // has it: the handler reads its `sentAt` (the turn's `[Sent: …]` line,
+    // its prompt context) and compacts the chat before it (bead
+    // chuk_chat-3b2q). The history builder drops it again: it is the turn
+    // being sent.
+    final Map<String, String> question = queuedRow(
+      target >= 0 ? stored[target] : null,
+      payload.messageText,
+    );
+    working.add(question);
     final String messageId = _uuid.v4();
     working.add(<String, String>{
       'sender': 'ai',
@@ -182,6 +195,11 @@ abstract final class HeadlessChatTurn {
             ? await resolveSystemPrompt(chatId)
             : null);
 
+    // Summaries the rows carry now; a compaction in the turn adds one.
+    final List<String?> summariesBefore = <String?>[
+      for (final row in working) row[ChatCompaction.fieldKey],
+    ];
+
     final StreamingMessageHandler handler = handlerFactory();
     final Completer<void> done = Completer<void>();
     var accepted = false;
@@ -189,6 +207,7 @@ abstract final class HeadlessChatTurn {
     var paymentRequired = false;
     var finalized = false;
     String? lastNotice;
+    String? turnErrorCode;
 
     void noteAccepted() {
       if (serverAccepted(chatId)) accepted = true;
@@ -264,6 +283,9 @@ abstract final class HeadlessChatTurn {
       ..onPaymentRequired = () {
         paymentRequired = true;
       }
+      ..onTurnError = (String c, int i, String error, String? code) {
+        turnErrorCode = code;
+      }
       ..onSendNotAccepted = (String c, int i) async {
         // Never reached the server: the row goes back to the outbox.
         notAccepted = true;
@@ -272,6 +294,12 @@ abstract final class HeadlessChatTurn {
 
     final runtime = ChatRuntimeRegistry.instance.get(chatId);
     runtime.isSending.value = true;
+    // The row's own `client_request_id`s: the same on every send of it, so
+    // a re-send after a kill or a dropped socket is billed once.
+    ClientRequestIds.arm(
+      chatId,
+      OfflineSendCoordinator.requestBaseFor(queued, payload),
+    );
     try {
       await handler.sendMessage(
         userInput: payload.messageText,
@@ -316,6 +344,7 @@ abstract final class HeadlessChatTurn {
         return SendExecutorResult.failure(_classify(e.toString()));
       }
     } finally {
+      ClientRequestIds.disarm(chatId);
       handler.dispose();
       runtime.isSending.value = false;
     }
@@ -332,20 +361,84 @@ abstract final class HeadlessChatTurn {
       return SendExecutorResult.failure(_classify(error));
     }
 
+    // The socket died (or the answer was still being written) and no tool
+    // ran: the server holds this request under the row's ids, so the next
+    // flush re-sends the same ids and gets the answer from the server's
+    // record, billed once. Nothing is stored now; the bubble keeps
+    // waiting. A turn that ran tools keeps its error instead: a re-send
+    // would run the tools again.
+    if (resendable(turnErrorCode, reply)) {
+      return SendExecutorResult.failure('network: resend ($turnErrorCode)');
+    }
+
     // The server took the turn: what it produced is the answer, like a send
     // on screen (an error after acceptance stays as the turn's text).
     final String text = reply['text'] ?? '';
     if (text == 'Thinking...') reply['text'] = '';
-    await _writeReply(queued, payload, reply);
+    // A compaction before the first pass marked one working row (the
+    // first kept user message) with its summary; store it on that row.
+    Map<String, String>? summaryRow;
+    for (var i = 0; i < placeholderIndex; i++) {
+      final String? now = working[i][ChatCompaction.fieldKey];
+      if (now != null && now.isNotEmpty && now != summariesBefore[i]) {
+        summaryRow = working[i];
+      }
+    }
+    await _writeReply(
+      queued,
+      payload,
+      reply,
+      question: question,
+      summaryRow: summaryRow,
+    );
     return const SendExecutorResult.success();
   }
 
-  /// Writes [reply] into the stored chat right after its question.
+  /// The queued message [m] as the handler gets it: delivered (no waiting
+  /// marks), with a send time when it has none. Its text is the queued
+  /// text (what goes to the model, documents inlined; a voice bubble's
+  /// transcript), the same string the handler gets as `userInput`, so the
+  /// history builder knows it as the turn being sent and leaves it out of
+  /// `history`. The stored bubble keeps its own display text. Null [m]
+  /// (the bubble is gone): a new row.
+  @visibleForTesting
+  static Map<String, String> queuedRow(ChatMessage? m, String messageText) {
+    final Map<String, String> row = m == null
+        ? <String, String>{'sender': 'user', 'text': messageText}
+        : ChatUiHelpers.messageToRawMap(m);
+    row
+      ..remove('status')
+      ..remove('queueId')
+      ..remove('lastError');
+    if (messageText.trim().isNotEmpty) row['text'] = messageText;
+    if ((row['sentAt'] ?? '').isEmpty) {
+      row['sentAt'] = DateTime.now().toIso8601String();
+    }
+    return row;
+  }
+
+  /// Whether a turn that ended on [code] goes back to the outbox: the
+  /// server can de-duplicate a re-send ([StreamErrorCodes.resendSameId])
+  /// and no tool ran, so a re-send repeats nothing.
+  @visibleForTesting
+  static bool resendable(String? code, Map<String, String> reply) {
+    if (code == null || !StreamErrorCodes.resendSameId.contains(code)) {
+      return false;
+    }
+    final String calls = reply['toolCalls'] ?? '';
+    return calls.isEmpty || calls == '[]';
+  }
+
+  /// Writes [reply] into the stored chat right after its question, and what
+  /// the turn wrote onto the question ([question]: its send time, and a
+  /// compaction summary) or onto an earlier row (a summary).
   static Future<void> _writeReply(
     QueuedMessage queued,
     OfflineSendPayload payload,
-    Map<String, String> reply,
-  ) async {
+    Map<String, String> reply, {
+    Map<String, String>? question,
+    Map<String, String>? summaryRow,
+  }) async {
     final String chatId = payload.chatId;
     final fresh = await OfflineSendExecutor.readChat(chatId);
     final List<ChatMessage> messages = fresh?.messages.toList() ?? [];
@@ -358,13 +451,57 @@ abstract final class HeadlessChatTurn {
         .map((m) => m.toJson())
         .toList();
     if (idx < 0) {
-      maps.add(<String, dynamic>{'role': 'user', 'text': payload.messageText});
+      maps.add(<String, dynamic>{
+        'role': 'user',
+        'text': payload.messageText,
+        'sentAt': ?question?['sentAt'],
+      });
       idx = maps.length - 1;
     } else {
       maps[idx] = OfflineSendExecutor.delivered(maps[idx], payload.messageText);
+      final String? sentAt = question?['sentAt'];
+      if ((maps[idx]['sentAt'] as String? ?? '').isEmpty && sentAt != null) {
+        maps[idx]['sentAt'] = sentAt;
+      }
+    }
+    if (summaryRow != null) {
+      _storeSummary(
+        maps,
+        idx,
+        summaryRow,
+        isQuestion: identical(summaryRow, question),
+      );
     }
     maps.insert(idx + 1, Map<String, dynamic>.of(reply));
     await OfflineSendExecutor.writeChat(chatId, maps);
+  }
+
+  /// Puts the summary of [row] (the working row the compaction marked) on
+  /// the stored row it came from: the question at [questionIdx] when
+  /// [isQuestion], else the user row before it with the same send time and
+  /// text (the working list is the stored chat minus waiting rows).
+  static void _storeSummary(
+    List<Map<String, dynamic>> maps,
+    int questionIdx,
+    Map<String, String> row, {
+    required bool isQuestion,
+  }) {
+    final String? summary = row[ChatCompaction.fieldKey];
+    if (summary == null || summary.isEmpty) return;
+    if (isQuestion) {
+      maps[questionIdx][ChatCompaction.fieldKey] = summary;
+      return;
+    }
+    for (var i = questionIdx - 1; i >= 0; i--) {
+      final m = maps[i];
+      final String role = m['role']?.toString() ?? m['sender']?.toString() ?? '';
+      if (role != 'user') continue;
+      if ((m['sentAt'] ?? '') == (row['sentAt'] ?? '') &&
+          (m['text'] ?? '') == (row['text'] ?? '')) {
+        m[ChatCompaction.fieldKey] = summary;
+        return;
+      }
+    }
   }
 
   static String _classify(String msg) =>

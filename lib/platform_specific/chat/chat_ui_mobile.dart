@@ -2680,7 +2680,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       return false;
     }
     final ok = await _queueForLater(
-      payload,
+      // The re-send keeps this turn's `client_request_id`s: the server may
+      // have taken the first pass even though no frame came back.
+      payload.withRequestBase(_streamingHandler.turnRequestBase),
       userIdx: userIdx,
       placeholderIdx: placeholderIndex,
       kick: true,

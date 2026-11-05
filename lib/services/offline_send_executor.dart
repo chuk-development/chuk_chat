@@ -28,6 +28,7 @@ import 'package:chuk_chat/models/chat_stream_event.dart';
 import 'package:chuk_chat/models/queued_message.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/client_request_ids.dart';
 import 'package:chuk_chat/services/message_composition_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/offline_retry_manager.dart';
@@ -50,6 +51,7 @@ class OfflineSendRequest {
     this.systemPrompt,
     this.images,
     this.reasoningEffort,
+    this.clientRequestId,
   });
 
   final String accessToken;
@@ -62,6 +64,9 @@ class OfflineSendRequest {
   final String? systemPrompt;
   final List<String>? images;
   final String? reasoningEffort;
+
+  /// The row's id for this (single) pass; the same on every send of the row.
+  final String? clientRequestId;
 }
 
 /// A chat screen that can send an outbox row through its own send path, so
@@ -163,6 +168,7 @@ class OfflineSendExecutor {
         images: r.images,
         reasoningEffort: r.reasoningEffort,
         chatId: r.chatId,
+        clientRequestId: r.clientRequestId,
       );
 
   static Future<void> _defaultSave(
@@ -331,7 +337,9 @@ class OfflineSendExecutor {
       final reasoning = StringBuffer();
       final content = StringBuffer();
       var accepted = false;
+      var sawToolCalls = false;
       String? errorMessage;
+      String? errorCode;
       try {
         await for (final ChatStreamEvent event in stream(
           OfflineSendRequest(
@@ -345,9 +353,14 @@ class OfflineSendExecutor {
             systemPrompt: payload.systemPrompt,
             images: payload.images,
             reasoningEffort: payload.reasoningEffort,
+            clientRequestId: ClientRequestIds.forPass(
+              OfflineSendCoordinator.requestBaseFor(queued, payload),
+              1,
+            ),
           ),
         )) {
           if (event is! ErrorEvent) accepted = true;
+          if (event is ToolCallsEvent) sawToolCalls = true;
           switch (event) {
             case ContentEvent(:final text):
               content.write(text);
@@ -357,8 +370,9 @@ class OfflineSendExecutor {
                 ..write(text);
             case ReasoningEvent(:final text):
               reasoning.write(text);
-            case ErrorEvent(:final message):
+            case ErrorEvent(:final message, :final code):
               errorMessage = message;
+              errorCode = code;
             case DoneEvent():
             case UsageEvent():
             case MetaEvent():
@@ -374,8 +388,15 @@ class OfflineSendExecutor {
       }
 
       if (errorMessage != null) {
-        // Once the server answered anything, a second send could bill the
-        // turn twice: the row fails and waits for the user's Retry.
+        // The server holds this request under the row's id (the socket died,
+        // or the answer was still being written): a later send of the same
+        // id is answered from its record, so the row simply waits again.
+        if (!sawToolCalls &&
+            StreamErrorCodes.resendSameId.contains(errorCode)) {
+          return SendExecutorResult.failure('network: resend ($errorCode)');
+        }
+        // Once the server answered anything else, a second send could bill
+        // the turn twice: the row fails and waits for the user's Retry.
         return accepted
             ? SendExecutorResult.accepted(errorMessage)
             : SendExecutorResult.failure(_classify(errorMessage));

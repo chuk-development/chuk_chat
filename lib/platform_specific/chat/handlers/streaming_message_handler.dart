@@ -8,6 +8,7 @@ import 'package:chuk_chat/models/chat_stream_event.dart';
 import 'package:chuk_chat/services/chat_compaction.dart';
 import 'package:chuk_chat/services/chat_compaction_runner.dart';
 import 'package:chuk_chat/services/chat_history_builder.dart';
+import 'package:chuk_chat/services/client_request_ids.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/app_lifecycle_service.dart';
@@ -121,6 +122,14 @@ class StreamingMessageHandler {
   /// (docs/OFFLINE_SEND.md). False or null: the normal error path runs.
   Future<bool> Function(String chatId, int placeholderIndex)? onSendNotAccepted;
 
+  /// The turn ended on an error after its retries (the error text is in the
+  /// answer). [code] is the server's or the stream's error code. The
+  /// headless outbox turn reads it: a turn the server can de-duplicate
+  /// ([StreamErrorCodes.resendSameId]) goes back to the outbox instead of
+  /// keeping the error (docs/OFFLINE_SEND.md).
+  void Function(String chatId, int placeholderIndex, String error, String? code)?
+  onTurnError;
+
   bool _isStreaming = false;
   bool _isSending = false;
   bool _isDisposed = false;
@@ -152,6 +161,13 @@ class StreamingMessageHandler {
 
   bool get isStreaming => _isStreaming;
   bool get isSending => _isSending;
+
+  String? _turnRequestBase;
+
+  /// The `client_request_id` base of the latest turn (pass n sends
+  /// `<base>-p<n>`). A send that goes into the outbox after it never
+  /// reached the server stores it, so the re-send uses the same ids.
+  String? get turnRequestBase => _turnRequestBase;
   Future<void>? get activeToolLoopFuture => _activeToolLoopFuture;
 
   // In-memory cache for resolved Base64 images (storage path -> data URL)
@@ -280,6 +296,13 @@ class StreamingMessageHandler {
     await _acquireForegroundKeepAlive();
 
     final chatId = activeChatId;
+
+    // Request idempotency: an outbox row armed its base for this turn, so
+    // its passes keep the same `client_request_id` across app restarts.
+    // Any other turn gets a fresh base; pass n sends `<base>-p<n>`.
+    final String requestBase =
+        ClientRequestIds.take(chatId) ?? ClientRequestIds.freshBase();
+    _turnRequestBase = requestBase;
 
     // The chat picks the tool loop: the host's fold for an Agents thread,
     // upstream's client-side loop for a chuk_chat chat.
@@ -611,7 +634,13 @@ class StreamingMessageHandler {
       int currentPass = 0,
       int reconnectRetries = 0,
       int cacheMissRetries = 0,
+      String? passRequestId,
     }) async {
+      // One `client_request_id` per pass; a retry of this pass (reconnect,
+      // cache miss) passes it back in, so the server answers it once.
+      final String requestId =
+          passRequestId ??
+          ClientRequestIds.forPass(requestBase, currentPass + 1);
       // A cancel landed (button) — the current stream was already torn down
       // and the message finalized by cancelStream(); do not open another pass.
       if (_cancelRequested) {
@@ -693,6 +722,7 @@ class StreamingMessageHandler {
         toolChoice: ToolCallHandler.nativeToolChoice(toolSession),
         requestPass: currentPass + 1,
         turnHistoryIndex: turnHistoryIndex,
+        clientRequestId: requestId,
         // A retry REPLACES the last answer, so the host drops the turn being
         // retried instead of storing the same question again. Only the first
         // pass says so: later passes of the same turn are continuations, and
@@ -1182,6 +1212,7 @@ class StreamingMessageHandler {
                 currentPass: currentPass,
                 reconnectRetries: reconnectRetries,
                 cacheMissRetries: cacheMissRetries + 1,
+                passRequestId: requestId,
               );
             }());
             return;
@@ -1248,6 +1279,7 @@ class StreamingMessageHandler {
                 turnHistoryIndex: turnHistoryIndex,
                 currentPass: currentPass,
                 reconnectRetries: reconnectRetries + 1,
+                passRequestId: requestId,
               );
             }());
             return;
@@ -1361,9 +1393,14 @@ class StreamingMessageHandler {
           // single thread. A run the host itself reported as dead keeps the
           // button — that one really is over and really can be continued.
           final bool transportDrop = code == StreamErrorCodes.connectionLost;
-          if (!transportDrop) {
+          // An answer the server billed but cannot restore has nothing to
+          // continue from; the notice asks for a new send instead.
+          final bool unrestorable =
+              code == StreamErrorCodes.duplicateUnavailable;
+          if (!transportDrop && !unrestorable) {
             onStreamInterrupted?.call(chatId, placeholderIndex);
           }
+          onTurnError?.call(chatId, placeholderIndex, errorMessage, code);
 
           _markStreamFinalized();
           _isStreaming = false;

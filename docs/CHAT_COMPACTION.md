@@ -44,10 +44,11 @@ group in `prompt_cache_stability_test.dart`.
   last row is the answer it continues) and copies the summary onto the
   chat's own row at `tailStart`. Mobile resend/regenerate pass the live
   list (user row before the placeholder), the continue goes through
-  `StreamingMessageHandler.onCompactionStored`. Not compacted: Agents
-  threads (the host has its own context ladder) and the headless outbox
-  turn (`headless_chat_turn.dart`, its rows do not carry the queued user
-  message).
+  `StreamingMessageHandler.onCompactionStored`. The headless outbox turn
+  (`headless_chat_turn.dart`) compacts like a send: its rows end with the
+  queued user message, and the summary is written back onto the stored row
+  it marked. Not compacted: Agents threads (the host has its own context
+  ladder).
 - **`/compact`** (composer `/` menu, `onCompact`):
   `lib/platform_specific/chat/manual_compaction.dart` builds the request
   a send of the chat would build (turn system prompt with an empty user

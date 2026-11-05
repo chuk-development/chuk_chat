@@ -16,6 +16,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:chuk_chat/models/chat_stream_event.dart';
 import 'package:chuk_chat/services/tool_result_cache_registry.dart';
 import 'package:chuk_chat/services/websocket_connector.dart' as ws_connector;
+import 'package:chuk_chat/utils/stream_error_notice.dart';
 
 const _uuid = Uuid();
 
@@ -780,6 +781,26 @@ class MultiplexConnection {
         // Don't close yet — server still owes us `done`. If it never
         // arrives the transport-failure path will close us.
         break;
+      case 'duplicate':
+        // The server answered this `client_request_id` before: the stored
+        // answer, then `done`. It reads like a normal answer in one piece.
+        for (final event in duplicateEvents(data['data'])) {
+          ctrl.add(event);
+        }
+        break;
+      case 'duplicate_in_flight':
+        // The same request still runs on the server. The send layer polls
+        // again after the hint ([WebSocketChatService]); `done` follows.
+        final hint = data['data'];
+        final retryAfter = hint is Map ? hint['retry_after_s'] : null;
+        ctrl.add(
+          ChatStreamEvent.error(
+            'request still running',
+            code: StreamErrorCodes.duplicateInFlight,
+            retryAfterSeconds: retryAfter is num ? retryAfter.toDouble() : null,
+          ),
+        );
+        break;
       case 'timing':
         // Older servers carry `finish_reason` only on the `timing` frame of
         // phase `complete`. Lift it into a meta event so the tool loop's
@@ -804,6 +825,48 @@ class MultiplexConnection {
         // Ignore unknown frame kinds.
         break;
     }
+  }
+
+  /// The events of a `duplicate` frame's `data` (the stored answer of a
+  /// re-sent `client_request_id`): content, tool calls, usage and the
+  /// closing meta (with `finish_reason`), in the order a live answer has
+  /// them. Reasoning is not stored. A minimal record (`truncated: true`, no
+  /// content, no calls) is an error with code
+  /// [StreamErrorCodes.duplicateUnavailable]: the answer exists and was
+  /// billed, but cannot be shown.
+  @visibleForTesting
+  static List<ChatStreamEvent> duplicateEvents(Object? raw) {
+    final data = raw is Map ? raw : const <dynamic, dynamic>{};
+    final content = data['content'] is String ? data['content'] as String : '';
+    final rawCalls = data['tool_calls'];
+    final calls = rawCalls is List
+        ? rawCalls
+              .whereType<Map>()
+              .map((m) => NativeToolCall.fromJson(m.cast<String, dynamic>()))
+              .toList()
+        : const <NativeToolCall>[];
+    if (data['truncated'] == true && content.isEmpty && calls.isEmpty) {
+      return const <ChatStreamEvent>[
+        ChatStreamEvent.error(
+          kAnswerUnavailableNotice,
+          code: StreamErrorCodes.duplicateUnavailable,
+        ),
+      ];
+    }
+    final events = <ChatStreamEvent>[];
+    if (content.isNotEmpty) events.add(ChatStreamEvent.content(content));
+    if (calls.isNotEmpty) events.add(ChatStreamEvent.toolCalls(calls));
+    final usage = data['usage'];
+    if (usage is Map) {
+      events.add(ChatStreamEvent.usage(Map<String, dynamic>.from(usage)));
+    }
+    final meta = <String, dynamic>{
+      if (data['meta'] is Map) ...Map<String, dynamic>.from(data['meta'] as Map),
+    };
+    final finishReason = _nonEmptyString(data['finish_reason']);
+    if (finishReason != null) meta['finish_reason'] ??= finishReason;
+    if (meta.isNotEmpty) events.add(ChatStreamEvent.meta(meta));
+    return events;
   }
 
   /// The `finish_reason` of a `timing` frame of phase `complete`, or null.
@@ -955,6 +1018,26 @@ class MultiplexConnection {
       );
     }
     _sendCancel(reqId);
+  }
+
+  /// Stops the chat that holds [clientRequestId] on any socket of this
+  /// user, also one the server detached when its socket went away. Sent
+  /// when the user stops a reply, so the server bills the partial, releases
+  /// the id and does not run on. Best effort: a closed socket sends nothing.
+  void cancelClientRequest(String clientRequestId) {
+    final ch = _channel;
+    if (ch == null) return;
+    try {
+      ch.sink.add(
+        jsonEncode({
+          'req_id': _newReqId(),
+          'type': 'cancel',
+          'client_request_id': clientRequestId,
+        }),
+      );
+    } catch (_) {
+      // Connection already dead; nothing to clean up.
+    }
   }
 
   void _sendCancel(String reqId) {

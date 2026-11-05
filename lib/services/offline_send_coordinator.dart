@@ -17,11 +17,13 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:uuid/uuid.dart';
 
 import 'package:chuk_chat/models/queued_message.dart';
 import 'package:chuk_chat/services/agents/agents_chat_transport.dart';
 import 'package:chuk_chat/services/agents/agents_task_outbox.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/client_request_ids.dart';
 import 'package:chuk_chat/services/follow_up_parking_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/services/offline_queue_service.dart';
@@ -45,6 +47,7 @@ class OfflineSendPayload {
     this.voiceDurationMs,
     this.autoSend = true,
     this.resolvePromptAtSend = false,
+    this.clientRequestBase,
   });
 
   factory OfflineSendPayload.fromJson(Map<String, dynamic> json) {
@@ -65,6 +68,7 @@ class OfflineSendPayload {
           : null,
       autoSend: json['autoSend'] as bool? ?? true,
       resolvePromptAtSend: json['resolvePromptAtSend'] == true,
+      clientRequestBase: json['clientRequestBase'] as String?,
     );
   }
 
@@ -102,6 +106,13 @@ class OfflineSendPayload {
   /// while no screen held the chat): it is resolved at send time.
   final bool resolvePromptAtSend;
 
+  /// Base of the row's `client_request_id`s (`ob-<row id>`, pass `n` sends
+  /// `<base>-p<n>`), written at enqueue and stored with the row, so every
+  /// send of the row, also after an app restart, uses the same ids and the
+  /// server bills it once (docs/OFFLINE_SEND.md). Null on rows queued before
+  /// it existed; [OfflineSendCoordinator.requestBaseFor] derives it then.
+  final String? clientRequestBase;
+
   Map<String, dynamic> toJson() => <String, dynamic>{
     'chatId': chatId,
     'messageText': messageText,
@@ -120,7 +131,16 @@ class OfflineSendPayload {
     if (voiceDurationMs != null) 'voiceDurationMs': voiceDurationMs,
     if (!autoSend) 'autoSend': false,
     if (resolvePromptAtSend) 'resolvePromptAtSend': true,
+    if (clientRequestBase case final String base when base.isNotEmpty)
+      'clientRequestBase': base,
   };
+
+  /// This payload with [base] as its [clientRequestBase].
+  OfflineSendPayload withRequestBase(String? base) =>
+      OfflineSendPayload.fromJson(<String, dynamic>{
+        ...toJson(),
+        'clientRequestBase': ?base,
+      });
 
   List<String>? get images {
     final json = imagesJson;
@@ -155,9 +175,11 @@ class OfflineSendCoordinator {
         'text_len=${payload.messageText.length}',
       );
     }
+    final rowId = _uuid.v4();
     final id = await OfflineQueueService.instance.enqueue(
       chatId: payload.chatId,
-      sendPayload: payload.toJson(),
+      sendPayload: _withRequestBase(payload.toJson(), rowId),
+      id: rowId,
     );
     if (kick) OfflineRetryManager.instance.kick('enqueue');
     return id;
@@ -170,13 +192,40 @@ class OfflineSendCoordinator {
     OfflineSendPayload payload, {
     bool kick = false,
   }) async {
+    final rowId = _uuid.v4();
     final id = await OfflineQueueService.instance.enqueue(
       chatId: payload.chatId,
-      sendPayload: payload.toJson(),
+      sendPayload: _withRequestBase(payload.toJson(), rowId),
+      id: rowId,
       kind: OutboxKind.voice,
     );
     if (kick) OfflineRetryManager.instance.kick('enqueue-voice');
     return id;
+  }
+
+  static const Uuid _uuid = Uuid();
+
+  /// [json] with the row's request-id base ([ClientRequestIds.outboxBase]),
+  /// unless it carries one already.
+  static Map<String, dynamic> _withRequestBase(
+    Map<String, dynamic> json,
+    String rowId,
+  ) {
+    final existing = json['clientRequestBase'];
+    if (existing is String && existing.isNotEmpty) return json;
+    return <String, dynamic>{
+      ...json,
+      'clientRequestBase': ClientRequestIds.outboxBase(rowId),
+    };
+  }
+
+  /// The base of [row]'s `client_request_id`s: the stored one, else derived
+  /// from the row id (rows queued before the base was stored). Both are
+  /// stable for the life of the row.
+  static String requestBaseFor(QueuedMessage row, OfflineSendPayload payload) {
+    final stored = payload.clientRequestBase;
+    if (stored != null && ClientRequestIds.isValid(stored)) return stored;
+    return ClientRequestIds.outboxBase(row.id);
   }
 
   /// Whether [chatId] has rows waiting. A new message in such a chat is

@@ -14,7 +14,11 @@ import 'package:chuk_chat/models/stored_chat.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/streaming_message_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/headless_chat_turn.dart';
+import 'package:chuk_chat/models/chat_stream_event.dart';
+import 'package:chuk_chat/services/chat_compaction.dart';
+import 'package:chuk_chat/services/chat_history_builder.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
+import 'package:chuk_chat/services/client_request_ids.dart';
 import 'package:chuk_chat/services/headless_turn_scope.dart';
 import 'package:chuk_chat/services/offline_send_coordinator.dart';
 import 'package:chuk_chat/services/offline_send_executor.dart';
@@ -22,11 +26,15 @@ import 'package:chuk_chat/services/offline_send_executor.dart';
 /// What the fake handler saw, and what it does.
 class _Script {
   List<Map<String, String>>? messages;
+
+  /// The handler's own list (the compaction writes onto it).
+  List<Map<String, String>>? live;
   int? placeholderIndex;
   String? userInput;
   List<AttachedFile>? files;
   String? systemPrompt;
   String? scopeChat;
+  String? requestBase;
   bool toolCalling = false;
   bool runtimeBusyDuringTurn = false;
   Future<void> Function(_FakeHandler h, int placeholder)? run;
@@ -74,11 +82,13 @@ class _FakeHandler extends StreamingMessageHandler {
   }) async {
     script
       ..messages = messages.map(Map<String, String>.of).toList()
+      ..live = messages
       ..placeholderIndex = placeholderIndex
       ..userInput = userInput
       ..files = attachedFiles
       ..systemPrompt = systemPrompt
       ..scopeChat = HeadlessTurnScope.chatId
+      ..requestBase = ClientRequestIds.take(activeChatId)
       ..toolCalling = toolCallingEnabled
       ..runtimeBusyDuringTurn = OfflineSendExecutor.isTurnRunning(
         activeChatId!,
@@ -141,6 +151,7 @@ void main() {
         text: 'what is the weather',
         status: ChatMessageStatus.pending,
         queueId: 'q1',
+        sentAt: '2026-11-05T10:00:00.000',
       ),
       ChatMessage(
         role: 'user',
@@ -183,14 +194,23 @@ void main() {
     final result = await HeadlessChatTurn.run(_row('q1'), _payload);
 
     expect(result.success, isTrue);
-    // The handler saw the delivered history only, then the placeholder.
+    // The handler saw the delivered history, the queued message as
+    // delivered (its send time, no waiting marks), then the placeholder.
     final seen = script.messages!;
     expect(seen.map((m) => m['text']).toList(), [
       'earlier',
       'earlier answer',
+      'what is the weather',
       'Thinking...',
     ]);
-    expect(script.placeholderIndex, 2);
+    expect(seen[2]['sender'], 'user');
+    expect(seen[2].containsKey('status'), isFalse);
+    expect(seen[2].containsKey('queueId'), isFalse);
+    expect(seen[2]['sentAt'], '2026-11-05T10:00:00.000');
+    expect(script.placeholderIndex, 3);
+    // The row's own request ids: derived from the row, the same each send.
+    expect(script.requestBase, 'ob-q1');
+    expect(ClientRequestIds.take('chat-1'), isNull);
     expect(script.userInput, 'what is the weather');
     expect(script.files!.single.encryptedImagePath, 'u/1.enc');
     expect(script.files!.single.isImage, isTrue);
@@ -302,5 +322,177 @@ void main() {
     final result = await HeadlessChatTurn.run(_row('q1'), _payload);
     expect(result.success, isTrue);
     expect(saved![4]['text'], 'late answer');
+  });
+
+  group('request idempotency', () {
+    test('a stored base wins over the row id', () async {
+      script.run = (h, p) async {
+        accepted = true;
+        h.onMessageFinalize?.call(p, 'ok', '', 'chat-1', null);
+        h.end();
+      };
+      await HeadlessChatTurn.run(
+        _row('q1'),
+        const OfflineSendPayload(
+          chatId: 'chat-1',
+          messageText: 'what is the weather',
+          modelId: 'model-x',
+          providerSlug: 'prov',
+          clientRequestBase: 'c-turn',
+        ),
+      );
+      expect(script.requestBase, 'c-turn');
+    });
+
+    test('a dropped socket after acceptance goes back to the outbox',
+        () async {
+      script.run = (h, p) async {
+        accepted = true;
+        h.onMessageUpdate?.call(p, 'half an answer', '', 'chat-1');
+        h.onMessageFinalize?.call(p, 'half\n\nConnection lost', '', 'c', null);
+        h.onTurnError?.call(
+          'chat-1',
+          p,
+          'Connection lost',
+          StreamErrorCodes.connectionLost,
+        );
+        h.end();
+      };
+      final result = await HeadlessChatTurn.run(_row('q1'), _payload);
+      // Re-sent later with the same ids: the server answers it from its
+      // record, billed once. Nothing is stored now.
+      expect(result.success, isFalse);
+      expect(result.accepted, isFalse);
+      expect(result.error, startsWith('network'));
+      expect(saved, isNull);
+    });
+
+    test('an answer still being written goes back to the outbox', () async {
+      script.run = (h, p) async {
+        accepted = true;
+        h.onTurnError?.call('chat-1', p, 'busy', StreamErrorCodes.requestPending);
+        h.end();
+      };
+      final result = await HeadlessChatTurn.run(_row('q1'), _payload);
+      expect(result.error, startsWith('network'));
+      expect(saved, isNull);
+    });
+
+    test('a turn that ran tools keeps its error (no tool runs twice)',
+        () async {
+      script.run = (h, p) async {
+        accepted = true;
+        h.onToolCallsUpdate?.call(p, [
+          ToolCall(
+            id: 't1',
+            name: 'weather',
+            arguments: const {},
+            status: ToolCallStatus.completed,
+            result: 'sunny',
+          ),
+        ], 'chat-1');
+        h.onMessageFinalize?.call(p, 'Connection lost', '', 'chat-1', null);
+        h.onTurnError?.call(
+          'chat-1',
+          p,
+          'Connection lost',
+          StreamErrorCodes.connectionLost,
+        );
+        h.end();
+      };
+      final result = await HeadlessChatTurn.run(_row('q1'), _payload);
+      expect(result.success, isTrue);
+      expect(saved![4]['text'], 'Connection lost');
+    });
+
+    test('an error the server cannot de-duplicate is kept as the answer',
+        () async {
+      expect(
+        HeadlessChatTurn.resendable(
+          StreamErrorCodes.upstreamInterrupted,
+          const {},
+        ),
+        isFalse,
+      );
+      expect(HeadlessChatTurn.resendable(null, const {}), isFalse);
+      expect(
+        HeadlessChatTurn.resendable(StreamErrorCodes.connectionLost, const {
+          'toolCalls': '[]',
+        }),
+        isTrue,
+      );
+    });
+  });
+
+  group('compaction (bead chuk_chat-3b2q)', () {
+    test('a summary on the queued message is stored with it', () async {
+      script.run = (h, p) async {
+        // ChatCompactionRunner writes onto the handler's own rows; here the
+        // kept tail starts at the queued message (the row before p).
+        script.live![p - 1][ChatCompaction.fieldKey] = '{"summary":"s"}';
+        accepted = true;
+        h.onMessageFinalize?.call(p, 'ok', '', 'chat-1', null);
+        h.end();
+      };
+      final result = await HeadlessChatTurn.run(_row('q1'), _payload);
+      expect(result.success, isTrue);
+      final question = saved![3];
+      expect(question['text'], 'what is the weather');
+      expect(question[ChatCompaction.fieldKey], '{"summary":"s"}');
+      expect(question['sentAt'], '2026-11-05T10:00:00.000');
+      expect(saved![0].containsKey(ChatCompaction.fieldKey), isFalse);
+    });
+
+    test('a summary on an earlier row is stored on that row', () async {
+      script.run = (h, p) async {
+        script.live![0][ChatCompaction.fieldKey] = '{"summary":"e"}';
+        accepted = true;
+        h.onMessageFinalize?.call(p, 'ok', '', 'chat-1', null);
+        h.end();
+      };
+      await HeadlessChatTurn.run(_row('q1'), _payload);
+      expect(saved![0][ChatCompaction.fieldKey], '{"summary":"e"}');
+      expect(saved![3].containsKey(ChatCompaction.fieldKey), isFalse);
+    });
+
+    test('a bubble with no text (voice) is sent with the queued text', () {
+      final row = HeadlessChatTurn.queuedRow(
+        ChatMessage(
+          role: 'user',
+          text: '',
+          status: ChatMessageStatus.pending,
+          queueId: 'q9',
+        ),
+        'transcript',
+      );
+      expect(row['text'], 'transcript');
+      expect(row['sentAt'], isNotEmpty);
+      expect(row.containsKey('queueId'), isFalse);
+    });
+  });
+
+  test('the queued message is the turn being sent, not history', () async {
+    // A bubble that shows only the document names: the handler gets the
+    // queued text (documents inlined) both as userInput and as the row.
+    final row = HeadlessChatTurn.queuedRow(
+      ChatMessage(
+        role: 'user',
+        text: 'Documents: a.txt\n\nsum it up',
+        status: ChatMessageStatus.pending,
+        queueId: 'q1',
+        sentAt: '2026-11-05T10:00:00.000',
+      ),
+      'Document: "a.txt"\nbody\n\nsum it up',
+    );
+    final history = await ChatHistoryBuilder.build(
+      messages: [
+        {'sender': 'user', 'text': 'earlier', 'sentAt': '2026-11-05T09:00:00.000'},
+        {'sender': 'ai', 'text': 'earlier answer'},
+        row,
+      ],
+      pendingUserText: 'Document: "a.txt"\nbody\n\nsum it up',
+    );
+    expect(history, hasLength(2));
+    expect(history.last['role'], 'assistant');
   });
 }

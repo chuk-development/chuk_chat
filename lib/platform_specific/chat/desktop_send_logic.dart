@@ -472,6 +472,13 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       const int kMaxMessageLevelRetries = 1;
       int messageLevelRetries = 0;
 
+      // Request idempotency: an outbox row armed its base for this turn (the
+      // outbox sends a row through this Retry path); other turns get a
+      // fresh `client_request_id` per pass.
+      final String requestBase =
+          ClientRequestIds.take(chatIdForStream) ??
+          ClientRequestIds.freshBase();
+
       // Accumulates display text across all streaming passes so that AI text
       // from earlier passes is never lost when a new pass begins.
       final accumulatedText = StringBuffer();
@@ -486,10 +493,16 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         List<String>? passImages,
         int? turnHistoryIndex,
         int currentPass = 0,
+        int cacheMissRetries = 0,
+        String? passRequestId,
       }) async {
         if (_isSendOperationCancelled(sendOperationId)) {
           return;
         }
+        // One id per pass; the cache-miss retry of this pass reuses it.
+        final String requestId =
+            passRequestId ??
+            ClientRequestIds.forPass(requestBase, currentPass + 1);
 
         final requestPayload = <String, dynamic>{
           'pass': currentPass + 1,
@@ -526,6 +539,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           toolChoice: ToolCallHandler.nativeToolChoice(toolSession),
           requestPass: currentPass + 1,
           turnHistoryIndex: turnHistoryIndex,
+          clientRequestId: requestId,
           // A retry REPLACES the last answer, so the host drops the turn being
           // retried instead of storing the same question again. Only the first
           // pass says so: the later passes of the same turn are continuations,
@@ -885,6 +899,27 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
             );
           },
           onError: (errorMessage, {String? code}) {
+            // A server ref (tool result, turn or history image) is no longer
+            // cached: clear the registry and send this pass again once, in
+            // full. The same id: the error released it.
+            if (_isCacheMiss(errorMessage, code) &&
+                cacheMissRetries < _kMaxCacheMissRetries) {
+              _streamingManager.takeInterruptedPartial(chatIdForStream);
+              ToolResultCacheRegistry.instance.handleMiss();
+              unawaited(
+                startStreamPass(
+                  message: message,
+                  history: history,
+                  passSystemPrompt: passSystemPrompt,
+                  passImages: passImages,
+                  turnHistoryIndex: turnHistoryIndex,
+                  currentPass: currentPass,
+                  cacheMissRetries: cacheMissRetries + 1,
+                  passRequestId: requestId,
+                ),
+              );
+              return;
+            }
             // Text this turn had already written, plus the cut pass (idle
             // timeout, close without `done`). It stays above the error.
             final interruptedPartial = _streamingManager
@@ -1221,6 +1256,13 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
   /// The text to keep above a stream error: what earlier passes of the turn
   /// wrote ([accumulated]) plus the cut pass ([interruptedPartial], raw, with
   /// tool-call markup), or empty when there is none.
+  /// One replay of a pass after a server `cache_miss`; after the registry
+  /// is cleared no ref goes up, so a second miss cannot happen.
+  static const int _kMaxCacheMissRetries = 1;
+
+  bool _isCacheMiss(String errorMessage, String? code) =>
+      code == kCacheMissErrorCode || errorMessage.contains(kCacheMissErrorCode);
+
   String _keptTextOnError(String accumulated, String? interruptedPartial) {
     final partial = stripToolCallBlocksForDisplay(interruptedPartial ?? '');
     return '$accumulated$partial'.trim();
@@ -1913,6 +1955,12 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       const int kMaxMessageLevelRetries2 = 1;
       int messageLevelRetries2 = 0;
 
+      // Request idempotency: a fresh `client_request_id` per pass, or ids
+      // derived from an outbox row that armed its base for this chat.
+      final String requestBase =
+          ClientRequestIds.take(chatIdForStream) ??
+          ClientRequestIds.freshBase();
+
       // Accumulates display text across all streaming passes so that AI text
       // from earlier passes is never lost when a new pass begins.
       final String continuationText = (continuePriorText ?? '').trimRight();
@@ -1935,10 +1983,16 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         List<String>? passImages,
         int? turnHistoryIndex,
         int currentPass = 0,
+        int cacheMissRetries = 0,
+        String? passRequestId,
       }) async {
         if (_isSendOperationCancelled(sendOperationId)) {
           return;
         }
+        // One id per pass; the cache-miss retry of this pass reuses it.
+        final String requestId =
+            passRequestId ??
+            ClientRequestIds.forPass(requestBase, currentPass + 1);
 
         final requestPayload = <String, dynamic>{
           'pass': currentPass + 1,
@@ -1975,6 +2029,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           toolChoice: ToolCallHandler.nativeToolChoice(toolSession),
           requestPass: currentPass + 1,
           turnHistoryIndex: turnHistoryIndex,
+          clientRequestId: requestId,
         );
 
         await _streamingManager.startStream(
@@ -2340,6 +2395,24 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
             );
           },
           onError: (errorMessage, {String? code}) async {
+            // A server ref is no longer cached: clear the registry and send
+            // this pass again once, in full, under the same id.
+            if (_isCacheMiss(errorMessage, code) &&
+                cacheMissRetries < _kMaxCacheMissRetries) {
+              _streamingManager.takeInterruptedPartial(chatIdForStream);
+              ToolResultCacheRegistry.instance.handleMiss();
+              await startStreamPass(
+                message: message,
+                history: history,
+                passSystemPrompt: passSystemPrompt,
+                passImages: passImages,
+                turnHistoryIndex: turnHistoryIndex,
+                currentPass: currentPass,
+                cacheMissRetries: cacheMissRetries + 1,
+                passRequestId: requestId,
+              );
+              return;
+            }
             // Read before any await: the text this turn had already written,
             // plus the cut pass (idle timeout, close without `done`).
             final interruptedPartial = _streamingManager
@@ -2413,6 +2486,9 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     modelIdForSend,
                     providerSlug,
                   ),
+                  // The re-send keeps this turn's ids: the server may have
+                  // taken the first pass even though no frame came back.
+                  clientRequestBase: requestBase,
                   kick: true,
                 );
               } catch (error) {
@@ -2844,6 +2920,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     String? imagesJson,
     required int maxTokens,
     String? reasoningEffort,
+    String? clientRequestBase,
     bool kick = false,
   }) async {
     // Documents and the original attachment list ride on the user bubble.
@@ -2862,6 +2939,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       attachedFilesJson: userMsg?['attachedFilesJson'],
       maxTokens: maxTokens,
       reasoningEffort: reasoningEffort,
+      clientRequestBase: clientRequestBase,
     );
 
     String queueId;
