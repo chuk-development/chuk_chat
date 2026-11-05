@@ -47,6 +47,9 @@ IMAGE_MIME = frozenset({"image/png", "image/jpeg", "image/webp", "image/gif"})
 #: An image larger than this goes as a path only (a model request would be
 #: too large).
 MAX_IMAGE_PART_BYTES = 8 * 1024 * 1024
+#: Finished uploads remembered in memory, so a chunk sent again after a lost
+#: final ack is answered with the same complete ack.
+RECENT_COMPLETED_MAX = 64
 
 _ID_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
 _SHA_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -138,6 +141,10 @@ class AttachmentInbox:
     """
 
     _lock = threading.Lock()
+    #: ``(state dir, upload_id)`` -> the public record of a finished upload,
+    #: newest last. Process-wide, like the lock; at most
+    #: :data:`RECENT_COMPLETED_MAX` entries.
+    _recent: "dict[tuple[str, str], dict]" = {}
 
     def __init__(
         self,
@@ -198,10 +205,14 @@ class AttachmentInbox:
         name = safe_name(payload.get("name"))
         with self._lock:
             self.sweep()
-            done = self._record(upload_id)
-            if done is not None:
-                # Finished already (a retried last chunk): the same answer.
-                return self._ack(upload_id, index, count, count, self._public(done))
+            finished = self._finished(upload_id, size, sha)
+            if finished is not None:
+                # Finished already: the app sends a chunk again when the ack
+                # that said "complete" was lost. Answer it the same way,
+                # whatever chunk it is, so the retry is idempotent.
+                reply = self._ack(upload_id, index, count, count, finished)
+                reply["already_complete"] = True
+                return reply
             partial = self._state_dir("partial")
             state_path = partial / f"{upload_id}.json"
             data_path = partial / f"{upload_id}.part"
@@ -245,7 +256,26 @@ class AttachmentInbox:
                 "created_at": self._now(),
             }
             self._write_json(self._state_dir("done") / f"{upload_id}.json", record)
-            return self._ack(upload_id, index, count, count, self._public(record))
+            public = self._public(record)
+            self._remember(upload_id, public)
+            return self._ack(upload_id, index, count, count, public)
+
+    def _finished(self, upload_id: str, size: int, sha: str) -> dict | None:
+        """The public record of a finished upload with this id, size and
+        sha256: from the host record, else from the recent-completed map.
+        ``None`` when the id is unknown or names another file."""
+        done = self._record(upload_id)
+        public = self._public(done) if done is not None else self._recent.get((str(self.state), upload_id))
+        if public is None or public.get("size") != size or public.get("sha256") != sha:
+            return None
+        return public
+
+    def _remember(self, upload_id: str, public: dict) -> None:
+        key = (str(self.state), upload_id)
+        self._recent.pop(key, None)
+        self._recent[key] = dict(public)
+        while len(self._recent) > RECENT_COMPLETED_MAX:
+            self._recent.pop(next(iter(self._recent)))
 
     def _place(self, blob_id: str, name: str, source: Path) -> None:
         """Copy ``source`` (host state) to ``.agents/inbox/<blob_id>/<name>``

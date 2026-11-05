@@ -11,14 +11,27 @@
 //  * a file that a row names is kept, whatever its age;
 //  * a file no row names is deleted once it is older than [grace]. A newer
 //    one may belong to a recording or a composer that is still open.
-// When any row of the user cannot be opened (wrong key), nothing is deleted:
-// the files that row names are not known.
+// When any chat-queue row of the user cannot be opened (wrong key), nothing
+// is deleted: the files that row names are not known.
+//
+// The Agents outbox is handled per row (review of b8e3343c, finding 5): one
+// row it cannot open must not stop the sweep for ever. Its paths are
+// unknown, so while such a row exists the sweeper keeps every offline image
+// and sealed Agents file younger than [unreadableGrace] (days, not hours),
+// and still sweeps what is older. An Agents prompt only ever names offline
+// images and sealed Agents files, never a voice recording, so voice files
+// keep the normal grace.
+//
+// Sealed Agents files (`agents-att://`) are swept too (bead chuk_chat-j35g):
+// a file no outbox row names and the blob index no longer points at is
+// deleted once it is older than the grace.
 import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
 import 'package:chuk_chat/models/queued_message.dart';
+import 'package:chuk_chat/services/agents/agents_attachment_store.dart';
 import 'package:chuk_chat/services/agents/agents_task_outbox.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/services/offline_outbox_cipher.dart';
@@ -34,6 +47,10 @@ class OfflineFileSweeper {
 
   /// A file younger than this is never swept.
   static Duration grace = const Duration(hours: 6);
+
+  /// While an Agents outbox row cannot be opened, an offline image or a
+  /// sealed Agents file younger than this is kept: that row may name it.
+  static Duration unreadableGrace = const Duration(days: 14);
 
   // ── Test seams ──────────────────────────────────────────────────────
   @visibleForTesting
@@ -57,10 +74,19 @@ class OfflineFileSweeper {
   @visibleForTesting
   static DateTime Function() now = DateTime.now;
 
-  /// The local attachment paths the queued Agents prompts still name (null:
-  /// a row cannot be opened, so nothing is deleted).
-  static Future<Set<String>?> Function() agentsPaths =
+  /// The local attachment paths the queued Agents prompts still name, and
+  /// whether every row could be read.
+  static Future<({Set<String> paths, bool complete})> Function() agentsPaths =
       AgentsTaskOutbox.attachmentPaths;
+  @visibleForTesting
+  static Future<List<SweptFile>> Function(String userId) agentsFiles =
+      AgentsAttachmentStore.listRefs;
+  @visibleForTesting
+  static Future<Set<String>> Function() agentsIndexed =
+      AgentsAttachmentStore.indexedRefs;
+  @visibleForTesting
+  static Future<void> Function(String ref) deleteAgentsFile =
+      AgentsAttachmentStore.delete;
 
   static String? _defaultUser() => OutboxCipher.currentUserId();
   static bool _defaultCanOpen() => OutboxCipher.canOpen();
@@ -79,7 +105,11 @@ class OfflineFileSweeper {
     deleteImage = ImageStorageService.deleteOfflineImage;
     now = DateTime.now;
     agentsPaths = AgentsTaskOutbox.attachmentPaths;
+    agentsFiles = AgentsAttachmentStore.listRefs;
+    agentsIndexed = AgentsAttachmentStore.indexedRefs;
+    deleteAgentsFile = AgentsAttachmentStore.delete;
     grace = const Duration(hours: 6);
+    unreadableGrace = const Duration(days: 14);
     instance._swept.clear();
     instance._running = null;
   }
@@ -118,12 +148,11 @@ class OfflineFileSweeper {
       if (mine.any((r) => r.locked)) return 0;
       // A queued Agents prompt keeps its pictures offline until they are
       // uploaded to the host.
-      final Set<String>? agents = await agentsPaths();
-      if (agents == null) return 0;
+      final ({Set<String> paths, bool complete}) agents = await agentsPaths();
 
       final Set<String> voice = <String>{};
       final Set<String> images = <String>{
-        for (final String p in agents)
+        for (final String p in agents.paths)
           if (ImageStorageService.isOfflinePath(p)) p,
       };
       for (final r in mine) {
@@ -138,6 +167,10 @@ class OfflineFileSweeper {
       }
 
       final DateTime cutoff = now().subtract(grace);
+      // What an unreadable Agents row may name waits much longer.
+      final DateTime agentsCutoff = agents.complete
+          ? cutoff
+          : now().subtract(unreadableGrace);
       for (final f in await voiceFiles(userId)) {
         if (voice.contains(pathKey(f.path)) || f.modified.isAfter(cutoff)) {
           continue;
@@ -146,8 +179,22 @@ class OfflineFileSweeper {
         deleted++;
       }
       for (final f in await imageFiles(userId)) {
-        if (images.contains(f.path) || f.modified.isAfter(cutoff)) continue;
+        if (images.contains(f.path) || f.modified.isAfter(agentsCutoff)) {
+          continue;
+        }
         await deleteImage(f.path);
+        deleted++;
+      }
+      // Sealed Agents files: kept while a queued prompt names one or the
+      // blob index still points at it (a replayed bubble draws from it).
+      final Set<String> indexed = await agentsIndexed();
+      for (final f in await agentsFiles(userId)) {
+        if (agents.paths.contains(f.path) ||
+            indexed.contains(f.path) ||
+            f.modified.isAfter(agentsCutoff)) {
+          continue;
+        }
+        await deleteAgentsFile(f.path);
         deleted++;
       }
       _swept.add(userId);

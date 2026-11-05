@@ -20,6 +20,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
+import 'package:chuk_chat/services/agents/agents_task_outbox.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/io_helper.dart' show Directory, File;
@@ -282,17 +283,88 @@ class AgentsAttachmentStore {
 
   /// Records that [blobId] was uploaded from [localPath] (a ref or an image
   /// path). Only ids and paths are kept, never content.
+  ///
+  /// The index keeps the newest [_maxBlobs] uploads. A sealed copy (a ref)
+  /// that falls out of it is deleted with it, unless another blob still
+  /// points at it or a queued prompt still names it: the index was the only
+  /// reason to keep it (bead chuk_chat-j35g, review of b8e3343c finding 6).
+  /// Offline pictures are not deleted here; [OfflineFileSweeper] does that.
   static Future<void> rememberBlob(String blobId, String localPath) async {
     await _loadBlobs();
     _blobs.remove(blobId);
     _blobs[blobId] = localPath;
+    final List<String> evicted = <String>[];
     while (_blobs.length > _maxBlobs) {
-      _blobs.remove(_blobs.keys.first);
+      final String key = _blobs.keys.first;
+      evicted.add(_blobs.remove(key)!);
     }
     try {
       final SharedPreferences prefs = await SharedPreferences.getInstance();
       await prefs.setString(_blobKey(_user()), jsonEncode(_blobs));
     } catch (_) {}
+    await _deleteEvicted(evicted);
+  }
+
+  /// The local copies the outbox still names, and whether every outbox row
+  /// could be read. Replaceable in tests.
+  @visibleForTesting
+  static Future<({Set<String> paths, bool complete})> Function()
+  outboxPaths = AgentsTaskOutbox.attachmentPaths;
+
+  static Future<void> _deleteEvicted(List<String> evicted) async {
+    final List<String> refs = <String>[
+      for (final String path in evicted)
+        if (isRef(path) && !_blobs.containsValue(path)) path,
+    ];
+    if (refs.isEmpty) return;
+    final ({Set<String> paths, bool complete}) named;
+    try {
+      named = await outboxPaths();
+    } catch (_) {
+      return;
+    }
+    // A row that cannot be opened may name any ref: keep them all, the
+    // sweeper takes them later.
+    if (!named.complete) return;
+    for (final String ref in refs) {
+      if (!named.paths.contains(ref)) await delete(ref);
+    }
+  }
+
+  /// The refs the blob index still points at: the sweeper keeps them.
+  static Future<Set<String>> indexedRefs() async {
+    await _loadBlobs();
+    return <String>{
+      for (final String path in _blobs.values)
+        if (isRef(path)) path,
+    };
+  }
+
+  /// Every sealed file of [userId] as a ref, with the time it was written.
+  static Future<List<({String path, DateTime modified})>> listRefs(
+    String userId,
+  ) async {
+    if (!_segment.hasMatch(userId)) return const [];
+    final Directory? root = await _root();
+    if (root == null) return const [];
+    final Directory dir = Directory('${root.path}/$userId');
+    final out = <({String path, DateTime modified})>[];
+    try {
+      if (!await dir.exists()) return const [];
+      await for (final entity in dir.list(followLinks: false)) {
+        if (entity is! File || !entity.path.endsWith('.enc')) continue;
+        final String name = entity.path.split(RegExp(r'[/\\]')).last;
+        final String id = name.substring(0, name.length - '.enc'.length);
+        if (!_segment.hasMatch(id)) continue;
+        out.add((
+          path: '$scheme$userId/$id',
+          modified: await entity.lastModified(),
+        ));
+      }
+    } catch (error) {
+      if (kDebugMode) debugPrint('[agents-attach] list failed: $error');
+    }
+    return out;
   }
 
   /// The local copy [blobId] was uploaded from, when this device knows it.
@@ -322,6 +394,7 @@ class AgentsAttachmentStore {
 
   @visibleForTesting
   static void resetForTest() {
+    outboxPaths = AgentsTaskOutbox.attachmentPaths;
     rootOverride = null;
     userOverride = null;
     sealOverride = null;

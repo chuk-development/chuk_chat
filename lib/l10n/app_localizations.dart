@@ -1806,6 +1806,7 @@ class AppLocalizations {
   String get webhookNoAutomation => _get('webhookNoAutomation');
   String webhookMerged(String count) => _get('webhookMerged').replaceAll('{count}', count);
   String get webhookFailed => _get('webhookFailed');
+  String get webhookRollbackFailed => _get('webhookRollbackFailed');
   // ── end webhooks ──
   // ── feedback ──
   String get feedbackRemoveRating => _get('feedbackRemoveRating');

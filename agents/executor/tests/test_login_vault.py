@@ -187,6 +187,31 @@ def test_no_vault_answers_with_an_error():
     assert reply["entries"] == [] and reply["error"]
 
 
+def test_every_reply_echoes_the_request_id(tmp_path):
+    # The app matches its answer by request_id: a list reply must never be
+    # taken for the answer to a save sent at the same time.
+    vault = _vault(tmp_path)
+    saved = handle_login_vault_frame(
+        vault,
+        "login_vault_set",
+        {"origin": "https://github.com", "username": "octo", "password": PASSWORD, "request_id": "lv-1"},
+    )
+    assert saved["request_id"] == "lv-1" and saved["saved"]
+    listed = handle_login_vault_frame(vault, "login_vault_list", {"request_id": "lv-2"})
+    assert listed["request_id"] == "lv-2"
+    refused = handle_login_vault_frame(
+        vault, "login_vault_delete", {"id": "nope", "request_id": "lv-3"}
+    )
+    assert refused["request_id"] == "lv-3" and refused["error"]
+    assert handle_login_vault_frame(None, "login_vault_list", {"request_id": "lv-4"})["request_id"] == "lv-4"
+    # No id (an old app) or a junk id: no echo.
+    assert "request_id" not in handle_login_vault_frame(vault, "login_vault_list", {})
+    assert "request_id" not in handle_login_vault_frame(
+        vault, "login_vault_list", {"request_id": "x" * 500}
+    )
+    assert "request_id" not in handle_login_vault_frame(vault, "login_vault_list", {"request_id": 7})
+
+
 # -- through the executor -------------------------------------------------------------
 
 

@@ -221,6 +221,19 @@ class OutboxSendDeferred implements Exception {
   String toString() => 'OutboxSendDeferred: $reason';
 }
 
+/// Thrown by a flush sender when the entry itself cannot go out as it is
+/// (its files are too large, too many, empty or gone). Sending again will
+/// not help, so [AgentsTaskOutbox.flush] marks the entry
+/// [OutboxTask.failed] at once, with [reason], instead of counting attempts.
+class OutboxSendRefused implements Exception {
+  const OutboxSendRefused(this.reason);
+
+  final String reason;
+
+  @override
+  String toString() => 'OutboxSendRefused: $reason';
+}
+
 /// What one `kv_cache` row of either store holds once it is read.
 ///
 /// [rows] are the entries this install can read. [locked] are sealed blobs it
@@ -554,6 +567,25 @@ class AgentsTaskOutbox {
     return !failed;
   });
 
+  /// Marks [localId] [OutboxTask.failed] now, with [error]: it is kept and
+  /// waits for the user. Returns whether the entry was found.
+  static Future<bool> markFailed(
+    String sessionKey,
+    String localId,
+    String error,
+  ) => _edit(sessionKey, (List<OutboxTask> tasks) async {
+    final int index = tasks.indexWhere(
+      (OutboxTask task) => task.localId == localId,
+    );
+    if (index < 0) return false;
+    tasks[index] = tasks[index].copyWith(
+      attempts: tasks[index].attempts + 1,
+      lastError: error,
+      failed: true,
+    );
+    return true;
+  });
+
   /// The session keys that have a queue row, from the store itself.
   static Future<List<String>> _sessionKeys() async {
     final List<String> rows = await _listKeys(kTaskOutboxPrefix);
@@ -700,6 +732,12 @@ class AgentsTaskOutbox {
           // No link: not the prompt's fault, so no attempt is counted. A
           // flapping network must never push a prompt into `failed`.
           break;
+        } on OutboxSendRefused catch (refused) {
+          // The entry itself is the problem (its files): no retry can fix
+          // it. It fails now and waits for the user; the link is fine, so
+          // the entries behind it still go.
+          await markFailed(sessionKey, task.localId, refused.reason);
+          continue;
         } catch (error) {
           await markAttempt(sessionKey, task.localId, '$error');
           break;
@@ -781,22 +819,34 @@ class AgentsTaskOutbox {
   }
 
   /// Every local attachment path a queued prompt still names, so the file
-  /// sweeper keeps those files. Null when a row cannot be opened (no key
-  /// yet) or the store cannot be read: then nothing may be deleted.
-  static Future<Set<String>?> attachmentPaths() async {
+  /// sweeper keeps those files.
+  ///
+  /// [complete] is false when some row could not be read (no key yet, a
+  /// sealed blob of another key, a store error): the paths of that row are
+  /// not known. The readable rows still count, so one bad row does not hide
+  /// what the others name. The caller decides how careful to be with files
+  /// no known row names ([OfflineFileSweeper] waits much longer then).
+  static Future<({Set<String> paths, bool complete})> attachmentPaths() async {
+    final Set<String> out = <String>{};
+    bool complete = true;
+    final List<String> sessions;
     try {
-      final Set<String> out = <String>{};
-      for (final String sessionKey in await _sessionKeys()) {
+      sessions = await _sessionKeys();
+    } catch (_) {
+      return (paths: out, complete: false);
+    }
+    for (final String sessionKey in sessions) {
+      try {
         final _OutboxRow row = await _locked(() => _loadRow(sessionKey));
-        if (row.locked.isNotEmpty || row.readFailed) return null;
+        if (row.locked.isNotEmpty || row.readFailed) complete = false;
         for (final OutboxTask task in row.tasks) {
           out.addAll(task.attachments);
         }
+      } catch (_) {
+        complete = false;
       }
-      return out;
-    } catch (_) {
-      return null;
     }
+    return (paths: out, complete: complete);
   }
 
   @visibleForTesting

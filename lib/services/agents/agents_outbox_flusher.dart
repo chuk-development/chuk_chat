@@ -15,6 +15,7 @@ import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/services/agents/agents_attachments.dart';
 import 'package:chuk_chat/services/agents/agents_background_link.dart';
+import 'package:chuk_chat/services/agents/agents_chat_transport.dart';
 import 'package:chuk_chat/services/agents/agents_queued_marks.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
@@ -250,7 +251,10 @@ class AgentsOutboxFlusher {
 
   /// Uploads [task]'s local files and returns their `blob_id`s, or the ids
   /// the host already holds. A link that cannot take the frames defers the
-  /// entry (no attempt counted); any other failure counts as one.
+  /// entry (no attempt counted). A selection the user must change (too
+  /// large, too many, empty, gone) fails the entry at once and raises the
+  /// same `attachmentsRefused` notice as a live send; any other failure
+  /// counts as one attempt.
   static Future<List<String>> uploadQueuedAttachments(
     AgentsRelayController controller,
     OutboxTask task,
@@ -265,6 +269,20 @@ class AgentsOutboxFlusher {
     } on AgentsAttachmentException catch (error) {
       if (error.failure == AgentsAttachmentFailure.notSent) {
         throw const OutboxSendDeferred('attachments could not be sent');
+      }
+      if (error.isUserFixable) {
+        AgentsChatTransport.notify(
+          AgentsSendNotice(
+            kind: AgentsSendNoticeKind.attachmentsRefused,
+            sessionKey: task.sessionKey,
+            count: task.attachments.length,
+            failure: error.failure,
+            name: error.name,
+          ),
+        );
+        throw OutboxSendRefused(
+          agentsAttachmentRefusalText(error.failure, name: error.name),
+        );
       }
       throw StateError('attachments: ${error.failure.name}');
     }

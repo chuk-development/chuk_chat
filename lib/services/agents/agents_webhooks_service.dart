@@ -4,7 +4,8 @@
 /// The server makes the secret URL and pushes each call to the host. The app
 /// creates the server row first, then the host's `automation_create` with
 /// `kind: "webhook"`. When the host refuses the row, the server row is
-/// deleted again, so no URL is left that starts nothing.
+/// deleted again, so no URL is left that starts nothing. A delete that fails
+/// is queued and tried again ([WebhookRollbackQueue]).
 ///
 /// The URL is the credential. It comes back from `POST` only, once. It is
 /// never logged here and never sent anywhere else.
@@ -15,6 +16,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/services/agents/agent_mail_service.dart'
     show AgentMailTokenSource, supabaseAgentMailToken;
@@ -299,12 +301,16 @@ class WebhookCreateResult {
     required String this.url,
     required String this.webhookId,
   }) : error = null,
-       serverCode = null;
+       serverCode = null,
+       rollbackFailed = false;
 
-  const WebhookCreateResult.failed(this.error, {this.serverCode})
-    : automation = null,
-      url = null,
-      webhookId = null;
+  const WebhookCreateResult.failed(
+    this.error, {
+    this.serverCode,
+    this.rollbackFailed = false,
+  }) : automation = null,
+       url = null,
+       webhookId = null;
 
   /// Set when the server webhook could not be made: the server's code
   /// (`too_many_webhooks`, `network`, ...). Null for a host refusal.
@@ -318,6 +324,10 @@ class WebhookCreateResult {
 
   /// Why it failed: the host's own words, or a server code.
   final String? error;
+
+  /// The server webhook of a failed create could not be deleted yet. It is
+  /// queued and deleted on a later try; the user is told so.
+  final bool rollbackFailed;
 
   bool get ok => automation != null;
 }
@@ -338,6 +348,13 @@ typedef WebhookAutomationCreator = Future<AutomationSaveResult> Function({
 /// "Inbound webhooks", App work 1 and 2): the server webhook first, then
 /// the host's row with `spec.webhook_id` = the server's row id. A host
 /// refusal (or no answer) deletes the server webhook again.
+///
+/// No answer is not a refusal: the host may still save the row, and its
+/// `automation_saved` arrive after the wait ran out. The choice made here:
+/// the server webhook is deleted all the same (its URL was never shown, so
+/// nobody could call it), and [WebhookRollbackQueue] watches for a host row
+/// that names its id and cancels it. Keeping the server row instead would
+/// need the URL shown later, and the server returns it only once.
 Future<WebhookCreateResult> createWebhookAutomation({
   required String sessionKey,
   required String prompt,
@@ -352,8 +369,13 @@ Future<WebhookCreateResult> createWebhookAutomation({
   AgentsWebhooksService? service,
   Future<String?> Function()? deviceId,
   WebhookAutomationCreator? createAutomation,
+  AutomationsSource? source,
+  WebhookRollbackQueue? rollback,
 }) async {
   final AgentsWebhooksService api = service ?? AgentsWebhooksService.instance;
+  final WebhookRollbackQueue queue = rollback ?? WebhookRollbackQueue.instance;
+  // Server webhooks an earlier rollback could not delete go first.
+  await queue.retryDeletes(api);
   final AgentsWebhookCreated created;
   try {
     created = await api.create(
@@ -374,6 +396,7 @@ Future<WebhookCreateResult> createWebhookAutomation({
   final WebhookAutomationCreator send =
       createAutomation ?? webhookCreatorFor(AutomationsSource.instance);
   AutomationSaveResult result;
+  bool answered = true;
   try {
     result = await send(
       sessionKey: sessionKey,
@@ -386,19 +409,34 @@ Future<WebhookCreateResult> createWebhookAutomation({
       catchUp: catchUp,
     );
   } catch (error) {
+    // The frame may have left before the send failed.
+    answered = false;
     result = AutomationSaveResult.failed('Could not reach the host: $error');
   }
   final AgentsAutomation? saved = result.automation;
   if (saved == null) {
-    // The host did not keep the row: the URL would start nothing.
+    if (!answered || result.noAnswer) {
+      // A late `automation_saved` would make a host row for a dead URL:
+      // watch for it and cancel it (see the doc comment above).
+      await queue.watchLateRow(id);
+      queue.attach(source ?? AutomationsSource.instance);
+    }
+    // The host did not keep the row (or may never): the URL would start
+    // nothing.
+    bool rolledBack = true;
     try {
       await api.delete(id);
     } catch (error) {
+      rolledBack = false;
       if (kDebugMode) {
         debugPrint('agent webhooks: rollback failed (${error.runtimeType})');
       }
+      await queue.addDelete(id);
     }
-    return WebhookCreateResult.failed(result.error);
+    return WebhookCreateResult.failed(
+      result.error,
+      rollbackFailed: !rolledBack,
+    );
   }
   return WebhookCreateResult.saved(
     automation: saved,
@@ -428,3 +466,207 @@ WebhookAutomationCreator webhookCreatorFor(AutomationsSource source) =>
       allowChaining: allowChaining,
       catchUp: catchUp,
     );
+
+/// Server webhooks a failed create left behind, kept until they are gone
+/// (review of b8e3343c, findings 2 and 3).
+///
+/// * [addDelete]: the rollback `DELETE` failed (offline, server error). The
+///   id is kept in SharedPreferences and deleted again on the next create
+///   ([createWebhookAutomation]) and when the webhook list opens
+///   ([WebhooksSection]). A 404 counts as deleted.
+/// * [watchLateRow]: the host did not answer the create in time. Its
+///   `automation_saved` can still come, with a row whose `webhook_id` is a
+///   deleted server webhook. [cancelLateRows] sends `automation_control
+///   cancel` for such a row; the watch ends after [watchLifetime].
+///
+/// Only row ids are kept, never a URL or a secret.
+class WebhookRollbackQueue {
+  WebhookRollbackQueue({
+    this.prefsKey = 'agents_webhook_rollback_v1',
+    DateTime Function()? now,
+  }) : _now = now ?? DateTime.now;
+
+  static final WebhookRollbackQueue instance = WebhookRollbackQueue();
+
+  /// How long a timed-out create is watched for a late host row.
+  static const Duration watchLifetime = Duration(days: 7);
+
+  /// At most this many ids of each kind are kept (the oldest go first).
+  static const int maxIds = 50;
+
+  final String prefsKey;
+  final DateTime Function() _now;
+
+  /// Automation ids whose cancel is on the wire now.
+  final Set<String> _cancelling = <String>{};
+  AutomationsSource? _attached;
+
+  Future<({List<String> deletes, Map<String, int> watches})> _load() async {
+    final List<String> deletes = <String>[];
+    final Map<String, int> watches = <String, int>{};
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final String? raw = prefs.getString(prefsKey);
+      if (raw != null) {
+        final Object? data = jsonDecode(raw);
+        if (data is Map) {
+          final Object? d = data['delete'];
+          if (d is List) {
+            for (final Object? id in d) {
+              if (id is String && id.isNotEmpty) deletes.add(id);
+            }
+          }
+          final Object? w = data['watch'];
+          if (w is Map) {
+            for (final MapEntry<Object?, Object?> e in w.entries) {
+              if (e.key is String && e.value is int) {
+                watches[e.key as String] = e.value as int;
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('agent webhooks: rollback queue unreadable ($error)');
+      }
+    }
+    final int cutoff = _now().subtract(watchLifetime).millisecondsSinceEpoch;
+    watches.removeWhere((_, int at) => at < cutoff);
+    return (deletes: deletes, watches: watches);
+  }
+
+  Future<void> _store(List<String> deletes, Map<String, int> watches) async {
+    while (deletes.length > maxIds) {
+      deletes.removeAt(0);
+    }
+    while (watches.length > maxIds) {
+      watches.remove(watches.keys.first);
+    }
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      if (deletes.isEmpty && watches.isEmpty) {
+        await prefs.remove(prefsKey);
+      } else {
+        await prefs.setString(
+          prefsKey,
+          jsonEncode(<String, Object>{'delete': deletes, 'watch': watches}),
+        );
+      }
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('agent webhooks: rollback queue not saved ($error)');
+      }
+    }
+  }
+
+  /// Keeps [webhookId] to delete on a later try.
+  Future<void> addDelete(String webhookId) async {
+    final state = await _load();
+    final String id = webhookId.toLowerCase();
+    state.deletes
+      ..remove(id)
+      ..add(id);
+    await _store(state.deletes, state.watches);
+  }
+
+  /// Server webhooks still waiting for their delete.
+  Future<List<String>> pendingDeletes() async => (await _load()).deletes;
+
+  /// Watches for a late host row that names [webhookId].
+  Future<void> watchLateRow(String webhookId) async {
+    final state = await _load();
+    state.watches[webhookId.toLowerCase()] = _now().millisecondsSinceEpoch;
+    await _store(state.deletes, state.watches);
+  }
+
+  /// The webhook ids a late host row is watched for.
+  Future<Set<String>> watchedIds() async =>
+      (await _load()).watches.keys.toSet();
+
+  /// Deletes every queued server webhook with [api]. Returns how many are
+  /// still queued. Never throws.
+  Future<int> retryDeletes(AgentsWebhooksService api) async {
+    final state = await _load();
+    if (state.deletes.isEmpty) return 0;
+    final List<String> left = <String>[];
+    for (final String id in state.deletes) {
+      try {
+        await api.delete(id);
+      } catch (error) {
+        if (kDebugMode) {
+          debugPrint(
+            'agent webhooks: queued delete failed (${error.runtimeType})',
+          );
+        }
+        left.add(id);
+      }
+    }
+    // Read again: an id may have been queued while the deletes ran.
+    final latest = await _load();
+    final List<String> deletes = <String>[
+      for (final String id in latest.deletes)
+        if (left.contains(id) || !state.deletes.contains(id)) id,
+    ];
+    await _store(deletes, latest.watches);
+    return deletes.length;
+  }
+
+  /// Cancels every live webhook row in [rows] whose `webhook_id` is
+  /// watched, with [cancel] (`automation_control cancel`). A row that was
+  /// cancelled ends its watch. Never throws.
+  Future<void> cancelLateRows(
+    Iterable<AgentsAutomation> rows,
+    Future<bool> Function(String automationId) cancel,
+  ) async {
+    final List<AgentsAutomation> live = <AgentsAutomation>[
+      for (final AgentsAutomation a in rows)
+        if (a.isWebhook && !a.isOver && a.webhookId != null) a,
+    ];
+    if (live.isEmpty) return;
+    final state = await _load();
+    if (state.watches.isEmpty) return;
+    final Set<String> done = <String>{};
+    for (final AgentsAutomation a in live) {
+      final String hook = a.webhookId!.toLowerCase();
+      if (!state.watches.containsKey(hook)) continue;
+      if (!_cancelling.add(a.id)) continue;
+      try {
+        if (await cancel(a.id)) done.add(hook);
+      } catch (_) {
+        // Tried again on the next change of the list.
+      } finally {
+        _cancelling.remove(a.id);
+      }
+    }
+    if (done.isEmpty) return;
+    final latest = await _load();
+    latest.watches.removeWhere((String id, _) => done.contains(id));
+    await _store(latest.deletes, latest.watches);
+  }
+
+  /// Watches [source]: every change of its list cancels a late row. Once
+  /// per source; the current list is checked at once.
+  void attach(AutomationsSource source) {
+    if (identical(_attached, source)) return;
+    _attached?.removeListener(_onSourceChanged);
+    _attached = source;
+    source.addListener(_onSourceChanged);
+    _onSourceChanged();
+  }
+
+  void _onSourceChanged() {
+    final AutomationsSource? source = _attached;
+    if (source == null) return;
+    unawaited(
+      cancelLateRows(source.all, (String id) => source.control(id, 'cancel')),
+    );
+  }
+
+  @visibleForTesting
+  void detachForTest() {
+    _attached?.removeListener(_onSourceChanged);
+    _attached = null;
+    _cancelling.clear();
+  }
+}

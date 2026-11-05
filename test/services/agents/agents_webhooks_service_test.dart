@@ -6,9 +6,16 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/agents_webhooks_service.dart';
 import 'package:chuk_chat/services/automations/agents_automation.dart';
+import 'package:chuk_chat/services/automations/automations_source.dart';
+
+import '../automations/automation_event_triggers_test.dart'
+    show FakeEditController;
 
 const String _hookId = '2A6B0C1E-1111-4222-8333-444455556666';
 const String _url = 'https://api.chuk.chat/v1/hooks/wh_secretsecret';
@@ -219,7 +226,10 @@ void main() {
           return result;
         };
 
-    setUp(() => sent = <Map<String, Object?>>[]);
+    setUp(() {
+      sent = <Map<String, Object?>>[];
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+    });
 
     test('server first, then the host row with the row uuid', () async {
       final result = await createWebhookAutomation(
@@ -291,6 +301,148 @@ void main() {
       );
       expect(result.ok, isFalse);
       expect(requests.where((r) => r.method == 'DELETE'), hasLength(1));
+    });
+
+    group('no answer and a failed rollback (review of b8e3343c)', () {
+      final AutomationsSource source = AutomationsSource.instance;
+      final savedBefore = AgentsRelayClient.automationSavedSink;
+      final doneBefore = AgentsRelayClient.automationDoneSink;
+      late FakeEditController controller;
+      late WebhookRollbackQueue queue;
+
+      setUp(() {
+        source.reset();
+        AgentsRelayLink.instance.reset();
+        controller = FakeEditController();
+        AgentsRelayLink.instance.bind(controller);
+        source.attach();
+        queue = WebhookRollbackQueue(prefsKey: 'test_rollback');
+      });
+
+      tearDown(() {
+        queue.detachForTest();
+        source.reset();
+        AgentsRelayLink.instance.reset();
+        AgentsRelayClient.automationSavedSink = savedBefore;
+        AgentsRelayClient.automationDoneSink = doneBefore;
+      });
+
+      Future<void> drain() async {
+        for (int i = 0; i < 20; i++) {
+          await Future<void>.delayed(Duration.zero);
+        }
+      }
+
+      test('no answer: a late automation_saved row is cancelled', () async {
+        final result = await createWebhookAutomation(
+          sessionKey: 'host:dev-1',
+          prompt: 'x',
+          service: api(),
+          deviceId: () async => null,
+          createAutomation: creator(
+            const AutomationSaveResult.noAnswer('The host did not answer.'),
+          ),
+          source: source,
+          rollback: queue,
+        );
+        expect(result.ok, isFalse);
+        expect(result.rollbackFailed, isFalse);
+        // The URL was never shown: the server webhook goes at once.
+        expect(requests.where((r) => r.method == 'DELETE'), hasLength(1));
+        expect(await queue.watchedIds(), <String>{_hookId.toLowerCase()});
+
+        // The host's answer comes late, with a row for the dead webhook.
+        AgentsRelayClient.automationSavedSink!(<String, dynamic>{
+          'type': 'automation_saved',
+          'ok': true,
+          'automation': <String, dynamic>{
+            'id': 'a1',
+            'session_key': 'host:dev-1',
+            'kind': 'webhook',
+            'name': 'late',
+            'state': 'active',
+            'spec': <String, dynamic>{'webhook_id': _hookId.toLowerCase()},
+          },
+        });
+        await drain();
+        expect(controller.controls, <(String, String)>[('a1', 'cancel')]);
+        expect(await queue.watchedIds(), isEmpty);
+      });
+
+      test('an explicit refusal watches nothing', () async {
+        await createWebhookAutomation(
+          sessionKey: 'host:dev-1',
+          prompt: 'x',
+          service: api(),
+          deviceId: () async => null,
+          createAutomation: creator(
+            const AutomationSaveResult.failed('invalid filter'),
+          ),
+          source: source,
+          rollback: queue,
+        );
+        expect(await queue.watchedIds(), isEmpty);
+      });
+
+      test('a failed rollback is queued, told, and retried on the next '
+          'create', () async {
+        bool serverDown = true;
+        final AgentsWebhooksService flaky = service((http.Request r) {
+          if (r.method == 'DELETE' && serverDown) {
+            return http.Response('{"detail":"boom"}', 503);
+          }
+          return r.method == 'POST'
+              ? http.Response(
+                  jsonEncode(<String, dynamic>{
+                    ..._row(),
+                    'id': _hookId,
+                    'url': _url,
+                  }),
+                  201,
+                )
+              : http.Response('{"ok": true}', 200);
+        });
+        final first = await createWebhookAutomation(
+          sessionKey: 'host:dev-1',
+          prompt: 'x',
+          service: flaky,
+          deviceId: () async => null,
+          createAutomation: creator(
+            const AutomationSaveResult.failed('invalid filter'),
+          ),
+          source: source,
+          rollback: queue,
+        );
+        expect(first.ok, isFalse);
+        expect(first.rollbackFailed, isTrue);
+        expect(await queue.pendingDeletes(), <String>[_hookId.toLowerCase()]);
+
+        // A later try deletes it first.
+        serverDown = false;
+        requests.clear();
+        final second = await createWebhookAutomation(
+          sessionKey: 'host:dev-1',
+          prompt: 'x',
+          service: flaky,
+          deviceId: () async => null,
+          createAutomation: creator(AutomationSaveResult.saved(_saved())),
+          source: source,
+          rollback: queue,
+        );
+        expect(second.ok, isTrue);
+        expect(requests.first.method, 'DELETE');
+        expect(
+          requests.first.url.path,
+          '/v1/agents/webhooks/${_hookId.toLowerCase()}',
+        );
+        expect(await queue.pendingDeletes(), isEmpty);
+      });
+
+      test('the queue survives a new instance (SharedPreferences)', () async {
+        await queue.addDelete('ABC');
+        final again = WebhookRollbackQueue(prefsKey: 'test_rollback');
+        expect(await again.pendingDeletes(), <String>['abc']);
+      });
     });
 
     test('a server refusal sends nothing to the host', () async {

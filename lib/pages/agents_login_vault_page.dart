@@ -281,8 +281,13 @@ class _LoginVaultFormState extends State<LoginVaultForm> {
   late final TextEditingController _username = TextEditingController(
     text: widget.entry?.username ?? '',
   );
-  final TextEditingController _password = TextEditingController();
-  final TextEditingController _totp = TextEditingController();
+  TextEditingController _password = TextEditingController();
+  TextEditingController _totp = TextEditingController();
+
+  /// The undo history of each secret field. A cleared secret must not come
+  /// back with an undo (Ctrl+Z, the undo key of a keyboard).
+  final UndoHistoryController _passwordUndo = UndoHistoryController();
+  final UndoHistoryController _totpUndo = UndoHistoryController();
   late final TextEditingController _label = TextEditingController(
     text: widget.entry?.label ?? '',
   );
@@ -308,7 +313,34 @@ class _LoginVaultFormState extends State<LoginVaultForm> {
       c.clear();
       c.dispose();
     }
+    _passwordUndo.dispose();
+    _totpUndo.dispose();
     super.dispose();
+  }
+
+  /// Empties both secret fields AND their undo history.
+  ///
+  /// `clear()` alone pushes an empty value on the field's undo stack: the
+  /// typed secret stays one undo away. The stack belongs to the field's
+  /// [TextEditingController] (Flutter drops it when the controller changes),
+  /// so each secret field gets a fresh controller; the old one is disposed
+  /// after the frame that stops using it. The [UndoHistoryController]s are
+  /// reset too, so no undo button offers a step back.
+  void _clearSecrets() {
+    _password = _fresh(_password);
+    _passwordUndo.value = UndoHistoryValue.empty;
+    _clearTotp();
+  }
+
+  void _clearTotp() {
+    _totp = _fresh(_totp);
+    _totpUndo.value = UndoHistoryValue.empty;
+  }
+
+  static TextEditingController _fresh(TextEditingController old) {
+    old.clear();
+    WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
+    return TextEditingController();
   }
 
   void _fail(String key, String message) => setState(() {
@@ -345,8 +377,7 @@ class _LoginVaultFormState extends State<LoginVaultForm> {
       // login leaves an empty one out.
       label: _editing || label.isNotEmpty ? label : null,
     );
-    _password.clear();
-    _totp.clear();
+    _clearSecrets();
     setState(() => _saving = true);
     final AgentsLoginVaultReply reply = await sent;
     if (!mounted) return;
@@ -392,6 +423,7 @@ class _LoginVaultFormState extends State<LoginVaultForm> {
   Widget _secretField({
     required String key,
     required TextEditingController controller,
+    required UndoHistoryController undo,
     required String label,
     Widget? suffix,
     bool obscure = true,
@@ -399,6 +431,7 @@ class _LoginVaultFormState extends State<LoginVaultForm> {
     child: TextField(
       key: ValueKey<String>('login-vault-field-$key'),
       controller: controller,
+      undoController: undo,
       obscureText: obscure,
       autocorrect: false,
       enableSuggestions: false,
@@ -475,6 +508,7 @@ class _LoginVaultFormState extends State<LoginVaultForm> {
             _secretField(
               key: 'password',
               controller: _password,
+              undo: _passwordUndo,
               label: l.loginVaultPassword,
               obscure: !_showPassword,
               suffix: ExpressiveIconButton(
@@ -494,6 +528,7 @@ class _LoginVaultFormState extends State<LoginVaultForm> {
               _secretField(
                 key: 'totp',
                 controller: _totp,
+                undo: _totpUndo,
                 label: l.loginVaultTotp,
               ),
               _help(
@@ -510,7 +545,7 @@ class _LoginVaultFormState extends State<LoginVaultForm> {
                     ? null
                     : (bool v) => setState(() {
                         _removeTotp = v;
-                        if (v) _totp.clear();
+                        if (v) _clearTotp();
                       }),
               ),
             ExpressiveField(

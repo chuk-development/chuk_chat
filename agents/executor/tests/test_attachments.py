@@ -154,6 +154,36 @@ def _upload(inbox, upload_id, data, **kw):
     return ack
 
 
+def test_a_chunk_sent_again_after_a_lost_final_ack_is_complete(tmp_path):
+    # Review of b8e3343c, finding 8: the app lost the ack that said complete
+    # and sends a chunk again. The host answers with the same complete ack.
+    ws, inbox = _inbox(tmp_path)
+    data = b"x" * (CHUNK_BYTES + 10)
+    frames = list(_chunks("upload-lost-ack", data, name="a.bin", mime="application/octet-stream"))
+    first = [inbox.put(f) for f in frames][-1]
+    assert first["complete"] is True and "already_complete" not in first
+    for frame in frames:
+        again = inbox.put(frame)
+        assert again["complete"] is True and again["already_complete"] is True
+        assert again["blob_id"] == first["blob_id"] and again["path"] == first["path"]
+        assert again["received"] == again["count"] == len(frames)
+    # Even when the record on disk is gone, the recent-completed map answers.
+    (tmp_path / "host-state" / "done" / "upload-lost-ack.json").unlink()
+    fresh = AttachmentInbox(ws, state_dir=tmp_path / "host-state")
+    late = fresh.put(frames[0])
+    assert late["complete"] is True and late["already_complete"] is True
+    assert late["blob_id"] == "upload-lost-ack"
+
+
+def test_a_finished_id_with_another_file_is_not_answered_as_finished(tmp_path):
+    _, inbox = _inbox(tmp_path)
+    _upload(inbox, "upload-other-file", b"a" * 100)
+    other = next(_chunks("upload-other-file", b"b" * 100))
+    # Same id, another sha256: never the "already complete" answer of the
+    # first file.
+    assert "already_complete" not in inbox.put(other)
+
+
 def test_state_dir_inside_the_workspace_is_refused(tmp_path):
     with pytest.raises(AttachmentError):
         AttachmentInbox(tmp_path, state_dir=tmp_path / ".agents" / "state")

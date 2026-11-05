@@ -224,8 +224,14 @@ void checkAgentsAttachmentCaps(List<AgentsOutgoingAttachment> files) {
   }
 }
 
-class _HashMismatch implements Exception {
-  const _HashMismatch();
+/// The file starts again from chunk 0 under a fresh `upload_id`: a hash
+/// mismatch dropped the upload on the host, or every chunk was acked and
+/// still no ack said complete (the host lost the upload, e.g. an error ack
+/// that was lost and a chunk sent again into a fresh upload).
+class _StartOver implements Exception {
+  const _StartOver(this.detail);
+
+  final String detail;
 }
 
 class AgentsAttachmentUploader {
@@ -280,12 +286,12 @@ class AgentsAttachmentUploader {
           sessionKey: sessionKey,
           onProgress: onProgress,
         );
-      } on _HashMismatch {
+      } on _StartOver catch (why) {
         if (restart >= maxFileRestarts) {
           throw AgentsAttachmentException(
             AgentsAttachmentFailure.refused,
             name: file.name,
-            detail: 'hash mismatch',
+            detail: why.detail,
           );
         }
       }
@@ -353,7 +359,10 @@ class AgentsAttachmentUploader {
         } on TimeoutException {
           continue;
         }
-        if (ack['ok'] == true) {
+        // A complete ack is success whatever else it says: after a lost
+        // final ack the chunk goes again, and the host answers it with the
+        // record of the finished file (`already_complete`).
+        if (ack['ok'] == true || ack['complete'] == true) {
           final Object? got = ack['received'];
           if (got is int && got > received) received = got;
           if (ack['complete'] == true) {
@@ -374,7 +383,7 @@ class AgentsAttachmentUploader {
         if (error.contains('sha256') ||
             error.contains('hash') ||
             error.contains('mismatch')) {
-          throw const _HashMismatch();
+          throw const _StartOver('hash mismatch');
         }
       }
       throw AgentsAttachmentException(
@@ -404,11 +413,7 @@ class AgentsAttachmentUploader {
     }
     final Map<String, dynamic>? done = completeAck;
     if (done == null) {
-      throw AgentsAttachmentException(
-        AgentsAttachmentFailure.refused,
-        name: file.name,
-        detail: 'the host never said complete',
-      );
+      throw const _StartOver('the host never said complete');
     }
     final Object? blobId = done['blob_id'];
     final Object? path = done['path'];

@@ -3,7 +3,8 @@
 // Files a crash left behind (bead chuk_chat-khct, docs/OFFLINE_SEND.md):
 // a voice recording or an offline image that no outbox row names is
 // deleted once it is older than the grace period; a file a row names is
-// kept at any age; a row that cannot be opened stops the sweep.
+// kept at any age; a chat row that cannot be opened stops the sweep, an
+// Agents outbox row that cannot be opened only makes it wait longer.
 
 import 'package:flutter_test/flutter_test.dart';
 
@@ -35,10 +36,16 @@ void main() {
   late List<SweptFile> images;
   final deletedVoice = <String>[];
   final deletedImages = <String>[];
+  final deletedAgents = <String>[];
+  late List<SweptFile> agentsFiles;
+  late Set<String> indexed;
 
   setUp(() {
     deletedVoice.clear();
     deletedImages.clear();
+    deletedAgents.clear();
+    agentsFiles = [];
+    indexed = <String>{};
     rows = [];
     voice = [];
     images = [];
@@ -50,7 +57,11 @@ void main() {
     OfflineFileSweeper.imageFiles = (_) async => images;
     OfflineFileSweeper.deleteVoice = (p) async => deletedVoice.add(p);
     OfflineFileSweeper.deleteImage = (p) async => deletedImages.add(p);
-    OfflineFileSweeper.agentsPaths = () async => <String>{};
+    OfflineFileSweeper.agentsPaths = () async =>
+        (paths: <String>{}, complete: true);
+    OfflineFileSweeper.agentsFiles = (_) async => agentsFiles;
+    OfflineFileSweeper.agentsIndexed = () async => indexed;
+    OfflineFileSweeper.deleteAgentsFile = (p) async => deletedAgents.add(p);
   });
 
   tearDown(OfflineFileSweeper.resetSeams);
@@ -128,10 +139,10 @@ void main() {
   });
 
   test('an offline picture a queued Agents prompt names stays', () async {
-    OfflineFileSweeper.agentsPaths = () async => <String>{
-      'offline://img/u1/queued',
-      'agents-att://u1/abc',
-    };
+    OfflineFileSweeper.agentsPaths = () async => (
+      paths: <String>{'offline://img/u1/queued', 'agents-att://u1/abc'},
+      complete: true,
+    );
     images = [
       (path: 'offline://img/u1/queued', modified: old),
       (path: 'offline://img/u1/orphan', modified: old),
@@ -140,10 +151,41 @@ void main() {
     expect(deletedImages, ['offline://img/u1/orphan']);
   });
 
-  test('an Agents outbox it cannot open deletes nothing', () async {
-    OfflineFileSweeper.agentsPaths = () async => null;
-    images = [(path: 'offline://img/u1/orphan', modified: old)];
-    expect(await OfflineFileSweeper.instance.sweep('u1'), 0);
-    expect(deletedImages, isEmpty);
+  test('an Agents outbox row it cannot open does not stop the sweep '
+      '(review of b8e3343c, finding 5)', () async {
+    // The readable rows still count; files the unreadable row may name are
+    // kept for unreadableGrace (14 days), older ones go.
+    OfflineFileSweeper.agentsPaths = () async =>
+        (paths: <String>{'offline://img/u1/named'}, complete: false);
+    final weeksOld = now.subtract(const Duration(days: 30));
+    images = [
+      (path: 'offline://img/u1/named', modified: weeksOld),
+      (path: 'offline://img/u1/recent', modified: old),
+      (path: 'offline://img/u1/ancient', modified: weeksOld),
+    ];
+    agentsFiles = [
+      (path: 'agents-att://u1/recent', modified: old),
+      (path: 'agents-att://u1/ancient', modified: weeksOld),
+    ];
+    voice = [(path: '/s/u1/orphan.wav', modified: old)];
+    expect(await OfflineFileSweeper.instance.sweep('u1'), 3);
+    expect(deletedImages, ['offline://img/u1/ancient']);
+    expect(deletedAgents, ['agents-att://u1/ancient']);
+    expect(deletedVoice, ['/s/u1/orphan.wav']);
+  });
+
+  test('sealed Agents files: named or indexed stay, orphans go after the '
+      'grace (bead chuk_chat-j35g)', () async {
+    OfflineFileSweeper.agentsPaths = () async =>
+        (paths: <String>{'agents-att://u1/queued'}, complete: true);
+    indexed = <String>{'agents-att://u1/indexed'};
+    agentsFiles = [
+      (path: 'agents-att://u1/queued', modified: old),
+      (path: 'agents-att://u1/indexed', modified: old),
+      (path: 'agents-att://u1/orphan', modified: old),
+      (path: 'agents-att://u1/fresh', modified: fresh),
+    ];
+    expect(await OfflineFileSweeper.instance.sweep('u1'), 1);
+    expect(deletedAgents, ['agents-att://u1/orphan']);
   });
 }

@@ -518,13 +518,26 @@ abstract interface class AgentsAutomationEditControl {
 /// The host's answer to a create or an update: the saved row, or why not.
 @immutable
 class AutomationSaveResult {
-  const AutomationSaveResult.saved(this.automation) : error = null;
-  const AutomationSaveResult.failed(this.error) : automation = null;
+  const AutomationSaveResult.saved(this.automation)
+    : error = null,
+      noAnswer = false;
+  const AutomationSaveResult.failed(this.error)
+    : automation = null,
+      noAnswer = false;
+
+  /// No `automation_saved` came in time. Unlike [failed], the host may still
+  /// have saved the row: its answer can arrive late.
+  const AutomationSaveResult.noAnswer(this.error)
+    : automation = null,
+      noAnswer = true;
 
   final AgentsAutomation? automation;
 
   /// The host's own words, shown as they are.
   final String? error;
+
+  /// True for [AutomationSaveResult.noAnswer].
+  final bool noAnswer;
 
   bool get ok => automation != null;
 

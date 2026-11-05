@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:chuk_chat/pages/agents_login_vault_page.dart';
@@ -24,6 +25,7 @@ class _Host {
       'type': 'login_vault',
       'entries': entries,
       'error': ?error,
+      'request_id': ?frame['request_id'],
     };
     if (error == null && frame['type'] == 'login_vault_set') {
       reply['saved'] = <String, dynamic>{
@@ -73,9 +75,8 @@ void main() {
         await tester.pumpWidget(testApp(AgentsLoginVaultPage(vault: vault)));
         await tester.pumpAndSettle();
 
-        expect(host.frames.first, <String, dynamic>{
-          'type': 'login_vault_list',
-        });
+        expect(host.frames.first['type'], 'login_vault_list');
+        expect(host.frames.first['request_id'], isA<String>());
         expect(find.text('Logins'), findsWidgets);
         expect(find.text('https://github.com'), findsOneWidget);
         expect(find.textContaining('octo@example.com'), findsOneWidget);
@@ -112,10 +113,14 @@ void main() {
           find.byKey(const ValueKey<String>('login-vault-field-password')),
           'hunter2',
         );
+        await tester.pump(const Duration(milliseconds: 600));
         await tester.enterText(
           find.byKey(const ValueKey<String>('login-vault-field-totp')),
           'JBSWY3DPEHPK3PXP',
         );
+        // A person types slower than the undo history's 500 ms throttle: the
+        // secrets are on the undo stack before Save.
+        await tester.pump(const Duration(milliseconds: 600));
         host.nextError =
             'totp_secret must be a base32 key or an otpauth:// URI';
         await tester.ensureVisible(
@@ -148,6 +153,32 @@ void main() {
         expect(field('password').enableInteractiveSelection, isFalse);
         expect(field('password').keyboardType, TextInputType.visiblePassword);
         expect(tester.takeException(), isNull);
+
+        // An undo does not bring a cleared secret back (review of b8e3343c,
+        // finding 9): the undo history went with the text.
+        for (final (String key, String secret) in <(String, String)>[
+          ('password', 'hunter2'),
+          ('totp', 'JBSWY3DPEHPK3PXP'),
+        ]) {
+          expect(field(key).undoController?.value.canUndo, isFalse);
+          final Finder input = find.byKey(
+            ValueKey<String>('login-vault-field-$key'),
+          );
+          await tester.enterText(input, 'x');
+          await tester.pump(const Duration(milliseconds: 600));
+          final List<String> seen = <String>[];
+          for (int i = 0; i < 4; i++) {
+            // Ctrl+Z, the undo shortcut of a text field.
+            await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+            await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
+            await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+            await tester.pump(const Duration(milliseconds: 600));
+            seen.add(field(key).controller?.text ?? '');
+          }
+          expect(seen, isNot(contains(secret)), reason: key);
+          await tester.enterText(input, '');
+          await tester.pump(const Duration(milliseconds: 600));
+        }
 
         // A second try with a fresh password succeeds and closes the sheet.
         await tester.enterText(
@@ -268,7 +299,10 @@ void main() {
       find.byKey(const ValueKey<String>('login-vault-delete-confirm')),
     );
     await tester.pumpAndSettle();
-    expect(host.frames.last, <String, dynamic>{
+    expect(Map<String, dynamic>.of(host.frames.last)..remove('request_id'), <
+      String,
+      dynamic
+    >{
       'type': 'login_vault_delete',
       'id': 'gh1',
     });

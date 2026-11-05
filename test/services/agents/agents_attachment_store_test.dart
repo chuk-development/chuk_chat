@@ -98,4 +98,46 @@ void main() {
     );
     expect(agentsSniffImageMime(Uint8List.fromList(<int>[1, 2, 3])), isNull);
   });
+
+  test('a sealed copy that falls out of the blob index is deleted '
+      '(review of b8e3343c, finding 6)', () async {
+    AgentsAttachmentStore.outboxPaths = () async =>
+        (paths: <String>{}, complete: true);
+    final String gone = await AgentsAttachmentStore.put(
+      Uint8List.fromList('old'.codeUnits),
+      name: 'old.txt',
+    );
+    final String queued = await AgentsAttachmentStore.put(
+      Uint8List.fromList('queued'.codeUnits),
+      name: 'queued.txt',
+    );
+    await AgentsAttachmentStore.rememberBlob('blob-gone', gone);
+    await AgentsAttachmentStore.rememberBlob('blob-queued', queued);
+    // A queued prompt still names one of them.
+    AgentsAttachmentStore.outboxPaths = () async =>
+        (paths: <String>{queued}, complete: true);
+    for (int i = 0; i < 300; i++) {
+      await AgentsAttachmentStore.rememberBlob('b$i', 'offline://img/u1/$i');
+    }
+    expect(AgentsAttachmentStore.localPathOfBlob('blob-gone'), isNull);
+    expect(await AgentsAttachmentStore.read(gone), isNull);
+    expect(await AgentsAttachmentStore.read(queued), isNotNull);
+    expect(await AgentsAttachmentStore.indexedRefs(), isEmpty);
+    final listed = await AgentsAttachmentStore.listRefs('u1');
+    expect(listed.map((f) => f.path), <String>[queued]);
+  });
+
+  test('an unreadable outbox row keeps evicted copies for the sweeper', () async {
+    final String ref = await AgentsAttachmentStore.put(
+      Uint8List.fromList('x'.codeUnits),
+      name: 'x.txt',
+    );
+    AgentsAttachmentStore.outboxPaths = () async =>
+        (paths: <String>{}, complete: false);
+    await AgentsAttachmentStore.rememberBlob('first', ref);
+    for (int i = 0; i < 300; i++) {
+      await AgentsAttachmentStore.rememberBlob('b$i', 'offline://img/u1/$i');
+    }
+    expect(await AgentsAttachmentStore.read(ref), isNotNull);
+  });
 }
