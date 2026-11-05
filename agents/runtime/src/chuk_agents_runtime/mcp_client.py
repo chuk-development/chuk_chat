@@ -2263,6 +2263,11 @@ class MCPManager:
             )
         )
         self._registered: set[str] = set()
+        #: ``guard(manager, server, tool, arguments, invoke) -> result``, run
+        #: around every call (the login vault's placeholder resolver,
+        #: :class:`chuk_agents_runtime.login_vault.LoginGuard`). ``None``: calls
+        #: go straight to the connection.
+        self.call_guard: Callable[..., dict] | None = None
         #: Servers a lazy start dials in the background without a tool list:
         #: their last handshake failed (:meth:`MCPToolCache.failed`). Their
         #: tools join at the next start after the handshake succeeds.
@@ -2572,11 +2577,34 @@ class MCPManager:
         # a tool error instead gets one renew and one retry: the call was
         # refused, so it did not run.
         seen = getattr(getattr(connection, "config", None), "auth_token", None)
-        result = connection.call(tool, arguments)
-        if result.get("ok") is False and _looks_unauthorized(result.get("error")):
-            refresh = getattr(connection, "refresh_token", None)
-            if callable(refresh) and refresh(force=True, seen_token=seen):
-                result = connection.call(tool, arguments)
+
+        def invoke(args: dict | None) -> dict:
+            result = connection.call(tool, args)
+            if result.get("ok") is False and _looks_unauthorized(result.get("error")):
+                refresh = getattr(connection, "refresh_token", None)
+                if callable(refresh) and refresh(force=True, seen_token=seen):
+                    result = connection.call(tool, args)
+            return result
+
+        guard = self.call_guard
+        if guard is None:
+            result = invoke(arguments)
+        else:
+            # The login vault (chuk_agents_runtime.login_vault): resolves
+            # ``{{login:...}}`` placeholders on a copy of the arguments, or
+            # refuses the call. A guard that raises refuses too: the
+            # arguments may hold a placeholder that must not leave unresolved
+            # checks behind.
+            try:
+                result = guard(self, server, tool, arguments, invoke)
+            except Exception as exc:  # noqa: BLE001 — never send on a broken guard
+                logger.warning("mcp call guard failed: %s", type(exc).__name__)
+                result = {
+                    "ok": False,
+                    "server": server,
+                    "tool": tool,
+                    "error": "the call was refused: the login vault check failed",
+                }
         return self._with_instructions(server, connection, result)
 
     def _with_instructions(self, server: str, connection: Any, result: dict) -> dict:

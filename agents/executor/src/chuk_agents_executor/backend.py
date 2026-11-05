@@ -23,6 +23,7 @@ from chuk_agents_runtime import (
     clamp_reasoning_effort,
     fetch_models_info,
     model_limits_from_catalog,
+    model_supports_vision_in_catalog,
     resolve_model,
     supported_efforts,
 )
@@ -167,6 +168,7 @@ def make_backend_model_select(
             reasoning_effort=effective,
             context_length=ctx,
             max_output_tokens=out,
+            supports_vision=model_supports_vision_in_catalog(models, resolved.model_id),
         )
 
     return select

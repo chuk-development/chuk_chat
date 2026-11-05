@@ -28,6 +28,7 @@ from collections.abc import Iterable, Sequence
 from typing import Any
 
 from pydantic_ai.messages import (
+    BinaryContent,
     ModelMessage,
     ModelRequest,
     ModelRequestPart,
@@ -127,14 +128,42 @@ def row_to_response(row: dict, *, include_reasoning: bool = False) -> ModelRespo
     return ModelResponse(parts=parts)
 
 
-def row_to_request_part(row: dict) -> ModelRequestPart | None:
+#: ``loader(attachment) -> (bytes, media type) | None``: reads one picture of
+#: a user row (docs/WIRE_CONTRACT.md, "Attachments to Agents"). Set only for
+#: a vision-capable model.
+ImageLoader = Any
+
+
+def _with_images(text: Any, row: dict, image_loader: ImageLoader) -> Any:
+    """The user content plus the row's pictures as image parts."""
+    parts: list[Any] = [text] if text else []
+    for attachment in row.get("attachments") or []:
+        if not isinstance(attachment, dict) or attachment.get("kind") != "image":
+            continue
+        try:
+            loaded = image_loader(attachment)
+        except Exception:  # noqa: BLE001 — a missing picture leaves its path in the text
+            loaded = None
+        if loaded:
+            data, media_type = loaded
+            parts.append(BinaryContent(data=data, media_type=media_type))
+    if len(parts) <= 1:
+        return text
+    return parts
+
+
+def row_to_request_part(row: dict, image_loader: ImageLoader = None) -> ModelRequestPart | None:
     """One stored request-side row (system, user, tool) as a request part.
-    ``None`` for a row the model never sees (an unknown role)."""
+    ``None`` for a row the model never sees (an unknown role). With
+    ``image_loader`` the row's picture attachments become image parts."""
     role = row.get("role")
     if role == "system":
         return SystemPromptPart(content=content_text(row.get("content")))
     if role == "user":
-        return UserPromptPart(content=_user_content(row.get("content")))
+        content = _user_content(row.get("content"))
+        if image_loader is not None and row.get("attachments"):
+            content = _with_images(content, row, image_loader)
+        return UserPromptPart(content=content)
     if role == "tool":
         content = row.get("content")
         if (
@@ -232,6 +261,7 @@ def rows_to_messages(
     *,
     include_reasoning: bool = False,
     deferred: Iterable[str] = (),
+    image_loader: ImageLoader = None,
 ) -> list[ModelMessage]:
     """The stored conversation as Pydantic AI messages.
 
@@ -249,6 +279,15 @@ def rows_to_messages(
     exchange on the wire (call and answer), so no provider sees an orphan.
     """
     rows = _rewrite_bridge(rows)
+    # Pictures go with the current task only (the newest user row): an older
+    # one stays a path in the text, so a long thread does not resend every
+    # image on every round (``read_document`` can still look at it).
+    image_row = None
+    if image_loader is not None:
+        for candidate in reversed(rows):
+            if candidate.get("role") == "user" and not candidate.get("source"):
+                image_row = candidate if candidate.get("attachments") else None
+                break
     hidden = set(deferred)
     discovered: set[str] = set()
     synthesized: dict[str, str] = {}
@@ -272,7 +311,7 @@ def rows_to_messages(
                 response = _with_discovery(response, hidden, discovered, answered, synthesized)
             out.append(response)
             continue
-        part = row_to_request_part(row)
+        part = row_to_request_part(row, image_loader if row is image_row else None)
         if part is None:
             continue
         if isinstance(part, ToolSearchReturnPart):
@@ -409,7 +448,12 @@ def request_to_rows(request: ModelRequest) -> list[dict]:
 
 
 def _flatten_user(content: Sequence[Any]) -> str:
-    return "\n".join(item if isinstance(item, str) else str(item) for item in content)
+    return "\n".join(
+        item
+        if isinstance(item, str)
+        else (f"[image {item.media_type}]" if isinstance(item, BinaryContent) else str(item))
+        for item in content
+    )
 
 
 def found_tools(

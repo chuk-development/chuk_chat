@@ -243,6 +243,48 @@ def hardening_run_args(policy: SandboxPolicy) -> tuple[str, ...]:
     return tuple(args)
 
 
+#: Sandbox escalation (docs/WIRE_CONTRACT.md, "Sandbox escalation", DeepSeek
+#: research item 28): what ONE approved ``run_command`` / ``python`` call may
+#: get on top of the agent's policy. Each name maps to the policy field it
+#: widens. ``secrets_env`` and the browser switches are not here: they are
+#: privacy choices of the user, not a box limit a command can run into.
+ESCALATION_KEYS: dict[str, str] = {
+    "network": "network",
+    "sudo": "sudo",
+    "workspace_write": "workspace_mount",
+}
+
+
+def withheld_permissions(policy: SandboxPolicy, kind: str) -> tuple[str, ...]:
+    """The escalation names the box really withholds now: switched off in
+    ``policy`` AND enforced by the backend ``kind``. A switch the backend
+    cannot enforce (``network`` on the plain local backend) is not withheld,
+    so asking for it widens nothing."""
+    enforced = enforced_permissions(kind)
+    out: list[str] = []
+    for name, field_name in ESCALATION_KEYS.items():
+        if not enforced.get(field_name, False):
+            continue
+        if field_name == "workspace_mount":
+            if policy.read_only_workspace:
+                out.append(name)
+        elif not getattr(policy, field_name):
+            out.append(name)
+    return tuple(out)
+
+
+def widened_policy(policy: SandboxPolicy, grant: "tuple[str, ...] | list[str] | frozenset[str]") -> SandboxPolicy:
+    """``policy`` with the escalation names in ``grant`` switched on. Raises
+    :class:`PolicyError` for a name that is not an escalation key."""
+    values = policy.to_dict()
+    for name in grant:
+        field_name = ESCALATION_KEYS.get(name)
+        if field_name is None:
+            raise PolicyError(f"unknown sandbox permission {str(name)[:40]!r}")
+        values[field_name] = WORKSPACE_RW if field_name == "workspace_mount" else True
+    return SandboxPolicy(**values)
+
+
 #: The container key a container from before the policy label was created
 #: with. Such a container ran with every permission, so it matches the default.
 DEFAULT_CONTAINER_KEY = DEFAULT_POLICY.container_key()

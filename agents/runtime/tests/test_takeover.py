@@ -68,7 +68,9 @@ def test_done_returns_the_status_and_a_hint_never_content():
     result = handler(kind="two_factor", site="github.com", reason="GitHub asks for the code")
     assert result["status"] == "done"
     assert "browser_snapshot" in result["note"]
-    assert set(result) == {"status", "note"}
+    # ``tip`` points a login / 2FA step at the login vault (Hermes H32).
+    assert set(result) == {"status", "note", "tip"}
+    assert "login_vault_list" in result["tip"]
     assert backend.requests == [
         {"kind": "two_factor", "site": "github.com", "reason": "GitHub asks for the code"}
     ]
