@@ -256,6 +256,7 @@ const List<String> _canonicalStringKeys = <String>[
   'modelContext',
   'usage',
   'compactSummary',
+  'hostMid', // checkpoints
 ];
 
 // ─── v3 message encoding ────────────────────────────────────────────────

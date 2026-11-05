@@ -538,7 +538,8 @@ class AgentsPermissionsService extends ChangeNotifier {
     }
   }
 
-  /// Sets one class to `ask`, `allow` or `deny`. Sends `approvals` only. False
+  /// Sets one class to `ask`, `allow` or `deny` (`local_actions` also takes
+  /// `review` and `review_strict`). Sends `approvals` only. False
   /// when the host does not keep approvals or the frame could not be sent;
   /// the choice is put back then.
   Future<bool> setApprovalMode(
@@ -546,8 +547,8 @@ class AgentsPermissionsService extends ChangeNotifier {
     String actionClass,
     String mode,
   ) {
-    if (!AgentApprovals.modes.contains(mode)) {
-      throw ArgumentError.value(mode, 'mode', 'not ask, allow or deny');
+    if (!AgentApprovals.validMode(actionClass, mode)) {
+      throw ArgumentError.value(mode, 'mode', 'not a mode of $actionClass');
     }
     final AgentApprovals before =
         approvalsOf(agentId) ?? const AgentApprovals();
@@ -968,12 +969,42 @@ class AgentApprovals {
   static const String classMcpDestructive = 'mcp_destructive';
   static const String classBrowserAct = 'browser_act';
 
+  /// The agent's own commands and file changes (docs/WIRE_CONTRACT.md,
+  /// "Auto review"): `run_command`, `python`, `write_file`, `edit_file`,
+  /// `apply_patch`.
+  static const String classLocalActions = 'local_actions';
+
   static const String modeAsk = 'ask';
   static const String modeAllow = 'allow';
   static const String modeDeny = 'deny';
 
+  /// A small model rates each call; a deny or an invalid answer asks the
+  /// user. Valid for [classLocalActions] only.
+  static const String modeReview = 'review';
+
+  /// Like [modeReview], but a deny is final.
+  static const String modeReviewStrict = 'review_strict';
+
   /// The three modes, in the order the app offers them.
   static const List<String> modes = <String>[modeAsk, modeAllow, modeDeny];
+
+  /// The five modes of [classLocalActions], in the order the app offers
+  /// them.
+  static const List<String> localActionModes = <String>[
+    modeAllow,
+    modeAsk,
+    modeReview,
+    modeReviewStrict,
+    modeDeny,
+  ];
+
+  /// The modes [actionClass] accepts.
+  static List<String> modesFor(String actionClass) =>
+      actionClass == classLocalActions ? localActionModes : modes;
+
+  /// True when [mode] is a valid mode of [actionClass].
+  static bool validMode(String actionClass, String mode) =>
+      modesFor(actionClass).contains(mode);
 
   /// The classes in the order the app shows them.
   static const List<String> order = <String>[
@@ -981,6 +1012,7 @@ class AgentApprovals {
     classMcpDestructive,
     classBrowserAct,
     classPublish,
+    classLocalActions,
   ];
 
   /// The host's defaults, for a host that leaves `defaults` out.
@@ -989,6 +1021,7 @@ class AgentApprovals {
     classSendExternal: modeAsk,
     classMcpDestructive: modeAsk,
     classBrowserAct: modeAllow,
+    classLocalActions: modeAllow,
   };
 
   /// Effective mode per class, as the host said.
@@ -1045,8 +1078,9 @@ class AgentApprovals {
     Map<String, String> modesOf(Object? raw) => <String, String>{
       if (raw is Map)
         for (final MapEntry<Object?, Object?> e in raw.entries)
-          if (e.value is String && modes.contains(e.value))
-            '${e.key}': e.value! as String,
+          if (e.value case final String mode
+              when validMode('${e.key}', mode))
+            '${e.key}': mode,
     };
     final Object? rawSites = json['sites'];
     final Object? appliesFrom = json['applies_from'];

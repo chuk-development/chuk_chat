@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/message_feedback_store.dart';
+import 'package:chuk_chat/services/prompt_cache/prompt_context.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 
 Widget _wrap(Widget child) => MaterialApp(
@@ -31,10 +32,82 @@ MessageBubble _answer({String? feedbackId = 'answer-1'}) => MessageBubble(
 );
 
 void main() {
+  final List<MessageFeedback> sent = <MessageFeedback>[];
+  final List<String> removed = <String>[];
+
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     MessageFeedbackStore.instance.resetForTest();
+    sent.clear();
+    removed.clear();
+    MessageFeedbackStore.sendToBackend = (fb) async => sent.add(fb);
+    MessageFeedbackStore.removeFromBackend = (id) async => removed.add(id);
   });
+
+  tearDown(() {
+    MessageFeedbackStore.sendToBackend = null;
+    MessageFeedbackStore.removeFromBackend = null;
+  });
+
+  for (final double width in <double>[360, 1280]) {
+    testWidgets('at $width px: the verdict names the chat by its hash and '
+        'can be removed again', (tester) async {
+      tester.view.physicalSize = Size(width, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        _wrap(
+          MessageBubble(
+            message: 'Here is the answer.',
+            isUser: false,
+            maxWidth: width - 40,
+            feedbackId: 'answer-1',
+            feedbackModelId: 'z-ai/glm-5.3-flash',
+            modelProvider: 'orcarouter',
+            chatId: 'chat-42',
+            actions: <MessageBubbleAction>[
+              MessageBubbleAction(
+                icon: Icons.copy,
+                tooltip: 'Copy',
+                onPressed: () {},
+              ),
+            ],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey<String>('feedback-up')));
+      await tester.pumpAndSettle();
+      // A first verdict has nothing to remove.
+      expect(find.byKey(const ValueKey<String>('feedback-remove')), findsNothing);
+      await tester.ensureVisible(
+        find.byKey(const ValueKey<String>('feedback-submit')),
+      );
+      await tester.tap(find.byKey(const ValueKey<String>('feedback-submit')));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      final MessageFeedback fb = sent.single;
+      expect(fb.chatHash, chatIdHash('chat-42'));
+      expect(fb.modelId, 'z-ai/glm-5.3-flash');
+      expect(fb.provider, 'orcarouter');
+      expect(fb.toBackendBody()?['rating'], 'positive');
+      expect(fb.toBackendBody()?.containsKey('text'), isFalse);
+
+      // Open it again: "Remove rating" takes it back here and on the server.
+      await tester.tap(find.byKey(const ValueKey<String>('feedback-up')));
+      await tester.pumpAndSettle();
+      final Finder remove = find.byKey(
+        const ValueKey<String>('feedback-remove'),
+      );
+      await tester.ensureVisible(remove);
+      await tester.tap(remove);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(MessageFeedbackStore.instance.peek('answer-1'), isNull);
+      expect(removed, <String>['answer-1']);
+    });
+  }
 
   testWidgets('a finished answer carries thumbs in its action bar', (
     tester,

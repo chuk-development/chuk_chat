@@ -184,6 +184,27 @@ class AgentsDerivedThreads extends ChangeNotifier {
     _persist();
   }
 
+  /// A thread the user forked from a message (`thread_fork`): listed under
+  /// the agent that owns [sourceKey], like a chat an automation made.
+  void addFork({
+    required String key,
+    required String sourceKey,
+    required String title,
+    DateTime? now,
+  }) {
+    if (key.isEmpty) return;
+    final String ownerKey =
+        _byKey[sourceKey]?.ownerKey ?? ownerOf(sourceKey) ?? sourceKey;
+    _byKey[key] = AgentsDerivedThread(
+      key: key,
+      ownerKey: ownerKey,
+      title: title,
+      lastActivity: now ?? DateTime.now(),
+    );
+    notifyListeners();
+    _persist();
+  }
+
   /// Test seam.
   @visibleForTesting
   void reset() {

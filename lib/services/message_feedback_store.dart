@@ -3,9 +3,11 @@
 // Thumbs up / down on an answer, with optional reasons and a note, kept on
 // this device and keyed by the answer's message id.
 //
-// The api_server has no feedback route yet (bead "feedback endpoint"), so
-// nothing leaves the device: [MessageFeedbackStore.sendToBackend] stays null
-// until that route exists. The shape below is the body it would POST.
+// Each verdict also goes to the api_server (`POST /v1/feedback`, removal
+// `DELETE /v1/feedback/{message_id}`) through a small retry queue
+// ([MessageFeedbackSync], lib/services/message_feedback_sync.dart). The
+// device copy comes first; the network never blocks the sheet. Never the
+// message text: the chat is named by its hash only.
 
 import 'dart:async';
 import 'dart:convert';
@@ -13,6 +15,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:chuk_chat/services/message_feedback_sync.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
 /// The reasons a reader can pick, in the order the sheet shows them.
@@ -49,6 +52,8 @@ class MessageFeedback {
     this.categories = const <FeedbackCategory>[],
     this.note,
     this.modelId,
+    this.provider,
+    this.chatHash,
     required this.createdAt,
   });
 
@@ -57,7 +62,25 @@ class MessageFeedback {
   final List<FeedbackCategory> categories;
   final String? note;
   final String? modelId;
+
+  /// The provider slug that answered, when known.
+  final String? provider;
+
+  /// First 16 hex digits of sha256(chat id) (`chatIdHash`, the `x_chuk`
+  /// value). Null on verdicts stored before it was kept: those stay local.
+  final String? chatHash;
   final DateTime createdAt;
+
+  /// The `POST /v1/feedback` body, or null when it cannot be sent.
+  Map<String, dynamic>? toBackendBody() => feedbackRequestBody(
+    messageId: messageId,
+    chatHash: chatHash,
+    positive: rating == FeedbackRating.up,
+    categories: <String>[for (final c in categories) c.id],
+    note: note,
+    modelId: modelId,
+    provider: provider,
+  );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
     'message_id': messageId,
@@ -65,6 +88,8 @@ class MessageFeedback {
     'categories': <String>[for (final c in categories) c.id],
     if (note != null && note!.trim().isNotEmpty) 'note': note!.trim(),
     if (modelId != null && modelId!.isNotEmpty) 'model_id': modelId,
+    if (provider case final String p when p.isNotEmpty) 'provider': p,
+    if (chatHash case final String h when h.isNotEmpty) 'chat_hash': h,
     'created_at': createdAt.toUtc().toIso8601String(),
   };
 
@@ -91,6 +116,8 @@ class MessageFeedback {
       ],
       note: raw['note'] as String?,
       modelId: raw['model_id'] as String?,
+      provider: raw['provider'] is String ? raw['provider'] as String : null,
+      chatHash: raw['chat_hash'] is String ? raw['chat_hash'] as String : null,
       createdAt:
           DateTime.tryParse(raw['created_at'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
@@ -122,9 +149,28 @@ class MessageFeedbackStore extends ChangeNotifier {
   /// stay well inside the SharedPreferences budget (CLAUDE.md, ~200 KB).
   static const int maxEntries = 500;
 
-  /// Posts one verdict to the server. Null: there is no route yet, so the
-  /// verdict stays on this device only.
-  static Future<void> Function(MessageFeedback feedback)? sendToBackend;
+  /// The retry queue to the server. Tests put their own.
+  static MessageFeedbackSync sync = MessageFeedbackSync();
+
+  /// Hands one verdict to the server. The default queues it in [sync]
+  /// (`POST /v1/feedback`, retried while offline); null keeps verdicts on
+  /// this device only. Never awaited by the UI.
+  static Future<void> Function(MessageFeedback feedback)? sendToBackend =
+      _queueSend;
+
+  /// Takes a removed verdict off the server (`DELETE /v1/feedback/{id}`,
+  /// queued like [sendToBackend]). Null keeps it local.
+  static Future<void> Function(String messageId)? removeFromBackend =
+      _queueRemove;
+
+  static Future<void> _queueSend(MessageFeedback feedback) async {
+    final Map<String, dynamic>? body = feedback.toBackendBody();
+    if (body == null) return;
+    await sync.enqueue(FeedbackJob.set(feedback.messageId, body));
+  }
+
+  static Future<void> _queueRemove(String messageId) =>
+      sync.enqueue(FeedbackJob.remove(messageId));
 
   /// Insertion order = age; the last entry is the newest.
   final Map<String, MessageFeedback> _entries = <String, MessageFeedback>{};
@@ -146,6 +192,10 @@ class MessageFeedbackStore extends ChangeNotifier {
       _loaded = false;
     }
     _owner = user;
+    // Verdicts that could not reach the server last time go out now.
+    if (sendToBackend == _queueSend || removeFromBackend == _queueRemove) {
+      unawaited(sync.attach(user).catchError((Object _) {}));
+    }
     return _loading ??= _load(user);
   }
 
@@ -156,6 +206,7 @@ class MessageFeedbackStore extends ChangeNotifier {
     _loaded = false;
     _owner = null;
     notifyListeners();
+    await sync.clearForSignOut(userId);
     try {
       final SharedPreferences prefs = await SharedPreferences.getInstance();
       await prefs.remove(prefsKeyFor(userId));
@@ -207,20 +258,26 @@ class MessageFeedbackStore extends ChangeNotifier {
     notifyListeners();
     await _persist();
     final Future<void> Function(MessageFeedback)? send = sendToBackend;
-    if (send != null) {
-      try {
-        await send(feedback);
-      } catch (error) {
-        if (kDebugMode) debugPrint('Feedback send failed: $error');
-      }
-    }
+    if (send != null) unawaited(_quietly(() => send(feedback)));
   }
 
+  /// Takes the verdict on [messageId] back, here and on the server.
   Future<void> remove(String messageId) async {
     await ensureLoaded();
     if (_entries.remove(messageId) == null) return;
     notifyListeners();
     await _persist();
+    final Future<void> Function(String)? drop = removeFromBackend;
+    if (drop != null) unawaited(_quietly(() => drop(messageId)));
+  }
+
+  /// The server side never fails a verdict the device kept.
+  static Future<void> _quietly(Future<void> Function() action) async {
+    try {
+      await action();
+    } catch (error) {
+      if (kDebugMode) debugPrint('Feedback sync failed: $error');
+    }
   }
 
   Future<void> _persist() async {

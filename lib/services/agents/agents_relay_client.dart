@@ -44,6 +44,7 @@ import 'package:chuk_chat/services/agents/agents_frame_fragments.dart';
 import 'package:chuk_chat/services/agents/agents_pairing.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
 import 'package:chuk_chat/services/agents/agents_reconnect.dart';
+import 'package:chuk_chat/services/agents/agents_reply_frames.dart';
 import 'package:chuk_chat/services/agents/agents_resume_trace.dart';
 import 'package:chuk_chat/services/agents/agents_run_cost.dart'; // F1: cost
 import 'package:chuk_chat/services/agents/agents_thread_modes.dart';
@@ -356,9 +357,14 @@ class AgentsRelayUser extends AgentsRelayInbound {
     this.sentAt,
     this.source,
     this.answerToPendingQuestion,
+    this.attachments,
   });
   final String text;
   final DateTime? sentAt;
+
+  /// The files the user sent with this row, as the host stored them
+  /// (`[{blob_id, name, mime, size, kind, path}]`). Null when none.
+  final List<Map<String, dynamic>>? attachments;
 
   /// Who wrote this row when the user did not (docs/WIRE_CONTRACT.md, "Typed
   /// source on synthetic rows"): `goal`, `schedule`, `job`, `mail`, ... Null
@@ -1699,6 +1705,10 @@ abstract interface class AgentsRelayController {
     /// only to a host that names `cost_budget`.
     bool budgetOverride,
     // ── end F1 ──
+    /// The `blob_id`s of files already uploaded with `attachment_put`
+    /// (docs/WIRE_CONTRACT.md, "Attachments to Agents"). Empty leaves the
+    /// key off the frame.
+    List<String> attachments,
   });
 
   /// Creates the room on the host so a later [sendRoomTask] can find it (§16.1).
@@ -2770,6 +2780,7 @@ class AgentsRelayClient
     bool regenerate = false,
     String? taskId,
     bool budgetOverride = false, // F1: approvals + cost
+    List<String> attachments = const <String>[],
   }) async {
     // Auth first, then the work — the same gate as a replay and an agent list,
     // and for a worse reason. Right after a reconnect this frame could overtake
@@ -2807,6 +2818,7 @@ class AgentsRelayClient
         debug: debug,
         regenerate: regenerate,
         budgetOverride: budgetOverride,
+        attachments: attachments,
       );
     } catch (_) {
       if (plan != null) {
@@ -2829,6 +2841,7 @@ class AgentsRelayClient
     required bool debug,
     required bool regenerate,
     required bool budgetOverride,
+    List<String> attachments = const <String>[],
   }) async {
     await _sendFramePayload(<String, dynamic>{
       'type': 'task',
@@ -2856,6 +2869,13 @@ class AgentsRelayClient
       // F1: "Run anyway" after a budget refusal, to a host that keeps budgets.
       if (budgetOverride && hostCapabilities.value.contains('cost_budget'))
         'budget_override': true,
+      // Files uploaded before the task, by `blob_id`. Only a task with files
+      // carries the key, so an old host sees the frame it always saw.
+      if (attachments.isNotEmpty)
+        'attachments': <Map<String, String>>[
+          for (final String blobId in attachments)
+            <String, String>{'blob_id': blobId},
+        ],
     });
   }
 
@@ -3566,6 +3586,7 @@ class AgentsRelayClient
             answerToPendingQuestion: answerTo is String && answerTo.isNotEmpty
                 ? answerTo
                 : null,
+            attachments: _userAttachments(payload['attachments']),
           ),
         );
       case 'context':
@@ -3659,6 +3680,14 @@ class AgentsRelayClient
       // ── end F2 ──
       case 'documents':
         _inbound.add(AgentsRelayDocuments(payload));
+      // Terminal replies to the app's own requests (checkpoints, the login
+      // vault, attachment chunks): a service waits on them, nothing renders.
+      case 'checkpoints':
+      case 'checkpoint_rewound':
+      case 'thread_forked':
+      case 'login_vault':
+      case 'attachment_ack':
+        AgentsReplyFrames.instance.add(payload);
       case 'skills_list':
         _inbound.add(AgentsRelaySkillsList.fromPayload(payload));
       // ── skill proposals ──
@@ -3801,6 +3830,17 @@ class AgentsRelayClient
       default:
         break;
     }
+  }
+
+  /// The replayed `user.attachments`, entries that are maps only. Null when
+  /// the row has none.
+  static List<Map<String, dynamic>>? _userAttachments(Object? raw) {
+    if (raw is! List || raw.isEmpty) return null;
+    final List<Map<String, dynamic>> out = <Map<String, dynamic>>[
+      for (final Object? e in raw)
+        if (e is Map) e.map((Object? k, Object? v) => MapEntry('$k', v)),
+    ];
+    return out.isEmpty ? null : out;
   }
 
   /// Turns a `subagent` frame into a [AgentsRelaySubagent], or null when the

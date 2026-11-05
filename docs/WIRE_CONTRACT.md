@@ -4345,7 +4345,8 @@ background review's `skill_proposal`), `plan` (plan-mode rules).
 
 ## Sandbox escalation (DeepSeek research item 28)
 
-Host side IMPLEMENTED 2026-11-05. App side: open (see "App work"). Additive:
+Host side IMPLEMENTED 2026-11-05. App side IMPLEMENTED 2026-11-05
+(`agents_action_approval_card.dart`). Additive:
 an older app shows the card as a generic `action_approval` with Allow / Deny.
 
 ### The idea
@@ -4454,7 +4455,8 @@ Rules, checked before anything runs (fail closed):
 
 ## Auto review (DeepSeek research item 31)
 
-Host side IMPLEMENTED 2026-11-05. App side: open. Off by default.
+Host side IMPLEMENTED 2026-11-05. App side IMPLEMENTED 2026-11-05
+(`agent_approvals_section.dart`, the approval card). Off by default.
 
 ### The idea
 
@@ -4578,7 +4580,9 @@ the session rows from `loop_history`). Tests:
 
 ## Checkpoints, rewind and fork (Hermes H30/H31, opencode O2)
 
-Host side IMPLEMENTED 2026-11-05. App side: open.
+Host side IMPLEMENTED 2026-11-05. App side IMPLEMENTED 2026-11-05
+(`lib/services/agents/agents_checkpoints.dart`,
+`lib/widgets/agents_checkpoints_sheet.dart`).
 
 ### The idea
 
@@ -4708,7 +4712,8 @@ in `session_features`, `fork_session`), `build_runtime(checkpoint_sink=)`,
 
 ## Attachments to Agents (pictures and files from the phone)
 
-Host side IMPLEMENTED 2026-11-05. App side: open.
+Host side IMPLEMENTED 2026-11-05. App side IMPLEMENTED 2026-11-05
+(`lib/services/agents/agents_attachments.dart`, docs/OFFLINE_SEND.md).
 
 ### The idea
 
@@ -4819,6 +4824,9 @@ send it again from chunk 0).
 5. Cap: 25 MiB per file, 10 files per task; say so before the upload.
 
 ## Login vault for the browser (Hermes H32)
+
+App side IMPLEMENTED 2026-11-05 (`lib/services/agents/agents_login_vault.dart`,
+`lib/pages/agents_login_vault_page.dart`); item 8 is not built yet.
 
 ### The idea
 
@@ -5069,7 +5077,8 @@ Server side IMPLEMENTED in api_server (`routers/cowork/cowork_webhooks.py`,
 table `agent_webhooks`, api_server `CLAUDE.md` section "Agents webhooks").
 Python host side IMPLEMENTED 2026-11-05 (`chuk_agents_host.webhooks`,
 `chuk_agents_host.automations`, `chuk_agents_host.cloud_relay`,
-`chuk_agents_host.host`, `chuk_agents_runtime.automations`). App side: open
+`chuk_agents_host.host`, `chuk_agents_runtime.automations`). App side:
+IMPLEMENTED 2026-11-05 (`lib/services/agents/agents_webhooks_service.dart`)
 (see "App work"). Additive: nothing above changes.
 
 ### The idea

@@ -150,11 +150,31 @@ extension _MessageBubbleLayout on _MessageBubbleState {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          AppIcon(Icons.bolt_outlined, size: 14, color: color),
+          // A webhook fire gets its own glyph, and a merged burst says so.
+          AppIcon(
+            wake.webhook ? Icons.link : Icons.bolt_outlined,
+            key: wake.webhook
+                ? const ValueKey<String>('automation-wake-webhook')
+                : null,
+            size: 14,
+            color: color,
+          ),
           const SizedBox(width: 4),
           Flexible(
             child: Text(
-              wake.name.isEmpty ? 'Automation' : 'Automation · ${wake.name}',
+              <String>[
+                if (wake.webhook)
+                  AppLocalizations.of(context)?.automationKindWebhook ??
+                      'Webhook'
+                else
+                  'Automation',
+                if (wake.name.isNotEmpty) wake.name,
+                if (wake.merged > 1)
+                  AppLocalizations.of(context)?.webhookMerged(
+                        '${wake.merged}',
+                      ) ??
+                      '${wake.merged} calls merged',
+              ].join(' · '),
               style: style,
               overflow: TextOverflow.ellipsis,
             ),
@@ -716,6 +736,13 @@ extension _MessageBubbleLayout on _MessageBubbleState {
         _buildAttachmentsChips(widget.attachments!),
         const SizedBox(height: _kBlockGap),
       ],
+      if (widget.agentsAttachments?.isNotEmpty ?? false) ...[
+        AgentsAttachmentChips(
+          items: widget.agentsAttachments ?? const <AgentsAttachmentInfo>[],
+          alignEnd: isUserMessage,
+        ),
+        const SizedBox(height: _kBlockGap),
+      ],
       if (streamingTextBeforeTools && messageBody != null) messageBody,
       if (hasVisibleToolCalls) toolBarSection,
       if (!isUserMessage && _agentsLive == null)
@@ -765,6 +792,13 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     // Document attachments
     if (widget.attachments != null && widget.attachments!.isNotEmpty) {
       children.add(_buildAttachmentsChips(widget.attachments!));
+      children.add(const SizedBox(height: _kBlockGap));
+    }
+    final List<AgentsAttachmentInfo>? agentsFiles = widget.agentsAttachments;
+    if (agentsFiles != null && agentsFiles.isNotEmpty) {
+      children.add(
+        AgentsAttachmentChips(items: agentsFiles, alignEnd: widget.isUser),
+      );
       children.add(const SizedBox(height: _kBlockGap));
     }
 

@@ -945,7 +945,6 @@ class AppLocalizations {
   String get outboxQueuedSnack => _get('outboxQueuedSnack');
   String outboxPendingCount(int count) =>
       _get('outboxPendingCount').replaceAll('{count}', count.toString());
-  String get agentsImagesNotSupported => _get('agentsImagesNotSupported');
 
   // ── Onboarding ─────────────────────────────────────────────
   String get onboardingReplayTile => _get('onboardingReplayTile');
@@ -1626,6 +1625,191 @@ class AppLocalizations {
   String get spreadsheetErrorInvalid => _get('spreadsheetErrorInvalid');
   String get spreadsheetReadOnly => _get('spreadsheetReadOnly');
   // ── end Spreadsheet preview ──
+  // ── esc ──
+  String get approvalsLocalActions => _get('approvalsLocalActions');
+  String get approvalsLocalActionsHelp => _get('approvalsLocalActionsHelp');
+  String get approvalsModeReview => _get('approvalsModeReview');
+  String get approvalsModeReviewStrict => _get('approvalsModeReviewStrict');
+  String get approvalsModeAllowHelp => _get('approvalsModeAllowHelp');
+  String get approvalsModeAskHelp => _get('approvalsModeAskHelp');
+  String get approvalsModeReviewHelp => _get('approvalsModeReviewHelp');
+  String get approvalsModeReviewStrictHelp => _get('approvalsModeReviewStrictHelp');
+  String get approvalsModeDenyHelp => _get('approvalsModeDenyHelp');
+  String get escTitle => _get('escTitle');
+  String get escNeeds => _get('escNeeds');
+  String get escPermNetwork => _get('escPermNetwork');
+  String get escPermWorkspaceWrite => _get('escPermWorkspaceWrite');
+  String get escPermSudo => _get('escPermSudo');
+  String get escOneCall => _get('escOneCall');
+  String get escShowAll => _get('escShowAll');
+  String get escShowLess => _get('escShowLess');
+  String reviewLine(String risk, String reason) =>
+      _get('reviewLine').replaceAll('{risk}', risk).replaceAll('{reason}', reason);
+  String reviewLineNoReason(String risk) =>
+      _get('reviewLineNoReason').replaceAll('{risk}', risk);
+  String get reviewInvalid => _get('reviewInvalid');
+  String get reviewRiskLow => _get('reviewRiskLow');
+  String get reviewRiskMedium => _get('reviewRiskMedium');
+  String get reviewRiskHigh => _get('reviewRiskHigh');
+  String get localActionCommand => _get('localActionCommand');
+  String get localActionScript => _get('localActionScript');
+  String get localActionWrite => _get('localActionWrite');
+  String get localActionEdit => _get('localActionEdit');
+  String get localActionPatch => _get('localActionPatch');
+  String get localActionFile => _get('localActionFile');
+  String get localActionFiles => _get('localActionFiles');
+  String get localActionNote => _get('localActionNote');
+  // ── end esc ──
+  // ── checkpoints ──
+  String get ckTitle => _get('ckTitle');
+  String get ckIntro => _get('ckIntro');
+  String get ckEmpty => _get('ckEmpty');
+  String get ckRewind => _get('ckRewind');
+  String get ckUntitled => _get('ckUntitled');
+  String get ckNotConnected => _get('ckNotConnected');
+  String get ckTimeout => _get('ckTimeout');
+  String ckBusy(String name) =>
+      _get('ckBusy').replaceAll('{name}', name);
+  String ckRunningHint(String name) =>
+      _get('ckRunningHint').replaceAll('{name}', name);
+  String get ckConflictTitle => _get('ckConflictTitle');
+  String get ckConflictBody => _get('ckConflictBody');
+  String get ckKeepEdits => _get('ckKeepEdits');
+  String get ckMerge => _get('ckMerge');
+  String get ckOverwrite => _get('ckOverwrite');
+  String get ckOverwriteTitle => _get('ckOverwriteTitle');
+  String get ckOverwriteBody => _get('ckOverwriteBody');
+  String get ckCancel => _get('ckCancel');
+  String ckMore(String count) =>
+      _get('ckMore').replaceAll('{count}', count);
+  String get ckDone => _get('ckDone');
+  String get ckNothing => _get('ckNothing');
+  String ckRestored(String files) =>
+      _get('ckRestored').replaceAll('{files}', files);
+  String ckMerged(String files) =>
+      _get('ckMerged').replaceAll('{files}', files);
+  String ckKept(String files) =>
+      _get('ckKept').replaceAll('{files}', files);
+  String ckRefused(String files) =>
+      _get('ckRefused').replaceAll('{files}', files);
+  String get ckOutside => _get('ckOutside');
+  String get ckFork => _get('ckFork');
+  String get ckForked => _get('ckForked');
+  String ckForkTitle(String text) =>
+      _get('ckForkTitle').replaceAll('{text}', text);
+  String ckFailed(String error) =>
+      _get('ckFailed').replaceAll('{error}', error);
+  String get ckThisAgent => _get('ckThisAgent');
+  // ── end checkpoints ──
+  // ── loginvault ──
+  String get loginVaultTitle => _get('loginVaultTitle');
+  String get loginVaultRowSubtitle => _get('loginVaultRowSubtitle');
+  String get loginVaultIntro => _get('loginVaultIntro');
+  String get loginVaultSection => _get('loginVaultSection');
+  String get loginVaultEmpty => _get('loginVaultEmpty');
+  String get loginVaultEmptyHelp => _get('loginVaultEmptyHelp');
+  String get loginVaultAdd => _get('loginVaultAdd');
+  String get loginVaultAddHelp => _get('loginVaultAddHelp');
+  String get loginVaultBadge2fa => _get('loginVaultBadge2fa');
+  String loginVaultLastUsed(String when) =>
+      _get('loginVaultLastUsed').replaceAll('{when}', when);
+  String get loginVaultNeverUsed => _get('loginVaultNeverUsed');
+  String loginVaultOptions(String origin) =>
+      _get('loginVaultOptions').replaceAll('{origin}', origin);
+  String get loginVaultEdit => _get('loginVaultEdit');
+  String get loginVaultDelete => _get('loginVaultDelete');
+  String loginVaultDeleteTitle(String origin) =>
+      _get('loginVaultDeleteTitle').replaceAll('{origin}', origin);
+  String get loginVaultDeleteBody => _get('loginVaultDeleteBody');
+  String get loginVaultCancel => _get('loginVaultCancel');
+  String get loginVaultEditTitle => _get('loginVaultEditTitle');
+  String get loginVaultSite => _get('loginVaultSite');
+  String loginVaultSiteKeeps(String origin) =>
+      _get('loginVaultSiteKeeps').replaceAll('{origin}', origin);
+  String get loginVaultSiteInvalid => _get('loginVaultSiteInvalid');
+  String get loginVaultUsername => _get('loginVaultUsername');
+  String get loginVaultPassword => _get('loginVaultPassword');
+  String get loginVaultPasswordEditHelp => _get('loginVaultPasswordEditHelp');
+  String get loginVaultShowPassword => _get('loginVaultShowPassword');
+  String get loginVaultHidePassword => _get('loginVaultHidePassword');
+  String get loginVaultTotp => _get('loginVaultTotp');
+  String get loginVaultTotpHelp => _get('loginVaultTotpHelp');
+  String get loginVaultTotpKeep => _get('loginVaultTotpKeep');
+  String get loginVaultTotpRemove => _get('loginVaultTotpRemove');
+  String get loginVaultLabel => _get('loginVaultLabel');
+  String get loginVaultSave => _get('loginVaultSave');
+  String get loginVaultModelNever => _get('loginVaultModelNever');
+  String get loginVaultInfo => _get('loginVaultInfo');
+  String get loginVaultNotConnected => _get('loginVaultNotConnected');
+  String get loginVaultNoReply => _get('loginVaultNoReply');
+  String get loginVaultErrUsername => _get('loginVaultErrUsername');
+  String get loginVaultErrPassword => _get('loginVaultErrPassword');
+  // ── end loginvault ──
+  // ── attach ──
+  String attachTooLarge(String name) =>
+      _get('attachTooLarge').replaceAll('{name}', name);
+  String get attachTooLargeAny => _get('attachTooLargeAny');
+  String get attachTooMany => _get('attachTooMany');
+  String attachEmpty(String name) =>
+      _get('attachEmpty').replaceAll('{name}', name);
+  String get attachMissing => _get('attachMissing');
+  String get attachFailed => _get('attachFailed');
+  String get attachUploading => _get('attachUploading');
+  String attachProgress(int received, int count) => _get('attachProgress')
+      .replaceAll('{received}', '$received')
+      .replaceAll('{count}', '$count');
+  String attachChipLabel(String name, String size) => _get(
+    'attachChipLabel',
+  ).replaceAll('{name}', name).replaceAll('{size}', size);
+  // ── end attach ──
+  // ── webhooks ──
+  String get automationKindWebhook => _get('automationKindWebhook');
+  String get webhookSecretLabel => _get('webhookSecretLabel');
+  String get webhookSecretHelp => _get('webhookSecretHelp');
+  String get webhookErrSecret => _get('webhookErrSecret');
+  String get webhookSecretSet => _get('webhookSecretSet');
+  String get webhookRemoveSecret => _get('webhookRemoveSecret');
+  String get webhookSecretRemoved => _get('webhookSecretRemoved');
+  String get webhookFilterLabel => _get('webhookFilterLabel');
+  String get webhookFilterHelp => _get('webhookFilterHelp');
+  String get webhookFilterPath => _get('webhookFilterPath');
+  String get webhookFilterHeader => _get('webhookFilterHeader');
+  String get webhookFilterTargetPath => _get('webhookFilterTargetPath');
+  String get webhookFilterTargetHeader => _get('webhookFilterTargetHeader');
+  String get webhookFilterValue => _get('webhookFilterValue');
+  String get webhookFilterJson => _get('webhookFilterJson');
+  String get webhookFilterJsonHelp => _get('webhookFilterJsonHelp');
+  String get webhookErrFilter => _get('webhookErrFilter');
+  String get webhookErrFilterJson => _get('webhookErrFilterJson');
+  String get webhookDebounceLabel => _get('webhookDebounceLabel');
+  String get webhookDebounceHelp => _get('webhookDebounceHelp');
+  String get webhookMaxWaitLabel => _get('webhookMaxWaitLabel');
+  String get webhookErrDebounce => _get('webhookErrDebounce');
+  String get webhookErrMaxWait => _get('webhookErrMaxWait');
+  String get webhookUrlTitle => _get('webhookUrlTitle');
+  String get webhookUrlNote => _get('webhookUrlNote');
+  String get webhookCopy => _get('webhookCopy');
+  String get webhookCopied => _get('webhookCopied');
+  String get webhookDone => _get('webhookDone');
+  String get webhookErrTooMany => _get('webhookErrTooMany');
+  String get webhookErrNetwork => _get('webhookErrNetwork');
+  String webhookErrServer(String code) => _get('webhookErrServer').replaceAll('{code}', code);
+  String get webhookListTitle => _get('webhookListTitle');
+  String get webhookOn => _get('webhookOn');
+  String get webhookOff => _get('webhookOff');
+  String get webhookDelete => _get('webhookDelete');
+  String get webhookDeleteTitle => _get('webhookDeleteTitle');
+  String get webhookDeleteBody => _get('webhookDeleteBody');
+  String get webhookCancel => _get('webhookCancel');
+  String webhookLastCall(String when) => _get('webhookLastCall').replaceAll('{when}', when);
+  String get webhookNoCalls => _get('webhookNoCalls');
+  String get webhookNoAutomation => _get('webhookNoAutomation');
+  String webhookMerged(String count) => _get('webhookMerged').replaceAll('{count}', count);
+  String get webhookFailed => _get('webhookFailed');
+  // ── end webhooks ──
+  // ── feedback ──
+  String get feedbackRemoveRating => _get('feedbackRemoveRating');
+  // ── end feedback ──
 }
 
 class _AppLocalizationsDelegate

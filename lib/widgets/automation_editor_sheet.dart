@@ -9,9 +9,13 @@
 /// open so the user can fix the field. Nothing is saved optimistically.
 library;
 
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/services/agents/agents_webhooks_service.dart';
 import 'package:chuk_chat/services/automations/agents_automation.dart';
 import 'package:chuk_chat/services/automations/automations_source.dart';
 import 'package:chuk_chat/ui/expressive/connected_group.dart';
@@ -30,6 +34,7 @@ Future<AgentsAutomation?> showAutomationEditor(
   String? sessionKey,
   Map<String, String> agents = const <String, String>{},
   AutomationsSource? source,
+  AgentsWebhooksService? webhooks,
 }) {
   final AppLocalizations l = _l10n(context);
   return expressiveSheet<AgentsAutomation>(
@@ -40,6 +45,7 @@ Future<AgentsAutomation?> showAutomationEditor(
       sessionKey: sessionKey,
       agents: agents,
       source: source,
+      webhooks: webhooks,
     ),
   );
 }
@@ -55,12 +61,21 @@ class AutomationEditorForm extends StatefulWidget {
     this.sessionKey,
     this.agents = const <String, String>{},
     this.source,
+    this.webhooks,
+    this.hostDeviceId,
   });
 
   final AgentsAutomation? existing;
   final String? sessionKey;
   final Map<String, String> agents;
   final AutomationsSource? source;
+
+  /// The server half of a webhook. Defaults to
+  /// [AgentsWebhooksService.instance].
+  final AgentsWebhooksService? webhooks;
+
+  /// The host's relay executor id. Defaults to the stored pairing's.
+  final Future<String?> Function()? hostDeviceId;
 
   @override
   State<AutomationEditorForm> createState() => _AutomationEditorFormState();
@@ -82,6 +97,25 @@ class _AutomationEditorFormState extends State<AutomationEditorForm> {
   late final TextEditingController _name;
   late final TextEditingController _catchUp;
   late bool _onChange;
+
+  // ── webhooks ──
+  late final TextEditingController _secret;
+  late final TextEditingController _filterTarget;
+  late final TextEditingController _filterValue;
+  late final TextEditingController _filterJson;
+  late final TextEditingController _debounce;
+  late final TextEditingController _maxWait;
+  String _filterPlace = 'path';
+  String _filterOp = kWebhookFilterOps.first;
+
+  /// "Remove secret" was tapped on a row that has one.
+  bool _removeSecret = false;
+
+  /// The URL of the webhook just made, shown once, and the row it belongs
+  /// to. While set, the form shows only the URL.
+  String? _createdUrl;
+  AgentsAutomation? _createdRow;
+  // ── end webhooks ──
 
   /// Where a fired schedule run goes (docs/WIRE_CONTRACT.md, "Schedule
   /// target").
@@ -123,6 +157,19 @@ class _AutomationEditorFormState extends State<AutomationEditorForm> {
     _target = a?.target ?? kAutomationTargetThisSession;
     _allowChaining = a?.allowChaining ?? false;
     _catchUp = TextEditingController(text: catchUpText(a?.catchUpSeconds));
+    _secret = TextEditingController();
+    _filterTarget = TextEditingController();
+    _filterValue = TextEditingController();
+    final Object? oldFilter = a != null && a.isWebhook ? a.webhookFilter : null;
+    _filterJson = TextEditingController(
+      text: oldFilter == null ? '' : jsonEncode(oldFilter),
+    );
+    _debounce = TextEditingController(
+      text: '${a != null && a.isWebhook ? a.webhookDebounce : kWebhookDefaultDebounce}',
+    );
+    _maxWait = TextEditingController(
+      text: '${a != null && a.isWebhook ? a.webhookMaxWait : kWebhookDefaultMaxWait}',
+    );
   }
 
   @override
@@ -137,6 +184,12 @@ class _AutomationEditorFormState extends State<AutomationEditorForm> {
       _prompt,
       _name,
       _catchUp,
+      _secret,
+      _filterTarget,
+      _filterValue,
+      _filterJson,
+      _debounce,
+      _maxWait,
     ]) {
       c.dispose();
     }
@@ -203,6 +256,8 @@ class _AutomationEditorFormState extends State<AutomationEditorForm> {
           mailSubject: subject,
           mailAlias: alias,
         );
+      case kWebhookKind:
+        return _webhookFields(l, fail);
       default:
         if (_schedule.text.trim().isEmpty) {
           return fail('schedule', l.automationErrSchedule);
@@ -232,6 +287,10 @@ class _AutomationEditorFormState extends State<AutomationEditorForm> {
         _fieldKey = 'catch_up';
         _fieldError = l.automationErrCatchUp;
       });
+      return;
+    }
+    if (_kind == kWebhookKind) {
+      await _saveWebhook(l, spec as _WebhookFields, catchUp);
       return;
     }
     final AutomationSaveResult result;
@@ -278,6 +337,318 @@ class _AutomationEditorFormState extends State<AutomationEditorForm> {
     });
   }
 
+  // ── webhooks ──
+  /// The webhook fields, checked. Null after setting the error.
+  _WebhookFields? _webhookFields(
+    AppLocalizations l,
+    String? Function(String key, String message) fail,
+  ) {
+    final String secret = _secret.text;
+    if (secret.isNotEmpty && !isValidWebhookSecret(secret)) {
+      fail('secret', l.webhookErrSecret);
+      return null;
+    }
+    Object? filter;
+    if (_filterJson.text.trim().isNotEmpty) {
+      try {
+        filter = parseWebhookFilterJson(_filterJson.text);
+      } on FormatException {
+        fail('filter_json', l.webhookErrFilterJson);
+        return null;
+      }
+    } else if (_filterTarget.text.trim().isNotEmpty) {
+      try {
+        filter = webhookFilterLeaf(
+          place: _filterPlace,
+          target: _filterTarget.text,
+          op: _filterOp,
+          value: _filterValue.text,
+        );
+      } on FormatException {
+        fail('filter_value', l.webhookErrFilter);
+        return null;
+      }
+    }
+    final int? debounce = parseWebhookSeconds(
+      _debounce.text,
+      kWebhookMaxDebounce,
+    );
+    if (debounce == null) {
+      fail('debounce', l.webhookErrDebounce);
+      return null;
+    }
+    final int? maxWait = parseWebhookSeconds(_maxWait.text, kWebhookMaxMaxWait);
+    if (maxWait == null) {
+      fail('max_wait', l.webhookErrMaxWait);
+      return null;
+    }
+    if (_prompt.text.trim().isEmpty) {
+      fail('prompt', l.automationErrPrompt);
+      return null;
+    }
+    return _WebhookFields(
+      filter: filter,
+      debounce: debounce,
+      maxWait: maxWait,
+      secret: secret.isEmpty ? null : secret,
+    );
+  }
+
+  /// Creates (server webhook, then the host row) or edits a webhook row.
+  Future<void> _saveWebhook(
+    AppLocalizations l,
+    _WebhookFields fields,
+    Object? catchUp,
+  ) async {
+    final AgentsAutomation? before = widget.existing;
+    if (before != null) {
+      Map<String, dynamic>? frame = automationUpdateFrame(
+        before: before,
+        spec: before.spec,
+        prompt: _prompt.text,
+        name: _name.text,
+        notifyOnChange: _onChange,
+        allowChaining: _allowChaining,
+        catchUp: catchUp,
+        catchUpSet: true,
+      );
+      final Map<String, dynamic> specChange = webhookSpecUpdate(
+        before: before,
+        filter: fields.filter,
+        debounceSeconds: fields.debounce,
+        maxWaitSeconds: fields.maxWait,
+        secret: _removeSecret ? '' : fields.secret,
+      );
+      if (specChange.isNotEmpty) {
+        frame ??= <String, dynamic>{
+          'type': 'automation_update',
+          'id': before.id,
+        };
+        frame['spec'] = specChange;
+      }
+      if (frame == null) {
+        setState(() => _hostError = l.automationNothingChanged);
+        return;
+      }
+      setState(() => _saving = true);
+      final AutomationSaveResult result = await _source.update(frame);
+      if (!mounted) return;
+      final AgentsAutomation? saved = result.automation;
+      if (saved != null) {
+        Navigator.of(context).pop(saved);
+        return;
+      }
+      setState(() {
+        _saving = false;
+        _hostError = result.error;
+      });
+      return;
+    }
+    final String? session = widget.sessionKey ?? _agent;
+    if (session == null) return;
+    setState(() => _saving = true);
+    final WebhookCreateResult result = await createWebhookAutomation(
+      sessionKey: session,
+      prompt: _prompt.text,
+      name: _name.text,
+      notifyOnChange: _onChange,
+      allowChaining: _allowChaining,
+      catchUp: catchUp,
+      filter: fields.filter,
+      debounceSeconds: fields.debounce,
+      maxWaitSeconds: fields.maxWait,
+      signingSecret: fields.secret,
+      service: widget.webhooks,
+      deviceId: widget.hostDeviceId,
+      createAutomation: webhookCreatorFor(_source),
+    );
+    if (!mounted) return;
+    // The secret has gone to the host; the form forgets it.
+    _secret.clear();
+    final AgentsAutomation? saved = result.automation;
+    final String? url = result.url;
+    if (saved != null && url != null) {
+      setState(() {
+        _saving = false;
+        _createdRow = saved;
+        _createdUrl = url;
+      });
+      return;
+    }
+    setState(() {
+      _saving = false;
+      _hostError = webhookErrorText(l, result);
+    });
+  }
+
+  Widget _webhookFieldsView(AppLocalizations l, ThemeData theme) {
+    final AgentsAutomation? a = widget.existing;
+    final bool signed = a != null && a.webhookSigned && !_removeSecret;
+    final TextStyle? label = theme.textTheme.labelLarge?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        if (signed)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 4,
+              children: <Widget>[
+                ExpressiveBadge(l.webhookSecretSet, icon: Icons.check),
+                TextButton(
+                  key: const ValueKey<String>('webhook-remove-secret'),
+                  onPressed: _saving
+                      ? null
+                      : () => setState(() {
+                          _removeSecret = true;
+                          _hostError = null;
+                        }),
+                  child: Text(l.webhookRemoveSecret),
+                ),
+              ],
+            ),
+          ),
+        if (_removeSecret)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+            child: Text(
+              l.webhookSecretRemoved,
+              key: const ValueKey<String>('webhook-secret-removed'),
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
+        _field(
+          key: 'secret',
+          controller: _secret,
+          label: l.webhookSecretLabel,
+          help: l.webhookSecretHelp,
+          obscure: true,
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 4, 4, 6),
+          child: Text(l.webhookFilterLabel, style: label),
+        ),
+        ConnectedGroup(
+          key: const ValueKey<String>('webhook-filter-place'),
+          margin: EdgeInsets.zero,
+          labels: <String>[l.webhookFilterPath, l.webhookFilterHeader],
+          selected: _filterPlace == 'path' ? 0 : 1,
+          onSelected: (int i) =>
+              setState(() => _filterPlace = i == 0 ? 'path' : 'header'),
+        ),
+        const SizedBox(height: 10),
+        _field(
+          key: 'filter_target',
+          controller: _filterTarget,
+          label: _filterPlace == 'path'
+              ? l.webhookFilterTargetPath
+              : l.webhookFilterTargetHeader,
+          hint: _filterPlace == 'path' ? r'$.action' : 'x-github-event',
+        ),
+        Wrap(
+          key: const ValueKey<String>('webhook-filter-op'),
+          spacing: 6,
+          runSpacing: 6,
+          children: <Widget>[
+            for (final String op in kWebhookFilterOps)
+              ChoiceChip(
+                key: ValueKey<String>('webhook-filter-op-$op'),
+                label: Text(op),
+                selected: _filterOp == op,
+                onSelected: (_) => setState(() => _filterOp = op),
+              ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        _field(
+          key: 'filter_value',
+          controller: _filterValue,
+          label: l.webhookFilterValue,
+          hint: _filterOp == 'in' ? 'push, pull_request' : 'opened',
+          help: l.webhookFilterHelp,
+        ),
+        _field(
+          key: 'filter_json',
+          controller: _filterJson,
+          label: l.webhookFilterJson,
+          hint: '{"any": [...]}',
+          help: l.webhookFilterJsonHelp,
+          maxLines: 4,
+        ),
+        _field(
+          key: 'debounce',
+          controller: _debounce,
+          label: l.webhookDebounceLabel,
+          help: l.webhookDebounceHelp,
+          keyboard: TextInputType.number,
+        ),
+        _field(
+          key: 'max_wait',
+          controller: _maxWait,
+          label: l.webhookMaxWaitLabel,
+          keyboard: TextInputType.number,
+        ),
+      ],
+    );
+  }
+
+  /// The kind choice. Four labels do not fit one pill on a phone at a large
+  /// text size, so a narrow sheet shows two pills of two.
+  Widget _kindPicker(AppLocalizations l, List<String> kinds) {
+    String labelOf(String kind) => switch (kind) {
+      'watch_url' => l.automationKindPage,
+      'mail' => l.automationKindMail,
+      kWebhookKind => l.automationKindWebhook,
+      _ => l.automationKindSchedule,
+    };
+    void pick(String kind) => setState(() {
+      _kind = kind;
+      _fieldError = null;
+      _fieldKey = null;
+      _hostError = null;
+    });
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints box) {
+        if (box.maxWidth >= 520) {
+          return ConnectedGroup(
+            key: const ValueKey<String>('automation-kind'),
+            margin: EdgeInsets.zero,
+            labels: <String>[for (final String k in kinds) labelOf(k)],
+            selected: kinds.indexOf(_kind).clamp(0, kinds.length - 1),
+            onSelected: (int i) => pick(kinds[i]),
+          );
+        }
+        final List<List<String>> rows = <List<String>>[
+          for (int i = 0; i < kinds.length; i += 2)
+            kinds.sublist(i, i + 2 > kinds.length ? kinds.length : i + 2),
+        ];
+        return Column(
+          key: const ValueKey<String>('automation-kind'),
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            for (int r = 0; r < rows.length; r++) ...<Widget>[
+              if (r > 0) const SizedBox(height: 4),
+              ConnectedGroup(
+                key: ValueKey<String>('automation-kind-row-$r'),
+                margin: EdgeInsets.zero,
+                labels: <String>[for (final String k in rows[r]) labelOf(k)],
+                selected: rows[r].indexOf(_kind),
+                onSelected: (int i) => pick(rows[r][i]),
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+  // ── end webhooks ──
+
   Widget _field({
     required String key,
     required TextEditingController controller,
@@ -286,6 +657,7 @@ class _AutomationEditorFormState extends State<AutomationEditorForm> {
     String? help,
     TextInputType? keyboard,
     int maxLines = 1,
+    bool obscure = false,
   }) {
     final ThemeData theme = Theme.of(context);
     final bool failed = _fieldKey == key;
@@ -299,8 +671,10 @@ class _AutomationEditorFormState extends State<AutomationEditorForm> {
               key: ValueKey<String>('automation-field-$key'),
               controller: controller,
               keyboardType: keyboard,
-              maxLines: maxLines,
+              maxLines: obscure ? 1 : maxLines,
               minLines: 1,
+              obscureText: obscure,
+              enableSuggestions: !obscure,
               autocorrect: key == 'prompt',
               decoration: InputDecoration(
                 border: InputBorder.none,
@@ -339,8 +713,20 @@ class _AutomationEditorFormState extends State<AutomationEditorForm> {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final AppLocalizations l = _l10n(context);
+    final String? createdUrl = _createdUrl;
+    if (createdUrl != null) {
+      return Flexible(
+        child: SingleChildScrollView(
+          child: WebhookUrlOnceView(
+            url: createdUrl,
+            onDone: () => Navigator.of(context).pop(_createdRow),
+          ),
+        ),
+      );
+    }
     final List<String> kinds = kCreatableAutomationKinds;
     final List<Widget> specFields = switch (_kind) {
+      kWebhookKind => <Widget>[_webhookFieldsView(l, theme)],
       'watch_url' => <Widget>[
         _field(
           key: 'url',
@@ -454,22 +840,7 @@ class _AutomationEditorFormState extends State<AutomationEditorForm> {
             // The kind is chosen once; an edit keeps it (the host keeps a
             // row's kind, and a page watch is not a schedule with a URL).
             if (!_editing) ...<Widget>[
-              ConnectedGroup(
-                key: const ValueKey<String>('automation-kind'),
-                margin: EdgeInsets.zero,
-                labels: <String>[
-                  l.automationKindSchedule,
-                  l.automationKindPage,
-                  l.automationKindMail,
-                ],
-                selected: kinds.indexOf(_kind).clamp(0, kinds.length - 1),
-                onSelected: (int i) => setState(() {
-                  _kind = kinds[i];
-                  _fieldError = null;
-                  _fieldKey = null;
-                  _hostError = null;
-                }),
-              ),
+              _kindPicker(l, kinds),
               const SizedBox(height: 14),
             ],
             ...specFields,
@@ -587,3 +958,108 @@ class _AutomationEditorFormState extends State<AutomationEditorForm> {
     );
   }
 }
+
+// ── webhooks ──
+/// The checked webhook fields of the form.
+class _WebhookFields {
+  const _WebhookFields({
+    required this.filter,
+    required this.debounce,
+    required this.maxWait,
+    required this.secret,
+  });
+
+  final Object? filter;
+  final int debounce;
+  final int maxWait;
+  final String? secret;
+}
+
+/// The user-facing text of a failed webhook create: a server code in the
+/// app's words, a host refusal in the host's.
+String webhookErrorText(AppLocalizations l, WebhookCreateResult result) {
+  final String? code = result.serverCode;
+  if (code == null) return result.error ?? l.webhookFailed;
+  return switch (code) {
+    'too_many_webhooks' => l.webhookErrTooMany,
+    AgentsWebhookException.network => l.webhookErrNetwork,
+    _ => l.webhookErrServer(code),
+  };
+}
+
+/// The secret URL of a new webhook, shown this one time: the URL, a copy
+/// button and the warning (docs/WIRE_CONTRACT.md, "Inbound webhooks", App
+/// work 1). The app does not keep the URL.
+class WebhookUrlOnceView extends StatelessWidget {
+  const WebhookUrlOnceView({super.key, required this.url, required this.onDone});
+
+  final String url;
+  final VoidCallback onDone;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme scheme = theme.colorScheme;
+    final AppLocalizations l = _l10n(context);
+    return Column(
+      key: const ValueKey<String>('webhook-url-once'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Text(
+          l.webhookUrlTitle,
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: SelectableText(
+            url,
+            key: const ValueKey<String>('webhook-url'),
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontFamily: 'monospace',
+              fontFamilyFallback: const <String>['Courier'],
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        ExpressiveInfoCard(
+          key: const ValueKey<String>('webhook-url-note'),
+          icon: Icons.warning_amber_outlined,
+          text: l.webhookUrlNote,
+        ),
+        const SizedBox(height: 14),
+        Wrap(
+          alignment: WrapAlignment.end,
+          spacing: 8,
+          runSpacing: 8,
+          children: <Widget>[
+            ExpressiveButton(
+              key: const ValueKey<String>('webhook-copy'),
+              label: l.webhookCopy,
+              icon: Icons.copy,
+              tonal: true,
+              onTap: () async {
+                await Clipboard.setData(ClipboardData(text: url));
+                if (context.mounted) pillToast(context, l.webhookCopied);
+              },
+            ),
+            ExpressiveButton(
+              key: const ValueKey<String>('webhook-done'),
+              label: l.webhookDone,
+              icon: Icons.check,
+              onTap: onDone,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+// ── end webhooks ──

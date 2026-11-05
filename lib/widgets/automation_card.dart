@@ -71,12 +71,14 @@ class _AutomationCardState extends State<AutomationCard> {
       'script' => Icons.visibility_outlined,
       'page' => Icons.public,
       'mail' => Icons.mail_outline,
+      'webhook' => Icons.link,
       _ => Icons.schedule,
     };
     final String kindLabel = switch (a.trigger) {
       'script' => 'Watcher',
       'page' => l10n?.automationTriggerPage ?? 'Page',
       'mail' => l10n?.automationTriggerMail ?? 'Mail',
+      'webhook' => l10n?.automationKindWebhook ?? 'Webhook',
       _ => l10n?.automationTriggerClock ?? 'Schedule',
     };
 

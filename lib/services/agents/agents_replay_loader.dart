@@ -43,6 +43,9 @@ import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/services/agents/media_index.dart';
 import 'package:chuk_chat/services/agents/thread_preview_store.dart';
 import 'package:chuk_chat/services/agents/agents_context_rows.dart';
+import 'package:chuk_chat/services/agents/agents_checkpoints.dart'
+    show kAgentsHostMidKey; // checkpoints
+import 'package:chuk_chat/services/agents/agents_attachment_store.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/automations/automation_ledger.dart';
@@ -357,6 +360,10 @@ class AgentsReplayLoader extends ChangeNotifier {
         // Always true today (a user turn only exists in a replay); checked, not
         // assumed, like every other case (review F13).
         if (!replay) return;
+        // The thumbnails of the files read the blob index synchronously.
+        if (event.attachments != null) {
+          unawaited(AgentsAttachmentStore.warm().catchError((Object _) {}));
+        }
         final draft = _draftFor();
         _closeAiRow(draft);
         draft.rows.add(<String, String>{
@@ -364,7 +371,9 @@ class AgentsReplayLoader extends ChangeNotifier {
           // A late answer to a pending question reads as what the user
           // picked, not as the host's wrapper.
           'text': event.answerToPendingQuestion == null
-              ? text
+              ? (event.attachments == null
+                    ? text
+                    : stripAgentsAttachmentBlock(text))
               : (pendingAnswerSummary(text) ?? text),
           'reasoning': '',
           if (event.sentAt != null) 'sentAt': event.sentAt!.toIso8601String(),
@@ -373,6 +382,12 @@ class AgentsReplayLoader extends ChangeNotifier {
           // source on synthetic rows").
           if (event.source != null)
             'inputMode': '$kAgentsSourceInputModePrefix${event.source}',
+          // checkpoints: the host's row id, for "Fork from here".
+          if (mid != null) kAgentsHostMidKey: '$mid',
+          // The files the user sent with it (docs/WIRE_CONTRACT.md,
+          // "Attachments to Agents"): rows on the bubble, never prompt text.
+          if (event.attachments case final List<Map<String, dynamic>> files)
+            'agentsAttachments': jsonEncode(files),
         });
         _noteMid(draft, mid);
 
@@ -1152,4 +1167,13 @@ class AgentsReplayLoader extends ChangeNotifier {
       return null;
     }
   }
+}
+
+/// [text] without the host's attachment block (`[Attachments from the
+/// user, saved in the workspace ...]`) at its end, for a host that keeps it
+/// in the stored row: the bubble draws the files as rows instead.
+String stripAgentsAttachmentBlock(String text) {
+  final int at = text.lastIndexOf('[Attachments from the user');
+  if (at < 0) return text;
+  return text.substring(0, at).trimRight();
 }

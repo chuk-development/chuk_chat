@@ -25,6 +25,7 @@
   },
   "targets": {
     "docs/agents/DESIGN.md": "CLAUDE.md says 'if present'",
+    ".agents/git": "host-side path in the agents workspace (WIRE_CONTRACT, checkpoints), not a repo file",
     ".beads/issues.jsonl": "beads export, written by bd on demand",
     "marketing/_shared/music/": "local only, WAVs are gitignored",
     "lib/services/x.dart": "placeholder in an example",
@@ -34,6 +35,7 @@
     "scripts/release.sh": "suggested script the doc tells you to create",
     "scripts/package-linux.sh": "named by linux/fastlane/Fastfile, missing; tracked as a bead",
     ".agents/automations/triggers.jsonl": "path in an agent workspace on the host",
+    ".agents/inbox": "path in an agent workspace on the host (attachments)",
     "agents/voice/": "open question, directory does not exist yet"
   }
 }

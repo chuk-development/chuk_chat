@@ -367,8 +367,17 @@ An Agents prompt that cannot reach the host waits in `AgentsTaskOutbox`:
   died (`closed`, or `error` after a reconnect that failed) is dropped and a
   fresh one is built on the same look while work is left. Checks every 15 s
   and on every outbox change or network change.
-- Images in Agents are not sent yet (no attachment frame). The text goes out
-  and the user sees "Images are not supported in Agents yet".
+- Pictures and files go out with the prompt (docs/WIRE_CONTRACT.md,
+  "Attachments to Agents"). A picture is kept like any composer image
+  (encrypted, `offline://img/` or the bucket). Any other file is sealed with
+  the chat key in `agents_attachments/<user>/` and named `agents-att://…`
+  (`lib/services/agents/agents_attachment_store.dart`). The queued entry
+  keeps these paths; the flush uploads each file in 256 KiB
+  `attachment_put` chunks (`lib/services/agents/agents_attachments.dart`)
+  and sends the task with the `blob_id`s only when every file is complete.
+  An unconfirmed task is re-sent with the same `blob_id`s. The sweeper keeps
+  every offline picture a queued entry names. Sign-out wipes the sealed
+  files with the outbox.
 
 ## Web
 

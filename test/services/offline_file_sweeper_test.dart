@@ -50,6 +50,7 @@ void main() {
     OfflineFileSweeper.imageFiles = (_) async => images;
     OfflineFileSweeper.deleteVoice = (p) async => deletedVoice.add(p);
     OfflineFileSweeper.deleteImage = (p) async => deletedImages.add(p);
+    OfflineFileSweeper.agentsPaths = () async => <String>{};
   });
 
   tearDown(OfflineFileSweeper.resetSeams);
@@ -124,5 +125,25 @@ void main() {
     OfflineFileSweeper.instance.sweepOnce();
     await Future<void>.delayed(const Duration(milliseconds: 10));
     expect(deletedVoice, hasLength(1));
+  });
+
+  test('an offline picture a queued Agents prompt names stays', () async {
+    OfflineFileSweeper.agentsPaths = () async => <String>{
+      'offline://img/u1/queued',
+      'agents-att://u1/abc',
+    };
+    images = [
+      (path: 'offline://img/u1/queued', modified: old),
+      (path: 'offline://img/u1/orphan', modified: old),
+    ];
+    expect(await OfflineFileSweeper.instance.sweep('u1'), 1);
+    expect(deletedImages, ['offline://img/u1/orphan']);
+  });
+
+  test('an Agents outbox it cannot open deletes nothing', () async {
+    OfflineFileSweeper.agentsPaths = () async => null;
+    images = [(path: 'offline://img/u1/orphan', modified: old)];
+    expect(await OfflineFileSweeper.instance.sweep('u1'), 0);
+    expect(deletedImages, isEmpty);
   });
 }

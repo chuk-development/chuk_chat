@@ -120,6 +120,7 @@ class _FakeRelayController implements AgentsRelayController {
     bool regenerate = false,
     String? taskId,
     bool budgetOverride = false,
+    List<String> attachments = const <String>[],
   }) async => sessionKeys.add(sessionKey);
 
   final List<(String, String)> roomTasks = <(String, String)>[];

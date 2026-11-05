@@ -973,6 +973,8 @@ class ChatStorageCrud {
         compactSummary: role == 'user'
             ? m['compactSummary']?.toString()
             : null,
+        // checkpoints: the host's row id of an Agents message (fork).
+        hostMid: ChatOrigin.agentsEnabled ? m['hostMid']?.toString() : null,
       );
     }).toList();
   }

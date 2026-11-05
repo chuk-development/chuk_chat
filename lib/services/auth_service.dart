@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:chuk_chat/services/agents/agent_mail_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chukdoo/chukdoo_connector.dart';
+import 'package:chuk_chat/services/agents/agents_login_vault.dart';
 import 'package:chuk_chat/services/agents/agents_thread_modes.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
@@ -193,6 +194,8 @@ class AuthService {
       // preferences (keyed by user).
       await MessageFeedbackStore.instance.clearForSignOut(userId);
       await AgentsThreadModes.instance.clearForSignOut(userId);
+      // The host's login list (origins and user names, never a password).
+      AgentsLoginVault.instance.clear();
       // Web: drop the local plaintext chat cache on logout. The next login
       // (e.g. after a password reset) then starts clean, so chats encrypted
       // with an old key correctly surface as locked. Native intentionally
