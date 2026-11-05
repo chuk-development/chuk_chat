@@ -296,7 +296,8 @@ class AgentsAttachmentStore {
     final List<String> evicted = <String>[];
     while (_blobs.length > _maxBlobs) {
       final String key = _blobs.keys.first;
-      evicted.add(_blobs.remove(key)!);
+      final String? path = _blobs.remove(key);
+      if (path != null) evicted.add(path);
     }
     try {
       final SharedPreferences prefs = await SharedPreferences.getInstance();
