@@ -78,6 +78,42 @@ class SandboxEnvironment:
         root = getattr(self._inner, "root", None)
         return root if isinstance(root, str) and root else None
 
+    def withheld_permissions(self) -> tuple[str, ...]:
+        """The escalation names the box withholds now (docs/WIRE_CONTRACT.md,
+        "Sandbox escalation"). An inner sandbox that predates escalation
+        withholds nothing it could widen."""
+        reader = getattr(self._inner, "withheld_permissions", None)
+        if not callable(reader):
+            return ()
+        try:
+            return tuple(reader())
+        except Exception:  # noqa: BLE001 — an unreadable policy offers no escalation
+            return ()
+
+    def run_escalated(
+        self,
+        cmd: str,
+        *,
+        grant,
+        timeout: int = 120,
+        env: Mapping[str, str] | None = None,
+    ) -> AgentProcessResult:
+        """One approved command with wider permissions (see the sandbox's
+        ``run_escalated``). Timed and observed like :meth:`run_bash`."""
+        start = time.monotonic()
+        raw = self._inner.run_escalated(cmd, grant=tuple(grant), timeout=timeout, env=env or None)
+        result = AgentProcessResult(
+            exit_code=raw.exit_code,
+            stdout=raw.stdout,
+            stderr=raw.stderr,
+            duration_s=time.monotonic() - start,
+            timed_out=raw.timed_out,
+        )
+        observer = self.on_run
+        if observer is not None:
+            observer(cmd, result)
+        return result
+
     def run_bash(
         self,
         cmd: str,

@@ -37,7 +37,7 @@ import threading
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Mapping
 
-from .policy import DEFAULT_POLICY, SandboxPolicy
+from .policy import DEFAULT_POLICY, SandboxPolicy, widened_policy, withheld_permissions
 from .result import ProcessResult
 
 #: Reads an agent's current permissions (docs/WIRE_CONTRACT.md, "Agent
@@ -166,9 +166,56 @@ class BaseEnvironment(ABC):
         return self._policy
 
     @property
+    def kind(self) -> str:
+        """The backend name of :func:`~.policy.enforced_permissions`. A backend
+        that does not say enforces nothing it cannot prove."""
+        return "unknown"
+
+    @property
     def effective_policy(self) -> SandboxPolicy:
-        """:attr:`policy`, with the defaults standing in for "none"."""
+        """:attr:`policy`, with the defaults standing in for "none". During
+        :meth:`run_escalated` on a backend that applies the policy per command
+        (local bwrap) this is the widened policy of that one call."""
+        override = getattr(self, "_escalated_policy", None)
+        if override is not None:
+            return override
         return self._policy or DEFAULT_POLICY
+
+    def withheld_permissions(self) -> tuple[str, ...]:
+        """The escalation names (``network``, ``sudo``, ``workspace_write``)
+        this box withholds now (docs/WIRE_CONTRACT.md, "Sandbox escalation")."""
+        return withheld_permissions(self._policy or DEFAULT_POLICY, self.kind)
+
+    def run_escalated(
+        self,
+        cmd: str,
+        *,
+        grant: "tuple[str, ...] | list[str]",
+        timeout: int = 120,
+        env: Mapping[str, str] | None = None,
+    ) -> ProcessResult:
+        """Run ONE command with the escalation names in ``grant`` switched on,
+        after the user approved it. The agent's own policy does not change: the
+        next command runs under it again.
+
+        The default applies the widened policy to this one call only, which is
+        right for a backend that builds its isolation per command (local
+        bwrap). A backend whose limits are fixed at creation (docker)
+        overrides this and runs the call in a temporary wider box."""
+        widened = widened_policy(self._policy or DEFAULT_POLICY, tuple(grant))
+        with self._escalation_lock():
+            self._escalated_policy = widened
+            try:
+                return self.run(cmd, timeout=timeout, env=env)
+            finally:
+                self._escalated_policy = None
+
+    def _escalation_lock(self) -> threading.Lock:
+        lock = getattr(self, "_escalation_mutex", None)
+        if lock is None:
+            lock = threading.Lock()
+            self._escalation_mutex = lock
+        return lock
 
     @property
     def leases(self) -> int:

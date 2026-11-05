@@ -671,6 +671,10 @@ class AgentLoop:
             model if isinstance(model, Model) else LegacyClientModel(model)
         )
         self._registry = registry
+        #: Reads a picture of the current task for a vision-capable model
+        #: (docs/WIRE_CONTRACT.md, "Attachments to Agents"); ``None`` = the
+        #: pictures stay paths in the prompt.
+        self.image_loader = None
         self._store = store
         self._max_iterations = max_iterations
         self._budget = budget or IterationBudget(max_iterations)
@@ -940,7 +944,9 @@ class AgentLoop:
         tracer = get_tracer()
         if tracer.enabled:
             self._trace_prepare(tracer, outbound, elapsed)
-        converted = rows_to_messages(outbound, deferred=self._registry.deferred_names())
+        converted = rows_to_messages(
+            outbound, deferred=self._registry.deferred_names(), image_loader=self.image_loader
+        )
         if not converted or not hasattr(converted[-1], "parts") or converted[-1].kind != "request":
             # Pydantic AI needs the history to end in a request. The store
             # always ends in the user row or tool results by the time a model
@@ -1084,7 +1090,9 @@ class AgentLoop:
         token = CancellationToken()
         self._kill.on_interrupt(token.cancel)
         history = rows_to_messages(
-            self._stored_rows(active.session_id), deferred=self._registry.deferred_names()
+            self._stored_rows(active.session_id),
+            deferred=self._registry.deferred_names(),
+            image_loader=self.image_loader,
         )
         state = _DriveState()
         # One sink for the whole run: it puts a paragraph break between the

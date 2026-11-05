@@ -436,6 +436,7 @@ def build_runtime(
     todo_sink: Callable[[list[dict]], None] | None = None,
     questions: QuestionBackend | None = None,
     context_observer: Callable[[dict], None] | None = None,
+    checkpoint_sink: Callable[[str, Any], None] | None = None,
 ) -> AgentLoop:
     """Assemble the loop. ``system_prompt`` is the operator *persona*: the
     behaviour contract is prepended from :mod:`chuk_agents_runtime.prompt` and the live
@@ -568,6 +569,9 @@ def build_runtime(
         else None
     )
     registry = JournalingRegistry(git_workspace, observer=tool_observer)
+    # Checkpoints (docs/WIRE_CONTRACT.md, "Checkpoints, rewind and fork"):
+    # the run's first workspace-changing call pins the workspace as it was.
+    registry.checkpoint_sink = checkpoint_sink
     # Project rules (Hermes H33): the AGENTS.md / CLAUDE.md of a directory the
     # agent first works in, appended once to that tool's RESULT (never to the
     # frozen system prompt, so the prefix cache stays valid).
@@ -618,6 +622,10 @@ def build_runtime(
         jobs=jobs,
         guard=edit_guard,
         floor=safety_floor,
+        # Sandbox escalation (docs/WIRE_CONTRACT.md, "Sandbox escalation"):
+        # the card goes through the run's approval gate. No binding (a room
+        # member, a test) = no one can approve = escalation is refused.
+        escalation_ask=(action_approvals.ask if action_approvals is not None else None),
     )
     register_job_tools(registry, jobs)
     register_workspace_tools(registry, git_workspace)
@@ -931,6 +939,19 @@ def build_runtime(
     # model — the streamed OpenAI-compatible route for the account client, the
     # legacy adapter for a scripted one. A bare run that uses its persona
     # verbatim (``include_tool_docs=False``) offers no tools.
+    # Auto review (docs/WIRE_CONTRACT.md, "Auto review"): the cheap aux model
+    # rates a local action when the agent's ``local_actions`` class is in a
+    # review mode. Built only with an approval binding and an aux model; the
+    # session's rows are attached once the loop exists (below).
+    reviewer = None
+    if action_approvals is not None and aux_model is not None:
+        from .auto_review import AutoReviewer
+
+        reviewer = AutoReviewer(
+            aux_model,
+            workspace=workspace,
+            schema_of=lambda name: registry.spec(name).schema if registry.has(name) else None,
+        )
     loop_model, loop_extra = loop_setup(
         model,
         env=env,
@@ -940,6 +961,7 @@ def build_runtime(
         registry=registry,
         mcp=manager,
         action_approvals=action_approvals,
+        reviewer=reviewer,
     )
     loop = AgentLoop(
         loop_model,
@@ -1042,6 +1064,14 @@ def build_runtime(
     # and the tool-search decision, which is what the executor logs.
     loop.mcp = manager
     loop.tool_search = decision
+    # Attachments (docs/WIRE_CONTRACT.md, "Attachments to Agents"): the
+    # current task's pictures go to a vision-capable model as image parts.
+    from .attachment_images import make_image_loader, model_supports_vision
+
+    if model_supports_vision(model):
+        loop.image_loader = make_image_loader(workspace)
+    if reviewer is not None:
+        reviewer.history_provider = lambda: loop_history(loop)
     if subagents is not None and subagents.supervisor is not None:
         # ``fork=true`` copies the history of the run that calls it.
         subagents.supervisor.history_provider = lambda: loop_history(loop)

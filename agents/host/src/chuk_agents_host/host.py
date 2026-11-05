@@ -129,6 +129,7 @@ from .desktop_notify import DesktopNotifier
 from chuk_agents_runtime.automations import owner_session_key
 
 from .automations import AutomationManager
+from .webhooks import OUTCOME_OTHER_AGENT, OUTCOME_OTHER_DEVICE
 from .calls import CallService
 from .notification_text import DEFAULT_COWORKER, coworker_name
 from .notify import SupabaseNotifier
@@ -789,6 +790,9 @@ class LocalHost:
             # switch decides whether it may (docs/WIRE_CONTRACT.md, "Event
             # triggers").
             network_allowed=lambda: bool(self._permissions.get(self._agent.id).network),
+            # Inbound webhooks (docs/WIRE_CONTRACT.md, "Inbound webhooks"):
+            # an event addressed to another agent or host is not ours.
+            webhook_scope=self._webhook_scope,
         )
         # Background jobs (docs/WIRE_CONTRACT.md, "Interactive shell and
         # background commands"): the same trigger tail, a second consumer. A
@@ -902,6 +906,9 @@ class LocalHost:
                 # docs/AGENT_MAIL.md §7: an ``agent_mail`` frame, or a fresh
                 # authenticated connect, means "fetch the mail now".
                 on_agent_mail=self._on_agent_mail_signal,
+                # docs/WIRE_CONTRACT.md, "Inbound webhooks": a forwarded call
+                # to a webhook automation's URL.
+                on_webhook=self._on_webhook_event,
                 # With an install token the channel is fixed: nothing is
                 # scanned, and an expiry means "park on it again", not "print a
                 # fresh code".
@@ -2078,6 +2085,24 @@ class LocalHost:
         if manager is None:
             return False
         return manager.offer_mail(mail)
+
+    def _on_webhook_event(self, frame: dict) -> str:
+        """A ``webhook_event`` relay frame. Returns the outcome word for the
+        frame ledger (``queued``, ``filtered``, ``unknown_webhook``, ...)."""
+        manager = getattr(self, "_automations", None)
+        if manager is None:
+            return "not_enabled"
+        return manager.offer_webhook(frame)
+
+    def _webhook_scope(self, agent_id: str | None, device_id: str | None) -> str | None:
+        """Whether a ``webhook_event`` is for this host. ``device_id`` is the
+        relay executor id the server routes by; ``agent_id`` must be this
+        host's own agent or an agent the app registered here. ``None`` = ours."""
+        if device_id and device_id != getattr(self, "_relay_device_id", None):
+            return OUTCOME_OTHER_DEVICE
+        if agent_id and agent_id not in self._primary_agent_ids() and not self._is_own_coworker(agent_id):
+            return OUTCOME_OTHER_AGENT
+        return None
 
     def _on_job_trigger(self, record: dict) -> None:
         """A ``kind: job`` line in the trigger file: a background job ended

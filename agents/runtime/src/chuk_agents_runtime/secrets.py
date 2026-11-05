@@ -279,7 +279,16 @@ def register_secrets_tools(registry: ToolRegistry, access: SecretsAccess | None)
     registry.register(
         LIST_SECRETS_TOOL, LIST_SECRETS_SCHEMA, make_list_secrets_handler(access), deferrable=True
     )
-    registry.result_filter = Scrubber(access.env).scrub_obj
+    # ``scrub_values`` (when the access has it) is ``env`` plus values that
+    # must be masked but never reach a child process: the passwords and TOTP
+    # keys of the browser login vault (:mod:`chuk_agents_runtime.login_vault`).
+    scrub_values = getattr(access, "scrub_values", None)
+    registry.result_filter = Scrubber(
+        scrub_values if callable(scrub_values) else access.env
+    ).scrub_obj
+    from .login_vault import register_login_vault_tool
+
+    register_login_vault_tool(registry, access)
 
 
 class DictSecrets:

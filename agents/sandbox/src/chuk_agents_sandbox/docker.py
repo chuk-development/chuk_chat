@@ -58,7 +58,14 @@ from .lifecycle import (
     remove_container,
 )
 from .child_env import FIXED
-from .policy import DEFAULT_CONTAINER_KEY, LABEL_POLICY, SandboxPolicy, hardening_run_args
+from .policy import (
+    DEFAULT_CONTAINER_KEY,
+    DEFAULT_POLICY,
+    LABEL_POLICY,
+    SandboxPolicy,
+    hardening_run_args,
+    widened_policy,
+)
 from .result import ProcessResult
 
 #: The image ``install.sh`` builds (``sandbox/docker/Dockerfile``).
@@ -760,6 +767,109 @@ class DockerEnvironment(BaseEnvironment):
             with self._proc_lock:
                 if self._proc is proc:
                     self._proc = None
+
+    @property
+    def kind(self) -> str:
+        return "docker"
+
+    def escalation_argv(
+        self, cmd: str, grant: "tuple[str, ...] | list[str]", env_names: "tuple[str, ...] | list[str]" = ()
+    ) -> list[str]:
+        """``docker run`` argv for one escalated call (docs/WIRE_CONTRACT.md,
+        "Sandbox escalation"): a temporary box from the same image, with the
+        same workspace bind and the WIDENED policy, removed when the command
+        ends (``--rm``). The agent's own box keeps its limits; nothing of the
+        grant outlives this one call. The command runs as the agent user
+        (``runuser``) in the current directory. The command text rides in the
+        ``AGENTS_ESCALATED_CMD`` environment variable (value from the client's
+        own environment), never on the command line."""
+        policy = widened_policy(self._policy or DEFAULT_POLICY, tuple(grant))
+        argv = [self._cli.binary, "run", "--rm", "-i", "--label", "cowork.escalation=1"]
+        argv += ["--label", f"cowork.agent={self._agent_id}"]
+        if self._owner:
+            argv += ["--label", f"cowork.owner={self._owner}"]
+        argv += ["--workdir", self._cwd]
+        if self._workspace is not None:
+            mode = ":ro" if policy.read_only_workspace else ""
+            argv += ["-v", f"{self._workspace}:{CONTAINER_WORKSPACE}{mode}"]
+            transcript = os.path.join(self._workspace, "transcript")
+            if os.path.isdir(transcript):
+                argv += ["-v", f"{transcript}:{CONTAINER_WORKSPACE}/transcript:ro"]
+            uid = getattr(os, "getuid", lambda: None)()
+            gid = getattr(os, "getgid", lambda: None)()
+            if uid is not None and gid is not None:
+                argv += ["-e", f"AGENTS_UID={uid}", "-e", f"AGENTS_GID={gid}"]
+        timezone = host_timezone()
+        if timezone:
+            argv += ["-e", f"TZ={timezone}"]
+        argv += list(policy.docker_run_args())
+        argv += list(hardening_run_args(policy))
+        for name in env_names:
+            argv += ["-e", name]
+        for name, value in FIXED.items():
+            if name not in env_names:
+                argv += ["-e", f"{name}={value}"]
+        argv += ["-e", "AGENTS_ESCALATED_CMD"]
+        user = self._user if self._user_resolved else DEFAULT_USER
+        if user == DEFAULT_USER:
+            inner = 'exec runuser -u "${AGENTS_USER:-agents}" -- bash -c "$AGENTS_ESCALATED_CMD"'
+        else:
+            inner = 'exec bash -c "$AGENTS_ESCALATED_CMD"'
+            if user:
+                argv += ["--user", user]
+        argv += [*self._extra_run_args, self._image, "bash", "-c", inner]
+        return argv
+
+    def run_escalated(
+        self,
+        cmd: str,
+        *,
+        grant: "tuple[str, ...] | list[str]",
+        timeout: int = 120,
+        env: Mapping[str, str] | None = None,
+    ) -> ProcessResult:
+        """One approved command in a temporary wider box (see
+        :meth:`escalation_argv`). The persistent shell state of the agent's
+        own box (exports, aliases) is not carried over: the call starts from a
+        login-less ``bash`` in the current directory."""
+        allowed = self.effective_policy.secrets_env
+        extra = {k: v for k, v in (env or {}).items() if allowed and k.isidentifier()}
+        argv = self.escalation_argv(cmd, grant, tuple(extra))
+        child_env = {**os.environ, **extra, "AGENTS_ESCALATED_CMD": cmd}
+        try:
+            proc = subprocess.Popen(
+                argv,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                stdin=subprocess.PIPE,
+                text=True,
+                env=child_env,
+            )
+        except OSError as exc:
+            raise DockerUnavailableError(str(exc)) from exc
+        with self._proc_lock:
+            self._proc = proc
+        try:
+            out, err = proc.communicate(timeout=timeout)
+            result = ProcessResult(out, err, proc.returncode)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            out, err = proc.communicate()
+            result = ProcessResult(out, err, -9, timed_out=True)
+        finally:
+            with self._proc_lock:
+                if self._proc is proc:
+                    self._proc = None
+        stdout, out_trunc = self._bound(result.stdout)
+        stderr, err_trunc = self._bound(result.stderr)
+        return ProcessResult(
+            stdout=stdout,
+            stderr=stderr,
+            exit_code=result.exit_code,
+            stdout_truncated=out_trunc,
+            stderr_truncated=err_trunc,
+            timed_out=result.timed_out,
+        )
 
     def cancel(self) -> None:
         """Kill the ``docker exec`` in flight and the tree it left inside (§7.1).

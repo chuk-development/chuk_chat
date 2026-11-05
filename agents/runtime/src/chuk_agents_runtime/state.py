@@ -892,6 +892,10 @@ class StateStore:
                 answer = content.get("answer_to_pending_question")
                 if isinstance(answer, str) and answer:
                     event["answer_to_pending_question"] = answer
+                # docs/WIRE_CONTRACT.md, "Attachments to Agents".
+                attachments = content.get("attachments")
+                if isinstance(attachments, list) and attachments:
+                    event["attachments"] = attachments
                 events.append(event)
                 continue
             # assistant
