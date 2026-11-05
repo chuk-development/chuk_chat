@@ -15,7 +15,16 @@ What leaves this module:
   values.
 - ``names()`` / ``status(names)`` — what the model may learn.
 - ``scrubber()`` — a :class:`chuk_agents_runtime.Scrubber` over the live values, the
-  one the executor installs on its frame sealer.
+  one the executor installs on its frame sealer. It also masks the passwords
+  and TOTP keys of the login vault (``scrub_values``).
+
+The login vault (Hermes H32, "Login vault for the browser") lives in the same
+at-rest file under the same key: browser logins bound to one exact origin.
+They are NOT environment variables: ``env()`` never holds them, so no child
+process sees a password. The browser call guard
+(:class:`chuk_agents_runtime.login_vault.LoginGuard`) reads them through
+``login_lookup`` and fills them into the page; ``login_entries`` is the public
+view (no password, no TOTP key) for the app and the model.
 
 Never logged, never in the runs/messages database, never in a workspace file.
 """
@@ -27,10 +36,12 @@ import json
 import logging
 import os
 import threading
+import time
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 
 from chuk_agents_runtime import Scrubber, status_map, valid_name
+from chuk_agents_runtime.login_vault import clean_origin, parse_totp_secret
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 logger = logging.getLogger(__name__)
@@ -44,6 +55,21 @@ _KEY_LEN = 32
 #: pattern of that size for every dispatch.
 MAX_VALUE_CHARS = 8192
 MAX_ENTRIES = 256
+
+#: Login vault ceilings.
+MAX_LOGINS = 256
+MAX_USERNAME_CHARS = 512
+MAX_LABEL_CHARS = 80
+#: The audit file next to the at-rest file (host state dir, not the sandbox
+#: workspace). One JSON line per fill attempt; never a value.
+LOGIN_AUDIT_FILENAME = "login_vault_audit.jsonl"
+#: The public fields of one login: what the app and the model may learn.
+LOGIN_PUBLIC_FIELDS = ("id", "origin", "username", "label", "has_totp", "created_at", "last_used_at")
+
+
+class LoginVaultError(ValueError):
+    """A ``login_vault_set`` / ``login_vault_delete`` the vault refuses. The
+    message is safe to send to the app (it never holds a value)."""
 
 
 def clean_entries(entries: object) -> dict[str, str]:
@@ -86,7 +112,11 @@ class SecretsVault:
         self._values: dict[str, str] = {}
         self._revision: int = 0
         self._user_id: str = ""
-        self._scrubber = Scrubber(self.env)
+        #: Login vault: id -> {id, origin, username, password, totp_secret,
+        #: label, created_at, last_used_at}.
+        self._logins: dict[str, dict] = {}
+        self._audit_lock = threading.Lock()
+        self._scrubber = Scrubber(self.scrub_values)
 
     # -- what the model and the tools may learn ---------------------------
 
@@ -122,8 +152,149 @@ class SecretsVault:
             return dict(self._values)
 
     def scrubber(self) -> Scrubber:
-        """The scrubber over the LIVE set (it re-reads ``env`` per call)."""
+        """The scrubber over the LIVE set (it re-reads ``scrub_values`` per call)."""
         return self._scrubber
+
+    def scrub_values(self) -> dict[str, str]:
+        """``env()`` plus the login vault's passwords and TOTP keys, named
+        ``login:<origin>:password`` / ``login:<origin>:totp_secret``. For the
+        scrubbers only, never for a child process."""
+        with self._lock:
+            out = dict(self._values)
+            for entry in self._logins.values():
+                origin = entry["origin"]
+                if entry.get("password"):
+                    out[f"login:{origin}#{entry['id']}:password"] = entry["password"]
+                if entry.get("totp_secret"):
+                    out[f"login:{origin}#{entry['id']}:totp_secret"] = entry["totp_secret"]
+            return out
+
+    # -- the login vault (Hermes H32) -------------------------------------
+
+    def login_entries(self) -> list[dict]:
+        """Every login, public fields only, sorted by origin then username."""
+        with self._lock:
+            rows = [_public(e) for e in self._logins.values()]
+        return sorted(rows, key=lambda r: (r["origin"], r["username"], r["id"]))
+
+    def login_lookup(self, origin: str) -> list[dict]:
+        """Full entries (with the password and TOTP key) of exactly ``origin``."""
+        with self._lock:
+            return [dict(e) for e in self._logins.values() if e["origin"] == origin]
+
+    def login_set(
+        self,
+        *,
+        origin: object,
+        username: object,
+        password: object,
+        totp_secret: object = ...,
+        label: object = None,
+    ) -> dict:
+        """Upsert by (origin, username). Returns the public entry.
+
+        ``totp_secret`` left out keeps the stored key; ``None`` or ``""``
+        removes it. ``label`` ``None`` keeps the stored label."""
+        clean = clean_origin(origin)
+        if clean is None:
+            raise LoginVaultError(
+                "origin must be https://host[:port] (http only for localhost)"
+            )
+        if not isinstance(username, str) or not username.strip():
+            raise LoginVaultError("username is required")
+        username = username.strip()
+        if len(username) > MAX_USERNAME_CHARS:
+            raise LoginVaultError("username is too long")
+        if not isinstance(password, str) or not password:
+            raise LoginVaultError("password is required")
+        if len(password) > MAX_VALUE_CHARS:
+            raise LoginVaultError("password is too long")
+        if totp_secret is not ... and totp_secret not in (None, ""):
+            if not isinstance(totp_secret, str) or len(totp_secret) > 2048:
+                raise LoginVaultError("totp_secret must be a base32 key or an otpauth:// URI")
+            if parse_totp_secret(totp_secret) is None:
+                raise LoginVaultError("totp_secret must be a base32 key or an otpauth:// URI")
+        if label is not None and not isinstance(label, str):
+            raise LoginVaultError("label must be a string")
+        label_text = " ".join(label.split())[:MAX_LABEL_CHARS] if isinstance(label, str) else None
+        now = _now_ms()
+        with self._lock:
+            entry = next(
+                (
+                    e
+                    for e in self._logins.values()
+                    if e["origin"] == clean and e["username"] == username
+                ),
+                None,
+            )
+            if entry is None:
+                if len(self._logins) >= MAX_LOGINS:
+                    raise LoginVaultError(f"at most {MAX_LOGINS} logins per host")
+                entry = {
+                    "id": os.urandom(8).hex(),
+                    "origin": clean,
+                    "username": username,
+                    "password": "",
+                    "totp_secret": "",
+                    "label": "",
+                    "created_at": now,
+                    "last_used_at": None,
+                }
+                self._logins[entry["id"]] = entry
+            entry["password"] = password
+            if totp_secret is not ...:
+                entry["totp_secret"] = totp_secret.strip() if isinstance(totp_secret, str) else ""
+            if label_text is not None:
+                entry["label"] = label_text
+            public = _public(entry)
+        # Origin and id only. Never a value.
+        logger.info("login vault: saved %s (%s)", public["origin"], public["id"])
+        self.save()
+        return public
+
+    def login_delete(self, entry_id: object) -> bool:
+        """Remove one login. False when the id is unknown."""
+        if not isinstance(entry_id, str):
+            return False
+        with self._lock:
+            gone = self._logins.pop(entry_id, None)
+        if gone is None:
+            return False
+        logger.info("login vault: deleted %s", entry_id)
+        self.save()
+        return True
+
+    def login_used(self, entry_id: str) -> None:
+        """Record ``last_used_at`` (ms since the epoch)."""
+        with self._lock:
+            entry = self._logins.get(entry_id)
+            if entry is None:
+                return
+            entry["last_used_at"] = _now_ms()
+        self.save()
+
+    @property
+    def login_audit_path(self) -> Path | None:
+        return self._path.parent / LOGIN_AUDIT_FILENAME if self._path is not None else None
+
+    def login_audit(self, record: dict) -> None:
+        """Append one audit line (JSONL, mode 0600) next to the at-rest file.
+        No path: logged instead. The record holds no value by construction
+        (:class:`LoginGuard`); only known keys are written."""
+        keys = ("ts", "session_key", "origin", "entry_id", "fields", "tool", "outcome")
+        line = {k: record.get(k) for k in keys}
+        path = self.login_audit_path
+        if path is None:
+            logger.info("login vault audit: %s", json.dumps(line, separators=(",", ":")))
+            return
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with self._audit_lock:
+                fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+                with os.fdopen(fd, "a", encoding="utf-8") as handle:
+                    handle.write(json.dumps(line, separators=(",", ":")) + "\n")
+        except Exception as exc:  # noqa: BLE001 — the audit never fails a call
+            logger.warning("could not write the login audit: %s", type(exc).__name__)
 
     # -- the frame -----------------------------------------------------------
 
@@ -174,7 +345,12 @@ class SecretsVault:
             return False
         with self._lock:
             plain = json.dumps(
-                {"user_id": self._user_id, "revision": self._revision, "values": self._values},
+                {
+                    "user_id": self._user_id,
+                    "revision": self._revision,
+                    "values": self._values,
+                    "logins": list(self._logins.values()),
+                },
                 separators=(",", ":"),
             ).encode("utf-8")
         try:
@@ -220,8 +396,10 @@ class SecretsVault:
                 for k, v in values.items()
                 if valid_name(k) and isinstance(v, str) and v
             }
+            logins = _clean_logins(data.get("logins"))
             with self._lock:
                 self._values = clean
+                self._logins = logins
                 try:
                     self._revision = int(data.get("revision") or 0)
                 except (TypeError, ValueError):
@@ -245,9 +423,64 @@ class SecretsVault:
             return False
 
 
+def _now_ms() -> int:
+    return int(time.time() * 1000)
+
+
+def _public(entry: Mapping) -> dict:
+    return {
+        "id": entry["id"],
+        "origin": entry["origin"],
+        "username": entry["username"],
+        "label": entry.get("label") or "",
+        "has_totp": bool(entry.get("totp_secret")),
+        "created_at": entry.get("created_at"),
+        "last_used_at": entry.get("last_used_at"),
+    }
+
+
+def _clean_logins(raw: object) -> dict[str, dict]:
+    """The logins of an at-rest record; a malformed row is dropped."""
+    out: dict[str, dict] = {}
+    if not isinstance(raw, list):
+        return out
+    for row in raw:
+        if not isinstance(row, dict):
+            continue
+        entry_id, origin = row.get("id"), clean_origin(row.get("origin"))
+        username, password = row.get("username"), row.get("password")
+        if not (isinstance(entry_id, str) and entry_id and origin):
+            continue
+        if not (isinstance(username, str) and username and isinstance(password, str) and password):
+            continue
+        totp = row.get("totp_secret")
+        out[entry_id] = {
+            "id": entry_id,
+            "origin": origin,
+            "username": username,
+            "password": password,
+            "totp_secret": totp if isinstance(totp, str) else "",
+            "label": str(row.get("label") or "")[:MAX_LABEL_CHARS],
+            "created_at": row.get("created_at") if isinstance(row.get("created_at"), int) else None,
+            "last_used_at": row.get("last_used_at") if isinstance(row.get("last_used_at"), int) else None,
+        }
+        if len(out) >= MAX_LOGINS:
+            break
+    return out
+
+
 def _aad() -> bytes:
     """Additional authenticated data: binds the ciphertext to this format."""
     return b"cowork/host/secrets-at-rest/v1"
 
 
-__all__ = ["SecretsVault", "clean_entries", "MAX_VALUE_CHARS", "MAX_ENTRIES", "AT_REST_VERSION"]
+__all__ = [
+    "SecretsVault",
+    "LoginVaultError",
+    "clean_entries",
+    "MAX_VALUE_CHARS",
+    "MAX_ENTRIES",
+    "MAX_LOGINS",
+    "AT_REST_VERSION",
+    "LOGIN_AUDIT_FILENAME",
+]

@@ -36,6 +36,7 @@ import httpx
 
 from .documents import VisionReader, build_backend_vision, register_read_document
 from .environment import Environment
+from . import escalation as _esc
 from .file_edit import EditGuard, FileObservations
 from .file_edit import edit_file as _edit_file
 from .file_edit import read_window
@@ -71,35 +72,30 @@ _DESCRIPTION_PROP = {
 RUN_COMMAND_SCHEMA = {
     "type": "object",
     "description": (
-        "Run one shell command in the workspace and return its exit code, "
-        "stdout and stderr. Use it to run scripts and tests, to inspect the "
-        "system, and for git. The working directory stays between calls of this "
-        "tool: after `cd x` the next command starts in x. The file tools always "
-        "read relative paths from the workspace root. For a long command (a "
-        "build, a download, a training run) set background=true: it returns a "
-        "job_id at once, the command keeps running, and you are woken with its "
-        "output when it "
-        "ends. For a program that asks questions use shell_start instead."
+        "Run one shell command in the workspace; returns exit code, stdout, "
+        "stderr. The working directory persists: after `cd x` the next command "
+        "starts in x (file tools resolve relative paths from the workspace "
+        "root). For a long command (build, download, training) set "
+        "background=true: you get a job_id at once and are woken with the "
+        "output when it ends. For a program that asks questions use shell_start."
     ),
     "properties": {
         "command": {"type": "string", "description": "Shell command to run."},
         "timeout": {
             "type": "integer",
-            "description": "Seconds before the command is killed (foreground only).",
+            "description": "Seconds until killed (foreground).",
             "default": 120,
         },
         "background": {
             "type": "boolean",
-            "description": (
-                "Start detached and return {job_id, log_path} immediately. "
-                "No timeout (24 h cap). You are woken when it finishes."
-            ),
+            "description": "Detach; returns {job_id, log_path} at once (24 h cap).",
             "default": False,
         },
         "cwd": {
             "type": "string",
             "description": "Directory to run in (background only).",
         },
+        **_esc.SCHEMA_PROPERTIES,
     },
     "required": ["description", "command"],
 }
@@ -128,9 +124,8 @@ READ_FILE_SCHEMA = {
     "type": "object",
     "description": (
         "Read a text file as numbered lines. By default it returns the first "
-        "2000 lines; use `offset` (1-based line number) and `limit` to read a "
-        "later window. The footer says how many lines the file has and which "
-        "offset to use to continue. Reading a file also lets you edit it: "
+        "2000 lines; use `offset` (1-based) and `limit` to read a "
+        "later window; the footer names the offset to continue. "
         "edit_file and apply_patch need a prior read."
     ),
     "properties": {
@@ -213,19 +208,19 @@ LIST_DIR_SCHEMA = {
 RUN_PYTHON_SCHEMA = {
     "type": "object",
     "description": (
-        "Run a Python 3 script in the workspace and return its exit code, "
-        "stdout and stderr. Prefer this over many small shell calls when a task "
-        "needs several steps, loops, or intermediate values — write one script. "
-        "The script runs to completion; print what you need to see."
+        "Run a Python 3 script in the workspace; returns exit code, stdout, "
+        "stderr. Prefer one script over many shell calls for multi-step work; "
+        "print what you need."
     ),
     "properties": {
         "description": _DESCRIPTION_PROP,
         "code": {"type": "string", "description": "The full Python source to run."},
         "timeout": {
             "type": "integer",
-            "description": "Seconds before the script is killed.",
+            "description": "Seconds until killed.",
             "default": 120,
         },
+        **_esc.SCHEMA_PROPERTIES,
     },
     "required": ["description", "code"],
 }
@@ -277,6 +272,15 @@ def _shell_result(result, timeout: int) -> dict:
     }
 
 
+def _exit_last(result: dict) -> dict:
+    """Keep ``exit_code`` the LAST key after extra fields were added."""
+    if "exit_code" not in result:
+        return result
+    out = {k: v for k, v in result.items() if k != "exit_code"}
+    out["exit_code"] = result["exit_code"]
+    return out
+
+
 def _secret_env(secrets: SecretsAccess | None) -> dict:
     """The ``env=`` keyword for a child process, or nothing.
 
@@ -294,7 +298,11 @@ def _secret_env(secrets: SecretsAccess | None) -> dict:
 
 
 def make_run_command_handler(
-    env: Environment, secrets: SecretsAccess | None = None, jobs=None, floor: "SafetyFloor | None" = None
+    env: Environment,
+    secrets: SecretsAccess | None = None,
+    jobs=None,
+    floor: "SafetyFloor | None" = None,
+    escalation_ask=None,
 ):
     """``jobs`` is a :class:`chuk_agents_runtime.shell_tools.JobManager` (or None).
     With one, ``background=true`` starts the command detached and returns the
@@ -308,6 +316,8 @@ def make_run_command_handler(
         timeout: int = 120,
         background: bool = False,
         cwd: str | None = None,
+        sandbox_permissions=None,
+        justification: str | None = None,
     ) -> dict:
         # The schema requires `description` so a model supplies the 5-10 word
         # label the app shows while the call streams (research item 40). A
@@ -325,6 +335,32 @@ def make_run_command_handler(
                 verdict = FloorVerdict("the safety floor could not check this command", hard=False)
             if verdict is not None:
                 return {"ok": False, "blocked": True, "error": verdict.message()}
+        # Sandbox escalation (research item 28): checked and approved BEFORE
+        # anything runs; a grant covers this one call only.
+        asked = _esc.parse_escalation(sandbox_permissions, justification)
+        if asked.requested and background and not asked.error:
+            return {"ok": False, "error": "a call with sandbox_permissions runs in the foreground only"}
+        resolution = _esc.resolve_escalation(
+            asked, env=env, ask=escalation_ask, tool="run_command", command=command
+        )
+        if resolution.refusal is not None:
+            return resolution.refusal
+        if resolution.grant:
+            result = env.run_escalated(
+                command, grant=resolution.grant, timeout=timeout, **_secret_env(secrets)
+            )
+            return _exit_last({**_shell_result(result, timeout), "escalated": list(resolution.grant)})
+        out = _run_command_plain(command, timeout, background, cwd)
+        if resolution.note and isinstance(out, dict):
+            out = {**out, "note": resolution.note}
+        if isinstance(out, dict) and "exit_code" in out:
+            extra = _esc.denial_fields(env, escalation_ask, out.get("exit_code"), "command")
+            if extra:
+                out = {**out, **extra}
+            out = _exit_last(out)
+        return out
+
+    def _run_command_plain(command: str, timeout: int, background: bool, cwd: str | None) -> dict:
         if background:
             if jobs is None:
                 return {
@@ -469,8 +505,16 @@ def _cap(text: str, limit: int) -> tuple[str, bool]:
     return raw[:limit].decode("utf-8", "ignore"), True
 
 
-def make_run_python_handler(env: Environment, secrets: SecretsAccess | None = None):
-    def run_python(code: str, description: str | None = None, timeout: int = 120) -> dict:
+def make_run_python_handler(
+    env: Environment, secrets: SecretsAccess | None = None, escalation_ask=None
+):
+    def run_python(
+        code: str,
+        description: str | None = None,
+        timeout: int = 120,
+        sandbox_permissions=None,
+        justification: str | None = None,
+    ) -> dict:
         if description is not None and not str(description).strip():
             return {
                 "ok": False,
@@ -486,7 +530,18 @@ def make_run_python_handler(env: Environment, secrets: SecretsAccess | None = No
             f"printf %s {shlex.quote(payload)} | base64 -d > \"$__f\" && "
             f"python3 \"$__f\"; __rc=$?; rm -f \"$__f\"; exit $__rc"
         )
-        result = env.run_bash(cmd, timeout=timeout, **_secret_env(secrets))
+        asked = _esc.parse_escalation(sandbox_permissions, justification)
+        resolution = _esc.resolve_escalation(
+            asked, env=env, ask=escalation_ask, tool="python", command=code, subject="script"
+        )
+        if resolution.refusal is not None:
+            return resolution.refusal
+        if resolution.grant:
+            result = env.run_escalated(
+                cmd, grant=resolution.grant, timeout=timeout, **_secret_env(secrets)
+            )
+        else:
+            result = env.run_bash(cmd, timeout=timeout, **_secret_env(secrets))
         stdout, out_trunc = _cap(result.stdout, PYTHON_OUTPUT_CAP)
         stderr, err_trunc = _cap(result.stderr, PYTHON_OUTPUT_CAP)
         return {
@@ -497,6 +552,13 @@ def make_run_python_handler(env: Environment, secrets: SecretsAccess | None = No
             "timeout_ms": int(timeout) * 1000,
             "truncated": out_trunc or err_trunc,
             "duration_s": round(result.duration_s, 4),
+            **({"escalated": list(resolution.grant)} if resolution.grant else {}),
+            **({"note": resolution.note} if resolution.note else {}),
+            **(
+                {}
+                if resolution.grant
+                else _esc.denial_fields(env, escalation_ask, result.exit_code, "script")
+            ),
             "exit_code": result.exit_code,
         }
 
@@ -519,11 +581,12 @@ def register_run_command(
     secrets: SecretsAccess | None = None,
     jobs=None,
     floor: "SafetyFloor | None" = None,
+    escalation_ask=None,
 ) -> None:
     registry.register(
         "run_command",
         RUN_COMMAND_SCHEMA,
-        make_run_command_handler(env, secrets, jobs, floor),
+        make_run_command_handler(env, secrets, jobs, floor, escalation_ask),
     )
 
 
@@ -552,9 +615,9 @@ def register_file_tools(
 
 
 def register_run_python(
-    registry: ToolRegistry, env: Environment, secrets: SecretsAccess | None = None
+    registry: ToolRegistry, env: Environment, secrets: SecretsAccess | None = None, escalation_ask=None
 ) -> None:
-    registry.register("python", RUN_PYTHON_SCHEMA, make_run_python_handler(env, secrets))
+    registry.register("python", RUN_PYTHON_SCHEMA, make_run_python_handler(env, secrets, escalation_ask))
 
 
 def register_finish(registry: ToolRegistry) -> None:
@@ -578,6 +641,7 @@ def register_builtin_tools(
     jobs=None,
     guard: "EditGuard | None" = None,
     floor: "SafetyFloor | None" = None,
+    escalation_ask=None,
 ) -> None:
     """Register the whole built-in tool set against one environment.
 
@@ -607,12 +671,12 @@ def register_builtin_tools(
       WIRE_CONTRACT.md, "Interactive shell and background commands"); without
       it the flag is refused and the job tools are not registered.
     """
-    register_run_command(registry, env, secrets, jobs, floor)
+    register_run_command(registry, env, secrets, jobs, floor, escalation_ask)
     register_file_tools(registry, env, guard, floor)
     # Net-new built-ins: CodeAct `python` and the explicit `finish` terminator.
     # Both need only the environment/registry, so the extra channel params above
     # (session, sinks, mounts) do not apply to them.
-    register_run_python(registry, env, secrets)
+    register_run_python(registry, env, secrets, escalation_ask)
     register_finish(registry)
     register_secrets_tools(registry, secrets)
     register_web_search(

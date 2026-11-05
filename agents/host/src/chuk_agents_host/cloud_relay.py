@@ -121,6 +121,22 @@ TYPE_PAIR_EXPIRED = "cowork_pair_expired"
 #: ``{"type": "agent_mail", "event": "new", "message_id": "<uuid>"}``. It
 #: carries no content; it only tells the host to fetch.
 TYPE_AGENT_MAIL = "agent_mail"
+#: An inbound webhook call (docs/WIRE_CONTRACT.md, "Inbound webhooks";
+#: api_server ``routers/cowork/cowork_webhooks.py``): ``{"type":
+#: "webhook_event", "v": 1, "event_id", "webhook_id", "webhook_id_hash",
+#: "agent_id", "device_id", "received_at", "method", "headers", "body",
+#: "body_encoding", "body_size"}``. A top-level control frame like
+#: ``agent_mail``, not sealed: the server saw the call anyway. Every host of
+#: the user (or the one named by ``device_id``) gets it; the row's host acts.
+TYPE_WEBHOOK_EVENT = "webhook_event"
+#: Ledger words of a webhook frame. ``webhook`` = handed to the automations
+#: (``outcome`` says queued / filtered); a drop names why.
+DECISION_WEBHOOK = "webhook"
+REASON_UNKNOWN_WEBHOOK = "unknown_webhook"
+REASON_TOO_LARGE = "too_large"
+#: A ``webhook_event`` larger than this (the raw frame text) is dropped
+#: before it is parsed further: 256 KB body as base64 plus headers.
+MAX_WEBHOOK_FRAME_CHARS = 400 * 1024
 
 #: The error code the relay answers with when the executor sends a frame and no
 #: controller of that user is attached anywhere. Our one honest "the app left".
@@ -267,6 +283,7 @@ class CloudRelayTransport:
         on_pairing_expired: Callable[[], None] | None = None,
         fixed_pairing_channel: bool = False,
         on_agent_mail: Callable[[str], None] | None = None,
+        on_webhook: Callable[[dict[str, Any]], str] | None = None,
         logger: Callable[[str], None] | None = None,
         open_timeout: float = 15.0,
         connect: Callable[..., Any] = ws_connect,
@@ -287,6 +304,9 @@ class CloudRelayTransport:
         # every authenticated connect, because a frame sent while the host was
         # away is lost.
         self._on_agent_mail = on_agent_mail
+        # ``on_webhook(frame) -> outcome`` (docs/WIRE_CONTRACT.md, "Inbound
+        # webhooks"): the automations' webhook door.
+        self._on_webhook = on_webhook
         self._log = logger or (lambda _msg: None)
         self._open_timeout = open_timeout
         self._connect = connect
@@ -392,6 +412,7 @@ class CloudRelayTransport:
             heal=heal,
             fixed_pairing_channel=self._fixed_pairing_channel,
             on_agent_mail=self._on_agent_mail,
+            on_webhook=self._on_webhook,
         )
         # The same hello the loopback relay gets, as the first payload: it tells a
         # controller already on the channel that the executor is here.
@@ -425,6 +446,7 @@ class CloudRelayLink:
         heal: bool = False,
         fixed_pairing_channel: bool = False,
         on_agent_mail: Callable[[str], None] | None = None,
+        on_webhook: Callable[[dict[str, Any]], str] | None = None,
     ) -> None:
         # ``join_message`` here is the built hello dict, not the protocol helper
         # of the same name — the transport builds it and hands it over.
@@ -448,6 +470,7 @@ class CloudRelayLink:
         # code on screen to warn about and no fresh one to mint.
         self._fixed_pairing_channel = fixed_pairing_channel
         self._on_agent_mail = on_agent_mail
+        self._on_webhook = on_webhook
         self._warning: threading.Timer | None = None
         # Every frame off this socket reports what became of it. The pipe is the
         # first place a lost message can disappear, and until this existed a
@@ -633,6 +656,9 @@ class CloudRelayLink:
         if kind == TYPE_AGENT_MAIL:
             self._on_agent_mail_frame(frame)
             return []
+        if kind == TYPE_WEBHOOK_EVENT:
+            self._on_webhook_frame(frame)
+            return []
         if kind in (TYPE_AGENTS_ERROR, TYPE_ERROR):
             self._on_error(frame)
             return []
@@ -667,6 +693,44 @@ class CloudRelayLink:
             self._on_agent_mail("frame")
         except Exception as exc:  # noqa: BLE001 - a listener must not kill the pipe
             self._log(f"cloud relay: mail listener failed: {type(exc).__name__}")
+
+    def _on_webhook_frame(self, frame: dict[str, Any]) -> None:
+        """An inbound webhook call (docs/WIRE_CONTRACT.md, "Inbound
+        webhooks"). Accepted only as this top-level relay frame type. Handed
+        to the automations, which answer with what became of it. The ledger
+        gets the event id and the server's webhook row id (not the secret
+        URL token, which the host never has); never the body or a header,
+        which are the caller's data."""
+        req_id = frame.get("req_id")
+        webhook_id = frame.get("webhook_id")
+        event_id = frame.get("event_id")
+        fields = {
+            "req_id": req_id,
+            "webhook_id": webhook_id[:64] if isinstance(webhook_id, str) else None,
+            "event_id": event_id[:64] if isinstance(event_id, str) else None,
+        }
+        if self._on_webhook is None:
+            self._frames.dropped(TYPE_WEBHOOK_EVENT, REASON_NOT_ENABLED, **fields)
+            return
+        body = frame.get("body")
+        if isinstance(body, str) and len(body) > MAX_WEBHOOK_FRAME_CHARS:
+            self._frames.dropped(TYPE_WEBHOOK_EVENT, REASON_TOO_LARGE, **fields)
+            return
+        try:
+            outcome = self._on_webhook(frame)
+        except Exception as exc:  # noqa: BLE001 - a listener must not kill the pipe
+            self._log(f"cloud relay: webhook listener failed: {type(exc).__name__}")
+            self._frames.dropped(TYPE_WEBHOOK_EVENT, REASON_REJECTED, **fields)
+            return
+        if outcome in ("queued", "filtered"):
+            self._frames.acted(TYPE_WEBHOOK_EVENT, DECISION_WEBHOOK, outcome=outcome, **fields)
+            return
+        reason = {
+            "unknown_webhook": REASON_UNKNOWN_WEBHOOK,
+            "too_large": REASON_TOO_LARGE,
+            "malformed": REASON_MALFORMED,
+        }.get(str(outcome), str(outcome or REASON_REJECTED)[:32])
+        self._frames.dropped(TYPE_WEBHOOK_EVENT, reason, **fields)
 
     def send_control(self, frame: dict[str, Any]) -> None:
         """Send a relay control frame verbatim (not wrapped in a payload)."""

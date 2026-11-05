@@ -452,6 +452,22 @@ def resolve_model(
     return ResolvedModel(model_id=chosen["id"], provider_slug=slug)
 
 
+def model_supports_vision_in_catalog(models: list[dict[str, Any]], model_id: str) -> bool | None:
+    """The catalogue's ``supports_vision`` flag of ``model_id`` (also read
+    from ``input_modalities`` containing ``image``). ``None`` when unknown."""
+    for entry in models or []:
+        if not isinstance(entry, dict) or entry.get("id") != model_id:
+            continue
+        flag = entry.get("supports_vision")
+        if isinstance(flag, bool):
+            return flag
+        modalities = entry.get("input_modalities") or (entry.get("architecture") or {}).get("input_modalities")
+        if isinstance(modalities, list):
+            return "image" in modalities
+        return None
+    return None
+
+
 def model_limits_from_catalog(
     models: list[dict[str, Any]], model_id: str, provider_slug: str | None = None
 ) -> tuple[int | None, int | None]:
@@ -658,8 +674,12 @@ class BackendModelClient:
         clock: Callable[[], float] = time.monotonic,
         context_length: int | None = None,
         max_output_tokens: int | None = None,
+        supports_vision: bool | None = None,
     ) -> None:
         self._session = session
+        #: The catalogue's ``supports_vision`` for the model (docs/
+        #: WIRE_CONTRACT.md, "Attachments to Agents"); ``None`` = unknown.
+        self.supports_vision = supports_vision
         # The model's window and output cap from the catalogue (bead B18):
         # the context ladder sizes itself from these. ``None`` = unknown.
         self._context_length = context_length

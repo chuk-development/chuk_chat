@@ -106,6 +106,16 @@ DEFAULT_AUTHOR_NAME = "Agents Agent"
 DEFAULT_AUTHOR_EMAIL = "agent@cowork.local"
 
 ROLLBACK_TOOL = "__rollback__"
+#: Journal tools of the checkpoint feature (docs/WIRE_CONTRACT.md,
+#: "Checkpoints, rewind and fork").
+REWIND_TOOL = "__rewind__"
+OUTSIDE_TOOL = "__outside__"
+CHECKPOINT_REF_PREFIX = "refs/agents/checkpoints/"
+REWIND_SAFE = "safe"
+REWIND_KEEP = "keep_user_edits"
+REWIND_MERGE = "merge"
+REWIND_FORCE = "force"
+REWIND_MODES = (REWIND_SAFE, REWIND_KEEP, REWIND_MERGE, REWIND_FORCE)
 MERGE_TOOL = "__subagent_merge__"
 
 #: Where a subagent's worktree is checked out (§7.6/§7.7). Inside the git
@@ -834,6 +844,275 @@ class GitWorkspace:
                 "(sent mail, API calls, host changes) are NOT undone."
             ),
         }
+
+    # -- checkpoints, rewind (docs/WIRE_CONTRACT.md, "Checkpoints, rewind
+    # and fork", Hermes H30/H31) ------------------------------------------
+
+    def _ledger_path(self) -> Path | None:
+        """The agent-write ledger: ``{path: blob sha | "-"}`` of the last
+        version of each file the AGENT wrote ("-" = the agent deleted it).
+        Inside the git dir, so it is never committed, never rewound and never
+        in the user's tree."""
+        base = self._common_dir or self._git_dir
+        return (base / "agents-writes.json") if base is not None else None
+
+    def agent_writes(self) -> dict[str, str]:
+        path = self._ledger_path()
+        if path is None:
+            return {}
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+        return {str(k): str(v) for k, v in data.items()} if isinstance(data, dict) else {}
+
+    def _save_agent_writes(self, ledger: dict[str, str]) -> None:
+        path = self._ledger_path()
+        if path is None:
+            return
+        try:
+            tmp = path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(ledger, sort_keys=True), encoding="utf-8")
+            os.replace(tmp, path)
+        except OSError:
+            return
+
+    def _blob_of(self, rel: str) -> str:
+        """The blob sha of a working-tree file, or ``"-"`` when it is gone."""
+        target = self.root / rel
+        if not target.is_file():
+            return "-"
+        proc = self._git("hash-object", "--", rel)
+        return proc.stdout.strip() if proc.returncode == 0 else "?"
+
+    def note_agent_writes(self, paths: list[str]) -> None:
+        """Record that the agent wrote ``paths`` (the files a tool call
+        changed). The ledger is what lets a rewind tell the agent's work from
+        the user's own later hand edits (Hermes H31)."""
+        if not self._enabled or not paths:
+            return
+        with self._lock:
+            ledger = self.agent_writes()
+            for rel in paths:
+                if rel == self.journal_path or rel.startswith(JOURNAL_DIRNAME + "/"):
+                    continue
+                ledger[rel] = self._blob_of(rel)
+            self._save_agent_writes(ledger)
+
+    def outside_changes(self) -> list[str]:
+        """Paths changed since the last commit, journal excluded: before an
+        agent call these are changes made OUTSIDE the agent."""
+        if not self._enabled:
+            return []
+        return [p for _, p in self._pending() if p != self.journal_path]
+
+    def commit_outside_changes(self) -> CommitInfo | None:
+        """Commit what changed outside the agent as its own commit, so the
+        next commit holds only the agent's changes and the ledger stays true.
+        Inside :meth:`batch` nothing is committed: the pending changes are the
+        batch's own (the agent's), and the batch is one commit by design."""
+        if not self._enabled or self._batch is not None:
+            return None
+        with self._lock:
+            pending = self._pending()
+            changed = [p for _, p in pending if p != self.journal_path]
+            if not changed:
+                return None
+            return self._commit(
+                "outside: changes made outside the agent",
+                [f"tool: {OUTSIDE_TOOL}", f"files-changed: {len(changed)}"],
+                pending,
+            )
+
+    def create_checkpoint(self, checkpoint_id: str) -> CommitInfo | None:
+        """The workspace as it is now, pinned under
+        ``refs/agents/checkpoints/<id>``. Changes outside the agent are
+        committed first, so the checkpoint is exactly what the user had."""
+        if not self._enabled or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", checkpoint_id or ""):
+            return None
+        with self._lock:
+            self.commit_outside_changes()
+            head = self._git("rev-parse", "HEAD")
+            if head.returncode != 0:
+                return None
+            sha = head.stdout.strip()
+            self._git("update-ref", f"{CHECKPOINT_REF_PREFIX}{checkpoint_id}", sha)
+            return CommitInfo(commit=sha, short=sha[:8], time=_now(), subject=f"checkpoint {checkpoint_id}")
+
+    def drop_checkpoint(self, checkpoint_id: str) -> None:
+        if self._enabled and re.fullmatch(r"[A-Za-z0-9_-]{1,64}", checkpoint_id or ""):
+            self._git("update-ref", "-d", f"{CHECKPOINT_REF_PREFIX}{checkpoint_id}")
+
+    def rewind(self, commit: str, *, mode: str = REWIND_SAFE) -> dict:
+        """Restore the files the agent changed since ``commit`` (a checkpoint).
+
+        A file that differs from the checkpoint is the agent's when its
+        current content is the version the agent last wrote (the ledger). Any
+        other difference is a change made outside the agent (the user's hand
+        edit). ``mode``:
+
+        - ``safe`` (default): refuse the whole rewind when there is one such
+          file; nothing changes; the answer lists them;
+        - ``keep_user_edits``: restore the agent's files, leave the others;
+        - ``merge``: like ``keep_user_edits``, but a text file the agent
+          wrote and the user then edited gets a 3-way merge (base = the
+          agent's version, ours = now, theirs = the checkpoint); a clean merge
+          is written, a conflict leaves the file as it is;
+        - ``force``: restore every file, also the user's edits.
+
+        Like :meth:`rollback`, the restore is a new commit; history and the
+        journal are kept."""
+        if not self._enabled:
+            return {"ok": False, "error": "workspace versioning is not enabled"}
+        if mode not in REWIND_MODES:
+            return {"ok": False, "error": f"mode must be one of {', '.join(REWIND_MODES)}"}
+        with self._lock:
+            resolved = self._git("rev-parse", "--verify", "-q", f"{commit}^{{commit}}")
+            if resolved.returncode != 0 or not resolved.stdout.strip():
+                return {"ok": False, "error": "no such checkpoint"}
+            target = resolved.stdout.strip()
+            self.commit_outside_changes()
+            diff = self._git("diff", "--name-only", "-z", "--no-renames", target, "HEAD", "--")
+            if diff.returncode != 0:
+                return {"ok": False, "error": (diff.stderr or "diff failed").strip()[:400]}
+            paths = [
+                p for p in diff.stdout.split("\0")
+                if p and p != self.journal_path and not p.startswith(JOURNAL_DIRNAME + "/")
+            ]
+            ledger = self.agent_writes()
+            agent_owned: list[str] = []
+            user_edited: list[str] = []
+            for rel in paths:
+                current = self._blob_of(rel)
+                if ledger.get(rel) == current:
+                    agent_owned.append(rel)
+                else:
+                    user_edited.append(rel)
+            if user_edited and mode == REWIND_SAFE:
+                return {
+                    "ok": False,
+                    "error": "files changed outside the agent since this checkpoint",
+                    "conflicts": user_edited[:200],
+                    "restorable": len(agent_owned),
+                }
+            restore = list(agent_owned) + (list(user_edited) if mode == REWIND_FORCE else [])
+            merged: list[str] = []
+            kept: list[str] = []
+            if mode == REWIND_MERGE:
+                for rel in user_edited:
+                    if self._merge_back(rel, ledger.get(rel), target):
+                        merged.append(rel)
+                    else:
+                        kept.append(rel)
+            elif mode == REWIND_KEEP:
+                kept = list(user_edited)
+            for rel in restore:
+                self._restore_path(rel, target)
+            entry = self._build_entry(
+                REWIND_TOOL,
+                {"target": target, "mode": mode},
+                {"ok": True, "restored": len(restore), "merged": len(merged), "kept": len(kept)},
+                None,
+                restore + merged,
+            )
+            self._append_journal(entry)
+            info = self._commit(
+                f"rewind: restore workspace to checkpoint {target[:8]}",
+                [f"tool: {REWIND_TOOL}", f"journal-seq: {entry['seq']}"],
+            )
+            # What the rewind wrote is now the agent's version.
+            ledger = self.agent_writes()
+            for rel in restore + merged:
+                ledger[rel] = self._blob_of(rel)
+            self._save_agent_writes(ledger)
+            return {
+                "ok": True,
+                "restored": restore[:200],
+                "merged": merged[:200],
+                "kept": kept[:200],
+                "commit": info.commit if info else None,
+                "note": (
+                    "Files are restored. Effects outside the workspace (sent mail, "
+                    "API calls, installed packages) are NOT undone."
+                ),
+            }
+
+    def _restore_path(self, rel: str, target: str) -> None:
+        exists = self._git("cat-file", "-e", f"{target}:{rel}").returncode == 0
+        path = self.root / rel
+        if exists:
+            blob = subprocess.run(
+                ["git", "-C", str(self.root), *self._config, "show", f"{target}:{rel}"],
+                capture_output=True,
+                timeout=GIT_TIMEOUT_S,
+                env=self._env(),
+                check=False,
+            )
+            if blob.returncode != 0:
+                return
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(blob.stdout)
+            except OSError:
+                return
+        else:
+            try:
+                path.unlink()
+            except OSError:
+                return
+
+    def _merge_back(self, rel: str, base_blob: str | None, target: str) -> bool:
+        """3-way: undo the agent's change (base -> checkpoint) on top of the
+        current file with the user's edit in it. True when the merge was
+        clean and written."""
+        if not base_blob or base_blob in ("-", "?"):
+            return False
+        path = self.root / rel
+        if not path.is_file():
+            return False
+        if self._git("cat-file", "-e", f"{target}:{rel}").returncode != 0:
+            return False
+        import tempfile
+
+        def show(spec: str) -> bytes | None:
+            proc = subprocess.run(
+                ["git", "-C", str(self.root), *self._config, "show", spec],
+                capture_output=True, timeout=GIT_TIMEOUT_S, env=self._env(), check=False,
+            )
+            return proc.stdout if proc.returncode == 0 else None
+
+        base = show(base_blob)
+        theirs = show(f"{target}:{rel}")
+        if base is None or theirs is None or b"\0" in base or b"\0" in theirs:
+            return False
+        base_dir = self._common_dir or self._git_dir or self.root
+        with tempfile.TemporaryDirectory(dir=str(base_dir)) as tmp:
+            base_file = Path(tmp) / "base"
+            theirs_file = Path(tmp) / "theirs"
+            base_file.write_bytes(base)
+            theirs_file.write_bytes(theirs)
+            proc = subprocess.run(
+                ["git", "merge-file", "-p", str(path), str(base_file), str(theirs_file)],
+                capture_output=True, timeout=GIT_TIMEOUT_S, env=self._env(), check=False,
+            )
+        if proc.returncode != 0:
+            return False
+        try:
+            path.write_bytes(proc.stdout)
+        except OSError:
+            return False
+        return True
+
+    def _env(self) -> dict[str, str]:
+        env = {
+            k: v for k, v in os.environ.items()
+            if k not in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR")
+        }
+        if self._private_dir is not None:
+            env["GIT_DIR"] = str(self._private_dir)
+            env["GIT_WORK_TREE"] = str(self.root.resolve())
+        env.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull, "GIT_TERMINAL_PROMPT": "0"})
+        return env
 
     # -- subagent branches / worktrees (§7.6, §7.7) ------------------------
 
