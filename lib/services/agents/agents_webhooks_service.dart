@@ -628,7 +628,7 @@ class WebhookRollbackQueue {
     if (state.watches.isEmpty) return;
     final Set<String> done = <String>{};
     for (final AgentsAutomation a in live) {
-      final String hook = a.webhookId!.toLowerCase();
+      final String hook = (a.webhookId ?? '').toLowerCase();
       if (!state.watches.containsKey(hook)) continue;
       if (!_cancelling.add(a.id)) continue;
       try {

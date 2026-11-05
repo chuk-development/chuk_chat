@@ -139,7 +139,6 @@ class ContentBlock {
   /// A test picks a side here. Sets the one shared override.
   @visibleForTesting
   static set decodesFileBlocks(bool value) =>
-      // ignore: invalid_use_of_visible_for_testing_member
       debugAgentsChatCoreOverride = value;
 
   factory ContentBlock.fromJson(Map<String, dynamic> json) {
