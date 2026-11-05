@@ -81,6 +81,11 @@ class FakeConnection:
     other tool echoes its arguments (like the real ``Ran Playwright code``)."""
 
     page_url = "https://github.com/login"
+    #: What the guard's field probe sees, by element ref. A ref not listed is
+    #: a password input in the top page.
+    elements: dict = {}
+    #: The page URL after the next fill (a page that navigates away).
+    url_after_fill: str | None = None
 
     def __init__(self, config: MCPServerConfig) -> None:
         self.config = config
@@ -91,6 +96,7 @@ class FakeConnection:
         self.error = None
         self.connected_once = True
         self.calls: list[tuple[str, dict]] = []
+        self.probes: list[dict] = []
 
     def start(self) -> bool:
         return True
@@ -99,9 +105,21 @@ class FakeConnection:
         return True
 
     def call(self, tool, arguments):
+        if tool == "browser_evaluate" and arguments.get("function", "").startswith("(el) => ({origin"):
+            self.probes.append(copy.deepcopy(arguments))
+            from chuk_agents_runtime.login_vault import normalize_origin
+
+            found = self.elements.get(
+                arguments.get("ref"),
+                {"origin": normalize_origin(self.page_url), "tag": "input", "type": "password"},
+            )
+            return {"ok": True, "content": "### Result\n" + json.dumps(found) + "\n"}
         self.calls.append((tool, copy.deepcopy(arguments)))
         if tool == "browser_tabs":
             return {"ok": True, "content": _tabs(self.page_url)}
+        if tool in ("browser_type", "browser_fill_form") and FakeConnection.url_after_fill:
+            FakeConnection.page_url = FakeConnection.url_after_fill
+            FakeConnection.url_after_fill = None
         return {
             "ok": True,
             "content": f"### Ran Playwright code\nawait page.fill({json.dumps(arguments)})",
@@ -113,6 +131,8 @@ class FakeConnection:
 
 def _manager(access: Access, page_url: str = "https://github.com/login") -> tuple[MCPManager, FakeConnection]:
     FakeConnection.page_url = page_url
+    FakeConnection.elements = {}
+    FakeConnection.url_after_fill = None
     manager = MCPManager(
         [MCPServerConfig(name="playwright", command="true")],
         connection_factory=FakeConnection,
@@ -176,8 +196,10 @@ def test_browser_type_fills_on_the_exact_origin_and_the_model_never_sees_the_val
     assert result["ok"] is True
     # The browser got the value...
     assert _sent(conn, "browser_type") == [{**kept, "text": PASSWORD}]
-    # ...read the tab fresh right before it.
-    assert [n for n, _ in conn.calls] == ["browser_tabs", "browser_type"]
+    # ...read the tab fresh right before it, probed the field in its own
+    # frame, and read the tab again after the fill.
+    assert [n for n, _ in conn.calls] == ["browser_tabs", "browser_type", "browser_tabs"]
+    assert [p["ref"] for p in conn.probes] == ["e7"]
     # The model's own arguments (what the transcript stores) keep the placeholder.
     assert model_args == kept
     # The echoing result is masked.
@@ -377,3 +399,148 @@ def test_no_login_tool_without_login_access():
     registry = ToolRegistry()
     register_login_vault_tool(registry, object())
     assert not registry.has(LOGIN_VAULT_LIST_TOOL)
+
+
+# -- M1: the field's own frame, the field type, a page that moves -------------------
+
+
+def test_a_field_in_a_cross_origin_iframe_is_refused():
+    access = Access([_github()])
+    manager, conn = _manager(access)
+    FakeConnection.elements = {
+        "f1e3": {"origin": "https://evil.example", "tag": "input", "type": "password"}
+    }
+    result = manager.call(
+        "playwright",
+        "browser_type",
+        {"element": "Password", "ref": "f1e3", "text": "{{login:https://github.com:password}}"},
+    )
+    assert result["ok"] is False and "evil.example" in result["error"]
+    assert _sent(conn, "browser_type") == []
+    assert access.audit[-1]["outcome"] == "refused_frame"
+    assert PASSWORD not in json.dumps(conn.calls + conn.probes)
+
+
+def test_a_field_without_a_ref_is_refused():
+    access = Access([_github()])
+    manager, conn = _manager(access)
+    result = manager.call("playwright", "browser_type", {"text": "{{login:https://github.com:password}}"})
+    assert result["ok"] is False and "ref" in result["error"]
+    assert _sent(conn, "browser_type") == []
+
+
+@pytest.mark.parametrize(
+    "probe",
+    [
+        {"tag": "input", "type": "text"},
+        {"tag": "textarea", "type": "textarea"},
+        {"tag": "div", "type": ""},
+    ],
+)
+def test_a_password_goes_only_into_a_password_input(probe):
+    access = Access([_github()])
+    manager, conn = _manager(access)
+    FakeConnection.elements = {"e2": {"origin": "https://github.com", **probe}}
+    result = manager.call(
+        "playwright",
+        "browser_fill_form",
+        {"fields": [{"name": "Search", "type": "textbox", "ref": "e2",
+                     "value": "{{login:https://github.com:password}}"}]},
+    )
+    assert result["ok"] is False and "password field" in result["error"]
+    assert _sent(conn, "browser_fill_form") == []
+    assert access.audit[-1]["outcome"] == "refused_field"
+
+
+def test_a_username_may_go_into_a_text_input():
+    access = Access([_github()])
+    manager, conn = _manager(access)
+    FakeConnection.elements = {"e1": {"origin": "https://github.com", "tag": "input", "type": "email"}}
+    result = manager.call(
+        "playwright", "browser_type", {"ref": "e1", "text": "{{login:https://github.com:username}}"}
+    )
+    assert result["ok"] is True
+
+
+def test_a_page_that_leaves_the_origin_during_the_fill_stops_it():
+    access = Access([_github()])
+    manager, conn = _manager(access)
+    FakeConnection.url_after_fill = "https://evil.example/phish"
+    result = manager.call(
+        "playwright", "browser_type", {"ref": "e7", "text": "{{login:https://github.com:password}}"}
+    )
+    assert result["ok"] is False and "left https://github.com" in result["error"]
+    assert access.audit[-1]["outcome"] == "navigated_during_fill"
+    assert PASSWORD not in json.dumps(result)
+
+
+# -- M2: escaped echoes, short values, page scripts after a fill ---------------------
+
+
+def test_json_and_js_escaped_echoes_are_masked():
+    from chuk_agents_runtime.login_vault import mask_values
+
+    value = 'p"a/s\'s\\w0rd-é'
+    values = {"login:https://github.com:password": value}
+    for echoed in (
+        json.dumps({"v": value}),
+        json.dumps({"v": value}, ensure_ascii=False),
+        json.dumps(json.dumps({"v": value})),
+        "x='" + value.replace("\\", "\\\\").replace("'", "\\'") + "'",
+        "".join(f"\\u{ord(c):04x}" for c in value),
+    ):
+        masked = json.dumps(mask_values({"content": echoed}, values))
+        assert "REDACTED" in masked, echoed
+        assert "w0rd" not in masked, echoed
+
+
+def test_scrubber_masks_escaped_forms_and_short_vault_values():
+    from chuk_agents_runtime.secrets import Scrubber
+
+    scrubber = Scrubber(
+        lambda: {
+            "API_KEY": 'k"ey/with\\escapes-1234',
+            "SHORT_ENV": "abc",
+            "login:https://github.com#e1:password": "pw1",
+        }
+    )
+    out = scrubber.scrub_text(json.dumps({"a": 'k"ey/with\\escapes-1234'}) + " pw1 abc")
+    assert "escapes-1234" not in out
+    assert "[REDACTED:API_KEY]" in out
+    assert "pw1" not in out and "[REDACTED:login:https://github.com#e1:password]" in out
+    # An env secret under the floor still is not masked (unchanged rule).
+    assert "abc" in out
+    js = scrubber.scrub_text("".join(f"\\x{ord(c):02x}" for c in 'k"ey/with\\escapes-1234'))
+    assert js == "[REDACTED:API_KEY]"
+
+
+def test_page_scripts_are_blocked_on_an_origin_after_a_fill():
+    access = Access([_github()])
+    manager, conn = _manager(access)
+    assert manager.call(
+        "playwright", "browser_type", {"ref": "e7", "text": "{{login:https://github.com:password}}"}
+    )["ok"] is True
+    read_back = manager.call(
+        "playwright",
+        "browser_evaluate",
+        {"function": "() => document.querySelector('input[type=password]').value"},
+    )
+    assert read_back["ok"] is False and "blocked" in read_back["error"]
+    assert _sent(conn, "browser_evaluate") == []
+    assert access.audit[-1]["outcome"] == "refused_script"
+    # A second fill on the same origin still works (the guard's own probe
+    # is not blocked).
+    assert manager.call(
+        "playwright", "browser_type", {"ref": "e8", "text": "{{login:https://github.com:username}}"}
+    )["ok"] is True
+    # Another origin is not affected.
+    FakeConnection.page_url = "https://example.org/"
+    assert manager.call("playwright", "browser_evaluate", {"function": "() => 1"})["ok"] is True
+
+
+def test_page_scripts_pass_when_nothing_was_filled():
+    access = Access([_github()])
+    manager, conn = _manager(access)
+    assert manager.call("playwright", "browser_evaluate", {"function": "() => 1"})["ok"] is True
+    # No extra tab read without a fill.
+    assert [n for n, _ in conn.calls] == ["browser_evaluate"]

@@ -57,6 +57,10 @@ LABEL_IMAGE = "cowork.image"
 #: the orphan reaper to one host, so two hosts on one machine never reap each
 #: other's live containers.
 LABEL_OWNER = "cowork.owner"
+#: A temporary box of one approved escalated call (docs/WIRE_CONTRACT.md,
+#: "Sandbox escalation"). Never reused; the orphan reaper removes any that a
+#: killed host left behind (security review H4).
+LABEL_ESCALATION = "cowork.escalation"
 
 #: Legacy label kept so containers from before the lifecycle work stay findable.
 SESSION_LABEL = "agents-session"
@@ -352,7 +356,15 @@ def reap_orphans(
     """
     live = set(active_session_ids or ())
     reaped: list[str] = []
-    for container in list_containers(cli=cli, filters={LABEL_MANAGED: "true"}):
+    # Escalation boxes carry no ``cowork.managed`` label (they are never
+    # reused), so they are listed on their own label. One that survived a
+    # killed host still runs with the widened policy of its one call.
+    candidates = list_containers(cli=cli, filters={LABEL_MANAGED: "true"})
+    seen = {c.id or c.name for c in candidates}
+    for container in list_containers(cli=cli, filters={LABEL_ESCALATION: "1"}):
+        if (container.id or container.name) not in seen:
+            candidates.append(container)
+    for container in candidates:
         if owner is not None and not owned_by(container, owner, legacy_workspace_roots):
             continue
         session = container.session_id

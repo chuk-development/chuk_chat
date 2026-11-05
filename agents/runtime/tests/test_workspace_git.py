@@ -129,7 +129,7 @@ def _private_git(workspace, *args) -> str:
         check=True,
         env={
             "PATH": __import__("os").environ["PATH"],
-            "GIT_DIR": str(workspace.root / ".agents" / "git"),
+            "GIT_DIR": str(workspace._private_dir),
             "GIT_WORK_TREE": str(workspace.root),
         },
     )
@@ -171,6 +171,9 @@ def test_a_user_repo_is_never_committed_into(tmp_path):
     tracked = _private_git(workspace, "ls-files")
     assert "agent.txt" in tracked and ".agents/journal.jsonl" in tracked
     assert ".agents/git" not in tracked
+    # The private git dir is host state, outside the workspace (H3).
+    assert not (root / ".agents" / "git").exists()
+    assert root.resolve() not in workspace._private_dir.parents
 
 
 def test_the_user_repo_hides_agents_dir_on_git_older_than_2_31(tmp_path, monkeypatch):

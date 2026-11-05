@@ -84,7 +84,7 @@ from .terminal import TerminalManager
 from .tool_search import DEFAULT_THRESHOLD, ToolSearchDecision, apply_tool_search
 from .tools import register_builtin_tools
 from .web_search import DEFAULT_BASE_URL, TokenSession
-from .workspace_git import JOURNAL_PATH, GitWorkspace, summarize_result
+from .workspace_git import JOURNAL_PATH, GitWorkspace, summarize_result, workspace_state_dir
 from .workspace_tools import JournalingRegistry, register_workspace_tools
 
 MEMORY_DIRNAME = "memory"
@@ -350,7 +350,9 @@ def model_limits(model: Any) -> tuple[int | None, int | None]:
 
 def _self_dirs(workspace: str | None) -> tuple[str, ...]:
     """Directories the agent must never delete (research H25): its own install
-    (the package tree) and its per-workspace state (the state folders under ``.agents``)."""
+    (the package tree) and its per-workspace state (the state folders under
+    ``.agents``, and the host-side folder with the private git dir and the
+    rewind ledger)."""
     dirs: list[str] = []
     try:
         dirs.append(str(Path(__file__).resolve().parent))
@@ -359,8 +361,14 @@ def _self_dirs(workspace: str | None) -> tuple[str, ...]:
     if workspace:
         # Only the agent's own state under ``.agents``; ``.agents/skills`` is
         # the user's project skills folder and stays editable.
-        for name in ("git", "jobs", "automations", "mcp", "chrome-profile"):
+        for name in ("jobs", "automations", "mcp", "chrome-profile"):
             dirs.append(str(Path(workspace) / ".agents" / name))
+        # The private git dir and the ledger are host state, outside the
+        # workspace (security review H3).
+        try:
+            dirs.append(str(workspace_state_dir(workspace)))
+        except Exception:  # noqa: BLE001 — never fatal for a run
+            pass
     return tuple(dirs)
 
 

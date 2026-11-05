@@ -108,7 +108,12 @@ class BaseEnvironment(ABC):
         ``env`` is extra environment for THIS process only (the user's secrets,
         docs/WIRE_CONTRACT.md "Secrets"). A backend passes it to the child
         process — never on a command line, never into the image, never into a
-        file. ``None`` / empty: run exactly as before."""
+        file. ``None`` / empty: run exactly as before.
+
+        A backend that builds its isolation per command also accepts
+        ``policy=`` (a :class:`SandboxPolicy`): the widened policy of ONE
+        approved :meth:`run_escalated` call. It is passed only for that call
+        and must never be stored on the environment."""
         raise NotImplementedError
 
     @abstractmethod
@@ -173,12 +178,12 @@ class BaseEnvironment(ABC):
 
     @property
     def effective_policy(self) -> SandboxPolicy:
-        """:attr:`policy`, with the defaults standing in for "none". During
-        :meth:`run_escalated` on a backend that applies the policy per command
-        (local bwrap) this is the widened policy of that one call."""
-        override = getattr(self, "_escalated_policy", None)
-        if override is not None:
-            return override
+        """:attr:`policy`, with the defaults standing in for "none".
+
+        Never the widened policy of :meth:`run_escalated`: that one travels as
+        an argument down to the one command it was approved for. Every other
+        caller (a parallel ``run_command``, a background job, a room turn)
+        reads this and gets the agent's own, narrow policy."""
         return self._policy or DEFAULT_POLICY
 
     def withheld_permissions(self) -> tuple[str, ...]:
@@ -203,19 +208,10 @@ class BaseEnvironment(ABC):
         bwrap). A backend whose limits are fixed at creation (docker)
         overrides this and runs the call in a temporary wider box."""
         widened = widened_policy(self._policy or DEFAULT_POLICY, tuple(grant))
-        with self._escalation_lock():
-            self._escalated_policy = widened
-            try:
-                return self.run(cmd, timeout=timeout, env=env)
-            finally:
-                self._escalated_policy = None
-
-    def _escalation_lock(self) -> threading.Lock:
-        lock = getattr(self, "_escalation_mutex", None)
-        if lock is None:
-            lock = threading.Lock()
-            self._escalation_mutex = lock
-        return lock
+        # No shared state: the widened policy is an argument of this one call
+        # (security review C1). Storing it on the environment would hand it to
+        # every concurrent caller of :attr:`effective_policy`.
+        return self._run_policy(cmd, policy=widened, timeout=timeout, env=env)
 
     @property
     def leases(self) -> int:
@@ -304,17 +300,33 @@ class BaseEnvironment(ABC):
         ``env`` rides into the child process only. The wrapper unsets those
         names before it re-dumps the session, so a secret never lands in the
         snapshot file and never reaches the next command through it."""
+        return self._run_policy(cmd, login=login, timeout=timeout, stdin=stdin, env=env)
+
+    def _run_policy(
+        self,
+        cmd: str,
+        *,
+        policy: SandboxPolicy | None = None,
+        login: bool = False,
+        timeout: int = 120,
+        stdin: str | None = None,
+        env: Mapping[str, str] | None = None,
+    ) -> ProcessResult:
+        """:meth:`run` under ``policy`` for this one call (``None``: the
+        environment's own policy). A backend that builds isolation per command
+        receives ``policy=`` in :meth:`_run_bash`; nothing is stored."""
         if not self._session_initialized:
             self.init_session()
 
         # ``secrets_env`` off (docs/WIRE_CONTRACT.md, "Agent permissions"): the
         # secret values never reach the sandbox, whatever the caller passed.
-        allowed = self.effective_policy.secrets_env
+        allowed = (policy or self.effective_policy).secrets_env
         extra = {k: v for k, v in (env or {}).items() if allowed and _is_env_name(k)}
         wrapped = self._wrap(cmd, unset=list(extra))
-        raw = self._run_bash(
-            wrapped, login=login, timeout=timeout, stdin=stdin, env=extra or None
-        )
+        kwargs: dict = {"login": login, "timeout": timeout, "stdin": stdin, "env": extra or None}
+        if policy is not None:
+            kwargs["policy"] = policy
+        raw = self._run_bash(wrapped, **kwargs)
 
         stdout, cwd = self._extract_cwd(raw.stdout)
         if cwd:

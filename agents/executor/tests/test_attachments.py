@@ -136,3 +136,140 @@ def test_upload_then_task_with_the_attachment(tmp_path):
     assert user["attachments"][0]["blob_id"] == "upload-0003"
     assert "host_path" not in user["attachments"][0]
     store.close()
+
+
+# -- H1: the agent can write its workspace; the host must not follow its links
+
+
+def _inbox(tmp_path):
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    return ws, AttachmentInbox(ws, state_dir=tmp_path / "host-state")
+
+
+def _upload(inbox, upload_id, data, **kw):
+    ack = None
+    for frame in _chunks(upload_id, data, **kw):
+        ack = inbox.put(frame)
+    return ack
+
+
+def test_state_dir_inside_the_workspace_is_refused(tmp_path):
+    with pytest.raises(AttachmentError):
+        AttachmentInbox(tmp_path, state_dir=tmp_path / ".agents" / "state")
+
+
+def test_partials_live_outside_the_workspace(tmp_path):
+    ws, inbox = _inbox(tmp_path)
+    data = b"x" * (CHUNK_BYTES + 10)
+    inbox.put(next(_chunks("upload-0100", data)))
+    assert not (ws / ".agents").exists()
+    assert (tmp_path / "host-state" / "partial" / "upload-0100.part").is_file()
+
+
+@pytest.mark.parametrize("planted", [".agents", ".agents/inbox", ".agents/inbox/upload-0101"])
+def test_symlinked_inbox_directory_is_not_written_through(tmp_path, planted):
+    ws, inbox = _inbox(tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    link = ws / planted
+    link.parent.mkdir(parents=True, exist_ok=True)
+    link.symlink_to(outside, target_is_directory=True)
+    with pytest.raises(AttachmentError, match="symlink"):
+        _upload(inbox, "upload-0101", b"payload", name="evil.txt", mime="text/plain")
+    assert list(outside.rglob("*")) == []
+    assert inbox.resolve("upload-0101") is None
+
+
+def test_symlinked_final_file_is_replaced_not_written_through(tmp_path):
+    ws, inbox = _inbox(tmp_path)
+    victim = tmp_path / "victim.txt"
+    victim.write_text("keep me")
+    blob = ws / ".agents" / "inbox" / "upload-0102"
+    blob.mkdir(parents=True)
+    (blob / "note.txt").symlink_to(victim)
+    _upload(inbox, "upload-0102", b"new bytes", name="note.txt", mime="text/plain")
+    assert victim.read_text() == "keep me"
+    assert not (blob / "note.txt").is_symlink()
+    assert (blob / "note.txt").read_bytes() == b"new bytes"
+
+
+def test_forged_workspace_meta_is_ignored(tmp_path):
+    ws, inbox = _inbox(tmp_path)
+    blob = ws / ".agents" / "inbox" / "forged-0001"
+    blob.mkdir(parents=True)
+    (blob / "meta.json").write_text(
+        '{"blob_id": "forged-0001", "name": "x", "mime": "image/png", "size": 1,'
+        ' "sha256": "' + "0" * 64 + '", "kind": "image", "path": "../../../etc/passwd"}'
+    )
+    (blob / "x").write_bytes(b"x")
+    assert inbox.resolve("forged-0001") is None
+    with pytest.raises(AttachmentError, match="unknown attachment"):
+        inbox.resolve_task([{"blob_id": "forged-0001"}])
+
+
+def test_resolve_refuses_a_swapped_file(tmp_path):
+    ws, inbox = _inbox(tmp_path)
+    ack = _upload(inbox, "upload-0103", b"original", name="a.txt", mime="text/plain")
+    path = ws / ack["path"]
+    assert inbox.resolve("upload-0103")["path"] == ".agents/inbox/upload-0103/a.txt"
+    # The agent swaps the file for a symlink to a host file: refused.
+    secret = tmp_path / "secret.txt"
+    secret.write_bytes(b"original")  # even with the same bytes
+    path.unlink()
+    path.symlink_to(secret)
+    assert inbox.resolve("upload-0103") is None
+    # ... or edits it: refused too.
+    path.unlink()
+    path.write_bytes(b"changed!")
+    assert inbox.resolve("upload-0103") is None
+
+
+def test_image_mime_is_checked_against_the_bytes(tmp_path):
+    _, inbox = _inbox(tmp_path)
+    _upload(inbox, "upload-0104", b"#!/bin/sh\necho hi\n", name="a.png", mime="image/png")
+    assert inbox.resolve("upload-0104")["kind"] == "file"
+    png = b"\x89PNG\r\n\x1a\n" + b"0" * 32
+    _upload(inbox, "upload-0105", png, name="b.png", mime="image/png")
+    assert inbox.resolve("upload-0105")["kind"] == "image"
+
+
+def test_sweep_only_touches_host_state(tmp_path):
+    ws, inbox = _inbox(tmp_path)
+    keep = ws / ".agents" / "inbox" / ".partial"
+    keep.mkdir(parents=True)
+    victim = tmp_path / "victim.part"
+    victim.write_text("keep")
+    (keep / "old-00001.json").write_text('{"touched_at": 0}')
+    (keep / "old-00001.part").symlink_to(victim)
+    stale = tmp_path / "host-state" / "partial"
+    stale.mkdir(parents=True)
+    (stale / "stale-0001.json").write_text('{"touched_at": 0}')
+    (stale / "stale-0001.part").write_bytes(b"x")
+    (stale / "noise.txt").write_text("not a record")
+    assert inbox.sweep() == 1
+    assert not (stale / "stale-0001.part").exists()
+    assert (stale / "noise.txt").exists()
+    assert victim.read_text() == "keep" and (keep / "old-00001.json").exists()
+
+
+def test_remove_does_not_follow_links(tmp_path):
+    ws, inbox = _inbox(tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "precious").write_text("keep")
+    # No host record: nothing is removed, even a real directory.
+    planted = ws / ".agents" / "inbox" / "planted-0001"
+    planted.mkdir(parents=True)
+    assert inbox.remove("planted-0001") is False and planted.is_dir()
+    # A recorded upload whose directory the agent replaced with a symlink.
+    _upload(inbox, "upload-0106", b"data", name="a.txt", mime="text/plain")
+    blob = ws / ".agents" / "inbox" / "upload-0106"
+    (blob / "a.txt").unlink()
+    blob.rmdir()
+    blob.symlink_to(outside, target_is_directory=True)
+    (outside / "a.txt").write_text("keep too")
+    assert inbox.remove("upload-0106") is True
+    assert (outside / "precious").read_text() == "keep"
+    assert (outside / "a.txt").read_text() == "keep too"
+    assert inbox.resolve("upload-0106") is None

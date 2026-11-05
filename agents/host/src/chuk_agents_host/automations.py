@@ -558,6 +558,7 @@ class AutomationManager:
         # agent / host an event is for, and the double-delivery guard.
         self._webhook_scope = webhook_scope or (lambda _agent, _device: None)
         self._seen_events = _webhooks.SeenEvents()
+        self._replays = _webhooks.ReplayGuard()
 
         self.store = AutomationStore(db_path)
         self._dir = self._workspace / AUTOMATIONS_DIRNAME
@@ -1310,6 +1311,16 @@ class AutomationManager:
             merged=merged,
         )
         meta = {"automation_id": automation_id, "name": row["name"], "kind": row["kind"], "reason": reason}
+        # The auto reviewer (docs/WIRE_CONTRACT.md, "Auto review") counts the
+        # prompt of an automation the USER created as the user's words. It
+        # gets this stored copy, never the fired text: that text also carries
+        # the payload, the previous result and the header (security review
+        # C2). An automation the agent or another automation created gives
+        # no copy.
+        user_prompt = row.get("prompt")
+        if (row.get("created_by") or CREATED_BY_USER) == CREATED_BY_USER and isinstance(user_prompt, str):
+            if user_prompt.strip():
+                meta["user_prompt"] = user_prompt.strip()
         target = row.get("target") or TARGET_THIS_SESSION
         # A retry re-runs the occurrence that failed: same chat as that run.
         fire_number = int(row.get("fire_count") or 0) + (0 if retry else 1)
@@ -1512,7 +1523,7 @@ class AutomationManager:
         of :mod:`chuk_agents_host.webhooks`: ``queued``, ``filtered``,
         ``unknown_webhook`` (no row here: another host of the user may own
         it), ``other_agent`` / ``other_device`` (addressed elsewhere),
-        ``unknown_version``, ``duplicate``, ``paused``, ``bad_signature``,
+        ``unknown_version``, ``duplicate``, ``replay``, ``paused``, ``bad_signature``,
         ``too_large`` or ``malformed``. Called on the relay thread; no
         network."""
         try:
@@ -1528,7 +1539,10 @@ class AutomationManager:
         row = self._webhook_row(event.webhook_id)
         if row is None or row["state"] == STATE_DONE:
             return _webhooks.OUTCOME_UNKNOWN
-        if self._seen_events.check_and_add(event.event_id):
+        # A look only: the id is recorded after the state and signature
+        # checks, so a forged frame that reuses a real event id cannot make
+        # the real delivery a "duplicate".
+        if event.event_id in self._seen_events:
             return _webhooks.OUTCOME_DUPLICATE
         if row["state"] != STATE_ACTIVE:
             return _webhooks.OUTCOME_PAUSED
@@ -1538,6 +1552,16 @@ class AutomationManager:
             self._log(f"[automations] webhook {row['id']}: a call with a missing or wrong signature was dropped")
             self.store.update(row["id"], last_error="a call with a missing or wrong signature was dropped")
             return _webhooks.OUTCOME_BAD_SIGNATURE
+        if secret:
+            # A captured signed call POSTed again gets a new event_id from the
+            # server; the sender's own (signed) message id gives it away.
+            # Only after the signature passed, so a forger cannot burn ids.
+            message_ids = _webhooks.sender_message_ids(event)
+            if message_ids and self._replays.check_and_add(event.webhook_id, message_ids, self._now()):
+                self._log(f"[automations] webhook {row['id']}: a replayed call was dropped")
+                return _webhooks.OUTCOME_REPLAY
+        if self._seen_events.check_and_add(event.event_id):
+            return _webhooks.OUTCOME_DUPLICATE
         if not webhook_matches(spec, event.document, event.headers):
             return _webhooks.OUTCOME_FILTERED
         self._queue_webhook(row, _webhooks.event_payload(event))
