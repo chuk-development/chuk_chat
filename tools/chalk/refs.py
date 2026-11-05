@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Finds reference photos and a short fact text for a subject. No key, neutral agent.
+"""Finds reference photos and a short fact text for a subject. No key, plain browser User-Agent.
 refs.py <subject> <out_dir> [n]"""
 import json, re, sys, threading, time, urllib.error, urllib.parse, urllib.request
 from pathlib import Path
-UA = {'User-Agent': 'chalk-refs/1.0'}
+UA = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36'}
 LOCK = threading.Lock()
 
 

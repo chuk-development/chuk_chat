@@ -26,7 +26,7 @@ def run(name):
     t = time.time()
     for a in range(8):
         try:
-            r = urllib.request.Request('https://api.melious.ai/v1/chat/completions', json.dumps(body).encode(), {'Authorization': 'Bearer ' + KEY, 'Content-Type': 'application/json', 'User-Agent': 'chalk-eval/1.0'})
+            r = urllib.request.Request('https://api.melious.ai/v1/chat/completions', json.dumps(body).encode(), {'Authorization': 'Bearer ' + KEY, 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36'})
             d = json.load(urllib.request.urlopen(r, timeout=280)); break
         except Exception:
             time.sleep(8 * (a + 1))

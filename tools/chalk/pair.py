@@ -21,7 +21,7 @@ def duel(name):
         body = {'model': 'glm-5.3-flash', 'max_tokens': 8000, 'temperature': 0, 'reasoning_effort': 'low', 'messages': [{'role': 'user', 'content': [{'type': 'text', 'text': f'Two illustrations of "{name}". Which looks more like the real thing, with better proportions, detail and finish? Answer FIRST or SECOND.'}, uri(first), uri(second)]}]}
         for attempt in range(6):
             try:
-                r = urllib.request.Request('https://api.melious.ai/v1/chat/completions', json.dumps(body).encode(), {'Authorization': 'Bearer ' + KEY, 'Content-Type': 'application/json', 'User-Agent': 'chalk-eval/1.0'})
+                r = urllib.request.Request('https://api.melious.ai/v1/chat/completions', json.dumps(body).encode(), {'Authorization': 'Bearer ' + KEY, 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36'})
                 t = json.load(urllib.request.urlopen(r, timeout=120))['choices'][0]['message']['content']
                 break
             except Exception:

@@ -10,7 +10,7 @@ HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
 KEY = (HERE.parent.parent / '_scratch/rtgfx/.melious_key').read_text().strip()
 URL = 'https://api.melious.ai/v1/chat/completions'
-WEB = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120 Safari/537.36'}
+WEB = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36'}
 
 
 STOCK = re.compile(r'istock|shutterstock|alamy|gettyimages|dreamstime|123rf|depositphotos|vecteezy|adobestock|freepik|bigstock|pond5|canstock', re.I)
@@ -19,7 +19,7 @@ STOCK = re.compile(r'istock|shutterstock|alamy|gettyimages|dreamstime|123rf|depo
 def llm(model, content, system=None, effort='high', tokens=48000):
     msgs = ([{'role': 'system', 'content': system}] if system else []) + [{'role': 'user', 'content': content}]
     body = {'model': model, 'messages': msgs, 'max_tokens': tokens, 'temperature': 0.3, 'reasoning_effort': effort}
-    req = urllib.request.Request(URL, json.dumps(body).encode(), {'Authorization': 'Bearer ' + KEY, 'Content-Type': 'application/json', 'User-Agent': 'chalk-draw/1.0'})
+    req = urllib.request.Request(URL, json.dumps(body).encode(), {'Authorization': 'Bearer ' + KEY, 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36'})
     for attempt in range(8):
         try:
             d = json.load(urllib.request.urlopen(req, timeout=280))

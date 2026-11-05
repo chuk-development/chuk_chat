@@ -40,7 +40,7 @@ def call(model, messages, effort):
     if effort:
         body['reasoning_effort'] = effort
     req = urllib.request.Request(URL, json.dumps(body).encode(), {
-        'Authorization': 'Bearer ' + KEY, 'Content-Type': 'application/json', 'User-Agent': 'chalk-eval/1.0'})
+        'Authorization': 'Bearer ' + KEY, 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36'})
     t = time.time()
     for attempt in range(3):
         try:

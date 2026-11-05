@@ -14,7 +14,7 @@ msgs = [{'role': 'system', 'content': (HERE / 'PROMPT.md').read_text()},
                                      {'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,' + img}}]}]
 t = time.time()
 r = urllib.request.Request('https://api.melious.ai/v1/chat/completions', json.dumps({'model': 'glm-5.3-flash', 'messages': msgs, 'max_tokens': 8000, 'reasoning_effort': 'high', 'temperature': 0.3}).encode(),
-                           {'Authorization': 'Bearer ' + KEY, 'Content-Type': 'application/json', 'User-Agent': 'chalk-eval/1.0'})
+                           {'Authorization': 'Bearer ' + KEY, 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36'})
 o = json.load(urllib.request.urlopen(r, timeout=200))
 text = o['choices'][0]['message']['content']
 print(said, '|', round(time.time() - t, 1), 's |', o['usage']['completion_tokens'], 'tokens')
