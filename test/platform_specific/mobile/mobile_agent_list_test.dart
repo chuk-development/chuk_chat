@@ -178,11 +178,13 @@ void main() {
     final Rect slot = tester.getRect(find.byKey(const ValueKey<String>('slot')));
     final Rect search = tester.getRect(findId('mobile_home_search'));
     final Rect add = tester.getRect(findId('mobile_home_add'));
-    // chuk's bar: 48 px presses around 42 px chips, the slot left-aligned
-    // 8 px right of the first chip, all on one line under the status bar.
+    // chuk's bar: 48 px presses around 42 px chips, the slot centred
+    // between the two chips (where the shell floats the Home | Agents
+    // switch), all on one line under the status bar.
     expect(search.size, const Size(48, 48));
     expect(add.size, const Size(48, 48));
-    expect(slot.left, 10 + 42 + 8);
+    expect(slot.center.dx, closeTo(kPhoneSize.width / 2, 0.5));
+    expect(slot.left, greaterThan(search.right));
     expect(slot.top, kPhonePadding.top + 8);
     expect(add.right, kPhoneSize.width - 7);
     // All / Unread moved under the bar and kept its unread count segment.

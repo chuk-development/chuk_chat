@@ -9,10 +9,15 @@
 ///    segment ([AgentReadMarks] answers what is unread), the accent "+" on the
 ///    right; the search fades that whole row through into a rounded field that
 ///    carries its own glyph and its own clear target. When the shell hands in
-///    [MobileAgentList.headerCenter] (the Chat | Agents switch), that takes
-///    the middle, the row takes chuk's floating-bar geometry so the switch
-///    sits where it sits over chuk's chat, and All / Unread moves to a
-///    compact row under it;
+///    [MobileAgentList.headerCenter] (the Home | Agents switch, or the room
+///    the shell keeps for it), that takes the middle, the row takes chuk's
+///    floating-bar geometry, and All / Unread moves to a compact row under
+///    it;
+///  * with [MobileAgentList.mainAgentSection], the main agent first, in a
+///    section of its own ("Your assistant") and a larger row: the user's
+///    choice ([RosterPins.mainAgentId], "Make main agent" in the row menu),
+///    else the first agent ([resolveMainAgent]). A search or the Unread
+///    filter folds it back into the list, first when it matches;
 ///  * one row per agent: its blob face with the presence dot, the name, the
 ///    role tag, the time of the last activity, one line of preview, and an
 ///    unread dot. The row springs and morphs on press, and the list cascades in.
@@ -36,6 +41,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_chat_chrome.dart'
     show kMobileChromeChip, kMobileChromeRow;
 import 'package:chuk_chat/platform_specific/mobile/mobile_container_transform.dart';
@@ -100,15 +106,27 @@ class MobileAgentList extends StatefulWidget {
     this.onCreateRoom,
     this.emptyState,
     this.headerCenter,
+    this.onSearchingChanged,
+    this.mainAgentSection = false,
   });
 
   final AgentRosterSource source;
 
-  /// Takes the middle of the header row: the Agents build's Chat | Agents
-  /// switch. With it, the row is chuk's floating bar — its padding, its 48 px
-  /// row, its 42 px chips — so the switch lands on the same pixels as over
-  /// chuk's chat, and All / Unread moves to a compact row under the bar.
-  /// Null keeps All / Unread in the middle of the row.
+  /// Draws the main agent on top, in its own "Your assistant" section, and
+  /// offers "Make main agent" in the row menu. The Agents shell turns it on;
+  /// off keeps the list exactly as it was.
+  final bool mainAgentSection;
+
+  /// Told when the search opens (true) and closes (false), so the shell can
+  /// step aside what floats over the header row (the Home | Agents switch).
+  final ValueChanged<bool>? onSearchingChanged;
+
+  /// Takes the middle of the header row, centred: the Agents build's Home |
+  /// Agents switch (or a box the size of it, when the shell floats the
+  /// switch over the list itself). With it, the row is chuk's floating bar —
+  /// its padding, its 48 px row, its 42 px chips — and All / Unread moves to
+  /// a compact row under the bar. Null keeps All / Unread in the middle of
+  /// the row.
   final Widget? headerCenter;
 
   /// Shown instead of the plain "No agents yet" when the list is empty and
@@ -228,6 +246,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
 
   void _openSearch() {
     setState(() => _searching = true);
+    widget.onSearchingChanged?.call(true);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _searchFocus.requestFocus();
     });
@@ -240,6 +259,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
       _searching = false;
       _animate = false;
     });
+    widget.onSearchingChanged?.call(false);
   }
 
   /// The rooms this list shows. A room has no read marks, so the Unread filter
@@ -288,6 +308,19 @@ class _MobileAgentListState extends State<MobileAgentList> {
     if (choice == 'room') widget.onCreateRoom?.call();
   }
 
+  /// The main agent, when this list draws one ([MobileAgentList.mainAgentSection]).
+  AgentsAgent? get _mainAgent => widget.mainAgentSection
+      ? resolveMainAgent(
+          widget.source.visibleAgents,
+          RosterPins.instance.mainAgentId,
+        )
+      : null;
+
+  /// Whether the main agent sits in its own section above the list: only
+  /// while nothing narrows the list.
+  bool get _mainInSection =>
+      _mainAgent != null && _filter == 0 && _query.text.trim().isEmpty;
+
   List<AgentsAgent> _visible() {
     Iterable<AgentsAgent> list = widget.source.visibleAgents;
     if (_filter == 1) list = list.where(_marks.isUnread);
@@ -303,13 +336,27 @@ class _MobileAgentListState extends State<MobileAgentList> {
             ).toLowerCase().contains(q),
       );
     }
+    final AgentsAgent? main = _mainAgent;
+    final List<AgentsAgent> found = list.toList(growable: false);
+    // The main agent leaves the list for its own section; under a search or
+    // a filter it is simply the first row, when it matches.
+    final bool mainFound =
+        main != null && found.any((AgentsAgent a) => a.id == main.id);
+    final List<AgentsAgent> rest = mainFound
+        ? <AgentsAgent>[
+            for (final AgentsAgent a in found)
+              if (a.id != main.id) a,
+          ]
+        : found;
     // Pinned first, then by the last time anything happened in the thread:
     // the conversation the user just used is at the top. The same order as
     // the desktop sidebar ([rosterPinOrder]).
-    return rosterPinOrder(
-      list.toList(growable: false),
+    final List<AgentsAgent> ordered = rosterPinOrder(
+      rest,
       RosterPins.instance.ids,
     );
+    if (!mainFound || _mainInSection) return ordered;
+    return <AgentsAgent>[main, ...ordered];
   }
 
   /// The role line: the one the user set in the profile wins over the one the
@@ -331,6 +378,16 @@ class _MobileAgentListState extends State<MobileAgentList> {
           const PopupMenuItem<String>(
             value: 'profile',
             child: _MenuRow(icon: Icons.person_rounded, label: 'Profile'),
+          ),
+        if (widget.mainAgentSection && _mainAgent?.id != agent.id)
+          PopupMenuItem<String>(
+            value: 'main',
+            child: _MenuRow(
+              icon: Icons.star_rounded,
+              label:
+                  AppLocalizations.of(rowContext)?.agentsMakeMainAgent ??
+                  'Make main agent',
+            ),
           ),
         PopupMenuItem<String>(
           value: 'pin',
@@ -377,6 +434,8 @@ class _MobileAgentListState extends State<MobileAgentList> {
     switch (choice) {
       case 'profile':
         widget.onOpenProfile?.call(agent);
+      case 'main':
+        RosterPins.instance.setMainAgent(agent.id);
       case 'pin':
         RosterPins.instance.toggle(agent.id);
       case 'rename':
@@ -390,6 +449,57 @@ class _MobileAgentListState extends State<MobileAgentList> {
       case 'delete':
         widget.onDeleteAgent?.call(agent);
     }
+  }
+
+  /// One agent's row in the list: the row, hidden (not removed) while its
+  /// copy rides in the chat-open container, cascading in. [main] is the main
+  /// agent's larger row.
+  Widget _agentRow(AgentsAgent agent, int index, {bool main = false}) {
+    // One description, built twice: the row in the list, and — when the chat
+    // grows out of it — the copy that rides inside the container while this
+    // one is hidden.
+    MobileAgentRow buildRow({required bool padded}) => MobileAgentRow(
+      key: padded ? ValueKey<String>('mobile-agent-${agent.id}') : null,
+      agent: agent,
+      selected: agent.id == widget.selectedAgentId,
+      unread: _marks.isUnread(agent),
+      unreadThreads: _marks.unreadThreads(agent),
+      role: _roleOf(agent),
+      now: _now(),
+      profiles: _profiles,
+      pinned: !main && RosterPins.instance.isPinned(agent.id),
+      main: main,
+      padded: padded,
+      onTap: !padded || agent.threads.isEmpty
+          ? null
+          : (Rect rect) {
+              widget.onOpenFrom?.call(
+                ContainerTransformSource(
+                  rect: rect,
+                  child: buildRow(padded: false),
+                ),
+              );
+              widget.onSelect(agent.id, agent.threads.first.key);
+            },
+      onLongPress: !padded
+          ? null
+          : (BuildContext rowContext) => _openRowMenu(rowContext, agent),
+    );
+    final Widget row = Visibility(
+      // Hidden, not removed: the list must not reflow under the growing
+      // container.
+      visible: agent.id != widget.hiddenAgentId,
+      maintainSize: true,
+      maintainAnimation: true,
+      maintainState: true,
+      child: buildRow(padded: true),
+    );
+    if (_searching || !_animate) return row;
+    return StaggeredItem(
+      key: ValueKey<String>('stagger-${agent.id}'),
+      index: index,
+      child: row,
+    );
   }
 
   @override
@@ -423,6 +533,13 @@ class _MobileAgentListState extends State<MobileAgentList> {
       ]),
     );
     final int unread = _marks.unreadCount(widget.source.visibleAgents);
+    // The main agent's own section, while nothing narrows the list.
+    final AgentsAgent? mainRow = _mainInSection ? _mainAgent : null;
+    // Grok Bot's Library grammar: a grey section word over each run of rows
+    // ("Your assistant", then "Agents" when there is more below).
+    final bool restLabel =
+        mainRow != null && (rooms.isNotEmpty || agents.isNotEmpty);
+    final int lead = mainRow == null ? 0 : (restLabel ? 3 : 2);
 
     // The roster floats over its own list: the rows travel up behind the
     // header and fade out in the veil, the same way the chat does. A pinned
@@ -471,10 +588,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
               tooltip: 'Search agents',
               semanticsId: 'mobile_home_search',
             ),
-            middle: Align(
-              alignment: Alignment.centerLeft,
-              child: widget.headerCenter,
-            ),
+            middle: Align(child: widget.headerCenter),
             trailing: canAdd
                 ? Builder(
                     builder: (BuildContext anchor) => _BarChip(
@@ -647,7 +761,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
                 ),
             child: KeyedSubtree(
               key: ValueKey<int>(_filter),
-              child: agents.isEmpty && rooms.isEmpty
+              child: agents.isEmpty && rooms.isEmpty && mainRow == null
                   ? (widget.emptyState != null &&
                             _filter == 0 &&
                             _query.text.trim().isEmpty)
@@ -665,10 +779,36 @@ class _MobileAgentListState extends State<MobileAgentList> {
                         top: headerSpace,
                         bottom: MediaQuery.paddingOf(context).bottom + 24,
                       ),
-                      itemCount: rooms.length + agents.length,
+                      itemCount: lead + rooms.length + agents.length,
                       itemBuilder: (BuildContext context, int index) {
-                        if (index < rooms.length) {
-                          final AgentsRoom room = rooms[index];
+                        // The main agent's section: its label, then its row.
+                        if (mainRow != null && index == 0) {
+                          return _SectionLabel(
+                            key: const ValueKey<String>('mobile-main-label'),
+                            label:
+                                AppLocalizations.of(context)
+                                    ?.agentsYourAssistant ??
+                                'Your assistant',
+                          );
+                        }
+                        if (mainRow != null && index == 1) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 14),
+                            child: _agentRow(mainRow, index, main: true),
+                          );
+                        }
+                        if (restLabel && index == 2) {
+                          return _SectionLabel(
+                            key: const ValueKey<String>('mobile-rest-label'),
+                            label:
+                                AppLocalizations.of(context)
+                                    ?.agentsModeAgents ??
+                                'Agents',
+                          );
+                        }
+                        final int i = index - lead;
+                        if (i < rooms.length) {
+                          final AgentsRoom room = rooms[i];
                           final Widget roomRow = MobileRoomRow(
                             key: ValueKey<String>('mobile-room-${room.id}'),
                             room: room,
@@ -682,58 +822,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
                             child: roomRow,
                           );
                         }
-                        final AgentsAgent agent = agents[index - rooms.length];
-                        // One description, built twice: the row in the list,
-                        // and — when the chat grows out of it — the copy that
-                        // rides inside the container while this one is hidden.
-                        MobileAgentRow buildRow({required bool padded}) =>
-                            MobileAgentRow(
-                              key: padded
-                                  ? ValueKey<String>('mobile-agent-${agent.id}')
-                                  : null,
-                              agent: agent,
-                              selected: agent.id == widget.selectedAgentId,
-                              unread: _marks.isUnread(agent),
-                              unreadThreads: _marks.unreadThreads(agent),
-                              role: _roleOf(agent),
-                              now: _now(),
-                              profiles: _profiles,
-                              pinned: RosterPins.instance.isPinned(agent.id),
-                              padded: padded,
-                              onTap: !padded || agent.threads.isEmpty
-                                  ? null
-                                  : (Rect rect) {
-                                      widget.onOpenFrom?.call(
-                                        ContainerTransformSource(
-                                          rect: rect,
-                                          child: buildRow(padded: false),
-                                        ),
-                                      );
-                                      widget.onSelect(
-                                        agent.id,
-                                        agent.threads.first.key,
-                                      );
-                                    },
-                              onLongPress: !padded
-                                  ? null
-                                  : (BuildContext rowContext) =>
-                                        _openRowMenu(rowContext, agent),
-                            );
-                        final Widget row = Visibility(
-                          // Hidden, not removed: the list must not reflow
-                          // under the growing container.
-                          visible: agent.id != widget.hiddenAgentId,
-                          maintainSize: true,
-                          maintainAnimation: true,
-                          maintainState: true,
-                          child: buildRow(padded: true),
-                        );
-                        if (_searching || !_animate) return row;
-                        return StaggeredItem(
-                          key: ValueKey<String>('stagger-${agent.id}'),
-                          index: index,
-                          child: row,
-                        );
+                        return _agentRow(agents[i - rooms.length], index);
                       },
                     ),
             ),
@@ -925,10 +1014,20 @@ class MobileAgentRow extends StatelessWidget {
     this.profiles,
     this.pinned = false,
     this.padded = true,
+    this.main = false,
   });
 
   final AgentsAgent agent;
   final DateTime now;
+
+  /// The main agent's row ("Your assistant"): a larger face, a taller row
+  /// and a calm card of its own (after Grok Bot's pinned row,
+  /// docs/MOBILE_GROKBOT_STRUCTURE.md §1): face with presence, name, one
+  /// line of status or last message.
+  final bool main;
+
+  /// The main agent row's minimum height.
+  static const double mainHeight = 80;
   final bool selected;
   final bool unread;
 
@@ -1026,17 +1125,25 @@ class MobileAgentRow extends StatelessWidget {
                 ? accent.withValues(alpha: 0.13)
                 : selected
                 ? scheme.primary.withValues(alpha: 0.08)
+                // The main agent: a calm card of its own, no border, no
+                // shadow (Grok Bot's pinned row, DESIGN.md: no glow).
+                : main
+                ? scheme.surfaceContainerLow
                 : Colors.transparent,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(30),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            padding: main
+                ? const EdgeInsets.symmetric(horizontal: 12, vertical: 10)
+                : const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: height - 4),
+              constraints: BoxConstraints(
+                minHeight: (main ? mainHeight : height) - 4,
+              ),
               child: Row(
                 children: <Widget>[
-                  AgentFace(agent: agent, size: 48, store: profiles),
-                  const SizedBox(width: 12),
+                  AgentFace(agent: agent, size: main ? 58 : 48, store: profiles),
+                  SizedBox(width: main ? 14 : 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1052,11 +1159,12 @@ class MobileAgentRow extends StatelessWidget {
                               child: _NameWithRole(
                                 name: agent.name,
                                 role: role,
-                                style: text.titleMedium?.copyWith(
-                                  fontWeight: unread
-                                      ? FontWeight.w800
-                                      : FontWeight.w600,
-                                ),
+                                style: (main ? text.titleLarge : text.titleMedium)
+                                    ?.copyWith(
+                                      fontWeight: unread
+                                          ? FontWeight.w800
+                                          : FontWeight.w600,
+                                    ),
                               ),
                             ),
                             if (pinned) ...<Widget>[
@@ -1473,6 +1581,32 @@ class _UnreadBadge extends StatelessWidget {
           color: ThemeData.estimateBrightnessForColor(colour) == Brightness.dark
               ? Colors.white
               : Colors.black,
+        ),
+      ),
+    );
+  }
+}
+
+/// A section's label in the inbox ("Your assistant"), lined up with the
+/// rows' text.
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel({super.key, required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 4, 24, 6),
+      child: Semantics(
+        header: true,
+        child: Text(
+          label,
+          style: theme.textTheme.labelLarge?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w500,
+          ),
         ),
       ),
     );

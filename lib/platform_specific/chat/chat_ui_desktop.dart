@@ -539,6 +539,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     // AGENTS: "Run anyway" on a budget refusal sends the refused prompt
     // through this screen's own send path, as a normal turn of the thread.
     if (widget.agentsThread) AgentsThreadComposer.attach(_agentsThreadSend);
+    // AGENTS: text the shell parked for this thread's composer (a Home
+    // widget opening the main agent), put in and not sent.
+    if (widget.agentsThread) {
+      AgentsThreadComposer.prefillChanges.addListener(_takeAgentsPrefill);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _takeAgentsPrefill());
+    }
     _selectedWorkspaceId = widget.workspaceId;
     _loadChatById(widget.selectedChatId);
     unawaited(_clipboardHandler.cleanupOldPasteTempDirectories());
@@ -674,6 +680,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
       if (widget.agentsThread) _resetThreadTransientState();
       _loadChatById(widget.selectedChatId);
+      if (widget.agentsThread) {
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _takeAgentsPrefill(),
+        );
+      }
       // Trigger rebuild to reflect new chat's streaming status
       // _isStreaming getter will automatically check the new _activeChatId
       setState(() {});
@@ -696,6 +707,26 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     _flyInKey = null;
   }
 
+  /// AGENTS: the prefill parked for the thread on screen goes into the
+  /// composer, unsent, with the caret at its end ([AgentsThreadComposer]).
+  void _takeAgentsPrefill() {
+    if (!mounted) return;
+    // The chat the shell asked for first: the active one can still be the
+    // thread being left while the switch loads.
+    final String? text =
+        AgentsThreadComposer.takePrefill(widget.selectedChatId) ??
+        AgentsThreadComposer.takePrefill(_activeChatId);
+    if (text == null) return;
+    // Empty: only the focus (Home's "Ask" pill); the draft stays.
+    if (text.isNotEmpty) {
+      composerController.value = TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+      );
+    }
+    composerFocusNode.requestFocus();
+  }
+
   /// AGENTS: sends [text] into [chatId] when this screen shows it and is
   /// free ([AgentsThreadComposer]).
   bool _agentsThreadSend(String chatId, String text) {
@@ -713,6 +744,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   @override
   void dispose() {
     AgentsThreadComposer.detach(_agentsThreadSend); // AGENTS
+    AgentsThreadComposer.prefillChanges.removeListener(_takeAgentsPrefill);
     // CRITICAL: Clear loading lock if we're disposed while loading
     // This prevents the flag from getting stuck
     if (_isLoadingChat) {

@@ -28,6 +28,16 @@ import 'package:chuk_chat/services/supabase_service.dart';
 /// (migrations/agents_chat_pins.sql): one row per pinned id. A deployment
 /// without the table yet, or a signed-out session, simply stays local — the
 /// same rule the other Agents stores keep.
+///
+/// The same store keeps the user's MAIN AGENT ([mainAgentId]): the one agent
+/// the roster shows first, in a section of its own ("Your assistant"), and
+/// the one a Home widget opens (`main_agent_launcher.dart`). It is the same
+/// kind of thing as a pin (the user's arrangement of the inbox, the same on
+/// every device), so it rides in the same table as one row whose item id is
+/// [mainRowPrefix] + the agent id. No second table: an id with that prefix
+/// is never a pin, and older builds that read it as one pin an id no agent
+/// has, which changes nothing they show. Without a choice the main agent is
+/// the first agent of the roster ([resolveMainAgent]).
 class RosterPins extends ChangeNotifier {
   RosterPins._();
 
@@ -41,6 +51,21 @@ class RosterPins extends ChangeNotifier {
 
   final Set<String> _ids = <String>{};
 
+  /// The local key of the main agent choice (per account, like the pins).
+  static const String _kMainKey = 'agents.roster.main_v1';
+
+  /// The item id prefix of the main agent row in `agents_chat_pins`.
+  static const String mainRowPrefix = 'main:';
+
+  /// The agent the user made the main agent, or null for "the first one".
+  String? _mainId;
+
+  /// The main agent choice changed here and is not pushed yet. While set, a
+  /// pull keeps the local choice, as [_dirty] does for a pin.
+  bool _mainDirty = false;
+  bool _mainPushInFlight = false;
+  bool _mainPushAgain = false;
+
   /// Ids toggled since the last successful push. They stand against the
   /// remote on pull, so a toggle made offline survives the next load.
   final Set<String> _dirty = <String>{};
@@ -51,6 +76,85 @@ class RosterPins extends ChangeNotifier {
   Set<String> get ids => Set<String>.unmodifiable(_ids);
 
   bool isPinned(String agentId) => _ids.contains(agentId);
+
+  /// The agent the user chose as the main agent, or null when there is no
+  /// choice. The id may name an agent that is gone or hidden; read the
+  /// effective one through [resolveMainAgent].
+  String? get mainAgentId => _mainId;
+
+  /// Makes [agentId] the main agent; null drops the choice, so the first
+  /// agent of the roster is the main agent again.
+  void setMainAgent(String? agentId) {
+    final String? next = (agentId == null || agentId.isEmpty) ? null : agentId;
+    if (next == _mainId) return;
+    _mainId = next;
+    _mainDirty = true;
+    notifyListeners();
+    unawaited(_saveMain());
+    unawaited(_pushMain());
+  }
+
+  static String _mainKeyFor(String? userId) =>
+      userId == null ? _kMainKey : '$_kMainKey.$userId';
+
+  Future<void> _saveMain() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String key = _mainKeyFor(_loadedForUserId);
+      final String? id = _mainId;
+      if (id == null) {
+        await prefs.remove(key);
+      } else if (prefs.getString(key) != id) {
+        await prefs.setString(key, id);
+      }
+    } catch (_) {
+      // A choice that is not written is lost on the next launch, nothing more.
+    }
+  }
+
+  /// Writes the main agent row: every old `main:` row of the user goes, then
+  /// the new one is written. A failure between the two leaves no row, which
+  /// reads as "the first agent" until the next push.
+  Future<void> _pushMain() async {
+    if (_mainPushInFlight) {
+      _mainPushAgain = true;
+      return;
+    }
+    _mainPushInFlight = true;
+    final String? pushed = _mainId;
+    try {
+      final user = SupabaseService.auth.currentUser;
+      if (user == null || user.id != _loadedForUserId) return;
+      if (!_mainDirty) return;
+      final client = SupabaseService.client;
+      await client
+          .from('agents_chat_pins')
+          .delete()
+          .eq('user_id', user.id)
+          .like('item_id', '$mainRowPrefix%');
+      if (pushed != null) {
+        await client.from('agents_chat_pins').upsert(
+          <Map<String, dynamic>>[
+            <String, dynamic>{
+              'user_id': user.id,
+              'item_id': '$mainRowPrefix$pushed',
+            },
+          ],
+          onConflict: 'user_id,item_id',
+        );
+      }
+      // A choice made while this ran is still owed to the remote.
+      if (_mainId == pushed) _mainDirty = false;
+    } catch (_) {
+      // The local choice stands; the next change or load pushes again.
+    } finally {
+      _mainPushInFlight = false;
+      if (_mainPushAgain) {
+        _mainPushAgain = false;
+        unawaited(_pushMain());
+      }
+    }
+  }
 
   /// The local key of the signed-in account, or the signed-out shared one.
   /// Pins are the user's inbox arrangement: two accounts on one device do not
@@ -76,9 +180,13 @@ class RosterPins extends ChangeNotifier {
     final bool firstLoad = _loadedForUserId == null && _ids.isEmpty;
     _loadedForUserId = userId;
     _ids.clear();
+    _mainId = null;
+    _mainDirty = false;
     Set<String> migrated = const <String>{};
     try {
       final prefs = await SharedPreferences.getInstance();
+      final String? main = prefs.getString(_mainKeyFor(userId));
+      if (main != null && main.isNotEmpty) _mainId = main;
       final String key = _keyFor(userId);
       String? raw = prefs.getString(key);
       bool fromLegacy = false;
@@ -150,12 +258,32 @@ class RosterPins extends ChangeNotifier {
       if (user == null || user.id != _loadedForUserId) return;
       final List<dynamic> rows = await SupabaseService.client
           .from('agents_chat_pins')
-          .select('item_id')
+          .select('item_id, pinned_at')
           .eq('user_id', user.id);
-      final Set<String> remote = <String>{
-        for (final Object? row in rows)
-          if (row is Map && row['item_id'] is String) row['item_id'] as String,
-      };
+      // The main agent row is not a pin: it is split off here, and the
+      // newest one wins should two devices have raced.
+      final Set<String> remote = <String>{};
+      String? remoteMain;
+      String remoteMainAt = '';
+      for (final Object? row in rows) {
+        if (row is! Map || row['item_id'] is! String) continue;
+        final String id = row['item_id'] as String;
+        if (!id.startsWith(mainRowPrefix)) {
+          remote.add(id);
+          continue;
+        }
+        final String at = row['pinned_at']?.toString() ?? '';
+        if (remoteMain == null || at.compareTo(remoteMainAt) > 0) {
+          remoteMain = id.substring(mainRowPrefix.length);
+          remoteMainAt = at;
+        }
+      }
+      bool mainChanged = false;
+      if (!_mainDirty && remoteMain != _mainId) {
+        _mainId = (remoteMain == null || remoteMain.isEmpty) ? null : remoteMain;
+        mainChanged = true;
+        unawaited(_saveMain());
+      }
       final Set<String> next = <String>{
         // Remote truth, minus the ids this device changed without pushing.
         for (final String id in remote)
@@ -168,10 +296,8 @@ class RosterPins extends ChangeNotifier {
       _ids
         ..clear()
         ..addAll(next);
-      if (changed) {
-        notifyListeners();
-        unawaited(_save());
-      }
+      if (changed) unawaited(_save());
+      if (changed || mainChanged) notifyListeners();
     } catch (_) {
       // No remote (not signed in, table not deployed yet, offline): local only.
     }
@@ -241,6 +367,8 @@ class RosterPins extends ChangeNotifier {
   void reset() {
     _ids.clear();
     _dirty.clear();
+    _mainId = null;
+    _mainDirty = false;
     _loadedForUserId = null;
     _syncedRemotely = false;
     notifyListeners();
@@ -277,6 +405,39 @@ List<AgentsAgent> rosterPinOrder(
     for (final AgentsAgent a in agents)
       if (pinned.contains(a.id)) a,
     ...rest,
+  ];
+}
+
+/// The main agent of [agents]: the one [chosenId] names when it is among
+/// them, else the first one (the oldest: the roster keeps creation order, the
+/// computer's own agent first). Null for an empty roster. Pass the VISIBLE
+/// agents: a hidden or deleted choice falls back to the first one shown.
+AgentsAgent? resolveMainAgent(List<AgentsAgent> agents, String? chosenId) {
+  if (agents.isEmpty) return null;
+  if (chosenId != null) {
+    for (final AgentsAgent a in agents) {
+      if (a.id == chosenId) return a;
+    }
+  }
+  return agents.first;
+}
+
+/// The roster order with the main agent on top: the main agent
+/// ([resolveMainAgent]) first, then [rosterPinOrder] of the rest. Every
+/// roster draws this order, and Ctrl+1 opens the main agent.
+List<AgentsAgent> rosterMainOrder(
+  List<AgentsAgent> agents,
+  Set<String> pinned,
+  String? mainId,
+) {
+  final AgentsAgent? main = resolveMainAgent(agents, mainId);
+  if (main == null) return const <AgentsAgent>[];
+  return <AgentsAgent>[
+    main,
+    ...rosterPinOrder(<AgentsAgent>[
+      for (final AgentsAgent a in agents)
+        if (a.id != main.id) a,
+    ], pinned),
   ];
 }
 

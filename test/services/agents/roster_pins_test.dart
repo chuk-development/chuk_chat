@@ -178,4 +178,66 @@ void main() {
       );
     });
   });
+
+  group('main agent', () {
+    final List<AgentsAgent> roster = <AgentsAgent>[
+      _agent('host'),
+      _agent('b', lastActivity: DateTime(2026, 1, 2)),
+      _agent('c', lastActivity: DateTime(2026, 1, 3)),
+    ];
+
+    test('without a choice it is the first (oldest) agent', () {
+      expect(resolveMainAgent(roster, null)?.id, 'host');
+      expect(resolveMainAgent(const <AgentsAgent>[], null), isNull);
+    });
+
+    test('the choice wins; a choice that is gone falls back', () {
+      expect(resolveMainAgent(roster, 'c')?.id, 'c');
+      expect(resolveMainAgent(roster, 'gone')?.id, 'host');
+    });
+
+    test('rosterMainOrder: main first, then pins, then by activity', () {
+      final List<String> ids = rosterMainOrder(
+        roster,
+        <String>{'b'},
+        'c',
+      ).map((AgentsAgent a) => a.id).toList();
+      expect(ids, <String>['c', 'b', 'host']);
+      expect(
+        rosterMainOrder(roster, const <String>{}, null)
+            .map((AgentsAgent a) => a.id)
+            .toList(),
+        <String>['host', 'c', 'b'],
+      );
+      expect(rosterMainOrder(const <AgentsAgent>[], const <String>{}, null),
+          isEmpty);
+    });
+
+    test('setMainAgent notifies and survives a restart', () async {
+      await RosterPins.instance.load();
+      int notified = 0;
+      void count() => notified++;
+      RosterPins.instance.addListener(count);
+      addTearDown(() => RosterPins.instance.removeListener(count));
+      RosterPins.instance.setMainAgent('c');
+      expect(RosterPins.instance.mainAgentId, 'c');
+      expect(notified, 1);
+      RosterPins.instance.setMainAgent('c');
+      expect(notified, 1, reason: 'the same choice is no change');
+      await Future<void>.delayed(Duration.zero);
+
+      RosterPins.instance.reset();
+      expect(RosterPins.instance.mainAgentId, isNull);
+      await RosterPins.instance.load();
+      expect(RosterPins.instance.mainAgentId, 'c');
+      // The main agent is not a pin.
+      expect(RosterPins.instance.isPinned('c'), isFalse);
+
+      RosterPins.instance.setMainAgent(null);
+      await Future<void>.delayed(Duration.zero);
+      RosterPins.instance.reset();
+      await RosterPins.instance.load();
+      expect(RosterPins.instance.mainAgentId, isNull);
+    });
+  });
 }

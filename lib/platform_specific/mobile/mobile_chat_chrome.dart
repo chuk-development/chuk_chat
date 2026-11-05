@@ -1,27 +1,16 @@
-/// The floating top bar of a phone chat: chuk_chat's phone top bar
-/// (`root_wrapper_mobile.dart`, `_buildFloatingTopBar`) with an agent in it.
+/// The chips and the agent pill of chuk_chat's floating top bar, with an
+/// agent in it: [ChromeChip] (chuk's 42 px round chip with a 48 px press) and
+/// [AgentChromePill] (chuk's title pill carrying the agent's face, its name
+/// and its status line — "Active now", three dots while it works, or
+/// "Offline · Reconnect").
 ///
-/// No app bar. Over the messages, on a fade from the page colour, float
-///
-///  * a round back chip where chuk has its menu chip;
-///  * chuk's title pill, carrying the agent's face, its name and its
-///    status line — "Active now", three dots while it works, or "Offline ·
-///    Reconnect". Tapping the pill opens the agent's profile;
-///  * round chips for the shared files and the agent's screen. The screen
-///    chip is lit (chuk's accent fill) when there is a screen to take over,
-///    parked when there is none — and a parked tap says why, so the chip is
-///    never a dead button;
-///  * an optional "more" chip.
-///
-/// The chips are drawn at chuk's 42 px, and each one takes a 48 px press, so
-/// nothing is hard to hit. The bar reads only `paddingOf`, so it never
-/// rebuilds on a keyboard frame. The body under it reserves
-/// [MobileLayout.chromeInset]; [MobileChatScreen] does that.
+/// The desktop thread header (`agents_thread_header.dart`) draws them. The
+/// phone's old floating chat bar that also used them is gone: the phone has
+/// one top bar for both halves now (`mobile_top_bar.dart`).
 library;
 
 import 'package:flutter/material.dart';
 
-import 'package:chuk_chat/l10n/app_localizations.dart'; // own browser
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
@@ -44,165 +33,12 @@ const double kMobileChromeRow = 48;
 /// Corner radius of the title pill: chuk's title pill.
 const double kMobileChromePillRadius = 18;
 
-/// How far a 48 px press reaches past a 42 px chip on each side. The row's
-/// padding and gaps take it back, so the chips land where chuk's land.
-const double _kReach = (MobileLayout.minTouchTarget - kMobileChromeChip) / 2;
-
 /// The agent's face inside the pill. 30 leaves the two text lines their
 /// room and keeps air above and below the face inside the 42 px pill.
 const double _kPillFaceSize = 30;
 
 /// The status line's font size. The presence dot is derived from it.
 const double _kPillStatusFontSize = 11;
-
-class MobileChatChrome extends StatelessWidget {
-  const MobileChatChrome({
-    super.key,
-    required this.agent,
-    required this.onBack,
-    this.onOpenProfile,
-    this.onOpenBrowser,
-    this.browserAvailable = false,
-    this.usesUserBrowser = false, // own browser
-    this.onOpenFiles,
-    this.onReconnect,
-    this.onMore,
-    this.profiles,
-  });
-
-  final AgentsAgent agent;
-
-  /// Back to the agent list.
-  final VoidCallback onBack;
-
-  /// Tap on the agent pill — its profile page. Null renders the pill flat.
-  final VoidCallback? onOpenProfile;
-
-  // ── own browser ──
-  /// The agent works in the user's own browser (`run_state.browser_target`).
-  /// With no screen open, the parked screen target says "Works in your
-  /// browser", like the desktop header, not "No screen open yet".
-  final bool usesUserBrowser;
-  // ── end own browser ──
-
-  /// The "computer" chip: the agent's screen. Called whether or not a
-  /// screen is open — when none is, it is expected to say so, which is why the
-  /// chip is never silently dead (bead cowork-egrg).
-  final VoidCallback? onOpenBrowser;
-
-  /// Is a screen open right now? False draws the chip parked: visibly not
-  /// ready, still answering a tap with the reason.
-  final bool browserAvailable;
-  final VoidCallback? onOpenFiles;
-  final VoidCallback? onReconnect;
-
-  /// The "more" chip: the shell's secondary actions. Null hides it.
-  final VoidCallback? onMore;
-
-  final AgentProfileStore? profiles;
-
-  @override
-  Widget build(BuildContext context) {
-    final Color pageColor = Theme.of(context).scaffoldBackgroundColor;
-    return TickerMode(
-      enabled: !MediaQuery.disableAnimationsOf(context),
-      child: DecoratedBox(
-        // The chat runs on underneath this bar, so the bar holds the page
-        // down behind it: page colour at the status bar, nothing at all by
-        // its lower edge. chuk's phone top bar, stop for stop.
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: <Color>[
-              pageColor,
-              pageColor,
-              pageColor.withValues(alpha: 0),
-            ],
-            stops: const <double>[0.0, 0.62, 1.0],
-          ),
-        ),
-        child: SafeArea(
-          bottom: false,
-          child: Padding(
-            // chuk's 10 / 8 / 10 / 6, less the reach of the 48 px presses.
-            padding: const EdgeInsets.fromLTRB(
-              10 - _kReach,
-              8,
-              10 - _kReach,
-              6,
-            ),
-            child: ConstrainedBox(
-              // chuk's 48 px row. Larger text grows the pill, and the row
-              // with it, instead of clipping the name.
-              constraints: const BoxConstraints(minHeight: kMobileChromeRow),
-              child: Row(
-                children: <Widget>[
-                  ChromeChip(
-                    icon: Icons.arrow_back_rounded,
-                    onTap: onBack,
-                    tooltip: 'Agents',
-                    semanticsId: 'mobile_chat_back',
-                  ),
-                  const SizedBox(width: 8 - _kReach),
-                  // Expanded + left alignment, as chuk's title: a long name
-                  // ellipsises inside the pill instead of pushing the chips
-                  // off the right edge.
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      heightFactor: 1,
-                      child: AgentChromePill(
-                        agent: agent,
-                        onTap: onOpenProfile,
-                        onReconnect: onReconnect,
-                        profiles: profiles,
-                      ),
-                    ),
-                  ),
-                  if (onOpenFiles != null) ...<Widget>[
-                    const SizedBox(width: 8 - _kReach),
-                    ChromeChip(
-                      icon: Icons.folder_open_rounded,
-                      tooltip: 'Shared files',
-                      semanticsId: 'mobile_chat_files',
-                      onTap: onOpenFiles,
-                    ),
-                  ],
-                  SizedBox(
-                    width: onOpenFiles != null ? 8 - 2 * _kReach : 8 - _kReach,
-                  ),
-                  ChromeChip(
-                    icon: Icons.desktop_windows_rounded,
-                    accent: browserAvailable,
-                    parked: !browserAvailable,
-                    tooltip: browserAvailable
-                        ? 'Take over the screen'
-                        : usesUserBrowser // own browser
-                        ? (AppLocalizations.of(context)?.ubScreenTooltip ??
-                              'Works in your browser')
-                        : 'No screen open yet',
-                    semanticsId: 'mobile_chat_browser',
-                    onTap: onOpenBrowser,
-                  ),
-                  if (onMore != null) ...<Widget>[
-                    const SizedBox(width: 8 - 2 * _kReach),
-                    ChromeChip(
-                      icon: Icons.more_horiz_rounded,
-                      onTap: onMore,
-                      tooltip: 'More',
-                      semanticsId: 'mobile_chat_more',
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 /// One round chip of the bar: chuk's floating chip — the chrome surface, a
 /// 22 px glyph in the icon colour — or, with [accent], chuk's accent-filled

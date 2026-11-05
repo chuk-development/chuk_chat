@@ -53,6 +53,7 @@ class ChukChart extends StatefulWidget {
     this.accentColor,
     this.fontFamily,
     this.animate = true,
+    this.framed = true,
   });
 
   final ChartSpec spec;
@@ -65,6 +66,11 @@ class ChukChart extends StatefulWidget {
 
   /// False draws the finished chart at once. Tests and goldens use it.
   final bool animate;
+
+  /// False drops the card's own outline and margin, for a host that already
+  /// draws the card (a Home tile). Default true: every other caller is as
+  /// before.
+  final bool framed;
 
   @override
   State<ChukChart> createState() => _ChukChartState();
@@ -122,14 +128,20 @@ class _ChukChartState extends State<ChukChart>
     final String? family = _family(context);
 
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6),
+      margin: widget.framed
+          ? const EdgeInsets.symmetric(vertical: 6)
+          : EdgeInsets.zero,
       width: double.infinity,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(kChukChartRadius),
-        border: Border.all(color: palette.border, width: 1),
-      ),
-      clipBehavior: Clip.antiAlias,
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+      decoration: widget.framed
+          ? BoxDecoration(
+              borderRadius: BorderRadius.circular(kChukChartRadius),
+              border: Border.all(color: palette.border, width: 1),
+            )
+          : null,
+      clipBehavior: widget.framed ? Clip.antiAlias : Clip.none,
+      padding: widget.framed
+          ? const EdgeInsets.fromLTRB(12, 12, 12, 10)
+          : EdgeInsets.zero,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,

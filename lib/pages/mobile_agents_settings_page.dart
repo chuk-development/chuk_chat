@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/services/agents/roster_pins.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/pages/agent_mailbox_page.dart';
@@ -194,7 +195,12 @@ class _AgentSettingsViewState extends State<AgentSettingsView> {
   Widget build(BuildContext context) {
     final profiles = widget.profiles ?? AgentProfileStore.instance;
     return AnimatedBuilder(
-      animation: Listenable.merge([widget.source, profiles, _preferences]),
+      animation: Listenable.merge([
+        widget.source,
+        profiles,
+        _preferences,
+        RosterPins.instance,
+      ]),
       builder: (context, _) {
         final AppLocalizations l = _l;
         final agent = widget.source.byId(widget.agentId);
@@ -275,6 +281,22 @@ class _AgentSettingsViewState extends State<AgentSettingsView> {
                     ),
                     subtitle: l.agentsCwPermissionsSubtitle,
                   ),
+                  // The main agent: first in the roster, the one Home opens
+                  // (roster_pins.dart). Offered while this one is not it and
+                  // there is another to be it.
+                  if (widget.source.visibleAgents.length > 1 &&
+                      resolveMainAgent(
+                            widget.source.visibleAgents,
+                            RosterPins.instance.mainAgentId,
+                          )?.id !=
+                          agent.id)
+                    _row(
+                      'Make main agent',
+                      l.agentsMakeMainAgent,
+                      Icons.star_outline_rounded,
+                      () => RosterPins.instance.setMainAgent(agent.id),
+                      subtitle: l.agentsMakeMainAgentSubtitle,
+                    ),
                   if (widget.onDocuments != null)
                     _row(
                       'Documents & pages',

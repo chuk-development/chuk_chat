@@ -480,6 +480,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // AGENTS: "Run anyway" on a budget refusal sends the refused prompt
     // through this screen's own send path, as a normal turn of the thread.
     if (widget.messengerMode) AgentsThreadComposer.attach(_agentsThreadSend);
+    // AGENTS: text the shell parked for this thread's composer (a Home
+    // widget opening the main agent), put in and not sent.
+    if (widget.messengerMode) {
+      AgentsThreadComposer.prefillChanges.addListener(_takeAgentsPrefill);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _takeAgentsPrefill());
+    }
     AppLifecycleService.instance.addOnResumeCallback(_handleAppResumed);
     AppLifecycleService.instance.addOnPauseCallback(_handleAppPaused);
     // The disclaimer under the composer steps aside while the field has the
@@ -1088,6 +1094,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         );
       }
       _loadChatById(widget.selectedChatId);
+      if (widget.messengerMode) {
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _takeAgentsPrefill(),
+        );
+      }
       if (kDebugMode) {
         debugPrint(
           '│ 🔄 [CHAT-UI-MOBILE] After _loadChatById, _activeChatId: $_activeChatId',
@@ -1106,8 +1117,32 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
   /// AGENTS: sends [text] into [chatId] when this screen shows it and is
   /// free ([AgentsThreadComposer]).
+  /// AGENTS: the prefill parked for the thread on screen goes into the
+  /// composer, unsent, with the caret at its end ([AgentsThreadComposer]).
+  /// The composer takes the focus: the user came here to write.
+  void _takeAgentsPrefill() {
+    if (!mounted) return;
+    // The chat the shell asked for first: the active one can still be the
+    // thread being left while the switch loads.
+    final String? text =
+        AgentsThreadComposer.takePrefill(widget.selectedChatId) ??
+        AgentsThreadComposer.takePrefill(_activeChatId);
+    if (text == null) return;
+    // Empty: only the focus (Home's "Ask" pill); the draft stays.
+    if (text.isNotEmpty) {
+      composerController.value = TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+      );
+    }
+    composerFocusNode.requestFocus();
+  }
+
   bool _agentsThreadSend(String chatId, String text) {
     if (!mounted || _isSendingMessage || _isCurrentChatStreaming) return false;
+    // A thread that is still loading would wipe the message it is handed
+    // when its transcript lands; the caller tries again (Home's composer).
+    if (_isLoadingChat) return false;
     if ((_activeChatId ?? widget.selectedChatId) != chatId) return false;
     unawaited(_sendComposerOrVoice(voiceText: text));
     return true;
@@ -1116,6 +1151,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   @override
   void dispose() {
     AgentsThreadComposer.detach(_agentsThreadSend); // AGENTS
+    AgentsThreadComposer.prefillChanges.removeListener(_takeAgentsPrefill);
     WidgetsBinding.instance.removeObserver(_viewInsetRepin);
     AppLifecycleService.instance.removeOnResumeCallback(_handleAppResumed);
     AppLifecycleService.instance.removeOnPauseCallback(_handleAppPaused);

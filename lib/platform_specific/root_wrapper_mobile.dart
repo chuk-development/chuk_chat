@@ -12,11 +12,15 @@ import 'package:chuk_chat/pages/workspaces_page.dart';
 import 'package:chuk_chat/pages/media_manager_page.dart';
 import 'package:chuk_chat/pages/settings_page.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_mobile.dart';
+import 'package:chuk_chat/platform_specific/mobile/chat_title_strip.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_top_bar.dart';
+import 'package:chuk_chat/platform_specific/mobile/swipe_chat_pager.dart';
 import 'package:chuk_chat/platform_specific/sidebar_mobile.dart'; // UPDATED: Use mobile sidebar
 import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/developer_options_service.dart';
 import 'package:chuk_chat/services/multiplex_session.dart';
+import 'package:chuk_chat/services/streaming_manager.dart';
 import 'package:chuk_chat/services/streaming_foreground_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
@@ -29,6 +33,11 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/brand_wordmark.dart';
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/floating_chrome_surface.dart';
+import 'package:chuk_chat/widgets/icons/huge_icon.dart';
+import 'package:chuk_chat/widgets/sidebar/sidebar_chrome.dart'
+    show sbChatDateLine;
+import 'package:chuk_chat/widgets/sidebar/sidebar_common.dart'
+    show deriveSidebarChatTitle, kSidebarAddComputerLabel;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_debug_snapshot.dart';
@@ -53,12 +62,24 @@ class RootWrapperMobile extends StatefulWidget {
   /// sidebar. Null, as in chuk_chat, draws nothing.
   final VoidCallback? onAddComputer;
 
+  /// The Agents build's phone layout for the Chats half (owner, 2026-11-05):
+  /// no drawer, no bottom bar. [MobileTopBar] holds the menu chip,
+  /// [headerCenter] (the Chats | Agents switch) and the new-chat button, and
+  /// under them a [ChatTitleStrip] that names the chat in view. A sideways
+  /// swipe on the chat moves to the next or previous chat ([SwipeChatPager])
+  /// in the same chat view; a tap on the strip opens the chat list.
+  ///
+  /// False, the default, is chuk_chat's layout unchanged: the floating top
+  /// bar and the sliding sidebar.
+  final bool swipeNavigation;
+
   const RootWrapperMobile({
     super.key,
     required this.config,
     this.headerCenter,
     this.selectedChatIdReader,
     this.onAddComputer,
+    this.swipeNavigation = false,
   });
 
   @override
@@ -82,13 +103,23 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     final ValueGetter<String?>? read = widget.selectedChatIdReader;
     return read != null ? read() : ChatStorageService.selectedChatId;
   }
+
   late AnimationController _sidebarAnimController;
   late Animation<double> _sidebarAnimation;
+
+  /// Swipe mode only ([RootWrapperMobile.swipeNavigation]): shares the
+  /// pager's drag with the title strip.
+  SwipeChatPagerController? _swipeController;
+
+  /// Swipe mode only: rebuilds the entries when a chat is created, renamed,
+  /// deleted or reordered by a new message.
+  StreamSubscription<String?>? _chatListSubscription;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    if (widget.swipeNavigation) _startSwipeNavigation();
     if (kFeatureArtifacts) {
       // The notifier defaults to true (desktop idles with the panel "open").
       // On mobile the panel is a modal sheet, so force the notifier to false
@@ -165,9 +196,45 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
         _onPanelOpenRequested,
       );
     }
+    _stopSwipeNavigation(unmounting: true);
     _sidebarAnimController.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant RootWrapperMobile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.swipeNavigation != oldWidget.swipeNavigation) {
+      if (widget.swipeNavigation) {
+        _startSwipeNavigation();
+      } else {
+        _stopSwipeNavigation();
+      }
+    }
+  }
+
+  void _startSwipeNavigation() {
+    _swipeController ??= SwipeChatPagerController();
+    _chatListSubscription ??= ChatStorageService.changes.listen((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  void _stopSwipeNavigation({bool unmounting = false}) {
+    final StreamSubscription<String?>? sub = _chatListSubscription;
+    _chatListSubscription = null;
+    if (sub != null) unawaited(sub.cancel());
+    final SwipeChatPagerController? controller = _swipeController;
+    _swipeController = null;
+    if (controller == null) return;
+    if (unmounting) {
+      // The pager below has already been unmounted (children go first).
+      controller.dispose();
+    } else {
+      // The pager still holds it until this frame drops it.
+      WidgetsBinding.instance.addPostFrameCallback((_) => controller.dispose());
+    }
   }
 
   void _onPanelOpenRequested() {
@@ -305,9 +372,15 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     final messenger = ScaffoldMessenger.maybeOf(context);
     if (messenger == null) return;
 
-    messenger.hideCurrentSnackBar();AppNotifications.showOn(messenger, '$permissionName permission is blocked. Enable it in app settings.', actionLabel: 'Settings', onAction: () {
-            unawaited(openAppSettings());
-          });
+    messenger.hideCurrentSnackBar();
+    AppNotifications.showOn(
+      messenger,
+      '$permissionName permission is blocked. Enable it in app settings.',
+      actionLabel: 'Settings',
+      onAction: () {
+        unawaited(openAppSettings());
+      },
+    );
   }
 
   void _toggleSidebar() {
@@ -370,9 +443,8 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
 
   void _openMediaPage() {
     if (_isSidebarExpanded) _toggleSidebar();
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const MediaManagerPage()));
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const MediaManagerPage()));
   }
 
   void _handleChatSelected(String? chatId) {
@@ -494,86 +566,86 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
         ),
       ),
       child: SafeArea(
-      bottom: false,
-      child: Padding(
-        // The chips take a 48 px press around a 42 px paint; the 3 px of slop
-        // comes out of the margins so the painted chips keep their place.
-        padding: const EdgeInsets.fromLTRB(7, 8, 10, 6),
-        child: SizedBox(
-          height: 48,
-          child: Row(
-            children: [
-              KeyedSubtree(
-                key: TourKeyRegistry.instance.anchorFor(TourSlots.menuButton),
-                child: _floatIconChip(
-                  icon: Icons.menu,
-                  onTap: _toggleSidebar,
-                  iconFg: iconFg,
-                  tooltip: 'Open menu',
-                  semanticsId: 'menu_button',
+        bottom: false,
+        child: Padding(
+          // The chips take a 48 px press around a 42 px paint; the 3 px of slop
+          // comes out of the margins so the painted chips keep their place.
+          padding: const EdgeInsets.fromLTRB(7, 8, 10, 6),
+          child: SizedBox(
+            height: 48,
+            child: Row(
+              children: [
+                KeyedSubtree(
+                  key: TourKeyRegistry.instance.anchorFor(TourSlots.menuButton),
+                  child: _floatIconChip(
+                    icon: Icons.menu,
+                    onTap: _toggleSidebar,
+                    iconFg: iconFg,
+                    tooltip: 'Open menu',
+                    semanticsId: 'menu_button',
+                  ),
                 ),
-              ),
-              const SizedBox(width: 5),
-              // Expanded, not a fixed width + Spacer: the title takes exactly
-              // the room left after the two right-hand buttons, so a long
-              // title ellipsises with "…" instead of pushing the buttons off
-              // the right edge. Left-aligned so a short title hugs the menu.
-              // A [RootWrapperMobile.headerCenter] takes the pill's place in
-              // a new chat; an open chat shows its title pill.
-              Expanded(
-                child: _isSidebarExpanded
-                    ? const SizedBox.shrink()
-                    : Align(
-                        alignment: Alignment.centerLeft,
-                        child:
-                            (_selectedChatId == null
-                                ? widget.headerCenter
-                                : null) ??
-                            FloatingChromeSurface(
-                          radius: 18,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 11,
-                          ),
-                          child: (title != null)
-                              ? Text(
-                                  title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: iconFg.withValues(alpha: 0.92),
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                )
-                              : BrandWordmark(
-                                  color: iconFg.withValues(alpha: 0.92),
+                const SizedBox(width: 5),
+                // Expanded, not a fixed width + Spacer: the title takes exactly
+                // the room left after the two right-hand buttons, so a long
+                // title ellipsises with "…" instead of pushing the buttons off
+                // the right edge. Left-aligned so a short title hugs the menu.
+                // A [RootWrapperMobile.headerCenter] takes the pill's place in
+                // a new chat; an open chat shows its title pill.
+                Expanded(
+                  child: _isSidebarExpanded
+                      ? const SizedBox.shrink()
+                      : Align(
+                          alignment: Alignment.centerLeft,
+                          child:
+                              (_selectedChatId == null
+                                  ? widget.headerCenter
+                                  : null) ??
+                              FloatingChromeSurface(
+                                radius: 18,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 11,
                                 ),
+                                child: (title != null)
+                                    ? Text(
+                                        title,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: iconFg.withValues(alpha: 0.92),
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      )
+                                    : BrandWordmark(
+                                        color: iconFg.withValues(alpha: 0.92),
+                                      ),
+                              ),
                         ),
-                      ),
-              ),
-              const SizedBox(width: 5),
-              _floatIconChip(
-                icon: Icons.copy_all,
-                onTap: _copyDebugChat,
-                iconFg: iconFg,
-                tooltip: 'Copy full chat',
-                semanticsId: 'copy_debug_chat_button',
-              ),
-              const SizedBox(width: 5),
-              // Accent-filled circle, not a frosted chip: the new-chat button
-              // is the primary action and matches the identical button in the
-              // sidebar (AccentIconButton) so the two read as the same control.
-              AccentIconButton(
-                icon: Icons.edit_square,
-                onTap: _newChatFromAppBar,
-                tooltip: 'New Chat',
-                semanticsId: 'new_chat_button',
-              ),
-            ],
+                ),
+                const SizedBox(width: 5),
+                _floatIconChip(
+                  icon: Icons.copy_all,
+                  onTap: _copyDebugChat,
+                  iconFg: iconFg,
+                  tooltip: 'Copy full chat',
+                  semanticsId: 'copy_debug_chat_button',
+                ),
+                const SizedBox(width: 5),
+                // Accent-filled circle, not a frosted chip: the new-chat button
+                // is the primary action and matches the identical button in the
+                // sidebar (AccentIconButton) so the two read as the same control.
+                AccentIconButton(
+                  icon: Icons.edit_square,
+                  onTap: _newChatFromAppBar,
+                  tooltip: 'New Chat',
+                  semanticsId: 'new_chat_button',
+                ),
+              ],
+            ),
           ),
         ),
-      ),
       ),
     );
   }
@@ -633,18 +705,318 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     final state = _chatUIMobileKey.currentState;
     final messages = state?.debugMessages;
     if (messages == null || messages.isEmpty) {
-        AppNotifications.show(context, 'No messages to copy');
+      AppNotifications.show(context, 'No messages to copy');
       return;
     }
     final text = DebugChatFormatter.format(
       messages,
       context: chatDebugContext(state, platform: 'mobile'),
     );
-    Clipboard.setData(ClipboardData(text: text));AppNotifications.show(context, 'Copied ${messages.length} messages (debug, images redacted)', duration: Duration(seconds: 2));
+    Clipboard.setData(ClipboardData(text: text));
+    AppNotifications.show(
+      context,
+      'Copied ${messages.length} messages (debug, images redacted)',
+      duration: Duration(seconds: 2),
+    );
+  }
+
+  // ---------- Swipe mode ([RootWrapperMobile.swipeNavigation]) ----------
+
+  /// The id of the "New chat" page, the leftmost entry of the pager. It is
+  /// selected while no chat is open.
+  static const String _kNewChatEntryId = '__new__';
+
+  /// The pages of the pager, left to right: "New chat", then the chats the
+  /// sidebar lists, newest first.
+  ///
+  /// The source is the sidebar's: [ChatStorageService.savedChats], which
+  /// already leaves out Agents threads and sorts by last activity, and
+  /// [ChatStorageService.changes] (see [_startSwipeNavigation]) for every
+  /// create, rename, delete and reorder. Titles go through the sidebar's
+  /// [deriveSidebarChatTitle]. Two differences: pinned chats are not pulled
+  /// to the front (a swipe follows time, not pins), and locked chats are left
+  /// out, because the sidebar does not open them either.
+  List<SwipeChatEntry> _swipeEntries(BuildContext context) {
+    final AppLocalizations? l = AppLocalizations.of(context);
+    final StreamingManager streaming = StreamingManager();
+    return <SwipeChatEntry>[
+      SwipeChatEntry(
+        id: _kNewChatEntryId,
+        title: l?.newChat ?? 'New chat',
+        leading: const _NewChatFace(),
+      ),
+      for (final StoredChat chat in ChatStorageService.savedChats)
+        if (!chat.isLocked)
+          SwipeChatEntry(
+            id: chat.id,
+            title: deriveSidebarChatTitle(chat),
+            subtitle: sbChatDateLine(context, chat.updatedAt ?? chat.createdAt),
+            working: streaming.isStreaming(chat.id),
+          ),
+    ];
+  }
+
+  /// The pager committed a switch: open that chat, or a new one.
+  void _onSwipeSelected(String id) {
+    if (id == _kNewChatEntryId) {
+      // newChat() hands null to onChatIdChanged, which selects it.
+      _newChatFromAppBar();
+      setState(() {});
+      return;
+    }
+    _handleChatSelected(id);
+  }
+
+  /// The menu chip: the pages the sidebar used to hold.
+  void _openSwipeMenu() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final AppLocalizations? l = AppLocalizations.of(context);
+    final VoidCallback? onAddComputer = widget.onAddComputer;
+    final String? current = _selectedChatId;
+    unawaited(
+      showMobileMenuSheet(
+        context,
+        items: <MobileMenuItem>[
+          MobileMenuItem(
+            icon: Icons.settings,
+            label: l?.settings ?? 'Settings',
+            onTap: _openSettingsPage,
+          ),
+          if (kFeatureMediaManager)
+            MobileMenuItem(
+              icon: Icons.image_rounded,
+              label: l?.media ?? 'Media',
+              onTap: _openMediaPage,
+            ),
+          if (kFeatureWorkspaces)
+            MobileMenuItem(
+              icon: Icons.folder_rounded,
+              label: l?.workspaces ?? 'Workspaces',
+              onTap: _openWorkspacesPage,
+            ),
+          if (onAddComputer != null)
+            MobileMenuItem(
+              icon: Icons.computer,
+              label: kSidebarAddComputerLabel,
+              onTap: onAddComputer,
+            ),
+          MobileMenuItem(
+            icon: Icons.copy_all,
+            label: l?.chatSwipeCopyChat ?? 'Copy full chat',
+            onTap: _copyDebugChat,
+          ),
+          // The chat in view; there is no list to do it from any more.
+          if (current != null) ...<MobileMenuItem>[
+            MobileMenuItem(
+              icon: Icons.edit_outlined,
+              label: l?.chatSwipeRename ?? 'Rename',
+              onTap: () => unawaited(_renameCurrentChat(current)),
+            ),
+            MobileMenuItem(
+              icon: Icons.delete_outline_rounded,
+              label: l?.delete ?? 'Delete',
+              destructive: true,
+              onTap: () => unawaited(_deleteCurrentChat(current)),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// The sidebar's delete path ([SidebarStateCommon]): the same question,
+  /// the same store call, then the same reset of the chat in view.
+  Future<void> _deleteCurrentChat(String chatId) async {
+    final StoredChat? chat = ChatStorageService.getChatById(chatId);
+    if (chat == null) return;
+    final String derivedTitle = deriveSidebarChatTitle(chat);
+    final String chatTitle = derivedTitle.length > 40
+        ? '${derivedTitle.substring(0, 40)}...'
+        : derivedTitle;
+    final bool? shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Text('Delete chat?'),
+        content: Text(
+          '"$chatTitle"\n\nThis will be removed forever. Once deleted, it '
+          'cannot be recovered.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (shouldDelete != true || !mounted) return;
+    final ScaffoldMessengerState? messenger = ScaffoldMessenger.maybeOf(
+      context,
+    );
+    try {
+      await ChatStorageService.deleteChat(chatId);
+    } on StateError catch (error) {
+      if (messenger != null) AppNotifications.showOn(messenger, error.message);
+      return;
+    } catch (error) {
+      if (messenger != null) {
+        AppNotifications.showOn(
+          messenger,
+          'Failed to delete chat: $error',
+          kind: AppNotificationKind.error,
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+    await _handleChatDeleted(chatId);
+    if (!mounted || messenger == null) return;
+    final String shown = chatTitle.length > 30
+        ? '${chatTitle.substring(0, 30)}...'
+        : chatTitle;
+    AppNotifications.showOn(messenger, '"$shown" deleted');
+  }
+
+  /// The sidebar's rename path ([SidebarStateCommon]).
+  Future<void> _renameCurrentChat(String chatId) async {
+    final StoredChat? chat = ChatStorageService.getChatById(chatId);
+    if (chat == null) return;
+    final String oldName = deriveSidebarChatTitle(chat);
+    // The dialog owns its text controller: it is still built during the
+    // route's exit animation, after showDialog has returned.
+    final String? newName = await showDialog<String>(
+      context: context,
+      builder: (BuildContext dialogContext) =>
+          _RenameChatDialog(initial: oldName),
+    );
+    if (newName == null || newName.isEmpty || newName == oldName) return;
+    if (!mounted) return;
+    final ScaffoldMessengerState? messenger = ScaffoldMessenger.maybeOf(
+      context,
+    );
+    try {
+      await ChatStorageService.renameChat(chatId, newName);
+    } on StateError catch (error) {
+      if (messenger != null) AppNotifications.showOn(messenger, error.message);
+      return;
+    } catch (error) {
+      if (messenger != null) {
+        AppNotifications.showOn(
+          messenger,
+          'Failed to rename chat: $error',
+          kind: AppNotificationKind.error,
+        );
+      }
+      return;
+    }
+    if (mounted) setState(() {});
+  }
+
+  /// Swipe mode's screen: the one chat view inside the pager, and the top
+  /// bar with the strip lying over it.
+  Widget _buildSwipeLayout(BuildContext context) {
+    final AppLocalizations? l = AppLocalizations.of(context);
+    // viewPaddingOf: see the plain build below.
+    final double topInset =
+        MediaQuery.viewPaddingOf(context).top + kMobileTopBarHeight;
+    final List<SwipeChatEntry> entries = _swipeEntries(context);
+    final String selectedId = _selectedChatId ?? _kNewChatEntryId;
+
+    return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: Stack(
+        children: <Widget>[
+          Positioned.fill(
+            child: SwipeChatPager(
+              entries: entries,
+              selectedId: selectedId,
+              controller: _swipeController,
+              onSelected: _onSwipeSelected,
+              child: _buildChatView(
+                topInset: topInset,
+                onToggleSidebar: _openSwipeMenu,
+              ),
+            ),
+          ),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: MobileTopBar(
+              onMenu: _openSwipeMenu,
+              centre: widget.headerCenter,
+              onAdd: _newChatFromAppBar,
+              menuTooltip: l?.chatSwipeMenu ?? 'Menu',
+              addTooltip: l?.newChat ?? 'New chat',
+              strip: ChatTitleStrip(
+                entries: entries,
+                selectedId: selectedId,
+                controller: _swipeController,
+                semanticsHint: l?.chatSwipeStripHint ?? 'Swipe to switch chats',
+                workingLabel: l?.chatSwipeWorking ?? 'working',
+                // A chat that is not in the list yet (saved a moment ago).
+                emptyTitle: _currentChatTitle() ?? (l?.newChat ?? 'New chat'),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The one chat view. Both layouts build it through here, with the same
+  /// key, so it is the same widget whichever layout holds it.
+  Widget _buildChatView({
+    required double topInset,
+    required VoidCallback onToggleSidebar,
+  }) {
+    return ChukChatUIMobile(
+      key: _chatUIMobileKey,
+      topInset: topInset,
+      onToggleSidebar: onToggleSidebar,
+      selectedChatId: _selectedChatId,
+      onChatIdChanged: (newId) {
+        // Update the global state when chat UI creates/changes a chat
+        // Use setState to ensure parent rebuilds with new ID
+        setState(() {
+          ChatStorageService.selectedChatId = newId;
+        });
+        if (kFeatureArtifacts) {
+          unawaited(
+            ArtifactStorageService.setActiveChat(newId, forceRefresh: false),
+          );
+        }
+      },
+      isSidebarExpanded: _isSidebarExpanded,
+      showReasoningTokens: widget.config.showReasoningTokens,
+      showModelInfo: widget.config.showModelInfo,
+      showTps: widget.config.showTps,
+      autoSendVoiceTranscription: widget.config.autoSendVoiceTranscription,
+      // Image generation settings
+      imageGenEnabled: widget.config.imageGenEnabled,
+      imageGenDefaultSize: widget.config.imageGenDefaultSize,
+      imageGenCustomWidth: widget.config.imageGenCustomWidth,
+      imageGenCustomHeight: widget.config.imageGenCustomHeight,
+      imageGenUseCustomSize: widget.config.imageGenUseCustomSize,
+      includeRecentImagesInHistory: widget.config.includeRecentImagesInHistory,
+      includeAllImagesInHistory: widget.config.includeAllImagesInHistory,
+      includeReasoningInHistory: widget.config.includeReasoningInHistory,
+      includeToolResultsInHistory: widget.config.includeToolResultsInHistory,
+      toolCallingEnabled: widget.config.toolCallingEnabled,
+      toolDiscoveryMode: widget.config.toolDiscoveryMode,
+      showToolCalls: widget.config.showToolCalls,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    if (widget.swipeNavigation) return _buildSwipeLayout(context);
+
     // sizeOf, not of(): this sits above the Scaffold, so `of` would see the
     // raw animating viewInsets and rebuild the app bar, the chat screen and
     // the whole sidebar on every keyboard frame.
@@ -691,49 +1063,9 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
         child: Stack(
           children: [
             Positioned.fill(
-              child: ChukChatUIMobile(
-                key: _chatUIMobileKey,
+              child: _buildChatView(
                 topInset: topBarInset,
                 onToggleSidebar: _toggleSidebar,
-                selectedChatId: _selectedChatId,
-                onChatIdChanged: (newId) {
-                  // Update the global state when chat UI creates/changes a chat
-                  // Use setState to ensure parent rebuilds with new ID
-                  setState(() {
-                    ChatStorageService.selectedChatId = newId;
-                  });
-                  if (kFeatureArtifacts) {
-                    unawaited(
-                      ArtifactStorageService.setActiveChat(
-                        newId,
-                        forceRefresh: false,
-                      ),
-                    );
-                  }
-                },
-                isSidebarExpanded: _isSidebarExpanded,
-                showReasoningTokens: widget.config.showReasoningTokens,
-                showModelInfo: widget.config.showModelInfo,
-                showTps: widget.config.showTps,
-                autoSendVoiceTranscription:
-                    widget.config.autoSendVoiceTranscription,
-                // Image generation settings
-                imageGenEnabled: widget.config.imageGenEnabled,
-                imageGenDefaultSize: widget.config.imageGenDefaultSize,
-                imageGenCustomWidth: widget.config.imageGenCustomWidth,
-                imageGenCustomHeight: widget.config.imageGenCustomHeight,
-                imageGenUseCustomSize: widget.config.imageGenUseCustomSize,
-                includeRecentImagesInHistory:
-                    widget.config.includeRecentImagesInHistory,
-                includeAllImagesInHistory:
-                    widget.config.includeAllImagesInHistory,
-                includeReasoningInHistory:
-                    widget.config.includeReasoningInHistory,
-                includeToolResultsInHistory:
-                    widget.config.includeToolResultsInHistory,
-                toolCallingEnabled: widget.config.toolCallingEnabled,
-                toolDiscoveryMode: widget.config.toolDiscoveryMode,
-                showToolCalls: widget.config.showToolCalls,
               ),
             ),
             Positioned(
@@ -812,6 +1144,80 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
           );
         },
       ),
+    );
+  }
+}
+
+/// The face of the "New chat" page in the title strip: the new-chat glyph in
+/// a 32 px circle.
+class _NewChatFace extends StatelessWidget {
+  const _NewChatFace();
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        color: scheme.primaryContainer,
+        shape: BoxShape.circle,
+      ),
+      alignment: Alignment.center,
+      child: HugeIcon(
+        HugeIcons.pencilEdit02,
+        size: 18,
+        color: scheme.onPrimaryContainer,
+      ),
+    );
+  }
+}
+
+/// The rename question of the swipe menu. It owns its controller, so the
+/// field outlives the `showDialog` future through the exit animation.
+class _RenameChatDialog extends StatefulWidget {
+  const _RenameChatDialog({required this.initial});
+
+  final String initial;
+
+  @override
+  State<_RenameChatDialog> createState() => _RenameChatDialogState();
+}
+
+class _RenameChatDialogState extends State<_RenameChatDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initial,
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Rename chat'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        decoration: const InputDecoration(
+          labelText: 'Chat name',
+          hintText: 'Enter new name',
+        ),
+        onSubmitted: (String value) => Navigator.of(context).pop(value.trim()),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
+          child: const Text('Rename'),
+        ),
+      ],
     );
   }
 }

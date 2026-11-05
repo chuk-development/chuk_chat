@@ -1,15 +1,22 @@
-/// Which half of the Agents build is in front: chuk_chat's own chat ("Chat")
-/// or the agents ("Agents").
+/// Which half of the Agents build is in front: chuk_chat's own chats
+/// ("Chats") or the agents ("Agents").
 ///
 /// Only the Agents build (`FEATURE_AGENTS=true`) has two halves. The switch at
 /// the top of both (`widgets/app_mode_switch.dart`) writes here, and the
 /// messenger shell shows the half this names. The plain build never reads it.
+/// Home (the dashboard the agents build, docs/DASHBOARD.md) is not a mode: it
+/// is the first page of the Agents half, and the shell keeps that state.
 ///
 /// The choice is remembered per device in SharedPreferences under
 /// [AppModeService.prefsKey]. With nothing remembered, a device that holds a
-/// pairing opens on Agents (it has a computer to talk to) and any other
-/// device opens on Chat. The default is not written: only a choice the user
-/// made is.
+/// pairing opens on Agents (it has a computer to talk to), and a device
+/// without one opens on Chats: Agents has nothing for it but the "Add your
+/// computer" path, and chuk chat works right away. The default is not
+/// written: only a choice the user made is.
+///
+/// Stored values of older builds: `chat` (the plain chats, before
+/// 2026-11-02) reads as Chats; `home` (the dashboard as a half of its own,
+/// 2026-11-02 to 2026-11-05) reads as Agents, where Home lives now.
 library;
 
 import 'dart:async';
@@ -17,9 +24,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// The two halves, in the order the switch shows them: Chat on the left,
+/// The two halves, in the order the switch shows them: Chats on the left,
 /// Agents on the right.
-enum AppMode { chat, agents }
+enum AppMode { chats, agents }
 
 /// The current [AppMode], with its persistence.
 ///
@@ -29,11 +36,12 @@ enum AppMode { chat, agents }
 /// nothing more.
 class AppModeService extends ValueNotifier<AppMode> {
   /// [initial] is what the shell shows until [load] has answered. Agents, by
-  /// default: it is what the Agents build showed before there were two halves,
-  /// so a device with a computer never sees the other half flash first.
+  /// default: it is where a device with a computer lands, so the common case
+  /// never sees the other half flash first.
   AppModeService({AppMode initial = AppMode.agents}) : super(initial);
 
-  /// The preference key of the remembered choice (`chat` or `agents`).
+  /// The preference key of the remembered choice (`chats` or `agents`; the
+  /// old `chat` and `home` are read too, see [parse]).
   static const String prefsKey = 'app_home_mode';
 
   /// How long the default may wait for the pairing store. It lives in secure
@@ -64,7 +72,7 @@ class AppModeService extends ValueNotifier<AppMode> {
     if (found == null) {
       try {
         final bool paired = await hasPairing().timeout(pairingTimeout);
-        found = paired ? AppMode.agents : AppMode.chat;
+        found = paired ? AppMode.agents : AppMode.chats;
       } catch (_) {
         // The store did not answer in time, or failed: keep what is shown.
         found = value;
@@ -92,10 +100,24 @@ class AppModeService extends ValueNotifier<AppMode> {
     }
   }
 
-  /// The mode a stored value names, or null for anything else.
+  /// Shows [mode] without remembering it: a move the app made for the user
+  /// (a notification tap, a Home widget that opens the main agent), not a
+  /// choice of where to land next time. Like [select], it wins over a [load]
+  /// that is still running.
+  void show(AppMode mode) {
+    if (_disposed) return;
+    _chosen = true;
+    value = mode;
+  }
+
+  /// The mode a stored value names, or null for anything else. The old
+  /// `chat` is Chats; the old `home` (the dashboard) is Agents, which holds
+  /// Home now.
   static AppMode? parse(String? raw) => switch (raw) {
-    'chat' => AppMode.chat,
+    'chats' => AppMode.chats,
+    'chat' => AppMode.chats,
     'agents' => AppMode.agents,
+    'home' => AppMode.agents,
     _ => null,
   };
 

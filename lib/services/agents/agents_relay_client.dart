@@ -1914,6 +1914,12 @@ class AgentsRelayClient
   static void Function(Map<String, dynamic> payload)? userBrowserStatusSink;
   // ── end own browser ──
 
+  // ── dashboard ──
+  /// Where the host's `dashboard_state` and `dashboard_error` frames go
+  /// (docs/DASHBOARD.md §5). `DashboardController` sets it; null drops them.
+  static void Function(Map<String, dynamic> payload)? dashboardSink;
+  // ── end dashboard ──
+
   /// What the paired host said it can do beyond the base contract
   /// (`host_route.capabilities`). Empty until it says; a host from before the
   /// field never does, so a feature gated on it stays off there.
@@ -2924,6 +2930,17 @@ class AgentsRelayClient
     });
   }
 
+  // ── dashboard ──
+  /// Asks the host for the whole dashboard (docs/DASHBOARD.md §5).
+  Future<void> sendDashboardGet() =>
+      _sendFramePayload(<String, dynamic>{'type': 'dashboard_get'});
+
+  /// Sends one tap on the dashboard. [op] carries `op_id`, `action`, `id` and
+  /// the action's arguments; the type is set here.
+  Future<void> sendDashboardOp(Map<String, dynamic> op) =>
+      _sendFramePayload(<String, dynamic>{...op, 'type': 'dashboard_op'});
+  // ── end dashboard ──
+
   @override
   Future<void> sendRunAck(String runId) =>
       // A sealed control frame, sent the same way as a stop: no running phase,
@@ -3542,6 +3559,11 @@ class AgentsRelayClient
       case 'user_browser_status':
         userBrowserStatusSink?.call(payload);
       // ── end own browser ──
+      // ── dashboard ──
+      case 'dashboard_state':
+      case 'dashboard_error':
+        dashboardSink?.call(payload);
+      // ── end dashboard ──
       // The app has no messenger channels (Telegram was removed from the
       // UI): a host that still pushes `agent_channel` is ignored.
       case 'agent_channel':

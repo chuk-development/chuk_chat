@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:chuk_chat/services/app_mode_service.dart';
 import 'package:chuk_chat/services/storage/chat_origin.dart';
 
 import '../support/icon_finder.dart';
@@ -30,6 +31,7 @@ import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agent_templates.dart';
 import 'package:chuk_chat/widgets/agent_template_picker.dart';
 import 'package:chuk_chat/widgets/room_list_view.dart';
+import 'package:chuk_chat/widgets/room_thread_view.dart';
 import 'package:chuk_chat/services/account_session.dart';
 import 'package:chuk_chat/services/agents/agent_control_source.dart';
 import 'package:chuk_chat/services/agents/agent_read_marks.dart';
@@ -45,7 +47,16 @@ import 'package:chuk_chat/services/agents/room_source.dart';
 import 'package:chuk_chat/services/notifications/notification_router.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_agent_list.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_chat_chrome.dart';
-import 'package:chuk_chat/platform_specific/mobile/mobile_chat_screen.dart';
+import 'package:chuk_chat/widgets/app_mode_switch.dart';
+import 'package:chuk_chat/platform_specific/mobile/chat_title_strip.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_home_composer.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_media_page.dart';
+import 'package:chuk_chat/services/agents/agents_thread_composer.dart';
+import 'package:chuk_chat/services/agents/main_agent_launcher.dart';
+import 'package:chuk_chat/services/agents/roster_pins.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_top_bar.dart';
+import 'package:chuk_chat/platform_specific/mobile/swipe_chat_pager.dart';
+import 'package:chuk_chat/pages/settings_page.dart';
 import 'package:chuk_chat/widgets/agents_thread_view.dart';
 import 'package:chuk_chat/widgets/sidebar/sidebar_chrome.dart';
 import 'package:chuk_chat/widgets/agents_thread_header.dart';
@@ -320,6 +331,8 @@ void main() {
         localizationsDelegates: kTestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: MessengerShell(
+          // These tests are about the Agents half: it is in front.
+          appMode: _agentsInFront(),
           relayControllerBuilder: () async {
             controllerBuilds++;
             return controller;
@@ -397,6 +410,21 @@ void main() {
   Future<void> resize(WidgetTester tester, Size size) async {
     tester.view.physicalSize = size;
     await tester.pumpAndSettle();
+  }
+
+  /// The conversation on stage on a phone: the thread view, not off stage
+  /// behind Home.
+  final Finder conversation = find.byType(AgentsThreadView);
+
+  /// On a phone: opens the menu chip's sheet and taps the row [label].
+  Future<void> tapPhoneMenu(WidgetTester tester, String label) async {
+    await tester.tap(find.byTooltip('Menu'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(of: find.byType(BottomSheet), matching: find.text(label)),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
   }
 
   testWidgets(
@@ -941,10 +969,8 @@ void main() {
     controller.pair();
     await tester.pumpAndSettle();
     final agent = roster.agents.single;
-    await tester.tap(find.byKey(ValueKey<String>('mobile-agent-${agent.id}')));
-    await tester.pumpAndSettle();
     expect(find.byTooltip('More'), findsNothing);
-    await tester.tap(findId('mobile_chat_bot_pill'));
+    await tapPhoneMenu(tester, 'Agent profile');
     await tester.pumpAndSettle();
     expect(find.byType(MobileAgentsSettingsPage), findsOneWidget);
     await tester.tap(find.byTooltip('Edit agent'));
@@ -1051,32 +1077,17 @@ void main() {
       );
       controller.pair();
       await tester.pumpAndSettle();
-      await tester.tap(
-        find.byKey(ValueKey<String>('mobile-agent-${roster.agents.single.id}')),
-      );
-      await tester.pumpAndSettle();
+      expect(roster.agents, isNotEmpty);
       controller.emit(
         const AgentsRelayBrowserView(status: 'opened', vncAvailable: true),
       );
       await tester.pumpAndSettle();
-      expect(
-        tester
-            .widget<MobileChatScreen>(find.byType(MobileChatScreen))
-            .browserAvailable,
-        isTrue,
-      );
 
       await tester.pump(kBrowserPresenceFreshness + const Duration(minutes: 1));
       await tester.pumpAndSettle();
-      final MobileChatScreen stale = tester.widget<MobileChatScreen>(
-        find.byType(MobileChatScreen),
-      );
-      expect(stale.browserAvailable, isFalse);
-      // Parked, not dead: the tap says what happened to the screen it offered.
-      expect(stale.onOpenBrowser, isNotNull);
-      stale.onOpenBrowser!();
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
+      // Parked, not dead: the menu's screen row says what happened to the
+      // screen it offered.
+      await tapPhoneMenu(tester, 'Open screen');
       expect(find.byType(BrowserViewPage), findsNothing);
       expect(find.textContaining('No word about the screen'), findsOneWidget);
 
@@ -1094,13 +1105,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      final MobileChatScreen failed = tester.widget<MobileChatScreen>(
-        find.byType(MobileChatScreen),
-      );
-      expect(failed.browserAvailable, isFalse);
-      failed.onOpenBrowser!();
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
+      await tapPhoneMenu(tester, 'Open screen');
+      expect(find.byType(BrowserViewPage), findsNothing);
       expect(
         find.textContaining('screen server would not start'),
         findsOneWidget,
@@ -1118,52 +1124,25 @@ void main() {
       controller.pair();
       await tester.pumpAndSettle();
       final agent = roster.agents.single;
-      await tester.tap(
-        find.byKey(ValueKey<String>('mobile-agent-${agent.id}')),
-      );
-      await tester.pumpAndSettle();
-      final chat = tester.widget<MobileChatScreen>(
-        find.byType(MobileChatScreen),
-      );
-      // No screen yet: the target is parked, not dead. Tapping it says why
+      // No screen yet: the row is parked, not dead. Tapping it says why
       // (bead cowork-egrg).
-      expect(chat.browserAvailable, isFalse);
-      expect(chat.onOpenBrowser, isNotNull);
-      expect(findId('mobile_chat_browser'), findsOneWidget);
-      expect(chat.onOpenFiles, isNotNull);
-      chat.onOpenBrowser!();
-      // The shell already has an "offline" snack up; ours is queued behind it.
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
+      await tapPhoneMenu(tester, 'Open screen');
       expect(find.byType(BrowserViewPage), findsNothing);
       expect(find.textContaining('No screen yet'), findsOneWidget);
 
+      // A screen that opened and closed again opens nothing.
       controller.emit(
         const AgentsRelayBrowserView(status: 'opened', vncAvailable: true),
       );
       await tester.pumpAndSettle();
-      final activeChat = tester.widget<MobileChatScreen>(
-        find.byType(MobileChatScreen),
-      );
-      // The lit target IS the announcement; nothing interrupts the reader.
-      expect(activeChat.browserAvailable, isTrue);
-      expect(activeChat.onOpenBrowser, isNotNull);
       expect(find.textContaining('You can take over'), findsNothing);
-
       controller.emit(const AgentsRelayBrowserView(status: 'closed'));
       await tester.pumpAndSettle();
-      expect(
-        tester
-            .widget<MobileChatScreen>(find.byType(MobileChatScreen))
-            .browserAvailable,
-        isFalse,
-      );
-      expect(findId('mobile_chat_browser'), findsOneWidget);
-      // A callback captured before closure must not enter a dead VNC route.
-      activeChat.onOpenBrowser!();
+      await tapPhoneMenu(tester, 'Open screen');
       await tester.pumpAndSettle();
       expect(find.byType(BrowserViewPage), findsNothing);
-      await tester.tap(findId('mobile_chat_files'));
+
+      await tapPhoneMenu(tester, 'Files');
       await tester.pumpAndSettle();
       final explorer = tester.widget<ChatDocumentsPanel>(
         find.byType(ChatDocumentsPanel),
@@ -1184,18 +1163,21 @@ void main() {
       controller.pair();
       await tester.pumpAndSettle();
       final agent = roster.agents.single;
-      await tester.tap(
-        find.byKey(ValueKey<String>('mobile-agent-${agent.id}')),
-      );
-      await tester.pumpAndSettle();
       final String selected = agent.threads.single.key;
-      bool usesUserBrowser() => tester
-          .widget<MobileChatScreen>(find.byType(MobileChatScreen))
-          .usesUserBrowser;
-      expect(usesUserBrowser(), isFalse);
+      const String ownBrowser = 'works in your own browser';
+      Future<bool> usesUserBrowser() async {
+        await tapPhoneMenu(tester, 'Open screen');
+        final bool said = find.textContaining(ownBrowser).evaluate().isNotEmpty;
+        ScaffoldMessenger.of(tester.element(find.byType(SwipeChatPager)))
+            .clearSnackBars();
+        await tester.pumpAndSettle();
+        return said;
+      }
+
+      expect(await usesUserBrowser(), isFalse);
 
       // Another agent's header says it works in the user's browser: the
-      // selected thread's chip does not change.
+      // selected thread's row does not change.
       controller.emit(
         AgentsRelayRunState(
           sessionKey: '$selected-other',
@@ -1204,7 +1186,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(usesUserBrowser(), isFalse);
+      expect(await usesUserBrowser(), isFalse);
 
       // The selected thread's own header does.
       controller.emit(
@@ -1215,7 +1197,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(usesUserBrowser(), isTrue);
+      expect(await usesUserBrowser(), isTrue);
 
       // And another thread back on the sandbox leaves it in the browser.
       controller.emit(
@@ -1226,7 +1208,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(usesUserBrowser(), isTrue);
+      expect(await usesUserBrowser(), isTrue);
     },
   );
 
@@ -1240,11 +1222,7 @@ void main() {
       controller.pair();
       await tester.pumpAndSettle();
       final agent = roster.agents.single;
-      await tester.tap(
-        find.byKey(ValueKey<String>('mobile-agent-${agent.id}')),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(findId('mobile_chat_bot_pill'));
+      await tapPhoneMenu(tester, 'Agent profile');
       await tester.pumpAndSettle();
       final profile = tester.widget<MobileAgentsSettingsPage>(
         find.byType(MobileAgentsSettingsPage),
@@ -1420,54 +1398,335 @@ void main() {
     expect(threadOffstage(tester), isFalse);
   });
 
-  testWidgets('a phone window shows the inbox, then the chat, and back again', (
-    tester,
-  ) async {
-    // Under 600 the shell mounts the mobile layer instead: the agent inbox,
-    // and a chat screen whose chrome floats over the thread with no app bar.
-    final (controller, roster) = await pumpShell(
+  group('phone: the swipe pager', () {
+    setUp(RosterPins.instance.reset);
+    tearDown(() {
+      RosterPins.instance.reset();
+      AgentsThreadComposer.reset();
+      MainAgentLauncher.instance.reset();
+    });
+
+    // Off stage too: a pushed route (a room) covers the shell.
+    ChatTitleStrip strip(WidgetTester tester) => tester.widget<ChatTitleStrip>(
+      find.byType(ChatTitleStrip, skipOffstage: false),
+    );
+
+    String shownThread(WidgetTester tester) =>
+        tester.widget<AgentsThreadView>(threadView).threadKey;
+
+    testWidgets('the top bar and the strip, agents only (Home is no swipe '
+        'page); no drawer, no bottom bar; the chat starts under the strip', (
       tester,
-      size: const Size(420, 900),
-    );
-    controller.pair();
-    await tester.pumpAndSettle();
+    ) async {
+      final (controller, roster) = await pumpShell(
+        tester,
+        size: const Size(420, 900),
+      );
+      controller.pair();
+      await tester.pumpAndSettle();
 
-    final agentId = roster.agents.single.id;
-    expect(find.byType(MobileAgentList), findsOneWidget);
-    // The inbox is a messenger home: one header row, with the All / Unread
-    // switch in the middle of it and no page headline.
-    expect(find.text('Agents'), findsNothing);
-    expect(find.text('All'), findsOneWidget);
+      final String agentId = roster.agents.single.id;
+      expect(find.byType(MobileTopBar), findsOneWidget);
+      final ChatTitleStrip bar = strip(tester);
+      expect(bar.entries.map((SwipeChatEntry e) => e.id).toList(), <String>[
+        agentId,
+      ]);
+      expect(bar.selectedId, agentId);
+      expect(conversation, findsOneWidget);
+      expect(find.byType(MobileHomeComposer), findsNothing);
 
-    await tester.tap(find.byKey(ValueKey<String>('mobile-agent-$agentId')));
-    await tester.pumpAndSettle();
+      final Scaffold shell = tester.widget<Scaffold>(
+        find.ancestor(of: threadView, matching: find.byType(Scaffold)).first,
+      );
+      expect(shell.endDrawer, isNull);
+      expect(shell.drawer, isNull);
+      expect(shell.bottomNavigationBar, isNull);
+      expect(find.byType(NavigationBar), findsNothing);
+      expect(find.byType(BottomNavigationBar), findsNothing);
+      expect(find.text('Media'), findsNothing, reason: 'no tab bar');
+      // Without a Chats half there is no Chats | Agents switch.
+      expect(find.byType(AppModeSwitch), findsNothing);
+      // The first message starts under the strip.
+      expect(
+        tester.widget<AgentsThreadView>(threadView).topInset,
+        tester.view.viewPadding.top + kMobileTopBarHeight,
+      );
+      // A fling across the chat never opens a drawer.
+      await tester.flingFrom(
+        const Offset(416, 400),
+        const Offset(-230, 0),
+        1200,
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(Drawer), findsNothing);
+    });
 
-    // The chat is in front with its floating chrome — no app bar of its own —
-    // and the back target returns to the inbox, the same flag the tablet path
-    // flips. Both layers stay mounted (the chat owns the socket), so the check
-    // is which one the reader can touch.
-    expect(find.byType(MobileChatScreen), findsOneWidget);
-    expect(find.byType(MobileChatChrome), findsOneWidget);
-    expect(findId('mobile_chat_more'), findsNothing);
-    final shellScaffold = tester.widget<Scaffold>(
-      find
-          .ancestor(
-            of: find.byType(MobileChatScreen),
-            matching: find.byType(Scaffold),
-          )
-          .first,
-    );
-    expect(shellScaffold.endDrawer, isNull);
-    expect(shellScaffold.endDrawerEnableOpenDragGesture, isFalse);
-    await tester.flingFrom(const Offset(416, 400), const Offset(-230, 0), 1200);
-    await tester.pumpAndSettle();
-    expect(find.byType(Drawer), findsNothing);
-    // The inbox has no headline to look for any more; its search target is
-    // the thing only the inbox has.
-    expect(findId('mobile_home_search').hitTestable(), findsNothing);
-    await tester.tap(findIcon(Icons.arrow_back_rounded).first);
-    await tester.pumpAndSettle();
-    expect(findId('mobile_home_search').hitTestable(), findsOneWidget);
+    testWidgets('the swipe runs over the agents only and stops at the main '
+        'agent; the thread view keeps its State', (tester) async {
+      final (controller, roster) = await pumpShell(
+        tester,
+        size: const Size(420, 900),
+      );
+      controller.pair();
+      await tester.pumpAndSettle();
+      final host = roster.agents.single;
+      final main = roster.addAgent(name: 'jade-heron');
+      RosterPins.instance.setMainAgent(main.id);
+      await tester.pumpAndSettle();
+      // The main agent, then the host. No Home.
+      expect(
+        strip(tester).entries.map((SwipeChatEntry e) => e.id).toList(),
+        <String>[main.id, host.id],
+      );
+      expect(shownThread(tester), host.threads.single.key);
+      final State threadState = tester.state(threadView);
+
+      // From the host: one swipe right to the main agent.
+      await tester.fling(
+        find.byType(SwipeChatPager),
+        const Offset(300, 0),
+        1000,
+      );
+      await tester.pumpAndSettle();
+      expect(shownThread(tester), main.threads.single.key);
+      expect(strip(tester).selectedId, main.id);
+
+      // One more swipe right: nothing is left of the main agent, Home is
+      // not a page of the swipe. It springs back.
+      await tester.fling(
+        find.byType(SwipeChatPager),
+        const Offset(300, 0),
+        1000,
+      );
+      await tester.pumpAndSettle();
+      expect(strip(tester).selectedId, main.id);
+      expect(conversation, findsOneWidget);
+      expect(find.byType(MobileHomeComposer), findsNothing);
+
+      // And left again: the host, in the same thread view.
+      await tester.fling(
+        find.byType(SwipeChatPager),
+        const Offset(-300, 0),
+        1000,
+      );
+      await tester.pumpAndSettle();
+      expect(strip(tester).selectedId, host.id);
+      expect(shownThread(tester), host.threads.single.key);
+      expect(tester.state(threadView), same(threadState));
+      expect(controllerBuilds, 1);
+    });
+
+    testWidgets('a tap on the strip opens no list; a drag on the strip '
+        'selects the next agent', (tester) async {
+      final (controller, roster) = await pumpShell(
+        tester,
+        size: const Size(420, 900),
+      );
+      controller.pair();
+      await tester.pumpAndSettle();
+      final host = roster.agents.single;
+      final other = roster.addAgent(name: 'jade-heron');
+      await tester.pumpAndSettle();
+      expect(
+        strip(tester).entries.map((SwipeChatEntry e) => e.id).toList(),
+        <String>[host.id, other.id],
+      );
+      expect(strip(tester).selectedId, host.id);
+      // The next agent peeks in at the strip's right edge.
+      expect(
+        find.byKey(ValueKey<String>('chat_title_strip_${other.id}')),
+        findsOneWidget,
+      );
+
+      final Rect bar = tester.getRect(find.byType(ChatTitleStrip));
+      await tester.tapAt(bar.center);
+      await tester.pumpAndSettle();
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(strip(tester).selectedId, host.id);
+
+      await tester.timedDrag(
+        find.byType(ChatTitleStrip),
+        const Offset(-200, 0),
+        const Duration(milliseconds: 500),
+      );
+      await tester.pumpAndSettle();
+      expect(shownThread(tester), other.threads.single.key);
+      expect(strip(tester).selectedId, other.id);
+      expect(controllerBuilds, 1);
+    });
+
+    testWidgets('a room opens as a route; closing it names the thread again', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(420, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final rooms = LocalRoomSource();
+      final room = rooms.addRoom(
+        const AgentsRoomDraft(
+          name: 'launch',
+          members: [
+            AgentsRoomMember(agentId: 'a', handle: 'amber'),
+            AgentsRoomMember(agentId: 'b', handle: 'cobalt'),
+          ],
+        ),
+      );
+      final roster = LocalAgentRosterSource()..addAgent(name: 'amber');
+      final controller = _FakeRelayController();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: kTestLocalizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: MessengerShell(
+            appMode: _agentsInFront(),
+            relayControllerBuilder: () async => controller,
+            sessionSource: const _FakeSessionSource(),
+            pairingStore: AgentsPairingStore(backend: _MemoryStore()),
+            rosterSource: roster,
+            roomSource: rooms,
+            onSignOut: () {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final String agentId = strip(tester).selectedId!;
+      expect(agentId, isNot(AgentsHalfPage.homeId));
+      expect(strip(tester).entries.last.id, room.id);
+
+      // The room is the next place: a drag on the strip opens it.
+      await tester.timedDrag(
+        find.byType(ChatTitleStrip),
+        const Offset(-200, 0),
+        const Duration(milliseconds: 500),
+      );
+      // The chat slides out, the room is picked, then its route comes in.
+      for (int i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 200));
+      }
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(find.byType(RoomThreadView), findsOneWidget);
+      expect(strip(tester).selectedId, room.id);
+
+      Navigator.of(tester.element(find.byType(RoomThreadView))).pop();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(find.byType(RoomThreadView), findsNothing);
+      expect(strip(tester).selectedId, agentId);
+      expect(conversation, findsOneWidget);
+    });
+
+    testWidgets('Android back on an agent goes to Home', (tester) async {
+      final (controller, _) = await pumpShell(
+        tester,
+        size: const Size(420, 900),
+      );
+      controller.pair();
+      await tester.pumpAndSettle();
+      expect(conversation, findsOneWidget);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      // Home: the top bar has no strip and the pager stands still.
+      expect(find.byType(ChatTitleStrip), findsNothing);
+      expect(
+        tester.widget<MobileTopBar>(find.byType(MobileTopBar)).strip,
+        isNull,
+      );
+      expect(
+        tester.widget<SwipeChatPager>(find.byType(SwipeChatPager)).enabled,
+        isFalse,
+      );
+      expect(find.byType(MobileHomeComposer), findsOneWidget);
+      expect(conversation, findsNothing);
+      expect(find.byType(MessengerShell), findsOneWidget);
+    });
+
+    testWidgets('the menu opens Settings, Media and Control Rooms', (
+      tester,
+    ) async {
+      final (controller, _) = await pumpShell(
+        tester,
+        size: const Size(420, 900),
+      );
+      controller.pair();
+      await tester.pumpAndSettle();
+
+      // A shell without chuk's config: Settings is the agent's own page.
+      await tapPhoneMenu(tester, 'Settings');
+      await tester.pumpAndSettle();
+      expect(find.byType(MobileAgentsSettingsPage), findsOneWidget);
+      expect(find.byType(SettingsPage), findsNothing);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+
+      await tapPhoneMenu(tester, 'Media');
+      await tester.pumpAndSettle();
+      expect(find.byType(MobileMediaPage), findsOneWidget);
+      Navigator.of(tester.element(find.byType(MobileMediaPage))).pop();
+      await tester.pumpAndSettle();
+
+      await tapPhoneMenu(tester, 'Control rooms');
+      await tester.pumpAndSettle();
+      expect(find.byType(RoomListView), findsOneWidget);
+    });
+
+    testWidgets("Home's composer sends to the main agent", (tester) async {
+      final (controller, roster) = await pumpShell(
+        tester,
+        size: const Size(420, 900),
+      );
+      controller.pair();
+      await tester.pumpAndSettle();
+      final main = roster.addAgent(name: 'jade-heron');
+      RosterPins.instance.setMainAgent(main.id);
+      await tester.pumpAndSettle();
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byType(MobileHomeComposer), findsOneWidget);
+      expect(find.text('Ask jade-heron…'), findsOneWidget);
+      // Stands in for the chat screen's send path (its own tests cover it).
+      final List<(String, String)> sent = <(String, String)>[];
+      bool fakeSender(String chatId, String text) {
+        if (shownThread(tester) != chatId) return false;
+        sent.add((chatId, text));
+        return true;
+      }
+
+      AgentsThreadComposer.attach(fakeSender);
+      addTearDown(() => AgentsThreadComposer.detach(fakeSender));
+
+      await tester.enterText(
+        find.descendant(
+          of: find.byType(MobileHomeComposer),
+          matching: find.byType(TextField),
+        ),
+        'log 10 push-ups',
+      );
+      await tester.pump();
+      await tester.tap(
+        find.descendant(
+          of: find.byType(MobileHomeComposer),
+          matching: find.byKey(const ValueKey<String>('composer-send-target')),
+        ),
+      );
+      // The thread view's composer is the one that sends; it answers for
+      // the thread it shows. The shell hands the text to it once the main
+      // agent's thread is the one on screen.
+      await settle(tester);
+      await settle(tester);
+
+      expect(conversation, findsOneWidget);
+      expect(shownThread(tester), main.threads.single.key);
+      expect(sent, <(String, String)>[
+        (main.threads.single.key, 'log 10 push-ups'),
+      ]);
+      expect(
+        AgentsThreadComposer.takePrefill(main.threads.single.key),
+        isNull,
+        reason: 'sent, not left in the composer',
+      );
+    });
   });
 
   testWidgets('the Rooms button opens the rooms screen and lists rooms', (
@@ -1489,6 +1748,8 @@ void main() {
         localizationsDelegates: kTestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: MessengerShell(
+          // These tests are about the Agents half: it is in front.
+          appMode: _agentsInFront(),
           relayControllerBuilder: () async => controller,
           sessionSource: const _FakeSessionSource(),
           pairingStore: AgentsPairingStore(backend: _MemoryStore()),
@@ -1570,6 +1831,8 @@ void main() {
         localizationsDelegates: kTestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: MessengerShell(
+          // These tests are about the Agents half: it is in front.
+          appMode: _agentsInFront(),
           relayControllerBuilder: () async => controller,
           sessionSource: const _FakeSessionSource(),
           pairingStore: AgentsPairingStore(backend: _MemoryStore()),
@@ -1620,9 +1883,7 @@ void main() {
     );
   });
 
-  testWidgets('the front page lists rooms beside the agents', (
-    tester,
-  ) async {
+  testWidgets('the front page lists rooms beside the agents', (tester) async {
     // A room is a conversation, so it is a row on the home screen and not only
     // behind Control Rooms. Checked on both front pages the shell has.
     final rooms = LocalRoomSource();
@@ -1646,6 +1907,8 @@ void main() {
           localizationsDelegates: kTestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: MessengerShell(
+            // These tests are about the Agents half: it is in front.
+            appMode: _agentsInFront(),
             relayControllerBuilder: () async => controller,
             sessionSource: const _FakeSessionSource(),
             pairingStore: AgentsPairingStore(backend: _MemoryStore()),
@@ -1661,14 +1924,26 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    // The phone inbox: the room is a row in the same list as the agents.
+    // The phone: the room is a place of the swipe, after the agent; it
+    // peeks in at the strip's edge beside the agent, not in a second list.
     await pumpAt(const Size(360, 900));
-    expect(find.byType(MobileAgentList), findsOneWidget);
+    expect(find.byType(MobileAgentList), findsNothing);
     expect(
-      find.byKey(ValueKey<String>('mobile-room-${room.id}')),
+      tester
+          .widget<ChatTitleStrip>(find.byType(ChatTitleStrip))
+          .entries
+          .last
+          .id,
+      room.id,
+    );
+    final Finder roomPeek = find.byKey(
+      ValueKey<String>('chat_title_strip_${room.id}'),
+    );
+    expect(roomPeek, findsOneWidget);
+    expect(
+      find.descendant(of: roomPeek, matching: find.text('launch')),
       findsOneWidget,
     );
-    expect(find.text('launch'), findsOneWidget);
 
     // The desktop roster: same room, under its own quiet label, and Control
     // Rooms is still in the rail — this is a second way in, not a move.
@@ -1711,6 +1986,8 @@ void main() {
         localizationsDelegates: kTestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: MessengerShell(
+          // These tests are about the Agents half: it is in front.
+          appMode: _agentsInFront(),
           relayControllerBuilder: () async => controller,
           sessionSource: const _FakeSessionSource(),
           pairingStore: AgentsPairingStore(backend: _MemoryStore()),
@@ -1769,6 +2046,8 @@ void main() {
         localizationsDelegates: kTestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: MessengerShell(
+          // These tests are about the Agents half: it is in front.
+          appMode: _agentsInFront(),
           relayControllerBuilder: () async => controller,
           sessionSource: const _FakeSessionSource(),
           pairingStore: AgentsPairingStore(backend: _MemoryStore()),
@@ -1817,6 +2096,8 @@ void main() {
           localizationsDelegates: kTestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: MessengerShell(
+            // These tests are about the Agents half: it is in front.
+            appMode: _agentsInFront(),
             relayControllerBuilder: () => gate.future,
             sessionSource: const _FakeSessionSource(),
             pairingStore: AgentsPairingStore(backend: _MemoryStore()),
@@ -1858,6 +2139,8 @@ void main() {
         localizationsDelegates: kTestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: MessengerShell(
+          // These tests are about the Agents half: it is in front.
+          appMode: _agentsInFront(),
           relayControllerBuilder: () async => _FakeRelayController(),
           sessionSource: const _FakeSessionSource(),
           pairingStore: AgentsPairingStore(backend: _MemoryStore()),
@@ -1907,6 +2190,8 @@ void main() {
         localizationsDelegates: kTestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: MessengerShell(
+          // These tests are about the Agents half: it is in front.
+          appMode: _agentsInFront(),
           relayControllerBuilder: () async => _FakeRelayController(),
           sessionSource: const _FakeSessionSource(),
           pairingStore: AgentsPairingStore(backend: _MemoryStore()),
@@ -1936,6 +2221,8 @@ void main() {
         localizationsDelegates: kTestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: MessengerShell(
+          // These tests are about the Agents half: it is in front.
+          appMode: _agentsInFront(),
           relayControllerBuilder: () async => _FakeRelayController(),
           sessionSource: const _FakeSessionSource(),
           pairingStore: AgentsPairingStore(backend: _MemoryStore()),
@@ -1971,6 +2258,8 @@ void main() {
         localizationsDelegates: kTestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: MessengerShell(
+          // These tests are about the Agents half: it is in front.
+          appMode: _agentsInFront(),
           relayControllerBuilder: () async => controller,
           sessionSource: const _FakeSessionSource(),
           pairingStore: AgentsPairingStore(backend: _MemoryStore()),
@@ -2117,45 +2406,31 @@ void main() {
     expect(tester.widget<AgentsThreadView>(threadView).threadKey, picked);
   });
 
-  testWidgets('nothing in the chat layer takes the focus while it is behind '
-      'the inbox', (tester) async {
-    // The shell keeps the thread mounted behind the agent list, because it
-    // owns the socket. If the composer takes the focus there, the soft
-    // keyboard opens over the list at start-up — the bug this pins.
+  testWidgets('the open conversation does not raise the keyboard by itself', (
+    tester,
+  ) async {
+    // The conversation is the Agents page. The composer is on screen, and it
+    // must not take the focus: a keyboard at start-up covers the thread.
     final (controller, _) = await pumpShell(tester, size: const Size(420, 900));
     controller.pair();
     await tester.pumpAndSettle();
 
-    expect(find.byType(MobileAgentList), findsOneWidget);
-    expect(find.byType(MobileChatScreen, skipOffstage: false), findsOneWidget);
-
-    final BuildContext? focused = FocusManager.instance.primaryFocus?.context;
-    expect(
-      focused?.findAncestorWidgetOfExactType<MobileChatScreen>(),
-      isNull,
-      reason: 'the offstage chat layer must not hold the focus',
-    );
+    expect(find.byType(MobileAgentList), findsNothing);
+    expect(conversation, findsOneWidget);
     expect(
       tester.testTextInput.isVisible,
       isFalse,
-      reason: 'no keyboard while the agent list is what is on screen',
+      reason: 'the composer waits for a tap',
     );
   });
 
   testWidgets('the composer rides the keyboard: a bottom view inset lifts the '
       'chat layer instead of hiding it', (tester) async {
-    final (controller, roster) = await pumpShell(
-      tester,
-      size: const Size(420, 900),
-    );
+    final (controller, _) = await pumpShell(tester, size: const Size(420, 900));
     controller.pair();
     await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(ValueKey<String>('mobile-agent-${roster.agents.single.id}')),
-    );
-    await tester.pumpAndSettle();
 
-    final Finder chat = find.byType(MobileChatScreen);
+    final Finder chat = conversation;
     expect(tester.getRect(chat).bottom, 900);
     final double composerBefore = tester
         .getRect(findId('message_input'))
@@ -2199,6 +2474,8 @@ void main() {
         localizationsDelegates: kTestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: MessengerShell(
+          // These tests are about the Agents half: it is in front.
+          appMode: _agentsInFront(),
           relayControllerBuilder: () async => _FakeRelayController(),
           sessionSource: const _FakeSessionSource(),
           pairingStore: AgentsPairingStore(backend: _MemoryStore()),
@@ -2251,3 +2528,8 @@ class _CountingRoster extends LocalAgentRosterSource {
     super.flushPendingPersist();
   }
 }
+
+/// The Agents half in front, whatever the device would default to (Chats
+/// without a pairing). Shown, so the shell's own load does not move it.
+AppModeService _agentsInFront() =>
+    AppModeService(initial: AppMode.agents)..show(AppMode.agents);

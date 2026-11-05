@@ -8,6 +8,10 @@ import 'package:chuk_chat/services/app_mode_service.dart';
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues(<String, Object>{}));
 
+  test('the switch order is Chats, then Agents', () {
+    expect(AppMode.values, <AppMode>[AppMode.chats, AppMode.agents]);
+  });
+
   test('with nothing remembered, a paired device opens on Agents', () async {
     final AppModeService mode = AppModeService();
     addTearDown(mode.dispose);
@@ -16,11 +20,37 @@ void main() {
     expect(mode.loaded, isTrue);
   });
 
-  test('with nothing remembered, an unpaired device opens on Chat', () async {
+  test('with nothing remembered, an unpaired device opens on Chats', () async {
     final AppModeService mode = AppModeService();
     addTearDown(mode.dispose);
     await mode.load(hasPairing: () async => false);
-    expect(mode.value, AppMode.chat);
+    expect(mode.value, AppMode.chats);
+  });
+
+  test('Agents is what shows until the load answers', () {
+    final AppModeService mode = AppModeService();
+    addTearDown(mode.dispose);
+    expect(mode.value, AppMode.agents);
+  });
+
+  test('the old "chat" value reads as Chats', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      AppModeService.prefsKey: 'chat',
+    });
+    final AppModeService mode = AppModeService();
+    addTearDown(mode.dispose);
+    await mode.load(hasPairing: () async => true);
+    expect(mode.value, AppMode.chats);
+  });
+
+  test('the old "home" value reads as Agents, where Home lives now', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      AppModeService.prefsKey: 'home',
+    });
+    final AppModeService mode = AppModeService();
+    addTearDown(mode.dispose);
+    await mode.load(hasPairing: () async => false);
+    expect(mode.value, AppMode.agents);
   });
 
   test('the default is not written: only a choice is', () async {
@@ -33,7 +63,7 @@ void main() {
 
   test('a remembered choice wins over the pairing', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{
-      AppModeService.prefsKey: 'chat',
+      AppModeService.prefsKey: 'chats',
     });
     final AppModeService mode = AppModeService();
     addTearDown(mode.dispose);
@@ -44,7 +74,7 @@ void main() {
         return true;
       },
     );
-    expect(mode.value, AppMode.chat);
+    expect(mode.value, AppMode.chats);
     expect(asked, 0, reason: 'the pairing store is not opened for nothing');
   });
 
@@ -53,19 +83,36 @@ void main() {
     addTearDown(mode.dispose);
     final List<AppMode> seen = <AppMode>[];
     mode.addListener(() => seen.add(mode.value));
-    final Future<void> write = mode.select(AppMode.chat);
-    expect(mode.value, AppMode.chat, reason: 'before the write lands');
+    final Future<void> write = mode.select(AppMode.chats);
+    expect(mode.value, AppMode.chats, reason: 'before the write lands');
     await write;
-    expect(seen, <AppMode>[AppMode.chat]);
+    expect(seen, <AppMode>[AppMode.chats]);
     final SharedPreferences prefs = await SharedPreferences.getInstance();
-    expect(prefs.getString(AppModeService.prefsKey), 'chat');
+    expect(prefs.getString(AppModeService.prefsKey), 'chats');
 
     // The next launch reads it back.
     final AppModeService next = AppModeService();
     addTearDown(next.dispose);
     await next.load(hasPairing: () async => true);
-    expect(next.value, AppMode.chat);
+    expect(next.value, AppMode.chats);
   });
+
+  test(
+    'show moves the half without remembering it, and beats a load',
+    () async {
+      final AppModeService mode = AppModeService();
+      addTearDown(mode.dispose);
+      final Completer<bool> pairing = Completer<bool>();
+      final Future<void> load = mode.load(hasPairing: () => pairing.future);
+      mode.show(AppMode.chats);
+      expect(mode.value, AppMode.chats);
+      pairing.complete(true);
+      await load;
+      expect(mode.value, AppMode.chats);
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString(AppModeService.prefsKey), isNull);
+    },
+  );
 
   test('a choice made while the default is still loading wins', () async {
     final AppModeService mode = AppModeService();
@@ -94,7 +141,7 @@ void main() {
     final AppModeService mode = AppModeService();
     addTearDown(mode.dispose);
     await mode.load(hasPairing: () async => false);
-    expect(mode.value, AppMode.chat);
+    expect(mode.value, AppMode.chats);
   });
 
   test('a load that lands after dispose does nothing', () async {
@@ -108,8 +155,10 @@ void main() {
   });
 
   test('parse', () {
-    expect(AppModeService.parse('chat'), AppMode.chat);
+    expect(AppModeService.parse('chats'), AppMode.chats);
     expect(AppModeService.parse('agents'), AppMode.agents);
+    expect(AppModeService.parse('chat'), AppMode.chats);
+    expect(AppModeService.parse('home'), AppMode.agents);
     expect(AppModeService.parse(null), isNull);
     expect(AppModeService.parse(''), isNull);
   });

@@ -14,7 +14,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_agent_list.dart';
-import 'package:chuk_chat/platform_specific/mobile/mobile_chat_screen.dart';
 import 'package:chuk_chat/models/chat_message.dart' show ChatMessageStatus;
 import 'package:chuk_chat/widgets/message_bubble.dart';
 
@@ -132,22 +131,6 @@ void main() {
     await shoot(tester, 'preview_home_dark');
   });
 
-  testWidgets('chat chrome over a placeholder body, light', (tester) async {
-    await pumpPhone(
-      tester,
-      MobileChatScreen(
-        agent: roster().first,
-        onBack: () {},
-        onOpenProfile: () {},
-        onOpenBrowser: () {},
-        onMore: () {},
-        bodyBuilder: (context, topInset) => _PlaceholderChat(topInset: topInset),
-      ),
-      theme: mono(Brightness.light),
-    );
-    await shoot(tester, 'preview_chat_chrome_light');
-  });
-
   testWidgets('the message bubbles', (tester) async {
     // The Agents build draws chuk_chat's bubbles: the accent user bubble with
     // its tail, the answer straight on the page, the queued-send row.
@@ -202,93 +185,4 @@ void main() {
     );
     await shoot(tester, 'preview_bubbles_light');
   });
-}
-
-/// Stands in for the verbatim chuk_chat phone screen in the preview: a
-/// scrollable list that starts under the chrome, so the fade is visible, and
-/// a bar at the bottom where the real composer sits. Nothing here ships.
-class _PlaceholderChat extends StatelessWidget {
-  const _PlaceholderChat({required this.topInset});
-
-  final double topInset;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final Color muted = theme.colorScheme.onSurface.withValues(alpha: 0.5);
-    Widget bubble(String text, {required bool user}) => Align(
-          alignment: user ? Alignment.centerRight : Alignment.centerLeft,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 300),
-            child: Container(
-              margin: const EdgeInsets.symmetric(vertical: 4),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: user
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: Text(
-                text,
-                style: TextStyle(
-                  color: user ? theme.colorScheme.onPrimary : null,
-                  fontSize: 15,
-                ),
-              ),
-            ),
-          ),
-        );
-    return Column(
-      children: [
-        Expanded(
-          child: ListView(
-            padding: EdgeInsets.fromLTRB(16, topInset, 16, 16),
-            children: [
-              Center(child: Text('Today 4:29 PM', style: TextStyle(color: muted, fontSize: 12))),
-              bubble('Hey Sam. Fresh start, I am here.', user: false),
-              bubble('What is the main thing you want me on, day to day?', user: false),
-              bubble('Make a meal prep for a week', user: true),
-              bubble('Sunday order: rice cooker on first, chicken thighs in the oven at 200°C, broccoli and carrots on a second tray. Full quantities and the shopping list are in the file.', user: false),
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Text('[ chat body = chuk_chat ChukChatUIMobile, verbatim ]',
-                      style: TextStyle(color: muted, fontSize: 11)),
-                ),
-              ),
-            ],
-          ),
-        ),
-        SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 22,
-                  backgroundColor: theme.colorScheme.surface,
-                  child: const Icon(Icons.add),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Container(
-                    height: 44,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(22),
-                    ),
-                    alignment: Alignment.centerLeft,
-                    child: Text('Ask Chief of Staff', style: TextStyle(color: muted)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
 }

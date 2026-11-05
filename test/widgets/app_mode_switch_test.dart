@@ -1,9 +1,11 @@
-// The Chat | Agents switch: one app, two halves (bead chuk_chat-18v).
+// The Chats | Agents switch: one app, two halves (bead chuk_chat-18v; Home
+// was a half of its own from 2026-11-02 to 2026-11-05, and is now the first
+// page of Agents).
 //
-// The shell tests stand a light widget in for chuk_chat's own root wrapper
-// (`MessengerShell.chatModeBuilder`): the real one starts the whole chat
-// stack. The last group pumps the real `RootWrapperMobile` to pin its header
-// slot, and that the plain build still draws the title pill.
+// The shell tests stand light widgets in for chuk_chat's root wrapper
+// (`MessengerShell.chatModeBuilder`) and for the dashboard
+// (`MessengerShell.homeBuilder`). The last groups pump chuk_chat's real root
+// wrappers to pin their header slot, which the plain build keeps.
 
 import 'dart:async';
 import 'dart:typed_data';
@@ -12,10 +14,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/pages/agents_install_page.dart';
 import 'package:chuk_chat/pages/messenger_shell.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_agent_list.dart';
-import 'package:chuk_chat/platform_specific/mobile/mobile_nav_bar.dart';
+import 'package:chuk_chat/platform_specific/mobile/chat_title_strip.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_top_bar.dart';
+import 'package:chuk_chat/platform_specific/mobile/swipe_chat_pager.dart';
 import 'package:chuk_chat/platform_specific/root_wrapper_desktop.dart';
 import 'package:chuk_chat/platform_specific/root_wrapper_mobile.dart';
 import 'package:chuk_chat/services/account_session.dart';
@@ -26,7 +31,11 @@ import 'package:chuk_chat/services/agents/agents_install_flow.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_restore.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_uri.dart';
+import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
+import 'package:chuk_chat/services/agents/agents_thread_composer.dart';
+import 'package:chuk_chat/services/agents/main_agent_launcher.dart';
+import 'package:chuk_chat/services/agents/roster_pins.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import 'package:chuk_chat/services/agents/room_source.dart';
 import 'package:chuk_chat/services/agents/supabase_pairing_sync.dart';
@@ -34,10 +43,12 @@ import 'package:chuk_chat/services/app_mode_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/notifications/notification_router.dart';
 import 'package:chuk_chat/widgets/agent_roster_view.dart';
+import 'package:chuk_chat/widgets/agents_status_panel.dart';
 import 'package:chuk_chat/widgets/agents_thread_header.dart';
 import 'package:chuk_chat/widgets/agents_thread_view.dart';
 import 'package:chuk_chat/widgets/app_mode_switch.dart';
 import 'package:chuk_chat/widgets/brand_wordmark.dart';
+import 'package:chuk_chat/widgets/sidebar/sidebar_chrome.dart' show SbChatTile;
 import 'package:chuk_chat/widgets/sidebar/sidebar_common.dart'
     show kSidebarAddComputerKey, kSidebarAddComputerLabel;
 
@@ -77,16 +88,6 @@ class _EmptyMirror extends SupabasePairingSync {
   Future<void> clearEncryptedPairing() async {}
 }
 
-/// A mirror whose read answers only when the test says so.
-class _SlowMirror extends _EmptyMirror {
-  _SlowMirror(this._read);
-
-  final Future<AgentsCloudPairingRead> _read;
-
-  @override
-  Future<AgentsCloudPairingRead> readEncryptedPairing() => _read;
-}
-
 class _Session implements AccountSessionSource {
   const _Session();
 
@@ -101,8 +102,7 @@ class _Session implements AccountSessionSource {
   Future<AccountSession?> refresh() async => current();
 }
 
-/// Stands in for chuk_chat's root wrapper: a top bar shaped like chuk's (a
-/// 42 px chip, then the switch left-aligned in the rest of a 48 px row), a
+/// Stands in for chuk_chat's root wrapper: the switch in its top bar, a
 /// counter and a draft, so a test can see that its state survives a switch.
 class _FakeChatHalf extends StatefulWidget {
   const _FakeChatHalf({
@@ -112,8 +112,6 @@ class _FakeChatHalf extends StatefulWidget {
   });
 
   final bool phone;
-
-  /// Null while the device has no computer.
   final Widget? modeSwitch;
 
   /// The install entry's action; null unless the device has no computer.
@@ -136,62 +134,64 @@ class _FakeChatHalfState extends State<_FakeChatHalf> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
+      body: SafeArea(
+        child: Column(
+          children: <Widget>[
+            SizedBox(
+              height: 48,
+              child: Center(
+                child: widget.modeSwitch ?? const SizedBox.shrink(),
+              ),
+            ),
+            Text(widget.phone ? 'chuk phone chat' : 'chuk desktop chat'),
+            Text('taps $taps'),
+            if (widget.onAddComputer != null)
+              TextButton(
+                key: const ValueKey<String>('fake-add-computer'),
+                onPressed: widget.onAddComputer,
+                child: const Text('Add your computer'),
+              ),
+            TextButton(
+              onPressed: () => setState(() => taps++),
+              child: const Text('tap'),
+            ),
+            SizedBox(
+              width: 200,
+              child: TextField(
+                key: const ValueKey<String>('fake-chuk-draft'),
+                controller: draft,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Stands in for the dashboard: a counter, so a test can see that Home keeps
+/// its state across a switch.
+class _FakeHome extends StatefulWidget {
+  const _FakeHome();
+
+  @override
+  State<_FakeHome> createState() => _FakeHomeState();
+}
+
+class _FakeHomeState extends State<_FakeHome> {
+  int taps = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Positioned.fill(
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Text(widget.phone ? 'chuk phone chat' : 'chuk desktop chat'),
-                  Text('taps $taps'),
-                  if (widget.onAddComputer != null)
-                    TextButton(
-                      key: const ValueKey<String>('fake-add-computer'),
-                      onPressed: widget.onAddComputer,
-                      child: const Text('Add your computer'),
-                    ),
-                  TextButton(
-                    onPressed: () => setState(() => taps++),
-                    child: const Text('tap'),
-                  ),
-                  SizedBox(
-                    width: 200,
-                    child: TextField(
-                      key: const ValueKey<String>('fake-chuk-draft'),
-                      controller: draft,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
-                child: SizedBox(
-                  height: 48,
-                  child: Row(
-                    children: <Widget>[
-                      const SizedBox(width: 42, height: 42),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child:
-                              widget.modeSwitch ?? const SizedBox.shrink(),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+          const Text('home stand-in'),
+          Text('home taps $taps'),
+          TextButton(
+            onPressed: () => setState(() => taps++),
+            child: const Text('home tap'),
           ),
         ],
       ),
@@ -201,8 +201,8 @@ class _FakeChatHalfState extends State<_FakeChatHalf> {
 
 const Size kPhone = Size(360, 800);
 
-/// Where the switch sits on a 360 px phone with a 24 px status bar, over
-/// chuk's chat and over the inbox alike.
+/// Where chuk's phone wrapper puts a header slot on a 360 px phone with a
+/// 24 px status bar: right of its first chip.
 const Rect kSwitchOnPhone = Rect.fromLTWH(
   10 + 42 + 8,
   24 + 8,
@@ -211,7 +211,7 @@ const Rect kSwitchOnPhone = Rect.fromLTWH(
 );
 
 /// A phone wide enough for the "Add your computer" panel an unpaired device
-/// shows behind the inbox (the test font runs wider than the real one).
+/// shows in Agents (the test font runs wider than the real one).
 const Size kWidePhone = Size(412, 800);
 const EdgeInsets kPhoneInsets = EdgeInsets.only(top: 24);
 
@@ -233,12 +233,18 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     AgentsRelayLink.instance.reset();
     AgentsRunLedger.instance.reset();
+    RosterPins.instance.reset();
+    MainAgentLauncher.instance.reset();
+    AgentsThreadComposer.reset();
     ChatStorageService.selectedChatId = null;
   });
   tearDown(() {
     AgentsRelayLink.instance.reset();
     AgentsRunLedger.instance.reset();
     NotificationRouter.instance.reset();
+    RosterPins.instance.reset();
+    MainAgentLauncher.instance.reset();
+    AgentsThreadComposer.reset();
     ChatStorageService.selectedChatId = null;
   });
 
@@ -247,17 +253,19 @@ void main() {
   int controllerBuilds = 0;
   setUp(() => controllerBuilds = 0);
 
-  /// Pumps the shell with a Chat half. [paired] seeds a stored pairing (the
-  /// default half with nothing remembered); [mode] injects the mode state.
-  /// The pairing store of the last [pumpShell].
+  /// The pairing store and the transport of the last [pumpShell].
   late AgentsPairingStore lastStore;
+  FakeRelayController? lastController;
 
+  /// Pumps the shell. [paired] seeds a stored pairing (the default half with
+  /// nothing remembered); [mode] injects the mode state; [withChat] adds the
+  /// Chats half.
   Future<LocalAgentRosterSource> pumpShell(
     WidgetTester tester, {
     Size size = kPhone,
     bool paired = true,
-    AppModeService? mode,
     bool withChat = true,
+    AppModeService? mode,
     AgentsStoredPairing? trustOnConnect,
     AgentsInstallClaimWaiter? installClaimWaiter,
   }) async {
@@ -279,7 +287,8 @@ void main() {
         MessengerShell(
           relayControllerBuilder: () async {
             controllerBuilds++;
-            return FakeRelayController()..trustOnConnect = trustOnConnect;
+            return lastController = FakeRelayController()
+              ..trustOnConnect = trustOnConnect;
           },
           installClaimWaiter: installClaimWaiter,
           sessionSource: const _Session(),
@@ -309,6 +318,7 @@ void main() {
                   onAddComputer: onAddComputer,
                 )
               : null,
+          homeBuilder: (_) => const _FakeHome(),
         ),
       ),
     );
@@ -316,8 +326,8 @@ void main() {
     return roster;
   }
 
-  /// The switch on screen. Both halves may hold one; only the half in front
-  /// is on stage.
+  /// The switch on screen. Both halves hold one; only the half in front is
+  /// on stage.
   Finder onStageSwitch() => find.byType(AppModeSwitch);
 
   Future<void> pick(WidgetTester tester, String label) async {
@@ -327,10 +337,22 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  AppMode shownMode(WidgetTester tester) =>
+      tester.widget<AppModeSwitch>(onStageSwitch()).mode;
+
   final Finder threadView = find.byType(AgentsThreadView, skipOffstage: false);
+  final Finder home = find.text('home stand-in');
+  final Finder rosterHome = find.byKey(const ValueKey<String>('roster-home'));
+
+  /// The conversation on stage: the thread view, not hidden behind Home or
+  /// the other half.
+  final Finder conversation = find.byType(AgentsThreadView);
+
+  /// On a phone: picks the switch's Home segment. Home is no swipe page.
+  Future<void> pickHome(WidgetTester tester) => pick(tester, 'Home');
 
   group('AppModeSwitch', () {
-    testWidgets('Chat on the left, Agents on the right; a press picks', (
+    testWidgets('Chats on the left, Agents on the right; a press picks', (
       tester,
     ) async {
       final List<AppMode> picked = <AppMode>[];
@@ -346,78 +368,165 @@ void main() {
       // The localisation delegates load asynchronously; the first frame is
       // empty.
       await tester.pump();
-      final Rect chat = tester.getRect(find.text('Chat'));
+      final Rect chats = tester.getRect(find.text('Chats'));
       final Rect agents = tester.getRect(find.text('Agents'));
-      expect(chat.center.dx, lessThan(agents.center.dx));
+      expect(chats.center.dx, lessThan(agents.center.dx));
       // The strip is the chips' 42, in a 48 px box a finger can hit.
       expect(tester.getSize(find.byType(AppModeSwitch)).height, 48);
 
       await tester.tap(find.text('Agents'));
       await tester.pump();
       expect(picked, isEmpty, reason: 'the half in front is not picked again');
-      await tester.tap(find.text('Chat'));
+      await tester.tap(find.text('Chats'));
       await tester.pump();
-      expect(picked, <AppMode>[AppMode.chat]);
+      expect(picked, <AppMode>[AppMode.chats]);
+    });
+
+    testWidgets('German labels: Chats | Agenten', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('de'),
+          localizationsDelegates: kTestLocalizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: Center(
+              child: AppModeSwitch(mode: AppMode.agents, onChanged: (_) {}),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('Chats'), findsOneWidget);
+      expect(find.text('Agenten'), findsOneWidget);
     });
   });
 
   group('phone', () {
-    testWidgets('Agents: the switch sits in the inbox header, All / Unread in '
-        'a compact row under it', (tester) async {
+    testWidgets('a paired device opens on Agents: the conversation, the '
+        'switch Home | Chats | Agents fixed at the top centre', (tester) async {
       await pumpShell(tester);
-
-      expect(find.byType(MobileAgentList), findsOneWidget);
-      final Rect bar = tester.getRect(onStageSwitch());
-      final Rect search = tester.getRect(findId('mobile_home_search'));
-      final Rect add = tester.getRect(findId('mobile_home_add'));
-      // [search] [Chat | Agents] [+], on one line.
-      expect(search.right, lessThanOrEqualTo(bar.left));
-      expect(bar.right, lessThanOrEqualTo(add.left));
-      expect(bar.center.dy, closeTo(search.center.dy, 0.5));
-      expect(bar.center.dy, closeTo(add.center.dy, 0.5));
-
-      // All / Unread still works, below the bar and left-aligned.
-      final Rect all = tester.getRect(findId('connected-group-all'));
-      expect(all.top, greaterThanOrEqualTo(bar.bottom));
-      expect(all.left, lessThan(bar.left));
-      expect(find.textContaining('Unread'), findsOneWidget);
-      // The switch leads with the half in front.
-      expect(
-        tester.widget<AppModeSwitch>(onStageSwitch()).mode,
-        AppMode.agents,
+      expect(shownMode(tester), AppMode.agents);
+      expect(conversation, findsOneWidget);
+      expect(home, findsNothing, reason: 'Home is a segment, not in front');
+      final AppModeSwitch modeSwitch = tester.widget(onStageSwitch());
+      expect(modeSwitch.onHome, isNotNull);
+      expect(modeSwitch.home, isFalse);
+      final Rect homeLabel = tester.getRect(
+        find.descendant(of: onStageSwitch(), matching: find.text('Home')),
       );
-      // chuk's floating bar: 10 px in, a 42 px chip, 8 px, then the switch;
-      // 8 px under the status bar, in a 48 px row.
-      expect(bar, kSwitchOnPhone);
+      final Rect chatsLabel = tester.getRect(
+        find.descendant(of: onStageSwitch(), matching: find.text('Chats')),
+      );
+      final Rect agentsLabel = tester.getRect(
+        find.descendant(of: onStageSwitch(), matching: find.text('Agents')),
+      );
+      expect(homeLabel.center.dx, lessThan(chatsLabel.center.dx));
+      expect(chatsLabel.center.dx, lessThan(agentsLabel.center.dx));
+      final Rect bar = tester.getRect(onStageSwitch());
+      expect(bar.center.dx, closeTo(kPhone.width / 2, 0.5));
+      expect(bar.top, kPhoneInsets.top + 8);
+      expect(bar.height, AppModeSwitch.boxHeight);
+      expect(find.byType(MobileAgentList, skipOffstage: false), findsNothing);
+      expect(find.text('chuk phone chat'), findsNothing);
+      expect(threadView, findsOneWidget);
     });
 
-    testWidgets('Chat: chuk\'s chat in front, the switch on the same pixels, '
-        'no navigation pill', (tester) async {
+    testWidgets('Home is the switch\'s first segment: it shows Home in the '
+        'Agents half, with no strip and a still pager; Agents leaves it', (
+      tester,
+    ) async {
       await pumpShell(tester);
-      final Rect inAgents = tester.getRect(onStageSwitch());
+      // The swipe never reaches Home: the agent is the only page.
+      await tester.fling(
+        find.byType(SwipeChatPager),
+        const Offset(300, 0),
+        1000,
+      );
+      await tester.pumpAndSettle();
+      expect(home, findsNothing);
+      expect(conversation, findsOneWidget);
+      expect(
+        tester
+            .widget<ChatTitleStrip>(find.byType(ChatTitleStrip))
+            .entries
+            .map((SwipeChatEntry e) => e.id),
+        isNot(contains(AgentsHalfPage.homeId)),
+      );
 
-      await pick(tester, 'Chat');
+      await pickHome(tester);
+      expect(home, findsOneWidget);
+      expect(conversation, findsNothing);
+      expect(shownMode(tester), AppMode.agents);
+      expect(tester.widget<AppModeSwitch>(onStageSwitch()).home, isTrue);
+      expect(onStageSwitch(), findsOneWidget);
+      expect(
+        tester.widget<MobileTopBar>(find.byType(MobileTopBar)).strip,
+        isNull,
+      );
+      expect(find.byType(ChatTitleStrip), findsNothing);
+      expect(
+        tester.widget<SwipeChatPager>(find.byType(SwipeChatPager)).enabled,
+        isFalse,
+      );
+      // A swipe on Home goes nowhere.
+      await tester.fling(home, const Offset(-300, 0), 1000);
+      await tester.pumpAndSettle();
+      expect(home, findsOneWidget);
 
-      expect(find.text('chuk phone chat'), findsOneWidget);
-      expect(find.byType(MobileAgentList), findsNothing, reason: 'off stage');
-      expect(find.byType(MobileAgentList, skipOffstage: false), findsOneWidget);
-      expect(find.byType(MobileNavBar), findsNothing, reason: 'Agents only');
-      final Rect inChat = tester.getRect(onStageSwitch());
-      expect(inChat, inAgents);
-      expect(tester.widget<AppModeSwitch>(onStageSwitch()).mode, AppMode.chat);
+      await pick(tester, 'Agents');
+      expect(home, findsNothing);
+      expect(conversation, findsOneWidget);
+      expect(shownMode(tester), AppMode.agents);
+      expect(tester.widget<AppModeSwitch>(onStageSwitch()).home, isFalse);
+      expect(find.byType(ChatTitleStrip), findsOneWidget);
+      expect(
+        tester.widget<SwipeChatPager>(find.byType(SwipeChatPager)).enabled,
+        isTrue,
+      );
     });
 
-    testWidgets('both halves stay mounted and keep their state', (
+    testWidgets('Home from Chats brings the Agents half with Home in front', (
+      tester,
+    ) async {
+      await pumpShell(tester);
+      await pick(tester, 'Chats');
+      expect(find.text('chuk phone chat'), findsOneWidget);
+      expect(tester.widget<AppModeSwitch>(onStageSwitch()).home, isFalse);
+
+      await pickHome(tester);
+      expect(shownMode(tester), AppMode.agents);
+      expect(find.text('chuk phone chat'), findsNothing);
+      expect(home, findsOneWidget);
+      expect(tester.widget<AppModeSwitch>(onStageSwitch()).home, isTrue);
+    });
+
+    testWidgets('Chats: chuk\'s chat in front; the choice is remembered', (
+      tester,
+    ) async {
+      await pumpShell(tester);
+      await pick(tester, 'Chats');
+      expect(find.text('chuk phone chat'), findsOneWidget);
+      expect(conversation, findsNothing, reason: 'behind');
+      expect(shownMode(tester), AppMode.chats);
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString(AppModeService.prefsKey), 'chats');
+
+      await pick(tester, 'Agents');
+      expect(find.text('chuk phone chat'), findsNothing);
+      expect(conversation, findsOneWidget);
+      expect(prefs.getString(AppModeService.prefsKey), 'agents');
+    });
+
+    testWidgets('both halves and Home keep their state; one socket owner', (
       tester,
     ) async {
       await pumpShell(tester);
       expect(controllerBuilds, 1);
+      await pickHome(tester);
+      await tester.tap(find.text('home tap'));
+      await tester.pump();
 
-      // Agents: pick the Unread filter.
-      await tester.tap(find.textContaining('Unread'));
-      await tester.pumpAndSettle();
-
-      await pick(tester, 'Chat');
+      await pick(tester, 'Chats');
       await tester.tap(find.text('tap'));
       await tester.enterText(
         find.byKey(const ValueKey<String>('fake-chuk-draft')),
@@ -426,63 +535,60 @@ void main() {
       await tester.pump();
       expect(find.text('taps 1'), findsOneWidget);
 
+      // Home kept its state behind the switch.
+      await pickHome(tester);
+      expect(find.text('home taps 1'), findsOneWidget);
       await pick(tester, 'Agents');
-      expect(find.byType(MobileAgentList), findsOneWidget);
-      // The inbox kept its filter: the Unread segment is still the one on.
-      final Semantics unread = tester.widget<Semantics>(
-        findId('connected-group-unread'),
-      );
-      expect(unread.properties.selected, isTrue);
+      expect(conversation, findsOneWidget);
 
-      await pick(tester, 'Chat');
+      await pick(tester, 'Chats');
       expect(find.text('taps 1'), findsOneWidget);
       expect(find.text('half a thought'), findsOneWidget);
-
-      // One socket owner the whole time.
       expect(threadView, findsOneWidget);
       expect(controllerBuilds, 1);
     });
 
-    testWidgets('the choice is remembered for the next launch', (
+    testWidgets('a remembered "chat" (older builds) opens Chats', (
       tester,
     ) async {
-      await pumpShell(tester);
-      await pick(tester, 'Chat');
-      final SharedPreferences prefs = await SharedPreferences.getInstance();
-      expect(prefs.getString(AppModeService.prefsKey), 'chat');
-
-      // A new shell on a paired device still opens where the user left.
-      await tester.pumpWidget(const SizedBox.shrink());
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        AppModeService.prefsKey: 'chat',
+      });
       await pumpShell(tester);
       expect(find.text('chuk phone chat'), findsOneWidget);
+      expect(shownMode(tester), AppMode.chats);
     });
 
-    testWidgets('with nothing remembered: Agents with a pairing, Chat '
-        'without', (tester) async {
-      await pumpShell(tester, paired: true);
-      expect(find.byType(MobileAgentList), findsOneWidget);
-
-      await tester.pumpWidget(const SizedBox.shrink());
-      await pumpShell(tester, paired: false, size: kWidePhone);
-      expect(find.text('chuk phone chat'), findsOneWidget);
-      expect(find.byType(MobileAgentList), findsNothing);
-      // The thread view is still there behind it: it owns the socket.
-      expect(threadView, findsOneWidget);
+    testWidgets('a remembered "home" (the dashboard half) opens Agents', (
+      tester,
+    ) async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        AppModeService.prefsKey: 'home',
+      });
+      await pumpShell(tester);
+      expect(conversation, findsOneWidget);
+      expect(shownMode(tester), AppMode.agents);
     });
 
-    testWidgets('without a Chat half there is no switch, and All / Unread '
-        'stays in the header row', (tester) async {
-      await pumpShell(
-        tester,
-        withChat: false,
-        paired: false,
-        size: kWidePhone,
-      );
+    // Without a Chats half there is no switch, so no Home segment, and Home
+    // is no swipe page any more. _buildPhoneBody's PopScope is the way left:
+    // Android back on an agent shows Home.
+    testWidgets('without a Chats half there is no switch; Android back is '
+        'the way to Home', (tester) async {
+      await pumpShell(tester, withChat: false);
       expect(find.byType(AppModeSwitch), findsNothing);
-      expect(find.byType(MobileAgentList), findsOneWidget);
-      final Rect all = tester.getRect(findId('connected-group-all'));
-      final Rect search = tester.getRect(findId('mobile_home_search'));
-      expect(all.center.dy, closeTo(search.center.dy, 0.5));
+      expect(conversation, findsOneWidget);
+      await tester.fling(
+        find.byType(SwipeChatPager),
+        const Offset(300, 0),
+        1000,
+      );
+      await tester.pumpAndSettle();
+      expect(home, findsNothing, reason: 'Home is not a swipe away');
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(home, findsOneWidget);
+      expect(find.byType(ChatTitleStrip), findsNothing);
     });
 
     testWidgets('a 360 px phone at 1.3 text fits the header without overflow', (
@@ -495,158 +601,41 @@ void main() {
       final Rect bar = tester.getRect(onStageSwitch());
       expect(bar.left, greaterThanOrEqualTo(0));
       expect(bar.right, lessThanOrEqualTo(kPhone.width));
-      await pick(tester, 'Chat');
+      await pick(tester, 'Chats');
       expect(tester.takeException(), isNull);
     });
   });
 
-  group('desktop', () {
-    /// The rect of the switch's painted strip, not its 48 px box.
-    Rect strip(WidgetTester tester) {
-      final Rect box = tester.getRect(onStageSwitch());
-      final double inset = (AppModeSwitch.boxHeight - AppModeSwitch.height) / 2;
-      return Rect.fromLTRB(box.left, box.top + inset, box.right, box.bottom - inset);
-    }
-
-    for (final Size size in <Size>[
-      const Size(1200, 800),
-      const Size(800, 700),
-      const Size(640, 700),
-    ]) {
-      testWidgets('${size.width.toInt()} px: the switch floats top centre and '
-          'clears the thread\'s buttons', (tester) async {
-        await pumpShell(tester, size: size);
-
-        final Rect sw = strip(tester);
-        // On the line of the 40 px chrome buttons, and of the header's row.
-        expect(sw.center.dy, closeTo(16 + 20, 1));
-        expect(
-          sw.center.dy,
-          AgentsThreadHeader.rowTop + AgentsThreadHeader.chipBox / 2,
-        );
-        // Nothing of the thread header's row under it: not the agent
-        // pill, not a chip.
-        final Finder buttons = find.descendant(
-          of: find.byType(AgentsThreadHeader),
-          matching: find.byType(Tooltip),
-        );
-        expect(buttons, findsWidgets);
-        for (final Element e in buttons.evaluate()) {
-          final Rect r = tester.getRect(find.byWidget(e.widget));
-          expect(r.overlaps(sw), isFalse, reason: 'overlaps $r');
-        }
-        // Clear of the roster (or its rail).
-        final Rect roster = tester.getRect(find.byType(AgentRosterView));
-        expect(sw.left, greaterThanOrEqualTo(roster.right));
-        expect(sw.right, lessThanOrEqualTo(size.width));
-        // A Linux window: the thread draws its desktop row at every width.
-      }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
-    }
-
-    testWidgets('Chat: chuk\'s desktop in front; the thread stays mounted', (
-      tester,
-    ) async {
-      await pumpShell(tester, size: const Size(1200, 800));
-      await pick(tester, 'Chat');
-      expect(find.text('chuk desktop chat'), findsOneWidget);
-      expect(threadView, findsOneWidget);
-      expect(controllerBuilds, 1);
-
-      await pick(tester, 'Agents');
-      expect(find.text('chuk desktop chat'), findsNothing);
-      expect(find.byType(AgentsThreadView), findsOneWidget);
-      expect(controllerBuilds, 1);
-    });
-
-    testWidgets('the details pane on a narrow window gives the switch a line '
-        'of its own', (tester) async {
-      await pumpShell(tester, size: const Size(800, 700));
-      // The host's agent is selected once the fake relay pairs.
-      await tester.tap(find.byTooltip('More actions'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Details (Ctrl+.)'));
-      await tester.pumpAndSettle();
-
-      final Rect sw = strip(tester);
-      final Rect header = tester.getRect(find.byType(AgentsThreadHeader));
-      expect(header.top, greaterThanOrEqualTo(sw.bottom));
-    }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
-  });
-
-  group('the shared chat pointer', () {
-    testWidgets('belongs to the half in front', (tester) async {
-      final LocalAgentRosterSource roster = await pumpShell(tester);
-      final String threadKey = roster.addAgent(name: 'Amber').threads.first.key;
-      await tester.pumpAndSettle();
-
-      await pick(tester, 'Chat');
-      // chuk's chat opens a chat of its own.
-      ChatStorageService.selectedChatId = '11111111-2222-3333-4444-555555555555';
-      await tester.pump();
-      // The Agents thread, behind it, reconnects and points it at itself.
-      ChatStorageService.selectedChatId = threadKey;
-      await tester.pump();
-      expect(
-        ChatStorageService.selectedChatId,
-        '11111111-2222-3333-4444-555555555555',
-        reason: 'the half in front keeps its chat',
-      );
-
-      await pick(tester, 'Agents');
-      // A thread is selected once the roster has one; the pointer follows it.
-      final String? agentsPointer = ChatStorageService.selectedChatId;
-      expect(agentsPointer, isNot('11111111-2222-3333-4444-555555555555'));
-
-      await pick(tester, 'Chat');
-      expect(
-        ChatStorageService.selectedChatId,
-        '11111111-2222-3333-4444-555555555555',
-        reason: 'chuk\'s chat comes back with its half',
-      );
-    });
-  });
-
   group('no computer', () {
-    final Finder addComputer = find.byKey(
+    final Finder statusAddComputer = find.byKey(
+      AgentsStatusPanel.addComputerKey,
+    );
+    final Finder chatAddComputer = find.byKey(
       const ValueKey<String>('fake-add-computer'),
     );
 
-    testWidgets('no pairing: Chat in front, no switch, the install entry', (
-      tester,
-    ) async {
+    testWidgets('no pairing: Chats in front with the install entry; the '
+        'switch reaches Agents and its "Add your computer"', (tester) async {
       await pumpShell(tester, paired: false, size: kWidePhone);
       expect(find.text('chuk phone chat'), findsOneWidget);
-      expect(find.byType(AppModeSwitch), findsNothing);
-      expect(addComputer, findsOneWidget);
-      // The Agents half is still mounted behind it: it owns the socket.
+      expect(shownMode(tester), AppMode.chats);
+      expect(chatAddComputer, findsOneWidget);
+      // The Agents half is mounted behind it: it owns the socket.
       expect(threadView, findsOneWidget);
+
+      await pick(tester, 'Agents');
+      expect(find.byType(AgentsStatusPanel), findsOneWidget);
+      expect(statusAddComputer, findsOneWidget);
     });
 
-    testWidgets('a remembered "agents" does not open an empty Agents half', (
-      tester,
-    ) async {
-      SharedPreferences.setMockInitialValues(<String, Object>{
-        AppModeService.prefsKey: 'agents',
-      });
-      await pumpShell(tester, paired: false, size: kWidePhone);
-      expect(find.text('chuk phone chat'), findsOneWidget);
-      expect(find.byType(AppModeSwitch), findsNothing);
-      expect(addComputer, findsOneWidget);
-      // The stored choice is left alone for when a computer comes.
-      final SharedPreferences prefs = await SharedPreferences.getInstance();
-      expect(prefs.getString(AppModeService.prefsKey), 'agents');
-    });
-
-    testWidgets('a pairing: the switch, and no install entry', (tester) async {
+    testWidgets('a pairing: no install entry in chuk\'s chats', (tester) async {
       await pumpShell(tester);
-      expect(find.byType(AppModeSwitch), findsOneWidget);
-      await pick(tester, 'Chat');
-      expect(find.byType(AppModeSwitch), findsOneWidget);
-      expect(addComputer, findsNothing);
+      await pick(tester, 'Chats');
+      expect(chatAddComputer, findsNothing);
     });
 
-    testWidgets('install: the page pairs on the live thread view, closes, '
-        'the switch appears and Agents comes to the front', (tester) async {
+    testWidgets('"Add your computer" in Agents opens the install page, which '
+        'pairs on the live thread view', (tester) async {
       final List<AgentsPairingInvite> claimed = <AgentsPairingInvite>[];
       await pumpShell(
         tester,
@@ -664,110 +653,292 @@ void main() {
             },
       );
       expect(controllerBuilds, 1);
-
-      await tester.tap(addComputer);
+      await pick(tester, 'Agents');
+      await tester.tap(statusAddComputer);
       await tester.pumpAndSettle();
 
-      // The page opened, claimed its own ticket's channel, paired and closed.
       expect(claimed, hasLength(1));
-      expect(claimed.single.pairingChannel, matches(RegExp(r'^[0-9a-f]{64}$')));
       expect(find.byType(AgentsInstallPage), findsNothing);
-      // The trust is in the store, as after a scan.
       expect(await lastStore.loadPairing(), isNotNull);
-      // One socket owner the whole time: the thread view paired itself.
       expect(controllerBuilds, 1);
-      // The switch is back and Agents is in front.
-      expect(find.byType(AppModeSwitch), findsOneWidget);
-      expect(tester.widget<AppModeSwitch>(onStageSwitch()).mode, AppMode.agents);
-      expect(find.byType(MobileAgentList), findsOneWidget);
-      expect(addComputer, findsNothing);
+      expect(shownMode(tester), AppMode.agents);
     });
 
-    testWidgets('a restored pairing shows the switch without a move', (
+    testWidgets('the install entry in chuk\'s chats pairs and brings Agents '
+        'to the front', (tester) async {
+      await pumpShell(
+        tester,
+        paired: false,
+        size: kWidePhone,
+        trustOnConnect: record,
+        installClaimWaiter: (
+          AgentsPairingInvite invite, {
+          required DateTime deadline,
+          required AgentsClaimCancel cancel,
+        }) async => 'host-1',
+      );
+      await tester.tap(chatAddComputer);
+      await tester.pumpAndSettle();
+      expect(await lastStore.loadPairing(), isNotNull);
+      expect(shownMode(tester), AppMode.agents);
+      expect(chatAddComputer, findsNothing);
+    });
+  });
+
+  group('desktop', () {
+    /// The rect of the switch's painted strip, not its 48 px box.
+    Rect strip(WidgetTester tester) {
+      final Rect box = tester.getRect(onStageSwitch());
+      final double inset = (AppModeSwitch.boxHeight - AppModeSwitch.height) / 2;
+      return Rect.fromLTRB(
+        box.left,
+        box.top + inset,
+        box.right,
+        box.bottom - inset,
+      );
+    }
+
+    final Finder agentTile = find.byWidgetPredicate(
+      (Widget w) =>
+          w.key is ValueKey<String> &&
+          (w.key! as ValueKey<String>).value.startsWith('agent-tile-'),
+    );
+
+    for (final Size size in <Size>[
+      const Size(1200, 800),
+      const Size(800, 700),
+      const Size(640, 700),
+    ]) {
+      testWidgets('${size.width.toInt()} px: the switch floats top centre and '
+          'clears the thread\'s buttons', (tester) async {
+        await pumpShell(tester, size: size);
+        expect(shownMode(tester), AppMode.agents);
+        // Two segments on the desktop: Chats | Agents, no Home.
+        expect(tester.widget<AppModeSwitch>(onStageSwitch()).onHome, isNull);
+        expect(
+          find.descendant(of: onStageSwitch(), matching: find.text('Home')),
+          findsNothing,
+        );
+
+        final Rect sw = strip(tester);
+        expect(sw.center.dy, closeTo(16 + 20, 1));
+        expect(
+          sw.center.dy,
+          AgentsThreadHeader.rowTop + AgentsThreadHeader.chipBox / 2,
+        );
+        final Finder buttons = find.descendant(
+          of: find.byType(AgentsThreadHeader),
+          matching: find.byType(Tooltip),
+        );
+        expect(buttons, findsWidgets);
+        for (final Element e in buttons.evaluate()) {
+          final Rect r = tester.getRect(find.byWidget(e.widget));
+          expect(r.overlaps(sw), isFalse, reason: 'overlaps $r');
+        }
+        final Rect roster = tester.getRect(find.byType(AgentRosterView));
+        expect(sw.left, greaterThanOrEqualTo(roster.right));
+        expect(sw.right, lessThanOrEqualTo(size.width));
+      }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
+    }
+
+    testWidgets('the roster\'s "Home" row sits above the main agent; Home '
+        'takes the centre pane and a pick leaves it', (tester) async {
+      await pumpShell(tester, size: const Size(1200, 800));
+      expect(home, findsNothing);
+      expect(rosterHome, findsOneWidget);
+      expect(agentTile, findsWidgets);
+      expect(
+        tester.getRect(rosterHome).top,
+        lessThan(tester.getRect(agentTile.first).top),
+      );
+
+      await tester.tap(rosterHome);
+      await tester.pumpAndSettle();
+      expect(home, findsOneWidget);
+      expect(shownMode(tester), AppMode.agents);
+      final Rect roster = tester.getRect(find.byType(AgentRosterView));
+      final Rect homeRect = tester.getRect(
+        find.byKey(const ValueKey<String>('desk-home')),
+      );
+      expect(homeRect.left, greaterThanOrEqualTo(roster.right));
+      expect(find.byType(AgentsThreadView), findsNothing, reason: 'off stage');
+      expect(threadView, findsOneWidget);
+      // Home sits under the switch's row.
+      expect(
+        tester.getRect(home).top,
+        greaterThan(tester.getRect(onStageSwitch()).bottom),
+      );
+      final SbChatTile homeRow = tester.widget<SbChatTile>(rosterHome);
+      expect(homeRow.selected, isTrue);
+
+      await tester.tap(agentTile.first);
+      await tester.pumpAndSettle();
+      expect(home, findsNothing);
+      expect(find.byType(AgentsThreadView), findsOneWidget);
+      expect(tester.widget<SbChatTile>(rosterHome).selected, isFalse);
+      expect(controllerBuilds, 1);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
+
+    testWidgets('Chats: chuk\'s desktop in front; the thread stays mounted', (
       tester,
     ) async {
-      await pumpShell(tester, paired: false, size: kWidePhone);
-      expect(addComputer, findsOneWidget);
+      await pumpShell(tester, size: const Size(1200, 800));
+      await pick(tester, 'Chats');
+      expect(find.text('chuk desktop chat'), findsOneWidget);
+      expect(find.byType(AgentRosterView), findsNothing, reason: 'behind');
+      expect(threadView, findsOneWidget);
+      expect(controllerBuilds, 1);
 
-      // Another device paired; the restore writes the record here.
-      await lastStore.savePairing(record);
+      await pick(tester, 'Agents');
+      expect(find.text('chuk desktop chat'), findsNothing);
+      expect(find.byType(AgentsThreadView), findsOneWidget);
+      expect(controllerBuilds, 1);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
+
+    testWidgets('the details pane on a narrow window gives the switch a line '
+        'of its own', (tester) async {
+      await pumpShell(tester, size: const Size(800, 700));
+      await tester.tap(find.byTooltip('More actions'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Details (Ctrl+.)'));
       await tester.pumpAndSettle();
 
-      expect(find.byType(AppModeSwitch), findsOneWidget);
-      expect(addComputer, findsNothing);
-      expect(find.text('chuk phone chat'), findsOneWidget);
+      final Rect sw = strip(tester);
+      final Rect header = tester.getRect(find.byType(AgentsThreadHeader));
+      expect(header.top, greaterThanOrEqualTo(sw.bottom));
+    }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
+  });
+
+  group('the shared chat pointer', () {
+    testWidgets('belongs to the half in front', (tester) async {
+      final LocalAgentRosterSource roster = await pumpShell(tester);
+      final String threadKey = roster.addAgent(name: 'Amber').threads.first.key;
+      await tester.pumpAndSettle();
+
+      await pick(tester, 'Chats');
+      // chuk's chat opens a chat of its own.
+      ChatStorageService.selectedChatId =
+          '11111111-2222-3333-4444-555555555555';
+      await tester.pump();
+      // The Agents thread, behind it, reconnects and points it at itself.
+      ChatStorageService.selectedChatId = threadKey;
+      await tester.pump();
+      expect(
+        ChatStorageService.selectedChatId,
+        '11111111-2222-3333-4444-555555555555',
+        reason: 'the half in front keeps its chat',
+      );
+
+      await pick(tester, 'Agents');
+      final String? agentsPointer = ChatStorageService.selectedChatId;
+      expect(agentsPointer, isNot('11111111-2222-3333-4444-555555555555'));
+
+      await pick(tester, 'Chats');
+      expect(
+        ChatStorageService.selectedChatId,
+        '11111111-2222-3333-4444-555555555555',
+        reason: 'chuk\'s chat comes back with its half',
+      );
+    });
+  });
+
+  group('main agent', () {
+    testWidgets('the launcher opens the main agent with the text in its '
+        'composer, not sent, from Home', (tester) async {
+      final AppModeService mode = AppModeService();
+      addTearDown(mode.dispose);
+      final LocalAgentRosterSource roster = await pumpShell(tester, mode: mode);
+      final AgentsAgent host = roster.visibleAgents.first;
+      final AgentsAgent other = roster.addAgent(name: 'Cobalt');
+      RosterPins.instance.setMainAgent(other.id);
+      await tester.pumpAndSettle();
+      // The open thread is the host's, right of the main agent: Android back
+      // is the one step to Home from any agent.
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(home, findsOneWidget);
+
+      MainAgentLauncher.instance.openWithPrompt('log 10 push-ups');
+      await tester.pumpAndSettle();
+
+      expect(MainAgentLauncher.instance.requests.value, isNull);
+      expect(mode.value, AppMode.agents);
+      expect(home, findsNothing, reason: 'the conversation is in front');
+      expect(find.byType(AgentsThreadView), findsOneWidget);
+      // The chosen main agent, not the first one.
+      expect(host.id, isNot(other.id));
+      final String threadKey = other.threads.first.key;
+      final bool inComposer = find
+          .byWidgetPredicate(
+            (Widget w) =>
+                w is EditableText && w.controller.text == 'log 10 push-ups',
+            skipOffstage: false,
+          )
+          .evaluate()
+          .isNotEmpty;
+      // Either the chat screen took it, or it waits for that thread's screen.
+      expect(
+        inComposer || AgentsThreadComposer.takePrefill(threadKey) != null,
+        isTrue,
+      );
+      expect(lastController!.tasks, isEmpty, reason: 'nothing was sent');
+      // The launch is not a choice of where to land next time.
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString(AppModeService.prefsKey), isNull);
     });
 
-    testWidgets('"Remove this computer": back to Chat, no switch, the entry', (
+    testWidgets('the launcher brings Agents in front of chuk\'s chats', (
       tester,
     ) async {
-      await pumpShell(tester);
-      expect(find.byType(MobileAgentList), findsOneWidget);
+      final AppModeService mode = AppModeService(initial: AppMode.chats)
+        ..show(AppMode.chats);
+      addTearDown(mode.dispose);
+      await pumpShell(tester, mode: mode);
+      expect(find.text('chuk phone chat'), findsOneWidget);
 
-      await lastStore.clearPairing();
+      MainAgentLauncher.instance.openWithPrompt('');
       await tester.pumpAndSettle();
 
-      expect(find.byType(AppModeSwitch), findsNothing);
-      expect(find.text('chuk phone chat'), findsOneWidget);
-      expect(addComputer, findsOneWidget);
+      expect(mode.value, AppMode.agents);
+      expect(find.byType(AgentsThreadView), findsOneWidget);
+      expect(lastController!.tasks, isEmpty);
     });
 
-    testWidgets('while the answer is not known, neither the entry nor the '
-        'switch', (tester) async {
-      final Completer<AgentsCloudPairingRead> read =
-          Completer<AgentsCloudPairingRead>();
-      tester.view.physicalSize = kWidePhone;
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.reset);
-      final AgentsPairingStore store = AgentsPairingStore(
-        backend: _MemoryStore(),
-        cloudSync: _SlowMirror(read.future),
-      );
-      await tester.pumpWidget(
-        testApp(
-          MessengerShell(
-            relayControllerBuilder: () async => FakeRelayController(),
-            sessionSource: const _Session(),
-            pairingStore: store,
-            rosterSource: LocalAgentRosterSource(),
-            roomSource: LocalRoomSource(),
-            onSignOut: () {},
-            pairingRestoreBuilder: (store, session, onRestored) =>
-                AgentsPairingRestore(
-                  store: store,
-                  sessionSource: session,
-                  onRestored: onRestored,
-                  authChanges: const Stream<Never>.empty(),
-                  hasEncryptionKey: () => true,
-                  sleep: (_) => Completer<void>().future,
-                ),
-            chatModeBuilder:
-                (
-                  context, {
-                  required phone,
-                  required modeSwitch,
-                  required onAddComputer,
-                }) => _FakeChatHalf(
-                  phone: phone,
-                  modeSwitch: modeSwitch,
-                  onAddComputer: onAddComputer,
-                ),
-          ),
-        ),
+    testWidgets('a computer whose roster has no agent at all gets one, '
+        'named "Assistant"', (tester) async {
+      final LocalAgentRosterSource roster = await pumpShell(tester);
+      for (final AgentsAgent a in roster.agents.toList()) {
+        roster.removeAgent(a.id);
+      }
+      await tester.pumpAndSettle();
+      expect(roster.agents, isEmpty);
+
+      lastController!.emit(
+        const AgentsRelayAgentList(agents: <AgentsHostAgentName>[]),
       );
       await tester.pumpAndSettle();
-      expect(find.byType(AppModeSwitch), findsNothing);
-      expect(addComputer, findsNothing);
 
-      // The restore answers: no computer on the account.
-      read.complete(
-        const AgentsCloudPairingRead(AgentsCloudPairingOutcome.noRecord),
+      expect(roster.agents, hasLength(1));
+      expect(roster.agents.single.name, 'Assistant');
+
+      // Once per session: an empty roster again does not make a second one.
+      roster.removeAgent(roster.agents.single.id);
+      lastController!.emit(
+        const AgentsRelayAgentList(agents: <AgentsHostAgentName>[]),
       );
       await tester.pumpAndSettle();
-      expect(addComputer, findsOneWidget);
-      expect(find.byType(AppModeSwitch), findsNothing);
+      expect(roster.agents, isEmpty);
+    });
 
-      await tester.pumpWidget(const SizedBox.shrink());
+    testWidgets('an empty cache before the host listed creates nothing', (
+      tester,
+    ) async {
+      final LocalAgentRosterSource roster = await pumpShell(tester);
+      for (final AgentsAgent a in roster.agents.toList()) {
+        roster.removeAgent(a.id);
+      }
+      await tester.pumpAndSettle();
+      expect(roster.agents, isEmpty);
     });
   });
 
@@ -781,7 +952,10 @@ void main() {
         .where((Rect r) => r.left >= 0 && r.right <= kPhone.width)
         .length;
 
-    Future<void> pumpWrapper(WidgetTester tester, {Widget? headerCenter}) async {
+    Future<void> pumpWrapper(
+      WidgetTester tester, {
+      Widget? headerCenter,
+    }) async {
       tester.view.physicalSize = kPhone;
       tester.view.devicePixelRatio = 1;
       tester.view.padding = FakeViewPadding(top: kPhoneInsets.top);
@@ -846,7 +1020,7 @@ void main() {
         'stay at 360 px', (tester) async {
       await pumpWrapper(
         tester,
-        headerCenter: AppModeSwitch(mode: AppMode.chat, onChanged: (_) {}),
+        headerCenter: AppModeSwitch(mode: AppMode.chats, onChanged: (_) {}),
       );
       expect(wordmarksOnScreen(tester), 0);
       expect(find.byType(AppModeSwitch), findsOneWidget);
@@ -858,7 +1032,6 @@ void main() {
       expect(sw.right, lessThanOrEqualTo(copy.left));
       expect(copy.right, lessThanOrEqualTo(add.left));
       expect(add.right, lessThanOrEqualTo(kPhone.width));
-      // The same pixels the switch takes over the Agents inbox.
       expect(sw, kSwitchOnPhone);
       expect(tester.takeException(), isNull);
       await drain(tester);
@@ -872,7 +1045,7 @@ void main() {
         testApp(
           RootWrapperMobile(
             config: testShellConfig(),
-            headerCenter: AppModeSwitch(mode: AppMode.chat, onChanged: (_) {}),
+            headerCenter: AppModeSwitch(mode: AppMode.chats, onChanged: (_) {}),
             selectedChatIdReader: () => 'open-chat',
           ),
         ),
@@ -897,7 +1070,7 @@ void main() {
         testApp(
           RootWrapperDesktop(
             config: testShellConfig(),
-            headerCenter: AppModeSwitch(mode: AppMode.chat, onChanged: (_) {}),
+            headerCenter: AppModeSwitch(mode: AppMode.chats, onChanged: (_) {}),
           ),
         ),
       );
@@ -965,7 +1138,7 @@ void main() {
           RootWrapperDesktop(
             key: wrapperKey,
             config: testShellConfig(),
-            headerCenter: AppModeSwitch(mode: AppMode.chat, onChanged: (_) {}),
+            headerCenter: AppModeSwitch(mode: AppMode.chats, onChanged: (_) {}),
             selectedChatIdReader: () => chatId,
           ),
         ),

@@ -84,9 +84,25 @@ class AgentRosterView extends StatefulWidget {
     this.readMarks,
     this.profiles,
     this.pins,
+    this.mainAgentSection = false,
+    this.onOpenHome,
+    this.homeSelected = false,
   });
 
   final AgentRosterSource source;
+
+  /// Opens Home (the dashboard, docs/DASHBOARD.md). Non-null draws a "Home"
+  /// row at the top of the list, above the main agent, and a Home slot at
+  /// the top of the rail. Null draws neither.
+  final VoidCallback? onOpenHome;
+
+  /// Home is in front: its row is the selected one.
+  final bool homeSelected;
+
+  /// Puts the main agent ([resolveMainAgent]) on top, in a group of its own
+  /// ("Your assistant"), and offers "Make main agent" in the row menu. The
+  /// Agents shell turns it on; off keeps the roster as it was.
+  final bool mainAgentSection;
 
   /// Called with the agent and the thread the user picked. An agent has one
   /// permanent thread, so this always reports that single thread's key.
@@ -206,6 +222,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
   /// goes to be out of the way.
   final Set<String> _folded = <String>{_kGroupHidden};
 
+  static const String _kGroupMain = 'main';
   static const String _kGroupPinned = 'pinned';
   static const String _kGroupAgents = 'agents';
   static const String _kGroupRooms = 'rooms';
@@ -466,6 +483,13 @@ class _AgentRosterViewState extends State<AgentRosterView> {
           Icons.edit_outlined,
           () => unawaited(_renameAgent(agent)),
         ),
+      if (widget.mainAgentSection && _mainAgent?.id != agent.id)
+        _menuItem(
+          AppLocalizations.of(context)?.agentsMakeMainAgent ??
+              'Make main agent',
+          Icons.star_outline_rounded,
+          () => _pins.setMainAgent(agent.id),
+        ),
       _menuItem(
         pinned ? 'Unpin' : 'Pin',
         pinned ? Icons.push_pin_rounded : Icons.push_pin_outlined,
@@ -526,8 +550,18 @@ class _AgentRosterViewState extends State<AgentRosterView> {
     );
   }
 
-  List<AgentsAgent> get _orderedAgents =>
-      rosterPinOrder(widget.source.visibleAgents, _pins.ids);
+  List<AgentsAgent> get _orderedAgents => widget.mainAgentSection
+      ? rosterMainOrder(
+          widget.source.visibleAgents,
+          _pins.ids,
+          _pins.mainAgentId,
+        )
+      : rosterPinOrder(widget.source.visibleAgents, _pins.ids);
+
+  /// The main agent, when this roster draws one.
+  AgentsAgent? get _mainAgent => widget.mainAgentSection
+      ? resolveMainAgent(widget.source.visibleAgents, _pins.mainAgentId)
+      : null;
 
   List<AgentsRoom> get _rooms => widget.onOpenRoom == null
       ? const <AgentsRoom>[]
@@ -841,13 +875,19 @@ class _AgentRosterViewState extends State<AgentRosterView> {
       for (final AgentsAgent a in _orderedAgents)
         if (matches(a.name)) a,
     ];
+    // The main agent has its own group on top, and is in no other.
+    final String? mainId = _mainAgent?.id;
+    final List<AgentsAgent> main = <AgentsAgent>[
+      for (final AgentsAgent a in agents)
+        if (a.id == mainId) a,
+    ];
     final List<AgentsAgent> pinned = <AgentsAgent>[
       for (final AgentsAgent a in agents)
-        if (pinnedIds.contains(a.id)) a,
+        if (a.id != mainId && pinnedIds.contains(a.id)) a,
     ];
     final List<AgentsAgent> rest = <AgentsAgent>[
       for (final AgentsAgent a in agents)
-        if (!pinnedIds.contains(a.id)) a,
+        if (a.id != mainId && !pinnedIds.contains(a.id)) a,
     ];
     final List<AgentsRoom> rooms = <AgentsRoom>[
       for (final AgentsRoom r in _rooms)
@@ -857,12 +897,18 @@ class _AgentRosterViewState extends State<AgentRosterView> {
         ? widget.source.hiddenAgents
         : const <AgentsAgent>[];
 
+    // Home is a place, not a match: it stays out of a search.
+    final List<Widget> home = widget.onOpenHome != null && query.isEmpty
+        ? <Widget>[_homeTile(context)]
+        : const <Widget>[];
+
     if (agents.isEmpty && rooms.isEmpty && hidden.isEmpty) {
       final bool nothingAtAll =
           widget.source.visibleAgents.isEmpty &&
           widget.source.hiddenAgents.isEmpty &&
           _rooms.isEmpty;
       return <Widget>[
+        ...home,
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
@@ -878,6 +924,14 @@ class _AgentRosterViewState extends State<AgentRosterView> {
     }
 
     return <Widget>[
+      ...home,
+      if (main.isNotEmpty)
+        ..._group(
+          _kGroupMain,
+          AppLocalizations.of(context)?.agentsYourAssistant ??
+              'Your assistant',
+          <Widget>[for (final AgentsAgent a in main) _agentTile(context, a)],
+        ),
       if (pinned.isNotEmpty)
         ..._group(
           _kGroupPinned,
@@ -905,6 +959,37 @@ class _AgentRosterViewState extends State<AgentRosterView> {
           ],
         ),
     ];
+  }
+
+  /// The Home row: a card of its own above the groups, shaped like an agent
+  /// row so the eye reads it as the first place in the list.
+  Widget _homeTile(BuildContext context) {
+    final String label =
+        AppLocalizations.of(context)?.agentsModeHome ?? 'Home';
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          kSbBlockInset,
+          kSbCardGap,
+          kSbBlockInset,
+          0,
+        ),
+        child: SbCardShape(
+          radius: BorderRadius.circular(kSbCardRadius),
+          child: SbChatTile(
+            key: const ValueKey<String>('roster-home'),
+            title: label,
+            selected: widget.homeSelected,
+            leading: const SizedBox(
+              width: kRosterTileFace,
+              height: kRosterTileFace,
+              child: Center(child: SbNavIcon(icon: Icons.home_rounded)),
+            ),
+            onTap: widget.onOpenHome,
+          ),
+        ),
+      ),
+    );
   }
 
   /// The row menu from the keyboard (the Menu key, Shift+F10), for the row
@@ -1140,6 +1225,18 @@ class _AgentRosterViewState extends State<AgentRosterView> {
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 children: <Widget>[
+                  if (widget.onOpenHome != null)
+                    slot(
+                      SbRailSlot(
+                        key: const ValueKey<String>('rail-home'),
+                        tooltip:
+                            AppLocalizations.of(context)?.agentsModeHome ??
+                            'Home',
+                        selected: widget.homeSelected,
+                        onTap: widget.onOpenHome,
+                        child: const SbNavIcon(icon: Icons.home_rounded),
+                      ),
+                    ),
                   for (final AgentsAgent agent in agents)
                     slot(
                       SbRailSlot(

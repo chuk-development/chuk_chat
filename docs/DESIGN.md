@@ -140,15 +140,18 @@ edge draws a line across the content.
 
 ## 4. Navigation
 
-`lib/platform_specific/mobile/mobile_nav_bar.dart`: one pill, centred, only as
-wide as its targets, floating on the bottom veil. Three destinations: Chats,
-Media, Settings (`mobile_home.dart`; AGENTS_UI_UNIFY.md, "Phone home"). The
-selected one is a filled capsule in `primary` with `onPrimary`; the rest are
-bare icons in `onSurfaceVariant`. The unread count rides on the Chats icon.
+Phone (owner's design, 2026-11-05): no drawer and no bottom navigation bar.
+`lib/platform_specific/mobile/mobile_top_bar.dart` is the one top bar of both
+halves: the menu chip, the Chats | Agents switch, the add button, and under
+them the title strip (`chat_title_strip.dart`) that names the place in view.
+A horizontal swipe (`swipe_chat_pager.dart`) moves to the previous or next
+place; a tap on the strip lists them all (`chat_switcher_sheet.dart`).
+Settings, Media and the other pages are rows of the menu chip's sheet. The
+composer is always at the bottom: in a thread it is the chat's own, on the
+Agents Home it is `mobile_home_composer.dart`, which sends to the main agent.
 
-The same shape is the filter control above the roster (`ConnectedGroup`): one
-pill, the selected segment a filled capsule. A control that offers a choice
-looks like the navigation, because it is the same idea.
+The filter control above a list (`ConnectedGroup`) is one pill, the selected
+segment a filled capsule in `primary` with `onPrimary`.
 
 ## 5. Icons
 

@@ -1,9 +1,8 @@
 /// Every interactive target on the phone surfaces is at least
 /// [MobileLayout.minTouchTarget] in both directions.
 ///
-/// The precedent is the named-chip check in `mobile_chat_chrome_test.dart`,
-/// which names the four chips it looks at. This one names nothing: it WALKS
-/// the tree of the mobile chat chrome and of the attachment bar, collects
+/// It names nothing: it WALKS the tree of the phone's top bar (menu, switch
+/// slot, add, title strip) and of the attachment bar, collects
 /// every widget that takes a tap, and measures it. A new control that is added
 /// too small therefore fails here without anyone remembering to list it.
 library;
@@ -12,8 +11,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:chuk_chat/models/chat_model.dart';
-import 'package:chuk_chat/platform_specific/mobile/mobile_chat_chrome.dart';
+import 'package:chuk_chat/platform_specific/mobile/chat_title_strip.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_top_bar.dart';
+import 'package:chuk_chat/platform_specific/mobile/swipe_chat_pager.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
@@ -65,22 +66,28 @@ void expectAllTargetsAreBigEnough(WidgetTester tester, Finder root) {
 void main() {
   tearDown(() => AgentsRelayLink.instance.reset());
 
-  testWidgets('every target in the mobile chat chrome is 48 dp', (
-    tester,
-  ) async {
+  testWidgets('every target in the phone top bar is 48 dp', (tester) async {
     await pumpPhone(
       tester,
-      MobileChatChrome(
-        agent: agent(id: 'a1', name: 'Chief of Staff', role: 'ops'),
-        onBack: () {},
-        onOpenProfile: () {},
-        onOpenFiles: () {},
-        onOpenBrowser: () {},
-        onMore: () {},
+      Align(
+        alignment: Alignment.topCenter,
+        child: MobileTopBar(
+          onMenu: () {},
+          centre: null,
+          onAdd: () {},
+          strip: ChatTitleStrip(
+            entries: const <SwipeChatEntry>[
+              SwipeChatEntry(id: 'home', title: 'Home'),
+              SwipeChatEntry(id: 'a1', title: 'Chief of Staff'),
+            ],
+            selectedId: 'a1',
+            onTap: () {},
+          ),
+        ),
       ),
     );
 
-    expectAllTargetsAreBigEnough(tester, find.byType(MobileChatChrome));
+    expectAllTargetsAreBigEnough(tester, find.byType(MobileTopBar));
   });
 
   testWidgets('every target in the attachment bar is 48 dp', (tester) async {

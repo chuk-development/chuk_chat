@@ -18,8 +18,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:chuk_chat/pages/agents_install_page.dart';
+import 'package:chuk_chat/services/app_mode_service.dart';
 import 'package:chuk_chat/models/agents_agent.dart';
-import 'package:chuk_chat/pages/agents_pairing_page.dart';
 import 'package:chuk_chat/pages/messenger_shell.dart';
 import 'package:chuk_chat/services/account_session.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
@@ -157,6 +158,8 @@ void main() {
     await tester.pumpWidget(
       testApp(
         MessengerShell(
+          // These tests are about the Agents half: it is in front.
+          appMode: _agentsInFront(),
           relayControllerBuilder: () async {
             final c = (controller ?? FakeRelayController.new)();
             built.add(c);
@@ -200,7 +203,8 @@ void main() {
     ('phone', kPhone),
   ]) {
     group(layout, () {
-      testWidgets('(a) no computer: "Add your computer" opens the pairing', (
+      testWidgets('(a) no computer: "Add your computer" opens the install '
+          'page', (
         tester,
       ) async {
         await pumpShell(tester, size: size);
@@ -213,8 +217,10 @@ void main() {
 
         await tester.tap(add);
         await tester.pumpAndSettle();
-        // The QR flow is up.
-        expect(find.byType(AgentsPairingPage), findsOneWidget);
+        // The install page (one command to paste; "Pair with a code
+        // instead" inside it). The plain chats' sidebar that used to carry
+        // it is gone from the Agents build (bead chuk_chat-lgq2.13.3).
+        expect(find.byType(AgentsInstallPage), findsOneWidget);
       });
 
       testWidgets('(a) a restore that can still land says "Looking for your '
@@ -330,3 +336,8 @@ void main() {
     });
   }
 }
+
+/// The Agents half in front, whatever the device would default to (Chats
+/// without a pairing). Shown, so the shell's own load does not move it.
+AppModeService _agentsInFront() =>
+    AppModeService(initial: AppMode.agents)..show(AppMode.agents);

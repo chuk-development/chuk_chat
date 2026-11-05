@@ -1059,6 +1059,13 @@ class AppLocalizations {
   String get agentsRoomEmptyHint => _get('agentsRoomEmptyHint');
   String get agentsRoomConnectHostHint => _get('agentsRoomConnectHostHint');
   String get agentsHostYourComputer => _get('agentsHostYourComputer');
+  String get agentsModeChats => _get('agentsModeChats');
+  String get agentsModeHome => _get('agentsModeHome');
+  String get agentsModeAgents => _get('agentsModeAgents');
+  String get agentsYourAssistant => _get('agentsYourAssistant');
+  String get agentsMakeMainAgent => _get('agentsMakeMainAgent');
+  String get agentsMakeMainAgentSubtitle => _get('agentsMakeMainAgentSubtitle');
+  String get agentsDefaultAssistantName => _get('agentsDefaultAssistantName');
   String get agentModelListFailed => _get('agentModelListFailed');
   String get profileSaveFailedPlain => _get('profileSaveFailedPlain');
   // ── F2: automations + cost totals ──
@@ -1405,6 +1412,90 @@ class AppLocalizations {
   String get openUiViewFailed => _get('openUiViewFailed');
   String get openUiPleaseWait => _get('openUiPleaseWait');
   // ── end OpenUI ──
+  // ── Home dashboard ──
+  String get dashGoodMorning => _get('dashGoodMorning');
+  String get dashGoodAfternoon => _get('dashGoodAfternoon');
+  String get dashGoodEvening => _get('dashGoodEvening');
+  String get dashGoodNight => _get('dashGoodNight');
+  String get dashEmptyTitle => _get('dashEmptyTitle');
+  String get dashEmptyBody => _get('dashEmptyBody');
+  String get dashSuggestPushups => _get('dashSuggestPushups');
+  String get dashSuggestPushupsPrompt => _get('dashSuggestPushupsPrompt');
+  String get dashSuggestWater => _get('dashSuggestWater');
+  String get dashSuggestWaterPrompt => _get('dashSuggestWaterPrompt');
+  String get dashSuggestWeather => _get('dashSuggestWeather');
+  String get dashSuggestWeatherPrompt => _get('dashSuggestWeatherPrompt');
+  String get dashEdit => _get('dashEdit');
+  String get dashDone => _get('dashDone');
+  String get dashEditHint => _get('dashEditHint');
+  String dashRemoveTitle(String title) => _get('dashRemoveTitle').replaceAll('{title}', title);
+  String get dashRemoveBody => _get('dashRemoveBody');
+  String get dashRemove => _get('dashRemove');
+  String get dashCancel => _get('dashCancel');
+  String get dashSizeHalf => _get('dashSizeHalf');
+  String get dashSizeFull => _get('dashSizeFull');
+  String get dashOffline => _get('dashOffline');
+  String dashPendingN(String n) => _get('dashPendingN').replaceAll('{n}', n);
+  String get dashPending1 => _get('dashPending1');
+  String get dashJustNow => _get('dashJustNow');
+  String dashMinAgo(String n) => _get('dashMinAgo').replaceAll('{n}', n);
+  String dashHourAgo(String n) => _get('dashHourAgo').replaceAll('{n}', n);
+  String get dashYesterday => _get('dashYesterday');
+  String dashDaysAgo(String n) => _get('dashDaysAgo').replaceAll('{n}', n);
+  String dashOfGoal(String goal, String unit) => _get('dashOfGoal').replaceAll('{goal}', goal).replaceAll('{unit}', unit);
+  String dashStreakDays(String n) => _get('dashStreakDays').replaceAll('{n}', n);
+  String dashStreakWeeks(String n) => _get('dashStreakWeeks').replaceAll('{n}', n);
+  String get dashNoStreak => _get('dashNoStreak');
+  String get dashGoalReached => _get('dashGoalReached');
+  String dashUndoLast(String value) => _get('dashUndoLast').replaceAll('{value}', value);
+  String get dashNothingToUndo => _get('dashNothingToUndo');
+  String dashLogged(String value) => _get('dashLogged').replaceAll('{value}', value);
+  String get dashMoreOptions => _get('dashMoreOptions');
+  String dashChecklistCount(String done, String total) => _get('dashChecklistCount').replaceAll('{done}', done).replaceAll('{total}', total);
+  String get dashChecklistEmpty => _get('dashChecklistEmpty');
+  String get dashAgendaEmpty => _get('dashAgendaEmpty');
+  String get dashAgendaAllDay => _get('dashAgendaAllDay');
+  String get dashAgendaNow => _get('dashAgendaNow');
+  String get dashTypeTracker => _get('dashTypeTracker');
+  String get dashTypeMetric => _get('dashTypeMetric');
+  String get dashTypeChecklist => _get('dashTypeChecklist');
+  String get dashTypeNote => _get('dashTypeNote');
+  String get dashTypeChart => _get('dashTypeChart');
+  String get dashTypeAgenda => _get('dashTypeAgenda');
+  String get dashTypePrompts => _get('dashTypePrompts');
+  String get dashTypeWeather => _get('dashTypeWeather');
+  String get dashRefreshFailed => _get('dashRefreshFailed');
+  String get dashLoading => _get('dashLoading');
+  String get dashAskAgent => _get('dashAskAgent');
+  String dashAskAgentPrompt(String title) => _get('dashAskAgentPrompt').replaceAll('{title}', title);
+  String get dashCheckedOff => _get('dashCheckedOff');
+  String dashTodayTitle(String date) => _get('dashTodayTitle').replaceAll('{date}', date);
+  String get dashGetStarted => _get('dashGetStarted');
+  String get dashSuggestPushupsDesc => _get('dashSuggestPushupsDesc');
+  String get dashSuggestWaterDesc => _get('dashSuggestWaterDesc');
+  String get dashSuggestWeatherDesc => _get('dashSuggestWeatherDesc');
+  String get dashAskAssistant => _get('dashAskAssistant');
+  String dashAskNamed(String name) => _get('dashAskNamed').replaceAll('{name}', name);
+  String dashInDuration(String d) => _get('dashInDuration').replaceAll('{d}', d);
+  // ── end Home dashboard ──
+  // ── Chats half, swipe mode (phone) ──
+  String get chatSwipeMenu => _get('chatSwipeMenu');
+  String get chatSwipeCopyChat => _get('chatSwipeCopyChat');
+  String get chatSwipeRename => _get('chatSwipeRename');
+  String get chatSwipeStripHint => _get('chatSwipeStripHint');
+  String get chatSwipeWorking => _get('chatSwipeWorking');
+  String get chatSwipeNoMatch => _get('chatSwipeNoMatch');
+  // ── Agents phone: swipe pager ──
+  String get agentsHomeDashboard => _get('agentsHomeDashboard');
+  String get agentsNewAgent => _get('agentsNewAgent');
+  String get agentsAgentProfile => _get('agentsAgentProfile');
+  String get agentsStripHint => _get('agentsStripHint');
+  String get agentsNoAgentMatch => _get('agentsNoAgentMatch');
+  String get agentsHomeAskAssistant => _get('agentsHomeAskAssistant');
+  String agentsHomeAskNamed(String name) =>
+      _get('agentsHomeAskNamed').replaceAll('{name}', name);
+  // ── end Agents phone: swipe pager ──
+  // ── end Chats half, swipe mode ──
 }
 
 class _AppLocalizationsDelegate

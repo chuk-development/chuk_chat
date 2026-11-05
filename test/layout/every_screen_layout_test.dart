@@ -50,8 +50,10 @@ import 'package:chuk_chat/pages/tool_calling_settings_page.dart';
 import 'package:chuk_chat/pages/usage_details_page.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_agent_list.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_agent_sheet.dart';
-import 'package:chuk_chat/platform_specific/mobile/mobile_chat_chrome.dart';
-import 'package:chuk_chat/platform_specific/mobile/mobile_chat_screen.dart';
+import 'package:chuk_chat/platform_specific/mobile/chat_title_strip.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_home_composer.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_top_bar.dart';
+import 'package:chuk_chat/platform_specific/mobile/swipe_chat_pager.dart';
 import 'package:chuk_chat/services/app_mode_service.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/services/agents/agent_control_source.dart';
@@ -409,8 +411,30 @@ List<_Screen> _screens() => <_Screen>[
       ),
     );
   }),
-  // The inbox as the Agents build shows it: the Chat | Agents switch in the
-  // header row (chuk's floating-bar geometry), All / Unread compact under it.
+  // The inbox as the Agents build shows it: the Home | Agents switch in the
+  // header row (chuk's floating-bar geometry), All / Unread compact under it,
+  // the main agent on top in its own section.
+  _Screen('mobile/mobile_agent_list (main agent)', (_Bag bag) {
+    final LocalAgentRosterSource source = LocalAgentRosterSource(
+      seed: _roster(),
+    );
+    bag.keep(source, source.dispose);
+    return _hosted(
+      MobileAgentList(
+        source: source,
+        onSelect: (_, _) {},
+        selectedAgentId: 'cobalt',
+        onAddAgent: () {},
+        onCreateRoom: () {},
+        onOpenProfile: (_) {},
+        onRenameAgent: (_) {},
+        onDeleteAgent: (_) {},
+        now: () => DateTime(2026, 1, 5, 15),
+        headerCenter: AppModeSwitch(mode: AppMode.agents, onChanged: (_) {}),
+        mainAgentSection: true,
+      ),
+    );
+  }),
   _Screen('mobile/mobile_agent_list (app switch)', (_Bag bag) {
     final LocalAgentRosterSource source = LocalAgentRosterSource(
       seed: _roster(),
@@ -443,33 +467,28 @@ List<_Screen> _screens() => <_Screen>[
           onSignOut: () {},
         ),
       )),
-  _Screen('mobile/mobile_chat_chrome', (_) => _hosted(
-        MobileChatChrome(
-          agent: _agent(),
-          onBack: () {},
-          onOpenProfile: () {},
-          onOpenFiles: () {},
-          onOpenBrowser: () {},
-          browserAvailable: true,
-          onReconnect: () {},
-          onMore: () {},
+  _Screen('mobile/mobile_top_bar', (_) => _hosted(
+        MobileTopBar(
+          onMenu: () {},
+          centre: AppModeSwitch(mode: AppMode.agents, onChanged: (_) {}),
+          onAdd: () {},
+          strip: ChatTitleStrip(
+            entries: const <SwipeChatEntry>[
+              SwipeChatEntry(id: 'home', title: 'Home', subtitle: 'Dashboard'),
+              SwipeChatEntry(
+                id: 'amber',
+                title: 'Chief of Staff with a long name',
+                subtitle: 'The build is green and the notes are out.',
+                unread: true,
+              ),
+            ],
+            selectedId: 'amber',
+            onTap: () {},
+          ),
         ),
       )),
-  _Screen('mobile/mobile_chat_screen', (_) => MobileChatScreen(
-        agent: _agent(),
-        onBack: () {},
-        onOpenProfile: () {},
-        onOpenFiles: () {},
-        onMore: () {},
-        bodyBuilder: (BuildContext context, double topInset) => ListView(
-          padding: EdgeInsets.only(top: topInset),
-          children: const <Widget>[
-            Padding(
-              padding: EdgeInsets.all(16),
-              child: Text('A message from the agent'),
-            ),
-          ],
-        ),
+  _Screen('mobile/mobile_home_composer', (_) => _hosted(
+        MobileHomeComposer(hintText: 'Ask Assistant…', onSend: (_) {}),
       )),
 
   // -- panels and sheets ---------------------------------------------------

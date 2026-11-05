@@ -15,10 +15,14 @@ part of 'messenger_shell.dart';
 ///    chuk's artifact panel slot: its header, its left border and its
 ///    divider. Resizable between [kDeskDetailsMin] and [kDeskDetailsMax]. It
 ///    pushes the thread; it never covers it.
-///  * **Top centre** — the Chat | Agents switch, where chuk's desktop floats
-///    it in the Chat half: on the line of the thread header's row, clear of
-///    the roster, the agent pill and the chips. A centre pane too narrow
-///    for all of them gives the switch a line of its own above the thread.
+///  * **Top centre** — the Chats | Agents switch: on the line of the thread
+///    header's row, clear of the roster, the agent pill and the chips. A
+///    centre pane too narrow for all of them gives the switch a line of its
+///    own above the thread.
+///  * **Home** — the "Home" row at the top of the roster, above the main
+///    agent, puts the dashboard in the centre pane. The roster stays docked
+///    (a pick in it, Ctrl+K or Ctrl+1 … Ctrl+9 leaves Home), the right pane
+///    closes, and the thread stays mounted behind it.
 ///
 /// The keyboard reaches everything: the shell's focus node sits above the
 /// whole body, so a shortcut works from the composer as well as from anywhere
@@ -36,8 +40,14 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
 
   void _openSettings();
 
-  /// The Chat | Agents switch, or null when there is no Chat half.
+  /// The Chats | Agents switch, or null when there is no Chats half.
   Widget? _agentsModeSwitch();
+
+  /// Home (the dashboard), for the centre pane.
+  Widget _buildHome(BuildContext context);
+
+  /// Whether Home is in front of the Agents half ([_agentsHomeShown]).
+  bool get _homeInFront;
 
   // --- state -------------------------------------------------------------------
 
@@ -156,6 +166,7 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
 
   void _deskOpenRoom(String roomId) {
     if (_rooms.byId(roomId) == null) return;
+    _leaveAgentsHome();
     setState(() => _deskRoomId = roomId);
   }
 
@@ -164,10 +175,13 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
     setState(() => _deskRoomId = null);
   }
 
-  /// The agents in the order the roster shows them: pinned first, then the
-  /// rest, each in the roster's own order. Ctrl+1 … Ctrl+9 count this list.
-  List<AgentsAgent> get _deskAgentOrder =>
-      rosterPinOrder(_roster.visibleAgents, RosterPins.instance.ids);
+  /// The agents in the order the roster shows them: the main agent, then the
+  /// pinned ones, then the rest. Ctrl+1 … Ctrl+9 count this list.
+  List<AgentsAgent> get _deskAgentOrder => rosterMainOrder(
+    _roster.visibleAgents,
+    RosterPins.instance.ids,
+    RosterPins.instance.mainAgentId,
+  );
 
   void _deskOpenNth(int n) {
     final List<AgentsAgent> order = _deskAgentOrder;
@@ -298,11 +312,16 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
     final ThemeData theme = Theme.of(context);
     final Color iconFg = theme.resolvedIconColor;
 
+    // Home takes the centre pane; the right pane belongs to a thread or the
+    // rooms, so it waits while Home is in front.
+    final bool home = _homeInFront;
+
     // The right pane first: it is what the user opened last.
     final AgentsAgent? detailsAgent = agent;
     final bool wantsRight =
-        _deskRightPane == 'rooms' ||
-        (_deskRightPane == 'details' && detailsAgent != null);
+        !home &&
+        (_deskRightPane == 'rooms' ||
+            (_deskRightPane == 'details' && detailsAgent != null));
     double rightW = wantsRight
         ? _deskDetailsWidth.clamp(kDeskDetailsMin, kDeskDetailsMax)
         : 0;
@@ -329,9 +348,10 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
       source: _roster,
       readMarks: _readMarks,
       profiles: _agentProfiles,
-      selectedAgentId: room == null ? _selectedAgentId : null,
+      // Nothing is picked while Home is in front.
+      selectedAgentId: home || room != null ? null : _selectedAgentId,
       selectedThreadKey: _selectedThreadKey,
-      selectedRoomId: room?.id,
+      selectedRoomId: home ? null : room?.id,
       collapsed: rail,
       onToggleCollapsed: _deskToggleRoster,
       onOpenQuickSwitcher: _deskOpenQuickSwitcher,
@@ -354,9 +374,13 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
       },
       onManageRoomMembers: _manageRoomMembers,
       onOpenSettings: widget.shellConfig == null ? null : _openSettings,
+      mainAgentSection: true,
+      // Home is the first place in the list, above the main agent.
+      onOpenHome: _showAgentsHome,
+      homeSelected: home,
     );
 
-    // The Chat | Agents switch: at the top centre of the window, on the line
+    // The Chats | Agents switch: at the top centre of the window, on the line
     // of the thread header's row, kept clear of the roster, of the agent
     // pill at the left of the header and of its chips at the right (or a
     // room's two). The header's fade is under it, so the transcript never
@@ -366,10 +390,13 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
     double centreTop = 0;
     Widget? switchSlot;
     if (modeSwitch != null) {
-      final double chips = room != null
+      // Home has no header row of its own: nothing to clear but the edges.
+      final double chips = home
+          ? AgentsThreadHeader.edge
+          : room != null
           ? AgentsThreadHeader.edge + 2 * AgentsThreadHeader.chipBox
           : AgentsThreadHeader.trailingExtent();
-      final double leading = room != null || agent == null
+      final double leading = home || room != null || agent == null
           ? AgentsThreadHeader.edge
           : AgentsThreadHeader.edge + AgentsThreadHeader.leadingMaxWidth;
       final double left = rosterW + leading + 8;
@@ -398,7 +425,7 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
         // never unmounted.
         Positioned.fill(
           child: Offstage(
-            offstage: room != null,
+            offstage: room != null || home,
             child: _buildThread(
               onOpenAgent: agent == null
                   ? null
@@ -407,11 +434,28 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
             ),
           ),
         ),
-        if (room != null)
+        if (room != null && !home)
           Positioned.fill(
             child: ColoredBox(
               color: theme.scaffoldBackgroundColor,
               child: _buildDeskRoom(context, room),
+            ),
+          ),
+        if (home)
+          Positioned.fill(
+            key: const ValueKey<String>('desk-home'),
+            child: ColoredBox(
+              color: theme.scaffoldBackgroundColor,
+              // Home starts under the switch's row, as the thread's first
+              // message starts under its header.
+              child: MediaQuery(
+                data: MediaQuery.of(context).copyWith(
+                  padding: MediaQuery.paddingOf(context).copyWith(
+                    top: centreTop == 0 ? AgentsThreadHeader.rowBottom : 0,
+                  ),
+                ),
+                child: _buildHome(context),
+              ),
             ),
           ),
       ],

@@ -102,10 +102,9 @@ mixin AgentsShellHost on State<MessengerShell> {
   /// pairing, false when there is none and the cloud restore has had its
   /// chance, null while that is not known yet.
   ///
-  /// The shell shows the Chat | Agents switch only on true, and the "Add your
-  /// computer" entry only on false. Null shows neither, so a cold start never
-  /// flashes the entry and then the switch. It follows the pairing store's
-  /// change signal and the restore's reason; nothing polls.
+  /// It follows the pairing store's change signal and the restore's reason;
+  /// nothing polls. The shell reads it to know when an empty roster means a
+  /// computer with no agent at all.
   final ValueNotifier<bool?> _hasComputer = ValueNotifier<bool?>(null);
 
   /// The last local read of the pairing store, and whether one has finished.
@@ -195,9 +194,22 @@ mixin AgentsShellHost on State<MessengerShell> {
   /// pairing, so it is not there on the first frame).
   bool _selectionIsAuto = false;
 
-  /// On a phone: the chat is in front of the inbox. Flipped by [_select], by
-  /// the back chip, and cleared when the selected agent is deleted.
-  bool _showThreadOnNarrow = false;
+  /// Home (the dashboard, docs/DASHBOARD.md) is in front inside the Agents
+  /// half. Home is the first page of that half: on a desktop window it takes
+  /// the centre pane (the roster's "Home" row), on a phone it is the first
+  /// page left of the conversation. Not remembered across launches.
+  ///
+  /// Written only through [_showAgentsHome] and [_leaveAgentsHome]; [_select]
+  /// (any agent pick) and a room that opens leave Home. The shell listens to
+  /// it and rebuilds.
+  final ValueNotifier<bool> _agentsHomeShown = ValueNotifier<bool>(false);
+
+  /// Brings Home to the front of the Agents half. Whether the Agents half
+  /// itself is in front is the shell's [AppModeService], not this.
+  void _showAgentsHome() => _agentsHomeShown.value = true;
+
+  /// Puts the conversation (or the open room) back in front of Home.
+  void _leaveAgentsHome() => _agentsHomeShown.value = false;
 
   /// Opens an agent's profile page. Implemented by the layout, which owns the
   /// navigator and the callbacks the page needs.
@@ -550,6 +562,7 @@ mixin AgentsShellHost on State<MessengerShell> {
 
   /// The `dispose` half of the host. Called by the state before `super`.
   void _hostDispose() {
+    _agentsHomeShown.dispose();
     if (_rememberTimer != null) {
       _rememberTimer!.cancel();
       unawaited(_writeRememberedSelection());
@@ -616,10 +629,8 @@ mixin AgentsShellHost on State<MessengerShell> {
       unawaited(
         Navigator.of(context).push(
           MaterialPageRoute<void>(
-            builder: (_) => McpConnectorDetailPage(
-              id: connectorId,
-              reconnectOnOpen: true,
-            ),
+            builder: (_) =>
+                McpConnectorDetailPage(id: connectorId, reconnectOnOpen: true),
           ),
         ),
       );
@@ -864,8 +875,10 @@ mixin AgentsShellHost on State<MessengerShell> {
             message: link.message,
             busy: link.busy,
             topInset: topInset,
-            onAddComputer: () =>
-                unawaited(_threadViewState?.openPairing() ?? Future.value()),
+            // The install page (one command to paste), which keeps "Pair
+            // with a code instead" one tap away. It used to sit in the plain
+            // chats' sidebar, which the Agents build no longer has.
+            onAddComputer: () => unawaited(_openInstallPage()),
             onReconnect: () => unawaited(
               _threadViewState?.reconnect(force: true) ?? Future.value(),
             ),
@@ -1146,10 +1159,10 @@ mixin AgentsShellHost on State<MessengerShell> {
   /// and its live socket stay mounted underneath — a room never disturbs the
   /// one-to-one connection. The desktop layout overrides this and shows the
   /// room in its centre pane instead.
-  void _openRoom(String roomId) {
+  Future<void> _openRoom(String roomId) async {
     final room = _rooms.byId(roomId);
     if (room == null) return;
-    Navigator.of(context).push(
+    await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (context) => Scaffold(
           appBar: FloatingAppBar(title: Text(room.name)),
@@ -1334,7 +1347,6 @@ mixin AgentsShellHost on State<MessengerShell> {
         // kept showing its chat after the last agent was gone, instead of
         // the empty state.
         _selectedThreadKey = '';
-        _showThreadOnNarrow = false;
         _selectionIsAuto = true;
       });
       if (_restoredAgentId == agentId) {

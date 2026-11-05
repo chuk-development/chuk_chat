@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:chuk_chat/services/app_mode_service.dart';
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
 import 'package:chuk_chat/pages/mobile_agents_settings_page.dart'
     show AgentSettingsView;
@@ -116,6 +117,8 @@ void main() {
     await tester.pumpWidget(
       testApp(
         MessengerShell(
+          // These tests are about the Agents half: it is in front.
+          appMode: _agentsInFront(),
           relayControllerBuilder: () async =>
               relayController?.call() ?? FakeRelayController(),
           sessionSource: const _Session(),
@@ -675,3 +678,8 @@ void main() {
     );
   });
 }
+
+/// The Agents half in front, whatever the device would default to (Chats
+/// without a pairing). Shown, so the shell's own load does not move it.
+AppModeService _agentsInFront() =>
+    AppModeService(initial: AppMode.agents)..show(AppMode.agents);

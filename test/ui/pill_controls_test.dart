@@ -1,5 +1,5 @@
-/// The two pill controls: the filter switch above a list and the floating
-/// navigation bar.
+/// The pill controls: the filter switch above a list. (The floating
+/// navigation bar of the old phone home is gone: the phone has no bottom bar.)
 ///
 /// Three things were wrong and all three are checked here. The switch lost its
 /// tap to the list it sits above, so it selects on pointer down now — and a
@@ -13,18 +13,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
-import 'package:chuk_chat/platform_specific/mobile/mobile_nav_bar.dart';
 import 'package:chuk_chat/ui/expressive/connected_group.dart';
-import 'package:chuk_chat/ui/expressive/huge_icon.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/ui/expressive/pill_geometry.dart';
-
-const List<MobileNavDestination> _destinations = <MobileNavDestination>[
-  MobileNavDestination(icon: HugeIcons.message01, label: 'Chats', badge: 7),
-  MobileNavDestination(icon: HugeIcons.album02, label: 'Media'),
-  MobileNavDestination(icon: HugeIcons.folder03, label: 'Files'),
-  MobileNavDestination(icon: HugeIcons.settings01, label: 'Settings'),
-];
 
 Future<void> _pumpPhone(WidgetTester tester, Widget child) async {
   tester.view.physicalSize = const Size(360, 800);
@@ -211,88 +202,6 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(picked, <int>[1]);
-    });
-  });
-
-  group('the navigation pill', () {
-    testWidgets('four targets fit a 360 phone and each one is 52 tall', (
-      tester,
-    ) async {
-      await _pumpPhone(
-        tester,
-        MobileNavBar(
-          destinations: _destinations,
-          index: 0,
-          onSelected: (_) {},
-        ),
-      );
-
-      final List<Element> targets = find.byType(MorphTap).evaluate().toList();
-      expect(targets, hasLength(_destinations.length));
-      for (final Element element in targets) {
-        final Size size = tester.getSize(find.byWidget(element.widget));
-        expect(size.height, PillGeometry.tapHeight);
-        expect(
-          size.width,
-          greaterThanOrEqualTo(MobileLayout.minTouchTarget),
-        );
-      }
-      // The shell itself: 60 tall, and four targets still inside a 360 phone.
-      final Size pill = tester.getSize(
-        find
-            .descendant(
-              of: find.byType(MobileNavBar),
-              matching: find.byType(Container),
-            )
-            .first,
-      );
-      expect(pill.height, PillGeometry.height);
-      expect(pill.width, lessThanOrEqualTo(360));
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('a destination that is not current draws no outline', (
-      tester,
-    ) async {
-      await _pumpPhone(
-        tester,
-        MobileNavBar(
-          destinations: _destinations,
-          index: 0,
-          onSelected: (_) {},
-        ),
-      );
-
-      for (final MorphTap tap
-          in tester.widgetList<MorphTap>(find.byType(MorphTap))) {
-        expect(tap.pressedOutline, isNull);
-        expect(tap.instant, isTrue);
-      }
-    });
-
-    testWidgets('the destination changes on pointer down, once', (
-      tester,
-    ) async {
-      final List<int> picked = <int>[];
-      await _pumpPhone(
-        tester,
-        MobileNavBar(
-          destinations: _destinations,
-          index: 0,
-          onSelected: picked.add,
-        ),
-      );
-
-      final Offset target = tester.getCenter(
-        find.byType(MorphTap).at(2),
-      );
-      final TestGesture gesture = await tester.startGesture(target);
-      await tester.pump();
-      // Down alone is the whole selection.
-      expect(picked, <int>[2]);
-      await gesture.up();
-      await tester.pumpAndSettle();
-      expect(picked, <int>[2]);
     });
   });
 
