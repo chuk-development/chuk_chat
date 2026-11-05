@@ -140,3 +140,30 @@ def test_a_different_question_on_the_same_thread_still_queues(rig):
     assert count == 2, "a genuine follow-up must still be accepted"
 
     _BlockingModel.gate.set()
+
+
+def test_a_resent_plan_task_runs_once(rig):
+    """A ``/plan`` task re-sent after the app's idle timeout is a copy too: the
+    run stores the prompt without the prefix, so the guard compares that."""
+    controller, executor = rig
+
+    first = controller.send_task(f"/plan {PROMPT}", session_key="thread-1")
+    for _ in range(200):
+        if executor._run_in_flight("thread-1", PROMPT) is not None:
+            break
+        threading.Event().wait(0.05)
+    live = executor._run_in_flight("thread-1", PROMPT)
+    assert live is not None, "the first task never became a run"
+
+    second = controller.send_task(f"/plan {PROMPT}", session_key="thread-1")
+    events = controller.collect(second, timeout=10.0)
+    assert events[-1]["type"] == "done"
+    assert events[-1]["reason"] == "duplicate"
+    assert events[-1]["run_id"] == live.run_id
+
+    with executor._runs_lock:
+        for_thread = [r for r in executor._runs.values() if r.session_key == "thread-1"]
+    assert len(for_thread) == 1
+
+    _BlockingModel.gate.set()
+    assert controller.collect(first, timeout=20.0)[-1]["reason"] == "finished"

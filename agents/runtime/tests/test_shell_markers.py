@@ -169,3 +169,31 @@ def test_an_adoptable_foreground_keeps_the_persistent_shell_and_no_secret_on_dis
     jobs_dir = tmp_path / ".agents" / "jobs"
     for path in jobs_dir.iterdir():
         assert "s3cr3t" not in path.read_text(errors="ignore")
+
+
+def test_an_adopted_job_leaves_no_shell_state_on_disk(tmp_path):
+    """The ``.env`` snapshot holds the caller's exports in plain text and the
+    caller never loads ``.state`` of an adopted job: both are removed."""
+    import time
+
+    env = _PersistentShell(tmp_path)
+    jobs = JobManager(env, workspace=str(tmp_path))
+    env.run_bash("export NOT_A_VAULT_TOKEN=tok-123", timeout=10)
+    moved = jobs.run_foreground("echo start; sleep 1.5", timeout=1)
+    assert moved["moved"] is True
+    job_id = moved["job_id"]
+    jobs_dir = tmp_path / ".agents" / "jobs"
+    # The snapshot is gone as soon as the command loaded it.
+    assert not (jobs_dir / f"{job_id}.env").exists()
+    deadline = time.monotonic() + 15
+    while not (jobs_dir / f"{job_id}.exit").exists() and time.monotonic() < deadline:
+        time.sleep(0.1)
+    assert (jobs_dir / f"{job_id}.exit").exists()
+    for _ in range(50):
+        if not (jobs_dir / f"{job_id}.state").exists():
+            break
+        time.sleep(0.1)
+    assert not (jobs_dir / f"{job_id}.env").exists()
+    assert not (jobs_dir / f"{job_id}.state").exists()
+    for path in jobs_dir.iterdir():
+        assert "tok-123" not in path.read_text(errors="ignore")
