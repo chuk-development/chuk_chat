@@ -20,6 +20,10 @@ This module holds what does not need the automation store:
   Slack, GitLab, and a generic ``x-signature-256``.
 - :func:`event_payload` — the event as trigger payload (untrusted data).
 - :class:`SeenEvents` — a small LRU of event ids against a double delivery.
+- :func:`sender_message_ids` and :class:`ReplayGuard` — the sender's own
+  message id (``svix-id``, ``webhook-id``, ``x-github-delivery``, the Stripe
+  event id, ...) is remembered for a TTL window, so a captured signed call
+  that is POSTed again (the server gives it a new ``event_id``) is refused.
 
 Nothing here logs a body or a header value.
 """
@@ -39,7 +43,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from chuk_agents_runtime.automations import WEBHOOK_ID_RE, missing
+from chuk_agents_runtime.automations import WEBHOOK_ID_RE, filter_header_allowed, missing
 
 #: The relay control frame (server -> host, top level, not sealed).
 TYPE_WEBHOOK_EVENT = "webhook_event"
@@ -58,6 +62,12 @@ SIGNATURE_TOLERANCE_SECONDS = 300
 #: to the automation payload cap (16 KB).
 EVENT_BODY_CHARS = 12 * 1024
 SEEN_EVENTS = 2048
+#: How long a sender's message id is remembered against a replay. Schemes with
+#: a signed timestamp refuse an old call anyway after
+#: ``SIGNATURE_TOLERANCE_SECONDS``; GitHub / GitLab / generic have no signed
+#: timestamp, so the window is long.
+REPLAY_TTL_SECONDS = 24 * 3600
+REPLAY_IDS = 4096
 _EVENT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 #: What :meth:`AutomationManager.offer_webhook` did with an event.
@@ -65,6 +75,8 @@ OUTCOME_QUEUED = "queued"
 OUTCOME_FILTERED = "filtered"
 OUTCOME_UNKNOWN = "unknown_webhook"
 OUTCOME_DUPLICATE = "duplicate"
+#: A signed call whose sender message id was already accepted (a replay).
+OUTCOME_REPLAY = "replay"
 OUTCOME_BAD_SIGNATURE = "bad_signature"
 OUTCOME_PAUSED = "paused"
 OUTCOME_TOO_LARGE = "too_large"
@@ -186,11 +198,20 @@ def _hmac(key: bytes, message: bytes) -> bytes:
 
 
 def _fresh(stamp: str, reference: float) -> bool:
-    return stamp.isdigit() and abs(reference - int(stamp)) <= SIGNATURE_TOLERANCE_SECONDS
+    # ``isdigit`` alone accepts "²" or Arabic-Indic digits; only ASCII counts.
+    if not (stamp.isascii() and stamp.isdigit()) or len(stamp) > 12:
+        return False
+    return abs(reference - int(stamp)) <= SIGNATURE_TOLERANCE_SECONDS
+
+
+def _bytes(text: str) -> bytes:
+    """A header value as bytes for a constant-time compare.
+    ``hmac.compare_digest`` raises on a non-ASCII ``str``; bytes never do."""
+    return text.encode("utf-8", "surrogatepass")
 
 
 def _hex_equal(given: str, digest: bytes) -> bool:
-    return hmac.compare_digest(given.strip().lower(), digest.hex())
+    return hmac.compare_digest(_bytes(given.strip().lower()), digest.hex().encode("ascii"))
 
 
 def _svix_key(secret: str) -> bytes:
@@ -221,7 +242,8 @@ def verify_signature(secret: str, event: WebhookEvent, *, now: float | None = No
     - GitLab: ``x-gitlab-token`` equals the secret.
 
     Timestamps must be within 5 minutes of ``received_at``. No signature
-    header = not verified. Every compare is constant-time."""
+    header = not verified. Every compare is constant-time and on bytes, so a
+    non-ASCII header is a plain mismatch, not an exception."""
     reference = event.received_at if now is None else now
     headers = event.headers
     key = secret.encode("utf-8")
@@ -259,7 +281,7 @@ def verify_signature(secret: str, event: WebhookEvent, *, now: float | None = No
         ok = False
         for item in signature.split():
             version, _, value = item.partition(",")
-            if version == "v1" and hmac.compare_digest(value, expected):
+            if version == "v1" and hmac.compare_digest(_bytes(value), expected.encode("ascii")):
                 ok = True
         return ok
     slack = headers.get("x-slack-signature")
@@ -270,19 +292,28 @@ def verify_signature(secret: str, event: WebhookEvent, *, now: float | None = No
         return _hex_equal(slack[3:], _hmac(key, f"v0:{stamp}:".encode() + event.raw))
     gitlab = headers.get("x-gitlab-token")
     if gitlab is not None:
-        return hmac.compare_digest(gitlab.encode("utf-8"), key)
+        return hmac.compare_digest(_bytes(gitlab), key)
     return False
+
+
+def payload_header_allowed(name: str) -> bool:
+    """Whether header ``name`` reaches the model. An allowlist (the headers a
+    filter may read, :func:`chuk_agents_runtime.automations.filter_header_allowed`),
+    never a denylist: an unknown header (``authorization``, ``cookie``,
+    ``x-api-key``, a vendor's own auth header) stays on the host."""
+    return filter_header_allowed(name) and not is_secret_header(name)
 
 
 def event_payload(event: WebhookEvent) -> dict[str, Any]:
     """The event as trigger payload. Untrusted: it goes after the payload
-    marker only. Signature and token headers are left out; the body is the
-    parsed JSON when it is small enough, else the first characters as text."""
+    marker only. Only allowlisted headers go in (:func:`payload_header_allowed`);
+    the body is the parsed JSON when it is small enough, else the first
+    characters as text."""
     out: dict[str, Any] = {
         "event_id": event.event_id,
         "received_at": event.received_at,
         "method": event.method,
-        "headers": {k: v for k, v in event.headers.items() if not is_secret_header(k)},
+        "headers": {k: v for k, v in event.headers.items() if payload_header_allowed(k)},
     }
     if event.document is not missing():
         encoded = json.dumps(event.document, ensure_ascii=False)
@@ -314,6 +345,10 @@ class SeenEvents:
         self._ids: OrderedDict[str, None] = OrderedDict()
         self._lock = threading.Lock()
 
+    def __contains__(self, event_id: object) -> bool:
+        with self._lock:
+            return event_id in self._ids
+
     def check_and_add(self, event_id: str) -> bool:
         """True when ``event_id`` was seen before."""
         with self._lock:
@@ -321,6 +356,94 @@ class SeenEvents:
                 self._ids.move_to_end(event_id)
                 return True
             self._ids[event_id] = None
+            while len(self._ids) > self._size:
+                self._ids.popitem(last=False)
+            return False
+
+
+#: Delivery-id headers of senders that sign only the body. The header itself
+#: is NOT signed, so it is a second key only; the body MAC is the first.
+_DELIVERY_HEADERS = (
+    "x-github-delivery",
+    "x-gitea-delivery",
+    "x-gogs-delivery",
+    "x-gitlab-event-uuid",
+)
+_SENDER_ID_MAX = 200
+
+
+def _bounded(key: str) -> str:
+    if len(key) > _SENDER_ID_MAX:
+        # Bounded memory per entry; a digest keeps it unique.
+        return "sha256:" + hashlib.sha256(_bytes(key)).hexdigest()
+    return key
+
+
+def sender_message_ids(event: WebhookEvent) -> list[str]:
+    """The keys that name this delivery for the replay check. Read only after
+    :func:`verify_signature` passed: then the scheme that decided is the one
+    whose headers are present. A call is a replay when ANY key was seen.
+
+    - Svix / Standard Webhooks: ``svix-id`` / ``webhook-id`` (signed).
+    - Stripe: the event id ``id`` of the signed JSON body.
+    - Slack: timestamp + signature (the MAC covers the timestamp).
+    - GitHub / Gitea / generic ``x-signature-256``: the body MAC itself (an
+      attacker cannot make a new one) and the delivery header.
+    - GitLab: the delivery header (the token signs nothing)."""
+    headers = event.headers
+    keys: list[str] = []
+    for prefix in ("svix-", "webhook-"):
+        if headers.get(prefix + "signature") and headers.get(prefix + "id"):
+            keys.append(prefix + headers[prefix + "id"])
+            break
+    if not keys and headers.get("stripe-signature"):
+        doc = event.document
+        if isinstance(doc, dict) and isinstance(doc.get("id"), str) and doc["id"]:
+            keys.append("stripe:" + doc["id"])
+    if not keys and headers.get("x-slack-signature"):
+        keys.append("slack:" + (headers.get("x-slack-request-timestamp") or "") + ":" + headers["x-slack-signature"])
+    if not keys:
+        for name in ("x-hub-signature-256", "x-signature-256"):
+            value = (headers.get(name) or "").strip().lower()
+            if value:
+                keys.append("mac:" + value.removeprefix("sha256="))
+                break
+        for name in _DELIVERY_HEADERS:
+            value = (headers.get(name) or "").strip()
+            if value:
+                keys.append(name + ":" + value)
+                break
+    return [_bounded(k) for k in keys]
+
+
+class ReplayGuard:
+    """Sender message ids per webhook row, each kept ``ttl`` seconds.
+    Thread-safe; bounded to ``size`` entries (oldest out first)."""
+
+    def __init__(self, ttl: float = REPLAY_TTL_SECONDS, size: int = REPLAY_IDS) -> None:
+        self._ttl = ttl
+        self._size = size
+        self._ids: OrderedDict[tuple[str, str], float] = OrderedDict()
+        self._lock = threading.Lock()
+
+    def check_and_add(self, webhook_id: str, message_ids: list[str], now: float) -> bool:
+        """True when any of ``message_ids`` was accepted for ``webhook_id``
+        within the TTL (a replay); nothing is recorded then. Otherwise all
+        are recorded and False is returned."""
+        keys = [(webhook_id, m) for m in message_ids]
+        with self._lock:
+            while self._ids:
+                oldest_key, oldest_at = next(iter(self._ids.items()))
+                if now - oldest_at <= self._ttl:
+                    break
+                del self._ids[oldest_key]
+            for key in keys:
+                seen_at = self._ids.get(key)
+                if seen_at is not None and now - seen_at <= self._ttl:
+                    return True
+            for key in keys:
+                self._ids[key] = now
+                self._ids.move_to_end(key)
             while len(self._ids) > self._size:
                 self._ids.popitem(last=False)
             return False
@@ -337,9 +460,12 @@ __all__ = [
     "OUTCOME_OTHER_DEVICE",
     "OUTCOME_PAUSED",
     "OUTCOME_QUEUED",
+    "OUTCOME_REPLAY",
     "OUTCOME_TOO_LARGE",
     "OUTCOME_UNKNOWN",
     "OUTCOME_UNKNOWN_VERSION",
+    "REPLAY_TTL_SECONDS",
+    "ReplayGuard",
     "SeenEvents",
     "TYPE_WEBHOOK_EVENT",
     "WebhookEvent",
@@ -347,5 +473,7 @@ __all__ = [
     "decode_event",
     "event_payload",
     "is_secret_header",
+    "payload_header_allowed",
+    "sender_message_ids",
     "verify_signature",
 ]

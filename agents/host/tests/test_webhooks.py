@@ -27,7 +27,9 @@ from chuk_agents_host.cloud_relay import (
 )
 from chuk_agents_host.webhooks import (
     MAX_BODY_BYTES,
+    REPLAY_TTL_SECONDS,
     decode_event,
+    event_payload,
     verify_signature,
 )
 from chuk_agents_runtime.automations import PAYLOAD_MARKER
@@ -376,7 +378,8 @@ def test_github_style(env):
     row = _create(manager, signing_secret=SECRET)
     good = _frame(_wid(row), raw=RAW, headers={"x-hub-signature-256": "sha256=" + _hex(SECRET.encode(), RAW)})
     assert manager.offer_webhook(good) == "queued"
-    bare = _frame(_wid(row), raw=RAW, headers={"x-signature-256": _hex(SECRET.encode(), RAW)})
+    other = b'{"action":"closed"}'
+    bare = _frame(_wid(row), raw=other, headers={"x-signature-256": _hex(SECRET.encode(), other)})
     assert manager.offer_webhook(bare) == "queued"
     wrong = _frame(_wid(row), raw=RAW, headers={"x-hub-signature-256": "sha256=" + _hex(b"other", RAW)})
     assert manager.offer_webhook(wrong) == "bad_signature"
@@ -552,3 +555,130 @@ def test_the_host_scope_uses_its_relay_id_and_its_agents():
     assert scope(fake, "agent-2", None) is None
     assert scope(fake, "agent-9", None) == "other_agent"
     assert scope(fake, None, "dev-2") == "other_device"
+
+
+# -- security review 3cb9aa01: L1-L5 ------------------------------------------------
+
+
+def _svix_headers(prefix: str, key: bytes, msg_id: str, stamp: str, raw: bytes = RAW) -> dict:
+    sig = base64.b64encode(hmac.new(key, f"{msg_id}.{stamp}.".encode() + raw, hashlib.sha256).digest()).decode()
+    return {prefix + "id": msg_id, prefix + "timestamp": stamp, prefix + "signature": f"v1,{sig}"}
+
+
+@pytest.mark.parametrize("prefix", ["svix-", "webhook-"])
+def test_a_replayed_svix_call_is_refused(env, prefix):
+    """L1: an attacker who captured one signed call POSTs it again. The
+    server gives it a new event_id; the signed sender id gives it away."""
+    manager, _host, clock = env
+    key = b"0123456789abcdef0123456789abcdef"
+    row = _create(manager, signing_secret="whsec_" + base64.b64encode(key).decode())
+    headers = _svix_headers(prefix, key, "msg_1", str(int(NOW)))
+    assert manager.offer_webhook(_frame(_wid(row), raw=RAW, headers=headers)) == "queued"
+    assert manager.offer_webhook(_frame(_wid(row), raw=RAW, headers=headers)) == "replay"
+    other = _svix_headers(prefix, key, "msg_2", str(int(NOW)))
+    assert manager.offer_webhook(_frame(_wid(row), raw=RAW, headers=other)) == "queued"
+
+
+def test_a_replayed_github_call_is_refused_even_with_a_new_delivery_id(env):
+    """L1: x-github-delivery is not signed; the body MAC is. A replay with a
+    fresh delivery header is still caught; a real redelivery too."""
+    manager, _host, clock = env
+    row = _create(manager, signing_secret=SECRET)
+    sig = "sha256=" + _hex(SECRET.encode(), RAW)
+    first = {"x-hub-signature-256": sig, "x-github-delivery": "d-1"}
+    assert manager.offer_webhook(_frame(_wid(row), raw=RAW, headers=first)) == "queued"
+    assert manager.offer_webhook(_frame(_wid(row), raw=RAW, headers=first)) == "replay"
+    assert manager.offer_webhook(_frame(_wid(row), raw=RAW, headers={**first, "x-github-delivery": "d-2"})) == "replay"
+    # After the TTL the window is over.
+    clock.now += REPLAY_TTL_SECONDS + 1
+    later = _frame(_wid(row), raw=RAW, headers=first, received_at=datetime.fromtimestamp(clock.now, UTC).isoformat())
+    assert manager.offer_webhook(later) == "queued"
+
+
+def test_a_replayed_stripe_event_is_refused(env):
+    """L1: Stripe retries keep the event id; a replay with a new t= and a
+    re-made signature cannot happen without the secret, but the same event
+    id twice is refused."""
+    manager, _host, _clock = env
+    row = _create(manager, signing_secret=SECRET)
+    raw = b'{"id":"evt_1","type":"invoice.paid"}'
+
+    def headers(stamp: int) -> dict:
+        return {"stripe-signature": f"t={stamp},v1=" + _hex(SECRET.encode(), f"{stamp}.".encode() + raw)}
+
+    assert manager.offer_webhook(_frame(_wid(row), raw=raw, headers=headers(int(NOW)))) == "queued"
+    assert manager.offer_webhook(_frame(_wid(row), raw=raw, headers=headers(int(NOW) - 10))) == "replay"
+
+
+def test_replay_ids_are_per_webhook(env):
+    manager, _host, _clock = env
+    a = _create(manager, signing_secret=SECRET)
+    b = _create(manager, signing_secret=SECRET)
+    headers = {"x-hub-signature-256": "sha256=" + _hex(SECRET.encode(), RAW)}
+    assert manager.offer_webhook(_frame(_wid(a), raw=RAW, headers=headers)) == "queued"
+    assert manager.offer_webhook(_frame(_wid(b), raw=RAW, headers=headers)) == "queued"
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        {"x-hub-signature-256": "sha256=\u00e9" + "0" * 63},
+        {"x-signature-256": "\u00fc\u00fc"},
+        {"stripe-signature": f"t={int(NOW)},v1=\u00e9\u00e9"},
+        {"stripe-signature": "t=\u00b2\u00b2,v1=00"},
+        {"stripe-signature": "t=\u0661\u0662,v1=00"},
+        {"svix-id": "m", "svix-timestamp": str(int(NOW)), "svix-signature": "v1,\u00e9"},
+        {"x-slack-signature": "v0=\u00e9", "x-slack-request-timestamp": str(int(NOW))},
+        {"x-gitlab-token": "\u00e9\ud800"},
+    ],
+)
+def test_a_non_ascii_signature_header_is_a_bad_signature(env, headers):
+    """L2: compare_digest on a non-ASCII str raised TypeError; now bytes."""
+    assert not verify_signature(SECRET, _event(RAW, headers))
+    manager, _host, _clock = env
+    row = _create(manager, signing_secret=SECRET)
+    assert manager.offer_webhook(_frame(_wid(row), raw=RAW, headers=headers)) == "bad_signature"
+
+
+def test_only_allowlisted_headers_reach_the_payload():
+    """L3: an allowlist, not a denylist: auth headers with other names stay out."""
+    event = _event(
+        RAW,
+        {
+            "authorization": "Bearer abc",
+            "cookie": "session=abc",
+            "x-api-key": "k-123",
+            "proxy-authorization": "Basic x",
+            "x-amz-security-credential": "c",
+            "x-github-event": "pull_request",
+            "user-agent": "GitHub-Hookshot/1",
+            "x-hub-signature-256": "sha256=00",
+            "stripe-signature": "t=1,v1=00",
+        },
+    )
+    headers = event_payload(event)["headers"]
+    assert set(headers) == {"content-type", "x-github-event", "user-agent"}
+
+
+def test_a_bad_signature_does_not_burn_the_event_id(env):
+    """L5: a forged frame that reuses a real event id (or an id the server
+    will hand out) must not make the real delivery a duplicate."""
+    manager, _host, _clock = env
+    row = _create(manager, signing_secret=SECRET)
+    forged = _frame(_wid(row), raw=RAW, event_id="evt-shared", headers={"x-hub-signature-256": "sha256=" + "0" * 64})
+    assert manager.offer_webhook(forged) == "bad_signature"
+    good = _frame(
+        _wid(row), raw=RAW, event_id="evt-shared", headers={"x-hub-signature-256": "sha256=" + _hex(SECRET.encode(), RAW)}
+    )
+    assert manager.offer_webhook(good) == "queued"
+    assert manager.offer_webhook(dict(good)) == "duplicate"
+
+
+def test_a_paused_row_does_not_burn_the_event_id(env):
+    manager, _host, _clock = env
+    row = _create(manager)
+    frame = _frame(_wid(row), event_id="evt-p")
+    manager.control(None, row["id"], "pause")
+    assert manager.offer_webhook(frame) == "paused"
+    manager.control(None, row["id"], "resume")
+    assert manager.offer_webhook(dict(frame)) == "queued"

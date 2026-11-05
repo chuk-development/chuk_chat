@@ -34,7 +34,9 @@ from __future__ import annotations
 import hashlib
 import os
 import shlex
+import shutil
 import subprocess
+import tempfile
 import threading
 import time
 import uuid
@@ -43,6 +45,7 @@ from collections.abc import Mapping
 from .base import DEFAULT_MAX_OUTPUT_CHARS, BaseEnvironment, PolicyProvider
 from .lifecycle import (
     DEFAULT_TASK_ID,
+    LABEL_ESCALATION,
     LABEL_IMAGE,
     LABEL_WORKSPACE,
     SESSION_LABEL,
@@ -370,6 +373,12 @@ class DockerEnvironment(BaseEnvironment):
         # can kill it from the thread that pressed Stop.
         self._proc: subprocess.Popen | None = None
         self._proc_lock = threading.Lock()
+        # Escalation boxes in flight (name -> docker run client), so a Stop, a
+        # timeout or a cleanup can ``docker kill`` + ``docker rm -f`` them
+        # (security review H4): killing only the client leaves the box running.
+        self._escalations: dict[str, subprocess.Popen] = {}
+        # Escalation boxes a Stop / cleanup already killed (names).
+        self._cancelled: set[str] = set()
 
         cwd = initial_cwd or CONTAINER_WORKSPACE
         # The snapshot lives in the container's /tmp, never in the mounted
@@ -718,7 +727,12 @@ class DockerEnvironment(BaseEnvironment):
         timeout: int = 120,
         stdin: str | None = None,
         env: Mapping[str, str] | None = None,
+        policy: SandboxPolicy | None = None,
     ) -> ProcessResult:
+        # ``policy`` is accepted for the base contract and not used: the
+        # container's limits are fixed at creation, so a widened call goes
+        # through :meth:`run_escalated` (a separate, temporary box) instead.
+        del policy
         container = self._ensure_container()
         argv = [self._cli.binary, "exec", "-i"]
         if self._user:
@@ -773,7 +787,13 @@ class DockerEnvironment(BaseEnvironment):
         return "docker"
 
     def escalation_argv(
-        self, cmd: str, grant: "tuple[str, ...] | list[str]", env_names: "tuple[str, ...] | list[str]" = ()
+        self,
+        cmd: str,
+        grant: "tuple[str, ...] | list[str]",
+        env_names: "tuple[str, ...] | list[str]" = (),
+        *,
+        name: str | None = None,
+        cidfile: str | None = None,
     ) -> list[str]:
         """``docker run`` argv for one escalated call (docs/WIRE_CONTRACT.md,
         "Sandbox escalation"): a temporary box from the same image, with the
@@ -782,10 +802,20 @@ class DockerEnvironment(BaseEnvironment):
         grant outlives this one call. The command runs as the agent user
         (``runuser``) in the current directory. The command text rides in the
         ``AGENTS_ESCALATED_CMD`` environment variable (value from the client's
-        own environment), never on the command line."""
+        own environment), never on the command line.
+
+        ``name`` / ``cidfile`` give the box a handle, so a timeout, a Stop or a
+        cleanup can ``docker kill`` and ``docker rm -f`` it; the session label
+        lets the orphan reaper find a box a killed host left behind."""
         policy = widened_policy(self._policy or DEFAULT_POLICY, tuple(grant))
-        argv = [self._cli.binary, "run", "--rm", "-i", "--label", "cowork.escalation=1"]
+        argv = [self._cli.binary, "run", "--rm", "-i"]
+        if name:
+            argv += ["--name", name]
+        if cidfile:
+            argv += ["--cidfile", cidfile]
+        argv += ["--label", f"{LABEL_ESCALATION}=1"]
         argv += ["--label", f"cowork.agent={self._agent_id}"]
+        argv += ["--label", f"cowork.session={self._session_id}"]
         if self._owner:
             argv += ["--label", f"cowork.owner={self._owner}"]
         argv += ["--workdir", self._cwd]
@@ -834,32 +864,45 @@ class DockerEnvironment(BaseEnvironment):
         login-less ``bash`` in the current directory."""
         allowed = self.effective_policy.secrets_env
         extra = {k: v for k, v in (env or {}).items() if allowed and k.isidentifier()}
-        argv = self.escalation_argv(cmd, grant, tuple(extra))
+        name = f"cowork-esc-{_slug(self._agent_id, 16)}-{uuid.uuid4().hex[:12]}"
+        cid_dir = tempfile.mkdtemp(prefix="agents-esc-")
+        cidfile = os.path.join(cid_dir, "cid")  # docker refuses an existing file
+        argv = self.escalation_argv(cmd, grant, tuple(extra), name=name, cidfile=cidfile)
         child_env = {**os.environ, **extra, "AGENTS_ESCALATED_CMD": cmd}
+        clean = False
         try:
-            proc = subprocess.Popen(
-                argv,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                stdin=subprocess.PIPE,
-                text=True,
-                env=child_env,
-            )
-        except OSError as exc:
-            raise DockerUnavailableError(str(exc)) from exc
-        with self._proc_lock:
-            self._proc = proc
-        try:
-            out, err = proc.communicate(timeout=timeout)
-            result = ProcessResult(out, err, proc.returncode)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            out, err = proc.communicate()
-            result = ProcessResult(out, err, -9, timed_out=True)
-        finally:
+            try:
+                proc = subprocess.Popen(
+                    argv,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    stdin=subprocess.PIPE,
+                    text=True,
+                    env=child_env,
+                )
+            except OSError as exc:
+                raise DockerUnavailableError(str(exc)) from exc
             with self._proc_lock:
-                if self._proc is proc:
-                    self._proc = None
+                self._escalations[name] = proc
+            try:
+                out, err = proc.communicate(timeout=timeout)
+                result = ProcessResult(out, err, proc.returncode)
+                # A Stop kills the client; the box may still be alive then.
+                with self._proc_lock:
+                    clean = name not in self._cancelled
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                out, err = proc.communicate()
+                result = ProcessResult(out, err, -9, timed_out=True)
+            finally:
+                with self._proc_lock:
+                    self._escalations.pop(name, None)
+                    self._cancelled.discard(name)
+        finally:
+            # Always end the box: ``--rm`` covers a normal exit, but a killed
+            # client (timeout, Stop) leaves it running with the widened policy.
+            self._end_escalation_box(name, _read_cid(cidfile), kill=not clean)
+            shutil.rmtree(cid_dir, ignore_errors=True)
         stdout, out_trunc = self._bound(result.stdout)
         stderr, err_trunc = self._bound(result.stderr)
         return ProcessResult(
@@ -877,13 +920,37 @@ class DockerEnvironment(BaseEnvironment):
         Same two-step as the timeout path, for the same reason: the container is
         kept alive for reuse, so killing only the exec client would leave the
         command running in it forever with nobody reading its output.
+
+        An escalation box in flight is killed and removed as well: it runs with
+        the widened policy, so it must not outlive the Stop.
         """
+        self._kill_escalations()
         with self._proc_lock:
             proc = self._proc
         if proc is None or proc.poll() is not None:
             return
         proc.kill()
         self._kill_in_container()
+
+    def _kill_escalations(self) -> None:
+        """``docker kill`` + ``docker rm -f`` every escalation box in flight."""
+        with self._proc_lock:
+            running = dict(self._escalations)
+            self._cancelled.update(running)
+        for name, proc in running.items():
+            self._end_escalation_box(name, None, kill=True)
+            if proc.poll() is None:
+                proc.kill()
+
+    def _end_escalation_box(self, name: str, cid: str | None, *, kill: bool) -> None:
+        """Best effort: stop and remove one escalation box. Idempotent."""
+        target = cid or name
+        try:
+            if kill:
+                self._cli.run("kill", target, timeout=30)
+            remove_container(target, cli=self._cli)
+        except Exception:  # noqa: BLE001 — teardown must not raise over the result
+            pass
 
     def _kill_in_container(self) -> None:
         """Best-effort kill of the bash tree a timed-out exec left behind."""
@@ -908,6 +975,7 @@ class DockerEnvironment(BaseEnvironment):
         The default container is the agent's box; keeping it is the whole point of
         label-keyed reuse. The orphan reaper collects it when no session owns it.
         """
+        self._kill_escalations()
         if self._container is None:
             return
         if self.is_task_scoped:
@@ -943,6 +1011,16 @@ class DockerEnvironment(BaseEnvironment):
             return None
         value = result.stdout.strip()
         return None if value in ("", "<no value>") else value
+
+
+def _read_cid(path: str) -> str | None:
+    """The container id docker wrote to ``--cidfile``, if any."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            value = fh.read().strip()
+    except OSError:
+        return None
+    return value or None
 
 
 def _go_label_key(key: str) -> str:

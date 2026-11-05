@@ -4495,12 +4495,25 @@ system prompt (`chuk_agents_runtime.auto_review.REVIEW_POLICY`):
 
 - `environment`: the workspace path;
 - `user-message` items (role `user-instruction`): user rows the user typed
-  (no `source`), and the text of a fired schedule up to the payload marker.
-  The last 8, each max 2000 characters;
-- `project-rules` (role `constraint`): `AGENTS.md` / `CLAUDE.md` at the
-  workspace root, max 4000 characters. They can only narrow;
+  (no `source`), cut at the first host-made line (the attachment block, a
+  payload or previous-result marker, `notify: on_change`). For a fired
+  schedule (`source: "schedule"`) only the prompt the host stored on the row
+  (`automation_user_prompt`), and only when the automation has
+  `created_by: "user"`. The fired text itself is never read, so an
+  automation the agent made and a webhook fire give no instruction. The
+  last 8, each max 2000 characters;
+- `user-attachments` (role `fact`): name, mime, kind and size of the files
+  on a user row, taken from the host-stored `attachments` list, never from
+  the prompt text. Names are cleaned and cut to 80 characters; a mime that
+  is not a plain `type/subtype` is shown as `unknown`;
 - `tool-schema` of the pending tool, and the pending `tool-call` arguments
-  (max 8000 characters).
+  (max 8000 characters), without `justification` and `description`;
+- `agent-claim` (role `untrusted`): the `justification` and `description`
+  the agent wrote. They never authorize anything, never establish a fact
+  and never lower a risk class.
+
+No project rules: `AGENTS.md` / `CLAUDE.md` in the workspace are writable by
+the agent, so the reviewer does not read them.
 
 Never a tool result, never assistant text, never a mail, a web page, a
 webhook payload or any other row with a `source`.
@@ -4572,13 +4585,24 @@ Host side IMPLEMENTED 2026-11-05. App side: open.
 Before the first call of a run that can change files (`run_command`,
 `python`, `write_file`, `edit_file`, `apply_patch`, `run_ffmpeg`,
 `workspace_undo`), the host pins the workspace as it is: a checkpoint in the
-agent's private git (`.agents/git`, or the agent's own `.git`), ref
+agent's private git (or the agent's own `.git` in a fresh workspace), ref
 `refs/agents/checkpoints/<id>`. The user's own `.git` is never touched. The
 user can list the checkpoints of a thread, rewind the files to one, and fork
 the thread from a message.
 
-The host keeps an agent-write ledger (in the git dir, never committed): the
-last version of each file the agent wrote. Before each such call, changes
+The private git dir is HOST state, not workspace: it lives under
+`<host state>/workspace-git/<sha256 of the workspace path>/git`, never inside
+the workspace the agent can write. A private dir an older host left at
+`.agents/git` is moved there once (copied, HEAD and refs verified, config cut
+to an allowlist, then the old dir deleted; one that holds a symlink is not
+trusted and left alone). Every host git call switches off what a repo config
+or a worktree file could make it run: `core.fsmonitor`, hooks, external diff,
+textconv, filter/diff/merge drivers (attributes come only from the empty tree,
+`GIT_ATTR_SOURCE`), and `core.worktree` (the work tree is always pinned).
+
+The host keeps an agent-write ledger (host state, next to the private git dir,
+never in the workspace, never committed): the last version of each file the
+agent wrote. Before each such call, changes
 made outside the agent are committed on their own (`outside: ...`). So a
 rewind can tell the agent's work from the user's own later hand edits.
 
@@ -4614,7 +4638,7 @@ the state before that run changed anything.
 ```json
 {"type": "checkpoint_rewound", "session_key": "<key>", "checkpoint_id": "<id>",
  "mode": "safe", "ok": true, "restored": ["a.py"], "merged": [], "kept": [],
- "commit": "<sha>", "note": "Files are restored. Effects outside ..."}
+ "refused": [], "commit": "<sha>", "note": "Files are restored. Effects outside ..."}
 ```
 
 - `safe` (default): when one file changed outside the agent since the
@@ -4628,6 +4652,9 @@ the state before that run changed anything.
   leaves the file (`kept`).
 - `force`: restore every file, also the user's edits.
 - The rewind is a new commit; history and the journal are kept.
+- A rewind never writes or deletes through a symlink. A path whose parent
+  directory is a symlink (or not a directory) is not restored and is listed
+  in `refused`; a symlink at the path itself is replaced, not followed.
 - Errors: `no such checkpoint`, `busy: a task of this agent is running`,
   `workspace versioning is not enabled`, a bad `mode`.
 
@@ -4688,7 +4715,14 @@ Host side IMPLEMENTED 2026-11-05. App side: open.
 The user adds pictures or files to a task. The app uploads each one in
 chunks with sealed `attachment_put` frames, then sends the task with
 `attachments: [{"blob_id": ...}]`. The host stores the file in the agent's
-workspace under `.agents/inbox/<blob_id>/<name>`. The task text gets one line
+workspace under `.agents/inbox/<blob_id>/<name>`. Unfinished chunks and the
+record of each upload stay in host state outside the workspace
+(`$AGENTS_ATTACHMENT_STATE_DIR`, else
+`$XDG_STATE_HOME/chuk-agents/attachments/<sha256 of the workspace path>`).
+The host writes the file with no-follow directory handles and a rename, so a
+symlink the agent plants in `.agents/inbox` is never followed. A task
+resolves an attachment only from the host record, and the file must still
+have the uploaded size and sha256. The task text gets one line
 per file with its path. A model that the catalogue marks `supports_vision`
 also gets the pictures of the CURRENT task as image parts; older pictures
 stay paths (the agent reads them with `read_document`).

@@ -58,3 +58,23 @@ def test_vision_flag():
     assert model_supports_vision_in_catalog(models, "a") is True
     assert model_supports_vision_in_catalog(models, "b") is False
     assert model_supports_vision_in_catalog(models, "c") is None
+
+
+def test_the_loader_never_follows_a_planted_symlink(tmp_path):
+    ws = _workspace(tmp_path)
+    host = tmp_path.parent / (tmp_path.name + "-host")
+    (host / "u2").mkdir(parents=True)
+    (host / "u2" / "p.png").write_bytes(PNG)
+    # The whole inbox swapped for a link to a host directory.
+    inbox = ws / ".agents" / "inbox"
+    (inbox / "u1" / "p.png").unlink()
+    (inbox / "u1").rmdir()
+    inbox.rmdir()
+    inbox.symlink_to(host, target_is_directory=True)
+    loader = make_image_loader(str(ws))
+    assert loader({"mime": "image/png", "path": ".agents/inbox/u2/p.png"}) is None
+    # The file itself a link.
+    inbox.unlink()
+    (inbox / "u3").mkdir(parents=True)
+    (inbox / "u3" / "p.png").symlink_to(host / "u2" / "p.png")
+    assert loader({"mime": "image/png", "path": ".agents/inbox/u3/p.png"}) is None

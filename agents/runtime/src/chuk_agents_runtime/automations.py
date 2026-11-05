@@ -370,9 +370,167 @@ FILTER_OPERATORS = ("equals", "contains", "in", "regex", "exists")
 _PATH_KEY_RE = re.compile(r"\.([A-Za-z0-9_\-]{1,64})")
 _PATH_INDEX_RE = re.compile(r"\[(\d{1,6})\]")
 #: ``(a+)+``, ``(a*)*``, ``(a+){2,}``: nested quantifiers backtrack without
-#: end on a crafted body. Python's ``re`` has no timeout, so they are refused.
+#: end on a crafted body. The quick form; :func:`regex_risk` is the full check.
 _NESTED_QUANTIFIER_RE = re.compile(r"\([^()]*[+*}][^()]*\)\s*[+*{]")
+#: Unbounded quantifiers (``*``, ``+``, ``{m,}``) in one filter regex. Each one
+#: more multiplies the backtracking on a non-match (``.*a.*b.*c.*d`` is
+#: O(n^4) over 4096 characters).
+MAX_FILTER_REGEX_UNBOUNDED = 3
+#: Wall time one filter regex may run on one value. Needs the third-party
+#: ``regex`` module (it is in the lock); without it only the static check of
+#: :func:`regex_risk` protects the host.
+FILTER_REGEX_TIMEOUT_S = 0.05
+try:  # pragma: no cover - depends on the environment
+    import regex as _regex_mod
+except ImportError:  # pragma: no cover
+    _regex_mod = None
+_QUANT_BRACE_RE = re.compile(r"\{(\d*)(,?)(\d*)\}")
 _MISSING = object()
+
+
+def regex_risk(pattern: str) -> str | None:
+    """Why ``pattern`` can backtrack without end, or None. Refuses:
+
+    - a back reference (``\\1``, ``(?P=name)``): matching is NP-hard;
+    - a repeated group that holds a quantifier or an alternation, at any
+      depth: ``(a+)+``, ``((a)+)*``, ``(a|aa)+``, ``(a?){20}``;
+    - more than :data:`MAX_FILTER_REGEX_UNBOUNDED` unbounded quantifiers.
+
+    A scanner over the pattern text (escapes and ``[...]`` classes skipped),
+    not a regex over a regex."""
+    stack: list[dict[str, bool]] = [{"quant": False, "alt": False}]
+    unbounded = 0
+    i, n = 0, len(pattern)
+
+    def quantifier_at(j: int) -> tuple[int, bool, bool] | None:
+        """(length, repeats more than once, unbounded) of a quantifier at j."""
+        if j >= n:
+            return None
+        ch = pattern[j]
+        if ch in "*+":
+            return 1, True, True
+        if ch == "?":
+            return 1, False, False
+        if ch == "{":
+            m = _QUANT_BRACE_RE.match(pattern, j)
+            if not m or (not m.group(1) and not m.group(3)):
+                return None
+            low = int(m.group(1) or 0)
+            if m.group(2):
+                high = int(m.group(3)) if m.group(3) else None
+            else:
+                high = low
+            return m.end() - j, high is None or high > 1, high is None
+        return None
+
+    while i < n:
+        ch = pattern[i]
+        if ch == "\\":
+            if i + 1 < n and pattern[i + 1] in "123456789":
+                return "a regex must not use a back reference"
+            i += 2
+            atom_end = i
+        elif ch == "[":
+            j = i + 1
+            if j < n and pattern[j] == "^":
+                j += 1
+            if j < n and pattern[j] == "]":
+                j += 1
+            while j < n and pattern[j] != "]":
+                j += 2 if pattern[j] == "\\" else 1
+            i = j + 1
+            atom_end = i
+        elif ch == "(":
+            j = i + 1
+            if j < n and pattern[j] == "?":
+                rest = pattern[j + 1 : j + 4]
+                if rest.startswith("P="):
+                    return "a regex must not use a back reference"
+                if rest.startswith("#"):
+                    close = pattern.find(")", j)
+                    i = n if close < 0 else close + 1
+                    continue
+                if rest.startswith("P<"):
+                    close = pattern.find(">", j)
+                    j = n if close < 0 else close + 1
+                elif rest[:2] in ("<=", "<!"):
+                    j += 3
+                elif rest[:1] in (":", "=", "!", ">"):
+                    j += 2
+                else:
+                    # Inline flags: (?i) or (?i:...)
+                    j += 1
+                    while j < n and pattern[j].isalpha():
+                        j += 1
+                    if j < n and pattern[j] == "-":
+                        j += 1
+                        while j < n and pattern[j].isalpha():
+                            j += 1
+                    if j < n and pattern[j] == ")":
+                        i = j + 1
+                        continue
+                    j += 1  # the ':'
+            stack.append({"quant": False, "alt": False})
+            i = j
+            continue
+        elif ch == ")":
+            if len(stack) < 2:
+                return None  # unbalanced: re.compile reports it
+            inner = stack.pop()
+            i += 1
+            q = quantifier_at(i)
+            if q is not None:
+                length, repeats, open_ended = q
+                if repeats and (inner["quant"] or inner["alt"]):
+                    return "a regex must not repeat a group that repeats or has | inside, like (a+)+ or (a|b)*"
+                unbounded += open_ended
+                i += length
+                if i < n and pattern[i] in "?+":  # lazy / possessive
+                    i += 1
+                stack[-1]["quant"] = True
+            stack[-1]["quant"] = stack[-1]["quant"] or inner["quant"]
+            stack[-1]["alt"] = stack[-1]["alt"] or inner["alt"]
+            if unbounded > MAX_FILTER_REGEX_UNBOUNDED:
+                return f"a regex may have at most {MAX_FILTER_REGEX_UNBOUNDED} open repeats (*, +, {{m,}})"
+            continue
+        elif ch == "|":
+            if len(stack) > 1:
+                stack[-1]["alt"] = True
+            i += 1
+            continue
+        else:
+            i += 1
+            atom_end = i
+        q = quantifier_at(atom_end)
+        if q is not None:
+            length, _repeats, open_ended = q
+            unbounded += open_ended
+            stack[-1]["quant"] = True
+            i = atom_end + length
+            if i < n and pattern[i] in "?+":
+                i += 1
+            if unbounded > MAX_FILTER_REGEX_UNBOUNDED:
+                return f"a regex may have at most {MAX_FILTER_REGEX_UNBOUNDED} open repeats (*, +, {{m,}})"
+    return None
+
+
+def filter_regex_search(pattern: str, text: str) -> bool:
+    """``re.search`` for a webhook filter, bounded in input and (with the
+    ``regex`` module) in time. A timeout or a bad pattern is "no match"."""
+    text = text[:MAX_FILTER_REGEX_INPUT_CHARS]
+    if regex_risk(pattern) is not None:
+        return False
+    if _regex_mod is not None:
+        try:
+            return _regex_mod.search(pattern, text, timeout=FILTER_REGEX_TIMEOUT_S) is not None
+        except TimeoutError:
+            return False
+        except _regex_mod.error:
+            return False
+    try:
+        return re.search(pattern, text) is not None
+    except re.error:
+        return False
 
 
 def parse_json_path(path: Any) -> tuple[Any, ...]:
@@ -485,9 +643,14 @@ def parse_webhook_filter(value: Any, *, _depth: int = 0, _count: list[int] | Non
             raise AutomationSpecError(f"a regex is longer than {MAX_FILTER_REGEX_CHARS} characters")
         if _NESTED_QUANTIFIER_RE.search(operand):
             raise AutomationSpecError("a regex must not repeat a repeated group, like (a+)+")
+        risk = regex_risk(operand)
+        if risk is not None:
+            raise AutomationSpecError(risk)
         try:
             re.compile(operand)
-        except re.error as exc:
+            if _regex_mod is not None:
+                _regex_mod.compile(operand)
+        except (re.error, Exception) as exc:  # noqa: BLE001 — regex.error is not re.error
             raise AutomationSpecError(f"cannot read the regex: {exc}") from exc
     elif op == "in":
         if not isinstance(operand, list) or not operand or len(operand) > MAX_FILTER_IN_ITEMS:
@@ -564,10 +727,7 @@ def webhook_filter_matches(flt: dict[str, Any], document: Any, headers: dict[str
         text = _as_text(value)
         if text is None:
             return False
-        try:
-            return re.search(flt["regex"], text[:MAX_FILTER_REGEX_INPUT_CHARS]) is not None
-        except re.error:
-            return False
+        return filter_regex_search(flt["regex"], text)
     return False
 
 

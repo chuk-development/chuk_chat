@@ -288,6 +288,11 @@ class LocalHost:
         # before anything reads the device seed, the account token or the
         # secret vault. An explicit path is used as given.
         self._workspace = resolve_state_home(workspace_dir, logger=self._log)
+        # Private git dirs and rewind ledgers of the agents' workspaces live
+        # here, outside every workspace (security review H3).
+        from chuk_agents_runtime.workspace_git import GIT_STATE_DIRNAME, set_git_state_home
+
+        set_git_state_home(self._workspace / GIT_STATE_DIRNAME)
         self._agents_dir = self._workspace / "agents"
         self._agents_dir.mkdir(parents=True, exist_ok=True)
         self._roster_path = str(self._workspace / "roster.db")

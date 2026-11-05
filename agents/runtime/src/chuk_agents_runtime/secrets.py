@@ -23,11 +23,12 @@ app; tests implement it with a dict.
 from __future__ import annotations
 
 import base64
+import json
 import re
 import threading
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any, Protocol, runtime_checkable
-from urllib.parse import quote
+from urllib.parse import quote, quote_plus
 
 from .registry import ToolRegistry
 
@@ -43,6 +44,12 @@ STATUS_MISSING = "missing"
 #: every "abc" in every output and make the transcript unreadable, while it is
 #: no secret worth the name. Matches the contract.
 REDACT_MIN_LEN = 8
+
+#: Names of login-vault values in ``scrub_values`` start with this
+#: (``login:<origin>#<id>:password``). They are masked at ANY length: a short
+#: password is still the user's password, and the model was never meant to
+#: see it.
+VAULT_NAME_PREFIX = "login:"
 
 #: Environment variable name shape. Also what the vault accepts.
 NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -82,10 +89,34 @@ class SecretsAccess(Protocol):
 # -- the scrubber --------------------------------------------------------------
 
 
-def _variants(value: str) -> list[str]:
+def _js_escapes(value: str) -> list[str]:
+    """How JavaScript or JSON source may spell ``value`` inside a string
+    literal: the JSON body (ASCII and non-ASCII), with ``/`` escaped, the
+    single-quoted JS form, and every character as ``\\uXXXX`` / ``\\xNN``.
+    A page script or a ``browser_evaluate`` result that echoes the password
+    through ``JSON.stringify`` or ``escape`` is masked too."""
+    out = []
+    for ensure_ascii in (True, False):
+        body = json.dumps(value, ensure_ascii=ensure_ascii)[1:-1]
+        out.append(body)
+        out.append(body.replace("/", "\\/"))
+        out.append(body.replace('\\"', '"').replace("'", "\\'"))
+        # JSON inside JSON (a tool result that carries a JSON document).
+        out.append(json.dumps(body, ensure_ascii=ensure_ascii)[1:-1])
+    units = value.encode("utf-16-be", "surrogatepass")
+    codes = [int.from_bytes(units[i : i + 2], "big") for i in range(0, len(units), 2)]
+    out.append("".join(f"\\u{c:04x}" for c in codes))
+    out.append("".join(f"\\u{c:04X}" for c in codes))
+    if all(ord(ch) < 256 for ch in value):
+        out.append("".join(f"\\x{ord(ch):02x}" for ch in value))
+        out.append("".join(f"\\x{ord(ch):02X}" for ch in value))
+    return out
+
+
+def _variants(value: str, *, min_len: int = REDACT_MIN_LEN) -> list[str]:
     """Every rendering of ``value`` the scrubber masks. The raw value first;
-    the encoded forms only when they differ from it and are long enough to
-    be unambiguous."""
+    the encoded forms (base64, URL, JSON / JS string escapes) only when they
+    differ from it and are at least ``min_len`` long."""
     out = [value]
     raw = value.encode("utf-8")
     for candidate in (
@@ -94,10 +125,16 @@ def _variants(value: str) -> list[str]:
         base64.urlsafe_b64encode(raw).decode("ascii"),
         base64.urlsafe_b64encode(raw).decode("ascii").rstrip("="),
         quote(value, safe=""),
+        quote_plus(value, safe=""),
+        *_js_escapes(value),
     ):
-        if candidate != value and len(candidate) >= REDACT_MIN_LEN and candidate not in out:
+        if candidate and candidate != value and len(candidate) >= min_len and candidate not in out:
             out.append(candidate)
     return out
+
+
+def _min_len(name: str) -> int:
+    return 1 if name.startswith(VAULT_NAME_PREFIX) else REDACT_MIN_LEN
 
 
 class Scrubber:
@@ -128,7 +165,7 @@ class Scrubber:
             sorted(
                 (str(name), str(value))
                 for name, value in current.items()
-                if isinstance(value, str) and len(value) >= REDACT_MIN_LEN
+                if isinstance(value, str) and value and len(value) >= _min_len(str(name))
             )
         )
         with self._lock:
@@ -136,7 +173,7 @@ class Scrubber:
                 return self._pattern
             by_variant: dict[str, str] = {}
             for name, value in items:
-                for variant in _variants(value):
+                for variant in _variants(value, min_len=_min_len(name)):
                     # A variant two secrets share masks as the first name; the
                     # value is hidden either way.
                     by_variant.setdefault(variant, name)

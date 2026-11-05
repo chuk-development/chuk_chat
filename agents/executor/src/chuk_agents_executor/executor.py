@@ -2482,6 +2482,14 @@ class Executor:
         answered = meta.get("answer_to_pending_question")
         if isinstance(answered, str) and answered:
             run.row_extra = {"answer_to_pending_question": answered}
+        # The prompt of an automation the user created, stored on the row for
+        # the auto reviewer (``auto_review.USER_PROMPT_KEY``). Only the host
+        # sets it, only for ``created_by == "user"``; never read by the model.
+        user_prompt = meta.get("user_prompt")
+        if run.origin == "automation" and isinstance(user_prompt, str) and user_prompt.strip():
+            from chuk_agents_runtime.auto_review import USER_PROMPT_KEY
+
+            run.row_extra = {**(run.row_extra or {}), USER_PROMPT_KEY: user_prompt.strip()[:8_000]}
         logger.info(
             "automation task accepted request=%s session=%s run=%s automation=%s model=%s",
             run.request_id,

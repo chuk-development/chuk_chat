@@ -4,6 +4,7 @@ the fired prompt's merge note (docs/WIRE_CONTRACT.md, "Inbound webhooks")."""
 from __future__ import annotations
 
 import json
+import time
 
 import pytest
 
@@ -12,11 +13,13 @@ from chuk_agents_runtime.automations import (
     KINDS,
     PAYLOAD_MARKER,
     AutomationSpecError,
+    filter_regex_search,
     fired_prompt,
     missing,
     parse_json_path,
     parse_webhook_filter,
     parse_webhook_spec,
+    regex_risk,
     resolve_json_path,
     spec_label,
     webhook_matches,
@@ -100,6 +103,14 @@ def test_filter_parse_normalises():
         {"path": "$.a", "regex": "(a+)+$"},
         {"path": "$.a", "regex": "(?:x*)*"},
         {"path": "$.a", "regex": "(a{1,9})+"},
+        # L4: the old one-level check missed these.
+        {"path": "$.a", "regex": "((a)+)*"},
+        {"path": "$.a", "regex": "(a|aa)+$"},
+        {"path": "$.a", "regex": "(a?){25}b"},
+        {"path": "$.a", "regex": "(?:(?:a)+x?)+"},
+        {"path": "$.a", "regex": "(a)\\1+"},
+        {"path": "$.a", "regex": "(?P<x>a)(?P=x)"},
+        {"path": "$.a", "regex": ".*a.*b.*c.*d"},
         {"path": "$.a", "regex": "a" * 201},
         {"path": "$.a", "in": []},
         {"path": "$.a", "in": list(range(51))},
@@ -199,6 +210,30 @@ def test_body_that_is_not_json():
     assert _match({"path": "$", "exists": False}, doc=no_json)
     # A JSON body is "present" at $.
     assert _match({"path": "$", "exists": True})
+
+
+def test_regex_risk_lets_plain_patterns_through():
+    for pattern in ("^fix/", "^4\\d$", "(?i)^release-v\\d+", "(?P<k>feat|fix):", "(ab)+", "x{2,}y+z*", "\\(a+\\)+"):
+        assert regex_risk(pattern) is None, pattern
+
+
+def test_a_slow_regex_that_passes_the_static_check_times_out():
+    """L4: a polynomial pattern the scanner allows still cannot hold the relay
+    thread; it runs with a timeout and counts as no match."""
+    pytest.importorskip("regex")
+    pattern = "[ab]*a[ab]*b[ab]*c"
+    assert regex_risk(pattern) is None
+    started = time.monotonic()
+    assert not filter_regex_search(pattern, "ab" * 2048)
+    assert time.monotonic() - started < 1.0
+    assert filter_regex_search(pattern, "aabbc")
+
+
+def test_a_stored_risky_regex_is_no_match_at_run_time():
+    """A row saved before the stricter check never runs its pattern."""
+    started = time.monotonic()
+    assert not filter_regex_search("(a|aa)+$", "a" * 4000 + "!")
+    assert time.monotonic() - started < 1.0
 
 
 def test_regex_reads_a_bounded_prefix():

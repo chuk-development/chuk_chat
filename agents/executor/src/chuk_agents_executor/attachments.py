@@ -8,8 +8,10 @@ inside the relay envelope, so 256 KiB of file is about 610 KiB on the relay,
 under its 1 MiB cap (the same number the ``fragment`` frames use). A task then
 names the finished uploads by ``blob_id`` (``task.attachments``).
 
-The files land in the agent's workspace under ``.agents/inbox/<blob_id>/``,
-so the sandbox reads them like any workspace file. Nothing here talks to the
+The finished files land in the agent's workspace under
+``.agents/inbox/<blob_id>/``, so the sandbox reads them like any workspace
+file. Everything the host trusts (partial uploads, the record of each
+finished one) stays in a host state directory outside the workspace. Nothing here talks to the
 network or the model.
 """
 
@@ -22,11 +24,13 @@ import json
 import math
 import os
 import re
-import shutil
+import stat
 import threading
 import time
 from pathlib import Path
 from typing import Any
+
+from chuk_agents_runtime.attachment_images import open_dir_nofollow, read_regular_nofollow
 
 #: Raw bytes of every chunk but the last (which may be shorter).
 CHUNK_BYTES = 256 * 1024
@@ -38,7 +42,6 @@ MAX_TASK_ATTACHMENTS = 10
 PARTIAL_TTL_SECONDS = 3600
 #: Where the files go, relative to the workspace.
 INBOX_DIR = ".agents/inbox"
-PARTIAL_DIR = ".agents/inbox/.partial"
 #: Images a vision model gets as image parts; others are paths in the prompt.
 IMAGE_MIME = frozenset({"image/png", "image/jpeg", "image/webp", "image/gif"})
 #: An image larger than this goes as a path only (a model request would be
@@ -72,14 +75,94 @@ def kind_of(mime: str) -> str:
     return "image" if mime in IMAGE_MIME else "file"
 
 
+#: The environment variable that moves the host-side attachment state (the
+#: unfinished uploads and the records of finished ones). Tests point it at a
+#: temporary directory.
+STATE_ENV = "AGENTS_ATTACHMENT_STATE_DIR"
+
+
+def default_state_root(environ=None) -> Path:
+    """Where the host keeps upload state, outside every workspace:
+    ``$AGENTS_ATTACHMENT_STATE_DIR``, else
+    ``$XDG_STATE_HOME/chuk-agents/attachments`` (``~/.local/state/...``).
+
+    Not under ``~/.local/share/chuk-agents``: that is also the default
+    workspace, which the agent can write.
+    """
+    env = os.environ if environ is None else environ
+    raw = (env.get(STATE_ENV) or "").strip()
+    if raw:
+        return Path(raw).expanduser()
+    xdg = (env.get("XDG_STATE_HOME") or "").strip()
+    base = Path(xdg) if xdg and os.path.isabs(xdg) else Path.home() / ".local" / "state"
+    return base / "chuk-agents" / "attachments"
+
+
+def _workspace_key(workspace: Path) -> str:
+    return hashlib.sha256(os.path.realpath(workspace).encode("utf-8", "surrogateescape")).hexdigest()[:24]
+
+
+def _is_inside(child: Path, parent: Path) -> bool:
+    try:
+        Path(os.path.realpath(child)).relative_to(os.path.realpath(parent))
+    except ValueError:
+        return False
+    return True
+
+
+#: Leading bytes of each image type; an image whose bytes do not match is
+#: handed on as a plain file (never as an image part).
+_MAGIC = {
+    "image/png": (b"\x89PNG\r\n\x1a\n",),
+    "image/jpeg": (b"\xff\xd8\xff",),
+    "image/gif": (b"GIF87a", b"GIF89a"),
+}
+
+
+def _looks_like(mime: str, head: bytes) -> bool:
+    if mime == "image/webp":
+        return head[:4] == b"RIFF" and head[8:12] == b"WEBP"
+    return any(head.startswith(m) for m in _MAGIC.get(mime, (b"",)))
+
+
 class AttachmentInbox:
-    """The inbox of one workspace. Thread-safe; one lock per process."""
+    """The inbox of one workspace. Thread-safe; one lock per process.
+
+    The agent can write its workspace, so nothing the host trusts lives
+    there: the unfinished uploads and the record of each finished one are in
+    a host state directory (:func:`default_state_root`, one subdirectory per
+    workspace). Only the finished file is placed in
+    ``<workspace>/.agents/inbox/<blob_id>/<name>``, through directory fds
+    opened with ``O_NOFOLLOW``, so a symlink the agent planted on the way
+    makes the store fail instead of writing elsewhere.
+    """
 
     _lock = threading.Lock()
 
-    def __init__(self, workspace: str | os.PathLike, *, clock=time.time) -> None:
+    def __init__(
+        self,
+        workspace: str | os.PathLike,
+        *,
+        clock=time.time,
+        state_dir: str | os.PathLike | None = None,
+    ) -> None:
         self.root = Path(workspace)
         self._now = clock
+        if state_dir is None:
+            state_dir = default_state_root() / _workspace_key(self.root)
+        self.state = Path(state_dir)
+        if _is_inside(self.state, self.root):
+            raise AttachmentError("the attachment state must not be inside the workspace")
+
+    # -- host state --------------------------------------------------------
+
+    def _state_dir(self, name: str) -> Path:
+        path = self.state / name
+        path.mkdir(parents=True, exist_ok=True, mode=0o700)
+        return path
+
+    def _record_path(self, blob_id: str) -> Path:
+        return self.state / "done" / f"{blob_id}.json"
 
     # -- upload ------------------------------------------------------------
 
@@ -115,12 +198,11 @@ class AttachmentInbox:
         name = safe_name(payload.get("name"))
         with self._lock:
             self.sweep()
-            done = self._meta(upload_id)
+            done = self._record(upload_id)
             if done is not None:
                 # Finished already (a retried last chunk): the same answer.
-                return self._ack(upload_id, index, count, count, done)
-            partial = self.root / PARTIAL_DIR
-            partial.mkdir(parents=True, exist_ok=True)
+                return self._ack(upload_id, index, count, count, self._public(done))
+            partial = self._state_dir("partial")
             state_path = partial / f"{upload_id}.json"
             data_path = partial / f"{upload_id}.part"
             state = self._read_json(state_path) or {
@@ -145,22 +227,58 @@ class AttachmentInbox:
                 data_path.unlink(missing_ok=True)
                 state_path.unlink(missing_ok=True)
                 raise AttachmentError("sha256 or size does not match: send the whole file again")
-            target_dir = self.root / INBOX_DIR / upload_id
-            target_dir.mkdir(parents=True, exist_ok=True)
-            os.replace(data_path, target_dir / state["name"])
+            final_name = safe_name(state.get("name"))
+            try:
+                self._place(upload_id, final_name, data_path)
+            except OSError:
+                raise AttachmentError(
+                    "the workspace inbox is not a plain directory (a symlink?): not stored"
+                ) from None
+            data_path.unlink(missing_ok=True)
             state_path.unlink(missing_ok=True)
-            meta = {
+            record = {
                 "blob_id": upload_id,
-                "name": state["name"],
+                "name": final_name,
                 "mime": mime,
                 "size": size,
                 "sha256": sha,
-                "kind": kind_of(mime),
-                "path": f"{INBOX_DIR}/{upload_id}/{state['name']}",
                 "created_at": self._now(),
             }
-            self._write_json(target_dir / "meta.json", meta)
-            return self._ack(upload_id, index, count, count, meta)
+            self._write_json(self._state_dir("done") / f"{upload_id}.json", record)
+            return self._ack(upload_id, index, count, count, self._public(record))
+
+    def _place(self, blob_id: str, name: str, source: Path) -> None:
+        """Copy ``source`` (host state) to ``.agents/inbox/<blob_id>/<name>``
+        without following any symlink in the workspace."""
+        parts = [*INBOX_DIR.split("/"), blob_id]
+        dir_fd = open_dir_nofollow(str(self.root), parts, create=True)
+        tmp = f".{name[:40]}.{os.getpid()}.{threading.get_ident()}.tmp"
+        try:
+            fd = os.open(
+                tmp,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
+                0o644,
+                dir_fd=dir_fd,
+            )
+            try:
+                with open(source, "rb") as src:
+                    for block in iter(lambda: src.read(1 << 20), b""):
+                        view = memoryview(block)
+                        while view:
+                            view = view[os.write(fd, view):]
+            finally:
+                os.close(fd)
+            # rename(2) replaces a symlink at ``name`` itself; it never
+            # writes through it.
+            os.replace(tmp, name, src_dir_fd=dir_fd, dst_dir_fd=dir_fd)
+        except BaseException:
+            try:
+                os.unlink(tmp, dir_fd=dir_fd)
+            except OSError:
+                pass
+            raise
+        finally:
+            os.close(dir_fd)
 
     @staticmethod
     def _ack(upload_id: str, index: int, received: int, count: int, meta: dict | None) -> dict:
@@ -178,22 +296,56 @@ class AttachmentInbox:
 
     # -- read --------------------------------------------------------------
 
-    def _meta(self, blob_id: str) -> dict | None:
-        if not _ID_RE.match(blob_id or ""):
+    def _record(self, blob_id: str) -> dict | None:
+        """The host's record of a finished upload, checked field by field;
+        ``None`` for an unknown id or a record that does not hold up."""
+        if not isinstance(blob_id, str) or not _ID_RE.match(blob_id):
             return None
-        return self._read_json(self.root / INBOX_DIR / blob_id / "meta.json")
+        rec = self._read_json(self._record_path(blob_id))
+        if rec is None or rec.get("blob_id") != blob_id:
+            return None
+        name, mime, size, sha = rec.get("name"), rec.get("mime"), rec.get("size"), rec.get("sha256")
+        if not isinstance(name, str) or safe_name(name) != name:
+            return None
+        if not isinstance(mime, str) or len(mime) > 100 or not _MIME_RE.match(mime):
+            return None
+        if not isinstance(size, int) or isinstance(size, bool) or not 0 < size <= MAX_TOTAL_BYTES:
+            return None
+        if not isinstance(sha, str) or not _SHA_RE.match(sha):
+            return None
+        return rec
+
+    @staticmethod
+    def _public(rec: dict, *, kind: str | None = None) -> dict:
+        """The metadata the task and the app see. The path is computed from
+        ``blob_id`` and the safe name, never taken from a file."""
+        return {
+            "blob_id": rec["blob_id"],
+            "name": rec["name"],
+            "mime": rec["mime"],
+            "size": rec["size"],
+            "sha256": rec["sha256"],
+            "kind": kind or kind_of(rec["mime"]),
+            "path": f"{INBOX_DIR}/{rec['blob_id']}/{rec['name']}",
+            "created_at": rec.get("created_at"),
+        }
 
     def resolve(self, blob_id: Any) -> dict | None:
-        """A finished upload's metadata plus ``host_path``, or ``None``."""
-        if not isinstance(blob_id, str):
+        """A finished upload's metadata plus ``host_path``, or ``None``.
+
+        The file in the workspace must still be the uploaded one: a regular
+        file (no symlink on the way), same size and sha256. An image whose
+        bytes do not match its type is handed on as a plain file."""
+        rec = self._record(blob_id)
+        if rec is None:
             return None
-        meta = self._meta(blob_id)
-        if meta is None:
+        meta = self._public(rec)
+        data = read_regular_nofollow(str(self.root), meta["path"], max_bytes=MAX_TOTAL_BYTES)
+        if data is None or len(data) != rec["size"] or hashlib.sha256(data).hexdigest() != rec["sha256"]:
             return None
-        host_path = self.root / meta["path"]
-        if not host_path.is_file():
-            return None
-        return {**meta, "host_path": str(host_path)}
+        if meta["kind"] == "image" and not _looks_like(rec["mime"], data[:16]):
+            meta["kind"] = "file"
+        return {**meta, "host_path": str(self.root / meta["path"])}
 
     def resolve_task(self, raw: Any) -> list[dict]:
         """The ``attachments`` of a task: a list of ``{"blob_id": ...}`` (or
@@ -218,28 +370,69 @@ class AttachmentInbox:
     # -- housekeeping ------------------------------------------------------
 
     def sweep(self) -> int:
-        """Remove unfinished uploads older than :data:`PARTIAL_TTL_SECONDS`."""
-        partial = self.root / PARTIAL_DIR
+        """Remove unfinished uploads older than :data:`PARTIAL_TTL_SECONDS`.
+        Only the host state directory is touched, never the workspace."""
+        partial = self.state / "partial"
         if not partial.is_dir():
             return 0
         removed = 0
         cutoff = self._now() - PARTIAL_TTL_SECONDS
         for state_path in partial.glob("*.json"):
-            state = self._read_json(state_path) or {}
-            if float(state.get("touched_at") or 0) < cutoff:
+            upload_id = state_path.stem
+            if not _ID_RE.match(upload_id):
+                continue
+            state = self._read_json(state_path)
+            if state is None:
+                continue
+            try:
+                touched = float(state.get("touched_at") or 0)
+            except (TypeError, ValueError):
+                touched = 0.0
+            if touched < cutoff:
                 state_path.unlink(missing_ok=True)
-                state_path.with_suffix(".part").unlink(missing_ok=True)
+                (partial / f"{upload_id}.part").unlink(missing_ok=True)
                 removed += 1
         return removed
 
     def remove(self, blob_id: str) -> bool:
-        if not _ID_RE.match(blob_id or ""):
-            return False
-        target = self.root / INBOX_DIR / blob_id
-        if not target.is_dir():
-            return False
-        shutil.rmtree(target, ignore_errors=True)
-        return True
+        """Delete a finished upload the host has a record of: its file and
+        its (then empty) directory, both unlinked at a no-follow directory
+        fd, then the record. A path the agent swapped for a symlink or a
+        directory is left alone."""
+        with self._lock:
+            rec = self._record(blob_id)
+            if rec is None:
+                return False
+            try:
+                dir_fd = open_dir_nofollow(str(self.root), INBOX_DIR.split("/"))
+            except OSError:
+                dir_fd = None
+            if dir_fd is not None:
+                try:
+                    try:
+                        blob_fd = os.open(
+                            blob_id, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=dir_fd
+                        )
+                    except OSError:
+                        blob_fd = None
+                    if blob_fd is not None:
+                        try:
+                            st = os.stat(rec["name"], dir_fd=blob_fd, follow_symlinks=False)
+                            if stat.S_ISREG(st.st_mode) or stat.S_ISLNK(st.st_mode):
+                                # unlink(2) removes the entry, never a target.
+                                os.unlink(rec["name"], dir_fd=blob_fd)
+                        except OSError:
+                            pass
+                        finally:
+                            os.close(blob_fd)
+                        try:
+                            os.rmdir(blob_id, dir_fd=dir_fd)
+                        except OSError:
+                            pass  # not empty: the agent's own files stay
+                finally:
+                    os.close(dir_fd)
+            self._record_path(blob_id).unlink(missing_ok=True)
+            return True
 
     @staticmethod
     def _read_json(path: Path) -> dict | None:
@@ -286,6 +479,8 @@ __all__ = [
     "MAX_TOTAL_BYTES",
     "AttachmentError",
     "AttachmentInbox",
+    "STATE_ENV",
+    "default_state_root",
     "is_image_part",
     "prompt_with_attachments",
     "row_attachments",

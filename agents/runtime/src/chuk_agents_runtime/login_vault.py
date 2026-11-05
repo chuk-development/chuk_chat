@@ -22,11 +22,19 @@ browser server. The guard here:
 2. reads the current tab URL fresh (``browser_tabs list``) and resolves only
    when its origin equals the login's origin exactly (scheme, host, port; no
    subdomain match; ``https`` only, ``http`` only for localhost);
-3. calls the browser with a resolved COPY of the arguments (the model's own
+3. probes every target field (``browser_evaluate`` on its ``ref``): its
+   document's origin must equal the login's origin too (a cross-origin
+   iframe on the right page is refused), and a password goes only into an
+   ``<input type="password">``;
+4. calls the browser with a resolved COPY of the arguments (the model's own
    arguments, which the transcript and the tool events store, keep the
    placeholder text);
-4. masks every resolved password, TOTP code and username in the result, and
-   writes one audit line (never a value).
+5. reads the page URL again after the call; a page that left the origin
+   during the fill stops the fill with an error;
+6. masks every resolved password, TOTP code and username in the result (also
+   their JSON / JS escaped forms), and writes one audit line (never a value);
+7. after a fill, refuses ``browser_evaluate`` / ``browser_run_code`` on that
+   origin for the rest of the session: such a script could read the field.
 
 This module knows nothing about storage or frames. :class:`LoginVaultAccess`
 is the seam; the executor implements it with its secrets vault.
@@ -39,13 +47,16 @@ import copy
 import hashlib
 import hmac
 import re
+import json
 import struct
+import threading
 import time
 from collections.abc import Callable, Mapping
 from typing import Any, Protocol, runtime_checkable
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from .registry import ToolRegistry
+from .secrets import _variants
 from .takeover import current_tab_url
 
 LOGIN_VAULT_LIST_TOOL = "login_vault_list"
@@ -62,11 +73,30 @@ OUTCOME_UNKNOWN_ENTRY = "unknown_entry"
 OUTCOME_AMBIGUOUS = "ambiguous_entry"
 OUTCOME_REFUSED_TOOL = "refused_tool"
 OUTCOME_NO_PAGE = "no_page"
+OUTCOME_REFUSED_FRAME = "refused_frame"
+OUTCOME_REFUSED_FIELD = "refused_field"
+OUTCOME_NAVIGATED = "navigated_during_fill"
+OUTCOME_REFUSED_SCRIPT = "refused_script"
 
 #: The browser tools and the argument slots where a placeholder is resolved.
 TYPE_TOOL = "browser_type"
 FILL_FORM_TOOL = "browser_fill_form"
 TAB_TOOL = "browser_tabs"
+EVALUATE_TOOL = "browser_evaluate"
+#: Tools that run page script the model wrote. After a fill they could read
+#: the password straight out of the field, so on an origin the vault filled
+#: they are refused for the rest of the session.
+SCRIPT_TOOLS = frozenset({EVALUATE_TOOL, "browser_run_code", "browser_run_code_unsafe"})
+
+#: Run on the target element (``browser_evaluate`` with its ``ref``): the
+#: origin of the document the element lives in (an iframe has its own), and
+#: what kind of field it is. ``document.location`` is unforgeable, so a
+#: cross-origin frame cannot claim the top page's origin.
+_PROBE_FUNCTION = (
+    "(el) => ({origin: el.ownerDocument.location.origin, "
+    "tag: String(el.tagName || '').toLowerCase(), "
+    "type: String(el.getAttribute('type') || el.type || '').toLowerCase()})"
+)
 
 #: Hosts where ``http`` is accepted (local test pages). Everything else is
 #: ``https`` only: a password must not travel in clear text.
@@ -306,6 +336,11 @@ class LoginGuard:
         self._access = access
         self._session_key = session_key
         self._clock = clock
+        #: Origins this session filled a login on (see :data:`SCRIPT_TOOLS`).
+        self._filled_origins: set[str] = set()
+        #: Set while the guard makes its own calls (tab list, probe), which
+        #: pass straight through.
+        self._internal = threading.local()
 
     # The seam ---------------------------------------------------------------
 
@@ -318,6 +353,23 @@ class LoginGuard:
         invoke: Callable[[dict], dict],
     ) -> dict:
         args = arguments if isinstance(arguments, dict) else {}
+        if getattr(self._internal, "depth", 0):
+            return invoke(args)
+        if tool in SCRIPT_TOOLS and self._filled_origins and not has_placeholder(args):
+            origin = normalize_origin(self._page_url(manager, server))
+            if origin is None or origin in self._filled_origins:
+                shown = origin or "an unknown page"
+                self._audit(tool, origin or "", "", [], OUTCOME_REFUSED_SCRIPT)
+                return {
+                    "ok": False,
+                    "server": server,
+                    "tool": tool,
+                    "error": (
+                        f"{tool} is blocked on {shown} after a saved login was filled there: "
+                        "a page script could read the password. Use browser_snapshot to "
+                        "read the page instead."
+                    ),
+                }
         if not has_placeholder(args):
             return invoke(args)
         try:
@@ -382,6 +434,39 @@ class LoginGuard:
                     OUTCOME_REFUSED_ORIGIN,
                     origin,
                 )
+        # Probe every target field: same origin as the login (no cross-origin
+        # iframe), and a password only into a password input.
+        for container, key in slots:
+            fields = {m.group("field") for m in PLACEHOLDER_RE.finditer(container[key])}
+            if not fields:
+                continue
+            ref = container.get("ref") if isinstance(container, dict) else None
+            probe = self._probe(manager, server, ref, container.get("element"))
+            if probe is None:
+                raise Refusal(
+                    "the target field could not be checked (no element ref, or the page "
+                    "did not answer). Take a browser_snapshot and pass the field's ref.",
+                    OUTCOME_REFUSED_FRAME,
+                    first_origin,
+                )
+            frame_origin = normalize_origin(probe.get("origin"))
+            if frame_origin != page_origin:
+                raise Refusal(
+                    f"the login for {page_origin} can only be filled into a field of "
+                    f"{page_origin}; this field is in a frame of "
+                    f"{frame_origin or probe.get('origin') or 'an unknown origin'}.",
+                    OUTCOME_REFUSED_FRAME,
+                    first_origin,
+                )
+            if FIELD_PASSWORD in fields and not (
+                probe.get("tag") == "input" and probe.get("type") == "password"
+            ):
+                raise Refusal(
+                    "a saved password goes only into a password field "
+                    "(<input type=\"password\">). This field is not one.",
+                    OUTCOME_REFUSED_FIELD,
+                    first_origin,
+                )
         # Resolve.
         values: dict[str, str] = {}
         used: dict[str, list[str]] = {}
@@ -428,6 +513,22 @@ class LoginGuard:
             )
         result = invoke(resolved)
         result = mask_values(result, values)
+        self._filled_origins.add(page_origin)
+        after_url = self._page_url(manager, server)
+        after_origin = normalize_origin(after_url) if after_url else None
+        if after_origin != page_origin:
+            for entry_id, kinds in used.items():
+                self._audit(tool, page_origin, entry_id, kinds, OUTCOME_NAVIGATED)
+            return {
+                "ok": False,
+                "server": server,
+                "tool": tool,
+                "error": (
+                    f"the page left {page_origin} during the login fill (now "
+                    f"{after_origin or 'unknown'}). The fill is stopped; check the page "
+                    "with browser_snapshot before you go on."
+                ),
+            }
         for entry_id, kinds in used.items():
             try:
                 self._access.login_used(entry_id)
@@ -444,9 +545,34 @@ class LoginGuard:
             result = {**result, "login_vault": {"origin": page_origin, "filled_fields": len(values)}}
         return result
 
+    def _own_call(self, manager: Any, server: str, tool: str, args: dict) -> Any:
+        self._internal.depth = getattr(self._internal, "depth", 0) + 1
+        try:
+            return manager.call(server, tool, args)
+        finally:
+            self._internal.depth -= 1
+
+    def _probe(self, manager: Any, server: str, ref: Any, element: Any) -> dict | None:
+        """``{origin, tag, type}`` of the element ``ref`` points at, read in
+        the element's own frame. ``None`` when it cannot be read."""
+        if not isinstance(ref, str) or not ref.strip():
+            return None
+        args = {
+            "function": _PROBE_FUNCTION,
+            "ref": ref,
+            "element": element if isinstance(element, str) and element else "login field",
+        }
+        try:
+            result = self._own_call(manager, server, EVALUATE_TOOL, args)
+        except Exception:  # noqa: BLE001 — unknown field means no fill
+            return None
+        if not isinstance(result, dict) or not result.get("ok"):
+            return None
+        return _probe_result(result.get("content"))
+
     def _page_url(self, manager: Any, server: str) -> str | None:
         try:
-            result = manager.call(server, TAB_TOOL, {"action": "list"})
+            result = self._own_call(manager, server, TAB_TOOL, {"action": "list"})
         except Exception:  # noqa: BLE001 — no page URL means no fill
             return None
         if not isinstance(result, dict) or not result.get("ok"):
@@ -469,11 +595,48 @@ class LoginGuard:
             pass
 
 
+def _probe_result(content: Any) -> dict | None:
+    """The probe's object from a ``browser_evaluate`` answer. Playwright MCP
+    puts the JSON value after a ``### Result`` heading; a bare JSON object (a
+    test double) works too."""
+    if isinstance(content, dict):
+        data = content
+    elif isinstance(content, str):
+        text = content
+        if "### Result" in text:
+            text = text.split("### Result", 1)[1]
+        start = text.find("{")
+        if start < 0:
+            return None
+        try:
+            data, _end = json.JSONDecoder().raw_decode(text[start:])
+        except ValueError:
+            return None
+    else:
+        return None
+    if not isinstance(data, dict) or not isinstance(data.get("origin"), str):
+        return None
+    return {
+        "origin": data["origin"],
+        "tag": str(data.get("tag") or "").lower(),
+        "type": str(data.get("type") or "").lower(),
+    }
+
+
 def mask_values(obj: Any, values: Mapping[str, str]) -> Any:
     """Replace every resolved value in ``obj`` (nested) with ``[REDACTED:<name>]``.
-    No length floor: a short password or a 6-digit code is masked too. Longest
-    value first."""
-    pairs = sorted(((v, k) for k, v in values.items() if v), key=lambda p: len(p[0]), reverse=True)
+    No length floor: a short password or a 6-digit code is masked too, also
+    in its base64, URL, JSON and JS escaped forms. Longest value first."""
+    pairs = sorted(
+        {
+            (variant, k)
+            for k, v in values.items()
+            if v
+            for variant in _variants(v, min_len=1)
+        },
+        key=lambda p: len(p[0]),
+        reverse=True,
+    )
     if not pairs:
         return obj
 
