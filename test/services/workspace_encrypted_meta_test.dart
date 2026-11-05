@@ -661,6 +661,98 @@ void main() {
     });
   });
 
+  group('persona flags', () {
+    test('old rows and caches load with the defaults', () async {
+      final read = await _readProject(
+        _projectRow(envelope: await _envelope({'name': 'Alpha'})),
+      );
+      final ws = Workspace.fromJson(read.row);
+      expect(ws.complete, isFalse);
+      expect(ws.includeRuntimeContext, isTrue);
+    });
+
+    test('envelope strings and cache bools both read', () async {
+      final read = await _readProject(
+        _projectRow(
+          envelope: await _envelope({
+            'name': 'Alpha',
+            'persona_complete': '1',
+            'include_runtime_context': '0',
+          }),
+        ),
+      );
+      final ws = Workspace.fromJson(read.row);
+      expect(ws.complete, isTrue);
+      expect(ws.includeRuntimeContext, isFalse);
+      final cached = Workspace.fromJson(ws.toJson());
+      expect(cached.complete, isTrue);
+      expect(cached.includeRuntimeContext, isFalse);
+    });
+
+    test('sealed columns carry only non-default flags', () async {
+      final plain = await WorkspaceStorageService.sealedProjectColumns(
+        rowId: 'proj-1',
+        name: 'Alpha',
+      );
+      final opened = jsonDecode(
+        await _fakeOpen(plain['encrypted_meta'] as String),
+      ) as Map;
+      expect(opened.containsKey('persona_complete'), isFalse);
+      expect(opened.containsKey('include_runtime_context'), isFalse);
+      expect(plain.containsKey('persona_complete'), isFalse);
+
+      final flagged = await WorkspaceStorageService.sealedProjectColumns(
+        rowId: 'proj-1',
+        name: 'Alpha',
+        personaComplete: '1',
+        personaRuntimeContext: '0',
+      );
+      final opened2 = jsonDecode(
+        await _fakeOpen(flagged['encrypted_meta'] as String),
+      ) as Map;
+      expect(opened2['persona_complete'], '1');
+      expect(opened2['include_runtime_context'], '0');
+    });
+
+    test('a merge keeps flags it does not change and sets the given one', () {
+      final kept = WorkspaceStorageService.mergeProjectFields(
+        currentName: 'Alpha',
+        currentPersonaComplete: '1',
+        currentPersonaRuntimeContext: '0',
+        customSystemPrompt: 'New',
+      );
+      expect(kept.personaComplete, '1');
+      expect(kept.personaRuntimeContext, '0');
+      final changed = WorkspaceStorageService.mergeProjectFields(
+        currentName: 'Alpha',
+        currentPersonaComplete: '1',
+        complete: false,
+        includeRuntimeContext: false,
+      );
+      expect(changed.personaComplete, isNull);
+      expect(changed.personaRuntimeContext, '0');
+    });
+
+    test('a re-seal keeps the flags of the envelope', () async {
+      final read = await _readProject(
+        _projectRow(
+          // An old build wrote the prompt back in plaintext.
+          prompt: 'Be brief',
+          envelope: await _envelope({
+            'name': 'Alpha',
+            'persona_complete': '1',
+          }),
+        ),
+      );
+      final job = WorkspaceStorageService.resealJobFromRead(
+        read,
+        isFile: false,
+      )!;
+      expect(job.values['persona_complete'], '1');
+      expect(job.values.containsKey('include_runtime_context'), isFalse);
+    });
+  });
+
   group('re-seal snapshot job', () {
     test('project job carries the raw stamp and values of the same row',
         () async {

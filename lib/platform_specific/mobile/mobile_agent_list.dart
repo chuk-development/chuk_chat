@@ -223,6 +223,8 @@ class _MobileAgentListState extends State<MobileAgentList> {
     unawaited(RosterPins.instance.load());
     // The chats automations made, stored on this device.
     unawaited(AgentsDerivedThreads.instance.load());
+    // The "waits on you" labels the inbox showed before the restart.
+    unawaited(AgentsThreadModes.instance.loadWaits());
   }
 
   @override

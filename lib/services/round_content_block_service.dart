@@ -256,6 +256,7 @@ class RoundContentBlockService {
     switch (a.type) {
       case ContentBlockType.text:
       case ContentBlockType.reasoning:
+      case ContentBlockType.steer:
         return (a.text ?? '').trim() == (b.text ?? '').trim();
       case ContentBlockType.toolCalls:
         final aCalls = a.toolCalls ?? const <ToolCall>[];

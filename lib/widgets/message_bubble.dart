@@ -36,6 +36,7 @@ import 'package:chuk_chat/widgets/agent_activity/tool_activity_category.dart';
 import 'package:chuk_chat/widgets/terminal_block.dart';
 import 'package:chuk_chat/services/agents/agents_approval_grants.dart';
 import 'package:chuk_chat/widgets/agents_approval_row.dart';
+import 'package:chuk_chat/widgets/agents_context_chip.dart';
 import 'package:chuk_chat/models/artifact.dart';
 import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/services/app_theme_service.dart';
@@ -67,6 +68,9 @@ import 'package:chuk_chat/widgets/message_bubble/voice_message_bubble.dart';
 import 'package:chuk_chat/widgets/message_bubble/outbox_status_line.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
 import 'package:chuk_chat/widgets/document_viewer.dart';
+import 'package:chuk_chat/services/spreadsheet/spreadsheet_parser.dart'
+    show SpreadsheetDocument;
+import 'package:chuk_chat/widgets/spreadsheet/spreadsheet_viewer.dart';
 import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/nice_snackbar.dart';
 import 'package:chuk_chat/widgets/sandbox_artifact_block.dart';

@@ -230,6 +230,8 @@ class _AgentRosterViewState extends State<AgentRosterView> {
   void initState() {
     super.initState();
     if (_hosted) _loadProfile();
+    // The "waits on you" labels the inbox showed before the restart.
+    unawaited(AgentsThreadModes.instance.loadWaits());
     _search.addListener(_onSearch);
     _searchFocus.addListener(_onSearchFocusChanged);
   }

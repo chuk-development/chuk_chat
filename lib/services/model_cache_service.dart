@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -14,8 +15,87 @@ class ModelCacheService {
   static const String _kSelectedModelKeyPrefix = 'cached_selected_model_';
   static const String _kProviderPrefsKeyPrefix = 'cached_provider_prefs_';
 
-  /// Cache validity duration - models don't change often
-  static const Duration _cacheValidDuration = Duration(hours: 24);
+  /// How long a stored catalogue counts as fresh. Older than this it is
+  /// still served at once (stale-while-revalidate), and a read starts one
+  /// background refresh. Was 24 h, so a model added on the server stayed
+  /// missing for up to a day.
+  static const Duration cacheFreshDuration = Duration(minutes: 10);
+
+  /// Least time between two background refresh attempts, so a failing
+  /// network is not asked again on every read.
+  static const Duration _minRevalidateGap = Duration(seconds: 30);
+
+  /// Fetches the catalogue and calls [saveAvailableModels]. Set by
+  /// `ModelPrefetchService`; null in tests unless a test sets it.
+  static Future<void> Function()? _revalidator;
+  static Future<void>? _revalidating;
+  static DateTime? _lastRevalidateStart;
+
+  /// When the stored catalogue was written (ms since epoch), once read.
+  static int? _savedAtMs;
+  static bool _savedAtLoaded = false;
+
+  /// Registers the background refresh used when a read finds the catalogue
+  /// stale. Concurrent stale reads share one refresh.
+  static void registerRevalidator(Future<void> Function() revalidate) {
+    _revalidator = revalidate;
+  }
+
+  @visibleForTesting
+  static void debugResetRevalidation() {
+    _revalidator = null;
+    _revalidating = null;
+    _lastRevalidateStart = null;
+    _savedAtMs = null;
+    _savedAtLoaded = false;
+  }
+
+  /// The refresh started by the last stale read, or null when none runs.
+  @visibleForTesting
+  static Future<void>? get debugRevalidating => _revalidating;
+
+  static Future<int?> _savedAt() async {
+    if (_savedAtLoaded) return _savedAtMs;
+    final raw = await LocalChatCacheService.kvGet(_kModelsTimestampKey);
+    _savedAtMs = raw == null ? null : int.tryParse(raw);
+    _savedAtLoaded = true;
+    return _savedAtMs;
+  }
+
+  static bool _isFresh(int? savedAtMs, DateTime now) {
+    if (savedAtMs == null) return false;
+    final age = now.difference(DateTime.fromMillisecondsSinceEpoch(savedAtMs));
+    return age >= Duration.zero && age < cacheFreshDuration;
+  }
+
+  /// Starts one background refresh when the catalogue is stale. Never waits
+  /// for it and never throws.
+  static Future<void> _revalidateIfStale() async {
+    final revalidate = _revalidator;
+    if (revalidate == null || _revalidating != null) return;
+    final now = DateTime.now();
+    final last = _lastRevalidateStart;
+    if (last != null && now.difference(last) < _minRevalidateGap) return;
+    int? savedAt;
+    try {
+      savedAt = await _savedAt();
+    } catch (_) {
+      return;
+    }
+    if (_isFresh(savedAt, now) || _revalidating != null) return;
+    _lastRevalidateStart = now;
+    final Future<void> run = Future<void>.sync(revalidate).catchError((
+      Object e,
+    ) {
+      if (kDebugMode) debugPrint('ModelCacheService: refresh failed: $e');
+    });
+    _revalidating = run;
+    unawaited(
+      run.whenComplete(() {
+        if (identical(_revalidating, run)) _revalidating = null;
+      }),
+    );
+  }
 
   // The model catalogue (~200 KB) used to live in SharedPreferences. That
   // bloated the prefs file, which the legacy plugin re-parses on every
@@ -84,25 +164,29 @@ class ModelCacheService {
     // have seen the old value.
     _modelsGeneration++;
     _decodedModels = null;
-    await LocalChatCacheService.kvSet(
-      _kModelsTimestampKey,
-      DateTime.now().millisecondsSinceEpoch.toString(),
-    );
+    final int now = DateTime.now().millisecondsSinceEpoch;
+    await LocalChatCacheService.kvSet(_kModelsTimestampKey, now.toString());
+    _savedAtMs = now;
+    _savedAtLoaded = true;
   }
 
-  /// Check if cached models are still valid (less than 24h old)
+  /// Whether the stored catalogue is fresh (younger than
+  /// [cacheFreshDuration]). A stale one is still served by
+  /// [loadAvailableModels]; this only says whether to fetch again.
   static Future<bool> isCacheValid() async {
     await _migrateFromPrefs();
     final raw = await LocalChatCacheService.kvGet(_kModelsTimestampKey);
     final timestamp = raw == null ? null : int.tryParse(raw);
-    if (timestamp == null) return false;
-
-    final cachedAt = DateTime.fromMillisecondsSinceEpoch(timestamp);
-    final age = DateTime.now().difference(cachedAt);
-    return age < _cacheValidDuration;
+    _savedAtMs = timestamp;
+    _savedAtLoaded = true;
+    return _isFresh(timestamp, DateTime.now());
   }
 
+  /// The stored catalogue, served at once. When it is older than
+  /// [cacheFreshDuration], one background refresh starts (see
+  /// [registerRevalidator]); its result reaches the next read.
   static Future<List<Map<String, dynamic>>> loadAvailableModels() async {
+    unawaited(_revalidateIfStale());
     final memo = _decodedModels;
     if (memo != null) return _copyOf(memo);
     final generation = _modelsGeneration;

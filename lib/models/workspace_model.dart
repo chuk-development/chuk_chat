@@ -23,6 +23,18 @@ class Workspace {
   final String? userId;
   final String? ownerDisplayName;
 
+  /// Persona flag: [customSystemPrompt] is the complete system prompt. It is
+  /// sent as written, without the tool protocol, identity and per-model
+  /// blocks the app adds otherwise. Off by default (today's behaviour).
+  /// Stored in the row's encrypted envelope (`persona_complete`).
+  final bool complete;
+
+  /// Persona flag: user messages carry their `[Sent: …]` time line. On by
+  /// default (today's behaviour). Stored in the row's encrypted envelope
+  /// (`include_runtime_context`). Both flags are frozen per chat at its
+  /// first request (`PromptState.complete` / `runtimeContext`).
+  final bool includeRuntimeContext;
+
   // Relationships (loaded separately via joins)
   final List<String> chatIds;
   final List<WorkspaceFile> files;
@@ -43,6 +55,8 @@ class Workspace {
     this.isPublic = false,
     this.userId,
     this.ownerDisplayName,
+    this.complete = false,
+    this.includeRuntimeContext = true,
     this.chatIds = const [],
     this.files = const [],
   });
@@ -64,6 +78,9 @@ class Workspace {
       isPublic: (json['is_public'] as bool?) ?? false,
       userId: json['user_id'] as String?,
       ownerDisplayName: json['owner_display_name'] as String?,
+      complete: parsePersonaFlag(json['persona_complete']) ?? false,
+      includeRuntimeContext:
+          parsePersonaFlag(json['include_runtime_context']) ?? true,
       chatIds: json['chatIds'] != null
           ? List<String>.from(json['chatIds'] as List)
           : const [],
@@ -91,6 +108,8 @@ class Workspace {
     'is_public': isPublic,
     if (userId != null) 'user_id': userId,
     if (ownerDisplayName != null) 'owner_display_name': ownerDisplayName,
+    'persona_complete': complete,
+    'include_runtime_context': includeRuntimeContext,
     'chatIds': chatIds,
     'files': files.map((f) => f.toJson()).toList(),
   };
@@ -111,6 +130,8 @@ class Workspace {
     bool? isPublic,
     String? userId,
     String? ownerDisplayName,
+    bool? complete,
+    bool? includeRuntimeContext,
     List<String>? chatIds,
     List<WorkspaceFile>? files,
   }) {
@@ -130,10 +151,30 @@ class Workspace {
       isPublic: isPublic ?? this.isPublic,
       userId: userId ?? this.userId,
       ownerDisplayName: ownerDisplayName ?? this.ownerDisplayName,
+      complete: complete ?? this.complete,
+      includeRuntimeContext:
+          includeRuntimeContext ?? this.includeRuntimeContext,
       chatIds: chatIds ?? this.chatIds,
       files: files ?? this.files,
     );
   }
+
+  /// Reads a persona flag: a bool (local cache) or the string form the
+  /// encrypted envelope stores (`'1'` / `'0'`, see [encodePersonaFlag]).
+  /// Null when absent or unreadable, so the caller's default applies.
+  static bool? parsePersonaFlag(Object? raw) {
+    if (raw is bool) return raw;
+    if (raw is String) {
+      if (raw == '1' || raw == 'true') return true;
+      if (raw == '0' || raw == 'false') return false;
+    }
+    return null;
+  }
+
+  /// The envelope form of a persona flag. Null for the default, so a row
+  /// without a persona seals exactly what it sealed before.
+  static String? encodePersonaFlag(bool value, {required bool byDefault}) =>
+      value == byDefault ? null : (value ? '1' : '0');
 
   /// Get number of chats in this workspace
   int get chatCount => chatIds.length;

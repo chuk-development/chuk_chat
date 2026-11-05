@@ -22,6 +22,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
+import 'package:chuk_chat/services/chat_compaction.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/services/prompt_cache/prompt_context.dart';
 import 'package:chuk_chat/utils/input_validator.dart';
@@ -66,6 +67,7 @@ class ChatHistoryBuilder {
     bool includeAllImages = false,
     bool includeReasoning = false,
     bool includeToolResults = true,
+    List<int>? messageStarts,
   }) async {
     final List<Map<String, dynamic>> history = <Map<String, dynamic>>[];
     final bool shouldIncludeImages = includeRecentImages || includeAllImages;
@@ -88,8 +90,31 @@ class ChatHistoryBuilder {
     // Frozen per chat with the snapshot: whether earlier turns' tool rounds
     // are replayed. A chat without one follows the setting.
     final bool replayTools = snapshot?.toolHistory ?? includeToolResults;
+
+    // Chat compaction (docs/GOTCHAS.md, "Chat compaction"): the newest user
+    // message with a summary starts the history. Everything before it is
+    // sent as that summary alone; the walk below still reads the earlier
+    // messages' prompt state, but adds no entry for them.
+    final int compactedAt = ChatCompaction.latestCompactionIndex(messages);
+    final CompactionRecord? record = compactedAt > 0
+        ? CompactionRecord.decode(messages[compactedAt][ChatCompaction.fieldKey])
+        : null;
+    if (record != null) {
+      history.add({
+        'role': 'user',
+        'content': ChatCompaction.summaryMessage(record.summary),
+      });
+    }
+
     final Set<int> droppedTranscripts = replayTools
-        ? _droppedTranscripts(contexts)
+        ? _droppedTranscripts(
+            compactedAt > 0
+                ? <TurnPromptContext?>[
+                    for (var i = 0; i < contexts.length; i++)
+                      i < compactedAt ? null : contexts[i],
+                  ]
+                : contexts,
+          )
         : const <int>{};
 
     // The pending-turn check: the last user message's entries, and whether
@@ -103,6 +128,7 @@ class ChatHistoryBuilder {
     var roundsReplayed = false;
 
     for (var i = 0; i < messages.length; i++) {
+      messageStarts?.add(history.length);
       final message = messages[i];
       final String? sender = message['sender'];
       final String? text = message['text'];
@@ -116,6 +142,8 @@ class ChatHistoryBuilder {
             context!.stateDiff!,
           );
         }
+        // Summarized by a compaction: only its prompt state counts.
+        if (i < compactedAt) continue;
         // Document attachments live in `message['attachments']` (their
         // markdown body), never in `message['text']` — which stores only the
         // display line ("Documents: foo.txt"). Fold the bodies back in so an
@@ -135,7 +163,11 @@ class ChatHistoryBuilder {
             message['images'] != null && message['images']!.isNotEmpty;
         final String modelText = renderUserTurnForModel(
           text: userText,
-          sentAt: message['sentAt'],
+          // A workspace persona without runtime context (frozen in the
+          // snapshot) sends no `[Sent: …]` line; the tool loop does the same.
+          sentAt: (snapshot?.runtimeContextOn ?? true)
+              ? message['sentAt']
+              : null,
           notes: context?.notes ?? const <String>[],
         );
 
@@ -206,6 +238,8 @@ class ChatHistoryBuilder {
           ];
           lastIsUser = true;
         }
+      } else if (i < compactedAt) {
+        continue;
       } else if (sender == 'ai' || sender == 'assistant') {
         // Prior tool calls + results ride along so a follow-up question that
         // needs the same data does not re-run the tools. A turn whose rounds

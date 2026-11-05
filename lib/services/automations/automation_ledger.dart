@@ -90,6 +90,17 @@ String automationEventText(AgentsRelayAutomation event) {
       return 'Finished: $what';
     case 'updated':
       return 'Edited: $what';
+    case 'skipped':
+      // A fire past its catch-up window: the row moved to its next time.
+      final error = a.lastError;
+      return error == null
+          ? 'Skipped a late run: $what'
+          : 'Skipped a late run: $what — $error';
+    case 'retry':
+      final retryAt = a.retryAt;
+      return retryAt == null
+          ? 'Will retry: $what'
+          : 'Will retry at ${_clock(retryAt)}: $what';
     case 'result':
       final summary = event.summary;
       if (event.changed == false) {
@@ -102,4 +113,11 @@ String automationEventText(AgentsRelayAutomation event) {
     default:
       return '${event.event}: $what';
   }
+}
+
+/// `HH:mm` in local time.
+String _clock(DateTime when) {
+  final DateTime local = when.toLocal();
+  String two(int v) => v.toString().padLeft(2, '0');
+  return '${two(local.hour)}:${two(local.minute)}';
 }

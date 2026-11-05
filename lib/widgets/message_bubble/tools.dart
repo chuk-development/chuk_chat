@@ -145,6 +145,24 @@ extension _MessageBubbleTools on _MessageBubbleState {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
+        // Rows nobody typed (a loaded skill, the plan rules) show as chips
+        // the moment the host writes them, not only after the replay.
+        ListenableBuilder(
+          listenable: live.listenable,
+          builder: (BuildContext context, _) {
+            final rows = live.contextRows();
+            if (rows.isEmpty) return const SizedBox.shrink();
+            return Column(
+              key: const ValueKey<String>('agents-live-context'),
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                for (final row in rows)
+                  AgentsContextChip(source: row.source, text: row.text),
+              ],
+            );
+          },
+        ),
         _buildAgentsLiveTimeline(live, steps),
         // An approval answered during the run stays in view as its row,
         // read from the same live source as the panel.

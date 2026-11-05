@@ -423,8 +423,8 @@ class AgentsRelayContext extends AgentsRelayInbound {
 /// the answer and is rendered separately (never folded into the reply text).
 ///
 /// The host emits it live and in a replay (`{"type":"reasoning"}`, docs/
-/// WIRE_CONTRACT.md; landed by session b5, HANDOVER_2026-09-05_REASONING_
-/// TOOLFRAMES.md) whenever the model's reasoning effort is on.
+/// WIRE_CONTRACT.md; landed by session b5,
+/// docs/notes/archived/2026-09-05-handover-reasoning-toolframes.md) whenever the model's reasoning effort is on.
 class AgentsRelayReasoning extends AgentsRelayInbound {
   const AgentsRelayReasoning(
     this.text, {

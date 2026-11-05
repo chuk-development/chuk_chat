@@ -10,6 +10,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/widgets/composer/busy_mode_setting.dart';
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
 
 import 'package:chuk_chat/widgets/app_notification.dart';
@@ -448,6 +449,9 @@ class _CustomizationPageState extends State<CustomizationPage> {
               ),
               const SizedBox(height: 8),
               ExpressiveInfoCard(text: l.autoSendVoiceInfo),
+
+              // What Enter does while a reply runs (queue or steer).
+              const ComposerBusyModeSetting(),
 
               // Message display (toggles only; typography is its own section).
               ExpressiveSectionHeader(l.messageDisplay),

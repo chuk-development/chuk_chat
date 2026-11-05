@@ -344,17 +344,21 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       // every prior tool result was stripped from history on an edit/resend
       // and the model re-ran searches it had already done. It also dropped
       // `sender == 'assistant'` rows entirely.
-      final List<Map<String, dynamic>> conversationHistory =
-          await ChatHistoryBuilder.build(
-            messages: _messages.sublist(0, index),
-            // The edited turn is passed separately as `message`; the slice
-            // above already excludes it, so nothing needs dropping here.
-            pendingUserText: '',
-            includeRecentImages: widget.includeRecentImagesInHistory,
-            includeAllImages: widget.includeAllImagesInHistory,
-            includeReasoning: widget.includeReasoningInHistory,
-            includeToolResults: widget.includeToolResultsInHistory,
-          );
+      Future<List<Map<String, dynamic>>> buildResendHistory([
+        List<int>? starts,
+      ]) => ChatHistoryBuilder.build(
+        messages: _messages.sublist(0, index),
+        // The edited turn is passed separately as `message`; the slice
+        // above already excludes it, so nothing needs dropping here.
+        pendingUserText: '',
+        includeRecentImages: widget.includeRecentImagesInHistory,
+        includeAllImages: widget.includeAllImagesInHistory,
+        includeReasoning: widget.includeReasoningInHistory,
+        includeToolResults: widget.includeToolResultsInHistory,
+        messageStarts: starts,
+      );
+      List<Map<String, dynamic>> conversationHistory =
+          await buildResendHistory();
 
       if (_isSendOperationCancelled(sendOperationId)) {
         return;
@@ -381,7 +385,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         showSnackBar(resendBudget.error!);
         return;
       }
-      final int resendMaxTokens = resendBudget.maxResponseTokens ?? 512;
+      int resendMaxTokens = resendBudget.maxResponseTokens ?? 512;
 
       // The chat picks the tool loop: the host's fold for an Agents thread,
       // upstream's client-side loop for a chuk_chat chat.
@@ -403,11 +407,65 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         skipIdentity: skipIdentity,
         nativeToolCalling: !kIsWeb,
       );
-      final initialSystemPrompt = await toolCallHandler
-          .buildInitialSystemPrompt(toolSession);
+      toolSession.applyWorkspace(_resolveWorkspaceForCurrentChat());
+      var initialSystemPrompt = await toolCallHandler.buildInitialSystemPrompt(
+        toolSession,
+      );
 
       // Capture chatId for this streaming operation
       final String chatIdForStream = _activeChatId!;
+
+      // A long chat is compacted on a resend / regenerate too, the same way
+      // a normal send does it (docs/GOTCHAS.md, "Chat compaction").
+      if (index >= 1) {
+        final compaction = await ChatCompactionRunner.beforeSend(
+          messages: _messages,
+          end: index,
+          chatId: chatIdForStream,
+          modelId: modelIdToUse,
+          providerSlug: providerToUse ?? 'openai',
+          accessToken: accessToken,
+          systemPrompt: initialSystemPrompt,
+          tools: toolCallHandler.nativeToolDefinitions(toolSession),
+          history: conversationHistory,
+          pendingMessage: toolSession.firstPassMessage,
+          buildHistory: buildResendHistory,
+        );
+        if (_isSendOperationCancelled(sendOperationId)) {
+          return;
+        }
+        if (compaction.compacted) {
+          if (mounted) setState(() {});
+          conversationHistory = await buildResendHistory();
+          // The room the summary freed goes to the answer.
+          resendMaxTokens =
+              MessageCompositionService.resolveResponseTokenBudget(
+                selectedModelId: modelIdToUse,
+                apiHistory: conversationHistory,
+                aiPromptContent: messageForSend,
+                systemPrompt: systemPrompt,
+              ).maxResponseTokens ??
+              resendMaxTokens;
+          toolSession = toolCallHandler.createSession(
+            initialUserMessage: messageForSend,
+            userSentAt: turnSentAt,
+            history: conversationHistory,
+            accessToken: accessToken,
+            discoveryContextKey: chatIdForStream,
+            baseSystemPrompt: systemPrompt,
+            modelId: selectedModelId,
+            toolCallingEnabled: widget.toolCallingEnabled,
+            discoveryMode: widget.toolDiscoveryMode,
+            skipIdentity: skipIdentity,
+            nativeToolCalling: !kIsWeb,
+          );
+          toolSession.applyWorkspace(_resolveWorkspaceForCurrentChat());
+          initialSystemPrompt = await toolCallHandler.buildInitialSystemPrompt(
+            toolSession,
+          );
+          _persistChatWithId(chatIdForStream, commit: false);
+        }
+      }
 
       // Message-level auto-retry: if the final answer is empty after all
       // tool-loop retries, re-send the last user message once more.
@@ -655,6 +713,10 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     discoveryMode: widget.toolDiscoveryMode,
                     skipIdentity: skipIdentity,
                     nativeToolCalling: !kIsWeb,
+                  );
+
+                  toolSession.applyWorkspace(
+                    _resolveWorkspaceForCurrentChat(),
                   );
                   final retryPrompt = await toolCallHandler
                       .buildInitialSystemPrompt(toolSession);
@@ -1033,9 +1095,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
   /// Cancel any ongoing operation (streaming or sending)
   Future<void> _cancelCurrentOperation() async {
-    // Explicit cancel discards any queued follow-up message too.
-    _pendingMessageText = null;
-    _parkFollowUp();
+    // An explicit stop does not send the queue on its own: the waiting
+    // messages go back into the composer, where the reader can send, edit or
+    // drop them. Nothing typed is lost.
+    _escapeStop.reset();
+    _cancelPendingMessage();
 
     if (_isStreaming) {
       // Stream is active - cancel via existing method
@@ -1285,13 +1349,10 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         final text = composerController.text.trim();
         if (text.isNotEmpty) {
           if (mounted) {
-            setState(() {
-              _pendingMessageText = text;
-            });
+            setState(() => _followUps.enqueue(text));
           } else {
-            _pendingMessageText = text;
+            _followUps.enqueue(text);
           }
-          _parkFollowUp();
           composerController.clear();
           if (kDebugMode) {
             debugPrint(
@@ -1346,7 +1407,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           : (voiceText ?? composerController.text.trim());
 
       // Use MessageCompositionService to prepare the message
-      final List<Map<String, dynamic>> apiHistory = isContinuation
+      List<Map<String, dynamic>> apiHistory = isContinuation
           ? await ChatHistoryBuilder.build(
               messages: continuationHistoryMessages!,
               pendingUserText: originalUserInput,
@@ -1668,6 +1729,16 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
               _messages.removeAt(placeholderIndex);
             }
             _isSending = false;
+            // Not accepted anywhere: the draft comes back (idea 67, the
+            // draft clears only once the send is accepted).
+            if (voiceText == null &&
+                !isContinuation &&
+                composerController.text.trim().isEmpty) {
+              composerController.text = originalUserInput;
+              composerController.selection = TextSelection.collapsed(
+                offset: originalUserInput.length,
+              );
+            }
           });
         }
         _persistChatWithId(_activeChatId!);
@@ -1748,8 +1819,91 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         skipIdentity: skipIdentity,
         nativeToolCalling: !kIsWeb,
       );
-      final initialSystemPrompt = await toolCallHandler
-          .buildInitialSystemPrompt(toolSession);
+      toolSession.applyWorkspace(_resolveWorkspaceForCurrentChat());
+      var initialSystemPrompt = await toolCallHandler.buildInitialSystemPrompt(
+        toolSession,
+      );
+
+      // Long chat: summarize the older turns first (docs/GOTCHAS.md, "Chat
+      // compaction"). Replaces the old hard "Too much context" stop. A
+      // continue compacts a copy of its history rows (they end with the
+      // answer it continues) and then puts the summary on the chat's own
+      // row at the same index.
+      if (placeholderIndex >= 1) {
+        final List<Map<String, String>> compactRows = isContinuation
+            ? <Map<String, String>>[
+                for (final m
+                    in continuationHistoryMessages ??
+                        const <Map<String, String>>[])
+                  Map<String, String>.from(m),
+              ]
+            : _messages;
+        final int end = isContinuation
+            ? compactRows.length
+            : placeholderIndex - 1;
+        final compaction = await ChatCompactionRunner.beforeSend(
+          messages: compactRows,
+          end: end,
+          chatId: chatIdForStream,
+          modelId: modelIdForSend,
+          providerSlug: providerSlug,
+          accessToken: accessToken,
+          systemPrompt: initialSystemPrompt,
+          tools: toolCallHandler.nativeToolDefinitions(toolSession),
+          history: apiHistory,
+          pendingMessage: toolSession.firstPassMessage,
+          buildHistory: (starts) => ChatHistoryBuilder.build(
+            messages: compactRows.sublist(0, end),
+            pendingUserText: originalUserInput,
+            includeRecentImages: widget.includeRecentImagesInHistory,
+            includeAllImages: widget.includeAllImagesInHistory,
+            includeReasoning: widget.includeReasoningInHistory,
+            includeToolResults: widget.includeToolResultsInHistory,
+            messageStarts: starts,
+          ),
+        );
+        final int? tailStart = compaction.tailStart;
+        if (compaction.compacted &&
+            isContinuation &&
+            tailStart != null &&
+            tailStart < _messages.length) {
+          final String? record = compactRows[tailStart][ChatCompaction.fieldKey];
+          if (record != null) {
+            _messages[tailStart] = Map<String, String>.from(
+              _messages[tailStart],
+            )..[ChatCompaction.fieldKey] = record;
+          }
+        }
+        if (compaction.compacted) {
+          if (mounted) setState(() {});
+          apiHistory = await ChatHistoryBuilder.build(
+            messages: compactRows.sublist(0, end),
+            pendingUserText: originalUserInput,
+            includeRecentImages: widget.includeRecentImagesInHistory,
+            includeAllImages: widget.includeAllImagesInHistory,
+            includeReasoning: widget.includeReasoningInHistory,
+            includeToolResults: widget.includeToolResultsInHistory,
+          );
+          toolSession = toolCallHandler.createSession(
+            initialUserMessage: aiPromptContent,
+            userSentAt: turnSentAt,
+            history: apiHistory,
+            accessToken: accessToken,
+            discoveryContextKey: chatIdForStream,
+            baseSystemPrompt: systemPrompt,
+            modelId: modelIdForSend,
+            toolCallingEnabled: widget.toolCallingEnabled,
+            discoveryMode: widget.toolDiscoveryMode,
+            skipIdentity: skipIdentity,
+            nativeToolCalling: !kIsWeb,
+          );
+          toolSession.applyWorkspace(_resolveWorkspaceForCurrentChat());
+          initialSystemPrompt = await toolCallHandler.buildInitialSystemPrompt(
+            toolSession,
+          );
+          _persistChatWithId(chatIdForStream, commit: false);
+        }
+      }
 
       if (_isSendOperationCancelled(sendOperationId)) {
         return;
@@ -2008,6 +2162,10 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                       skipIdentity: skipIdentity,
                       nativeToolCalling: !kIsWeb,
                     );
+
+                    toolSession.applyWorkspace(
+                    _resolveWorkspaceForCurrentChat(),
+                  );
                     final retryPrompt = await toolCallHandler
                         .buildInitialSystemPrompt(toolSession);
 
@@ -2617,55 +2775,55 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     }
   }
 
-  /// If a message was queued while the AI was streaming, inject it into the
-  /// text field and trigger a new send cycle.
-  /// Cancel a queued follow-up message and restore its text to the composer so
-  /// the user can edit or discard it instead of losing it silently.
+  /// Cancel the queued follow-ups and put their text back into the
+  /// composer, so the user can edit or discard it instead of losing it.
+  /// A draft typed meanwhile stays first; the queue goes after it.
   void _cancelPendingMessage() {
-    final pending = _pendingMessageText;
-    if (pending == null) return;
-    if (mounted) {
-      setState(() {
-        _pendingMessageText = null;
-      });
-    } else {
-      _pendingMessageText = null;
-    }
-    _parkFollowUp();
-    if (composerController.text.trim().isEmpty) {
-      composerController.text = pending;
+    final String? queued = _followUps.drainToText();
+    if (queued == null) return;
+    final String draft = composerController.text;
+    final String restored = draft.trim().isEmpty ? queued : '$draft\n\n$queued';
+    void apply() {
+      composerController.text = restored;
       composerController.selection = TextSelection.collapsed(
-        offset: pending.length,
+        offset: restored.length,
       );
+    }
+
+    if (mounted) {
+      setState(apply);
+    } else {
+      apply();
     }
     composerFocusNode.requestFocus();
   }
 
+  /// The turn ended: steers it did not take become queued, then the oldest
+  /// queued message goes out as its own turn. It is sent as given (the
+  /// voice-task path), so a draft in the composer is never touched.
   void _drainPendingMessage() {
-    final pending = _pendingMessageText;
-    if (pending == null) return;
-    if (mounted) {
-      setState(() {
-        _pendingMessageText = null;
-      });
-    } else {
-      _pendingMessageText = null;
+    _followUps.onTurnEnded();
+    if (!_followUps.hasQueued || !mounted) return;
+    if (_isStreaming || _activeSendOperationId != null) {
+      // The send of the turn is still closing; try again shortly.
+      if (_drainRetries++ < 20) {
+        Future<void>.delayed(
+          const Duration(milliseconds: 250),
+          _drainPendingMessage,
+        );
+      }
+      return;
     }
-    _parkFollowUp();
-
+    _drainRetries = 0;
+    final QueuedFollowUp? next = _followUps.takeNext();
+    if (next == null) return;
+    setState(() {});
     if (kDebugMode) {
       debugPrint(
-        '📋 [DrainQueue] Sending queued message (${pending.length} chars)',
+        '📋 [DrainQueue] Sending queued message (${next.text.length} chars)',
       );
     }
-
-    // Put the text back into the controller so _sendMessage picks it up
-    // via its normal `composerController.text.trim()` path.
-    composerController.text = pending;
-    composerController.selection = TextSelection.collapsed(
-      offset: pending.length,
-    );
-    unawaited(_sendMessage());
+    unawaited(_sendMessage(voiceText: next.text));
   }
 
   /// Enqueue an in-flight send (offline or network-error) and reflect the
@@ -2732,22 +2890,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
   // --- OFFLINE OUTBOX (docs/OFFLINE_SEND.md) ---
 
-  /// The follow-up typed while a reply streams is parked on disk, so a kill
-  /// or a thread switch does not lose it.
-  void _parkFollowUp() {
-    final chatId = _activeChatId;
-    if (chatId == null) return;
-    unawaited(
-      FollowUpParkingService.save(chatId, <String>[?_pendingMessageText]),
-    );
-  }
-
-  /// Restores a parked follow-up of the chat just opened and sends it.
+  /// Restores parked follow-ups of the chat just opened and sends them.
   Future<void> _restoreParkedFollowUp(String chatId) async {
-    final parked = await FollowUpParkingService.load(chatId);
-    if (parked.isEmpty || !mounted || _activeChatId != chatId) return;
-    if (_pendingMessageText != null) return;
-    setState(() => _pendingMessageText = parked.join('\n\n'));
+    final bool restored = await _followUps.restoreParked(chatId);
+    if (!restored || !mounted) return;
+    setState(() {});
     if (!_isSending && !_isStreaming) _drainPendingMessage();
   }
 

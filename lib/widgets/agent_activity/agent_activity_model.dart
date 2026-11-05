@@ -8,6 +8,7 @@
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/services/agents/agents_tool_row_info.dart';
 
 /// What a timeline line represents. Drives the icon and the wording.
 enum AgentActivityKind {
@@ -48,6 +49,7 @@ class AgentActivityEntry {
     this.toolCall,
     this.sources = const <AgentActivitySource>[],
     this.body,
+    this.diffLabel,
   });
 
   /// A group of consecutive tool steps, drawn as ONE row ("Searched the
@@ -62,7 +64,8 @@ class AgentActivityEntry {
       hasError = false,
       toolCall = null,
       sources = const <AgentActivitySource>[],
-      body = null;
+      body = null,
+      diffLabel = null;
 
   final AgentActivityKind kind;
 
@@ -91,6 +94,10 @@ class AgentActivityEntry {
   /// The whole of what the model wrote, when the line is only its first
   /// sentence. A reader can open it; the line stays short either way.
   final String? body;
+
+  /// `+12 -3` for a host edit (`edit_file` / `apply_patch`), from the counts
+  /// kept on the call ([toolCallDiffLabel]). Null for every other step.
+  final String? diffLabel;
 
   bool get isGroup => children.isNotEmpty;
 
@@ -291,8 +298,25 @@ AgentActivityEntry _entryFor(ToolCall call) {
       );
     case AgentActivityKind.thinking:
     case AgentActivityKind.other:
+      // A host call the model labelled itself ("Run the unit tests") reads
+      // as that label; the raw command stays in the opened arguments.
+      final String? description = toolCallDescription(call);
+      if (description != null) {
+        return AgentActivityEntry(
+          kind: AgentActivityKind.other,
+          label: _clip(
+            hasError ? 'Failed: $description' : description,
+            _maxDetailChars,
+          ),
+          hasError: hasError,
+          toolCall: call,
+          sources: extractSourcesFor(call),
+          diffLabel: toolCallDiffLabel(call),
+        );
+      }
       return AgentActivityEntry(
         kind: AgentActivityKind.other,
+        diffLabel: toolCallDiffLabel(call),
         label: hasError
             ? 'Failed: ${_humanizeToolName(call.name)}'
             : 'Ran ${_humanizeToolName(call.name)}',

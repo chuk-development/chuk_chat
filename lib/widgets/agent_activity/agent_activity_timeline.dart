@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/stream_phase.dart';
 import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/services/agents/agents_tool_row_info.dart';
 import 'package:chuk_chat/services/settings/tool_detail_service.dart';
 import 'package:chuk_chat/utils/favicon.dart';
 import 'package:chuk_chat/widgets/agent_activity/agent_activity_model.dart';
@@ -811,12 +812,15 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
       );
     }
     // A finished edit names its change size on the folded row: "+3 -1".
-    final changes =
-        call != null &&
-            call.status == ToolCallStatus.completed &&
-            isEditCategory(toolActivityCategoryOf(call.name))
-        ? diffChangeCountInResult(call.result)
-        : null;
+    // A host edit keeps its counts on the call (`toolCallDiffLabel`, the
+    // live `ui.diff` the model never saw); a chat edit reads its result.
+    final changes = call == null
+        ? null
+        : toolCallDiffStat(call) ??
+              (call.status == ToolCallStatus.completed &&
+                      isEditCategory(toolActivityCategoryOf(call.name))
+                  ? diffChangeCountInResult(call.result)
+                  : null);
     if (changes != null) {
       final Widget text = _buildEntryTextBody(theme, entry, baseStyle);
       return Row(

@@ -144,7 +144,8 @@ RUN_ACK_TIMEOUT_SECONDS = float(os.environ.get("AGENTS_RUN_ACK_TIMEOUT_SECONDS",
 DEFAULT_WORKSPACE = "~/.local/share/chuk-agents"
 KEY_VERSION = 1
 
-#: The two pipes the party can run on (docs/PLAN_2026-09-09_CLOUD_PAIRING_TRANSPORT.md).
+#: The two pipes the party can run on
+#: (docs/notes/implemented/2026-09-09-plan-cloud-pairing-transport.md).
 #: ``cloud`` is the product default — a phone on mobile data can only ever reach
 #: the host through the relay. ``local`` is the same-machine developer path and
 #: stays the default of *this class* so the in-process test suite never dials out;

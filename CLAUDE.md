@@ -541,6 +541,9 @@ Management API query endpoint; the steps are in `docs/DATABASE.md`
 | `docs/REMOTE_DEV_SETUP.md` | Agent on `claudecode`, app on the laptop: `flutter-remote` / `flutter-hotd` |
 | `docs/FASTLANE.md` | Fastlane: generated store screenshots, Play + F-Droid metadata, upload lanes |
 | `docs/SCREENSHOTS.md` | **Read before recapturing any screenshot** — the seven gallery shots, the store frames, the painted backdrop, the traps |
+| `docs/AGENTS.md` | Where a fact belongs (doc tiers), word budgets (`scripts/doc_budgets.json`), slop checklist |
+| `docs/notes/README.md` | Decision records and frozen session history: `proposed/`, `implemented/`, `rejected/`, `archived/`. New dated session docs go here |
+| `.agents/skills/pre-push-checks/SKILL.md` | Scoped tests while working (`dart run tool/change_scope.dart`), repo checks, the full gate before push |
 
 
 ## Launch videos (HyperFrames, not Remotion)

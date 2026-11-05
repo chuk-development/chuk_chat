@@ -1,6 +1,7 @@
 """The cloud pipe — the host as an ``executor`` on ``api.chuk.chat``.
 
-The production transport (docs/PLAN_2026-09-09_CLOUD_PAIRING_TRANSPORT.md). It
+The production transport
+(docs/notes/implemented/2026-09-09-plan-cloud-pairing-transport.md). It
 dials ``wss://api.chuk.chat/v2/relay/ws`` and carries **exactly** the messages
 the blind loopback relay has always carried, one per ``cowork_relay`` frame:
 

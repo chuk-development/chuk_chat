@@ -26,6 +26,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
+import 'package:flutter/services.dart' show HardwareKeyboard;
 
 import 'dart:convert';
 import 'dart:math' as math;
@@ -36,13 +37,26 @@ import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/models/chat_reply.dart';
+import 'package:chuk_chat/services/chat_compaction.dart';
+import 'package:chuk_chat/platform_specific/chat/manual_compaction.dart';
 import 'package:chuk_chat/services/chat_model_selection_service.dart';
 import 'package:chuk_chat/services/chat_reaction_service.dart';
 import 'package:chuk_chat/widgets/messenger_typing_indicator.dart';
 import 'package:chuk_chat/widgets/agent_activity/agents_live_status.dart';
 import 'package:chuk_chat/services/offline_send_coordinator.dart';
 import 'package:chuk_chat/services/follow_up_dispatcher.dart';
-import 'package:chuk_chat/services/follow_up_parking_service.dart';
+import 'package:chuk_chat/services/composer/composer_follow_ups.dart';
+import 'package:chuk_chat/services/composer/follow_up_queue.dart';
+import 'package:chuk_chat/services/agents/agents_thread_modes.dart'
+    show AgentsQuestionRequest;
+import 'package:chuk_chat/widgets/composer/chat_question_seat.dart';
+import 'package:chuk_chat/services/chat_reference_service.dart';
+import 'package:chuk_chat/services/composer/composer_trigger.dart';
+import 'package:chuk_chat/widgets/composer/chat_export.dart';
+import 'package:chuk_chat/widgets/composer/chip_text_controller.dart';
+import 'package:chuk_chat/widgets/composer/composer_trigger_menu.dart';
+import 'package:chuk_chat/widgets/composer/composer_trigger_sources.dart';
+import 'package:chuk_chat/widgets/composer/queue_dock.dart';
 import 'package:chuk_chat/services/offline_retry_manager.dart';
 import 'package:chuk_chat/platform_specific/chat/offline_send_bridge.dart';
 import 'package:chuk_chat/services/mcp/mcp_availability.dart';
@@ -50,6 +64,7 @@ import 'package:chuk_chat/services/chat_runtime_registry.dart';
 import 'package:chuk_chat/utils/composer_focus_policy.dart';
 import 'package:chuk_chat/services/chat_turn_stats.dart';
 import 'package:chuk_chat/widgets/chat_stats_row.dart';
+import 'package:chuk_chat/widgets/chat_reference_picker.dart';
 import 'package:chuk_chat/services/agents/agents_thread_composer.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
@@ -119,7 +134,7 @@ import 'package:chuk_chat/platform_specific/chat/voice/voice_turn_queue.dart';
 import 'package:chuk_chat/voice/voice_call_models.dart' show VoiceTurn;
 
 /// What the plus menu can start.
-enum _AttachChoice { camera, photos, files, workspace }
+enum _AttachChoice { camera, photos, files, chatReference, workspace }
 
 /// A row in the workspace menu: a workspace to switch to (null clears it),
 /// or the way to make a new one.
@@ -266,8 +281,99 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     implements ChatDebugSnapshot {
   // Controllers and basic state
   @override
-  final TextEditingController composerController = TextEditingController();
+  /// Keeps `/` and `@` picks as atomic chips (idea 68).
+  @override
+  final ChipTextEditingController composerController =
+      ChipTextEditingController();
+
+  /// The `/` and `@` menu over [composerController]. Taps on the phone.
+  late final ComposerTriggerController _trigger = ComposerTriggerController(
+    text: composerController,
+    source: _buildTriggerSource,
+  );
+
+  /// What the `/` and `@` menu lists for this chat.
+  ComposerTriggerSource _buildTriggerSource() {
+    final AppLocalizations l =
+        AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));
+    return buildComposerTriggerSource(
+      l: l,
+      chatId: _activeChatId,
+      messages: _messages,
+      workspaceId: _selectedWorkspaceId,
+      agentsThread: widget.messengerMode,
+      onCompact: widget.messengerMode || _messages.isEmpty
+          ? null
+          : () => unawaited(_compactChatNow()),
+      onModel: openModelScreen,
+      onNewChat: widget.messengerMode ? null : newChat,
+      onExport: _messages.isEmpty
+          ? null
+          : () => unawaited(
+              copyChatAsMarkdown(
+                context,
+                List<Map<String, String>>.of(_messages),
+                doneLabel: l.copiedToClipboard,
+              ),
+            ),
+      onReferenceChat: (String chatId) async {
+        final AttachedFile? file = await ChatReferenceService.loadAttachment(
+          chatId,
+        );
+        if (file != null && mounted) _fileHandler.addReadyFile(file);
+      },
+      onSelectWorkspace: kFeatureWorkspaces
+          ? (String id) => setState(() => _selectedWorkspaceId = id)
+          : null,
+    );
+  }
   final List<Map<String, String>> _messages = [];
+
+  /// The `/compact` command: summarize the earlier messages now
+  /// (lib/platform_specific/chat/manual_compaction.dart).
+  Future<void> _compactChatNow() async {
+    final AppLocalizations l =
+        AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));
+    final String? chatId = _activeChatId;
+    if (chatId == null || _messages.isEmpty) return;
+    if (_streamingHandler.isStreaming || _streamingHandler.isSending) {
+      showSnackBar(l.composerCompactBusy);
+      return;
+    }
+    showSnackBar(l.composerCompactRunning);
+    final String? provider = await ensureProviderSlugForCurrentModel();
+    final String? systemPrompt = await _resolveSystemPromptForSend();
+    if (!mounted || _activeChatId != chatId) return;
+    final CompactionOutcome outcome = await runManualCompaction(
+      ManualCompactionRequest(
+        messages: _messages,
+        chatId: chatId,
+        modelId: selectedModelId,
+        providerSlug: provider ?? 'openai',
+        baseSystemPrompt: systemPrompt,
+        workspace: WorkspaceStorageService.getWorkspaceForChat(chatId),
+        toolCallingEnabled: widget.toolCallingEnabled,
+        discoveryMode: widget.toolDiscoveryMode,
+        includeRecentImages: widget.includeRecentImagesInHistory,
+        includeAllImages: widget.includeAllImagesInHistory,
+        includeReasoning: widget.includeReasoningInHistory,
+        includeToolResults: widget.includeToolResultsInHistory,
+      ),
+    );
+    if (!mounted) return;
+    if (outcome.compacted && _activeChatId == chatId) {
+      setState(() {});
+      unawaited(persistChat());
+    }
+    showSnackBar(switch (outcome.status) {
+      CompactionStatus.compacted => l.composerCompactDone,
+      CompactionStatus.notNeeded =>
+        outcome.reason == 'busy'
+            ? l.composerCompactBusy
+            : l.composerCompactNothing,
+      CompactionStatus.failed => l.composerCompactFailed,
+    });
+  }
 
   // --- Outbox on screen (docs/OFFLINE_SEND.md) ---
 
@@ -409,14 +515,26 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   // Network and UI state
   bool _isOffline = false;
 
-  /// Queued message text — when the user sends while AI is still streaming,
-  /// the text is parked here and dispatched after the current response ends.
-  String? _pendingMessageText;
+  /// Messages sent while a reply runs, oldest first: queued for after it,
+  /// or steering it (lib/services/composer/composer_follow_ups.dart). The
+  /// dock above the field draws them. A burst goes out in order.
+  late final ComposerFollowUps _followUps = ComposerFollowUps(
+    chatId: () => _activeChatId,
+  );
 
-  /// Messenger mode only: messages queued behind [_pendingMessageText],
-  /// oldest first. A burst typed while the agent works goes out in order;
-  /// the single slot alone lost the first of two messages.
-  final List<String> _queuedFollowUps = <String>[];
+  /// Bounded retries of a drain that found the chat still busy.
+  int _drainRetries = 0;
+
+  @override
+  bool get composerBusy => _isCurrentChatStreaming || _isSendingMessage;
+
+  @override
+  Future<void> queueOrSteerComposer({required bool alternate}) async {
+    final String text = composerController.text.trim();
+    if (text.isEmpty) return;
+    setState(() => _followUps.enqueue(text, alternate: alternate));
+    composerController.clear();
+  }
 
   /// The payload of the send now streaming, per chat. A send that never
   /// reaches the server goes into the offline outbox with it.
@@ -488,6 +606,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   @override
   void initState() {
     super.initState();
+    unawaited(ComposerBusySetting.load());
     // chuk_chat's screen builds its tool loop on mount, as before, so the
     // tools are ready by the first send. The Agents thread does not: the host
     // runs every tool. Each send still picks its loop by chat id.
@@ -730,7 +849,19 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       ..onStreamInterrupted = _markAssistantMessageInterrupted
       ..onStreamTick = _persistStreamTick
       ..onPaymentRequired = _showPaymentRequiredDialog
-      ..onSendNotAccepted = _onSendNotAccepted;
+      ..onSendNotAccepted = _onSendNotAccepted
+      ..onCompactionStored = _storeCompactionSummary;
+  }
+
+  /// A "continue generation" turn compacted the chat on a copy of its rows:
+  /// put the summary on this screen's row too, so the turn's save keeps it.
+  void _storeCompactionSummary(String chatId, int index, String record) {
+    if (!mounted || _activeChatId != chatId) return;
+    if (index < 0 || index >= _messages.length) return;
+    setState(() {
+      _messages[index] = Map<String, String>.from(_messages[index])
+        ..[ChatCompaction.fieldKey] = record;
+    });
   }
 
   /// Periodic snapshot persistence — writes the current streamed body of
@@ -1122,8 +1253,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         if (widget.messengerMode) _resetThreadTransientState();
         // Follow-ups typed in the chat being left stay parked under it and
         // go out from there (FollowUpDispatcher), never into the next chat.
-        _pendingMessageText = null;
-        _queuedFollowUps.clear();
+        _followUps.leaveChat(_activeChatId);
       });
       FollowUpDispatcher.instance.kick();
 
@@ -1162,6 +1292,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   void dispose() {
     AgentsThreadComposer.detach(_agentsThreadSend); // AGENTS
     _outboxSub?.cancel();
+    _followUps.dispose();
+    _trigger.dispose();
     _fileHandler.dispose();
     WidgetsBinding.instance.removeObserver(_viewInsetRepin);
     AppLifecycleService.instance.removeOnResumeCallback(_handleAppResumed);
@@ -1771,6 +1903,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           icon: Icons.attach_file,
           label: l10n.files,
         ),
+        _composerMenuRow(
+          value: _AttachChoice.chatReference,
+          iconFg: iconFg,
+          icon: Icons.chat_bubble_outline,
+          label: l10n.chatReferenceAction,
+        ),
         if (_workspacesEnabled)
           _composerMenuRow(
             value: _AttachChoice.workspace,
@@ -1801,6 +1939,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         );
       case _AttachChoice.files:
         unawaited(_fileHandler.uploadFiles(supportsImages: supportsImages));
+      case _AttachChoice.chatReference:
+        final file = await pickChatReference(
+          context,
+          currentChatId: _activeChatId,
+        );
+        if (file != null && mounted) _fileHandler.addReadyFile(file);
       case _AttachChoice.workspace:
         if (!anchorContext.mounted) return;
         await _openWorkspaceMenu(anchorContext);
@@ -2359,44 +2503,31 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   /// The original app remounted, which dropped all of it. Reply drafts stay:
   /// they are keyed by chat and cannot leak.
   void _resetThreadTransientState() {
-    _pendingMessageText = null;
-    _queuedFollowUps.clear();
+    _followUps.leaveChat(_activeChatId);
     restoredAttachmentIds.clear();
     _flyInKey = null;
   }
 
-  /// Cancel a queued follow-up message and restore its text to the composer so
-  /// the user can edit or discard it instead of losing it silently.
+  /// Cancel the queued follow-ups and put their text back into the
+  /// composer, in the order they were typed, so the user can edit or discard
+  /// it instead of losing it. A draft typed meanwhile stays first.
   void _cancelPendingMessage() {
-    final pending = _pendingMessageText;
-    if (pending == null) return;
-    // Messenger mode queues more than one message: all of them go back,
-    // in the order they were typed, as one text. Without a queue this is
-    // the pending message alone, as upstream.
-    // A draft typed meanwhile is kept as upstream does; but a queue of
-    // several messages must not be lost to it, so with follow-ups the queued
-    // text goes after the draft.
+    final String? queued = _followUps.drainToText();
+    if (queued == null) return;
     final String draft = composerController.text;
-    final bool hadQueue = _queuedFollowUps.isNotEmpty;
-    final queued = queuedMessagesForComposer(pending, _queuedFollowUps);
-    _queuedFollowUps.clear();
-    final String? restored = draft.trim().isEmpty
-        ? queued
-        : (hadQueue ? '$draft\n\n$queued' : null);
-    if (mounted) {
-      setState(() {
-        _pendingMessageText = null;
-        if (restored != null) {
-          composerController.text = restored;
-          composerController.selection = TextSelection.collapsed(
-            offset: restored.length,
-          );
-        }
-      });
-    } else {
-      _pendingMessageText = null;
+    final String restored = draft.trim().isEmpty ? queued : '$draft\n\n$queued';
+    void apply() {
+      composerController.text = restored;
+      composerController.selection = TextSelection.collapsed(
+        offset: restored.length,
+      );
     }
-    _parkFollowUps();
+
+    if (mounted) {
+      setState(apply);
+    } else {
+      apply();
+    }
   }
 
   // --- OFFLINE OUTBOX (docs/OFFLINE_SEND.md) ---
@@ -2580,57 +2711,43 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     });
   }
 
-  /// Follow-ups typed while a reply streams are parked on disk, so a kill
-  /// or a thread switch does not lose them.
-  void _parkFollowUps() {
-    final chatId = _activeChatId;
-    if (chatId == null) return;
-    final texts = <String>[
-      ?_pendingMessageText,
-      ..._queuedFollowUps,
-    ];
-    unawaited(FollowUpParkingService.save(chatId, texts));
-  }
-
   /// Restores parked follow-ups of the chat just opened and sends them.
   Future<void> _restoreParkedFollowUps(String chatId) async {
-    final parked = await FollowUpParkingService.load(chatId);
-    if (parked.isEmpty || !mounted || _activeChatId != chatId) return;
-    if (_pendingMessageText != null) return;
-    setState(() {
-      _pendingMessageText = parked.first;
-      _queuedFollowUps
-        ..clear()
-        ..addAll(parked.skip(1));
-    });
+    final bool restored = await _followUps.restoreParked(chatId);
+    if (!restored || !mounted) return;
+    setState(() {});
     if (!_isSendingMessage && !_isCurrentChatStreaming) {
       _drainPendingMessage();
     }
   }
 
-  /// If a message was queued while the AI was streaming, inject it into the
-  /// text field and trigger a new send cycle.
+  /// The turn ended: steers it did not take become queued, then the oldest
+  /// queued message goes out as its own turn. It is sent as given (the
+  /// voice-task path), so a draft in the composer is never touched (bead
+  /// cowork-vc1l).
   void _drainPendingMessage() {
-    final pending = _pendingMessageText;
-    if (pending == null) return;
-
+    _followUps.onTurnEnded();
+    if (!_followUps.hasQueued || !mounted) return;
+    if (_isSendingMessage || _isCurrentChatStreaming) {
+      // The send of the turn is still closing; try again shortly.
+      if (_drainRetries++ < 20) {
+        Future<void>.delayed(
+          const Duration(milliseconds: 250),
+          _drainPendingMessage,
+        );
+      }
+      return;
+    }
+    _drainRetries = 0;
+    final QueuedFollowUp? next = _followUps.takeNext();
+    if (next == null) return;
+    setState(() {});
     if (kDebugMode) {
       debugPrint(
-        '📋 [DrainQueue] Sending queued message (${pending.length} chars)',
+        '📋 [DrainQueue] Sending queued message (${next.text.length} chars)',
       );
     }
-
-    setState(() {
-      _pendingMessageText = _queuedFollowUps.isEmpty
-          ? null
-          : _queuedFollowUps.removeAt(0);
-      composerController.text = pending;
-      composerController.selection = TextSelection.collapsed(
-        offset: pending.length,
-      );
-    });
-    _parkFollowUps();
-    unawaited(sendMessage());
+    unawaited(_sendComposerOrVoice(voiceText: next.text));
   }
 
   @override
@@ -2660,20 +2777,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       // AI is still streaming — queue the message instead of cancelling.
       final text = composerController.text.trim();
       if (text.isNotEmpty) {
-        void queue() {
-          if (widget.messengerMode && _pendingMessageText != null) {
-            _queuedFollowUps.add(text);
-          } else {
-            _pendingMessageText = text;
-          }
-        }
-
         if (mounted) {
-          setState(queue);
+          setState(() => _followUps.enqueue(text));
         } else {
-          queue();
+          _followUps.enqueue(text);
         }
-        _parkFollowUps();
         composerController.clear();
         if (kDebugMode) {
           debugPrint(
@@ -2963,12 +3071,25 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           selectedProviderSlug,
         ),
       );
-      await _queueForLater(
+      final bool queued = await _queueForLater(
         payload,
         userIdx: placeholderIndex - 1,
         placeholderIdx: placeholderIndex,
         kick: NetworkStatusService.isOnline,
       );
+      // Not accepted anywhere: the draft comes back (idea 67, the draft
+      // clears only once the send is accepted).
+      if (!queued &&
+          voiceText == null &&
+          mounted &&
+          composerController.text.trim().isEmpty) {
+        setState(() {
+          composerController.text = typedInput;
+          composerController.selection = TextSelection.collapsed(
+            offset: typedInput.length,
+          );
+        });
+      }
       // Propagate the new chat ID to the parent so chat-switch behavior
       // stays consistent. Without this the parent thinks selection is
       // still null while this widget already owns chatIdForThisMessage.
@@ -3017,6 +3138,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     // Keep _activeChatId in sync (should already be correct, but ensure consistency)
     if (storedChat != null) {
+      if (storedChat.id != chatIdForThisMessage) {
+        ChatTurnStats.instance.rename(chatIdForThisMessage, storedChat.id);
+      }
       _activeChatId = storedChat.id;
 
       // ID-BASED: Notify parent when a new chat is created
@@ -3272,10 +3396,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
   /// Cancel any ongoing operation (streaming or sending)
   Future<void> _cancelCurrentOperation() async {
-    // Explicit cancel discards any queued follow-up message too.
-    _pendingMessageText = null;
-    _queuedFollowUps.clear();
-    _parkFollowUps();
+    // An explicit stop does not send the queue on its own: the waiting
+    // messages go back into the composer. Nothing typed is lost.
+    _cancelPendingMessage();
 
     if (_isCurrentChatStreaming) {
       // Stream is active - cancel via handler
@@ -3532,6 +3655,50 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     );
   }
 
+  /// ask_user questions the reader skipped: the seat gives way to the
+  /// composer, and the bubble's option chips stay as the way back.
+  final Set<String> _skippedQuestionIds = <String>{};
+
+  /// The open ask_user question of a plain chat: the last answer asked it,
+  /// no turn runs, and the reader did not skip it. Agents threads bring
+  /// their own card ([ChukChatUIMobile.composerSeat]).
+  AgentsQuestionRequest? _openChatQuestion() {
+    if (widget.messengerMode || _messages.isEmpty) return null;
+    if (_isCurrentChatStreaming || _isSendingMessage) return null;
+    if (messageActionsHandler.isEditing) return null;
+    final int index = _messages.length - 1;
+    final String sender = _messages[index]['sender'] ?? '';
+    if (sender != 'ai' && sender != 'assistant') return null;
+    final MessageRenderData data = _messageRenderCache.build(
+      messages: _messages,
+      index: index,
+      isStreaming: false,
+    );
+    final ToolCall? call = lastCompletedAskUser(
+      data.toolCalls,
+      data.contentBlocks,
+    );
+    if (call == null || _skippedQuestionIds.contains(call.id)) return null;
+    return askUserRequestFor(call);
+  }
+
+  /// The question card in the composer's seat, or null for the composer.
+  Widget? _buildQuestionSeat() {
+    final AgentsQuestionRequest? request = _openChatQuestion();
+    if (request == null) return null;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+      child: ChatQuestionSeat(
+        request: request,
+        onAnswer: (String text) {
+          // The answer goes out as given; a draft in the composer stays.
+          unawaited(_sendComposerOrVoice(voiceText: text));
+        },
+        onSkip: () => setState(() => _skippedQuestionIds.add(request.questionId)),
+      ),
+    );
+  }
+
   /// Returns a callback for the ask_user interactive buttons if [index] is
   /// the last AI message, is not streaming, and contains a completed
   /// ask_user tool call. Otherwise returns null.
@@ -3550,6 +3717,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     }
 
     if (!ChatUiHelpers.hasCompletedTool(data, 'ask_user')) return null;
+    // The open question sits in the composer's seat; the chips come back
+    // once the reader skipped it.
+    if (_openChatQuestion() != null) return null;
 
     return (String answer) {
       composerController.text = answer;
@@ -4111,7 +4281,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         // tall boxed variant; leaving it there over-reserved the first frame.
         64.0 +
         (hasAttachments ? 80.0 : 0.0) +
-        (_pendingMessageText != null ? 28.0 : 0.0) +
+        40.0 * _followUps.queue.length +
         bottomPadding;
     // Distance from the bottom edge to the top of the composer, plus a small
     // gap so the last message never sits flush against the input box. The
@@ -4302,6 +4472,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                 // card that takes its seat.
                                 ?widget.composerAbove,
                                 widget.composerSeat ??
+                                    _buildQuestionSeat() ??
                                     _buildSearchBar(
                                       isCompactMode:
                                           isCompactModeForModelDropdown,
@@ -4539,20 +4710,20 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                               () => _replyDrafts.remove(_messengerChatKey),
                             ),
                           ),
-                      if (_pendingMessageText != null)
-                        _buildComposerNotice(
-                          theme: theme,
-                          icon: Icons.schedule,
-                          label: _queuedFollowUps.isNotEmpty
-                              ? AppLocalizations.of(context)!
-                                    .queuedMessagesCount(
-                                      '${_queuedFollowUps.length + 1}',
-                                    )
-                              : '${AppLocalizations.of(context)!.queuedLabel}: '
-                                    '"${_pendingMessageText!}"',
-                          actionLabel: AppLocalizations.of(context)!.cancel,
-                          onAction: _cancelPendingMessage,
-                        ),
+                      // The `/` and `@` menu, while a trigger is open.
+                      ComposerTriggerMenu(controller: _trigger),
+                      // The queue dock: messages sent while the reply runs.
+                      QueueDock(
+                        queue: _followUps.queue,
+                        onEdit: (String id, String text) =>
+                            setState(() => _followUps.edit(id, text)),
+                        onRemove: (String id) =>
+                            setState(() => _followUps.remove(id)),
+                        onSteerNow: _followUps.steerAvailable
+                            ? (String id) =>
+                                  setState(() => _followUps.steerNow(id))
+                            : null,
+                      ),
 
                       // ── Row one: what you are saying ──
                       //
@@ -4570,7 +4741,25 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                         child: buildKeyboardListener(
                           focusNode: _rawKeyboardListenerFocusNode,
                           controller: composerController,
-                          onSend: sendOrSubmitEdit,
+                          onSend: () {
+                            // A hardware Enter picks from the open menu.
+                            if (_trigger.isOpen &&
+                                _trigger.visible.isNotEmpty) {
+                              _trigger.pick(
+                                _trigger.visible[_trigger.highlight],
+                              );
+                              return;
+                            }
+                            unawaited(
+                              sendOrSubmitEdit(
+                                alternate:
+                                    HardwareKeyboard
+                                        .instance
+                                        .isControlPressed ||
+                                    HardwareKeyboard.instance.isMetaPressed,
+                              ),
+                            );
+                          },
                           child: KeyedSubtree(
                             key: TourKeyRegistry.instance.anchorFor(
                               TourSlots.chatInput,

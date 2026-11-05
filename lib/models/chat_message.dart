@@ -79,6 +79,8 @@ class ChatMessage {
     this.inputMode,
     this.voiceDurationMs,
     this.modelContext,
+    this.usage,
+    this.compactSummary,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -109,6 +111,8 @@ class ChatMessage {
       inputMode: json['inputMode'] as String?,
       voiceDurationMs: json['voiceDurationMs']?.toString(),
       modelContext: json['modelContext'] as String?,
+      usage: json['usage'] as String?,
+      compactSummary: json['compactSummary'] as String?,
     );
   }
 
@@ -207,6 +211,21 @@ class ChatMessage {
   /// size and skill names. Older, unbounded values still load.
   final String? modelContext;
 
+  /// Assistant messages: the token usage of the reply (`TurnUsage.encode`,
+  /// lib/models/turn_usage.dart: prompt, completion, total and cached
+  /// tokens). The meta line and the stats row read it after a reload, and
+  /// the context estimate anchors on it (`TokenEstimator.anchoredPrompt
+  /// Tokens`). Absent on older messages; an older app ignores it.
+  final String? usage;
+
+  /// User messages: a summary of everything before this message, as JSON
+  /// (`CompactionRecord`, lib/services/chat_compaction.dart). The newest one
+  /// in a chat makes the history start with the summary and continue with
+  /// this message (docs/GOTCHAS.md, "Chat compaction"). Stored encrypted
+  /// with the rest of the payload. An older app ignores it and sends the
+  /// whole history.
+  final String? compactSummary;
+
   /// [generationMs] as a duration, or null when it was never recorded or
   /// cannot be read.
   Duration? get workedFor {
@@ -253,6 +272,8 @@ class ChatMessage {
     String? inputMode,
     String? voiceDurationMs,
     String? modelContext,
+    String? usage,
+    String? compactSummary,
   }) {
     return ChatMessage(
       role: role ?? this.role,
@@ -281,6 +302,8 @@ class ChatMessage {
       inputMode: inputMode ?? this.inputMode,
       voiceDurationMs: voiceDurationMs ?? this.voiceDurationMs,
       modelContext: modelContext ?? this.modelContext,
+      usage: usage ?? this.usage,
+      compactSummary: compactSummary ?? this.compactSummary,
     );
   }
 
@@ -321,5 +344,8 @@ class ChatMessage {
       'voiceDurationMs': voiceDurationMs,
     if (modelContext != null && modelContext!.isNotEmpty)
       'modelContext': modelContext,
+    if (usage case final String u when u.isNotEmpty) 'usage': u,
+    if (compactSummary case final String c when c.isNotEmpty)
+      'compactSummary': c,
   };
 }
