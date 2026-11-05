@@ -350,14 +350,17 @@ def model_limits(model: Any) -> tuple[int | None, int | None]:
 
 def _self_dirs(workspace: str | None) -> tuple[str, ...]:
     """Directories the agent must never delete (research H25): its own install
-    (the package tree) and its per-workspace state (``.agents``)."""
+    (the package tree) and its per-workspace state (the state folders under ``.agents``)."""
     dirs: list[str] = []
     try:
         dirs.append(str(Path(__file__).resolve().parent))
     except Exception:  # noqa: BLE001 — a frozen build may hide the path
         pass
     if workspace:
-        dirs.append(str(Path(workspace) / ".agents"))
+        # Only the agent's own state under ``.agents``; ``.agents/skills`` is
+        # the user's project skills folder and stays editable.
+        for name in ("git", "jobs", "automations", "mcp", "chrome-profile"):
+            dirs.append(str(Path(workspace) / ".agents" / name))
     return tuple(dirs)
 
 

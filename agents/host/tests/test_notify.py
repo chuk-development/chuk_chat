@@ -131,6 +131,41 @@ def test_one_notification_per_run(tmp_path):
     assert notifier.dropped_duplicates == 1
 
 
+def test_a_blocked_goal_is_announced_once_per_block(tmp_path):
+    """``goal.needs_user`` stays true on every later run of the thread; only
+    the run that blocked the goal says so, and only once per block."""
+    import time as _time
+
+    cloud = _Cloud()
+    notifier = _notifier(tmp_path, cloud, _session(cloud))
+    t0 = _time.time()
+    blocked = {"id": "g1", "revision": 3, "needs_user": True, "updated_at": t0 + 1.0}
+
+    first = _finished_run(tmp_path, "run-b1")
+    first.update(started_at=t0, goal=dict(blocked))
+    notifier.notify_run_finished(first)
+
+    # An overlapping run that ended after the block: no second "blocked".
+    overlap = _finished_run(tmp_path, "run-b2")
+    overlap.update(started_at=t0 + 0.5, goal=dict(blocked))
+    notifier.notify_run_finished(overlap)
+
+    # A later ordinary chat turn in the same thread: a plain answer push.
+    later = _finished_run(tmp_path, "run-b3")
+    later.update(started_at=t0 + 5.0, goal=dict(blocked))
+    notifier.notify_run_finished(later)
+
+    # The goal resumed and blocked again (new revision): announced again.
+    again = _finished_run(tmp_path, "run-b4")
+    again.update(started_at=t0 + 10.0, goal={**blocked, "revision": 5, "updated_at": t0 + 11.0})
+    notifier.notify_run_finished(again)
+
+    bodies = [r["body"] for r in cloud.bodies("/rest/v1/cowork_run_notifications")]
+    assert len(bodies) == 4
+    told = ["goal is blocked" in b for b in bodies]
+    assert told == [True, False, False, True]
+
+
 def test_a_stale_token_is_refreshed_once_and_retried(tmp_path):
     cloud = _Cloud()
     cloud.reject_first_insert = True
