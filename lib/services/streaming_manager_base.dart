@@ -65,6 +65,14 @@ abstract class StreamingManagerBase {
   /// next [startStream] for the chat, so an error handler can still ask.
   final Set<String> _serverAccepted = <String>{};
 
+  /// Errors that still mean the server has the request (request
+  /// idempotency): the answer exists but is not stored, or it is still
+  /// being written. A re-send of a fresh copy would bill the turn again.
+  static const Set<String> _acceptedErrorCodes = <String>{
+    StreamErrorCodes.duplicateUnavailable,
+    StreamErrorCodes.requestPending,
+  };
+
   /// Whether the server had already accepted the last request in [chatId]:
   /// it sent a frame (meta, heartbeat, a token). A send that broke after
   /// that must not be re-sent by itself (docs/OFFLINE_SEND.md): the server
@@ -391,7 +399,9 @@ abstract class StreamingManagerBase {
     // Diagnostics for the silence log. Nothing branches on them.
     activeStream.lastEventAt = DateTime.now();
     activeStream.eventCount++;
-    if (event is! ErrorEvent) _serverAccepted.add(chatId);
+    if (event is! ErrorEvent || _acceptedErrorCodes.contains(event.code)) {
+      _serverAccepted.add(chatId);
+    }
 
     // First-event stamp, idle-timer reset and TTFT measurement (io only).
     onEventBookkeeping(

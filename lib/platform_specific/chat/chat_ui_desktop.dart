@@ -82,6 +82,8 @@ import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart'; // NEW
 import 'package:chuk_chat/services/websocket_chat_service.dart';
+import 'package:chuk_chat/services/client_request_ids.dart';
+import 'package:chuk_chat/services/tool_result_cache_registry.dart';
 import 'package:chuk_chat/services/streaming_manager.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/services/tool_image_result_service.dart';

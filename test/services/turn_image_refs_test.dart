@@ -58,8 +58,8 @@ void main() {
   });
 
   test('all images cached: refs in order, entry keeps its text', () {
-    final idA = registry.register(_imgA);
-    final idB = registry.register(_imgB);
+    final idA = registry.registerImage(_imgA);
+    final idB = registry.registerImage(_imgB);
     final history = _loop(
       userContentWithImages('[Sent: Wed 2026-11-04 14:32]\nlook', const [
         _imgA,
@@ -84,7 +84,7 @@ void main() {
   });
 
   test('stays in full when it cannot be byte-identical', () {
-    registry.register(_imgA);
+    registry.registerImage(_imgA);
     final withImage = _loop(userContentWithImages('look', const [_imgA]));
     // A prompt-based pass sends a message: the server would put the images
     // on a new user turn.
@@ -133,7 +133,7 @@ void main() {
     );
     // After a server cache miss refs pause.
     registry.handleMiss();
-    registry.register(_imgA);
+    registry.registerImage(_imgA);
     expect(
       WebSocketChatService.foldTurnImageRefs(withImage, '', registry),
       isNull,
@@ -141,7 +141,7 @@ void main() {
   });
 
   test('several text parts stay a list', () {
-    final id = registry.register(_imgA);
+    final id = registry.registerImage(_imgA);
     final folded = WebSocketChatService.foldTurnImageRefs(
       _loop([
         {'type': 'text', 'text': '[image omitted: old.png]'},
@@ -232,7 +232,7 @@ void main() {
       expect(WebSocketChatService.turnAnchor(history, 0), 0);
       expect(WebSocketChatService.turnAnchor(history, 3), isNull);
       expect(WebSocketChatService.turnAnchor(history, 99), isNull);
-      final id = registry.register(_imgA);
+      final id = registry.registerImage(_imgA);
       final folded = WebSocketChatService.foldTurnImageRefs(
         history,
         '',
@@ -244,7 +244,7 @@ void main() {
     });
 
     test('text parts keep their whitespace', () {
-      registry.register(_imgA);
+      registry.registerImage(_imgA);
       final folded = WebSocketChatService.foldTurnImageRefs(
         _loop([
           {'type': 'text', 'text': 'hello '},
@@ -261,8 +261,8 @@ void main() {
     });
 
     test('pass N is a byte prefix of pass N+1 with a skill body', () {
-      final idA = registry.register(_imgA);
-      final idB = registry.register(_imgB);
+      final idA = registry.registerImage(_imgA);
+      final idB = registry.registerImage(_imgB);
       const text = '[Sent: Wed 2026-11-04 14:32]\nlook';
       final older = <Map<String, dynamic>>[
         {'role': 'user', 'content': 'older'},
@@ -311,6 +311,174 @@ void main() {
       expect(b.startsWith(a), isTrue);
       // The skill body is untouched and carries no image.
       expect(pass2[3], same(step[3]));
+    });
+  });
+
+  // Earlier turns' images: a full block goes up once, tagged with a
+  // `cache_id`; later requests send `image_ref`. The server
+  // (`multiplex._history_image_refs`) stores tagged blocks, resolves refs to
+  // the same `image_url` block and never sends `cache_id` upstream, so the
+  // history it hands the provider is byte-identical either way
+  // (api_server tests/test_history_image_refs.py).
+  group('history image refs', () {
+    // The server's image store, per user (tool_result_cache).
+    late Map<String, String> serverStore;
+
+    // The history the server sends upstream for [sent], or null on a
+    // cache_miss. Mirrors `_history_image_refs`: store every tagged block
+    // first, then resolve every ref; a block goes up as
+    // {type: image_url, image_url: {url}}.
+    List<Map<String, dynamic>>? serverHistory(
+      List<Map<String, dynamic>> sent,
+    ) {
+      for (final entry in sent) {
+        final content = entry['content'];
+        if (entry['role'] != 'user' || content is! List) continue;
+        for (final block in content) {
+          if (block is Map &&
+              block['type'] == 'image_url' &&
+              block['cache_id'] is String) {
+            serverStore[block['cache_id'] as String] =
+                (block['image_url'] as Map)['url'] as String;
+          }
+        }
+      }
+      final out = <Map<String, dynamic>>[];
+      for (final entry in sent) {
+        final content = entry['content'];
+        if (entry['role'] != 'user' || content is! List) {
+          out.add(entry);
+          continue;
+        }
+        final blocks = <Map<String, dynamic>>[];
+        for (final block in content.cast<Map>()) {
+          if (block['type'] == 'image_ref') {
+            final url = serverStore[block['ref']];
+            if (url == null || !url.startsWith('data:image/')) return null;
+            blocks.add({
+              'type': 'image_url',
+              'image_url': {'url': url},
+            });
+          } else if (block['type'] == 'image_url') {
+            blocks.add({'type': 'image_url', 'image_url': block['image_url']});
+          } else {
+            blocks.add(Map<String, dynamic>.from(block));
+          }
+        }
+        out.add({...entry, 'content': blocks});
+      }
+      return out;
+    }
+
+    List<Map<String, dynamic>> chat(int turns) => [
+      for (var t = 0; t < turns; t++) ...[
+        {
+          'role': 'user',
+          'content': userContentWithImages('turn $t', [
+            if (t == 0) _imgA,
+            if (t == 1) _imgB,
+          ]),
+        },
+        {'role': 'assistant', 'content': 'answer $t'},
+      ],
+    ];
+
+    setUp(() => serverStore = <String, String>{});
+
+    test('first request tags, later requests ref, upstream bytes equal', () {
+      // Turn 2: both images go up in full, tagged.
+      final full2 = chat(2);
+      final sent2 = WebSocketChatService.foldHistoryImageRefs(full2, registry);
+      final blocks2 = [
+        for (final e in sent2)
+          if (e['content'] is List) ...(e['content'] as List).cast<Map>(),
+      ].where((b) => b['type'] != 'text').toList();
+      expect(blocks2.every((b) => b['cache_id'] is String), isTrue);
+      expect(jsonEncode(serverHistory(sent2)), jsonEncode(full2));
+
+      // Turn 3: the same images go as refs, a few bytes each.
+      final full3 = chat(3);
+      final sent3 = WebSocketChatService.foldHistoryImageRefs(full3, registry);
+      final blocks3 = [
+        for (final e in sent3)
+          if (e['content'] is List) ...(e['content'] as List).cast<Map>(),
+      ].where((b) => b['type'] != 'text').toList();
+      expect(blocks3.map((b) => b['type']), ['image_ref', 'image_ref']);
+      expect(jsonEncode(sent3), isNot(contains('base64')));
+      final upstream3 = serverHistory(sent3)!;
+      expect(jsonEncode(upstream3), jsonEncode(full3));
+      // And turn 2's upstream history is a byte prefix of turn 3's.
+      final a = serverHistory(sent2)!.map(jsonEncode).join();
+      expect(upstream3.map(jsonEncode).join().startsWith(a), isTrue);
+      // The input is never changed in place.
+      expect(jsonEncode(full3), contains(_imgA));
+    });
+
+    test('a miss clears the registry; the retry goes in full, tagged', () {
+      final full = chat(3);
+      WebSocketChatService.foldHistoryImageRefs(full, registry);
+      serverStore.clear(); // expired on the server (other replica, LRU)
+      final sent = WebSocketChatService.foldHistoryImageRefs(full, registry);
+      expect(serverHistory(sent), isNull); // the server answers cache_miss
+      registry.handleMiss();
+      final retry = WebSocketChatService.foldHistoryImageRefs(full, registry);
+      expect(jsonEncode(retry), isNot(contains('image_ref')));
+      expect(jsonEncode(serverHistory(retry)), jsonEncode(full));
+    });
+
+    test('the same image twice: stored and used in one request', () {
+      final full = [
+        {
+          'role': 'user',
+          'content': userContentWithImages('twice', const [_imgA, _imgA]),
+        },
+        {'role': 'assistant', 'content': 'ok'},
+      ];
+      final sent = WebSocketChatService.foldHistoryImageRefs(full, registry);
+      final parts = (sent[0]['content'] as List).cast<Map>();
+      expect(parts[1]['cache_id'], isA<String>());
+      expect(parts[2], {'type': 'image_ref', 'ref': parts[1]['cache_id']});
+      expect(jsonEncode(serverHistory(sent)), jsonEncode(full));
+    });
+
+    test('only plain data-URL blocks of user turns are folded', () {
+      final odd = <Map<String, dynamic>>[
+        {
+          'role': 'user',
+          'content': [
+            {'type': 'text', 'text': 'x'},
+            {
+              'type': 'image_url',
+              'image_url': {'url': _imgA, 'detail': 'high'},
+            },
+            {
+              'type': 'image_url',
+              'image_url': {'url': 'https://example.com/a.png'},
+            },
+          ],
+        },
+        {
+          'role': 'tool',
+          'tool_call_id': 't',
+          'content': [
+            {
+              'type': 'image_url',
+              'image_url': {'url': _imgB},
+            },
+          ],
+        },
+      ];
+      final sent = WebSocketChatService.foldHistoryImageRefs(odd, registry);
+      expect(identical(sent, odd), isTrue);
+      expect(registry.imageCount, 0);
+    });
+
+    test("the turn's own refs and history refs share one image id", () {
+      // Pass 1 sent the turn's image in full with an image_cache_ids id;
+      // the next turn's history refs it by that id.
+      final id = registry.registerImage(_imgA);
+      final sent = WebSocketChatService.foldHistoryImageRefs(chat(2), registry);
+      expect((sent[0]['content'] as List)[1], {'type': 'image_ref', 'ref': id});
     });
   });
 }

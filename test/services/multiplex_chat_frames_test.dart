@@ -7,6 +7,7 @@ import 'dart:io';
 
 import 'package:chuk_chat/models/chat_stream_event.dart';
 import 'package:chuk_chat/services/multiplex_connection.dart';
+import 'package:chuk_chat/utils/stream_error_notice.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Answers the handshake; answers every `chat` with [chatReply]; never
@@ -17,6 +18,7 @@ class _FakeServer {
   final HttpServer _server;
   final List<WebSocket> _sockets = <WebSocket>[];
   final List<String> cancelled = <String>[];
+  final List<String> cancelledRequestIds = <String>[];
   final List<String> tools = <String>[];
   List<Map<String, dynamic>> Function(String reqId) chatReply = (_) => [];
 
@@ -46,6 +48,8 @@ class _FakeServer {
               }
             case 'cancel':
               cancelled.add(frame['req_id'] as String);
+              final crid = frame['client_request_id'];
+              if (crid is String) cancelledRequestIds.add(crid);
             case 'tool':
               tools.add(frame['req_id'] as String);
             default:
@@ -212,6 +216,116 @@ void main() {
       expect(server.tools, isEmpty);
     },
   );
+
+  group('request idempotency frames', () {
+    test('duplicate: the stored answer arrives as a normal answer', () async {
+      server.chatReply = (id) => [
+        {
+          'req_id': id,
+          'kind': 'duplicate',
+          'data': {
+            'client_request_id': 'c-1',
+            'content': 'stored answer',
+            'tool_calls': [
+              {
+                'id': 'call_1',
+                'type': 'function',
+                'function': {'name': 'calc', 'arguments': '{"x":1}'},
+              },
+            ],
+            'usage': {'prompt_tokens': 10, 'completion_tokens': 3},
+            'meta': {'model': 'm', 'provider': 'p', 'finish_reason': 'tool_calls'},
+            'finish_reason': 'tool_calls',
+          },
+        },
+        {'req_id': id, 'kind': 'done'},
+      ];
+      final events = await chat();
+      expect(events[0], isA<ContentEvent>());
+      expect((events[0] as ContentEvent).text, 'stored answer');
+      final calls = (events[1] as ToolCallsEvent).calls;
+      expect(calls.single.name, 'calc');
+      expect(calls.single.arguments, '{"x":1}');
+      expect((events[2] as UsageEvent).usage['prompt_tokens'], 10);
+      final meta = (events[3] as MetaEvent).meta;
+      expect(meta['model'], 'm');
+      expect(meta['finish_reason'], 'tool_calls');
+      expect(events.last, isA<DoneEvent>());
+      expect(events.whereType<ErrorEvent>(), isEmpty);
+    });
+
+    test('duplicate without tool calls has no tool event', () {
+      final events = MultiplexConnection.duplicateEvents({
+        'content': 'hi',
+        'finish_reason': 'stop',
+        'meta': {'model': 'm'},
+      });
+      expect(events.whereType<ToolCallsEvent>(), isEmpty);
+      expect((events.last as MetaEvent).meta, {
+        'model': 'm',
+        'finish_reason': 'stop',
+      });
+    });
+
+    test('a truncated record with no content is a clear error', () async {
+      server.chatReply = (id) => [
+        {
+          'req_id': id,
+          'kind': 'duplicate',
+          'data': {
+            'client_request_id': 'c-1',
+            'content': '',
+            'truncated': true,
+            'usage': {},
+            'meta': {},
+            'finish_reason': 'stop',
+          },
+        },
+        {'req_id': id, 'kind': 'done'},
+      ];
+      final events = await chat();
+      final error = events.whereType<ErrorEvent>().single;
+      expect(error.code, StreamErrorCodes.duplicateUnavailable);
+      expect(error.message, kAnswerUnavailableNotice);
+      expect(events.whereType<ContentEvent>(), isEmpty);
+    });
+
+    test('a truncated record that kept content shows the content', () {
+      final events = MultiplexConnection.duplicateEvents({
+        'content': 'cut at 512k',
+        'truncated': true,
+      });
+      expect(events.whereType<ErrorEvent>(), isEmpty);
+      expect((events.first as ContentEvent).text, 'cut at 512k');
+    });
+
+    test('duplicate_in_flight carries the poll hint', () async {
+      server.chatReply = (id) => [
+        {
+          'req_id': id,
+          'kind': 'duplicate_in_flight',
+          'data': {'client_request_id': 'c-1', 'retry_after_s': 3},
+        },
+        {'req_id': id, 'kind': 'done'},
+      ];
+      final events = await chat();
+      final error = events.whereType<ErrorEvent>().single;
+      expect(error.code, StreamErrorCodes.duplicateInFlight);
+      expect(error.retryAfterSeconds, 3);
+      expect(events.last, isA<DoneEvent>());
+    });
+
+    test('cancelClientRequest sends cancel with the id', () async {
+      await connection.ensureReady();
+      connection.cancelClientRequest('ob-q1-p2');
+      for (var i = 0; i < 50 && server.cancelledRequestIds.isEmpty; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      expect(server.cancelledRequestIds, ['ob-q1-p2']);
+      // Its own req_id, not one of a running chat.
+      expect(server.cancelled.single, isNotEmpty);
+    });
+  });
 
   test('the default server tool timeout is 120 s', () {
     expect(

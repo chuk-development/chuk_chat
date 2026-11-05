@@ -120,4 +120,47 @@ void main() {
     final id2 = registry.register(content);
     expect(id2, isNot(id1));
   });
+
+  group('images', () {
+    const img = 'data:image/png;base64,AAAA';
+
+    test('registerImage then imageRefFor; text refs never see them', () {
+      final id = registry.registerImage(img);
+      expect(registry.imageRefFor(img), id);
+      expect(registry.refFor(img), isNull);
+      expect(registry.registerImage(img), id);
+      expect(registry.imageCount, 1);
+    });
+
+    test('a hit restarts the lifetime, as the server does', () {
+      final id = registry.registerImage(img);
+      clock = clock.add(const Duration(minutes: 8));
+      expect(registry.imageRefFor(img), id);
+      clock = clock.add(const Duration(minutes: 8));
+      expect(registry.imageRefFor(img), id);
+      clock = clock.add(const Duration(minutes: 11));
+      expect(registry.imageRefFor(img), isNull);
+    });
+
+    test('a miss drops the images and pauses refs', () {
+      registry.registerImage(img);
+      registry.handleMiss();
+      expect(registry.imageCount, 0);
+      final id = registry.registerImage(img);
+      expect(registry.imageRefFor(img), isNull); // cooldown
+      clock = clock.add(const Duration(seconds: 61));
+      expect(registry.imageRefFor(img), id);
+    });
+
+    test('the oldest image goes first past the cap', () {
+      final first = 'data:image/png;base64,first';
+      registry.registerImage(first);
+      for (var i = 0; i < 128; i++) {
+        registry.registerImage('data:image/png;base64,$i');
+      }
+      expect(registry.imageCount, 128);
+      expect(registry.imageRefFor(first), isNull);
+      expect(registry.imageRefFor('data:image/png;base64,127'), isNotNull);
+    });
+  });
 }

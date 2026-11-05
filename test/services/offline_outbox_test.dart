@@ -12,9 +12,11 @@ import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:chuk_chat/models/queued_message.dart';
+import 'package:chuk_chat/services/client_request_ids.dart';
 import 'package:chuk_chat/services/offline_outbox_cipher.dart';
 import 'package:chuk_chat/services/offline_queue_service.dart';
 import 'package:chuk_chat/services/offline_retry_manager.dart';
+import 'package:chuk_chat/services/offline_send_coordinator.dart';
 
 void main() {
   final queue = OfflineQueueService.instance;
@@ -124,6 +126,48 @@ void main() {
       expect(await queue.recoverInterrupted(), 1);
       expect((await queue.getById(a))!.state, OutboxState.queued);
       expect((await queue.getById(b))!.state, OutboxState.failed);
+    });
+  });
+
+  group('request ids (bead chuk_chat-vnan)', () {
+    test('a row stores its id base; a kill mid-send re-sends the same ids',
+        () async {
+      final id = await OfflineSendCoordinator.enqueue(
+        const OfflineSendPayload(
+          chatId: 'c',
+          messageText: 'hello',
+          modelId: 'm',
+          providerSlug: 'p',
+        ),
+      );
+      var row = (await queue.getById(id))!;
+      final base = row.sendPayload['clientRequestBase'];
+      expect(base, ClientRequestIds.outboxBase(id));
+      // Stored sealed with the row, not derived per run.
+      final raw = await queue.debugRawRows();
+      expect('${raw.single['message_json']}', isNot(contains('ob-')));
+
+      // The app dies while the row is sending; the next start re-queues it.
+      await queue.setState(id, OutboxState.sending);
+      await queue.recoverInterrupted();
+      row = (await queue.getById(id))!;
+      final payload = OfflineSendCoordinator.payloadFrom(row);
+      expect(OfflineSendCoordinator.requestBaseFor(row, payload), base);
+      expect(ClientRequestIds.forPass(base as String, 1), '$base-p1');
+    });
+
+    test('a payload that carries a base keeps it', () async {
+      final id = await OfflineSendCoordinator.enqueue(
+        const OfflineSendPayload(
+          chatId: 'c',
+          messageText: 'hello',
+          modelId: 'm',
+          providerSlug: 'p',
+          clientRequestBase: 'c-turn',
+        ),
+      );
+      final row = (await queue.getById(id))!;
+      expect(row.sendPayload['clientRequestBase'], 'c-turn');
     });
   });
 

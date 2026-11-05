@@ -15,6 +15,7 @@ import 'package:flutter/widgets.dart';
 import 'package:chuk_chat/models/queued_message.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_message_edit_mixin.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_scroll_mixin.dart';
+import 'package:chuk_chat/services/client_request_ids.dart';
 import 'package:chuk_chat/services/follow_up_dispatcher.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/offline_retry_manager.dart';
@@ -144,6 +145,12 @@ mixin OutboxScreenTurnMixin<W extends StatefulWidget>
     }
 
     final Timer poll = Timer.periodic(_poll, (_) => noteAccepted());
+    // The row's own `client_request_id`s: a re-send of the row (also after
+    // an app restart) is answered by the server once.
+    ClientRequestIds.arm(
+      chatId,
+      OfflineSendCoordinator.requestBaseFor(queued, payload),
+    );
     try {
       // The Retry path of a message: the bubble is the last one, so nothing
       // below it is cleared, and its attachments are rebuilt from the bubble.
@@ -163,6 +170,9 @@ mixin OutboxScreenTurnMixin<W extends StatefulWidget>
       noteAccepted();
     } finally {
       poll.cancel();
+      // A send that never started leaves the base armed; it must not reach
+      // the chat's next, unrelated turn.
+      ClientRequestIds.disarm(chatId);
     }
 
     if (accepted || OutboxScreenRules.answerShowsWork(messages, bubble)) {

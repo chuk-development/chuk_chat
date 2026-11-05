@@ -24,6 +24,7 @@ Agents view. Nothing is lost, also not after an app restart.
 | Images: offline image store, upload step | `lib/services/image_storage_service.dart` (`offline://img/`), `lib/services/offline_image_preparer.dart` |
 | Follow-ups typed during a reply | `lib/services/follow_up_parking_service.dart` |
 | Shared screen logic | `lib/platform_specific/chat/offline_send_bridge.dart` |
+| Request ids (`client_request_id`) | `lib/services/client_request_ids.dart`, `WebSocketChatService.runIdempotent` |
 | Bubble status line, chat list badge | `lib/widgets/message_bubble/outbox_status_line.dart`, `SbOutboxBadge` in `lib/widgets/sidebar/sidebar_chrome.dart` |
 | Agents prompts | `lib/services/agents/agents_task_outbox.dart`, `lib/services/agents/agents_outbox_flusher.dart` |
 
@@ -42,7 +43,7 @@ model (documents are already inlined as markdown), the model, the provider,
 the system prompt resolved at send time, the image storage paths, the
 document list, the original attachment list, the response budget, the
 reasoning effort, and for voice the recording path, its length and the
-auto-send setting.
+auto-send setting, and `clientRequestBase` (see "Request ids").
 
 ### Encryption
 
@@ -122,9 +123,11 @@ what they did before.
    bubble goes into the chat that started the recording, also when the user
    switched chats while it was queued (`OfflineSendBridge.voiceBubbleOffScreen`).
 
-A send that fails AFTER the server accepted it is never queued and never
-re-sent by itself, because the server may already bill the turn. The normal
-error shows, and the user can retry.
+A send of a fresh message that fails AFTER the server accepted it is not
+queued: the user sees the error and the answer so far, and can retry or
+continue. Queued rows are different: a row that the server took but whose
+socket died is sent again by itself, with the same request ids, so the
+server answers it once (see "Request ids").
 
 Follow-ups that the user types while a reply streams are kept in memory as
 before, and also parked on disk. The open chat sends them when its turn
@@ -163,7 +166,8 @@ start.
 |------|--------|
 | Network error, 5xx, 429 | `queued`, one attempt more, next try after 5 s, 15 s, 30 s, 1 min, 2 min, 5 min, 10 min, 15 min. After that: `failed` |
 | Other error (4xx, bad payload, chat not found) | `failed` at once |
-| Server had accepted the request | Sent. What the turn wrote (also an error text after acceptance) is the answer, like a send on screen. Never sent again by itself (no double billing) |
+| Server had accepted the request, then the socket died (`connection_lost`) or the answer was still being written (`request_pending`), and no tool ran | `queued` with backoff. The re-send has the same request ids, so the server answers it from its record and bills it once. Headless and plain path only |
+| Server had accepted the request, any other end (also the cases above after a tool ran, or on the screen path) | Sent. What the turn wrote (also an error text after acceptance) is the answer, like a send on screen. Not sent again by itself: a fresh run would bill again, or run its tools again |
 | No session, no key, a turn of the chat runs (also between two tool passes) | `queued`, no attempt counted |
 | The device is offline | The flush does not start; a manual Retry probes once |
 | Voice: recording file missing, empty transcript | `failed` |
@@ -171,6 +175,40 @@ start.
 
 Retry puts a row back to `queued` with attempts cleared and flushes. Delete
 removes the row, its files and its bubble.
+
+## Request ids (no double billing)
+
+Every chat frame on `/v2/ws` carries a `client_request_id` (api_server
+`CLAUDE.md`, "/v2/ws", request idempotency). One id per pass of a turn,
+`<base>-p<n>`; every re-send of the same pass (a reconnect retry, a
+`cache_miss` retry, an outbox re-send after a restart) has the same id. A
+new pass, a message-level retry or a new send has a new one. The server
+runs and bills each id once:
+
+- `duplicate`: the stored answer of the id. It reaches the turn as a normal
+  answer (content, tool calls, usage, meta). A minimal record
+  (`truncated: true`, no content) shows `kAnswerUnavailableNotice`; the
+  answer was billed but cannot be shown, and a new send asks again with
+  new ids.
+- `duplicate_in_flight`: the request still runs (detached after its socket
+  died). The send waits the hint and asks again, up to 6 times, then ends
+  with `request_pending` (`kAnswerPendingNotice`); the pass retry asks
+  again with the same id.
+- `client_request_id_conflict` / `invalid_client_request_id`: one re-send
+  with a fresh id.
+- The user's Stop sends `cancel` with the running pass's id
+  (`WebSocketChatService.declareStopIntent`), so a detached request stops
+  too.
+
+The base of a turn on screen is random. The base of an outbox row is
+`ob-<row id>`, written into the payload at enqueue (`clientRequestBase`,
+sealed with the row). A screen send that never reached the server keeps its
+own base when it goes into the outbox, because the server may have taken
+the first pass without a frame coming back. The send paths take the base
+the outbox armed for the chat (`ClientRequestIds.arm` / `take`), the screen
+path and the headless turn alike. So a row killed mid-send (`sending` at
+start goes back to `queued`) is sent again with the same ids, and the
+server answers instead of billing a second time (bead chuk_chat-vnan).
 
 ## How one row is sent (with tools)
 
@@ -188,7 +226,11 @@ so the answer is the one a normal send gives.
    the row is retried with backoff.
 2. **Otherwise: headless** (`HeadlessChatTurn`). It runs the mobile screen's
    `StreamingMessageHandler` with no screen, on a copy of the chat up to the
-   queued message (only delivered messages) plus a placeholder. The handler's
+   queued message (only delivered messages), the queued message itself (as
+   delivered, with its send time and the queued text, so its `[Sent: …]`
+   line and prompt context are the ones a screen send has) plus a
+   placeholder. A long chat is compacted before the first pass like any
+   send; the summary goes onto the stored row it marked. The handler's
    callbacks fill the placeholder (text, reasoning, tool calls, content
    blocks, tool images, `interrupted`). At the end the placeholder is written
    right after its question; later queued messages stay after it. The chat's
@@ -339,4 +381,8 @@ to the old behaviour (voice transcribed live only, no offline images).
 - The screen path takes a row only when its bubble is the last message;
   earlier rows of the open chat go out headless and the screen reloads.
 - A headless turn that the app is killed in the middle of goes back to
-  `queued` at start and is sent again (the server may have billed the first).
+  `queued` at start and is sent again with the same request ids, so the
+  server answers the passes it took from its record. Client-side tools of
+  those passes run again (the server only stores the answer).
+- A request id the server refused as a conflict is replaced for that send
+  only; it is not written back into the row.

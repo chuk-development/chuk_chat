@@ -12,6 +12,18 @@ const String kConnectionErrorNotice =
     'Could not establish a connection to the server. '
     'Please check your internet connection and try again.';
 
+/// Shown when the server answered this request before but kept no copy of
+/// the answer (a `duplicate` with `truncated: true` and no content). A new
+/// send makes a new request.
+const String kAnswerUnavailableNotice =
+    'This message was already answered, but the answer could not be '
+    'restored. Send it again for a new answer.';
+
+/// Shown when the server still writes the answer to this request after the
+/// app asked several times.
+const String kAnswerPendingNotice =
+    'The server is still writing this answer. Try again in a moment.';
+
 /// Removes the transport error notice from [text], wherever it sits.
 ///
 /// Only this exact notice is removed. A generic `Error: …` line is left

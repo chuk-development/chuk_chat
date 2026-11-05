@@ -271,8 +271,8 @@ Code: `lib/services/prompt_cache/`, test:
   trim single parts in the app either. Not folded, so sent in full: a pass with a
   `message` (prompt-based mode; the server would add a new user turn), an
   image-only entry (the server drops it), text after an image, a missing
-  ref. The server resolves image refs only for the current turn, so an
-  older turn's images in later history still go up in full each request.
+  ref. Older turns' images go up once, tagged `cache_id`, then as
+  `image_ref` (`foldHistoryImageRefs`); the server restores the same block.
 - **The repeat-call note** (`repeatCallAdvisory`) is appended after the cap
   and stored with the result; never recompute it at send time.
 - **A steer** (`SteerInbox`) replays from the transcript;

@@ -1,9 +1,12 @@
+import 'dart:async';
+
 
 import 'package:flutter/foundation.dart';
 
 import 'package:chuk_chat/models/chat_stream_event.dart';
 import 'package:chuk_chat/services/agents/agents_chat_transport.dart';
 import 'package:chuk_chat/services/chat_history_builder.dart';
+import 'package:chuk_chat/services/client_request_ids.dart';
 import 'package:chuk_chat/services/model_capabilities_service.dart';
 import 'package:chuk_chat/services/prompt_cache/image_budget.dart';
 import 'package:chuk_chat/services/prompt_cache/prompt_context.dart';
@@ -39,10 +42,57 @@ class WebSocketChatService {
 
   /// Declares that the user asked to stop [sessionKey]'s run. Agents threads
   /// only; see [AgentsChatTransport.declareStopIntent].
+  ///
+  /// For a chuk_chat chat it sends `cancel` with the `client_request_id` of
+  /// the chat's running pass ([cancelHostedRequest]): the server stops that
+  /// request on any socket, also one it detached after a reconnect, so it
+  /// does not run on (and bill) after the user stopped it.
   static void declareStopIntent(String sessionKey) {
     if (usesAgentsTransport(sessionKey)) {
       AgentsChatTransport.declareStopIntent(sessionKey);
+    } else {
+      cancelHostedRequest(sessionKey);
     }
+  }
+
+  /// The `client_request_id` of each chat's latest hosted pass. Kept until
+  /// the next pass of the chat replaces it; a cancel of a finished request
+  /// does nothing on the server.
+  static final Map<String, String> _activeRequestIds = <String, String>{};
+
+  /// The id of [chatId]'s latest hosted pass, or null.
+  @visibleForTesting
+  static String? activeRequestIdFor(String chatId) => _activeRequestIds[chatId];
+
+  /// Test seam: records [id] as [chatId]'s running pass.
+  @visibleForTesting
+  static void debugTrackRequest(String chatId, String id) =>
+      _activeRequestIds[chatId] = id;
+
+  /// Test seam: where [cancelHostedRequest] sends. Null sends on the open
+  /// multiplex connection.
+  @visibleForTesting
+  static void Function(String clientRequestId)? debugCancelSink;
+
+  /// Sends `cancel` with the `client_request_id` of [chatId]'s latest pass.
+  /// The user stopped the reply; see [declareStopIntent].
+  static void cancelHostedRequest(String chatId) {
+    final id = _activeRequestIds.remove(chatId);
+    if (id == null) return;
+    final sink = debugCancelSink;
+    if (sink != null) {
+      sink(id);
+      return;
+    }
+    unawaited(() async {
+      try {
+        final connection =
+            MultiplexSession.current ?? await MultiplexSession.ensureCurrent();
+        connection?.cancelClientRequest(id);
+      } catch (_) {
+        // Best effort: with no socket the server cannot be told now.
+      }
+    }());
   }
 
   /// Takes back a declared stop. Agents threads only; see
@@ -77,6 +127,12 @@ class WebSocketChatService {
   /// [turnHistoryIndex]: on a tool-loop pass, the index in [history] of the
   /// turn's own user message (`ToolLoopStep.turnUserIndex`). The server puts
   /// the turn's re-sent images back on that entry (`turn_history_index`).
+  ///
+  /// [clientRequestId]: the pass's `client_request_id`
+  /// ([ClientRequestIds.forPass]). Give the same id on every re-send of the
+  /// same pass (reconnect, cache-miss retry, outbox re-send) and a new one
+  /// for each new pass; the server then runs and bills each pass once. Null
+  /// (title, assistant, compaction) makes one id for this call.
   static Stream<ChatStreamEvent> sendStreamingChat({
     required String accessToken,
     required String message,
@@ -96,6 +152,7 @@ class WebSocketChatService {
     String? requestPurpose,
     int? requestPass,
     int? turnHistoryIndex,
+    String? clientRequestId,
   }) {
     if (usesAgentsTransport(chatId)) {
       return AgentsChatTransport.sendStreamingChat(
@@ -133,6 +190,7 @@ class WebSocketChatService {
       requestPurpose: requestPurpose,
       requestPass: requestPass,
       turnHistoryIndex: turnHistoryIndex,
+      clientRequestId: clientRequestId,
     );
   }
 
@@ -153,6 +211,7 @@ class WebSocketChatService {
     String? requestPurpose,
     int? requestPass,
     int? turnHistoryIndex,
+    String? clientRequestId,
   }) async* {
     // One connection carries everything. When [chatId] is supplied the
     // multiplex routes through [MultiplexSession.chatForChat] (single
@@ -188,6 +247,7 @@ class WebSocketChatService {
       requestPurpose: requestPurpose,
       requestPass: requestPass,
       turnHistoryIndex: turnHistoryIndex,
+      clientRequestId: clientRequestId,
     );
   }
 
@@ -211,6 +271,7 @@ class WebSocketChatService {
     String? requestPurpose,
     int? requestPass,
     int? turnHistoryIndex,
+    String? clientRequestId,
   }) async* {
     // Last guard: the Auto marker is the reader's choice, not a provider the
     // server knows. Every send path resolves it earlier; one that forgot
@@ -303,8 +364,11 @@ class WebSocketChatService {
           );
         }
       }
-      payload['history'] = _foldHistoryRefs(
-        turnRefs?.history ?? budgeted,
+      // Earlier turns' images go up once: a full block is tagged with a
+      // `cache_id` (the server stores it), a block the server holds goes as
+      // `image_ref` (the server puts the same block back).
+      payload['history'] = foldHistoryImageRefs(
+        _foldHistoryRefs(turnRefs?.history ?? budgeted, registry),
         registry,
       );
     }
@@ -326,13 +390,13 @@ class WebSocketChatService {
       final fullImages = <String>[];
       final fullImageIds = <String>[];
       final imageRefs = <String>[];
-      final refs = [for (final img in base64Images) registry.refFor(img)];
+      final refs = [for (final img in base64Images) registry.imageRefFor(img)];
       if (refs.every((ref) => ref != null)) {
         imageRefs.addAll(refs.whereType<String>());
       } else {
         for (final img in base64Images) {
           fullImages.add(img);
-          fullImageIds.add(registry.register(img));
+          fullImageIds.add(registry.registerImage(img));
         }
       }
       if (fullImages.isNotEmpty) {
@@ -350,30 +414,113 @@ class WebSocketChatService {
       }
     }
 
+    // Request idempotency: one `client_request_id` per pass, the same on
+    // every re-send of it (ClientRequestIds). The server runs it once.
+    final given = clientRequestId;
+    final requestId = given != null && ClientRequestIds.isValid(given)
+        ? given
+        : ClientRequestIds.fresh();
+    payload['client_request_id'] = requestId;
+    // The chat's own passes only: a title request of the same chat must not
+    // become the target of the user's Stop.
+    final bool trackForStop =
+        chatId != null && chatId.isNotEmpty && requestPurpose != 'title';
+    if (trackForStop) _activeRequestIds[chatId] = requestId;
+
     // Route through the per-chatId tracker so two concurrent chat
     // streams for the same chat (e.g. title generation racing the
     // main response) can never interleave into the same UI buffer.
-    //
-    // The backend occasionally returns a transient routing error (e.g.
-    // "Model 'X' is not available on Fireworks AI." or "No provider
-    // selected") on the synthesis pass right after tool calls succeed;
-    // re-issuing the identical request normally works. Retry once,
-    // silently, but only before any content has streamed. (Carried over
-    // from the removed legacy path so this self-heal isn't lost.)
+    yield* runIdempotent(
+      payload: payload,
+      send: (p) => MultiplexSession.chatForChat(chatId: chatId, payload: p),
+      onRequestId: (id) {
+        if (trackForStop) _activeRequestIds[chatId] = id;
+      },
+    );
+  }
+
+  /// Most polls of a request the server still runs (`duplicate_in_flight`)
+  /// before the send gives up with [StreamErrorCodes.requestPending].
+  static const int maxInFlightPolls = 6;
+
+  /// Test seam: the wait between two polls.
+  @visibleForTesting
+  static Future<void> Function(Duration) pollDelay = Future<void>.delayed;
+
+  /// Sends [payload] (it holds `client_request_id`) through [send] and
+  /// answers the idempotency frames, so callers see a normal answer:
+  ///
+  /// * `duplicate`: the stored answer, already turned into events by
+  ///   [MultiplexConnection.duplicateEvents].
+  /// * `duplicate_in_flight`: wait the hint (1 to 5 s) and send the same
+  ///   frame again, at most [maxInFlightPolls] times; then an error with
+  ///   [StreamErrorCodes.requestPending] (the same id gets the answer later).
+  /// * `client_request_id_conflict` / `invalid_client_request_id`: send
+  ///   again once with a fresh id ([onRequestId] learns it).
+  /// * A transient routing error before any content (`is not available
+  ///   on`, `No provider`): send again once. Carried over from the removed
+  ///   legacy path. The error released the id, so it is reused.
+  @visibleForTesting
+  static Stream<ChatStreamEvent> runIdempotent({
+    required Map<String, dynamic> payload,
+    required Stream<ChatStreamEvent> Function(Map<String, dynamic> payload)
+    send,
+    void Function(String id)? onRequestId,
+  }) async* {
     var retriedTransient = false;
+    var renewedId = false;
+    var polls = 0;
     var yieldedContent = false;
     while (true) {
       var shouldRetry = false;
-      await for (final event in MultiplexSession.chatForChat(
-        chatId: chatId,
-        payload: payload,
-      )) {
+      Duration? wait;
+      await for (final event in send(payload)) {
+        if (shouldRetry) {
+          // Drain the rest of the answered attempt (its `done`) unseen.
+          continue;
+        }
         if (event is ContentEvent ||
             event is ReasoningEvent ||
             event is ToolCallsEvent) {
           yieldedContent = true;
           yield event;
         } else if (event is ErrorEvent) {
+          final code = event.code;
+          if (code == StreamErrorCodes.duplicateInFlight) {
+            if (polls < maxInFlightPolls) {
+              polls++;
+              shouldRetry = true;
+              final hint = event.retryAfterSeconds ?? 2;
+              final seconds = hint.clamp(1, 5).toDouble();
+              wait = Duration(milliseconds: (seconds * 1000).round());
+              if (kDebugMode) {
+                debugPrint(
+                  '⏳ [Multiplex] request still running, poll $polls '
+                  'in ${seconds}s',
+                );
+              }
+              continue;
+            }
+            yield const ChatStreamEvent.error(
+              kAnswerPendingNotice,
+              code: StreamErrorCodes.requestPending,
+            );
+            continue;
+          }
+          if (!yieldedContent &&
+              !renewedId &&
+              (code == StreamErrorCodes.clientRequestIdConflict ||
+                  code == StreamErrorCodes.invalidClientRequestId)) {
+            renewedId = true;
+            shouldRetry = true;
+            final fresh = ClientRequestIds.fresh();
+            payload['client_request_id'] = fresh;
+            onRequestId?.call(fresh);
+            if (kDebugMode) {
+              debugPrint('↻ [Multiplex] request id refused ($code), new id');
+            }
+            continue;
+          }
           final msg = event.message;
           final transient =
               !yieldedContent &&
@@ -401,6 +548,7 @@ class WebSocketChatService {
         }
       }
       if (!shouldRetry) break;
+      if (wait != null) await pollDelay(wait);
     }
   }
 
@@ -507,9 +655,9 @@ class WebSocketChatService {
   /// - text remains (an image-only entry would be dropped by the server);
   /// - every image is an inline data URL with a fresh registry ref.
   ///
-  /// The server resolves image refs only for the current turn. An older
-  /// turn's images in later history go up in full on each request; the
-  /// provider bytes matter more than our upload, so they keep their place.
+  /// An older turn's images stay in place in its own entry and go as
+  /// per-image `image_ref` blocks ([foldHistoryImageRefs]); so does this
+  /// turn's entry when this fold is not safe.
   @visibleForTesting
   static ({List<Map<String, dynamic>> history, List<String> refs})?
   foldTurnImageRefs(
@@ -535,7 +683,7 @@ class WebSocketChatService {
         final image = part['image_url'];
         final url = image is Map ? image['url'] : image;
         if (url is! String || !url.startsWith('data:image/')) return null;
-        final ref = registry.refFor(url);
+        final ref = registry.imageRefFor(url);
         if (ref == null) return null;
         refs.add(ref);
       } else {
@@ -590,6 +738,65 @@ class WebSocketChatService {
       }
       return entry;
     }).toList();
+  }
+
+  /// Per-image refs in the history's user turns (api_server CLAUDE.md,
+  /// "Image refs in history"). Each image block `{type: image_url,
+  /// image_url: {url: data:image/...}}`:
+  ///
+  /// * the server holds it ([ToolResultCacheRegistry.imageRefFor]): sent as
+  ///   `{type: image_ref, ref: <id>}`; the server puts back exactly the
+  ///   block the full image gives, so the provider bytes do not change;
+  /// * else sent in full with a `cache_id` ([registerImage]); the server
+  ///   stores it under that id and never sends `cache_id` upstream.
+  ///
+  /// A block of any other form is left as it is. A server `cache_miss`
+  /// clears the registry (and pauses refs), so the retry sends every image
+  /// in full, tagged again. Only user turns: the server resolves refs there.
+  @visibleForTesting
+  static List<Map<String, dynamic>> foldHistoryImageRefs(
+    List<Map<String, dynamic>> history,
+    ToolResultCacheRegistry registry,
+  ) {
+    List<Map<String, dynamic>>? out;
+    for (var i = 0; i < history.length; i++) {
+      final entry = history[i];
+      if (entry['role'] != 'user') continue;
+      final content = entry['content'];
+      if (content is! List) continue;
+      List<dynamic>? parts;
+      for (var j = 0; j < content.length; j++) {
+        final url = _plainImageBlockUrl(content[j]);
+        if (url == null) continue;
+        final ref = registry.imageRefFor(url);
+        parts ??= List<dynamic>.of(content);
+        parts[j] = ref != null
+            ? <String, dynamic>{'type': 'image_ref', 'ref': ref}
+            : <String, dynamic>{
+                'type': 'image_url',
+                'image_url': <String, dynamic>{'url': url},
+                'cache_id': registry.registerImage(url),
+              };
+      }
+      if (parts == null) continue;
+      out ??= List<Map<String, dynamic>>.of(history);
+      out[i] = <String, dynamic>{...entry, 'content': parts};
+    }
+    return out ?? history;
+  }
+
+  /// The data URL of [part] when it is exactly `{type: image_url,
+  /// image_url: {url: data:image/...}}` (what [userContentWithImages]
+  /// builds), else null. Any other key would not survive a ref.
+  static String? _plainImageBlockUrl(Object? part) {
+    if (part is! Map || part['type'] != 'image_url' || part.length != 2) {
+      return null;
+    }
+    final image = part['image_url'];
+    if (image is! Map || image.length != 1) return null;
+    final url = image['url'];
+    if (url is! String || !url.startsWith('data:image/')) return null;
+    return url;
   }
 
   /// Convert image storage paths or existing Base64 URLs to Base64 data URLs.
