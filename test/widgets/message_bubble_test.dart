@@ -233,7 +233,7 @@ void main() {
         );
         await tester.pump();
 
-        expect(find.text('Will send when online'), findsOneWidget);
+        expect(find.text('Waiting for network'), findsOneWidget);
         expect(findIcon(Icons.schedule), findsOneWidget);
       });
     }

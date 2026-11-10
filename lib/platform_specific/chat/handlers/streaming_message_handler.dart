@@ -5,7 +5,11 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import 'package:chuk_chat/models/chat_stream_event.dart';
+import 'package:chuk_chat/services/chat_compaction.dart';
+import 'package:chuk_chat/services/chat_compaction_runner.dart';
+import 'package:chuk_chat/services/chat_turn_stats.dart';
 import 'package:chuk_chat/services/chat_history_builder.dart';
+import 'package:chuk_chat/services/client_request_ids.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/app_lifecycle_service.dart';
@@ -14,13 +18,16 @@ import 'package:chuk_chat/services/streaming_manager.dart';
 import 'package:chuk_chat/services/artifact_tag_processor.dart';
 import 'package:chuk_chat/services/message_composition_service.dart';
 import 'package:chuk_chat/services/tool_call_handler.dart';
+import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/tool_image_result_service.dart';
 import 'package:chuk_chat/services/tool_result_cache_registry.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/services/streaming_foreground_service.dart';
 import 'package:chuk_chat/services/round_content_block_service.dart';
 import 'package:chuk_chat/models/chat_model.dart';
+import 'package:chuk_chat/utils/retry_backoff.dart';
 import 'package:chuk_chat/utils/tool_parser.dart';
 
 /// Handles message streaming and sending
@@ -102,6 +109,34 @@ class StreamingMessageHandler {
 
   Function()? onPaymentRequired;
 
+  /// The turn compacted a copy of chat [chatId]'s rows. [row] is the
+  /// summarized row with its stored summary ([ChatCompaction.fieldKey],
+  /// JSON [CompactionRecord]); the host puts it on its own row at [index]
+  /// only when that row is still the same message
+  /// ([ChatCompaction.sameMessage]) and the host still shows [chatId].
+  void Function(String chatId, int index, Map<String, String> row)?
+  onCompactionStored;
+
+  /// The send failed before the server accepted it (no frame came back) on
+  /// a network error, after the pass's own reconnect retries. The host
+  /// moves the message into the offline outbox and answers true; then this
+  /// handler only ends the turn, without an error text in the chat
+  /// (docs/OFFLINE_SEND.md). False or null: the normal error path runs.
+  Future<bool> Function(String chatId, int placeholderIndex)? onSendNotAccepted;
+
+  /// The turn ended on an error after its retries (the error text is in the
+  /// answer). [code] is the server's or the stream's error code. The
+  /// headless outbox turn reads it: a turn the server can de-duplicate
+  /// ([StreamErrorCodes.resendSameId]) goes back to the outbox instead of
+  /// keeping the error (docs/OFFLINE_SEND.md).
+  void Function(
+    String chatId,
+    int placeholderIndex,
+    String error,
+    String? code,
+  )?
+  onTurnError;
+
   bool _isStreaming = false;
   bool _isSending = false;
   bool _isDisposed = false;
@@ -133,6 +168,13 @@ class StreamingMessageHandler {
 
   bool get isStreaming => _isStreaming;
   bool get isSending => _isSending;
+
+  String? _turnRequestBase;
+
+  /// The `client_request_id` base of the latest turn (pass n sends
+  /// `<base>-p<n>`). A send that goes into the outbox after it never
+  /// reached the server stores it, so the re-send uses the same ids.
+  String? get turnRequestBase => _turnRequestBase;
   Future<void>? get activeToolLoopFuture => _activeToolLoopFuture;
 
   // In-memory cache for resolved Base64 images (storage path -> data URL)
@@ -206,7 +248,7 @@ class StreamingMessageHandler {
     }
 
     // Build API history (with optional images and reasoning)
-    final List<Map<String, dynamic>> apiHistory = await _buildApiHistory(
+    List<Map<String, dynamic>> apiHistory = await _buildApiHistory(
       messages,
       userInput,
       includeRecentImages: includeRecentImagesInHistory,
@@ -262,6 +304,31 @@ class StreamingMessageHandler {
 
     final chatId = activeChatId;
 
+    // Request idempotency: an outbox row armed its base for this turn, so
+    // its passes keep the same `client_request_id` across app restarts. A
+    // Retry of a message whose turn ended while the server still held it
+    // (`connection_lost`, `request_pending`) asks with that turn's ids, so
+    // the server answers from its record instead of billing again. Any
+    // other turn gets a fresh base; pass n sends `<base>-p<n>`.
+    Map<String, String>? turnUserRow;
+    if (continuePriorText == null) {
+      for (var i = messages.length - 1; i >= 0; i--) {
+        if (messages[i]['sender'] == 'user') {
+          turnUserRow = messages[i];
+          break;
+        }
+      }
+    }
+    final String? turnMessageKey = ClientRequestIds.messageKeyOf(turnUserRow);
+    final String requestBase =
+        ClientRequestIds.take(chatId) ??
+        ClientRequestIds.takeForRetry(chatId, turnMessageKey) ??
+        ClientRequestIds.freshBase();
+    _turnRequestBase = requestBase;
+    // The usage stamped on this turn's answer is only what this turn
+    // records.
+    ChatTurnStats.instance.beginTurn(chatId);
+
     // The chat picks the tool loop: the host's fold for an Agents thread,
     // upstream's client-side loop for a chuk_chat chat.
     final ToolCallHandler toolCallHandler = ToolCallHandler.forChat(chatId);
@@ -277,11 +344,25 @@ class StreamingMessageHandler {
         .map((m) => Map<String, dynamic>.from(m))
         .toList();
 
+    // The send time stored on this turn's user message (the last user row;
+    // the list already holds it): its `[Sent: …]` line. None for a
+    // "continue generation" turn, which sends no user message of its own.
+    String? turnSentAt;
+    if (continuePriorText == null) {
+      for (var i = messages.length - 1; i >= 0; i--) {
+        if (messages[i]['sender'] == 'user') {
+          turnSentAt = messages[i]['sentAt'];
+          break;
+        }
+      }
+    }
+
     late ToolLoopSession toolSession;
-    late final String initialSystemPrompt;
+    late String initialSystemPrompt;
     try {
       toolSession = toolCallHandler.createSession(
         initialUserMessage: aiPromptContent,
+        userSentAt: turnSentAt,
         history: apiHistory,
         accessToken: accessToken,
         discoveryContextKey: chatId,
@@ -293,6 +374,9 @@ class StreamingMessageHandler {
         // to the prompt-based scheme (its stream manager does not consume
         // native tool_calls frames).
         nativeToolCalling: !kIsWeb,
+      );
+      toolSession.applyWorkspace(
+        WorkspaceStorageService.getWorkspaceForChat(chatId),
       );
       initialSystemPrompt = await toolCallHandler.buildInitialSystemPrompt(
         toolSession,
@@ -312,6 +396,102 @@ class StreamingMessageHandler {
       onUpdateUI?.call();
       await _releaseForegroundKeepAlive();
       return;
+    }
+
+    // Long chat: summarize the older turns first (docs/GOTCHAS.md, "Chat
+    // compaction"). Replaces the old hard "Too much context" stop. A send,
+    // a resend and a regenerate end with the user row before the
+    // placeholder; a "continue generation" turn's rows end with the answer
+    // it continues (the placeholder), and they may be read-only, so it
+    // compacts a copy and hands the summary to the host.
+    final bool continuing = continuePriorText != null;
+    final int compactEnd = continuing ? messages.length : placeholderIndex - 1;
+    final bool canCompact = continuing
+        ? compactEnd >= 2 && placeholderIndex == messages.length - 1
+        : compactEnd >= 1 &&
+              compactEnd < messages.length &&
+              messages[compactEnd]['sender'] == 'user';
+    if (canCompact) {
+      // The runner works on a copy of `0..compactEnd-1` (the live list may
+      // hold another chat when the summary returns); the history is rebuilt
+      // from that copy and the host writes the summary back after checking
+      // the chat and the row ([onCompactionStored]).
+      Future<List<Map<String, dynamic>>> buildBefore(
+        List<Map<String, String>> rows, [
+        List<int>? starts,
+      ]) => ChatHistoryBuilder.build(
+        messages: rows,
+        pendingUserText: userInput,
+        includeRecentImages: includeRecentImagesInHistory,
+        includeAllImages: includeAllImagesInHistory,
+        includeReasoning: includeReasoningInHistory,
+        includeToolResults: includeToolResultsInHistory,
+        messageStarts: starts,
+      );
+      final compaction = await ChatCompactionRunner.beforeSend(
+        messages: messages,
+        end: compactEnd,
+        chatId: chatId,
+        modelId: selectedModelId,
+        providerSlug: providerSlug,
+        accessToken: accessToken,
+        systemPrompt: initialSystemPrompt,
+        tools: toolCallHandler.nativeToolDefinitions(toolSession),
+        history: apiHistory,
+        pendingMessage: toolSession.firstPassMessage,
+        buildHistory: buildBefore,
+        // A continue: the answer it continues is measured again after the
+        // summary.
+        madeAt: continuing ? compactEnd - 1 : compactEnd,
+      );
+      if (compaction.overflow) {
+        final String failureMessage = compaction.overflowMessage;
+        onMessageFinalize?.call(
+          placeholderIndex,
+          failureMessage,
+          '',
+          chatId,
+          null,
+        );
+        onShowSnackBar?.call(failureMessage);
+        _markStreamFinalized();
+        _isStreaming = false;
+        _isSending = false;
+        onUpdateUI?.call();
+        await _releaseForegroundKeepAlive();
+        return;
+      }
+      final int? tailStart = compaction.tailStart;
+      final Map<String, String>? target = compaction.target;
+      final List<Map<String, String>>? compactedRows = compaction.messages;
+      if (compaction.compacted &&
+          tailStart != null &&
+          target != null &&
+          compactedRows != null) {
+        // This turn's own snapshot (the background save) carries it too.
+        compaction.writeInto(capturedMessagesSnapshot);
+        onCompactionStored?.call(chatId, tailStart, target);
+        onUpdateUI?.call();
+        apiHistory = await buildBefore(compactedRows);
+        toolSession = toolCallHandler.createSession(
+          initialUserMessage: aiPromptContent,
+          userSentAt: turnSentAt,
+          history: apiHistory,
+          accessToken: accessToken,
+          discoveryContextKey: chatId,
+          baseSystemPrompt: effectiveSystemPrompt,
+          modelId: selectedModelId,
+          toolCallingEnabled: toolCallingEnabled,
+          discoveryMode: toolDiscoveryMode,
+          nativeToolCalling: !kIsWeb,
+        );
+        toolSession.applyWorkspace(
+          WorkspaceStorageService.getWorkspaceForChat(chatId),
+        );
+        initialSystemPrompt = await toolCallHandler.buildInitialSystemPrompt(
+          toolSession,
+        );
+      }
     }
     const int kMaxStreamingPasses = 20;
     // Weak / flapping mobile links drop the multiplex WS mid-turn (see the
@@ -495,10 +675,17 @@ class StreamingMessageHandler {
       required List<Map<String, dynamic>> history,
       required String? systemPrompt,
       List<String>? passImages,
+      int? turnHistoryIndex,
       int currentPass = 0,
       int reconnectRetries = 0,
       int cacheMissRetries = 0,
+      String? passRequestId,
     }) async {
+      // One `client_request_id` per pass; a retry of this pass (reconnect,
+      // cache miss) passes it back in, so the server answers it once.
+      final String requestId =
+          passRequestId ??
+          ClientRequestIds.forPass(requestBase, currentPass + 1);
       // A cancel landed (button) — the current stream was already torn down
       // and the message finalized by cancelStream(); do not open another pass.
       if (_cancelRequested) {
@@ -577,6 +764,10 @@ class StreamingMessageHandler {
         // Native tool calling: the enabled tools as OpenAI function defs. Sent
         // on every pass; empty (prompt-based) when native mode is off.
         tools: toolCallHandler.nativeToolDefinitions(toolSession),
+        toolChoice: ToolCallHandler.nativeToolChoice(toolSession),
+        requestPass: currentPass + 1,
+        turnHistoryIndex: turnHistoryIndex,
+        clientRequestId: requestId,
         // A retry REPLACES the last answer, so the host drops the turn being
         // retried instead of storing the same question again. Only the first
         // pass says so: later passes of the same turn are continuations, and
@@ -790,7 +981,9 @@ class StreamingMessageHandler {
                   chatId,
                 );
 
-                final next = loopResult.nextStep!;
+                // Later passes carry the turn's images in its own history
+                // entry, not on the pass message (prompt cache, order).
+                final next = loopResult.nextStep!.withTurnImages(images);
                 await _updateForegroundNotification(
                   title: 'Generating response...',
                   content: 'AI is continuing the response',
@@ -801,7 +994,8 @@ class StreamingMessageHandler {
                   message: next.message,
                   history: next.history,
                   systemPrompt: next.systemPrompt,
-                  passImages: images,
+                  passImages: next.passImages,
+                  turnHistoryIndex: next.turnUserIndex,
                   currentPass: currentPass + 1,
                 );
                 return;
@@ -859,6 +1053,7 @@ class StreamingMessageHandler {
                 // Reset the tool session for a clean retry
                 final retrySession = toolCallHandler.createSession(
                   initialUserMessage: aiPromptContent,
+                  userSentAt: turnSentAt,
                   history: apiHistory,
                   accessToken: accessToken,
                   discoveryContextKey: chatId,
@@ -867,6 +1062,9 @@ class StreamingMessageHandler {
                   toolCallingEnabled: toolCallingEnabled,
                   discoveryMode: toolDiscoveryMode,
                   nativeToolCalling: !kIsWeb,
+                );
+                retrySession.applyWorkspace(
+                  WorkspaceStorageService.getWorkspaceForChat(chatId),
                 );
                 final retryPrompt = await toolCallHandler
                     .buildInitialSystemPrompt(retrySession);
@@ -885,7 +1083,7 @@ class StreamingMessageHandler {
                 }
 
                 await startStreamingPass(
-                  message: aiPromptContent,
+                  message: retrySession.firstPassMessage,
                   history: apiHistory,
                   systemPrompt: retryPrompt,
                   passImages: images,
@@ -1032,7 +1230,12 @@ class StreamingMessageHandler {
           _activeToolLoopFuture = completionFuture;
           unawaited(completionFuture);
         },
-        onError: (errorMessage, {String? code}) {
+        onError: (errorMessage, {String? code}) async {
+          // Read (and clear) the text this pass had streamed when it was cut
+          // off, before any early return, so a stale copy never leaks into a
+          // later error of the same chat.
+          final interruptedPartial =
+              _streamingManager.takeInterruptedPartial(chatId) ?? '';
           if (_isDisposed) return;
 
           // A referenced tool result is no longer cached server-side. Drop the
@@ -1050,9 +1253,11 @@ class StreamingMessageHandler {
                 history: history,
                 systemPrompt: systemPrompt,
                 passImages: passImages,
+                turnHistoryIndex: turnHistoryIndex,
                 currentPass: currentPass,
                 reconnectRetries: reconnectRetries,
                 cacheMissRetries: cacheMissRetries + 1,
+                passRequestId: requestId,
               );
             }());
             return;
@@ -1105,25 +1310,53 @@ class StreamingMessageHandler {
                 title: 'Reconnecting...',
                 content: 'Retrying connection',
               );
-              // Exponential backoff: 700ms, 1.4s, 2.8s. Gives a flapping
-              // mobile link progressively more time to recover instead of
-              // hammering it with a single fixed-delay retry.
-              final backoffMs = 700 * (1 << reconnectRetries);
-              await Future<void>.delayed(Duration(milliseconds: backoffMs));
+              // Exponential backoff: ~700ms, 1.4s, 2.8s, with ±10 % jitter
+              // and a cap. Gives a flapping mobile link progressively more
+              // time to recover instead of hammering it, and the jitter keeps
+              // many clients that lost the same server from retrying in step.
+              await Future<void>.delayed(reconnectBackoff(reconnectRetries));
               if (_isDisposed) return;
               await startStreamingPass(
                 message: message,
                 history: history,
                 systemPrompt: systemPrompt,
                 passImages: passImages,
+                turnHistoryIndex: turnHistoryIndex,
                 currentPass: currentPass,
                 reconnectRetries: reconnectRetries + 1,
+                passRequestId: requestId,
               );
             }());
             return;
           }
 
           finalizeStaleToolState();
+
+          // The server may still answer this turn's ids: a Retry of the
+          // same message asks with them (bead chuk_chat-3e67).
+          if (code != null && StreamErrorCodes.resendSameId.contains(code)) {
+            ClientRequestIds.keepForRetry(chatId, turnMessageKey, requestBase);
+          }
+
+          // Never reached the server: queue it instead of failing. Only the
+          // first pass of a fresh send; a regenerate or continue, or a later
+          // tool pass, is not a message the outbox can replay.
+          if (currentPass == 0 &&
+              !regenerate &&
+              continuePriorText == null &&
+              !ChatOrigin.isAgentsThread(chatId) &&
+              !_streamingManager.serverAccepted(chatId) &&
+              (isReconnectable ||
+                  NetworkStatusService.isNetworkError(errorMessage)) &&
+              onSendNotAccepted != null &&
+              await onSendNotAccepted!(chatId, placeholderIndex)) {
+            _markStreamFinalized();
+            _isStreaming = false;
+            _isSending = false;
+            onUpdateUI?.call();
+            unawaited(_releaseForegroundKeepAlive());
+            return;
+          }
 
           if (errorMessage == '__PAYMENT_REQUIRED__') {
             final paymentMessage =
@@ -1154,13 +1387,37 @@ class StreamingMessageHandler {
           // five tool calls and streamed half an answer was reduced to one
           // sentence — the work was gone and there was nothing to continue
           // from. The error is appended as a trailing note instead.
+          //
+          // The text of the pass that was cut off (idle timeout, stream closed
+          // without `done`, upstream broke) is kept too: it used to be saved
+          // as a complete answer, and now it stands above the error instead.
           final salvaged = mergeAccumulatedWithFinal(
             accumulated: accumulatedText.toString(),
-            finalText: '',
+            finalText: stripToolCallBlocksForDisplay(interruptedPartial),
           );
           final finalizedText = salvaged.isEmpty
               ? errorMessage
               : '$salvaged\n\n$errorMessage';
+
+          // In content-block mode the bubble hides the flat text, so the cut
+          // pass and the error need their own block (earlier passes are
+          // already in [contentBlocks]). Same order as the success path:
+          // blocks first, then finalize.
+          final withNote = RoundContentBlockService.withInterruptionNote(
+            contentBlocks,
+            interruptedText: stripToolCallBlocksForDisplay(interruptedPartial),
+            errorNote: errorMessage,
+          );
+          if (withNote != null) {
+            contentBlocks
+              ..clear()
+              ..addAll(withNote);
+            onContentBlocksUpdate?.call(
+              placeholderIndex,
+              encodeBlocks(),
+              chatId,
+            );
+          }
 
           if (onMessageFinalize != null) {
             onMessageFinalize!(
@@ -1187,9 +1444,14 @@ class StreamingMessageHandler {
           // single thread. A run the host itself reported as dead keeps the
           // button — that one really is over and really can be continued.
           final bool transportDrop = code == StreamErrorCodes.connectionLost;
-          if (!transportDrop) {
+          // An answer the server billed but cannot restore has nothing to
+          // continue from; the notice asks for a new send instead.
+          final bool unrestorable =
+              code == StreamErrorCodes.duplicateUnavailable;
+          if (!transportDrop && !unrestorable) {
             onStreamInterrupted?.call(chatId, placeholderIndex);
           }
+          onTurnError?.call(chatId, placeholderIndex, errorMessage, code);
 
           _markStreamFinalized();
           _isStreaming = false;
@@ -1222,7 +1484,7 @@ class StreamingMessageHandler {
 
     try {
       await startStreamingPass(
-        message: aiPromptContent,
+        message: toolSession.firstPassMessage,
         history: apiHistory,
         systemPrompt: initialSystemPrompt,
         passImages: images,
@@ -1231,6 +1493,20 @@ class StreamingMessageHandler {
       if (_isDisposed) return;
       if (kDebugMode) {
         debugPrint('Failed to start stream: $error');
+      }
+      if (!regenerate &&
+          continuePriorText == null &&
+          !ChatOrigin.isAgentsThread(activeChatId) &&
+          NetworkStatusService.isNetworkError(error) &&
+          onSendNotAccepted != null &&
+          await onSendNotAccepted!(activeChatId, placeholderIndex)) {
+        finalizeStaleToolState();
+        _markStreamFinalized();
+        _isStreaming = false;
+        _isSending = false;
+        onUpdateUI?.call();
+        await _releaseForegroundKeepAlive();
+        return;
       }
       const failureMessage = 'Failed to start streaming. Please try again.';
       if (onMessageFinalize != null) {

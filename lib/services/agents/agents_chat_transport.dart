@@ -14,6 +14,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import 'package:chuk_chat/models/chat_stream_event.dart';
+import 'package:chuk_chat/services/agents/agents_attachments.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/agents_replay_loader.dart';
@@ -103,6 +104,19 @@ class AgentsChatTransport {
     return DateTime.now().difference(at) <= _stopIntentWindow;
   }
 
+  static final StreamController<AgentsSendNotice> _notices =
+      StreamController<AgentsSendNotice>.broadcast();
+
+  /// Things a send could not do that the user must hear about, for a widget
+  /// with a [BuildContext] to show. This service has none.
+  static Stream<AgentsSendNotice> get notices => _notices.stream;
+
+  /// Raises [notice] from outside a send (the offline queue drops images of
+  /// an Agents prompt the same way a live send does).
+  static void notify(AgentsSendNotice notice) {
+    if (!_notices.isClosed) _notices.add(notice);
+  }
+
   /// True while the user's stop for [sessionKey] is still on record. Test seam.
   @visibleForTesting
   static bool hasStopIntent(String sessionKey) =>
@@ -142,7 +156,7 @@ class AgentsChatTransport {
     // `duplicate` and never runs — so sharing one id across passes would leave
     // pass two silently undone, which is the failure this whole mechanism
     // exists to remove.
-    final String wireTaskId = mintTaskId();
+    String wireTaskId = mintTaskId();
     final selectedRoute = modelSelectionCaptured
         ? Future.value(
             ChatModelSelection(modelId: modelId, providerSlug: providerSlug),
@@ -153,16 +167,16 @@ class AgentsChatTransport {
             providerSlug: providerSlug,
           );
 
-    if (images != null && images.isNotEmpty) {
-      // No image channel on `sendTask` yet: the frame carries a prompt, not
-      // attachments. Dropped loudly rather than silently mangled.
-      if (kDebugMode) {
-        debugPrint(
-          '[agents-adapter] dropping ${images.length} image(s): the relay has '
-          'no image channel yet',
-        );
-      }
-    }
+    // The local copies of the files this send carries (pictures and store
+    // refs, all sealed on this device). They are uploaded with
+    // `attachment_put` right before the task, which names them by
+    // `blob_id` (docs/WIRE_CONTRACT.md, "Attachments to Agents").
+    final List<String> attachmentPaths = List<String>.unmodifiable(
+      images ?? const <String>[],
+    );
+    // The host lost a file between the upload and the task: upload again
+    // and send the task once more, once.
+    var reuploaded = false;
 
     final out = StreamController<ChatStreamEvent>();
     StreamSubscription<AgentsRelayInbound>? sub;
@@ -240,6 +254,85 @@ class AgentsChatTransport {
       if (finalAnswer != null) emit(FinalContentEvent(finalAnswer));
       emit(DoneEvent());
       closeOut();
+    }
+
+    /// Uploads this send's files (if any), then sends the task naming them.
+    /// Throws when the link refuses a frame or an upload fails.
+    Future<void> sendWithAttachments(
+      AgentsRelayController controller,
+      ChatModelSelection route,
+    ) async {
+      final List<String> blobIds = attachmentPaths.isEmpty
+          ? const <String>[]
+          : await AgentsAttachmentPaths.upload(
+              controller,
+              sessionKey: sessionKey,
+              paths: attachmentPaths,
+              // Every acknowledged chunk is proof of life: a long upload is
+              // not a lost run.
+              onChunk: () => ledger.touch(sessionKey),
+            );
+      // The agent's own reasoning level rides with its own model; a
+      // chat with none keeps the level the composer sent.
+      final String? effort = route.reasoningEffort ?? reasoningEffort;
+      // Recorded BEFORE the frame goes out, never after. A fire-and-forget
+      // `send()` on a half-open socket reports success for a frame nobody
+      // will read, so "the send returned" is not evidence of anything: the
+      // record has to exist by the time the frame could be lost. It is
+      // cleared by the host's `task_ack`, or by the run's first real
+      // output; anything still recorded on the next pairing is re-sent.
+      //
+      // Started, not awaited. Every read and write of the store goes
+      // through one serialiser, so this write is already ahead of the
+      // clear that any later ack will queue — the ordering that matters
+      // is guaranteed without holding the send behind a disk round trip.
+      // Awaiting it would also put two more turns of the event loop
+      // between the listen and the frame, and the handler chain that
+      // folds the host's events runs behind the same future.
+      unawaited(
+        AgentsPendingTasks.record(
+          sessionKey: sessionKey,
+          taskId: wireTaskId,
+          prompt: message,
+          modelId: route.modelId,
+          providerSlug: route.providerSlug,
+          reasoningEffort: effort,
+          blobIds: blobIds,
+        ).catchError((Object _) => _unrecorded(sessionKey, wireTaskId)),
+      );
+      ledger.taskSent(sessionKey, wireTaskId);
+      // F1: the one task "Run anyway" armed for this thread. Read, not
+      // used up: it is disarmed only after the frame went out, so a send
+      // that fails keeps it for the next try.
+      final bool overBudget = AgentsBudgetOverride.peek(sessionKey);
+      await controller.sendTask(
+        message,
+        sessionKey: sessionKey,
+        modelId: route.modelId,
+        providerSlug: route.providerSlug,
+        reasoningEffort: effort,
+        // Names this send, so a re-send after a reconnect is the same
+        // task to the host and the host's answer says which one it means.
+        taskId: wireTaskId,
+        // Ask the executor to echo the raw model context only in the full
+        // log view; the quiet default leaves the frame unchanged.
+        debug: verbose,
+        // A retry replaces the last answer instead of asking again, so the
+        // host drops the turn being retried before it stores this prompt.
+        // Without it the stored conversation grows one copy of the question
+        // per attempt: the transcript shows it four times after four
+        // retries, and the model is handed a history in which the user
+        // asked the same thing four times (bead cowork-bkw).
+        regenerate: overBudget ? false : regenerate,
+        // F1: "Run anyway" after a budget refusal. The refused prompt
+        // was never stored on the host, so there is no turn to replace:
+        // the override goes out as a plain new turn.
+        budgetOverride: overBudget,
+        // The files, by the ids the host gave them. Only complete
+        // uploads are named: the task waited for every one.
+        attachments: blobIds,
+      );
+      if (overBudget) AgentsBudgetOverride.disarm(sessionKey);
     }
 
     Future<void> handle(AgentsRelayInbound event) async {
@@ -405,6 +498,13 @@ class AgentsChatTransport {
           // "Automations"); the strip and the page read the source.
           ledger.automation(sessionKey, event);
 
+        case AgentsRelayContext():
+          // A row nobody typed, written during the run: a chip on its answer.
+          if (!event.replay &&
+              (event.sessionKey == null || event.sessionKey == sessionKey)) {
+            ledger.context(sessionKey, event);
+          }
+
         case AgentsRelayAutomationList():
         case AgentsRelayDocuments():
         case AgentsRelaySkillsList():
@@ -434,6 +534,32 @@ class AgentsChatTransport {
           // forever. (The app no longer sends such a host the frames it would
           // refuse; see AgentsPermissionsService.)
           final String? owner = event.sessionKey;
+          if ((owner == null || owner == sessionKey) &&
+              !reuploaded &&
+              attachmentPaths.isNotEmpty &&
+              isUnknownAttachmentError(message)) {
+            reuploaded = true;
+            final AgentsRelayController? again = link.controller.value;
+            if (again != null) {
+              // A fresh id: the host refused the first one, nothing ran.
+              final String refused = wireTaskId;
+              wireTaskId = mintTaskId();
+              unawaited(
+                AgentsPendingTasks.clear(
+                  sessionKey,
+                  refused,
+                ).catchError((Object _) {}),
+              );
+              try {
+                await sendWithAttachments(again, await selectedRoute);
+                return;
+              } catch (error) {
+                if (kDebugMode) {
+                  debugPrint('[agents-adapter] re-upload failed: $error');
+                }
+              }
+            }
+          }
           if (owner != null && owner != sessionKey) {
             if (kDebugMode) {
               debugPrint(
@@ -625,6 +751,8 @@ class AgentsChatTransport {
             sessionKey,
             selectedRoute,
             reasoningEffort: reasoningEffort,
+            taskId: wireTaskId,
+            attachments: attachmentPaths,
           ),
         );
         emit(
@@ -641,66 +769,34 @@ class AgentsChatTransport {
 
       chain = chain.then((_) async {
         try {
-          final route = await selectedRoute;
-          // The agent's own reasoning level rides with its own model; a
-          // chat with none keeps the level the composer sent.
-          final String? effort = route.reasoningEffort ?? reasoningEffort;
-          // Recorded BEFORE the frame goes out, never after. A fire-and-forget
-          // `send()` on a half-open socket reports success for a frame nobody
-          // will read, so "the send returned" is not evidence of anything: the
-          // record has to exist by the time the frame could be lost. It is
-          // cleared by the host's `task_ack`, or by the run's first real
-          // output; anything still recorded on the next pairing is re-sent.
-          //
-          // Started, not awaited. Every read and write of the store goes
-          // through one serialiser, so this write is already ahead of the
-          // clear that any later ack will queue — the ordering that matters
-          // is guaranteed without holding the send behind a disk round trip.
-          // Awaiting it would also put two more turns of the event loop
-          // between the listen and the frame, and the handler chain that
-          // folds the host's events runs behind the same future.
-          unawaited(
-            AgentsPendingTasks.record(
-              sessionKey: sessionKey,
-              taskId: wireTaskId,
-              prompt: message,
-              modelId: route.modelId,
-              providerSlug: route.providerSlug,
-              reasoningEffort: effort,
-            ).catchError((Object _) => _unrecorded(sessionKey, wireTaskId)),
-          );
-          ledger.taskSent(sessionKey, wireTaskId);
-          // F1: the one task "Run anyway" armed for this thread. Read, not
-          // used up: it is disarmed only after the frame went out, so a send
-          // that fails keeps it for the next try.
-          final bool overBudget = AgentsBudgetOverride.peek(sessionKey);
-          await controller.sendTask(
-            message,
-            sessionKey: sessionKey,
-            modelId: route.modelId,
-            providerSlug: route.providerSlug,
-            reasoningEffort: effort,
-            // Names this send, so a re-send after a reconnect is the same
-            // task to the host and the host's answer says which one it means.
-            taskId: wireTaskId,
-            // Ask the executor to echo the raw model context only in the full
-            // log view; the quiet default leaves the frame unchanged.
-            debug: verbose,
-            // A retry replaces the last answer instead of asking again, so the
-            // host drops the turn being retried before it stores this prompt.
-            // Without it the stored conversation grows one copy of the question
-            // per attempt: the transcript shows it four times after four
-            // retries, and the model is handed a history in which the user
-            // asked the same thing four times (bead cowork-bkw).
-            regenerate: overBudget ? false : regenerate,
-            // F1: "Run anyway" after a budget refusal. The refused prompt
-            // was never stored on the host, so there is no turn to replace:
-            // the override goes out as a plain new turn.
-            budgetOverride: overBudget,
-          );
-          if (overBudget) AgentsBudgetOverride.disarm(sessionKey);
+          await sendWithAttachments(controller, await selectedRoute);
         } catch (error) {
           if (terminated) return;
+          if (error is AgentsAttachmentException && error.isUserFixable) {
+            // A selection the host would refuse (too big, too many, a file
+            // that is gone): nothing goes out and nothing is queued, the user
+            // has to change the selection. Said in plain words.
+            terminated = true;
+            ledger.finish(sessionKey, reason: 'error');
+            _notices.add(
+              AgentsSendNotice(
+                kind: AgentsSendNoticeKind.attachmentsRefused,
+                sessionKey: sessionKey,
+                count: attachmentPaths.length,
+                failure: error.failure,
+                name: error.name,
+              ),
+            );
+            emit(
+              ErrorEvent(
+                agentsAttachmentRefusalText(error.failure, name: error.name),
+                code: StreamErrorCodes.streamFailure,
+              ),
+            );
+            emit(const DoneEvent());
+            closeOut();
+            return;
+          }
           terminated = true;
           ledger.finish(sessionKey, reason: 'error');
           // The socket said no, so nothing is in flight and there is nothing to
@@ -714,12 +810,17 @@ class AgentsChatTransport {
           );
           // Same as the no-controller case: a socket that refused the frame
           // has not lost the prompt, it has only delayed it.
+          // It keeps the id this send was given: if the frame did slip out
+          // before the socket failed, the flush is a `duplicate` to the host,
+          // not a second run.
           unawaited(
             _queueAndMark(
               message,
               sessionKey,
               selectedRoute,
               reasoningEffort: reasoningEffort,
+              taskId: wireTaskId,
+              attachments: attachmentPaths,
             ),
           );
           emit(
@@ -848,6 +949,8 @@ Future<OutboxTask?> _queueForLater(
   String sessionKey,
   Future<ChatModelSelection> selectedRoute, {
   String? reasoningEffort,
+  String? taskId,
+  List<String> attachments = const <String>[],
 }) async {
   try {
     ChatModelSelection? route;
@@ -863,6 +966,8 @@ Future<OutboxTask?> _queueForLater(
       modelId: route?.modelId,
       providerSlug: route?.providerSlug,
       reasoningEffort: route?.reasoningEffort ?? reasoningEffort,
+      taskId: taskId,
+      attachments: attachments,
     );
   } catch (error) {
     if (kDebugMode) {
@@ -885,12 +990,16 @@ Future<void> _queueAndMark(
   String sessionKey,
   Future<ChatModelSelection> selectedRoute, {
   String? reasoningEffort,
+  String? taskId,
+  List<String> attachments = const <String>[],
 }) async {
   final OutboxTask? task = await _queueForLater(
     message,
     sessionKey,
     selectedRoute,
     reasoningEffort: reasoningEffort,
+    taskId: taskId,
+    attachments: attachments,
   );
   if (task == null) return;
   await AgentsQueuedMarks.markQueued(
@@ -898,4 +1007,35 @@ Future<void> _queueAndMark(
     prompt: message,
     queueId: task.localId,
   );
+}
+
+/// What kind of [AgentsSendNotice] it is.
+enum AgentsSendNoticeKind {
+  /// The files of the send cannot go to the host as they are (too large,
+  /// too many, empty, or the local copy is gone). Nothing was sent.
+  attachmentsRefused,
+}
+
+/// One thing a send could not do, for the thread view to tell the user.
+@immutable
+class AgentsSendNotice {
+  const AgentsSendNotice({
+    required this.kind,
+    required this.sessionKey,
+    this.count = 0,
+    this.failure,
+    this.name,
+  });
+
+  final AgentsSendNoticeKind kind;
+
+  /// The thread the send was for. A view shows only its own thread's notices.
+  final String sessionKey;
+
+  /// How many items it is about (the files of the send).
+  final int count;
+
+  /// Why the files were refused, and which one, when one file is the reason.
+  final AgentsAttachmentFailure? failure;
+  final String? name;
 }

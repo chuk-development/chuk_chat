@@ -28,12 +28,15 @@ class ModelPrefetchService {
   ///
   /// This is optimized for fast startup:
   /// - Uses short timeout (3s) to avoid blocking
-  /// - Skips network fetch if cache is valid (< 24h old)
+  /// - Skips network fetch if cache is fresh (< 10 min old)
   /// - Fails silently - cached data will be used as fallback
   ///
   /// [force] fetches even when the cache is still valid: a model added on the
-  /// server after the last fetch is otherwise missing for up to 24 hours.
+  /// server after the last fetch is otherwise missing until the cache turns stale.
   static Future<void> prefetch({bool force = false}) {
+    // A stale catalogue read (older than 10 min) refreshes through here, in
+    // the background; the in-flight future below dedupes it.
+    ModelCacheService.registerRevalidator(prefetch);
     final Future<void>? running = _inFlight;
     if (running != null && !force) return running;
     final Future<void> next = (running ?? Future<void>.value())

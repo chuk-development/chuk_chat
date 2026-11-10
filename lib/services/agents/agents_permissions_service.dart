@@ -36,9 +36,10 @@ class AgentPermissions {
     this.secretsEnv = true,
     this.workspaceMount = AgentWorkspaceMount.rw,
     this.userBrowser = false,
+    this.externalAgents = false,
   });
 
-  /// Everything on, except the user's own browser.
+  /// Everything on, except the user's own browser and the external agents.
   static const AgentPermissions defaults = AgentPermissions();
 
   static const String keySudo = 'sudo';
@@ -46,6 +47,7 @@ class AgentPermissions {
   static const String keySecretsEnv = 'secrets_env';
   static const String keyWorkspaceMount = 'workspace_mount';
   static const String keyUserBrowser = 'user_browser';
+  static const String keyExternalAgents = 'external_agents';
 
   /// Every key, in the order the app shows them.
   static const List<String> keys = <String>[
@@ -54,6 +56,7 @@ class AgentPermissions {
     keySecretsEnv,
     keyWorkspaceMount,
     keyUserBrowser,
+    keyExternalAgents,
   ];
 
   /// Passwordless sudo in the sandbox.
@@ -71,6 +74,10 @@ class AgentPermissions {
   /// The agent drives the browser add-on on the user's computer.
   final bool userBrowser;
 
+  /// `delegate_task` may hand a task to the user's own `claude` or `codex`
+  /// CLI in the sandbox. Off by default: the CLI bills the user's account.
+  final bool externalAgents;
+
   bool get workspaceWritable => workspaceMount == AgentWorkspaceMount.rw;
 
   /// The switch state of [key]. The workspace switch is "writable".
@@ -80,6 +87,7 @@ class AgentPermissions {
     keySecretsEnv => secretsEnv,
     keyWorkspaceMount => workspaceWritable,
     keyUserBrowser => userBrowser,
+    keyExternalAgents => externalAgents,
     _ => throw ArgumentError.value(key, 'key', 'unknown permission'),
   };
 
@@ -101,6 +109,7 @@ class AgentPermissions {
       workspaceMount: on ? AgentWorkspaceMount.rw : AgentWorkspaceMount.ro,
     ),
     keyUserBrowser => copyWith(userBrowser: on),
+    keyExternalAgents => copyWith(externalAgents: on),
     _ => throw ArgumentError.value(key, 'key', 'unknown permission'),
   };
 
@@ -110,6 +119,7 @@ class AgentPermissions {
     bool? secretsEnv,
     AgentWorkspaceMount? workspaceMount,
     bool? userBrowser,
+    bool? externalAgents,
   }) {
     return AgentPermissions(
       sudo: sudo ?? this.sudo,
@@ -117,6 +127,7 @@ class AgentPermissions {
       secretsEnv: secretsEnv ?? this.secretsEnv,
       workspaceMount: workspaceMount ?? this.workspaceMount,
       userBrowser: userBrowser ?? this.userBrowser,
+      externalAgents: externalAgents ?? this.externalAgents,
     );
   }
 
@@ -138,6 +149,7 @@ class AgentPermissions {
           ? AgentWorkspaceMount.ro
           : AgentWorkspaceMount.rw,
       userBrowser: flag(keyUserBrowser, defaults.userBrowser),
+      externalAgents: flag(keyExternalAgents, defaults.externalAgents),
     );
   }
 
@@ -147,6 +159,7 @@ class AgentPermissions {
     keySecretsEnv: secretsEnv,
     keyWorkspaceMount: workspaceMount.name,
     keyUserBrowser: userBrowser,
+    keyExternalAgents: externalAgents,
   };
 
   @override
@@ -156,14 +169,71 @@ class AgentPermissions {
       other.network == network &&
       other.secretsEnv == secretsEnv &&
       other.workspaceMount == workspaceMount &&
-      other.userBrowser == userBrowser;
+      other.userBrowser == userBrowser &&
+      other.externalAgents == externalAgents;
 
   @override
-  int get hashCode =>
-      Object.hash(sudo, network, secretsEnv, workspaceMount, userBrowser);
+  int get hashCode => Object.hash(
+    sudo,
+    network,
+    secretsEnv,
+    workspaceMount,
+    userBrowser,
+    externalAgents,
+  );
 
   @override
   String toString() => 'AgentPermissions(${toJson()})';
+}
+
+/// One tap that sets the sandbox switches (Full / Careful / Locked). The
+/// user's own browser and the external agents are not part of a preset: the
+/// one is a separate add-on, the other bills the user's own account.
+enum AgentPermissionPreset {
+  /// Everything allowed: root, internet, secrets, a writable workspace.
+  full,
+
+  /// Internet and a writable workspace, no root, no secrets.
+  careful,
+
+  /// Nothing leaves the box: no root, no internet, no secrets, read-only.
+  locked,
+}
+
+/// The switches a preset sets.
+const Map<AgentPermissionPreset, Map<String, bool>> kAgentPermissionPresets =
+    <AgentPermissionPreset, Map<String, bool>>{
+      AgentPermissionPreset.full: <String, bool>{
+        AgentPermissions.keySudo: true,
+        AgentPermissions.keyNetwork: true,
+        AgentPermissions.keySecretsEnv: true,
+        AgentPermissions.keyWorkspaceMount: true,
+      },
+      AgentPermissionPreset.careful: <String, bool>{
+        AgentPermissions.keySudo: false,
+        AgentPermissions.keyNetwork: true,
+        AgentPermissions.keySecretsEnv: false,
+        AgentPermissions.keyWorkspaceMount: true,
+      },
+      AgentPermissionPreset.locked: <String, bool>{
+        AgentPermissions.keySudo: false,
+        AgentPermissions.keyNetwork: false,
+        AgentPermissions.keySecretsEnv: false,
+        AgentPermissions.keyWorkspaceMount: false,
+      },
+    };
+
+/// The preset [permissions] matches, or null ("Custom").
+AgentPermissionPreset? presetOf(AgentPermissions permissions) {
+  for (final MapEntry<AgentPermissionPreset, Map<String, bool>> preset
+      in kAgentPermissionPresets.entries) {
+    if (preset.value.entries.every(
+      (MapEntry<String, bool> e) => permissions.isOn(e.key) == e.value,
+    )) {
+      return preset.key;
+    }
+  }
+  return null;
 }
 
 /// Seals and sends one control frame to the host. Throws when nothing is
@@ -331,6 +401,39 @@ class AgentsPermissionsService extends ChangeNotifier {
     }
   }
 
+  /// Sets several switches in one `agent_permissions_set` (a preset). Only
+  /// the keys that differ from what is shown go out. False when the frame
+  /// could not be sent; the switches are put back.
+  Future<bool> setSwitches(String agentId, Map<String, bool> switches) async {
+    if (!supported) return false;
+    final AgentPermissions before = permissionsOf(agentId);
+    final Map<String, dynamic> changes = <String, dynamic>{
+      for (final MapEntry<String, bool> e in switches.entries)
+        if (before.isOn(e.key) != e.value)
+          e.key: AgentPermissions.wireValue(e.key, e.value),
+    };
+    if (changes.isEmpty) return true;
+    AgentPermissions next = before;
+    for (final MapEntry<String, bool> e in switches.entries) {
+      next = next.withSwitch(e.key, e.value);
+    }
+    _optimistic[agentId] = next;
+    _errors.remove(agentId);
+    notifyListeners();
+    try {
+      await _send(<String, dynamic>{
+        'type': 'agent_permissions_set',
+        'agent_id': agentId,
+        'permissions': changes,
+      });
+      return true;
+    } catch (_) {
+      _optimistic.remove(agentId);
+      notifyListeners();
+      return false;
+    }
+  }
+
   /// Takes one `agent_permissions` reply for one agent: the whole set, what
   /// this host enforces, and the reason when a request was refused. A reply
   /// with no set (an unknown agent) carries only the reason. It may come
@@ -435,7 +538,8 @@ class AgentsPermissionsService extends ChangeNotifier {
     }
   }
 
-  /// Sets one class to `ask`, `allow` or `deny`. Sends `approvals` only. False
+  /// Sets one class to `ask`, `allow` or `deny` (`local_actions` also takes
+  /// `review` and `review_strict`). Sends `approvals` only. False
   /// when the host does not keep approvals or the frame could not be sent;
   /// the choice is put back then.
   Future<bool> setApprovalMode(
@@ -443,8 +547,8 @@ class AgentsPermissionsService extends ChangeNotifier {
     String actionClass,
     String mode,
   ) {
-    if (!AgentApprovals.modes.contains(mode)) {
-      throw ArgumentError.value(mode, 'mode', 'not ask, allow or deny');
+    if (!AgentApprovals.validMode(actionClass, mode)) {
+      throw ArgumentError.value(mode, 'mode', 'not a mode of $actionClass');
     }
     final AgentApprovals before =
         approvalsOf(agentId) ?? const AgentApprovals();
@@ -865,12 +969,42 @@ class AgentApprovals {
   static const String classMcpDestructive = 'mcp_destructive';
   static const String classBrowserAct = 'browser_act';
 
+  /// The agent's own commands and file changes (docs/WIRE_CONTRACT.md,
+  /// "Auto review"): `run_command`, `python`, `write_file`, `edit_file`,
+  /// `apply_patch`.
+  static const String classLocalActions = 'local_actions';
+
   static const String modeAsk = 'ask';
   static const String modeAllow = 'allow';
   static const String modeDeny = 'deny';
 
+  /// A small model rates each call; a deny or an invalid answer asks the
+  /// user. Valid for [classLocalActions] only.
+  static const String modeReview = 'review';
+
+  /// Like [modeReview], but a deny is final.
+  static const String modeReviewStrict = 'review_strict';
+
   /// The three modes, in the order the app offers them.
   static const List<String> modes = <String>[modeAsk, modeAllow, modeDeny];
+
+  /// The five modes of [classLocalActions], in the order the app offers
+  /// them.
+  static const List<String> localActionModes = <String>[
+    modeAllow,
+    modeAsk,
+    modeReview,
+    modeReviewStrict,
+    modeDeny,
+  ];
+
+  /// The modes [actionClass] accepts.
+  static List<String> modesFor(String actionClass) =>
+      actionClass == classLocalActions ? localActionModes : modes;
+
+  /// True when [mode] is a valid mode of [actionClass].
+  static bool validMode(String actionClass, String mode) =>
+      modesFor(actionClass).contains(mode);
 
   /// The classes in the order the app shows them.
   static const List<String> order = <String>[
@@ -878,6 +1012,7 @@ class AgentApprovals {
     classMcpDestructive,
     classBrowserAct,
     classPublish,
+    classLocalActions,
   ];
 
   /// The host's defaults, for a host that leaves `defaults` out.
@@ -886,6 +1021,7 @@ class AgentApprovals {
     classSendExternal: modeAsk,
     classMcpDestructive: modeAsk,
     classBrowserAct: modeAllow,
+    classLocalActions: modeAllow,
   };
 
   /// Effective mode per class, as the host said.
@@ -942,8 +1078,9 @@ class AgentApprovals {
     Map<String, String> modesOf(Object? raw) => <String, String>{
       if (raw is Map)
         for (final MapEntry<Object?, Object?> e in raw.entries)
-          if (e.value is String && modes.contains(e.value))
-            '${e.key}': e.value! as String,
+          if (e.value case final String mode
+              when validMode('${e.key}', mode))
+            '${e.key}': mode,
     };
     final Object? rawSites = json['sites'];
     final Object? appliesFrom = json['applies_from'];

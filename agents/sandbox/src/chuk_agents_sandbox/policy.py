@@ -27,6 +27,11 @@ carries. The backends enforce it at the one place they can:
     the container key, so the box is rebuilt when it changes.
 ``user_browser``
     Not enforced here: the executor reads it when it picks the browser target.
+``external_agents``
+    Not enforced here: the executor reads it when it wires subagents. ``True``
+    lets ``delegate_task`` hand a task to a ``claude`` / ``codex`` CLI that is
+    installed in the sandbox (``chuk_agents_runtime.acp_runner``). Off by
+    default: the CLI bills the user's own account.
 
 The container-level part of a policy is written onto the container as the
 ``cowork.policy`` label. A container whose label does not match the policy of
@@ -49,8 +54,17 @@ WORKSPACE_RO = "ro"
 WORKSPACE_MODES = (WORKSPACE_RW, WORKSPACE_RO)
 
 #: Every permission key, in the order the app shows them.
-PERMISSION_KEYS = ("sudo", "network", "secrets_env", "workspace_mount", "user_browser")
-_BOOL_KEYS = frozenset({"sudo", "network", "secrets_env", "user_browser"})
+PERMISSION_KEYS = (
+    "sudo",
+    "network",
+    "secrets_env",
+    "workspace_mount",
+    "user_browser",
+    "external_agents",
+)
+_BOOL_KEYS = frozenset(
+    {"sudo", "network", "secrets_env", "user_browser", "external_agents"}
+)
 
 #: Label with the container-level part of the policy (see ``container_key``).
 LABEL_POLICY = "cowork.policy"
@@ -74,6 +88,7 @@ class SandboxPolicy:
     secrets_env: bool = True
     workspace_mount: str = WORKSPACE_RW
     user_browser: bool = False
+    external_agents: bool = False
 
     def __post_init__(self) -> None:
         for name in _BOOL_KEYS:
@@ -161,15 +176,114 @@ DEFAULT_POLICY = SandboxPolicy()
 #: files; of the sandbox permissions it can only keep secrets out.
 _ENFORCED_BY_KIND: dict[str, frozenset[str]] = {
     "docker": frozenset(PERMISSION_KEYS),
-    "local": frozenset({"secrets_env", "user_browser"}),
+    "local": frozenset({"secrets_env", "user_browser", "external_agents"}),
+    # Local commands inside bubblewrap (``AGENTS_LOCAL_ISOLATION``): the
+    # network namespace and the read-only bind make ``network`` and
+    # ``workspace_mount`` real. ``sudo`` is not: bwrap's ``no_new_privs``
+    # forbids it whatever the switch says.
+    "local-bwrap": frozenset(
+        {"secrets_env", "user_browser", "external_agents", "network", "workspace_mount"}
+    ),
 }
 
 
 def enforced_permissions(kind: str) -> dict[str, bool]:
     """``{permission: enforced}`` for a sandbox backend (``docker`` / ``local``).
     An unknown backend enforces nothing it cannot prove."""
-    enforced = _ENFORCED_BY_KIND.get(kind, frozenset({"user_browser"}))
+    enforced = _ENFORCED_BY_KIND.get(
+        kind, frozenset({"user_browser", "external_agents"})
+    )
     return {key: key in enforced for key in PERMISSION_KEYS}
+
+#: ``--pids-limit`` of every agent container: a fork bomb stops here, a
+#: browser with its renderers stays well below it.
+PIDS_LIMIT = 512
+
+#: Capabilities the box keeps when ``sudo`` is on, after ``--cap-drop ALL``:
+#: what root needs to install packages and run the entrypoint's uid remap
+#: (chown, setuid/setgid to drop to the agent user, signals). Not kept:
+#: ``NET_RAW`` (raw sockets, ARP/ICMP spoofing), ``MKNOD``, ``SYS_CHROOT``,
+#: ``SETFCAP``, ``SETPCAP``.
+SUDO_CAPS = (
+    "CHOWN",
+    "DAC_OVERRIDE",
+    "FOWNER",
+    "FSETID",
+    "SETUID",
+    "SETGID",
+    "KILL",
+    "NET_BIND_SERVICE",
+    "AUDIT_WRITE",
+)
+
+#: Capabilities the box keeps with ``sudo`` off. The entrypoint runs as root
+#: once (uid remap, sudoers removal, workspace chown); agent commands run as
+#: the agent user through ``docker exec -u`` and never need one.
+NO_SUDO_CAPS = ("CHOWN", "DAC_OVERRIDE", "FOWNER", "SETUID", "SETGID")
+
+
+def hardening_run_args(policy: SandboxPolicy) -> tuple[str, ...]:
+    """``docker run`` hardening for every agent container (research item 37):
+    ``--cap-drop ALL`` plus the few capabilities the policy needs back,
+    ``--pids-limit`` and, with ``sudo`` off, ``no-new-privileges`` (already in
+    :meth:`SandboxPolicy.docker_run_args`).
+
+    Not in the container key on purpose: an existing box keeps working and
+    gets these flags the next time it is rebuilt (a policy or image change).
+
+    The cloud metadata address (169.254.169.254) cannot be blocked from a
+    ``docker run`` flag: that needs a host firewall rule, e.g.
+    ``iptables -I DOCKER-USER -d 169.254.169.254 -j REJECT`` (root, once per
+    host). With ``network`` off there is no route to it at all."""
+    keep = SUDO_CAPS if policy.sudo else NO_SUDO_CAPS
+    args = ["--cap-drop", "ALL"]
+    for cap in keep:
+        args += ["--cap-add", cap]
+    args += ["--pids-limit", str(PIDS_LIMIT)]
+    return tuple(args)
+
+
+#: Sandbox escalation (docs/WIRE_CONTRACT.md, "Sandbox escalation", DeepSeek
+#: research item 28): what ONE approved ``run_command`` / ``python`` call may
+#: get on top of the agent's policy. Each name maps to the policy field it
+#: widens. ``secrets_env`` and the browser switches are not here: they are
+#: privacy choices of the user, not a box limit a command can run into.
+ESCALATION_KEYS: dict[str, str] = {
+    "network": "network",
+    "sudo": "sudo",
+    "workspace_write": "workspace_mount",
+}
+
+
+def withheld_permissions(policy: SandboxPolicy, kind: str) -> tuple[str, ...]:
+    """The escalation names the box really withholds now: switched off in
+    ``policy`` AND enforced by the backend ``kind``. A switch the backend
+    cannot enforce (``network`` on the plain local backend) is not withheld,
+    so asking for it widens nothing."""
+    enforced = enforced_permissions(kind)
+    out: list[str] = []
+    for name, field_name in ESCALATION_KEYS.items():
+        if not enforced.get(field_name, False):
+            continue
+        if field_name == "workspace_mount":
+            if policy.read_only_workspace:
+                out.append(name)
+        elif not getattr(policy, field_name):
+            out.append(name)
+    return tuple(out)
+
+
+def widened_policy(policy: SandboxPolicy, grant: "tuple[str, ...] | list[str] | frozenset[str]") -> SandboxPolicy:
+    """``policy`` with the escalation names in ``grant`` switched on. Raises
+    :class:`PolicyError` for a name that is not an escalation key."""
+    values = policy.to_dict()
+    for name in grant:
+        field_name = ESCALATION_KEYS.get(name)
+        if field_name is None:
+            raise PolicyError(f"unknown sandbox permission {str(name)[:40]!r}")
+        values[field_name] = WORKSPACE_RW if field_name == "workspace_mount" else True
+    return SandboxPolicy(**values)
+
 
 #: The container key a container from before the policy label was created
 #: with. Such a container ran with every permission, so it matches the default.

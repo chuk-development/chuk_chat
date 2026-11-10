@@ -16,11 +16,13 @@ import 'package:chuk_chat/widgets/encrypted_image_widget.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/floating_chrome_surface.dart';
+import 'package:chuk_chat/widgets/spreadsheet/spreadsheet_viewer.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/utils/format_bytes.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
+import 'package:chuk_chat/constants.dart' show kRadiusSm, kRadiusXs;
 
 typedef AttachmentRemoveCallback = void Function(String fileId);
 typedef AttachmentCopyCallback = Future<void> Function(AttachedFile file);
@@ -195,7 +197,7 @@ class _ImageAttachmentCard extends StatelessWidget {
                         ),
                         decoration: BoxDecoration(
                           color: cs.scrim.withValues(alpha: 0.6),
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(kRadiusXs),
                         ),
                         child: Text(
                           formatBytes(file.fileSizeBytes!),
@@ -482,7 +484,7 @@ class _DocumentAttachmentTile extends StatelessWidget {
                           ),
                           decoration: BoxDecoration(
                             color: cs.scrim.withValues(alpha: 0.6),
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: BorderRadius.circular(kRadiusXs),
                           ),
                           child: Text(
                             formatBytes(file.fileSizeBytes!),
@@ -527,12 +529,46 @@ void _showDocumentPreview(
   Color textColor, {
   AttachmentContentChangedCallback? onContentChanged,
 }) {
+  // A spreadsheet with its bytes on disk opens in the table viewer.
+  final String? path = file.localPath;
+  if (!kIsWeb && path != null && SpreadsheetViewer.handles(file.fileName)) {
+    unawaited(_openSpreadsheet(context, file, path, textColor, onContentChanged));
+    return;
+  }
   showDialog<void>(
     context: context,
     barrierColor: Theme.of(context).colorScheme.scrim.withValues(alpha: 0.7),
     builder: (context) =>
         _DocumentPreviewDialog(file: file, onContentChanged: onContentChanged),
   );
+}
+
+Future<void> _openSpreadsheet(
+  BuildContext context,
+  AttachedFile file,
+  String path,
+  Color textColor,
+  AttachmentContentChangedCallback? onContentChanged,
+) async {
+  Uint8List? bytes;
+  try {
+    final File local = File(path);
+    if (await local.exists()) bytes = await local.readAsBytes();
+  } catch (_) {
+    bytes = null;
+  }
+  if (!context.mounted) return;
+  if (bytes == null) {
+    // The file is gone from disk: the old dialog still shows its text.
+    showDialog<void>(
+      context: context,
+      barrierColor: Theme.of(context).colorScheme.scrim.withValues(alpha: 0.7),
+      builder: (context) =>
+          _DocumentPreviewDialog(file: file, onContentChanged: onContentChanged),
+    );
+    return;
+  }
+  await SpreadsheetViewer.open(context, fileName: file.fileName, bytes: bytes);
 }
 
 class _DocumentPreviewDialog extends StatefulWidget {
@@ -861,7 +897,7 @@ class _DocumentPreviewDialogState extends State<_DocumentPreviewDialog> {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
               decoration: BoxDecoration(
                 color: textColor.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(kRadiusSm),
               ),
               child: Text(
                 loadingState == PdfLoadingState.loading

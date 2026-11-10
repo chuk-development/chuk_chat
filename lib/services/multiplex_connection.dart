@@ -16,6 +16,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:chuk_chat/models/chat_stream_event.dart';
 import 'package:chuk_chat/services/tool_result_cache_registry.dart';
 import 'package:chuk_chat/services/websocket_connector.dart' as ws_connector;
+import 'package:chuk_chat/utils/stream_error_notice.dart';
 
 const _uuid = Uuid();
 
@@ -203,6 +204,10 @@ class MultiplexConnection {
   /// confirmed one.
   int get authRefreshFailures => _authRefreshFailures;
 
+  /// Called after every successful handshake. Set once by the offline
+  /// outbox; a static hook keeps this file free of outbox imports.
+  static void Function()? onAuthenticated;
+
   /// Establish (or reuse) the connection and perform the auth handshake.
   /// Idempotent — concurrent callers share one in-flight handshake.
   Future<void> ensureReady() {
@@ -357,6 +362,11 @@ class MultiplexConnection {
     if (kDebugMode) {
       debugPrint('🔌 [Multiplex] /v2/ws ready');
     }
+    // The server is reachable and knows us: a good moment to flush the
+    // offline outbox (docs/OFFLINE_SEND.md).
+    try {
+      onAuthenticated?.call();
+    } catch (_) {}
   }
 
   // ---------------------------------------------------------------------
@@ -763,11 +773,50 @@ class MultiplexConnection {
         final message = code == kCacheMissErrorCode
             ? '$kCacheMissErrorCode: $detail'
             : detail;
-        ctrl.add(ChatStreamEvent.error(message, code: code));
+        // Newer servers add a coarse `class` (auth, quota, rate_limit, ...).
+        final errorClass = data['class']?.toString();
+        ctrl.add(
+          ChatStreamEvent.error(message, code: code, errorClass: errorClass),
+        );
         // Don't close yet — server still owes us `done`. If it never
         // arrives the transport-failure path will close us.
         break;
+      case 'duplicate':
+        // The server answered this `client_request_id` before: the stored
+        // answer, then `done`. It reads like a normal answer in one piece.
+        for (final event in duplicateEvents(data['data'])) {
+          ctrl.add(event);
+        }
+        break;
+      case 'duplicate_in_flight':
+        // The same request still runs on the server. The send layer polls
+        // again after the hint ([WebSocketChatService]); `done` follows.
+        final hint = data['data'];
+        final retryAfter = hint is Map ? hint['retry_after_s'] : null;
+        ctrl.add(
+          ChatStreamEvent.error(
+            'request still running',
+            code: StreamErrorCodes.duplicateInFlight,
+            retryAfterSeconds: retryAfter is num ? retryAfter.toDouble() : null,
+          ),
+        );
+        break;
+      case 'timing':
+        // Older servers carry `finish_reason` only on the `timing` frame of
+        // phase `complete`. Lift it into a meta event so the tool loop's
+        // truncation and tool-use signals work on those servers too.
+        final finishReason = finishReasonFromTimingFrame(data);
+        if (finishReason != null) {
+          ctrl.add(ChatStreamEvent.meta({'finish_reason': finishReason}));
+        }
+        break;
       case 'done':
+        // Newer servers repeat `finish_reason` on `done`, as `data` or at the
+        // top level of the frame.
+        final finishReason = finishReasonFromDoneFrame(data);
+        if (finishReason != null) {
+          ctrl.add(ChatStreamEvent.meta({'finish_reason': finishReason}));
+        }
         ctrl.add(const ChatStreamEvent.done());
         _chatControllers.remove(reqId);
         unawaited(ctrl.close());
@@ -776,6 +825,75 @@ class MultiplexConnection {
         // Ignore unknown frame kinds.
         break;
     }
+  }
+
+  /// The events of a `duplicate` frame's `data` (the stored answer of a
+  /// re-sent `client_request_id`): content, tool calls, usage and the
+  /// closing meta (with `finish_reason`), in the order a live answer has
+  /// them. Reasoning is not stored. A minimal record (`truncated: true`, no
+  /// content, no calls) is an error with code
+  /// [StreamErrorCodes.duplicateUnavailable]: the answer exists and was
+  /// billed, but cannot be shown.
+  @visibleForTesting
+  static List<ChatStreamEvent> duplicateEvents(Object? raw) {
+    final data = raw is Map ? raw : const <dynamic, dynamic>{};
+    final content = data['content'] is String ? data['content'] as String : '';
+    final rawCalls = data['tool_calls'];
+    final calls = rawCalls is List
+        ? rawCalls
+              .whereType<Map>()
+              .map((m) => NativeToolCall.fromJson(m.cast<String, dynamic>()))
+              .toList()
+        : const <NativeToolCall>[];
+    if (data['truncated'] == true && content.isEmpty && calls.isEmpty) {
+      return const <ChatStreamEvent>[
+        ChatStreamEvent.error(
+          kAnswerUnavailableNotice,
+          code: StreamErrorCodes.duplicateUnavailable,
+        ),
+      ];
+    }
+    final events = <ChatStreamEvent>[];
+    if (content.isNotEmpty) events.add(ChatStreamEvent.content(content));
+    if (calls.isNotEmpty) events.add(ChatStreamEvent.toolCalls(calls));
+    final usage = data['usage'];
+    if (usage is Map) {
+      events.add(ChatStreamEvent.usage(Map<String, dynamic>.from(usage)));
+    }
+    final meta = <String, dynamic>{
+      if (data['meta'] is Map) ...Map<String, dynamic>.from(data['meta'] as Map),
+    };
+    final finishReason = _nonEmptyString(data['finish_reason']);
+    if (finishReason != null) meta['finish_reason'] ??= finishReason;
+    if (meta.isNotEmpty) events.add(ChatStreamEvent.meta(meta));
+    return events;
+  }
+
+  /// The `finish_reason` of a `timing` frame of phase `complete`, or null.
+  @visibleForTesting
+  static String? finishReasonFromTimingFrame(Map<String, dynamic> frame) {
+    final data = frame['data'];
+    if (data is! Map) return null;
+    if (data['phase'] != 'complete') return null;
+    return _nonEmptyString(data['finish_reason']);
+  }
+
+  /// The `finish_reason` a `done` frame carries, or null (older servers send
+  /// a bare `done`).
+  @visibleForTesting
+  static String? finishReasonFromDoneFrame(Map<String, dynamic> frame) {
+    final data = frame['data'];
+    if (data is Map) {
+      final fromData = _nonEmptyString(data['finish_reason']);
+      if (fromData != null) return fromData;
+    }
+    return _nonEmptyString(frame['finish_reason']);
+  }
+
+  static String? _nonEmptyString(Object? value) {
+    if (value is! String) return null;
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
   }
 
   void _dispatchTool(
@@ -846,11 +964,19 @@ class MultiplexConnection {
     return controller.stream;
   }
 
+  /// How long a server tool call may take before it is given up.
+  static const Duration defaultToolTimeout = Duration(seconds: 120);
+
   /// Open a single-shot tool call. Resolves with the `result.data` map
   /// or rejects with [MultiplexException].
+  ///
+  /// A call with no answer after [timeout] is cancelled on the server and
+  /// rejects with code `timeout` and the text
+  /// `tool call timed out after <n>ms`, so a lost frame cannot hang the turn.
   Future<Map<String, dynamic>> tool({
     required String tool,
     required Map<String, dynamic> payload,
+    Duration timeout = defaultToolTimeout,
   }) {
     final reqId = _newReqId();
     final completer = Completer<Map<String, dynamic>>();
@@ -863,7 +989,18 @@ class MultiplexConnection {
       'payload': payload,
     }, toolCompleter: completer));
 
-    return completer.future;
+    final timer = Timer(timeout, () {
+      if (completer.isCompleted) return;
+      _toolCompleters.remove(reqId);
+      _sendCancel(reqId);
+      completer.completeError(
+        MultiplexException(
+          'tool call timed out after ${timeout.inMilliseconds}ms',
+          code: 'timeout',
+        ),
+      );
+    });
+    return completer.future.whenComplete(timer.cancel);
   }
 
   /// Cancel an in-flight request. Idempotent; safe to call after the
@@ -881,6 +1018,26 @@ class MultiplexConnection {
       );
     }
     _sendCancel(reqId);
+  }
+
+  /// Stops the chat that holds [clientRequestId] on any socket of this
+  /// user, also one the server detached when its socket went away. Sent
+  /// when the user stops a reply, so the server bills the partial, releases
+  /// the id and does not run on. Best effort: a closed socket sends nothing.
+  void cancelClientRequest(String clientRequestId) {
+    final ch = _channel;
+    if (ch == null) return;
+    try {
+      ch.sink.add(
+        jsonEncode({
+          'req_id': _newReqId(),
+          'type': 'cancel',
+          'client_request_id': clientRequestId,
+        }),
+      );
+    } catch (_) {
+      // Connection already dead; nothing to clean up.
+    }
   }
 
   void _sendCancel(String reqId) {
@@ -924,6 +1081,20 @@ class MultiplexConnection {
               : MultiplexException(e.toString(), code: 'send_failed'),
         );
       }
+      return;
+    }
+
+    // The caller may have given up while the handshake ran: a tool call
+    // that timed out, or a request cancelled by [cancel], is no longer in
+    // the maps. Writing its frame now would let the server act on a call
+    // the caller was already told is dead.
+    final pendingId = frame['req_id'] as String;
+    if (toolCompleter != null &&
+        !identical(_toolCompleters[pendingId], toolCompleter)) {
+      return;
+    }
+    if (controller != null &&
+        !identical(_chatControllers[pendingId], controller)) {
       return;
     }
 

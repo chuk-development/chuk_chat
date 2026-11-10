@@ -515,4 +515,45 @@ void main() {
       });
     });
   });
+
+  group('withInterruptionNote', () {
+    test('no blocks: null, the flat text carries the error', () {
+      expect(
+        RoundContentBlockService.withInterruptionNote(
+          const <ContentBlock>[],
+          interruptedText: 'half',
+          errorNote: 'Error: boom',
+        ),
+        isNull,
+      );
+    });
+
+    test('keeps earlier blocks and adds the cut text above the error', () {
+      final blocks = <ContentBlock>[
+        ContentBlock.toolCalls([
+          ToolCall(name: 'web_search', status: ToolCallStatus.completed),
+        ]),
+      ];
+      final out = RoundContentBlockService.withInterruptionNote(
+        blocks,
+        interruptedText: '  Half an answer ',
+        errorNote: 'Error: idle timeout',
+      )!;
+      expect(out, hasLength(2));
+      expect(out.first.type, ContentBlockType.toolCalls);
+      expect(out.last.type, ContentBlockType.text);
+      expect(out.last.text, 'Half an answer\n\nError: idle timeout');
+      // The caller's list is not changed.
+      expect(blocks, hasLength(1));
+    });
+
+    test('no cut text: the error alone gets a block', () {
+      final out = RoundContentBlockService.withInterruptionNote(
+        <ContentBlock>[ContentBlock.text('Earlier pass')],
+        interruptedText: '',
+        errorNote: 'Error: boom',
+      )!;
+      expect(out.last.text, 'Error: boom');
+    });
+  });
 }

@@ -174,7 +174,9 @@ def test_current_turn_tool_rounds_stay_intact():
 
 def test_old_big_tool_results_of_the_current_run_are_truncated():
     rows, turn_start = _with_new_fired_turn(_history(5))
-    for n in range(6):
+    # Enough rounds that the rows outside the tail save more than one tier-1
+    # step (bead chuk_chat-8i9z: the frontier moves in steps, not per round).
+    for n in range(24):
         rows.extend(
             [
                 {
@@ -183,7 +185,7 @@ def test_old_big_tool_results_of_the_current_run_are_truncated():
                         {"id": f"r{n}", "type": "function", "function": {"name": "web_fetch", "arguments": "{}"}}
                     ],
                 },
-                {"role": "tool", "tool_call_id": f"r{n}", "name": "web_fetch", "content": str(n) * 8_000},
+                {"role": "tool", "tool_call_id": f"r{n}", "name": "web_fetch", "content": chr(ord("a") + n) * 8_000},
             ]
         )
     cfg = LadderConfig()
@@ -191,10 +193,10 @@ def test_old_big_tool_results_of_the_current_run_are_truncated():
     out = ladder.prepare(rows, turn_start=turn_start)
 
     tool_rows = [m for m in out if m.get("role") == "tool" and m.get("name") == "web_fetch"]
-    assert len(tool_rows) == 6
+    assert len(tool_rows) == 24
     # The oldest result is cut to the tier-1 cap; the newest stays whole.
     assert len(tool_rows[0]["content"]) < 8_000
-    assert tool_rows[-1]["content"] == "5" * 8_000
+    assert tool_rows[-1]["content"] == "x" * 8_000  # n = 23
     assert estimate_messages_tokens(out) < estimate_messages_tokens(rows[turn_start:])
 
 

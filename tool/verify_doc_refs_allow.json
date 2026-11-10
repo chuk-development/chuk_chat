@@ -1,0 +1,41 @@
+{
+  "_comment": "Exceptions for tool/verify_doc_refs.dart. Every entry needs a reason. 'files': docs whose backticked paths are not checked (plans and audits that name files that do not exist yet, or that describe another repository); relative Markdown links in them are still checked. 'targets': backticked paths that are allowed in any checked doc.",
+  "files": {
+    "docs/AGENTS_AGENT_PLATFORM_PLAN.md": "plan; names files of the hermes-agent tree and planned files",
+    "docs/COWORK_AGENT_PLATFORM_PLAN.md": "plan; names files of the hermes-agent tree and planned files",
+    "docs/COWORK_BUILD_PLAN.md": "plan; names planned files",
+    "docs/COWORK_EXECUTION_PLAN.md": "plan; names planned files",
+    "docs/COWORK_SELF_HOSTED_PIVOT.md": "plan; names files that the pivot removed",
+    "docs/PROJECTS_PLAN.md": "plan from before Projects became Workspaces",
+    "docs/MERGE_INTO_CHUK_CHAT.md": "merge plan; names files of the old cowork repository",
+    "docs/CHAT_UI_IMPORT.md": "import plan; names the old import script",
+    "docs/SUPABASE_SCHEMA.md": "names the old import script of the cowork merge",
+    "docs/OPENUI_AUTOSYNC.md": "plan; names planned files and files of the upstream openui repository",
+    "docs/OPENUI_RESEARCH.md": "research; names files of the upstream openui repository",
+    "docs/ARCHITECTURE_ANALYSIS_PROMPT.md": "prompt from 2026-02; names files of that time",
+    "docs/SKILLS_REMOTE_PLAN.md": "plan; names files of the remote skills repository",
+    "docs/VISUALIZATIONS_PLAN.md": "plan; names planned skills",
+    "docs/UI_AUDIT_2026-10-05.md": "dated audit; names files of that day",
+    "docs/AUDIT_CHECKLIST.md": "audit checklist; names files of the 2025-12 audit",
+    "docs/GROWTH_LESSONS_RAKAZO.md": "names files of the rakazo repository",
+    "docs/HANDOFF.md": "session handoff; names files of that session",
+    "docs/PYDANTIC_AI_LOOP.md": "names files of the pydantic-ai repository",
+    "docs/AGENT_MAIL.md": "names files of the api_server repository",
+    "docs/VOICE_STACK_DECISION.md": "decision record; names a planned directory"
+  },
+  "targets": {
+    "docs/agents/DESIGN.md": "CLAUDE.md says 'if present'",
+    ".agents/git": "host-side path in the agents workspace (WIRE_CONTRACT, checkpoints), not a repo file",
+    ".beads/issues.jsonl": "beads export, written by bd on demand",
+    "marketing/_shared/music/": "local only, WAVs are gitignored",
+    "lib/services/x.dart": "placeholder in an example",
+    "tools/list": "MCP method name, not a path",
+    "supabase/setup-cli": "GitHub Action name, not a path",
+    "docs/AI_ACCESS.md": "file of the chukdoo repository",
+    "scripts/release.sh": "suggested script the doc tells you to create",
+    "scripts/package-linux.sh": "named by linux/fastlane/Fastfile, missing; tracked as a bead",
+    ".agents/automations/triggers.jsonl": "path in an agent workspace on the host",
+    ".agents/inbox": "path in an agent workspace on the host (attachments)",
+    "agents/voice/": "open question, directory does not exist yet"
+  }
+}

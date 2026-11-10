@@ -216,7 +216,9 @@ void main() {
       expect(second.shouldContinue, isTrue);
       expect(session.toolsClosed, isTrue);
       expect(session.toolCalls.last.result, contains(kToolsClosedNote));
-      expect(handler.nativeToolDefinitions(session), isEmpty);
+      // Shut tools keep tools[] (prompt cache) and send tool_choice none.
+      expect(handler.nativeToolDefinitions(session), isNotEmpty);
+      expect(ToolCallHandler.nativeToolChoice(session), 'none');
 
       // Still asking with the tools closed: nothing runs, and the next pass
       // asks for the answer with no tools.
@@ -230,7 +232,9 @@ void main() {
       expect(third.shouldContinue, isTrue);
       expect(third.nextStep!.message, kForcedFinalAnswerNote);
       expect(session.toolCalls, hasLength(callsBefore));
-      expect(handler.nativeToolDefinitions(session), isEmpty);
+      // Shut tools keep tools[] (prompt cache) and send tool_choice none.
+      expect(handler.nativeToolDefinitions(session), isNotEmpty);
+      expect(ToolCallHandler.nativeToolChoice(session), 'none');
 
       const answer = 'Kiel: 15 °C.';
       final done = await handler.processAssistantResponse(
@@ -300,7 +304,9 @@ void main() {
       );
       expect(second.shouldContinue, isTrue);
       expect(session.toolsClosed, isTrue);
-      expect(handler.nativeToolDefinitions(session), isEmpty);
+      // Shut tools keep tools[] (prompt cache) and send tool_choice none.
+      expect(handler.nativeToolDefinitions(session), isNotEmpty);
+      expect(ToolCallHandler.nativeToolChoice(session), 'none');
     });
 
     test('the same lookup twice in one round runs once', () async {

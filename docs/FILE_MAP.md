@@ -28,7 +28,7 @@ Complete map of all Dart files in the codebase.
 | `media_manager_page.dart` | Image management |
 | `coming_soon_page.dart` | Placeholder |
 
-### Model Selector (`lib/pages/model_selector/`)
+### Model Selector (`lib/model_selector_page.dart`)
 | File | Purpose |
 |------|---------|
 | `models/model_info.dart` | Model/provider pricing details |

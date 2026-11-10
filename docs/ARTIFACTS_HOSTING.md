@@ -90,7 +90,7 @@ repo README for the full surface, CSP details and deploy steps.
 
 ## Deploy checklist
 
-1. Apply `migrations/001_artifacts.sql` to the Supabase project (Management API
+1. Apply `migrations/artifacts.sql` to the Supabase project (Management API
    query endpoint, not `supabase db push`).
 2. Point DNS `artifacts.chuk.chat` at the Dokploy app for `chuk-artifacts`.
 3. Set the service `.env` values in Dokploy (Supabase keys, `ABUSE_ADMIN_TOKEN`).

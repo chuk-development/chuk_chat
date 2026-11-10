@@ -14,8 +14,15 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/models/chat_stream_event.dart';
 import 'package:chuk_chat/models/stream_phase.dart';
+import 'package:chuk_chat/services/chat_turn_stats.dart';
 import 'package:chuk_chat/utils/stream_error_sanitizer.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/services/streaming_chat_service.dart';
+
+/// The error text [StreamingManagerBase] hands to `onError` when the user is
+/// out of credits or free messages. The chat UIs show the upgrade dialog on
+/// it instead of an error line.
+const String kPaymentRequiredError = '__PAYMENT_REQUIRED__';
 
 /// Manages multiple concurrent chat streams across different chats.
 abstract class StreamingManagerBase {
@@ -29,6 +36,48 @@ abstract class StreamingManagerBase {
 
   // Track if app is in background - only show notification when backgrounded
   bool _isAppInBackground = false;
+
+  /// Content of a stream that ended in an idle timeout or closed without
+  /// `done`, keyed by chat id. The error path removes the stream entry, so the
+  /// cut text is parked here for the error handler to read once with
+  /// [takeInterruptedPartial] and show next to the error.
+  final Map<String, String> _interruptedPartials = <String, String>{};
+
+  /// Park the cut content of [chatId]'s stream before an interruption error
+  /// is reported. Empty content is not stored.
+  @protected
+  void recordInterruptedPartial(String chatId, String content) {
+    if (content.isEmpty) {
+      _interruptedPartials.remove(chatId);
+    } else {
+      _interruptedPartials[chatId] = content;
+    }
+  }
+
+  /// The raw content (tool-call markup included) that [chatId]'s last stream
+  /// had produced when it was cut off by an idle timeout or a close without
+  /// `done`, or null. Reading it removes it.
+  String? takeInterruptedPartial(String chatId) =>
+      _interruptedPartials.remove(chatId);
+
+  /// Chats whose current (or last) stream received at least one frame from
+  /// the server other than an error. Survives the stream's cleanup until the
+  /// next [startStream] for the chat, so an error handler can still ask.
+  final Set<String> _serverAccepted = <String>{};
+
+  /// Errors that still mean the server has the request (request
+  /// idempotency): the answer exists but is not stored, or it is still
+  /// being written. A re-send of a fresh copy would bill the turn again.
+  static const Set<String> _acceptedErrorCodes = <String>{
+    StreamErrorCodes.duplicateUnavailable,
+    StreamErrorCodes.requestPending,
+  };
+
+  /// Whether the server had already accepted the last request in [chatId]:
+  /// it sent a frame (meta, heartbeat, a token). A send that broke after
+  /// that must not be re-sent by itself (docs/OFFLINE_SEND.md): the server
+  /// may already bill the turn. A locally made error frame does not count.
+  bool serverAccepted(String chatId) => _serverAccepted.contains(chatId);
 
   /// Whether the app is currently in the background
   bool get isAppInBackground => _isAppInBackground;
@@ -157,6 +206,8 @@ abstract class StreamingManagerBase {
   }) async {
     // Cancel existing stream for this chat if any
     await cancelStream(chatId);
+    _interruptedPartials.remove(chatId);
+    _serverAccepted.remove(chatId);
 
     // Note: the foreground service is started only when the app goes to
     // background — see onAppLifecycleChanged(). This avoids showing a
@@ -181,7 +232,7 @@ abstract class StreamingManagerBase {
         }
         // Preserve HTTP status code for 402 (Payment Required) so UI can show upgrade dialog
         if (error is StreamingChatException && error.statusCode == 402) {
-          onError('__PAYMENT_REQUIRED__');
+          onError(kPaymentRequiredError, code: StreamErrorCodes.billing);
         } else {
           onError(
             'Error: ${sanitizeStreamError(error)}',
@@ -192,7 +243,13 @@ abstract class StreamingManagerBase {
       },
       onDone: () {
         // Handle stream close in async function
-        unawaited(handleStreamClose(chatId: chatId, onComplete: onComplete));
+        unawaited(
+          handleStreamClose(
+            chatId: chatId,
+            onComplete: onComplete,
+            onError: onError,
+          ),
+        );
       },
       cancelOnError: true, // Auto-cancel subscription on error to prevent leaks
     );
@@ -342,6 +399,9 @@ abstract class StreamingManagerBase {
     // Diagnostics for the silence log. Nothing branches on them.
     activeStream.lastEventAt = DateTime.now();
     activeStream.eventCount++;
+    if (event is! ErrorEvent || _acceptedErrorCodes.contains(event.code)) {
+      _serverAccepted.add(chatId);
+    }
 
     // First-event stamp, idle-timer reset and TTFT measurement (io only).
     onEventBookkeeping(
@@ -361,12 +421,22 @@ abstract class StreamingManagerBase {
     } else if (event is TpsEvent) {
       // Store TPS metric for later use in onComplete
       activeStream.tps = event.tokensPerSecond;
+      ChatTurnStats.instance.recordTps(chatId, event.tokensPerSecond);
+    } else if (event is UsageEvent) {
+      // The stats row under the composer reads it; the last frame wins.
+      ChatTurnStats.instance.recordUsage(chatId, event.usage);
     } else if (event is ToolCallsEvent) {
       // Native tool calls, assembled server-side. Collected here and read by
       // the tool loop after completion via getNativeToolCalls.
       activeStream.nativeToolCalls.addAll(event.calls);
     } else if (event is MetaEvent) {
-      activeStream.latestMeta = Map<String, dynamic>.from(event.meta);
+      // Merged, not replaced: the server sends one meta frame at the start
+      // (model, provider) and, since `finish_reason` exists, one more right
+      // before `done`. Replacing would drop the first one's fields.
+      activeStream.latestMeta = <String, dynamic>{
+        ...?activeStream.latestMeta,
+        ...event.meta,
+      };
     } else if (event is HeartbeatEvent) {
       // Agents: proof of life and nothing else. It has already reset the idle
       // timer (where there is one) and moved `connecting` to `processing`.
@@ -384,7 +454,20 @@ abstract class StreamingManagerBase {
       // even after the error message is shown.
       activeStream.isActive = false;
       cleanupStream(chatId);
-      onError(event.message, code: event.code);
+      // Out of credits arrives as an error frame with code `billing` (or
+      // class `quota`), not as HTTP 402. Without this mapping the user saw
+      // the bare server text and never the upgrade dialog.
+      if (event.isPaymentRequired) {
+        onError(kPaymentRequiredError, code: StreamErrorCodes.billing);
+      } else {
+        if (event.code == StreamErrorCodes.upstreamInterrupted) {
+          recordInterruptedPartial(
+            chatId,
+            activeStream.contentBuffer.toString(),
+          );
+        }
+        onError(event.message, code: event.code);
+      }
     } else if (event is DoneEvent) {
       // Handle done events from the stream (successful completion)
       if (kDebugMode) {
@@ -419,21 +502,41 @@ abstract class StreamingManagerBase {
       // don't remove from map, just record the completion timestamp.
       completeStream(chatId);
     }
-    // UsageEvent is ignored (just logging)
   }
 
   /// Handle stream close asynchronously
+  ///
+  /// A chuk_chat stream always ends with a `done` frame, so a stream that
+  /// closes while still active was cut off: the text so far is not an
+  /// answer. It is reported as an error with
+  /// [StreamErrorCodes.streamInterrupted]; the cut text is parked for
+  /// [takeInterruptedPartial] so the UI keeps it next to the error. Saving it
+  /// as complete looked like a finished answer and offered no retry.
+  ///
+  /// An Agents thread keeps the old completion: its transport owns the
+  /// terminal events and the ledger, and its stream ends the run itself.
   @protected
   Future<void> handleStreamClose({
     required String chatId,
     required Function(String content, String reasoning, double? tps) onComplete,
+    required StreamErrorCallback onError,
   }) async {
-    // Stream closed - if we haven't completed via DoneEvent, complete now
     final activeStream = activeStreams[chatId];
     if (activeStream == null || !activeStream.isActive) return;
 
     if (kDebugMode) {
       debugPrint('Stream subscription closed for chat $chatId');
+    }
+
+    if (!ChatOrigin.isAgentsThread(chatId)) {
+      activeStream.isActive = false;
+      recordInterruptedPartial(chatId, activeStream.contentBuffer.toString());
+      cleanupStream(chatId);
+      onError(
+        'The response was interrupted before it finished. Please try again.',
+        code: StreamErrorCodes.streamInterrupted,
+      );
+      return;
     }
     final finalContent = activeStream.contentBuffer.toString();
     final finalReasoning = activeStream.reasoningBuffer.toString();

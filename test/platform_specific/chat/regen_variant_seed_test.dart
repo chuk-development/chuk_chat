@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -181,6 +182,44 @@ void main() {
       final row = <String, String>{'messageId': 'mA', 'text': 'new'};
       expect(s.foldBackgroundVariantOnto('A', row), isTrue);
       expect(row['variants'], isNotNull);
+    });
+  });
+
+  // Regression: on a regenerate error the desktop wrote the error content
+  // blocks after _finalizeAiMessage had folded the variant, so the archived
+  // variant lost the interrupted text and error block.
+  group('error blocks are in place before the fold', () {
+    testWidgets('a fold snapshots contentBlocks set before it', (tester) async {
+      final s = await _pump(tester);
+      s.armVariantSeed(_seed(), 'm1');
+      final msg = <String, String>{
+        'messageId': 'm1',
+        'text': 'partial\n\nError: boom',
+        'contentBlocks': '[{"type":"error","text":"boom"}]',
+      };
+      expect(s.foldRegenVariantOnto(msg), isTrue);
+      final variants = jsonDecode(msg['variants']!) as List;
+      expect(
+        (variants.last as Map)['contentBlocks'],
+        '[{"type":"error","text":"boom"}]',
+      );
+    });
+
+    test('both desktop error paths hand the blocks to finalize', () {
+      final src = File('lib/platform_specific/chat/desktop_send_logic.dart')
+          .readAsStringSync();
+      expect(
+        RegExp(
+          r'_finalizeAiMessage\(placeholderIndex, errorText\);\s*'
+          r'if \(errorBlocksJson',
+        ).hasMatch(src),
+        isFalse,
+        reason: 'error blocks written after the fold',
+      );
+      expect(
+        RegExp(r'contentBlocks: errorBlocksJson').allMatches(src).length,
+        2,
+      );
     });
   });
 }

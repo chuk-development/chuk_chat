@@ -6,7 +6,7 @@
 ///
 /// Assume there is never a direct connection between phone and host. The only
 /// direct connection either side has is to the API server, so every byte goes
-/// `app ⇄ api.chuk.chat ⇄ host` (docs/PLAN_2026-09-09_CLOUD_PAIRING_TRANSPORT.md).
+/// `app ⇄ api.chuk.chat ⇄ host` (docs/notes/implemented/2026-09-09-plan-cloud-pairing-transport.md).
 /// The relay stays blind: it routes an opaque `payload` it can never read, and
 /// the seal, the SAS and the commitment are what make that safe.
 ///

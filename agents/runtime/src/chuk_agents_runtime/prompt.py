@@ -124,8 +124,8 @@ Mobbin | Update payment method | | due Last chance | 18.10. | mobbin.com
   every request small. They include interactive programs (`shell_start`),
   background jobs (`job_output`), workspace history and undo
   (`workspace_undo`), chat documents and pages (`chat_document`), audio and video
-  (`run_ffmpeg`), and the tools of the connected MCP servers, the browser
-  among them (`browser_navigate`).
+  (`run_ffmpeg`), `todo_write`, `set_goal`, `ask_user`, and the tools of the
+  connected MCP servers, the browser among them (`browser_navigate`).
 - When you need a tool that is not in your tool list, call `search_tools` with
   its name or a few words of what it does. Then call the tool it returns. A
   tool that a skill names works the same way.
@@ -230,6 +230,16 @@ Mobbin | Update payment method | | due Last chance | 18.10. | mobbin.com
   back (delete, overwrite, `git reset --hard`) is the one case to stop on: if
   the user did not clearly ask for it, ask first, then do it.
 """
+
+#: How the model points at a file in the workspace (DeepSeek harness item 49).
+#: The app turns an angle-bracket path into a tap target; the ``#L`` suffix
+#: opens the file at that line range. Part of the per-agent workspace block, so
+#: it is as stable as the workspace path and costs nothing on the cache.
+WORKSPACE_LINK_RULE = (
+    "Link a workspace file as <path> or, for lines, <src/app.py#L24-L30>; "
+    "no backticks around it."
+)
+
 
 def _base_section(title: str, next_title: str) -> str:
     """The body of one ``# title`` section of :data:`BASE_INSTRUCTIONS`, up to
@@ -517,7 +527,8 @@ def build_system_prompt(
             "# Workspace\n\n"
             f"Your working directory is `{workspace}`. Use relative paths inside it. "
             "Your notes: `notes/`. Scratch: `tmp/` (clean it up). Your searchable "
-            "history: `transcript/` (read-only)."
+            "history: `transcript/` (read-only).\n\n"
+            + WORKSPACE_LINK_RULE
         )
     if skills and skills.strip():
         parts.append(skills.strip())

@@ -345,11 +345,11 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
               ('Text tokens', _formatCount(usageSlice.textTokens)),
               if (usageSlice.mediaRequests > 0)
                 ('Media requests', _formatCount(usageSlice.mediaRequests)),
-              if (usageSlice.cacheReadTokens > 0)
-                (
-                  AppLocalizations.of(context)!.cachedTokens,
-                  _formatCount(usageSlice.cacheReadTokens),
-                ),
+              (
+                AppLocalizations.of(context)!.cachedTokens,
+                // Unknown (no provider reported it) is "—", never 0.
+                _formatKnownCount(usageSlice.cacheReadTokens),
+              ),
               ('Provider cost', _formatUsd(usageSlice.totalCostUsd)),
             ],
           ),
@@ -637,8 +637,7 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
       else
         '${_formatCount(entry.promptTokens)} in · '
             '${_formatCount(entry.completionTokens)} out',
-      if (entry.cacheReadTokens > 0)
-        '${_formatCount(entry.cacheReadTokens)} cached',
+      '${_formatKnownCount(entry.cacheReadTokens)} cached',
       _formatDateTime(entry.createdAt),
     ];
 
@@ -828,7 +827,9 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
     int mediaRequests = 0;
     double totalCreditsEur = 0;
     double totalCostUsd = 0;
-    int cacheReadTokens = 0;
+    final int? cacheReadTokens = sumKnownInts(
+      scopedEntries.map((entry) => entry.cacheReadTokens),
+    );
 
     final Map<String, _MutableModelSliceSummary> byModel =
         <String, _MutableModelSliceSummary>{};
@@ -841,7 +842,6 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
       }
       totalCreditsEur += entry.creditsDeductedEur;
       totalCostUsd += entry.totalCostUsd;
-      cacheReadTokens += entry.cacheReadTokens;
 
       final summary = byModel.putIfAbsent(
         entry.modelId,
@@ -913,6 +913,10 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
     return raw.replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ',');
   }
 
+  /// A count the provider may not have reported: "—" when unknown.
+  String _formatKnownCount(int? value) =>
+      value == null ? '—' : _formatCount(value);
+
   String _formatDate(DateTime? dateTime) {
     if (dateTime == null) {
       return 'Unknown';
@@ -979,7 +983,7 @@ class _UsageSlice {
     required this.totalCreditsEur,
     required this.totalCostUsd,
     required this.models,
-    this.cacheReadTokens = 0,
+    this.cacheReadTokens,
   });
 
   final List<UsageLogEntry> entries;
@@ -988,7 +992,8 @@ class _UsageSlice {
   final int mediaRequests;
   final double totalCreditsEur;
   final double totalCostUsd;
-  final int cacheReadTokens;
+  /// Null when no entry of the slice reports it.
+  final int? cacheReadTokens;
   final List<_ModelSliceSummary> models;
 }
 

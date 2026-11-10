@@ -37,6 +37,7 @@ import 'package:chuk_chat/widgets/nice_snackbar.dart';
 import 'package:chuk_chat/utils/format_bytes.dart';
 import 'package:chuk_chat/widgets/chat_document_inline.dart';
 import 'package:chuk_chat/widgets/chat_document_view.dart';
+import 'package:chuk_chat/constants.dart' show kRadiusMd;
 
 class SandboxArtifactBlock extends StatefulWidget {
   const SandboxArtifactBlock({
@@ -621,7 +622,7 @@ class _ArtifactCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHigh.withValues(alpha: 0.55),
-        borderRadius: borderRadius ?? BorderRadius.circular(10),
+        borderRadius: borderRadius ?? BorderRadius.circular(kRadiusMd),
         border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5)),
       ),
       clipBehavior: Clip.antiAlias,

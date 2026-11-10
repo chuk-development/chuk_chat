@@ -40,6 +40,18 @@ v3 changes per message (the reader turns it back into exactly the v2 message):
 - `_ref` (bit mask) says which references a message uses: 1 = tool-call
   indexes, 2 = roundThinking references. Without the bit nothing is resolved.
 
+Optional per-message string fields added later (an older app ignores them;
+an older payload loads without them):
+
+- `usage` (assistant): the reply's token usage, `TurnUsage.encode` JSON
+  (`prompt_tokens`, `completion_tokens`, `total_tokens`, `cached_tokens`).
+  The meta line, the stats row and the context estimate read it after a
+  reload.
+- `compactSummary` (user): a `CompactionRecord` JSON (`summary`, `madeAt`,
+  `model`). The newest one replaces every message before it in the request
+  history (docs/GOTCHAS.md, "Chat compaction"). The messages stay in the
+  payload and on screen.
+
 The encoder decodes every message again and falls back to the plain v2 form of
 that message if it does not come back byte-identical. A payload with a version
 above 3 is refused (`UnsupportedError`), never read as v1.

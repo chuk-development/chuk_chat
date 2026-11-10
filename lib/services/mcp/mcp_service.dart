@@ -50,7 +50,14 @@ import 'package:chuk_chat/services/mcp/mcp_connection.dart';
 // Only the call path below uses the device-side client; `show` keeps its
 // McpTool from clashing with the one in mcp_connection.dart.
 import 'package:chuk_chat/services/mcp/mcp_client.dart'
-    show McpCallResult, McpClient, McpException, McpUnauthorized;
+    show
+        McpCallResult,
+        McpClient,
+        McpException,
+        McpServerInfo,
+        McpUnauthorized,
+        kMcpMaxInstructionsBytes,
+        wrapMcpInstructions;
 import 'package:chuk_chat/services/mcp/chuk_mcp_mirror.dart';
 import 'package:chuk_chat/services/mcp/mcp_connector_sync.dart';
 import 'package:chuk_chat/services/mcp/mcp_oauth.dart';
@@ -59,6 +66,7 @@ import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/mcp/mcp_probe_control.dart';
+import 'package:chuk_chat/services/mcp/mcp_redact.dart';
 import 'package:chuk_chat/services/mcp/mcp_store.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
@@ -605,11 +613,14 @@ class McpService {
         connection: connection,
       );
     } on McpAuthException catch (e) {
-      return McpConnectResult(McpConnectStatus.failed, message: e.message);
+      return McpConnectResult(
+        McpConnectStatus.failed,
+        message: redactMcpSecrets(e.message),
+      );
     } catch (e) {
       return McpConnectResult(
         McpConnectStatus.failed,
-        message: 'Could not save the connector: $e',
+        message: redactMcpSecrets('Could not save the connector: $e'),
       );
     } finally {
       _setMember(connecting, id, false);
@@ -692,7 +703,7 @@ class McpService {
     } catch (e) {
       return McpConnectResult(
         McpConnectStatus.failed,
-        message: 'Could not save the connector: $e',
+        message: redactMcpSecrets('Could not save the connector: $e'),
       );
     }
   }
@@ -1256,6 +1267,42 @@ class McpService {
   /// Matched on the device's own connector id when the host echoed one, else on
   /// the name. A server the device does not know is ignored: the frame reports,
   /// it never creates a connector.
+  /// Every credential value this device holds for connector [id]: the
+  /// API-key parameters and the OAuth tokens and client secret. Fed to
+  /// [redactMcpSecrets] so error text from the host never keeps them.
+  static Future<List<String>> _storedSecretValues(String id) async {
+    final McpSecrets? record = await store.secretsFor(id);
+    return <String>[
+      ...(await store.apiCredentialsFor(id)).values,
+      ?record?.tokens.accessToken,
+      ?record?.tokens.refreshToken,
+      ?record?.credentials.clientSecret,
+    ];
+  }
+
+  /// Shown instead of the host's error text when this device cannot read the
+  /// connector's credentials to mask them.
+  @visibleForTesting
+  static const String hiddenHostError =
+      'The host reported an error. Details are hidden.';
+
+  /// [rawError] with every credential of connector [id] masked. When secure
+  /// storage cannot be read, the host text could still carry a secret, so a
+  /// generic text stands in for it; the rest of the frame goes on.
+  static Future<String> _redactHostError(String rawError, String id) async {
+    final List<String> secrets;
+    try {
+      secrets = await _storedSecretValues(id);
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ [MCP] secret lookup for redaction failed: '
+            '${e.runtimeType}');
+      }
+      return hiddenHostError;
+    }
+    return redactMcpSecrets(rawError, secrets: secrets);
+  }
+
   static Future<int> applyToolsFrame(Map<String, dynamic> payload) async {
     final Object? acked = payload['signed_out_ack'];
     if (acked is List && acked.isNotEmpty) {
@@ -1285,7 +1332,13 @@ class McpService {
       // was in flight across a Reconnect) says nothing about the new one.
       final String frameClient = '${row['client_id'] ?? ''}';
       if (frameClient.isNotEmpty) {
-        final McpSecrets? record = await store.secretsFor(target.id);
+        McpSecrets? record;
+        try {
+          record = await store.secretsFor(target.id);
+        } catch (e) {
+          // Storage failed: do not stop the frame for the other connectors.
+          if (kDebugMode) debugPrint('⚠️ [Mcp] client_id lookup failed: $e');
+        }
         final String ours = record?.credentials.clientId ?? '';
         if (ours.isNotEmpty && ours != frameClient) continue;
       }
@@ -1296,7 +1349,13 @@ class McpService {
           for (final Object? tool in toolsRaw)
             if (tool is Map) McpTool.fromJson(Map<String, dynamic>.from(tool)),
       ];
-      final String error = '${row['error'] ?? ''}'.trim();
+      // The host's error text can echo a request; mask credentials. The
+      // connector's own values are masked by value too: an API-key connector
+      // can use any parameter name, which no pattern can know.
+      final String rawError = '${row['error'] ?? ''}'.trim();
+      final String error = rawError.isEmpty
+          ? rawError
+          : await _redactHostError(rawError, target.id);
       // Structural, from the host: `auth` / `network` / `other`. An older
       // host sends none, which reads as `other`.
       final McpErrorKind? kind = error.isEmpty
@@ -1453,10 +1512,21 @@ class McpService {
   }
 
   /// Call [toolName] on the server that offers it, from this device.
+  ///
+  /// When [abortTrigger] completes (the caller's deadline ran out), the
+  /// in-flight request is aborted and the server is told to cancel it; the
+  /// tool is not started at all if the deadline runs out before that.
   static Future<McpCallResult> call(
     String toolName,
-    Map<String, dynamic> arguments,
-  ) async {
+    Map<String, dynamic> arguments, {
+    Future<void>? abortTrigger,
+  }) async {
+    var aborted = false;
+    unawaited(abortTrigger?.then((_) => aborted = true));
+    const McpCallResult cancelled = McpCallResult(
+      text: 'The tool call was cancelled because it took too long.',
+      isError: true,
+    );
     final target = resolve(toolName);
     if (target == null) {
       return const McpCallResult(
@@ -1475,9 +1545,16 @@ class McpService {
       );
     }
 
+    if (aborted) return cancelled;
     try {
-      await client.initialize();
-      return await client.callTool(target.tool, arguments);
+      final info = await client.initialize(abortTrigger: abortTrigger);
+      _rememberInstructions(target.connection.id, info);
+      if (aborted) return cancelled;
+      return await client.callTool(
+        target.tool,
+        arguments,
+        abortTrigger: abortTrigger,
+      );
     } on McpUnauthorized {
       return McpCallResult(
         text:
@@ -1486,9 +1563,56 @@ class McpService {
         isError: true,
       );
     } on McpException catch (e) {
-      return McpCallResult(text: e.message, isError: true);
+      return McpCallResult(
+        text: redactMcpSecrets(
+          e.message,
+          secrets: mcpSecretsOf(
+            client.endpoint,
+            accessToken: client.accessToken,
+          ),
+        ),
+        isError: true,
+      );
+    } catch (e) {
+      // Transport errors (ClientException, SocketException, timeouts) carry
+      // the request URL, which for an API-key connector holds the key.
+      return McpCallResult(
+        text: redactMcpSecrets(
+          '${target.connection.name} could not be reached: $e',
+          secrets: mcpSecretsOf(
+            client.endpoint,
+            accessToken: client.accessToken,
+          ),
+        ),
+        isError: true,
+      );
     }
   }
+
+  static final Map<String, String> _instructionsById = <String, String>{};
+
+  static void _rememberInstructions(String connectionId, McpServerInfo info) {
+    final wrapped = info.untrustedInstructions;
+    if (wrapped == null) {
+      _instructionsById.remove(connectionId);
+    } else {
+      _instructionsById[connectionId] = wrapped;
+    }
+  }
+
+  /// The `instructions` the server behind [connectionId] sent in its last
+  /// initialize on this device, capped at [kMcpMaxInstructionsBytes] and
+  /// wrapped as untrusted data (see [wrapMcpInstructions]). Null when the
+  /// server sent none or has not been initialised here yet. Not yet fed to
+  /// the prompt; the prompt builder can read it from here.
+  static String? instructionsFor(String connectionId) =>
+      _instructionsById[connectionId];
+
+  @visibleForTesting
+  static void debugRememberInstructions(
+    String connectionId,
+    McpServerInfo info,
+  ) => _rememberInstructions(connectionId, info);
 
   /// A client for [connection], with whatever credential it needs. Null when
   /// the record cannot produce one — the caller then says so to the reader

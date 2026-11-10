@@ -4,9 +4,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:chuk_chat/services/agents/agent_mail_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chukdoo/chukdoo_connector.dart';
+import 'package:chuk_chat/services/agents/agents_login_vault.dart';
+import 'package:chuk_chat/services/agents/agents_thread_modes.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
+import 'package:chuk_chat/services/message_feedback_store.dart';
 import 'package:chuk_chat/services/multiplex_session.dart';
+import 'package:chuk_chat/services/offline_send_coordinator.dart';
 import 'package:chuk_chat/services/password_revision_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/user_status_service.dart';
@@ -175,12 +179,23 @@ class AuthService {
       await ChukdooConnector.instance.forgetLocal(userId);
       // So is the opened mail key (docs/AGENT_MAIL.md §3.1).
       AgentMailService.instance.forgetKey();
+      // So are the messages still waiting in the offline outbox, with their
+      // voice recordings and offline images (docs/OFFLINE_SEND.md).
+      if (userId != null) {
+        await OfflineSendCoordinator.wipeUser(userId);
+      }
       // Tear down the multiplexed /v2/ws connection so the new user (or
       // re-auth) gets a fresh socket with their token. Best-effort —
       // never blocks signOut on a hung socket teardown.
       await MultiplexSession.shutdown();
       // The cached plan belongs to the user who just left.
       UserStatusService.clear();
+      // So do the answer verdicts and the Agents wait labels kept in the
+      // preferences (keyed by user).
+      await MessageFeedbackStore.instance.clearForSignOut(userId);
+      await AgentsThreadModes.instance.clearForSignOut(userId);
+      // The host's login list (origins and user names, never a password).
+      AgentsLoginVault.instance.clear();
       // Web: drop the local plaintext chat cache on logout. The next login
       // (e.g. after a password reset) then starts clean, so chats encrypted
       // with an old key correctly surface as locked. Native intentionally

@@ -114,6 +114,7 @@ class _IdleRelayController implements AgentsRelayController {
     bool regenerate = false,
     String? taskId,
     bool budgetOverride = false,
+    List<String> attachments = const <String>[],
   }) async {}
 
   @override

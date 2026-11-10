@@ -24,6 +24,8 @@
 //
 // Parsing is pure and unit tested.
 
+import 'package:chuk_chat/utils/browser_user_agent.dart';
+
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
@@ -46,7 +48,7 @@ const String kAutobahnRefPrefix = 'ab:';
 /// Neutral agent string: the app name only, no user or device data.
 const Map<String, String> kAutobahnHeaders = {
   'Accept': 'application/json',
-  'User-Agent': 'chuk-chat/1.0',
+  'User-Agent': kBrowserUserAgent,
 };
 
 /// The services asked per road.

@@ -1,0 +1,46 @@
+{
+  "_comment": "Budgets for scripts/perf_bench.sh runs on the AVD (scripts/emulator.sh, -gpu host). scripts/perf_bench_table.py compares every run to them and lists what is over; with --strict it exits 1. Keys of 'phases' are prefixes of the phase names in test_driver/perf_bench_main.dart; the first matching prefix wins. Values are in ms and sit about 2x above the AVD numbers in docs/PERFORMANCE.md ('AVD before and after'), so noise does not trip them and a real regression does. Lower a budget after a measured improvement; raise one only with a reason in the commit message.",
+  "phases": {
+    "open long chat, cache to frame": {
+      "build_max": 50
+    },
+    "keyboard open, long chat": {
+      "build_max": 25
+    },
+    "keyboard close, long chat": {
+      "build_max": 25
+    },
+    "typing, long chat": {
+      "build_max": 12,
+      "build_p90": 8
+    },
+    "scroll up": {
+      "build_max": 16
+    },
+    "scroll down": {
+      "build_max": 16
+    },
+    "fling": {
+      "build_max": 16
+    },
+    "sidebar open": {
+      "build_max": 8
+    },
+    "chat switch short then long": {
+      "build_max": 45
+    },
+    "jump button": {
+      "build_max": 16
+    }
+  },
+  "cold_start": {
+    "_comment": "Median of the --cold runs. Measured on the AVD 2026-10 (avd-after-2): 1288 ms am TotalTime, 1415 ms to the shell; budget about 2x.",
+    "am_total_ms": 2600,
+    "to_shell_ms": 2900
+  },
+  "memory": {
+    "_comment": "Host RSS of the AVD (qemu) during the run, from _scratch/perf/<label>.rss. Short install peaks are allowed; over the limit for this many seconds in a row is a failure. perf_bench.sh stops the run at the same point.",
+    "avd_rss_mb": 8192,
+    "seconds_over": 30
+  }
+}

@@ -3,12 +3,14 @@
 // instead of an answer. Every pass also re-sent every ~20k-char result
 // (5.8M chars over the turn).
 //
-// Now the limit forces a final pass with no tools and a short instruction,
-// and the tool results of older rounds are shortened before each pass.
+// Now the limit forces a final pass with no tools and a short instruction.
+// Tool results are capped once, when they first go into the history, and
+// never changed after that (prompt cache).
 
 import 'dart:convert';
 
 import 'package:chuk_chat/models/chat_stream_event.dart' show NativeToolCall;
+import 'package:chuk_chat/services/prompt_cache/prompt_context.dart';
 import 'package:chuk_chat/services/tool_call_handler.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -48,73 +50,35 @@ void main() {
     ],
   };
 
-  group('compactToolResultForModel', () {
+  group('capToolResultForModel', () {
     test('short results are returned unchanged', () {
-      final text = 'x' * kCompactToolResultTriggerChars;
-      expect(identical(compactToolResultForModel(text), text), isTrue);
+      final text = 'x' * 5000;
+      expect(identical(capToolResultForModel(text), text), isTrue);
     });
 
-    test('long results keep their head and are cut only once', () {
-      final once = compactToolResultForModel('y' * 20000);
-      expect(once, startsWith('y' * kCompactToolResultKeepChars));
-      expect(once, contains('20000 characters'));
-      expect(once.length, lessThan(kCompactToolResultTriggerChars));
-      expect(compactToolResultForModel(once), once);
+    test('long results keep head and tail and are cut only once', () {
+      final text = '${'h' * 10000}${'t' * 10000}';
+      final once = capToolResultForModel(text);
+      expect(once, startsWith('h' * kToolResultHeadCodePoints));
+      expect(once, endsWith('t' * kToolResultTailCodePoints));
+      expect(once, contains(kToolResultPrunedMarker));
+      expect(capToolResultForModel(once), once);
     });
 
-    test('the text matches the api_server copy byte for byte', () {
-      // chat/tool_history.py: COMPACTED_NOTE_TEMPLATE.
-      expect(
-        compactToolResultForModel('z' * 5000).substring(3000),
-        '\n\n[Shortened: this is an older tool result of 5000 characters. '
-        'Only the first 3000 are kept here to save space.]',
-      );
-    });
-  });
-
-  group('compactOlderToolResults', () {
-    test('older native rounds are shortened, the newest stays full', () {
-      final big = 'r' * 20000;
-      final history = <Map<String, dynamic>>[
-        {'role': 'user', 'content': 'q'},
-        assistantCall('a'),
-        {'role': 'tool', 'tool_call_id': 'a', 'content': big},
-        assistantCall('b'),
-        {'role': 'tool', 'tool_call_id': 'b', 'content': big},
-      ];
-      compactOlderToolResults(history);
-      expect(
-        (history[2]['content'] as String).length,
-        lessThan(kCompactToolResultTriggerChars),
-      );
-      expect(history[4]['content'], big);
-      expect(history[2]['tool_call_id'], 'a');
-    });
-
-    test('a long user message is never touched', () {
-      final pasted = 'p' * 20000;
-      final history = <Map<String, dynamic>>[
-        {'role': 'user', 'content': pasted},
-        {'role': 'assistant', 'content': 'ok'},
-      ];
-      compactOlderToolResults(history, promptToolResultIndices: const {});
-      expect(history[0]['content'], pasted);
-    });
-
-    test('entries of earlier turns are left alone', () {
-      final big = 'e' * 20000;
-      final history = <Map<String, dynamic>>[
-        {'role': 'tool', 'tool_call_id': 'old', 'content': big},
-        assistantCall('a'),
-        {'role': 'tool', 'tool_call_id': 'a', 'content': 'x'},
-      ];
-      compactOlderToolResults(history, turnStart: 1);
-      expect(history[0]['content'], big);
+    test('counts code points, never splits a surrogate pair', () {
+      final text = '😀' * 8000;
+      final once = capToolResultForModel(text);
+      final head = once.substring(0, once.indexOf(kToolResultPrunedMarker));
+      expect(head.runes.length, kToolResultHeadCodePoints);
+      expect(head.runes.every((r) => r == 0x1F600), isTrue);
     });
   });
 
   group('the tool loop', () {
-    test('the next pass carries older results shortened', () async {
+    test('a sent tool result is never changed on a later pass', () async {
+      // Older rounds used to be shortened once a newer round existed, which
+      // changed the history between passes: a prompt cache miss on
+      // everything after it.
       final handler = ToolCallHandler();
       final big = 'c' * 20000;
       final session = newSession(handler);
@@ -136,13 +100,8 @@ void main() {
       final history = result.nextStep!.history;
       final tools = history.where((m) => m['role'] == 'tool').toList();
       expect(tools, hasLength(2));
-      expect(
-        (tools.first['content'] as String).length,
-        lessThan(kCompactToolResultTriggerChars),
-      );
-      // The newest round (the calculate result) is sent in full.
+      expect(tools.first['content'], big);
       expect(tools.last['tool_call_id'], 'c-1');
-      expect(tools.last['content'], isNot(contains('[Shortened')));
     });
 
     test('at the round limit a final pass without tools is forced', () async {
@@ -170,7 +129,9 @@ void main() {
       );
       expect(result.shouldContinue, isTrue);
       expect(result.nextStep!.message, kForcedFinalAnswerNote);
-      expect(handler.nativeToolDefinitions(session), isEmpty);
+      // Shut tools keep tools[] (prompt cache) and send tool_choice none.
+      expect(handler.nativeToolDefinitions(session), isNotEmpty);
+      expect(ToolCallHandler.nativeToolChoice(session), 'none');
       expect(session.toolCalls, hasLength(kMaxToolRoundsPerTurn));
       // The unrun call is not recorded, so every tool_call_id stays paired.
       final last = result.nextStep!.history.last;
@@ -221,8 +182,7 @@ void main() {
       expect(result.finalContent, 'Final answer from the results.');
     });
 
-    test('prompt-based tool results in history are shortened, the user '
-        'question is not', () async {
+    test('prompt-based tool results stay as they were sent', () async {
       final handler = ToolCallHandler();
       final question = 'q' * 6000;
       final session = handler.createSession(
@@ -241,12 +201,9 @@ void main() {
             '{"expression":"1+1"}}</tool_call>',
         reasoning: '',
       );
-      // Pretend the result was large, as a crawl would be.
-      final bigResult = 'Tool Results:\n${'w' * 20000}';
-      session.latestUserMessage = bigResult;
-      session.pendingPromptToolResult = bigResult;
+      final firstResult = result.nextStep!.message;
 
-      // Round 2: round 1's result moves into history and is shortened.
+      // Round 2: round 1's result moves into history unchanged.
       result = await handler.processAssistantResponse(
         session: session,
         content:
@@ -259,41 +216,7 @@ void main() {
           .map((m) => m['content'] as String)
           .toList();
       expect(users.first, question);
-      expect(users[1].length, lessThan(kCompactToolResultTriggerChars));
-      expect(users[1], contains('[Shortened'));
-    });
-
-    test('the newest prompt-based result stays full when the next pass is '
-        'not a tool result', () async {
-      final handler = ToolCallHandler();
-      final session = newSession(handler, native: false);
-
-      // Round 1: a tool call, whose result we make crawl-sized.
-      await handler.processAssistantResponse(
-        session: session,
-        content:
-            '<tool_call>{"name":"calculate","arguments":'
-            '{"expression":"1+1"}}</tool_call>',
-        reasoning: '',
-      );
-      final bigResult = 'Tool Results:\n${'w' * 20000}';
-      session.latestUserMessage = bigResult;
-      session.pendingPromptToolResult = bigResult;
-
-      // The model then sends an empty reply. The retry pass moves the result
-      // into history; it is still the newest round and must not be cut.
-      final result = await handler.processAssistantResponse(
-        session: session,
-        content: '',
-        reasoning: '',
-      );
-      expect(result.shouldContinue, isTrue);
-      final contents = result.nextStep!.history
-          .map((m) => m['content'])
-          .whereType<String>()
-          .toList();
-      expect(contents, contains(bigResult));
-      expect(contents.any((c) => c.contains('[Shortened')), isFalse);
+      expect(users[1], firstResult.trim());
     });
 
     test('the driver can shut the tools before its pass budget ends', () async {
@@ -309,7 +232,9 @@ void main() {
       expect(result.shouldContinue, isTrue);
       expect(result.nextStep!.message, kForcedFinalAnswerNote);
       expect(session.toolCalls, isEmpty);
-      expect(handler.nativeToolDefinitions(session), isEmpty);
+      // Shut tools keep tools[] (prompt cache) and send tool_choice none.
+      expect(handler.nativeToolDefinitions(session), isNotEmpty);
+      expect(ToolCallHandler.nativeToolChoice(session), 'none');
     });
 
     test('a model that never stops asking ends with the text it wrote, '

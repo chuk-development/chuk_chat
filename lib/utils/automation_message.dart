@@ -15,7 +15,19 @@
 
 /// A user turn that a fired automation produced, not a person.
 class AutomationWake {
-  const AutomationWake({required this.id, required this.name});
+  const AutomationWake({
+    required this.id,
+    required this.name,
+    this.webhook = false,
+    this.merged = 0,
+  });
+
+  /// The run was started by a call to a webhook URL (the payload is the
+  /// host's `{"events": [...]}` list).
+  final bool webhook;
+
+  /// How many calls the host merged into this one run (0 or 1: one).
+  final int merged;
 
   /// The automation's id, as the host printed it in the header.
   final String id;
@@ -25,10 +37,14 @@ class AutomationWake {
 
   @override
   bool operator ==(Object other) =>
-      other is AutomationWake && other.id == id && other.name == name;
+      other is AutomationWake &&
+      other.id == id &&
+      other.name == name &&
+      other.webhook == webhook &&
+      other.merged == merged;
 
   @override
-  int get hashCode => Object.hash(id, name);
+  int get hashCode => Object.hash(id, name, webhook, merged);
 }
 
 /// The header the host writes first in a fired task's prompt, mirroring
@@ -50,5 +66,25 @@ AutomationWake? parseAutomationWake(String text) {
       .trimRight();
   final match = _headerPattern.firstMatch(header);
   if (match == null) return null;
-  return AutomationWake(id: match.group(1)!, name: match.group(2)!.trim());
+  final String body = lineEnd < 0 ? '' : trimmed.substring(lineEnd + 1);
+  final Match? merged = _mergedPattern.firstMatch(body);
+  return AutomationWake(
+    id: match.group(1)!,
+    name: match.group(2)!.trim(),
+    webhook: _webhookPayload.hasMatch(body),
+    merged: merged == null ? 0 : int.tryParse(merged.group(1) ?? '') ?? 0,
+  );
 }
+
+/// The host line of a merged webhook burst (`fired_prompt(merged=N)` in
+/// `agents/runtime/src/chuk_agents_runtime/automations.py`).
+final RegExp _mergedPattern = RegExp(
+  r'^(\d+) events arrived close together and were merged',
+  multiLine: true,
+);
+
+/// The payload of a webhook fire: the host's `{"events": [{"event_id"...`.
+final RegExp _webhookPayload = RegExp(
+  r'^\{"events": \[\{"event_id"',
+  multiLine: true,
+);

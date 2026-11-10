@@ -141,6 +141,8 @@ import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/account_session.dart';
 import 'package:chuk_chat/services/auth_service.dart';
 import 'package:chuk_chat/pages/agents_install_page.dart';
+import 'package:chuk_chat/services/agents/agents_checkpoints.dart';
+import 'package:chuk_chat/services/agents/agents_derived_threads.dart';
 import 'package:chuk_chat/services/agents/agent_control_source.dart';
 import 'package:chuk_chat/services/agents/agent_mail_key_handover.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
@@ -159,13 +161,10 @@ import 'package:chuk_chat/services/agents/agents_pairing_uri.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_restore.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/services/agents/agents_relay_factory.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/agents_shell_status.dart';
 import 'package:chuk_chat/services/agents/room_source.dart';
-import 'package:chuk_chat/services/herenow/herenow_store.dart';
-import 'package:chuk_chat/services/mcp/mcp_store.dart';
-import 'package:chuk_chat/services/secrets/secrets_service.dart';
-import 'package:chuk_chat/services/session_recovery.dart';
 import 'package:chuk_chat/services/notifications/agents_notifications.dart';
 import 'package:chuk_chat/services/notifications/notification_router.dart';
 import 'package:chuk_chat/services/settings/theme_controller.dart';
@@ -251,7 +250,8 @@ class MessengerShell extends StatefulWidget {
   final VoidCallback? onSignOut;
 
   /// The app's theme controller. Kept as the bridge `main.dart` and
-  /// `auth_gate.dart` still take (see HANDOVER_2026-09-05_SHELL_SETTINGS);
+  /// `auth_gate.dart` still take (see
+  /// docs/notes/archived/2026-09-05-handover-shell-settings-cowork-5c.md);
   /// chuk's settings surfaces write the theme through [shellConfig].
   final ThemeController? themeController;
 
@@ -404,6 +404,8 @@ class _MessengerShellState extends State<MessengerShell>
     super.initState();
     _hostInit();
     _deskInit();
+    // checkpoints: a fork opens its new thread.
+    _forkOpens = AgentsCheckpoints.openRequests.listen(_openForkedThread);
     _controller.addListener(_onControllerForBrowser);
     _agentsHomeShown.addListener(_onAgentsHomeChanged);
     _chatListening = _chatModeAvailable;
@@ -746,8 +748,27 @@ class _MessengerShellState extends State<MessengerShell>
     }
   }
 
+  // ── checkpoints ──
+  StreamSubscription<String>? _forkOpens;
+
+  /// A fork from a message opens its new thread under the agent that owns
+  /// it (docs/WIRE_CONTRACT.md, "Checkpoints, rewind and fork").
+  void _openForkedThread(String key) {
+    if (!mounted) return;
+    final String? owner = AgentsDerivedThreads.instance.byKey(key)?.ownerKey;
+    if (owner == null) return;
+    for (final AgentsAgent agent in _roster.agents) {
+      if (agent.threads.isNotEmpty && agent.threads.first.key == owner) {
+        _select(agent.id, key);
+        return;
+      }
+    }
+  }
+  // ── end checkpoints ──
+
   @override
   void dispose() {
+    unawaited(_forkOpens?.cancel()); // checkpoints
     if (_chatListening) {
       _appMode.removeListener(_onModeChanged);
       _hasComputer.removeListener(_onHasComputerChanged);
@@ -841,7 +862,14 @@ class _MessengerShellState extends State<MessengerShell>
     // (or another agent's session) under this agent's identity.
     if (agent == null ||
         agent.threads.isEmpty ||
-        agent.threads.first.key != threadKey) {
+        (agent.threads.first.key != threadKey &&
+            // A chat one of its automations made (`<owner>#auto-<id>`) is
+            // this agent's too.
+            AgentsDerivedThreads.ownerOf(threadKey) !=
+                agent.threads.first.key &&
+            // A thread forked from a message is this agent's too.
+            AgentsDerivedThreads.instance.byKey(threadKey)?.ownerKey !=
+                agent.threads.first.key)) {
       return;
     }
     // A thread opened from behind chuk's chats (a tapped notification): the

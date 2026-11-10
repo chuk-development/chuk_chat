@@ -20,6 +20,7 @@ import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/format_bytes.dart';
 import 'package:chuk_chat/utils/host_lookup.dart';
 import 'package:chuk_chat/utils/non_public_ip.dart';
+import 'package:chuk_chat/utils/untrusted_content.dart';
 
 /// Most URLs one call may fetch.
 const int kFetchFilesMaxCount = 20;
@@ -163,7 +164,9 @@ Future<FetchFilesResult> executeFetchFiles(
 
   if (fetched.isEmpty) {
     return FetchFilesResult(
-      text: 'Error: no file could be downloaded. ${failures.join('; ')}',
+      text:
+          'Error: no file could be downloaded. ${failures.join('; ')}\n'
+          '$kUntrustedWebDetailsNotice',
       isError: true,
     );
   }
@@ -211,6 +214,7 @@ Future<FetchFilesResult> executeFetchFiles(
     ' The card with a download button is shown under your answer. '
     'Do not paste a download link for it.',
   );
+  buf.write('\n$kUntrustedWebDetailsNotice');
 
   return FetchFilesResult(
     text: buf.toString(),

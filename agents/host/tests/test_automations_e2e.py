@@ -1,5 +1,5 @@
 """The acceptance scenario end to end, on the real host stack, no UI
-(docs/WIRE_CONTRACT.md, "Automations"; docs/PROMPT_2026-09-05_cowork-automations.md).
+(docs/WIRE_CONTRACT.md, "Automations"; docs/notes/archived/2026-09-05-prompt-cowork-automations.md).
 
 The user says "monitor this channel". The (scripted) model writes nothing —
 the watcher script is already in the workspace — and calls ``start_watcher``.

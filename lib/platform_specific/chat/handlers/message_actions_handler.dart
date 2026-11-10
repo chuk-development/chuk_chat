@@ -176,6 +176,7 @@ class MessageActionsHandler {
     required String messageText,
     required Function(int) onEdit,
     required Function(int) onResendMessage,
+    MessageBubbleAction? forkFromHere, // checkpoints: Agents threads only
   }) {
     final List<MessageBubbleAction> actions = [];
 
@@ -207,6 +208,8 @@ class MessageActionsHandler {
         onPressed: () => onResendMessage(index),
       ),
     );
+
+    if (forkFromHere != null) actions.add(forkFromHere); // checkpoints
 
     return actions;
   }

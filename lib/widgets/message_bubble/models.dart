@@ -85,16 +85,21 @@ class MessageBubbleAction {
 }
 
 class _RenderSegment {
-  _RenderSegment._({this.text, this.sandboxArtifact})
+  _RenderSegment._({this.text, this.sandboxArtifact, this.steer})
     : toolCalls = <ToolCall>[],
       timeline = <_ToolTimelineEntry>[];
 
   _RenderSegment.text(String t) : this._(text: t);
+  _RenderSegment.steer(String t) : this._(steer: t);
   _RenderSegment.round() : this._();
   _RenderSegment.sandboxArtifact(SandboxArtifactPayload p)
     : this._(sandboxArtifact: p);
 
   final String? text;
+
+  /// Set for a steer: a message the user sent while the turn ran, drawn as
+  /// a small user bubble where the tool loop handed it to the model.
+  final String? steer;
 
   /// Set for sandbox-artifact segments — the inline downloadable file the
   /// AI handed to the user via send_file_to_user. Rendered as its own
@@ -120,6 +125,7 @@ class _RenderSegment {
 
   bool get isText => text != null;
   bool get isSandboxArtifact => sandboxArtifact != null;
+  bool get isSteer => steer != null;
   bool get hasContent => timeline.isNotEmpty;
 }
 

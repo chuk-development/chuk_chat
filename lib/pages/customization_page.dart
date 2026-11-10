@@ -10,6 +10,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/widgets/composer/busy_mode_setting.dart';
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
 
 import 'package:chuk_chat/widgets/app_notification.dart';
@@ -27,6 +28,7 @@ import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/settings/verbose_service.dart';
+import 'package:chuk_chat/services/settings/tool_detail_service.dart';
 
 class CustomizationPage extends StatefulWidget {
   final AppShellConfig config;
@@ -448,6 +450,9 @@ class _CustomizationPageState extends State<CustomizationPage> {
               const SizedBox(height: 8),
               ExpressiveInfoCard(text: l.autoSendVoiceInfo),
 
+              // What Enter does while a reply runs (queue or steer).
+              const ComposerBusyModeSetting(),
+
               // Message display (toggles only; typography is its own section).
               ExpressiveSectionHeader(l.messageDisplay),
               ExpressiveGroup(
@@ -476,6 +481,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
                       widget.config.setShowModelInfo(value);
                     },
                   ),
+                  const _ToolDetailRow(),
                   ExpressiveSwitchRow(
                     icon: Icons.speed_outlined,
                     title: l.showTps,
@@ -894,6 +900,67 @@ class _CardLabel extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// "Tool detail": Compact / Standard / Detailed / Verbose, how much of a
+/// turn's tool work the chat shows (`ToolDetailService`).
+class _ToolDetailRow extends StatelessWidget {
+  const _ToolDetailRow();
+
+  static String _label(AppLocalizations l, ToolDetailMode mode) {
+    final (String key, String english) = switch (mode) {
+      ToolDetailMode.compact => ('modeCompact', 'Compact'),
+      ToolDetailMode.standard => ('modeStandard', 'Standard'),
+      ToolDetailMode.detailed => ('modeDetailed', 'Detailed'),
+      ToolDetailMode.verbose => ('modeVerbose', 'Verbose'),
+    };
+    final String text = l.toolActivityText(key);
+    return text.startsWith('toolActivity_') ? english : text;
+  }
+
+  static String _text(AppLocalizations l, String key, String english) {
+    final String text = l.toolActivityText(key);
+    return text.startsWith('toolActivity_') ? english : text;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l = AppLocalizations.of(context)!;
+    final ThemeData theme = Theme.of(context);
+    return ValueListenableBuilder<ToolDetailMode>(
+      valueListenable: ToolDetailService.instance,
+      builder: (BuildContext context, ToolDetailMode mode, _) => ExpressiveRow(
+        key: const ValueKey<String>('tool-detail-row'),
+        icon: Icons.terminal_outlined,
+        title: _text(l, 'toolDetail', 'Tool detail'),
+        subtitle: _text(
+          l,
+          'toolDetailSubtitle',
+          'How much of the tool work the chat shows',
+        ),
+        trailing: DropdownButtonHideUnderline(
+          child: DropdownButton<ToolDetailMode>(
+            key: const ValueKey<String>('tool-detail-dropdown'),
+            icon: const AppIcon(Icons.keyboard_arrow_down_rounded),
+            value: mode,
+            dropdownColor: theme.m3.surfaceContainerHigh,
+            borderRadius: kBorderRadiusMenu,
+            focusColor: Colors.transparent,
+            items: <DropdownMenuItem<ToolDetailMode>>[
+              for (final ToolDetailMode m in ToolDetailMode.values)
+                DropdownMenuItem<ToolDetailMode>(
+                  value: m,
+                  child: Text(_label(l, m)),
+                ),
+            ],
+            onChanged: (ToolDetailMode? value) {
+              if (value != null) ToolDetailService.instance.setMode(value);
+            },
+          ),
+        ),
+      ),
     );
   }
 }

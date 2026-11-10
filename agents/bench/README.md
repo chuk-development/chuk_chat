@@ -166,9 +166,10 @@ Results on the 2026-10-27 snapshot (bead chuk_chat-0qlc):
   `search_tools`. Mail sessions add about 0.65k for the mail tools and
   0.36k for `herenow_publish`, which the offline runtime does not wire.
 - Between two tasks the prefix is identical up to the previous task's
-  prompt (99.5 % of the request). The context ladder then drops the tool
-  traffic of the earlier task (`old_task_tools_drop_tokens`), so the cache
-  loses that task's tool rows and answer once. A refreshed summary moves
+  prompt (99.5 % of the request). Since 2026-11-04 the context ladder drops
+  earlier tasks' tool traffic only in rare large steps (once it passes
+  `old_task_tools_drop_tokens`, then all at once, `old_task_cut`), so most
+  tasks extend the previous request unchanged. A refreshed summary moves
   everything after the head.
 - The cache misses between hourly automation runs are the provider cache
   timing out, not a changed prefix.

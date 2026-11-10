@@ -1,3 +1,4 @@
+import 'package:chuk_chat/utils/browser_user_agent.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -15,7 +16,7 @@ const String _nominatimBaseUrl = 'https://nominatim.openstreetmap.org';
 const String _osrmBaseUrl = 'https://router.workspace-osrm.org';
 const Map<String, String> _defaultHeaders = {
   'Accept': 'application/json',
-  'User-Agent': 'chuk-chat/1.0',
+  'User-Agent': kBrowserUserAgent,
 };
 
 /// What a places lookup produces: the text the model reads, and the raw

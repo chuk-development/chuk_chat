@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/widgets/icons/huge_icon.dart';
+import 'package:chuk_chat/constants.dart' show kRadiusSm;
 
 /// Interactive options shown below messages that used the ask_user tool.
 ///
@@ -220,7 +221,7 @@ class _MultiRow extends StatelessWidget {
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                           color: cs.primary,
-                          borderRadius: BorderRadius.circular(7),
+                          borderRadius: BorderRadius.circular(kRadiusSm),
                         ),
                         child: picked
                             ? HugeIcon(

@@ -72,10 +72,19 @@ def test_existing_session_gets_installed_and_disabled_skills_without_rewriting_h
     second_loop = runtime(second)
     second_loop.run("permanent", "what song is this")
     system = second.calls[0][0]["content"]
-    assert "`song-id`" in system
-    assert "`old-skill`" not in system
+    # The system prompt stays the one the session was seeded with (DS #47:
+    # the cached prefix survives); the new list arrives as ONE hashed message.
+    assert system == saved
     assert "Keep this persona exactly." in system
     assert "first answer" in _texts(second.calls[0])
+    deltas = [m for m in second.calls[0] if "<skill_catalog hash=" in str(m.get("content"))]
+    assert len(deltas) == 1
+    assert "`song-id`" in deltas[0]["content"]
+    assert "`old-skill`" not in deltas[0]["content"]
+    # A third task with no change sends no second catalogue.
+    third = MockModelClient(["third answer"])
+    runtime(third).run("permanent", "again")
+    assert sum("<skill_catalog hash=" in str(m.get("content")) for m in third.calls[0]) == 1
     sid = second_loop.store.route("permanent")
     stored_system = next(m.content["content"] for m in second_loop.store.get_conversation(sid)
                          if m.content.get("role") == "system")
@@ -478,6 +487,9 @@ def test_a_control_flips_the_switch_and_answers_with_the_list(tmp_path):
             "source": "workspace",
             "enabled": False,
             "path": str(root / "deploy" / "SKILL.md"),
+            "model_invocable": True,
+            "use_count": 0,
+            "last_used_at": None,
         }
     ]
     assert reply["errors"] == []

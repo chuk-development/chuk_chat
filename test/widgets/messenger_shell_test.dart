@@ -20,8 +20,6 @@ import 'package:chuk_chat/pages/messenger_shell.dart';
 import 'package:chuk_chat/pages/mobile_agents_settings_page.dart';
 import 'package:chuk_chat/pages/agent_host_activity_page.dart';
 import 'package:chuk_chat/pages/agent_profile_edit_page.dart';
-import 'package:chuk_chat/pages/mobile_agents_settings_page.dart'
-    show AgentSettingsView;
 import 'package:chuk_chat/pages/automations_page.dart';
 import 'package:chuk_chat/widgets/chat_documents_panel.dart';
 import 'package:chuk_chat/models/stored_chat.dart';
@@ -131,6 +129,7 @@ class _FakeRelayController implements AgentsRelayController {
     bool regenerate = false,
     String? taskId,
     bool budgetOverride = false,
+    List<String> attachments = const <String>[],
   }) async => sessionKeys.add(sessionKey);
 
   final List<(String, String)> roomTasks = <(String, String)>[];

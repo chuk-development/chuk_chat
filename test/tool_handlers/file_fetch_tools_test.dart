@@ -7,6 +7,7 @@ import 'package:http/testing.dart';
 
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/tool_handlers/file_fetch_tools.dart';
+import 'package:chuk_chat/utils/untrusted_content.dart';
 
 void main() {
   final png = Uint8List.fromList([0x89, 0x50, 0x4E, 0x47, 1, 2, 3]);
@@ -64,6 +65,7 @@ void main() {
       lookup: publicDns,
     );
     expect(r.isError, isFalse);
+    expect(r.text, contains(kUntrustedWebDetailsNotice));
     expect(r.file!.filename, 'banner.png');
     expect(r.file!.mime, 'image/png');
     expect(r.file!.origin, SandboxArtifactPayload.originFetchFiles);

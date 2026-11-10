@@ -9,6 +9,7 @@ import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/workspace/workspace_actions_mixin.dart';
 import 'package:chuk_chat/widgets/workspace/workspace_common_widgets.dart';
+import 'package:chuk_chat/widgets/workspace/workspace_persona_flags.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -707,6 +708,10 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
               ),
             ),
           ),
+
+          const SizedBox(height: 16),
+          if (_project case final project?)
+            WorkspacePersonaFlags(workspace: project),
 
           // Save button (only shown when changes exist)
           if (_hasSettingsChanges) ...[

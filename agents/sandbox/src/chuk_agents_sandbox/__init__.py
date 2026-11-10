@@ -24,6 +24,7 @@ from .lifecycle import (
     LABEL_AGENT,
     LABEL_IMAGE,
     LABEL_MANAGED,
+    LABEL_ESCALATION,
     LABEL_OWNER,
     LABEL_SESSION,
     LABEL_TASK,
@@ -43,9 +44,12 @@ from .lifecycle import (
     reap_orphans,
     remove_container,
 )
+from .bwrap import ISOLATION_ENV_VAR, bwrap_usable, resolve_isolation
+from .child_env import child_env
 from .local import LocalEnvironment
 from .policy import (
     DEFAULT_POLICY,
+    ESCALATION_KEYS,
     LABEL_POLICY,
     PERMISSION_KEYS,
     WORKSPACE_RO,
@@ -53,10 +57,21 @@ from .policy import (
     PolicyError,
     SandboxPolicy,
     enforced_permissions,
+    hardening_run_args,
+    widened_policy,
+    withheld_permissions,
 )
 from .result import Environment, ProcessResult
 
 __all__ = [
+    "ESCALATION_KEYS",
+    "widened_policy",
+    "withheld_permissions",
+    "ISOLATION_ENV_VAR",
+    "bwrap_usable",
+    "child_env",
+    "hardening_run_args",
+    "resolve_isolation",
     "BaseEnvironment",
     "DEFAULT_MAX_OUTPUT_CHARS",
     "LocalEnvironment",
@@ -80,6 +95,7 @@ __all__ = [
     "LABEL_AGENT",
     "LABEL_IMAGE",
     "LABEL_MANAGED",
+    "LABEL_ESCALATION",
     "LABEL_OWNER",
     "LABEL_SESSION",
     "LABEL_TASK",

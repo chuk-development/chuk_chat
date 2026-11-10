@@ -56,6 +56,22 @@ class ToolResultCacheRegistry {
 
   final Map<String, _RegistryEntry> _byContent = <String, _RegistryEntry>{};
 
+  /// Images (data URLs) the server holds: the turn's images (`images` +
+  /// `image_cache_ids`) and history images tagged with `cache_id`. Kept
+  /// apart from the text entries so a long chat's images do not push the
+  /// tool results out (and the other way round).
+  final Map<String, _RegistryEntry> _images = <String, _RegistryEntry>{};
+
+  /// Cap of [_images]. A chat may carry up to 100 history images for some
+  /// providers; the server keeps them in a shared 96 MiB LRU, so the oldest
+  /// go first on both sides.
+  static const int _maxImageEntries = 128;
+
+  /// Cap on the characters of all tracked image keys, so the registry never
+  /// holds more than a few requests' worth of image data alive.
+  static const int _maxImageChars = 48000000;
+  int _imageChars = 0;
+
   DateTime? _refsPausedUntil;
 
   /// Injectable clock for tests.
@@ -103,9 +119,46 @@ class ToolResultCacheRegistry {
     return entry.id;
   }
 
+  /// Registers an image ([dataUrl], a `data:image/` URL) that is about to
+  /// go up in full with a cache id (`image_cache_ids`, or `cache_id` on a
+  /// history block). Returns the id. Re-registering a fresh image returns
+  /// the same id and restarts its lifetime, as the server's store does.
+  String registerImage(String dataUrl) {
+    _purgeExpiredImages();
+    final existing = _images.remove(dataUrl);
+    final id = existing != null && existing.expiresAt.isAfter(now())
+        ? existing.id
+        : _uuid.v4().replaceAll('-', '');
+    if (existing == null) _imageChars += dataUrl.length;
+    _images[dataUrl] = _RegistryEntry(id, now().add(_ttl));
+    _evictImagesIfNeeded();
+    return id;
+  }
+
+  /// The id the server holds [dataUrl] under, or null (send it in full).
+  /// A hit restarts the entry's lifetime: the server restarts its TTL each
+  /// time a ref resolves (history images are used on every turn). Null
+  /// during the post-miss cooldown.
+  String? imageRefFor(String dataUrl) {
+    if (_refsPaused) return null;
+    final entry = _images.remove(dataUrl);
+    if (entry == null) return null;
+    if (!entry.expiresAt.isAfter(now())) {
+      _imageChars -= dataUrl.length;
+      return null;
+    }
+    // Re-insert as the newest, with a fresh lifetime.
+    _images[dataUrl] = _RegistryEntry(entry.id, now().add(_ttl));
+    return entry.id;
+  }
+
+  int get imageCount => _images.length;
+
   /// Drop everything. Used by tests and as the hard reset.
   void clear() {
     _byContent.clear();
+    _images.clear();
+    _imageChars = 0;
     _refsPausedUntil = null;
   }
 
@@ -114,6 +167,8 @@ class ToolResultCacheRegistry {
   /// server cache doesn't cost a miss on every turn.
   void handleMiss() {
     _byContent.clear();
+    _images.clear();
+    _imageChars = 0;
     _refsPausedUntil = now().add(_missCooldown);
   }
 
@@ -122,6 +177,24 @@ class ToolResultCacheRegistry {
   void _purgeExpired() {
     final t = now();
     _byContent.removeWhere((_, e) => !e.expiresAt.isAfter(t));
+  }
+
+  void _purgeExpiredImages() {
+    final t = now();
+    _images.removeWhere((key, e) {
+      if (e.expiresAt.isAfter(t)) return false;
+      _imageChars -= key.length;
+      return true;
+    });
+  }
+
+  void _evictImagesIfNeeded() {
+    while (_images.length > _maxImageEntries ||
+        (_imageChars > _maxImageChars && _images.length > 1)) {
+      final oldest = _images.keys.first;
+      _images.remove(oldest);
+      _imageChars -= oldest.length;
+    }
   }
 
   void _evictIfNeeded() {

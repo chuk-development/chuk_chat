@@ -1,6 +1,8 @@
 // The MCP transport, against a server that is only a function.
 
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -203,5 +205,94 @@ void main() {
       client.callTool('nope', const {}),
       throwsA(isA<McpException>()),
     );
+  });
+
+  // Regression: the tool executor's outer deadline used to return an error
+  // while the MCP request went on, so a slow write could still land and then
+  // be retried. The deadline now aborts the request and tells the server.
+  test('an abort ends a call whose reply body never finishes', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() => server.close(force: true));
+    final Completer<Map<String, dynamic>> cancelled =
+        Completer<Map<String, dynamic>>();
+    final Completer<void> callConnectionClosed = Completer<void>();
+    int? callId;
+    server.listen((HttpRequest request) async {
+      final raw = await utf8.decoder.bind(request).join();
+      if (raw.isEmpty) {
+        await request.response.close();
+        return;
+      }
+      final body = jsonDecode(raw) as Map<String, dynamic>;
+      if (body['method'] == 'notifications/cancelled') {
+        cancelled.complete(Map<String, dynamic>.from(body['params'] as Map));
+        request.response.statusCode = 202;
+        await request.response.close();
+        return;
+      }
+      // tools/call: send the headers and one unrelated event, then hang on
+      // the raw socket, which also shows when the client drops it.
+      callId = body['id'] as int;
+      request.response
+        ..persistentConnection = false
+        ..headers.chunkedTransferEncoding = false
+        ..headers.contentType = ContentType('text', 'event-stream');
+      final Socket socket = await request.response.detachSocket();
+      socket.write('data: {"jsonrpc":"2.0","method":"progress"}\n\n');
+      await socket.flush();
+      void closed([Object? _]) {
+        if (!callConnectionClosed.isCompleted) callConnectionClosed.complete();
+      }
+
+      socket.listen((_) {}, onDone: closed, onError: closed);
+    });
+
+    final client = McpClient(
+      endpoint: Uri.parse('http://127.0.0.1:${server.port}/mcp'),
+    );
+    addTearDown(client.close);
+    final Completer<void> deadline = Completer<void>();
+    final Future<McpCallResult> call = client.callTool(
+      'write',
+      const {},
+      abortTrigger: deadline.future,
+    );
+    // Let the request reach the server and the reply start streaming.
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    deadline.complete();
+
+    await expectLater(
+      call.timeout(const Duration(seconds: 5)),
+      throwsA(isA<McpException>()),
+    );
+    final params = await cancelled.future.timeout(const Duration(seconds: 5));
+    expect(params['requestId'], callId);
+    // The abandoned reply is not read on: its connection goes away.
+    await callConnectionClosed.future.timeout(const Duration(seconds: 5));
+  });
+
+  test('an abort that never fires leaves the call alone', () async {
+    final client = McpClient(
+      endpoint: endpoint,
+      httpClient: MockClient((request) async {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        expect(body['method'], 'tools/call');
+        return _json({
+          'jsonrpc': '2.0',
+          'id': body['id'],
+          'result': {
+            'content': [
+              {'type': 'text', 'text': 'done'},
+            ],
+          },
+        });
+      }),
+    );
+    final result = await client.callTool(
+      'write',
+      const {},
+      abortTrigger: Completer<void>().future,
+    );
+    expect(result.text, 'done');
   });
 }

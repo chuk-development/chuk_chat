@@ -45,6 +45,7 @@ class ComposerSendButton extends StatelessWidget {
     this.spinnerSize,
     this.spinnerStroke = 2,
     this.semanticsId = 'send_button',
+    this.sendTooltip,
   });
 
   /// The composer's text. The face follows it as the user types.
@@ -90,6 +91,10 @@ class ComposerSendButton extends StatelessWidget {
   final double spinnerStroke;
 
   final String semanticsId;
+
+  /// Tooltip on the send face, e.g. "Send (Enter)" from the shortcut
+  /// registry. Null: no tooltip (the phone).
+  final String? sendTooltip;
 
   /// The face for a composer state. Loading wins, then stop, then content.
   /// Whether a busy chat (a response streams, or a send is in flight) makes
@@ -147,6 +152,26 @@ class ComposerSendButton extends StatelessWidget {
       ComposerSendFace.send => 'Send',
     };
     final BorderRadius shape = BorderRadius.circular(radius);
+    final Widget target = _target(face, onTap, label, shape, fill, on);
+    final String? tip = sendTooltip;
+    if (tip == null) return target;
+    // Always wrapped once a tooltip is asked for, so a face change does not
+    // remount the target and drop the swap animation.
+    return Tooltip(
+      message: face == ComposerSendFace.send ? tip : label,
+      excludeFromSemantics: true,
+      child: target,
+    );
+  }
+
+  Widget _target(
+    ComposerSendFace face,
+    VoidCallback? onTap,
+    String label,
+    BorderRadius shape,
+    Color fill,
+    Color on,
+  ) {
     return Semantics(
       identifier: semanticsId,
       button: true,

@@ -256,6 +256,7 @@ class RoundContentBlockService {
     switch (a.type) {
       case ContentBlockType.text:
       case ContentBlockType.reasoning:
+      case ContentBlockType.steer:
         return (a.text ?? '').trim() == (b.text ?? '').trim();
       case ContentBlockType.toolCalls:
         final aCalls = a.toolCalls ?? const <ToolCall>[];
@@ -298,6 +299,30 @@ class RoundContentBlockService {
       if (normalizedExisting.contains(normalizedNew)) return true;
     }
     return false;
+  }
+
+  /// [blocks] plus one closing text block for a turn a stream error cut
+  /// off: the text of the cut pass ([interruptedText], already stripped of
+  /// tool-call markup) above [errorNote]. Null when [blocks] is empty: then
+  /// the message has no block mode and its flat text already shows both.
+  ///
+  /// The bubble hides the flat text field in content-block mode, so without
+  /// this block the retained answer and the error would not render.
+  static List<ContentBlock>? withInterruptionNote(
+    List<ContentBlock> blocks, {
+    required String interruptedText,
+    required String errorNote,
+  }) {
+    if (blocks.isEmpty) return null;
+    final text = interruptedText.trim();
+    final note = errorNote.trim();
+    final combined = text.isEmpty
+        ? note
+        : note.isEmpty
+        ? text
+        : '$text\n\n$note';
+    if (combined.isEmpty) return List<ContentBlock>.of(blocks);
+    return <ContentBlock>[...blocks, ContentBlock.text(combined)];
   }
 
   /// Whitespace-normalized form used for duplicate detection.

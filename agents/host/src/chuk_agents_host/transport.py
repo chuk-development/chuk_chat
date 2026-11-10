@@ -18,7 +18,7 @@ Two implementations exist:
 
 The party never learns which one it is on. That is the whole point: the crypto,
 the ceremony and the frame handling are identical on both, so only the pipe is
-new (docs/PLAN_2026-09-09_CLOUD_PAIRING_TRANSPORT.md).
+new (docs/notes/implemented/2026-09-09-plan-cloud-pairing-transport.md).
 """
 
 from __future__ import annotations

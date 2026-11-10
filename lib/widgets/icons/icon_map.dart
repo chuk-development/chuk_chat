@@ -166,6 +166,8 @@ final Map<int, HugeIconData> _map = <int, HugeIconData>{
   Icons.key.codePoint: HugeIcons.key01,
   Icons.key_outlined.codePoint: HugeIcons.key01,
   Icons.key_rounded.codePoint: HugeIcons.key01,
+  // A saved sign-in of the agent's browser (the login vault).
+  Icons.login.codePoint: HugeIcons.login01,
   Icons.palette_outlined.codePoint: HugeIcons.paintBoard,
   Icons.extension_outlined.codePoint: HugeIcons.puzzle,
   Icons.extension_rounded.codePoint: HugeIcons.puzzle,

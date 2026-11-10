@@ -24,7 +24,7 @@ import os
 import threading
 import time
 from pathlib import Path
-from typing import Callable, Iterable
+from typing import Any, Callable, Iterable
 
 from chuk_agents_runtime import DEFAULT_MODEL_ID, StateStore, SupabaseSession, fetch_models_info
 from chuk_agents_runtime import mcp_client
@@ -62,7 +62,7 @@ from chuk_agents_executor import (
     frame_to_b64,
     resolve_backend_model_wiring,
 )
-from chuk_agents_executor.protocol import USER_BROWSER, browser_target
+from chuk_agents_executor.protocol import AUTOMATION_UPDATE_KEYS, USER_BROWSER, browser_target
 from chuk_agents_executor.user_browser import (
     PANEL_ORIGIN,
     RESUME_CAPABILITY as USER_BROWSER_RESUME_CAPABILITY,
@@ -127,7 +127,10 @@ from .coworker_templates import seed_persona, template_seed
 from .secrets_key import mail_key_at_rest_key, mcp_grants_at_rest_key, secrets_at_rest_key
 from .seed_skills import seed_skills_dir, seed_workspace_skills
 from .desktop_notify import DesktopNotifier
+from chuk_agents_runtime.automations import owner_session_key
+
 from .automations import AutomationManager
+from .webhooks import OUTCOME_OTHER_AGENT, OUTCOME_OTHER_DEVICE
 from .calls import CallService
 from .notification_text import DEFAULT_COWORKER, coworker_name
 from .notify import SupabaseNotifier
@@ -143,7 +146,8 @@ RUN_ACK_TIMEOUT_SECONDS = float(os.environ.get("AGENTS_RUN_ACK_TIMEOUT_SECONDS",
 DEFAULT_WORKSPACE = "~/.local/share/chuk-agents"
 KEY_VERSION = 1
 
-#: The two pipes the party can run on (docs/PLAN_2026-09-09_CLOUD_PAIRING_TRANSPORT.md).
+#: The two pipes the party can run on
+#: (docs/notes/implemented/2026-09-09-plan-cloud-pairing-transport.md).
 #: ``cloud`` is the product default — a phone on mobile data can only ever reach
 #: the host through the relay. ``local`` is the same-machine developer path and
 #: stays the default of *this class* so the in-process test suite never dials out;
@@ -208,6 +212,8 @@ class LocalHost:
         provider_slug: str | None = None,
         reasoning_effort: str | None = None,
         sandbox_kind: str = "local",
+        # ``--sandbox auto`` found no docker and fell back to local (bead B10).
+        sandbox_fallback: bool = False,
         host_addr: str = "127.0.0.1",
         agent_name: str | None = None,
         supabase_url: str | None = None,
@@ -257,6 +263,7 @@ class LocalHost:
         self._provider_slug = provider_slug
         self._reasoning_effort = reasoning_effort
         self._sandbox_kind = sandbox_kind
+        self._sandbox_fallback = bool(sandbox_fallback) and sandbox_kind != "docker"
         # The image every container of this host runs. ``AGENTS_SANDBOX_IMAGE``
         # still wins; with nothing set the browser image is taken when it is
         # built on this machine, because it is the base image plus the watchable
@@ -282,6 +289,11 @@ class LocalHost:
         # before anything reads the device seed, the account token or the
         # secret vault. An explicit path is used as given.
         self._workspace = resolve_state_home(workspace_dir, logger=self._log)
+        # Private git dirs and rewind ledgers of the agents' workspaces live
+        # here, outside every workspace (security review H3).
+        from chuk_agents_runtime.workspace_git import GIT_STATE_DIRNAME, set_git_state_home
+
+        set_git_state_home(self._workspace / GIT_STATE_DIRNAME)
         self._agents_dir = self._workspace / "agents"
         self._agents_dir.mkdir(parents=True, exist_ok=True)
         self._roster_path = str(self._workspace / "roster.db")
@@ -620,6 +632,11 @@ class LocalHost:
         to be an "unknown tool" deep inside a run (bead cowork-3i5c).
         """
         if self._sandbox_kind != "docker":
+            if self._sandbox_fallback:
+                return (
+                    f"{self._sandbox_kind} — FALLBACK: --sandbox auto found no docker "
+                    "(no container, so no isolation and no watchable browser)"
+                )
             return f"{self._sandbox_kind} (no container, so no watchable browser)"
         if self._browser_mcp:
             return f"docker {self._sandbox_image} (browser ready)"
@@ -786,6 +803,9 @@ class LocalHost:
             # switch decides whether it may (docs/WIRE_CONTRACT.md, "Event
             # triggers").
             network_allowed=lambda: bool(self._permissions.get(self._agent.id).network),
+            # Inbound webhooks (docs/WIRE_CONTRACT.md, "Inbound webhooks"):
+            # an event addressed to another agent or host is not ours.
+            webhook_scope=self._webhook_scope,
         )
         # Background jobs (docs/WIRE_CONTRACT.md, "Interactive shell and
         # background commands"): the same trigger tail, a second consumer. A
@@ -899,6 +919,9 @@ class LocalHost:
                 # docs/AGENT_MAIL.md §7: an ``agent_mail`` frame, or a fresh
                 # authenticated connect, means "fetch the mail now".
                 on_agent_mail=self._on_agent_mail_signal,
+                # docs/WIRE_CONTRACT.md, "Inbound webhooks": a forwarded call
+                # to a webhook automation's URL.
+                on_webhook=self._on_webhook_event,
                 # With an install token the channel is fixed: nothing is
                 # scanned, and an expiry means "park on it again", not "print a
                 # fresh code".
@@ -1177,7 +1200,10 @@ class LocalHost:
             return False
 
     def _agent_key(self, session_key: str) -> str:
-        """The agent a session key belongs to: itself, or this host's agent."""
+        """The agent a session key belongs to: itself, or this host's agent.
+        A chat a schedule opened (``<owner>#auto-<id>``, docs/WIRE_CONTRACT.md,
+        "Automation guards") belongs to its owner's agent."""
+        session_key = owner_session_key(session_key)
         return session_key if self._is_own_coworker(session_key) else self._agent.id
 
     def _agent_keys(self, session_keys: Iterable[str]) -> dict[str, str]:
@@ -1193,8 +1219,11 @@ class LocalHost:
             }
         except Exception:  # noqa: BLE001 — an unreadable roster is not a new agent
             coworkers = set()
+        owners = {key: owner_session_key(key) for key in keys}
         return {
-            key: key if key and key not in primary and key in coworkers else self._agent.id
+            key: owners[key]
+            if owners[key] and owners[key] not in primary and owners[key] in coworkers
+            else self._agent.id
             for key in keys
         }
 
@@ -1240,7 +1269,10 @@ class LocalHost:
             # The local backend enforces ``secrets_env`` only (it runs on the
             # host itself); the docker one enforces every permission.
             environment = make_environment(
-                "local", workdir=workdir, policy_provider=self._permissions.provider_for(key)
+                "local",
+                workdir=workdir,
+                policy_provider=self._permissions.provider_for(key),
+                sandbox_fallback=self._sandbox_fallback,
             )
         self._environments[key] = environment
         return environment
@@ -1909,9 +1941,17 @@ class LocalHost:
             # ends as the note on the mail, which the app shows. No toast and
             # no push.
             return
+        goal = summary.get("goal") if isinstance(summary, dict) else None
+        if isinstance(goal, dict) and goal.get("continues") is True:
+            # docs/WIRE_CONTRACT.md, "Goal mode": the next goal round is
+            # already queued. One notification when the goal ends, not one
+            # per round.
+            self._log(f"goal {goal.get('id')}: round {goal.get('rounds_started')} done, continuing")
+            return
         attached = self._controller_attached()
-        # ``automation``, ``job`` and ``mail`` runs are unattended by definition.
-        automation = origin in ("automation", "job", ORIGIN_MAIL)
+        # ``automation``, ``job``, ``mail`` and ``goal`` runs are unattended
+        # by definition.
+        automation = origin in ("automation", "job", ORIGIN_MAIL, "goal")
         if attached and not automation:
             # The user is (supposedly) watching. Hold the announcement until the
             # app confirms it rendered the ``done`` (``run_ack``); if that never
@@ -2063,6 +2103,24 @@ class LocalHost:
             return False
         return manager.offer_mail(mail)
 
+    def _on_webhook_event(self, frame: dict) -> str:
+        """A ``webhook_event`` relay frame. Returns the outcome word for the
+        frame ledger (``queued``, ``filtered``, ``unknown_webhook``, ...)."""
+        manager = getattr(self, "_automations", None)
+        if manager is None:
+            return "not_enabled"
+        return manager.offer_webhook(frame)
+
+    def _webhook_scope(self, agent_id: str | None, device_id: str | None) -> str | None:
+        """Whether a ``webhook_event`` is for this host. ``device_id`` is the
+        relay executor id the server routes by; ``agent_id`` must be this
+        host's own agent or an agent the app registered here. ``None`` = ours."""
+        if device_id and device_id != getattr(self, "_relay_device_id", None):
+            return OUTCOME_OTHER_DEVICE
+        if agent_id and agent_id not in self._primary_agent_ids() and not self._is_own_coworker(agent_id):
+            return OUTCOME_OTHER_AGENT
+        return None
+
     def _on_job_trigger(self, record: dict) -> None:
         """A ``kind: job`` line in the trigger file: a background job ended
         (docs/WIRE_CONTRACT.md, "The wake-up"). Handed to the executor's job
@@ -2113,7 +2171,7 @@ class LocalHost:
         automation_id = payload.get("id")
         if not isinstance(automation_id, str) or not automation_id:
             return {"ok": False, "error": "id is required"}
-        changes = {k: payload[k] for k in ("name", "prompt", "spec", "notify") if k in payload}
+        changes = {k: payload[k] for k in AUTOMATION_UPDATE_KEYS if k in payload}
         return manager.update(None, automation_id, changes)
 
     def _on_agent_frame(self, payload: dict) -> list[dict] | dict:
@@ -2206,13 +2264,42 @@ class LocalHost:
             permissions_payload(
                 agent_id,
                 self._permissions.get(key),
-                enforced=enforced_permissions(
-                    "docker" if self._containers is not None else "local"
-                ),
+                enforced=self._enforced_permissions(),
                 approvals=approvals,
                 budget_weekly=self._permissions.budget(key),
             )
+            | {"sandbox": self.sandbox_status()}
         )
+
+    def _local_kind(self) -> str:
+        """``local`` or ``local-bwrap``: whether this host's local commands
+        run inside bubblewrap (``AGENTS_LOCAL_ISOLATION``)."""
+        from chuk_agents_sandbox.bwrap import wants_bwrap
+
+        try:
+            return "local-bwrap" if wants_bwrap() else "local"
+        except Exception:  # noqa: BLE001 — a failed probe is plain local
+            return "local"
+
+    def _enforced_permissions(self) -> dict[str, bool]:
+        return enforced_permissions(
+            "docker" if self._containers is not None else self._local_kind()
+        )
+
+    def sandbox_status(self) -> dict[str, Any]:
+        """The host-wide sandbox fact the app shows (docs/WIRE_CONTRACT.md,
+        "Sandbox fallback", bead B10): the backend in force, what was asked
+        for, and whether ``auto`` had to fall back to local."""
+        if self._containers is not None:
+            kind = "docker"
+        elif self._sandbox_kind == "docker":
+            kind = "docker"
+        else:
+            kind = self._local_kind()
+        body: dict[str, Any] = {"kind": kind, "fallback": self._sandbox_fallback}
+        if self._sandbox_fallback:
+            body["requested"] = "auto"
+        return body
 
     def _on_permissions_frame(self, payload: dict) -> dict:
         """``agent_permissions_get`` / ``_set`` (docs/WIRE_CONTRACT.md, "Agent
@@ -2224,9 +2311,10 @@ class LocalHost:
             self._permissions,
             payload,
             key_for=self._permission_key,
-            enforced=enforced_permissions("docker" if self._containers is not None else "local"),
+            enforced=self._enforced_permissions(),
             log=self._log,
         )
+        reply["sandbox"] = self.sandbox_status()
         self._attach_user_browser_status(payload, reply)
         if after is not None:
             self._send_host_payload(reply)
@@ -2401,6 +2489,7 @@ class LocalHost:
         call. A registered agent is its own session key; any other key is
         this host's own agent (``host:<device id>``). Never the roster
         codename: the fallback is the generic label."""
+        session_key = owner_session_key(session_key)
         agent_id = (
             session_key if self._is_own_coworker(session_key) else host_agent_id(self._device_id)
         )

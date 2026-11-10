@@ -21,7 +21,9 @@ pressure figure tracks the provider's real tokenizer.
 are deduplicated and replaced by a back-reference (lossless: see
 :func:`expand_back_references`), oversized tool outputs outside the tail are
 truncated, and bloated tool-call arguments are cut. This reclaims most of the
-waste before a single cent is spent on an aux model.
+waste before a single cent is spent on an aux model. Truncation stops at a
+frontier that moves in large steps (:func:`tier1_frontier`), so a row keeps
+its form from round to round and the provider's prefix cache keeps hitting.
 
 **Tier 2 — cheap aux-model summary of the middle.** At ~50% pressure the middle
 of the transcript is folded into one fixed-template summary (Goal / Constraints /
@@ -50,7 +52,12 @@ and an orphaned call makes some of them error outright.
 
 **Anti-thrashing.** If the last two passes each saved under 10%, the ladder
 stops trying: paying an aux model to shave 3% off every round is a leak, not a
-saving.
+saving. Tier 1 still runs (it is free, and switching it off would change rows).
+
+**Skill bodies.** A compaction that removes a loaded skill body leaves a
+``[skill <name> was loaded earlier; call skill again if needed]`` note, and
+:attr:`ContextLadder.on_skill_dropped` lets the skill library send the body
+again on the next call.
 
 **Summaries off the turn path (cowork-z9mo).** With a ``summarizer_factory``
 and a :class:`SummaryStore`, a needed summary is made on a background thread
@@ -71,6 +78,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+import bisect
 import hashlib
 import json
 import logging
@@ -80,11 +88,24 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
+from .skills import SKILL_BODY_PREFIX
 from .think_scrubber import scrub_history
 
 logger = logging.getLogger(__name__)
 
 # -- token accounting ---------------------------------------------------------
+
+
+def _positive_int(value: Any) -> int | None:
+    """``value`` as a positive int, else ``None`` (catalogue fields may be
+    missing, ``null``, a float or a string)."""
+    if isinstance(value, bool):
+        return None
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number > 0 else None
 
 DEFAULT_CONTEXT_LENGTH = 128_000
 DEFAULT_RESERVED_OUTPUT = 4_096
@@ -454,6 +475,17 @@ class LadderConfig:
     max_tool_result_tokens: int = 1_000
     max_tool_arg_chars: int = 2_000
     dedup_min_chars: int = 200
+    # Tier-1 truncation frontier (bead chuk_chat-8i9z). Rows before the
+    # frontier are truncated, rows after it are sent whole. The frontier moves
+    # forward only when the rows between it and the tail would save at least
+    # this many tokens: min(``tier1_step_tokens``, ``tier1_step_fraction`` of
+    # the input budget). So a big result that leaves the tail is not cut on
+    # the next round (that rewrote an earlier row and cost a prefix-cache
+    # miss on nearly every round); several are cut together, once. The cost
+    # of the step: up to this many tokens of old results ride along whole
+    # (cached, ~10% of the price) until the next step. 128k window: ~15.5k.
+    tier1_step_tokens: int = 16_000
+    tier1_step_fraction: float = 0.125
 
     # Anti-thrashing: skip once the last ``thrash_window`` passes each saved less
     # than ``thrash_min_savings``.
@@ -471,14 +503,16 @@ class LadderConfig:
     # and tool results before it. 0 turns the rule off.
     idle_drop_seconds: float = 1800.0
     # A new task drops the tool calls and tool results of the earlier tasks
-    # when they hold at least this many tokens (bead cowork-g7oc, live test
-    # 2026-10-09): the answers stay, the transcript keeps the rest. Without
-    # it, a research task's page dumps rode along on every round of the next
-    # task (an image job paid ~10k tokens of old tool results on each of its
-    # 26 rounds). Below the floor the previous task stays a byte-exact prefix
-    # of the next for the provider cache (cowork-g85d): a few small results
-    # cost less than one cache miss. 0 turns the rule off.
-    old_task_tools_drop_tokens: int = 4_000
+    # (bead cowork-g7oc, live test 2026-10-09): the answers stay, the
+    # transcript keeps the rest. Without it, a research task's page dumps
+    # rode along on every round of the next task. The drop works in blocks
+    # (bead chuk_chat-74ey): the drop point moves to a task's prompt only
+    # when the old tool traffic since the last drop point holds at least
+    # this many tokens, and then all of it goes at once. Between two drops
+    # each task is a byte-exact extension of the one before (cowork-g85d),
+    # so most tasks cost no prefix-cache miss, and the old tool traffic that
+    # rides along stays under this bound. 0 turns the rule off.
+    old_task_tools_drop_tokens: int = 16_000
     # Browser results of the current task are folded to this many tokens once
     # they are not among the newest ``browser_keep`` (live test 2026-10-09: 30
     # ``browser_evaluate`` results, 75k characters, re-sent on every step).
@@ -502,6 +536,31 @@ class LadderConfig:
     @property
     def effective_input_budget(self) -> int:
         return max(1, self.context_length - self.reserved_output)
+
+    @classmethod
+    def for_model(
+        cls, context_length: int | None, max_output_tokens: int | None = None
+    ) -> "LadderConfig":
+        """The ladder for a model with this context window (bead B18).
+
+        ``context_length`` unknown (``None`` / not positive): the 128k default.
+        ``max_output_tokens`` is what the request may spend on the answer (the
+        client's ``max_tokens`` cap, else the catalogue's
+        ``max_completion_tokens``). Reserved for output, but never more than a
+        quarter of the window: some providers report the whole window as the
+        output cap, which would leave nothing for the input."""
+        ctx = _positive_int(context_length)
+        if ctx is None:
+            return cls()
+        quarter = max(1, ctx // 4)
+        out = _positive_int(max_output_tokens) or DEFAULT_RESERVED_OUTPUT
+        return cls(context_length=ctx, reserved_output=min(out, quarter))
+
+    @property
+    def tier1_step(self) -> int:
+        """Tokens the tier-1 frontier must save before it moves."""
+        by_budget = int(self.effective_input_budget * max(0.0, self.tier1_step_fraction))
+        return max(1, min(max(1, self.tier1_step_tokens), max(1, by_budget)))
 
     @property
     def tail_budget(self) -> int:
@@ -665,8 +724,38 @@ def _stale_marks(
     return out, changed
 
 
+#: The head of a loaded skill body row (``skills.SKILL_BODY_PREFIX``).
+SKILL_MARK = SKILL_BODY_PREFIX
+
 #: Rows the runtime injects with ``role: "user"``; none of them starts a turn.
-_INJECTED_MARKS = (RECALL_MARK, CLOCK_MARK, SUMMARY_PREFIX)
+_INJECTED_MARKS = (RECALL_MARK, CLOCK_MARK, SUMMARY_PREFIX, SKILL_MARK)
+
+
+def skill_reload_note(name: str) -> str:
+    """The line that stands in for a skill body a compaction removed."""
+    return f"[skill {name} was loaded earlier; call skill again if needed]"
+
+
+def _skill_name(message: dict) -> str | None:
+    """The skill name of a loaded skill body row, else ``None``. Found by the
+    row's role and the prefix the runtime itself writes, not by its text."""
+    if message.get("role") != "user" or message.get(IDLE_DROP_KEY):
+        return None
+    content = message.get("content")
+    if not isinstance(content, str) or not content.startswith(SKILL_MARK):
+        return None
+    name = content[len(SKILL_MARK) :].split("\n", 1)[0].strip()
+    return name or None
+
+
+def _skill_names(messages: list[dict], start: int = 0, end: int | None = None) -> list[str]:
+    """Names of the skill bodies in ``messages[start:end]``, first seen first."""
+    names: list[str] = []
+    for message in messages[start:end]:
+        name = _skill_name(message)
+        if name and name not in names:
+            names.append(name)
+    return names
 
 
 def automation_runs_note(count: int) -> str:
@@ -776,17 +865,123 @@ def _fold_browser_results(messages: list[dict], start: int, cfg: "LadderConfig")
     return out
 
 
-def _tool_traffic_tokens(messages: list[dict], start: int, end: int) -> int:
-    """Estimated tokens of the tool results and tool calls in
-    ``messages[start:end]``: what :func:`_idle_marks` would drop there."""
-    total = 0
-    for message in messages[start:end]:
-        role = message.get("role")
-        if role == "tool":
-            total += estimate_message_tokens(message)
-        elif role == "assistant" and message.get("tool_calls"):
-            total += estimate_message_tokens({"role": "assistant", "tool_calls": message["tool_calls"]})
-    return total
+def _row_tool_traffic(message: dict) -> int:
+    role = message.get("role")
+    if role == "tool":
+        return estimate_message_tokens(message)
+    if role == "assistant" and message.get("tool_calls"):
+        return estimate_message_tokens({"role": "assistant", "tool_calls": message["tool_calls"]})
+    return 0
+
+
+def old_task_cut(messages: list[dict], start: int, turn_start: int, threshold: int) -> int:
+    """Where the old-task rule cuts (bead chuk_chat-74ey): the tool traffic
+    in ``messages[start:cut]`` is dropped. ``start`` when nothing is dropped.
+
+    The cut sits at a task's prompt and moves in blocks. Walking the prompts
+    in order, up to and including ``turn_start``, the cut moves to a prompt
+    only when the tool traffic between the cut and that prompt holds at
+    least ``threshold`` tokens. So the cut is a function of the stored rows
+    alone (no clock, no ladder state), it is the same on every round of a
+    task, and it moves at one task in many: the other tasks extend the
+    previous payload byte for byte. The old tool traffic kept is below
+    ``threshold`` after every move."""
+    if threshold <= 0 or turn_start <= start:
+        return start
+    cut = start
+    acc = 0
+    end = min(turn_start, len(messages))
+    for i in range(start, end + 1):
+        if i == end or (i > start and _is_turn_start(messages[i])):
+            if acc >= threshold:
+                cut = i
+                acc = 0
+            if i == end:
+                break
+        acc += _row_tool_traffic(messages[i])
+    return cut
+
+
+def _tier1_saving(message: dict, cfg: "LadderConfig") -> int:
+    """Tokens tier-1 truncation would take off this one row (0 when it
+    fits). A function of the row alone."""
+    if message.get(IDLE_DROP_KEY):
+        return 0
+    role = message.get("role")
+    if role == "tool":
+        content = message.get("content")
+        if _is_dup_marker(content):
+            return 0
+        truncated = _truncate_content(content, cfg.max_tool_result_tokens)
+        if truncated is None:
+            return 0
+        return max(
+            0,
+            estimate_message_tokens(message)
+            - estimate_message_tokens({**message, "content": truncated}),
+        )
+    if role == "assistant" and _has_tool_calls(message):
+        trimmed = _trim_tool_call_args(message, cfg.max_tool_arg_chars)
+        if trimmed is None:
+            return 0
+        return max(0, estimate_message_tokens(message) - estimate_message_tokens(trimmed))
+    return 0
+
+
+def tier1_frontier(messages: list[dict], floor: int, cfg: "LadderConfig") -> int:
+    """The tier-1 truncation frontier (bead chuk_chat-8i9z): rows before it
+    are truncated, rows from it on are sent whole.
+
+    The old rule truncated every row before the tail start. The tail is
+    measured from the END, so in a multi-round task each round moved it past
+    an earlier big result, that row changed in place, and the provider cache
+    missed everything after it, on almost every round.
+
+    The frontier is computed by replaying the history: for every prefix
+    ``messages[:k]`` (each possible payload), the tail of that prefix is
+    taken, and the frontier moves to the tail start only when the rows
+    between the frontier and the tail would save at least
+    ``cfg.tier1_step`` tokens. So:
+
+    - it depends on the rows alone, never on wall clock or ladder state;
+    - the frontier of a longer history replays the same steps first, so
+      within a task it never moves back and a row's form changes at most
+      once, in a step that cuts several rows together;
+    - the rows left whole between frontier and tail save less than one step.
+
+    A newest unit that does not fit the tail budget on its own is past the
+    tail exemption (as in :func:`_tail_start`) and is cut when it is first
+    sent, if it is big enough."""
+    n = len(messages)
+    if n == 0:
+        return 0
+    step = cfg.tier1_step
+    budget = cfg.tail_budget
+    floor = max(0, min(floor, n))
+    # prefix sums of cost and of savings
+    cost_sum = [0] * (n + 1)
+    save_sum = [0] * (n + 1)
+    for i, message in enumerate(messages):
+        cost_sum[i + 1] = cost_sum[i] + _cost(message)
+        save_sum[i + 1] = save_sum[i] + _tier1_saving(message, cfg)
+    if save_sum[n] - save_sum[0] < step:
+        return 0
+    starts = _unit_starts(messages)
+    start_costs = [cost_sum[s] for s in starts]
+    frontier = 0
+    seen_starts = 0
+    for k in range(1, n + 1):
+        while seen_starts < len(starts) and starts[seen_starts] < k:
+            seen_starts += 1
+        # The tail start of the prefix messages[:k]: the oldest unit start
+        # whose units up to k fit the budget; k when not even the newest
+        # unit fits (no exemption then).
+        idx = bisect.bisect_left(start_costs, cost_sum[k] - budget, 0, seen_starts)
+        exempt = starts[idx] if idx < seen_starts else k
+        exempt = max(min(floor, k), exempt)
+        if exempt > frontier and save_sum[exempt] - save_sum[frontier] >= step:
+            frontier = exempt
+    return frontier
 
 
 def _idle_marks(messages: list[dict], head_end: int, cut: int) -> tuple[list[dict], int]:
@@ -884,8 +1079,14 @@ def background_summaries() -> BackgroundSummaries:
     return _BACKGROUND
 
 
-def _summary_message(summary: str) -> dict:
-    return {"role": "user", "content": SUMMARY_PREFIX + summary}
+def _summary_message(summary: str, skills: list[str] | tuple[str, ...] = ()) -> dict:
+    """The summary row. ``skills`` are the skill bodies the summary folded
+    away; each gets a reload note, so the model knows to load it again
+    (the aux summary may well drop the instructions)."""
+    content = SUMMARY_PREFIX + summary
+    if skills:
+        content += "\n\n" + "\n".join(skill_reload_note(name) for name in skills)
+    return {"role": "user", "content": content}
 
 
 def _covers_more(row: dict, source: list[dict], head_end: int, upto: int) -> bool:
@@ -1017,6 +1218,11 @@ class ContextLadder:
     #: user's chat turn never starts with it. ``False`` forces the full
     #: ladder, ``True`` the window.
     automation_window: bool | None = None
+    #: Fired (per pass) with the name of each skill whose body the pass left
+    #: out of the payload (a summary folded it away, an automation window did
+    #: not keep it). The runtime wires ``SkillLibrary.forget``, so a ``skill``
+    #: call after the reload note sends the body again.
+    on_skill_dropped: Callable[[str], None] | None = None
 
     _summary: str | None = field(default=None, init=False, repr=False)
     _summarized_upto: int = field(default=0, init=False, repr=False)
@@ -1098,7 +1304,24 @@ class ContextLadder:
             cut = idle_cut(scrubbed, timestamps, self.config.idle_drop_seconds)
             out = self.compress(scrubbed, idle_cut=cut, turn_start=turn_start or 0)
         self._last_estimate = self._measure(out)
+        self._report_dropped_skills(scrubbed, out)
         return out
+
+    def _report_dropped_skills(self, before: list[dict], after: list[dict]) -> None:
+        """Tell :attr:`on_skill_dropped` about every skill whose body was in
+        the history but is not in the payload any more, so the next ``skill``
+        call sends the body again instead of ``already_active``."""
+        hook = self.on_skill_dropped
+        if hook is None:
+            return
+        kept = set(_skill_names(after))
+        for name in _skill_names(before):
+            if name in kept:
+                continue
+            try:
+                hook(name)
+            except Exception:  # noqa: BLE001 — a hook must never break a turn
+                logger.warning("context ladder: on_skill_dropped failed", exc_info=True)
 
     # -- fired automation runs (bead chuk_chat-kq1g / chuk_chat-n69s) ------
 
@@ -1145,6 +1368,7 @@ class ContextLadder:
         prefix: list[dict] = []
         history_start = system_end
         summary = self._summary
+        noted: list[str] = []
         if summary and head_end < self._summarized_upto <= turn_start:
             message = _summary_message(summary)
             cost = estimate_message_tokens(message)
@@ -1153,7 +1377,16 @@ class ContextLadder:
                     **message,
                     "content": _truncate_str(message["content"], budget * _CHARS_PER_TOKEN),
                 }
-                cost = estimate_message_tokens(message)
+            noted = _skill_names(messages, head_end, self._summarized_upto)
+            if noted:
+                # After the cut, so a long summary cannot cut the notes off.
+                message = {
+                    **message,
+                    "content": message["content"]
+                    + "\n\n"
+                    + "\n".join(skill_reload_note(name) for name in noted),
+                }
+            cost = estimate_message_tokens(message)
             prefix.append(message)
             budget = max(0, budget - cost)
             history_start = self._summarized_upto
@@ -1187,6 +1420,17 @@ class ContextLadder:
         out = list(messages[:system_end]) + prefix
         for rows in reversed(kept):
             out.extend(rows)
+        # Skill bodies are injected rows: the window never keeps them. Each
+        # one left out gets a reload note (the summary carries its own).
+        skipped = [
+            name
+            for name in _skill_names(messages, system_end, turn_start)
+            if name not in noted
+        ]
+        if skipped:
+            out.append(
+                {"role": "user", "content": "\n".join(skill_reload_note(n) for n in skipped)}
+            )
         if omitted:
             out.append({"role": "user", "content": automation_runs_note(omitted)})
         current = _fold_browser_results(list(messages), turn_start, cfg)
@@ -1195,8 +1439,7 @@ class ContextLadder:
         # with many tool rounds still gets its older tool results truncated;
         # the newest unit stays whole. Never compress() here: that would
         # persist a summary digest computed against window indices.
-        _, exempt_start = _tail_start(out, cfg.tail_budget)
-        out = self._tier1(out, max(system_end, exempt_start))
+        out = self._tier1(out, system_end)
         stats.automation_runs_omitted = omitted
         stats.tokens_after = self._measure(out)
         self._last_stats = stats
@@ -1220,12 +1463,11 @@ class ContextLadder:
         head_end = _head_end(scrubbed, cfg.head_messages)
         self._refresh_from_background()
         self._check_summary(scrubbed, head_end)
-        raw_tail_start, raw_exempt_start = _tail_start(scrubbed, cfg.tail_budget)
+        raw_tail_start, _ = _tail_start(scrubbed, cfg.tail_budget)
         tail_start = max(head_end, raw_tail_start)
-        exempt_start = max(head_end, raw_exempt_start)
         if tail_start <= head_end:
             return False
-        working = self._tier1(scrubbed, exempt_start)
+        working = self._tier1(scrubbed, head_end)
         trigger = cfg.tier2_threshold - cfg.plan_headroom
         if self._pressure(self._measure(working)) < trigger:
             return False
@@ -1234,7 +1476,11 @@ class ContextLadder:
         if not new_slice:
             return False
         if previous:
-            kept = working[:head_end] + [_summary_message(previous)] + working[slice_start:]
+            kept = (
+                working[:head_end]
+                + [_summary_message(previous, _skill_names(working, head_end, slice_start))]
+                + working[slice_start:]
+            )
             if self._pressure(self._measure(kept)) < trigger:
                 return False
         return self._schedule(scrubbed, working, head_end, slice_start, tail_start, previous)
@@ -1390,13 +1636,16 @@ class ContextLadder:
         # result is never larger than without them (a drop that lowered the
         # pressure under tier 2 left the whole middle verbatim).
         tool_cut = idle_cut
-        if (
-            cfg.old_task_tools_drop_tokens > 0
-            and turn_start > max(idle_cut, head_end)
-            and _tool_traffic_tokens(messages, max(idle_cut, head_end), turn_start)
-            >= cfg.old_task_tools_drop_tokens
-        ):
-            tool_cut = turn_start
+        if cfg.old_task_tools_drop_tokens > 0 and turn_start > max(idle_cut, head_end):
+            tool_cut = max(
+                idle_cut,
+                old_task_cut(
+                    messages,
+                    max(idle_cut, head_end),
+                    turn_start,
+                    cfg.old_task_tools_drop_tokens,
+                ),
+            )
         marked, stats.idle_dropped = _idle_marks(messages, head_end, tool_cut)
         marked, stale = _stale_marks(marked, head_end, turn_start, recall_end=idle_cut)
         stats.idle_dropped += stale
@@ -1414,8 +1663,13 @@ class ContextLadder:
             2 if self.summarizer is not None and pressure >= cfg.tier2_threshold else 1
         )
         if self._thrashing(intended_tier):
+            # Tier 1 still runs: it is free, and switching it off would put
+            # the truncated rows back whole, a prefix-cache miss and more
+            # tokens on every later round. Only the aux attempt is skipped.
             stats.skipped_reason = "anti_thrash"
-            return self._finish(marked, stats, record=False)
+            stats.tier = 1
+            working = self._tier1(marked, head_end)
+            return self._finish(working, stats, record=False)
 
         # A background job may have written a fresher summary since this
         # ladder read it; then check that the summary still covers this
@@ -1423,12 +1677,11 @@ class ContextLadder:
         self._refresh_from_background()
         self._check_summary(messages, head_end)
 
-        raw_tail_start, raw_exempt_start = _tail_start(marked, cfg.tail_budget)
+        raw_tail_start, _ = _tail_start(marked, cfg.tail_budget)
         tail_start = max(head_end, raw_tail_start)
-        exempt_start = max(head_end, raw_exempt_start)
 
         # -- tier 1: deterministic, no LLM ---------------------------------
-        working = self._tier1(marked, exempt_start)
+        working = self._tier1(marked, head_end)
         stats.tier = 1
 
         # -- tier 2/3: aux-model summary of the middle ---------------------
@@ -1468,14 +1721,19 @@ class ContextLadder:
 
     # -- tier 1 -----------------------------------------------------------
 
-    def _tier1(self, messages: list[dict], exempt_start: int) -> list[dict]:
-        """Deterministic pass. ``exempt_start`` marks where the truncation
-        exemption begins — the newest work stays byte-exact, because that is what
-        the model is reasoning about right now. Dedup applies everywhere, since
-        it is lossless."""
+    def _tier1(self, messages: list[dict], floor: int = 0) -> list[dict]:
+        """Deterministic pass. Rows before the :func:`tier1_frontier` are
+        truncated; the rows from it on stay byte-exact, the newest work above
+        all, because that is what the model is reasoning about right now. The
+        frontier moves in steps, so a row's form does not change from one
+        round to the next (bead chuk_chat-8i9z). ``floor`` is the lowest
+        exemption start (the head). Dedup applies everywhere, since it is
+        lossless. Returns ``messages`` itself when nothing changed."""
         cfg = self.config
+        exempt_start = tier1_frontier(messages, floor, cfg)
         out: list[dict] = []
         seen: dict[str, int] = {}
+        changed = False
         for i, message in enumerate(messages):
             role = message.get("role")
             in_tail = i >= exempt_start
@@ -1503,6 +1761,7 @@ class ContextLadder:
                             "bytes": len(canonical),
                         }
                         out.append(clone)
+                        changed = True
                         continue
                     seen[key] = i
                 if not in_tail:
@@ -1513,17 +1772,22 @@ class ContextLadder:
                         clone = dict(message)
                         clone["content"] = truncated
                         out.append(clone)
+                        changed = True
                         continue
                 out.append(message)
                 continue
 
             if role == "assistant" and _has_tool_calls(message) and not in_tail:
                 trimmed = _trim_tool_call_args(message, cfg.max_tool_arg_chars)
-                out.append(trimmed if trimmed is not None else message)
+                if trimmed is not None:
+                    out.append(trimmed)
+                    changed = True
+                else:
+                    out.append(message)
                 continue
 
             out.append(message)
-        return out
+        return out if changed else messages
 
     # -- tier 2 / 3 -------------------------------------------------------
 
@@ -1571,7 +1835,11 @@ class ContextLadder:
             # the aux model for a slice of a few messages. Without this, every
             # round that moved the tail by one unit paid a blocking aux call
             # (bead chuk_chat-p5xm).
-            kept = head + [_summary_message(previous)] + messages[slice_start:]
+            kept = (
+                head
+                + [_summary_message(previous, _skill_names(messages, head_end, slice_start))]
+                + messages[slice_start:]
+            )
             if not new_slice or self._pressure(self._decision_size(kept)) < cfg.tier2_threshold:
                 return self._repair_dangling_refs(kept, messages)
         if not new_slice:
@@ -1620,7 +1888,11 @@ class ContextLadder:
             except Exception:  # noqa: BLE001 — memory must never break compaction
                 pass
 
-        rebuilt = head + [_summary_message(self._summary)] + messages[tail_start:]
+        rebuilt = (
+            head
+            + [_summary_message(self._summary, _skill_names(messages, head_end, tail_start))]
+            + messages[tail_start:]
+        )
         return self._repair_dangling_refs(rebuilt, messages)
 
     def _schedule(

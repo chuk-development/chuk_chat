@@ -344,17 +344,29 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       // every prior tool result was stripped from history on an edit/resend
       // and the model re-ran searches it had already done. It also dropped
       // `sender == 'assistant'` rows entirely.
-      final List<Map<String, dynamic>> conversationHistory =
-          await ChatHistoryBuilder.build(
-            messages: _messages.sublist(0, index),
-            // The edited turn is passed separately as `message`; the slice
-            // above already excludes it, so nothing needs dropping here.
-            pendingUserText: '',
-            includeRecentImages: widget.includeRecentImagesInHistory,
-            includeAllImages: widget.includeAllImagesInHistory,
-            includeReasoning: widget.includeReasoningInHistory,
-            includeToolResults: widget.includeToolResultsInHistory,
-          );
+      // The rows before the edited message, copied now: the history must
+      // come from this chat even if the screen switches to another one
+      // while the turn sets up (a compaction takes seconds).
+      final List<Map<String, String>> resendRows = <Map<String, String>>[
+        for (final m in _messages.take(index)) Map<String, String>.from(m),
+      ];
+      Future<List<Map<String, dynamic>>> buildResendHistory(
+        List<Map<String, String>> rows, [
+        List<int>? starts,
+      ]) => ChatHistoryBuilder.build(
+        messages: rows,
+        // The edited turn is passed separately as `message`; the slice
+        // above already excludes it, so nothing needs dropping here.
+        pendingUserText: '',
+        includeRecentImages: widget.includeRecentImagesInHistory,
+        includeAllImages: widget.includeAllImagesInHistory,
+        includeReasoning: widget.includeReasoningInHistory,
+        includeToolResults: widget.includeToolResultsInHistory,
+        messageStarts: starts,
+      );
+      List<Map<String, dynamic>> conversationHistory = await buildResendHistory(
+        resendRows,
+      );
 
       if (_isSendOperationCancelled(sendOperationId)) {
         return;
@@ -381,15 +393,23 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         showSnackBar(resendBudget.error!);
         return;
       }
-      final int resendMaxTokens = resendBudget.maxResponseTokens ?? 512;
+      int resendMaxTokens = resendBudget.maxResponseTokens ?? 512;
 
       // The chat picks the tool loop: the host's fold for an Agents thread,
       // upstream's client-side loop for a chuk_chat chat.
       final ToolCallHandler toolCallHandler = ToolCallHandler.forChat(
         _activeChatId,
       );
+      // The edited message's stored send time: its `[Sent: …]` line.
+      final String? turnSentAt = _messages[index]['sentAt'];
+      // Which message this turn answers: a Retry of a turn the server may
+      // still hold reuses its ids (bead chuk_chat-3e67).
+      final String? turnMessageKey = ClientRequestIds.messageKeyOf(
+        _messages[index],
+      );
       var toolSession = toolCallHandler.createSession(
         initialUserMessage: messageForSend,
+        userSentAt: turnSentAt,
         history: conversationHistory,
         accessToken: accessToken,
         discoveryContextKey: _activeChatId,
@@ -400,16 +420,92 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         skipIdentity: skipIdentity,
         nativeToolCalling: !kIsWeb,
       );
-      final initialSystemPrompt = await toolCallHandler
-          .buildInitialSystemPrompt(toolSession);
+      toolSession.applyWorkspace(_resolveWorkspaceForCurrentChat());
+      var initialSystemPrompt = await toolCallHandler.buildInitialSystemPrompt(
+        toolSession,
+      );
 
       // Capture chatId for this streaming operation
       final String chatIdForStream = _activeChatId!;
+
+      // A long chat is compacted on a resend / regenerate too, the same way
+      // a normal send does it (docs/GOTCHAS.md, "Chat compaction").
+      if (index >= 1) {
+        final compaction = await ChatCompactionRunner.beforeSend(
+          messages: resendRows,
+          end: index,
+          chatId: chatIdForStream,
+          modelId: modelIdToUse,
+          providerSlug: providerToUse ?? 'openai',
+          accessToken: accessToken,
+          systemPrompt: initialSystemPrompt,
+          tools: toolCallHandler.nativeToolDefinitions(toolSession),
+          history: conversationHistory,
+          pendingMessage: toolSession.firstPassMessage,
+          buildHistory: buildResendHistory,
+        );
+        if (_isSendOperationCancelled(sendOperationId)) {
+          return;
+        }
+        if (compaction.overflow) {
+          _endTurnWithError(
+            chatIdForStream,
+            placeholderIndex,
+            compaction.overflowMessage,
+          );
+          return;
+        }
+        final List<Map<String, String>>? compactedRows = compaction.messages;
+        if (compaction.compacted && compactedRows != null) {
+          _storeCompaction(chatIdForStream, compaction);
+          conversationHistory = await buildResendHistory(compactedRows);
+          // The room the summary freed goes to the answer.
+          resendMaxTokens =
+              MessageCompositionService.resolveResponseTokenBudget(
+                selectedModelId: modelIdToUse,
+                apiHistory: conversationHistory,
+                aiPromptContent: messageForSend,
+                systemPrompt: systemPrompt,
+              ).maxResponseTokens ??
+              resendMaxTokens;
+          toolSession = toolCallHandler.createSession(
+            initialUserMessage: messageForSend,
+            userSentAt: turnSentAt,
+            history: conversationHistory,
+            accessToken: accessToken,
+            discoveryContextKey: chatIdForStream,
+            baseSystemPrompt: systemPrompt,
+            modelId: selectedModelId,
+            toolCallingEnabled: widget.toolCallingEnabled,
+            discoveryMode: widget.toolDiscoveryMode,
+            skipIdentity: skipIdentity,
+            nativeToolCalling: !kIsWeb,
+          );
+          toolSession.applyWorkspace(_resolveWorkspaceForCurrentChat());
+          initialSystemPrompt = await toolCallHandler.buildInitialSystemPrompt(
+            toolSession,
+          );
+        }
+      }
 
       // Message-level auto-retry: if the final answer is empty after all
       // tool-loop retries, re-send the last user message once more.
       const int kMaxMessageLevelRetries = 1;
       int messageLevelRetries = 0;
+
+      // Request idempotency: an outbox row armed its base for this turn (the
+      // outbox sends a row through this Retry path); a Retry of a message
+      // whose turn ended while the server still held it (`connection_lost`,
+      // `request_pending`) asks with that turn's ids, so the server answers
+      // from its record; other turns get a fresh `client_request_id` per
+      // pass.
+      final String requestBase =
+          ClientRequestIds.take(chatIdForStream) ??
+          ClientRequestIds.takeForRetry(chatIdForStream, turnMessageKey) ??
+          ClientRequestIds.freshBase();
+      // The usage stamped on this turn's answer is only what this turn
+      // records, never the reply before it.
+      ChatTurnStats.instance.beginTurn(chatIdForStream);
 
       // Accumulates display text across all streaming passes so that AI text
       // from earlier passes is never lost when a new pass begins.
@@ -423,11 +519,19 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         required List<Map<String, dynamic>> history,
         required String? passSystemPrompt,
         List<String>? passImages,
+        int? turnHistoryIndex,
         int currentPass = 0,
+        int cacheMissRetries = 0,
+        int reconnectRetries = 0,
+        String? passRequestId,
       }) async {
         if (_isSendOperationCancelled(sendOperationId)) {
           return;
         }
+        // One id per pass; the cache-miss retry of this pass reuses it.
+        final String requestId =
+            passRequestId ??
+            ClientRequestIds.forPass(requestBase, currentPass + 1);
 
         final requestPayload = <String, dynamic>{
           'pass': currentPass + 1,
@@ -461,6 +565,10 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           // Native tool calling: enabled tools as OpenAI function defs, sent on
           // every pass; empty (prompt-based) when native mode is off.
           tools: toolCallHandler.nativeToolDefinitions(toolSession),
+          toolChoice: ToolCallHandler.nativeToolChoice(toolSession),
+          requestPass: currentPass + 1,
+          turnHistoryIndex: turnHistoryIndex,
+          clientRequestId: requestId,
           // A retry REPLACES the last answer, so the host drops the turn being
           // retried instead of storing the same question again. Only the first
           // pass says so: the later passes of the same turn are continuations,
@@ -600,13 +708,18 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     chatIdForStream,
                   );
 
-                  final next = loopResult.nextStep!;
+                  // Later passes carry the turn's images in its own history
+                  // entry, not on the pass message (prompt cache, order).
+                  final next = loopResult.nextStep!.withTurnImages(
+                    imagesForResend,
+                  );
                   await Future<void>.delayed(Duration.zero);
                   await startStreamPass(
                     message: next.message,
                     history: next.history,
                     passSystemPrompt: next.systemPrompt,
-                    passImages: imagesForResend,
+                    passImages: next.passImages,
+                    turnHistoryIndex: next.turnUserIndex,
                     currentPass: currentPass + 1,
                   );
                   return;
@@ -633,6 +746,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
                   toolSession = toolCallHandler.createSession(
                     initialUserMessage: messageForSend,
+                    userSentAt: turnSentAt,
                     history: conversationHistory,
                     accessToken: accessToken,
                     discoveryContextKey: chatIdForStream,
@@ -643,6 +757,8 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     skipIdentity: skipIdentity,
                     nativeToolCalling: !kIsWeb,
                   );
+
+                  toolSession.applyWorkspace(_resolveWorkspaceForCurrentChat());
                   final retryPrompt = await toolCallHandler
                       .buildInitialSystemPrompt(toolSession);
 
@@ -654,7 +770,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                   if (!mounted) return;
 
                   await startStreamPass(
-                    message: messageForSend,
+                    message: toolSession.firstPassMessage,
                     history: conversationHistory,
                     passSystemPrompt: retryPrompt,
                     passImages: imagesForResend,
@@ -777,6 +893,9 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                       'reasoning': resolvedReasoning,
                       'contentBlocks': ?contentBlocksJson,
                       if (tps != null) 'tps': tps.toString(),
+                      'usage': ?ChatTurnStats.instance
+                          .usageOf(chatIdForStream)
+                          ?.encode(),
                     },
                     foldVariant: true,
                   );
@@ -807,6 +926,64 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
             );
           },
           onError: (errorMessage, {String? code}) {
+            // A server ref (tool result, turn or history image) is no longer
+            // cached: clear the registry and send this pass again once, in
+            // full. The same id: the error released it.
+            if (_isCacheMiss(errorMessage, code) &&
+                cacheMissRetries < _kMaxCacheMissRetries) {
+              _streamingManager.takeInterruptedPartial(chatIdForStream);
+              ToolResultCacheRegistry.instance.handleMiss();
+              unawaited(
+                startStreamPass(
+                  message: message,
+                  history: history,
+                  passSystemPrompt: passSystemPrompt,
+                  passImages: passImages,
+                  turnHistoryIndex: turnHistoryIndex,
+                  currentPass: currentPass,
+                  cacheMissRetries: cacheMissRetries + 1,
+                  passRequestId: requestId,
+                ),
+              );
+              return;
+            }
+            // The socket died, or the answer is still being written: ask
+            // again for the same id; the server answers from its record and
+            // bills the pass once (bead chuk_chat-074s).
+            if (_retryPassOnSameId(chatIdForStream, code, reconnectRetries)) {
+              _streamingManager.takeInterruptedPartial(chatIdForStream);
+              unawaited(() async {
+                await Future<void>.delayed(reconnectBackoff(reconnectRetries));
+                if (_isSendOperationCancelled(sendOperationId)) return;
+                await startStreamPass(
+                  message: message,
+                  history: history,
+                  passSystemPrompt: passSystemPrompt,
+                  passImages: passImages,
+                  turnHistoryIndex: turnHistoryIndex,
+                  currentPass: currentPass,
+                  cacheMissRetries: cacheMissRetries,
+                  reconnectRetries: reconnectRetries + 1,
+                  passRequestId: requestId,
+                );
+              }());
+              return;
+            }
+            _keepTurnForRetry(
+              chatIdForStream,
+              code,
+              turnMessageKey,
+              requestBase,
+            );
+            // Text this turn had already written, plus the cut pass (idle
+            // timeout, close without `done`). It stays above the error.
+            final interruptedPartial = _streamingManager.takeInterruptedPartial(
+              chatIdForStream,
+            );
+            final keptText = _keptTextOnError(
+              accumulatedText.toString(),
+              interruptedPartial,
+            );
             if (errorMessage == '__PAYMENT_REQUIRED__') {
               final paymentMessage =
                   'You have used all free messages. Please subscribe to continue chatting.';
@@ -828,18 +1005,33 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
               return;
             }
 
+            final errorText = keptText.isEmpty
+                ? 'Error: $errorMessage'
+                : '$keptText\n\nError: $errorMessage';
+            final errorBlocksJson = _errorContentBlocksJson(
+              contentBlocks,
+              interruptedPartial,
+              errorMessage,
+            );
             if (_activeChatId == chatIdForStream) {
               if (mounted) {
                 setState(() {
                   _isSending = false;
                 });
               }
-              _finalizeAiMessage(placeholderIndex, 'Error: $errorMessage');
+              // The error blocks go in before the fold, so a regenerate's
+              // archived variant keeps the interrupted text and error block.
+              _finalizeAiMessage(
+                placeholderIndex,
+                errorText,
+                contentBlocks: errorBlocksJson,
+              );
               _persistChatWithId(chatIdForStream);
             } else {
               _persistBackgroundAssistant(chatIdForStream, placeholderIndex, {
-                'text': 'Error: $errorMessage',
+                'text': errorText,
                 'reasoning': '',
+                'contentBlocks': ?errorBlocksJson,
               });
             }
           },
@@ -865,7 +1057,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
       try {
         await startStreamPass(
-          message: messageForSend,
+          message: toolSession.firstPassMessage,
           history: conversationHistory,
           passSystemPrompt: initialSystemPrompt,
           passImages: imagesForResend,
@@ -994,8 +1186,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
   /// Cancel any ongoing operation (streaming or sending)
   Future<void> _cancelCurrentOperation() async {
-    // Explicit cancel discards any queued follow-up message too.
-    _pendingMessageText = null;
+    // An explicit stop does not send the queue on its own: the waiting
+    // messages go back into the composer, where the reader can send, edit or
+    // drop them. Nothing typed is lost.
+    _escapeStop.reset();
+    _cancelPendingMessage();
 
     if (_isStreaming) {
       // Stream is active - cancel via existing method
@@ -1114,6 +1309,39 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     _persistChatWithIdAndMessages(chatId, target, commit: commit);
   }
 
+  /// The text to keep above a stream error: what earlier passes of the turn
+  /// wrote ([accumulated]) plus the cut pass ([interruptedPartial], raw, with
+  /// tool-call markup), or empty when there is none.
+  /// One replay of a pass after a server `cache_miss`; after the registry
+  /// is cleared no ref goes up, so a second miss cannot happen.
+  static const int _kMaxCacheMissRetries = 1;
+
+  bool _isCacheMiss(String errorMessage, String? code) =>
+      code == kCacheMissErrorCode || errorMessage.contains(kCacheMissErrorCode);
+
+  String _keptTextOnError(String accumulated, String? interruptedPartial) {
+    final partial = stripToolCallBlocksForDisplay(interruptedPartial ?? '');
+    return '$accumulated$partial'.trim();
+  }
+
+  /// The content blocks to store for a turn a stream error cut off, or null
+  /// when the turn has none. [blocks] gets one text block with the cut pass
+  /// ([interruptedPartial], raw) and the error, so the bubble shows them in
+  /// content-block mode too. Earlier passes are already in [blocks].
+  String? _errorContentBlocksJson(
+    List<ContentBlock> blocks,
+    String? interruptedPartial,
+    String errorMessage,
+  ) {
+    final withNote = RoundContentBlockService.withInterruptionNote(
+      blocks,
+      interruptedText: stripToolCallBlocksForDisplay(interruptedPartial ?? ''),
+      errorNote: 'Error: $errorMessage',
+    );
+    if (withNote == null) return null;
+    return jsonEncode(withNote.map((b) => b.toJson()).toList());
+  }
+
   /// Show dialog when API returns 402 (free messages exhausted)
   void _showPaymentRequiredDialog() {
     if (!mounted) return;
@@ -1164,7 +1392,12 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           ),
           ElevatedButton.icon(
             icon: const AppIcon(Icons.rocket_launch, size: 18),
-            label: const Text('Subscribe Now'),
+            // Opens the plans page only; the order button with the
+            // § 312j wording ("Subscribe and pay") is on that page.
+            label: Text(
+              AppLocalizations.of(dialogContext)?.viewSubscription ??
+                  'View subscription',
+            ),
             style: ElevatedButton.styleFrom(
               backgroundColor: theme.colorScheme.primary,
               foregroundColor: theme.colorScheme.onPrimary,
@@ -1219,11 +1452,9 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         final text = composerController.text.trim();
         if (text.isNotEmpty) {
           if (mounted) {
-            setState(() {
-              _pendingMessageText = text;
-            });
+            setState(() => _followUps.enqueue(text));
           } else {
-            _pendingMessageText = text;
+            _followUps.enqueue(text);
           }
           composerController.clear();
           if (kDebugMode) {
@@ -1279,7 +1510,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           : (voiceText ?? composerController.text.trim());
 
       // Use MessageCompositionService to prepare the message
-      final List<Map<String, dynamic>> apiHistory = isContinuation
+      List<Map<String, dynamic>> apiHistory = isContinuation
           ? await ChatHistoryBuilder.build(
               messages: continuationHistoryMessages!,
               pendingUserText: originalUserInput,
@@ -1565,7 +1796,10 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       // bubble to "pending", remove the "Thinking..." placeholder, persist
       // and bail out before contacting the WebSocket.  The retry manager
       // will replay the send once connectivity returns.
-      if (!NetworkStatusService.isOnline) {
+      if (OfflineSendBridge.mustQueue(
+        _activeChatId!,
+        imagePaths: imageDataUrls,
+      )) {
         final userMsgIndex = placeholderIndex - 1;
         final enqueued = await _enqueueOfflineSend(
           chatId: _activeChatId!,
@@ -1580,6 +1814,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
               : null,
           maxTokens: maxResponseTokens,
           reasoningEffort: clampedReasoningEffort(modelIdForSend, providerSlug),
+          kick: NetworkStatusService.isOnline,
         );
         ChatStorageService.isMessageOperationInProgress = false;
         if (enqueued) return;
@@ -1597,6 +1832,16 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
               _messages.removeAt(placeholderIndex);
             }
             _isSending = false;
+            // Not accepted anywhere: the draft comes back (idea 67, the
+            // draft clears only once the send is accepted).
+            if (voiceText == null &&
+                !isContinuation &&
+                composerController.text.trim().isEmpty) {
+              composerController.text = originalUserInput;
+              composerController.selection = TextSelection.collapsed(
+                offset: originalUserInput.length,
+              );
+            }
           });
         }
         _persistChatWithId(_activeChatId!);
@@ -1660,8 +1905,13 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       final ToolCallHandler toolCallHandler = ToolCallHandler.forChat(
         chatIdForStream,
       );
+      // The user message's stored send time: its `[Sent: …]` line.
+      final String? turnSentAt = isContinuation
+          ? null
+          : _messages[placeholderIndex - 1]['sentAt'];
       var toolSession = toolCallHandler.createSession(
         initialUserMessage: aiPromptContent,
+        userSentAt: turnSentAt,
         history: apiHistory,
         accessToken: accessToken,
         discoveryContextKey: chatIdForStream,
@@ -1672,8 +1922,91 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         skipIdentity: skipIdentity,
         nativeToolCalling: !kIsWeb,
       );
-      final initialSystemPrompt = await toolCallHandler
-          .buildInitialSystemPrompt(toolSession);
+      toolSession.applyWorkspace(_resolveWorkspaceForCurrentChat());
+      var initialSystemPrompt = await toolCallHandler.buildInitialSystemPrompt(
+        toolSession,
+      );
+
+      // Long chat: summarize the older turns first (docs/GOTCHAS.md, "Chat
+      // compaction"). Replaces the old hard "Too much context" stop. A
+      // continue compacts a copy of its history rows (they end with the
+      // answer it continues) and then puts the summary on the chat's own
+      // row at the same index.
+      if (placeholderIndex >= 1) {
+        // Copied now (the summary request takes seconds and the screen may
+        // switch to another chat meanwhile): the summary goes onto this
+        // copy, and the history is rebuilt from it.
+        final List<Map<String, String>> compactRows = isContinuation
+            ? <Map<String, String>>[
+                for (final m
+                    in continuationHistoryMessages ??
+                        const <Map<String, String>>[])
+                  Map<String, String>.from(m),
+              ]
+            : <Map<String, String>>[
+                for (final m in _messages.take(placeholderIndex - 1))
+                  Map<String, String>.from(m),
+              ];
+        final int end = compactRows.length;
+        Future<List<Map<String, dynamic>>> buildSendHistory(
+          List<Map<String, String>> rows, [
+          List<int>? starts,
+        ]) => ChatHistoryBuilder.build(
+          messages: rows,
+          pendingUserText: originalUserInput,
+          includeRecentImages: widget.includeRecentImagesInHistory,
+          includeAllImages: widget.includeAllImagesInHistory,
+          includeReasoning: widget.includeReasoningInHistory,
+          includeToolResults: widget.includeToolResultsInHistory,
+          messageStarts: starts,
+        );
+        final compaction = await ChatCompactionRunner.beforeSend(
+          messages: compactRows,
+          end: end,
+          chatId: chatIdForStream,
+          modelId: modelIdForSend,
+          providerSlug: providerSlug,
+          accessToken: accessToken,
+          systemPrompt: initialSystemPrompt,
+          tools: toolCallHandler.nativeToolDefinitions(toolSession),
+          history: apiHistory,
+          pendingMessage: toolSession.firstPassMessage,
+          buildHistory: buildSendHistory,
+          // A continue: the answer it continues (the last row) is measured
+          // again after the summary.
+          madeAt: isContinuation ? end - 1 : end,
+        );
+        if (compaction.overflow) {
+          _endTurnWithError(
+            chatIdForStream,
+            placeholderIndex,
+            compaction.overflowMessage,
+          );
+          return;
+        }
+        final List<Map<String, String>>? compactedRows = compaction.messages;
+        if (compaction.compacted && compactedRows != null) {
+          _storeCompaction(chatIdForStream, compaction);
+          apiHistory = await buildSendHistory(compactedRows);
+          toolSession = toolCallHandler.createSession(
+            initialUserMessage: aiPromptContent,
+            userSentAt: turnSentAt,
+            history: apiHistory,
+            accessToken: accessToken,
+            discoveryContextKey: chatIdForStream,
+            baseSystemPrompt: systemPrompt,
+            modelId: modelIdForSend,
+            toolCallingEnabled: widget.toolCallingEnabled,
+            discoveryMode: widget.toolDiscoveryMode,
+            skipIdentity: skipIdentity,
+            nativeToolCalling: !kIsWeb,
+          );
+          toolSession.applyWorkspace(_resolveWorkspaceForCurrentChat());
+          initialSystemPrompt = await toolCallHandler.buildInitialSystemPrompt(
+            toolSession,
+          );
+        }
+      }
 
       if (_isSendOperationCancelled(sendOperationId)) {
         return;
@@ -1682,6 +2015,24 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       // Message-level auto-retry for the second streaming path.
       const int kMaxMessageLevelRetries2 = 1;
       int messageLevelRetries2 = 0;
+
+      // Request idempotency: a fresh `client_request_id` per pass, or ids
+      // derived from an outbox row that armed its base for this chat.
+      final String requestBase =
+          ClientRequestIds.take(chatIdForStream) ??
+          ClientRequestIds.freshBase();
+      // The message this turn answers (none for a continue): a Retry of it
+      // after the server kept the turn reuses [requestBase].
+      final String? turnMessageKey = isContinuation
+          ? null
+          : ClientRequestIds.messageKeyOf(
+              placeholderIndex >= 1 && placeholderIndex - 1 < _messages.length
+                  ? _messages[placeholderIndex - 1]
+                  : null,
+            );
+      // The usage stamped on this turn's answer is only what this turn
+      // records, never the reply before it.
+      ChatTurnStats.instance.beginTurn(chatIdForStream);
 
       // Accumulates display text across all streaming passes so that AI text
       // from earlier passes is never lost when a new pass begins.
@@ -1703,11 +2054,19 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         required List<Map<String, dynamic>> history,
         required String? passSystemPrompt,
         List<String>? passImages,
+        int? turnHistoryIndex,
         int currentPass = 0,
+        int cacheMissRetries = 0,
+        int reconnectRetries = 0,
+        String? passRequestId,
       }) async {
         if (_isSendOperationCancelled(sendOperationId)) {
           return;
         }
+        // One id per pass; the cache-miss retry of this pass reuses it.
+        final String requestId =
+            passRequestId ??
+            ClientRequestIds.forPass(requestBase, currentPass + 1);
 
         final requestPayload = <String, dynamic>{
           'pass': currentPass + 1,
@@ -1741,6 +2100,10 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           // Native tool calling: enabled tools as OpenAI function defs, sent on
           // every pass; empty (prompt-based) when native mode is off.
           tools: toolCallHandler.nativeToolDefinitions(toolSession),
+          toolChoice: ToolCallHandler.nativeToolChoice(toolSession),
+          requestPass: currentPass + 1,
+          turnHistoryIndex: turnHistoryIndex,
+          clientRequestId: requestId,
         );
 
         await _streamingManager.startStream(
@@ -1872,13 +2235,18 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                       chatIdForStream,
                     );
 
-                    final next = loopResult.nextStep!;
+                    // Later passes carry the turn's images in its own history
+                    // entry, not on the pass message (prompt cache, order).
+                    final next = loopResult.nextStep!.withTurnImages(
+                      imageDataUrls,
+                    );
                     await Future<void>.delayed(Duration.zero);
                     await startStreamPass(
                       message: next.message,
                       history: next.history,
                       passSystemPrompt: next.systemPrompt,
-                      passImages: imageDataUrls,
+                      passImages: next.passImages,
+                      turnHistoryIndex: next.turnUserIndex,
                       currentPass: currentPass + 1,
                     );
                     return;
@@ -1912,6 +2280,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
                     toolSession = toolCallHandler.createSession(
                       initialUserMessage: aiPromptContent,
+                      userSentAt: turnSentAt,
                       history: apiHistory,
                       accessToken: accessToken,
                       discoveryContextKey: chatIdForStream,
@@ -1921,6 +2290,10 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                       discoveryMode: widget.toolDiscoveryMode,
                       skipIdentity: skipIdentity,
                       nativeToolCalling: !kIsWeb,
+                    );
+
+                    toolSession.applyWorkspace(
+                      _resolveWorkspaceForCurrentChat(),
                     );
                     final retryPrompt = await toolCallHandler
                         .buildInitialSystemPrompt(toolSession);
@@ -1938,7 +2311,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     if (!mounted) return;
 
                     await startStreamPass(
-                      message: aiPromptContent,
+                      message: toolSession.firstPassMessage,
                       history: apiHistory,
                       passSystemPrompt: retryPrompt,
                       passImages: imageDataUrls,
@@ -2031,6 +2404,12 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                       if (tps != null) {
                         _messages[placeholderIndex]['tps'] = tps.toString();
                       }
+                      final String? usageStored = ChatTurnStats.instance
+                          .usageOf(chatIdForStream)
+                          ?.encode();
+                      if (usageStored != null) {
+                        _messages[placeholderIndex]['usage'] = usageStored;
+                      }
                     }
                     if (mounted) {
                       setState(() {
@@ -2053,6 +2432,9 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                         'reasoning': resolvedReasoning,
                         'contentBlocks': ?contentBlocksJson,
                         if (tps != null) 'tps': tps.toString(),
+                        'usage': ?ChatTurnStats.instance
+                            .usageOf(chatIdForStream)
+                            ?.encode(),
                       },
                     );
                   }
@@ -2087,6 +2469,59 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
             );
           },
           onError: (errorMessage, {String? code}) async {
+            // A server ref is no longer cached: clear the registry and send
+            // this pass again once, in full, under the same id.
+            if (_isCacheMiss(errorMessage, code) &&
+                cacheMissRetries < _kMaxCacheMissRetries) {
+              _streamingManager.takeInterruptedPartial(chatIdForStream);
+              ToolResultCacheRegistry.instance.handleMiss();
+              await startStreamPass(
+                message: message,
+                history: history,
+                passSystemPrompt: passSystemPrompt,
+                passImages: passImages,
+                turnHistoryIndex: turnHistoryIndex,
+                currentPass: currentPass,
+                cacheMissRetries: cacheMissRetries + 1,
+                passRequestId: requestId,
+              );
+              return;
+            }
+            // The socket died, or the answer is still being written: ask
+            // again for the same id; the server answers from its record and
+            // bills the pass once (bead chuk_chat-074s).
+            if (_retryPassOnSameId(chatIdForStream, code, reconnectRetries)) {
+              _streamingManager.takeInterruptedPartial(chatIdForStream);
+              await Future<void>.delayed(reconnectBackoff(reconnectRetries));
+              if (_isSendOperationCancelled(sendOperationId)) return;
+              await startStreamPass(
+                message: message,
+                history: history,
+                passSystemPrompt: passSystemPrompt,
+                passImages: passImages,
+                turnHistoryIndex: turnHistoryIndex,
+                currentPass: currentPass,
+                cacheMissRetries: cacheMissRetries,
+                reconnectRetries: reconnectRetries + 1,
+                passRequestId: requestId,
+              );
+              return;
+            }
+            _keepTurnForRetry(
+              chatIdForStream,
+              code,
+              turnMessageKey,
+              requestBase,
+            );
+            // Read before any await: the text this turn had already written,
+            // plus the cut pass (idle timeout, close without `done`).
+            final interruptedPartial = _streamingManager.takeInterruptedPartial(
+              chatIdForStream,
+            );
+            final keptText = _keptTextOnError(
+              accumulatedText2.toString(),
+              interruptedPartial,
+            );
             if (kDebugMode) {
               debugPrint(
                 'Stream error for chat $chatIdForStream: $errorMessage',
@@ -2126,7 +2561,12 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
             // and just flips to a "pending" state; AI placeholder is removed.
             // If enqueue itself fails, fall through to the normal error
             // display path so the user always gets feedback.
+            // Only a first pass the server never answered: once it sent a
+            // frame it may bill the turn, and a replay would run it twice
+            // (docs/OFFLINE_SEND.md). Then the normal error path runs.
             if (NetworkStatusService.isNetworkError(errorMessage) &&
+                currentPass == 0 &&
+                !_streamingManager.serverAccepted(chatIdForStream) &&
                 _activeChatId == chatIdForStream) {
               final userMsgIndex = placeholderIndex - 1;
               bool enqueued = false;
@@ -2147,6 +2587,10 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     modelIdForSend,
                     providerSlug,
                   ),
+                  // The re-send keeps this turn's ids: the server may have
+                  // taken the first pass even though no frame came back.
+                  clientRequestBase: requestBase,
+                  kick: true,
                 );
               } catch (error) {
                 if (kDebugMode) {
@@ -2164,7 +2608,14 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
               // Fall through to normal error display below.
             }
 
-            final errorText = 'Error: $errorMessage';
+            final errorText = keptText.isEmpty
+                ? 'Error: $errorMessage'
+                : '$keptText\n\nError: $errorMessage';
+            final errorBlocksJson = _errorContentBlocksJson(
+              contentBlocks2,
+              interruptedPartial,
+              errorMessage,
+            );
             if (_activeChatId == chatIdForStream) {
               if (placeholderIndex >= 0 &&
                   placeholderIndex < _messages.length) {
@@ -2175,7 +2626,13 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                   _isSending = false;
                 });
               }
-              _finalizeAiMessage(placeholderIndex, errorText);
+              // The error blocks go in before the fold, so a regenerate's
+              // archived variant keeps the interrupted text and error block.
+              _finalizeAiMessage(
+                placeholderIndex,
+                errorText,
+                contentBlocks: errorBlocksJson,
+              );
               if (mounted) {
                 AppNotifications.show(
                   context,
@@ -2187,6 +2644,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
             } else {
               _persistBackgroundAssistant(chatIdForStream, placeholderIndex, {
                 'text': errorText,
+                'contentBlocks': ?errorBlocksJson,
               });
             }
           },
@@ -2214,7 +2672,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       onVoiceTurnStarted?.call(chatIdForStream, placeholderIndex);
       try {
         await startStreamPass(
-          message: aiPromptContent,
+          message: toolSession.firstPassMessage,
           history: apiHistory,
           passSystemPrompt: initialSystemPrompt,
           passImages: imageDataUrls,
@@ -2418,11 +2876,89 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
   /// writes the cloud right after, with the fields it adds after this call
   /// (content blocks, tool images). A caller with nothing to add passes
   /// [commit] true.
+  ///
+  /// [contentBlocks], when given, is written onto the message before the
+  /// regenerate fold, so the archived variant carries it too.
+  /// Whether a pass that failed with [code] is asked again under the same
+  /// id: only for the failures where the server still runs the request or
+  /// answers a re-send from its record (`StreamErrorCodes.resendSameId`),
+  /// so the retry is never billed twice. Not in an Agents thread (the host
+  /// owns its runs).
+  bool _retryPassOnSameId(String chatId, String? code, int retries) =>
+      ClientRequestIds.resendPassOnSameId(
+        code,
+        retries,
+        StreamErrorCodes.resendSameId,
+      ) &&
+      !ChatOrigin.isAgentsThread(chatId);
+
+  /// The turn ended with an error after which the server may still answer
+  /// its ids: a Retry of the same message reuses [base] (bead
+  /// chuk_chat-3e67).
+  void _keepTurnForRetry(
+    String chatId,
+    String? code,
+    String? messageKey,
+    String base,
+  ) {
+    if (code == null || !StreamErrorCodes.resendSameId.contains(code)) return;
+    if (ChatOrigin.isAgentsThread(chatId)) return;
+    ClientRequestIds.keepForRetry(chatId, messageKey, base);
+  }
+
+  /// Writes a compaction's summary onto the chat it was made for: the
+  /// screen's list when it still shows [chatId] and the summarized row is
+  /// still there, else the turn's background snapshot or the stored chat.
+  /// Never into whatever list the screen holds now.
+  void _storeCompaction(
+    String chatId,
+    CompactionOutcome outcome, {
+    bool commit = false,
+  }) {
+    if (_activeChatId == chatId && outcome.writeInto(_messages)) {
+      if (mounted) setState(() {});
+      _persistChatWithId(chatId, commit: commit);
+      return;
+    }
+    final background = _streamingManager.getBackgroundMessages(chatId);
+    if (background != null) {
+      if (outcome.writeInto(background)) {
+        _streamingManager.setBackgroundMessages(chatId, background);
+        _persistChatWithIdAndMessages(chatId, background, commit: commit);
+      }
+      return;
+    }
+    final rows = ChatCompactionRunner.applyToStored(chatId, outcome);
+    if (rows != null) {
+      _persistChatWithIdAndMessages(chatId, rows, commit: commit);
+    }
+  }
+
+  /// Ends a turn of [chatId] before its first pass with [text] as the
+  /// answer, on screen or, after a chat switch, in the stored chat.
+  void _endTurnWithError(String chatId, int placeholderIndex, String text) {
+    if (_activeChatId == chatId) {
+      if (mounted) {
+        setState(() => _isSending = false);
+      } else {
+        _isSending = false;
+      }
+      _finalizeAiMessage(placeholderIndex, text, commit: true);
+      return;
+    }
+    ChatRuntimeRegistry.instance.lookup(chatId)?.isSending.value = false;
+    _persistBackgroundAssistant(chatId, placeholderIndex, <String, String?>{
+      'text': text,
+      'reasoning': '',
+    });
+  }
+
   void _finalizeAiMessage(
     int index,
     String content, {
     String? reasoning,
     double? tps,
+    String? contentBlocks,
     bool commit = false,
   }) {
     _voice?.completeTurn(_activeChatId, index, content);
@@ -2430,6 +2966,10 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     // Streaming ended: drop the per-token live snapshot so the finalized
     // bubble renders from the persisted message text, not a stale live value.
     final String? finalizingChatId = _activeChatId;
+    // The last reply's token usage, kept with the message for its footer.
+    final String? usageStored = ChatTurnStats.instance
+        .usageOf(finalizingChatId)
+        ?.encode();
     if (finalizingChatId != null) {
       ChatRuntimeRegistry.instance
               .lookup(finalizingChatId)
@@ -2456,6 +2996,8 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         message['text'] = content;
         message['reasoning'] = reasoning ?? '';
         if (tps != null) message['tps'] = tps.toString();
+        if (usageStored != null) message['usage'] = usageStored;
+        if (contentBlocks != null) message['contentBlocks'] = contentBlocks;
         foldRegenVariantOnto(message);
         _messages[index] = message;
         _isSending = false;
@@ -2467,6 +3009,8 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       message['text'] = content;
       message['reasoning'] = reasoning ?? '';
       if (tps != null) message['tps'] = tps.toString();
+      if (usageStored != null) message['usage'] = usageStored;
+      if (contentBlocks != null) message['contentBlocks'] = contentBlocks;
       foldRegenVariantOnto(message);
       _messages[index] = message;
       _isSending = false;
@@ -2482,53 +3026,62 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     }
   }
 
-  /// If a message was queued while the AI was streaming, inject it into the
-  /// text field and trigger a new send cycle.
-  /// Cancel a queued follow-up message and restore its text to the composer so
-  /// the user can edit or discard it instead of losing it silently.
+  /// Cancel the queued follow-ups and put their text back into the
+  /// composer, so the user can edit or discard it instead of losing it.
+  /// A draft typed meanwhile stays first; the queue goes after it.
   void _cancelPendingMessage() {
-    final pending = _pendingMessageText;
-    if (pending == null) return;
-    if (mounted) {
-      setState(() {
-        _pendingMessageText = null;
-      });
-    } else {
-      _pendingMessageText = null;
-    }
-    if (composerController.text.trim().isEmpty) {
-      composerController.text = pending;
+    final String? queued = _followUps.drainToText();
+    if (queued == null) return;
+    final String draft = composerController.text;
+    final String restored = draft.trim().isEmpty ? queued : '$draft\n\n$queued';
+    void apply() {
+      composerController.text = restored;
       composerController.selection = TextSelection.collapsed(
-        offset: pending.length,
+        offset: restored.length,
       );
+    }
+
+    if (mounted) {
+      setState(apply);
+    } else {
+      apply();
     }
     composerFocusNode.requestFocus();
   }
 
-  void _drainPendingMessage() {
-    final pending = _pendingMessageText;
-    if (pending == null) return;
-    if (mounted) {
-      setState(() {
-        _pendingMessageText = null;
-      });
-    } else {
-      _pendingMessageText = null;
+  /// The turn ended: steers it did not take become queued, then the oldest
+  /// queued message goes out as its own turn. It is sent as given (the
+  /// voice-task path), so a draft in the composer is never touched.
+  ///
+  /// [turnChatId] is the chat whose turn ended, taken at the first call; a
+  /// retry for a chat the screen no longer shows does nothing, and a
+  /// screen that is gone touches nothing.
+  void _drainPendingMessage([String? turnChatId, bool retry = false]) {
+    if (!mounted) return;
+    final String? chatId = retry ? turnChatId : _activeChatId;
+    if (_activeChatId != chatId) return;
+    if (!retry) _followUps.onTurnEnded();
+    if (!_followUps.hasQueued) return;
+    if (_isStreaming || _activeSendOperationId != null) {
+      // The send of the turn is still closing; try again shortly.
+      if (_drainRetries++ < 20) {
+        Future<void>.delayed(
+          const Duration(milliseconds: 250),
+          () => _drainPendingMessage(chatId, true),
+        );
+      }
+      return;
     }
-
+    _drainRetries = 0;
+    final QueuedFollowUp? next = _followUps.takeNext();
+    if (next == null) return;
+    setState(() {});
     if (kDebugMode) {
       debugPrint(
-        '📋 [DrainQueue] Sending queued message (${pending.length} chars)',
+        '📋 [DrainQueue] Sending queued message (${next.text.length} chars)',
       );
     }
-
-    // Put the text back into the controller so _sendMessage picks it up
-    // via its normal `composerController.text.trim()` path.
-    composerController.text = pending;
-    composerController.selection = TextSelection.collapsed(
-      offset: pending.length,
-    );
-    unawaited(_sendMessage());
+    unawaited(_sendMessage(voiceText: next.text));
   }
 
   /// Enqueue an in-flight send (offline or network-error) and reflect the
@@ -2549,7 +3102,14 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     String? imagesJson,
     required int maxTokens,
     String? reasoningEffort,
+    String? clientRequestBase,
+    bool kick = false,
   }) async {
+    // Documents and the original attachment list ride on the user bubble.
+    final Map<String, String>? userMsg =
+        userMsgIndex >= 0 && userMsgIndex < _messages.length
+        ? _messages[userMsgIndex]
+        : null;
     final payload = OfflineSendPayload(
       chatId: chatId,
       messageText: messageText,
@@ -2557,13 +3117,16 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       providerSlug: providerSlug,
       systemPrompt: systemPrompt,
       imagesJson: imagesJson,
+      attachmentsJson: userMsg?['attachments'],
+      attachedFilesJson: userMsg?['attachedFilesJson'],
       maxTokens: maxTokens,
       reasoningEffort: reasoningEffort,
+      clientRequestBase: clientRequestBase,
     );
 
     String queueId;
     try {
-      queueId = await OfflineSendCoordinator.enqueue(payload);
+      queueId = await OfflineSendCoordinator.enqueue(payload, kick: kick);
     } catch (e) {
       if (kDebugMode) {
         debugPrint('[Desktop-Send] enqueue failed: $e');
@@ -2573,20 +3136,41 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
     if (!mounted) return true;
     setState(() {
-      if (userMsgIndex >= 0 && userMsgIndex < _messages.length) {
-        _messages[userMsgIndex]['status'] = 'pending';
-        _messages[userMsgIndex]['queueId'] = queueId;
-      }
-      // Drop the trailing "Thinking..." placeholder — no AI reply will come
-      // until the queued send is replayed.
-      if (placeholderIndex >= 0 &&
-          placeholderIndex < _messages.length &&
-          _messages[placeholderIndex]['text'] == 'Thinking...') {
-        _messages.removeAt(placeholderIndex);
-      }
+      OfflineSendBridge.markQueued(
+        _messages,
+        userIdx: userMsgIndex,
+        placeholderIdx: placeholderIndex,
+        queueId: queueId,
+      );
       _isSending = false;
     });
     _persistChatWithId(chatId);
     return true;
+  }
+
+  // --- OFFLINE OUTBOX (docs/OFFLINE_SEND.md) ---
+
+  /// Restores parked follow-ups of the chat just opened and sends them.
+  Future<void> _restoreParkedFollowUp(String chatId) async {
+    final bool restored = await _followUps.restoreParked(chatId);
+    if (!restored || !mounted) return;
+    setState(() {});
+    if (!_isSending && !_isStreaming) _drainPendingMessage();
+  }
+
+  /// The outbox wrote into [chatId] (a reply, a transcript, an uploaded
+  /// image, a deleted row). The open chat reloads from storage unless a
+  /// turn runs, which saves its own list and would be overwritten.
+  Future<void> _onOutboxChangedChat(String chatId) async {
+    if (chatId != _activeChatId || _isSending || _isStreaming) return;
+    final chat = await ChatStorageService.loadFullChat(chatId);
+    if (!mounted || chat == null || !chat.isFullyLoaded) return;
+    if (chatId != _activeChatId || _isSending || _isStreaming) return;
+    setState(() {
+      _messages
+        ..clear()
+        ..addAll(chat.messages.map(_messageToRawMap));
+      _messageRenderCache.clear();
+    });
   }
 }

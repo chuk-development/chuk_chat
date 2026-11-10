@@ -114,6 +114,15 @@ _NOTES = {
 }
 
 
+#: Added to a login / 2FA takeover result (Hermes H32): the next login on
+#: that site can be filled from the user's login vault without a takeover.
+_LOGIN_VAULT_TIP = (
+    "If the user saved this login in the app's login vault, fill it next time "
+    "with {{login:<origin>:password}} (and :username, :totp) in browser_type; "
+    "login_vault_list shows the saved logins."
+)
+
+
 def _error(message: str) -> dict:
     return {"ok": False, "error": message}
 
@@ -158,7 +167,10 @@ def make_request_takeover_handler(backend: TakeoverBackend):
             message = result.get("error") if isinstance(result, dict) else None
             return _error(str(message or "the takeover could not be started"))
         # Status and a hint only: never a password, never page content.
-        return {"status": status, "note": _NOTES[status]}
+        out = {"status": status, "note": _NOTES[status]}
+        if level in (KIND_LOGIN, KIND_TWO_FACTOR):
+            out["tip"] = _LOGIN_VAULT_TIP
+        return out
 
     return request_takeover
 

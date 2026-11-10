@@ -25,17 +25,17 @@ Workspaces for organizing chats with custom AI behavior.
 - Mobile-friendly project management page
 
 **Files:**
-- `lib/models/project_model.dart` - Data models
-- `lib/services/project_storage_service.dart` - CRUD operations
-- `lib/services/project_message_service.dart` - Inject context into AI
-- `lib/pages/projects_page.dart` - Projects list
-- `lib/pages/project_detail_page.dart` - Project detail (tabs)
-- `lib/pages/project_management_page.dart` - Mobile project management
-- `lib/widgets/project_panel.dart` - Right-side settings panel (desktop)
-- `lib/widgets/project_file_viewer.dart` - File viewer dialog
-- `lib/widgets/project_selection_dropdown.dart` - Project dropdown in chat
+- `lib/models/workspace_model.dart` - Data models (`Workspace`, `WorkspaceFile`)
+- `lib/services/workspace_storage_service.dart` - CRUD operations
+- `lib/services/workspace_message_service.dart` - Inject context into AI
+- `lib/pages/workspaces_page.dart` - Workspaces list
+- `lib/pages/workspace_detail_page.dart` - Workspace detail (tabs)
+- `lib/pages/workspace_management_page.dart` - Mobile workspace management
+- `lib/widgets/workspace_panel.dart` - Right-side settings panel (desktop)
+- `lib/widgets/workspace_file_viewer.dart` - File viewer dialog
+- `lib/widgets/workspace_selection_dropdown.dart` - Workspace dropdown in chat
 
-**Flag:** `--dart-define=FEATURE_PROJECTS=true`
+**Flag:** `--dart-define=FEATURE_WORKSPACES=true` (there is no `FEATURE_PROJECTS`)
 
 ## Image Generation
 AI image generation through the `generate_image` tool. The API server
@@ -108,7 +108,6 @@ Full theme customization with Supabase sync.
 **Files:**
 - `lib/pages/theme_page.dart` - Settings UI
 - `lib/services/theme_settings_service.dart` - Sync service
-- `lib/utils/grain_overlay.dart` - Grain effect
 
 ## Auto Title Generation
 AI-powered automatic chat title generation.

@@ -242,7 +242,7 @@ Pass via `--dart-define=FLAG=value`. Defined in `lib/platform_config.dart`.
 
 **There is no `FEATURE_PROJECTS`.** Nothing in `lib/` reads it; the flag is
 `FEATURE_WORKSPACES`, and it defaults to `false` (`lib/platform_config.dart`). `build.sh`,
-`codemagic.yaml` and `AGENTS.md` still pass `--dart-define=FEATURE_PROJECTS=…`,
+`codemagic.yaml` and the build examples below still pass `--dart-define=FEATURE_PROJECTS=…`,
 which does nothing.
 
 `./run.sh` turns on skills, server tools, artifacts and (on desktop) the
@@ -448,6 +448,8 @@ Alternative: `pLog('message')` from `lib/utils/privacy_logger.dart`
 
 ## Agent Behavior Rules
 
+Code conventions: `docs/CONVENTIONS.md`.
+
 ### Planning
 - Enter plan mode for ANY non-trivial task (3+ steps or architectural decisions)
 - If something goes sideways, STOP and re-plan immediately — don't keep pushing
@@ -528,15 +530,20 @@ Management API query endpoint; the steps are in `docs/DATABASE.md`
 | `docs/DATABASE.md` | Supabase tables, schema |
 | `docs/COMMON_TASKS.md` | Adding services, pages, features |
 | `docs/GOTCHAS.md` | **CRITICAL** — bugs to avoid |
+| `docs/CONVENTIONS.md` | Code conventions: imports, names, Dart patterns, errors, state, layout, api_server tests |
 | `docs/ANSWER_BLOCKS.md` | The `:::` answer UI: parser repairs, how cards draw, card images, `scripts/answer_replay.sh` (real answers to PNG, headless) |
 | `docs/PERFORMANCE.md` | Phone and emulator benchmarks, the every-screen crawler, ranked hops, `scripts/perf_bench.sh` |
 | `docs/ASSISTANT_SURFACE.md` | Android assistant surface: assist role, overlay, device tools, the pinned model |
 | `docs/MCP_CONNECTORS.md` | Remote MCP connectors: the OAuth flow, storage, tool naming |
+| `docs/OFFLINE_SEND.md` | Offline outbox: text, image, voice kept and sent later; states, triggers, encryption, failure cases |
 | `docs/CHAT_PAYLOAD_FORMAT.md` | Chat payload v3 (no duplicates), compression frame, envelope `v:"2"`, old-client behaviour, the one-time migration behind the blocking maintenance screen |
 | `docs/LINUX_BUILDS.md` | Fastlane packaging (DEB, RPM, AppImage, Flatpak) |
 | `docs/REMOTE_DEV_SETUP.md` | Agent on `claudecode`, app on the laptop: `flutter-remote` / `flutter-hotd` |
 | `docs/FASTLANE.md` | Fastlane: generated store screenshots, Play + F-Droid metadata, upload lanes |
 | `docs/SCREENSHOTS.md` | **Read before recapturing any screenshot** — the seven gallery shots, the store frames, the painted backdrop, the traps |
+| `docs/AGENTS.md` | Where a fact belongs (doc tiers), word budgets (`scripts/doc_budgets.json`), slop checklist |
+| `docs/notes/README.md` | Decision records and frozen session history: `proposed/`, `implemented/`, `rejected/`, `archived/`. New dated session docs go here |
+| `.agents/skills/pre-push-checks/SKILL.md` | Scoped tests while working (`dart run tool/change_scope.dart`), repo checks, the full gate before push |
 
 
 ## Launch videos (HyperFrames, not Remotion)

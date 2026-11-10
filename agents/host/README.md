@@ -129,7 +129,7 @@ The host is the **executor** role and the pairing **initiator**; the app is the
 On the cloud relay these exact messages ride inside one `cowork_relay` frame
 each — `{"req_id":"<hex>","type":"cowork_relay","payload":"<the JSON above>"}` —
 and the relay never reads the payload. Nothing about the ceremony or the seal
-changes with the pipe; see `docs/PLAN_2026-09-09_CLOUD_PAIRING_TRANSPORT.md`.
+changes with the pipe; see `docs/notes/implemented/2026-09-09-plan-cloud-pairing-transport.md`.
 
 ## Agent mail
 

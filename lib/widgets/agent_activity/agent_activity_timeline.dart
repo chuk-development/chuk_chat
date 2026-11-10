@@ -12,11 +12,17 @@ import 'package:flutter/material.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/stream_phase.dart';
 import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/services/agents/agents_tool_row_info.dart';
+import 'package:chuk_chat/services/settings/tool_detail_service.dart';
 import 'package:chuk_chat/utils/favicon.dart';
 import 'package:chuk_chat/widgets/agent_activity/agent_activity_model.dart';
+import 'package:chuk_chat/widgets/agent_activity/min_duration_hold.dart';
+import 'package:chuk_chat/widgets/agent_activity/tool_activity_category.dart';
 import 'package:chuk_chat/widgets/agent_activity/turn_status.dart';
+import 'package:chuk_chat/widgets/diff_widget.dart' show diffChangeCountInResult;
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 import 'package:chuk_chat/widgets/messenger_typing_indicator.dart';
+import 'package:chuk_chat/widgets/text_shimmer.dart';
 
 class AgentActivityTimeline extends StatefulWidget {
   const AgentActivityTimeline({
@@ -38,7 +44,12 @@ class AgentActivityTimeline extends StatefulWidget {
     this.liveDots = false,
     this.liveSteps,
     this.showResultSummaries = false,
+    this.toolDetailMode,
   });
+
+  /// Overrides the "Tool detail" setting ([ToolDetailService]). Null follows
+  /// the setting, which is what the app does; tests pin a mode.
+  final ToolDetailMode? toolDetailMode;
 
   /// While the round runs, the header is only the three typing dots: it
   /// says the agent is still working and nothing more. The words (the
@@ -137,12 +148,62 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
   /// Where the rail runs, measured from the left edge of the timeline.
   static const double _railCenter = _badgeSize / 2;
 
+  /// Holds a running title for at least 150 ms (header and group rows),
+  /// keyed by row: -1 is the header.
+  final Map<int, MinDurationHold<String>> _holds =
+      <int, MinDurationHold<String>>{};
+  Timer? _holdTimer;
+
+  /// Groups the reader opened or closed by hand, by their position.
+  final Map<int, bool> _groupOverrides = <int, bool>{};
+
+  ToolDetailMode get _mode =>
+      widget.toolDetailMode ?? ToolDetailService.instance.value;
+
   @override
   void initState() {
     super.initState();
     _expandedOverride = widget.initiallyExpanded;
     _syncTicker();
     widget.liveListenable?.addListener(_onLive);
+    ToolDetailService.instance.addListener(_onMode);
+  }
+
+  void _onMode() {
+    if (mounted && widget.toolDetailMode == null) setState(() {});
+  }
+
+  /// [wanted] as it may show now: a running title that changed less than
+  /// 150 ms ago waits, and a timer shows the newest waiting one.
+  String _held(int key, String wanted) {
+    if (!widget.isRunning) {
+      _holds.remove(key);
+      return wanted;
+    }
+    final MinDurationHold<String> hold = _holds.putIfAbsent(
+      key,
+      MinDurationHold<String>.new,
+    );
+    final DateTime now = DateTime.now();
+    final String shown = hold.show(wanted, now);
+    final Duration? wait = hold.waitFor(now);
+    if (wait != null && _holdTimer == null) {
+      _holdTimer = Timer(wait, () {
+        _holdTimer = null;
+        // Show every waiting title now; re-checking the clock could wait
+        // again and never let the title through.
+        for (final MinDurationHold<String> h in _holds.values) {
+          final String? next = h.pending;
+          if (next != null) {
+            h
+              ..reset()
+              ..show(next, DateTime.now());
+          }
+        }
+        if (mounted) setState(() {});
+      });
+    }
+    return shown;
   }
 
   void _onLive() {
@@ -164,6 +225,11 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
     }
     if (oldWidget.isRunning != widget.isRunning) {
       _syncTicker();
+      if (!widget.isRunning) {
+        _holds.clear();
+        _holdTimer?.cancel();
+        _holdTimer = null;
+      }
     }
     if (oldWidget.liveListenable != widget.liveListenable) {
       oldWidget.liveListenable?.removeListener(_onLive);
@@ -174,7 +240,9 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
   @override
   void dispose() {
     _ticker?.cancel();
+    _holdTimer?.cancel();
     widget.liveListenable?.removeListener(_onLive);
+    ToolDetailService.instance.removeListener(_onMode);
     super.dispose();
   }
 
@@ -194,8 +262,36 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
     });
   }
 
+  /// Whether any step of the round failed. Set in [build].
+  bool _hasError = false;
+
+  /// Open while the round runs; once it settles it folds to one line, unless
+  /// a step failed (then it stays open so the failure is not hidden, in every
+  /// mode) or the reader chose Verbose.
   bool get _isExpanded =>
-      _expandedOverride ?? (widget.isRunning && !widget.liveDots);
+      _expandedOverride ??
+      ((widget.isRunning && !widget.liveDots) ||
+          (!widget.isRunning && (_hasError || _mode.keepsSettledTurnOpen)));
+
+  static bool _anyError(Iterable<AgentActivityEntry> entries) {
+    for (final e in entries) {
+      if (e.anyError) return true;
+    }
+    return false;
+  }
+
+  /// Whether the group at [index] shows its steps: the reader's choice,
+  /// else open when a step failed, else what the mode says.
+  bool _groupOpen(int index, AgentActivityEntry group) {
+    final bool? manual = _groupOverrides[index];
+    if (manual != null) return manual;
+    if (group.anyError) return true;
+    final bool running = widget.isRunning && liveCall(group.groupCalls) != null;
+    return running ? _mode.opensRunningGroups : _mode.opensSettledGroups;
+  }
+
+  bool get _showSummaries =>
+      widget.showResultSummaries || _mode.showsResultSummaries;
 
   /// The header is the typing dots right now.
   bool get _showsDots => widget.liveDots && widget.isRunning;
@@ -211,9 +307,15 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
     final muted = theme.colorScheme.onSurface.withValues(alpha: 0.55);
     final liveSteps = widget.isRunning ? widget.liveSteps : null;
     final steps = liveSteps != null ? liveSteps() : widget.steps;
-    final entries = steps == null
+    final flat = steps == null
         ? buildAgentActivityEntries(widget.toolCalls)
         : buildAgentActivityEntriesFromSteps(steps);
+    // The Agents live panel lists every call with its result: opening it is
+    // the request to see each step, so it is not grouped.
+    final entries = widget.liveDots ? flat : groupAgentActivityEntries(flat);
+    _hasError =
+        _anyError(entries) ||
+        widget.toolCalls.any((c) => c.status == ToolCallStatus.error);
     // A settled round with neither a step nor a model line has nothing to
     // show. A RUNNING one still does: the header is what tells the reader
     // the turn is alive and how long it has been waiting, and at that point
@@ -327,7 +429,11 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
   Widget _buildHeader(ThemeData theme, Color muted, TurnStatus status) {
     // The wording is decided in one place for every platform and every
     // layout branch — see turn_status.dart.
-    final label = status.label;
+    // An Agents phase (the host's ack, "offline") must show within a frame;
+    // only the tool-derived wording is held.
+    final label = status.liveVerb != null && status.liveVerb!.isNotEmpty
+        ? status.label
+        : _held(-1, status.label);
 
     return Semantics(
       button: true,
@@ -342,13 +448,21 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: muted,
-                    fontWeight: FontWeight.w500,
+                child: TextShimmer(
+                  active: widget.isRunning,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: muted,
+                      fontWeight: FontWeight.w500,
+                      // The clock in the label counts up; fixed-width digits
+                      // keep the line from jittering every second.
+                      fontFeatures: const <FontFeature>[
+                        FontFeature.tabularFigures(),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -378,6 +492,16 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
     required bool isLast,
     bool soleStep = false,
   }) {
+    if (entry.isGroup) {
+      return _buildGroup(
+        theme,
+        muted,
+        entry,
+        index: index,
+        isFirst: isFirst,
+        isLast: isLast,
+      );
+    }
     // A turn whose only step is the model thinking has nothing to choose
     // between: opening the bar is already the request to read the thinking,
     // and asking for a second tap to get past a clipped first sentence is
@@ -403,7 +527,7 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
             child: _buildEntryText(theme, entry, color),
           ),
         ),
-        if (widget.showResultSummaries && entry.toolCall != null)
+        if (_showSummaries && entry.toolCall != null)
           if (toolResultSummary(entry.toolCall!) case final String summary)
             Padding(
               padding: const EdgeInsets.only(bottom: 2),
@@ -484,11 +608,144 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
     );
   }
 
+  /// A run of consecutive tool steps as ONE row: the category title
+  /// ("Searching the web · react hooks" while it runs, "Searched the web and
+  /// read pages" once closed), opening onto the steps behind it.
+  Widget _buildGroup(
+    ThemeData theme,
+    Color muted,
+    AgentActivityEntry group, {
+    required int index,
+    required bool isFirst,
+    required bool isLast,
+  }) {
+    final AppLocalizations? l10n = AppLocalizations.of(context);
+    final List<ToolCall> calls = group.groupCalls;
+    final ToolCall? live = widget.isRunning ? liveCall(calls) : null;
+    final bool running = live != null;
+    String title = running
+        ? runningGroupTitle(calls, l10n)
+        : closedGroupTitle(calls, l10n);
+    if (running && _mode.showsLiveDetail) {
+      final String? detail = liveDetail(calls);
+      if (detail != null) title = '$title · $detail';
+    }
+    title = _held(index, title);
+    final bool open = _groupOpen(index, group);
+    final bool failed = group.anyError;
+    final Color color = failed
+        ? theme.colorScheme.error.withValues(alpha: 0.85)
+        : muted;
+    final Color railColor = theme.colorScheme.onSurface.withValues(alpha: 0.15);
+    final ToolActivityCategory category = toolActivityCategoryOf(
+      (live ?? calls.first).name,
+    );
+
+    final Widget header = SizedBox(
+      height: _badgeSize,
+      child: Row(
+        children: [
+          Flexible(
+            child: TextShimmer(
+              active: running,
+              child: Text(
+                title,
+                key: ValueKey<String>('agent-activity-group-$index'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          AppIcon(
+            open ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_right,
+            size: 16,
+            color: muted,
+          ),
+        ],
+      ),
+    );
+
+    final List<AgentActivityEntry> steps = group.children;
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Semantics(
+          button: true,
+          expanded: open,
+          label: title,
+          child: InkWell(
+            onTap: () => setState(() => _groupOverrides[index] = !open),
+            borderRadius: BorderRadius.circular(8),
+            child: ExcludeSemantics(child: header),
+          ),
+        ),
+        if (open) ...[
+          const SizedBox(height: 4),
+          // Keys for the steps' own state (opened bodies) must not collide
+          // with the outer rows, so they live in their own index range.
+          for (int i = 0; i < steps.length; i++)
+            _buildEntry(
+              theme,
+              muted,
+              steps[i],
+              index: (index + 1) * 1000 + i,
+              isFirst: i == 0,
+              isLast: i == steps.length - 1,
+            ),
+        ],
+        SizedBox(height: isLast ? 2 : 8),
+      ],
+    );
+
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: _badgeSize,
+            child: _buildRailWithIcon(
+              theme,
+              icon: _iconForCategory(category),
+              color: color,
+              railColor: railColor,
+              isFirst: isFirst,
+              isLast: isLast,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(child: content),
+        ],
+      ),
+    );
+  }
+
   /// The badge plus the line above and below it, so the steps read as one
   /// continuous thread rather than a stack of unrelated rows.
   Widget _buildRail(
     ThemeData theme,
     AgentActivityEntry entry, {
+    required Color color,
+    required Color railColor,
+    required bool isFirst,
+    required bool isLast,
+  }) => _buildRailWithIcon(
+    theme,
+    icon: _iconFor(entry),
+    color: color,
+    railColor: railColor,
+    isFirst: isFirst,
+    isLast: isLast,
+  );
+
+  Widget _buildRailWithIcon(
+    ThemeData theme, {
+    required IconData icon,
     required Color color,
     required Color railColor,
     required bool isFirst,
@@ -525,7 +782,7 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
             shape: BoxShape.circle,
             border: Border.all(color: railColor),
           ),
-          child: AppIcon(_iconFor(entry), size: 14, color: color),
+          child: AppIcon(icon, size: 14, color: color),
         ),
       ],
     );
@@ -537,6 +794,51 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
     Color color,
   ) {
     final baseStyle = theme.textTheme.bodySmall?.copyWith(color: color);
+    final ToolCall? call = entry.toolCall;
+    // A call that has not run yet says what it is about to do, with the
+    // file and the size it sends: "Preparing: Edit intro.md 1KB".
+    final String? preparing = call == null
+        ? null
+        : preparingLabel(call, AppLocalizations.of(context));
+    if (preparing != null) {
+      return TextShimmer(
+        active: widget.isRunning,
+        child: Text(
+          preparing,
+          style: baseStyle,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      );
+    }
+    // A finished edit names its change size on the folded row: "+3 -1".
+    // A host edit keeps its counts on the call (`toolCallDiffLabel`, the
+    // live `ui.diff` the model never saw); a chat edit reads its result.
+    final changes = call == null
+        ? null
+        : toolCallDiffStat(call) ??
+              (call.status == ToolCallStatus.completed &&
+                      isEditCategory(toolActivityCategoryOf(call.name))
+                  ? diffChangeCountInResult(call.result)
+                  : null);
+    if (changes != null) {
+      final Widget text = _buildEntryTextBody(theme, entry, baseStyle);
+      return Row(
+        children: [
+          Flexible(child: text),
+          const SizedBox(width: 6),
+          _ChangeCount(added: changes.added, removed: changes.removed),
+        ],
+      );
+    }
+    return _buildEntryTextBody(theme, entry, baseStyle);
+  }
+
+  Widget _buildEntryTextBody(
+    ThemeData theme,
+    AgentActivityEntry entry,
+    TextStyle? baseStyle,
+  ) {
     final detail = entry.detail;
 
     if (detail == null) {
@@ -623,6 +925,35 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
     );
   }
 
+  IconData _iconForCategory(ToolActivityCategory category) {
+    switch (category) {
+      case ToolActivityCategory.search:
+      case ToolActivityCategory.webSearch:
+        return Icons.search;
+      case ToolActivityCategory.webFetch:
+        return Icons.language;
+      case ToolActivityCategory.read:
+        return Icons.description_outlined;
+      case ToolActivityCategory.readImage:
+      case ToolActivityCategory.images:
+        return Icons.image_outlined;
+      case ToolActivityCategory.write:
+      case ToolActivityCategory.edit:
+      case ToolActivityCategory.notes:
+        return Icons.edit_outlined;
+      case ToolActivityCategory.documents:
+        return Icons.article_outlined;
+      case ToolActivityCategory.commands:
+        return Icons.terminal;
+      case ToolActivityCategory.code:
+        return Icons.code;
+      case ToolActivityCategory.questions:
+        return Icons.chat_bubble_outline;
+      case ToolActivityCategory.tools:
+        return Icons.bolt_outlined;
+    }
+  }
+
   IconData _iconFor(AgentActivityEntry entry) {
     switch (entry.kind) {
       case AgentActivityKind.search:
@@ -634,5 +965,48 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
       case AgentActivityKind.other:
         return Icons.bolt_outlined;
     }
+  }
+}
+
+/// "+3 -1" on a folded edit row: green for added, red for removed, fixed
+/// width digits. A zero side is left out.
+class _ChangeCount extends StatelessWidget {
+  const _ChangeCount({required this.added, required this.removed});
+
+  final int added;
+  final int removed;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool dark = Theme.of(context).brightness == Brightness.dark;
+    final TextStyle base = TextStyle(
+      fontSize: 11,
+      fontWeight: FontWeight.w600,
+      fontFamily: 'monospace',
+      fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+    );
+    return Text.rich(
+      key: const ValueKey<String>('agent-activity-change-count'),
+      TextSpan(
+        children: [
+          if (added > 0)
+            TextSpan(
+              text: '+$added',
+              style: base.copyWith(
+                color: dark ? const Color(0xFF7EE787) : const Color(0xFF1A7F37),
+              ),
+            ),
+          if (added > 0 && removed > 0) const TextSpan(text: ' '),
+          if (removed > 0)
+            TextSpan(
+              text: '-$removed',
+              style: base.copyWith(
+                color: dark ? const Color(0xFFFF7B72) : const Color(0xFFCF222E),
+              ),
+            ),
+        ],
+      ),
+      maxLines: 1,
+    );
   }
 }

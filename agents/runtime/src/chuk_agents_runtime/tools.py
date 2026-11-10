@@ -36,6 +36,12 @@ import httpx
 
 from .documents import VisionReader, build_backend_vision, register_read_document
 from .environment import Environment
+from . import escalation as _esc
+from .file_edit import EditGuard, FileObservations
+from .file_edit import edit_file as _edit_file
+from .file_edit import read_window
+from .file_patch import apply_patch as _apply_patch
+from .safety_floor import FloorVerdict, SafetyFloor
 from .files_out import FileSink, register_send_file
 from .media import WorkspaceMount, register_media_tools
 from .registry import ToolRegistry
@@ -56,40 +62,42 @@ PYTHON_OUTPUT_CAP = 30_000
 # agree on one string.
 FINISH_TOOL = "finish"
 
+#: The required one-line label (research item 40). 5-10 active-voice words the
+#: app shows while the call streams, before the output is known.
+_DESCRIPTION_PROP = {
+    "type": "string",
+    "description": "A 5-10 word active-voice label for this call (e.g. 'Run the unit tests'). First.",
+}
+
 RUN_COMMAND_SCHEMA = {
     "type": "object",
     "description": (
-        "Run one shell command in the workspace and return its exit code, "
-        "stdout and stderr. Use it to run scripts and tests, to inspect the "
-        "system, and for git. The working directory stays between calls of this "
-        "tool: after `cd x` the next command starts in x. The file tools always "
-        "read relative paths from the workspace root. For a long command (a "
-        "build, a download, a training run) set background=true: it returns a "
-        "job_id at once, the command keeps running, and you are woken with its "
-        "output when it "
-        "ends. For a program that asks questions use shell_start instead."
+        "Run one shell command in the workspace; returns exit code, stdout, "
+        "stderr. The working directory persists: after `cd x` the next command "
+        "starts in x (file tools resolve relative paths from the workspace "
+        "root). For a long command (build, download, training) set "
+        "background=true: you get a job_id at once and are woken with the "
+        "output when it ends. For a program that asks questions use shell_start."
     ),
     "properties": {
         "command": {"type": "string", "description": "Shell command to run."},
         "timeout": {
             "type": "integer",
-            "description": "Seconds before the command is killed (foreground only).",
+            "description": "Seconds until killed (foreground).",
             "default": 120,
         },
         "background": {
             "type": "boolean",
-            "description": (
-                "Start detached and return {job_id, log_path} immediately. "
-                "No timeout (24 h cap). You are woken when it finishes."
-            ),
+            "description": "Detach; returns {job_id, log_path} at once (24 h cap).",
             "default": False,
         },
         "cwd": {
             "type": "string",
             "description": "Directory to run in (background only).",
         },
+        **_esc.SCHEMA_PROPERTIES,
     },
-    "required": ["command"],
+    "required": ["description", "command"],
 }
 
 WRITE_FILE_SCHEMA = {
@@ -114,16 +122,68 @@ WRITE_FILE_SCHEMA = {
 
 READ_FILE_SCHEMA = {
     "type": "object",
-    "description": "Read a text file back. The result is truncated at 60000 bytes.",
+    "description": (
+        "Read a text file as numbered lines. By default it returns the first "
+        "2000 lines; use `offset` (1-based) and `limit` to read a "
+        "later window; the footer names the offset to continue. "
+        "edit_file and apply_patch need a prior read."
+    ),
     "properties": {
         "path": {"type": "string", "description": "File path to read."},
+        "offset": {
+            "type": "integer",
+            "description": "First line to return (1-based). Default 1.",
+            "default": 1,
+        },
+        "limit": {
+            "type": "integer",
+            "description": "How many lines to return. Default 2000.",
+            "default": 2000,
+        },
         "max_bytes": {
             "type": "integer",
-            "description": "Read at most this many bytes.",
+            "description": "Cap on the bytes returned for this window.",
             "default": READ_CAP,
         },
     },
     "required": ["path"],
+}
+
+EDIT_FILE_SCHEMA = {
+    "type": "object",
+    "description": (
+        "Edit an existing text file by replacing literal text. Read the file "
+        "first. `old_string` must be present; with replace_all=false it must "
+        "appear exactly once, so include enough surrounding text to make it "
+        "unique. Use an empty new_string to delete the match. For several edits "
+        "in different places, or to add/delete/move whole files, use apply_patch."
+    ),
+    "properties": {
+        "path": {"type": "string", "description": "File to edit."},
+        "old_string": {"type": "string", "description": "Literal text to replace (must be non-empty)."},
+        "new_string": {"type": "string", "description": "Replacement text (empty to delete the match)."},
+        "replace_all": {
+            "type": "boolean",
+            "description": "Replace every match. Default false (old_string must be unique).",
+            "default": False,
+        },
+    },
+    "required": ["path", "old_string", "new_string"],
+}
+
+APPLY_PATCH_SCHEMA = {
+    "type": "object",
+    "description": (
+        "Apply a Codex-format patch: one envelope between '*** Begin Patch' and "
+        "'*** End Patch' with '*** Add File:', '*** Update File:' (with @@ "
+        "context and +/- lines), '*** Delete File:' and '*** Move to:' sections. "
+        "Update and Delete need a prior read of the file. All operations are "
+        "checked first and applied together, or none is applied."
+    ),
+    "properties": {
+        "patch": {"type": "string", "description": "The whole patch text."},
+    },
+    "required": ["patch"],
 }
 
 LIST_DIR_SCHEMA = {
@@ -148,20 +208,21 @@ LIST_DIR_SCHEMA = {
 RUN_PYTHON_SCHEMA = {
     "type": "object",
     "description": (
-        "Run a Python 3 script in the workspace and return its exit code, "
-        "stdout and stderr. Prefer this over many small shell calls when a task "
-        "needs several steps, loops, or intermediate values — write one script. "
-        "The script runs to completion; print what you need to see."
+        "Run a Python 3 script in the workspace; returns exit code, stdout, "
+        "stderr. Prefer one script over many shell calls for multi-step work; "
+        "print what you need."
     ),
     "properties": {
+        "description": _DESCRIPTION_PROP,
         "code": {"type": "string", "description": "The full Python source to run."},
         "timeout": {
             "type": "integer",
-            "description": "Seconds before the script is killed.",
+            "description": "Seconds until killed.",
             "default": 120,
         },
+        **_esc.SCHEMA_PROPERTIES,
     },
-    "required": ["code"],
+    "required": ["description", "code"],
 }
 
 # Explicit terminal action (§7.1). None of the strong agent loops rely on
@@ -186,6 +247,40 @@ FINISH_SCHEMA = {
 }
 
 
+def _join_streams(stdout: str, stderr: str) -> str:
+    parts = [stdout or ""]
+    if stderr:
+        if parts[0] and not parts[0].endswith("\n"):
+            parts[0] += "\n"
+        parts.append(f"[stderr]\n{stderr}")
+    return "".join(parts)
+
+
+def _shell_result(result, timeout: int) -> dict:
+    """The shell result dict (research items 5 / 27). ``stopped`` names why the
+    run ended early (``timeout``; ``user_stop`` is added by the loop on a Stop).
+    ``exit_code`` is the LAST key so a reader can anchor on it. A non-zero exit
+    is a normal result, not a tool error."""
+    return {
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+        "timed_out": result.timed_out,
+        "stopped": "timeout" if result.timed_out else None,
+        "timeout_ms": int(timeout) * 1000,
+        "duration_s": round(result.duration_s, 4),
+        "exit_code": result.exit_code,
+    }
+
+
+def _exit_last(result: dict) -> dict:
+    """Keep ``exit_code`` the LAST key after extra fields were added."""
+    if "exit_code" not in result:
+        return result
+    out = {k: v for k, v in result.items() if k != "exit_code"}
+    out["exit_code"] = result["exit_code"]
+    return out
+
+
 def _secret_env(secrets: SecretsAccess | None) -> dict:
     """The ``env=`` keyword for a child process, or nothing.
 
@@ -203,18 +298,69 @@ def _secret_env(secrets: SecretsAccess | None) -> dict:
 
 
 def make_run_command_handler(
-    env: Environment, secrets: SecretsAccess | None = None, jobs=None
+    env: Environment,
+    secrets: SecretsAccess | None = None,
+    jobs=None,
+    floor: "SafetyFloor | None" = None,
+    escalation_ask=None,
 ):
     """``jobs`` is a :class:`chuk_agents_runtime.shell_tools.JobManager` (or None).
     With one, ``background=true`` starts the command detached and returns the
-    job handle; without one the flag is refused with a message."""
+    job handle; without one the flag is refused with a message. ``floor`` is the
+    safety floor (research H23-H25): a catastrophic command is refused before it
+    runs, whatever the approval mode."""
 
     def run_command(
         command: str,
+        description: str | None = None,
         timeout: int = 120,
         background: bool = False,
         cwd: str | None = None,
+        sandbox_permissions=None,
+        justification: str | None = None,
     ) -> dict:
+        # The schema requires `description` so a model supplies the 5-10 word
+        # label the app shows while the call streams (research item 40). A
+        # present-but-blank value is rejected; an absent one still runs (an
+        # older client, a scripted call), it just carries no label.
+        if description is not None and not str(description).strip():
+            return {
+                "ok": False,
+                "error": "description must not be blank: give a short 5-10 word label for this command",
+            }
+        if floor is not None:
+            try:
+                verdict = floor.check_command(command)
+            except Exception:  # noqa: BLE001 — RecursionError and friends: fail closed
+                verdict = FloorVerdict("the safety floor could not check this command", hard=False)
+            if verdict is not None:
+                return {"ok": False, "blocked": True, "error": verdict.message()}
+        # Sandbox escalation (research item 28): checked and approved BEFORE
+        # anything runs; a grant covers this one call only.
+        asked = _esc.parse_escalation(sandbox_permissions, justification)
+        if asked.requested and background and not asked.error:
+            return {"ok": False, "error": "a call with sandbox_permissions runs in the foreground only"}
+        resolution = _esc.resolve_escalation(
+            asked, env=env, ask=escalation_ask, tool="run_command", command=command
+        )
+        if resolution.refusal is not None:
+            return resolution.refusal
+        if resolution.grant:
+            result = env.run_escalated(
+                command, grant=resolution.grant, timeout=timeout, **_secret_env(secrets)
+            )
+            return _exit_last({**_shell_result(result, timeout), "escalated": list(resolution.grant)})
+        out = _run_command_plain(command, timeout, background, cwd)
+        if resolution.note and isinstance(out, dict):
+            out = {**out, "note": resolution.note}
+        if isinstance(out, dict) and "exit_code" in out:
+            extra = _esc.denial_fields(env, escalation_ask, out.get("exit_code"), "command")
+            if extra:
+                out = {**out, **extra}
+            out = _exit_last(out)
+        return out
+
+    def _run_command_plain(command: str, timeout: int, background: bool, cwd: str | None) -> dict:
         if background:
             if jobs is None:
                 return {
@@ -222,20 +368,56 @@ def make_run_command_handler(
                     "error": "background jobs are not available in this runtime; run it in the foreground",
                 }
             return jobs.start(command, cwd=cwd or None)
-        result = env.run_bash(command, timeout=timeout, **_secret_env(secrets))
-        return {
-            "exit_code": result.exit_code,
-            "stdout": result.stdout,
-            "stderr": result.stderr,
-            "timed_out": result.timed_out,
-            "duration_s": round(result.duration_s, 4),
-        }
+        secret_kw = _secret_env(secrets)
+        if (
+            jobs is not None
+            and callable(getattr(jobs, "run_foreground", None))
+            and getattr(jobs, "env", env) is env
+        ):
+            # Research item 38: a foreground command runs as an adoptable job.
+            # Past its timeout the SAME process becomes a background job; it is
+            # never stopped and started a second time (a second ``git push`` /
+            # ``curl -X POST`` / ``>>`` append would apply its effects twice).
+            outcome = jobs.run_foreground(command, timeout=timeout, env=secret_kw.get("env"))
+            if outcome is not None and outcome.get("moved"):
+                return {
+                    "moved_to_background": True,
+                    "job_id": outcome.get("job_id"),
+                    "log_path": outcome.get("log_path"),
+                    "stderr_path": outcome.get("stderr_path"),
+                    "output_so_far": _join_streams(outcome.get("stdout", ""), outcome.get("stderr", "")),
+                    "timeout_ms": int(timeout) * 1000,
+                    "note": (
+                        "The command ran past its timeout and keeps running as a background job "
+                        "(the same process, not started again). You are woken when it ends; "
+                        "job_status / job_output show it meanwhile (stderr is in stderr_path)."
+                    ),
+                }
+            if outcome is not None:
+                return _shell_result(outcome["result"], timeout)
+            # The job could not be set up, so the command never ran: run it plainly.
+        result = env.run_bash(command, timeout=timeout, **secret_kw)
+        return _shell_result(result, timeout)
 
     return run_command
 
 
-def make_write_file_handler(env: Environment):
+def make_write_file_handler(
+    env: Environment, guard: "EditGuard | None" = None, floor: "SafetyFloor | None" = None
+):
     def write_file(path: str, content: str, append: bool = False) -> dict:
+        if floor is not None:
+            verdict = floor.check_path_write(path)
+            if verdict is not None:
+                return {"ok": False, "path": path, "blocked": True, "error": verdict.message()}
+        # An existing file the agent has not read is protected (research item
+        # 34): only a new path is a free create. Append is exempt — it adds, it
+        # does not overwrite. A guardless runtime (a test, an older build) keeps
+        # the old free behaviour.
+        if guard is not None and not append:
+            refused = guard.check_write(path)
+            if refused:
+                return {"ok": False, "path": path, "error": refused}
         raw = content.encode("utf-8")
         payload = base64.b64encode(raw).decode("ascii")
         quoted = shlex.quote(workspace_path(env, path))
@@ -251,6 +433,8 @@ def make_write_file_handler(env: Environment):
                 "path": path,
                 "error": (result.stderr or result.stdout or "write failed").strip(),
             }
+        if guard is not None:
+            guard.observe(path)
         return {
             "ok": True,
             "path": path,
@@ -261,25 +445,39 @@ def make_write_file_handler(env: Environment):
     return write_file
 
 
-def make_read_file_handler(env: Environment):
-    def read_file(path: str, max_bytes: int = READ_CAP) -> dict:
-        limit = max(1, min(int(max_bytes), READ_CAP))
-        quoted = shlex.quote(workspace_path(env, path))
-        # head -c reads at most `limit` bytes; +1 tells truncation from an exact fit.
-        result = env.run_bash(f"head -c {limit + 1} -- {quoted}", timeout=60)
-        if not result.ok:
-            return {
-                "ok": False,
-                "path": path,
-                "error": (result.stderr or "read failed").strip(),
-            }
-        content = result.stdout
-        truncated = len(content.encode("utf-8", "replace")) > limit
-        if truncated:
-            content = content[:limit]
-        return {"ok": True, "path": path, "content": content, "truncated": truncated}
+def make_read_file_handler(
+    env: Environment, guard: "EditGuard | None" = None, floor: "SafetyFloor | None" = None
+):
+    def read_file(
+        path: str, offset: int = 1, limit: int = 2000, max_bytes: int = READ_CAP
+    ) -> dict:
+        if floor is not None:
+            verdict = floor.check_path_read(path)
+            if verdict is not None:
+                return {"ok": False, "path": path, "blocked": True, "error": verdict.message()}
+        return read_window(
+            env, path, offset=offset, limit=limit, max_bytes=max_bytes, guard=guard
+        )
 
     return read_file
+
+
+def make_edit_file_handler(env: Environment, guard: "EditGuard", floor: "SafetyFloor | None" = None):
+    def edit_file(path: str, old_string: str, new_string: str, replace_all: bool = False) -> dict:
+        if floor is not None:
+            verdict = floor.check_path_write(path)
+            if verdict is not None:
+                return {"ok": False, "path": path, "blocked": True, "error": verdict.message()}
+        return _edit_file(env, guard, path, old_string, new_string, bool(replace_all))
+
+    return edit_file
+
+
+def make_apply_patch_handler(env: Environment, guard: "EditGuard", floor: "SafetyFloor | None" = None):
+    def apply_patch(patch: str) -> dict:
+        return _apply_patch(env, guard, patch, floor=floor)
+
+    return apply_patch
 
 
 def make_list_dir_handler(env: Environment):
@@ -307,8 +505,21 @@ def _cap(text: str, limit: int) -> tuple[str, bool]:
     return raw[:limit].decode("utf-8", "ignore"), True
 
 
-def make_run_python_handler(env: Environment, secrets: SecretsAccess | None = None):
-    def run_python(code: str, timeout: int = 120) -> dict:
+def make_run_python_handler(
+    env: Environment, secrets: SecretsAccess | None = None, escalation_ask=None
+):
+    def run_python(
+        code: str,
+        description: str | None = None,
+        timeout: int = 120,
+        sandbox_permissions=None,
+        justification: str | None = None,
+    ) -> dict:
+        if description is not None and not str(description).strip():
+            return {
+                "ok": False,
+                "error": "description must not be blank: give a short 5-10 word label for this script",
+            }
         # The source travels as base64 inside the command, so nothing in the
         # code (quotes, backticks, ``$``, newlines) can break the shell or be
         # expanded by it — the same trick the file tools use.
@@ -319,16 +530,36 @@ def make_run_python_handler(env: Environment, secrets: SecretsAccess | None = No
             f"printf %s {shlex.quote(payload)} | base64 -d > \"$__f\" && "
             f"python3 \"$__f\"; __rc=$?; rm -f \"$__f\"; exit $__rc"
         )
-        result = env.run_bash(cmd, timeout=timeout, **_secret_env(secrets))
+        asked = _esc.parse_escalation(sandbox_permissions, justification)
+        resolution = _esc.resolve_escalation(
+            asked, env=env, ask=escalation_ask, tool="python", command=code, subject="script"
+        )
+        if resolution.refusal is not None:
+            return resolution.refusal
+        if resolution.grant:
+            result = env.run_escalated(
+                cmd, grant=resolution.grant, timeout=timeout, **_secret_env(secrets)
+            )
+        else:
+            result = env.run_bash(cmd, timeout=timeout, **_secret_env(secrets))
         stdout, out_trunc = _cap(result.stdout, PYTHON_OUTPUT_CAP)
         stderr, err_trunc = _cap(result.stderr, PYTHON_OUTPUT_CAP)
         return {
-            "exit_code": result.exit_code,
             "stdout": stdout,
             "stderr": stderr,
             "timed_out": result.timed_out,
+            "stopped": "timeout" if result.timed_out else None,
+            "timeout_ms": int(timeout) * 1000,
             "truncated": out_trunc or err_trunc,
             "duration_s": round(result.duration_s, 4),
+            **({"escalated": list(resolution.grant)} if resolution.grant else {}),
+            **({"note": resolution.note} if resolution.note else {}),
+            **(
+                {}
+                if resolution.grant
+                else _esc.denial_fields(env, escalation_ask, result.exit_code, "script")
+            ),
+            "exit_code": result.exit_code,
         }
 
     return run_python
@@ -349,24 +580,44 @@ def register_run_command(
     env: Environment,
     secrets: SecretsAccess | None = None,
     jobs=None,
+    floor: "SafetyFloor | None" = None,
+    escalation_ask=None,
 ) -> None:
     registry.register(
         "run_command",
         RUN_COMMAND_SCHEMA,
-        make_run_command_handler(env, secrets, jobs),
+        make_run_command_handler(env, secrets, jobs, floor, escalation_ask),
     )
 
 
-def register_file_tools(registry: ToolRegistry, env: Environment) -> None:
-    registry.register("write_file", WRITE_FILE_SCHEMA, make_write_file_handler(env))
-    registry.register("read_file", READ_FILE_SCHEMA, make_read_file_handler(env))
+def register_file_tools(
+    registry: ToolRegistry,
+    env: Environment,
+    guard: "EditGuard | None" = None,
+    floor: "SafetyFloor | None" = None,
+) -> None:
+    registry.register("write_file", WRITE_FILE_SCHEMA, make_write_file_handler(env, guard, floor))
+    registry.register("read_file", READ_FILE_SCHEMA, make_read_file_handler(env, guard, floor))
     registry.register("list_dir", LIST_DIR_SCHEMA, make_list_dir_handler(env))
+    # The literal edit and the Codex patch need the read-before-edit guard, so
+    # they are only registered with one (research items 32-34). Without a guard
+    # the runtime keeps only the plain write/read tools, as before.
+    # Deferrable: they stay out of the per-round prompt (found with
+    # search_tools) to keep the tool budget, but the loop still runs one when a
+    # model calls it by name without searching first.
+    if guard is not None:
+        registry.register(
+            "edit_file", EDIT_FILE_SCHEMA, make_edit_file_handler(env, guard, floor), deferrable=True
+        )
+        registry.register(
+            "apply_patch", APPLY_PATCH_SCHEMA, make_apply_patch_handler(env, guard, floor), deferrable=True
+        )
 
 
 def register_run_python(
-    registry: ToolRegistry, env: Environment, secrets: SecretsAccess | None = None
+    registry: ToolRegistry, env: Environment, secrets: SecretsAccess | None = None, escalation_ask=None
 ) -> None:
-    registry.register("python", RUN_PYTHON_SCHEMA, make_run_python_handler(env, secrets))
+    registry.register("python", RUN_PYTHON_SCHEMA, make_run_python_handler(env, secrets, escalation_ask))
 
 
 def register_finish(registry: ToolRegistry) -> None:
@@ -388,6 +639,9 @@ def register_builtin_tools(
     vision_http_client: httpx.Client | None = None,
     secrets: SecretsAccess | None = None,
     jobs=None,
+    guard: "EditGuard | None" = None,
+    floor: "SafetyFloor | None" = None,
+    escalation_ask=None,
 ) -> None:
     """Register the whole built-in tool set against one environment.
 
@@ -417,12 +671,12 @@ def register_builtin_tools(
       WIRE_CONTRACT.md, "Interactive shell and background commands"); without
       it the flag is refused and the job tools are not registered.
     """
-    register_run_command(registry, env, secrets, jobs)
-    register_file_tools(registry, env)
+    register_run_command(registry, env, secrets, jobs, floor, escalation_ask)
+    register_file_tools(registry, env, guard, floor)
     # Net-new built-ins: CodeAct `python` and the explicit `finish` terminator.
     # Both need only the environment/registry, so the extra channel params above
     # (session, sinks, mounts) do not apply to them.
-    register_run_python(registry, env, secrets)
+    register_run_python(registry, env, secrets, escalation_ask)
     register_finish(registry)
     register_secrets_tools(registry, secrets)
     register_web_search(

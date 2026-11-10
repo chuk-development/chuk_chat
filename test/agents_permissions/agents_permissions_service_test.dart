@@ -20,6 +20,7 @@ void main() {
         'secrets_env': true,
         'workspace_mount': 'rw',
         'user_browser': false,
+        'external_agents': false,
       });
     });
 

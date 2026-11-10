@@ -62,7 +62,10 @@ void main() {
       expect(find.text(spec.title), findsOneWidget);
       expect(find.text(spec.explanation), findsOneWidget);
     }
-    expect(find.byType(Switch), findsNWidgets(5));
+    expect(
+      find.byType(Switch),
+      findsNWidgets(kAgentPermissionSpecs.length),
+    );
     expect(find.text('PERMISSIONS'), findsOneWidget);
     // The internet switch covers the host-side web tools too.
     expect(find.text('Sandbox and web tools.'), findsOneWidget);
