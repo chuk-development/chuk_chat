@@ -190,6 +190,29 @@ class FileAttachmentHandler {
     }
   }
 
+  /// Attaches files that are already on disk (content shared into the app
+  /// from the system share sheet). Each one passes the same type and size
+  /// checks as a picked file.
+  Future<void> attachLocalFiles(
+    List<({String path, String name})> files, {
+    required bool supportsImages,
+  }) async {
+    if (kIsWeb) return;
+    for (final f in files) {
+      final File file = File(f.path);
+      if (!await file.exists()) {
+        onError?.call('Could not read ${f.name}');
+        continue;
+      }
+      await _handleFileAttachment(
+        file: file,
+        fileName: f.name,
+        fileSizeBytes: await file.length(),
+        supportsImages: supportsImages,
+      );
+    }
+  }
+
   Future<void> _handleFileAttachment({
     required File file,
     required String fileName,

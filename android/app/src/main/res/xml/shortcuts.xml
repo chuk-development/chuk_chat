@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Direct Share: the sheet lists the dynamic shortcuts in this category (one
+     per agent, published by share/ShareBridge.kt) as contacts. Picking one
+     starts the share target below with the shortcut id. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <share-target android:targetClass="dev.chuk.chat.share.ShareReceiverActivity">
+        <data android:mimeType="text/*" />
+        <data android:mimeType="image/*" />
+        <data android:mimeType="application/*" />
+        <category android:name="dev.chuk.chat.category.SHARE_TARGET" />
+    </share-target>
+</shortcuts>

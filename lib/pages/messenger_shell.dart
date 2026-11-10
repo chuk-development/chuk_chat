@@ -129,6 +129,8 @@ import 'package:chuk_chat/widgets/room_faces.dart';
 import 'package:chuk_chat/widgets/dashboard/dashboard_page.dart';
 import 'package:chuk_chat/services/dashboard/dashboard_controller.dart';
 import 'package:chuk_chat/services/agents/agents_thread_composer.dart';
+import 'package:chuk_chat/services/share/share_intent_service.dart';
+import 'package:chuk_chat/services/share/share_target_icon.dart';
 import 'package:chuk_chat/services/agents/main_agent_launcher.dart';
 import 'package:chuk_chat/widgets/chat_documents_panel.dart';
 import 'package:chuk_chat/widgets/top_centre_slot.dart';
@@ -195,6 +197,7 @@ import 'package:chuk_chat/widgets/agent_template_picker.dart';
 
 part 'agents_shell_state.dart';
 part 'agents_desktop_layout.dart';
+part 'agents_share_targets.dart';
 
 /// The messenger: agents down the left, the selected thread in the middle,
 /// Control Rooms on the right, the agent's browser as a full-screen route, the
@@ -323,7 +326,7 @@ class MessengerShell extends StatefulWidget {
 }
 
 class _MessengerShellState extends State<MessengerShell>
-    with AgentsShellHost, _AgentsDesktopLayout {
+    with AgentsShellHost, _AgentsDesktopLayout, _AgentsShareTargets {
   /// Whether the agent has a browser open, derived from the live transport's
   /// frames (see [BrowserPresence]). Rebuilt on every reconnect; null while
   /// there is no transport. The "Agent's browser" button exists only while
@@ -334,6 +337,7 @@ class _MessengerShellState extends State<MessengerShell>
 
   // Read by handlers that run after build (the same trick chuk's settings
   // modal uses for `_compact`): which layout the last frame chose.
+  @override
   bool _isPhone = false;
 
   /// The phone's swipe between the places of the Agents half. Its progress
@@ -355,6 +359,7 @@ class _MessengerShellState extends State<MessengerShell>
 
   // --- Chats | Agents --------------------------------------------------------
 
+  @override
   late final AppModeService _appMode = widget.appMode ?? AppModeService();
   late final bool _ownsAppMode = widget.appMode == null;
 
@@ -365,11 +370,13 @@ class _MessengerShellState extends State<MessengerShell>
 
   /// Whether there is a chuk_chat to switch to. Without a shell config (a
   /// widget test, the auth gate's fallback) the shell is Agents alone.
+  @override
   bool get _chatModeAvailable =>
       widget.shellConfig != null || widget.chatModeBuilder != null;
 
   /// The half on screen. Follows [_appMode], and is always Agents when there
   /// is no Chats half.
+  @override
   AppMode _shownMode = AppMode.agents;
 
   /// Whether the Chats half has been shown yet. It is built on first show and
@@ -437,6 +444,7 @@ class _MessengerShellState extends State<MessengerShell>
     });
     // A request made before this shell existed.
     WidgetsBinding.instance.addPostFrameCallback((_) => _onLaunchRequest());
+    _shareInit();
     // Home's data (docs/DASHBOARD.md): this shell mounts once the user is
     // signed in, and the controller follows the relay's attachment itself
     // (it reads its cache, flushes pending taps and asks the host on every
@@ -665,6 +673,7 @@ class _MessengerShellState extends State<MessengerShell>
   // --- main agent ------------------------------------------------------------
 
   /// The agent the roster draws first and a Home widget opens.
+  @override
   AgentsAgent? get _mainAgent =>
       resolveMainAgent(_roster.visibleAgents, RosterPins.instance.mainAgentId);
 
@@ -757,6 +766,7 @@ class _MessengerShellState extends State<MessengerShell>
     _controller.removeListener(_onControllerForBrowser);
     _browserPresence?.dispose();
     _browserPresence = null;
+    _shareDispose();
     _deskDispose();
     _hostDispose();
     super.dispose();

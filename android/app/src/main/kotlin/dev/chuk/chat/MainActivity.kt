@@ -2,6 +2,7 @@ package dev.chuk.chat
 
 import android.content.Intent
 import dev.chuk.chat.assist.AssistantHostActivity
+import dev.chuk.chat.share.ShareBridge
 import dev.chuk.chat.voice.VoiceCallBridge
 import io.flutter.embedding.engine.FlutterEngine
 
@@ -19,23 +20,31 @@ import io.flutter.embedding.engine.FlutterEngine
  */
 class MainActivity : AssistantHostActivity() {
   private var voiceCall: VoiceCallBridge? = null
+  private var share: ShareBridge? = null
 
   override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
     super.configureFlutterEngine(flutterEngine)
     val bridge = VoiceCallBridge(this, flutterEngine.dartExecutor.binaryMessenger)
     voiceCall = bridge
     bridge.onIntent(intent)
+    // Content from the system share sheet (share/ShareReceiverActivity.kt).
+    val shareBridge = ShareBridge(this, flutterEngine.dartExecutor.binaryMessenger)
+    share = shareBridge
+    shareBridge.onIntent(intent)
   }
 
   override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
     voiceCall?.dispose()
     voiceCall = null
+    share?.dispose()
+    share = null
     super.cleanUpFlutterEngine(flutterEngine)
   }
 
   override fun onNewIntent(intent: Intent) {
     super.onNewIntent(intent)
     voiceCall?.onIntent(intent)
+    share?.onIntent(intent)
   }
 
   override fun onDestroy() {

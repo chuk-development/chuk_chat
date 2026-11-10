@@ -33,6 +33,7 @@ import 'package:material_ui/material_ui.dart' as mui;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:chuk_chat/services/share/share_intent_service.dart';
 import 'package:chuk_chat/assistant/assistant_overlay.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
@@ -487,6 +488,17 @@ class _AgentsAppState extends State<AgentsApp> {
   }
 
   void _initializeNotificationsInBackground() {
+    // Content shared into the app from the Android share sheet. A plain
+    // build has no agents: it clears Direct Share contacts an Agents build
+    // of the same package may have left.
+    if (ShareIntentService.isSupported) {
+      unawaited(ShareIntentService.instance.start());
+      if (!kFeatureAgents) {
+        unawaited(
+          ShareIntentService.instance.publishTargets(const <ShareTarget>[]),
+        );
+      }
+    }
     // Completion notifications are used on Android/iOS only.
     if (kIsWeb ||
         (defaultTargetPlatform != TargetPlatform.android &&

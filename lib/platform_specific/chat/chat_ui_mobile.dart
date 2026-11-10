@@ -44,6 +44,7 @@ import 'package:chuk_chat/services/offline_send_coordinator.dart';
 import 'package:chuk_chat/services/mcp/mcp_availability.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
 import 'package:chuk_chat/services/agents/agents_thread_composer.dart';
+import 'package:chuk_chat/services/share/share_intent_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -1128,6 +1129,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         AgentsThreadComposer.takePrefill(widget.selectedChatId) ??
         AgentsThreadComposer.takePrefill(_activeChatId);
     if (text == null) return;
+    // Files shared to this agent from the system share sheet ride along.
+    final List<SharedFile> files = ShareIntentService.instance
+        .takeParkedFiles(widget.selectedChatId ?? _activeChatId);
+    if (files.isNotEmpty) unawaited(_attachSharedFiles(files));
     // Empty: only the focus (Home's "Ask" pill); the draft stays.
     if (text.isNotEmpty) {
       composerController.value = TextEditingValue(
@@ -1137,6 +1142,27 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     }
     composerFocusNode.requestFocus();
   }
+
+  /// Content shared into the app (system share sheet) goes into the
+  /// composer of the chat on screen: the text replaces the draft, the files
+  /// are attached. Nothing is sent; the user adds a question and sends.
+  void applySharedContent(SharedContent share) {
+    if (!mounted) return;
+    final String text = share.composerText;
+    if (text.isNotEmpty) {
+      composerController.value = TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+      );
+    }
+    if (share.files.isNotEmpty) unawaited(_attachSharedFiles(share.files));
+    composerFocusNode.requestFocus();
+  }
+
+  Future<void> _attachSharedFiles(List<SharedFile> files) => _fileHandler
+      .attachLocalFiles(<({String path, String name})>[
+        for (final SharedFile f in files) (path: f.path, name: f.name),
+      ], supportsImages: modelSupportsImageInput);
 
   bool _agentsThreadSend(String chatId, String text) {
     if (!mounted || _isSendingMessage || _isCurrentChatStreaming) return false;

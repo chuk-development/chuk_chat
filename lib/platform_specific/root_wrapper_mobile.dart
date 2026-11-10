@@ -41,6 +41,7 @@ import 'package:chuk_chat/widgets/sidebar/sidebar_common.dart'
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_debug_snapshot.dart';
+import 'package:chuk_chat/services/share/share_intent_service.dart';
 
 /* ---------- ROOT WRAPPER MOBILE (for Phones) ---------- */
 class RootWrapperMobile extends StatefulWidget {
@@ -184,10 +185,49 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _ensurePermissions();
     });
+
+    // Content shared into the app from the system share sheet.
+    ShareIntentService.instance.incoming.addListener(_onShareIncoming);
+    _onShareIncoming();
+  }
+
+  /// Handled after the frame, never inside the notification: the Agents
+  /// shell listens to the same share and first brings the Chats half to the
+  /// front.
+  void _onShareIncoming() {
+    WidgetsBinding.instance.addPostFrameCallback((_) => _takeShare());
+    WidgetsBinding.instance.scheduleFrame();
+  }
+
+  /// A share for the app itself (not for one agent) opens a new chat with
+  /// the shared text and files in the composer. A plain build has no agents,
+  /// so a share that names one (a contact left from an Agents build) lands
+  /// here too.
+  void _takeShare([int attempt = 0]) {
+    if (!mounted) return;
+    final SharedContent? share = ShareIntentService.instance.incoming.value;
+    if (share == null || (share.agentId != null && kFeatureAgents)) return;
+    if (_chatUIMobileKey.currentState == null) {
+      // The chat view is not built yet (first frame after sign-in).
+      if (attempt < 20) {
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _takeShare(attempt + 1),
+        );
+      }
+      return;
+    }
+    ShareIntentService.instance.take();
+    Navigator.of(context).popUntil((Route<dynamic> r) => r.isFirst);
+    if (_isSidebarExpanded) _toggleSidebar();
+    _newChatFromAppBar();
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _chatUIMobileKey.currentState?.applySharedContent(share),
+    );
   }
 
   @override
   void dispose() {
+    ShareIntentService.instance.incoming.removeListener(_onShareIncoming);
     if (kFeatureArtifacts) {
       ArtifactStorageService.activeArtifactNotifier.removeListener(
         _onArtifactChanged,

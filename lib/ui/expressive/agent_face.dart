@@ -70,12 +70,25 @@ Color agentAccent(
   String agentId, {
   AgentProfileStore? store,
 }) {
+  return agentAccentFor(
+    agentId,
+    dark: Theme.of(context).brightness == Brightness.dark,
+    store: store,
+  );
+}
+
+/// [agentAccent] without a [BuildContext], for faces painted outside the
+/// widget tree (the share sheet's Direct Share icons).
+Color agentAccentFor(
+  String agentId, {
+  required bool dark,
+  AgentProfileStore? store,
+}) {
   final AgentProfile profile = (store ?? AgentProfileStore.instance).profileOf(
     agentId,
   );
   final int? picked = profile.colorValue;
   if (picked != null) return Color(picked);
-  final bool dark = Theme.of(context).brightness == Brightness.dark;
   // The hue is taken from the offered palette instead of straight from the
   // hash. A raw hash spreads over the full circle, which sounds fair and in
   // practice put two of three agents within a few degrees of each other —

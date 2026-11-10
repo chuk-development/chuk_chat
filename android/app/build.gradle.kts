@@ -192,6 +192,9 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    // ShortcutManagerCompat / Person for the share sheet's Direct Share
+    // contacts (share/ShareBridge.kt).
+    implementation("androidx.core:core-ktx:1.16.0")
 }
 
 // Flutter's pub-get registrant lists integration_test (a dev plugin).
