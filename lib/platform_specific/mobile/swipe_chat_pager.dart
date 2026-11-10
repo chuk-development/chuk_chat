@@ -160,6 +160,7 @@ class SwipeChatPager extends StatefulWidget {
     this.enabled = true,
     this.controller,
     this.clipBehavior = Clip.hardEdge,
+    this.moveChild = true,
   });
 
   /// entries[0] is the leftmost. A swipe to the left goes to index + 1.
@@ -181,6 +182,10 @@ class SwipeChatPager extends StatefulWidget {
 
   /// Clips the child while it is moved. [Clip.none] lets it paint outside.
   final Clip clipBehavior;
+
+  /// False keeps the child still: the swipe only switches the chat, and the
+  /// motion is the title strip's alone (owner, 2026-11-05, the phone).
+  final bool moveChild;
 
   @override
   State<SwipeChatPager> createState() => _SwipeChatPagerState();
@@ -455,6 +460,7 @@ class _SwipeChatPagerState extends State<SwipeChatPager>
           _width = constraints.maxWidth.isFinite
               ? constraints.maxWidth
               : MediaQuery.sizeOf(context).width;
+          if (!widget.moveChild) return widget.child;
           return ClipRect(
             clipBehavior: widget.clipBehavior,
             child: AnimatedBuilder(

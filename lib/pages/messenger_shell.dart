@@ -1572,6 +1572,8 @@ class _MessengerShellState extends State<MessengerShell>
                     onSelected: _onPhoneSelected,
                     controller: _phonePager,
                     enabled: !home,
+                    // Only the name in the strip moves (owner, 2026-11-05).
+                    moveChild: false,
                     child: body,
                   ),
                 ),

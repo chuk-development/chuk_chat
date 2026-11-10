@@ -1,15 +1,13 @@
 /// The full-width bar under the mode switch that names the chat in view.
 ///
 /// It is the swipe surface of the phone (owner, 2026-11-05): no chevron, no
-/// dropdown, no list. The bar holds a carousel of titles. The chat in view
-/// sits in the middle; the previous and the next chat peek in, dimmed and
-/// cut by the bar's edges, so the bar says "there is more this way". A
-/// sideways drag on the bar drives the [SwipeChatPager] below through its
-/// [SwipeChatPagerController]; chat and titles move together, and a peeking
-/// title glides to the middle as its chat comes in. A tap on a peeking title
-/// goes there. A row of dots at the foot of the bar shows where in the list
-/// the chat is, Instagram style: a window of at most [_kMaxDots] dots that
-/// shrink towards its ends when the list goes on.
+/// dropdown, no list, and no peek at the neighbours. A sideways drag on the
+/// bar drives the [SwipeChatPager] below through its
+/// [SwipeChatPagerController]. The chat itself stays still; only the name
+/// here moves: it follows the finger out and fades, and the new name slides
+/// in from the other side. A row of dots at the foot of the bar shows where
+/// in the list the chat is, Instagram style: a window of at most [_kMaxDots]
+/// dots that shrink towards its ends when the list goes on.
 library;
 
 import 'dart:math' as math;
@@ -38,9 +36,6 @@ const double _kItemFraction = 0.66;
 
 /// How small a peeking title gets.
 const double _kPeekScale = 0.88;
-
-/// How faint a peeking title gets.
-const double _kPeekOpacity = 0.42;
 
 /// The most dots the position row shows at once.
 const int _kMaxDots = 7;
@@ -93,7 +88,7 @@ class ChatTitleStrip extends StatelessWidget {
     final int index = swipeChatIndexOf(entries, selectedId);
     final String title = index >= 0 ? entries[index].title : emptyTitle;
     final SwipeChatPagerController? pager = controller;
-    final ValueListenable<double>? motion = progress ?? pager?.carousel;
+    final ValueListenable<double>? motion = progress ?? pager?.progress;
     final bool dots = showPosition && index >= 0 && entries.length > 1;
 
     Widget track(double p) => _Track(
@@ -140,18 +135,7 @@ class ChatTitleStrip extends StatelessWidget {
               onHorizontalDragEnd: (DragEndDetails d) =>
                   pager.dragEnd(d.primaryVelocity ?? 0),
               onHorizontalDragCancel: pager.dragCancel,
-              onTapUp: (TapUpDetails d) {
-                final double w = constraints.maxWidth;
-                if (w <= 0) return;
-                final double x = d.localPosition.dx / w;
-                if (x > 0.78 && hasNext) {
-                  pager.next();
-                } else if (x < 0.22 && hasPrev) {
-                  pager.previous();
-                } else {
-                  onTap?.call();
-                }
-              },
+              onTap: onTap,
               child: plain,
             ),
       );
@@ -222,31 +206,20 @@ class _Track extends StatelessWidget {
             ),
           );
         } else {
-          // The far one first, so the one in the middle paints on top.
-          final List<int> order =
-              <int>[
-                for (int d = -2; d <= 2; d++)
-                  if (index + d >= 0 && index + d < entries.length) index + d,
-              ]..sort(
-                (int a, int b) =>
-                    ((b - index) + p).abs().compareTo(((a - index) + p).abs()),
-              );
-          for (final int i in order) {
-            final double position = (i - index) + p;
-            if (position.abs() > 1.9) continue;
-            items.add(
-              _place(
-                key: i == index
-                    ? const ValueKey<String>('chat_title_strip_current')
-                    : ValueKey<String>('chat_title_strip_${entries[i].id}'),
-                entry: entries[i],
-                position: position,
-                slot: slot,
-                width: w,
-                itemWidth: itemWidth,
-              ),
-            );
-          }
+          // Only the chat in view: its name rides the finger out, and the
+          // next name comes in from the other side once the switch is made
+          // (the pager's progress runs to ±1, then from ∓1 back to 0). No
+          // neighbour is shown (owner, 2026-11-05).
+          items.add(
+            _place(
+              key: const ValueKey<String>('chat_title_strip_current'),
+              entry: entries[index],
+              position: p,
+              slot: slot,
+              width: w,
+              itemWidth: itemWidth,
+            ),
+          );
         }
         return Stack(
           clipBehavior: Clip.hardEdge,
@@ -277,7 +250,7 @@ class _Track extends StatelessWidget {
                 child: _PositionDots(
                   key: const ValueKey<String>('chat_title_strip_position'),
                   count: entries.length,
-                  position: index - p,
+                  position: index.toDouble(),
                 ),
               ),
           ],
@@ -296,7 +269,7 @@ class _Track extends StatelessWidget {
   }) {
     final double t = position.abs().clamp(0.0, 1.0);
     final double scale = 1 - (1 - _kPeekScale) * t;
-    final double opacity = 1 - (1 - _kPeekOpacity) * t;
+    final double opacity = 1 - t;
     final double left = (width - itemWidth) / 2 + position * slot;
     return Positioned(
       key: key,
@@ -313,7 +286,7 @@ class _Track extends StatelessWidget {
               entry: entry,
               fallbackTitle: emptyTitle,
               workingLabel: workingLabel,
-              detail: 1 - t,
+              detail: 1,
             ),
           ),
         ),

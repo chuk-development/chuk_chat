@@ -97,6 +97,13 @@ Uncommitted (made after `686f9e4b`, from the 15:05 instruction):
   (`-no-window`), x86_64 AVD `cowork_x64`, about 5 GB RAM.
 - `.env.maestro` test credentials are invalid ("Invalid login credentials").
   The emulator app needs a manual login.
+- T3 Code has a Device panel: the agent tools `device_list`,
+  `device_open`, `device_screenshot` and `device_close` show an Android
+  emulator in the T3 UI, also remote. They need "Agent device access" on
+  (T3 Settings > Integrations > Devices) and then a new thread. On
+  2026-11-05 this switch was off. When you use the panel, do not start the
+  AVD with `scripts/emulator.sh start` first: `device_open` boots
+  `cowork_x64` itself, and an AVD can run only once.
 - To see the emulator from another device: `scrcpy` over adb, or the
   `android-emulator.service` in CT 100 `t3code` on pve. That one is a
   different emulator, on another host.
