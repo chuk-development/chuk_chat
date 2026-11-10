@@ -42,6 +42,7 @@ import 'package:chuk_chat/services/agents/supabase_pairing_sync.dart';
 import 'package:chuk_chat/services/app_mode_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/notifications/notification_router.dart';
+import 'package:chuk_chat/services/share/share_intent_service.dart';
 import 'package:chuk_chat/widgets/agent_roster_view.dart';
 import 'package:chuk_chat/widgets/agents_status_panel.dart';
 import 'package:chuk_chat/widgets/agents_thread_header.dart';
@@ -840,6 +841,45 @@ void main() {
         reason: 'chuk\'s chat comes back with its half',
       );
     });
+  });
+
+  group('share sheet', () {
+    tearDown(ShareIntentService.instance.resetForTest);
+
+    testWidgets('a share picked on an agent opens its thread with the text '
+        'in the composer, not sent', (tester) async {
+      final AppModeService mode = AppModeService(initial: AppMode.chats)
+        ..show(AppMode.chats);
+      addTearDown(mode.dispose);
+      final LocalAgentRosterSource roster = await pumpShell(tester, mode: mode);
+      final AgentsAgent other = roster.addAgent(name: 'Cobalt');
+      await tester.pumpAndSettle();
+
+      ShareIntentService.instance.incoming.value = SharedContent(
+        text: 'what does it say?',
+        agentId: other.id,
+      );
+      await tester.pumpAndSettle();
+
+      expect(ShareIntentService.instance.incoming.value, isNull);
+      expect(mode.value, AppMode.agents);
+      final bool inComposer = find
+          .byWidgetPredicate(
+            (Widget w) =>
+                w is EditableText && w.controller.text == 'what does it say?',
+            skipOffstage: false,
+          )
+          .evaluate()
+          .isNotEmpty;
+      expect(inComposer, isTrue);
+      expect(
+        AgentsThreadComposer.takePrefill(other.threads.first.key),
+        isNull,
+        reason: 'the thread screen took it',
+      );
+      expect(lastController!.tasks, isEmpty, reason: 'nothing was sent');
+      // The share sheet is Android only.
+    }, variant: TargetPlatformVariant.only(TargetPlatform.android));
   });
 
   group('main agent', () {

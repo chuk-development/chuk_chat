@@ -2147,6 +2147,8 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     final chat = ChatStorageService.getChatById(key);
     if (chat == null || !chat.isFullyLoaded || chat.messages.isEmpty) return;
     if (!_screenIsEmpty) return;
+    // The composer's draft goes on to the new screen.
+    AgentsThreadComposer.markRemount(widget.threadKey);
     setState(() {
       _cacheRevision++;
       _screenGeneration++;
@@ -2171,6 +2173,8 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       return;
     }
     AgentsResumeTrace.mark('replay revision $revision painted (remount)');
+    // The composer's draft goes on to the new screen.
+    AgentsThreadComposer.markRemount(widget.threadKey);
     setState(() {
       _revision = revision;
       _screenGeneration++;

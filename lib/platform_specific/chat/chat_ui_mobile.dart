@@ -1335,6 +1335,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     if (text == null) return;
     // Files shared to this agent from the system share sheet ride along.
     final String? shareChat = widget.selectedChatId ?? _activeChatId;
+    // Ready files of the screen this one replaced (a remount).
+    final List<AttachedFile> carried = AgentsThreadComposer.takeCarriedFiles(
+      shareChat,
+    );
+    for (final AttachedFile f in carried) {
+      _fileHandler.addReadyFile(f);
+    }
     final List<SharedFile> files = ShareIntentService.instance.takeParkedFiles(
       shareChat,
     );
@@ -1409,8 +1416,44 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     return true;
   }
 
+  /// AGENTS: the thread view remounts this screen when the host's replay
+  /// lands, about a second after a thread opens. What the composer holds
+  /// then (typed text, a share, attachments) goes to the screen that
+  /// replaces this one instead of being lost.
+  void _carryDraftAcrossRemount() {
+    final String? chatId = _activeChatId ?? widget.selectedChatId;
+    if (chatId == null || !AgentsThreadComposer.takeRemount(chatId)) return;
+    if (_isSendingMessage) return;
+    final List<AttachedFile> attached = _fileHandler.attachedFiles;
+    final List<AttachedFile> ready = <AttachedFile>[
+      for (final AttachedFile f in attached)
+        if (!f.isUploading) f,
+    ];
+    // An upload in flight belongs to this screen's handler: attach the
+    // local file again on the next screen.
+    final List<SharedFile> again = <SharedFile>[
+      for (final AttachedFile f in attached)
+        if (f.localPath case final String path when f.isUploading)
+          SharedFile(path: path, name: f.fileName),
+      ..._pendingSharedFiles,
+    ];
+    final String text = composerController.text;
+    if (text.trim().isEmpty && ready.isEmpty && again.isEmpty) return;
+    AgentsThreadComposer.carryFiles(chatId, ready);
+    if (again.isNotEmpty) ShareIntentService.instance.parkFiles(chatId, again);
+    // A prefill no screen took yet is newer than this draft.
+    if (!AgentsThreadComposer.hasPrefill(chatId)) {
+      AgentsThreadComposer.prefill(
+        chatId,
+        text.trim().isEmpty ? '' : text,
+        notify: false,
+      );
+    }
+  }
+
   @override
   void dispose() {
+    if (widget.messengerMode) _carryDraftAcrossRemount();
     AgentsThreadComposer.detach(_agentsThreadSend); // AGENTS
     AgentsThreadComposer.prefillChanges.removeListener(_takeAgentsPrefill);
     _outboxSub?.cancel();
