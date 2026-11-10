@@ -1532,11 +1532,6 @@ void main() {
         <String>[host.id, other.id],
       );
       expect(strip(tester).selectedId, host.id);
-      // The next agent peeks in at the strip's right edge.
-      expect(
-        find.byKey(ValueKey<String>('chat_title_strip_${other.id}')),
-        findsOneWidget,
-      );
 
       final Rect bar = tester.getRect(find.byType(ChatTitleStrip));
       await tester.tapAt(bar.center);
@@ -1924,26 +1919,16 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    // The phone: the room is a place of the swipe, after the agent; it
-    // peeks in at the strip's edge beside the agent, not in a second list.
+    // The phone: the room is a place of the swipe, after the agent, not in
+    // a second list.
     await pumpAt(const Size(360, 900));
     expect(find.byType(MobileAgentList), findsNothing);
-    expect(
-      tester
-          .widget<ChatTitleStrip>(find.byType(ChatTitleStrip))
-          .entries
-          .last
-          .id,
-      room.id,
-    );
-    final Finder roomPeek = find.byKey(
-      ValueKey<String>('chat_title_strip_${room.id}'),
-    );
-    expect(roomPeek, findsOneWidget);
-    expect(
-      find.descendant(of: roomPeek, matching: find.text('launch')),
-      findsOneWidget,
-    );
+    final SwipeChatEntry roomEntry = tester
+        .widget<ChatTitleStrip>(find.byType(ChatTitleStrip))
+        .entries
+        .last;
+    expect(roomEntry.id, room.id);
+    expect(roomEntry.title, 'launch');
 
     // The desktop roster: same room, under its own quiet label, and Control
     // Rooms is still in the rail — this is a second way in, not a move.

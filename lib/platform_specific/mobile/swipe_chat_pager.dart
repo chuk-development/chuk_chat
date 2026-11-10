@@ -136,14 +136,19 @@ const double kSwipeChatCommitFraction = 0.22;
 /// Fling speed (px/s) that commits a switch whatever the distance.
 const double kSwipeChatFlingVelocity = 700;
 
-/// Duration of the "out" half of a committed switch.
-const Duration kSwipeChatOutDuration = Duration(milliseconds: 160);
+/// Duration of the "out" half of a committed switch: the chat moves on a
+/// little and fades. Short on purpose (owner, 2026-11-10: no big
+/// animations, the user wants to keep working).
+const Duration kSwipeChatOutDuration = Duration(milliseconds: 90);
 
-/// Duration of the "in" half of a committed switch.
-const Duration kSwipeChatInDuration = Duration(milliseconds: 220);
+/// Duration of the "in" half: the new chat fades in from a small offset.
+const Duration kSwipeChatInDuration = Duration(milliseconds: 150);
 
-/// M3 emphasized accelerate: leaves slowly, exits fast.
-const Cubic _kEmphasizedAccelerate = Cubic(0.3, 0.0, 0.8, 0.15);
+/// How far (in pages) the chat moves on after the release, while it fades.
+const double _kOutTravel = 0.12;
+
+/// How far (in pages) the new chat starts off its place.
+const double _kInTravel = 0.06;
 
 /// How far (in pages) the rubber band can stretch at an end, at most.
 const double _kRubberMax = 0.12;
@@ -187,11 +192,18 @@ class SwipeChatPager extends StatefulWidget {
 }
 
 class _SwipeChatPagerState extends State<SwipeChatPager>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   /// Progress in pages, see [SwipeChatPagerController.progress].
   late final AnimationController _anim = AnimationController.unbounded(
     vsync: this,
   )..addListener(_publish);
+
+  /// Opacity of the chat during a committed switch. 1 at rest and during a
+  /// drag: only the switch itself fades.
+  late final AnimationController _fade = AnimationController(
+    vsync: this,
+    value: 1,
+  );
 
   double _width = 0;
 
@@ -235,6 +247,8 @@ class _SwipeChatPagerState extends State<SwipeChatPager>
       _raw = 0;
       _anim.stop();
       _anim.value = 0;
+      _fade.stop();
+      _fade.value = 1;
     }
   }
 
@@ -246,6 +260,7 @@ class _SwipeChatPagerState extends State<SwipeChatPager>
       widget.controller!._carousel.value = 0;
     }
     _recognizer?.dispose();
+    _fade.dispose();
     _anim.dispose();
     super.dispose();
   }
@@ -391,38 +406,56 @@ class _SwipeChatPagerState extends State<SwipeChatPager>
     }
 
     final double end = direction.toDouble();
-    final double remaining = (end - _anim.value).abs().clamp(0.0, 1.0);
+    // Out: from wherever the finger let go, a little further on, fading.
+    final double from = _anim.value;
+    final double outTo = from + end * _kOutTravel;
     try {
-      await _anim
-          .animateTo(
-            end,
-            duration: kSwipeChatOutDuration * remaining,
-            curve: _kEmphasizedAccelerate,
-          )
-          .orCancel;
+      await Future.wait<void>(<Future<void>>[
+        _anim
+            .animateTo(
+              outTo,
+              duration: kSwipeChatOutDuration,
+              curve: Curves.easeIn,
+            )
+            .orCancel,
+        _fade
+            .animateTo(0, duration: kSwipeChatOutDuration, curve: Curves.easeIn)
+            .orCancel,
+      ]);
     } on TickerCanceled {
       return;
     }
     if (!mounted || !_committing || _expectedId != id) return;
     widget.onSelected(id);
     if (!mounted) return;
-    // The same child comes back in from the other side, now the new chat.
+    // The same child comes back, now the new chat: a short fade in from a
+    // small offset on the side it comes from.
     _arriving = true;
-    _anim.value = -end;
+    _anim.value = -end * _kInTravel;
     try {
-      await _anim
-          .animateTo(
-            0,
-            duration: kSwipeChatInDuration,
-            curve: kExpressiveDecelerate,
-          )
-          .orCancel;
+      await Future.wait<void>(<Future<void>>[
+        _anim
+            .animateTo(
+              0,
+              duration: kSwipeChatInDuration,
+              curve: kExpressiveDecelerate,
+            )
+            .orCancel,
+        _fade
+            .animateTo(
+              1,
+              duration: kSwipeChatInDuration,
+              curve: kExpressiveDecelerate,
+            )
+            .orCancel,
+      ]);
     } on TickerCanceled {
       return;
     } finally {
       if (mounted && _expectedId == id) {
         _committing = false;
         _arriving = false;
+        _fade.value = 1;
       }
     }
   }
@@ -462,12 +495,17 @@ class _SwipeChatPagerState extends State<SwipeChatPager>
           return ClipRect(
             clipBehavior: widget.clipBehavior,
             child: AnimatedBuilder(
-              animation: _anim,
+              animation: Listenable.merge(<Listenable>[_anim, _fade]),
               child: widget.child,
               builder: (BuildContext context, Widget? child) {
-                return Transform.translate(
-                  offset: Offset(_anim.value * _width, 0),
-                  child: child,
+                // Opacity 1 paints without a layer, so a drag costs nothing
+                // extra; only the short switch fades.
+                return Opacity(
+                  opacity: _fade.value,
+                  child: Transform.translate(
+                    offset: Offset(_anim.value * _width, 0),
+                    child: child,
+                  ),
                 );
               },
             ),

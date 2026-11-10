@@ -411,9 +411,8 @@ void main() {
     return frames;
   }
 
-  testWidgets('carousel runs to -1 on the way out and reads 0 on the way in', (
-    WidgetTester tester,
-  ) async {
+  testWidgets('a switch moves a short way out, reads 0 on the way in, and is '
+      'over in under 300 ms', (WidgetTester tester) async {
     final SwipeChatPagerController controller = SwipeChatPagerController();
     addTearDown(controller.dispose);
     final _HostState host = await _pump(tester, controller: controller);
@@ -441,20 +440,29 @@ void main() {
       expect(c, p);
       expect(c, inInclusiveRange(-1.0, 0.0));
     }
-    expect(
-      out.map(((double, double, bool) f) => f.$1).reduce(math.min),
-      lessThan(-0.5),
-    );
-    // The "in" half: the chat comes back from +1, the carousel stays at 0.
-    expect(arriving.any(((double, double, bool) f) => f.$2 > 0.3), isTrue);
+    // A short move on, not a page: no big animation.
+    final double farthest = out
+        .map(((double, double, bool) f) => f.$1)
+        .reduce(math.min);
+    expect(farthest, lessThan(-0.05));
+    expect(farthest, greaterThan(-0.25));
+    // The "in" half: the chat comes back from a small offset on the other
+    // side, the carousel stays at 0.
+    expect(arriving.any(((double, double, bool) f) => f.$2 > 0.02), isTrue);
+    expect(arriving.every(((double, double, bool) f) => f.$2 < 0.1), isTrue);
     for (final (double c, double _, bool _) in arriving) {
       expect(c, 0);
     }
+    // Over in under 300 ms (frames are 8 ms apart).
+    final int lastMoving = frames.lastIndexWhere(
+      ((double, double, bool) f) => f.$2 != 0,
+    );
+    expect((lastMoving + 1) * 8, lessThan(300));
     expect(controller.carousel.value, 0);
     expect(controller.progress.value, 0);
   });
 
-  testWidgets('carousel runs to +1 on the way out to the previous chat', (
+  testWidgets('a switch to the previous chat moves a short way right', (
     WidgetTester tester,
   ) async {
     final SwipeChatPagerController controller = SwipeChatPagerController();
@@ -471,10 +479,11 @@ void main() {
     final Iterable<(double, double, bool)> out = frames.where(
       ((double, double, bool) f) => !f.$3,
     );
-    expect(
-      out.map(((double, double, bool) f) => f.$1).reduce(math.max),
-      greaterThan(0.5),
-    );
+    final double farthest = out
+        .map(((double, double, bool) f) => f.$1)
+        .reduce(math.max);
+    expect(farthest, greaterThan(0.05));
+    expect(farthest, lessThan(0.25));
     for (final (double c, double _, bool _) in out) {
       expect(c, inInclusiveRange(0.0, 1.0));
     }

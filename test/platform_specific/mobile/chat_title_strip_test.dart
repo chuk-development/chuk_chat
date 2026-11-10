@@ -27,13 +27,7 @@ void main() {
     await tester.pumpWidget(
       _app(const ChatTitleStrip(entries: _entries, selectedId: 'b')),
     );
-    final Finder current = find.byKey(
-      const ValueKey<String>('chat_title_strip_current'),
-    );
-    expect(
-      find.descendant(of: current, matching: find.text('Beta')),
-      findsOneWidget,
-    );
+    expect(find.text('Beta'), findsOneWidget);
     expect(find.text('second line'), findsOneWidget);
     expect(find.byKey(const ValueKey<String>('face_b')), findsOneWidget);
     // The position is a dot row, not "2/3" text.
@@ -42,12 +36,6 @@ void main() {
       const ValueKey<String>('chat_title_strip_position'),
     );
     expect(dots, findsOneWidget);
-    expect(
-      tester.widget(
-        find.descendant(of: dots, matching: find.byType(CustomPaint)).first,
-      ),
-      isA<CustomPaint>(),
-    );
     expect(
       tester.getSize(find.byType(ChatTitleStrip)).height,
       kChatTitleStripHeight,
@@ -59,86 +47,58 @@ void main() {
     handle.dispose();
   });
 
-  testWidgets('the neighbours peek in at rest, dimmed, on their side', (
+  testWidgets('content sits at the left; the neighbours are not drawn', (
     WidgetTester tester,
   ) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     await tester.pumpWidget(
       _app(const ChatTitleStrip(entries: _entries, selectedId: 'b')),
     );
-    final Finder prev = find.byKey(
-      const ValueKey<String>('chat_title_strip_a'),
+    final Rect bar = tester.getRect(find.byType(Container).first);
+    final Rect face = tester.getRect(
+      find.byKey(const ValueKey<String>('face_b')),
     );
-    final Finder next = find.byKey(
-      const ValueKey<String>('chat_title_strip_c'),
+    final Rect title = tester.getRect(find.text('Beta'));
+    // The face starts right at the pill's inner edge, the title next to it:
+    // no empty band on the left.
+    expect(face.left - bar.left, lessThan(24));
+    expect(title.left - face.right, lessThan(24));
+    // The dots sit on the right end.
+    final Rect dots = tester.getRect(
+      find.byKey(const ValueKey<String>('chat_title_strip_position')),
     );
-    final Finder current = find.byKey(
-      const ValueKey<String>('chat_title_strip_current'),
-    );
-    expect(prev, findsOneWidget);
-    expect(next, findsOneWidget);
-    expect(
-      find.descendant(of: prev, matching: find.text('Alpha')),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(of: next, matching: find.text('Gamma')),
-      findsOneWidget,
-    );
-    final double mid = tester.getCenter(current).dx;
-    expect(tester.getCenter(prev).dx, lessThan(mid));
-    expect(tester.getCenter(next).dx, greaterThan(mid));
-    // A peek is one quiet line: no subtitle.
-    expect(find.text('first'), findsNothing);
-    final Opacity peek = tester.widget(
-      find.descendant(of: next, matching: find.byType(Opacity)).first,
-    );
-    final Opacity middle = tester.widget(
-      find.descendant(of: current, matching: find.byType(Opacity)).first,
-    );
-    expect(peek.opacity, lessThan(middle.opacity));
+    expect(bar.right - dots.right, lessThan(24));
+    expect(find.text('Alpha'), findsNothing);
+    expect(find.text('Gamma'), findsNothing);
   });
 
-  testWidgets('unread shows as a dot next to the title, no edge dots', (
+  testWidgets('unread shows as a dot next to the title', (
     WidgetTester tester,
   ) async {
-    Finder dotIn(Finder of) => find.descendant(
-      of: of,
-      matching: find.byWidgetPredicate(
-        (Widget w) =>
-            w is Container &&
-            w.decoration is BoxDecoration &&
-            (w.decoration! as BoxDecoration).shape == BoxShape.circle,
-      ),
+    final Finder dot = find.byWidgetPredicate(
+      (Widget w) =>
+          w is Container &&
+          w.decoration is BoxDecoration &&
+          (w.decoration! as BoxDecoration).shape == BoxShape.circle,
     );
     await tester.pumpWidget(
       _app(const ChatTitleStrip(entries: _entries, selectedId: 'a')),
     );
-    final Finder current = find.byKey(
-      const ValueKey<String>('chat_title_strip_current'),
+    expect(dot, findsOneWidget);
+    final Rect title = tester.getRect(find.text('Alpha'));
+    final Rect d = tester.getRect(dot);
+    expect(d.left, greaterThanOrEqualTo(title.right));
+    expect(d.center.dy, closeTo(title.center.dy, 2));
+
+    await tester.pumpWidget(
+      _app(const ChatTitleStrip(entries: _entries, selectedId: 'b')),
     );
-    expect(dotIn(current), findsOneWidget);
-    expect(
-      dotIn(find.byKey(const ValueKey<String>('chat_title_strip_b'))),
-      findsNothing,
-    );
-    expect(
-      find.byKey(const ValueKey<String>('chat_strip_unread_l')),
-      findsNothing,
-    );
-    expect(
-      find.byKey(const ValueKey<String>('chat_strip_unread_r')),
-      findsNothing,
-    );
-    // Beside the title, on the same line.
-    final Rect title = tester.getRect(
-      find.descendant(of: current, matching: find.text('Alpha')),
-    );
-    final Rect dot = tester.getRect(dotIn(current));
-    expect(dot.left, greaterThanOrEqualTo(title.right));
-    expect(dot.center.dy, closeTo(title.center.dy, 2));
+    expect(dot, findsNothing);
   });
 
-  testWidgets('follows the drag progress like a carousel', (
+  testWidgets('a swipe slides the title a little and fades it', (
     WidgetTester tester,
   ) async {
     final ValueNotifier<double> progress = ValueNotifier<double>(0);
@@ -148,32 +108,25 @@ void main() {
         ChatTitleStrip(entries: _entries, selectedId: 'b', progress: progress),
       ),
     );
-    final Finder current = find.byKey(
-      const ValueKey<String>('chat_title_strip_current'),
+    final double rest = tester.getCenter(find.text('Beta')).dx;
+    Opacity fadeOf() => tester.widget<Opacity>(
+      find
+          .ancestor(of: find.text('Beta'), matching: find.byType(Opacity))
+          .first,
     );
-    final Finder next = find.byKey(
-      const ValueKey<String>('chat_title_strip_c'),
-    );
-    final Finder prev = find.byKey(
-      const ValueKey<String>('chat_title_strip_a'),
-    );
-    final double restMid = tester.getCenter(current).dx;
-    final double restNext = tester.getCenter(next).dx;
-    final double restPrev = tester.getCenter(prev).dx;
+    expect(fadeOf().opacity, 1);
 
-    progress.value = -0.4; // 40 % towards the next entry
+    progress.value = -0.2; // 20 % towards the next entry
     await tester.pump();
-    expect(tester.getCenter(current).dx, lessThan(restMid));
-    expect(tester.getCenter(next).dx, lessThan(restNext));
-    expect(
-      tester.getCenter(next).dx,
-      greaterThan(tester.getCenter(current).dx),
-    );
+    final double moved = tester.getCenter(find.text('Beta')).dx;
+    expect(moved, lessThan(rest));
+    // A short travel, not a page.
+    expect(rest - moved, lessThan(20));
+    expect(fadeOf().opacity, lessThan(1));
 
-    progress.value = 0.5; // towards the previous entry
+    progress.value = -0.5;
     await tester.pump();
-    expect(tester.getCenter(current).dx, greaterThan(restMid));
-    expect(tester.getCenter(prev).dx, greaterThan(restPrev));
+    expect(fadeOf().opacity, 0);
   });
 
   testWidgets('tap in the middle calls onTap; there is no long press', (
@@ -209,7 +162,7 @@ void main() {
     );
   });
 
-  testWidgets('with a pager, a tap on an edge steps, the middle calls onTap', (
+  testWidgets('with a pager, a tap anywhere calls onTap; a drag steps', (
     WidgetTester tester,
   ) async {
     tester.view.physicalSize = const Size(400, 800);
@@ -254,25 +207,20 @@ void main() {
       ),
     );
     final Rect bar = tester.getRect(find.byType(ChatTitleStrip));
-    await tester.tapAt(Offset(bar.left + bar.width * 0.5, bar.center.dy));
-    await tester.pumpAndSettle();
-    expect(taps, 1);
+    for (final double x in <double>[0.1, 0.5, 0.9]) {
+      await tester.tapAt(Offset(bar.left + bar.width * x, bar.center.dy));
+      await tester.pumpAndSettle();
+    }
+    expect(taps, 3);
     expect(selected, 'b');
 
-    await tester.tapAt(Offset(bar.left + bar.width * 0.9, bar.center.dy));
+    await tester.timedDrag(
+      find.byType(ChatTitleStrip),
+      const Offset(-200, 0),
+      const Duration(milliseconds: 300),
+    );
     await tester.pumpAndSettle();
     expect(selected, 'c');
-
-    // At the last entry the right edge has nowhere to go: it is a plain tap.
-    await tester.tapAt(Offset(bar.left + bar.width * 0.9, bar.center.dy));
-    await tester.pumpAndSettle();
-    expect(selected, 'c');
-    expect(taps, 2);
-
-    await tester.tapAt(Offset(bar.left + bar.width * 0.1, bar.center.dy));
-    await tester.pumpAndSettle();
-    expect(selected, 'b');
-    expect(taps, 2);
   });
 
   testWidgets('working entry shows the working dots', (
