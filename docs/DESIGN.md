@@ -159,6 +159,23 @@ Settings, Media and the other pages are rows of the menu chip's sheet. The
 composer is always at the bottom: in a thread it is the chat's own, on the
 Agents Home it is `mobile_home_composer.dart`, which sends to the main agent.
 
+The title strip (redesign 2026-11-10) is one 56 px pill, the M3 search bar
+height, its edges in line with the chips above. Content is left-aligned like
+the M3 Expressive app bar title: the face (36) at the inner edge, the title
+in title-medium emphasized, the last line under it, the position dots at the
+right end. The neighbours do not peek in: a centred carousel left a wide
+empty band on the left. A swipe is quick and small, not a page flight: the
+chat follows the finger, and on release it moves on 0.12 of a page and fades
+(90 ms), the next one fades in from 0.06 (150 ms). The title only slides
+56 px and fades. A swipe keeps the keyboard up.
+
+The menu chip's sheet (`showMobileMenuSheet`) is a Material 3 Expressive
+bottom sheet: `surfaceContainerLow`, top corners 28, the official 32 x 4
+handle. On top the app's pages as one connected row of large tonal tiles
+(`secondaryContainer`, outer corners 24, inner 8, a press rounds every
+corner). Under it, headed by the name of the chat or agent in view, its
+actions as one `ExpressiveGroup` of rows, delete last in the error colours.
+
 The filter control above a list (`ConnectedGroup`) is one pill, the selected
 segment a filled capsule in `primary` with `onPrimary`.
 

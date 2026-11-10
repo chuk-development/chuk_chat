@@ -495,7 +495,10 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
         .push(MaterialPageRoute(builder: (_) => const MediaManagerPage()));
   }
 
-  void _handleChatSelected(String? chatId) {
+  /// [keepKeyboard]: a swipe moves on to the next chat while the user may
+  /// be typing; the keyboard stays up (owner, 2026-11-10). Every other way
+  /// of opening a chat closes it.
+  void _handleChatSelected(String? chatId, {bool keepKeyboard = false}) {
     // Add guard like desktop has - prevent rapid chat switching during load
     if (ChatStorageService.isLoadingChat) {
       if (kDebugMode) {
@@ -530,8 +533,8 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
         '└─────────────────────────────────────────────────────────────',
       );
     }
-    // Hide keyboard when switching chats
-    FocusManager.instance.primaryFocus?.unfocus();
+    // Hide keyboard when switching chats, except on a swipe.
+    if (!keepKeyboard) FocusManager.instance.primaryFocus?.unfocus();
 
     // Update chat ID and close sidebar in a single setState to guarantee
     // the widget tree rebuilds with the new selectedChatId.
@@ -567,9 +570,9 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     setState(() {});
   }
 
-  void _newChatFromAppBar() {
-    // Hide keyboard when creating new chat
-    FocusManager.instance.primaryFocus?.unfocus();
+  void _newChatFromAppBar({bool keepKeyboard = false}) {
+    // Hide keyboard when creating new chat, except on a swipe.
+    if (!keepKeyboard) FocusManager.instance.primaryFocus?.unfocus();
     _chatUIMobileKey.currentState?.newChat();
     if (kFeatureArtifacts) {
       unawaited(ArtifactStorageService.setActiveChat(null, forceRefresh: true));
@@ -808,11 +811,11 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
   void _onSwipeSelected(String id) {
     if (id == _kNewChatEntryId) {
       // newChat() hands null to onChatIdChanged, which selects it.
-      _newChatFromAppBar();
+      _newChatFromAppBar(keepKeyboard: true);
       setState(() {});
       return;
     }
-    _handleChatSelected(id);
+    _handleChatSelected(id, keepKeyboard: true);
   }
 
   /// The menu chip: the pages the sidebar used to hold.
@@ -824,7 +827,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     unawaited(
       showMobileMenuSheet(
         context,
-        items: <MobileMenuItem>[
+        shortcuts: <MobileMenuItem>[
           MobileMenuItem(
             icon: Icons.settings,
             label: l?.settings ?? 'Settings',
@@ -848,28 +851,37 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
               label: kSidebarAddComputerLabel,
               onTap: onAddComputer,
             ),
-          MobileMenuItem(
-            icon: Icons.copy_all,
-            label: l?.chatSwipeCopyChat ?? 'Copy full chat',
-            onTap: _copyDebugChat,
-          ),
-          // The chat in view; there is no list to do it from any more.
-          if (current != null) ...<MobileMenuItem>[
+        ],
+        // The chat in view; there is no list to do it from any more.
+        sectionTitle: current == null ? null : _titleOfChat(current),
+        items: <MobileMenuItem>[
+          if (current != null)
             MobileMenuItem(
               icon: Icons.edit_outlined,
               label: l?.chatSwipeRename ?? 'Rename',
               onTap: () => unawaited(_renameCurrentChat(current)),
             ),
+          MobileMenuItem(
+            icon: Icons.copy_all,
+            label: l?.chatSwipeCopyChat ?? 'Copy full chat',
+            onTap: _copyDebugChat,
+          ),
+          if (current != null)
             MobileMenuItem(
               icon: Icons.delete_outline_rounded,
               label: l?.delete ?? 'Delete',
               destructive: true,
               onTap: () => unawaited(_deleteCurrentChat(current)),
             ),
-          ],
         ],
       ),
     );
+  }
+
+  /// The title the strip shows for [chatId], for the menu's section header.
+  String? _titleOfChat(String chatId) {
+    final StoredChat? chat = ChatStorageService.getChatById(chatId);
+    return chat == null ? null : deriveSidebarChatTitle(chat);
   }
 
   /// The sidebar's delete path ([SidebarStateCommon]): the same question,
