@@ -80,7 +80,7 @@ Future<T?> showSearchablePicker<T>(
   }
   return showAnchoredMenu<T>(
     anchorContext,
-    color: theme.m3.surfaceContainerHigh,
+    color: theme.m3.surfaceContainerLow,
     borderColor: Colors.transparent,
     minWidth: width,
     outlined: true,

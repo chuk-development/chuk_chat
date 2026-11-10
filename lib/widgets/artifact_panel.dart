@@ -526,7 +526,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
         onPressed: () async {
           final String? v = await showAnchoredMenu<String>(
             anchor,
-            color: Theme.of(anchor).colorScheme.surfaceContainerHigh,
+            color: Theme.of(anchor).colorScheme.surfaceContainerLow,
             items: const <PopupMenuEntry<String>>[
               PopupMenuItem<String>(
                 value: 'copy',

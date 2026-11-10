@@ -347,7 +347,7 @@ class _EditableTableState extends State<_EditableTable> {
     final scheme = Theme.of(anchor).colorScheme;
     final choice = await showAnchoredMenu<String>(
       anchor,
-      color: scheme.surfaceContainerHigh,
+      color: scheme.surfaceContainerLow,
       minWidth: 180,
       maxWidth: 320,
       items: <PopupMenuEntry<String>>[

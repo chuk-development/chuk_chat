@@ -290,7 +290,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
     final ColorScheme scheme = Theme.of(anchor).colorScheme;
     final String? choice = await showAnchoredMenu<String>(
       anchor,
-      color: scheme.surfaceContainerHigh,
+      color: scheme.surfaceContainerLow,
       borderColor: scheme.outlineVariant,
       items: const <PopupMenuEntry<String>>[
         PopupMenuItem<String>(
@@ -371,7 +371,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
     final bool unread = _marks.isUnread(agent);
     final String? choice = await showAnchoredMenu<String>(
       rowContext,
-      color: scheme.surfaceContainerHigh,
+      color: scheme.surfaceContainerLow,
       borderColor: scheme.outlineVariant,
       items: <PopupMenuEntry<String>>[
         if (widget.onOpenProfile != null)

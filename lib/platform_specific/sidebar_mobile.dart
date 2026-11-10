@@ -591,7 +591,7 @@ class _SidebarMobileState extends State<SidebarMobile>
       showAnchoredMenu<void>(
         context,
         anchorPoint: at,
-        color: theme.m3.surfaceContainerHigh,
+        color: theme.m3.surfaceContainerLow,
         borderColor: Colors.transparent,
         minWidth: 216,
         items: [

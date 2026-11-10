@@ -231,7 +231,7 @@ class _OpenUiSelectViewState extends State<OpenUiSelectView>
     setState(() => _open = true);
     final choice = await showAnchoredMenu<String>(
       box,
-      color: scheme.surfaceContainerHigh,
+      color: scheme.surfaceContainerLow,
       minWidth: math.max(width, 180),
       maxWidth: math.max(width, 360),
       outlined: true,
