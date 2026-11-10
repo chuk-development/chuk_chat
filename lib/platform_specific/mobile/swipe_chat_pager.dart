@@ -245,6 +245,7 @@ class _SwipeChatPagerState extends State<SwipeChatPager>
       widget.controller!._progress.value = 0;
       widget.controller!._carousel.value = 0;
     }
+    _recognizer?.dispose();
     _anim.dispose();
     super.dispose();
   }
@@ -426,30 +427,33 @@ class _SwipeChatPagerState extends State<SwipeChatPager>
     }
   }
 
+  /// The recognizer gets the pointer through [_PointerFirst], not through a
+  /// [RawGestureDetector], so it is first in line for every move event.
+  _ChatSwipeRecognizer? _recognizer;
+
+  _ChatSwipeRecognizer _ensureRecognizer() {
+    return (_recognizer ??= _ChatSwipeRecognizer(
+        debugOwner: this,
+        allowPointer: _allowPointer,
+      ))
+      ..allowPointer = _allowPointer
+      ..onStart = _onStart
+      ..onUpdate = _onUpdate
+      ..onEnd = _onEnd
+      ..onCancel = _onCancel;
+  }
+
+  void _onPointerDown(PointerDownEvent event) {
+    if (!widget.enabled) return;
+    _ensureRecognizer().addPointer(event);
+  }
+
   @override
   Widget build(BuildContext context) {
     // The tree below is the same shape whatever [enabled] says, so the child
     // never moves to another place in the tree and keeps its State.
-    return RawGestureDetector(
-      behavior: HitTestBehavior.translucent,
-      gestures: <Type, GestureRecognizerFactory>{
-        if (widget.enabled)
-          _ChatSwipeRecognizer:
-              GestureRecognizerFactoryWithHandlers<_ChatSwipeRecognizer>(
-                () => _ChatSwipeRecognizer(
-                  debugOwner: this,
-                  allowPointer: _allowPointer,
-                ),
-                (_ChatSwipeRecognizer r) {
-                  r
-                    ..allowPointer = _allowPointer
-                    ..onStart = _onStart
-                    ..onUpdate = _onUpdate
-                    ..onEnd = _onEnd
-                    ..onCancel = _onCancel;
-                },
-              ),
-      },
+    return _PointerFirst(
+      onPointerDown: _onPointerDown,
       child: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
           _width = constraints.maxWidth.isFinite
@@ -471,6 +475,54 @@ class _SwipeChatPagerState extends State<SwipeChatPager>
         },
       ),
     );
+  }
+}
+
+/// Puts itself in the hit-test path BEFORE its children.
+///
+/// Pointer events go to the hit-test entries in path order, and a
+/// recognizer sees move events in the order the recognizers were given the
+/// pointer. Normally the deepest widget is first. The transcript's
+/// [SelectionArea] adds a `TapAndHorizontalDragGestureRecognizer` that
+/// declares victory on the first move past the touch slop, so when one move
+/// event jumps past both slops at once (a quick fling: touch reports 10-20 px
+/// per event) the text selection took the swipe and the chat did not move.
+/// Entered first, the pager decides first on that same event.
+class _PointerFirst extends SingleChildRenderObjectWidget {
+  const _PointerFirst({required this.onPointerDown, required super.child});
+
+  final ValueChanged<PointerDownEvent> onPointerDown;
+
+  @override
+  _RenderPointerFirst createRenderObject(BuildContext context) =>
+      _RenderPointerFirst(onPointerDown);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderPointerFirst renderObject,
+  ) {
+    renderObject.onPointerDown = onPointerDown;
+  }
+}
+
+class _RenderPointerFirst extends RenderProxyBox {
+  _RenderPointerFirst(this.onPointerDown);
+
+  ValueChanged<PointerDownEvent> onPointerDown;
+
+  @override
+  bool hitTest(BoxHitTestResult result, {required Offset position}) {
+    if (!size.contains(position)) return false;
+    // Translucent: the pager is always in the path, its children decide
+    // whether the point is a hit.
+    result.add(BoxHitTestEntry(this, position));
+    return hitTestChildren(result, position: position);
+  }
+
+  @override
+  void handleEvent(PointerEvent event, BoxHitTestEntry entry) {
+    if (event is PointerDownEvent) onPointerDown(event);
   }
 }
 

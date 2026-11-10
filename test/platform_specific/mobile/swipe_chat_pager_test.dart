@@ -130,6 +130,29 @@ void main() {
   );
 
   testWidgets(
+    'a quick fling over a SelectionArea switches even when one move event '
+    'jumps past both slops',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(const _SelectableHost());
+      final _SelectableHostState host = tester.state(
+        find.byType(_SelectableHost),
+      );
+      final TestGesture gesture = await tester.startGesture(
+        tester.getCenter(find.text('message line 3')),
+      );
+      // The first move is already far past the selection's slop (8) and the
+      // pager's (4.8): whoever sees it first wins the arena.
+      for (int i = 0; i < 6; i++) {
+        await gesture.moveBy(const Offset(-40, 0));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(host.selected, 'b');
+    },
+  );
+
+  testWidgets(
     'a vertical scroll with a little sideways jitter does not switch',
     (WidgetTester tester) async {
       await tester.pumpWidget(const _SelectableHost());
