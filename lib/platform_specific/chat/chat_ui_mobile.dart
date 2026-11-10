@@ -1860,13 +1860,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     return showAnchoredMenu<T>(
       anchorContext,
       items: items,
-      color: theme.scaffoldBackgroundColor.withValues(alpha: 0.94),
+      color: theme.colorScheme.surfaceContainerLow,
       borderColor: theme.resolvedIconColor.withValues(alpha: 0.3),
       // The attach and workspace menus are read against the chat behind
       // them, the same as the model picker, so they keep the frame that says
       // where the list ends.
       outlined: true,
-      borderRadius: 18,
     );
   }
 

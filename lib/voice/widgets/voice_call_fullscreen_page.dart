@@ -142,10 +142,9 @@ class _VoiceCallFullscreenPageState extends State<VoiceCallFullscreenPage> {
     ];
     final _Route? picked = await showAnchoredMenu<_Route>(
       buttonContext,
-      color: theme.scaffoldBackgroundColor.withValues(alpha: 0.94),
+      color: theme.colorScheme.surfaceContainerLow,
       borderColor: ink.withValues(alpha: 0.3),
       outlined: true,
-      borderRadius: 18,
       preferAbove: true,
       minWidth: 220,
       items: <Widget>[

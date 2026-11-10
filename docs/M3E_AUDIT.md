@@ -20,13 +20,14 @@ whole-word matches and include a few doc-comment mentions.
 | 4 | Menus expand from the anchor on the spatial default spring | `lib/widgets/anchored_menu.dart` | 9f70d081 |
 | 5 | Selected menu row = vibrant `tertiaryContainer` tile, emphasized label, check | `menu_tile_group.dart`, `chat_mode_selector.dart` | 9f70d081 |
 | 9a | All themed buttons morph on press (stadium → 12 px corner; icon button circle → 8 px) | `lib/constants.dart` | see git log |
+| 6 | Menus are the M3E vertical menu: one container per group, gaps only between groups, no outline frame, inset selected pill, `surfaceContainerLow` on the pickers | `menu_tile_group.dart`, `anchored_menu.dart`, `chat_mode_selector.dart` | see git log |
 | 8a | Progress indicators and sliders on the current M3 geometry (`year2023: false`) | `lib/constants.dart` | see git log |
 
 ## Open, ordered by what the user sees most
 
 | # | Area | Official component / token | Gap today | Fix | Effort |
 |---|---|---|---|---|---|
-| 6 | Menu container | M3E vertical menu: items inside one container per group, groups split by a small gap, container corner large, shadow level 2, no outline | `MenuTileGroup` draws every row as its own tile with a 3 px gap (that is the M3E *segmented list* look); the model picker adds a 2 px outline frame on a translucent fill | Rebuild `MenuTileGroup` as container-per-group; drop the outline frame on the pickers | M |
+| 6b | Menu colours | Standard vertical menu = `surfaceContainerLow` | Ten call sites still pass `surfaceContainerHigh` | Move them to `surfaceContainerLow`, or pass `tertiaryContainer` where a vibrant menu is wanted | S |
 | 7 | Short waits | Loading indicator | 99 raw `CircularProgressIndicator`, 8 `RefreshIndicator` | Replace short, unknown-length waits with `ExpressiveLoader` (inline 16–24 px spinners in buttons stay a small indicator, see spec); `RefreshIndicator` → loading-indicator pull-to-refresh | M |
 | 8 | Measured progress | Progress indicator (flat or wavy) | 18 raw `LinearProgressIndicator` on default M3 look | Theme `progressIndicatorTheme` (track gap, rounded caps, M3E thickness); wavy for upload/download | S |
 | 9 | Buttons | M3E buttons: sizes XS–XL, round/square, shape morph on press, toggle shape swap | 171 `TextButton`, 90 `FilledButton`, 28 `OutlinedButton`, 14 `ElevatedButton` on the theme; the theme has no pressed-shape morph | Give the button themes the M3E pressed shape (`WidgetStateProperty` shape: stadium → small corner when pressed); move `ElevatedButton` to `FilledButton.tonal` | M |

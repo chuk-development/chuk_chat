@@ -52,7 +52,7 @@ Future<T?> showAnchoredComposerMenu<T>({
   return showAnchoredMenu<T>(
     anchorContext,
     items: items,
-    color: theme.scaffoldBackgroundColor.withValues(alpha: 0.94),
+    color: theme.colorScheme.surfaceContainerLow,
     borderColor: theme.resolvedIconColor.withValues(alpha: 0.3),
   );
 }

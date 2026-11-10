@@ -53,7 +53,7 @@ Future<T?> showAnchoredMenu<T>(
   // Caps how wide a long row may push the menu; without it a very long
   // model name makes the menu as wide as the screen.
   double? maxWidth,
-  // Null takes the default, 18: the radius the app's menus are tuned to.
+  // Null takes the M3E menu container corner, [kMenuOuterRadius].
   double? borderRadius,
   bool preferAbove = false,
   // null → pick the side from the anchor's screen position (a control on the
@@ -118,7 +118,7 @@ Future<T?> showAnchoredMenu<T>(
       borderColor: borderColor,
       minWidth: minWidth,
       maxWidth: maxWidth,
-      borderRadius: borderRadius ?? 18,
+      borderRadius: borderRadius ?? kMenuOuterRadius,
       preferAbove: preferAbove,
       alignRight: alignRight,
       besideAnchor: besideAnchor,
@@ -278,22 +278,10 @@ class _AnchoredMenuRoute<T> extends PopupRoute<T> {
   /// behind it. Its radius clears the tiles by the padding, so the corners
   /// run parallel instead of cutting across them.
   Widget _frame(Widget child) {
-    final Color? border = borderColor;
-    if (!outlined || border == null) return child;
-    const double pad = 3;
-    return Container(
-      padding: const EdgeInsets.all(pad),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(borderRadius + pad),
-        border: Border.all(color: border, width: 2),
-      ),
-      // A list that runs to the frame's edge must be cut by the frame's
-      // corners. Without this the last row is sliced off square and the
-      // panel reads as a rendering fault rather than as a scroller.
-      clipBehavior: Clip.antiAlias,
-      child: child,
-    );
+    // Material 3 Expressive menus have no outline: the group containers and
+    // their shadow say where the menu ends. [outlined] is kept so call sites
+    // compile, and draws nothing.
+    return child;
   }
 
   @override

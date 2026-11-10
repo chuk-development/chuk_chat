@@ -10,6 +10,8 @@
 // out to the full model screen where the whole catalogue lives.
 
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/widgets/menu_tile_group.dart'
+    show kMenuInnerRadius, kMenuRowInset;
 
 import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
@@ -489,16 +491,13 @@ class ChatModeSelector extends StatelessWidget {
     return showAnchoredMenu<T>(
       context,
       items: items,
-      color: theme.scaffoldBackgroundColor.withValues(alpha: 0.94),
-      borderColor: theme.resolvedIconColor.withValues(alpha: 0.3),
+      // The spec's standard vertical menu: `surfaceContainerLow`, a small
+      // shadow, no outline.
+      color: theme.colorScheme.surfaceContainerLow,
       minWidth: besideAnchor ? 160 : 220,
       preferAbove: menuAbove,
       alignRight: alignRight,
       besideAnchor: besideAnchor,
-      // This is the model picker, a list being read against the chat behind
-      // it — it keeps the frame that says where the list ends.
-      outlined: true,
-      borderRadius: 18,
     );
   }
 
@@ -596,17 +595,27 @@ class _ChoiceRowState<T> extends State<_ChoiceRow<T>> {
     return Semantics(
       selected: widget.selected,
       button: true,
-      child: Material(
-        type: widget.selected ? MaterialType.canvas : MaterialType.transparency,
-        color: widget.selected ? scheme.tertiaryContainer : null,
-        child: InkWell(
-          onTap: () => Navigator.of(context).pop<T>(widget.value),
-          child: SizedBox(
-            height: widget.rowHeight,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: widget.builder(
-                widget.selected ? scheme.onTertiaryContainer : null,
+      child: Padding(
+        // Ink and the selected pill sit inset in the menu container.
+        padding: const EdgeInsets.symmetric(horizontal: kMenuRowInset),
+        child: Material(
+          type: widget.selected
+              ? MaterialType.canvas
+              : MaterialType.transparency,
+          color: widget.selected ? scheme.tertiaryContainer : null,
+          clipBehavior: Clip.antiAlias,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(kMenuInnerRadius),
+          ),
+          child: InkWell(
+            onTap: () => Navigator.of(context).pop<T>(widget.value),
+            child: SizedBox(
+              height: widget.rowHeight,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: widget.builder(
+                  widget.selected ? scheme.onTertiaryContainer : null,
+                ),
               ),
             ),
           ),

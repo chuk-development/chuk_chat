@@ -140,7 +140,7 @@ void main() {
     expect(find.textContaining("You're chatting with an AI"), findsNothing);
   });
 
-  testWidgets('the plus menu is chuk\'s framed menu at radius 18, with '
+  testWidgets('the plus menu is the M3E vertical menu, unframed, with '
       'Workspace', (tester) async {
     await pumpPhoneThread(tester);
 
@@ -151,7 +151,7 @@ void main() {
     final MenuTileGroup group = tester.widget<MenuTileGroup>(
       find.byType(MenuTileGroup),
     );
-    expect(group.outerRadius, 18);
+    expect(group.outerRadius, kMenuOuterRadius);
     expect(
       find.ancestor(
         of: find.byType(MenuTileGroup),
@@ -162,13 +162,13 @@ void main() {
               (w.decoration! as BoxDecoration).border != null,
         ),
       ),
-      findsOneWidget,
-      reason: 'chuk\'s frame around the menu',
+      findsNothing,
+      reason: 'M3 Expressive menus have no outline',
     );
     expect(composerHasFocus(tester), isFalse);
   });
 
-  testWidgets('the mode menu is chuk\'s framed menu at radius 18', (
+  testWidgets('the mode menu is the M3E vertical menu, unframed', (
     tester,
   ) async {
     await pumpPhoneThread(tester);
@@ -179,7 +179,7 @@ void main() {
     final MenuTileGroup group = tester.widget<MenuTileGroup>(
       find.byType(MenuTileGroup),
     );
-    expect(group.outerRadius, 18);
+    expect(group.outerRadius, kMenuOuterRadius);
     expect(
       find.ancestor(
         of: find.byType(MenuTileGroup),
@@ -190,7 +190,8 @@ void main() {
               (w.decoration! as BoxDecoration).border != null,
         ),
       ),
-      findsOneWidget,
+      findsNothing,
+      reason: 'M3 Expressive menus have no outline',
     );
   });
 }
