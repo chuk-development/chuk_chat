@@ -1394,7 +1394,10 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
             icon: const AppIcon(Icons.rocket_launch, size: 18),
             // Opens the plans page only; the order button with the
             // § 312j wording ("Subscribe and pay") is on that page.
-            label: Text(AppLocalizations.of(dialogContext)!.viewSubscription),
+            label: Text(
+              AppLocalizations.of(dialogContext)?.viewSubscription ??
+                  'View subscription',
+            ),
             style: ElevatedButton.styleFrom(
               backgroundColor: theme.colorScheme.primary,
               foregroundColor: theme.colorScheme.onPrimary,

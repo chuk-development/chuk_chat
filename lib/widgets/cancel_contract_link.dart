@@ -80,7 +80,8 @@ class CancelContractRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l = AppLocalizations.of(context)!;
+    final l = AppLocalizations.of(context);
+    if (l == null) return const SizedBox.shrink();
     return ExpressiveRow(
       icon: Icons.cancel_outlined,
       title: l.cancelContractHere,
@@ -98,7 +99,8 @@ class WithdrawContractRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l = AppLocalizations.of(context)!;
+    final l = AppLocalizations.of(context);
+    if (l == null) return const SizedBox.shrink();
     return ExpressiveRow(
       icon: Icons.arrow_back,
       title: l.withdrawContract,
@@ -119,7 +121,8 @@ class CancelContractLink extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l = AppLocalizations.of(context)!;
+    final l = AppLocalizations.of(context);
+    if (l == null) return const SizedBox.shrink();
     final style = color == null
         ? null
         : TextButton.styleFrom(foregroundColor: color);
