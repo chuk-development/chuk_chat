@@ -19,6 +19,8 @@ whole-word matches and include a few doc-comment mentions.
 | 3 | `ExpressiveLoader` is the official M3E loading indicator (7-shape morph, contained variant) | `lib/ui/expressive/loading_indicator.dart` | 9f70d081 |
 | 4 | Menus expand from the anchor on the spatial default spring | `lib/widgets/anchored_menu.dart` | 9f70d081 |
 | 5 | Selected menu row = vibrant `tertiaryContainer` tile, emphasized label, check | `menu_tile_group.dart`, `chat_mode_selector.dart` | 9f70d081 |
+| 9a | All themed buttons morph on press (stadium → 12 px corner; icon button circle → 8 px) | `lib/constants.dart` | see git log |
+| 8a | Progress indicators and sliders on the current M3 geometry (`year2023: false`) | `lib/constants.dart` | see git log |
 
 ## Open, ordered by what the user sees most
 
