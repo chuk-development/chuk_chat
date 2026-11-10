@@ -63,8 +63,12 @@ class ChatSyncService {
     return const Duration(seconds: 4);
   }
 
-  /// Start the sync service
-  static void start() {
+  /// Start the sync service.
+  ///
+  /// [immediate] skips the startup delay. Pass it when the local cache is
+  /// empty (a fresh sign-in on this device): there is nothing on screen to
+  /// keep smooth, and the user waits for the list.
+  static void start({bool immediate = false}) {
     if (_isEnabled) return;
     _isEnabled = true;
     if (kDebugMode) {
@@ -74,7 +78,7 @@ class ChatSyncService {
     }
 
     // Initial sync after startup settles so first paint/input stays smooth.
-    Future.delayed(_initialSyncDelay, () {
+    Future.delayed(immediate ? Duration.zero : _initialSyncDelay, () {
       if (_isEnabled) _performSync();
     });
 
