@@ -172,6 +172,43 @@ void main() {
 
     expect(state.scrollController.position.pixels, moveTo(held));
   });
+  testWidgets(
+    'a reader at the end stays at the end when the composer or keyboard '
+    'takes more room',
+    (tester) async {
+      final state = await pumpHarness(tester);
+      state.jumpToEnd();
+      await tester.pumpAndSettle();
+      expect(state.isStickyBottom, isTrue);
+
+      // More than the 100 px that used to read as "scrolled up".
+      state.reserveBottom(220);
+      await tester.pump();
+      await tester.pump();
+
+      final position = state.scrollController.position;
+      expect(state.isStickyBottom, isTrue);
+      expect(position.pixels, position.maxScrollExtent);
+    },
+  );
+
+  testWidgets('a reader who scrolled up is not moved by a taller composer', (
+    tester,
+  ) async {
+    final state = await pumpHarness(tester);
+    state.jumpToEnd();
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView), const Offset(0, 300));
+    await tester.pumpAndSettle();
+    final double before = state.scrollController.position.pixels;
+    expect(state.isStickyBottom, isFalse);
+
+    state.reserveBottom(220);
+    await tester.pump();
+    await tester.pump();
+
+    expect(state.scrollController.position.pixels, before);
+  });
 }
 
 /// `pixels` lands on the extent within a sub-pixel of it.
@@ -188,6 +225,12 @@ class _Harness extends StatefulWidget {
 
 class _HarnessState extends State<_Harness> with ChatScrollMixin<_Harness> {
   late int rows = widget.initialRows;
+
+  /// Room under the last row, as the chat screens reserve it for the
+  /// composer. Grows when the keyboard opens or the composer gets taller.
+  double bottomPadding = 0;
+
+  void reserveBottom(double value) => setState(() => bottomPadding = value);
 
   @override
   void initState() {
@@ -226,12 +269,17 @@ class _HarnessState extends State<_Harness> with ChatScrollMixin<_Harness> {
   @override
   Widget build(BuildContext context) {
     return NotificationListener<ScrollMetricsNotification>(
+      // The same hook as the chat screens: a layout change is handled after
+      // the frame, through the layout-change path.
       onNotification: (_) {
-        onScrollChanged();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) onScrollMetricsChanged();
+        });
         return false;
       },
       child: ListView.builder(
         controller: scrollController,
+        padding: EdgeInsets.only(bottom: bottomPadding),
         itemCount: rows,
         itemBuilder: (context, index) =>
             SizedBox(height: 50, child: Text('message $index')),
