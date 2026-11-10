@@ -1531,10 +1531,10 @@ void main() {
         <String>[host.id, other.id],
       );
       expect(strip(tester).selectedId, host.id);
-      // The next agent peeks in at the strip's right edge.
+      // The next agent does not peek in: only the name in view shows.
       expect(
         find.byKey(ValueKey<String>('chat_title_strip_${other.id}')),
-        findsOneWidget,
+        findsNothing,
       );
 
       final Rect bar = tester.getRect(find.byType(ChatTitleStrip));
@@ -1923,25 +1923,19 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    // The phone: the room is a place of the swipe, after the agent; it
-    // peeks in at the strip's edge beside the agent, not in a second list.
+    // The phone: the room is a place of the swipe, after the agent, not a
+    // row in a second list. The strip names only the place in view, so the
+    // room is in its entries but not on screen (owner, 2026-11-05).
     await pumpAt(const Size(360, 900));
     expect(find.byType(MobileAgentList), findsNothing);
-    expect(
-      tester
-          .widget<ChatTitleStrip>(find.byType(ChatTitleStrip))
-          .entries
-          .last
-          .id,
-      room.id,
+    final ChatTitleStrip strip = tester.widget<ChatTitleStrip>(
+      find.byType(ChatTitleStrip),
     );
-    final Finder roomPeek = find.byKey(
-      ValueKey<String>('chat_title_strip_${room.id}'),
-    );
-    expect(roomPeek, findsOneWidget);
+    expect(strip.entries.last.id, room.id);
+    expect(strip.entries.last.title, 'launch');
     expect(
-      find.descendant(of: roomPeek, matching: find.text('launch')),
-      findsOneWidget,
+      find.byKey(ValueKey<String>('chat_title_strip_${room.id}')),
+      findsNothing,
     );
 
     // The desktop roster: same room, under its own quiet label, and Control

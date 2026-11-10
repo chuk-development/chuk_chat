@@ -59,43 +59,28 @@ void main() {
     handle.dispose();
   });
 
-  testWidgets('the neighbours peek in at rest, dimmed, on their side', (
+  testWidgets('only the chat in view shows: no neighbour peeks in', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
       _app(const ChatTitleStrip(entries: _entries, selectedId: 'b')),
     );
-    final Finder prev = find.byKey(
-      const ValueKey<String>('chat_title_strip_a'),
-    );
-    final Finder next = find.byKey(
-      const ValueKey<String>('chat_title_strip_c'),
-    );
-    final Finder current = find.byKey(
-      const ValueKey<String>('chat_title_strip_current'),
-    );
-    expect(prev, findsOneWidget);
-    expect(next, findsOneWidget);
+    // Owner, 2026-11-05: the next or previous chat name must not show.
     expect(
-      find.descendant(of: prev, matching: find.text('Alpha')),
+      find.byKey(const ValueKey<String>('chat_title_strip_current')),
       findsOneWidget,
     );
     expect(
-      find.descendant(of: next, matching: find.text('Gamma')),
-      findsOneWidget,
+      find.byKey(const ValueKey<String>('chat_title_strip_a')),
+      findsNothing,
     );
-    final double mid = tester.getCenter(current).dx;
-    expect(tester.getCenter(prev).dx, lessThan(mid));
-    expect(tester.getCenter(next).dx, greaterThan(mid));
-    // A peek is one quiet line: no subtitle.
-    expect(find.text('first'), findsNothing);
-    final Opacity peek = tester.widget(
-      find.descendant(of: next, matching: find.byType(Opacity)).first,
+    expect(
+      find.byKey(const ValueKey<String>('chat_title_strip_c')),
+      findsNothing,
     );
-    final Opacity middle = tester.widget(
-      find.descendant(of: current, matching: find.byType(Opacity)).first,
-    );
-    expect(peek.opacity, lessThan(middle.opacity));
+    expect(find.text('Alpha'), findsNothing);
+    expect(find.text('Gamma'), findsNothing);
+    expect(find.text('Beta'), findsOneWidget);
   });
 
   testWidgets('unread shows as a dot next to the title, no edge dots', (
@@ -138,7 +123,7 @@ void main() {
     expect(dot.center.dy, closeTo(title.center.dy, 2));
   });
 
-  testWidgets('follows the drag progress like a carousel', (
+  testWidgets('the name rides the drag progress and fades', (
     WidgetTester tester,
   ) async {
     final ValueNotifier<double> progress = ValueNotifier<double>(0);
@@ -151,29 +136,25 @@ void main() {
     final Finder current = find.byKey(
       const ValueKey<String>('chat_title_strip_current'),
     );
-    final Finder next = find.byKey(
-      const ValueKey<String>('chat_title_strip_c'),
-    );
-    final Finder prev = find.byKey(
-      const ValueKey<String>('chat_title_strip_a'),
-    );
+    double opacity() => tester
+        .widget<Opacity>(
+          find.descendant(of: current, matching: find.byType(Opacity)).first,
+        )
+        .opacity;
     final double restMid = tester.getCenter(current).dx;
-    final double restNext = tester.getCenter(next).dx;
-    final double restPrev = tester.getCenter(prev).dx;
+    final double restOpacity = opacity();
 
     progress.value = -0.4; // 40 % towards the next entry
     await tester.pump();
     expect(tester.getCenter(current).dx, lessThan(restMid));
-    expect(tester.getCenter(next).dx, lessThan(restNext));
-    expect(
-      tester.getCenter(next).dx,
-      greaterThan(tester.getCenter(current).dx),
-    );
+    expect(opacity(), lessThan(restOpacity));
 
     progress.value = 0.5; // towards the previous entry
     await tester.pump();
     expect(tester.getCenter(current).dx, greaterThan(restMid));
-    expect(tester.getCenter(prev).dx, greaterThan(restPrev));
+    // Still only the one name.
+    expect(find.text('Alpha'), findsNothing);
+    expect(find.text('Gamma'), findsNothing);
   });
 
   testWidgets('tap in the middle calls onTap; there is no long press', (
@@ -209,7 +190,7 @@ void main() {
     );
   });
 
-  testWidgets('with a pager, a tap on an edge steps, the middle calls onTap', (
+  testWidgets('with a pager, a tap anywhere calls onTap and never steps', (
     WidgetTester tester,
   ) async {
     tester.view.physicalSize = const Size(400, 800);
@@ -254,25 +235,13 @@ void main() {
       ),
     );
     final Rect bar = tester.getRect(find.byType(ChatTitleStrip));
-    await tester.tapAt(Offset(bar.left + bar.width * 0.5, bar.center.dy));
-    await tester.pumpAndSettle();
-    expect(taps, 1);
-    expect(selected, 'b');
-
-    await tester.tapAt(Offset(bar.left + bar.width * 0.9, bar.center.dy));
-    await tester.pumpAndSettle();
-    expect(selected, 'c');
-
-    // At the last entry the right edge has nowhere to go: it is a plain tap.
-    await tester.tapAt(Offset(bar.left + bar.width * 0.9, bar.center.dy));
-    await tester.pumpAndSettle();
-    expect(selected, 'c');
-    expect(taps, 2);
-
-    await tester.tapAt(Offset(bar.left + bar.width * 0.1, bar.center.dy));
-    await tester.pumpAndSettle();
-    expect(selected, 'b');
-    expect(taps, 2);
+    // No edge-tap zones any more: the strip shows no neighbour to step to.
+    for (final double x in <double>[0.5, 0.9, 0.1]) {
+      await tester.tapAt(Offset(bar.left + bar.width * x, bar.center.dy));
+      await tester.pumpAndSettle();
+      expect(selected, 'b');
+    }
+    expect(taps, 3);
   });
 
   testWidgets('working entry shows the working dots', (
