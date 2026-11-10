@@ -7,6 +7,15 @@ that includes screens that shipped before this file existed.
 This is a working rulebook, not a mood board. Read it before adding UI, and run
 the checklist at the end before calling a screen done.
 
+**Official Material 3 Expressive is the reference (owner, 2026-11-10).** Every
+component looks and moves the way Google specifies it on m3.material.io. Use
+the skill `m3-expressive-flutter` (`~/.claude/skills/m3-expressive-flutter/`)
+to read the official spec and map it to Flutter. Prefer the official Flutter
+pieces in `package:material_ui` (`MaterialShapes`, `MaterialShapeBorder`,
+`Springs`). Where a rule in this file contradicts the official guideline,
+change this file in the same commit. Open work and its order:
+`docs/M3E_AUDIT.md`.
+
 **Which document wins.** Since 2026-09-28 the Agents build draws chuk_chat's
 own components (`docs/AGENTS_UI_UNIFY.md`). Where this file and
 AGENTS_UI_UNIFY.md disagree, AGENTS_UI_UNIFY.md wins, and the code it
@@ -205,7 +214,7 @@ presentation, zip, database, image, video, book.
 | Navigation pill / filter pill | `PillGeometry` — outer 30, segment capsule 22, inset 8, segment height 44, whole pill 60. Both controls read those numbers from `lib/ui/expressive/pill_geometry.dart`; the outer radius is half the outer height, so the curves are concentric and the end segments follow the shell. A segment takes 4 of the ring above and below as tap slop, so what a finger hits is 52 even though the capsule paints 44. A pill segment SELECTS ON POINTER DOWN (`MorphTap(instant: true)`) — a recognised tap is lost to the list the pill sits over — so a press springs and fills at once and never draws an outline for a selection that has not happened. |
 | Card, sheet, attachment row, panel | 14–18 |
 | File message row | 18, full lane width |
-| Dropdown, overflow menu, long-press action sheet | `MenuTileGroup` (`widgets/menu_tile_group.dart`) — one filled tile per row, outer corners 26, the corners where two rows meet 6, a 3 gap between them and 10 where a divider used to sit. No frame, no outline, no divider line; the anchored dropdown and the message menu share this one surface. |
+| Dropdown, overflow menu, long-press action sheet | `MenuTileGroup` (`widgets/menu_tile_group.dart`) — one filled tile per row, outer corners 26, the corners where two rows meet 6, a 3 gap between them and 10 where a divider used to sit. No frame, no outline, no divider line; the anchored dropdown and the message menu share this one surface. The chosen row of a choice menu is the M3E vibrant selection: the tile fills with `tertiaryContainer`, text and glyphs `onTertiaryContainer`, the label emphasized, a check leads it (or follows it when the row has a logo). The menu expands from its anchor on the spatial default spring. Open: container-per-group menus, `docs/M3E_AUDIT.md` #6. |
 | Dialog | `kRadiusDialog` |
 | Chat bubble | chuk_chat's bubble (`lib/widgets/message_bubble/layout.dart`): user bubble 16, the tail corner 5 on the last bubble of a run. The AI answer has no bubble. `ui/expressive/bubble_shape.dart` (22 / 7) is no longer drawn by the thread. |
 | Agent face | the expressive silhouette family (`ui/expressive/shapes.dart`) |
@@ -243,9 +252,13 @@ surface: they are the old idiom and they do not match what sits next to them.
 - **No gradient on a control.** Buttons are flat fills.
 - Translucency only where content has to stay readable underneath: the veils and
   the agent pill. Nothing decorative.
-- Motion is the expressive spring the app ships (`ui/expressive/motion.dart`),
-  200–350 ms. Nothing pulses forever: an animation says something is happening
-  and then stops.
+- Motion is the official M3 Expressive spring scheme (`ui/expressive/motion.dart`,
+  values from `material_ui` `Springs`): spatial fast for a press or a thumb,
+  spatial default for menus and sheets, spatial slow for full-screen moves,
+  effects springs (no overshoot) for colour and opacity. `SpringCurve` turns a
+  spring into a curve where an API only takes a curve. Nothing pulses
+  forever: an animation says something is happening and then stops. The one
+  exception is the loading indicator while it is on screen.
 
 ## 9. Messages and files
 
