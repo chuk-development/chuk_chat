@@ -310,10 +310,7 @@ class ChatModeSelector extends StatelessWidget {
             value: _DeeperChoice.model(model.id),
             iconFg: iconFg,
             // The lab's logo in the icon column, in the colour of the name.
-            leading: ModelLogo(
-              modelId: model.id,
-              color: _labelColor(iconFg, model.id == selectedModelId),
-            ),
+            leadingFor: (Color fg) => ModelLogo(modelId: model.id, color: fg),
             label: stripLabPrefix(model.name),
             isSelected: model.id == selectedModelId,
           ),
@@ -401,28 +398,33 @@ class ChatModeSelector extends StatelessWidget {
     );
   }
 
-  /// One row, matching the model dropdown: one touch target high, 16 of side
-  /// padding,
-  /// bold label, a tick on the right when it is the current choice.
-  PopupMenuItem<T> _menuRow<T>({
+  /// One choice row: one touch target high, 16 of side padding. The current
+  /// choice is the Material 3 Expressive selected item: the whole tile fills
+  /// with `tertiaryContainer`, its text, logo and check turn
+  /// `onTertiaryContainer` (m3.material.io/components/menus).
+  PopupMenuEntry<T> _menuRow<T>({
     required T value,
     required Color iconFg,
     required String label,
     IconData? icon,
     Widget? leading,
+    Widget Function(Color fg)? leadingFor,
     bool isSelected = false,
     Widget? trailing,
   }) {
-    return PopupMenuItem<T>(
+    return _ChoiceRow<T>(
       value: value,
-      height: 40,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: _rowChild(
-        iconFg: iconFg,
+      rowHeight: 40,
+      selected: isSelected,
+      builder: (Color? selectedFg) => _rowChild(
+        iconFg: selectedFg ?? iconFg,
         label: label,
         icon: icon,
-        leading: leading,
+        leading: leadingFor != null
+            ? leadingFor(selectedFg ?? _labelColor(iconFg, isSelected))
+            : leading,
         isSelected: isSelected,
+        selectedFg: selectedFg,
         trailing: trailing,
       ),
     );
@@ -444,6 +446,7 @@ class ChatModeSelector extends StatelessWidget {
     IconData? icon,
     Widget? leading,
     bool isSelected = false,
+    Color? selectedFg,
     Widget? trailing,
   }) {
     final Widget? lead =
@@ -458,13 +461,15 @@ class ChatModeSelector extends StatelessWidget {
             softWrap: false,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              color: _labelColor(iconFg, isSelected),
-              fontWeight: FontWeight.w600,
+              color: selectedFg ?? _labelColor(iconFg, isSelected),
+              // Emphasized type for the chosen row.
+              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
             ),
           ),
         ),
         const SizedBox(width: 12),
-        if (isSelected) AppIcon(Icons.check, color: iconFg, size: 18),
+        if (isSelected)
+          AppIcon(Icons.check, color: selectedFg ?? iconFg, size: 18),
         ?trailing,
       ],
     );
@@ -555,6 +560,60 @@ class _DeeperChoice {
 
   final String? modelId;
   final bool openScreen;
+}
+
+/// A choice row of the model and mode menus. It pops [value] like a
+/// [PopupMenuItem], and when [selected] it fills the whole tile with
+/// `tertiaryContainer` (the tile's Material clips it to the tile corners) and
+/// hands its content `onTertiaryContainer` to draw with.
+class _ChoiceRow<T> extends PopupMenuEntry<T> {
+  const _ChoiceRow({
+    required this.value,
+    required this.rowHeight,
+    required this.selected,
+    required this.builder,
+  });
+
+  final T value;
+  final double rowHeight;
+  final bool selected;
+  final Widget Function(Color? selectedFg) builder;
+
+  @override
+  double get height => rowHeight;
+
+  @override
+  bool represents(T? value) => value == this.value;
+
+  @override
+  State<_ChoiceRow<T>> createState() => _ChoiceRowState<T>();
+}
+
+class _ChoiceRowState<T> extends State<_ChoiceRow<T>> {
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    return Semantics(
+      selected: widget.selected,
+      button: true,
+      child: Material(
+        type: widget.selected ? MaterialType.canvas : MaterialType.transparency,
+        color: widget.selected ? scheme.tertiaryContainer : null,
+        child: InkWell(
+          onTap: () => Navigator.of(context).pop<T>(widget.value),
+          child: SizedBox(
+            height: widget.rowHeight,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: widget.builder(
+                widget.selected ? scheme.onTertiaryContainer : null,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// A menu row that opens a cascading submenu on tap WITHOUT popping the menu

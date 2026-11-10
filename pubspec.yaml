@@ -55,7 +55,7 @@ dependencies:
   dynamic_color: ^2.1.0
   # dynamic_color 2.x surfaces its palette as a material_ui ColorScheme; we
   # import it directly in main.dart to convert to a Flutter ColorScheme.
-  material_ui: ^1.1.1
+  material_ui: ^1.9.0
   web: ^1.1.1
   shared_preferences: ^2.5.3
   http: ^1.5.0

@@ -13,6 +13,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart'
+    show SpringCurve, kM3eSpatialDefault, springSettleDuration;
 import 'package:chuk_chat/widgets/menu_tile_group.dart';
 
 /// Gap between the anchor and the menu.
@@ -28,7 +30,15 @@ const double _kMinRoomAbove = 120;
 // The menu surface itself lives in [MenuTileGroup] — one look for every
 // dropdown and every action sheet.
 
-const Duration _kMenuDuration = Duration(milliseconds: 140);
+/// The menu opens on the Material 3 Expressive spatial default spring
+/// (m3.material.io: menus expand from their anchor) and closes on the effects
+/// spring, which never overshoots.
+final Curve _kMenuOpenCurve = SpringCurve(kM3eSpatialDefault);
+final Duration _kMenuOpenDuration = springSettleDuration(kM3eSpatialDefault);
+const Duration _kMenuCloseDuration = Duration(milliseconds: 120);
+
+/// Where a menu grows from: 85 % of its height, at the anchor's edge.
+const double _kMenuStartScale = 0.85;
 
 /// Show [items] as a dropdown anchored to the widget of [anchorContext].
 ///
@@ -165,7 +175,16 @@ class _AnchoredMenuRoute<T> extends PopupRoute<T> {
   final CapturedThemes themes;
 
   @override
-  Duration get transitionDuration => _kMenuDuration;
+  Duration get transitionDuration => _kMenuOpenDuration;
+
+  @override
+  Duration get reverseTransitionDuration => _kMenuCloseDuration;
+
+  /// Whether the menu will most likely sit above its anchor: asked for, or
+  /// the anchor is in the lower half of the usable area. Only the growth
+  /// origin depends on it; the layout delegate still decides the position.
+  bool get _growsUpwards =>
+      preferAbove || anchor.center.dy > (usableTop + usableBottom) / 2;
 
   @override
   bool get barrierDismissible => true;
@@ -192,24 +211,28 @@ class _AnchoredMenuRoute<T> extends PopupRoute<T> {
         // No box around the menu: every row is its own filled tile, and a
         // divider becomes the gap that starts the next run. See
         // [MenuTileGroup].
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minWidth: minWidth),
-          child: IntrinsicWidth(
-            child: Semantics(
-              role: SemanticsRole.menu,
-              scopesRoute: true,
-              namesRoute: true,
-              explicitChildNodes: true,
-              child: ScrollConfiguration(
-                // No scrollbar over the menu — it looked messy on desktop.
-                behavior:
-                    ScrollConfiguration.of(context).copyWith(scrollbars: false),
-                child: SingleChildScrollView(
-                  child: _frame(
-                    MenuTileGroup(
-                      groups: _splitOnDividers(items),
-                      color: color,
-                      outerRadius: borderRadius,
+        child: _grow(
+          context,
+          animation,
+          ConstrainedBox(
+            constraints: BoxConstraints(minWidth: minWidth),
+            child: IntrinsicWidth(
+              child: Semantics(
+                role: SemanticsRole.menu,
+                scopesRoute: true,
+                namesRoute: true,
+                explicitChildNodes: true,
+                child: ScrollConfiguration(
+                  // No scrollbar over the menu — it looked messy on desktop.
+                  behavior: ScrollConfiguration.of(context)
+                      .copyWith(scrollbars: false),
+                  child: SingleChildScrollView(
+                    child: _frame(
+                      MenuTileGroup(
+                        groups: _splitOnDividers(items),
+                        color: color,
+                        outerRadius: borderRadius,
+                      ),
                     ),
                   ),
                 ),
@@ -218,6 +241,35 @@ class _AnchoredMenuRoute<T> extends PopupRoute<T> {
           ),
         ),
       ),
+    );
+  }
+
+  /// Material 3 Expressive: the menu expands from the edge that touches its
+  /// anchor on the spatial spring (a small overshoot is part of the look).
+  /// It grows in place instead of travelling, so a short and a long menu feel
+  /// the same. Closing is the route's short fade only.
+  Widget _grow(BuildContext context, Animation<double> animation, Widget menu) {
+    if (MediaQuery.disableAnimationsOf(context)) return menu;
+    final Animation<double> grow = CurvedAnimation(
+      parent: animation,
+      curve: _kMenuOpenCurve,
+      reverseCurve: Curves.linear,
+    );
+    return AnimatedBuilder(
+      animation: grow,
+      child: menu,
+      builder: (BuildContext context, Widget? child) {
+        final double scaleY = animation.status == AnimationStatus.reverse
+            ? 1
+            : _kMenuStartScale + (1 - _kMenuStartScale) * grow.value;
+        return Transform(
+          alignment: besideAnchor || !_growsUpwards
+              ? Alignment.topCenter
+              : Alignment.bottomCenter,
+          transform: Matrix4.diagonal3Values(1, scaleY, 1),
+          child: child,
+        );
+      },
     );
   }
 
@@ -251,17 +303,13 @@ class _AnchoredMenuRoute<T> extends PopupRoute<T> {
     Animation<double> secondaryAnimation,
     Widget child,
   ) {
-    // Fade only. The menu used to rise into place, and the distance it rose
-    // was a fraction of its own height — a short menu barely moved, a long
-    // one flew in. It now appears where it will stay.
-    return FadeTransition(
-      opacity: CurvedAnimation(
-        parent: animation,
-        curve: Curves.easeOutCubic,
-        reverseCurve: Curves.easeInCubic,
-      ),
-      child: child,
+    // The fade only; the growth from the anchor is in [_grow].
+    final Animation<double> fade = CurvedAnimation(
+      parent: animation,
+      curve: const Interval(0, 0.35, curve: Curves.easeOut),
+      reverseCurve: Curves.easeIn,
     );
+    return FadeTransition(opacity: fade, child: child);
   }
 }
 

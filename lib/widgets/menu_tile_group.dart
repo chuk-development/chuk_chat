@@ -142,7 +142,10 @@ class MenuActionRow extends StatelessWidget {
   /// pass `scheme.error` for a destructive row.
   final Color? tone;
 
-  /// Draws the check on the right, for a row that is a choice.
+  /// The chosen row of a choice menu. Material 3 Expressive marks it with
+  /// shape and vibrant colour: the whole tile fills with
+  /// `tertiaryContainer`, the text and glyphs turn `onTertiaryContainer` and
+  /// a check leads the label (m3.material.io/components/menus, selection).
   final bool selected;
 
   /// A parked row: it still reads, it just does not answer.
@@ -155,10 +158,14 @@ class MenuActionRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
     final TextTheme text = Theme.of(context).textTheme;
-    final Color fg = (tone ?? scheme.onSurface).withValues(
-      alpha: enabled ? 1 : 0.38,
-    );
-    return InkWell(
+    final Color fg =
+        (selected ? scheme.onTertiaryContainer : (tone ?? scheme.onSurface))
+            .withValues(alpha: enabled ? 1 : 0.38);
+    // A selected row leads with the check; its own icon steps aside. A row
+    // with a custom leading (an avatar, a lab logo) keeps it and shows the
+    // check after the label instead, so the logo column stays aligned.
+    final bool leadCheck = selected && leading == null;
+    final Widget row = InkWell(
       onTap: enabled ? onTap : null,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -166,9 +173,12 @@ class MenuActionRow extends StatelessWidget {
           children: <Widget>[
             if (leading != null)
               leading!
+            else if (leadCheck)
+              AppIcon(Icons.check, size: 20, color: fg)
             else if (icon != null)
               AppIcon(icon!, size: 20, color: fg),
-            if (leading != null || icon != null) const SizedBox(width: 14),
+            if (leading != null || icon != null || leadCheck)
+              const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -180,16 +190,19 @@ class MenuActionRow extends StatelessWidget {
                     overflow: maxLines == null ? null : TextOverflow.ellipsis,
                     style: text.bodyLarge?.copyWith(
                       color: fg,
-                      fontWeight: FontWeight.w500,
+                      // Emphasized type for the chosen row.
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                     ),
                   ),
                   if (subtitle != null)
                     Text(
                       subtitle!,
                       style: text.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant.withValues(
-                          alpha: enabled ? 1 : 0.5,
-                        ),
+                        color:
+                            (selected
+                                    ? scheme.onTertiaryContainer
+                                    : scheme.onSurfaceVariant)
+                                .withValues(alpha: enabled ? 1 : 0.5),
                       ),
                     ),
                 ],
@@ -198,9 +211,9 @@ class MenuActionRow extends StatelessWidget {
             if (trailing != null) ...<Widget>[
               const SizedBox(width: 12),
               trailing!,
-            ] else if (selected) ...<Widget>[
+            ] else if (selected && !leadCheck) ...<Widget>[
               const SizedBox(width: 12),
-              AppIcon(Icons.check, size: 18, color: scheme.primary),
+              AppIcon(Icons.check, size: 20, color: fg),
             ],
             if (shortcut != null) ...<Widget>[
               const SizedBox(width: 16),
@@ -215,6 +228,10 @@ class MenuActionRow extends StatelessWidget {
         ),
       ),
     );
+    if (!selected) return row;
+    // The tile's Material clips this fill to the tile's own corners.
+    // A Material, not a ColoredBox, so the ink splash still paints on top.
+    return Material(color: scheme.tertiaryContainer, child: row);
   }
 }
 

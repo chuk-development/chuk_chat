@@ -1,5 +1,7 @@
-/// The Material 3 Expressive shape family: the scalloped "cookie / clover /
-/// flower" blobs an agent's face is cut out of.
+/// The Material 3 Expressive shape family: the official cookie / clover /
+/// flower silhouettes an agent's face is cut out of ([expressiveShape]), plus
+/// two hand-drawn shapes ([CookieShape], [PolygonShape]) kept for callers that
+/// need a parametric lobe count.
 ///
 /// The shape is a [ShapeBorder], so it clips, it morphs with
 /// [ShapeBorder.lerp] and it takes an ink splash like any Material shape. The
@@ -14,6 +16,8 @@ library;
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart'
+    show MaterialShapeBorder, MaterialShapes, RoundedPolygon;
 
 /// A scalloped blob. [softness] 0 is a circle; about 0.2 is a deep scallop.
 class CookieShape extends ShapeBorder {
@@ -77,47 +81,29 @@ int shapeIndexFor(String key) {
 ShapeBorder expressiveShapeFor(String key) =>
     expressiveShape(shapeIndexFor(key));
 
-/// One curated silhouette per index.
+/// One curated silhouette per index, from the official Material 3 Expressive
+/// shape set ([MaterialShapes], the Dart port of Compose `MaterialShapes`).
 ///
 /// Every one of these has to read as a different shape at 32 px in a list, so
-/// none of them may be a circle in disguise. Two of the earlier set were: a
-/// [StadiumBorder] in a square box IS a circle, and a fixed 22 px corner radius
-/// on a 52 px avatar is one too. A scallop below about 0.13 also disappears at
-/// list size. The set is now: cookie, clover, squircle, flower, diamond, gem,
-/// triangle, burst. Eight, not six: with six silhouettes a roster of three
-/// agents already showed two of them the same shape.
+/// none of them may be a circle in disguise. The set: cookie, clover,
+/// rounded square, flower, diamond, gem, triangle, burst. Eight, not six: with
+/// six silhouettes a roster of three agents already showed two of them the
+/// same shape. The index order is kept from the hand-drawn set this replaced,
+/// so every agent keeps the silhouette family it had.
 ShapeBorder expressiveShape(int i) {
-  switch (i % 8) {
-    case 0:
-      return const CookieShape(lobes: 7, softness: 0.15); // cookie
-    case 1:
-      return const CookieShape(
-        lobes: 4,
-        softness: 0.22,
-        rotation: 0.4,
-      ); // clover
-    case 2:
-      return const PolygonShape(sides: 4, cornerFactor: 0.34); // squircle
-    case 3:
-      return const CookieShape(lobes: 6, softness: 0.18); // flower
-    case 4:
-      return const PolygonShape(
-        sides: 4,
-        cornerFactor: 0.22,
-        rotation: math.pi / 4,
-      ); // diamond
-    case 5:
-      return const PolygonShape(
-        sides: 6,
-        cornerFactor: 0.26,
-        rotation: math.pi / 6,
-      ); // gem
-    case 6:
-      return const PolygonShape(sides: 3, cornerFactor: 0.34); // triangle
-    default:
-      return const CookieShape(lobes: 11, softness: 0.14); // burst
-  }
+  return MaterialShapeBorder(shape: _kFaceShapes[i % _kFaceShapes.length]);
 }
+
+final List<RoundedPolygon> _kFaceShapes = <RoundedPolygon>[
+  MaterialShapes.cookie7Sided,
+  MaterialShapes.clover4Leaf,
+  MaterialShapes.cookie4Sided,
+  MaterialShapes.flower,
+  MaterialShapes.diamond,
+  MaterialShapes.gem,
+  MaterialShapes.triangle,
+  MaterialShapes.softBurst,
+];
 
 /// A regular polygon with rounded corners, inscribed in the box.
 ///
@@ -178,8 +164,7 @@ class PolygonShape extends ShapeBorder {
         ? 1
         : math.min(rect.width / spanX, rect.height / spanY);
     final List<Offset> corners = <Offset>[
-      for (final Offset c in raw)
-        centre + (c + shift - centre) * fill,
+      for (final Offset c in raw) centre + (c + shift - centre) * fill,
     ];
     final double round = (radius * cornerFactor).clamp(0.0, radius);
     final Path path = Path();
