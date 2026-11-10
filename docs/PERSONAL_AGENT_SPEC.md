@@ -405,7 +405,7 @@ The host stores one `dashboard.json` per agent workspace (host = truth).
 
 ### 9.4 App
 
-- New **Home** tab first in `lib/platform_specific/mobile/mobile_home.dart`.
+- New **Home** segment first in the phone switch, drawn by `lib/widgets/dashboard/dashboard_page.dart`.
   Desktop: a Home entry in the Agents sidebar.
 - Cards reuse the existing typed block renderers where possible
   (`rich_blocks.dart` weather, map, chart).
