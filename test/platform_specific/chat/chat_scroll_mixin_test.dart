@@ -17,7 +17,10 @@ void main() {
   /// non-reversed [ListView], the same two hooks (`onScrollChanged` from the
   /// controller and from layout-metric changes, `pinToBottomDuringStream` on
   /// each new token). `rows` grows the way a streaming answer does.
-  Future<_HarnessState> pumpHarness(WidgetTester tester, {int rows = 20}) async {
+  Future<_HarnessState> pumpHarness(
+    WidgetTester tester, {
+    int rows = 20,
+  }) async {
     final key = GlobalKey<_HarnessState>();
     await tester.pumpWidget(
       MaterialApp(
@@ -35,8 +38,9 @@ void main() {
     return key.currentState!;
   }
 
-  testWidgets('a reader at the end is carried along by a streaming answer',
-      (tester) async {
+  testWidgets('a reader at the end is carried along by a streaming answer', (
+    tester,
+  ) async {
     final state = await pumpHarness(tester);
     state.jumpToEnd();
     await tester.pumpAndSettle();
@@ -55,8 +59,9 @@ void main() {
     expect(position.pixels, moveTo(position.maxScrollExtent));
   });
 
-  testWidgets('a small pull towards history is not undone by the next token',
-      (tester) async {
+  testWidgets('a small pull towards history is not undone by the next token', (
+    tester,
+  ) async {
     final state = await pumpHarness(tester);
     state.jumpToEnd();
     await tester.pumpAndSettle();
@@ -67,8 +72,11 @@ void main() {
     await tester.pumpAndSettle();
 
     final position = state.scrollController.position;
-    expect(state.isStickyBottom, isFalse,
-        reason: 'one pull towards history lets go of the bottom, at any distance');
+    expect(
+      state.isStickyBottom,
+      isFalse,
+      reason: 'one pull towards history lets go of the bottom, at any distance',
+    );
     final settled = position.pixels;
     expect(position.maxScrollExtent - settled, greaterThan(8));
 
@@ -78,12 +86,16 @@ void main() {
       await tester.pump();
     }
 
-    expect(position.pixels, settled,
-        reason: 'the reader stays where they put the list');
+    expect(
+      position.pixels,
+      settled,
+      reason: 'the reader stays where they put the list',
+    );
   });
 
-  testWidgets('one wheel tick towards history also holds the list still',
-      (tester) async {
+  testWidgets('one wheel tick towards history also holds the list still', (
+    tester,
+  ) async {
     final state = await pumpHarness(tester);
     state.jumpToEnd();
     await tester.pumpAndSettle();
@@ -93,9 +105,7 @@ void main() {
     final Offset centre = tester.getCenter(find.byType(ListView));
     final TestPointer pointer = TestPointer(1, PointerDeviceKind.mouse);
     pointer.hover(centre);
-    await tester.sendEventToBinding(
-      pointer.scroll(const Offset(0, -40)),
-    );
+    await tester.sendEventToBinding(pointer.scroll(const Offset(0, -40)));
     await tester.pumpAndSettle();
 
     final position = state.scrollController.position;
@@ -127,8 +137,11 @@ void main() {
 
     final position = state.scrollController.position;
     expect(position.pixels, position.maxScrollExtent);
-    expect(state.isStickyBottom, isTrue,
-        reason: 'back at the end, new content should arrive in view again');
+    expect(
+      state.isStickyBottom,
+      isTrue,
+      reason: 'back at the end, new content should arrive in view again',
+    );
 
     state.streamOneMoreRow();
     await tester.pump();
@@ -136,28 +149,34 @@ void main() {
     expect(position.pixels, moveTo(position.maxScrollExtent));
   });
 
-  testWidgets('the end of an answer settles at the bottom while it still grows',
-      (tester) async {
-    final state = await pumpHarness(tester);
-    state.jumpToEnd();
-    await tester.pumpAndSettle();
+  testWidgets(
+    'the end of an answer settles at the bottom while it still grows',
+    (tester) async {
+      final state = await pumpHarness(tester);
+      state.jumpToEnd();
+      await tester.pumpAndSettle();
 
-    // The last token has arrived; the layout has not finished. Code blocks and
-    // images keep growing the extent for a few more frames.
-    state.finishStream();
-    for (int i = 0; i < 4; i++) {
-      state.growWithoutPinning();
-      await tester.pump();
-    }
-    await tester.pumpAndSettle();
+      // The last token has arrived; the layout has not finished. Code blocks and
+      // images keep growing the extent for a few more frames.
+      state.finishStream();
+      for (int i = 0; i < 4; i++) {
+        state.growWithoutPinning();
+        await tester.pump();
+      }
+      await tester.pumpAndSettle();
 
-    final position = state.scrollController.position;
-    expect(position.pixels, moveTo(position.maxScrollExtent),
-        reason: 'a reader who followed the answer should end at its end');
-  });
+      final position = state.scrollController.position;
+      expect(
+        position.pixels,
+        moveTo(position.maxScrollExtent),
+        reason: 'a reader who followed the answer should end at its end',
+      );
+    },
+  );
 
-  testWidgets('a reader who scrolled up is not dragged down at the end',
-      (tester) async {
+  testWidgets('a reader who scrolled up is not dragged down at the end', (
+    tester,
+  ) async {
     final state = await pumpHarness(tester);
     state.jumpToEnd();
     await tester.pumpAndSettle();
@@ -171,6 +190,44 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(state.scrollController.position.pixels, moveTo(held));
+  });
+  testWidgets('a composer that grows a lot keeps the end in view', (
+    tester,
+  ) async {
+    // An attached picture adds about 110 px, more than the 100 px that
+    // scrollChatToBottom still calls "near the bottom". The last message
+    // (its sources row) used to end up behind the composer.
+    final state = await pumpHarness(tester);
+    state.onComposerHeightChanged(const Size(300, 60));
+    await tester.pumpAndSettle();
+    state.jumpToEnd();
+    await tester.pumpAndSettle();
+    expect(state.isStickyBottom, isTrue);
+
+    state.onComposerHeightChanged(const Size(300, 180));
+    await tester.pump();
+    await tester.pump();
+
+    final position = state.scrollController.position;
+    expect(position.pixels, moveTo(position.maxScrollExtent));
+    expect(state.isStickyBottom, isTrue);
+  });
+
+  testWidgets('a growing composer leaves a reader up in the history alone', (
+    tester,
+  ) async {
+    final state = await pumpHarness(tester);
+    state.onComposerHeightChanged(const Size(300, 60));
+    await tester.pumpAndSettle();
+    state.scrollController.jumpTo(100);
+    await tester.pumpAndSettle();
+    expect(state.isStickyBottom, isFalse);
+
+    state.onComposerHeightChanged(const Size(300, 180));
+    await tester.pump();
+    await tester.pump();
+
+    expect(state.scrollController.position.pixels, 100);
   });
 }
 
@@ -232,6 +289,8 @@ class _HarnessState extends State<_Harness> with ChatScrollMixin<_Harness> {
       },
       child: ListView.builder(
         controller: scrollController,
+        // The room held for the composer, as the chat screens reserve it.
+        padding: EdgeInsets.only(bottom: composerHeight),
         itemCount: rows,
         itemBuilder: (context, index) =>
             SizedBox(height: 50, child: Text('message $index')),

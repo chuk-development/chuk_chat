@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.OpenableColumns
+import android.webkit.MimeTypeMap
 import androidx.core.app.Person
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
@@ -126,10 +127,18 @@ class ShareBridge(private val context: Context, messenger: BinaryMessenger) {
         }
       }
     if (size > MAX_FILE_BYTES) return@runCatching null
-    val safeName = (name ?: uri.lastPathSegment ?: "shared")
+    val mime = resolver.getType(uri)
+    var safeName = (name ?: uri.lastPathSegment ?: "shared")
       .replace(Regex("[/\\\\\\u0000]"), "_")
       .take(120)
       .ifBlank { "shared" }
+    // Gallery providers often name a photo without an extension; the app
+    // decides the file type by it.
+    if (!safeName.contains('.')) {
+      MimeTypeMap.getSingleton().getExtensionFromMimeType(mime)?.let {
+        safeName = "$safeName.$it"
+      }
+    }
     val dir = File(context.cacheDir, "shared/${UUID.randomUUID()}").apply { mkdirs() }
     val out = File(dir, safeName)
     var copied = 0L
@@ -148,7 +157,7 @@ class ShareBridge(private val context: Context, messenger: BinaryMessenger) {
     mapOf(
       "path" to out.absolutePath,
       "name" to safeName,
-      "mime" to resolver.getType(uri),
+      "mime" to mime,
     )
   }.getOrNull()
 

@@ -1,6 +1,7 @@
 // lib/platform_specific/chat/handlers/file_attachment_handler.dart
 import 'dart:async';
 import 'dart:typed_data';
+
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/utils/io_helper.dart';
@@ -413,26 +414,33 @@ class FileAttachmentHandler {
           isUploading: false,
         );
         onUpdate?.call();
+      } else if (!ImageStorageService.isOfflinePath(storagePath)) {
+        // Removed while it uploaded: the user cancelled it, so the copy
+        // that reached the server goes too.
+        unawaited(
+          ImageStorageService.deleteEncryptedImage(storagePath)
+              .catchError((_) {}),
+        );
+        return;
       }
       if (ImageStorageService.isOfflinePath(storagePath)) {
         if (index == -1) {
           // Removed while it was being stored: do not leave the file behind.
           unawaited(
-            ImageStorageService.deleteOfflineImage(
-              storagePath,
-            ).catchError((_) {}),
+            ImageStorageService.deleteOfflineImage(storagePath)
+                .catchError((_) {}),
           );
         } else {
           _offlineWatcher.track();
         }
       }
     } catch (error) {
-      onError?.call('Failed to upload image "$fileName": $error');
       int index = _attachedFiles.indexWhere((f) => f.id == fileId);
-      if (index != -1) {
-        _attachedFiles.removeAt(index);
-        onUpdate?.call();
-      }
+      // Removed while it uploaded: a cancel, not an error to report.
+      if (index == -1) return;
+      onError?.call('Failed to upload image "$fileName": $error');
+      _attachedFiles.removeAt(index);
+      onUpdate?.call();
     }
   }
 
@@ -524,11 +532,10 @@ class FileAttachmentHandler {
     if (AgentsAttachmentStore.isRef(file?.encryptedImagePath)) {
       unawaited(AgentsComposerFiles.discard(file?.encryptedImagePath));
     } else if (file != null && file.encryptedImagePath != null) {
-      ImageStorageService.deleteEncryptedImage(
-        file.encryptedImagePath!,
-      ).catchError((_) {
-        // Silently ignore — user chose to remove it
-      });
+      ImageStorageService.deleteEncryptedImage(file.encryptedImagePath!)
+          .catchError((_) {
+            // Silently ignore — user chose to remove it
+          });
     }
     _attachedFiles.removeWhere((f) => f.id == fileId);
     onUpdate?.call();

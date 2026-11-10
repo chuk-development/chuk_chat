@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
+
 import 'package:chuk_chat/utils/io_helper.dart';
 
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
@@ -26,8 +27,10 @@ import 'package:chuk_chat/constants.dart' show kRadiusSm, kRadiusXs;
 
 typedef AttachmentRemoveCallback = void Function(String fileId);
 typedef AttachmentCopyCallback = Future<void> Function(AttachedFile file);
-typedef AttachmentContentChangedCallback =
-    void Function(String fileId, String newContent);
+typedef AttachmentContentChangedCallback = void Function(
+  String fileId,
+  String newContent,
+);
 
 const int _kMaxExtensionChars = 3;
 
@@ -215,10 +218,10 @@ class _ImageAttachmentCard extends StatelessWidget {
                     top: 0,
                     right: 0,
                     child: _RemoveButton(
-                      onTap: isUploading ? null : () => onRemove(file.id),
-                      tooltip: AppLocalizations.of(
-                        context,
-                      )!.removeFile(file.fileName),
+                      // Also while uploading: removing it cancels the upload.
+                      onTap: () => onRemove(file.id),
+                      tooltip: AppLocalizations.of(context)!
+                          .removeFile(file.fileName),
                     ),
                   ),
                 ],
@@ -502,10 +505,10 @@ class _DocumentAttachmentTile extends StatelessWidget {
                       top: 0,
                       right: 0,
                       child: _RemoveButton(
-                        onTap: isUploading ? null : () => onRemove(file.id),
-                        tooltip: AppLocalizations.of(
-                          context,
-                        )!.removeFile(file.fileName),
+                        // Also while uploading: removing it cancels the upload.
+                        onTap: () => onRemove(file.id),
+                        tooltip: AppLocalizations.of(context)!
+                            .removeFile(file.fileName),
                       ),
                     ),
                   ],
@@ -532,7 +535,9 @@ void _showDocumentPreview(
   // A spreadsheet with its bytes on disk opens in the table viewer.
   final String? path = file.localPath;
   if (!kIsWeb && path != null && SpreadsheetViewer.handles(file.fileName)) {
-    unawaited(_openSpreadsheet(context, file, path, textColor, onContentChanged));
+    unawaited(
+      _openSpreadsheet(context, file, path, textColor, onContentChanged),
+    );
     return;
   }
   showDialog<void>(
@@ -563,8 +568,10 @@ Future<void> _openSpreadsheet(
     showDialog<void>(
       context: context,
       barrierColor: Theme.of(context).colorScheme.scrim.withValues(alpha: 0.7),
-      builder: (context) =>
-          _DocumentPreviewDialog(file: file, onContentChanged: onContentChanged),
+      builder: (context) => _DocumentPreviewDialog(
+        file: file,
+        onContentChanged: onContentChanged,
+      ),
     );
     return;
   }
@@ -1077,4 +1084,3 @@ String _extractExtension(String fileName) {
   if (dotIndex == -1 || dotIndex == fileName.length - 1) return '';
   return fileName.substring(dotIndex + 1).toLowerCase();
 }
-

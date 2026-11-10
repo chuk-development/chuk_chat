@@ -331,6 +331,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           : null,
     );
   }
+
   final List<Map<String, String>> _messages = [];
 
   /// The `/compact` command: summarize the earlier messages now
@@ -374,11 +375,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       } else {
         final rows = ChatCompactionRunner.applyToStored(chatId, outcome);
         if (rows != null) {
-          unawaited(persistenceHandler.persistChat(
-            messages: rows,
-            chatId: chatId,
-            silent: true,
-          ));
+          unawaited(
+            persistenceHandler.persistChat(
+              messages: rows,
+              chatId: chatId,
+              silent: true,
+            ),
+          );
         }
       }
     }
@@ -795,7 +798,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     _audioHandler = AudioRecordingHandler();
 
     _fileHandler = FileAttachmentHandler()
-      ..isAgentsThread = (() => ChatOrigin.isAgentsThread(_activeChatId))
+      ..isAgentsThread = (() =>
+          ChatOrigin.isAgentsThread(_activeChatId ?? widget.selectedChatId))
       ..initialize(_chatApiService)
       ..onError = showSnackBar
       ..onUpdate = () {
@@ -1330,9 +1334,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         AgentsThreadComposer.takePrefill(_activeChatId);
     if (text == null) return;
     // Files shared to this agent from the system share sheet ride along.
-    final List<SharedFile> files = ShareIntentService.instance
-        .takeParkedFiles(widget.selectedChatId ?? _activeChatId);
-    if (files.isNotEmpty) unawaited(_attachSharedFiles(files));
+    final String? shareChat = widget.selectedChatId ?? _activeChatId;
+    final List<SharedFile> files = ShareIntentService.instance.takeParkedFiles(
+      shareChat,
+    );
+    if (files.isNotEmpty) _attachSharedFiles(files, chatId: shareChat);
     // Empty: only the focus (Home's "Ask" pill); the draft stays.
     if (text.isNotEmpty) {
       composerController.value = TextEditingValue(
@@ -1355,14 +1361,43 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         selection: TextSelection.collapsed(offset: text.length),
       );
     }
-    if (share.files.isNotEmpty) unawaited(_attachSharedFiles(share.files));
+    if (share.files.isNotEmpty) _attachSharedFiles(share.files);
     composerFocusNode.requestFocus();
   }
 
-  Future<void> _attachSharedFiles(List<SharedFile> files) => _fileHandler
-      .attachLocalFiles(<({String path, String name})>[
+  /// Shared files waiting for their chat ([_flushSharedFiles]).
+  List<SharedFile> _pendingSharedFiles = const <SharedFile>[];
+
+  /// The chat they belong to; null for the chat on screen (a new chat).
+  String? _pendingSharedChatId;
+
+  /// Files are attached only once their chat is on screen and loaded. A
+  /// thread switch clears the composer's files while it loads, and until it
+  /// lands the screen still counts as the old chat, so an Agents thread
+  /// would be judged by the old chat's model ("images not supported").
+  void _attachSharedFiles(List<SharedFile> files, {String? chatId}) {
+    _pendingSharedFiles = files;
+    _pendingSharedChatId = chatId;
+    _flushSharedFiles();
+  }
+
+  void _flushSharedFiles() {
+    if (!mounted || _pendingSharedFiles.isEmpty || _isLoadingChat) return;
+    final String? target = _pendingSharedChatId;
+    // A thread with no stored transcript yet loads as a "new chat": no
+    // active id, the selected one is the thread.
+    if (target != null && (_activeChatId ?? widget.selectedChatId) != target) {
+      return;
+    }
+    final List<SharedFile> files = _pendingSharedFiles;
+    _pendingSharedFiles = const <SharedFile>[];
+    _pendingSharedChatId = null;
+    unawaited(
+      _fileHandler.attachLocalFiles(<({String path, String name})>[
         for (final SharedFile f in files) (path: f.path, name: f.name),
-      ], supportsImages: modelSupportsImageInput);
+      ], supportsImages: modelSupportsImageInput),
+    );
+  }
 
   bool _agentsThreadSend(String chatId, String text) {
     if (!mounted || _isSendingMessage || _isCurrentChatStreaming) return false;
@@ -1607,6 +1642,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       _isLoadingChat = false;
       showScrollToBottom = false;
     });
+    // Files shared into this chat while it loaded.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _flushSharedFiles());
 
     if (recoveredStaleCalls) {
       unawaited(
@@ -2644,10 +2681,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   }) async {
     var ok = true;
     try {
-      final queueId = await OfflineSendCoordinator.enqueue(
-        payload,
-        kick: kick,
-      );
+      final queueId = await OfflineSendCoordinator.enqueue(payload, kick: kick);
       void mark() => OfflineSendBridge.markQueued(
         _messages,
         userIdx: userIdx,
@@ -2789,7 +2823,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     if (_isSendingMessage || _isCurrentChatStreaming) return;
     final chat = await ChatStorageService.loadFullChat(chatId);
     if (!mounted || chat == null || !chat.isFullyLoaded) return;
-    if (chatId != _activeChatId || _isSendingMessage || _isCurrentChatStreaming) {
+    if (chatId != _activeChatId ||
+        _isSendingMessage ||
+        _isCurrentChatStreaming) {
       return;
     }
     setState(() {
@@ -3137,9 +3173,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // image that is only in the offline store: the send goes into the
     // outbox. The user bubble shows "waiting", the AI placeholder goes,
     // the chat is saved, and the outbox sends it once it can.
-    final String? documentsForQueue = _documentsJsonFor(
-      attachedFilesForApi,
-    );
+    final String? documentsForQueue = _documentsJsonFor(attachedFilesForApi);
     final String? attachedFilesForQueue = attachedFilesForApi.isEmpty
         ? null
         : jsonEncode(attachedFilesForApi.map((f) => f.toJson()).toList());
@@ -3790,7 +3824,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           // The answer goes out as given; a draft in the composer stays.
           unawaited(_sendComposerOrVoice(voiceText: text));
         },
-        onSkip: () => setState(() => _skippedQuestionIds.add(request.questionId)),
+        onSkip: () =>
+            setState(() => _skippedQuestionIds.add(request.questionId)),
       ),
     );
   }
@@ -4226,7 +4261,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
               messageText: data.displayText,
               onEdit: editMessageAt,
               onResendMessage: resendMessageAt,
-              forkFromHere: agentsForkAction(context, _activeChatId, _messages[i]),
+              forkFromHere: agentsForkAction(
+                context,
+                _activeChatId,
+                _messages[i],
+              ),
             )
           : const <MessageBubbleAction>[];
       // The message the reader just sent carries
