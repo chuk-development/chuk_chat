@@ -528,10 +528,19 @@ const Map<String, String> stringsEn = {
   'creditsExplanation':
       'Your \u20ac16 in AI credits are used per token based on the model you choose. Unused credits expire at the end of each month.',
   'immediateAccessAck':
-      'I want immediate access to Chuk Chat and acknowledge that I lose my ',
+      'I expressly ask that Chuk Chat starts the service before the withdrawal period ends. I know that if I withdraw, I must pay for the service that I got until that time. Read about your ',
   'rightOfWithdrawal': 'right of withdrawal',
-  'onceServiceBegins': ' once the service begins. I agree to the ',
-  'subscribeNow': 'Subscribe Now',
+  'onceServiceBegins': '. I agree to the ',
+  'subscribeNow': 'Subscribe and pay',
+  'viewSubscription': 'View subscription',
+  'consentTermsSuffix': '.',
+  'cancelContractHere': 'Cancel contract here',
+  'cancelContractHereSubtitle':
+      'Opens the cancellation form. You do not have to sign in.',
+  'withdrawContract': 'Withdraw from contract here',
+  'withdrawContractSubtitle':
+      'Opens the withdrawal form. You do not have to sign in.',
+  'linkOpenFailed': 'The link did not open. Open it yourself: {url}',
   'alreadySubscribed': 'You already have an active subscription.',
   'opening': 'Opening...',
   'agreeToTermsFirst':

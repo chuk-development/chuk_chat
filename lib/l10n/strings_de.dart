@@ -544,10 +544,19 @@ const Map<String, String> stringsDe = {
   'creditsExplanation':
       'Ihre 16\u00a0\u20ac KI-Guthaben werden pro Token basierend auf dem gewählten Modell verbraucht. Ungenutztes Guthaben verfällt am Ende jedes Monats.',
   'immediateAccessAck':
-      'Ich möchte sofortigen Zugang zu Chuk Chat und erkenne an, dass ich mein ',
+      'Ich verlange ausdrücklich, dass Chuk Chat vor Ablauf der Widerrufsfrist mit der Leistung beginnt. Mir ist bekannt, dass ich bei einem Widerruf Wertersatz für die bis dahin erbrachte Leistung zahle. Informationen zum ',
   'rightOfWithdrawal': 'Widerrufsrecht',
-  'onceServiceBegins': ' verliere, sobald der Dienst beginnt. Ich stimme den ',
-  'subscribeNow': 'Jetzt abonnieren',
+  'onceServiceBegins': '. Ich stimme den ',
+  'subscribeNow': 'Zahlungspflichtig abonnieren',
+  'viewSubscription': 'Abo ansehen',
+  'consentTermsSuffix': ' zu.',
+  'cancelContractHere': 'Verträge hier kündigen',
+  'cancelContractHereSubtitle':
+      'Öffnet das Kündigungsformular. Ohne Anmeldung.',
+  'withdrawContract': 'Vertrag hier widerrufen',
+  'withdrawContractSubtitle': 'Öffnet das Widerrufsformular. Ohne Anmeldung.',
+  'linkOpenFailed':
+      'Link konnte nicht geöffnet werden. Öffnen Sie ihn selbst: {url}',
   'alreadySubscribed': 'Sie haben bereits ein aktives Abonnement.',
   'opening': 'Wird geöffnet...',
   'agreeToTermsFirst':

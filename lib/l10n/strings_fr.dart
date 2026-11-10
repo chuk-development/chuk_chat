@@ -301,10 +301,19 @@ const Map<String, String> stringsFr = {
   'creditsExplanation':
       'Vos 16\u00a0\u20ac de crédits IA sont utilisés par token selon le modèle choisi. Les crédits non utilisés expirent à la fin de chaque mois.',
   'immediateAccessAck':
-      'Je souhaite un accès immédiat à Chuk Chat et reconnais perdre mon ',
+      'Je demande expressément que Chuk Chat commence le service avant la fin du délai de rétractation. Je sais qu\'en cas de rétractation, je paierai un montant proportionnel au service fourni jusqu\'à ce moment. Informations sur le ',
   'rightOfWithdrawal': 'droit de rétractation',
-  'onceServiceBegins': ' dès le début du service. J\'accepte les ',
-  'subscribeNow': 'S\'abonner maintenant',
+  'onceServiceBegins': '. J\'accepte les ',
+  'subscribeNow': 'S\'abonner avec obligation de paiement',
+  'viewSubscription': 'Voir l\'abonnement',
+  'consentTermsSuffix': '.',
+  'cancelContractHere': 'Résilier le contrat ici',
+  'cancelContractHereSubtitle':
+      'Ouvre le formulaire de résiliation. Sans connexion.',
+  'withdrawContract': 'Se rétracter du contrat ici',
+  'withdrawContractSubtitle':
+      'Ouvre le formulaire de rétractation. Sans connexion.',
+  'linkOpenFailed': 'Le lien ne s\'est pas ouvert. Ouvrez-le vous-même : {url}',
   'alreadySubscribed': 'Vous avez déjà un abonnement actif.',
   'opening': 'Ouverture...',
   'agreeToTermsFirst':

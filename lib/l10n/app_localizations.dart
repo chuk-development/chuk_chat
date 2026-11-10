@@ -557,6 +557,15 @@ class AppLocalizations {
   String get rightOfWithdrawal => _get('rightOfWithdrawal');
   String get onceServiceBegins => _get('onceServiceBegins');
   String get subscribeNow => _get('subscribeNow');
+  String get viewSubscription => _get('viewSubscription');
+  String get consentTermsSuffix => _get('consentTermsSuffix');
+  String get cancelContractHere => _get('cancelContractHere');
+  String get cancelContractHereSubtitle =>
+      _get('cancelContractHereSubtitle');
+  String get withdrawContract => _get('withdrawContract');
+  String get withdrawContractSubtitle => _get('withdrawContractSubtitle');
+  String linkOpenFailed(String url) =>
+      _get('linkOpenFailed').replaceAll('{url}', url);
   String get alreadySubscribed => _get('alreadySubscribed');
   String get opening => _get('opening');
   String get agreeToTermsFirst => _get('agreeToTermsFirst');

@@ -295,10 +295,19 @@ const Map<String, String> stringsPt = {
   'creditsExplanation':
       'Seus \u20ac16 em créditos de IA são consumidos por token com base no modelo escolhido. Créditos não utilizados expiram no final de cada mês.',
   'immediateAccessAck':
-      'Quero acesso imediato ao Chuk Chat e reconheço que perco meu ',
+      'Solicito expressamente que o Chuk Chat comece a prestar o serviço antes do fim do prazo de desistência. Sei que, se desistir, pagarei um valor proporcional ao serviço prestado até esse momento. Informações sobre o ',
   'rightOfWithdrawal': 'direito de desistência',
-  'onceServiceBegins': ' assim que o serviço começar. Concordo com os ',
-  'subscribeNow': 'Assinar Agora',
+  'onceServiceBegins': '. Concordo com os ',
+  'subscribeNow': 'Assinar com obrigação de pagamento',
+  'viewSubscription': 'Ver assinatura',
+  'consentTermsSuffix': '.',
+  'cancelContractHere': 'Cancelar contrato aqui',
+  'cancelContractHereSubtitle':
+      'Abre o formulário de cancelamento. Sem iniciar sessão.',
+  'withdrawContract': 'Desistir do contrato aqui',
+  'withdrawContractSubtitle':
+      'Abre o formulário de desistência. Sem iniciar sessão.',
+  'linkOpenFailed': 'Não foi possível abrir o link. Abra-o você mesmo: {url}',
   'alreadySubscribed': 'Você já possui uma assinatura ativa.',
   'opening': 'Abrindo...',
   'agreeToTermsFirst':
