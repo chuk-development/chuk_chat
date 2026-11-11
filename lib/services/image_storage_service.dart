@@ -31,12 +31,16 @@ class StoredImage {
   final String path;
   final String name;
   final DateTime? createdAt;
+
+  /// Last change of the stored file, as the bucket reports it.
+  final DateTime? updatedAt;
   final int? size;
 
   const StoredImage({
     required this.path,
     required this.name,
     this.createdAt,
+    this.updatedAt,
     this.size,
   });
 }
@@ -367,6 +371,9 @@ class ImageStorageService {
               name: file.name,
               createdAt: file.createdAt != null
                   ? DateTime.tryParse(file.createdAt!)
+                  : null,
+              updatedAt: file.updatedAt != null
+                  ? DateTime.tryParse(file.updatedAt!)
                   : null,
               size: file.metadata?['size'] as int?,
             ),

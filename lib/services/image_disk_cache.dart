@@ -119,6 +119,29 @@ class ImageDiskCache {
   static Future<void> writeThumb(String storagePath, Uint8List bytes) =>
       _write(storagePath, 'thumb', bytes);
 
+  /// What is known about where [storagePath] came from (see
+  /// MediaProvenanceService), or null when it was not worked out yet.
+  static Future<Map<String, dynamic>?> readMeta(String storagePath) async {
+    final Uint8List? bytes = await _read(storagePath, 'meta');
+    if (bytes == null) return null;
+    try {
+      final Object? decoded = jsonDecode(utf8.decode(bytes));
+      return decoded is Map ? Map<String, dynamic>.from(decoded) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Stores the provenance record for [storagePath].
+  static Future<void> writeMeta(
+    String storagePath,
+    Map<String, dynamic> meta,
+  ) => _write(
+    storagePath,
+    'meta',
+    Uint8List.fromList(utf8.encode(jsonEncode(meta))),
+  );
+
   /// Records that [storagePath] holds a PDF, not a picture. Old uploads gave
   /// files the same `.enc` ending as images, so the bucket listing cannot tell
   /// them apart; only the decrypted bytes can, once. The mark lets the media
@@ -132,7 +155,7 @@ class ImageDiskCache {
 
   /// Removes the picture and its thumbnail, e.g. after the image was deleted.
   static Future<void> remove(String storagePath) async {
-    for (final ext in const ['img', 'thumb', 'pdf']) {
+    for (final ext in const ['img', 'thumb', 'pdf', 'meta']) {
       try {
         final file = await _file(storagePath, ext);
         if (file != null && await file.exists()) await file.delete();

@@ -4,6 +4,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
@@ -15,6 +16,7 @@ import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/services/file_save_service.dart';
 import 'package:chuk_chat/services/image_disk_cache.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
+import 'package:chuk_chat/services/media_provenance_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/artifact_panel.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
@@ -1058,6 +1060,21 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
       onRetry: () => _retryThumbnail(image.path),
       onDownload: kIsWeb ? null : () => _downloadImage(image),
       onDelete: () => _deleteImage(image),
+      provenance: MediaProvenanceService.lookup(image.path),
+      onInfo: () => _showImageInfo(image),
+    );
+  }
+
+  Future<void> _showImageInfo(StoredImage image) {
+    return showDialog<void>(
+      context: context,
+      builder: (context) => _ImageInfoDialog(
+        image: image,
+        thumb: _thumbs[image.path],
+        provenance: MediaProvenanceService.lookup(image.path),
+        formatDate: _formatDate,
+        formatSize: _formatFileSize,
+      ),
     );
   }
 
@@ -1141,9 +1158,17 @@ class _ImageTile extends StatefulWidget {
     this.onDownload,
     this.dateLine,
     this.sizeLine,
+    this.provenance,
+    this.onInfo,
   });
 
   final StoredImage image;
+
+  /// Where the picture came from; a generated one wears a small badge.
+  final Future<ImageProvenance>? provenance;
+
+  /// Opens the picture's details (prompt, model, dates).
+  final VoidCallback? onInfo;
   final ValueNotifier<_ThumbState> thumb;
   final bool selected;
   final bool selectionMode;
@@ -1233,6 +1258,27 @@ class _ImageTileState extends State<_ImageTile> {
                   ),
                 ),
 
+              if (!widget.selectionMode && widget.provenance != null)
+                Positioned(
+                  top: 8,
+                  left: 8,
+                  child: FutureBuilder<ImageProvenance>(
+                    future: widget.provenance,
+                    builder: (context, snapshot) {
+                      final ImageProvenance? info = snapshot.data;
+                      if (info == null || !info.isGenerated) {
+                        return const SizedBox.shrink();
+                      }
+                      return Tooltip(
+                        message: info.model == null
+                            ? 'Generated'
+                            : 'Generated with ${info.model}',
+                        child: const _Glass(child: _GeneratedBadge()),
+                      );
+                    },
+                  ),
+                ),
+
               if (showChrome && !widget.selectionMode)
                 Positioned(
                   top: 6,
@@ -1240,6 +1286,14 @@ class _ImageTileState extends State<_ImageTile> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      if (widget.onInfo != null) ...[
+                        _TileAction(
+                          icon: Icons.info_outline_rounded,
+                          tooltip: 'Info',
+                          onTap: widget.onInfo!,
+                        ),
+                        const SizedBox(width: 6),
+                      ],
                       if (widget.onDownload != null)
                         _TileAction(
                           icon: Icons.download_rounded,
@@ -1788,6 +1842,254 @@ class _PdfPreviewDialog extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// The small mark on a generated picture: a sparkle and "AI".
+class _GeneratedBadge extends StatelessWidget {
+  const _GeneratedBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(horizontal: 4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          SizedBox(
+            height: 16,
+            width: 16,
+            child: Center(
+              child: AppIcon(Icons.auto_awesome, color: Colors.white, size: 14),
+            ),
+          ),
+          SizedBox(width: 4),
+          Text(
+            'AI',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              height: 16 / 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Everything known about one picture: where it came from (prompt, model,
+/// seed for a generated one), its size and its dates.
+class _ImageInfoDialog extends StatelessWidget {
+  const _ImageInfoDialog({
+    required this.image,
+    required this.thumb,
+    required this.provenance,
+    required this.formatDate,
+    required this.formatSize,
+  });
+
+  final StoredImage image;
+  final ValueNotifier<_ThumbState>? thumb;
+  final Future<ImageProvenance> provenance;
+  final String Function(DateTime?) formatDate;
+  final String Function(int?) formatSize;
+
+  static String _dateTime(DateTime? value) {
+    if (value == null) return '';
+    final DateTime local = value.toLocal();
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '${local.year}-${two(local.month)}-${two(local.day)} '
+        '${two(local.hour)}:${two(local.minute)}';
+  }
+
+  static String _originLabel(ImageOrigin origin) => switch (origin) {
+    ImageOrigin.generated => 'Generated by AI',
+    ImageOrigin.fetched => 'Loaded from the web',
+    ImageOrigin.uploaded => 'Uploaded by you',
+    ImageOrigin.unknown => 'Unknown',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final Size screen = MediaQuery.sizeOf(context);
+    return Dialog(
+      clipBehavior: Clip.antiAlias,
+      insetPadding: const EdgeInsets.all(32),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 760,
+          maxHeight: screen.height * 0.85,
+        ),
+        child: FutureBuilder<ImageProvenance>(
+          future: provenance,
+          builder: (context, snapshot) {
+            final ImageProvenance? info = snapshot.data;
+            final Widget? picture = thumb == null
+                ? null
+                : ValueListenableBuilder<_ThumbState>(
+                    valueListenable: thumb!,
+                    builder: (context, state, _) => state.bytes == null
+                        ? const SizedBox.shrink()
+                        : ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: Image.memory(
+                              state.bytes!,
+                              fit: BoxFit.contain,
+                              gaplessPlayback: true,
+                            ),
+                          ),
+                  );
+            final rows = <Widget>[
+              _InfoRow(
+                label: 'Source',
+                value: info == null
+                    ? 'Looking it up...'
+                    : _originLabel(info.origin),
+              ),
+              if (info?.prompt != null)
+                _InfoRow(label: 'Prompt', value: info!.prompt!, copy: true),
+              if (info?.model != null)
+                _InfoRow(label: 'Model', value: info!.model!),
+              if (info?.seed != null)
+                _InfoRow(label: 'Seed', value: info!.seed!, copy: true),
+              if (info?.width != null && info?.height != null)
+                _InfoRow(
+                  label: 'Resolution',
+                  value: '${info!.width} × ${info.height} px',
+                ),
+              if (info?.costEur != null)
+                _InfoRow(
+                  label: 'Cost',
+                  value: '€${info!.costEur!.toStringAsFixed(2)}',
+                ),
+              if (info?.sourceUrl != null)
+                _InfoRow(label: 'From', value: info!.sourceUrl!, copy: true),
+              if (info?.chatTitle != null || info?.chatId != null)
+                _InfoRow(label: 'Chat', value: info!.chatTitle ?? info.chatId!),
+              if (info?.createdAt != null)
+                _InfoRow(
+                  label: info!.isGenerated ? 'Generated' : 'Sent',
+                  value: _dateTime(info.createdAt),
+                ),
+              if (image.createdAt != null)
+                _InfoRow(label: 'Uploaded', value: _dateTime(image.createdAt)),
+              if (image.updatedAt != null)
+                _InfoRow(label: 'Changed', value: _dateTime(image.updatedAt)),
+              if (image.size != null)
+                _InfoRow(label: 'File size', value: formatSize(image.size)),
+            ];
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 12, 8, 4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Image info',
+                          style: theme.textTheme.titleLarge,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const AppIcon(Icons.close),
+                        tooltip: MaterialLocalizations.of(context)
+                            .closeButtonTooltip,
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
+                  ),
+                ),
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (picture != null) ...[
+                          SizedBox(width: 240, child: picture),
+                          const SizedBox(width: 24),
+                        ],
+                        Expanded(
+                          child: DefaultTextStyle.merge(
+                            style: TextStyle(
+                              color: theme.colorScheme.onSurface,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: rows,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+/// One label and its value in the image info, with an optional copy button.
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({required this.label, required this.value, this.copy = false});
+
+  final String label;
+  final String value;
+  final bool copy;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final m3 = theme.m3;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 96,
+            child: Text(
+              label,
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: m3.onSurfaceVariant,
+                height: 1.5,
+              ),
+            ),
+          ),
+          Expanded(
+            child: SelectableText(
+              value,
+              style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
+            ),
+          ),
+          if (copy)
+            SizedBox(
+              height: 21,
+              child: IconButton(
+                padding: EdgeInsets.zero,
+                visualDensity: VisualDensity.compact,
+                iconSize: 16,
+                tooltip: 'Copy',
+                icon: const AppIcon(Icons.copy_rounded, size: 16),
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: value));
+                  AppNotifications.show(context, 'Copied');
+                },
+              ),
+            ),
+        ],
       ),
     );
   }
