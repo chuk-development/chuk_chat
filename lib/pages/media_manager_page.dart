@@ -116,10 +116,12 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
       final images = await ImageStorageService.listUserImages();
       // Sort by creation date, newest first
       images.sort((a, b) {
-        if (a.createdAt == null && b.createdAt == null) return 0;
-        if (a.createdAt == null) return 1;
-        if (b.createdAt == null) return -1;
-        return b.createdAt!.compareTo(a.createdAt!);
+        return switch ((a.createdAt, b.createdAt)) {
+          (final DateTime ta, final DateTime tb) => tb.compareTo(ta),
+          (null, null) => 0,
+          (null, _) => 1,
+          (_, null) => -1,
+        };
       });
 
       // Sort out the files already known to be PDFs before the grid draws,
@@ -1286,19 +1288,19 @@ class _ImageTileState extends State<_ImageTile> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (widget.onInfo != null) ...[
+                      if (widget.onInfo case final VoidCallback onInfo) ...[
                         _TileAction(
                           icon: Icons.info_outline_rounded,
                           tooltip: 'Info',
-                          onTap: widget.onInfo!,
+                          onTap: onInfo,
                         ),
                         const SizedBox(width: 6),
                       ],
-                      if (widget.onDownload != null)
+                      if (widget.onDownload case final VoidCallback onDownload)
                         _TileAction(
                           icon: Icons.download_rounded,
                           tooltip: AppLocalizations.of(context)!.download,
-                          onTap: widget.onDownload!,
+                          onTap: onDownload,
                         ),
                       const SizedBox(width: 6),
                       _TileAction(
@@ -1333,10 +1335,7 @@ class _ImageTileState extends State<_ImageTile> {
                       ),
                     ),
                     child: Text(
-                      [
-                        if (widget.dateLine != null) widget.dateLine!,
-                        if (widget.sizeLine != null) widget.sizeLine!,
-                      ].join(' · '),
+                      [?widget.dateLine, ?widget.sizeLine].join(' · '),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -1930,20 +1929,22 @@ class _ImageInfoDialog extends StatelessWidget {
           future: provenance,
           builder: (context, snapshot) {
             final ImageProvenance? info = snapshot.data;
-            final Widget? picture = thumb == null
+            final ValueListenable<_ThumbState>? thumbState = thumb;
+            final Widget? picture = thumbState == null
                 ? null
                 : ValueListenableBuilder<_ThumbState>(
-                    valueListenable: thumb!,
-                    builder: (context, state, _) => state.bytes == null
-                        ? const SizedBox.shrink()
-                        : ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: Image.memory(
-                              state.bytes!,
-                              fit: BoxFit.contain,
-                              gaplessPlayback: true,
-                            ),
-                          ),
+                    valueListenable: thumbState,
+                    builder: (context, state, _) => switch (state.bytes) {
+                      null => const SizedBox.shrink(),
+                      final Uint8List bytes => ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Image.memory(
+                          bytes,
+                          fit: BoxFit.contain,
+                          gaplessPlayback: true,
+                        ),
+                      ),
+                    },
                   );
             final rows = <Widget>[
               _InfoRow(
@@ -1952,30 +1953,30 @@ class _ImageInfoDialog extends StatelessWidget {
                     ? 'Looking it up...'
                     : _originLabel(info.origin),
               ),
-              if (info?.prompt != null)
-                _InfoRow(label: 'Prompt', value: info!.prompt!, copy: true),
-              if (info?.model != null)
-                _InfoRow(label: 'Model', value: info!.model!),
-              if (info?.seed != null)
-                _InfoRow(label: 'Seed', value: info!.seed!, copy: true),
-              if (info?.width != null && info?.height != null)
+              if (info?.prompt case final String prompt)
+                _InfoRow(label: 'Prompt', value: prompt, copy: true),
+              if (info?.model case final String model)
+                _InfoRow(label: 'Model', value: model),
+              if (info?.seed case final String seed)
+                _InfoRow(label: 'Seed', value: seed, copy: true),
+              if ((info?.width, info?.height) case (
+                final int width,
+                final int height,
+              ))
+                _InfoRow(label: 'Resolution', value: '$width × $height px'),
+              if (info?.costEur case final double cost)
+                _InfoRow(label: 'Cost', value: '€${cost.toStringAsFixed(2)}'),
+              if (info?.sourceUrl case final String url)
+                _InfoRow(label: 'From', value: url, copy: true),
+              if (info?.chatTitle ?? info?.chatId case final String chat)
+                _InfoRow(label: 'Chat', value: chat),
+              if (info case ImageProvenance(
+                createdAt: final DateTime createdAt,
+                isGenerated: final bool generated,
+              ))
                 _InfoRow(
-                  label: 'Resolution',
-                  value: '${info!.width} × ${info.height} px',
-                ),
-              if (info?.costEur != null)
-                _InfoRow(
-                  label: 'Cost',
-                  value: '€${info!.costEur!.toStringAsFixed(2)}',
-                ),
-              if (info?.sourceUrl != null)
-                _InfoRow(label: 'From', value: info!.sourceUrl!, copy: true),
-              if (info?.chatTitle != null || info?.chatId != null)
-                _InfoRow(label: 'Chat', value: info!.chatTitle ?? info.chatId!),
-              if (info?.createdAt != null)
-                _InfoRow(
-                  label: info!.isGenerated ? 'Generated' : 'Sent',
-                  value: _dateTime(info.createdAt),
+                  label: generated ? 'Generated' : 'Sent',
+                  value: _dateTime(createdAt),
                 ),
               if (image.createdAt != null)
                 _InfoRow(label: 'Uploaded', value: _dateTime(image.createdAt)),

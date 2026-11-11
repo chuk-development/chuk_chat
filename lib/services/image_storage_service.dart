@@ -369,12 +369,8 @@ class ImageStorageService {
             (file) => StoredImage(
               path: '${user.id}/${file.name}',
               name: file.name,
-              createdAt: file.createdAt != null
-                  ? DateTime.tryParse(file.createdAt!)
-                  : null,
-              updatedAt: file.updatedAt != null
-                  ? DateTime.tryParse(file.updatedAt!)
-                  : null,
+              createdAt: DateTime.tryParse(file.createdAt ?? ''),
+              updatedAt: DateTime.tryParse(file.updatedAt ?? ''),
               size: file.metadata?['size'] as int?,
             ),
           )
