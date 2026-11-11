@@ -80,9 +80,7 @@ class _MobileAgentPermissionsPageState
   Widget build(BuildContext context) {
     final AppLocalizations l = _l;
     final AgentsPermissionsService service = _service;
-    return Scaffold(
-      // The page runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(title: Text(l.agentsCwPermissions)),
       body: SettingsListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),

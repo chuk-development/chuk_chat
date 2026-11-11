@@ -17,6 +17,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/ui/expressive/connected_group.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
@@ -847,10 +848,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
     final colorScheme = theme.colorScheme;
     final m3 = theme.m3;
 
-    return Scaffold(
-      backgroundColor: colorScheme.surface,
-      // The page runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(
         title: Text(l.models),
         bottom: PinnedSettingsSearchBar(
@@ -1947,9 +1945,8 @@ class _ModePickerPanel extends StatelessWidget {
   }
 }
 
-/// A three-way pill toggle above the model list: All / Active / Inactive.
-/// Styled to match the page's pills — a filled track with the selected
-/// segment lit in the primary colour.
+/// The three-way switch above the model list: All / Active / Inactive.
+/// The app's one segmented switch, [ConnectedGroup].
 class _ListFilterBar extends StatelessWidget {
   final _ModelListFilter value;
   final ValueChanged<_ModelListFilter> onChanged;
@@ -1969,49 +1966,13 @@ class _ListFilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final m3 = theme.m3;
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: m3.surfaceContainer,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        children: [
-          for (final f in _ModelListFilter.values)
-            Expanded(child: _segment(context, f)),
-        ],
-      ),
-    );
-  }
-
-  Widget _segment(BuildContext context, _ModelListFilter f) {
-    final theme = Theme.of(context);
-    final m3 = theme.m3;
-    final bool selected = f == value;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => onChanged(f),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: selected ? m3.selectedFill : Colors.transparent,
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Text(
-          _labelFor(f),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.labelLarge?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: selected ? m3.onSelectedFill : m3.onSurfaceVariant,
-          ),
-        ),
-      ),
+    return ConnectedGroup(
+      labels: <String>[
+        for (final _ModelListFilter f in _ModelListFilter.values) _labelFor(f),
+      ],
+      selected: value.index,
+      onSelected: (int i) => onChanged(_ModelListFilter.values[i]),
+      margin: EdgeInsets.zero,
     );
   }
 }

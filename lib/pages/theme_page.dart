@@ -261,10 +261,7 @@ class _ThemePageState extends State<ThemePage> {
     final l = AppLocalizations.of(context)!;
     final bool isDarkMode = _selectedThemeMode == Brightness.dark;
 
-    return Scaffold(
-      backgroundColor: cs.surface,
-      // The list runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(
         title: Text(l.themeSettings),
       ),

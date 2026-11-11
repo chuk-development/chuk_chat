@@ -137,10 +137,7 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
   Widget build(BuildContext context) {
     final hasLocationControls =
         (_hasPlaces || _hasRouteEndpoints) && _locationAvailable;
-    return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      // The page runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(
         // The map runs to the top edge; a page-colour fade over it reads as
         // a smear, not as a header.

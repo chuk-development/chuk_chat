@@ -291,10 +291,7 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
     final l = AppLocalizations.of(context)!;
 
     if (_isLoading) {
-      return Scaffold(
-        backgroundColor: colorScheme.surface,
-        // The page runs underneath the floating header.
-        extendBodyBehindAppBar: true,
+      return FloatingPageScaffold(
         appBar: FloatingAppBar(
           title: Text(l.subscription),
         ),
@@ -305,10 +302,7 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
     final hasSubscription = _userStatus?['has_subscription'] == true;
     final currentPlan = _userStatus?['current_plan'] as String?;
 
-    return Scaffold(
-      backgroundColor: colorScheme.surface,
-      // The list runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(
         title: Text(l.subscription),
       ),

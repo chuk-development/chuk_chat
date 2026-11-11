@@ -29,10 +29,7 @@ class ComingSoonPage extends StatelessWidget {
         theme.textTheme.titleLarge?.copyWith(color: iconFg) ??
         TextStyle(color: iconFg, fontSize: 20, fontWeight: FontWeight.w600);
 
-    return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      // The page runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(title: Text(title, style: titleStyle)),
       body: Center(
         child: Padding(

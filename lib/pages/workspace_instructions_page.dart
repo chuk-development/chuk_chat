@@ -106,9 +106,7 @@ class _WorkspaceInstructionsPageState extends State<WorkspaceInstructionsPage> {
     final l = AppLocalizations.of(context)!;
 
     if (_workspace == null) {
-      return Scaffold(
-        // The page runs underneath the floating header.
-        extendBodyBehindAppBar: true,
+      return FloatingPageScaffold(
         appBar: FloatingAppBar(
           title: Text(l.projectInstructions),
         ),
@@ -124,10 +122,7 @@ class _WorkspaceInstructionsPageState extends State<WorkspaceInstructionsPage> {
         if (!shouldPop || !mounted) return;
         Navigator.of(this.context).pop();
       },
-      child: Scaffold(
-        backgroundColor: cs.surface,
-        // The list runs underneath the floating header.
-        extendBodyBehindAppBar: true,
+      child: FloatingPageScaffold(
         appBar: FloatingAppBar(
           title: Text(l.projectInstructions),
         ),

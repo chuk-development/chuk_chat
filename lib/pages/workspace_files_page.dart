@@ -342,9 +342,7 @@ class _WorkspaceFilesPageState extends State<WorkspaceFilesPage>
 
     final ws = _workspace;
     if (ws == null) {
-      return Scaffold(
-        // The page runs underneath the floating header.
-        extendBodyBehindAppBar: true,
+      return FloatingPageScaffold(
         appBar: FloatingAppBar(
           title: Text(l.projectKnowledge),
         ),
@@ -352,10 +350,7 @@ class _WorkspaceFilesPageState extends State<WorkspaceFilesPage>
       );
     }
 
-    return Scaffold(
-      backgroundColor: cs.surface,
-      // The page runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(
         title: Text(l.projectKnowledge),
       ),
@@ -711,17 +706,13 @@ class _NewDocumentPageState extends State<_NewDocumentPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final cs = theme.colorScheme;
     final m3 = theme.m3;
     final l = AppLocalizations.of(context)!;
     final canSave =
         _titleCtrl.text.trim().isNotEmpty &&
         _contentCtrl.text.trim().isNotEmpty;
 
-    return Scaffold(
-      backgroundColor: cs.surface,
-      // The page runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(
         title: Text(l.projectNewDocument),
         actions: [

@@ -141,10 +141,7 @@ class _AgentsPairingPageState extends State<AgentsPairingPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     // chuk's page frame: the floating header, the page under it.
-    return Scaffold(
-      // The page runs underneath the floating header; the SafeArea keeps
-      // the form clear of it.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: const FloatingAppBar(title: Text('Add your computer')),
       body: SafeArea(
         child: Column(

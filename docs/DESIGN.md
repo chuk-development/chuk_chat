@@ -33,16 +33,23 @@ assembled from parts of other apps.
 ## 2. The frame: `FloatingAppBar` (settings-style pages) and `ExpressiveScreen`
 
 Settings-style pages (every settings page, the agent page, the model page,
-Host & activity) use chuk_chat's frame: a `Scaffold` with
-`extendBodyBehindAppBar: true`, `FloatingAppBar` (`lib/widgets/floating_app_bar.dart`)
-and a `SettingsListView` with the `Expressive*` rows. That is what
+Host & activity) use chuk_chat's frame: `FloatingPageScaffold`
+(`lib/widgets/floating_page_scaffold.dart`) with a `FloatingAppBar`
+(`lib/widgets/floating_app_bar.dart`) and a `SettingsListView` with the
+`Expressive*` rows.
+
+**Every page with a header uses `FloatingPageScaffold`.** It fixes the body
+behind the header and the page colour, so the fade always matches. Never a
+`Scaffold` with an `appBar:`, never a Material `AppBar`.
+`test/repo_checks/floating_page_scaffold_test.dart` fails on both. A body
+that does not extend on its own puts `floatingHeaderInset(context)` inside
+its scroll view. That is what
 AGENTS_UI_UNIFY.md (section 5) decided; there is one settings look for both
 halves.
 
 **One header on every agent sub-page** (bead chuk_chat-8hz4): the agent
 page, Host & activity, Permissions, Skills, connectors, Mail, Files, the
-model page, Control Rooms and the pairing page all use `FloatingAppBar` with
-`extendBodyBehindAppBar: true`. The back target is always the bar's round
+model page, Control Rooms and the pairing page all use `FloatingPageScaffold`. The back target is always the bar's round
 back chip (a page that needs a different back action passes a
 `FloatingHeaderButton` with the same arrow as `leading`), the title is always
 the pill on the left, and the bar draws no fill. Never a second back button
@@ -121,7 +128,7 @@ header is the reference.
 | A feature that is not ready yet but explains itself on tap | `FloatingHeaderButton(parked: true)` |
 | Work in progress on the target itself (a download running) | `FloatingHeaderButton(busy: true)` — spinner in place of the glyph, tap off |
 | An overflow menu in a header | `FloatingHeaderButton(icon: Icons.more_vert)` + `showAnchoredMenu`, never a `PopupMenuButton` |
-| Settings-style page header | `FloatingAppBar` (title optional: no title, no pill) |
+| Settings-style page header | `FloatingPageScaffold` + `FloatingAppBar` (title optional: no title, no pill) |
 | Full-screen viewer frame | `ExpressiveScreen` (same chips, same pill) |
 | A label floating over media (model name over an image) | `FloatingChromeSurface` pill |
 | The accent "new chat" button | `AccentIconButton` |
@@ -423,7 +430,7 @@ Never a picture the agent drew, never a second bar widget.
 
 ## 13. Before you call a screen done
 
-1. Does the page use the frame of §2 (`FloatingAppBar` for a settings-style
+1. Does the page use the frame of §2 (`FloatingPageScaffold` for a settings-style
    page, `ExpressiveScreen` with its `builder` for a full-screen viewer)?
 2. Is every header, close and overlay target a `FloatingHeaderButton` (§2.1),
    every in-content icon action an `ExpressiveIconButton`, and every icon from

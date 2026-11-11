@@ -425,7 +425,7 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
 
   @override
   Widget build(BuildContext context) {
-    final thread = RoomThreadView(
+    Widget thread = RoomThreadView(
       roomName: widget.roomName,
       userMessage: _sentMessage ?? widget.userMessage,
       emptyHint: widget.emptyHint,
@@ -434,7 +434,17 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
       stop: _stop,
       running: _running,
     );
-    final banner = _disconnected ? _reconnectBanner(context) : null;
+    Widget? banner;
+    if (_disconnected) {
+      // The banner takes the top of the page. Keep it below a floating
+      // header, and start the list right under the banner.
+      banner = SafeArea(bottom: false, child: _reconnectBanner(context));
+      thread = MediaQuery.removePadding(
+        context: context,
+        removeTop: true,
+        child: thread,
+      );
+    }
     if (widget.onSend == null) {
       return banner == null
           ? thread

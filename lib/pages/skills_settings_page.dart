@@ -140,9 +140,7 @@ class _SkillsSettingsPageState extends State<SkillsSettingsPage> {
     final builtins = _match(SkillRegistry.bySource(SkillSource.builtin));
     final userSkills = _match(_userSkills);
 
-    return Scaffold(
-      // The list runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(
         title: Text(l.skills),
         bottom: PinnedSettingsSearchBar(
@@ -365,9 +363,7 @@ message.
     final l = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
 
-    return Scaffold(
-      // The list runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(
         title: Text(widget.skill == null ? l.skillNew : l.skillEdit),
         actions: [
@@ -620,9 +616,7 @@ class _AgentsSkillsSettingsPageState extends State<AgentsSkillsSettingsPage> {
     final workspace = _source.workspace;
     final errors = _source.errors;
 
-    return Scaffold(
-      // The page runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(
         title: Text(title),
         actions: <Widget>[

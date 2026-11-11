@@ -166,9 +166,7 @@ class _AssistantSettingsPageState extends State<AssistantSettingsPage>
     final scheme = Theme.of(context).colorScheme;
 
     if (!AssistantPlatform.isSupported) {
-      return Scaffold(
-        // The page runs underneath the floating header.
-        extendBodyBehindAppBar: true,
+      return FloatingPageScaffold(
         appBar: FloatingAppBar(
           title: const Text('Assistent setzen'),
         ),
@@ -189,9 +187,7 @@ class _AssistantSettingsPageState extends State<AssistantSettingsPage>
     final isDefault = _granted(_grants.first);
     final missing = _grants.where((grant) => !_granted(grant)).toList();
 
-    return Scaffold(
-      // The list runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(
         title: const Text('Assistent setzen'),
         actions: [

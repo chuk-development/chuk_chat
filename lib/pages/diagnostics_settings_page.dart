@@ -196,9 +196,7 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
     final m3 = theme.m3;
     final l = AppLocalizations.of(context)!;
 
-    return Scaffold(
-      // The page runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(
         title: Text(l.developerOptions),
       ),

@@ -46,9 +46,7 @@ class _EmbeddingSettingsPageState extends State<EmbeddingSettingsPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Scaffold(
-      // The page runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: const FloatingAppBar(title: Text('Embedding model')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())

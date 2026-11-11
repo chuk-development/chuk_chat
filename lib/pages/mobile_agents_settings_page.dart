@@ -213,9 +213,7 @@ class _AgentSettingsViewState extends State<AgentSettingsView> {
         final agent = widget.source.byId(widget.agentId);
         if (agent == null) {
           if (!widget.framed) return Center(child: Text(l.agentsCwGone));
-          return Scaffold(
-            // The page runs underneath the floating header.
-            extendBodyBehindAppBar: true,
+          return FloatingPageScaffold(
             appBar: FloatingAppBar(title: Text(l.agentsCwTitle)),
             body: Center(child: Text(l.agentsCwGone)),
           );
@@ -484,9 +482,7 @@ class _AgentSettingsViewState extends State<AgentSettingsView> {
             ],
           );
         if (!widget.framed) return list;
-        return Scaffold(
-          // The page runs underneath the floating header.
-          extendBodyBehindAppBar: true,
+        return FloatingPageScaffold(
           appBar: FloatingAppBar(
             title: Text(l.agentsCwTitle),
             actions: <Widget>[

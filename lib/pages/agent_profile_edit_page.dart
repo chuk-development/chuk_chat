@@ -188,8 +188,7 @@ class _AgentProfileEditPageState extends State<AgentProfileEditPage> {
         final int? shownColor = _clearColor ? null : (_color ?? storedColor);
         // chuk's page frame: the floating header over a page that runs on
         // under it.
-        return Scaffold(
-          extendBodyBehindAppBar: true,
+        return FloatingPageScaffold(
           appBar: FloatingAppBar(
             title: const Text('Edit profile'),
             actions: <Widget>[

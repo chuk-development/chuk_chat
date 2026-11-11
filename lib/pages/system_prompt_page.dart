@@ -739,9 +739,7 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
       );
     }
 
-    return Scaffold(
-      // The page runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(
         title: Text(l.aiIdentityMemory),
       ),

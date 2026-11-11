@@ -591,9 +591,7 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
 
-    return Scaffold(
-      // The list runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(
         title: Text(l.toolCalling),
       ),

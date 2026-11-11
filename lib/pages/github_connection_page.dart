@@ -201,9 +201,7 @@ class _GitHubConnectionPageState extends State<GitHubConnectionPage> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Scaffold(
-      // The page runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(
         title: const Text('GitHub'),
       ),

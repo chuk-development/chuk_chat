@@ -116,10 +116,7 @@ class _AboutPageState extends State<AboutPage> {
     final m3 = theme.m3;
     final l = AppLocalizations.of(context)!;
 
-    return Scaffold(
-      backgroundColor: colorScheme.surface,
-      // The page runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(
         title: Text(l.about),
       ),
@@ -366,15 +363,11 @@ class _ThemedLicensePageState extends State<_ThemedLicensePage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     final m3 = theme.m3;
 
     final l = AppLocalizations.of(context)!;
 
-    return Scaffold(
-      backgroundColor: colorScheme.surface,
-      // The page runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(
         title: Text(l.licenses),
       ),
@@ -525,13 +518,9 @@ class _LicenseDetailPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     final m3 = theme.m3;
 
-    return Scaffold(
-      backgroundColor: colorScheme.surface,
-      // The page runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(
         title: Text(package.name),
       ),

@@ -1119,7 +1119,7 @@ mixin AgentsShellHost on State<MessengerShell> {
     if (room == null) return;
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (context) => Scaffold(
+        builder: (context) => FloatingPageScaffold(
           appBar: FloatingAppBar(title: Text(room.name)),
           body: _buildRoomBody(room),
         ),

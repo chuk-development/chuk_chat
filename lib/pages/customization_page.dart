@@ -25,6 +25,7 @@ import 'package:chuk_chat/utils/chat_font_resolver.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/services/title_generation_service.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/ui/expressive/connected_group.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/settings/verbose_service.dart';
@@ -306,10 +307,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
     final m3 = theme.m3;
     final l = AppLocalizations.of(context)!;
 
-    return Scaffold(
-      backgroundColor: cs.surface,
-      // The list runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(title: Text(l.customization)),
       body: SettingsListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -641,22 +639,34 @@ class _CustomizationPageState extends State<CustomizationPage> {
                           ],
                         ),
                         const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          children: <double>[0.8, 1.0, 1.2].map((preset) {
-                            final selected =
-                                (_selectedUiScale - preset).abs() < 0.001;
-                            return ChoiceChip(
-                              label: Text('${(preset * 100).round()}%'),
-                              selected: selected,
-                              onSelected: (_) {
+                        Builder(
+                          builder: (context) {
+                            const List<double> presets = <double>[
+                              0.8,
+                              1.0,
+                              1.2,
+                            ];
+                            return ConnectedGroup(
+                              labels: <String>[
+                                for (final double preset in presets)
+                                  '${(preset * 100).round()}%',
+                              ],
+                              // A free slider value between the presets lights
+                              // no segment.
+                              selected: presets.indexWhere(
+                                (preset) =>
+                                    (_selectedUiScale - preset).abs() < 0.001,
+                              ),
+                              onSelected: (int i) {
+                                final double preset = presets[i];
                                 setState(() {
                                   _selectedUiScale = preset;
                                 });
                                 widget.config.setUiScale(preset);
                               },
+                              margin: EdgeInsets.zero,
                             );
-                          }).toList(),
+                          },
                         ),
                       ],
                     ),

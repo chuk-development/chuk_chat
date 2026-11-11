@@ -162,9 +162,7 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Scaffold(
-      // The page runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(
         title: const Text('Connectors'),
         // Pinned under the header, like the models page: the list scrolls
@@ -668,9 +666,7 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
             _description ??
             '';
 
-        return Scaffold(
-          // The list runs underneath the floating header.
-          extendBodyBehindAppBar: true,
+        return FloatingPageScaffold(
           appBar: FloatingAppBar(
             title: Text(name),
           ),

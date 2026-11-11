@@ -136,9 +136,7 @@ class _AgentMailContactsPageState extends State<AgentMailContactsPage> {
   Widget build(BuildContext context) {
     final AppLocalizations l = AppLocalizations.of(context)!;
     final ThemeData theme = Theme.of(context);
-    return Scaffold(
-      // The page runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(title: Text(l.agentMailContacts)),
       body: SettingsListView(
         padding: EdgeInsets.fromLTRB(

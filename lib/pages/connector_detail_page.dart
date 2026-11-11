@@ -65,15 +65,11 @@ class _ConnectorDetailPageState extends State<ConnectorDetailPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scaffoldBg = theme.scaffoldBackgroundColor;
     final iconFg = theme.resolvedIconColor;
     final primary = theme.colorScheme.primary;
     final l = AppLocalizations.of(context)!;
 
-    return Scaffold(
-      backgroundColor: scaffoldBg,
-      // The list runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(
         title: Text(
           l.back,

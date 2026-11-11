@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/services/herenow/herenow_store.dart';
+import 'package:chuk_chat/ui/expressive/connected_group.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
-import 'package:chuk_chat/widgets/icons/icon_map.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 
 /// The here.now publishing connector: let an agent put a file or a folder on
@@ -55,9 +55,7 @@ class _HereNowSettingsPageState extends State<HereNowSettingsPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Scaffold(
-      // The page runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: const FloatingAppBar(title: Text('here.now Publishing')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -99,23 +97,23 @@ class _HereNowSettingsPageState extends State<HereNowSettingsPage> {
                               style: Theme.of(context).textTheme.labelLarge,
                             ),
                             const SizedBox(height: 8),
-                            SegmentedButton<HereNowApproval>(
-                              segments: const <ButtonSegment<HereNowApproval>>[
-                                ButtonSegment<HereNowApproval>(
-                                  value: HereNowApproval.ask,
-                                  icon: AppIcon(Icons.verified_user_outlined),
-                                  label: Text('Ask each time'),
-                                ),
-                                ButtonSegment<HereNowApproval>(
-                                  value: HereNowApproval.auto,
-                                  icon: AppIcon(Icons.bolt_outlined),
-                                  label: Text('Auto-approve'),
-                                ),
+                            ConnectedGroup(
+                              labels: const <String>[
+                                'Ask each time',
+                                'Auto-approve',
                               ],
-                              selected: <HereNowApproval>{_settings.approval},
-                              onSelectionChanged: (set) => _update(
-                                _settings.copyWith(approval: set.first),
+                              selected:
+                                  _settings.approval == HereNowApproval.ask
+                                  ? 0
+                                  : 1,
+                              onSelected: (int i) => _update(
+                                _settings.copyWith(
+                                  approval: i == 0
+                                      ? HereNowApproval.ask
+                                      : HereNowApproval.auto,
+                                ),
                               ),
+                              margin: EdgeInsets.zero,
                             ),
                             const SizedBox(height: 8),
                             Text(

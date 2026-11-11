@@ -147,8 +147,7 @@ class _AgentsLoginVaultPageState extends State<AgentsLoginVaultPage> {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final AppLocalizations l = _l10n(context);
-    return Scaffold(
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(title: Text(l.loginVaultTitle)),
       body: ListenableBuilder(
         listenable: _vault,

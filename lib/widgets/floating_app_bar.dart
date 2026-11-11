@@ -17,6 +17,9 @@ import 'package:chuk_chat/widgets/floating_chrome_surface.dart';
 import 'package:chuk_chat/widgets/icons/huge_icon.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
+// Every page imports this file, so every page gets the page frame too.
+export 'package:chuk_chat/widgets/floating_page_scaffold.dart';
+
 /// Height of the header band: the chat top bar's 48 row plus its 8/6 of air
 /// above and below, so a settings page and the chat sit their headers at the
 /// same place on the screen.

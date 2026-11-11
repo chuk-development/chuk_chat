@@ -542,8 +542,7 @@ class _FeaturesFullscreenPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(
         scrim: false,
         title: Text(title, style: const TextStyle(fontSize: 16)),

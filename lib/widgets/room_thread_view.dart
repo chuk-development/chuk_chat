@@ -103,8 +103,16 @@ class RoomThreadView extends StatelessWidget {
           children.add(_stopLine(context, stop!));
         }
 
+        // The top inset comes from the frame: under a floating header the
+        // Scaffold puts the header's height here, so the list starts below
+        // the header but still scrolls behind it.
         return ListView(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+          padding: EdgeInsets.fromLTRB(
+            12,
+            12 + MediaQuery.paddingOf(context).top,
+            12,
+            16,
+          ),
           children: children,
         );
       },

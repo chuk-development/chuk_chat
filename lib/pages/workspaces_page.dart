@@ -283,24 +283,14 @@ class _WorkspacesPageState extends State<WorkspacesPage> {
     // In embedded mode, just return the body without Scaffold
     if (widget.embedded) return body;
 
-    // Mobile: thin AppBar with back button only (the serif title lives
-    // inside the body to match the reference layout).
-    // Desktop: plain Scaffold (sidebar handles navigation).
+    // Mobile: the floating header with the back chip only (the serif title
+    // lives inside the body to match the reference layout). The title row
+    // and the search field do not scroll, so the body starts below the
+    // header. Desktop: plain Scaffold (sidebar handles navigation).
     if (isMobile) {
-      return Scaffold(
-        appBar: AppBar(
-          backgroundColor: theme.scaffoldBackgroundColor,
-          elevation: 0,
-          scrolledUnderElevation: 0,
-          leading: Center(
-            child: FloatingHeaderButton(
-              icon: Icons.arrow_back_rounded,
-              tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-              onPressed: () => Navigator.pop(context),
-            ),
-          ),
-        ),
-        body: body,
+      return FloatingPageScaffold(
+        appBar: const FloatingAppBar(),
+        body: SafeArea(bottom: false, child: body),
       );
     }
     return Scaffold(body: body);

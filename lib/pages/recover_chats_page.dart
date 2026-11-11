@@ -224,9 +224,7 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
     final iconFg = theme.iconTheme.color ?? Colors.white;
     final l = AppLocalizations.of(context)!;
 
-    return Scaffold(
-      // The page runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(
         title: Text(l.recoverEncryptedChats),
       ),

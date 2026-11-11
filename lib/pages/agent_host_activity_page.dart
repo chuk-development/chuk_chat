@@ -47,9 +47,7 @@ class AgentHostActivityPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppLocalizations l =
         AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));
-    return Scaffold(
-      // The page runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(
         title: Text(l.agentsCwHost),
         actions: <Widget>[

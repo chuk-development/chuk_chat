@@ -334,9 +334,7 @@ class _AgentMailboxPageState extends State<AgentMailboxPage> {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l = AppLocalizations.of(context)!;
-    return Scaffold(
-      // The page runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(
         title: Text(_single ? l.agentMailFolderArchive : l.agentMail),
       ),

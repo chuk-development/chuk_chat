@@ -114,7 +114,7 @@ class _FullscreenComposerPageState extends State<_FullscreenComposerPage> {
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _close();
       },
-      child: Scaffold(
+      child: FloatingPageScaffold(
         appBar: FloatingAppBar(
           leading: FloatingHeaderButton(
             icon: Icons.close_fullscreen_rounded,

@@ -123,9 +123,7 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
     final iconFg = theme.resolvedIconColor;
 
     if (_isLoading) {
-      return Scaffold(
-        // The page runs underneath the floating header.
-        extendBodyBehindAppBar: true,
+      return FloatingPageScaffold(
         appBar: FloatingAppBar(
           title: const Text('Loading...'),
         ),
@@ -134,9 +132,7 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
     }
 
     if (_project == null) {
-      return Scaffold(
-        // The page runs underneath the floating header.
-        extendBodyBehindAppBar: true,
+      return FloatingPageScaffold(
         appBar: FloatingAppBar(
           title: const Text('Workspace Not Found'),
         ),
@@ -151,9 +147,7 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
         : Colors.black;
     final isDark = theme.brightness == Brightness.dark;
 
-    return Scaffold(
-      // The page runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(
         title: Row(
           mainAxisSize: MainAxisSize.min,

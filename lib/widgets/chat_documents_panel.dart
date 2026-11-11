@@ -393,8 +393,7 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
       // chuk_chat-8hz4): the floating back chip, the title pill, and a bar
       // with no fill. The list and the reader read the bar's height from
       // the media query, so they start below it and scroll up behind it.
-      child: Scaffold(
-        extendBodyBehindAppBar: true,
+      child: FloatingPageScaffold(
         appBar: FloatingAppBar(
           title: reading ? _MiddleEllipsis(text: name) : const Text('Files'),
           // In the reader, back leaves the reader first.

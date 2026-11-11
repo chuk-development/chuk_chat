@@ -167,9 +167,7 @@ class _AutomationsPageState extends State<AutomationsPage> {
     for (final a in shown) {
       groups.putIfAbsent(a.sessionKey, () => <AgentsAutomation>[]).add(a);
     }
-    return Scaffold(
-      // The page runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(
         // The bar carries the name of the page. Repeating it as a heading in
         // the body says the same thing twice.

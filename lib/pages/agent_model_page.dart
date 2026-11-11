@@ -343,8 +343,7 @@ class _AgentModelPageState extends State<AgentModelPage> {
   @override
   Widget build(BuildContext context) {
     final state = _state;
-    return Scaffold(
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: const FloatingAppBar(title: Text('Model')),
       body: _loading || state == null
           ? const Center(child: CircularProgressIndicator())

@@ -156,8 +156,7 @@ class _ChukdooConnectorPageState extends State<ChukdooConnectorPage> {
       valueListenable: _connector.state,
       builder: (context, state, _) {
         final pairing = _pairing;
-        return Scaffold(
-          extendBodyBehindAppBar: true,
+        return FloatingPageScaffold(
           appBar: const FloatingAppBar(
             title: Text(ChukdooConnector.displayName),
           ),

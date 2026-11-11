@@ -221,8 +221,7 @@ class _WorkspaceMobileDetailPageState extends State<WorkspaceMobileDetailPage> {
     final l = AppLocalizations.of(context)!;
 
     if (_loading) {
-      return Scaffold(
-        backgroundColor: cs.surface,
+      return FloatingPageScaffold(
         appBar: const FloatingAppBar(),
         body: const Center(child: CircularProgressIndicator()),
       );
@@ -230,7 +229,7 @@ class _WorkspaceMobileDetailPageState extends State<WorkspaceMobileDetailPage> {
 
     final ws = _workspace;
     if (ws == null) {
-      return Scaffold(
+      return FloatingPageScaffold(
         appBar: const FloatingAppBar(),
         body: Center(child: Text(l.projectWorkspaceNotFound)),
       );
@@ -238,8 +237,7 @@ class _WorkspaceMobileDetailPageState extends State<WorkspaceMobileDetailPage> {
 
     final promptPreview = (ws.customSystemPrompt ?? '').trim();
 
-    return Scaffold(
-      backgroundColor: cs.surface,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(
         actions: [
           // Fix D: previously the only way to edit the workspace on mobile
@@ -306,7 +304,13 @@ class _WorkspaceMobileDetailPageState extends State<WorkspaceMobileDetailPage> {
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+        // The body runs behind the floating header: start below it.
+        padding: EdgeInsets.fromLTRB(
+          16,
+          floatingHeaderInset(context).top + 8,
+          16,
+          120,
+        ),
         children: [
           // ── Title ───────────────────────────────────────────────
           Text(

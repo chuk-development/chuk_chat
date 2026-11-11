@@ -332,9 +332,7 @@ class _AgentMailDetailPageState extends State<AgentMailDetailPage> {
         if (didPop) return;
         Navigator.of(context).pop(_outcome);
       },
-      child: Scaffold(
-        // The page runs underneath the floating header.
-        extendBodyBehindAppBar: true,
+      child: FloatingPageScaffold(
         appBar: FloatingAppBar(
           title: Text(_summary.isDraft ? l.agentMailDraft : l.agentMailMessage),
         ),

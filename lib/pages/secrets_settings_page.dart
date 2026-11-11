@@ -114,9 +114,7 @@ class _SecretsSettingsPageState extends State<SecretsSettingsPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Scaffold(
-      // The page runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: const FloatingAppBar(title: Text('API Keys')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())

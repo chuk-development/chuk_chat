@@ -66,17 +66,13 @@ class _DownloadSettingsPageState extends State<DownloadSettingsPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l = AppLocalizations.of(context)!;
-    final colorScheme = theme.colorScheme;
     final m3 = theme.m3;
     final folder = DownloadPreferencesService.defaultFolderNotifier.value;
     final alwaysAsk = DownloadPreferencesService.alwaysAskNotifier.value;
     final hasFolder = folder != null && folder.isNotEmpty;
     final canDisableAsk = hasFolder;
 
-    return Scaffold(
-      backgroundColor: colorScheme.surface,
-      // The list runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(
         title: Text(l.downloads),
       ),

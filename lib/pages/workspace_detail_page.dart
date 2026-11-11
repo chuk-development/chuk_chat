@@ -209,9 +209,7 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
   Widget build(BuildContext context) {
 
     if (_isLoading) {
-      return Scaffold(
-        // The page runs underneath the floating header.
-        extendBodyBehindAppBar: true,
+      return FloatingPageScaffold(
         appBar: FloatingAppBar(
           title: const Text('Loading...'),
         ),
@@ -220,9 +218,7 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
     }
 
     if (_project == null) {
-      return Scaffold(
-        // The page runs underneath the floating header.
-        extendBodyBehindAppBar: true,
+      return FloatingPageScaffold(
         appBar: FloatingAppBar(
           title: const Text('Workspace Not Found'),
         ),
@@ -233,9 +229,7 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
     final displayColor = _project!.displayColor;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
-      // The page runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(
         title: Row(
           mainAxisSize: MainAxisSize.min,
