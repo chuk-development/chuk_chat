@@ -42,11 +42,23 @@ class ModelProviderSummary {
   final double promptPrice;
   final double completionPrice;
 
+  /// Price of one prompt token read from the provider's prefix cache.
+  /// Null when the catalogue lists none (then no cache saving is priced in).
+  final double? cacheReadPrice;
+
+  /// Measured output speed (tokens/s) and p95 latency from the catalogue's
+  /// `speed` block. Null when unknown.
+  final double? throughput;
+  final double? latencyP95Ms;
+
   const ModelProviderSummary({
     required this.slug,
     required this.name,
     required this.promptPrice,
     required this.completionPrice,
+    this.cacheReadPrice,
+    this.throughput,
+    this.latencyP95Ms,
   });
 }
 

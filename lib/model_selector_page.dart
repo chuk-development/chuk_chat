@@ -31,8 +31,9 @@ import 'package:chuk_chat/core/model_selection_events.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/widgets/per_model_system_prompt_sheet.dart';
+import 'package:chuk_chat/services/provider_resolution_service.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart'
-    show kAutoCheapestProviderSlug;
+    show kAutoCheapestProviderSlug, ModelProviderSummary;
 import 'package:chuk_chat/widgets/nice_snackbar.dart';
 import 'package:chuk_chat/widgets/api_availability_polling.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
@@ -49,6 +50,7 @@ class PricingDetails {
   final double? image;
   final double? webSearch;
   final double? internalReasoning;
+  final double? cacheRead;
 
   PricingDetails({
     required this.prompt,
@@ -57,6 +59,7 @@ class PricingDetails {
     this.image,
     this.webSearch,
     this.internalReasoning,
+    this.cacheRead,
   });
 
   factory PricingDetails.fromJson(Map<String, dynamic> json) {
@@ -67,6 +70,7 @@ class PricingDetails {
       image: (json['image'] as num?)?.toDouble(),
       webSearch: (json['web_search'] as num?)?.toDouble(),
       internalReasoning: (json['internal_reasoning'] as num?)?.toDouble(),
+      cacheRead: (json['cache_read'] as num?)?.toDouble(),
     );
   }
 
@@ -93,6 +97,10 @@ class ModelProviderInfo {
   final bool? isModerated;
   final String? iconUrl;
 
+  /// Measured output speed (tokens/s) and p95 latency, from `speed`.
+  final double? throughput;
+  final double? latencyP95Ms;
+
   ModelProviderInfo({
     required this.slug,
     required this.name,
@@ -101,9 +109,12 @@ class ModelProviderInfo {
     this.maxCompletionTokens,
     this.isModerated,
     this.iconUrl,
+    this.throughput,
+    this.latencyP95Ms,
   });
 
   factory ModelProviderInfo.fromJson(Map<String, dynamic> json) {
+    final Object? speed = json['speed'];
     return ModelProviderInfo(
       slug: json['slug'] as String,
       name: json['name'] as String,
@@ -112,6 +123,12 @@ class ModelProviderInfo {
       maxCompletionTokens: json['max_completion_tokens'] as int?,
       isModerated: json['is_moderated'] as bool?,
       iconUrl: json['icon_url'] as String?,
+      throughput: speed is Map
+          ? (speed['throughput'] as num?)?.toDouble()
+          : null,
+      latencyP95Ms: speed is Map
+          ? (speed['latency_ms_p95'] as num?)?.toDouble()
+          : null,
     );
   }
 }
@@ -712,13 +729,29 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
     await UserPreferencesService.refreshModelSelections();
   }
 
+  /// The provider Auto sends to for a fresh turn: the same rule as the send
+  /// path ([ProviderResolutionService.cheapestOf]), so the label never names
+  /// a different provider than the one that answers.
   ModelProviderInfo? _cheapestProvider(CustomModelInfo model) {
     if (model.providers.isEmpty) return null;
-    ModelProviderInfo best = model.providers.first;
-    for (final p in model.providers.skip(1)) {
-      if (p.pricing.completion < best.pricing.completion) best = p;
-    }
-    return best;
+    final ModelProviderSummary? best = ProviderResolutionService.cheapestOf(
+      <ModelProviderSummary>[
+        for (final p in model.providers)
+          ModelProviderSummary(
+            slug: p.slug,
+            name: p.name,
+            promptPrice: p.pricing.prompt,
+            completionPrice: p.pricing.completion,
+            cacheReadPrice: p.pricing.cacheRead,
+            throughput: p.throughput,
+            latencyP95Ms: p.latencyP95Ms,
+          ),
+      ],
+    );
+    return model.providers.firstWhere(
+      (p) => p.slug == best?.slug,
+      orElse: () => model.providers.first,
+    );
   }
 
   String _formatContextLength(int? tokens) {

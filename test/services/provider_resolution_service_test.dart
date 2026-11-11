@@ -2,7 +2,8 @@
 // rules that keep a send with Auto working:
 //
 // - the Auto marker never reaches the server; it becomes the cheapest real
-//   provider of the model at send time,
+//   provider of the model at send time, priced for a whole turn (prompt
+//   and output), not by output price alone,
 // - the provider list comes from the model catalogue, not from a widget
 //   (the old resolver read a dropdown that is never built, so every send
 //   with Auto failed with "No provider is configured"),
@@ -52,11 +53,7 @@ final List<Map<String, dynamic>> _catalogue = <Map<String, dynamic>>[
 ];
 
 class _Composer extends StatefulWidget {
-  const _Composer({
-    super.key,
-    required this.modelId,
-    required this.slug,
-  });
+  const _Composer({super.key, required this.modelId, required this.slug});
   final String modelId;
   final String? slug;
   @override
@@ -93,13 +90,13 @@ void main() {
   tearDown(ProviderResolutionService.resetForTesting);
 
   group('resolveForSend', () {
-    test('Auto becomes the cheapest provider by output price', () async {
+    test('Auto becomes the cheapest provider for a typical turn', () async {
       expect(
         await ProviderResolutionService.resolveForSend(
           _flash,
           kAutoCheapestProviderSlug,
         ),
-        'sail',
+        'wafer',
       );
       expect(refreshes, 0);
     });
@@ -110,20 +107,26 @@ void main() {
           _flash,
           ' $kAutoCheapestProviderSlug ',
         ),
-        'sail',
+        'wafer',
       );
     });
 
     test('a concrete provider is sent unchanged', () async {
       expect(
-        await ProviderResolutionService.resolveForSend(_flash, 'wafer'),
-        'wafer',
+        await ProviderResolutionService.resolveForSend(_flash, 'digitalocean'),
+        'digitalocean',
       );
     });
 
     test('nothing stored falls back to the cheapest provider', () async {
-      expect(await ProviderResolutionService.resolveForSend(_flash, null), 'sail');
-      expect(await ProviderResolutionService.resolveForSend(_flash, ''), 'sail');
+      expect(
+        await ProviderResolutionService.resolveForSend(_flash, null),
+        'wafer',
+      );
+      expect(
+        await ProviderResolutionService.resolveForSend(_flash, ''),
+        'wafer',
+      );
     });
 
     test('a model missing from the cache is fetched once', () async {
@@ -137,7 +140,7 @@ void main() {
           _flash,
           kAutoCheapestProviderSlug,
         ),
-        'sail',
+        'wafer',
       );
       expect(refreshes, 1);
     });
@@ -169,14 +172,15 @@ void main() {
     });
 
     test('a tie keeps the first listed provider', () {
-      final slug = ProviderResolutionService.cheapestSlugIn(<
-        Map<String, dynamic>
-      >[
-        _model('x/y', <List<Object>>[
-          <Object>['first', 0, 1],
-          <Object>['second', 0, 1],
-        ]),
-      ], 'x/y');
+      final slug = ProviderResolutionService.cheapestSlugIn(
+        <Map<String, dynamic>>[
+          _model('x/y', <List<Object>>[
+            <Object>['first', 0, 1],
+            <Object>['second', 0, 1],
+          ]),
+        ],
+        'x/y',
+      );
       expect(slug, 'first');
     });
   });
@@ -193,7 +197,7 @@ void main() {
         _flash,
         kAutoCheapestProviderSlug,
       ),
-      'sail',
+      'wafer',
     );
     expect(refreshes, 0);
   });
@@ -214,7 +218,7 @@ void main() {
       );
       final String? sent = await key.currentState!
           .ensureProviderSlugForCurrentModel();
-      expect(sent, 'sail');
+      expect(sent, 'wafer');
       // The choice stays Auto for the next send.
       expect(key.currentState!.selectedProviderSlug, kAutoCheapestProviderSlug);
     });
@@ -225,9 +229,12 @@ void main() {
           _flash,
           kAutoCheapestProviderSlug,
         ),
-        'sail',
+        'wafer',
       );
-      expect(await ChatUiHelpers.ensureProviderSlug(_flash, 'wafer'), 'wafer');
+      expect(
+        await ChatUiHelpers.ensureProviderSlug(_flash, 'digitalocean'),
+        'digitalocean',
+      );
     });
   });
 }

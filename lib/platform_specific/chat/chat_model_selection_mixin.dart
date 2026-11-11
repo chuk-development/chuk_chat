@@ -91,6 +91,9 @@ mixin ChatModelSelectionMixin<W extends StatefulWidget>
   @override
   String? get modelSelectionChatId => perAgentModel ? activeChatId : null;
 
+  @override
+  String? get providerAffinityChatId => activeChatId;
+
   /// Present the full model screen (add models, pin providers).
   ///
   /// The default pushes the standalone page — in an agent's thread, the

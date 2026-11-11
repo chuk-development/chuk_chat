@@ -11,6 +11,7 @@ import 'package:chuk_chat/services/model_capabilities_service.dart';
 import 'package:chuk_chat/services/prompt_cache/image_budget.dart';
 import 'package:chuk_chat/services/prompt_cache/prompt_context.dart';
 import 'package:chuk_chat/services/multiplex_connection.dart';
+import 'package:chuk_chat/services/provider_cache_affinity.dart';
 import 'package:chuk_chat/services/provider_resolution_service.dart';
 import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/storage/chat_origin.dart';
@@ -278,7 +279,11 @@ class WebSocketChatService {
     // must still not ship it.
     if (ProviderResolutionService.isAuto(providerSlug)) {
       providerSlug =
-          await ProviderResolutionService.resolveForSend(modelId, providerSlug) ??
+          await ProviderResolutionService.resolveForSend(
+            modelId,
+            providerSlug,
+            chatId: chatId,
+          ) ??
           '';
     }
     if (kDebugMode) {
@@ -430,13 +435,24 @@ class WebSocketChatService {
     // Route through the per-chatId tracker so two concurrent chat
     // streams for the same chat (e.g. title generation racing the
     // main response) can never interleave into the same UI buffer.
-    yield* runIdempotent(
+    final Stream<ChatStreamEvent> events = runIdempotent(
       payload: payload,
       send: (p) => MultiplexSession.chatForChat(chatId: chatId, payload: p),
       onRequestId: (id) {
         if (trackForStop) _activeRequestIds[chatId] = id;
       },
     );
+    // Remember which provider served this chat and how big the prompt was,
+    // so the next Auto send can stay on a warm prompt cache. Title requests
+    // are tiny side calls and would overwrite the chat's real prompt size.
+    yield* requestPurpose == 'title'
+        ? events
+        : ProviderCacheAffinity.instance.observe(
+            events,
+            chatId: chatId,
+            modelId: modelId,
+            requestedProviderSlug: providerSlug,
+          );
   }
 
   /// Most polls of a request the server still runs (`duplicate_in_flight`)
