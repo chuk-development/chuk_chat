@@ -207,7 +207,7 @@ class _SbCardState extends State<SbCard> {
     final bool enabled = widget.onTap != null;
 
     final Color fill = widget.selected
-        ? Color.alphaBlend(accent.withValues(alpha: 0.20), m3.surfaceContainer)
+        ? m3.selection
         : (_pressed || _hovered
             ? m3.surfaceContainerHigh
             : m3.surfaceContainer);
@@ -990,14 +990,9 @@ class _SbChatTileBody extends StatelessWidget {
     final Color titleColor = locked
         ? theme.colorScheme.onSurface.withValues(alpha: 0.45)
         : (selected
-              // The selected card is the accent at 20 % over the card fill;
-              // the name is the accent ink on that, never below 3 : 1.
-              ? theme.accentForegroundOn(
-                  Color.alphaBlend(
-                    theme.colorScheme.primary.withValues(alpha: 0.20),
-                    theme.m3.surfaceContainer,
-                  ),
-                )
+              // The selected card's own ink: the accent ink (never below
+              // 3 : 1) on the accent tint, or plain text on a neutral one.
+              ? theme.m3.onSelection
               : theme.colorScheme.onSurface);
 
     return Row(

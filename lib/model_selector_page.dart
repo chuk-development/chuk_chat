@@ -1918,7 +1918,7 @@ class _ListFilterBar extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 8),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: selected ? theme.colorScheme.primary : Colors.transparent,
+          color: selected ? m3.selectedFill : Colors.transparent,
           borderRadius: BorderRadius.circular(999),
         ),
         child: Text(
@@ -1927,7 +1927,7 @@ class _ListFilterBar extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: theme.textTheme.labelLarge?.copyWith(
             fontWeight: FontWeight.w600,
-            color: selected ? theme.colorScheme.onPrimary : m3.onSurfaceVariant,
+            color: selected ? m3.onSelectedFill : m3.onSurfaceVariant,
           ),
         ),
       ),

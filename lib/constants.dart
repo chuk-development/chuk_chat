@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/utils/chat_font_resolver.dart';
+import 'package:chuk_chat/theme/theme_palette.dart';
 
 /* ---------- DEFAULT COLOURS (Material You dark palette) ---------- */
 const Color kDefaultBgColor = Color(0xFF111318);
@@ -183,8 +184,12 @@ ThemeData buildAppTheme({
   required Brightness brightness,
   double contrast = kDefaultContrast,
   String? uiFont,
+  ThemePalette? palette,
 }) {
   final bool isDark = brightness == Brightness.dark;
+  // A pack with its own palette (see [ThemePalette]) replaces every derived
+  // surface, outline and status colour below with its hand-picked value.
+  final ThemePalette? p = palette;
 
   // Contrast scales the surface-ladder deltas and the outline alphas. At the
   // default midpoint the factor is exactly 1.0, so every value below matches
@@ -196,27 +201,31 @@ ThemeData buildAppTheme({
   // Container-style surfaces are derived by lightening the scaffold bg
   // in dark mode and darkening it in light mode, producing the M3
   // surface-container ladder.
-  final Color surfaceLow = isDark
-      ? bg.lighten(scaled(0.03))
-      : bg.darken(scaled(0.03));
-  final Color surface = isDark
-      ? bg.lighten(scaled(0.06))
-      : bg.darken(scaled(0.05));
-  final Color surfaceHigh = isDark
-      ? bg.lighten(scaled(0.10))
-      : bg.darken(scaled(0.08));
-  final Color surfaceHighest = isDark
-      ? bg.lighten(scaled(0.14))
-      : bg.darken(scaled(0.12));
+  final Color surfaceLow =
+      p?.surfaceLow ??
+      (isDark ? bg.lighten(scaled(0.03)) : bg.darken(scaled(0.03)));
+  final Color surface =
+      p?.surface ??
+      (isDark ? bg.lighten(scaled(0.06)) : bg.darken(scaled(0.05)));
+  final Color surfaceHigh =
+      p?.surfaceHigh ??
+      (isDark ? bg.lighten(scaled(0.10)) : bg.darken(scaled(0.08)));
+  final Color surfaceHighest =
+      p?.surfaceHighest ??
+      (isDark ? bg.lighten(scaled(0.14)) : bg.darken(scaled(0.12)));
 
   // Primary / tertiary containers — tint accent toward the surface to get
   // a muted container color that still reads as accented.
-  final Color primaryContainer = isDark
-      ? Color.lerp(accent, bg, 0.70)!
-      : Color.lerp(accent, const Color(0xFFFFFFFF), 0.70)!;
-  final Color onPrimaryContainer = isDark
-      ? Color.lerp(accent, const Color(0xFFFFFFFF), 0.55)!
-      : Color.lerp(accent, const Color(0xFF000000), 0.55)!;
+  final Color primaryContainer =
+      p?.primaryContainer ??
+      (isDark
+          ? Color.lerp(accent, bg, 0.70)!
+          : Color.lerp(accent, const Color(0xFFFFFFFF), 0.70)!);
+  final Color onPrimaryContainer =
+      p?.onPrimaryContainer ??
+      (isDark
+          ? Color.lerp(accent, const Color(0xFFFFFFFF), 0.55)!
+          : Color.lerp(accent, const Color(0xFF000000), 0.55)!);
   final Color tertiary = _shiftHue(accent, 45);
   final Color tertiaryContainer = isDark
       ? Color.lerp(tertiary, bg, 0.65)!
@@ -224,9 +233,19 @@ ThemeData buildAppTheme({
   final Color onTertiaryContainer = isDark
       ? Color.lerp(tertiary, const Color(0xFFFFFFFF), 0.55)!
       : Color.lerp(tertiary, const Color(0xFF000000), 0.55)!;
-  final Color secondaryContainer = isDark
-      ? bg.lighten(scaled(0.18))
-      : bg.darken(scaled(0.15));
+  final Color secondaryContainer =
+      p?.secondaryContainer ??
+      (isDark ? bg.lighten(scaled(0.18)) : bg.darken(scaled(0.15)));
+  final Color selection =
+      p?.selection ??
+      Color.alphaBlend(accent.withValues(alpha: 0.20), surface);
+  // A pack with its own palette keeps every selection neutral; the accent is
+  // then only for the primary action, as in the product it was taken from.
+  final Color onSelection =
+      p?.onSelection ?? accentForegroundFor(accent, selection);
+  final Color selectedFill = p?.selectedFill ?? accent;
+  final Color onSelectedFill =
+      p?.onSelectedFill ?? readableOnFill(accent, iconFg);
   final Color onSecondaryContainer = iconFg;
 
   // The accent as a text or icon colour on the page (a text button, a
@@ -235,19 +254,21 @@ ThemeData buildAppTheme({
   // the accent already reaches 3 : 1 it is the accent itself.
   final Color accentInk = accentForegroundFor(accent, bg);
 
-  final Color outline = iconFg.withValues(alpha: scaled(0.55));
-  final Color outlineVariant = iconFg.withValues(alpha: scaled(0.25));
-  final Color onSurfaceVariant = iconFg.withValues(alpha: scaled(0.82));
+  final Color outline = p?.outline ?? iconFg.withValues(alpha: scaled(0.55));
+  final Color outlineVariant =
+      p?.outlineVariant ?? iconFg.withValues(alpha: scaled(0.25));
+  final Color onSurfaceVariant =
+      p?.onSurfaceVariant ?? iconFg.withValues(alpha: scaled(0.82));
 
-  final Color errorColor = isDark
-      ? const Color(0xFFFFB4AB)
-      : const Color(0xFFBA1A1A);
-  final Color errorContainer = isDark
-      ? const Color(0xFF93000A)
-      : const Color(0xFFFFDAD6);
-  final Color onErrorContainer = isDark
-      ? const Color(0xFFFFDAD6)
-      : const Color(0xFF410002);
+  final Color errorColor =
+      p?.error ??
+      (isDark ? const Color(0xFFFFB4AB) : const Color(0xFFBA1A1A));
+  final Color errorContainer =
+      p?.errorContainer ??
+      (isDark ? const Color(0xFF93000A) : const Color(0xFFFFDAD6));
+  final Color onErrorContainer =
+      p?.onErrorContainer ??
+      (isDark ? const Color(0xFFFFDAD6) : const Color(0xFF410002));
 
   final ColorScheme colorScheme = ColorScheme(
     brightness: brightness,
@@ -276,9 +297,9 @@ ThemeData buildAppTheme({
     surface: bg,
     onSurface: iconFg,
     onSurfaceVariant: onSurfaceVariant,
-    surfaceContainerLowest: isDark
-        ? bg.darken(scaled(0.02))
-        : bg.lighten(scaled(0.02)),
+    surfaceContainerLowest:
+        p?.surfaceLowest ??
+        (isDark ? bg.darken(scaled(0.02)) : bg.lighten(scaled(0.02))),
     surfaceContainerLow: surfaceLow,
     surfaceContainer: surface,
     surfaceContainerHigh: surfaceHigh,
@@ -307,21 +328,31 @@ ThemeData buildAppTheme({
     outline: outline,
     outlineVariant: outlineVariant,
     onSurfaceVariant: onSurfaceVariant,
-    success: isDark ? const Color(0xFF7FD79A) : const Color(0xFF2E7D43),
-    onSuccess: isDark ? const Color(0xFF003918) : const Color(0xFFFFFFFF),
-    successContainer: isDark
-        ? const Color(0xFF143A1F)
-        : const Color(0xFFB6F2C2),
-    onSuccessContainer: isDark
-        ? const Color(0xFFA5F0B0)
-        : const Color(0xFF002110),
-    warning: isDark ? const Color(0xFFFFC860) : const Color(0xFF855300),
-    warningContainer: isDark
-        ? const Color(0xFF3D2E00)
-        : const Color(0xFFFFDEA4),
-    onWarningContainer: isDark
-        ? const Color(0xFFFFDEA4)
-        : const Color(0xFF291800),
+    success:
+        p?.success ??
+        (isDark ? const Color(0xFF7FD79A) : const Color(0xFF2E7D43)),
+    onSuccess:
+        p?.onSuccess ??
+        (isDark ? const Color(0xFF003918) : const Color(0xFFFFFFFF)),
+    successContainer:
+        p?.successContainer ??
+        (isDark ? const Color(0xFF143A1F) : const Color(0xFFB6F2C2)),
+    onSuccessContainer:
+        p?.onSuccessContainer ??
+        (isDark ? const Color(0xFFA5F0B0) : const Color(0xFF002110)),
+    warning:
+        p?.warning ??
+        (isDark ? const Color(0xFFFFC860) : const Color(0xFF855300)),
+    warningContainer:
+        p?.warningContainer ??
+        (isDark ? const Color(0xFF3D2E00) : const Color(0xFFFFDEA4)),
+    onWarningContainer:
+        p?.onWarningContainer ??
+        (isDark ? const Color(0xFFFFDEA4) : const Color(0xFF291800)),
+    selection: selection,
+    onSelection: onSelection,
+    selectedFill: selectedFill,
+    onSelectedFill: onSelectedFill,
   );
 
   // 'system' leaves [ThemeData.fontFamily] unset, so the platform default
@@ -371,8 +402,8 @@ ThemeData buildAppTheme({
     listTileTheme: ListTileThemeData(
       iconColor: iconFg,
       textColor: iconFg,
-      selectedColor: accentInk,
-      selectedTileColor: accent.withValues(alpha: 0.1),
+      selectedColor: p?.onSelection ?? accentInk,
+      selectedTileColor: p?.selection ?? accent.withValues(alpha: 0.1),
       shape: RoundedRectangleBorder(borderRadius: kBorderRadiusRow),
     ),
     expansionTileTheme: ExpansionTileThemeData(

@@ -1150,10 +1150,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
     final bool selected = room.id == widget.selectedRoomId;
     // The faces overlap; the ring that separates them is the card's own fill.
     final Color cardFill = selected
-        ? Color.alphaBlend(
-            theme.colorScheme.primary.withValues(alpha: 0.20),
-            theme.m3.surfaceContainer,
-          )
+        ? theme.m3.selection
         : theme.m3.surfaceContainer;
     return Builder(
       builder: (BuildContext rowContext) => _withMenuKeys(

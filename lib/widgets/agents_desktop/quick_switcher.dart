@@ -260,10 +260,7 @@ class _QuickSwitcherState extends State<QuickSwitcher> {
     final ThemeData theme = Theme.of(context);
     final ColorScheme scheme = theme.colorScheme;
     // The fill a selected sidebar card takes ([SbCard]).
-    final Color lit = Color.alphaBlend(
-      scheme.primary.withValues(alpha: 0.20),
-      theme.m3.surfaceContainer,
-    );
+    final Color lit = theme.m3.selection;
     final Color rest =
         DialogTheme.of(context).backgroundColor ??
         theme.m3.surfaceContainerHigh;

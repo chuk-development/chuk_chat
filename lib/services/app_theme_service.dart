@@ -12,6 +12,7 @@ import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/theme_settings_service.dart';
 import 'package:chuk_chat/services/customization_preferences_service.dart';
 import 'package:chuk_chat/theme/legacy_pack_font_migration.dart';
+import 'package:chuk_chat/theme/theme_presets.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 
 /// Callback type for theme changes
@@ -887,6 +888,16 @@ class AppThemeService extends ChangeNotifier {
       brightness: _themeMode,
       contrast: _contrast,
       uiFont: _uiFontFamily,
+      // Dynamic colour replaces the pack's colours, so no pack palette.
+      palette: dynamicScheme != null
+          ? null
+          : paletteForLook(
+              brightness: _themeMode,
+              accent: accent,
+              iconFg: iconFg,
+              bg: bg,
+              contrast: _contrast,
+            ),
     );
     return _cachedThemeData!;
   }

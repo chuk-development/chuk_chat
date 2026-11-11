@@ -24,6 +24,7 @@ import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
+import 'package:chuk_chat/theme/theme_palette.dart';
 
 /// One complete look: palette + contrast, for a single brightness.
 @immutable
@@ -33,6 +34,7 @@ class ThemeVariant {
     required this.iconFg,
     required this.bg,
     this.contrast = kDefaultContrast,
+    this.palette,
   });
 
   /// Accent / primary colour.
@@ -46,6 +48,10 @@ class ThemeVariant {
 
   /// Surface/outline separation strength (see [buildAppTheme]).
   final double contrast;
+
+  /// Exact surface colours, for a pack copied from a real product. Null
+  /// means the ladder is derived from [bg] and [contrast].
+  final ThemePalette? palette;
 }
 
 /// A named pack with a light and a dark variant.
@@ -102,6 +108,66 @@ class ThemePreset {
   }
 }
 
+/// The exact palette of the pack whose [brightness] variant matches the given
+/// look, or null. Used by the theme service: a pack's hand-picked greys stay
+/// in force only while its colours and contrast are untouched.
+ThemePalette? paletteForLook({
+  required Brightness brightness,
+  required Color accent,
+  required Color iconFg,
+  required Color bg,
+  required double contrast,
+}) {
+  for (final preset in kThemePresets) {
+    final v = preset.variantFor(brightness);
+    if (v.palette == null) continue;
+    if (preset.matches(
+      brightness: brightness,
+      accent: accent,
+      iconFg: iconFg,
+      bg: bg,
+      contrast: contrast,
+    )) {
+      return v.palette;
+    }
+  }
+  return null;
+}
+
+/// Plane's dark mode (the open-source project tracker), taken from its
+/// design tokens (`@makeplane/propel`, `[data-theme="dark"]`): a canvas a
+/// step below the panels, then one grey per layer in front of it, a neutral
+/// grey for the selected row and Plane's blue accent.
+const ThemePalette kPlaneDarkPalette = ThemePalette(
+  surfaceLowest: Color(0xFF0F0F10), // bg-canvas
+  surfaceLow: Color(0xFF181A1B), // bg-layer-1
+  surface: Color(0xFF1D1F20), // bg-layer-2
+  surfaceHigh: Color(0xFF222425), // bg-layer-3
+  surfaceHighest: Color(0xFF2C2E30), // bg-layer-3-hover
+  secondaryContainer: Color(0xFF2B2B2C), // selected nav entry
+  // Plane's selected row: bg-layer-transparent-selected (white at 10 %)
+  // over the panel, measured as #2B2B2C in the running app.
+  selection: Color(0xFF2B2B2C),
+  onSelection: Color(0xFFE4E6E7), // txt-primary
+  selectedFill: Color(0xFF2B2B2C),
+  onSelectedFill: Color(0xFFE4E6E7),
+  outline: Color(0xFF45484A), // border-strong-1
+  outlineVariant: Color(0xFF2C2E30), // border-subtle-1
+  onSurfaceVariant: Color(0xFFAFB3B6), // txt-tertiary
+  primaryContainer: Color(0xFF0A2533), // bg-accent-subtle
+  onPrimaryContainer: Color(0xFF4CA9DC), // txt-accent-secondary
+  error: Color(0xFFE8847D), // txt-danger-secondary
+  errorContainer: Color(0xFF4E120E), // red-100
+  onErrorContainer: Color(0xFFF6CECB), // red-900
+  success: Color(0xFF6CD088), // txt-success-primary
+  onSuccess: Color(0xFF0A1F10), // green-50
+  successContainer: Color(0xFF11361C), // bg-success-subtle
+  onSuccessContainer: Color(0xFFAAE4BA), // green-900
+  warning: Color(0xFFFE9A00), // txt-warning-primary
+  warningContainer: Color(0xFF501D01), // bg-warning-subtle
+  onWarningContainer: Color(0xFFFEE685), // amber-900
+);
+
 /// The built-in packs, in dropdown order. Aya (the app default) is first.
 const List<ThemePreset> kThemePresets = <ThemePreset>[
   ThemePreset(
@@ -116,6 +182,22 @@ const List<ThemePreset> kThemePresets = <ThemePreset>[
       accent: kDefaultAccentColor,
       iconFg: kDefaultIconFgColor,
       bg: kDefaultBgColor,
+    ),
+  ),
+  ThemePreset(
+    name: 'Plane',
+    // Plane's light theme: white panels on a light grey canvas.
+    light: ThemeVariant(
+      accent: Color(0xFF006399),
+      iconFg: Color(0xFF0F0F10),
+      bg: Color(0xFFFFFFFF),
+      contrast: 0.5,
+    ),
+    dark: ThemeVariant(
+      accent: Color(0xFF2893CC), // brand-default
+      iconFg: Color(0xFFE4E6E7), // txt-primary
+      bg: Color(0xFF141415), // bg-surface-1
+      palette: kPlaneDarkPalette,
     ),
   ),
   ThemePreset(

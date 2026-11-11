@@ -1167,7 +1167,7 @@ class MobileAgentRow extends StatelessWidget {
             color: unread || waitKind != null
                 ? accent.withValues(alpha: 0.13)
                 : selected
-                ? scheme.primary.withValues(alpha: 0.08)
+                ? Theme.of(context).m3.selection
                 // The main agent: a calm card of its own, no border, no
                 // shadow (Grok Bot's pinned row, DESIGN.md: no glow).
                 : main
@@ -1323,7 +1323,7 @@ class MobileDerivedThreadRow extends StatelessWidget {
         child: MorphTap(
           onTap: onTap,
           color: selected
-              ? scheme.primary.withValues(alpha: 0.08)
+              ? Theme.of(context).m3.selection
               : Colors.transparent,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(kRadiusLg),
