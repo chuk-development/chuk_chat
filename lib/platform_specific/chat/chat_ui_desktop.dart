@@ -2696,15 +2696,19 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                             ),
                           ),
                         ),
-                      // One tick per user message on the right edge; hidden
-                      // under 900 px by the rail itself.
+                      // The message minimap on the left edge, after T3
+                      // Code: one strip per user message, hover preview,
+                      // click to jump, bright strips follow the scroll.
                       if (!isChatEmpty && !widget.agentsThread)
                         Positioned.fill(
                           key: const ValueKey<String>('desktop-turn-rail'),
                           child: ChatTurnRail(
                             messages: _messages,
-                            topPadding: widget.topInset + 12,
-                            bottomPadding: inputAreaTotalHeight + 12,
+                            rail: _turnRail,
+                            scrollController: scrollController,
+                            contentMaxWidth: _kMaxChatContentWidth,
+                            topPadding: widget.topInset,
+                            bottomPadding: inputAreaTotalHeight,
                             onTickTap: (int index) => scrollToTurn(
                               _turnRail,
                               index: index,
