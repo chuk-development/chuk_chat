@@ -5,10 +5,14 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/utils/chat_font_resolver.dart';
 import 'package:chuk_chat/theme/theme_palette.dart';
 
-/* ---------- DEFAULT COLOURS (Material You dark palette) ---------- */
-const Color kDefaultBgColor = Color(0xFF111318);
-const Color kDefaultAccentColor = Color(0xFFA8C7FA);
-const Color kDefaultIconFgColor = Color(0xFFE2E2E9);
+/* ---------- DEFAULT COLOURS (the Plane pack, dark) ----------
+   The app default is the dark variant of the Plane pack (theme_presets.dart):
+   panels #141415, text #E4E6E7, a grey accent. With the default contrast the
+   pack's exact palette applies, so "reset to default" gives the whole Plane
+   look. The old Material You blue lives on as the Aya pack. */
+const Color kDefaultBgColor = Color(0xFF141415);
+const Color kDefaultAccentColor = Color(0xFFAFB3B6);
+const Color kDefaultIconFgColor = Color(0xFFE4E6E7);
 const Brightness kDefaultThemeMode = Brightness.dark;
 
 /* ---------- MATERIAL YOU / DYNAMIC COLOUR DEFAULT ---------- */

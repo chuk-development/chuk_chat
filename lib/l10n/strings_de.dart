@@ -108,6 +108,8 @@ const Map<String, String> stringsDe = {
   'themePresetPackSubtitle':
       'Einen ganzen Look auf einmal anwenden, darunter fein abstimmen.',
   'themePresetCustom': 'Eigenes',
+  'themeResetDefault': 'Auf Standard zurücksetzen',
+  'themeResetDefaultSubtitle': 'Zurück zu den Standardfarben (Plane)',
   'themeContrast': 'Kontrast',
   'themeContrastStrength': 'Stärke der Abgrenzung',
   'themeContrastSubtitle':

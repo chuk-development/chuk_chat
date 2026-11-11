@@ -139,8 +139,8 @@ ThemePalette? paletteForLook({
 /// step below the panels, then one grey per layer in front of it, a neutral
 /// grey for the selected row. Plane's blue (#2893CC) is left out on purpose:
 /// it looked too loud on the many accent-coloured parts of this app (sidebar
-/// icons, the send button), so the accent is Plane's mid grey.
-const Color kPlaneAccentGrey = Color(0xFFAFB3B6); // neutral-1000
+/// icons, the send button), so the accent is Plane's mid grey #AFB3B6
+/// (neutral-1000).
 const ThemePalette kPlaneDarkPalette = ThemePalette(
   surfaceLowest: Color(0xFF0F0F10), // bg-canvas
   surfaceLow: Color(0xFF181A1B), // bg-layer-1
@@ -171,22 +171,9 @@ const ThemePalette kPlaneDarkPalette = ThemePalette(
   onWarningContainer: Color(0xFFFEE685), // amber-900
 );
 
-/// The built-in packs, in dropdown order. Aya (the app default) is first.
+/// The built-in packs, in dropdown order. Plane (the app default) is first;
+/// [kDefaultThemePreset] is what "reset to default" applies.
 const List<ThemePreset> kThemePresets = <ThemePreset>[
-  ThemePreset(
-    name: 'Aya',
-    light: ThemeVariant(
-      accent: Color(0xFF2F5EA8),
-      iconFg: Color(0xFF1A1B1F),
-      bg: Color(0xFFF7F9FF),
-      contrast: 0.55,
-    ),
-    dark: ThemeVariant(
-      accent: kDefaultAccentColor,
-      iconFg: kDefaultIconFgColor,
-      bg: kDefaultBgColor,
-    ),
-  ),
   ThemePreset(
     name: 'Plane',
     // Plane's light theme: white panels on a light grey canvas, grey accent.
@@ -197,10 +184,25 @@ const List<ThemePreset> kThemePresets = <ThemePreset>[
       contrast: 0.5,
     ),
     dark: ThemeVariant(
-      accent: kPlaneAccentGrey,
-      iconFg: Color(0xFFE4E6E7), // txt-primary
-      bg: Color(0xFF141415), // bg-surface-1
+      accent: kDefaultAccentColor, // neutral-1000
+      iconFg: kDefaultIconFgColor, // txt-primary
+      bg: kDefaultBgColor, // bg-surface-1
       palette: kPlaneDarkPalette,
+    ),
+  ),
+  ThemePreset(
+    name: 'Aya',
+    light: ThemeVariant(
+      accent: Color(0xFF2F5EA8),
+      iconFg: Color(0xFF1A1B1F),
+      bg: Color(0xFFF7F9FF),
+      contrast: 0.55,
+    ),
+    // The app default before Plane (Material You dark).
+    dark: ThemeVariant(
+      accent: Color(0xFFA8C7FA),
+      iconFg: Color(0xFFE2E2E9),
+      bg: Color(0xFF111318),
     ),
   ),
   ThemePreset(
@@ -440,3 +442,6 @@ const List<ThemePreset> kThemePresets = <ThemePreset>[
     ),
   ),
 ];
+
+/// The app's default pack: its dark variant is the kDefault* colours.
+ThemePreset get kDefaultThemePreset => kThemePresets.first;

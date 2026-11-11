@@ -135,6 +135,9 @@ class AppLocalizations {
   String get themePresetPack => _get('themePresetPack');
   String get themePresetPackSubtitle => _get('themePresetPackSubtitle');
   String get themePresetCustom => _get('themePresetCustom');
+  String get themeResetDefault => _get('themeResetDefault');
+  String get themeResetDefaultSubtitle =>
+      _get('themeResetDefaultSubtitle');
   String get themeContrast => _get('themeContrast');
   String get themeContrastStrength => _get('themeContrastStrength');
   String get themeContrastSubtitle => _get('themeContrastSubtitle');

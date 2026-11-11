@@ -7,6 +7,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 
+// The pastel-blue look these rules were written for (the app default until
+// the Plane pack, now the Aya pack's dark variant).
+const Color _kPastelAccent = Color(0xFFA8C7FA);
+const Color _kPastelIconFg = Color(0xFFE2E2E9);
+const Color _kPastelBg = Color(0xFF111318);
+
 void main() {
   // The owner's look: an orange accent with white text and icons.
   const Color ownerOrange = Color(0xFFE07A5F);
@@ -21,10 +27,10 @@ void main() {
 
     test('the default icon colour on the pastel default flips to black', () {
       expect(
-        contrastRatio(kDefaultIconFgColor, kDefaultAccentColor),
+        contrastRatio(_kPastelIconFg, _kPastelAccent),
         lessThan(kMinOnFillContrast),
       );
-      expect(readableOnFill(kDefaultAccentColor, kDefaultIconFgColor), black);
+      expect(readableOnFill(_kPastelAccent, _kPastelIconFg), black);
     });
 
     test('a dark fill with a dark preferred colour flips to white', () {
@@ -36,22 +42,22 @@ void main() {
 
     test('a colour that already reads is kept as is', () {
       const Color navy = Color(0xFF0A0D13);
-      expect(readableOnFill(kDefaultAccentColor, navy), navy);
+      expect(readableOnFill(_kPastelAccent, navy), navy);
     });
   });
 
   group('buildAppTheme onPrimary', () {
-    ThemeData theme(Color accent, Color iconFg, Brightness b, {Color? bg}) =>
-        buildAppTheme(
-          accent: accent,
-          iconFg: iconFg,
-          bg:
-              bg ??
-              (b == Brightness.dark
-                  ? kDefaultBgColor
-                  : const Color(0xFFF7F9FF)),
-          brightness: b,
-        );
+    ThemeData theme(
+      Color accent,
+      Color iconFg,
+      Brightness b, {
+      Color? bg,
+    }) => buildAppTheme(
+      accent: accent,
+      iconFg: iconFg,
+      bg: bg ?? (b == Brightness.dark ? _kPastelBg : const Color(0xFFF7F9FF)),
+      brightness: b,
+    );
 
     test('orange accent with white icons keeps white on the accent', () {
       for (final Brightness b in Brightness.values) {
@@ -61,8 +67,8 @@ void main() {
 
     test('pastel blue default gets dark text on the accent (dark mode)', () {
       final ColorScheme cs = theme(
-        kDefaultAccentColor,
-        kDefaultIconFgColor,
+        _kPastelAccent,
+        _kPastelIconFg,
         Brightness.dark,
       ).colorScheme;
       expect(cs.onPrimary, black);
@@ -89,14 +95,11 @@ void main() {
     );
 
     test('owner orange with white text stays white on a dark page', () {
-      expect(bubbleText(ownerOrange, white, kDefaultBgColor), white);
+      expect(bubbleText(ownerOrange, white, _kPastelBg), white);
     });
 
     test('pastel default on the dark page flips to dark text', () {
-      expect(
-        bubbleText(kDefaultAccentColor, kDefaultIconFgColor, kDefaultBgColor),
-        black,
-      );
+      expect(bubbleText(_kPastelAccent, _kPastelIconFg, _kPastelBg), black);
     });
   });
 
@@ -104,39 +107,35 @@ void main() {
     const Color lightPage = Color(0xFFF7F9FF);
 
     test('pastel accent on a light page gets a darker shade at 3 : 1', () {
-      final Color ink = accentForegroundFor(kDefaultAccentColor, lightPage);
-      expect(ink, isNot(kDefaultAccentColor));
+      final Color ink = accentForegroundFor(_kPastelAccent, lightPage);
+      expect(ink, isNot(_kPastelAccent));
       expect(
         contrastRatio(ink, lightPage),
         greaterThanOrEqualTo(kMinAccentForegroundContrast),
       );
       // Still the accent's hue, only darker.
       expect(
-        (HSLColor.fromColor(ink).hue -
-                HSLColor.fromColor(kDefaultAccentColor).hue)
+        (HSLColor.fromColor(ink).hue - HSLColor.fromColor(_kPastelAccent).hue)
             .abs(),
         lessThan(2),
       );
     });
 
     test('an accent that already reads is returned unchanged', () {
-      expect(
-        accentForegroundFor(kDefaultAccentColor, kDefaultBgColor),
-        kDefaultAccentColor,
-      );
-      expect(accentForegroundFor(ownerOrange, kDefaultBgColor), ownerOrange);
+      expect(accentForegroundFor(_kPastelAccent, _kPastelBg), _kPastelAccent);
+      expect(accentForegroundFor(ownerOrange, _kPastelBg), ownerOrange);
     });
 
     test('the theme getter uses the scaffold background by default', () {
       final ThemeData t = buildAppTheme(
-        accent: kDefaultAccentColor,
+        accent: _kPastelAccent,
         iconFg: const Color(0xFF1A1B1F),
         bg: lightPage,
         brightness: Brightness.light,
       );
       expect(
         t.accentForegroundOn(),
-        accentForegroundFor(kDefaultAccentColor, t.scaffoldBackgroundColor),
+        accentForegroundFor(_kPastelAccent, t.scaffoldBackgroundColor),
       );
       expect(
         contrastRatio(t.accentForegroundOn(), t.scaffoldBackgroundColor),

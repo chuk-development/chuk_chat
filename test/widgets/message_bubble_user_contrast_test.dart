@@ -9,6 +9,13 @@ import '../support/test_app.dart';
 
 /// The user bubble's text keeps the reader's icon colour unless that falls
 /// below 2 : 1 on the bubble fill (UI audit 2026-10-05, R-2).
+
+// The pastel-blue look these rules were written for (the app default until
+// the Plane pack, now the Aya pack's dark variant).
+const Color _kPastelAccent = Color(0xFFA8C7FA);
+const Color _kPastelIconFg = Color(0xFFE2E2E9);
+const Color _kPastelBg = Color(0xFF111318);
+
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues(<String, Object>{}));
 
@@ -22,7 +29,7 @@ void main() {
         theme: buildAppTheme(
           accent: accent,
           iconFg: iconFg,
-          bg: kDefaultBgColor,
+          bg: _kPastelBg,
           brightness: Brightness.dark,
         ),
         localizationsDelegates: kTestLocalizationsDelegates,
@@ -60,8 +67,8 @@ void main() {
     expect(
       await userTextColour(
         tester,
-        accent: kDefaultAccentColor,
-        iconFg: kDefaultIconFgColor,
+        accent: _kPastelAccent,
+        iconFg: _kPastelIconFg,
       ),
       const Color(0xFF000000),
     );

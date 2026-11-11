@@ -106,16 +106,28 @@ const _preset = ThemePreset(
 );
 
 void main() {
-  test('kThemePresets is non-empty and Aya default matches the dark defaults',
+  test('kThemePresets is non-empty and Plane default matches the dark defaults',
       () {
     expect(kThemePresets, isNotEmpty);
-    final aya = kThemePresets.first;
-    expect(aya.name, 'Aya');
-    expect(aya.dark.accent, kDefaultAccentColor);
-    expect(aya.dark.iconFg, kDefaultIconFgColor);
-    expect(aya.dark.bg, kDefaultBgColor);
+    final plane = kThemePresets.first;
+    expect(plane.name, 'Plane');
+    expect(kDefaultThemePreset, same(plane));
+    expect(plane.dark.accent, kDefaultAccentColor);
+    expect(plane.dark.iconFg, kDefaultIconFgColor);
+    expect(plane.dark.bg, kDefaultBgColor);
     // A light variant exists and differs from the dark one.
-    expect(aya.light.bg, isNot(kDefaultBgColor));
+    expect(plane.light.bg, isNot(kDefaultBgColor));
+    // The default look gets the exact palette.
+    expect(
+      paletteForLook(
+        brightness: Brightness.dark,
+        accent: kDefaultAccentColor,
+        iconFg: kDefaultIconFgColor,
+        bg: kDefaultBgColor,
+        contrast: kDefaultContrast,
+      ),
+      same(kPlaneDarkPalette),
+    );
   });
 
   test('every variant has an in-range contrast', () {
@@ -207,13 +219,14 @@ void main() {
     });
 
     test('packs without a palette never get one', () {
+      final aya = kThemePresets.firstWhere((p) => p.name == 'Aya');
       expect(
         paletteForLook(
           brightness: Brightness.dark,
-          accent: kDefaultAccentColor,
-          iconFg: kDefaultIconFgColor,
-          bg: kDefaultBgColor,
-          contrast: kDefaultContrast,
+          accent: aya.dark.accent,
+          iconFg: aya.dark.iconFg,
+          bg: aya.dark.bg,
+          contrast: aya.dark.contrast,
         ),
         isNull,
       );

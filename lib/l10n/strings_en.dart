@@ -105,6 +105,8 @@ const Map<String, String> stringsEn = {
   'themePresetPack': 'Theme pack',
   'themePresetPackSubtitle': 'Apply a full look at once, then fine-tune below.',
   'themePresetCustom': 'Custom',
+  'themeResetDefault': 'Reset to default',
+  'themeResetDefaultSubtitle': 'Back to the standard colours (Plane)',
   'themeContrast': 'Contrast',
   'themeContrastStrength': 'Separation strength',
   'themeContrastSubtitle':
