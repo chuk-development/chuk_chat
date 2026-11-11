@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -391,108 +389,130 @@ void main() {
   });
 
   /// Steps a committed switch frame by frame and records, per frame, the
-  /// carousel, the progress and whether the selection has changed yet.
-  Future<List<(double, double, bool)>> sampleSwitch(
+  /// progress and whether the selection has changed yet.
+  Future<List<(double, bool)>> sampleSwitch(
     WidgetTester tester,
     SwipeChatPagerController controller,
     _HostState host,
     String from,
   ) async {
-    final List<(double, double, bool)> frames = <(double, double, bool)>[];
-    for (int i = 0; i < 60; i++) {
+    final List<(double, bool)> frames = <(double, bool)>[];
+    for (int i = 0; i < 80; i++) {
       await tester.pump(const Duration(milliseconds: 8));
-      frames.add((
-        controller.carousel.value,
-        controller.progress.value,
-        host.selected != from,
-      ));
+      frames.add((controller.progress.value, host.selected != from));
     }
     await tester.pumpAndSettle();
     return frames;
   }
 
-  testWidgets('a switch moves a short way out, reads 0 on the way in, and is '
-      'over in under 300 ms', (WidgetTester tester) async {
+  testWidgets('a released swipe selects at once and settles in one motion, '
+      'with no jump and no fade', (WidgetTester tester) async {
     final SwipeChatPagerController controller = SwipeChatPagerController();
     addTearDown(controller.dispose);
     final _HostState host = await _pump(tester, controller: controller);
-    controller.next();
-    final List<(double, double, bool)> frames = await sampleSwitch(
+    controller.dragStart();
+    controller.dragUpdate(-160); // 0.4 pages towards the next chat
+    await tester.pump();
+    expect(controller.progress.value, closeTo(-0.4, 0.001));
+    controller.dragEnd(0);
+    // The selection changes at the release, not after an "out" animation.
+    expect(host.calls, <String>['c']);
+    await tester.pump();
+    expect(host.selected, 'c');
+    // Relative to the new chat, the old one is a page away: -0.4 to the
+    // next is +0.6 from it, so the picture did not move.
+    expect(controller.progress.value, closeTo(0.6, 0.001));
+    expect(tester.getTopLeft(find.byType(_Chat)).dx, closeTo(0.6 * 400, 0.5));
+    // No fade on the chat, ever.
+    expect(
+      find.descendant(
+        of: find.byType(SwipeChatPager),
+        matching: find.byType(Opacity),
+      ),
+      findsNothing,
+    );
+
+    final List<(double, bool)> frames = await sampleSwitch(
       tester,
       controller,
       host,
       'b',
     );
-    expect(host.calls, <String>['c']);
-
-    final List<(double, double, bool)> out = <(double, double, bool)>[
-      for (final (double, double, bool) f in frames)
-        if (!f.$3) f,
-    ];
-    final List<(double, double, bool)> arriving = <(double, double, bool)>[
-      for (final (double, double, bool) f in frames)
-        if (f.$3) f,
-    ];
-    expect(out, isNotEmpty);
-    expect(arriving, isNotEmpty);
-    // The "out" half: the carousel follows the progress towards -1.
-    for (final (double c, double p, bool _) in out) {
-      expect(c, p);
-      expect(c, inInclusiveRange(-1.0, 0.0));
+    // One settle: the progress only falls towards 0, never turns back and
+    // never passes it.
+    double last = 0.6;
+    for (final (double p, bool _) in frames) {
+      expect(p, lessThanOrEqualTo(last + 1e-9));
+      expect(p, greaterThanOrEqualTo(0));
+      last = p;
     }
-    // A short move on, not a page: no big animation.
-    final double farthest = out
-        .map(((double, double, bool) f) => f.$1)
-        .reduce(math.min);
-    expect(farthest, lessThan(-0.05));
-    expect(farthest, greaterThan(-0.25));
-    // The "in" half: the chat comes back from a small offset on the other
-    // side, the carousel stays at 0.
-    expect(arriving.any(((double, double, bool) f) => f.$2 > 0.02), isTrue);
-    expect(arriving.every(((double, double, bool) f) => f.$2 < 0.1), isTrue);
-    for (final (double c, double _, bool _) in arriving) {
-      expect(c, 0);
-    }
-    // Over in under 300 ms (frames are 8 ms apart).
+    // Short: at rest in under 400 ms (frames are 8 ms apart).
     final int lastMoving = frames.lastIndexWhere(
-      ((double, double, bool) f) => f.$2 != 0,
+      ((double, bool) f) => f.$1 != 0,
     );
-    expect((lastMoving + 1) * 8, lessThan(300));
-    expect(controller.carousel.value, 0);
+    expect((lastMoving + 1) * 8, lessThan(400));
     expect(controller.progress.value, 0);
+    expect(host.calls, <String>['c']);
   });
 
-  testWidgets('a switch to the previous chat moves a short way right', (
+  testWidgets('controller.previous settles from the left in one motion', (
     WidgetTester tester,
   ) async {
     final SwipeChatPagerController controller = SwipeChatPagerController();
     addTearDown(controller.dispose);
     final _HostState host = await _pump(tester, controller: controller);
     controller.previous();
-    final List<(double, double, bool)> frames = await sampleSwitch(
+    await tester.pump();
+    expect(host.calls, <String>['a']);
+    expect(controller.progress.value, closeTo(-1, 0.001));
+    final List<(double, bool)> frames = await sampleSwitch(
       tester,
       controller,
       host,
       'b',
     );
-    expect(host.calls, <String>['a']);
-    final Iterable<(double, double, bool)> out = frames.where(
-      ((double, double, bool) f) => !f.$3,
-    );
-    final double farthest = out
-        .map(((double, double, bool) f) => f.$1)
-        .reduce(math.max);
-    expect(farthest, greaterThan(0.05));
-    expect(farthest, lessThan(0.25));
-    for (final (double c, double _, bool _) in out) {
-      expect(c, inInclusiveRange(0.0, 1.0));
-    }
-    for (final (double c, double p, bool _) in frames.where(
-      ((double, double, bool) f) => f.$3,
-    )) {
-      expect(c, 0);
+    double last = -1;
+    for (final (double p, bool _) in frames) {
+      expect(p, greaterThanOrEqualTo(last - 1e-9));
       expect(p, lessThanOrEqualTo(0));
+      last = p;
     }
+    expect(controller.progress.value, 0);
+  });
+
+  testWidgets('a refused switch goes back to rest on the old chat', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final SwipeChatPagerController controller = SwipeChatPagerController();
+    addTearDown(controller.dispose);
+    final List<String> calls = <String>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SwipeChatPager(
+            entries: _entries,
+            selectedId: 'b',
+            controller: controller,
+            // The shell refuses: the selection stays on 'b'.
+            onSelected: calls.add,
+            child: const _Chat(chatId: 'b'),
+          ),
+        ),
+      ),
+    );
+    controller.dragStart();
+    controller.dragUpdate(-160);
+    controller.dragEnd(0);
+    await tester.pump();
+    await tester.pump();
+    expect(calls, <String>['c']);
+    expect(controller.progress.value, 0);
+    await tester.pumpAndSettle();
+    expect(controller.progress.value, 0);
+    expect(tester.getTopLeft(find.byType(_Chat)).dx, 0);
   });
 
   testWidgets('drag methods on the controller drive the pager', (
@@ -506,7 +526,6 @@ void main() {
     controller.dragUpdate(-80);
     await tester.pump();
     expect(controller.progress.value, closeTo(-80 / 400, 0.001));
-    expect(controller.carousel.value, closeTo(-80 / 400, 0.001));
     expect(tester.getTopLeft(find.byType(_Chat)).dx, closeTo(-80, 0.5));
     controller.dragUpdate(-40); // 120 px = 0.3 pages, past the threshold
     controller.dragEnd(0);
@@ -544,7 +563,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(host.calls, isEmpty);
     expect(controller.progress.value, 0);
-    expect(controller.carousel.value, 0);
     expect(tester.getTopLeft(find.byType(_Chat)).dx, 0);
   });
 

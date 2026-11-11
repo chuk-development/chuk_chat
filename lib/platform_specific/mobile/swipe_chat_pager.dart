@@ -9,7 +9,13 @@
 ///
 /// The drag position is published as "progress in pages" through
 /// [SwipeChatPagerController.progress], so the title strip above the chat can
-/// slide its text with the finger.
+/// slide its titles with the finger.
+///
+/// Motion (owner, CHAT-18): the swipe follows the finger 1:1, and a release
+/// ends in ONE short physical settle, started with the finger's speed. A
+/// committed switch selects the neighbour at the moment of release, and the
+/// same settle goes on from there without a jump: there is no second
+/// animation after the release, and no fade.
 library;
 
 import 'dart:math' as math;
@@ -77,8 +83,10 @@ int swipeChatIndexOf(List<SwipeChatEntry> entries, String? id) {
 ///
 /// [progress] is in pages: 0 = at rest, -0.4 = the chat is 40 % of the way
 /// out to the left, that is 40 % towards the NEXT entry (index + 1). +0.4 is
-/// 40 % towards the previous entry. During a committed switch the value runs
-/// to ±1, the selection changes, and it continues from ∓1 back to 0.
+/// 40 % towards the previous entry. It is always relative to the selected
+/// entry: when a release commits a switch, the selection changes and the
+/// value moves by one page in the same frame (-0.4 to the next becomes +0.6
+/// from it), so a picture drawn as "entry index at progress" does not jump.
 class SwipeChatPagerController {
   SwipeChatPagerController();
 
@@ -87,13 +95,12 @@ class SwipeChatPagerController {
   /// The drag progress in pages. See the class comment for the sign.
   ValueListenable<double> get progress => _progress;
 
-  final ValueNotifier<double> _carousel = ValueNotifier<double>(0);
-
-  /// Like [progress], but without the jump of a committed switch: it runs to
-  /// ±1 while the chat leaves, and reads 0 from the moment the selection
-  /// changes, while the chat comes back in. The title carousel follows this
-  /// one, so a title glides from the edge to the centre in one piece.
-  ValueListenable<double> get carousel => _carousel;
+  /// The width of one page in logical pixels, set by the widget that draws
+  /// the motion when the pager's child stays still
+  /// ([SwipeChatPager.moveChild] false): the title strip. A finger's travel
+  /// is divided by it, so the titles follow the finger 1:1. Null: the
+  /// pager's own width.
+  double? pageExtent;
 
   _SwipeChatPagerState? _attached;
 
@@ -126,7 +133,6 @@ class SwipeChatPagerController {
 
   void dispose() {
     _progress.dispose();
-    _carousel.dispose();
   }
 }
 
@@ -135,20 +141,6 @@ const double kSwipeChatCommitFraction = 0.22;
 
 /// Fling speed (px/s) that commits a switch whatever the distance.
 const double kSwipeChatFlingVelocity = 700;
-
-/// Duration of the "out" half of a committed switch: the chat moves on a
-/// little and fades. Short on purpose (owner, 2026-11-10: no big
-/// animations, the user wants to keep working).
-const Duration kSwipeChatOutDuration = Duration(milliseconds: 90);
-
-/// Duration of the "in" half: the new chat fades in from a small offset.
-const Duration kSwipeChatInDuration = Duration(milliseconds: 150);
-
-/// How far (in pages) the chat moves on after the release, while it fades.
-const double _kOutTravel = 0.12;
-
-/// How far (in pages) the new chat starts off its place.
-const double _kInTravel = 0.06;
 
 /// How far (in pages) the rubber band can stretch at an end, at most.
 const double _kRubberMax = 0.12;
@@ -172,10 +164,11 @@ class SwipeChatPager extends StatefulWidget {
   final List<SwipeChatEntry> entries;
   final String? selectedId;
 
-  /// Called once per committed switch, with the id of the new entry, while
-  /// the child is off screen. Update [selectedId] synchronously in it (a
-  /// plain setState), so the child and the title strip come back in showing
-  /// the new chat.
+  /// Called once per committed switch, with the id of the new entry, at the
+  /// moment of release. Update [selectedId] synchronously in it (a plain
+  /// setState): the settle that follows is drawn relative to the new entry
+  /// from the next frame on. A selection that does not change by the end of
+  /// that frame (the shell refused it) puts the pager back at rest.
   final ValueChanged<String> onSelected;
 
   /// The one live chat view. It keeps its State across every switch.
@@ -197,30 +190,17 @@ class SwipeChatPager extends StatefulWidget {
 }
 
 class _SwipeChatPagerState extends State<SwipeChatPager>
-    with TickerProviderStateMixin {
+    with SingleTickerProviderStateMixin {
   /// Progress in pages, see [SwipeChatPagerController.progress].
   late final AnimationController _anim = AnimationController.unbounded(
     vsync: this,
   )..addListener(_publish);
-
-  /// Opacity of the chat during a committed switch. 1 at rest and during a
-  /// drag: only the switch itself fades.
-  late final AnimationController _fade = AnimationController(
-    vsync: this,
-    value: 1,
-  );
 
   double _width = 0;
 
   /// The finger's travel in pages, before the rubber band.
   double _raw = 0;
   bool _dragging = false;
-
-  /// A switch is running (out, select, in). Drags are ignored until done.
-  bool _committing = false;
-
-  /// The "in" half of a switch runs: the selection has changed already.
-  bool _arriving = false;
 
   /// The id this pager asked the shell to select. A [selectedId] change to
   /// this id is ours, not an outside jump.
@@ -246,14 +226,10 @@ class _SwipeChatPagerState extends State<SwipeChatPager>
         widget.selectedId != _expectedId) {
       // Selected from outside (the sheet, a new chat): no slide, just rest.
       _expectedId = null;
-      _committing = false;
-      _arriving = false;
       _dragging = false;
       _raw = 0;
       _anim.stop();
       _anim.value = 0;
-      _fade.stop();
-      _fade.value = 1;
     }
   }
 
@@ -262,19 +238,22 @@ class _SwipeChatPagerState extends State<SwipeChatPager>
     if (widget.controller?._attached == this) {
       widget.controller!._attached = null;
       widget.controller!._progress.value = 0;
-      widget.controller!._carousel.value = 0;
     }
     _recognizer?.dispose();
-    _fade.dispose();
     _anim.dispose();
     super.dispose();
   }
 
   void _publish() {
-    final SwipeChatPagerController? c = widget.controller;
-    if (c == null) return;
-    c._progress.value = _anim.value;
-    c._carousel.value = _arriving ? 0 : _anim.value;
+    widget.controller?._progress.value = _anim.value;
+  }
+
+  /// One page in logical pixels: the strip's page when the child stays
+  /// still (the titles are what moves), else the pager's width.
+  double get _extent {
+    final double? strip = widget.controller?.pageExtent;
+    if (!widget.moveChild && strip != null && strip > 0) return strip;
+    return _width;
   }
 
   int get _index => swipeChatIndexOf(widget.entries, widget.selectedId);
@@ -291,7 +270,7 @@ class _SwipeChatPagerState extends State<SwipeChatPager>
   /// A drag that starts on a text field belongs to the text field (caret,
   /// selection), even where the field itself would not claim it.
   bool _allowPointer(PointerDownEvent event) {
-    if (!widget.enabled || _committing) return false;
+    if (!widget.enabled) return false;
     final HitTestResult result = HitTestResult();
     WidgetsBinding.instance.hitTestInView(result, event.position, event.viewId);
     for (final HitTestEntry entry in result.path) {
@@ -320,17 +299,17 @@ class _SwipeChatPagerState extends State<SwipeChatPager>
   }
 
   void _onStart(DragStartDetails details) {
-    if (_committing || _width <= 0) return;
+    if (_extent <= 0) return;
     _anim.stop();
     _dragging = true;
-    // Picking up a chat that is still springing back continues from where
-    // it is, not from zero.
+    // Picking up a strip that is still settling continues from where it
+    // is, not from zero.
     _raw = _anim.value;
   }
 
   void _onUpdate(DragUpdateDetails details) {
-    if (!_dragging || _width <= 0) return;
-    _raw += details.delta.dx / _width;
+    if (!_dragging || _extent <= 0) return;
+    _raw += details.delta.dx / _extent;
     _anim.value = _displayFor(_raw);
   }
 
@@ -353,7 +332,7 @@ class _SwipeChatPagerState extends State<SwipeChatPager>
         v > -kSwipeChatFlingVelocity) {
       _commit(1, velocity: v);
     } else {
-      _springBack(v);
+      _settle(velocity: v);
     }
   }
 
@@ -361,108 +340,70 @@ class _SwipeChatPagerState extends State<SwipeChatPager>
     if (!_dragging) return;
     _dragging = false;
     _raw = 0;
-    _springBack(0);
+    _settle(velocity: 0);
   }
 
-  void _springBack(double velocityPx) {
-    if (_reducedMotion || _width <= 0) {
+  /// The one motion after a release: a critically damped spring from where
+  /// the strip is to rest (0), started with the finger's speed [velocity]
+  /// in px/s. Critically damped, because an overshoot past zero would flash
+  /// the neighbour's edge.
+  void _settle({required double velocity}) {
+    final double extent = _extent;
+    if (_reducedMotion || extent <= 0) {
       _anim.value = 0;
       return;
     }
     final double from = _anim.value;
     if (from == 0) return;
-    // Overshoot past zero would flash the neighbour's edge; a critically
-    // damped copy of the spatial spring settles without it.
     final SpringDescription spring = SpringDescription.withDampingRatio(
       mass: kSpatialSpring.mass,
       stiffness: kSpatialSpring.stiffness,
     );
     _anim
         .animateWith(
-          SpringSimulation(spring, from, 0, velocityPx / _width)
+          SpringSimulation(spring, from, 0, velocity / extent)
             ..tolerance = const Tolerance(distance: 0.001, velocity: 0.01),
         )
         .then((_) {
           // The spring stops within its tolerance; land exactly on zero so
-          // the chat does not rest a fraction of a pixel off.
-          if (mounted && !_dragging && !_committing) _anim.value = 0;
+          // the strip does not rest a fraction of a pixel off.
+          if (mounted && !_dragging) _anim.value = 0;
         });
   }
 
   /// [direction] -1 = next (content leaves to the left), +1 = previous.
-  Future<void> _commit(int direction, {required double velocity}) async {
-    if (_committing) return;
+  ///
+  /// The neighbour is selected now, at the release. The progress moves by
+  /// one page in the same step (relative to the new entry, the old one is
+  /// one page away), so the picture stays where the finger left it, and the
+  /// same settle as a cancelled drag carries it to rest.
+  void _commit(int direction, {required double velocity}) {
     final int index = _index;
     final int target = index - direction;
     if (index < 0 || target < 0 || target >= widget.entries.length) {
-      _springBack(0);
+      _settle(velocity: 0);
       return;
     }
     final String id = widget.entries[target].id;
-    _committing = true;
     _dragging = false;
+    _raw = 0;
     _expectedId = id;
-
+    _anim.stop();
     if (_reducedMotion) {
       _anim.value = 0;
-      widget.onSelected(id);
-      _committing = false;
-      return;
+    } else {
+      _anim.value = _anim.value - direction;
+      _settle(velocity: velocity);
     }
-
-    final double end = direction.toDouble();
-    // Out: from wherever the finger let go, a little further on, fading.
-    final double from = _anim.value;
-    final double outTo = from + end * _kOutTravel;
-    try {
-      await Future.wait<void>(<Future<void>>[
-        _anim
-            .animateTo(
-              outTo,
-              duration: kSwipeChatOutDuration,
-              curve: Curves.easeIn,
-            )
-            .orCancel,
-        _fade
-            .animateTo(0, duration: kSwipeChatOutDuration, curve: Curves.easeIn)
-            .orCancel,
-      ]);
-    } on TickerCanceled {
-      return;
-    }
-    if (!mounted || !_committing || _expectedId != id) return;
     widget.onSelected(id);
-    if (!mounted) return;
-    // The same child comes back, now the new chat: a short fade in from a
-    // small offset on the side it comes from.
-    _arriving = true;
-    _anim.value = -end * _kInTravel;
-    try {
-      await Future.wait<void>(<Future<void>>[
-        _anim
-            .animateTo(
-              0,
-              duration: kSwipeChatInDuration,
-              curve: kExpressiveDecelerate,
-            )
-            .orCancel,
-        _fade
-            .animateTo(
-              1,
-              duration: kSwipeChatInDuration,
-              curve: kExpressiveDecelerate,
-            )
-            .orCancel,
-      ]);
-    } on TickerCanceled {
-      return;
-    } finally {
-      if (mounted && _expectedId == id) {
-        _committing = false;
-        _arriving = false;
-        _fade.value = 1;
-      }
-    }
+    // The shell may refuse (a chat still loading): then there is no new
+    // entry to settle onto, and the pager goes back to rest on the old one.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _expectedId != id || widget.selectedId == id) return;
+      _expectedId = null;
+      _anim.stop();
+      _anim.value = 0;
+    });
   }
 
   /// The recognizer gets the pointer through [_PointerFirst], not through a
@@ -501,17 +442,12 @@ class _SwipeChatPagerState extends State<SwipeChatPager>
           return ClipRect(
             clipBehavior: widget.clipBehavior,
             child: AnimatedBuilder(
-              animation: Listenable.merge(<Listenable>[_anim, _fade]),
+              animation: _anim,
               child: widget.child,
               builder: (BuildContext context, Widget? child) {
-                // Opacity 1 paints without a layer, so a drag costs nothing
-                // extra; only the short switch fades.
-                return Opacity(
-                  opacity: _fade.value,
-                  child: Transform.translate(
-                    offset: Offset(_anim.value * _width, 0),
-                    child: child,
-                  ),
+                return Transform.translate(
+                  offset: Offset(_anim.value * _width, 0),
+                  child: child,
                 );
               },
             ),

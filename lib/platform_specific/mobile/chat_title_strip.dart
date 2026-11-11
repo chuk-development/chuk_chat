@@ -13,11 +13,15 @@
 ///           last line or status
 /// ```
 ///
-/// The neighbours do not peek in any more: a centred carousel pushed the
+/// At rest the neighbours are not drawn: a centred carousel pushed the
 /// title to the middle and left a wide empty band on the left. The position
 /// dots on the right say "there is more this way" instead. During a swipe
-/// the title slides a little with the finger and fades; the next one fades
-/// in from the other side. A tap opens the list of chats ([onTap]).
+/// the titles are a carousel that follows the finger 1:1 (owner, CHAT-18):
+/// the title in view slides out under the finger and the neighbour slides in
+/// right behind it, with no fade. The strip tells the pager how wide its
+/// page is ([SwipeChatPagerController.pageExtent]), so a swipe on the chat
+/// below moves the titles exactly as far as the finger. A tap opens the list
+/// of chats ([onTap]).
 library;
 
 import 'dart:math' as math;
@@ -38,8 +42,8 @@ const double kChatTitleStripRadius = kChatTitleStripHeight / 2;
 /// Size of the leading face or icon slot.
 const double _kLeadingSize = 36;
 
-/// How far the title travels with a full page of swipe progress.
-const double _kTitleTravel = 56;
+/// The gap between two titles of the carousel, in logical pixels.
+const double _kTitleGap = 24;
 
 /// The most dots the position row shows at once.
 const int _kMaxDots = 5;
@@ -97,22 +101,44 @@ class ChatTitleStrip extends StatelessWidget {
     final ValueListenable<double>? motion = progress ?? pager?.progress;
     final bool dots = showPosition && index >= 0 && entries.length > 1;
 
-    final Widget line = _EntryLine(
-      entry: entry,
-      fallbackTitle: emptyTitle,
-      workingLabel: workingLabel,
+    // One title of the carousel, keyed by its entry: when a switch moves an
+    // entry from the neighbour's slot to the middle, its widgets (the
+    // working dots) keep their State.
+    Widget lineFor(SwipeChatEntry? e) => KeyedSubtree(
+      key: ValueKey<String>('chat_title_strip_line_${e?.id ?? ''}'),
+      child: Padding(
+        // The start padding belongs to the title, not to the bar: a face
+        // needs less of it than a bare title, and each title brings its own
+        // as it slides in.
+        padding: EdgeInsetsDirectional.only(
+          start: e?.leading != null ? 10 : 20,
+        ),
+        child: _EntryLine(
+          entry: e,
+          fallbackTitle: emptyTitle,
+          workingLabel: workingLabel,
+        ),
+      ),
     );
 
-    Widget moving(double p) {
+    // The titles at progress [p]: the one in view at p pages, the neighbour
+    // on the side the finger pulls from one page beyond it. A page is the
+    // title area plus a small gap.
+    Widget carousel(double p, double pitch) {
       final double t = p.clamp(-1.0, 1.0);
-      // Gone by a third of a page: the swipe is short and so is the fade.
-      final double opacity = (1 - t.abs() * 3).clamp(0.0, 1.0);
-      return Opacity(
-        opacity: opacity,
+      Widget at(SwipeChatEntry? e, double pages) => Positioned.fill(
         child: Transform.translate(
-          offset: Offset(t * _kTitleTravel, 0),
-          child: line,
+          offset: Offset(pages * pitch, 0),
+          child: lineFor(e),
         ),
+      );
+      return Stack(
+        children: <Widget>[
+          if (t > 0 && index > 0) at(entries[index - 1], t - 1),
+          at(entry, t),
+          if (t < 0 && index >= 0 && index < entries.length - 1)
+            at(entries[index + 1], t + 1),
+        ],
       );
     }
 
@@ -121,11 +147,19 @@ class ChatTitleStrip extends StatelessWidget {
         Expanded(
           child: ClipRect(
             child: motion == null
-                ? line
-                : ValueListenableBuilder<double>(
-                    valueListenable: motion,
-                    builder: (BuildContext context, double p, Widget? _) =>
-                        moving(p),
+                ? lineFor(entry)
+                : LayoutBuilder(
+                    builder: (BuildContext context, BoxConstraints box) {
+                      final double pitch = box.maxWidth + _kTitleGap;
+                      // The pager divides the finger's travel by this, so
+                      // the titles move exactly as far as the finger.
+                      pager?.pageExtent = pitch;
+                      return ValueListenableBuilder<double>(
+                        valueListenable: motion,
+                        builder: (BuildContext context, double p, Widget? _) =>
+                            carousel(p, pitch),
+                      );
+                    },
                   ),
           ),
         ),
@@ -148,8 +182,9 @@ class ChatTitleStrip extends StatelessWidget {
                             'chat_title_strip_position',
                           ),
                           count: entries.length,
-                          // During the "in" half the index has changed
-                          // already; the dots then simply rest on it.
+                          // The progress is relative to the selected
+                          // entry, so this runs on without a jump when a
+                          // switch commits.
                           position: (index - p.clamp(-1.0, 1.0)).clamp(
                             0.0,
                             (entries.length - 1).toDouble(),
@@ -163,10 +198,7 @@ class ChatTitleStrip extends StatelessWidget {
 
     Widget bar = Container(
       height: kChatTitleStripHeight,
-      padding: EdgeInsetsDirectional.only(
-        start: entry?.leading != null ? 10 : 20,
-        end: 18,
-      ),
+      padding: const EdgeInsetsDirectional.only(end: 18),
       decoration: ShapeDecoration(
         color: FloatingChromeSurface.fillOf(context),
         shape: const StadiumBorder(),

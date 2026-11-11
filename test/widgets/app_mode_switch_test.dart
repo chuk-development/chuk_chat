@@ -518,6 +518,61 @@ void main() {
       expect(prefs.getString(AppModeService.prefsKey), 'agents');
     });
 
+    for (final Size size in <Size>[kPhone, const Size(1200, 800)]) {
+      testWidgets('${size.width.toInt()} px: a tap on the switch shows the '
+          'other half on the very next frame, with no transition', (
+        tester,
+      ) async {
+        await pumpShell(tester, size: size);
+        final bool phone = size == kPhone;
+        final Finder chuk = find.text(
+          phone ? 'chuk phone chat' : 'chuk desktop chat',
+        );
+        final Rect screen = Offset.zero & size;
+
+        /// Every ancestor of [target] that could paint a transition.
+        void expectNoTransitionAbove(Finder target) {
+          for (final Opacity o in tester.widgetList<Opacity>(
+            find.ancestor(of: target, matching: find.byType(Opacity)),
+          )) {
+            expect(o.opacity, 1, reason: 'a fade on the half');
+          }
+          for (final Transform t in tester.widgetList<Transform>(
+            find.ancestor(of: target, matching: find.byType(Transform)),
+          )) {
+            expect(t.transform.isIdentity(), isTrue, reason: 'a move/scale');
+          }
+        }
+
+        await tester.tap(
+          find.descendant(of: onStageSwitch(), matching: find.text('Chats')),
+        );
+        await tester.pump();
+        // One frame: Chats is on stage, whole, and Agents is gone.
+        expect(chuk, findsOneWidget);
+        expect(conversation, findsNothing);
+        expectNoTransitionAbove(chuk);
+        expect(shownMode(tester), AppMode.chats);
+        final Rect switchAt = tester.getRect(onStageSwitch());
+        await tester.pump(const Duration(milliseconds: 16));
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(tester.getRect(onStageSwitch()), switchAt);
+        expect(screen.contains(tester.getCenter(chuk)), isTrue);
+        await tester.pumpAndSettle();
+
+        await tester.tap(
+          find.descendant(of: onStageSwitch(), matching: find.text('Agents')),
+        );
+        await tester.pump();
+        expect(conversation, findsOneWidget);
+        expect(chuk, findsNothing);
+        expectNoTransitionAbove(conversation);
+        expect(shownMode(tester), AppMode.agents);
+        expect(threadView, findsOneWidget);
+        expect(controllerBuilds, 1);
+      }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
+    }
+
     testWidgets('both halves and Home keep their state; one socket owner', (
       tester,
     ) async {

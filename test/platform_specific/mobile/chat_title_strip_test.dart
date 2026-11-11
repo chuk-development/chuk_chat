@@ -98,35 +98,60 @@ void main() {
     expect(dot, findsNothing);
   });
 
-  testWidgets('a swipe slides the title a little and fades it', (
+  testWidgets('a swipe moves the titles 1:1 as a carousel, with no fade', (
     WidgetTester tester,
   ) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final SwipeChatPagerController controller = SwipeChatPagerController();
+    addTearDown(controller.dispose);
     final ValueNotifier<double> progress = ValueNotifier<double>(0);
     addTearDown(progress.dispose);
     await tester.pumpWidget(
       _app(
-        ChatTitleStrip(entries: _entries, selectedId: 'b', progress: progress),
+        ChatTitleStrip(
+          entries: _entries,
+          selectedId: 'b',
+          controller: controller,
+          progress: progress,
+        ),
       ),
     );
-    final double rest = tester.getCenter(find.text('Beta')).dx;
-    Opacity fadeOf() => tester.widget<Opacity>(
-      find
-          .ancestor(of: find.text('Beta'), matching: find.byType(Opacity))
-          .first,
-    );
-    expect(fadeOf().opacity, 1);
+    // The strip tells the pager how wide a page is.
+    final double? pitch = controller.pageExtent;
+    expect(pitch, isNotNull);
+    expect(pitch, greaterThan(200));
+    final double rest = tester.getTopLeft(find.text('Beta')).dx;
+    expect(find.text('Gamma'), findsNothing);
 
     progress.value = -0.2; // 20 % towards the next entry
     await tester.pump();
-    final double moved = tester.getCenter(find.text('Beta')).dx;
-    expect(moved, lessThan(rest));
-    // A short travel, not a page.
-    expect(rest - moved, lessThan(20));
-    expect(fadeOf().opacity, lessThan(1));
+    // The title moved by exactly the finger's share of a page.
+    expect(
+      tester.getTopLeft(find.text('Beta')).dx,
+      closeTo(rest - 0.2 * pitch!, 0.5),
+    );
+    // The next one comes in right behind it, a page further on.
+    expect(find.text('Gamma'), findsOneWidget);
+    expect(find.text('Alpha'), findsNothing);
+    // No fade on the titles (the working dots of an entry pulse on their
+    // own, so only the titles' own chain is checked).
+    for (final String t in <String>['Beta', 'Gamma']) {
+      expect(
+        find.ancestor(of: find.text(t), matching: find.byType(Opacity)),
+        findsNothing,
+      );
+    }
 
-    progress.value = -0.5;
+    progress.value = 0.3; // towards the previous entry
     await tester.pump();
-    expect(fadeOf().opacity, 0);
+    expect(find.text('Alpha'), findsOneWidget);
+    expect(find.text('Gamma'), findsNothing);
+    expect(
+      tester.getTopLeft(find.text('Beta')).dx,
+      closeTo(rest + 0.3 * pitch, 0.5),
+    );
   });
 
   testWidgets('tap in the middle calls onTap; there is no long press', (

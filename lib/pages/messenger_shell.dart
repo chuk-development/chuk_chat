@@ -44,9 +44,9 @@
 /// [RootWrapperDesktop] otherwise — with chuk's sidebar, history and
 /// settings. Agents is everything above.
 ///
-/// Both halves stay mounted once shown and fade through each other
-/// ([FadeThroughTabs]): the thread view owns the socket, and chuk's chat keeps
-/// its draft and scroll. Chats is built the first time it is shown, not at
+/// Both halves stay mounted once shown, and a switch between them is a cut
+/// with no transition ([KeptTabs]; owner, CHAT-18): the thread view owns the
+/// socket, and chuk's chat keeps its draft and scroll. Chats is built the first time it is shown, not at
 /// startup, so a device that lives in Agents pays nothing for it. Without a
 /// shell config there is no chuk_chat to show, and no switch.
 ///
@@ -111,7 +111,7 @@ import 'package:chuk_chat/platform_specific/mobile/mobile_home_composer.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_media_page.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_top_bar.dart';
 import 'package:chuk_chat/platform_specific/mobile/swipe_chat_pager.dart';
-import 'package:chuk_chat/widgets/fade_through_tabs.dart';
+import 'package:chuk_chat/widgets/kept_tabs.dart';
 import 'package:chuk_chat/pages/mobile_agents_settings_page.dart';
 import 'package:chuk_chat/pages/agent_profile_edit_page.dart';
 import 'package:chuk_chat/pages/automations_page.dart';
@@ -1181,11 +1181,12 @@ class _MessengerShellState extends State<MessengerShell>
             // No end drawer any more: the agent controls are the desktop's
             // details pane, in chuk's artifact panel slot.
             endDrawerEnableOpenDragGesture: false,
-            // The two halves are peers, so they fade through each other, and
-            // both stay mounted (see the library doc). The slots follow
-            // [AppMode]: Chats first, Agents second. Home is inside Agents.
+            // The two halves are peers: a switch shows the other one on the
+            // next frame, with no transition, and both stay mounted (see the
+            // library doc). The slots follow [AppMode]: Chats first, Agents
+            // second. Home is inside Agents.
             body: _chatModeAvailable
-                ? FadeThroughTabs(
+                ? KeptTabs(
                     index: _shownMode.index,
                     children: <Widget>[
                       _chatModeBuilt
