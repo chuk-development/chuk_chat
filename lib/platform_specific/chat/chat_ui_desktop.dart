@@ -2850,161 +2850,173 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       child: Stack(
         fit: StackFit.passthrough,
         children: [
-          // Main content column
+          // Main content column: the field block on top, the action row
+          // pinned to the bottom of the box. Exactly two children, so
+          // spaceBetween puts all free height between them. An empty slot
+          // in the top block (a closed `/` menu, an empty queue dock) would
+          // otherwise take a share of it and push the field down under the
+          // floating send target.
           Column(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Attachment previews inside the textbox (right-padded so cards don't go under send button)
-              if (_fileHandler.attachedFiles.isNotEmpty)
-                Padding(
-                  padding: EdgeInsets.only(
-                    bottom: 14,
-                    left: 2,
-                    right: btnW + 8,
-                  ),
-                  child: AttachmentPreviewBar(
-                    files: _fileHandler.attachedFiles,
-                    onRemove: removeComposerAttachment,
-                  ),
-                ),
-              // Editing indicator
-              if (messageActionsHandler.isEditing)
-                Padding(
-                  // Clear the floating top-right send button so the "Cancel"
-                  // action isn't hidden underneath it.
-                  padding: EdgeInsets.only(bottom: 6, right: btnW + 8),
-                  child: Row(
-                    children: [
-                      AppIcon(
-                        Icons.edit,
-                        size: 14,
-                        color: iconFg.withValues(alpha: 0.6),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Attachment previews inside the textbox (right-padded so cards don't go under send button)
+                  if (_fileHandler.attachedFiles.isNotEmpty)
+                    Padding(
+                      padding: EdgeInsets.only(
+                        bottom: 14,
+                        left: 2,
+                        right: btnW + 8,
                       ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Editing message',
-                        style: TextStyle(
-                          color: iconFg.withValues(alpha: 0.6),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
+                      child: AttachmentPreviewBar(
+                        files: _fileHandler.attachedFiles,
+                        onRemove: removeComposerAttachment,
                       ),
-                      const Spacer(),
-                      GestureDetector(
-                        onTap: cancelEditMessage,
-                        child: Text(
-                          'Cancel',
-                          style: TextStyle(
-                            color: accent.withValues(alpha: 0.8),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                    ),
+                  // Editing indicator
+                  if (messageActionsHandler.isEditing)
+                    Padding(
+                      // Clear the floating top-right send button so the "Cancel"
+                      // action isn't hidden underneath it.
+                      padding: EdgeInsets.only(bottom: 6, right: btnW + 8),
+                      child: Row(
+                        children: [
+                          AppIcon(
+                            Icons.edit,
+                            size: 14,
+                            color: iconFg.withValues(alpha: 0.6),
                           ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              // The `/` and `@` menu, while a trigger is open.
-              ComposerTriggerMenu(
-                controller: _trigger,
-                trailingInset: btnW + 8,
-              ),
-              // The queue dock: messages sent while the reply runs. They go
-              // out after it (queued) or into it at its next step (steer).
-              QueueDock(
-                queue: _followUps.queue,
-                // Clear the floating top-right send/stop button.
-                trailingInset: btnW + 8,
-                onEdit: (String id, String text) =>
-                    setState(() => _followUps.edit(id, text)),
-                onRemove: (String id) => setState(() => _followUps.remove(id)),
-                onSteerNow: _followUps.steerAvailable
-                    ? (String id) => setState(() => _followUps.steerNow(id))
-                    : null,
-              ),
-              // Text field with right padding to avoid send button overlap.
-              // While the microphone is open the live waveform is drawn over
-              // it, the phone's arrangement: the field keeps its slot, so the
-              // composer is exactly as tall recording as at rest.
-              Padding(
-                padding: EdgeInsets.only(right: btnW + 8),
-                child: ComposerInputRow(
-                  isRecording: _audioHandler.isMicActive,
-                  audioLevels: _audioHandler.audioLevels,
-                  accentColor: Colors.red,
-                  timeColor: iconFg.withValues(alpha: 0.7),
-                  child: ConstrainedBox(
-                    // Raised so the composer grows to a comfortable ~10 lines
-                    // before it starts scrolling, and the internal scrollbar is
-                    // hidden (scrollbars: false) since it reads as clutter.
-                    constraints: const BoxConstraints(maxHeight: 240),
-                    child: _wrapWithSmartPasteActions(
-                      ScrollConfiguration(
-                        behavior: ScrollConfiguration.of(context)
-                            .copyWith(scrollbars: false),
-                        child: KeyedSubtree(
-                          key: TourKeyRegistry.instance.anchorFor(
-                            TourSlots.chatInput,
-                          ),
-                          child: TextField(
-                            controller: composerController,
-                            focusNode: composerFocusNode,
-                            selectionControls:
-                                ComposerSelectionControls.instance,
-                            contextMenuBuilder: _buildComposerContextMenu,
-                            autofocus: true,
-                            showCursor: true,
-                            minLines: 1,
-                            maxLines: null,
-                            keyboardType: TextInputType.multiline,
-                            textInputAction: TextInputAction.done,
-                            scrollController: _composerScrollController,
-                            textAlignVertical: TextAlignVertical.top,
+                          const SizedBox(width: 6),
+                          Text(
+                            'Editing message',
                             style: TextStyle(
-                              color: iconFg,
-                              fontWeight: FontWeight.w600,
-                              height: 1.4,
-                              // 16 on the web, or mobile Safari zooms in.
-                              fontSize: kIsWeb ? 16 : null,
+                              color: iconFg.withValues(alpha: 0.6),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
                             ),
-                            decoration: InputDecoration(
-                              hintText: messageActionsHandler.isEditing
-                                  ? AppLocalizations.of(context)!
-                                        .editYourMessage
-                                  : hasAttachments
-                                  ? AppLocalizations.of(context)!
-                                        .addMessageOrDocs
-                                  : AppLocalizations.of(context)!.askMeAnything,
-                              hintStyle: TextStyle(
-                                color: iconFg.withValues(alpha: 0.8),
+                          ),
+                          const Spacer(),
+                          GestureDetector(
+                            onTap: cancelEditMessage,
+                            child: Text(
+                              'Cancel',
+                              style: TextStyle(
+                                color: accent.withValues(alpha: 0.8),
+                                fontSize: 12,
                                 fontWeight: FontWeight.w600,
                               ),
-                              border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              errorBorder: InputBorder.none,
-                              focusedErrorBorder: InputBorder.none,
-                              disabledBorder: InputBorder.none,
-                              filled: false,
-                              fillColor: Colors.transparent,
-                              contentPadding: const EdgeInsets.symmetric(
-                                vertical: 8,
-                                horizontal: 0,
-                              ),
-                              isDense: true,
                             ),
-                            cursorColor: accent,
-                            cursorWidth: 2,
-                            cursorRadius: const Radius.circular(1),
+                          ),
+                        ],
+                      ),
+                    ),
+                  // The `/` and `@` menu, while a trigger is open.
+                  ComposerTriggerMenu(
+                    controller: _trigger,
+                    trailingInset: btnW + 8,
+                  ),
+                  // The queue dock: messages sent while the reply runs. They go
+                  // out after it (queued) or into it at its next step (steer).
+                  QueueDock(
+                    queue: _followUps.queue,
+                    // Clear the floating top-right send/stop button.
+                    trailingInset: btnW + 8,
+                    onEdit: (String id, String text) =>
+                        setState(() => _followUps.edit(id, text)),
+                    onRemove: (String id) =>
+                        setState(() => _followUps.remove(id)),
+                    onSteerNow: _followUps.steerAvailable
+                        ? (String id) => setState(() => _followUps.steerNow(id))
+                        : null,
+                  ),
+                  // Text field with right padding to avoid send button overlap.
+                  // While the microphone is open the live waveform is drawn over
+                  // it, the phone's arrangement: the field keeps its slot, so the
+                  // composer is exactly as tall recording as at rest.
+                  Padding(
+                    padding: EdgeInsets.only(right: btnW + 8),
+                    child: ComposerInputRow(
+                      isRecording: _audioHandler.isMicActive,
+                      audioLevels: _audioHandler.audioLevels,
+                      accentColor: Colors.red,
+                      timeColor: iconFg.withValues(alpha: 0.7),
+                      child: ConstrainedBox(
+                        // Raised so the composer grows to a comfortable ~10 lines
+                        // before it starts scrolling, and the internal scrollbar is
+                        // hidden (scrollbars: false) since it reads as clutter.
+                        constraints: const BoxConstraints(maxHeight: 240),
+                        child: _wrapWithSmartPasteActions(
+                          ScrollConfiguration(
+                            behavior: ScrollConfiguration.of(context)
+                                .copyWith(scrollbars: false),
+                            child: KeyedSubtree(
+                              key: TourKeyRegistry.instance.anchorFor(
+                                TourSlots.chatInput,
+                              ),
+                              child: TextField(
+                                controller: composerController,
+                                focusNode: composerFocusNode,
+                                selectionControls:
+                                    ComposerSelectionControls.instance,
+                                contextMenuBuilder: _buildComposerContextMenu,
+                                autofocus: true,
+                                showCursor: true,
+                                minLines: 1,
+                                maxLines: null,
+                                keyboardType: TextInputType.multiline,
+                                textInputAction: TextInputAction.done,
+                                scrollController: _composerScrollController,
+                                textAlignVertical: TextAlignVertical.top,
+                                style: TextStyle(
+                                  color: iconFg,
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.4,
+                                  // 16 on the web, or mobile Safari zooms in.
+                                  fontSize: kIsWeb ? 16 : null,
+                                ),
+                                decoration: InputDecoration(
+                                  hintText: messageActionsHandler.isEditing
+                                      ? AppLocalizations.of(context)!
+                                            .editYourMessage
+                                      : hasAttachments
+                                      ? AppLocalizations.of(context)!
+                                            .addMessageOrDocs
+                                      : AppLocalizations.of(context)!
+                                            .askMeAnything,
+                                  hintStyle: TextStyle(
+                                    color: iconFg.withValues(alpha: 0.8),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  border: InputBorder.none,
+                                  enabledBorder: InputBorder.none,
+                                  focusedBorder: InputBorder.none,
+                                  errorBorder: InputBorder.none,
+                                  focusedErrorBorder: InputBorder.none,
+                                  disabledBorder: InputBorder.none,
+                                  filled: false,
+                                  fillColor: Colors.transparent,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    vertical: 8,
+                                    horizontal: 0,
+                                  ),
+                                  isDense: true,
+                                ),
+                                cursorColor: accent,
+                                cursorWidth: 2,
+                                cursorRadius: const Radius.circular(1),
+                              ),
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
-                ),
+                  // Extra breathing room between text field and toolbar when attachments push content down
+                  if (hasAttachments) const SizedBox(height: 8),
+                ],
               ),
-              // Extra breathing room between text field and toolbar when attachments push content down
-              if (hasAttachments) const SizedBox(height: 8),
               Row(
                 children: <Widget>[
                   Expanded(
