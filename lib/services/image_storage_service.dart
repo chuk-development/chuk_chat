@@ -18,6 +18,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/image_compression_service.dart';
+import 'package:chuk_chat/services/image_disk_cache.dart';
 import 'package:chuk_chat/services/offline_blob_handle.dart';
 import 'package:chuk_chat/utils/lru_byte_cache.dart';
 import 'package:chuk_chat/utils/io_helper.dart' show Directory, File;
@@ -175,6 +176,7 @@ class ImageStorageService {
       // have in hand — this redundant Supabase round-trip + decrypt is the main
       // cause of the multi-second lag between "image generated" and display.
       _imageCache.put(path, bytes);
+      unawaited(ImageDiskCache.write(path, bytes));
 
       // Return the storage path (not the public URL, since files are encrypted)
       return path;
@@ -227,7 +229,10 @@ class ImageStorageService {
       return pending;
     }
 
-    final future = _downloadAndDecryptImageInternal(storagePath);
+    final future = _downloadAndDecryptImageInternal(
+      storagePath,
+      readDisk: !bypassCache,
+    );
     _pendingRequests[storagePath] = future;
 
     try {
@@ -239,8 +244,19 @@ class ImageStorageService {
   }
 
   static Future<Uint8List> _downloadAndDecryptImageInternal(
-    String storagePath,
-  ) async {
+    String storagePath, {
+    bool readDisk = true,
+  }) async {
+    // The disk copy survives restarts and the 50 MB memory limit. It needs
+    // neither the network nor the key, so it is checked before both.
+    if (readDisk) {
+      final onDisk = await ImageDiskCache.read(storagePath);
+      if (onDisk != null) {
+        _imageCache.put(storagePath, onDisk);
+        return onDisk;
+      }
+    }
+
     // Ensure user is authenticated
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
@@ -271,6 +287,7 @@ class ImageStorageService {
 
       // Cache the result (LRU evicts oldest if over 50 MB)
       _imageCache.put(storagePath, decryptedBytes);
+      unawaited(ImageDiskCache.write(storagePath, decryptedBytes));
 
       return decryptedBytes;
     } catch (e) {
@@ -296,6 +313,7 @@ class ImageStorageService {
 
       // Clear from cache
       _imageCache.remove(storagePath);
+      unawaited(ImageDiskCache.remove(storagePath));
 
       // Notify listeners that this image was deleted
       _deletedImagesController.add(storagePath);

@@ -22,6 +22,7 @@ class File {
   Future<File> writeAsString(String contents, {bool flush = false}) async =>
       this;
   Future<void> delete({bool recursive = false}) async {}
+  Future<File> rename(String newPath) async => File(newPath);
   Stream<List<int>> openRead([int? start, int? end]) => Stream.empty();
 }
 
