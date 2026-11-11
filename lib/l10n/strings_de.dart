@@ -1691,21 +1691,7 @@ const Map<String, String> stringsDe = {
   'shortcutsGroupAgents': 'Agents',
   'shortcutsClose': 'Schließen',
   // ── end Chat UI: shortcuts ──
-  // ── Chat UI: feedback and secret mask ──
-  'feedbackGood': 'Gute Antwort',
-  'feedbackBad': 'Schlechte Antwort',
-  'feedbackTitleUp': 'Was war gut?',
-  'feedbackTitleDown': 'Was war schlecht?',
-  'feedbackTaskResult': 'Ergebnis der Aufgabe',
-  'feedbackInstructionFollowing': 'Anweisungen befolgt',
-  'feedbackProductInteraction': 'Bedienung',
-  'feedbackServiceStability': 'Stabilität des Dienstes',
-  'feedbackCost': 'Kosten',
-  'feedbackSecurityPrivacy': 'Sicherheit und Datenschutz',
-  'feedbackOther': 'Sonstiges',
-  'feedbackNoteHint': 'Notiz hinzufügen (optional)',
-  'feedbackSubmit': 'Senden',
-  'feedbackClose': 'Schließen',
+  // ── Chat UI: secret mask ──
   'secretShow': 'Schlüssel zeigen',
   'secretHide': 'Schlüssel verbergen',
   'secretMaskedLabel': 'Verborgener Schlüssel',
@@ -1968,6 +1954,5 @@ const Map<String, String> stringsDe = {
       'Die nicht genutzte Webhook-URL ist noch nicht gelöscht. Die App versucht es später noch einmal.',
   // ── end webhooks ──
   // ── feedback ──
-  'feedbackRemoveRating': 'Bewertung entfernen',
   // ── end feedback ──
 };

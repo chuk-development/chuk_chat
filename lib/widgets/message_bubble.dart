@@ -91,7 +91,6 @@ import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/utils/json_helpers.dart';
 import 'package:chuk_chat/utils/secret_mask.dart';
 import 'package:chuk_chat/widgets/masked_secret_text.dart';
-import 'package:chuk_chat/widgets/message_feedback.dart';
 import 'package:chuk_chat/models/turn_usage.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 import 'package:chuk_chat/services/agents/agents_attachments.dart'
@@ -205,8 +204,6 @@ class MessageBubble extends StatefulWidget {
     this.modelProvider,
     this.tps,
     this.usage,
-    this.feedbackId,
-    this.feedbackModelId,
     this.isEditing = false,
     this.initialEditText,
     this.onSubmitEdit,
@@ -305,14 +302,6 @@ class MessageBubble extends StatefulWidget {
   /// server reported it. Null on older answers and while streaming.
   final TurnUsage? usage;
 
-  /// The stored id of this answer (`messageId` of the message map), which
-  /// keys the reader's thumbs verdict. Null: no thumbs, because a verdict on
-  /// a message without a lasting id could not be found again after a reload.
-  final String? feedbackId;
-
-  /// The raw model id of this answer (`modelId` of the message map), sent
-  /// with a thumbs verdict. Null falls back to [modelLabel].
-  final String? feedbackModelId;
   final bool isEditing;
   final String? initialEditText;
   final ValueChanged<String>? onSubmitEdit;

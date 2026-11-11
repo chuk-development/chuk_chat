@@ -1603,20 +1603,6 @@ class AppLocalizations {
   String get shortcutsClose => _get('shortcutsClose');
   // ── end Chat UI: shortcuts ──
   // ── Chat UI: feedback and secret mask ──
-  String get feedbackGood => _get('feedbackGood');
-  String get feedbackBad => _get('feedbackBad');
-  String get feedbackTitleUp => _get('feedbackTitleUp');
-  String get feedbackTitleDown => _get('feedbackTitleDown');
-  String get feedbackTaskResult => _get('feedbackTaskResult');
-  String get feedbackInstructionFollowing => _get('feedbackInstructionFollowing');
-  String get feedbackProductInteraction => _get('feedbackProductInteraction');
-  String get feedbackServiceStability => _get('feedbackServiceStability');
-  String get feedbackCost => _get('feedbackCost');
-  String get feedbackSecurityPrivacy => _get('feedbackSecurityPrivacy');
-  String get feedbackOther => _get('feedbackOther');
-  String get feedbackNoteHint => _get('feedbackNoteHint');
-  String get feedbackSubmit => _get('feedbackSubmit');
-  String get feedbackClose => _get('feedbackClose');
   String get secretShow => _get('secretShow');
   String get secretHide => _get('secretHide');
   String get secretMaskedLabel => _get('secretMaskedLabel');
@@ -1909,7 +1895,6 @@ class AppLocalizations {
   String get webhookRollbackFailed => _get('webhookRollbackFailed');
   // ── end webhooks ──
   // ── feedback ──
-  String get feedbackRemoveRating => _get('feedbackRemoveRating');
   // ── end feedback ──
 }
 

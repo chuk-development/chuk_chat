@@ -288,24 +288,13 @@ extension _MessageBubbleChrome on _MessageBubbleState {
     dimDisabledIcon: true,
   );
 
-  /// The AI action bar. A finished answer with an id also carries the
-  /// thumbs ([MessageFeedbackButtons]) at its end, in the same pill.
+  /// The AI action bar.
   Widget _buildActionButtons(Color iconFgColor, bool alignRight) =>
       _buildActionBar(
         actions: widget.actions,
         iconFgColor: iconFgColor,
         alignRight: alignRight,
         dimDisabledIcon: false,
-        trailing: widget.isStreamingMessage || widget.feedbackId == null
-            ? null
-            : MessageFeedbackButtons(
-                messageId: widget.feedbackId,
-                iconColor: iconFgColor,
-                modelId: widget.feedbackModelId ?? widget.modelLabel,
-                provider: widget.modelProvider,
-                chatId: widget.chatId,
-                compact: kPlatformMobile,
-              ),
       );
 
   /// Shared pill of icon action buttons behind [_buildUserActionButtons]

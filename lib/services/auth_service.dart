@@ -8,7 +8,6 @@ import 'package:chuk_chat/services/agents/agents_login_vault.dart';
 import 'package:chuk_chat/services/agents/agents_thread_modes.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
-import 'package:chuk_chat/services/message_feedback_store.dart';
 import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/offline_send_coordinator.dart';
 import 'package:chuk_chat/services/password_revision_service.dart';
@@ -190,9 +189,7 @@ class AuthService {
       await MultiplexSession.shutdown();
       // The cached plan belongs to the user who just left.
       UserStatusService.clear();
-      // So do the answer verdicts and the Agents wait labels kept in the
-      // preferences (keyed by user).
-      await MessageFeedbackStore.instance.clearForSignOut(userId);
+      // So do the Agents wait labels kept in the preferences (keyed by user).
       await AgentsThreadModes.instance.clearForSignOut(userId);
       // The host's login list (origins and user names, never a password).
       AgentsLoginVault.instance.clear();

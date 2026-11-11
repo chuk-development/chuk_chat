@@ -192,10 +192,6 @@ class ChatMessageListItem extends StatelessWidget {
       modelProvider: data.modelProvider,
       tps: data.tps,
       usage: data.usage,
-      feedbackId: data.isUser ? null : _nonEmpty(messages[index]['messageId']),
-      feedbackModelId: data.isUser
-          ? null
-          : _nonEmpty(messages[index]['modelId']),
       toolCalls: bubbleCalls,
       showToolCalls: showToolCalls,
       contentBlocks: costSplit == null
@@ -326,6 +322,3 @@ class ChatMessageListItem extends StatelessWidget {
     child: TickerMode(enabled: true, child: child),
   );
 }
-
-String? _nonEmpty(String? value) =>
-    value == null || value.isEmpty ? null : value;
