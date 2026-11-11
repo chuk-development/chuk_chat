@@ -142,6 +142,28 @@ void main() {
     expect(finishReasons(await chat()), ['stop']);
   });
 
+  test('heartbeat frame becomes a HeartbeatEvent', () async {
+    // The server forwards upstream keepalives while a long prompt is still
+    // being read; the event is what resets the client's idle watchdog.
+    server.chatReply = (id) => [
+      {
+        'req_id': id,
+        'kind': 'heartbeat',
+        'data': {'seq': 3, 'elapsed_s': 42.5},
+      },
+      {'req_id': id, 'kind': 'heartbeat'},
+      {'req_id': id, 'kind': 'done'},
+    ];
+    final events = await chat();
+    final beats = events.whereType<HeartbeatEvent>().toList();
+    expect(beats, hasLength(2));
+    expect(beats.first.seq, 3);
+    expect(beats.first.elapsedSeconds, 42.5);
+    expect(beats.last.seq, 0);
+    expect(beats.last.elapsedSeconds, isNull);
+    expect(events.last, isA<DoneEvent>());
+  });
+
   test('a bare done adds no meta', () async {
     server.chatReply = (id) => [
       {'req_id': id, 'kind': 'done'},

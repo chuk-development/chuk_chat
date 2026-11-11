@@ -801,6 +801,20 @@ class MultiplexConnection {
           ),
         );
         break;
+      case 'heartbeat':
+        // The upstream is still reading a long prompt and sent nothing but
+        // keepalives. The event resets the idle watchdog, so a slow prefill
+        // is not cut at 60 s.
+        final beat = data['data'];
+        final seq = beat is Map ? beat['seq'] : null;
+        final elapsed = beat is Map ? beat['elapsed_s'] : null;
+        ctrl.add(
+          ChatStreamEvent.heartbeat(
+            seq: seq is int ? seq : 0,
+            elapsedSeconds: elapsed is num ? elapsed.toDouble() : null,
+          ),
+        );
+        break;
       case 'timing':
         // Older servers carry `finish_reason` only on the `timing` frame of
         // phase `complete`. Lift it into a meta event so the tool loop's
