@@ -26,6 +26,12 @@ done
 if [[ $build == 1 ]]; then
   # run.sh prints the same defines it would run with (Supabase from .env,
   # feature flags), so the installed app matches ./run.sh linux.
+  # The owner's dev build is the FULL app (owner instruction 2026-11-11):
+  # Agents, Workspaces and Voice call on, which run.sh leaves off. Override
+  # per run, e.g. FEATURE_AGENTS=false scripts/install_dev.sh.
+  export FEATURE_AGENTS="${FEATURE_AGENTS:-true}"
+  export FEATURE_WORKSPACES="${FEATURE_WORKSPACES:-true}"
+  export FEATURE_VOICE_CALL="${FEATURE_VOICE_CALL:-true}"
   # shellcheck disable=SC2046
   flutter build linux --release $(PRINT_DEFINES=1 ./run.sh linux)
 fi
