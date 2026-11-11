@@ -15,11 +15,23 @@ how you end up with a tree that never existed.
 from __future__ import annotations
 
 import time
+import uuid
 from collections.abc import Callable
 from typing import Any
 
 from .registry import ToolRegistry
-from .workspace_git import GitWorkspace, timed_record
+from .workspace_git import CommitInfo, GitWorkspace, timed_record
+
+#: The tools that may change workspace files (docs/WIRE_CONTRACT.md,
+#: "Checkpoints, rewind and fork"): the first of them in a run takes the
+#: run's checkpoint, and each of them updates the agent-write ledger.
+CHECKPOINT_TOOLS = frozenset(
+    {"run_command", "python", "write_file", "edit_file", "apply_patch", "run_ffmpeg", "workspace_undo"}
+)
+
+#: ``(checkpoint_id, commit)`` -> None: the executor stores the checkpoint
+#: with the run and the user message it belongs to.
+CheckpointSink = Callable[[str, CommitInfo], None]
 
 #: An observer of every dispatch: ``(name, args, result)``. One place, for the
 #: same reason journaling lives here — a live feed that is wired per tool goes
@@ -83,14 +95,60 @@ class JournalingRegistry(ToolRegistry):
         super().__init__()
         self._workspace = workspace
         self._observer = observer
+        #: ``(name, args, result) -> result`` hooks run on every result before
+        #: it is journaled (e.g. :class:`chuk_agents_runtime.project_rules.
+        #: ProjectRules` appending a directory's AGENTS.md). A hook that
+        #: raises is skipped; the call's own result stands.
+        self.result_augmenters: list[Callable[[str, dict | None, Any], Any]] = []
+        #: Set by the executor per run: the first workspace-changing call of
+        #: the run pins a checkpoint and reports it here.
+        self.checkpoint_sink: CheckpointSink | None = None
+        self._checkpointed = False
 
     @property
     def workspace(self) -> GitWorkspace | None:
         return self._workspace
 
-    def dispatch(self, name: str, args: dict | None = None) -> Any:
+    def add_result_augmenter(self, fn: Callable[[str, dict | None, Any], Any]) -> None:
+        self.result_augmenters.append(fn)
+
+    def _before_write(self) -> None:
+        """Before a call that may change files: the run's checkpoint on the
+        first one, else commit what changed outside the agent meanwhile, so
+        the agent-write ledger only names the agent's own changes."""
+        workspace = self._workspace
+        try:
+            if not self._checkpointed and self.checkpoint_sink is not None:
+                self._checkpointed = True
+                checkpoint_id = uuid.uuid4().hex[:16]
+                info = workspace.create_checkpoint(checkpoint_id)
+                if info is not None:
+                    self.checkpoint_sink(checkpoint_id, info)
+            else:
+                workspace.commit_outside_changes()
+        except Exception:  # noqa: BLE001 — a checkpoint never fails a call
+            pass
+
+    def dispatch(self, name: str, args: dict | None = None, *, call_id: str | None = None) -> Any:
         started = time.perf_counter()
-        result = super().dispatch(name, args)
+        writes = (
+            name in CHECKPOINT_TOOLS
+            and self._workspace is not None
+            and self._workspace.enabled
+        )
+        if writes:
+            self._before_write()
+        result = super().dispatch(name, args, call_id=call_id)
+        if writes:
+            try:
+                self._workspace.note_agent_writes(self._workspace.outside_changes())
+            except Exception:  # noqa: BLE001
+                pass
+        for augment in self.result_augmenters:
+            try:
+                result = augment(name, args, result)
+            except Exception:  # noqa: BLE001 — an augmenter never fails a call
+                pass
         timed_record(self._workspace, name, args, result, started)
         if self._observer is not None:
             try:

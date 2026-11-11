@@ -30,6 +30,8 @@ import 'package:chuk_chat/platform_specific/chat/handlers/message_actions_handle
 import 'package:chuk_chat/services/chat_runtime.dart';
 import 'package:chuk_chat/services/dictation_tracker.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
+import 'package:chuk_chat/utils/secret_mask.dart';
+import 'package:chuk_chat/widgets/composer/secret_send_guard.dart';
 
 mixin ChatMessageEditMixin<W extends StatefulWidget>
     on State<W>, ChatScrollMixin<W> {
@@ -181,7 +183,33 @@ mixin ChatMessageEditMixin<W extends StatefulWidget>
   }
 
   /// Sends the message, or submits an edited message if in edit mode.
-  Future<void> sendOrSubmitEdit() async {
+  /// True while a reply of the open chat runs (streaming, or between two
+  /// tool passes). A send then goes to the follow-up queue or steers.
+  bool get composerBusy => false;
+
+  /// Puts the composer text into the follow-up queue (or steers the running
+  /// turn). [alternate] is Ctrl/Cmd+Enter: the other mode of the setting.
+  Future<void> queueOrSteerComposer({required bool alternate}) async {
+    await sendMessage();
+  }
+
+  /// The composer's send: an edit is submitted, a busy chat queues or steers,
+  /// otherwise the message goes out. Text that looks like an API key asks
+  /// first ([confirmSecretSend]); "Edit" sends nothing and keeps the draft.
+  Future<void> sendOrSubmitEdit({bool alternate = false}) async {
+    // Checked synchronously first, so a plain send still starts in this
+    // frame; only a text with a key waits for the dialog.
+    if (containsSecret(composerController.text)) {
+      if (!await confirmSecretSend(context, composerController.text)) {
+        if (mounted) composerFocusNode.requestFocus();
+        return;
+      }
+      if (!mounted) return;
+    }
+    if (!messageActionsHandler.isEditing && composerBusy) {
+      await queueOrSteerComposer(alternate: alternate);
+      return;
+    }
     if (messageActionsHandler.isEditing) {
       final editIndex = messageActionsHandler.editingMessageIndex!;
       final newText = composerController.text.trim();

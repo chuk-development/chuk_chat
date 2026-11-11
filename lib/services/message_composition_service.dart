@@ -1,6 +1,7 @@
 // lib/services/message_composition_service.dart
 import 'dart:math' as math;
 import 'package:chuk_chat/models/chat_model.dart';
+import 'package:chuk_chat/services/agents/agents_attachment_store.dart';
 import 'package:chuk_chat/services/provider_resolution_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/input_validator.dart';
@@ -198,6 +199,17 @@ class MessageCompositionService {
       final documentFiles = attachedFiles
           .where((f) => f.markdownContent != null)
           .toList();
+      // AGENTS: a file kept sealed on this device for the host (no markdown,
+      // not a picture). It rides with the pictures as a path; the Agents
+      // transport uploads it and the task names it by `blob_id`.
+      final agentsFiles = attachedFiles
+          .where(
+            (f) =>
+                !f.isImage &&
+                f.markdownContent == null &&
+                AgentsAttachmentStore.isRef(f.encryptedImagePath),
+          )
+          .toList();
 
       if (kDebugMode) {
         debugPrint(
@@ -257,6 +269,14 @@ class MessageCompositionService {
         }
       }
 
+      for (final f in agentsFiles) {
+        final String? ref = f.encryptedImagePath;
+        if (ref != null) imageStoragePaths.add(ref);
+      }
+      if (agentsFiles.isNotEmpty && displayMessageText.isEmpty) {
+        displayMessageText = agentsFiles.map((f) => f.fileName).join(', ');
+      }
+
       // Add documents with markdown content
       if (documentFiles.isNotEmpty) {
         final markdownSections = documentFiles
@@ -275,6 +295,8 @@ class MessageCompositionService {
           ? userInput
           : (imageFiles.isNotEmpty
                 ? '1 image attached'
+                : agentsFiles.isNotEmpty
+                ? 'Please look at the attached files.'
                 : 'Please review the uploaded documents.');
 
       if (promptParts.isNotEmpty) {
@@ -335,6 +357,7 @@ class MessageCompositionService {
       history: apiHistory,
       currentMessage: aiPromptContent,
       systemPrompt: systemPrompt,
+      modelId: selectedModelId,
     );
 
     int maxResponseTokens = 512; // Default
@@ -343,17 +366,12 @@ class MessageCompositionService {
         providerLimits!.contextLength! > 0) {
       final int contextLength = providerLimits.contextLength!;
 
-      // Check if prompt exceeds context length
-      if (promptTokens >= contextLength) {
-        return _TokenLimits.error(
-          'Too much context for this model '
-          '($promptTokens vs $contextLength token limit). '
-          'Clear history or shorten your message.',
-        );
-      }
-
-      // Calculate max response tokens
-      final int availableForCompletion = contextLength - promptTokens;
+      // No hard stop when the prompt is over the window: the send compacts
+      // the chat first (ChatCompaction, docs/GOTCHAS.md "Chat compaction"),
+      // which frees the room. The answer budget then is the model's cap.
+      final int availableForCompletion = promptTokens >= contextLength
+          ? contextLength
+          : contextLength - promptTokens;
       final int completionCap =
           providerLimits.maxCompletionTokens != null &&
               providerLimits.maxCompletionTokens! > 0
@@ -396,21 +414,15 @@ class _MessageContent {
   });
 }
 
-/// Internal class for token limits
+/// Internal class for token limits. Always valid now: an over-long prompt
+/// is compacted by the send instead of refused (ChatCompaction).
 class _TokenLimits {
   final bool isValid;
-  final String? errorMessage;
   final int? maxResponseTokens;
 
-  const _TokenLimits({
-    required this.isValid,
-    this.errorMessage,
-    this.maxResponseTokens,
-  });
+  String? get errorMessage => null;
 
-  factory _TokenLimits.error(String message) {
-    return _TokenLimits(isValid: false, errorMessage: message);
-  }
+  const _TokenLimits({required this.isValid, this.maxResponseTokens});
 
   factory _TokenLimits.success(int maxResponseTokens) {
     return _TokenLimits(isValid: true, maxResponseTokens: maxResponseTokens);

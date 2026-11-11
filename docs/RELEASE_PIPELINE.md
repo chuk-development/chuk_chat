@@ -125,11 +125,11 @@ For Vercel:
 
 | File | Purpose |
 |------|---------|
-| `.github/workflows/release-android.yml` | Android APK/AAB build + Play Store upload |
+| `.github/workflows/build-cross-platform.yml` | The release: Android, Linux x64/ARM64, Windows, macOS builds, tag and release notes |
+| `.github/workflows/play-store.yml` | Play Store AAB build + upload (on demand) |
 | `.github/workflows/release-macos.yml` | macOS DMG/PKG build + App Store upload |
 | `.github/workflows/release-windows.yml` | Windows MSIX/ZIP build + Store upload |
-| `.github/workflows/release-linux.yml` | Linux AppImage/DEB/RPM build + Snap Store upload |
-| `.github/workflows/release-web.yml` | Web build + GitHub Pages/Firebase/Netlify/Vercel |
+| `.github/workflows/web-image.yml` | Builds the web image as a check; Dokploy deploys `chat.chuk.chat` from `Dockerfile.web` |
 
 ## Fastlane Configuration
 
@@ -264,7 +264,7 @@ All store deployments are **commented out by default** in the workflows. Uncomme
 1. Create a service account in Google Play Console
 2. Download JSON key file
 3. Add `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` secret to GitHub
-4. Uncomment `deploy-playstore` job in `.github/workflows/release-android.yml`
+4. Run `.github/workflows/play-store.yml` (see `docs/FASTLANE.md`)
 
 ### macOS - Mac App Store
 
@@ -286,7 +286,7 @@ All store deployments are **commented out by default** in the workflows. Uncomme
 2. Register app
 3. Get snapcraft credentials
 4. Add `SNAPCRAFT_TOKEN` secret to GitHub
-5. Uncomment `deploy-snapstore` job in `.github/workflows/release-linux.yml`
+5. There is no Snap job yet; `.github/workflows/build-cross-platform.yml` builds the Linux packages
 
 ### Web - Hosting Platforms
 
@@ -295,7 +295,7 @@ All store deployments are **commented out by default** in the workflows. Uncomme
 - Set custom domain in workflow: `cname: chat.chuk.dev`
 
 **Firebase/Netlify/Vercel** (commented out):
-- Uncomment relevant job in `.github/workflows/release-web.yml`
+- Not used: the web app deploys through Dokploy (`Dockerfile.web`), see `CLAUDE.md`
 - Add required secrets
 - Configure project IDs
 

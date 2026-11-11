@@ -9,6 +9,7 @@ stack an unbounded error body across retries.
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import re
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
@@ -47,6 +48,31 @@ OLD_BRIDGE_HINT = (
     "that tool was replaced. Use search_tools to find a hidden tool, then call "
     "it by its own name."
 )
+
+
+#: The native tool call id of the call being dispatched, set by the loop's
+#: toolset around ``dispatch`` (``pai.tools.RegistryToolset.call_tool``). A
+#: tool whose answer can arrive later names it (``ask_user``: a late answer
+#: is routed back by this id). Empty outside a model call.
+_CURRENT_CALL_ID: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "chuk_agents_current_call_id", default=""
+)
+
+
+def current_call_id() -> str:
+    """The tool call id of the dispatch in progress, or ``""``."""
+    return _CURRENT_CALL_ID.get()
+
+
+def set_current_call_id(call_id: str) -> contextvars.Token:
+    return _CURRENT_CALL_ID.set(call_id or "")
+
+
+def reset_current_call_id(token: contextvars.Token) -> None:
+    try:
+        _CURRENT_CALL_ID.reset(token)
+    except ValueError:  # another context made the token
+        _CURRENT_CALL_ID.set("")
 
 
 def unknown_tool_message(name: str) -> str:
@@ -209,9 +235,19 @@ class ToolRegistry:
 
     # -- dispatch ---------------------------------------------------------
 
-    def dispatch(self, name: str, args: dict | None = None) -> Any:
+    def dispatch(self, name: str, args: dict | None = None, *, call_id: str | None = None) -> Any:
         """Execute a tool by name. Never raises for a tool failure — returns a
-        bounded error envelope instead."""
+        bounded error envelope instead. ``call_id`` (the native tool call id)
+        is readable by the handler through :func:`current_call_id`."""
+        if not call_id:
+            return self._dispatch(name, args)
+        token = set_current_call_id(call_id)
+        try:
+            return self._dispatch(name, args)
+        finally:
+            reset_current_call_id(token)
+
+    def _dispatch(self, name: str, args: dict | None) -> Any:
         args = dict(args or {})
         spec = self._tools.get(name)
         if spec is None:

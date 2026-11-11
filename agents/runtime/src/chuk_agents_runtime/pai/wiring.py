@@ -110,6 +110,7 @@ def loop_setup(
     registry: Any = None,
     mcp: Any = None,
     action_approvals: Any = None,
+    reviewer: Any = None,
 ) -> tuple[Any, dict[str, Any]]:
     """``(model, extra kwargs)`` for the :class:`~chuk_agents_runtime.loop.AgentLoop`
     that ``build_runtime`` builds.
@@ -131,7 +132,7 @@ def loop_setup(
                 bind_publish(rule, action_approvals, asks=_asks(herenow_config)),
             )
         if registry is not None:
-            for name, rule in action_rules(registry, mcp, action_approvals).items():
+            for name, rule in action_rules(registry, mcp, action_approvals, reviewer).items():
                 policy.add(name, rule)
     elif _asks(herenow_config):
         policy.add("herenow_publish", herenow_rule(env, herenow_config, herenow_gate))

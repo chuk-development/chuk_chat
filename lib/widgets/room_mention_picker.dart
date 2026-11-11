@@ -15,6 +15,8 @@ library;
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/utils/theme_extensions.dart';
+
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/models/agents_room.dart';
@@ -348,9 +350,9 @@ class _MentionRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final ColorScheme scheme = theme.colorScheme;
-    final Color name = selected ? scheme.onPrimaryContainer : scheme.onSurface;
+    final Color name = selected ? theme.m3.onSelection : scheme.onSurface;
     final Color quiet = selected
-        ? scheme.onPrimaryContainer.withValues(alpha: 0.72)
+        ? theme.m3.onSelection.withValues(alpha: 0.72)
         : scheme.onSurfaceVariant;
     final String? aside = entry.role ?? entry.trailing;
     return Semantics(
@@ -359,7 +361,7 @@ class _MentionRow extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: ColoredBox(
-          color: selected ? scheme.primaryContainer : Colors.transparent,
+          color: selected ? theme.m3.selection : Colors.transparent,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(

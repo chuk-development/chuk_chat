@@ -105,6 +105,7 @@ from chuk_agents_runtime.agent_mail import (
     NoSandbox,
     valid_id,
 )
+from chuk_agents_runtime.automations import is_transient_failure
 from chuk_agents_runtime.memory_hindsight import bank_id_for_workspace
 from chuk_agents_runtime.telemetry import get_tracer
 from chuk_agents_runtime.telemetry import run_scope as trace_run_scope
@@ -115,6 +116,7 @@ from chuk_agents_runtime.action_policy import (
     ActionDecision,
     ActionPolicy,
     ActionRequest,
+    SCOPE_PREFIX,
     parse_scope,
     user_browser_policy,
 )
@@ -128,11 +130,18 @@ from chuk_agents_runtime.takeover import (
     host_of,
 )
 from chuk_agents_runtime.runtime import SKILLS_DIRNAME
+from chuk_agents_runtime.acp_runner import detect_backends
 from chuk_agents_runtime.skill_proposals import (
     SkillDraft,
     SkillProposalStore,
     decide_skill_proposal,
 )
+from chuk_agents_runtime.background_review import (
+    MIN_ITERATIONS as REVIEW_MIN_ITERATIONS,
+    run_background_review,
+)
+from chuk_agents_runtime.skill_curator import curate_skills
+from chuk_agents_runtime.skills import load_skills
 from chuk_agents_runtime.cost import (
     BUDGET_EXCEEDED,
     BUDGET_OK,
@@ -158,12 +167,42 @@ from chuk_agents_sandbox import DEFAULT_USER, BaseEnvironment, make_environment
 
 from .environment import SandboxEnvironment
 from .secrets import SecretsVault
+from .login_vault import LOGIN_VAULT_FRAMES, handle_login_vault_frame, login_guard
 from .shell import JobWakeRouter
 from . import box_browser as _box_browser
 from . import user_browser as _user_browser
 from .box_browser import TOOLS_FILE, BoxBrowser, box_of
+from chuk_agents_runtime.ask_user import (
+    NO_TIMEOUT as QUESTION_NO_TIMEOUT,
+    clean_answers,
+    late_answer_prompt,
+)
+from chuk_agents_runtime.goal import GoalController
+from chuk_agents_runtime.plan_mode import (
+    DECISION_APPROVE,
+    DECISION_KEEP_PLANNING,
+    DECISION_STOPPED,
+    DECISION_TIMEOUT,
+    PlanMode,
+    PlanState,
+    parse_plan_prefix,
+)
+from chuk_agents_runtime.sources import source_for_origin
+from chuk_agents_runtime.todo import load_todos
+
+from .goal_driver import ORIGIN_GOAL, GoalDriver, default_max_rounds
 from .protocol import (
     ACTION_BROWSER_TAKEOVER,
+    ACTION_PLAN_REVIEW,
+    QUESTION_ANSWERED,
+    QUESTION_OPEN,
+    QUESTION_PENDING,
+    QUESTION_STOPPED,
+    goal_payload,
+    plan_mode_payload,
+    plan_review_request_payload,
+    question_request_payload,
+    todo_payload,
     APPROVAL_AUTO,
     APPROVAL_BY_USER,
     APPROVAL_STOPPED,
@@ -228,11 +267,29 @@ HOST_DEFAULT = "host-default"
 ORIGIN_APP = "app"
 
 #: Runs nobody watches live: the host announces their end itself.
-UNATTENDED_ORIGINS = ("automation", "job", ORIGIN_MAIL)
+UNATTENDED_ORIGINS = ("automation", "job", ORIGIN_MAIL, "goal")
+
+#: A late answer to an ``ask_user`` question that ran out
+#: (docs/WIRE_CONTRACT.md, "Questions to the user"): a new turn of the session.
+ORIGIN_ANSWER = "answer"
+
+#: How long a plan review waits for the user (docs/WIRE_CONTRACT.md, "Plan
+#: mode"). Past it the agent stays in plan mode and says the plan waits.
+PLAN_REVIEW_WAIT_SECONDS = 30 * 60
+
+#: Late-answerable questions kept in memory (oldest dropped first).
+MAX_LATE_QUESTIONS = 200
+#: The longest an ``ask_user`` card on screen (``ask_visible``) pauses the
+#: wait. A dead app (crashed, killed in the background, socket gone) never
+#: sends ``visible: false``; without this cap the run would hold the session's
+#: one worker until ``RUN_MAX_SECONDS``.
+MAX_VISIBLE_PAUSE_SECONDS = 30 * 60.0
 
 #: Origins whose task frame carries no ``mcp_servers`` (no app sent it): they
 #: run with the connectors the session already has.
-CONNECTORLESS_ORIGINS = ("automation", ORIGIN_MAIL, _user_browser.PANEL_ORIGIN)
+CONNECTORLESS_ORIGINS = (
+    "automation", ORIGIN_MAIL, _user_browser.PANEL_ORIGIN, "goal", "answer",
+)
 
 #: Origins a lighter context may serve (docs/WIRE_CONTRACT.md, "Cost per run
 #: and weekly budget"): a fired schedule / watcher and a background job wake.
@@ -264,6 +321,32 @@ def budget_refusal_text(*, spent: float, budget: float, interactive: bool) -> st
 
 def light_context_enabled() -> bool:
     return os.environ.get(LIGHT_CONTEXT_ENV, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+#: The background review (Hermes H1): after a finished task of at least
+#: ``REVIEW_MIN_ITERATIONS`` rounds, a cheap clone of the model reads the task
+#: and may offer ONE skill (new, or an update of a skill the task loaded)
+#: through the ``skill_proposal`` card. Off unless the operator opts in.
+BACKGROUND_REVIEW_ENV = "AGENTS_BACKGROUND_REVIEW"
+
+#: The skill curator (Hermes H5): archive workspace skills unused for this
+#: many days (never deletes; seeds and ``pinned`` skills are kept). Unset or
+#: not a positive number = off. Runs at most once per ``CURATOR_INTERVAL_SECONDS``.
+SKILL_CURATOR_DAYS_ENV = "AGENTS_SKILL_CURATOR_DAYS"
+CURATOR_INTERVAL_SECONDS = 86_400.0
+
+
+def background_review_enabled() -> bool:
+    return os.environ.get(BACKGROUND_REVIEW_ENV, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def skill_curator_days() -> float | None:
+    raw = os.environ.get(SKILL_CURATOR_DAYS_ENV, "").strip()
+    try:
+        days = float(raw)
+    except ValueError:
+        return None
+    return days if days > 0 else None
 
 
 #: Model rounds of a restricted mail run: read, note, maybe a draft, archive.
@@ -435,11 +518,24 @@ class _SkillProposalSink:
     proposals"): store the draft, persist the ``skill_proposal`` frame in the
     thread (so a replay shows the card), stream it live."""
 
-    def __init__(self, executor: "Executor", request_id: str, run: "_Run", session_key: str) -> None:
+    def __init__(
+        self,
+        executor: "Executor",
+        request_id: str,
+        run: "_Run",
+        session_key: str,
+        *,
+        live: bool = True,
+        origin: str | None = None,
+    ) -> None:
         self._executor = executor
         self._request_id = request_id
         self._run = run
         self._session_key = session_key
+        # A background review runs after the ``done``: its card is persisted
+        # for the replay only, never sent on the closed stream.
+        self._live = live
+        self._origin = origin
 
     def submit(self, draft: SkillDraft, *, skills_root: str) -> dict:
         executor = self._executor
@@ -456,10 +552,13 @@ class _SkillProposalSink:
             name=draft.name,
             description=draft.description,
             body=draft.body,
+            kind=draft.kind,
+            origin=self._origin,
         )
         mid = executor._persist_event(self._session_key, payload)
         store.set_event_mid(proposal_id, mid)
-        executor._event(self._request_id, payload)
+        if self._live:
+            executor._event(self._request_id, payload)
         return {"ok": True, "proposal_id": proposal_id}
 
 
@@ -537,6 +636,16 @@ class _Run:
     # Set once ``_finish_automation`` asked the host. A run ends once, so the
     # host hears it once even when a later step of the run fails.
     automation_finished: bool = False
+    # docs/WIRE_CONTRACT.md, "Plan mode": the task's switch (``True`` on,
+    # ``False`` off, ``None`` no change), applied when the run starts.
+    plan: bool | None = None
+    # docs/WIRE_CONTRACT.md, "Goal mode": the round number of a goal round.
+    goal_round: int | None = None
+    # Typed fields of the prompt row (``answer_to_pending_question``).
+    row_extra: dict | None = None
+    #: docs/WIRE_CONTRACT.md, "Attachments to Agents": the task's finished
+    #: uploads (inbox metadata); the prompt names their paths.
+    attachments: list | None = None
 
 
 class _PreRunClock:
@@ -853,8 +962,18 @@ class _SecretsOff:
     def env(self) -> dict[str, str]:
         return self._vault.env()
 
+    def scrub_values(self) -> dict[str, str]:
+        return self._vault.scrub_values()
+
+    def login_entries(self) -> list[dict]:
+        return self._vault.login_entries()
+
     def request(self, names: list[str], purpose: str) -> dict[str, str]:
         raise PermissionError(SECRETS_OFF_MESSAGE)
+
+
+#: The tools whose approval may remember a command prefix (item 9).
+_SHELL_APPROVAL_TOOLS = frozenset({"run_command"})
 
 
 @dataclass
@@ -877,8 +996,17 @@ class _PendingApproval:
     #: request without classes, whose answer is only yes or no.
     options: tuple[str, ...] = ()
     #: What the user's answer covered (``once`` / ``always_this_agent`` /
-    #: ``always_this_site`` / ``deny``), set with the decision.
+    #: ``always_this_site`` / ``always_this_prefix`` / ``deny``), set with the
+    #: decision.
     scope: str = "once"
+    #: The thread this approval belongs to, so a ``remember_prefix`` on the
+    #: decision (item 9) is stored for the right agent.
+    session_key: str | None = None
+    #: The tool the request is about (an action request's ``tool``), so a
+    #: ``remember_prefix`` is only stored for a shell command approval.
+    tool: str = ""
+    #: A plan review's "Keep planning" text (docs/WIRE_CONTRACT.md, "Plan mode").
+    feedback: str = ""
 
     def decide(self, approved: bool, scope: Any = None) -> bool:
         """Record a decision; False when one was already recorded. ``scope``
@@ -891,6 +1019,31 @@ class _PendingApproval:
             # A yes whose scope is "deny" is a deny: never approve it.
             self.approved = approved is True and self.scope != "deny"
             return True
+
+
+@dataclass
+class _PendingQuestion:
+    """One ``ask_user`` batch (docs/WIRE_CONTRACT.md, "Questions to the
+    user"). The worker waits on ``event`` while the run waits; after the wait
+    ran out the entry stays (``late``) so a later answer starts a new turn."""
+
+    call_id: str
+    session_key: str
+    questions: list
+    timeout: int
+    payload: dict
+    event: threading.Event = field(default_factory=threading.Event)
+    answers: list | None = None
+    #: The card is on screen (``ask_visible``): the wait does not count down,
+    #: for at most ``MAX_VISIBLE_PAUSE_SECONDS`` from ``visible_since``.
+    visible: bool = False
+    visible_since: float | None = None
+    #: The wait ran out; the run went on. A later answer becomes a new turn.
+    late: bool = False
+    #: Answered (in time or late) or withdrawn: nothing more to do.
+    closed: bool = False
+    mid: int | None = None
+    lock: threading.Lock = field(default_factory=threading.Lock)
 
 
 class _RfbClientFramer:
@@ -1498,6 +1651,14 @@ class Executor:
         # Guarded because the two threads touch it.
         self._approvals: dict[str, _PendingApproval] = {}
         self._approvals_lock = threading.Lock()
+        # docs/WIRE_CONTRACT.md, "Goal mode": the driver owns the
+        # process-local armed set. A new process arms nothing.
+        self._goal_driver = GoalDriver(self, db_path)
+        self._goal_max_rounds = default_max_rounds()
+        # docs/WIRE_CONTRACT.md, "Questions to the user": open questions by
+        # call id, and the ones that ran out and may still be answered.
+        self._questions: dict[str, _PendingQuestion] = {}
+        self._questions_lock = threading.Lock()
 
         # The live browser view (§9.1), at most one per executor (one agent, one
         # sandbox Chromium). Set on `browser_start`, fed by `browser_data`, torn
@@ -1921,11 +2082,44 @@ class Executor:
             # so there is no request-scoped terminal to send.
             self._resolve_approval(payload)
             return
+        if kind == "attachment_put":
+            # docs/WIRE_CONTRACT.md, "Attachments to Agents": one chunk of a
+            # picture or file; answered with one terminal ``attachment_ack``.
+            self._handle_attachment_put(request_id, payload)
+            return
+        if kind in ("checkpoints_list", "checkpoint_rewind", "thread_fork"):
+            # docs/WIRE_CONTRACT.md, "Checkpoints, rewind and fork". Each is
+            # answered with one terminal frame.
+            self._handle_checkpoint_frame(kind, request_id, payload)
+            return
+        if kind == "goal_control":
+            # The user pauses, resumes or clears the goal (docs/WIRE_CONTRACT.md,
+            # "Goal mode"). Answered with one terminal ``goal`` frame.
+            self._handle_goal_control(request_id, payload)
+            return
+        if kind == "question_answer":
+            # The user's answer to an ``ask_user`` card: wakes the waiting
+            # call, or (after the wait ran out) starts a new turn. A control
+            # frame like approval_decision: no terminal.
+            self._handle_question_answer(payload)
+            return
+        if kind == "ask_visible":
+            # The question card is on screen or not: the wait pauses while it is.
+            self._handle_ask_visible(payload)
+            return
         if kind == "secrets":
             # The user's whole secret set (docs/WIRE_CONTRACT.md, "Secrets"):
             # replace what the vault holds and wake a tool waiting for it. A
             # control frame like approval_decision: no terminal.
             self._handle_secrets(payload)
+            return
+        if kind in LOGIN_VAULT_FRAMES:
+            # The browser login vault (Hermes H32): set / delete / list,
+            # answered with one terminal ``login_vault`` frame that never
+            # holds a password or a TOTP key.
+            self._terminal(
+                request_id, handle_login_vault_frame(self._secrets, kind, payload)
+            )
             return
         if kind in ("automation_control", "automation_list", "automation_create", "automation_update"):
             # The user manages the automations of this host (docs/WIRE_CONTRACT.md,
@@ -2079,6 +2273,35 @@ class Executor:
             run_id=uuid4().hex,
             started_at=time.time(),
         )
+        # docs/WIRE_CONTRACT.md, "Attachments to Agents": finished uploads by
+        # ``blob_id``. An unknown one refuses the task, so the app uploads it
+        # again instead of the agent answering without the file.
+        raw_attachments = payload.get("attachments")
+        if raw_attachments:
+            from .attachments import AttachmentError, AttachmentInbox, row_attachments
+
+            try:
+                workspace_dir = self._workspace_for(str(session_key))
+                if not workspace_dir:
+                    raise AttachmentError("this agent has no workspace for attachments")
+                attached = AttachmentInbox(workspace_dir).resolve_task(raw_attachments)
+            except AttachmentError as exc:
+                self._terminal(
+                    request_id,
+                    {**error_payload(f"attachments: {exc}"), "session_key": str(session_key)},
+                )
+                return
+            run.attachments = attached
+            run.row_extra = {**(run.row_extra or {}), "attachments": row_attachments(attached)}
+        # docs/WIRE_CONTRACT.md, "Plan mode": the ``plan`` flag, or a
+        # ``/plan`` prefix (``/plan off`` leaves). Applied when the run starts.
+        raw_plan = payload.get("plan")
+        if isinstance(raw_plan, bool):
+            run.plan = raw_plan
+        switch, stripped = parse_plan_prefix(prompt)
+        if switch is not None:
+            run.plan = switch
+            run.prompt = stripped
         # A run of the same question is already in flight for this session:
         # refuse the copy rather than pay for the same answer twice.
         #
@@ -2102,7 +2325,9 @@ class Executor:
         # one run at a time, so a second run of a session waits rather than
         # interleaving its history writes with the first. This rule refuses the
         # duplicate outright; it does not change that ordering for anything else.
-        live = self._run_in_flight(str(session_key), prompt)
+        # Compare the prompt the run stores (``/plan`` prefix stripped): a
+        # re-sent ``/plan add login`` must match the run asking ``add login``.
+        live = self._run_in_flight(str(session_key), run.prompt)
         if live is not None:
             logger.warning(
                 "duplicate task refused request=%s session=%s: the same prompt "
@@ -2149,6 +2374,12 @@ class Executor:
             run.provider or HOST_DEFAULT,
             run.reasoning_effort or HOST_DEFAULT,
         )
+        # A user task resets the job wake cap of its session
+        # (docs/WIRE_CONTRACT.md, "The wake-up", 7).
+        try:
+            self._jobs.user_task(run.session_key)
+        except Exception:  # noqa: BLE001 — bookkeeping must not refuse a task
+            pass
         self._enqueue_run(run)
 
     def _run_in_flight(self, session_key: str, prompt: str) -> "_Run | None":
@@ -2217,6 +2448,17 @@ class Executor:
                 store.close()
         except Exception:  # noqa: BLE001 — no history, host default
             last = None
+        if not last and isinstance(meta.get("mode_session_key"), str) and meta["mode_session_key"]:
+            # A schedule with target ``new_once`` / ``new`` fires into a chat
+            # with no history: it runs in the mode of the chat that owns it.
+            try:
+                store = StateStore(self._db_path)
+                try:
+                    last = store.latest_run(str(meta["mode_session_key"]))
+                finally:
+                    store.close()
+            except Exception:  # noqa: BLE001 — no history, host default
+                last = None
         if last:
             model = last.get("model") or None
             provider = last.get("provider") or None
@@ -2252,6 +2494,24 @@ class Executor:
             profile=str(profile) if profile else None,
             mail_message_id=valid_id(meta.get("message_id")),
         )
+        # docs/WIRE_CONTRACT.md, "Goal mode": a goal round knows its number
+        # (the ``blocked`` rule counts rounds).
+        if origin == ORIGIN_GOAL:
+            try:
+                run.goal_round = int(meta.get("goal_round") or 0) or None
+            except (TypeError, ValueError):
+                run.goal_round = None
+        answered = meta.get("answer_to_pending_question")
+        if isinstance(answered, str) and answered:
+            run.row_extra = {"answer_to_pending_question": answered}
+        # The prompt of an automation the user created, stored on the row for
+        # the auto reviewer (``auto_review.USER_PROMPT_KEY``). Only the host
+        # sets it, only for ``created_by == "user"``; never read by the model.
+        user_prompt = meta.get("user_prompt")
+        if run.origin == "automation" and isinstance(user_prompt, str) and user_prompt.strip():
+            from chuk_agents_runtime.auto_review import USER_PROMPT_KEY
+
+            run.row_extra = {**(run.row_extra or {}), USER_PROMPT_KEY: user_prompt.strip()[:8_000]}
         logger.info(
             "automation task accepted request=%s session=%s run=%s automation=%s model=%s",
             run.request_id,
@@ -2879,6 +3139,13 @@ class Executor:
                 body["container_id"] = str(container_id)[:12]
         if workspace:
             body["workspace"] = str(workspace)
+        # ``--sandbox auto`` fell back to local (bead B10): the app must be
+        # able to say that this agent runs without a container.
+        if getattr(env, "sandbox_fallback", False) is True:
+            body["fallback"] = True
+            body["requested"] = "auto"
+        if not container and getattr(env, "isolated", False) is True:
+            body["isolation"] = "bwrap"
         return body
 
     def _handle_skills_frame(self, kind: str, request_id: str, payload: dict) -> None:
@@ -3002,6 +3269,9 @@ class Executor:
         stream with an ``error`` instead of killing the serve loop.
         """
         session_key = str(payload.get("session_key", "default"))
+        # The client that showed a question card may be gone; the countdown
+        # runs again until the reconnected app reports the card visible.
+        self._reset_question_visibility(session_key)
         # The replay cursor (docs/WIRE_CONTRACT.md): a client that already holds
         # the thread up to a message id asks only for what came after it.
         try:
@@ -3091,6 +3361,20 @@ class Executor:
             self._terminal(request_id, marker)
 
     def _run_state_for(self, store: StateStore, session_key: str) -> dict:
+        """``run_state`` with the agent-mode fields (docs/WIRE_CONTRACT.md,
+        "Goal mode", "Plan mode", "Todo list") and the live run's ``source``."""
+        payload = self._run_state_core(store, session_key)
+        payload.update(self._modes_state(store, session_key))
+        with self._runs_lock:
+            live = next(
+                (r for r in self._runs.values() if r.session_key == session_key), None
+            )
+        source = source_for_origin(live.origin) if live is not None else None
+        if source:
+            payload["source"] = source
+        return payload
+
+    def _run_state_core(self, store: StateStore, session_key: str) -> dict:
         """The ``run_state`` header of a replay: ``running`` when a run for the
         session is queued or in flight here, else ``idle``. The registry is the
         live truth; the store covers a run this process recorded but has since
@@ -4018,7 +4302,11 @@ class Executor:
             action = req if isinstance(req, ActionRequest) else None
             publish = action.publish if action is not None else req
             approval_id = uuid4().hex
-            pending = _PendingApproval(options=tuple(action.options) if action else ())
+            pending = _PendingApproval(
+                options=tuple(action.options) if action else (),
+                session_key=session_key,
+                tool=str(action.tool or "") if action else "",
+            )
             with self._approvals_lock:
                 self._approvals[approval_id] = pending
             if publish is not None:
@@ -4054,6 +4342,12 @@ class Executor:
                     details=action.details,
                     session_key=session_key,
                 )
+                # Sandbox escalation / auto review cards name their kind on
+                # the top level too (docs/WIRE_CONTRACT.md, "Sandbox
+                # escalation", "Auto review"), like a takeover does.
+                card_kind = (action.details or {}).get("kind")
+                if card_kind in ("sandbox_escalation", "auto_review"):
+                    payload["kind"] = card_kind
             # The row first, the frame second (docs/WIRE_CONTRACT.md,
             # cowork-266): a replay must show the request whatever the socket
             # did, and its outcome is patched into this row below.
@@ -4090,18 +4384,154 @@ class Executor:
                 with self._waiting_user(request_id):
                     while True:
                         if kill.interrupted() or kill.estop_engaged():
-                            self._close_approval(pending, approved=False, reason=APPROVAL_STOPPED)
-                            return answer(False)
+                            if self._expire_approval(
+                                request_id, pending, payload, reason=APPROVAL_STOPPED
+                            ):
+                                return answer(False)
                         if pending.event.wait(self._poll):
                             return answer(pending.approved)
                         if time.monotonic() >= deadline:
-                            self._close_approval(pending, approved=False, reason=APPROVAL_TIMEOUT)
-                            return answer(False)
+                            if self._expire_approval(
+                                request_id, pending, payload, reason=APPROVAL_TIMEOUT
+                            ):
+                                return answer(False)
             finally:
                 with self._approvals_lock:
                     self._approvals.pop(approval_id, None)
 
         return gate
+
+    # -- checkpoints, rewind, fork (docs/WIRE_CONTRACT.md) ------------------
+    def _handle_attachment_put(self, request_id: str, payload: dict) -> None:
+        from .attachments import AttachmentError, AttachmentInbox
+
+        session_key = str(payload.get("session_key") or "default")
+        upload_id = payload.get("upload_id")
+        workspace_dir = self._workspace_for(session_key)
+        if not workspace_dir:
+            self._terminal(request_id, {"type": "attachment_ack", "upload_id": upload_id,
+                                        "ok": False, "error": "this agent has no workspace"})
+            return
+        try:
+            reply = AttachmentInbox(workspace_dir).put(payload)
+        except AttachmentError as exc:
+            reply = {"type": "attachment_ack", "upload_id": upload_id,
+                     "index": payload.get("index"), "ok": False, "error": str(exc)}
+        except OSError as exc:
+            reply = {"type": "attachment_ack", "upload_id": upload_id,
+                     "index": payload.get("index"), "ok": False, "error": f"store failed: {type(exc).__name__}"}
+        else:
+            reply["ok"] = True
+        reply["session_key"] = session_key
+        self._terminal(request_id, reply)
+
+    def _checkpoint_sink(self, run, session_key: str):
+        """The run's checkpoint hook: store the checkpoint with the run and
+        the user message it answers; drop the refs of the oldest beyond the
+        cap. Best effort: a failure costs the checkpoint, never the call."""
+
+        def sink(checkpoint_id: str, info) -> None:
+            from chuk_agents_runtime.checkpoints import last_user_mid, record_checkpoint
+            from chuk_agents_runtime.workspace_git import GitWorkspace
+
+            try:
+                store = StateStore(self._db_path)
+                try:
+                    _, dropped = record_checkpoint(
+                        store,
+                        session_key,
+                        checkpoint_id=checkpoint_id,
+                        commit=info.commit,
+                        run_id=getattr(run, "run_id", None),
+                        user_mid=last_user_mid(store, session_key),
+                    )
+                finally:
+                    store.close()
+                if dropped:
+                    workspace = GitWorkspace.open(self._workspace_for(session_key))
+                    if workspace is not None and workspace.enabled:
+                        for old in dropped:
+                            workspace.drop_checkpoint(old)
+            except Exception:  # noqa: BLE001
+                logger.debug("checkpoint not stored", exc_info=True)
+
+        return sink
+
+    def _handle_checkpoint_frame(self, kind: str, request_id: str, payload: dict) -> None:
+        from chuk_agents_runtime import checkpoints as _cp
+        from chuk_agents_runtime.workspace_git import REWIND_MODES, REWIND_SAFE, GitWorkspace
+
+        session_key = payload.get("session_key")
+        if not isinstance(session_key, str) or not session_key.strip():
+            self._terminal(request_id, error_payload("session_key is required"))
+            return
+        reply_type = {"checkpoints_list": "checkpoints", "checkpoint_rewind": "checkpoint_rewound",
+                      "thread_fork": "thread_forked"}[kind]
+        base = {"type": reply_type, "session_key": session_key}
+        mode = payload.get("mode") or REWIND_SAFE
+        if kind != "checkpoints_list" and mode not in REWIND_MODES:
+            self._terminal(request_id, {**base, "ok": False, "error": f"mode must be one of {', '.join(REWIND_MODES)}"})
+            return
+        workspace_dir = self._workspace_for(session_key)
+        # One agent workspace is shared by the agent's threads: never move its
+        # files under a running task.
+        busy = kind != "checkpoints_list" and any(
+            self._workspace_for(r.session_key) == workspace_dir for r in self._live_runs()
+        )
+        store = StateStore(self._db_path)
+        try:
+            if kind == "checkpoints_list":
+                items = _cp.list_checkpoints(store, session_key)
+                self._terminal(request_id, {**base, "ok": True, "items": items})
+                return
+            if kind == "checkpoint_rewind":
+                if busy:
+                    self._terminal(request_id, {**base, "ok": False, "error": "busy: a task of this agent is running"})
+                    return
+                item = _cp.find_checkpoint(store, session_key, str(payload.get("checkpoint_id") or ""))
+                if item is None:
+                    self._terminal(request_id, {**base, "ok": False, "error": "no such checkpoint"})
+                    return
+                workspace = GitWorkspace.open(workspace_dir)
+                if workspace is None or not workspace.enabled:
+                    self._terminal(request_id, {**base, "ok": False, "error": "workspace versioning is not enabled"})
+                    return
+                result = workspace.rewind(item["commit"], mode=mode)
+                self._terminal(request_id, {**base, "checkpoint_id": item["id"], "mode": mode, **result})
+                return
+            # thread_fork
+            mid = payload.get("mid")
+            if not isinstance(mid, int) or isinstance(mid, bool):
+                self._terminal(request_id, {**base, "ok": False, "error": "mid must be a message id"})
+                return
+            new_key = payload.get("new_session_key")
+            if not isinstance(new_key, str) or not new_key.strip():
+                new_key = f"{session_key}:fork:{uuid4().hex[:8]}"
+            try:
+                copied = _cp.fork_session(store, session_key, mid, new_key)
+            except _cp.ForkError as exc:
+                self._terminal(request_id, {**base, "ok": False, "error": str(exc)})
+                return
+            checkpoint = _cp.checkpoint_after(store, session_key, mid)
+            out = {**base, "ok": True, "new_session_key": new_key, "mid": mid, "copied": copied}
+            if checkpoint is not None:
+                out["checkpoint_id"] = checkpoint["id"]
+                if payload.get("restore_workspace", True) is not False:
+                    if busy:
+                        out["workspace"] = {"ok": False, "error": "busy: a task of this agent is running"}
+                    else:
+                        workspace = GitWorkspace.open(workspace_dir)
+                        out["workspace"] = (
+                            workspace.rewind(checkpoint["commit"], mode=mode)
+                            if workspace is not None and workspace.enabled
+                            else {"ok": False, "error": "workspace versioning is not enabled"}
+                        )
+            self._terminal(request_id, out)
+        except Exception as exc:  # noqa: BLE001 — answer, never leave the request open
+            logger.warning("checkpoint frame %s failed: %s", kind, type(exc).__name__)
+            self._terminal(request_id, {**base, "ok": False, "error": f"{type(exc).__name__}"})
+        finally:
+            store.close()
 
     def _action_approvals_binding(
         self, request_id: str, kill: KillSwitch, session_key: str | None
@@ -4138,6 +4568,17 @@ class Executor:
                 tool, args, lambda: self._user_browser_tabs_text(session_key or "")
             )
 
+        def prefix_allowed(command: str) -> bool:
+            # Item 9: a command whose token prefix the user remembered for this
+            # agent lifts a soft safety-floor stop. No host policy = nothing
+            # remembered = always False.
+            if hook is None or not hasattr(hook, "prefix_allowed_for"):
+                return False
+            try:
+                return hook.prefix_allowed_for(key)(command)
+            except Exception:  # noqa: BLE001 — an unreadable store denies
+                return False
+
         return ActionApprovals(
             policy=policy,
             ask=self._make_approval_gate(request_id, kill, session_key),
@@ -4145,6 +4586,7 @@ class Executor:
             site=site,
             user_browser=user_browser,
             site_for=site_for if user_browser else None,
+            prefix_allowed=prefix_allowed,
         )
 
     def _user_browser_tabs_text(self, session_key: str) -> str | None:
@@ -4166,6 +4608,34 @@ class Executor:
             if run.session_key == session_key:
                 logger.info("user browser stop: stopping run %s", run.request_id)
                 run.kill.interrupt()
+
+    def _expire_approval(
+        self, request_id: str, pending: _PendingApproval, payload: dict, *, reason: str
+    ) -> bool:
+        """Close a wait that nobody answered: a timeout or a stop (bead B11).
+
+        Records the deny (so a late ``approval_decision`` is a no-op), patches
+        the stored row and sends the same ``approval_request`` again with
+        ``decision: "denied"`` and ``decision_reason`` (``timeout`` /
+        ``stopped``) — the shape the takeover's ``auto`` path already sends —
+        so the app closes the card instead of offering Allow on a dead
+        request. False when the user's answer won the race: the caller then
+        reads that answer on its next poll."""
+        if not pending.decide(False):
+            return False
+        self._close_approval(pending, approved=False, reason=reason)
+        pending.event.set()
+        try:
+            self._event(
+                request_id,
+                {
+                    **payload,
+                    **approval_outcome_fields(approved=False, reason=reason, at=time.time()),
+                },
+            )
+        except Exception:  # noqa: BLE001 — a dead stream must not keep the run waiting
+            logger.debug("approval close frame not sent", exc_info=True)
+        return True
 
     def _close_approval(
         self,
@@ -4233,8 +4703,31 @@ class Executor:
             pending = self._approvals.get(approval_id)
         if pending is None:
             return  # a decision for a publish that already ended: no-op
+        feedback = payload.get("feedback")
+        if isinstance(feedback, str):
+            pending.feedback = feedback.strip()[:4000]
         if not pending.decide(payload.get("approved") is True, payload.get("scope")):
             return  # the host already resolved it (a takeover's "auto")
+        # Item 9: store an 'approve and remember' command prefix for the agent.
+        # Only when the card was a shell command approval that OFFERED the
+        # prefix scope and the user picked it: a decision never reaches further
+        # than what the card showed (``parse_scope``). A stray prefix on a
+        # ``once`` mail approval must not lift the safety floor for good.
+        remember_prefix = payload.get("remember_prefix")
+        if (
+            pending.approved
+            and pending.scope == SCOPE_PREFIX
+            and pending.tool in _SHELL_APPROVAL_TOOLS
+            and isinstance(remember_prefix, str)
+            and remember_prefix.strip()
+            and self._action_approvals is not None
+            and hasattr(self._action_approvals, "remember_prefix")
+            and pending.session_key
+        ):
+            try:
+                self._action_approvals.remember_prefix(pending.session_key, remember_prefix)
+            except Exception:  # noqa: BLE001 — a save failure never fails the decision
+                logger.debug("remember_prefix failed", exc_info=True)
         self._close_approval(
             pending,
             approved=pending.approved,
@@ -4354,16 +4847,21 @@ class Executor:
             with self._waiting_user(request_id):
                 while True:
                     if kill.interrupted() or kill.estop_engaged():
-                        self._close_approval(pending, approved=False, reason=APPROVAL_STOPPED)
-                        return {"status": TAKEOVER_STOPPED}
+                        if self._expire_approval(
+                            request_id, pending, payload, reason=APPROVAL_STOPPED
+                        ):
+                            return {"status": TAKEOVER_STOPPED}
                     if pending.event.wait(self._poll):
                         return {
                             "status": TAKEOVER_DONE if pending.approved else TAKEOVER_SKIPPED
                         }
                     now = time.monotonic()
                     if now >= deadline:
-                        self._close_approval(pending, approved=False, reason=APPROVAL_TIMEOUT)
-                        return {"status": TAKEOVER_TIMEOUT}
+                        if self._expire_approval(
+                            request_id, pending, payload, reason=APPROVAL_TIMEOUT
+                        ):
+                            return {"status": TAKEOVER_TIMEOUT}
+                        continue  # the user's answer won the race; read it next
                     if now < next_poll:
                         continue
                     next_poll = now + TAKEOVER_POLL_SECONDS
@@ -4388,6 +4886,389 @@ class Executor:
         finally:
             with self._approvals_lock:
                 self._approvals.pop(approval_id, None)
+
+    # -- agent modes (docs/WIRE_CONTRACT.md, "Goal mode", "Plan mode", ...) --
+    def _mode_bindings(self, run: _Run, request_id: str, session_key: str):
+        """The goal controller, plan mode, todo sink and question backend of
+        one run, and the store they share (closed when the run ends). A
+        restricted mail run gets none of them. Never raises: a failure here
+        costs the modes, never the run."""
+        if run.profile is not None:
+            return None, None, None, None, None
+        try:
+            store = StateStore(self._db_path)
+        except Exception:  # noqa: BLE001
+            return None, None, None, None, None
+        executor = self
+        kill = run.kill
+
+        def goal_changed(view: dict | None) -> None:
+            self._emit_persisted(request_id, session_key, goal_payload(session_key, view))
+
+        goal = GoalController(
+            store=store,
+            session_key=session_key,
+            arming=self._goal_driver.arming,
+            goal_round=run.goal_round if run.origin == ORIGIN_GOAL else None,
+            direct_user=run.origin == ORIGIN_APP,
+            default_max_rounds=self._goal_max_rounds,
+            on_change=goal_changed,
+        )
+        state = PlanState(store, session_key)
+        if run.plan is not None:
+            try:
+                if state.set(run.plan):
+                    self._emit_persisted(
+                        request_id, session_key, plan_mode_payload(session_key, run.plan)
+                    )
+            except Exception:  # noqa: BLE001 — the switch is best effort
+                logger.debug("plan switch failed", exc_info=True)
+
+        class _Review:
+            def review(self, plan: str, title: str) -> dict:
+                return executor._request_plan_review(
+                    request_id, kill, session_key, plan, title
+                )
+
+        plan_mode = PlanMode(
+            state=state,
+            backend=_Review(),
+            on_change=lambda active: self._emit_persisted(
+                request_id, session_key, plan_mode_payload(session_key, active)
+            ),
+        )
+
+        def todo_sink(todos: list[dict]) -> None:
+            self._emit_persisted(request_id, session_key, todo_payload(session_key, todos))
+
+        class _Questions:
+            def ask(self, call_id: str, questions: list[dict], timeout: int) -> dict:
+                return executor._ask_questions(
+                    request_id, kill, session_key, call_id, questions, timeout
+                )
+
+        return store, goal, plan_mode, todo_sink, _Questions()
+
+    def _after_run_goal(self, run: _Run, reason: str) -> dict | None:
+        """Ask the goal driver what follows this run. Never raises."""
+        if run.profile is not None:
+            return None
+        with self._runs_lock:
+            others = any(
+                r.session_key == run.session_key and r.request_id != run.request_id
+                for r in self._runs.values()
+            )
+        try:
+            return self._goal_driver.after_run(
+                run.session_key, reason=reason, origin=run.origin, others_live=others
+            )
+        except Exception:  # noqa: BLE001 — the goal must never fail a run
+            logger.info("goal driver failed", exc_info=True)
+            return None
+
+    def _handle_goal_control(self, request_id: str, payload: dict) -> None:
+        session_key = str(payload.get("session_key") or "default")
+        action = str(payload.get("action") or "")
+        try:
+            view, error = self._goal_driver.control(session_key, action)
+        except Exception as exc:  # noqa: BLE001 — answer, never crash the serve thread
+            view, error = None, f"goal control failed: {type(exc).__name__}"
+        frame = goal_payload(session_key, view)
+        if error:
+            frame["error"] = error
+        self._terminal(request_id, frame)
+
+    def _modes_state(self, store: StateStore, session_key: str) -> dict:
+        """The agent-mode fields of ``run_state``: the goal, plan mode and
+        the latest todo list. Best effort: a store failure leaves them out."""
+        out: dict[str, Any] = {}
+        try:
+            goal = self._goal_driver.view(session_key)
+            if goal is not None:
+                out["goal"] = goal
+            if PlanState(store, session_key).active():
+                out["plan_mode"] = True
+            todos = load_todos(store, session_key)
+            if todos:
+                out["todos"] = todos
+        except Exception:  # noqa: BLE001
+            pass
+        return out
+
+    def _request_plan_review(
+        self, request_id: str, kill: KillSwitch, session_key: str, plan: str, title: str
+    ) -> dict:
+        """Worker-thread half of ``exit_plan_mode``: one ``approval_request``
+        with ``action: plan_review``, then block until the user approves or
+        asks to keep planning, the wait times out, or a stop fires."""
+        approval_id = uuid4().hex
+        pending = _PendingApproval(session_key=session_key)
+        with self._approvals_lock:
+            self._approvals[approval_id] = pending
+        payload = plan_review_request_payload(
+            approval_id=approval_id, plan=plan, title=title, session_key=session_key
+        )
+        pending.mid = self._persist_event(session_key, payload)
+        try:
+            self._event(request_id, payload)
+            self._call_hook(
+                self._on_approval_pending,
+                {
+                    "approval_id": approval_id,
+                    "request_id": request_id,
+                    "action": ACTION_PLAN_REVIEW,
+                    "action_class": ACTION_PLAN_REVIEW,
+                    "session_key": session_key,
+                },
+            )
+            deadline = time.monotonic() + PLAN_REVIEW_WAIT_SECONDS
+            with self._waiting_user(request_id):
+                while True:
+                    if kill.interrupted() or kill.estop_engaged():
+                        if self._expire_approval(
+                            request_id, pending, payload, reason=APPROVAL_STOPPED
+                        ):
+                            return {"decision": DECISION_STOPPED}
+                    if pending.event.wait(self._poll):
+                        if pending.approved:
+                            return {"decision": DECISION_APPROVE}
+                        return {"decision": DECISION_KEEP_PLANNING, "feedback": pending.feedback}
+                    if time.monotonic() >= deadline:
+                        if self._expire_approval(
+                            request_id, pending, payload, reason=APPROVAL_TIMEOUT
+                        ):
+                            return {"decision": DECISION_TIMEOUT}
+        finally:
+            with self._approvals_lock:
+                self._approvals.pop(approval_id, None)
+
+    def _ask_questions(
+        self,
+        request_id: str,
+        kill: KillSwitch,
+        session_key: str,
+        call_id: str,
+        questions: list[dict],
+        timeout: int,
+    ) -> dict:
+        """Worker-thread half of ``ask_user``: one ``question_request``, then
+        wait for the answer batch. The clock runs only while the card is NOT
+        on screen (``ask_visible``). Ran out: the question stays answerable
+        (``pending``) and the run goes on."""
+        if call_id in self._questions:
+            call_id = f"{call_id}-{uuid4().hex[:6]}"
+        payload = question_request_payload(
+            question_id=call_id,
+            questions=questions,
+            timeout_seconds=timeout,
+            session_key=session_key,
+        )
+        pending = _PendingQuestion(
+            call_id=call_id,
+            session_key=session_key,
+            questions=questions,
+            timeout=timeout,
+            payload=payload,
+        )
+        with self._questions_lock:
+            self._questions[call_id] = pending
+            self._trim_questions()
+        pending.mid = self._persist_event(session_key, payload)
+        self._event(request_id, payload)
+        self._call_hook(
+            self._on_approval_pending,
+            {
+                "approval_id": call_id,
+                "request_id": request_id,
+                "action": "ask_user",
+                "action_class": "ask_user",
+                "session_key": session_key,
+            },
+        )
+        remaining = float(timeout)
+        last = time.monotonic()
+        with self._waiting_user(request_id):
+            while True:
+                if kill.interrupted() or kill.estop_engaged():
+                    if self._close_question(pending, QUESTION_STOPPED, request_id=request_id):
+                        return {"stopped": True}
+                if pending.event.wait(self._poll):
+                    return {"answers": list(pending.answers or [])}
+                now = time.monotonic()
+                if not self._question_paused(pending, now):
+                    remaining -= now - last
+                last = now
+                if timeout != QUESTION_NO_TIMEOUT and remaining <= 0:
+                    with pending.lock:
+                        if pending.answers is not None:
+                            continue  # the answer won the race; read it next
+                        pending.late = True
+                    self._patch_question(pending, QUESTION_PENDING)
+                    try:
+                        self._event(request_id, {**payload, "status": QUESTION_PENDING})
+                    except Exception:  # noqa: BLE001
+                        pass
+                    return {"pending": True}
+
+    def _trim_questions(self) -> None:
+        """Bound the late-answerable set (caller holds the lock)."""
+        if len(self._questions) <= MAX_LATE_QUESTIONS:
+            return
+        for key in [k for k, q in self._questions.items() if q.closed or q.late]:
+            if len(self._questions) <= MAX_LATE_QUESTIONS:
+                break
+            self._questions.pop(key, None)
+
+    def _patch_question(self, pending: _PendingQuestion, status: str, answers=None) -> None:
+        if pending.mid is None:
+            return
+        patch: dict[str, Any] = {"status": status}
+        if answers is not None:
+            patch["answers"] = list(answers)
+        try:
+            store = StateStore(self._db_path)
+            try:
+                store.update_event(pending.mid, patch)
+            finally:
+                store.close()
+        except Exception:  # noqa: BLE001 — a stamp, never the answer
+            pass
+
+    def _close_question(
+        self, pending: _PendingQuestion, status: str, *, request_id: str | None = None
+    ) -> bool:
+        with pending.lock:
+            if pending.closed or pending.answers is not None:
+                return False
+            pending.closed = True
+        self._patch_question(pending, status)
+        if request_id:
+            try:
+                self._event(request_id, {**pending.payload, "status": status})
+            except Exception:  # noqa: BLE001
+                pass
+        return True
+
+    def _handle_ask_visible(self, payload: dict) -> None:
+        question_id = payload.get("question_id")
+        if not isinstance(question_id, str):
+            return
+        with self._questions_lock:
+            pending = self._questions.get(question_id)
+        if pending is None:
+            return
+        visible = payload.get("visible") is True
+        with pending.lock:
+            if visible and not pending.visible:
+                # The pause cap counts from the switch to visible; a repeated
+                # ``visible: true`` does not extend it.
+                pending.visible_since = time.monotonic()
+            elif not visible:
+                pending.visible_since = None
+            pending.visible = visible
+
+    @staticmethod
+    def _question_paused(pending: _PendingQuestion, now: float) -> bool:
+        """The card is on screen and the visible pause has not hit its cap."""
+        with pending.lock:
+            if not pending.visible:
+                return False
+            since = pending.visible_since
+        return since is None or now - since < MAX_VISIBLE_PAUSE_SECONDS
+
+    def _reset_question_visibility(self, session_key: str) -> None:
+        """A replay is a (re)connecting client: no card of this session is on
+        screen until the app says so again with a fresh ``ask_visible``."""
+        with self._questions_lock:
+            pendings = [q for q in self._questions.values() if q.session_key == session_key]
+        for pending in pendings:
+            with pending.lock:
+                pending.visible = False
+                pending.visible_since = None
+
+    def _handle_question_answer(self, payload: dict) -> None:
+        """The user's answer batch. In time: the waiting ``ask_user`` call
+        returns it. After the wait ran out: a new turn of the session whose
+        prompt row is tagged ``answer_to_pending_question``."""
+        question_id = payload.get("question_id")
+        if not isinstance(question_id, str) or not question_id:
+            return
+        with self._questions_lock:
+            pending = self._questions.get(question_id)
+        if pending is None:
+            pending = self._stored_pending_question(
+                question_id, str(payload.get("session_key") or "")
+            )
+            if pending is None:
+                return  # unknown or already answered: a no-op
+        answers = clean_answers(payload.get("answers"), pending.questions)
+        with pending.lock:
+            if pending.closed or pending.answers is not None:
+                return
+            pending.answers = answers
+            late = pending.late
+            if late:
+                pending.closed = True
+        self._patch_question(pending, QUESTION_ANSWERED, answers)
+        if not late:
+            pending.event.set()
+            request_id = self.live_request_id(pending.session_key)
+            if request_id:
+                try:
+                    self._event(
+                        request_id,
+                        {**pending.payload, "status": QUESTION_ANSWERED, "answers": answers},
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
+            return
+        with self._questions_lock:
+            self._questions.pop(question_id, None)
+        try:
+            self.submit_task(
+                pending.session_key,
+                late_answer_prompt(question_id, pending.questions, answers),
+                {"origin": ORIGIN_ANSWER, "answer_to_pending_question": question_id},
+            )
+        except Exception:  # noqa: BLE001 — an unprovisioned host loses the turn, not the thread
+            logger.info("late answer for %s could not start a turn", question_id)
+
+    def _stored_pending_question(
+        self, question_id: str, session_key: str
+    ) -> "_PendingQuestion | None":
+        """A question that ran out before this process started (a restart):
+        its persisted ``question_request`` row, if it is still ``pending``."""
+        if not session_key:
+            return None
+        try:
+            store = StateStore(self._db_path)
+            try:
+                sid = store.resolve_session(session_key)
+                if sid is None:
+                    return None
+                for message in reversed(store.get_conversation(sid, include_events=True)):
+                    content = message.content
+                    if (
+                        message.role == "event"
+                        and content.get("type") == "question_request"
+                        and content.get("question_id") == question_id
+                    ):
+                        if content.get("status") != QUESTION_PENDING:
+                            return None
+                        return _PendingQuestion(
+                            call_id=question_id,
+                            session_key=session_key,
+                            questions=list(content.get("questions") or []),
+                            timeout=int(content.get("timeout_seconds") or 0),
+                            payload=dict(content),
+                            late=True,
+                            mid=message.id,
+                        )
+            finally:
+                store.close()
+        except Exception:  # noqa: BLE001
+            return None
+        return None
 
     # -- secrets (docs/WIRE_CONTRACT.md, "Secrets") ------------------------
     def _handle_secrets(self, payload: dict) -> None:
@@ -4451,6 +5332,13 @@ class Executor:
 
             def env(self) -> dict[str, str]:
                 return vault.env()
+
+            def scrub_values(self) -> dict[str, str]:
+                # env plus the login vault's passwords: masked, never in env.
+                return vault.scrub_values()
+
+            def login_entries(self) -> list[dict]:
+                return vault.login_entries()
 
             def request(self, names: list[str], purpose: str) -> dict[str, str]:
                 return executor._request_secrets(
@@ -4767,6 +5655,11 @@ class Executor:
         # a lasting decision. Children get the same binding: a subagent never
         # sends a mail the parent would have had to ask for.
         action_approvals = self._action_approvals_binding(request_id, run.kill, session_key)
+        # The agent modes (docs/WIRE_CONTRACT.md, "Goal mode", "Plan mode",
+        # "Todo list", "Questions to the user"), bound to this run.
+        modes_store, goal, plan_mode, todo_sink, questions = self._mode_bindings(
+            run, request_id, session_key
+        )
         subagents = self._subagent_config(
             request_id, session_key, secrets_access, action_approvals=action_approvals
         )
@@ -4814,6 +5707,9 @@ class Executor:
             # tier-2/3 compaction and mem0 extraction by default in production.
             # ``None`` (mock model) keeps tier-1-only behaviour.
             aux_model=hero_model,
+            # docs/WIRE_CONTRACT.md, "Checkpoints, rewind and fork": the run's
+            # first workspace-changing call pins a checkpoint of this thread.
+            checkpoint_sink=self._checkpoint_sink(run, session_key),
             # Off unless the task set ``debug``; ``None`` means zero overhead.
             debug_observer=debug_observer,
             # A scheduled run on a lighter context (no recall, no extraction),
@@ -4871,6 +5767,16 @@ class Executor:
             # the draft is stored here and shown to the user as a card; only
             # the app's ``skill_proposal_decision`` writes it to disk.
             skill_proposals=self._skill_proposal_sink(request_id, run, session_key),
+            goal=goal,
+            plan_mode=plan_mode,
+            todo_sink=todo_sink,
+            questions=questions,
+            # Typed context rows as live ``context`` frames (docs/WIRE_CONTRACT.md,
+            # "Typed source on synthetic rows"). The row is the store's;
+            # the frame is live only.
+            context_observer=lambda event: self._event(
+                request_id, {**event, "session_key": session_key}
+            ),
         )
 
         clock.lap("runtime_built")
@@ -4880,9 +5786,25 @@ class Executor:
         # The heartbeat was armed when the task was accepted (``_enqueue_run``)
         # and has said ``queued`` / ``preparing`` since; the loop's phases
         # reach it through ``phase_observer`` above.
+        if run.attachments:
+            # docs/WIRE_CONTRACT.md, "Attachments to Agents": the paths go in
+            # the task text; a vision model also gets the pictures.
+            from .attachments import prompt_with_attachments
+
+            prompt = prompt_with_attachments(
+                prompt, run.attachments, vision=getattr(loop, "image_loader", None) is not None
+            )
         try:
             # Inside the run's trace scope (``_run_task``).
-            result = loop.run(session_key, prompt, regenerate=run.regenerate)
+            result = loop.run(
+                session_key,
+                prompt,
+                regenerate=run.regenerate,
+                # A prompt nobody typed names its origin (docs/WIRE_CONTRACT.md,
+                # "Typed source on synthetic rows").
+                source=source_for_origin(run.origin),
+                row_extra=run.row_extra,
+            )
         except Exception as exc:  # a crashing loop must not kill the serve thread
             # A model failure the user can act on (no credits, rate limited, a
             # stalled model) carries its own message (loop.ModelServiceError).
@@ -4894,7 +5816,10 @@ class Executor:
             self._record_run(run, failed=message)
             # A failed automation run still ends on the host: its result
             # event goes out and its reported result is dropped.
-            automation_result = self._finish_automation(run, ok=False)
+            automation_result = self._finish_automation(
+                run, ok=False, error=message, exc=exc, model_answered=self._run_was_billed(run, loop)
+            )
+            self._after_run_goal(run, "failed")
             self._terminal(request_id, _run_error(run, message))
             # The run is over once its terminal went out: drop it from the
             # registry now, so a replay that races the hook below reports idle.
@@ -4916,6 +5841,11 @@ class Executor:
             # Before the terminal below: the last beat must not outlive the run.
             self._stop_beat(request_id)
             env_shim.on_run = None
+            if modes_store is not None:
+                try:
+                    modes_store.close()
+                except Exception:  # noqa: BLE001 — cleanup must not mask a result
+                    pass
             # Children outlive the parent's turn otherwise: a leaked child keeps a
             # container and a model stream alive with nobody reading either.
             if subagents is not None and subagents.supervisor is not None:
@@ -4973,6 +5903,9 @@ class Executor:
         # terminal closes it). The run row is already closed above, so this
         # status counts the turn the user just watched.
         self._push_agent_status(request_id, session_key)
+        # docs/WIRE_CONTRACT.md, "Goal mode": the next round is queued (or
+        # not) before the ``done``, so the ``done`` can say so.
+        goal_state = self._after_run_goal(run, reason)
         self._terminal(
             request_id,
             done_payload(
@@ -4988,6 +5921,7 @@ class Executor:
                 session_key=session_key,
                 cost=run.cost,
                 automation_result=automation_result,
+                goal=goal_state,
             ),
         )
         # The run is over once its terminal went out: drop it from the registry
@@ -5003,8 +5937,121 @@ class Executor:
                 iterations=result.iterations,
                 tokens_spent=result.tokens_spent,
                 automation_result=automation_result,
+                goal=goal_state,
             ),
         )
+        # After the ``done``: the optional background review and the skill
+        # curator (docs/WIRE_CONTRACT.md, "Skill proposals"). Both are opt-in
+        # and run on a daemon thread, so the user never waits for them.
+        self._start_learning(run, request_id, session_key, reason, result.iterations)
+
+    # -- background review + curator (Hermes H1, H5) ------------------------
+    def _start_learning(
+        self, run: _Run, request_id: str, session_key: str, reason: str, iterations: int
+    ) -> None:
+        review = (
+            background_review_enabled()
+            and reason == StopReason.FINISHED.value
+            and run.profile is None
+            and run.origin not in UNATTENDED_ORIGINS
+            and int(iterations or 0) >= REVIEW_MIN_ITERATIONS
+        )
+        curator_days = skill_curator_days()
+        curate = curator_days is not None and (
+            time.time() - getattr(self, "_curated_at", 0.0) >= CURATOR_INTERVAL_SECONDS
+        )
+        if not (review or curate):
+            return
+        if curate:
+            self._curated_at = time.time()
+        workspace = self._workspace_for(session_key)
+        if not workspace:
+            return
+        root = str(Path(workspace) / SKILLS_DIRNAME)
+
+        def work() -> None:
+            if curate:
+                self._run_curator(root, curator_days)
+            if review:
+                self._run_background_review(run, request_id, session_key, root)
+
+        threading.Thread(target=work, name="skill-learning", daemon=True).start()
+
+    def _run_curator(self, root: str, days: float) -> None:
+        try:
+            report = curate_skills(
+                root,
+                SkillSettingsStore(self._db_path),
+                seed_root=self._skills_seed_root,
+                unused_days=days,
+            )
+            if report["archived"] or report["errors"]:
+                logger.info(
+                    "skill curator: %d archived, %d errors",
+                    len(report["archived"]),
+                    len(report["errors"]),
+                )
+        except Exception as exc:  # noqa: BLE001 — housekeeping must not crash a thread
+            logger.info("skill curator failed: %s", type(exc).__name__)
+
+    def _run_background_review(
+        self, run: _Run, request_id: str, session_key: str, root: str
+    ) -> None:
+        client = None
+        try:
+            client = self._model_factory()
+            clone = getattr(client, "cheap_clone", None)
+            model = clone() if callable(clone) else client
+            if model is not client:
+                close = getattr(client, "close", None)
+                if callable(close):
+                    close()
+                client = model
+            try:
+                model = metered(model, self._usage_sink(run), kind=LINE_AUX)
+            except Exception:  # noqa: BLE001 — unmetered is better than no review
+                pass
+            store = StateStore(self._db_path)
+            try:
+                sid = store.resolve_session(session_key)
+                rows = (
+                    [{"role_tag": m.role, "content": m.content} for m in store.get_conversation(sid)]
+                    if sid is not None
+                    else []
+                )
+            finally:
+                store.close()
+            settings = SkillSettingsStore(self._db_path)
+            report = run_background_review(
+                model,
+                rows,
+                skills_root=root,
+                sink=_SkillProposalSink(
+                    self, request_id, run, session_key, live=False, origin="review"
+                ),
+                catalog=load_skills(root, settings=settings).catalog(),
+                vault=(
+                    self._secret_scrubber.scrub_obj
+                    if self._secret_scrubber is not None
+                    else None
+                ),
+            )
+            logger.info(
+                "background review: ran=%s proposal=%s memory_candidates=%d errors=%d",
+                report.ran,
+                bool(report.proposal),
+                len(report.memory_candidates),
+                len(report.errors),
+            )
+        except Exception as exc:  # noqa: BLE001 — the review is optional
+            logger.info("background review failed: %s", type(exc).__name__)
+        finally:
+            close = getattr(client, "close", None) if client is not None else None
+            if callable(close):
+                try:
+                    close()
+                except Exception:  # noqa: BLE001
+                    pass
 
     def _automation_backend(self, run: _Run, session_key: str):
         """The automation tools' backend for this run, bound to its session.
@@ -5013,12 +6060,51 @@ class Executor:
         if self._automations is None:
             return None
         backend = self._automations.bound(session_key)
+        # The run's origin decides whether its model may set up automations
+        # (docs/WIRE_CONTRACT.md, "Automation guards"): a run an automation
+        # started may not, unless the user allowed it.
+        with_origin = getattr(backend, "with_origin", None)
+        if callable(with_origin):
+            backend = with_origin(run.origin)
         attach = getattr(backend, "for_run", None)
         if run.automation_id and callable(attach):
             backend = attach(run.run_id, run.automation_id)
         return backend
 
-    def _finish_automation(self, run: _Run, *, ok: bool) -> dict | None:
+    def _run_was_billed(self, run: _Run, loop: Any) -> bool:
+        """Whether a failed run already got a model answer (and so cost the
+        user money): the loop saw a response or spent tokens, or an aux or
+        browser call of the run wrote a usage line. ``run.cost`` is only set
+        on the success path, so it cannot tell."""
+        try:
+            if bool(getattr(loop, "model_answered", False)):
+                return True
+            if int(getattr(loop, "tokens_spent", 0) or 0) > 0:
+                return True
+        except Exception:  # noqa: BLE001 — unknown counts as billed below
+            return True
+        if run.cost:
+            return True
+        if not run.run_id:
+            return False
+        try:
+            store = StateStore(self._db_path)
+            try:
+                return bool(store.usage_lines(run.run_id))
+            finally:
+                store.close()
+        except Exception:  # noqa: BLE001 — unreadable: do not risk a second bill
+            return True
+
+    def _finish_automation(
+        self,
+        run: _Run,
+        *,
+        ok: bool,
+        error: str | None = None,
+        exc: BaseException | None = None,
+        model_answered: bool | None = None,
+    ) -> dict | None:
         """Ask the host whether a fired ``on_change`` run counts as a change.
         ``None`` for every other run (and for a host without the hook)."""
         if not run.automation_id or run.origin != "automation":
@@ -5030,7 +6116,20 @@ class Executor:
         if not callable(finish):
             return None
         try:
-            outcome = finish(run.run_id, run.automation_id, ok=ok)
+            if ok:
+                outcome = finish(run.run_id, run.automation_id, ok=ok)
+            else:
+                # The guards (retry ladder, one alert per incident) need the
+                # error and whether it was the network before the model
+                # answered. An older host hook takes ``ok`` only.
+                answered = bool(run.cost) if model_answered is None else bool(model_answered or run.cost)
+                transient = is_transient_failure(exc, model_answered=answered)
+                try:
+                    outcome = finish(
+                        run.run_id, run.automation_id, ok=ok, error=error, transient=transient
+                    )
+                except TypeError:
+                    outcome = finish(run.run_id, run.automation_id, ok=ok)
         except Exception:  # noqa: BLE001 — bookkeeping must not mask a result
             logger.warning("automation result failed run=%s", run.run_id, exc_info=True)
             return None
@@ -5039,6 +6138,11 @@ class Executor:
         out: dict = {"changed": bool(outcome.get("changed", True))}
         if outcome.get("summary"):
             out["summary"] = str(outcome["summary"])
+        # Additive (docs/WIRE_CONTRACT.md, "Automation guards").
+        if outcome.get("retry_at") is not None:
+            out["retry_at"] = outcome["retry_at"]
+        if outcome.get("repeated_error"):
+            out["repeated_error"] = True
         return out
 
     # -- agent mail (docs/AGENT_MAIL.md §7) --------------------------------
@@ -5402,6 +6506,7 @@ class Executor:
         tokens_spent: int = 0,
         error: str | None = None,
         automation_result: dict | None = None,
+        goal: dict | None = None,
     ) -> dict:
         """What the host's ``on_run_finished`` hook receives. No transcript: the
         host decides whether and how to notify; content stays in the store."""
@@ -5426,6 +6531,10 @@ class Executor:
             "automation_result": automation_result,
             # Where the run's time went, one line (bead chuk_chat-4xc5).
             "timing": run.timing,
+            # docs/WIRE_CONTRACT.md, "Goal mode": the goal after this run.
+            # ``continues`` = the next round is queued (the host stays
+            # quiet); ``needs_user`` = blocked, the user must act.
+            "goal": goal,
         }
 
     # -- MCP credential forwarding (§9, §10) -----------------------------
@@ -5543,6 +6652,9 @@ class Executor:
                 connection_factory=self._mcp_connection_factory(session_key),
                 tool_cache=self._mcp_tool_cache,
             )
+            # Login vault placeholders are resolved (or refused) here, on the
+            # one path every browser call takes (Hermes H32).
+            manager.call_guard = login_guard(self._secrets, session_key)
             with self._mcp_lock:
                 self._mcp_entry_meta[session_key] = _entry_meta(mcp_servers)
         except Exception:  # noqa: BLE001 — building MCP must never crash a task
@@ -5820,6 +6932,12 @@ class Executor:
                 kind = "other"
             config = getattr(connection, "config", None)
             client_id = str(((getattr(config, "oauth", None) or {}).get("client_id")) or "")
+            # The stdio package check (mcp_package_check): an unpinned version
+            # or a non-registry source. A refused launch is an ``error``.
+            try:
+                warnings = [str(w) for w in (getattr(connection, "warnings", None) or [])]
+            except Exception:  # noqa: BLE001
+                warnings = []
             servers.append(
                 {
                     "id": entry.get("id"),
@@ -5839,6 +6957,7 @@ class Executor:
                     # a sign-in it has since replaced (a frame that was in
                     # flight across a Reconnect).
                     **({"client_id": client_id} if client_id else {}),
+                    **({"warnings": warnings} if warnings else {}),
                 }
             )
         return servers
@@ -6213,7 +7332,23 @@ class Executor:
         )
         if self._subagent_limits is not None:
             config.limits = self._subagent_limits
+        # External coding CLIs as a subagent backend (docs/WIRE_CONTRACT.md,
+        # "Subagents"): only with the agent's ``external_agents`` permission
+        # on, and only the CLIs that are installed where the children run.
+        if parent_policy is not None and getattr(parent_policy, "external_agents", False):
+            config.acp_backends = self._acp_backends(session_key)
         return config
+
+    def _acp_backends(self, session_key: str) -> tuple[str, ...]:
+        """The ``claude`` / ``codex`` CLIs found in the session's sandbox. The
+        children are built from the same image, so the parent's box answers
+        for them. A failed probe offers nothing."""
+        try:
+            env = self._environment_for(session_key)
+            return detect_backends(env)
+        except Exception:  # noqa: BLE001 — no box, no external backends
+            logger.info("external agent probe failed for session=%s", session_key)
+            return ()
 
     def _bind_trace_scrubber(self) -> None:
         """Hand the run tracer this executor's secret scrubber.

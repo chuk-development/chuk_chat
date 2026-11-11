@@ -22,6 +22,8 @@ from chuk_agents_runtime import (
     SupabaseSession,
     clamp_reasoning_effort,
     fetch_models_info,
+    model_limits_from_catalog,
+    model_supports_vision_in_catalog,
     resolve_model,
     supported_efforts,
 )
@@ -40,10 +42,14 @@ def make_backend_model_factory(
     max_tokens: int | None = None,
     temperature: float | None = None,
     reasoning_effort: str | None = None,
+    context_length: int | None = None,
+    max_output_tokens: int | None = None,
 ) -> ModelFactory:
     """A ``model_factory`` that builds a fresh :class:`BackendModelClient` per task
     from the injected session. The session (and its auto-refresh) is shared, so a
-    token refreshed on one task carries to the next.
+    token refreshed on one task carries to the next. ``context_length`` /
+    ``max_output_tokens`` are the catalogue's figures for the model (bead B18):
+    the context ladder sizes itself from them.
     """
 
     def factory() -> ModelClient:
@@ -55,6 +61,8 @@ def make_backend_model_factory(
             max_tokens=max_tokens,
             temperature=temperature,
             reasoning_effort=reasoning_effort,
+            context_length=context_length,
+            max_output_tokens=max_output_tokens,
         )
 
     return factory
@@ -77,11 +85,14 @@ def resolve_backend_model_factory(
         preferred_model_id=preferred_model_id,
         preferred_provider=preferred_provider,
     )
+    ctx, out = model_limits_from_catalog(models, resolved.model_id, resolved.provider_slug)
     return make_backend_model_factory(
         session,
         model_id=resolved.model_id,
         provider_slug=resolved.provider_slug,
         base_url=base_url,
+        context_length=ctx,
+        max_output_tokens=out,
         **kwargs,
     )
 
@@ -144,6 +155,9 @@ def make_backend_model_select(
                     ",".join(supported_efforts(models, resolved.model_id)) or "?",
                     effective,
                 )
+        ctx, out = model_limits_from_catalog(
+            models, resolved.model_id, resolved.provider_slug
+        )
         return BackendModelClient(
             session,
             model_id=resolved.model_id,
@@ -152,6 +166,9 @@ def make_backend_model_select(
             max_tokens=max_tokens,
             temperature=temperature,
             reasoning_effort=effective,
+            context_length=ctx,
+            max_output_tokens=out,
+            supports_vision=model_supports_vision_in_catalog(models, resolved.model_id),
         )
 
     return select
@@ -178,11 +195,14 @@ def resolve_backend_model_wiring(
         preferred_model_id=preferred_model_id,
         preferred_provider=preferred_provider,
     )
+    ctx, out = model_limits_from_catalog(models, resolved.model_id, resolved.provider_slug)
     factory = make_backend_model_factory(
         session,
         model_id=resolved.model_id,
         provider_slug=resolved.provider_slug,
         base_url=base_url,
+        context_length=ctx,
+        max_output_tokens=out,
         **kwargs,
     )
     select = make_backend_model_select(session, models, base_url=base_url, **kwargs)

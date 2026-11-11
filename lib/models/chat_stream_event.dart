@@ -18,8 +18,12 @@ sealed class ChatStreamEvent {
   const factory ChatStreamEvent.tps(double tokensPerSecond) = TpsEvent;
   const factory ChatStreamEvent.toolCalls(List<NativeToolCall> calls) =
       ToolCallsEvent;
-  const factory ChatStreamEvent.error(String message, {String? code}) =
-      ErrorEvent;
+  const factory ChatStreamEvent.error(
+    String message, {
+    String? code,
+    String? errorClass,
+    double? retryAfterSeconds,
+  }) = ErrorEvent;
   const factory ChatStreamEvent.heartbeat({int seq, double? elapsedSeconds}) =
       HeartbeatEvent;
   const factory ChatStreamEvent.done() = DoneEvent;
@@ -111,7 +115,27 @@ class ErrorEvent extends ChatStreamEvent {
   /// raised locally rather than by the server.
   final String? code;
 
-  const ErrorEvent(this.message, {this.code});
+  /// Coarse failure class from the server's `class` field (`auth`, `quota`,
+  /// `rate_limit`, `context_window_exceeded`, `invalid_request`, `server`).
+  /// Null on older servers and for locally raised errors.
+  final String? errorClass;
+
+  /// Poll hint of a `duplicate_in_flight` frame (seconds, 1 to 5): the same
+  /// request is still running on the server. Null for every other error.
+  final double? retryAfterSeconds;
+
+  const ErrorEvent(
+    this.message, {
+    this.code,
+    this.errorClass,
+    this.retryAfterSeconds,
+  });
+
+  /// Whether this error means the user is out of credits or free messages:
+  /// the server's `billing` code, or the `quota` class. The UI then shows
+  /// the upgrade dialog instead of an error line.
+  bool get isPaymentRequired =>
+      code == StreamErrorCodes.billing || errorClass == 'quota';
 }
 
 /// Proof of life: the host says the run behind this stream is still running.
@@ -176,6 +200,52 @@ abstract final class StreamErrorCodes {
   /// The event stream itself raised.
   static const String streamFailure = 'stream_failure';
 
+  /// The server says the provider stream broke before it finished. What
+  /// arrived is a cut answer, not a complete one.
+  static const String upstreamInterrupted = 'upstream_interrupted';
+
+  /// The event stream closed without a `done` frame. Raised locally by
+  /// `StreamingManager`; the content so far is a cut answer.
+  static const String streamInterrupted = 'stream_interrupted';
+
+  /// Out of credits or free messages. Not retryable; the UI shows the
+  /// upgrade dialog (see [ErrorEvent.isPaymentRequired]).
+  static const String billing = 'billing';
+
+  /// Request idempotency (`client_request_id`, api_server CLAUDE.md
+  /// "/v2/ws"). The server still runs the request this id names. Raised by
+  /// the multiplex layer for a `duplicate_in_flight` frame; the send layer
+  /// polls again and never passes it on.
+  static const String duplicateInFlight = 'duplicate_in_flight';
+
+  /// The id names a different request. The send layer re-sends once with a
+  /// fresh id.
+  static const String clientRequestIdConflict = 'client_request_id_conflict';
+
+  /// The server refused the id's form. The send layer re-sends once with a
+  /// fresh id.
+  static const String invalidClientRequestId = 'invalid_client_request_id';
+
+  /// Raised locally: the server answered this id before, but kept only a
+  /// minimal record (`duplicate` with `truncated: true` and no content). The
+  /// answer was billed and cannot be shown; only a new request (new id)
+  /// gives one. Counts as accepted: the server had the request.
+  static const String duplicateUnavailable = 'duplicate_unavailable';
+
+  /// Raised locally: the request still ran on the server after every poll.
+  /// The same id gets the answer later; counts as accepted.
+  static const String requestPending = 'request_pending';
+
+  /// Failures where re-sending the SAME `client_request_id` later is safe:
+  /// the server either still runs the request (detached after the socket
+  /// died) or answers the re-send from its record, so nothing is billed
+  /// twice. The headless outbox turn re-queues such a turn instead of
+  /// storing the error (docs/OFFLINE_SEND.md).
+  static const Set<String> resendSameId = <String>{
+    connectionLost,
+    requestPending,
+  };
+
   /// Failures worth re-issuing the pass for.
   ///
   /// [upstreamStatus] is deliberately absent: a rejection is not transient,
@@ -189,5 +259,10 @@ abstract final class StreamErrorCodes {
     connectionLost,
     idleTimeout,
     streamFailure,
+    upstreamInterrupted,
+    streamInterrupted,
+    // The pass re-sends the same id, so the server answers it from its
+    // record once the running request ends.
+    requestPending,
   };
 }

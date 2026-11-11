@@ -930,7 +930,6 @@ class _DocumentRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     final m3 = theme.m3;
     final isFile = document['kind'] == 'file';
     final path = '${document['path'] ?? ''}';
@@ -948,9 +947,7 @@ class _DocumentRow extends StatelessWidget {
       button: true,
       child: MorphTap(
         onTap: onTap,
-        color: selected
-            ? scheme.primary.withValues(alpha: 0.12)
-            : Colors.transparent,
+        color: selected ? m3.selection : Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: kBorderRadiusRow),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         child: Row(

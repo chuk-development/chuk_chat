@@ -52,6 +52,7 @@ def test_defaults_allow_everything_but_the_users_browser():
         "secrets_env": True,
         "workspace_mount": "rw",
         "user_browser": False,
+        "external_agents": False,
     }
     assert tuple(DEFAULT_POLICY.to_dict()) == PERMISSION_KEYS
     assert DEFAULT_POLICY.docker_run_args() == ()
@@ -74,6 +75,7 @@ def test_merged_applies_a_partial_on_top():
         ({"secrets_env": None}, "secrets_env must be true or false"),
         ({"workspace_mount": "rwx"}, "workspace_mount"),
         ({"user_browser": 0}, "user_browser must be true or false"),
+        ({"external_agents": "on"}, "external_agents must be true or false"),
     ],
 )
 def test_merged_refuses_unknown_keys_and_wrong_types(partial, message):
@@ -105,6 +107,7 @@ def test_enforced_permissions_per_backend():
         "secrets_env": True,
         "workspace_mount": False,
         "user_browser": True,
+        "external_agents": True,
     }
 
 

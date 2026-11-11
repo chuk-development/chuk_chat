@@ -197,6 +197,11 @@ class ToolEnforcer {
     for (final call in parsedCalls) {
       final name = call['name'] as String? ?? '';
       final args = _coerceMap(call['arguments']);
+      final providedId = call['id'];
+      final String? nativeId =
+          (providedId is String && providedId.trim().isNotEmpty)
+          ? providedId
+          : null;
 
       // 1. Check tool exists in declared set
       if (!_declaredTools.contains(name)) {
@@ -204,6 +209,7 @@ class ToolEnforcer {
           RejectedToolCall(
             name: name,
             arguments: args,
+            callId: nativeId,
             reason:
                 'Tool "$name" not in declared tool set: '
                 '${_declaredTools.join(", ")}',
@@ -231,6 +237,7 @@ class ToolEnforcer {
             RejectedToolCall(
               name: name,
               arguments: args,
+              callId: nativeId,
               reason: validationError,
             ),
           );
@@ -256,10 +263,7 @@ class ToolEnforcer {
       //    validate that association on the follow-up request. Fall back to the
       //    Kimi-style synthetic id for prompt-based calls. The index still
       //    advances either way so synthetic ids stay unique.
-      final providedId = call['id'];
-      final callId = (providedId is String && providedId.trim().isNotEmpty)
-          ? providedId
-          : 'functions.$name:$_globalCallIndex';
+      final callId = nativeId ?? 'functions.$name:$_globalCallIndex';
       _globalCallIndex++;
 
       valid.add(
@@ -382,10 +386,15 @@ class RejectedToolCall {
   final Map<String, dynamic> arguments;
   final String reason;
 
+  /// The provider's native tool-call id, when the call carried one. A native
+  /// round reports the rejection to the model under this id.
+  final String? callId;
+
   const RejectedToolCall({
     required this.name,
     required this.arguments,
     required this.reason,
+    this.callId,
   });
 }
 

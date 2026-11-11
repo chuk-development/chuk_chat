@@ -162,9 +162,15 @@ def test_run_command_background_delegates_to_the_job_manager_or_refuses():
     # Without a manager the flag is refused with a message, not an exception.
     none = make_run_command_handler(RecordingEnv(), None, None)("sleep 5", background=True)
     assert none["ok"] is False and "background" in none["error"]
-    # The foreground path is unchanged.
-    fg = make_run_command_handler(RecordingEnv(stdout="hi\n"), None, jobs)("echo hi")
+    # The foreground runs as an adoptable job on the same environment; a
+    # command that ends in time gives a plain foreground result.
+    fg_env = RecordingEnv(stdout="hi\n")
+    fg_jobs = JobManager(fg_env, workspace="/ws", new_id=lambda: "j00000002")
+    fg = make_run_command_handler(fg_env, None, fg_jobs)("echo hi")
     assert fg["exit_code"] == 0 and fg["stdout"] == "hi\n"
+    # A job manager on another environment is not used for the foreground.
+    plain = make_run_command_handler(RecordingEnv(stdout="hi\n"), None, jobs)("echo hi")
+    assert plain["exit_code"] == 0 and plain["stdout"] == "hi\n"
 
 
 def test_shell_and_job_tools_register_and_hide_without_tmux():
@@ -331,6 +337,34 @@ def test_cancel_kills_the_group_and_writes_no_trigger(tmp_path):
     with pytest.raises(ProcessLookupError):
         os.killpg(pid, 0)
     assert jobs.cancel(job_id)["state"] == "already finished"
+
+
+def test_a_cancelled_foreground_job_leaves_no_shell_state_in_plain_text(tmp_path):
+    # The command's EXIT trap writes the caller's exports to ``.state`` even on
+    # TERM. Nobody loads it after a cancel, so it must not stay on disk.
+    jobs = JobManager(LocalEnvironment(), session_key="thread-1", workspace=str(tmp_path))
+    marker = tmp_path / "still-running"
+    moved = jobs.run_foreground(f"export TOKEN_X=abc; sleep 2; touch {marker}", timeout=1)
+    assert moved is not None and moved.get("moved") is True
+    job_id = moved["job_id"]
+    assert jobs.cancel(job_id)["state"] == "cancelled"
+    # ``timeout`` runs the command in its own process group: the cancel must
+    # still reach it, or it finishes later and writes the state after all.
+    time.sleep(2.5)
+    assert not marker.exists()
+    jobs_dir = tmp_path / ".agents/jobs"
+    assert not (jobs_dir / f"{job_id}.state").exists()
+    assert not (jobs_dir / f"{job_id}.env").exists()
+
+
+def test_cancel_reaches_the_command_under_timeout(tmp_path):
+    jobs = JobManager(LocalEnvironment(), session_key="thread-1", workspace=str(tmp_path))
+    marker = tmp_path / "still-running"
+    job_id = jobs.start(f"sleep 1.5; touch {marker}", cwd=str(tmp_path))["job_id"]
+    time.sleep(0.3)
+    assert jobs.cancel(job_id)["state"] == "cancelled"
+    time.sleep(2)
+    assert not marker.exists()
 
 
 def test_a_found_tmux_is_kept_for_the_next_task_of_the_sandbox():

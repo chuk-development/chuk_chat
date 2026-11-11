@@ -75,9 +75,9 @@ def test_get_carries_the_approvals(tmp_path):
     store = AgentPermissionsStore(tmp_path / FILE_NAME)
     reply, _b, _a = handle_permissions_frame(store, {"type": "agent_permissions_get", "agent_id": "a"})
     assert reply["approvals"] == {
-        "classes": {"publish": "ask", "send_external": "ask", "mcp_destructive": "ask", "browser_act": "allow"},
+        "classes": {"publish": "ask", "send_external": "ask", "mcp_destructive": "ask", "browser_act": "allow", "local_actions": "allow"},
         "sites": {"browser_act": []},
-        "defaults": {"publish": "ask", "send_external": "ask", "mcp_destructive": "ask", "browser_act": "allow"},
+        "defaults": {"publish": "ask", "send_external": "ask", "mcp_destructive": "ask", "browser_act": "allow", "local_actions": "allow"},
         "applies_from": "next_action",
     }
 

@@ -47,7 +47,9 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 import 'package:chuk_chat/services/agents/agents_backoff.dart';
+import 'package:chuk_chat/services/agents/agents_queued_marks.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
+import 'package:chuk_chat/services/offline_outbox_cipher.dart';
 
 /// Prefix of the per-thread outbox key in the SQLite `kv_cache` table.
 const String kTaskOutboxPrefix = 'agents.task_outbox.';
@@ -60,13 +62,26 @@ class OutboxTask {
     required this.sessionKey,
     required this.prompt,
     required this.createdAt,
+    this._taskId,
     this.modelId,
     this.providerSlug,
     this.reasoningEffort,
     this.attempts = 0,
     this.lastError,
     this.nextAttemptAt,
+    this.failed = false,
+    this.attachments = const <String>[],
+    this.blobIds = const <String>[],
   });
+
+  /// The local copies of the files this prompt carries: store refs and
+  /// image paths, all sealed on this device (docs/OFFLINE_SEND.md, "Agents").
+  /// They are uploaded right before the task goes out.
+  final List<String> attachments;
+
+  /// Files the host already holds for this prompt (a task that was sent and
+  /// never confirmed). Sent as they are when [attachments] is empty.
+  final List<String> blobIds;
 
   /// This app's own id for the prompt. The host never sees it; it is how the
   /// queue and the bubble on screen name the same thing.
@@ -80,8 +95,25 @@ class OutboxTask {
   final String? providerSlug;
   final String? reasoningEffort;
 
+  /// The `task_id` this prompt goes out under, minted ONCE when it is queued
+  /// and stored with it. Every flush of the entry sends the same id, so a
+  /// second flush of a prompt that did arrive is answered `duplicate` by the
+  /// host instead of running twice. A row stored before the id was kept falls
+  /// back to the id the old flush derived from [localId], so it stays the
+  /// same task too.
+  String get taskId => _taskId ?? legacyTaskId(localId);
+  final String? _taskId;
+
+  /// The id older builds derived at flush time. The wire contract caps
+  /// `task_id` at 64 characters.
+  static String legacyTaskId(String localId) {
+    final String id = 'o-$localId';
+    return id.length <= 64 ? id : id.substring(0, 64);
+  }
+
   /// How often a flush has tried and failed. At [AgentsTaskOutbox.maxAttempts]
-  /// the entry is given up on, so one poison prompt cannot loop forever.
+  /// the entry is marked [failed]: it stays stored, but automatic flushes
+  /// leave it alone until the user asks for it again.
   final int attempts;
   final String? lastError;
 
@@ -90,25 +122,38 @@ class OutboxTask {
   /// are one attempt, not three.
   final DateTime? nextAttemptAt;
 
-  /// True when [now] is at or past [nextAttemptAt] (or nothing is set).
+  /// True once the entry used up its automatic attempts. It is never deleted
+  /// for that: only the user (Retry or Discard) or a sign-out removes it.
+  final bool failed;
+
+  /// True when [now] is at or past [nextAttemptAt] (or nothing is set), and
+  /// the entry has not [failed].
   bool isDue(DateTime now) =>
-      nextAttemptAt == null || !now.isBefore(nextAttemptAt!);
+      !failed && (nextAttemptAt == null || !now.isBefore(nextAttemptAt!));
 
   OutboxTask copyWith({
     int? attempts,
     String? lastError,
     DateTime? nextAttemptAt,
+    bool? failed,
+    bool clearRetryState = false,
   }) => OutboxTask(
     localId: localId,
     sessionKey: sessionKey,
     prompt: prompt,
     createdAt: createdAt,
+    taskId: taskId,
     modelId: modelId,
     providerSlug: providerSlug,
     reasoningEffort: reasoningEffort,
+    attachments: attachments,
+    blobIds: blobIds,
     attempts: attempts ?? this.attempts,
-    lastError: lastError ?? this.lastError,
-    nextAttemptAt: nextAttemptAt ?? this.nextAttemptAt,
+    lastError: clearRetryState ? lastError : (lastError ?? this.lastError),
+    nextAttemptAt: clearRetryState
+        ? nextAttemptAt
+        : (nextAttemptAt ?? this.nextAttemptAt),
+    failed: failed ?? this.failed,
   );
 
   Map<String, Object?> toJson() => <String, Object?>{
@@ -116,17 +161,22 @@ class OutboxTask {
     'sessionKey': sessionKey,
     'prompt': prompt,
     'createdAt': createdAt.toIso8601String(),
+    'taskId': taskId,
     if (modelId != null) 'modelId': modelId,
     if (providerSlug != null) 'providerSlug': providerSlug,
     if (reasoningEffort != null) 'reasoningEffort': reasoningEffort,
+    if (attachments.isNotEmpty) 'attachments': attachments,
+    if (blobIds.isNotEmpty) 'blobIds': blobIds,
     if (attempts > 0) 'attempts': attempts,
     if (lastError != null) 'lastError': lastError,
     if (nextAttemptAt != null)
       'nextAttemptAt': nextAttemptAt!.toIso8601String(),
+    if (failed) 'failed': true,
   };
 
   /// Null for a row this version cannot read: a queue entry is a convenience,
-  /// never a reason to fail a launch.
+  /// never a reason to fail a launch. Rows written before `taskId` and
+  /// `failed` existed load with the derived id and as not failed.
   static OutboxTask? fromJson(Object? raw) {
     if (raw is! Map) return null;
     final Object? id = raw['localId'];
@@ -135,36 +185,190 @@ class OutboxTask {
     if (id is! String || id.isEmpty) return null;
     if (session is! String || session.isEmpty) return null;
     if (prompt is! String || prompt.isEmpty) return null;
+    final Object? taskId = raw['taskId'];
     return OutboxTask(
       localId: id,
       sessionKey: session,
       prompt: prompt,
       createdAt:
           DateTime.tryParse('${raw['createdAt']}') ?? DateTime.now().toUtc(),
+      taskId: taskId is String && taskId.isNotEmpty ? taskId : null,
       modelId: raw['modelId'] as String?,
       providerSlug: raw['providerSlug'] as String?,
       reasoningEffort: raw['reasoningEffort'] as String?,
+      attachments: _strings(raw['attachments']),
+      blobIds: _strings(raw['blobIds']),
       attempts: raw['attempts'] is int ? raw['attempts'] as int : 0,
       lastError: raw['lastError'] as String?,
       nextAttemptAt: raw['nextAttemptAt'] is String
           ? DateTime.tryParse(raw['nextAttemptAt'] as String)
           : null,
+      failed: raw['failed'] == true,
     );
   }
 }
 
+/// Thrown by a flush sender that has no link to send on. [AgentsTaskOutbox.flush]
+/// stops on it like on any failure, but does NOT count an attempt: only a
+/// send the paired socket refused moves an entry towards
+/// [OutboxTask.failed].
+class OutboxSendDeferred implements Exception {
+  const OutboxSendDeferred([this.reason = 'not paired']);
+
+  final String reason;
+
+  @override
+  String toString() => 'OutboxSendDeferred: $reason';
+}
+
+/// Thrown by a flush sender when the entry itself cannot go out as it is
+/// (its files are too large, too many, empty or gone). Sending again will
+/// not help, so [AgentsTaskOutbox.flush] marks the entry
+/// [OutboxTask.failed] at once, with [reason], instead of counting attempts.
+class OutboxSendRefused implements Exception {
+  const OutboxSendRefused(this.reason);
+
+  final String reason;
+
+  @override
+  String toString() => 'OutboxSendRefused: $reason';
+}
+
+/// What one `kv_cache` row of either store holds once it is read.
+///
+/// [rows] are the entries this install can read. [locked] are sealed blobs it
+/// cannot open right now (no key yet, or a key that does not fit): they are
+/// carried along VERBATIM on every write, never dropped, and tried again on
+/// every read. A thread with anything [locked] is not flushed, so a prompt the
+/// app cannot read never gets overtaken by a newer one.
+class _StoredRows {
+  const _StoredRows(this.rows, this.locked);
+
+  static const _StoredRows empty = _StoredRows(<Object?>[], <String>[]);
+
+  final List<Object?> rows;
+  final List<String> locked;
+}
+
+/// Encryption at rest for both stores in this file.
+///
+/// A row is written as `{"sealed": "<blob>"}`, the blob being the JSON list of
+/// entries sealed by [OutboxCipher.seal] (the user's chat key, AES-GCM). When
+/// no key is loaded the list is written as plain JSON, exactly the format
+/// older builds wrote, and the next write with a key seals it. Blobs that
+/// cannot be opened ride in `"locked"`; plain entries next to locked blobs
+/// ride in `"tasks"`.
+abstract final class _RowCodec {
+  static Future<_StoredRows> decode(String? raw) async {
+    if (raw == null || raw.isEmpty) return _StoredRows.empty;
+    final Object? decoded = jsonDecode(raw);
+    if (decoded is List) return _StoredRows(decoded, const <String>[]);
+    if (decoded is! Map) return _StoredRows.empty;
+    final List<Object?> rows = <Object?>[];
+    final List<String> locked = <String>[];
+    // Blobs that could not be opened before are OLDER than anything written
+    // next to them, so whatever opens now goes first.
+    final Object? oldLocked = decoded['locked'];
+    if (oldLocked is List) {
+      for (final Object? blob in oldLocked) {
+        if (blob is! String || blob.isEmpty) continue;
+        final List<Object?>? opened = await _open(blob);
+        if (opened == null) {
+          locked.add(blob);
+        } else {
+          rows.addAll(opened);
+        }
+      }
+    }
+    final Object? sealed = decoded['sealed'];
+    if (sealed is String && sealed.isNotEmpty) {
+      final List<Object?>? opened = await _open(sealed);
+      if (opened == null) {
+        locked.add(sealed);
+      } else {
+        rows.addAll(opened);
+      }
+    }
+    final Object? plain = decoded['tasks'];
+    if (plain is List) rows.addAll(plain);
+    return _StoredRows(rows, locked);
+  }
+
+  /// Null when [blob] cannot be opened now. Never throws.
+  static Future<List<Object?>?> _open(String blob) async {
+    try {
+      if (!OutboxCipher.canOpen()) return null;
+      final Object? list = jsonDecode(await OutboxCipher.open(blob));
+      return list is List ? list : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Null means "nothing left": the caller deletes the row.
+  static Future<String?> encode(
+    List<Map<String, Object?>> rows,
+    List<String> locked,
+  ) async {
+    if (rows.isEmpty && locked.isEmpty) return null;
+    if (rows.isEmpty) return jsonEncode(<String, Object?>{'locked': locked});
+    final String plain = jsonEncode(rows);
+    String? sealed;
+    try {
+      sealed = await OutboxCipher.seal(plain);
+    } catch (error) {
+      if (kDebugMode) debugPrint('[agents-outbox] seal failed: $error');
+      sealed = null;
+    }
+    if (sealed == null) {
+      // No key yet. A prompt typed before the key is ready must not be lost,
+      // so it is kept readable and sealed on the next write that has a key.
+      if (locked.isEmpty) return plain;
+      return jsonEncode(<String, Object?>{'tasks': rows, 'locked': locked});
+    }
+    return jsonEncode(<String, Object?>{
+      'sealed': sealed,
+      if (locked.isNotEmpty) 'locked': locked,
+    });
+  }
+}
+
+/// The typed view of one outbox row.
+class _OutboxRow {
+  _OutboxRow(this.tasks, this.locked, {this.readFailed = false});
+
+  final List<OutboxTask> tasks;
+  final List<String> locked;
+
+  /// The store could not be read at all. A write based on this row would
+  /// replace rows nobody has seen, so only [AgentsTaskOutbox.enqueue] (which
+  /// would otherwise lose the new prompt) writes after a failed read.
+  final bool readFailed;
+}
+
 /// Reads and writes the per-thread queue. Static because there is one queue
 /// per install, like the chat cache it sits next to.
+///
+/// Nothing in here ever deletes a prompt on its own. An entry leaves the queue
+/// only when its send came back, when the user discards it, or when the user
+/// signs out ([wipeAll]). An entry that keeps failing is marked
+/// [OutboxTask.failed] and kept: the owner's rule is that nothing typed may be
+/// lost.
 class AgentsTaskOutbox {
   AgentsTaskOutbox._();
 
-  /// After this many failed flushes an entry is dropped and reported, rather
-  /// than retried on every reconnect for the rest of the install's life.
+  /// After this many failed flushes an entry is marked failed: it stays in
+  /// the queue, but automatic flushes skip it, so one poison prompt cannot
+  /// loop forever or hold the prompts behind it.
   static const int maxAttempts = 5;
 
   /// How long a failed entry waits before the next trigger may take it.
   /// `chat`: 500 ms, doubling, capped at 10 s (bead cowork-i7sd follow-up).
   static const AgentsBackoff backoff = AgentsBackoff.chat;
+
+  /// Bumped after every write to either store, so a widget that shows an
+  /// entry's state can rebuild without polling.
+  static final ValueNotifier<int> changes = ValueNotifier<int>(0);
 
   /// The clock. A test moves it forward instead of waiting for real seconds.
   @visibleForTesting
@@ -189,6 +393,9 @@ class AgentsTaskOutbox {
   /// return. The first caller inside a zone starts the chain in that zone.
   static Future<void>? _chain;
 
+  /// Makes two enqueues in the same microsecond two different entries.
+  static int _seq = 0;
+
   static String _key(String sessionKey) => '$kTaskOutboxPrefix$sessionKey';
 
   static Future<T> _locked<T>(Future<T> Function() action) {
@@ -204,43 +411,53 @@ class AgentsTaskOutbox {
     return done.future;
   }
 
-  static Future<List<OutboxTask>> _load(String sessionKey) async {
+  /// Reads a raw row through the seam or SQLite. Throws when there is no
+  /// store; the callers decide what that means.
+  static Future<String?> _readRaw(String key) =>
+      (read ?? LocalChatCacheService.kvGet)(key);
+
+  /// Writes [encoded] under [key], or deletes the row when it is null.
+  static Future<void> _writeRaw(String key, String? encoded) async {
+    if (encoded == null) {
+      await (delete ?? LocalChatCacheService.kvDelete)(key);
+    } else {
+      await (write ?? LocalChatCacheService.kvSet)(key, encoded);
+    }
+    changes.value++;
+  }
+
+  static Future<List<String>> _listKeys(String prefix) =>
+      (readKeys ?? LocalChatCacheService.kvKeys)(prefix);
+
+  static Future<_OutboxRow> _loadRow(String sessionKey) async {
     try {
-      final Future<String?> Function(String) get =
-          read ?? LocalChatCacheService.kvGet;
-      final String? raw = await get(_key(sessionKey));
-      if (raw == null || raw.isEmpty) return <OutboxTask>[];
-      final Object? decoded = jsonDecode(raw);
-      if (decoded is! List) return <OutboxTask>[];
-      return <OutboxTask>[
-        for (final Object? entry in decoded)
+      final _StoredRows stored = await _RowCodec.decode(
+        await _readRaw(_key(sessionKey)),
+      );
+      return _OutboxRow(<OutboxTask>[
+        for (final Object? entry in stored.rows)
           if (OutboxTask.fromJson(entry) case final OutboxTask task) task,
-      ];
+      ], stored.locked);
     } catch (error) {
       // No SQLite (a widget test), or a row this version cannot read. An
       // unreadable queue is an empty queue, never a crash.
       if (kDebugMode) {
         debugPrint('[agents-outbox] load failed for $sessionKey: $error');
       }
-      return <OutboxTask>[];
+      return _OutboxRow(<OutboxTask>[], <String>[], readFailed: true);
     }
   }
 
-  static Future<void> _save(String sessionKey, List<OutboxTask> tasks) async {
+  static Future<List<OutboxTask>> _load(String sessionKey) async =>
+      (await _loadRow(sessionKey)).tasks;
+
+  static Future<void> _saveRow(String sessionKey, _OutboxRow row) async {
     try {
-      if (tasks.isEmpty) {
-        final Future<void> Function(String) remove =
-            delete ?? LocalChatCacheService.kvDelete;
-        await remove(_key(sessionKey));
-        return;
-      }
-      final Future<void> Function(String, String) put =
-          write ?? LocalChatCacheService.kvSet;
-      await put(
+      await _writeRaw(
         _key(sessionKey),
-        jsonEncode(<Map<String, Object?>>[
-          for (final OutboxTask task in tasks) task.toJson(),
-        ]),
+        await _RowCodec.encode(<Map<String, Object?>>[
+          for (final OutboxTask task in row.tasks) task.toJson(),
+        ], row.locked),
       );
     } catch (error) {
       if (kDebugMode) {
@@ -249,7 +466,27 @@ class AgentsTaskOutbox {
     }
   }
 
+  /// Reads [sessionKey]'s row, lets [edit] change its entries, and writes it
+  /// back with any locked blobs untouched. Inside the serialiser.
+  static Future<T> _edit<T>(
+    String sessionKey,
+    Future<T> Function(List<OutboxTask> tasks) edit, {
+    bool writeAfterFailedRead = false,
+  }) => _locked(() async {
+    final _OutboxRow row = await _loadRow(sessionKey);
+    final T result = await edit(row.tasks);
+    if (!row.readFailed || writeAfterFailedRead) {
+      await _saveRow(sessionKey, row);
+    }
+    return result;
+  });
+
   /// Puts [prompt] at the back of [sessionKey]'s queue and returns the entry.
+  ///
+  /// [taskId] is the `task_id` the prompt will go out under. A caller that
+  /// already minted one for a send the socket refused passes it, so a frame
+  /// that did slip out is still the same task to the host. Left null, the
+  /// entry mints its own here, once, and every flush reuses it.
   static Future<OutboxTask> enqueue({
     required String sessionKey,
     required String prompt,
@@ -257,25 +494,42 @@ class AgentsTaskOutbox {
     String? providerSlug,
     String? reasoningEffort,
     String? localId,
+    String? taskId,
     DateTime? createdAt,
-  }) => _locked(() async {
+    bool failed = false,
+    String? lastError,
+    List<String> attachments = const <String>[],
+    List<String> blobIds = const <String>[],
+  }) {
     final DateTime created = (createdAt ?? now()).toUtc();
+    _seq = (_seq + 1) & 0xffffff;
+    final String id =
+        localId ??
+        'q${created.microsecondsSinceEpoch}-${_seq.toRadixString(36)}';
     final OutboxTask task = OutboxTask(
-      localId: localId ?? 'q${created.microsecondsSinceEpoch}',
+      localId: id,
       sessionKey: sessionKey,
       prompt: prompt,
       createdAt: created,
+      taskId: (taskId != null && taskId.isNotEmpty)
+          ? taskId
+          : OutboxTask.legacyTaskId(id),
       modelId: modelId,
       providerSlug: providerSlug,
       reasoningEffort: reasoningEffort,
+      failed: failed,
+      lastError: lastError,
+      attachments: List<String>.unmodifiable(attachments),
+      blobIds: List<String>.unmodifiable(blobIds),
     );
-    final List<OutboxTask> tasks = await _load(sessionKey)
-      ..add(task);
-    await _save(sessionKey, tasks);
-    return task;
-  });
+    return _edit(sessionKey, (List<OutboxTask> tasks) async {
+      tasks.add(task);
+      return task;
+    }, writeAfterFailedRead: true);
+  }
 
-  /// What is still waiting for [sessionKey], oldest first.
+  /// What is still waiting for [sessionKey], oldest first. Failed entries are
+  /// included; check [OutboxTask.failed].
   static Future<List<OutboxTask>> pendingFor(String sessionKey) =>
       _locked(() => _load(sessionKey));
 
@@ -284,40 +538,157 @@ class AgentsTaskOutbox {
       (await pendingFor(sessionKey)).isNotEmpty;
 
   static Future<void> remove(String sessionKey, String localId) =>
-      _locked(() async {
-        final List<OutboxTask> tasks = await _load(sessionKey)
-          ..removeWhere((OutboxTask task) => task.localId == localId);
-        await _save(sessionKey, tasks);
+      _edit(sessionKey, (List<OutboxTask> tasks) async {
+        tasks.removeWhere((OutboxTask task) => task.localId == localId);
       });
 
-  /// Records a failed flush. Returns true while the entry is still worth
-  /// retrying; false once it has been given up on and removed.
+  /// Records a failed flush. Returns true while the entry is still retried
+  /// automatically; false once it is [OutboxTask.failed] (it is KEPT, with
+  /// its last error) or gone.
   static Future<bool> markAttempt(
     String sessionKey,
     String localId,
     String error,
-  ) => _locked(() async {
-    final List<OutboxTask> tasks = await _load(sessionKey);
+  ) => _edit(sessionKey, (List<OutboxTask> tasks) async {
     final int index = tasks.indexWhere(
       (OutboxTask task) => task.localId == localId,
     );
     if (index < 0) return false;
     final int attempts = tasks[index].attempts + 1;
-    final OutboxTask next = tasks[index].copyWith(
+    final bool failed = attempts >= maxAttempts;
+    tasks[index] = tasks[index].copyWith(
       attempts: attempts,
       lastError: error,
+      failed: failed,
       // The next trigger may not take it before this: a failure earns a wait,
       // it does not earn a retry on every reconnect in the same second.
       nextAttemptAt: now().add(backoff.delayAfter(attempts)),
     );
-    if (next.attempts >= maxAttempts) {
-      tasks.removeAt(index);
-      await _save(sessionKey, tasks);
-      return false;
-    }
-    tasks[index] = next;
-    await _save(sessionKey, tasks);
+    return !failed;
+  });
+
+  /// Marks [localId] [OutboxTask.failed] now, with [error]: it is kept and
+  /// waits for the user. Returns whether the entry was found.
+  static Future<bool> markFailed(
+    String sessionKey,
+    String localId,
+    String error,
+  ) => _edit(sessionKey, (List<OutboxTask> tasks) async {
+    final int index = tasks.indexWhere(
+      (OutboxTask task) => task.localId == localId,
+    );
+    if (index < 0) return false;
+    tasks[index] = tasks[index].copyWith(
+      attempts: tasks[index].attempts + 1,
+      lastError: error,
+      failed: true,
+    );
     return true;
+  });
+
+  /// The session keys that have a queue row, from the store itself.
+  static Future<List<String>> _sessionKeys() async {
+    final List<String> rows = await _listKeys(kTaskOutboxPrefix);
+    return <String>[
+      for (final String row in rows)
+        if (row.length > kTaskOutboxPrefix.length)
+          row.substring(kTaskOutboxPrefix.length),
+    ];
+  }
+
+  /// The entry named [localId] in any thread, or null. Reads every thread's
+  /// row, so call it on a user action, not per frame.
+  static Future<OutboxTask?> findByLocalId(String localId) async {
+    final List<String> sessions;
+    try {
+      sessions = await _sessionKeys();
+    } catch (_) {
+      return null;
+    }
+    for (final String sessionKey in sessions) {
+      for (final OutboxTask task in await pendingFor(sessionKey)) {
+        if (task.localId == localId) return task;
+      }
+    }
+    return null;
+  }
+
+  /// The user asked for [localId] again: a failed entry goes back to
+  /// pending with a clean attempt count and is due at once. Searches every
+  /// thread. Returns whether the entry was found.
+  static Future<bool> requeueByLocalId(String localId) async {
+    final OutboxTask? found = await findByLocalId(localId);
+    if (found == null) return false;
+    return _edit(found.sessionKey, (List<OutboxTask> tasks) async {
+      final int index = tasks.indexWhere(
+        (OutboxTask t) => t.localId == localId,
+      );
+      if (index < 0) return false;
+      tasks[index] = tasks[index].copyWith(
+        attempts: 0,
+        failed: false,
+        clearRetryState: true,
+      );
+      return true;
+    });
+  }
+
+  /// Every failed entry of [sessionKey] back to pending, as
+  /// [requeueByLocalId] does for one. The Retry button of a thread runs it
+  /// before it flushes. Returns how many were requeued.
+  static Future<int> requeueFailed(String sessionKey) =>
+      _edit(sessionKey, (List<OutboxTask> tasks) async {
+        int count = 0;
+        for (int i = 0; i < tasks.length; i++) {
+          if (!tasks[i].failed) continue;
+          tasks[i] = tasks[i].copyWith(
+            attempts: 0,
+            failed: false,
+            clearRetryState: true,
+          );
+          count++;
+        }
+        return count;
+      });
+
+  /// The user threw [localId] away. Searches every thread. Returns whether
+  /// the entry was found.
+  static Future<bool> discardByLocalId(String localId) async {
+    final OutboxTask? found = await findByLocalId(localId);
+    if (found == null) return false;
+    return _edit(found.sessionKey, (List<OutboxTask> tasks) async {
+      final int before = tasks.length;
+      tasks.removeWhere((OutboxTask t) => t.localId == localId);
+      return tasks.length != before;
+    });
+  }
+
+  /// Sign-out: deletes every queued prompt AND every unacknowledged-task
+  /// record of every thread. The next account on this device must never send
+  /// the last one's words to its own host.
+  static Future<void> wipeAll() => _locked(() async {
+    for (final String prefix in <String>[
+      kTaskOutboxPrefix,
+      kPendingTaskPrefix,
+    ]) {
+      List<String> keys;
+      try {
+        keys = await _listKeys(prefix);
+      } catch (error) {
+        if (kDebugMode) {
+          debugPrint('[agents-outbox] wipe: key listing failed: $error');
+        }
+        continue;
+      }
+      for (final String key in keys) {
+        if (!key.startsWith(prefix)) continue;
+        try {
+          await _writeRaw(key, null);
+        } catch (error) {
+          if (kDebugMode) debugPrint('[agents-outbox] wipe failed: $error');
+        }
+      }
+    }
   });
 
   /// Sends everything waiting for [sessionKey], oldest first, through [send].
@@ -331,28 +702,44 @@ class AgentsTaskOutbox {
   ///
   /// It also stops at the first entry that is not due yet ([OutboxTask.isDue]).
   /// Stopping rather than skipping keeps the thread in order: the prompt the
-  /// user typed second must not reach the host before the first one.
+  /// user typed second must not reach the host before the first one. A
+  /// [OutboxTask.failed] entry is the one exception: it is skipped, because it
+  /// waits for the user and must not hold everything behind it for ever.
+  ///
+  /// A thread whose row holds a sealed blob this install cannot open (no key
+  /// yet) is not flushed at all: what is readable might be newer than what is
+  /// not.
   ///
   /// One flush per thread at a time. A flush reads the queue, then removes
   /// each entry only after its send came back — so two flushes overlapping in
-  /// that window would both see the same prompt and send it twice, and the
-  /// host's dedupe cannot help (each send mints its own task id). The paired
-  /// transition and the Retry button (and [flushAll], which covers every
-  /// thread including the open one) all dial in here, so the guard is what
-  /// keeps a reconnect from delivering a prompt twice.
+  /// that window would both see the same prompt. The guard below stops that,
+  /// and the entry's stored [OutboxTask.taskId] makes any copy that still
+  /// slips through a `duplicate` to the host rather than a second run.
   static Future<int> flush(
     String sessionKey,
     Future<void> Function(OutboxTask task) send,
   ) async {
     if (!_flushing.add(sessionKey)) return 0;
     try {
-      final List<OutboxTask> tasks = await pendingFor(sessionKey);
+      final _OutboxRow row = await _locked(() => _loadRow(sessionKey));
+      if (row.locked.isNotEmpty) return 0;
       final DateTime at = now();
       int sent = 0;
-      for (final OutboxTask task in tasks) {
+      for (final OutboxTask task in row.tasks) {
+        if (task.failed) continue;
         if (!task.isDue(at)) break;
         try {
           await send(task);
+        } on OutboxSendDeferred {
+          // No link: not the prompt's fault, so no attempt is counted. A
+          // flapping network must never push a prompt into `failed`.
+          break;
+        } on OutboxSendRefused catch (refused) {
+          // The entry itself is the problem (its files): no retry can fix
+          // it. It fails now and waits for the user; the link is fine, so
+          // the entries behind it still go.
+          await markFailed(sessionKey, task.localId, refused.reason);
+          continue;
         } catch (error) {
           await markAttempt(sessionKey, task.localId, '$error');
           break;
@@ -374,13 +761,11 @@ class AgentsTaskOutbox {
   /// through [send]. [send] must route by [OutboxTask.sessionKey], not by a
   /// captured thread key.
   ///
-  /// The per-thread [flush] is what the open thread's Retry button and its own
-  /// paired transition run. This is the whole-queue counterpart: prompts typed
-  /// while the host was down are typed INTO a thread, but the user expects
-  /// them all to go out when the link returns — not only those of the thread
-  /// that happens to be on screen when the socket comes back. Without this, a
-  /// message queued in a background thread waits there until its thread is
-  /// opened, however long that takes.
+  /// The per-thread [flush] is what the open thread's Retry button runs. This
+  /// is the whole-queue counterpart: prompts typed while the host was down
+  /// are typed INTO a thread, but the user expects them all to go out when
+  /// the link returns — not only those of the thread that happens to be on
+  /// screen when the socket comes back.
   ///
   /// The session keys come from the store itself (every `kv_cache` key under
   /// [kTaskOutboxPrefix]), so a thread whose view was never mounted flushes
@@ -388,11 +773,9 @@ class AgentsTaskOutbox {
   static Future<int> flushAll(
     Future<void> Function(OutboxTask task) send,
   ) async {
-    final Future<List<String>> Function(String) keys =
-        readKeys ?? LocalChatCacheService.kvKeys;
-    List<String> rows;
+    List<String> sessions;
     try {
-      rows = await keys(kTaskOutboxPrefix);
+      sessions = await _sessionKeys();
     } catch (error) {
       // No store (a widget test, web without prefs yet): nothing to flush.
       if (kDebugMode) {
@@ -401,50 +784,77 @@ class AgentsTaskOutbox {
       return 0;
     }
     int sent = 0;
-    for (final String row in rows) {
-      final String sessionKey = row.substring(kTaskOutboxPrefix.length);
-      if (sessionKey.isEmpty) continue;
+    for (final String sessionKey in sessions) {
       sent += await flush(sessionKey, send);
     }
     return sent;
   }
 
-  /// Test seam for [flushAll]'s key listing. Production leaves it null and
-  /// reads the SQLite `kv_cache` table.
+  /// Test seam for the key listing. Production leaves it null and reads the
+  /// SQLite `kv_cache` table.
   @visibleForTesting
   static Future<List<String>> Function(String prefix)? readKeys;
 
   /// Whether ANY thread's queue holds an entry that may go out right now.
+  /// Failed entries never count: they wait for the user.
   ///
   /// The paired transition and the Retry button flush immediately, but a send
   /// that failed earns a wait ([markAttempt]) — and during that wait nothing
-  /// else would look at the queue again: the threads whose views are not
-  /// mounted have no notifier of their own. This is the poll the watchdog
-  /// calls, so a backed-off prompt goes out when it becomes due instead of
-  /// waiting for its thread to be opened.
+  /// else would look at the queue again. This is the poll the watchdog calls,
+  /// so a backed-off prompt goes out when it becomes due.
   static Future<bool> anyDue() async {
-    final Future<List<String>> Function(String) keys =
-        readKeys ?? LocalChatCacheService.kvKeys;
-    final List<String> rows;
+    final List<String> sessions;
     try {
-      rows = await keys(kTaskOutboxPrefix);
+      sessions = await _sessionKeys();
     } catch (_) {
       return false;
     }
     final DateTime at = now();
-    for (final String row in rows) {
-      final String sessionKey = row.substring(kTaskOutboxPrefix.length);
-      if (sessionKey.isEmpty) continue;
-      for (final OutboxTask task in await _load(sessionKey)) {
+    for (final String sessionKey in sessions) {
+      final _OutboxRow row = await _locked(() => _loadRow(sessionKey));
+      if (row.locked.isNotEmpty) continue;
+      for (final OutboxTask task in row.tasks) {
         if (task.isDue(at)) return true;
       }
     }
     return false;
   }
 
+  /// Every local attachment path a queued prompt still names, so the file
+  /// sweeper keeps those files.
+  ///
+  /// [complete] is false when some row could not be read (no key yet, a
+  /// sealed blob of another key, a store error): the paths of that row are
+  /// not known. The readable rows still count, so one bad row does not hide
+  /// what the others name. The caller decides how careful to be with files
+  /// no known row names ([OfflineFileSweeper] waits much longer then).
+  static Future<({Set<String> paths, bool complete})> attachmentPaths() async {
+    final Set<String> out = <String>{};
+    bool complete = true;
+    final List<String> sessions;
+    try {
+      sessions = await _sessionKeys();
+    } catch (_) {
+      return (paths: out, complete: false);
+    }
+    for (final String sessionKey in sessions) {
+      try {
+        final _OutboxRow row = await _locked(() => _loadRow(sessionKey));
+        if (row.locked.isNotEmpty || row.readFailed) complete = false;
+        for (final OutboxTask task in row.tasks) {
+          out.addAll(task.attachments);
+        }
+      } catch (_) {
+        complete = false;
+      }
+    }
+    return (paths: out, complete: complete);
+  }
+
   @visibleForTesting
-  static Future<void> clearForTest(String sessionKey) =>
-      _locked(() => _save(sessionKey, <OutboxTask>[]));
+  static Future<void> clearForTest(String sessionKey) => _locked(
+    () => _saveRow(sessionKey, _OutboxRow(<OutboxTask>[], <String>[])),
+  );
 
   /// Drops whatever is still queued on the serialiser.
   ///
@@ -476,7 +886,12 @@ class PendingTask {
     this.providerSlug,
     this.reasoningEffort,
     this.attempts = 1,
+    this.blobIds = const <String>[],
   });
+
+  /// The `blob_id`s the task named. A re-send names the same files: the host
+  /// keeps an uploaded file in the workspace.
+  final List<String> blobIds;
 
   /// The id on the wire, minted once per SEND. Every re-send of that send
   /// carries this same string, which is the only reason a blind re-send is
@@ -509,6 +924,7 @@ class PendingTask {
     providerSlug: providerSlug,
     reasoningEffort: reasoningEffort,
     attempts: attempts ?? this.attempts,
+    blobIds: blobIds,
   );
 
   Map<String, Object?> toJson() => <String, Object?>{
@@ -520,6 +936,7 @@ class PendingTask {
     if (providerSlug != null) 'providerSlug': providerSlug,
     if (reasoningEffort != null) 'reasoningEffort': reasoningEffort,
     'attempts': attempts,
+    if (blobIds.isNotEmpty) 'blobIds': blobIds,
   };
 
   /// Null for a row this version cannot read — the same rule as [OutboxTask]:
@@ -541,6 +958,7 @@ class PendingTask {
       providerSlug: raw['providerSlug'] as String?,
       reasoningEffort: raw['reasoningEffort'] as String?,
       attempts: raw['attempts'] is int ? raw['attempts'] as int : 1,
+      blobIds: _strings(raw['blobIds']),
     );
   }
 }
@@ -561,41 +979,45 @@ class AgentsPendingTasks {
 
   static String _key(String sessionKey) => '$kPendingTaskPrefix$sessionKey';
 
-  static Future<List<PendingTask>> _load(String sessionKey) async {
+  /// The entries this install can read, and the sealed blobs it cannot open
+  /// yet ([_StoredRows.locked]), which every write carries along unchanged.
+  static Future<(List<PendingTask>, List<String>, bool)> _loadRow(
+    String sessionKey,
+  ) async {
     try {
-      final Future<String?> Function(String) get =
-          AgentsTaskOutbox.read ?? LocalChatCacheService.kvGet;
-      final String? raw = await get(_key(sessionKey));
-      if (raw == null || raw.isEmpty) return <PendingTask>[];
-      final Object? decoded = jsonDecode(raw);
-      if (decoded is! List) return <PendingTask>[];
-      return <PendingTask>[
-        for (final Object? entry in decoded)
-          if (PendingTask.fromJson(entry) case final PendingTask task) task,
-      ];
+      final _StoredRows stored = await _RowCodec.decode(
+        await AgentsTaskOutbox._readRaw(_key(sessionKey)),
+      );
+      return (
+        <PendingTask>[
+          for (final Object? entry in stored.rows)
+            if (PendingTask.fromJson(entry) case final PendingTask task) task,
+        ],
+        stored.locked,
+        false,
+      );
     } catch (error) {
       if (kDebugMode) {
         debugPrint('[agents-pending] load failed for $sessionKey: $error');
       }
-      return <PendingTask>[];
+      return (<PendingTask>[], <String>[], true);
     }
   }
 
-  static Future<void> _save(String sessionKey, List<PendingTask> tasks) async {
+  static Future<List<PendingTask>> _load(String sessionKey) async =>
+      (await _loadRow(sessionKey)).$1;
+
+  static Future<void> _save(
+    String sessionKey,
+    List<PendingTask> tasks,
+    List<String> locked,
+  ) async {
     try {
-      if (tasks.isEmpty) {
-        final Future<void> Function(String) remove =
-            AgentsTaskOutbox.delete ?? LocalChatCacheService.kvDelete;
-        await remove(_key(sessionKey));
-        return;
-      }
-      final Future<void> Function(String, String) put =
-          AgentsTaskOutbox.write ?? LocalChatCacheService.kvSet;
-      await put(
+      await AgentsTaskOutbox._writeRaw(
         _key(sessionKey),
-        jsonEncode(<Map<String, Object?>>[
+        await _RowCodec.encode(<Map<String, Object?>>[
           for (final PendingTask task in tasks) task.toJson(),
-        ]),
+        ], locked),
       );
     } catch (error) {
       if (kDebugMode) {
@@ -618,9 +1040,12 @@ class AgentsPendingTasks {
     String? modelId,
     String? providerSlug,
     String? reasoningEffort,
+    List<String> blobIds = const <String>[],
   }) => AgentsTaskOutbox._locked(() async {
     final DateTime at = AgentsTaskOutbox.now();
-    final List<PendingTask> tasks = await _load(sessionKey);
+    final (List<PendingTask> tasks, List<String> locked, _) = await _loadRow(
+      sessionKey,
+    );
     final int index = tasks.indexWhere((PendingTask t) => t.taskId == taskId);
     final PendingTask task;
     if (index >= 0) {
@@ -638,10 +1063,11 @@ class AgentsPendingTasks {
         modelId: modelId,
         providerSlug: providerSlug,
         reasoningEffort: reasoningEffort,
+        blobIds: List<String>.unmodifiable(blobIds),
       );
       tasks.add(task);
     }
-    await _save(sessionKey, tasks);
+    await _save(sessionKey, tasks, locked);
     return task;
   });
 
@@ -654,11 +1080,13 @@ class AgentsPendingTasks {
   /// Idempotent: clearing an id that is not there is a no-op.
   static Future<void> clear(String sessionKey, String taskId) =>
       AgentsTaskOutbox._locked(() async {
-        final List<PendingTask> tasks = await _load(sessionKey);
+        final (List<PendingTask> tasks, List<String> locked, bool failed) =
+            await _loadRow(sessionKey);
+        if (failed) return;
         final int before = tasks.length;
         tasks.removeWhere((PendingTask t) => t.taskId == taskId);
         if (tasks.length == before) return;
-        await _save(sessionKey, tasks);
+        await _save(sessionKey, tasks, locked);
       });
 
   /// Sends everything [sessionKey] has no `task_ack` for again, oldest first.
@@ -672,8 +1100,7 @@ class AgentsPendingTasks {
   /// The attempt is counted and the record rewritten BEFORE [send] is called,
   /// because a send that is lost is exactly the case this exists for: it
   /// reports success and the frame is gone. A task that is out of attempts is
-  /// skipped and dropped, so the run's own pre-run rule can report it as a
-  /// message that did not arrive.
+  /// skipped and kept as a failed outbox entry with Retry ([mayRetry]).
   ///
   /// Stops at the first failure — the socket that just refused one frame will
   /// refuse the next — and leaves the rest recorded. Returns how many went out.
@@ -692,6 +1119,7 @@ class AgentsPendingTasks {
         modelId: task.modelId,
         providerSlug: task.providerSlug,
         reasoningEffort: task.reasoningEffort,
+        blobIds: task.blobIds,
       );
       try {
         await send(attempt);
@@ -707,20 +1135,91 @@ class AgentsPendingTasks {
   }
 
   /// True when [taskId] may go out once more, and false once it has used up
-  /// [maxAttempts]. A task that is out of attempts is REMOVED here, so the
-  /// caller can say "this did not arrive" exactly once.
-  static Future<bool> mayRetry(String sessionKey, String taskId) =>
-      AgentsTaskOutbox._locked(() async {
-        final List<PendingTask> tasks = await _load(sessionKey);
-        final int index = tasks.indexWhere(
-          (PendingTask t) => t.taskId == taskId,
-        );
-        if (index < 0) return false;
-        if (tasks[index].attempts >= maxAttempts) {
-          tasks.removeAt(index);
-          await _save(sessionKey, tasks);
-          return false;
-        }
-        return true;
-      });
+  /// [maxAttempts] (or is not recorded). A task that is out of attempts is
+  /// taken off this record and KEPT as a failed outbox entry under the same
+  /// `task_id` ([keepAsFailed]): the bubble offers Retry and Delete, and a
+  /// Retry is still the same task to the host, which dedupes it. Nothing the
+  /// user typed is dropped (bead chuk_chat-9hgx).
+  static Future<bool> mayRetry(String sessionKey, String taskId) async {
+    final (
+      bool may,
+      PendingTask? exhausted,
+    ) = await AgentsTaskOutbox._locked(() async {
+      final (List<PendingTask> tasks, List<String> locked, bool failed) =
+          await _loadRow(sessionKey);
+      if (failed) return (false, null);
+      final int index = tasks.indexWhere((PendingTask t) => t.taskId == taskId);
+      if (index < 0) return (false, null);
+      if (tasks[index].attempts >= maxAttempts) {
+        final PendingTask gone = tasks.removeAt(index);
+        await _save(sessionKey, tasks, locked);
+        return (false, gone);
+      }
+      return (true, null);
+    });
+    if (exhausted != null) await keepAsFailed(exhausted);
+    return may;
+  }
+
+  /// The error a task that was sent but never confirmed shows.
+  static const String notConfirmedError =
+      'Your computer did not confirm this message.';
+
+  /// [task] went out [maxAttempts] times and the host never confirmed it: it
+  /// becomes a failed outbox entry under its own `task_id`, and its bubble
+  /// is marked so it offers Retry. Never throws.
+  static Future<void> keepAsFailed(PendingTask task) async {
+    try {
+      final OutboxTask entry = await AgentsTaskOutbox.enqueue(
+        sessionKey: task.sessionKey,
+        prompt: task.prompt,
+        modelId: task.modelId,
+        providerSlug: task.providerSlug,
+        reasoningEffort: task.reasoningEffort,
+        taskId: task.taskId,
+        failed: true,
+        lastError: notConfirmedError,
+        blobIds: task.blobIds,
+      );
+      await AgentsQueuedMarks.markQueued(
+        sessionKey: task.sessionKey,
+        prompt: task.prompt,
+        queueId: entry.localId,
+      );
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('[agents-pending] could not keep the task: $error');
+      }
+    }
+  }
+
+  /// Clears [taskId] in whatever thread records it (a `task_ack` from a host
+  /// that leaves the session key off).
+  static Future<void> clearAnywhere(String taskId) async {
+    for (final String key in await sessionKeys()) {
+      await clear(key, taskId);
+    }
+  }
+
+  /// The threads that have tasks with no `task_ack`.
+  static Future<List<String>> sessionKeys() async {
+    try {
+      return <String>[
+        for (final String key in await AgentsTaskOutbox._listKeys(
+          kPendingTaskPrefix,
+        ))
+          key.substring(kPendingTaskPrefix.length),
+      ];
+    } catch (_) {
+      return const <String>[];
+    }
+  }
 }
+
+/// The string entries of a stored list; anything else is dropped.
+List<String> _strings(Object? raw) => raw is List
+    ? List<String>.unmodifiable(<String>[
+        for (final Object? e in raw)
+          if (e is String && e.isNotEmpty) e,
+      ])
+    : const <String>[];

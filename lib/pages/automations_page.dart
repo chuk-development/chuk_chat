@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/services/agents/agents_webhooks_service.dart';
 import 'package:chuk_chat/services/automations/automations_source.dart';
 import 'package:chuk_chat/services/automations/agents_automation.dart';
 import 'package:chuk_chat/widgets/app_notification.dart';
@@ -10,6 +13,7 @@ import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
+import 'package:chuk_chat/widgets/webhooks_section.dart';
 
 /// Every automation of the host, grouped by the agent that owns it, with
 /// Pause / Resume / Cancel. The user manages all of them here; an agent only
@@ -25,9 +29,13 @@ class AutomationsPage extends StatefulWidget {
     AutomationsSource? source,
     this.sessionKey,
     this.chatName,
+    this.webhooks,
   }) : _injectedSource = source;
 
   final AutomationsSource? _injectedSource;
+
+  /// The server half of webhook automations; defaults to the app's.
+  final AgentsWebhooksService? webhooks;
 
   /// Null is the global account view; chat settings always supply a scope.
   final String? sessionKey;
@@ -44,6 +52,10 @@ class _AutomationsPageState extends State<AutomationsPage> {
   bool _refreshing = false;
   bool _offline = false;
   bool _showFinished = false;
+
+  /// The webhook list, reloaded after a new webhook automation.
+  final GlobalKey<WebhooksSectionState> _webhooksKey =
+      GlobalKey<WebhooksSectionState>();
 
   @override
   void initState() {
@@ -75,6 +87,19 @@ class _AutomationsPageState extends State<AutomationsPage> {
 
   Future<void> _control(AgentsAutomation a, String action) async {
     final sent = await _source.control(a.id, action);
+    // A cancelled webhook automation takes its server URL with it
+    // (docs/WIRE_CONTRACT.md, "Inbound webhooks", App work 6).
+    final String? hookId = a.webhookId;
+    if (sent && action == 'cancel' && a.isWebhook && hookId != null) {
+      try {
+        await (widget.webhooks ?? AgentsWebhooksService.instance).delete(
+          hookId,
+        );
+      } on AgentsWebhookException {
+        // The section still lists it; delete stays possible there.
+      }
+      unawaited(_webhooksKey.currentState?.reload());
+    }
     if (!mounted || sent) return;
     AppNotifications.show(context, 'Not connected to the host');
   }
@@ -101,8 +126,10 @@ class _AutomationsPageState extends State<AutomationsPage> {
           ? _agentChoices()
           : const <String, String>{},
       source: _source,
+      webhooks: widget.webhooks,
     );
     if (!mounted || saved == null) return;
+    if (saved.isWebhook) unawaited(_webhooksKey.currentState?.reload());
     AppNotifications.show(
       context,
       AppLocalizations.of(context)?.automationSaved ?? 'Saved',
@@ -220,6 +247,12 @@ class _AutomationsPageState extends State<AutomationsPage> {
                 ],
               ),
             ],
+            WebhooksSection(
+              key: _webhooksKey,
+              sessionKey: widget.sessionKey,
+              service: widget.webhooks,
+              source: _source,
+            ),
             if (finished.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 18),

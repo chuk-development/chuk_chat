@@ -19,6 +19,8 @@ library;
 
 import 'package:flutter/foundation.dart';
 
+import 'package:chuk_chat/models/chat_model.dart';
+
 /// Sends [text] as a user message of [chatId]. False when this screen does
 /// not show that chat or cannot send right now.
 typedef AgentsThreadSender = bool Function(String chatId, String text);
@@ -54,10 +56,12 @@ class AgentsThreadComposer {
   /// older one that no screen has taken yet. An empty [text] asks only for
   /// the composer's focus (Home's `Ask <agent>` pill): the screen keeps
   /// whatever draft it has and puts the caret in it.
-  static void prefill(String chatId, String text) {
+  static void prefill(String chatId, String text, {bool notify = true}) {
     if (chatId.isEmpty) return;
     _prefill = (chatId: chatId, text: text);
-    _prefillTick.value++;
+    // Silent from a dispose: the tree is locked there, and the screen that
+    // replaces the disposed one takes the prefill after its first frame.
+    if (notify) _prefillTick.value++;
   }
 
   /// The parked text for [chatId], once: null for another chat or none, ''
@@ -71,9 +75,49 @@ class AgentsThreadComposer {
     return pending.text;
   }
 
+  /// True when text is parked for [chatId] and no screen took it yet.
+  static bool hasPrefill(String chatId) => _prefill?.chatId == chatId;
+
+  // --- a draft carried across a remount ------------------------------------
+
+  static ({String chatId, List<AttachedFile> files})? _carried;
+
+  static String? _remounting;
+
+  /// The thread view is about to remount the chat screen of [chatId]. Only
+  /// then does the screen going away hand its draft on.
+  static void markRemount(String chatId) => _remounting = chatId;
+
+  /// True once, when [chatId]'s screen goes away for a remount.
+  static bool takeRemount(String chatId) {
+    if (_remounting != chatId) return false;
+    _remounting = null;
+    return true;
+  }
+
+  /// Ready attachments of [chatId]'s composer, handed from a chat screen that
+  /// is going away to the one that replaces it. The thread view remounts its
+  /// chat screen when the host's replay lands (about a second after a thread
+  /// is opened), and the files in the composer would be lost with it.
+  static void carryFiles(String chatId, List<AttachedFile> files) {
+    _carried = files.isEmpty ? null : (chatId: chatId, files: files);
+  }
+
+  /// The attachments carried for [chatId], once.
+  static List<AttachedFile> takeCarriedFiles(String? chatId) {
+    final carried = _carried;
+    if (carried == null || chatId == null || carried.chatId != chatId) {
+      return const <AttachedFile>[];
+    }
+    _carried = null;
+    return carried.files;
+  }
+
   /// Test seam.
   static void reset() {
     _senders.clear();
     _prefill = null;
+    _carried = null;
+    _remounting = null;
   }
 }

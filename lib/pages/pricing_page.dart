@@ -16,6 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
 
 import 'package:chuk_chat/widgets/app_notification.dart';
+import 'package:chuk_chat/widgets/cancel_contract_link.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -491,7 +492,10 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
                                     ),
                                     recognizer: TapGestureRecognizer()
                                       ..onTap = () => _launchExternalUrl(
-                                            'https://chuk.chat/en/cancellation/',
+                                            legalPageUrl(
+                                              l.locale.languageCode,
+                                              'cancellation',
+                                            ),
                                           ),
                                   ),
                                   TextSpan(text: l.onceServiceBegins),
@@ -504,10 +508,13 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
                                     ),
                                     recognizer: TapGestureRecognizer()
                                       ..onTap = () => _launchExternalUrl(
-                                            'https://chuk.chat/en/terms/',
+                                            legalPageUrl(
+                                              l.locale.languageCode,
+                                              'terms',
+                                            ),
                                           ),
                                   ),
-                                  const TextSpan(text: '.'),
+                                  TextSpan(text: l.consentTermsSuffix),
                                 ],
                               ),
                             ),
@@ -558,6 +565,12 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
                 ],
               ),
             ),
+
+          // ── Cancellation (§ 312k BGB) and withdrawal (Art. 11a) ──
+          // Always visible, also without a subscription in this account:
+          // the form works for any contract and needs no sign-in.
+          const SizedBox(height: 16),
+          const CancelContractRows(),
           const SizedBox(height: 24),
         ],
       ),

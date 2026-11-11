@@ -288,6 +288,7 @@ extension _MessageBubbleChrome on _MessageBubbleState {
     dimDisabledIcon: true,
   );
 
+  /// The AI action bar.
   Widget _buildActionButtons(Color iconFgColor, bool alignRight) =>
       _buildActionBar(
         actions: widget.actions,
@@ -305,6 +306,7 @@ extension _MessageBubbleChrome on _MessageBubbleState {
     required Color iconFgColor,
     required bool alignRight,
     required bool dimDisabledIcon,
+    Widget? trailing,
   }) {
     final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
     return Row(
@@ -330,94 +332,56 @@ extension _MessageBubbleChrome on _MessageBubbleState {
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
-            children: actions.map((action) {
-              return Tooltip(
-                message: action.tooltip,
-                child: IconButton(
-                  icon: AppIcon(
-                    action.icon,
-                    color: (action.isEnabled || !dimDisabledIcon)
-                        ? iconFgColor
-                        : iconFgColor.withValues(alpha: 0.38),
-                    size: 18,
+            children: [
+              ...actions.map((action) {
+                return Tooltip(
+                  message: action.tooltip,
+                  child: IconButton(
+                    icon: action.isLoading
+                        ? SizedBox.square(
+                            dimension: 18,
+                            child: Padding(
+                              padding: const EdgeInsets.all(2),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: iconFgColor,
+                              ),
+                            ),
+                          )
+                        : AppIcon(
+                            action.icon,
+                            color: (action.isEnabled || !dimDisabledIcon)
+                                ? iconFgColor
+                                : iconFgColor.withValues(alpha: 0.38),
+                            size: 18,
+                          ),
+                    padding: EdgeInsets.all(kPlatformMobile ? 5 : 8),
+                    visualDensity: VisualDensity.compact,
+                    constraints: BoxConstraints(
+                      minWidth: kPlatformMobile ? 28 : 30,
+                      minHeight: kPlatformMobile ? 28 : 30,
+                    ),
+                    style: IconButton.styleFrom(
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    onPressed: action.isEnabled ? action.onPressed : null,
                   ),
-                  padding: EdgeInsets.all(kPlatformMobile ? 5 : 8),
-                  visualDensity: VisualDensity.compact,
-                  constraints: BoxConstraints(
-                    minWidth: kPlatformMobile ? 28 : 30,
-                    minHeight: kPlatformMobile ? 28 : 30,
-                  ),
-                  style: IconButton.styleFrom(
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  onPressed: action.isEnabled ? action.onPressed : null,
-                ),
-              );
-            }).toList(),
+                );
+              }),
+              ?trailing,
+            ],
           ),
         ),
       ],
     );
   }
 
-  Widget _buildStatusIndicator(BuildContext context) {
-    final loc = AppLocalizations.of(context);
-    final t = Theme.of(context);
-    final isFailed = widget.status == ChatMessageStatus.failed;
-    final color = isFailed
-        ? t.colorScheme.error
-        : t.colorScheme.onSurface.withValues(alpha: .6);
-    final icon = isFailed ? Icons.error_outline : Icons.schedule;
-    final label = isFailed
-        ? (loc?.messageFailed ?? 'Failed to send')
-        : (loc?.messagePending ?? 'Will send when online');
-    final tooltip = isFailed && widget.lastError != null
-        ? '$label: ${widget.lastError}'
-        : label;
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 4, right: 2),
-      child: Tooltip(
-        message: tooltip,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppIcon(icon, size: 14, color: color),
-            const SizedBox(width: 4),
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 12, color: color),
-              ),
-            ),
-            if (isFailed && widget.onRetryPending != null) ...[
-              const SizedBox(width: 8),
-              InkWell(
-                onTap: widget.onRetryPending,
-                borderRadius: BorderRadius.circular(4),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
-                  child: Text(
-                    loc?.messageRetry ?? 'Retry',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: t.colorScheme.primary,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
+  /// The outbox line under a user bubble (waiting, sending, failed, held).
+  /// See [OutboxStatusLine]; only that line listens to the outbox.
+  Widget _buildStatusIndicator(BuildContext context) => OutboxStatusLine(
+    status: widget.status,
+    queueId: widget.queueId,
+    lastError: widget.lastError,
+    onRetryFallback: widget.onRetryPending,
+  );
 }

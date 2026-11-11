@@ -9,17 +9,22 @@ import 'package:chuk_chat/models/skill.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/services/agents/agents_tool_call_handler.dart';
+import 'package:chuk_chat/services/composer/follow_up_queue.dart';
 import 'package:chuk_chat/services/per_model_system_prompt_service.dart';
+import 'package:chuk_chat/services/prompt_cache/prompt_context.dart';
 import 'package:chuk_chat/services/skills/skill_registry.dart';
 import 'package:chuk_chat/services/skills/skills_catalog_service.dart';
 import 'package:chuk_chat/services/storage/chat_origin.dart';
+import 'package:chuk_chat/models/workspace_model.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/tool_enforcer.dart';
 import 'package:chuk_chat/services/tool_executor.dart';
+import 'package:chuk_chat/services/tool_pairing_validator.dart';
 import 'package:chuk_chat/services/tool_prompt_builder.dart';
 import 'package:chuk_chat/services/chukdoo/chukdoo_connector.dart';
 import 'package:chuk_chat/services/chukdoo/chukdoo_tool_bridge.dart';
 import 'package:chuk_chat/services/mcp/mcp_availability.dart';
+import 'package:chuk_chat/services/mcp/mcp_catalogue.dart';
 import 'package:chuk_chat/services/mcp/mcp_service.dart';
 import 'package:chuk_chat/services/mcp/mcp_sync_service.dart';
 import 'package:chuk_chat/services/mcp/mcp_tool_bridge.dart';
@@ -106,64 +111,12 @@ const String kForcedFinalAnswerNote =
 /// tools again.
 const int _maxForcedFinalPasses = 2;
 
-/// An older tool result longer than this is shortened before the next pass.
-/// Every pass re-sends the whole turn: on 2026-10-19 a research turn re-sent
-/// each ~20k-char crawl on all 17 passes (5.8M chars). The newest round stays
-/// in full. Same numbers as the api_server (`chat/tool_history.py`).
-@visibleForTesting
-const int kCompactToolResultTriggerChars = 4000;
-
-/// Characters an older tool result keeps when it is shortened.
-@visibleForTesting
-const int kCompactToolResultKeepChars = 3000;
-
-/// Shortens one older tool result. A result at or under
-/// [kCompactToolResultTriggerChars] comes back unchanged, which also makes
-/// the cut idempotent: a shortened result is short and is never cut again.
-/// The text is byte-identical to the api_server copy.
-@visibleForTesting
-String compactToolResultForModel(String content) {
-  if (content.length <= kCompactToolResultTriggerChars) return content;
-  return '${content.substring(0, kCompactToolResultKeepChars)}'
-      '\n\n[Shortened: this is an older tool result of ${content.length} '
-      'characters. Only the first $kCompactToolResultKeepChars are kept here '
-      'to save space.]';
-}
-
-/// Shortens, in place, the tool results in [history] that are not part of
-/// the newest round. Classified by protocol only: a native result is a
-/// `role: tool` entry, a prompt-based result is an entry whose index is in
-/// [promptToolResultIndices] (the loop records those when it appends its own
-/// tool-result message). Entries before [turnStart] belong to earlier turns
-/// and are left alone. The native newest round is everything after the last
-/// assistant entry that carries `tool_calls`; a prompt-based newest round is
-/// the pass `message`, which is not in history at all.
-@visibleForTesting
-void compactOlderToolResults(
-  List<Map<String, dynamic>> history, {
-  int turnStart = 0,
-  Set<int> promptToolResultIndices = const <int>{},
-}) {
-  var newestNativeRound = history.length;
-  for (var i = history.length - 1; i >= turnStart && i >= 0; i--) {
-    final entry = history[i];
-    final calls = entry['tool_calls'];
-    if (entry['role'] == 'assistant' && calls is List && calls.isNotEmpty) {
-      newestNativeRound = i;
-      break;
-    }
-  }
-  for (var i = turnStart < 0 ? 0 : turnStart; i < history.length; i++) {
-    final entry = history[i];
-    final isNativeResult = entry['role'] == 'tool' && i < newestNativeRound;
-    final isPromptResult = promptToolResultIndices.contains(i);
-    if (!isNativeResult && !isPromptResult) continue;
-    final content = entry['content'];
-    if (content is! String) continue;
-    final shortened = compactToolResultForModel(content);
-    if (!identical(shortened, content)) entry['content'] = shortened;
-  }
-}
+/// Tool results are capped ONCE, when they first go into the history
+/// ([capToolResultForModel]: head + tail in code points). The capped text is
+/// what every later pass re-sends, byte for byte. The loop used to shorten
+/// older rounds again once a newer round existed, which changed the history
+/// between passes and made the provider's prompt cache miss on everything
+/// after the first shortened result.
 
 /// A key that is equal for two calls with the same name and the same
 /// arguments, whatever the order of the argument keys.
@@ -182,6 +135,50 @@ Object? _canonicalJson(Object? value) {
   return value;
 }
 
+/// Counts of identical calls (same name, same key-sorted arguments) in one
+/// turn at which the loop appends [repeatCallAdvisory] to the result. Advice
+/// only: the call still runs (or, for a read-only lookup, is answered from
+/// the held result as before).
+@visibleForTesting
+const List<int> kRepeatCallAdvisoryThresholds = <int>[3, 5, 8];
+
+/// Most characters of the canonical arguments quoted in the detailed note.
+const int _kRepeatAdvisoryArgsPreview = 500;
+
+/// The note for the [count]th identical call of [name] in this turn, or null
+/// when [count] is not one of [kRepeatCallAdvisoryThresholds]. The first
+/// threshold gets a gentle hint, later ones name the tool and arguments.
+/// The text goes into the tool result once, when it enters the history, so
+/// every later pass re-sends the same bytes.
+@visibleForTesting
+String? repeatCallAdvisory(
+  String name,
+  Map<String, dynamic> arguments,
+  int count,
+) {
+  if (!kRepeatCallAdvisoryThresholds.contains(count)) return null;
+  if (count == kRepeatCallAdvisoryThresholds.first) {
+    return '[REPEAT NOTE] You are repeating the exact same tool call with '
+        'identical arguments. Carefully analyze the previous result before '
+        'calling again: if the task is not complete, try a different approach '
+        'or different arguments instead of repeating the call.';
+  }
+  String args = jsonEncode(_canonicalJson(arguments));
+  if (args.length > _kRepeatAdvisoryArgsPreview) {
+    final int more = args.length - _kRepeatAdvisoryArgsPreview;
+    args =
+        '${args.substring(0, _kRepeatAdvisoryArgsPreview)}… (+$more more chars)';
+  }
+  return '[REPEAT NOTE] Repeated tool call detected:\n'
+      '- tool: $name\n'
+      '- identical_calls: $count\n'
+      '- arguments: $args\n'
+      'The repeated calls are not making progress. Do not call this tool with '
+      'these exact arguments again. Inspect the latest result and choose a '
+      'different action, different arguments, or finish the task if enough '
+      'evidence has been gathered.';
+}
+
 class ToolLoopSession {
   ToolLoopSession({
     required this.latestUserMessage,
@@ -195,21 +192,77 @@ class ToolLoopSession {
     this.modelId,
     this.skipIdentity = false,
     this.nativeToolCalling = false,
-  }) : turnHistoryStart = history.length;
+    this.userSentAt,
+    this.promptSnapshot,
+    this.promptEffective,
+    this.toolHistory = true,
+  }) : turnHistoryStart = history.length,
+       firstPassMessage = latestUserMessage;
 
   String latestUserMessage;
 
+  /// The user message of this turn as the first pass must send it: with its
+  /// `[Sent: …]` line and any tagged notes (prompt_context.dart). Set by
+  /// [ToolCallHandler.buildInitialSystemPrompt]; the same text goes into the
+  /// history on the next pass, so the two requests share the prefix.
+  String firstPassMessage;
+
   /// Length of [history] when the turn started. Entries from here on were
-  /// added by this turn's tool loop; only those are ever compacted.
+  /// added by this turn's tool loop.
   final int turnHistoryStart;
 
-  /// History indices of prompt-based tool-result messages (see
-  /// [compactOlderToolResults]).
-  final Set<int> promptToolResultIndices = <int>{};
+  /// `sentAt` of the stored user message this turn sends. The `[Sent: …]`
+  /// line is made from it, and the turn's [turnContext] is stored under it.
+  final String? userSentAt;
 
-  /// The prompt-based tool-result message last handed to the model, so the
-  /// history append can tell it apart from a real user message by identity.
-  String? pendingPromptToolResult;
+  /// The chat's frozen prompt inputs, from the history (null for a chat that
+  /// never stored one; the first request then takes it).
+  PromptState? promptSnapshot;
+
+  /// The prompt inputs after every note the history already holds.
+  final PromptState? promptEffective;
+
+  /// What this turn adds to its user message's `modelContext`.
+  final TurnPromptContext turnContext = TurnPromptContext();
+
+  /// Whether the chat replays earlier turns' tool rounds (from the history;
+  /// stored in the snapshot when this turn takes it).
+  final bool toolHistory;
+
+  /// Index in [history] of this turn's own user message, once a pass put it
+  /// there; null before. Later passes put the turn's images into this entry
+  /// ([ToolLoopStep.withTurnImages]), and the stored transcript starts
+  /// after it.
+  int? turnUserIndex;
+
+  /// The system prompt of this chat, built once per turn and re-sent on
+  /// every pass, byte for byte.
+  String? frozenSystemPrompt;
+
+  /// The chat's workspace persona sends its system prompt raw
+  /// (`Workspace.personaComplete`). Set by the send path before
+  /// [ToolCallHandler.buildInitialSystemPrompt]; read into the chat's
+  /// snapshot at its first request, after that the snapshot's value holds.
+  bool personaComplete = false;
+
+  /// The chat's workspace wants the `[Sent: …]` line on user messages
+  /// (`Workspace.includeRuntimeContext`). Same freezing as
+  /// [personaComplete].
+  bool includeRuntimeContext = true;
+
+  /// Whether this turn's user message carries its `[Sent: …]` line: the
+  /// snapshot's frozen value; without a snapshot (tool calling off) always
+  /// on, the same rule the history builder uses.
+  bool get runtimeContextOn => promptSnapshot?.runtimeContextOn ?? true;
+
+  /// Takes the persona flags of the chat's [workspace] (null: none, the
+  /// defaults). Call before [ToolCallHandler.buildInitialSystemPrompt].
+  void applyWorkspace(Workspace? workspace) {
+    personaComplete = workspace?.complete ?? false;
+    includeRuntimeContext = workspace?.includeRuntimeContext ?? true;
+  }
+
+  bool _contextPrepared = false;
   final List<Map<String, dynamic>> history;
   final String accessToken;
   final ToolEnforcer enforcer;
@@ -235,11 +288,15 @@ class ToolLoopSession {
   final List<Map<String, dynamic>> discoveredTools = [];
   final Set<String> discoveredToolNames = {};
 
-  /// Skills activated via the `skill` tool, oldest first. Their bodies are
-  /// injected under `## ACTIVE SKILL` on every system prompt rebuild for the
-  /// rest of the conversation. Ordered (not a Set) so eviction can drop the
-  /// least-recently activated one.
+  /// Skills activated via the `skill` tool, oldest first. A body is sent
+  /// once, as a `<skill_content>` user message after the round that loaded
+  /// it, never in the system prompt. Ordered (not a Set) so eviction can drop
+  /// the least-recently activated one.
   final List<String> activeSkillNames = [];
+
+  /// Skill bodies loaded in the round being run, appended to the history
+  /// after its tool results.
+  final List<SkillContent> pendingSkillContents = [];
 
   final List<ToolCall> toolCalls = [];
 
@@ -293,11 +350,56 @@ class ToolLoopStep {
     required this.message,
     required this.history,
     required this.systemPrompt,
+    this.turnUserIndex,
+    this.passImages,
   });
 
   final String message;
   final List<Map<String, dynamic>> history;
   final String? systemPrompt;
+
+  /// Index in [history] of the turn's own user message (null when no pass
+  /// put it there yet).
+  final int? turnUserIndex;
+
+  /// The images to send with [message]. Only set by [withTurnImages].
+  final List<String>? passImages;
+
+  /// This step with the turn's images ([images], storage paths or data
+  /// URLs) in the turn's own history entry, in their order, and none sent
+  /// with [message]. Sent with [message], the images landed on the tool
+  /// results (prompt-based mode) or on an empty user message (native mode),
+  /// and the turn's entry differed from the first pass's. When the turn's
+  /// entry is not in [history], the images go with [message] as before.
+  ToolLoopStep withTurnImages(List<String>? images) {
+    if (images == null || images.isEmpty) return this;
+    final index = turnUserIndex;
+    if (index == null || index < 0 || index >= history.length) {
+      return ToolLoopStep(
+        message: message,
+        history: history,
+        systemPrompt: systemPrompt,
+        turnUserIndex: turnUserIndex,
+        passImages: images,
+      );
+    }
+    final entry = history[index];
+    final content = entry['content'];
+    final out = List<Map<String, dynamic>>.of(history);
+    out[index] = <String, dynamic>{
+      ...entry,
+      'content': userContentWithImages(
+        content is String ? content : '',
+        images,
+      ),
+    };
+    return ToolLoopStep(
+      message: message,
+      history: out,
+      systemPrompt: systemPrompt,
+      turnUserIndex: index,
+    );
+  }
 }
 
 /// One segment in the model's interleaved output for a single round.
@@ -603,10 +705,10 @@ class ToolCallHandler {
 
   static const int _maxDiscoveryContexts = 200;
 
-  /// Ceiling on skills active in one chat. Every active skill's body is
-  /// re-injected into the system prompt each round, and the tool protocol is
-  /// invisible to `_calculateTokenLimits`, so this bounds the worst case.
-  /// Activating a fourth skill evicts the least-recently activated one.
+  /// Ceiling on skills tracked as active in one chat (their `allowed-tools`
+  /// stay discovered). A body is sent once, as a `<skill_content>` message,
+  /// so this no longer bounds prompt size. Activating a fourth skill evicts
+  /// the least-recently activated one.
   static const int _maxActiveSkillsPerChat = 3;
   final Map<String, _DiscoveryContextState> _discoveryContextStates =
       <String, _DiscoveryContextState>{};
@@ -624,6 +726,7 @@ class ToolCallHandler {
     bool discoveryMode = true,
     bool skipIdentity = false,
     bool nativeToolCalling = false,
+    String? userSentAt,
   }) {
     // Pin the chat id on the executor for the duration of this send. The
     // `discoveryContextKey` carries the active chat id from the send
@@ -646,8 +749,15 @@ class ToolCallHandler {
       enforcer.alwaysAllowedTools = bypass;
     }
 
+    // The chat's frozen prompt inputs travel with the built history
+    // (ChatHistoryBuilder attaches them); read them before the clone.
+    final historyContext = HistoryPromptContext.of(history);
     final session = ToolLoopSession(
       latestUserMessage: initialUserMessage,
+      userSentAt: userSentAt,
+      promptSnapshot: historyContext?.snapshot,
+      promptEffective: historyContext?.effective,
+      toolHistory: historyContext?.toolHistory ?? true,
       history: _cloneHistory(history),
       accessToken: accessToken,
       enforcer: enforcer,
@@ -670,11 +780,18 @@ class ToolCallHandler {
     return session;
   }
 
+  /// The system prompt of the turn. Also prepares the turn's user message
+  /// ([ToolLoopSession.firstPassMessage]): its `[Sent: …]` line and, when
+  /// soul / user info / memory or the MCP servers changed since the chat's
+  /// snapshot, a tagged note. Call it before the first pass.
   Future<String> buildInitialSystemPrompt(ToolLoopSession session) async {
+    await _prepareTurnContext(session);
     if (!session.toolCallingEnabled) {
+      final base = session.baseSystemPrompt?.trim() ?? '';
+      // A complete persona is the whole system prompt, as written.
+      if (session.personaComplete && base.isNotEmpty) return base;
       // Even when tools are disabled the per-model prompt should still apply,
       // so route through the merge helper rather than returning the raw base.
-      final base = session.baseSystemPrompt?.trim() ?? '';
       final merged = await _applyPerModelPrompt(
         base: base,
         modelId: session.modelId,
@@ -682,16 +799,165 @@ class ToolCallHandler {
       return merged ?? base;
     }
 
-    return _buildSystemPrompt(
-      baseSystemPrompt: session.baseSystemPrompt,
-      isToolResult: false,
-      discoveryMode: session.discoveryMode,
-      discoveredTools: session.discoveredTools,
-      activeSkillNames: session.activeSkillNames,
-      skipIdentity: session.skipIdentity,
-      nativeToolCalling: session.nativeToolCalling,
-      modelId: session.modelId,
+    return _systemPromptFor(session);
+  }
+
+  /// The prompt inputs as they are now.
+  Future<PromptState> _currentPromptState(ToolLoopSession session) async {
+    final identityOn = !session.skipIdentity && await isIdentityEnabled();
+    var soul = '';
+    var user = '';
+    var memory = '';
+    if (identityOn) {
+      final results = await Future.wait([
+        loadSoulText(),
+        loadUserInfoText(),
+        loadMemoryText(),
+      ]);
+      soul = results[0].trim();
+      user = results[1].trim();
+      memory = results[2].trim();
+    }
+    return PromptState(
+      identity: identityOn,
+      soul: soul,
+      user: user,
+      memory: memory,
+      mcpConnected: [
+        ...McpService.connections.value.map((c) => c.name),
+        if (ChukdooConnector.instance.state.value.connected)
+          ChukdooConnector.displayName,
+      ],
+      mcpUnconnected: unconnectedCatalogueEntries().map((e) => e.id).toList(),
+      skills: _liveSkillCatalog()
+          .map((s) => SkillCatalogEntry(s.name, s.description))
+          .toList(),
     );
+  }
+
+  /// The skills catalog as it is now: empty when the `skill` tool is not
+  /// registered (that build emits no catalog).
+  List<Skill> _liveSkillCatalog() =>
+      _toolExecutor.allTools.any((t) => t.name == 'skill')
+      ? SkillRegistry.all
+      : const <Skill>[];
+
+  /// Takes the chat's snapshot (first request) or compares the inputs with
+  /// it and writes a tagged note for each change, then renders the turn's
+  /// user message. Runs once per session.
+  Future<void> _prepareTurnContext(ToolLoopSession session) async {
+    if (session._contextPrepared) return;
+    session._contextPrepared = true;
+    final notes = <String>[];
+    // The user text as this turn sends it (with document bodies, before the
+    // notes and the `[Sent: …]` line). Stored, so the next turn replays
+    // exactly this, not the display text (dropped in storage when equal).
+    final sentText = session.latestUserMessage.trim();
+    if (sentText.isNotEmpty) session.turnContext.sent = sentText;
+    if (session.toolCallingEnabled) {
+      final current = await _currentPromptState(session);
+      final snapshot = session.promptSnapshot;
+      if (snapshot == null) {
+        final taken = current.withExtras(
+          toolHistory: session.toolHistory,
+          complete: session.personaComplete ? true : null,
+          runtimeContext: session.includeRuntimeContext ? null : false,
+        );
+        session.promptSnapshot = taken;
+        session.turnContext.snapshot = taken;
+      } else {
+        final before = session.promptEffective ?? snapshot;
+        if (!before.sameIdentityAs(current)) {
+          notes.add(memoryUpdatedNote(current));
+        }
+        if (!before.sameMcpAs(current)) {
+          notes.add(
+            connectorsUpdatedNote(current, native: session.nativeToolCalling),
+          );
+        }
+        if (!_effectiveSkills(before).sameSkillsAs(current)) {
+          notes.add(skillsUpdatedNote(current));
+        }
+        if (notes.isNotEmpty) {
+          session.turnContext.notes.addAll(notes);
+          // Only what changed against the state the history builder has
+          // reached here (`before`): soul, user info and memory are not
+          // stored again with every change.
+          final diff = current.diffFrom(before);
+          if (diff != null) {
+            session.turnContext.stateDiff = diff;
+          } else {
+            session.turnContext.state = current;
+          }
+        }
+      }
+    }
+    final rendered = renderUserTurnForModel(
+      text: session.latestUserMessage,
+      sentAt: session.runtimeContextOn ? session.userSentAt : null,
+      notes: notes,
+    );
+    session.latestUserMessage = rendered;
+    session.firstPassMessage = rendered;
+    PromptContextLedger.put(session.userSentAt, session.turnContext);
+  }
+
+  /// The note that replaces the identity copy of the system prompt.
+  @visibleForTesting
+  static String memoryUpdatedNote(PromptState state) {
+    if (!state.identity) {
+      return '[memory updated] Memory is now off for this chat. Do not use '
+          'the soul, user info and memory of the system prompt any more.';
+    }
+    return '[memory updated] The soul, user info and memory below replace '
+            'the copies in the system prompt.\n'
+            '${ToolPromptBuilder.identityDataSection(state.soul, state.user, state.memory)}'
+        .trimRight();
+  }
+
+  /// [state] with its skills catalog; an unrecorded one (an older snapshot)
+  /// counts as the live catalog, so it gives no note.
+  PromptState _effectiveSkills(PromptState state) => state.skills != null
+      ? state
+      : state.withExtras(
+          skills: _liveSkillCatalog()
+              .map((s) => SkillCatalogEntry(s.name, s.description))
+              .toList(),
+        );
+
+  /// The note that replaces the skills list of the system prompt.
+  @visibleForTesting
+  static String skillsUpdatedNote(PromptState state) {
+    final skills = state.skills ?? const <SkillCatalogEntry>[];
+    if (skills.isEmpty) {
+      return '[skills updated] No skills are available any more. Do not '
+          'load the skills listed in the system prompt.';
+    }
+    return [
+      '[skills updated] This list replaces the skills list of the system '
+          'prompt. Load a skill with the `skill` tool as described there.',
+      for (final skill in skills) '- ${skill.name}: ${skill.description}',
+    ].join('\n');
+  }
+
+  /// The note that replaces the MCP SERVERS block of the system prompt.
+  @visibleForTesting
+  static String connectorsUpdatedNote(PromptState state, {bool native = true}) {
+    return '[connectors updated] This list replaces the MCP SERVERS block of '
+            'the system prompt.\n'
+            '${ToolPromptBuilder.mcpServersSection(state.mcpUnconnected, state.mcpConnected, native: native)}'
+        .trimRight();
+  }
+
+  /// The chat's system prompt, built once per session and then re-sent as
+  /// it is, so every pass of the turn starts with the same bytes.
+  Future<String> _systemPromptFor(ToolLoopSession session) async {
+    final frozen = session.frozenSystemPrompt;
+    if (frozen != null) return frozen;
+    if (!session._contextPrepared) await _prepareTurnContext(session);
+    final prompt = await _buildSystemPrompt(session);
+    session.frozenSystemPrompt = prompt;
+    return prompt;
   }
 
   /// The enabled tools as native OpenAI function definitions, for the request's
@@ -701,10 +967,13 @@ class ToolCallHandler {
   /// is off or the session is not in native mode — the prompt-based path then
   /// applies. Mirrors the prompt build: `notes` is withheld when memory is
   /// disabled so it can never be invoked to overwrite/delete memory.
+  ///
+  /// Once the tools are shut ([ToolLoopSession.toolsShut]) the list stays the
+  /// same and [nativeToolChoice] says `none` instead. Dropping `tools[]` for
+  /// the forced final pass changed the request prefix, so the provider's
+  /// prompt cache missed on the whole history.
   List<Map<String, dynamic>> nativeToolDefinitions(ToolLoopSession session) {
-    if (!session.toolCallingEnabled ||
-        !session.nativeToolCalling ||
-        session.toolsShut) {
+    if (!session.toolCallingEnabled || !session.nativeToolCalling) {
       return const <Map<String, dynamic>>[];
     }
     return _toolExecutor.allTools
@@ -717,8 +986,19 @@ class ToolCallHandler {
         .toList();
   }
 
+  /// The `tool_choice` for the next request: `none` once the tools are shut in
+  /// a native session (the model may only answer), else null (the server's
+  /// default, `auto`).
+  ///
+  /// Static on purpose: `AgentsToolCallHandler` implements this class as an
+  /// interface, and a new instance member would break it.
+  static String? nativeToolChoice(ToolLoopSession session) {
+    if (!session.toolCallingEnabled || !session.nativeToolCalling) return null;
+    return session.toolsShut ? 'none' : null;
+  }
+
   /// The forced final pass. Sets [ToolLoopSession.toolsClosed] (the next
-  /// request carries no tool definitions) and continues with
+  /// request keeps its tool definitions with `tool_choice: none`) and continues with
   /// [kForcedFinalAnswerNote] as the user turn. This round's calls are not
   /// run and, for a native round, not recorded: the history then ends with
   /// the previous round's complete tool results, which keeps every
@@ -747,16 +1027,8 @@ class ToolCallHandler {
       nextStep: ToolLoopStep(
         message: kForcedFinalAnswerNote,
         history: _stepHistory(session),
-        systemPrompt: await _buildSystemPrompt(
-          baseSystemPrompt: session.baseSystemPrompt,
-          isToolResult: true,
-          discoveryMode: session.discoveryMode,
-          discoveredTools: session.discoveredTools,
-          activeSkillNames: session.activeSkillNames,
-          skipIdentity: session.skipIdentity,
-          nativeToolCalling: session.nativeToolCalling,
-          modelId: session.modelId,
-        ),
+        turnUserIndex: session.turnUserIndex,
+        systemPrompt: await _systemPromptFor(session),
       ),
       interimContent: '',
       toolCalls: _cloneToolCalls(session.toolCalls),
@@ -915,7 +1187,18 @@ class ToolCallHandler {
     // message WITH its tool_calls so the upstream sees a valid function-calling
     // history. A turn with no native calls (a final text answer, or a
     // prompt-based model) falls through to the existing text path unchanged.
-    final isNativeToolTurn = nativeToolCalls.isNotEmpty;
+    //
+    // A reply cut off at the token limit (`finish_reason` `length`) may end in
+    // the middle of a tool call's arguments. Running such calls would act on
+    // half a JSON object, so none of them run: the round is kept as plain
+    // text and the "continue" pass below asks the model to finish.
+    final bool truncatedNativeRound =
+        nativeToolCalls.isNotEmpty &&
+        (turnSignals?.indicatesTruncated ?? false) &&
+        session.truncatedCompletionRecoveryAttempts <
+            _maxTruncatedCompletionRecoveryAttempts;
+    final isNativeToolTurn =
+        nativeToolCalls.isNotEmpty && !truncatedNativeRound;
 
     if (isNativeToolTurn) {
       // Record the user turn now — native turns skip the plain history append,
@@ -926,6 +1209,7 @@ class ToolCallHandler {
       // empty, so nothing is added twice.
       final priorUser = session.latestUserMessage.trim();
       if (priorUser.isNotEmpty) {
+        _noteTurnUserEntry(session, priorUser);
         session.history.add({'role': 'user', 'content': priorUser});
       }
     } else {
@@ -936,9 +1220,14 @@ class ToolCallHandler {
       );
     }
 
-    final parsedCalls = isNativeToolTurn
-        ? _nativeCallsToParsed(nativeToolCalls)
-        : parseToolCalls(cleanedContent);
+    final List<Map<String, dynamic>> parsedCalls;
+    if (isNativeToolTurn) {
+      parsedCalls = _nativeCallsToParsed(session, nativeToolCalls);
+    } else if (truncatedNativeRound) {
+      parsedCalls = const <Map<String, dynamic>>[];
+    } else {
+      parsedCalls = parseToolCalls(cleanedContent);
+    }
     if (parsedCalls.isEmpty) {
       final displayContent = _stripToolCallBlocks(cleanedContent);
       final markerInContent = hasToolCallStartMarker(cleanedContent);
@@ -968,16 +1257,8 @@ class ToolCallHandler {
           nextStep: ToolLoopStep(
             message: retryMessage,
             history: _stepHistory(session),
-            systemPrompt: await _buildSystemPrompt(
-              baseSystemPrompt: session.baseSystemPrompt,
-              isToolResult: true,
-              discoveryMode: session.discoveryMode,
-              discoveredTools: session.discoveredTools,
-              activeSkillNames: session.activeSkillNames,
-              skipIdentity: session.skipIdentity,
-              nativeToolCalling: session.nativeToolCalling,
-              modelId: session.modelId,
-            ),
+            turnUserIndex: session.turnUserIndex,
+            systemPrompt: await _systemPromptFor(session),
           ),
           interimContent: '',
           toolCalls: _cloneToolCalls(session.toolCalls),
@@ -991,27 +1272,27 @@ class ToolCallHandler {
 
       if (shouldRetryAfterTruncatedCompletion) {
         session.truncatedCompletionRecoveryAttempts++;
-        const retryMessage =
-            'Tool Results:\n'
-            '[INFO] The previous response was cut off by the token limit.\n\n'
-            'Continue from where you stopped and complete the response for '
-            'the user. Do not restart from the beginning.';
+        final retryMessage = truncatedNativeRound
+            ? 'Tool Results:\n'
+                  '[INFO] The previous response was cut off by the token '
+                  'limit while it was writing tool calls. None of those '
+                  'calls were run.\n\n'
+                  'If tools are still needed, call them again with complete '
+                  'arguments. Otherwise continue and complete the response '
+                  'for the user. Do not restart from the beginning.'
+            : 'Tool Results:\n'
+                  '[INFO] The previous response was cut off by the token '
+                  'limit.\n\n'
+                  'Continue from where you stopped and complete the response '
+                  'for the user. Do not restart from the beginning.';
 
         session.latestUserMessage = retryMessage;
         return ToolLoopResult.continueWith(
           nextStep: ToolLoopStep(
             message: retryMessage,
             history: _stepHistory(session),
-            systemPrompt: await _buildSystemPrompt(
-              baseSystemPrompt: session.baseSystemPrompt,
-              isToolResult: true,
-              discoveryMode: session.discoveryMode,
-              discoveredTools: session.discoveredTools,
-              activeSkillNames: session.activeSkillNames,
-              skipIdentity: session.skipIdentity,
-              nativeToolCalling: session.nativeToolCalling,
-              modelId: session.modelId,
-            ),
+            turnUserIndex: session.turnUserIndex,
+            systemPrompt: await _systemPromptFor(session),
           ),
           interimContent: displayContent,
           toolCalls: _cloneToolCalls(session.toolCalls),
@@ -1039,16 +1320,8 @@ class ToolCallHandler {
           nextStep: ToolLoopStep(
             message: retryMessage,
             history: _stepHistory(session),
-            systemPrompt: await _buildSystemPrompt(
-              baseSystemPrompt: session.baseSystemPrompt,
-              isToolResult: true,
-              discoveryMode: session.discoveryMode,
-              discoveredTools: session.discoveredTools,
-              activeSkillNames: session.activeSkillNames,
-              skipIdentity: session.skipIdentity,
-              nativeToolCalling: session.nativeToolCalling,
-              modelId: session.modelId,
-            ),
+            turnUserIndex: session.turnUserIndex,
+            systemPrompt: await _systemPromptFor(session),
           ),
           // Preserve interim "I'm checking..." text in the UI while the loop
           // continues with the next tool round.
@@ -1095,16 +1368,8 @@ class ToolCallHandler {
           nextStep: ToolLoopStep(
             message: retryMessage,
             history: _stepHistory(session),
-            systemPrompt: await _buildSystemPrompt(
-              baseSystemPrompt: session.baseSystemPrompt,
-              isToolResult: true,
-              discoveryMode: session.discoveryMode,
-              discoveredTools: session.discoveredTools,
-              activeSkillNames: session.activeSkillNames,
-              skipIdentity: session.skipIdentity,
-              nativeToolCalling: session.nativeToolCalling,
-              modelId: session.modelId,
-            ),
+            turnUserIndex: session.turnUserIndex,
+            systemPrompt: await _systemPromptFor(session),
           ),
           interimContent: displayContent,
           toolCalls: _cloneToolCalls(session.toolCalls),
@@ -1134,16 +1399,8 @@ class ToolCallHandler {
           nextStep: ToolLoopStep(
             message: retryMessage,
             history: _stepHistory(session),
-            systemPrompt: await _buildSystemPrompt(
-              baseSystemPrompt: session.baseSystemPrompt,
-              isToolResult: true,
-              discoveryMode: session.discoveryMode,
-              discoveredTools: session.discoveredTools,
-              activeSkillNames: session.activeSkillNames,
-              skipIdentity: session.skipIdentity,
-              nativeToolCalling: session.nativeToolCalling,
-              modelId: session.modelId,
-            ),
+            turnUserIndex: session.turnUserIndex,
+            systemPrompt: await _systemPromptFor(session),
           ),
           interimContent: '',
           toolCalls: _cloneToolCalls(session.toolCalls),
@@ -1216,16 +1473,8 @@ class ToolCallHandler {
           nextStep: ToolLoopStep(
             message: factCheckMessage,
             history: _stepHistory(session),
-            systemPrompt: await _buildSystemPrompt(
-              baseSystemPrompt: session.baseSystemPrompt,
-              isToolResult: true,
-              discoveryMode: session.discoveryMode,
-              discoveredTools: session.discoveredTools,
-              activeSkillNames: session.activeSkillNames,
-              skipIdentity: session.skipIdentity,
-              nativeToolCalling: session.nativeToolCalling,
-              modelId: session.modelId,
-            ),
+            turnUserIndex: session.turnUserIndex,
+            systemPrompt: await _systemPromptFor(session),
           ),
           // Suppress the candidate in the UI for now — the verify pass either
           // confirms it (we restore it below) or replaces it via [CORRECTED].
@@ -1313,6 +1562,7 @@ class ToolCallHandler {
     for (final rejected in enforceResult.rejectedCalls) {
       session.toolCalls.add(
         ToolCall(
+          id: rejected.callId,
           name: rejected.name,
           arguments: rejected.arguments,
           result: 'Rejected: ${rejected.reason}',
@@ -1340,16 +1590,8 @@ class ToolCallHandler {
         nextStep: ToolLoopStep(
           message: nextMessage,
           history: _stepHistory(session),
-          systemPrompt: await _buildSystemPrompt(
-            baseSystemPrompt: session.baseSystemPrompt,
-            isToolResult: true,
-            discoveryMode: session.discoveryMode,
-            discoveredTools: session.discoveredTools,
-            activeSkillNames: session.activeSkillNames,
-            skipIdentity: session.skipIdentity,
-            nativeToolCalling: session.nativeToolCalling,
-            modelId: session.modelId,
-          ),
+          turnUserIndex: session.turnUserIndex,
+          systemPrompt: await _systemPromptFor(session),
         ),
         interimContent: _stripToolCallBlocks(cleanedContent),
         interimBeforeToolCalls: _hasInterimTextBeforeToolCalls(cleanedContent),
@@ -1431,6 +1673,22 @@ class ToolCallHandler {
       uiCallsById[call.callId] = uiCall;
     }
     onToolCallsUpdated?.call(_cloneToolCalls(session.toolCalls));
+
+    // How many identical calls (this one included) the turn has made, per
+    // call of this round. The counter lives in the session, so it starts
+    // over with every user turn.
+    final identicalCount = <String, int>{};
+    {
+      final running = <String, int>{};
+      for (final prior in session.toolCalls) {
+        if (prior.arguments.containsKey(_kMalformedArgumentsKey)) continue;
+        final key = toolCallIdentityKey(prior.name, prior.arguments);
+        final n = (running[key] ?? 0) + 1;
+        running[key] = n;
+        if (identical(uiCallsById[prior.id], prior))
+          identicalCount[prior.id] = n;
+      }
+    }
 
     final modelResults = <ToolCallResult>[];
     // Snapshot the session.producedBlocks length BEFORE this round's tool
@@ -1533,11 +1791,22 @@ class ToolCallHandler {
       uiCall.status = isError ? ToolCallStatus.error : ToolCallStatus.completed;
       onToolCallsUpdated?.call(_cloneToolCalls(session.toolCalls));
 
+      // The repeat note goes after the cap, so it is never pruned away,
+      // and only here, so the history keeps it byte for byte.
+      final int? repeats = identicalCount[call.callId];
+      final String? advisory = repeats == null
+          ? null
+          : repeatCallAdvisory(call.name, call.arguments, repeats);
+      final String capped = capToolResultForModel(
+        sanitizeResultForModel(rawResult),
+      );
       modelResults.add(
         ToolCallResult(
           callId: call.callId,
           name: call.name,
-          result: sanitizeResultForModel(rawResult),
+          // Capped once, here: this text is what the history keeps and
+          // every later pass re-sends.
+          result: advisory == null ? capped : '$capped\n\n$advisory',
           isError: isError,
         ),
       );
@@ -1551,14 +1820,40 @@ class ToolCallHandler {
       // results ARE the model's next input, not a synthetic user turn.
       // tool_call_id matches the assistant tool_calls id (the enforcer keeps
       // the provider's native id), which is what the stateless upstream needs.
+      //
+      // Calls the enforcer rejected (unknown tool, bad find_tools query) are
+      // part of the round too, each with a `Rejected: <reason>` result.
+      // Leaving them out meant the model never heard that they failed and
+      // waited for, or repeated, a call that would never run. All calls keep
+      // the order the model wrote them in.
+      final validById = <String, EnforcedToolCall>{
+        for (final call in enforceResult.validCalls) call.callId: call,
+      };
+      final rejectedById = <String, RejectedToolCall>{
+        for (final rejected in enforceResult.rejectedCalls)
+          if (rejected.callId != null) rejected.callId!: rejected,
+      };
+      final resultById = <String, String>{
+        for (final result in modelResults) result.callId: result.result,
+        for (final rejected in rejectedById.values)
+          rejected.callId!: 'Rejected: ${rejected.reason}',
+      };
+      final orderedIds = <String>[
+        for (final parsed in parsedCalls)
+          if (validById.containsKey(parsed['id']) ||
+              rejectedById.containsKey(parsed['id']))
+            parsed['id'] as String,
+      ];
       final assistantToolCalls = <Map<String, dynamic>>[
-        for (final call in enforceResult.validCalls)
+        for (final id in orderedIds)
           {
-            'id': call.callId,
+            'id': id,
             'type': 'function',
             'function': {
-              'name': call.name,
-              'arguments': jsonEncode(call.arguments),
+              'name': validById[id]?.name ?? rejectedById[id]!.name,
+              'arguments': jsonEncode(
+                validById[id]?.arguments ?? rejectedById[id]!.arguments,
+              ),
             },
           },
       ];
@@ -1568,19 +1863,49 @@ class ToolCallHandler {
         'content': interim.isEmpty ? null : interim,
         'tool_calls': assistantToolCalls,
       });
-      for (final result in modelResults) {
+      for (final id in orderedIds) {
         session.history.add({
           'role': 'tool',
-          'tool_call_id': result.callId,
-          'content': result.result,
+          'tool_call_id': id,
+          'content': resultById[id] ?? kUnansweredToolCallResult,
         });
+      }
+      // A skill loaded in this round: its body follows the tool results as
+      // a user message, appended (never put into the system prompt).
+      for (final skill in _takePendingSkillContents(session)) {
+        session.history.add({
+          'role': 'user',
+          'content': skillContentMessage(skill.name, skill.body),
+        });
+      }
+      // A steer the user sent while this turn ran goes in here, as a user
+      // message after the round (lib/services/composer/follow_up_queue.dart).
+      // The history entry is what the model reads; the transcript stores it
+      // byte for byte. The block only draws it in the answer, at this place.
+      for (final steer in SteerInbox.take(session.discoveryContextKey)) {
+        session.history.add({
+          'role': 'user',
+          'content': SteerInbox.messageFor(steer.text),
+        });
+        session.producedBlocks.add(ContentBlock.steer(steer.text));
       }
       nextMessage = '';
       session.latestUserMessage = '';
     } else {
-      nextMessage = enforcer.buildResultMessage(modelResults);
+      final skillMessages = [
+        for (final skill in _takePendingSkillContents(session))
+          skillContentMessage(skill.name, skill.body),
+      ];
+      final steers = SteerInbox.take(session.discoveryContextKey);
+      for (final steer in steers) {
+        session.producedBlocks.add(ContentBlock.steer(steer.text));
+      }
+      nextMessage = [
+        enforcer.buildResultMessage(modelResults),
+        ...skillMessages,
+        for (final steer in steers) SteerInbox.messageFor(steer.text),
+      ].join('\n\n');
       session.latestUserMessage = nextMessage;
-      session.pendingPromptToolResult = nextMessage;
     }
 
     final orderedUiCalls = enforceResult.validCalls
@@ -1596,16 +1921,8 @@ class ToolCallHandler {
       nextStep: ToolLoopStep(
         message: nextMessage,
         history: _stepHistory(session),
-        systemPrompt: await _buildSystemPrompt(
-          baseSystemPrompt: session.baseSystemPrompt,
-          isToolResult: true,
-          discoveryMode: session.discoveryMode,
-          discoveredTools: session.discoveredTools,
-          activeSkillNames: session.activeSkillNames,
-          skipIdentity: session.skipIdentity,
-          nativeToolCalling: session.nativeToolCalling,
-          modelId: session.modelId,
-        ),
+        turnUserIndex: session.turnUserIndex,
+        systemPrompt: await _systemPromptFor(session),
       ),
       // Preserve all non-tool text from this pass (before/after tool blocks)
       // so assistant text is never lost across multi-pass tool loops.
@@ -1693,8 +2010,23 @@ class ToolCallHandler {
   /// parse it defensively — providers occasionally emit malformed or truncated
   /// JSON, in which case the call runs with empty args rather than crashing the
   /// whole turn.
-  List<Map<String, dynamic>> _nativeCallsToParsed(List<NativeToolCall> calls) {
+  ///
+  /// Every call gets an id that is unique in this conversation: a missing id
+  /// gets one, and an id already used (twice in this round, or the server's
+  /// fallback `call_<n>` repeating every round) gets a `_2`, `_3`, ... suffix.
+  /// Two calls with one id overwrote each other in the running and result
+  /// maps. The new id is used for the assistant `tool_calls` and the tool
+  /// result alike, so the model sees a matching pair.
+  List<Map<String, dynamic>> _nativeCallsToParsed(
+    ToolLoopSession session,
+    List<NativeToolCall> calls,
+  ) {
+    final usedIds = _usedToolCallIds(session);
     return calls.map((call) {
+      final id = uniqueToolCallId(
+        call.id.trim().isNotEmpty ? call.id.trim() : 'call_${usedIds.length}',
+        usedIds,
+      );
       Map<String, dynamic> args = <String, dynamic>{};
       final raw = call.arguments.trim();
       if (raw.isNotEmpty) {
@@ -1728,12 +2060,31 @@ class ToolCallHandler {
       return <String, dynamic>{
         'name': call.name,
         'arguments': args,
-        // Carry the provider's native tool-call id so the enforcer uses it as
-        // the callId — the assistant.tool_calls[].id and role:"tool"
-        // tool_call_id then echo exactly what the provider issued.
-        if (call.id.isNotEmpty) 'id': call.id,
+        // Carry the provider's native tool-call id (made unique above) so the
+        // enforcer uses it as the callId — the assistant.tool_calls[].id and
+        // role:"tool" tool_call_id then match.
+        'id': id,
       };
     }).toList();
+  }
+
+  /// Tool-call ids already used in [session]: in its history and its calls.
+  Set<String> _usedToolCallIds(ToolLoopSession session) {
+    final used = <String>{};
+    for (final message in session.history) {
+      final calls = message['tool_calls'];
+      if (calls is List) {
+        for (final call in calls) {
+          if (call is Map && call['id'] != null) {
+            used.add(call['id'].toString());
+          }
+        }
+      }
+    }
+    for (final call in session.toolCalls) {
+      used.add(call.id);
+    }
+    return used;
   }
 
   void _appendRoundToHistory(
@@ -1743,13 +2094,9 @@ class ToolCallHandler {
   }) {
     final userText = session.latestUserMessage.trim();
     if (userText.isNotEmpty) {
-      final pending = session.pendingPromptToolResult;
-      if (pending != null && identical(pending, session.latestUserMessage)) {
-        session.promptToolResultIndices.add(session.history.length);
-      }
+      _noteTurnUserEntry(session, userText);
       session.history.add({'role': 'user', 'content': userText});
     }
-    session.pendingPromptToolResult = null;
 
     final reasoningText = assistantReasoning?.trim() ?? '';
     var assistantText = assistantContent.trim();
@@ -1824,6 +2171,14 @@ class ToolCallHandler {
     final skill = SkillRegistry.byName(name);
     if (skill == null) return;
 
+    // The body goes to the model once per chat, as a `<skill_content>` user
+    // message after this round's tool results (see processAssistantResponse).
+    // A skill the history already carries is not sent again.
+    if (!historyHasSkillContent(session.history, skill.name) &&
+        !session.pendingSkillContents.any((s) => s.name == skill.name)) {
+      session.pendingSkillContents.add(SkillContent(skill.name, skill.body));
+    }
+
     // Re-activating an already-active skill moves it to most-recent rather
     // than duplicating it.
     session.activeSkillNames
@@ -1859,19 +2214,24 @@ class ToolCallHandler {
     }
   }
 
-  Future<String> _buildSystemPrompt({
-    required String? baseSystemPrompt,
-    required bool isToolResult,
-    required bool discoveryMode,
-    required List<Map<String, dynamic>> discoveredTools,
-    List<String> activeSkillNames = const [],
-    bool skipIdentity = false,
-    bool nativeToolCalling = false,
-    String? modelId,
-  }) async {
-    // Check if identity system is enabled before loading Soul/User/Memory.
-    // When skipIdentity is true (assistant with memory disabled), skip entirely.
-    final identityOn = !skipIdentity && await isIdentityEnabled();
+  /// Builds the system prompt from the chat's snapshot
+  /// ([ToolLoopSession.promptSnapshot]), not from the live soul / memory /
+  /// MCP state: those change during a chat, and a changed system prompt
+  /// misses the prompt cache on the whole history. Use [_systemPromptFor].
+  Future<String> _buildSystemPrompt(ToolLoopSession session) async {
+    final baseSystemPrompt = session.baseSystemPrompt;
+    final discoveryMode = session.discoveryMode;
+    final skipIdentity = session.skipIdentity;
+    final nativeToolCalling = session.nativeToolCalling;
+    final modelId = session.modelId;
+    final snapshot = session.promptSnapshot ?? const PromptState();
+    final identityOn = snapshot.identity;
+
+    // A complete persona (frozen in the snapshot) is the whole system
+    // prompt: no tool protocol, identity or per-model blocks. Native tools
+    // still go in `tools[]`.
+    final rawBase = baseSystemPrompt?.trim() ?? '';
+    if (snapshot.complete == true && rawBase.isNotEmpty) return rawBase;
 
     String? soulText;
     String? userInfoText;
@@ -1879,14 +2239,9 @@ class ToolCallHandler {
     Map<String, dynamic>? notesToolDef;
 
     if (identityOn) {
-      final results = await Future.wait([
-        loadSoulText(),
-        loadUserInfoText(),
-        loadMemoryText(),
-      ]);
-      soulText = results[0];
-      userInfoText = results[1];
-      memoryText = results[2];
+      soulText = snapshot.soul;
+      userInfoText = snapshot.user;
+      memoryText = snapshot.memory;
 
       // Get the notes tool definition so it's always available.
       notesToolDef = _toolExecutor.allTools
@@ -1902,19 +2257,18 @@ class ToolCallHandler {
         .firstOrNull;
 
     // request_mcp_server is always available: the model must be able to offer
-    // a Connect button for a server the request needs. The unconnected list
-    // and connected names are recomputed on every rebuild, so the turn after a
-    // reconnect sees the server move from "not connected" to "connected".
+    // a Connect button for a server the request needs. The server lists come
+    // from the chat's snapshot; a later connect or disconnect reaches the
+    // model as a `[connectors updated]` note on the next user message.
     final requestMcpServerToolDef = _toolExecutor.allTools
         .where((t) => t.name == 'request_mcp_server')
         .map((t) => t.toJson())
         .firstOrNull;
-    final unconnectedMcpServers = unconnectedCatalogueEntries();
-    final connectedMcpServerNames = [
-      ...McpService.connections.value.map((c) => c.name),
-      if (ChukdooConnector.instance.state.value.connected)
-        ChukdooConnector.displayName,
-    ];
+    final unconnectedMcpServers = snapshot.mcpUnconnected
+        .map(catalogueEntryById)
+        .whereType<McpCatalogueEntry>()
+        .toList();
+    final connectedMcpServerNames = snapshot.mcpConnected;
 
     // web_search and web_crawl are always available in discovery mode.
     // web_search handles image search too (type="images") so the AI can
@@ -1973,17 +2327,24 @@ class ToolCallHandler {
     final skillsEnabled = _toolExecutor.allTools.any((t) => t.name == 'skill');
     Map<String, dynamic>? skillToolDef;
     List<Skill> skillCatalog = const [];
-    List<Skill> activeSkills = const [];
     if (skillsEnabled) {
       skillToolDef = _toolExecutor.allTools
           .where((t) => t.name == 'skill')
           .map((t) => t.toJson())
           .firstOrNull;
-      skillCatalog = SkillRegistry.all;
-      activeSkills = activeSkillNames
-          .map(SkillRegistry.byName)
-          .whereType<Skill>()
-          .toList();
+      // From the chat's snapshot: a catalog change reaches the model as a
+      // `[skills updated]` note on the next user message.
+      final frozen = snapshot.skills;
+      skillCatalog = frozen == null
+          ? SkillRegistry.all
+          : [
+              for (final entry in frozen)
+                Skill(
+                  name: entry.name,
+                  description: entry.description,
+                  body: '',
+                ),
+            ];
     }
 
     // When memory is disabled (skipIdentity), exclude the `notes` tool from
@@ -1997,9 +2358,7 @@ class ToolCallHandler {
     final toolProtocol = promptBuilder
         .buildToolProtocolSection(
           tools: tools,
-          isToolResult: isToolResult,
           nativeToolCalling: nativeToolCalling,
-          discoveredTools: discoveredTools,
           soulText: soulText,
           userInfoText: userInfoText,
           memoryText: memoryText,
@@ -2017,7 +2376,6 @@ class ToolCallHandler {
           artifactSchemaToolDef: artifactSchemaToolDef,
           skillToolDef: skillToolDef,
           skillCatalog: skillCatalog,
-          activeSkills: activeSkills,
         )
         .trim();
 
@@ -2257,23 +2615,58 @@ class ToolCallHandler {
     ).hasMatch(sentence);
   }
 
-  /// The history for the next pass: older tool results shortened in place
-  /// (see [compactOlderToolResults]), then cloned.
+  /// The history for the next pass: the session history as it is (nothing
+  /// that was sent before is rewritten), cloned and pairing-checked.
   List<Map<String, dynamic>> _stepHistory(ToolLoopSession session) {
-    // When the next message is not a fresh tool result (fact-check, retry,
-    // forced final pass), the newest prompt-based result already sits in the
-    // history and IS the newest round, so it must stay in full.
-    Set<int> indices = session.promptToolResultIndices;
-    if (session.pendingPromptToolResult == null && indices.isNotEmpty) {
-      final int newest = indices.reduce((a, b) => a > b ? a : b);
-      indices = indices.where((i) => i != newest).toSet();
+    // Repair the tool pairing before every request: one orphan or unanswered
+    // tool call and the upstream answers 400 for the whole turn.
+    final step = validateToolPairing(_cloneHistory(session.history));
+    _recordTranscript(session, step);
+    return step;
+  }
+
+  /// Marks the entry about to be appended at the end of the history as the
+  /// turn's own user message, when it is the first pass's message.
+  void _noteTurnUserEntry(ToolLoopSession session, String content) {
+    if (session.turnUserIndex != null) return;
+    if (content != session.firstPassMessage.trim()) return;
+    session.turnUserIndex = session.history.length;
+  }
+
+  /// Stores, with the turn's user message, what the next pass sends after
+  /// that message: the [step] history from the turn's user entry on, then
+  /// the pass's own user message ([ToolLoopSession.latestUserMessage],
+  /// which the server appends). The last one recorded is the turn's last
+  /// request, so the next turn's history replays it byte for byte
+  /// (`TurnPromptContext.transcript`).
+  void _recordTranscript(
+    ToolLoopSession session,
+    List<Map<String, dynamic>> step,
+  ) {
+    final userIndex = session.turnUserIndex;
+    if (userIndex == null || userIndex >= step.length) return;
+    final transcript = <Map<String, dynamic>>[
+      for (final entry in step.sublist(userIndex + 1))
+        Map<String, dynamic>.from(entry),
+    ];
+    final message = session.latestUserMessage.trim();
+    if (message.isNotEmpty) {
+      transcript.add({'role': 'user', 'content': message});
     }
-    compactOlderToolResults(
-      session.history,
-      turnStart: session.turnHistoryStart,
-      promptToolResultIndices: indices,
-    );
-    return _cloneHistory(session.history);
+    session.turnContext.transcript = transcript;
+    PromptContextLedger.put(session.userSentAt, session.turnContext);
+  }
+
+  /// The skill bodies queued in this round, in load order, and clears them.
+  /// Records each in the turn's stored context, so the history of every
+  /// later turn sends the same message at the same place.
+  List<SkillContent> _takePendingSkillContents(ToolLoopSession session) {
+    if (session.pendingSkillContents.isEmpty) return const <SkillContent>[];
+    final taken = List<SkillContent>.of(session.pendingSkillContents);
+    session.pendingSkillContents.clear();
+    session.turnContext.skills.addAll(taken);
+    PromptContextLedger.put(session.userSentAt, session.turnContext);
+    return taken;
   }
 
   List<Map<String, dynamic>> _cloneHistory(List<Map<String, dynamic>> history) {

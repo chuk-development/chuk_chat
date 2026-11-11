@@ -30,6 +30,7 @@ from typing import Any
 from .cost import cost_block
 from .search import ensure_fts_schema, register_functions, search_messages
 from .sqlite_tuning import tune_connection
+from .sources import REPLAYED_CONTEXT_SOURCES, valid_source
 from .tool_events import tool_event_fields
 
 _SCHEMA = """
@@ -166,6 +167,18 @@ CREATE TABLE IF NOT EXISTS usage_lines (
     created_at        REAL NOT NULL
 );
 
+-- Per-session state of the agent modes (docs/WIRE_CONTRACT.md, "Goal mode",
+-- "Plan mode", "Todo list"): one JSON document per (session_key, kind). The
+-- goal's armed flag is NOT stored here: it is process-local on purpose, so a
+-- restarted host never resumes a goal on its own.
+CREATE TABLE IF NOT EXISTS session_features (
+    session_key TEXT NOT NULL,
+    kind        TEXT NOT NULL,
+    data        TEXT NOT NULL,
+    updated_at  REAL NOT NULL,
+    PRIMARY KEY (session_key, kind)
+);
+
 CREATE INDEX IF NOT EXISTS idx_usage_lines_run ON usage_lines(run_id);
 CREATE INDEX IF NOT EXISTS idx_usage_lines_time ON usage_lines(created_at);
 """
@@ -216,6 +229,14 @@ RUN_TIMING_COLUMNS: tuple[str, ...] = (
 
 #: Run states (the ``runs.state`` column).
 RUN_RUNNING = "running"
+
+#: The result of a call that started and never reported back: a Stop that did
+#: not settle, or a crash (``sweep_orphan_runs``). It may have had its effect,
+#: so the model must check before it repeats it. ``loop.STOPPED_TOOL_RESULT``
+#: is this text.
+UNKNOWN_OUTCOME_RESULT = (
+    "stopped while running; the outcome is unknown. Verify it before you retry."
+)
 RUN_FINISHED = "finished"
 RUN_FAILED = "failed"
 #: A limit (steps, iteration budget, token budget) ended the run before the
@@ -278,6 +299,66 @@ def _close_open_approvals(
         )
         count += 1
     return count
+
+
+def _close_orphan_calls(
+    cur: sqlite3.Cursor, session_id: int, first_mid: Any, started_at: float
+) -> int:
+    """Write an unknown-outcome ``tool`` row for every call of a cut-off run
+    that has none. The rows land after the run's last row, which is right
+    after the unanswered turn: a crash ends the run there. Returns the count."""
+    if first_mid is not None:
+        rows = cur.execute(
+            "SELECT role, content FROM messages WHERE session_id=? AND id>? "
+            "AND role<>'event' ORDER BY id",
+            (session_id, int(first_mid)),
+        ).fetchall()
+    else:
+        rows = cur.execute(
+            "SELECT role, content FROM messages WHERE session_id=? AND created_at>=? "
+            "AND role<>'event' ORDER BY id",
+            (session_id, started_at),
+        ).fetchall()
+    calls: list[tuple[str, str]] = []
+    answered: set[str] = set()
+    for row in rows:
+        try:
+            content = json.loads(row["content"])
+        except ValueError:
+            continue
+        if not isinstance(content, dict):
+            continue
+        if row["role"] == "tool":
+            answered.add(str(content.get("tool_call_id") or ""))
+        elif row["role"] == "assistant":
+            for call in content.get("tool_calls") or []:
+                if not isinstance(call, dict) or not call.get("id"):
+                    continue
+                fn = call.get("function") or {}
+                calls.append((str(call["id"]), str(fn.get("name", "")) if isinstance(fn, dict) else ""))
+    written = 0
+    now = time.time()
+    for call_id, name in calls:
+        if call_id in answered:
+            continue
+        answered.add(call_id)
+        cur.execute(
+            "INSERT INTO messages(session_id, role, content, created_at) VALUES (?, 'tool', ?, ?)",
+            (
+                session_id,
+                json.dumps(
+                    {
+                        "role": "tool",
+                        "tool_call_id": call_id,
+                        "name": name,
+                        "content": UNKNOWN_OUTCOME_RESULT,
+                    }
+                ),
+                now,
+            ),
+        )
+        written += 1
+    return written
 
 
 def _tool_rows_after(conversation: list[Message], index: int) -> list[Message]:
@@ -766,7 +847,28 @@ class StateStore:
             # recall) or any other runtime row carries a wire role of ``user``
             # inside, but it was never the user's message and must not replay
             # as one. ``event`` rows were emitted above.
+            # Typed synthetic rows (docs/WIRE_CONTRACT.md, "Typed source on
+            # synthetic rows") are the exception: a runtime row with a source
+            # the app draws as a chip (a goal round's wrap-up, a skill load, a
+            # settled subagent) replays as a ``context`` event. Never the
+            # ``[clock]`` row: one per task is noise.
             if message.role not in ("user", "assistant"):
+                source = message.content.get("source")
+                if (
+                    message.role != "system"
+                    and message.content.get("role") == "user"
+                    and source in REPLAYED_CONTEXT_SOURCES
+                ):
+                    events.append(
+                        {
+                            "type": "context",
+                            "source": source,
+                            "text": _as_text(message.content.get("content")),
+                            "replay": True,
+                            "mid": message.id,
+                            "created_at": message.created_at,
+                        }
+                    )
                 continue
             content = message.content
             role = content.get("role")
@@ -775,15 +877,26 @@ class StateStore:
             # ``mid`` is the row id, so the client can persist a cursor.
             mid = message.id
             if role == "user":
-                events.append(
-                    {
-                        "type": "user",
-                        "text": _as_text(content.get("content")),
-                        "replay": True,
-                        "mid": mid,
-                        "created_at": message.created_at,
-                    }
-                )
+                event = {
+                    "type": "user",
+                    "text": _as_text(content.get("content")),
+                    "replay": True,
+                    "mid": mid,
+                    "created_at": message.created_at,
+                }
+                # A prompt nobody typed (a fired schedule, a goal round, a
+                # job wake, a mail) names where it came from; a late answer
+                # to an ask_user question names the call it answers.
+                if valid_source(content.get("source")):
+                    event["source"] = content["source"]
+                answer = content.get("answer_to_pending_question")
+                if isinstance(answer, str) and answer:
+                    event["answer_to_pending_question"] = answer
+                # docs/WIRE_CONTRACT.md, "Attachments to Agents".
+                attachments = content.get("attachments")
+                if isinstance(attachments, list) and attachments:
+                    event["attachments"] = attachments
+                events.append(event)
                 continue
             # assistant
             # The turn's thinking comes first, as it did live: the app renders
@@ -1167,12 +1280,24 @@ class StateStore:
 
     def sweep_orphan_runs(self, *, reason: str = "host_restarted") -> int:
         """On host start: a run still ``running`` was cut off by a crash or a
-        restart. Close it as failed so it never shows as live. Returns the count."""
+        restart. Close it as failed so it never shows as live. Returns the count.
+
+        Every tool call of such a run that has no result row gets one now,
+        with :data:`UNKNOWN_OUTCOME_RESULT` (research item 58): the call may
+        have run before the crash, so the next turn must verify, not repeat
+        it — and the stored conversation never holds a call without its
+        result, which a provider would refuse."""
 
         def op(cur: sqlite3.Cursor) -> int:
-            orphaned = cur.execute(
-                "SELECT DISTINCT session_id FROM runs WHERE state=?", (RUN_RUNNING,)
+            runs = cur.execute(
+                "SELECT session_id, first_mid, started_at FROM runs WHERE state=?",
+                (RUN_RUNNING,),
             ).fetchall()
+            orphaned = {int(row["session_id"]) for row in runs}
+            for row in runs:
+                _close_orphan_calls(
+                    cur, int(row["session_id"]), row["first_mid"], float(row["started_at"])
+                )
             cur.execute(
                 "UPDATE runs SET state=?, reason=?, finished_at=? WHERE state=?",
                 (RUN_FAILED, reason, time.time(), RUN_RUNNING),
@@ -1180,8 +1305,8 @@ class StateStore:
             count = int(cur.rowcount)
             # Their publish approvals died with them (docs/WIRE_CONTRACT.md,
             # cowork-266): never replay one as a prompt for a run that is over.
-            for row in orphaned:
-                _close_open_approvals(cur, int(row["session_id"]), "stopped", None)
+            for session_id in orphaned:
+                _close_open_approvals(cur, session_id, "stopped", None)
             return count
 
         return int(self._write(op))
@@ -1202,6 +1327,75 @@ class StateStore:
             )
 
         self._write(op)
+
+    # -- per-session feature state (goal, plan mode, todo list) -------------
+
+    def load_feature(self, session_key: str, kind: str) -> dict | None:
+        """The stored ``kind`` document of ``session_key``, or ``None``."""
+        row = self._conn().execute(
+            "SELECT data FROM session_features WHERE session_key=? AND kind=?",
+            (session_key, kind),
+        ).fetchone()
+        if row is None:
+            return None
+        try:
+            data = json.loads(row["data"])
+        except ValueError:
+            return None
+        return data if isinstance(data, dict) else None
+
+    def save_feature(self, session_key: str, kind: str, data: dict | None) -> None:
+        """Replace the ``kind`` document of ``session_key``; ``None`` deletes it."""
+
+        def op(cur: sqlite3.Cursor) -> None:
+            if data is None:
+                cur.execute(
+                    "DELETE FROM session_features WHERE session_key=? AND kind=?",
+                    (session_key, kind),
+                )
+                return
+            cur.execute(
+                "INSERT INTO session_features(session_key, kind, data, updated_at) "
+                "VALUES (?, ?, ?, ?) ON CONFLICT(session_key, kind) DO UPDATE SET "
+                "data=excluded.data, updated_at=excluded.updated_at",
+                (session_key, kind, json.dumps(data), time.time()),
+            )
+
+        self._write(op)
+
+    def update_feature(self, session_key: str, kind: str, fn) -> Any:
+        """Read-modify-write ``kind`` in ONE write transaction: ``fn(current)``
+        returns ``(new_document_or_None, result)``; ``result`` is returned.
+        Used for the goal's compare-and-set, so two writers never both win."""
+
+        def op(cur: sqlite3.Cursor) -> Any:
+            row = cur.execute(
+                "SELECT data FROM session_features WHERE session_key=? AND kind=?",
+                (session_key, kind),
+            ).fetchone()
+            current = None
+            if row is not None:
+                try:
+                    loaded = json.loads(row["data"])
+                    current = loaded if isinstance(loaded, dict) else None
+                except ValueError:
+                    current = None
+            new, result = fn(current)
+            if new is None:
+                cur.execute(
+                    "DELETE FROM session_features WHERE session_key=? AND kind=?",
+                    (session_key, kind),
+                )
+            else:
+                cur.execute(
+                    "INSERT INTO session_features(session_key, kind, data, updated_at) "
+                    "VALUES (?, ?, ?, ?) ON CONFLICT(session_key, kind) DO UPDATE SET "
+                    "data=excluded.data, updated_at=excluded.updated_at",
+                    (session_key, kind, json.dumps(new), time.time()),
+                )
+            return result
+
+        return self._write(op)
 
     def load_subagent(self, subagent_id: str) -> dict | None:
         row = self._conn().execute(

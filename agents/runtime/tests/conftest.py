@@ -12,3 +12,10 @@ def _fresh_mcp_grants():
     mcp_client.GRANTS.reset()
     yield
     mcp_client.GRANTS.reset()
+
+
+@pytest.fixture(autouse=True)
+def _private_git_state(tmp_path_factory, monkeypatch):
+    """The host state of workspace git (private git dirs, rewind ledgers) of
+    every test goes to a temp dir, never to the real host state."""
+    monkeypatch.setenv("AGENTS_GIT_STATE_DIR", str(tmp_path_factory.mktemp("git-state")))

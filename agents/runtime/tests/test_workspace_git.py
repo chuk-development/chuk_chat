@@ -105,26 +105,130 @@ def test_a_failed_call_is_journaled_as_not_ok(tmp_path):
     assert '"ok": false' in entry["result"].lower()
 
 
-def test_an_existing_repo_is_adopted_without_rewriting_its_config(tmp_path):
-    """From the second start on, "already a repo" is the normal case — and the
-    repo may be one the user already owned."""
+def _user_repo(tmp_path):
     root = tmp_path / "theirs"
     root.mkdir()
     subprocess.run(["git", "init", "-q", str(root)], check=True)
     _git(root, "config", "user.name", "Real Person")
     _git(root, "config", "user.email", "real@example.com")
     (root / "README.md").write_text("theirs\n")
+    (root / "staged.txt").write_text("v1\n")
     _git(root, "add", "-A")
     _git(root, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "their commit")
+    # Work in progress the user has staged but not committed.
+    (root / "staged.txt").write_text("v2 staged\n")
+    _git(root, "add", "staged.txt")
+    return root
+
+
+def _private_git(workspace, *args) -> str:
+    proc = subprocess.run(
+        ["git", *args],
+        capture_output=True,
+        text=True,
+        check=True,
+        env={
+            "PATH": __import__("os").environ["PATH"],
+            "GIT_DIR": str(workspace._private_dir),
+            "GIT_WORK_TREE": str(workspace.root),
+        },
+    )
+    return proc.stdout
+
+
+def test_a_user_repo_is_never_committed_into(tmp_path):
+    """Bead B14: the agent's checkpoints go to a private git dir. The user's
+    HEAD, index, refs and history stay exactly as they were."""
+    root = _user_repo(tmp_path)
+    head = _git(root, "rev-parse", "HEAD")
+    refs = _git(root, "for-each-ref")
+    index = (root / ".git" / "index").read_bytes()
+    status = _git(root, "status", "--porcelain")
 
     workspace = GitWorkspace.open(root)
-    assert workspace is not None and workspace.enabled
+    assert workspace is not None and workspace.enabled and workspace.private
+    registry = _registry(workspace)
+    registry.dispatch("write_file", {"path": str(root / "agent.txt"), "content": "made\n"})
     workspace.record("list_dir", {"path": "."}, {"ok": True})
+    # A subagent branch lives in the private repo too.
+    info = workspace.create_worktree("child")
+    assert info is not None
+    workspace.release_worktree(info, keep_branch=True)
 
+    assert _git(root, "rev-parse", "HEAD") == head
+    assert _git(root, "for-each-ref") == refs
+    assert (root / ".git" / "index").read_bytes() == index
+    assert _git(root, "log", "--format=%s").splitlines() == ["their commit"]
     assert _git(root, "config", "--local", "--get", "user.name").strip() == "Real Person"
-    assert "their commit" in _git(root, "log", "--format=%s")
-    # the agent's own commits are attributed to the agent, not to the user
-    assert _git(root, "log", "-1", "--format=%an").strip() == "Agents Agent"
+    # The user's status gains only the file the agent wrote: never .agents/.
+    after = _git(root, "status", "--porcelain")
+    assert after == status + "?? agent.txt\n"
+    assert not (root / ".gitignore").exists()
+
+    # The agent's own history is in the private repo, attributed to the agent.
+    log = _private_git(workspace, "log", "--format=%an %s")
+    assert "Agents Agent" in log and "write_file" in log
+    tracked = _private_git(workspace, "ls-files")
+    assert "agent.txt" in tracked and ".agents/journal.jsonl" in tracked
+    assert ".agents/git" not in tracked
+    # The private git dir is host state, outside the workspace (H3).
+    assert not (root / ".agents" / "git").exists()
+    assert root.resolve() not in workspace._private_dir.parents
+
+
+def test_the_user_repo_hides_agents_dir_on_git_older_than_2_31(tmp_path, monkeypatch):
+    """``rev-parse --path-format`` exists only since Git 2.31. Emulate an older
+    Git that rejects it: ``.agents/`` must still land in ``info/exclude``."""
+    root = _user_repo(tmp_path)
+    real = GitWorkspace._git_in
+
+    def old_git(self, cwd, *args, **kwargs):
+        if any(a.startswith("--path-format") for a in args):
+            return subprocess.CompletedProcess(args, 129, "", "unknown option")
+        return real(self, cwd, *args, **kwargs)
+
+    monkeypatch.setattr(GitWorkspace, "_git_in", old_git)
+    workspace = GitWorkspace.open(root)
+    assert workspace is not None and workspace.enabled and workspace.private
+    exclude = (root / ".git" / "info" / "exclude").read_text(encoding="utf-8")
+    assert "/.agents/" in exclude.splitlines()
+    assert ".agents" not in _git(root, "status", "--porcelain")
+
+
+def test_the_private_repo_is_found_again_after_a_restart(tmp_path):
+    root = _user_repo(tmp_path)
+    first = GitWorkspace.open(root)
+    first.record("list_dir", {"path": "."}, {"ok": True})
+    again = GitWorkspace.open(root)
+    assert again.private
+    again.record("list_dir", {"path": "."}, {"ok": True})
+    assert [e["seq"] for e in again.journal_entries()] == [1, 2]
+    assert len(again.history(10)) == 3  # root commit + two actions
+    assert _git(root, "log", "--format=%s").splitlines() == ["their commit"]
+
+
+def test_rollback_in_a_user_repo_leaves_the_user_index_alone(tmp_path):
+    root = _user_repo(tmp_path)
+    index = (root / ".git" / "index").read_bytes()
+    workspace = GitWorkspace.open(root)
+    registry = _registry(workspace)
+    registry.dispatch("write_file", {"path": str(root / "agent.txt"), "content": "one\n"})
+    assert workspace.rollback(actions=1)["ok"] is True
+    assert not (root / "agent.txt").exists()
+    assert (root / ".git" / "index").read_bytes() == index
+    assert _git(root, "log", "--format=%s").splitlines() == ["their commit"]
+
+
+def test_an_agent_made_repo_keeps_working_in_place(tmp_path):
+    """Migration: a workspace whose ``.git`` the agent made earlier stays on
+    it; no private dir appears."""
+    first = _ws(tmp_path)
+    first.record("list_dir", {"path": "."}, {"ok": True})
+    again = _ws(tmp_path)
+    assert not again.private
+    assert not (again.root / ".agents" / "git").exists()
+    again.record("list_dir", {"path": "."}, {"ok": True})
+    assert "list_dir" in _git(again.root, "log", "-1", "--format=%s")
 
 
 def test_the_journal_survives_a_restart_and_keeps_counting(tmp_path):

@@ -69,14 +69,14 @@ Money reasons, in order:
 | STT endpoints | `api_server/routers/ai/transcribe.py:56` (POST), `:274` (WS), Groq Whisper, billed | works |
 | Android assistant surface (ASSIST gesture, device tools) | `lib/assistant/*`, `android/.../assist/*`, `docs/ASSISTANT_SURFACE.md` | works, but **no speech output** and **no barge-in** (doc is stale on TTS) |
 | Voice-mode button | `lib/platform_config.dart:37` `kFeatureVoiceMode` | placeholder ("Coming soon") |
-| Voice-call button on the agent profile | `lib/pages/agent_profile_page.dart:287`, `mobile_agent_sheet.dart:144` | disabled placeholder |
+| Voice-call button on the agent profile | gone: the old agent profile page was deleted in f2fec887 | none |
 | Parked voice-call slot in the chat chrome | `docs/EXPRESSIVE_UI_REDESIGN.md:47` | parked |
 
 ### 3.2 Agent backend (host on the user's machine)
 
 | Piece | Where | State |
 |---|---|---|
-| Sealed relay app ⇄ `api.chuk.chat` ⇄ host, pairing, reconnect | `agents/common/chuk_agents_crypto/`, `host/cloud_relay.py`, `docs/PLAN_2026-09-09_CLOUD_PAIRING_TRANSPORT.md` | works |
+| Sealed relay app ⇄ `api.chuk.chat` ⇄ host, pairing, reconnect | `agents/common/chuk_agents_crypto/`, `host/cloud_relay.py`, `docs/notes/implemented/2026-09-09-plan-cloud-pairing-transport.md` | works |
 | Tool families: shell, terminal, files, web, MCP, secrets, skills, media, browser | `agents/runtime/src/chuk_agents_runtime/runtime.py:365-522` | works |
 | Automations: `schedule_task` (cron/every/at), `start_watcher`, `agents_hooks.trigger` | `runtime/automations.py:364-492`, `host/automations.py:307` | works, live-proven |
 | Self-started runs | `host.py:1651 _fire_automation` → `executor.py:1554 submit_task` | works |
@@ -117,7 +117,7 @@ These come from existing decisions. This spec does not change them unless it say
 3. **No content in push payloads.** A push carries an id only. The app fetches
    the content over the sealed relay.
 4. **All app ⇄ host traffic goes through the relay.** No P2P. 1 MB frame cap.
-   (`docs/PLAN_2026-09-09_CLOUD_PAIRING_TRANSPORT.md`)
+   (`docs/notes/implemented/2026-09-09-plan-cloud-pairing-transport.md`)
    Voice media is a separate plane through a LiveKit SFU. An SFU is a server,
    not P2P, so this is in line with the decision.
 5. **Talk as little as possible.** Proactive contact needs a rule or a clear
@@ -346,7 +346,7 @@ locally. Else the desktop app runs them via the same `device_cmd` frame.
 
 ### 8.3 User browser via add-on — finish the existing work
 
-Keep the design in `docs/PLAN_2026-09-08_BROWSER_EXTENSION.md` and
+Keep the design in `docs/notes/implemented/2026-09-08-plan-browser-extension.md` and
 `docs/RESEARCH_2026-09-08_BROWSER_CONTROL_APIS.md`. Remaining work:
 
 1. **Run it in a real browser once** (runbook `docs/RUNBOOK_2026-09-08_USER_BROWSER.md`;
@@ -405,7 +405,7 @@ The host stores one `dashboard.json` per agent workspace (host = truth).
 
 ### 9.4 App
 
-- New **Home** tab first in `lib/platform_specific/mobile/mobile_home.dart`.
+- New **Home** segment first in the phone switch, drawn by `lib/widgets/dashboard/dashboard_page.dart`.
   Desktop: a Home entry in the Agents sidebar.
 - Cards reuse the existing typed block renderers where possible
   (`rich_blocks.dart` weather, map, chart).

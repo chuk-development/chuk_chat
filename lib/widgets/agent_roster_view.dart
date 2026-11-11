@@ -32,6 +32,9 @@ import 'package:chuk_chat/models/agents_room.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agent_read_marks.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
+import 'package:chuk_chat/services/agents/agents_derived_threads.dart';
+import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
+import 'package:chuk_chat/services/agents/agents_thread_modes.dart';
 import 'package:chuk_chat/services/agents/roster_pins.dart';
 import 'package:chuk_chat/services/agents/room_source.dart';
 import 'package:chuk_chat/services/profile_service.dart';
@@ -41,6 +44,7 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/agents_desktop/desktop_controls.dart';
 import 'package:chuk_chat/widgets/brand_wordmark.dart';
 import 'package:chuk_chat/widgets/agent_name_dialog.dart';
+import 'package:chuk_chat/widgets/agents_wait_label.dart';
 import 'package:chuk_chat/widgets/credit_display.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 import 'package:chuk_chat/widgets/room_faces.dart';
@@ -243,6 +247,8 @@ class _AgentRosterViewState extends State<AgentRosterView> {
   void initState() {
     super.initState();
     if (_hosted) _loadProfile();
+    // The "waits on you" labels the inbox showed before the restart.
+    unawaited(AgentsThreadModes.instance.loadWaits());
     _search.addListener(_onSearch);
     _searchFocus.addListener(_onSearchFocusChanged);
   }
@@ -544,6 +550,10 @@ class _AgentRosterViewState extends State<AgentRosterView> {
         _marks,
         _profiles,
         _pins,
+        // The "waits on you" labels and the automation chats.
+        AgentsThreadModes.instance,
+        AgentsRunLedger.instance,
+        AgentsDerivedThreads.instance,
       ]),
       builder: (BuildContext context, _) =>
           widget.collapsed ? _buildRail(context) : _buildPane(context),
@@ -936,13 +946,17 @@ class _AgentRosterViewState extends State<AgentRosterView> {
         ..._group(
           _kGroupPinned,
           AppLocalizations.of(context)?.pinned ?? 'Pinned',
-          <Widget>[for (final AgentsAgent a in pinned) _agentTile(context, a)],
+          <Widget>[
+            for (final AgentsAgent a in pinned) ..._agentTiles(context, a),
+          ],
         ),
       if (rest.isNotEmpty)
         ..._group(
           _kGroupAgents,
           'Agents',
-          <Widget>[for (final AgentsAgent a in rest) _agentTile(context, a)],
+          <Widget>[
+            for (final AgentsAgent a in rest) ..._agentTiles(context, a),
+          ],
         ),
       if (rooms.isNotEmpty)
         ..._group(
@@ -1025,11 +1039,39 @@ class _AgentRosterViewState extends State<AgentRosterView> {
     );
   }
 
+  /// The agent's tile, then one tile per chat its automations made.
+  List<Widget> _agentTiles(BuildContext context, AgentsAgent agent) {
+    final AppLocalizations l =
+        AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));
+    return <Widget>[
+      _agentTile(context, agent),
+      for (final AgentsThreadInfo thread in agent.threads)
+        for (final AgentsDerivedThread t in AgentsDerivedThreads.instance
+            .forOwner(thread.key))
+          Padding(
+            key: ValueKey<String>('derived-tile-${t.key}'),
+            padding: const EdgeInsets.only(left: 24),
+            child: SbChatTile(
+              title: t.title,
+              dateLine: switch (agentsWaitKindForKeys(<String>[t.key])) {
+                final AgentsWaitKind kind => agentsWaitLabel(l, kind),
+                null => l.agentsDerivedThreadSubtitle,
+              },
+              selected: widget.selectedThreadKey == t.key,
+              onTap: () => widget.onSelect(agent.id, t.key),
+            ),
+          ),
+    ];
+  }
+
   Widget _agentTile(BuildContext context, AgentsAgent agent) {
     final ThemeData theme = Theme.of(context);
     final Color iconFg = theme.resolvedIconColor;
     final Color accent = theme.colorScheme.primary;
     final bool working = agent.activity == AgentActivity.working;
+    final AgentsWaitKind? waitKind = agentsWaitKindFor(agent);
+    final AppLocalizations l10n =
+        AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));
     final bool unread = _marks.isUnread(agent);
     final bool pinned = _pins.isPinned(agent.id);
     return Builder(
@@ -1037,7 +1079,10 @@ class _AgentRosterViewState extends State<AgentRosterView> {
         SbChatTile(
           key: ValueKey<String>('agent-tile-${agent.id}'),
           title: agent.name,
-          dateLine: sbChatDateLine(context, agent.lastActivity, now: _now()),
+          // A waiting agent says what it waits for instead of when.
+          dateLine: waitKind != null
+              ? agentsWaitLabel(l10n, waitKind)
+              : sbChatDateLine(context, agent.lastActivity, now: _now()),
           selected: _isSelected(agent),
           unread: unread,
           // chuk's dot for a chat that is still being written.
@@ -1073,6 +1118,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
+              if (waitKind != null) AgentsWaitPill(kind: waitKind),
               if (unread)
                 Container(
                   key: const ValueKey<String>('roster-unread-dot'),
@@ -1104,10 +1150,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
     final bool selected = room.id == widget.selectedRoomId;
     // The faces overlap; the ring that separates them is the card's own fill.
     final Color cardFill = selected
-        ? Color.alphaBlend(
-            theme.colorScheme.primary.withValues(alpha: 0.20),
-            theme.m3.surfaceContainer,
-          )
+        ? theme.m3.selection
         : theme.m3.surfaceContainer;
     return Builder(
       builder: (BuildContext rowContext) => _withMenuKeys(

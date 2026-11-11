@@ -71,12 +71,14 @@ class _AutomationCardState extends State<AutomationCard> {
       'script' => Icons.visibility_outlined,
       'page' => Icons.public,
       'mail' => Icons.mail_outline,
+      'webhook' => Icons.link,
       _ => Icons.schedule,
     };
     final String kindLabel = switch (a.trigger) {
       'script' => 'Watcher',
       'page' => l10n?.automationTriggerPage ?? 'Page',
       'mail' => l10n?.automationTriggerMail ?? 'Mail',
+      'webhook' => l10n?.automationKindWebhook ?? 'Webhook',
       _ => l10n?.automationTriggerClock ?? 'Schedule',
     };
 
@@ -96,6 +98,15 @@ class _AutomationCardState extends State<AutomationCard> {
       if (a.fireCount > 0)
         a.fireCount == 1 ? 'fired once' : 'fired ${a.fireCount}×',
       if (a.suppressedCount > 0) '${a.suppressedCount} folded',
+      // Late fires past the catch-up window, and a pending retry after a
+      // network failure (docs/WIRE_CONTRACT.md, "Automation guards").
+      if (a.skippedCount > 0)
+        l10n?.automationSkipped('${a.skippedCount}') ??
+            'skipped ${a.skippedCount}',
+      if (a.retryAt case final DateTime retryAt
+          when retryAt.isAfter(DateTime.now()))
+        l10n?.automationRetryAt(_relative(retryAt)) ??
+            'retry ${_relative(retryAt)}',
       if (a.notifiesOnChange)
         l10n?.automationNotifyChangeShort ?? 'notifies when relevant',
       if (a.unchangedCount == 1) l10n?.automationQuietOne ?? 'quiet 1 run',

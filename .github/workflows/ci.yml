@@ -85,3 +85,18 @@ jobs:
           flutter test
           --total-shards 4 --shard-index ${{ matrix.shard }}
           --reporter expanded
+
+  # Duplicate-code report for lib/ (.jscpd.json: 60 tokens, 6 lines, mild).
+  # Advisory: it lists clones in the job log and never fails the run. Make it
+  # blocking only after the existing clones are cleaned up or marked with
+  # `// jscpd:ignore-start` / `// jscpd:ignore-end` and a reason.
+  duplicates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      # ubuntu-latest ships Node and npx; no setup step needed.
+      - name: jscpd (advisory)
+        run: npx --yes jscpd@4 --config .jscpd.json

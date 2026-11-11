@@ -20,8 +20,6 @@ import 'package:chuk_chat/pages/messenger_shell.dart';
 import 'package:chuk_chat/pages/mobile_agents_settings_page.dart';
 import 'package:chuk_chat/pages/agent_host_activity_page.dart';
 import 'package:chuk_chat/pages/agent_profile_edit_page.dart';
-import 'package:chuk_chat/pages/mobile_agents_settings_page.dart'
-    show AgentSettingsView;
 import 'package:chuk_chat/pages/automations_page.dart';
 import 'package:chuk_chat/widgets/chat_documents_panel.dart';
 import 'package:chuk_chat/models/stored_chat.dart';
@@ -131,6 +129,7 @@ class _FakeRelayController implements AgentsRelayController {
     bool regenerate = false,
     String? taskId,
     bool budgetOverride = false,
+    List<String> attachments = const <String>[],
   }) async => sessionKeys.add(sessionKey);
 
   final List<(String, String)> roomTasks = <(String, String)>[];
@@ -1532,6 +1531,11 @@ void main() {
         <String>[host.id, other.id],
       );
       expect(strip(tester).selectedId, host.id);
+      // The next agent does not peek in: only the name in view shows.
+      expect(
+        find.byKey(ValueKey<String>('chat_title_strip_${other.id}')),
+        findsNothing,
+      );
 
       final Rect bar = tester.getRect(find.byType(ChatTitleStrip));
       await tester.tapAt(bar.center);
@@ -1919,16 +1923,20 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    // The phone: the room is a place of the swipe, after the agent, not in
-    // a second list.
+    // The phone: the room is a place of the swipe, after the agent, not a
+    // row in a second list. The strip names only the place in view, so the
+    // room is in its entries but not on screen (owner, 2026-11-05).
     await pumpAt(const Size(360, 900));
     expect(find.byType(MobileAgentList), findsNothing);
-    final SwipeChatEntry roomEntry = tester
-        .widget<ChatTitleStrip>(find.byType(ChatTitleStrip))
-        .entries
-        .last;
-    expect(roomEntry.id, room.id);
-    expect(roomEntry.title, 'launch');
+    final ChatTitleStrip strip = tester.widget<ChatTitleStrip>(
+      find.byType(ChatTitleStrip),
+    );
+    expect(strip.entries.last.id, room.id);
+    expect(strip.entries.last.title, 'launch');
+    expect(
+      find.byKey(ValueKey<String>('chat_title_strip_${room.id}')),
+      findsNothing,
+    );
 
     // The desktop roster: same room, under its own quiet label, and Control
     // Rooms is still in the rail — this is a second way in, not a move.

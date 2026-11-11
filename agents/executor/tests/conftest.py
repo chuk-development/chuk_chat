@@ -15,6 +15,12 @@ os.environ.setdefault(
     "AGENTS_BROWSER_BROKER_SOCKET", os.path.join(_BROWSER_SOCKETS, "browser-broker.sock")
 )
 
+# Host-side attachment state (``chuk_agents_executor.attachments``) goes to a
+# temporary directory, never to the real ``~/.local/state``.
+os.environ.setdefault(
+    "AGENTS_ATTACHMENT_STATE_DIR", _tempfile.mkdtemp(prefix="agents-attachment-state-")
+)
+
 import pytest as _pytest
 
 
@@ -27,3 +33,10 @@ def _fresh_mcp_grants():
     mcp_client.GRANTS.reset()
     yield
     mcp_client.GRANTS.reset()
+
+
+@_pytest.fixture(autouse=True)
+def _private_git_state(tmp_path_factory, monkeypatch):
+    """The host state of workspace git (private git dirs, rewind ledgers) of
+    every test goes to a temp dir, never to the real host state."""
+    monkeypatch.setenv("AGENTS_GIT_STATE_DIR", str(tmp_path_factory.mktemp("git-state")))

@@ -1,6 +1,6 @@
 # Agent competitors, October 2026
 
-Status: 2026-10-05. Research for track 7 of `docs/OVERNIGHT_2026-10-05.md`.
+Status: 2026-10-05. Research for track 7 of `docs/notes/archived/2026-10-05-overnight.md`.
 Web sources were read on 2026-10-05. Our own column comes only from the repo
 (file paths given). "(2nd)" marks a claim that rests only on a secondary or
 vendor-biased source (SEO review blogs, hosting vendors, competitor blogs).
@@ -313,7 +313,7 @@ Genspark, LI = Lindy, GO = Google (Gemini Agent/Spark/Chrome), DV = Devin/Cursor
 | Skills / plugins | Y + Teach Task + templates | Y ClawHub (malware) | Y self-written | ? | Y | Y apps | - | Y tools | Y templates | ~ | ~ | **~** 6 built-in + workspace skills, no learning loop, no templates: `agents/skills/builtin/`, `.../runtime/skills.py` |
 | MCP | Y | Y | Y | ? | Y | Y | ? | ? | Y | Y | ? | **Y** `.../runtime/mcp_client.py`, `lib/services/mcp/` |
 | File / document output | Y | ~ | ~ | Y | Y | Y | ~ | Y | ~ | ~ | ~ | **Y** `.../runtime/files_out.py`, `documents.py`, skill `document-authoring` |
-| Latency / streaming feel | ~ stalls, unclear status | ? | ~ prompt bloat | Y <4 min, -28 % | Y | ~ 6-9 min errands | ~ | ? | ? | ~ | Y fast models | **-** "hi": 100-180 s `prepare`, 3 s model, 33k tokens (`docs/OVERNIGHT_2026-10-05.md`); token stream via `delta` frames (`docs/WIRE_CONTRACT.md`) |
+| Latency / streaming feel | ~ stalls, unclear status | ? | ~ prompt bloat | Y <4 min, -28 % | Y | ~ 6-9 min errands | ~ | ? | ? | ~ | Y fast models | **-** "hi": 100-180 s `prepare`, 3 s model, 33k tokens (`docs/notes/archived/2026-10-05-overnight.md`); token stream via `delta` frames (`docs/WIRE_CONTRACT.md`) |
 | Onboarding | Y no setup, templates | ~ ("nightmare") | Y wizard | Y web | Y | Y | Y | Y | Y 2 min | Y | Y | **~** one `curl` line + automatic re-pairing (`lib/pages/agents_install_page.dart`, `lib/services/agents/agents_pairing_restore.dart`); Linux + Docker only |
 
 Extra things we have that most do not: git-journaled workspace with restore
@@ -329,7 +329,7 @@ relay with device pairing (`lib/services/agents/agents_cloud_relay.dart`).
 Speed and UX first, then features. Effort: S = days, M = 1-2 weeks, L = more.
 
 1. **Remove the `prepare` stall (100-180 s before a 3 s model call).**
-   Why: our baseline in `docs/OVERNIGHT_2026-10-05.md`; Manus sells speed
+   Why: our baseline in `docs/notes/archived/2026-10-05-overnight.md`; Manus sells speed
    (<4 min, -28 %); Grok Bot had to fix "several-second pause" with big memory.
    How: run the aux summary after the turn, in the background (as
    `docs/context-compaction-design.md` section 2.1 already says), never on the

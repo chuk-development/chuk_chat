@@ -5,6 +5,11 @@
 // and every read/delete dispatches on it. Uploads still go to Supabase whenever
 // there is a signed-in user and a key; without one they fall back to the blob
 // store instead of throwing, which is what keeps the relay working offline.
+//
+// A path that starts with [offlineScheme] (`offline://img/<userId>/<id>`) is
+// an image the user attached while the network was down: compressed and
+// encrypted exactly like a bucket object, but written to the app-support
+// directory until [promoteOfflineImage] uploads it. See docs/OFFLINE_SEND.md.
 import 'dart:async';
 import 'dart:convert';
 
@@ -13,6 +18,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/image_compression_service.dart';
+import 'package:chuk_chat/services/image_disk_cache.dart';
+import 'package:chuk_chat/services/offline_blob_handle.dart';
 import 'package:chuk_chat/utils/lru_byte_cache.dart';
 import 'package:chuk_chat/utils/io_helper.dart' show Directory, File;
 import 'package:chuk_chat/utils/path_provider_stub.dart'
@@ -160,16 +167,7 @@ class ImageStorageService {
     final path = '$userId/$fileName';
 
     try {
-      await SupabaseService.client.storage
-          .from(bucketName)
-          .uploadBinary(
-            path,
-            encryptedBytes,
-            fileOptions: const FileOptions(
-              contentType: 'application/octet-stream',
-              upsert: false,
-            ),
-          );
+      await _uploadRaw(path, encryptedBytes);
 
       // Pre-warm the in-memory cache with the image we just uploaded, keyed by
       // its storage path. `downloadAndDecryptImage(path)` returns exactly these
@@ -178,12 +176,30 @@ class ImageStorageService {
       // have in hand — this redundant Supabase round-trip + decrypt is the main
       // cause of the multi-second lag between "image generated" and display.
       _imageCache.put(path, bytes);
+      unawaited(ImageDiskCache.write(path, bytes));
 
       // Return the storage path (not the public URL, since files are encrypted)
       return path;
     } catch (e) {
       throw Exception('Failed to upload encrypted image: $e');
     }
+  }
+
+  /// Writes already encrypted bytes (UTF-8 of the `encryptBytes` JSON) to
+  /// [path] in the bucket. The single upload call of this service.
+  static Future<void> _uploadRaw(String path, Uint8List encryptedBytes) {
+    final override = uploadOverride;
+    if (override != null) return override(path, encryptedBytes);
+    return SupabaseService.client.storage
+        .from(bucketName)
+        .uploadBinary(
+          path,
+          encryptedBytes,
+          fileOptions: const FileOptions(
+            contentType: 'application/octet-stream',
+            upsert: false,
+          ),
+        );
   }
 
   /// Downloads and decrypts an image from Supabase Storage
@@ -195,6 +211,9 @@ class ImageStorageService {
   }) async {
     if (_isLocalBlob(storagePath)) {
       return _readLocalBlob(storagePath, bypassCache: bypassCache);
+    }
+    if (isOfflinePath(storagePath)) {
+      return _readOfflineImage(storagePath, bypassCache: bypassCache);
     }
     // Check cache first (unless bypassing)
     if (!bypassCache) {
@@ -210,7 +229,10 @@ class ImageStorageService {
       return pending;
     }
 
-    final future = _downloadAndDecryptImageInternal(storagePath);
+    final future = _downloadAndDecryptImageInternal(
+      storagePath,
+      readDisk: !bypassCache,
+    );
     _pendingRequests[storagePath] = future;
 
     try {
@@ -222,8 +244,19 @@ class ImageStorageService {
   }
 
   static Future<Uint8List> _downloadAndDecryptImageInternal(
-    String storagePath,
-  ) async {
+    String storagePath, {
+    bool readDisk = true,
+  }) async {
+    // The disk copy survives restarts and the 50 MB memory limit. It needs
+    // neither the network nor the key, so it is checked before both.
+    if (readDisk) {
+      final onDisk = await ImageDiskCache.read(storagePath);
+      if (onDisk != null) {
+        _imageCache.put(storagePath, onDisk);
+        return onDisk;
+      }
+    }
+
     // Ensure user is authenticated
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
@@ -254,6 +287,7 @@ class ImageStorageService {
 
       // Cache the result (LRU evicts oldest if over 50 MB)
       _imageCache.put(storagePath, decryptedBytes);
+      unawaited(ImageDiskCache.write(storagePath, decryptedBytes));
 
       return decryptedBytes;
     } catch (e) {
@@ -269,6 +303,9 @@ class ImageStorageService {
     if (_isLocalBlob(storagePath)) {
       return _deleteLocalBlob(storagePath);
     }
+    if (isOfflinePath(storagePath)) {
+      return deleteOfflineImage(storagePath);
+    }
     try {
       await SupabaseService.client.storage.from(bucketName).remove([
         storagePath,
@@ -276,6 +313,7 @@ class ImageStorageService {
 
       // Clear from cache
       _imageCache.remove(storagePath);
+      unawaited(ImageDiskCache.remove(storagePath));
 
       // Notify listeners that this image was deleted
       _deletedImagesController.add(storagePath);
@@ -474,6 +512,11 @@ class ImageStorageService {
   static Future<int> getImageSize(String storagePath) async {
     final cached = _imageCache.get(storagePath);
     if (cached != null) return cached.length;
+    if (isOfflinePath(storagePath)) {
+      final file = await _offlineFileFor(storagePath);
+      if (file == null || !await file.exists()) return 0;
+      return file.length();
+    }
     if (!_isLocalBlob(storagePath)) return 0;
     final file = await _fileFor(storagePath);
     if (file == null || !await file.exists()) return 0;
@@ -484,6 +527,11 @@ class ImageStorageService {
   /// for a bucket path it answers from the cache only.
   static Future<bool> imageExists(String storagePath) async {
     if (_imageCache.get(storagePath) != null) return true;
+    if (isOfflinePath(storagePath)) {
+      final file = await _offlineFileFor(storagePath);
+      if (file == null) return false;
+      return file.exists();
+    }
     if (!_isLocalBlob(storagePath)) return false;
     final file = await _fileFor(storagePath);
     if (file == null) return false;
@@ -512,4 +560,432 @@ class ImageStorageService {
     if (dir == null) return null;
     return File('${dir.path}/${_idOf(storagePath)}');
   }
+
+  // ---------------------------------------------------------------------------
+  // The offline image store. An image attached while the network is down is
+  // compressed and encrypted exactly like a bucket object (UTF-8 of the
+  // `EncryptionService.encryptBytes` JSON) and written to
+  // `<appSupport>/offline_images/<userId>/<id>.enc`. Its path is
+  // `offline://img/<userId>/<id>`. [promoteOfflineImage] uploads the same
+  // bytes later (no second encryption) and leaves a `<id>.promoted` marker
+  // holding the bucket path, so a message that still names the offline path
+  // resolves to the uploaded object, also after an app restart.
+  // ---------------------------------------------------------------------------
+
+  /// The scheme of an image kept on the device until the network is back.
+  static const String offlineScheme = 'offline://img/';
+
+  /// Matches one well-formed offline path inside any text (a JSON list, the
+  /// attached-files JSON).
+  static final RegExp offlinePathPattern = RegExp(
+    r'offline://img/[A-Za-z0-9_-]+/[A-Za-z0-9_-]+',
+  );
+
+  static final RegExp _offlineSegment = RegExp(r'^[A-Za-z0-9_-]+$');
+
+  /// Test seam: the path of the root directory of the offline store.
+  @visibleForTesting
+  static Future<String> Function()? offlineRootOverride;
+
+  /// Test seam: the signed-in user id.
+  @visibleForTesting
+  static String? Function()? currentUserIdOverride;
+
+  /// Test seam: the bucket upload of already encrypted bytes.
+  @visibleForTesting
+  static Future<void> Function(String path, Uint8List encryptedBytes)?
+  uploadOverride;
+
+  /// Promotions in flight, by offline path. A composer and the outbox may
+  /// ask for the same image at the same time; both get one upload.
+  static final Map<String, Future<String>> _promotions = {};
+
+  /// Whether [path] names an image in the offline store.
+  static bool isOfflinePath(String path) => path.startsWith(offlineScheme);
+
+  /// Whether [storeOfflineImage] can work now: a native platform, a
+  /// signed-in user and an encryption key.
+  static bool get canStoreOffline =>
+      (!_offlineWeb || offlineBlobs.isSupported) &&
+      _currentUserId() != null &&
+      EncryptionService.hasKey;
+
+  /// Test seam: run the web (IndexedDB) branch of the offline store.
+  @visibleForTesting
+  static bool? offlineForceWeb;
+
+  /// Test seam: the web store of offline images.
+  @visibleForTesting
+  static OfflineBlobHandle offlineBlobs = const OfflineBlobHandle();
+
+  static bool get _offlineWeb => offlineForceWeb ?? kIsWeb;
+
+  /// The key of an offline image in the web store.
+  static String _offlineKey(String userId, String name) =>
+      'offline_images/$userId/$name';
+
+  static String? _currentUserId() {
+    final override = currentUserIdOverride;
+    if (override != null) return override();
+    try {
+      return SupabaseService.auth.currentUser?.id;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// The user id and the file id of an offline path, or null when [path] is
+  /// not a well-formed offline path. The check also keeps `..` and `/` out
+  /// of the file name.
+  static ({String userId, String id})? _parseOffline(String path) {
+    if (!isOfflinePath(path)) return null;
+    final parts = path.substring(offlineScheme.length).split('/');
+    if (parts.length != 2) return null;
+    if (!_offlineSegment.hasMatch(parts[0])) return null;
+    if (!_offlineSegment.hasMatch(parts[1])) return null;
+    return (userId: parts[0], id: parts[1]);
+  }
+
+  static Future<Directory?> _offlineRoot() async {
+    if (kIsWeb) return null;
+    try {
+      final override = offlineRootOverride;
+      if (override != null) return Directory(await override());
+      final support = await getApplicationSupportDirectory();
+      return Directory('${support.path}/offline_images');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<_OfflineEntry?> _offlineFile(String path, String ending) async {
+    final parsed = _parseOffline(path);
+    if (parsed == null) return null;
+    if (_offlineWeb) {
+      return _BlobEntry(
+        offlineBlobs,
+        _offlineKey(parsed.userId, '${parsed.id}$ending'),
+      );
+    }
+    final root = await _offlineRoot();
+    if (root == null) return null;
+    return _FileEntry(
+      File('${root.path}/${parsed.userId}/${parsed.id}$ending'),
+    );
+  }
+
+  static Future<_OfflineEntry?> _offlineFileFor(String path) =>
+      _offlineFile(path, '.enc');
+
+  static Future<_OfflineEntry?> _offlineMarkerFor(String path) =>
+      _offlineFile(path, '.promoted');
+
+  /// The bucket path an offline image was promoted to, or null.
+  static Future<String?> promotedPathOf(String offlinePath) async {
+    final marker = await _offlineMarkerFor(offlinePath);
+    if (marker == null || !await marker.exists()) return null;
+    final value = (await marker.readString()).trim();
+    return value.isEmpty ? null : value;
+  }
+
+  /// Compresses and encrypts [imageBytes] and keeps them on this device.
+  /// Returns the `offline://img/<userId>/<id>` path.
+  ///
+  /// Throws [StateError] without a signed-in user or a key, and
+  /// [UnsupportedError] on web (no file system). The caller then reports the
+  /// failure as before.
+  static Future<String> storeOfflineImage(Uint8List imageBytes) async {
+    if (_offlineWeb && !offlineBlobs.isSupported) {
+      throw UnsupportedError('No offline image store in this browser');
+    }
+    final userId = _currentUserId();
+    if (userId == null || !_offlineSegment.hasMatch(userId)) {
+      throw StateError('not signed in');
+    }
+    if (!EncryptionService.hasKey) {
+      throw StateError('no encryption key');
+    }
+    final compressed = await ImageCompressionService.compressImage(imageBytes);
+    final encryptedJson = await EncryptionService.encryptBytes(compressed);
+    final id = _uuid.v4();
+    if (_offlineWeb) {
+      await offlineBlobs.put(
+        _offlineKey(userId, '$id.enc'),
+        Uint8List.fromList(utf8.encode(encryptedJson)),
+      );
+    } else {
+      final root = await _offlineRoot();
+      if (root == null) {
+        throw StateError('no app support directory');
+      }
+      final dir = Directory('${root.path}/$userId');
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      }
+      await File('${dir.path}/$id.enc')
+          .writeAsBytes(utf8.encode(encryptedJson), flush: true);
+    }
+    final path = '$offlineScheme$userId/$id';
+    _imageCache.put(path, compressed);
+    if (kDebugMode) {
+      debugPrint('[ImageStorage] kept image offline, ${compressed.length} B');
+    }
+    return path;
+  }
+
+  static Future<Uint8List> _readOfflineImage(
+    String path, {
+    bool bypassCache = false,
+  }) async {
+    if (!bypassCache) {
+      final cached = _imageCache.get(path);
+      if (cached != null) return cached;
+    }
+    final file = await _offlineFileFor(path);
+    if (file != null && await file.exists()) {
+      if (!EncryptionService.hasKey) {
+        throw Exception('Encryption key not available');
+      }
+      final raw = await file.readBytes();
+      final encryptedJson = await compute(_utf8DecodeInBackground, raw);
+      final bytes = await EncryptionService.decryptBytes(encryptedJson);
+      _imageCache.put(path, bytes);
+      return bytes;
+    }
+    // Already uploaded: read the bucket object instead.
+    final promoted = await promotedPathOf(path);
+    if (promoted != null) {
+      return downloadAndDecryptImage(promoted, bypassCache: bypassCache);
+    }
+    throw const OfflineImageMissingException();
+  }
+
+  /// Uploads an offline image to the bucket and returns its bucket path.
+  ///
+  /// The stored bytes are already encrypted in the bucket format, so they go
+  /// up as they are. Afterwards the local file is deleted, a marker keeps the
+  /// mapping, and the cache entry moves to the bucket path. Calling it again
+  /// for the same path returns the same bucket path without a new upload.
+  ///
+  /// Throws [OfflineImageMissingException] when the file is gone,
+  /// [StateError] without a session (or for another account's image), and
+  /// an [Exception] naming the upload error otherwise.
+  static Future<String> promoteOfflineImage(String offlinePath) async {
+    final running = _promotions[offlinePath];
+    if (running != null) return running;
+    final future = _promote(offlinePath);
+    _promotions[offlinePath] = future;
+    try {
+      return await future;
+    } finally {
+      _promotions.remove(offlinePath);
+    }
+  }
+
+  static Future<String> _promote(String offlinePath) async {
+    final parsed = _parseOffline(offlinePath);
+    if (parsed == null) throw const OfflineImageMissingException();
+    final already = await promotedPathOf(offlinePath);
+    if (already != null) return already;
+    final file = await _offlineFileFor(offlinePath);
+    if (file == null || !await file.exists()) {
+      throw const OfflineImageMissingException();
+    }
+    final userId = _currentUserId();
+    if (userId == null) throw StateError('not signed in');
+    if (userId != parsed.userId) {
+      throw StateError('image belongs to another account');
+    }
+    final encryptedBytes = await file.readBytes();
+    // Same id as the local file: a retry after a crash between the upload
+    // and the marker finds the object already there instead of making a
+    // second copy.
+    final storagePath = '$userId/${parsed.id}.enc';
+    try {
+      await _uploadRaw(storagePath, encryptedBytes);
+    } catch (e) {
+      if (!_isAlreadyExists(e)) {
+        throw Exception('Failed to upload encrypted image: $e');
+      }
+    }
+    final marker = await _offlineMarkerFor(offlinePath);
+    await marker?.writeString(storagePath);
+    final cached = _imageCache.get(offlinePath);
+    if (cached != null) {
+      _imageCache.remove(offlinePath);
+      _imageCache.put(storagePath, cached);
+    }
+    try {
+      await file.delete();
+    } catch (_) {}
+    if (kDebugMode) {
+      debugPrint('[ImageStorage] offline image uploaded');
+    }
+    return storagePath;
+  }
+
+  static bool _isAlreadyExists(Object e) {
+    if (e is StorageException) {
+      if (e.statusCode == '409') return true;
+      final text = '${e.message} ${e.error}'.toLowerCase();
+      return text.contains('already exists') || text.contains('duplicate');
+    }
+    return false;
+  }
+
+  /// Deletes an offline image: its file, its marker and its cache entry.
+  /// Never touches the bucket object a promotion made.
+  static Future<void> deleteOfflineImage(String path) async {
+    _imageCache.remove(path);
+    for (final file in [
+      await _offlineFileFor(path),
+      await _offlineMarkerFor(path),
+    ]) {
+      if (file == null) continue;
+      try {
+        if (await file.exists()) await file.delete();
+      } catch (_) {}
+    }
+    if (!_deletedImagesController.isClosed) {
+      _deletedImagesController.add(path);
+    }
+  }
+
+  /// The offline image id of the file at [path] (`<id>.enc`), or null when
+  /// it is not one. Splits on both separators: a listing on Windows joins
+  /// with a backslash, so a split on `/` alone matched no file there.
+  @visibleForTesting
+  static String? offlineIdOfFile(String path) {
+    final String name = path.split(RegExp(r'[/\\]')).last;
+    if (!name.endsWith('.enc')) return null;
+    final String id = name.substring(0, name.length - '.enc'.length);
+    return _offlineSegment.hasMatch(id) ? id : null;
+  }
+
+  /// Every offline image of [userId] that still has its file (not uploaded
+  /// yet), as offline paths with the time the file was written. For the
+  /// startup sweep of images no outbox row names.
+  static Future<List<({String path, DateTime modified})>> listOfflineImages(
+    String userId,
+  ) async {
+    if (!_offlineSegment.hasMatch(userId)) return const [];
+    final out = <({String path, DateTime modified})>[];
+    if (_offlineWeb) {
+      try {
+        for (final e in await offlineBlobs.list(_offlineKey(userId, ''))) {
+          final String? id = offlineIdOfFile(e.key);
+          if (id == null) continue;
+          out.add((path: '$offlineScheme$userId/$id', modified: e.modified));
+        }
+      } catch (_) {}
+      return out;
+    }
+    final root = await _offlineRoot();
+    if (root == null) return const [];
+    final dir = Directory('${root.path}/$userId');
+    try {
+      if (!await dir.exists()) return const [];
+      await for (final entity in dir.list(followLinks: false)) {
+        if (entity is! File) continue;
+        final String? id = offlineIdOfFile(entity.path);
+        if (id == null) continue;
+        out.add((
+          path: '$offlineScheme$userId/$id',
+          modified: await entity.lastModified(),
+        ));
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[ImageStorage] offline list failed: ${e.runtimeType}');
+      }
+    }
+    return out;
+  }
+
+  /// Sign-out: deletes every offline image of [userId] and clears the
+  /// decrypted image cache.
+  static Future<void> wipeOfflineImages(String userId) async {
+    _imageCache.clear();
+    _promotions.clear();
+    if (!_offlineSegment.hasMatch(userId)) return;
+    if (_offlineWeb) {
+      try {
+        await offlineBlobs.deletePrefix(_offlineKey(userId, ''));
+      } catch (_) {}
+      return;
+    }
+    final root = await _offlineRoot();
+    if (root == null) return;
+    final dir = Directory('${root.path}/$userId');
+    try {
+      if (await dir.exists()) await dir.delete(recursive: true);
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[ImageStorage] offline wipe failed: ${e.runtimeType}');
+      }
+    }
+  }
+}
+
+/// The file behind an offline image path is gone.
+class OfflineImageMissingException implements Exception {
+  const OfflineImageMissingException();
+
+  @override
+  String toString() => 'image missing (404)';
+}
+
+/// One file of the offline image store: a file on native platforms, an
+/// IndexedDB entry on web.
+abstract class _OfflineEntry {
+  Future<bool> exists();
+  Future<int> length();
+  Future<Uint8List> readBytes();
+  Future<String> readString();
+  Future<void> writeString(String value);
+  Future<void> delete();
+}
+
+class _FileEntry implements _OfflineEntry {
+  _FileEntry(this.file);
+  final File file;
+
+  @override
+  Future<bool> exists() => file.exists();
+  @override
+  Future<int> length() => file.length();
+  @override
+  Future<Uint8List> readBytes() => file.readAsBytes();
+  @override
+  Future<String> readString() => file.readAsString();
+  @override
+  Future<void> writeString(String value) async {
+    await file.writeAsString(value, flush: true);
+  }
+
+  @override
+  Future<void> delete() async {
+    await file.delete();
+  }
+}
+
+class _BlobEntry implements _OfflineEntry {
+  _BlobEntry(this.blobs, this.key);
+  final OfflineBlobHandle blobs;
+  final String key;
+
+  @override
+  Future<bool> exists() => blobs.exists(key);
+  @override
+  Future<int> length() async => (await blobs.get(key))?.length ?? 0;
+  @override
+  Future<Uint8List> readBytes() async =>
+      await blobs.get(key) ?? (throw const OfflineImageMissingException());
+  @override
+  Future<String> readString() async => utf8.decode(await readBytes());
+  @override
+  Future<void> writeString(String value) =>
+      blobs.put(key, Uint8List.fromList(utf8.encode(value)));
+  @override
+  Future<void> delete() => blobs.delete(key);
 }

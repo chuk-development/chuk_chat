@@ -17,6 +17,8 @@ import 'package:flutter/material.dart';
 import 'package:chuk_chat/constants.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/models/queued_message.dart';
+import 'package:chuk_chat/services/offline_retry_manager.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/widgets/floating_chrome_surface.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
@@ -205,7 +207,7 @@ class _SbCardState extends State<SbCard> {
     final bool enabled = widget.onTap != null;
 
     final Color fill = widget.selected
-        ? Color.alphaBlend(accent.withValues(alpha: 0.20), m3.surfaceContainer)
+        ? m3.selection
         : (_pressed || _hovered
             ? m3.surfaceContainerHigh
             : m3.surfaceContainer);
@@ -895,6 +897,7 @@ class SbChatTile extends StatelessWidget {
     this.hoverTrailing,
     this.leading,
     this.unread = false,
+    this.outboxChatId,
   });
 
   final String title;
@@ -924,6 +927,10 @@ class SbChatTile extends StatelessWidget {
   /// selected one. The chat list never sets it.
   final bool unread;
 
+  /// The chat's id for the outbox badge: a clock and the number of messages
+  /// that wait to be sent. Null shows no badge.
+  final String? outboxChatId;
+
   @override
   Widget build(BuildContext context) {
     return SbCard(
@@ -943,6 +950,7 @@ class SbChatTile extends StatelessWidget {
         hoverTrailing: hoverTrailing,
         leading: leading,
         unread: unread,
+        outboxChatId: outboxChatId,
       ),
     );
   }
@@ -961,6 +969,7 @@ class _SbChatTileBody extends StatelessWidget {
     required this.hoverTrailing,
     required this.leading,
     required this.unread,
+    required this.outboxChatId,
   });
 
   final String title;
@@ -972,6 +981,7 @@ class _SbChatTileBody extends StatelessWidget {
   final Widget? hoverTrailing;
   final Widget? leading;
   final bool unread;
+  final String? outboxChatId;
 
   @override
   Widget build(BuildContext context) {
@@ -980,14 +990,9 @@ class _SbChatTileBody extends StatelessWidget {
     final Color titleColor = locked
         ? theme.colorScheme.onSurface.withValues(alpha: 0.45)
         : (selected
-              // The selected card is the accent at 20 % over the card fill;
-              // the name is the accent ink on that, never below 3 : 1.
-              ? theme.accentForegroundOn(
-                  Color.alphaBlend(
-                    theme.colorScheme.primary.withValues(alpha: 0.20),
-                    theme.m3.surfaceContainer,
-                  ),
-                )
+              // The selected card's own ink: the accent ink (never below
+              // 3 : 1) on the accent tint, or plain text on a neutral one.
+              ? theme.m3.onSelection
               : theme.colorScheme.onSurface);
 
     return Row(
@@ -1031,6 +1036,7 @@ class _SbChatTileBody extends StatelessWidget {
             ],
           ),
         ),
+        if (outboxChatId != null) SbOutboxBadge(chatId: outboxChatId!),
         if (streaming) ...[
           const SizedBox(width: 6),
           Container(
@@ -1069,6 +1075,59 @@ class _SbChatTileBody extends StatelessWidget {
 }
 
 /// A time group: the header label and the chats that fall into it.
+/// A clock and the number of this chat's messages that wait in the offline
+/// outbox. Draws nothing while none wait. Only the badge listens to the
+/// outbox, so the row does not rebuild on every outbox change.
+class SbOutboxBadge extends StatelessWidget {
+  const SbOutboxBadge({super.key, required this.chatId});
+
+  final String chatId;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<Map<String, QueuedMessage>>(
+      valueListenable: OfflineRetryManager.instance.rows,
+      builder: (context, rows, _) {
+        int count = 0;
+        for (final QueuedMessage row in rows.values) {
+          if (row.chatId == chatId) count++;
+        }
+        if (count == 0) return const SizedBox.shrink();
+        final theme = Theme.of(context);
+        final Color color = theme.m3.onSurfaceVariant;
+        final String label =
+            AppLocalizations.of(context)?.outboxPendingCount(count) ??
+            '$count waiting to send';
+        return Padding(
+          padding: const EdgeInsets.only(left: 6),
+          child: Tooltip(
+            message: label,
+            child: Semantics(
+              label: label,
+              excludeSemantics: true,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  AppIcon(Icons.schedule, size: 13, color: color),
+                  const SizedBox(width: 2),
+                  Text(
+                    '$count',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: color,
+                      height: 1,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class SbChatGroup<T> {
   const SbChatGroup(this.label, this.items);
   final String label;

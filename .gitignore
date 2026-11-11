@@ -151,10 +151,8 @@ session.txt
 .beads-credential-key
 .beads/proxieddb/
 
-# pseudomap: Index wird lokal gebaut, Karten selbst werden committet
-.pseudomap/.lock
-.pseudomap/cache.json
-.pseudomap/index.json
+# pseudomap: lokal gebaut, nicht committet
+.pseudomap/
 
 # --- Agents ----------------------------------------------------------------
 # Golden-diff output from a failing image comparison (flutter_test writes it

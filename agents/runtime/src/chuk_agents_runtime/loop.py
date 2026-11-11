@@ -56,8 +56,9 @@ from .context import (
     total_tokens_from_usage,
 )
 from .registry import ToolRegistry
-from .state import StateStore
-from .tool_events import tool_event_fields
+from .sources import REPLAYED_CONTEXT_SOURCES, tag_row, valid_source
+from .state import UNKNOWN_OUTCOME_RESULT, StateStore
+from .tool_events import tool_event_fields, tool_status
 from .tools import FINISH_TOOL
 from .telemetry import get_tracer, set_round
 
@@ -353,7 +354,7 @@ from .pai.approvals import ApprovalPolicy  # noqa: E402
 from .pai.convert import found_tools, response_to_row, rows_to_messages, tool_call_args  # noqa: E402
 from .pai.events import PASS_BREAK, PassJoiner, StreamMapper  # noqa: E402
 from .pai.model import LEGACY_DETAILS_KEY, LegacyClientModel, is_legacy  # noqa: E402
-from .pai.tools import TOOL_RETRIES, UNSET, CallRecord, RegistryToolset  # noqa: E402
+from .pai.tools import TOOL_RETRIES, UNSET, CallRecord, RegistryToolset, split_ui  # noqa: E402
 
 disable_banner()
 
@@ -430,6 +431,48 @@ LIMIT_STOP_NOTE = (
 #: Reasons that mean "a limit ended the run", not "the work is done".
 LIMIT_REASONS = frozenset({"max_iterations", "budget_exhausted", "token_budget_exhausted"})
 
+#: Consecutive identical calls at which the run gets an advisory context row
+#: (research item 23, from deepseek-harness ``repeat-tool-reminder``). Advice
+#: only: the call still runs. A new task (a new user message) starts at zero.
+REPEAT_THRESHOLDS = (3, 5, 8)
+REPEAT_ARGS_PREVIEW = 500
+REPEAT_GENTLE = (
+    "You are repeating the exact same tool call with identical arguments. "
+    "Carefully analyze the previous result before calling again: if the task is "
+    "not complete, try a different approach or different arguments instead of "
+    "repeating the call."
+)
+REPEAT_DETAILED = (
+    "Repeated tool call detected:\n"
+    "- tool: {tool}\n"
+    "- consecutive_calls: {count}\n"
+    "- arguments: {arguments}\n"
+    "The repeated calls are not making progress. Do not call this tool with "
+    "these exact arguments again. Inspect the latest result and choose a "
+    "different action, different arguments, or finish the task if enough "
+    "evidence has been gathered."
+)
+
+#: Tools whose failure the user must hear about (research H29): they write,
+#: send or delete. Class tools of the approval policy (mail, publish, a
+#: destructive connector tool) count too; a shell command does not (a
+#: non-zero exit is a normal result).
+MUTATING_TOOLS = frozenset(
+    {
+        "write_file",
+        "edit_file",
+        "apply_patch",
+        "send_file_to_user",
+        "mail_send",
+        "mail_reply",
+        "herenow_publish",
+    }
+)
+#: Argument keys that name what a mutating call acts on, in order.
+_TARGET_KEYS = ("path", "to", "id", "name")
+FAILED_FOOTER_HEAD = "Not done: {n} action(s) in this task failed and did not take effect:"
+FAILED_FOOTER_ERROR_CHARS = 160
+
 #: How long a Stop waits for a call that had started to finish on its thread,
 #: so its row holds the real result. The executor kills the sandbox process on
 #: the same Stop, so a command returns at once; a web call, a publish or an MCP
@@ -438,9 +481,7 @@ STOP_SETTLE_S = 10.0
 
 #: The row of a call that started and did not finish inside the settle time.
 #: It may have had its effect: the model must check, not repeat it blindly.
-STOPPED_TOOL_RESULT = (
-    "stopped while running; the outcome is unknown. Verify it before you retry."
-)
+STOPPED_TOOL_RESULT = UNKNOWN_OUTCOME_RESULT
 
 
 @dataclass
@@ -455,6 +496,9 @@ class _DriveState:
     #: The wrap-up note went out (``WRAP_UP_NOTE``) / the last step had no tools.
     wrap_noted: bool = False
     last_step: bool = False
+    #: A context provider asked for one last step without tools (a goal's
+    #: wrap-up after ``update_goal`` complete / blocked).
+    final_step: bool = False
     #: Why a turn ended with no answer (``length`` / ``content_filter``).
     stop_note: str | None = None
     #: The model this run talks to (built per run for the HTTP route).
@@ -486,6 +530,17 @@ class _ActiveRun:
     recall: "_PendingRecall | None" = None
     #: Milliseconds the run waited for that recall (``recall_wait``).
     recall_waited_ms: float = 0.0
+    #: The repeat-call guard (research item 23): the key of the last call
+    #: (name + key-sorted JSON arguments) and how many times in a row it came.
+    repeat_key: str | None = None
+    repeat_count: int = 0
+    #: Write / send / delete calls that failed in this run, by (tool, target):
+    #: ``(tool, target, error)``. A later success of the same pair clears it.
+    failed_actions: dict[tuple[str, str], str] = field(default_factory=dict)
+    #: Repeat-guard notes of the current turn. Written only after every tool
+    #: row of the turn is stored: a user row between two tool results breaks
+    #: the call/result pairing a strict provider requires.
+    pending_notes: list[str] = field(default_factory=list)
 
 
 class _PendingRecall:
@@ -593,6 +648,8 @@ class AgentLoop:
         turn_observer: Callable[[TurnRecord], None] | None = None,
         phase_observer: Callable[[str, str | None], None] | None = None,
         clock_provider: Callable[[], list[dict]] | None = None,
+        task_context_providers: Sequence[Callable[[], list[dict]]] | None = None,
+        context_observer: Callable[[dict], None] | None = None,
         # -- Pydantic AI only -------------------------------------------
         model_settings: ModelSettings | None = None,
         on_delta: Sink | None = None,
@@ -614,11 +671,19 @@ class AgentLoop:
             model if isinstance(model, Model) else LegacyClientModel(model)
         )
         self._registry = registry
+        #: Reads a picture of the current task for a vision-capable model
+        #: (docs/WIRE_CONTRACT.md, "Attachments to Agents"); ``None`` = the
+        #: pictures stay paths in the prompt.
+        self.image_loader = None
         self._store = store
         self._max_iterations = max_iterations
         self._budget = budget or IterationBudget(max_iterations)
         self._token_budget = token_budget
         self._tokens_spent = 0
+        #: True once any model request of this loop got an answer back (a
+        #: first stream event or a finished response). A failure after that
+        #: was billed: the automation guard must not re-run it as transient.
+        self._model_answered = False
         self._kill = kill_switch or KillSwitch()
         self._system_prompt = system_prompt
         self._system_prompt_upgrade = system_prompt_upgrade
@@ -638,6 +703,14 @@ class AgentLoop:
         #: :mod:`chuk_agents_runtime.clock`): made when the task starts and
         #: appended after its prompt. ``None``: no clock row.
         self._clock_provider = clock_provider
+        #: Rows appended once per task, right after its prompt and clock (the
+        #: plan-mode rules, docs/WIRE_CONTRACT.md "Plan mode"). Rows, not the
+        #: system prompt: the cached prefix stays the same bytes.
+        self._task_context_providers = list(task_context_providers or [])
+        #: Told about every typed context row as it is stored, so the app can
+        #: draw its chip live (docs/WIRE_CONTRACT.md, "Typed source on
+        #: synthetic rows"). ``None``: not wired.
+        self._context_observer = context_observer
         self._turn_observer = turn_observer
         #: Told what the run does right now (docs/WIRE_CONTRACT.md,
         #: ``heartbeat.phase``): ``preparing``, ``model`` or ``tool`` + name.
@@ -678,6 +751,11 @@ class AgentLoop:
     @property
     def tokens_spent(self) -> int:
         return self._tokens_spent
+
+    @property
+    def model_answered(self) -> bool:
+        """Whether a model request already answered (and so was billed)."""
+        return self._model_answered or self._tokens_spent > 0
 
     @property
     def token_budget(self) -> int | None:
@@ -733,10 +811,29 @@ class AgentLoop:
                 content = self._persist_filter(content)
             except Exception:  # noqa: BLE001
                 content = {
-                    k: (v if k in ("role", "tool_call_id", "name") else None)
+                    k: (v if k in ("role", "tool_call_id", "name", "source") else None)
                     for k, v in content.items()
                 }
-        return self._store.append_message(session_id, role, content)
+        if role not in ("user", "assistant", "tool", "system"):
+            content = tag_row(role, content)
+        mid = self._store.append_message(session_id, role, content)
+        if (
+            self._context_observer is not None
+            and role not in ("user", "assistant", "tool", "system")
+            and content.get("source") in REPLAYED_CONTEXT_SOURCES
+        ):
+            try:
+                self._context_observer(
+                    {
+                        "type": "context",
+                        "source": content["source"],
+                        "text": content.get("content") if isinstance(content.get("content"), str) else "",
+                        "mid": mid,
+                    }
+                )
+            except Exception:  # noqa: BLE001 — a UI sink never fails a run
+                pass
+        return mid
 
     # -- what the model sees ---------------------------------------------
 
@@ -847,7 +944,9 @@ class AgentLoop:
         tracer = get_tracer()
         if tracer.enabled:
             self._trace_prepare(tracer, outbound, elapsed)
-        converted = rows_to_messages(outbound, deferred=self._registry.deferred_names())
+        converted = rows_to_messages(
+            outbound, deferred=self._registry.deferred_names(), image_loader=self.image_loader
+        )
         if not converted or not hasattr(converted[-1], "parts") or converted[-1].kind != "request":
             # Pydantic AI needs the history to end in a request. The store
             # always ends in the user row or tool results by the time a model
@@ -858,7 +957,13 @@ class AgentLoop:
     # -- running ---------------------------------------------------------
 
     def run(
-        self, session_key: str, user_message: str, *, regenerate: bool = False
+        self,
+        session_key: str,
+        user_message: str,
+        *,
+        regenerate: bool = False,
+        source: str | None = None,
+        row_extra: dict | None = None,
     ) -> LoopResult:
         """Run one task to completion. See the module docstring for the rules."""
         store = self._store
@@ -886,8 +991,18 @@ class AgentLoop:
             resolved = prompt() if callable(prompt) else prompt
             if resolved:
                 self._append(session_id, "system", {"role": "system", "content": resolved})
-        self._append(session_id, "user", {"role": "user", "content": user_message})
+        # A prompt nobody typed carries its ``source`` (a goal round, a fired
+        # schedule, a job wake, a mail); ``row_extra`` adds other typed fields
+        # (``answer_to_pending_question``). Neither reaches the model.
+        user_row: dict = {"role": "user", "content": user_message}
+        if valid_source(source):
+            user_row["source"] = source
+        for key, value in (row_extra or {}).items():
+            if key not in ("role", "content") and value is not None:
+                user_row[key] = value
+        self._append(session_id, "user", user_row)
         self._append_clock(session_id)
+        self._append_task_context(session_id)
         pending_recall: _PendingRecall | None = None
         if self._recall_provider is not None and self._recall_wait is not None:
             pending_recall = self._start_recall(user_message)
@@ -909,6 +1024,14 @@ class AgentLoop:
             reason, final_answer, iterations, note = _run_blocking(
                 self._drive(active, timings, tools_used)
             )
+            footer = self._failed_footer(active, final_answer)
+            if footer:
+                final_answer = f"{final_answer.rstrip()}\n\n{footer}"
+                if self._on_delta is not None:
+                    try:
+                        self._on_delta(f"\n\n{footer}")
+                    except Exception:  # noqa: BLE001 — a UI sink never fails a run
+                        pass
         finally:
             self._active = None
             if pending_recall is not None:
@@ -967,7 +1090,9 @@ class AgentLoop:
         token = CancellationToken()
         self._kill.on_interrupt(token.cancel)
         history = rows_to_messages(
-            self._stored_rows(active.session_id), deferred=self._registry.deferred_names()
+            self._stored_rows(active.session_id),
+            deferred=self._registry.deferred_names(),
+            image_loader=self.image_loader,
         )
         state = _DriveState()
         # One sink for the whole run: it puts a paragraph break between the
@@ -1016,6 +1141,7 @@ class AgentLoop:
                                 if streaming:
                                     await self._stream_request(node, run, mapper)
                                 node = await run.next(node)
+                                self._model_answered = True
                             except (RunCancelled, asyncio.CancelledError):
                                 raise
                             except Exception as exc:
@@ -1102,7 +1228,8 @@ class AgentLoop:
                                 )
                                 state.reason = StopReason.FINISHED
                                 break
-                            self._drain_context(active.session_id)
+                            if self._drain_context(active.session_id):
+                                state.final_step = True
                             node = await run.next(node)
                             continue
 
@@ -1159,6 +1286,13 @@ class AgentLoop:
                 "context",
                 {"role": "user", "content": WRAP_UP_NOTE.format(left=left)},
             )
+        if state.final_step and not state.last_step:
+            # A provider asked for the closing message now (a goal marked
+            # complete or blocked): its row is stored, the tools go away.
+            state.last_step = True
+            self._tools_enabled = self._toolset.enabled
+            self._toolset.enabled = False
+            return
         if left == 1 and limit >= 3 and not state.last_step:
             state.last_step = True
             self._tools_enabled = self._toolset.enabled
@@ -1176,6 +1310,7 @@ class AgentLoop:
                     async for event in stream:
                         if mapper.first_event_ms is None:
                             deadline.reschedule(None)
+                        self._model_answered = True
                         mapper.feed(event)
         except TimeoutError as exc:
             raise FirstEventTimeout(FIRST_EVENT_TIMEOUT_S) from exc
@@ -1419,7 +1554,9 @@ class AgentLoop:
 
         def work() -> Any:
             try:
-                result = registry.dispatch(name, args if isinstance(args, dict) else {})
+                result = registry.dispatch(
+                    name, args if isinstance(args, dict) else {}, call_id=call.tool_call_id
+                )
                 record.result = result
                 return result
             finally:
@@ -1460,8 +1597,13 @@ class AgentLoop:
                 # ``rows_to_messages`` adds keeps the next call from being
                 # refused again. A tool behind an approval is never run here.
                 self._phase(PHASE_TOOL, call.tool_name)
-                result = self._registry.dispatch(
-                    call.tool_name, args if isinstance(args, dict) else {}
+                result = split_ui(
+                    self._registry.dispatch(
+                        call.tool_name,
+                        args if isinstance(args, dict) else {},
+                        call_id=call.tool_call_id,
+                    ),
+                    record,
                 )
             elif self._registry.has(call.tool_name):
                 # A real tool Pydantic AI refused this turn (a deferred tool
@@ -1500,8 +1642,79 @@ class AgentLoop:
                 result_chars=len(str(result)),
                 text=tracer.text(str(result) if result is not None else None),
             )
-        self._emit_tool(call, result, started_at=started_at, completed_at=completed_at, raised=raised)
+        self._emit_tool(
+            call,
+            result,
+            started_at=started_at,
+            completed_at=completed_at,
+            raised=raised,
+            ui=record.ui if record is not None else None,
+        )
+        self._track_call(active, call, result, raised=raised)
         tools_used.append(call.tool_name)
+
+    def _track_call(
+        self, active: _ActiveRun, call: ToolCallPart, result: Any, *, raised: bool
+    ) -> None:
+        """After one call: the repeat guard and the failed-action ledger.
+        Never raises into the run."""
+        try:
+            args = tool_call_args(call)
+            canonical = json.dumps(args, sort_keys=True, ensure_ascii=False, default=str)
+            key = f"{call.tool_name}\x00{canonical}"
+            if key == active.repeat_key:
+                active.repeat_count += 1
+            else:
+                active.repeat_key = key
+                active.repeat_count = 1
+            count = active.repeat_count
+            if count in REPEAT_THRESHOLDS:
+                if count == REPEAT_THRESHOLDS[0]:
+                    text = REPEAT_GENTLE
+                else:
+                    preview = canonical
+                    if len(preview) > REPEAT_ARGS_PREVIEW:
+                        preview = preview[:REPEAT_ARGS_PREVIEW] + "..."
+                    text = REPEAT_DETAILED.format(
+                        tool=call.tool_name, count=count, arguments=preview
+                    )
+                active.pending_notes.append(f"[runtime] {text}")
+            if self._is_mutating(call.tool_name):
+                target = _call_target(args)
+                pair = (call.tool_name, target)
+                declined = isinstance(result, dict) and result.get("declined") is True
+                if not declined and (raised or tool_status(result) == "error"):
+                    # A real failure the user must hear about (research H29). A
+                    # user decline or a policy deny is a choice, not a silent
+                    # failure, so it never lands in the footer.
+                    active.failed_actions[pair] = _error_text(result)
+                else:
+                    active.failed_actions.pop(pair, None)
+        except Exception:  # noqa: BLE001 — a guard never breaks a run
+            logger.debug("call tracking failed", exc_info=True)
+
+    def _is_mutating(self, name: str) -> bool:
+        if name in MUTATING_TOOLS:
+            return True
+        rule = self._policy.rules.get(name)
+        return rule is not None and rule.action_class is not None
+
+    def _failed_footer(self, active: _ActiveRun, answer: str | None) -> str | None:
+        """The footer for failed actions the answer does not name, or None."""
+        if not answer or not active.failed_actions:
+            return None
+        missing = [
+            (tool, target, error)
+            for (tool, target), error in active.failed_actions.items()
+            if not ((target and target in answer) or tool in answer)
+        ]
+        if not missing:
+            return None
+        lines = [FAILED_FOOTER_HEAD.format(n=len(missing))]
+        for tool, target, error in missing:
+            where = f" {target}" if target else ""
+            lines.append(f"- {tool}{where}: {error}" if error else f"- {tool}{where}")
+        return "\n".join(lines)
 
     def _close_calls(
         self, active: _ActiveRun, calls: list[ToolCallPart], tools_used: list[str]
@@ -1519,6 +1732,13 @@ class AgentLoop:
                         else STOPPED_TOOL_RESULT
                     )
                 self._write_tool_row(active, call, None, tools_used)
+        self._flush_notes(active)
+
+    def _flush_notes(self, active: _ActiveRun) -> None:
+        """Store the turn's queued repeat-guard notes, after its tool rows."""
+        notes, active.pending_notes = active.pending_notes, []
+        for note in notes:
+            self._append(active.session_id, "context", {"role": "user", "content": note})
 
     def _trace_tool_start(self, call: ToolCallPart) -> None:
         tracer = get_tracer()
@@ -1540,6 +1760,7 @@ class AgentLoop:
         started_at: float,
         completed_at: float,
         raised: bool,
+        ui: Any = None,
     ) -> None:
         if self._tool_event_observer is None:
             return
@@ -1553,6 +1774,7 @@ class AgentLoop:
                     started_at=started_at,
                     completed_at=completed_at,
                     raised=raised,
+                    ui=ui,
                 )
             )
         except Exception:  # noqa: BLE001 — a UI sink error must not abort a run
@@ -1569,12 +1791,34 @@ class AgentLoop:
         except Exception:  # noqa: BLE001 — a UI sink error must not abort a run
             pass
 
-    def _drain_context(self, session_id: int) -> None:
+    def _drain_context(self, session_id: int) -> bool:
+        """Append what the context providers hand over. True when one of the
+        rows asked for a last step without tools (``final_step``)."""
+        final = False
         for provider in self._context_providers:
             for message in provider():
+                if message.get("final_step"):
+                    final = True
                 self._append(
                     session_id,
                     message.get("role_tag", "context"),
+                    {k: v for k, v in message.items() if k not in ("role_tag", "final_step")},
+                )
+        return final
+
+    def _append_task_context(self, session_id: int) -> None:
+        """Append the once-per-task rows (plan mode). Never raises."""
+        for provider in self._task_context_providers:
+            try:
+                messages = list(provider() or [])
+            except Exception:  # noqa: BLE001 — the run goes on without them
+                continue
+            for message in messages:
+                if not isinstance(message, dict) or not message.get("content"):
+                    continue
+                self._append(
+                    session_id,
+                    str(message.get("role_tag") or "context"),
                     {k: v for k, v in message.items() if k != "role_tag"},
                 )
 
@@ -1776,6 +2020,32 @@ class AgentLoop:
 
 
 # -- helpers -------------------------------------------------------------------
+
+
+def _call_target(args: Any) -> str:
+    """What a mutating call acts on (its path, recipient, id), as text."""
+    if not isinstance(args, dict):
+        return ""
+    for key in _TARGET_KEYS:
+        value = args.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()[:200]
+        if isinstance(value, list) and value and all(isinstance(v, str) for v in value):
+            return ", ".join(value)[:200]
+    return ""
+
+
+def _error_text(result: Any) -> str:
+    text = ""
+    if isinstance(result, dict):
+        value = result.get("error")
+        text = value if isinstance(value, str) else ""
+    elif isinstance(result, str):
+        text = result
+    text = " ".join(text.split())
+    if len(text) > FAILED_FOOTER_ERROR_CHARS:
+        text = text[: FAILED_FOOTER_ERROR_CHARS - 1] + "…"
+    return text
 
 
 def _calls(response: ModelResponse) -> list[ToolCallPart]:

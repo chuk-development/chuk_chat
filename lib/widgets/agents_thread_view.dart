@@ -33,12 +33,18 @@ import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/agents_replay_loader.dart';
 import 'package:chuk_chat/services/agents/agents_resume_trace.dart';
-import 'package:chuk_chat/services/agents/agents_queued_marks.dart';
 import 'package:chuk_chat/services/agents/agents_task_outbox.dart';
+import 'package:chuk_chat/services/agents/agents_outbox_flusher.dart';
+import 'package:chuk_chat/services/agents/agents_chat_transport.dart';
 import 'package:chuk_chat/services/mcp/mcp_service.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import 'package:chuk_chat/services/agents/agents_run_cost.dart'; // F1
 import 'package:chuk_chat/services/agents/agents_thread_composer.dart'; // F1
+import 'package:chuk_chat/services/agents/agents_command_prefix.dart';
+import 'package:chuk_chat/services/agents/agents_thread_modes.dart';
+import 'package:chuk_chat/widgets/agents_mode_bar.dart';
+import 'package:chuk_chat/widgets/agents_plan_review_card.dart';
+import 'package:chuk_chat/widgets/agents_question_card.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart'; // F1
 import 'package:chuk_chat/services/agents/agents_shell_status.dart';
 import 'package:chuk_chat/services/notifications/agents_notifications.dart';
@@ -51,8 +57,10 @@ import 'package:chuk_chat/widgets/ask_user_card.dart';
 import 'package:chuk_chat/widgets/automation_card.dart';
 import 'package:chuk_chat/widgets/chat_documents_panel.dart';
 import 'package:chuk_chat/widgets/agents_thread_header.dart';
+import 'package:chuk_chat/widgets/agents_checkpoints_sheet.dart'; // checkpoints
 import 'package:chuk_chat/widgets/agents_takeover_card.dart';
 import 'package:chuk_chat/widgets/agents_action_approval_card.dart'; // F1
+import 'package:chuk_chat/widgets/agents_attachment_chips.dart';
 // ── skill proposals ──
 import 'package:chuk_chat/services/skills/skill_proposals_source.dart';
 import 'package:chuk_chat/widgets/agents_skill_proposal_card.dart';
@@ -270,6 +278,9 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   AgentsRelayController? _controller;
   StreamSubscription<AgentsRelayInbound>? _inboundSub;
 
+  /// What a send of this thread could not do (images left out).
+  StreamSubscription<AgentsSendNotice>? _sendNoticeSub;
+
   final AgentsRelayLink _link = AgentsRelayLink.instance;
   final AgentsRunLedger _ledger = AgentsRunLedger.instance;
   final AgentsReplayLoader _loader = AgentsReplayLoader.instance;
@@ -475,6 +486,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     // survives reconnects. It carries only what this view still owns: the
     // approval prompt and the live `run_ack`.
     _inboundSub = _link.inbound.listen(_onInbound);
+    _sendNoticeSub = AgentsChatTransport.notices.listen(_onSendNotice);
     _loader.attach();
     // ── skill proposals ──
     // The cards at the end of the thread read the app-wide source, which
@@ -494,6 +506,8 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     _automations.attach();
     _automations.addListener(_onAutomationsChanged);
     AgentsBudgetNotices.instance.addListener(_onBudgetNotices); // F1
+    // Agent modes: goal, plan, todo, questions, sandbox fallback.
+    AgentsThreadModes.instance.addListener(_onModesChanged);
     // ── own browser ──
     _userBrowserService = AgentsPermissionsService.instance..attach();
     _userBrowserService.addListener(_onUserBrowserChanged);
@@ -602,10 +616,18 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     _loader.removeListener(_onLoaderChanged);
     _automations.removeListener(_onAutomationsChanged);
     AgentsBudgetNotices.instance.removeListener(_onBudgetNotices); // F1
+    AgentsThreadModes.instance.removeListener(_onModesChanged);
     _userBrowserService.removeListener(_onUserBrowserChanged); // own browser
     _controller?.state.removeListener(_onStateChanged);
+    // The link must not keep pointing at a controller that is disposed
+    // below: the background link (AgentsBackgroundLink) only opens a link
+    // of its own while none is bound.
+    if (_controller != null && identical(_link.controller.value, _controller)) {
+      _link.unbind();
+    }
     _startupState.dispose();
     _inboundSub?.cancel();
+    _sendNoticeSub?.cancel();
     _storeSub?.cancel();
     _controller?.dispose();
     _hostController.dispose();
@@ -963,10 +985,13 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       //
       // The same closure is what the Retry button runs: while a host is on the
       // other end, "retry" means "send the backlog now", not "reconnect".
-      OfflineRetryManager.instance.registerFlush(
-        widget.threadKey,
-        () => _flushOutbox(controller),
-      );
+      //
+      // Retry is a user action, so it also takes back what gave up on its
+      // own: a failed entry of this thread is pending again first.
+      OfflineRetryManager.instance.registerFlush(widget.threadKey, () async {
+        await AgentsTaskOutbox.requeueFailed(widget.threadKey);
+        return _flushOutbox(controller);
+      });
       // The prompts queued while the link was down — the open thread's and
       // every other thread's — go out through ONE flushAll. It runs on every
       // paired notification, not only the transition: a prompt queued in the
@@ -1009,16 +1034,16 @@ class AgentsThreadViewState extends State<AgentsThreadView>
 
   /// Sends what the user typed while the host was unreachable.
   ///
-  /// Nothing is retried forever: [AgentsTaskOutbox] gives up on an entry after
-  /// its own attempt cap, so one prompt the host will never take cannot block
-  /// the queue behind it.
+  /// Nothing is retried forever: [AgentsTaskOutbox] marks an entry failed
+  /// after its own attempt cap (and keeps it), so one prompt the host will
+  /// never take cannot block the queue behind it.
   Future<int> _flushOutbox(AgentsRelayController controller) async {
     final String sessionKey = widget.threadKey;
     if (sessionKey.isEmpty) return 0;
     try {
       final int sent = await AgentsTaskOutbox.flush(
         sessionKey,
-        (task) => _sendQueuedTask(controller, task),
+        (task) => AgentsOutboxFlusher.sendQueued(controller, task),
       );
       if (sent > 0 && kDebugMode) {
         debugPrint(
@@ -1036,67 +1061,13 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     }
   }
 
-  /// Sends one queued prompt into the thread it was typed in.
-  ///
-  /// The outbox drops the entry as soon as this returns, and a returned
-  /// `send()` is no proof the host has the prompt: a socket whose host
-  /// restarted, or a half-open one, takes the frame and nobody reads it. So
-  /// the prompt is first handed to [AgentsPendingTasks] under a `task_id`,
-  /// the same record a live send writes. That record is cleared only by the
-  /// host's `task_ack` (or the run's own output) and is re-sent with the same
-  /// id on the next pairing ([_resendUnacknowledged]); the host dedupes on the
-  /// id, so a copy that did arrive is not run twice. The id is derived from the
-  /// queue entry, so two flushes of one entry are one task to the host too.
-  Future<void> _sendQueuedTask(
-    AgentsRelayController controller,
-    OutboxTask task,
-  ) async {
-    final String taskId = _taskIdForQueued(task);
-    await AgentsPendingTasks.record(
-      sessionKey: task.sessionKey,
-      taskId: taskId,
-      prompt: task.prompt,
-      modelId: task.modelId,
-      providerSlug: task.providerSlug,
-      reasoningEffort: task.reasoningEffort,
-    );
-    _ledger.taskSent(task.sessionKey, taskId);
-    await controller.sendTask(
-      task.prompt,
-      sessionKey: task.sessionKey,
-      modelId: task.modelId,
-      providerSlug: task.providerSlug,
-      reasoningEffort: task.reasoningEffort,
-      taskId: taskId,
-    );
-    // It is on the wire and tracked until the host acknowledges it: the
-    // bubble stops saying "waiting" and stops offering Retry.
-    await AgentsQueuedMarks.clearMark(
-      sessionKey: task.sessionKey,
-      queueId: task.localId,
-    );
-  }
-
-  /// The wire contract caps `task_id` at 64 characters.
-  static String _taskIdForQueued(OutboxTask task) {
-    final String id = 'o-${task.localId}';
-    return id.length <= 64 ? id : id.substring(0, 64);
-  }
-
   /// Every thread's queued prompts, each into the conversation it was typed
   /// in — not only this view's. The paired transition and the watchdog (a
-  /// backed-off send coming due) dial in here; the per-session claim inside
-  /// [AgentsTaskOutbox.flush] makes a double run harmless.
+  /// backed-off send coming due) dial in here. [AgentsOutboxFlusher] does the
+  /// same app-wide; the per-session claim inside [AgentsTaskOutbox.flush] and
+  /// the stored `task_id` of every entry make a double run harmless.
   Future<void> _flushAllThreads(AgentsRelayController controller) async {
-    try {
-      await AgentsTaskOutbox.flushAll(
-        (task) => _sendQueuedTask(controller, task),
-      );
-    } catch (error) {
-      if (kDebugMode) {
-        debugPrint('[agents-outbox] flushAll failed: $error');
-      }
-    }
+    await AgentsOutboxFlusher.flushAllVia(controller);
   }
 
   /// Sends every task of this thread the host has not acknowledged again.
@@ -1112,9 +1083,8 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   /// is never run twice — and the app paints nothing for a `duplicate`, so the
   /// thread never grows a second bubble either.
   ///
-  /// Nothing is retried for ever: a task that has used up its attempts is
-  /// dropped from the record, and the ledger's own pre-run rule is what tells
-  /// the reader the message did not arrive.
+  /// Nothing is retried for ever: a task that has used up its attempts
+  /// becomes a failed outbox entry, and its bubble offers Retry and Delete.
   Future<void> _resendUnacknowledged(AgentsRelayController controller) async {
     final String sessionKey = widget.threadKey;
     if (sessionKey.isEmpty) return;
@@ -1133,6 +1103,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
           providerSlug: task.providerSlug,
           reasoningEffort: task.reasoningEffort,
           taskId: task.taskId,
+          attachments: task.blobIds,
         );
       });
     } catch (error) {
@@ -1635,6 +1606,13 @@ class AgentsThreadViewState extends State<AgentsThreadView>
             (event.isDecided || !_ledger.isRunning(widget.threadKey))) {
           return;
         }
+        // The host closed the wait itself (timeout, Stop): the SAME request
+        // comes back decided. Close the open card; never prompt for it
+        // (docs/WIRE_CONTRACT.md, "Closed by timeout or stop", bead B11).
+        if (event.isDecided) {
+          _onApprovalClosed(event);
+          return;
+        }
         setState(() {
           _approval = event;
           _approvalPreviousDraft = previousDraft;
@@ -1792,6 +1770,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
         _onBrowserTarget(event);
       // ── end own browser ──
       case AgentsRelayUser():
+      case AgentsRelayContext():
       case AgentsRelayDebugContext():
       case AgentsRelayRoomTurn():
       case AgentsRelayRoomDone():
@@ -1934,6 +1913,21 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     _syncWaitingForUser();
   }
 
+  /// The host closed [event] without the user's answer (timeout, Stop) and
+  /// sent it again, decided. The open card for that id loses its buttons and
+  /// says why; a card the user already answered keeps the answer. A closing
+  /// frame for a card not on screen changes nothing.
+  void _onApprovalClosed(AgentsRelayApprovalRequest event) {
+    final AgentsRelayApprovalRequest? current = _approval;
+    if (current == null || current.approvalId != event.approvalId) return;
+    if (_approvalDecision != null) return;
+    setState(() {
+      _approval = event;
+      _approvalDecision = event.isApproved;
+    });
+    _syncWaitingForUser();
+  }
+
   /// Takes a takeover card off the thread, whatever state it was in.
   void _clearTakeover() {
     final AgentsRelayApprovalRequest? current = _approval;
@@ -1955,7 +1949,8 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     if (key.isEmpty) return;
     final bool waiting =
         (_approval != null && _approvalDecision == null) ||
-        _secretRequest != null;
+        _secretRequest != null ||
+        (AgentsThreadModes.instance.questionOf(key)?.isAnswerable ?? false);
     _ledger.setWaitingForUser(key, waiting);
   }
 
@@ -1980,6 +1975,23 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       }
     } finally {
       _browserViewOpen = false;
+    }
+  }
+
+  /// Tells the user what a send of this thread could not do: its files
+  /// cannot go to the host as they are, so nothing was sent.
+  void _onSendNotice(AgentsSendNotice notice) {
+    if (!mounted || notice.sessionKey != widget.threadKey) return;
+    switch (notice.kind) {
+      case AgentsSendNoticeKind.attachmentsRefused:
+        final String text = agentsAttachmentRefusalLabel(
+          AppLocalizations.of(context),
+          notice.failure,
+          name: notice.name,
+        );
+        ScaffoldMessenger.maybeOf(context)
+          ?..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(text)));
     }
   }
 
@@ -2135,6 +2147,8 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     final chat = ChatStorageService.getChatById(key);
     if (chat == null || !chat.isFullyLoaded || chat.messages.isEmpty) return;
     if (!_screenIsEmpty) return;
+    // The composer's draft goes on to the new screen.
+    AgentsThreadComposer.markRemount(widget.threadKey);
     setState(() {
       _cacheRevision++;
       _screenGeneration++;
@@ -2159,6 +2173,8 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       return;
     }
     AgentsResumeTrace.mark('replay revision $revision painted (remount)');
+    // The composer's draft goes on to the new screen.
+    AgentsThreadComposer.markRemount(widget.threadKey);
     setState(() {
       _revision = revision;
       _screenGeneration++;
@@ -2169,6 +2185,11 @@ class AgentsThreadViewState extends State<AgentsThreadView>
 
   @override
   Widget build(BuildContext context) {
+    // checkpoints: "Wait until <Agent> is done" names the agent.
+    final String? checkpointAgent = widget.agent?.name;
+    if (widget.threadKey.isNotEmpty && checkpointAgent != null) {
+      agentsThreadAgentNames[widget.threadKey] = checkpointAgent;
+    }
     final controller = _controller;
     return ValueListenableBuilder<AgentsRelayState>(
       valueListenable: controller?.state ?? _startupState,
@@ -2223,6 +2244,9 @@ class AgentsThreadViewState extends State<AgentsThreadView>
             if (connected && secretRequest != null)
               _buildSecretRequestBar(context, secretRequest),
             if (showCards) _buildAutomationCards(context, automations),
+            // The files of a send going out to the host, per file.
+            if (widget.threadKey.isNotEmpty)
+              AgentsUploadStrip(sessionKey: widget.threadKey),
             Expanded(key: const ValueKey('persistent-chat'), child: body),
             if (_useDesktopChat(context) &&
                 !connected &&
@@ -2291,9 +2315,32 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       // The shell decides what the menu holds: with no agent selected it
       // is only Copy full chat, whose export still says what the link is
       // doing.
-      menuActions: widget.menuActions,
+      menuActions: <AgentsThreadAction>[
+        ...widget.menuActions,
+        // checkpoints: the thread's pins of the agent's files.
+        if (threadOpen)
+          AgentsThreadAction(
+            icon: Icons.history,
+            tooltip: AppLocalizations.of(context)?.ckTitle ?? 'Checkpoints',
+            onPressed: () => unawaited(openCheckpoints()),
+          ),
+      ],
     );
   }
+
+  // ── checkpoints ──
+  /// Opens the "Checkpoints" sheet of this thread. Public so the phone's
+  /// "…" chip (the shell) can open it.
+  Future<void> openCheckpoints() {
+    final String key = widget.threadKey;
+    if (key.isEmpty) return Future<void>.value();
+    return showAgentsCheckpointsSheet(
+      context,
+      sessionKey: key,
+      agentName: widget.agent?.name ?? '',
+    );
+  }
+  // ── end checkpoints ──
 
   /// One automation reads as itself; several read as a count, because the
   /// chip has room for one name and no more.
@@ -2374,6 +2421,8 @@ class AgentsThreadViewState extends State<AgentsThreadView>
         agentsTitle: widget.title,
         topInset: desktopTopInset,
         transcriptFooter: takeover,
+        composerAbove: _composerAbove(dense: true),
+        composerSeat: _composerSeat(context, dense: true),
         unreadSince: widget.unreadSince,
         onUnreadSeen: widget.onUnreadSeen,
       );
@@ -2387,6 +2436,8 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       // Action-required bars remain below the header and own their inset.
       topInset: _hasBarAboveChat ? 0 : widget.topInset,
       transcriptFooter: takeover,
+      composerAbove: _composerAbove(dense: false),
+      composerSeat: _composerSeat(context, dense: false),
       agentsTitle: widget.title,
       unreadSince: widget.unreadSince,
       onUnreadSeen: widget.onUnreadSeen,
@@ -2693,7 +2744,6 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   /// approval card, a budget refusal, a budget warning. Null when there is
   /// none, so the screen keeps no empty footer.
   Widget? _transcriptCards(BuildContext context, {required bool dense}) {
-    final AgentsRelayApprovalRequest? approval = _approval;
     final AgentsBudgetWarning? warning = AgentsBudgetNotices.instance.forThread(
       widget.threadKey,
     );
@@ -2736,15 +2786,10 @@ class AgentsThreadViewState extends State<AgentsThreadView>
           onRunAnyway: refusal.prompt == null ? null : _runAnyway,
           onChangeBudget: _openBudgetSheet,
         ),
-      if (approval != null && approval.hasOptions && !approval.isTakeover)
-        AgentsActionApprovalCard(
-          request: approval,
-          agentName: widget.title ?? widget.agent?.name ?? '',
-          decision: _approvalScope,
-          dense: dense,
-          previousDraft: _approvalPreviousDraft,
-          onSelect: _decideActionApproval,
-        ),
+      // An answered question, as the user's own bubble, while its run goes
+      // on (the in-time answer is not a transcript row of its own).
+      if (_answeredQuestion() case final AgentsQuestionRequest answered)
+        AgentsQuestionAnsweredBubble(request: answered),
       // ── skill proposals ──
       // "Save as skill?" The run does not wait on it, so it stays after the
       // run ended until the user answers (docs/WIRE_CONTRACT.md, "Skill
@@ -2805,16 +2850,212 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       return;
     }
     final bool approved = option != AgentsRelayApprovalRequest.scopeDeny;
-    _decideApproval(approved, scope: option);
-    _ledger.decideApproval(
+    AgentsThreadModes.instance.approvalAnswered(
+      request.sessionKey ?? widget.threadKey,
+      request.approvalId,
+    );
+    void record() => _ledger.decideApproval(
       request.sessionKey ?? widget.threadKey,
       request.approvalId,
       approved: approved,
       scope: option,
       site: request.site,
     );
+    if (option == AgentsRelayApprovalRequest.scopeAlwaysPrefix) {
+      // "Always allow git push": the typed decision has no remember_prefix,
+      // so the frame goes out whole (docs/WIRE_CONTRACT.md, "Shell command
+      // rules"). The run records the answer once the frame left.
+      setState(() {
+        _approvalDecision = true;
+        _approvalScope = option;
+      });
+      _syncWaitingForUser();
+      unawaited(
+        _sendWholeApprovalDecision(
+          request,
+          approved: true,
+          scope: option,
+          rememberPrefix: approvalCommandPrefix(request),
+          onSent: record,
+        ),
+      );
+      return;
+    }
+    _decideApproval(approved, scope: option);
+    record();
     setState(() => _approvalScope = option);
   }
+
+  /// Sends a whole `approval_decision` frame (the fields the typed
+  /// controller method lacks). The card already shows the answer; when the
+  /// frame cannot be sent the answer is taken back, the approval waits on
+  /// the user again and the user learns why, so the host never waits on an
+  /// answer that never left.
+  Future<void> _sendWholeApprovalDecision(
+    AgentsRelayApprovalRequest request, {
+    required bool approved,
+    String? scope,
+    String? rememberPrefix,
+    String? feedback,
+    bool planReview = false,
+    VoidCallback? onSent,
+  }) async {
+    final bool ok = await AgentsThreadModes.instance.sendApprovalDecision(
+      approvalId: request.approvalId,
+      approved: approved,
+      scope: scope,
+      rememberPrefix: rememberPrefix,
+      feedback: feedback,
+    );
+    if (ok) {
+      onSent?.call();
+      return;
+    }
+    _reopenApproval(request, planReview: planReview);
+  }
+
+  /// An answer to [request] did not leave: the card is open again.
+  void _reopenApproval(
+    AgentsRelayApprovalRequest request, {
+    bool planReview = false,
+  }) {
+    AgentsThreadModes.instance.approvalReopened(
+      request.sessionKey ?? widget.threadKey,
+      request.approvalId,
+      planReview: planReview,
+    );
+    if (!mounted || _approval?.approvalId != request.approvalId) return;
+    setState(() {
+      _approvalDecision = null;
+      _approvalScope = null;
+    });
+    _syncWaitingForUser();
+    AppNotifications.show(
+      context,
+      AppLocalizations.of(context)?.approvalNotConnected ??
+          'Not connected to your computer. Try again when it is back.',
+      duration: const Duration(seconds: 3),
+    );
+  }
+
+  // ── agent modes ──────────────────────────────────────────────────────────
+
+  void _onModesChanged() {
+    if (!mounted) return;
+    setState(() {});
+    _syncWaitingForUser();
+  }
+
+  /// The latest question of this thread, once answered, while its run goes
+  /// on. Null otherwise.
+  AgentsQuestionRequest? _answeredQuestion() {
+    final AgentsQuestionRequest? q = AgentsThreadModes.instance.questionOf(
+      widget.threadKey,
+    );
+    if (q == null || !q.isAnswered || q.answers.isEmpty) return null;
+    return _ledger.isRunning(widget.threadKey) ? q : null;
+  }
+
+  /// The goal strip, the todo card, the plan-mode chip and the sandbox
+  /// banner, above the composer.
+  Widget? _composerAbove({required bool dense}) {
+    if (widget.threadKey.isEmpty) return null;
+    return AgentsModeBar(
+      threadKey: widget.threadKey,
+      dense: dense,
+      onGoalControlFailed: () {
+        if (!mounted) return;
+        AppNotifications.show(
+          context,
+          AppLocalizations.of(context)?.agentsNotConnected ??
+              'Not connected to your computer. Try again when it is back.',
+          duration: const Duration(seconds: 3),
+        );
+      },
+    );
+  }
+
+  /// What takes the composer's seat while the run waits on the user: a plan
+  /// review, a per-action approval, or a question. Null keeps the composer.
+  Widget? _composerSeat(BuildContext context, {required bool dense}) {
+    if (widget.threadKey.isEmpty) return null;
+    final AgentsRelayApprovalRequest? approval = _approval;
+    if (approval != null && approval.hasOptions && !approval.isTakeover) {
+      if (approval.isPlanReview) {
+        return AgentsPlanReviewCard(
+          key: ValueKey<String>('plan-review-${approval.approvalId}'),
+          request: approval,
+          decision: _approvalDecision,
+          dense: dense,
+          maxPlanHeight: dense ? 360 : 240,
+          onDecide: _decidePlanReview,
+        );
+      }
+      return AgentsActionApprovalCard(
+        key: ValueKey<String>('approval-${approval.approvalId}'),
+        request: approval,
+        agentName: widget.title ?? widget.agent?.name ?? '',
+        decision: _approvalScope,
+        dense: dense,
+        previousDraft: _approvalPreviousDraft,
+        onSelect: _decideActionApproval,
+        // Enter / Esc on a desktop keyboard.
+        keyboardShortcuts: dense,
+      );
+    }
+    final AgentsQuestionRequest? question = AgentsThreadModes.instance
+        .questionOf(widget.threadKey);
+    if (question != null && question.isAnswerable) {
+      return AgentsQuestionCard(
+        key: ValueKey<String>('question-${question.questionId}'),
+        request: question,
+        dense: dense,
+        onVisible: (bool visible) => unawaited(
+          AgentsThreadModes.instance.setAskVisible(
+            question.questionId,
+            visible,
+          ),
+        ),
+        onSubmit: (List<AgentsQuestionAnswer> answers) =>
+            AgentsThreadModes.instance.answerQuestion(question, answers),
+      );
+    }
+    return null;
+  }
+
+  /// Approve / Keep planning on a plan review. Once only.
+  void _decidePlanReview(bool approved, String? feedback) {
+    final AgentsRelayApprovalRequest? request = _approval;
+    if (request == null || _approvalDecision != null) return;
+    final AgentsRelayController? controller = _controller;
+    if (controller == null || !controller.state.value.isPaired) {
+      AppNotifications.show(
+        context,
+        AppLocalizations.of(context)?.agentsNotConnected ??
+            'Not connected to your computer. Try again when it is back.',
+        duration: const Duration(seconds: 3),
+      );
+      return;
+    }
+    AgentsThreadModes.instance.approvalAnswered(
+      request.sessionKey ?? widget.threadKey,
+      request.approvalId,
+    );
+    setState(() {
+      _approvalDecision = approved;
+      _approvalScope = approved ? 'approve' : 'keep_planning';
+    });
+    _syncWaitingForUser();
+    unawaited(
+      _sendWholeApprovalDecision(
+        request,
+        approved: approved,
+        feedback: approved ? null : feedback,
+        planReview: true,
+      ),
+    );
+  }
+  // ── end agent modes ──
 
   /// Takes a per-action approval card off the thread, answered or not: the
   /// run ended, so nothing waits on it any more.
@@ -2832,7 +3073,8 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   /// The agent moved on after an answered card: the card has said what the
   /// answer covered long enough.
   void _clearAnsweredActionApproval() {
-    if (_approvalScope == null) return;
+    // An answered card, or one the host closed (timeout, Stop).
+    if (_approvalScope == null && !(_approval?.isDecided ?? false)) return;
     _clearActionApproval();
   }
 
@@ -3059,7 +3301,14 @@ class AgentsThreadViewState extends State<AgentsThreadView>
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      decision ? 'Published' : 'Denied',
+                      decision
+                          ? 'Published'
+                          : (request.isDecided
+                                ? AgentsActionApprovalCard.closedLabel(
+                                    AppLocalizations.of(context),
+                                    request,
+                                  )
+                                : 'Denied'),
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: decision
                             ? theme.colorScheme.primary

@@ -26,6 +26,11 @@ scripts/emulator.sh stop
 `perf_bench.sh` runs on an emulator only and refuses a physical phone. The
 serial comes from `--serial`, then `$ANDROID_SERIAL`, then the running emulator.
 
+Budgets: `scripts/perf_bench_table.py` compares every run to
+`docs/perf_budgets.json` (worst build frame per path, cold start, AVD RSS) and
+lists what is over; `--strict` makes it exit 1. Lower a budget after a measured
+improvement; raise one only with a reason.
+
 What the benchmark is:
 
 - It runs the **real app** (`app.main()`) from `test_driver/perf_bench_main.dart`,

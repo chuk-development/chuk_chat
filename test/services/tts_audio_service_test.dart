@@ -85,7 +85,7 @@ void main() {
       expect(played, isEmpty);
     });
 
-    test('the same answer stops during playback', () async {
+    test('the same answer pauses during playback', () async {
       final speaking = playback.speak(
         ['one'],
         loadAudio: (_) async => Uint8List.fromList([1]),
@@ -98,6 +98,9 @@ void main() {
         loadAudio: (_) => throw StateError('must not generate twice'),
         isCurrent: () => true,
       );
+      expect(playback.phase.value, TtsPhase.paused);
+      expect(playback.activeText.value, 'one');
+      await playback.stop();
       await speaking;
       expect(playback.activeText.value, isNull);
       expect(played, [1]);

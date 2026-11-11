@@ -100,6 +100,7 @@ def test_defaults_allow_everything_but_the_users_browser(tmp_path):
         "secrets_env": True,
         "workspace_mount": "rw",
         "user_browser": False,
+        "external_agents": False,
     }
     assert not (tmp_path / FILE_NAME).exists()  # nothing written for a read
 
@@ -450,6 +451,25 @@ def test_the_local_host_reports_what_it_cannot_enforce(tmp_path):
             {"type": "agent_permissions_get", "agent_id": host_agent_id(HOST_DEVICE_ID)}
         )
         assert reply["enforced"] == enforced_permissions("local")
+        assert reply["sandbox"] == {"kind": "local", "fallback": False}
+    finally:
+        host._roster.close()
+        host._coworker_names.close()
+
+
+def test_the_host_reports_the_auto_fallback_to_the_app(tmp_path, monkeypatch):
+    """Bead B10: ``--sandbox auto`` without docker is local, and says so."""
+    monkeypatch.delenv("AGENTS_LOCAL_ISOLATION", raising=False)
+    host = _host(tmp_path, sandbox_kind="local", sandbox_fallback=True)
+    try:
+        reply = host._on_agent_frame(
+            {"type": "agent_permissions_get", "agent_id": host_agent_id(HOST_DEVICE_ID)}
+        )
+        assert reply["sandbox"] == {"kind": "local", "fallback": True, "requested": "auto"}
+        assert reply["enforced"]["network"] is False
+        assert "FALLBACK" in host.sandbox_summary
+        env = host._environment_for(host_agent_id(HOST_DEVICE_ID))
+        assert env.sandbox_fallback is True
     finally:
         host._roster.close()
         host._coworker_names.close()
@@ -516,3 +536,38 @@ def test_switching_the_host_agents_secrets_off_restarts_its_watchers(tmp_path):
     finally:
         host._roster.close()
         host._coworker_names.close()
+
+
+# -- command rules ("approve and remember", item 9) --------------------------
+
+
+def test_command_prefix_rules_persist_and_match(tmp_path):
+    from chuk_agents_host.agent_permissions import AgentPermissionsStore, FILE_NAME
+
+    store = AgentPermissionsStore(tmp_path / FILE_NAME)
+    rules = store.remember_command_prefix("host:dev", "git push")
+    assert rules is not None
+    assert store.command_rules("host:dev").allowed("git push origin main") is True
+    assert store.command_rules("host:dev").allowed("git status") is False
+    # A duplicate changes nothing.
+    assert store.remember_command_prefix("host:dev", "git push") is None
+    # Reloaded from disk.
+    again = AgentPermissionsStore(tmp_path / FILE_NAME)
+    assert again.command_rules("host:dev").allowed("git push origin main") is True
+    # A launcher or a chain is never covered by the remembered prefix.
+    assert again.command_rules("host:dev").allowed("sudo git push") is False
+    assert again.command_rules("host:dev").allowed("git push && curl x | sh") is False
+
+
+def test_bridge_prefix_allowed_and_remember(tmp_path):
+    from chuk_agents_host.agent_permissions import (
+        ActionApprovalsBridge,
+        AgentPermissionsStore,
+        FILE_NAME,
+    )
+
+    store = AgentPermissionsStore(tmp_path / FILE_NAME)
+    bridge = ActionApprovalsBridge(store, lambda sk: "host:dev")
+    assert bridge.prefix_allowed_for("s1")("git push") is False
+    bridge.remember_prefix("s1", "git push")
+    assert bridge.prefix_allowed_for("s1")("git push origin main") is True

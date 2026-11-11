@@ -19,16 +19,40 @@ import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/services/chat_compaction.dart';
+import 'package:chuk_chat/platform_specific/chat/manual_compaction.dart';
+import 'package:chuk_chat/services/chat_compaction_runner.dart';
 import 'package:chuk_chat/services/chat_history_builder.dart';
 import 'package:chuk_chat/services/mcp/mcp_availability.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
+import 'package:chuk_chat/services/chat_turn_stats.dart';
+import 'package:chuk_chat/widgets/chat_stats_row.dart';
+import 'package:chuk_chat/widgets/chat_turn_rail.dart';
 import 'package:chuk_chat/services/agents/agents_thread_composer.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/offline_send_coordinator.dart';
+import 'package:chuk_chat/services/offline_retry_manager.dart';
+import 'package:chuk_chat/services/follow_up_dispatcher.dart';
+import 'package:chuk_chat/services/composer/composer_follow_ups.dart';
+import 'package:chuk_chat/services/composer/follow_up_queue.dart';
+import 'package:chuk_chat/services/agents/agents_thread_modes.dart'
+    show AgentsQuestionRequest;
+import 'package:chuk_chat/widgets/composer/chat_question_seat.dart';
+import 'package:chuk_chat/services/chat_reference_service.dart';
+import 'package:chuk_chat/services/composer/composer_trigger.dart';
+import 'package:chuk_chat/widgets/composer/chat_export.dart';
+import 'package:chuk_chat/widgets/composer/chip_text_controller.dart';
+import 'package:chuk_chat/widgets/composer/composer_trigger_menu.dart';
+import 'package:chuk_chat/widgets/composer/composer_trigger_sources.dart';
+import 'package:chuk_chat/widgets/chat_reference_picker.dart';
+import 'package:chuk_chat/platform_specific/chat/composer_menu.dart';
+import 'package:chuk_chat/widgets/composer/queue_dock.dart';
+import 'package:chuk_chat/platform_specific/chat/offline_send_bridge.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/tts_audio_service.dart';
+import 'package:chuk_chat/widgets/message_bubble/read_aloud_action.dart';
 import 'package:chuk_chat/voice/voice_transcript_migration.dart';
 import 'package:chuk_chat/services/dictation_tracker.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
@@ -47,6 +71,8 @@ import 'package:chuk_chat/platform_specific/chat/chat_scroll_mixin.dart';
 import 'package:chuk_chat/utils/unread_rows.dart';
 import 'package:chuk_chat/widgets/unread_jump_pill.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_message_edit_mixin.dart';
+import 'package:chuk_chat/platform_specific/chat/outbox_screen_turn.dart';
+import 'package:chuk_chat/services/offline_send_executor.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_model_selection_mixin.dart';
 import 'package:chuk_chat/platform_specific/chat/model_provider_resolution_mixin.dart';
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
@@ -57,6 +83,11 @@ import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart'; // NEW
 import 'package:chuk_chat/services/websocket_chat_service.dart';
+import 'package:chuk_chat/models/chat_stream_event.dart' show StreamErrorCodes;
+import 'package:chuk_chat/services/client_request_ids.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
+import 'package:chuk_chat/utils/retry_backoff.dart';
+import 'package:chuk_chat/services/tool_result_cache_registry.dart';
 import 'package:chuk_chat/services/streaming_manager.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/services/tool_image_result_service.dart';
@@ -75,6 +106,7 @@ import 'package:uuid/uuid.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/audio_recording_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/message_actions_handler.dart';
+import 'package:chuk_chat/widgets/agents_checkpoints_sheet.dart'; // checkpoints
 import 'package:chuk_chat/platform_specific/chat/handlers/chat_persistence_handler.dart';
 import 'package:chuk_chat/utils/desktop_drop_stub.dart'
     if (dart.library.io) 'package:desktop_drop/desktop_drop.dart';
@@ -91,6 +123,8 @@ import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_binding.dart';
 import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_call_button.dart';
 import 'package:chuk_chat/platform_specific/chat/voice/voice_turn_queue.dart';
 import 'package:chuk_chat/voice/voice_call_models.dart' show VoiceTurn;
+import 'package:chuk_chat/services/shortcut_registry.dart';
+import 'package:chuk_chat/widgets/shortcuts_dialog.dart';
 
 part 'desktop_send_logic.dart';
 
@@ -151,6 +185,14 @@ class ChukChatUIDesktop extends StatefulWidget {
   /// thread sets it ([agentsThread]).
   final Widget? transcriptFooter;
 
+  /// AGENTS: drawn right above the composer, inside its column (the goal
+  /// strip, the todo card, the plan-mode chip, the sandbox banner).
+  final Widget? composerAbove;
+
+  /// AGENTS: takes the composer's seat while it is set (a question card or
+  /// an approval the run waits on). The composer comes back when it goes.
+  final Widget? composerSeat;
+
   /// When the reader last had this thread open, before this visit. Rows the
   /// agent wrote after it are new; a pill jumps to the first one while it is
   /// off screen (bead chuk_chat-f5wd). Null: no pill.
@@ -190,6 +232,8 @@ class ChukChatUIDesktop extends StatefulWidget {
     this.agentsTitle,
     this.topInset = 0,
     this.transcriptFooter,
+    this.composerAbove,
+    this.composerSeat,
     this.unreadSince,
     this.onUnreadSeen,
   });
@@ -205,12 +249,32 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         ModelProviderResolutionMixin,
         ChatModelSelectionMixin,
         ChatMessageEditMixin,
+        OutboxScreenTurnMixin,
         RegenVariantSeedMixin<ChukChatUIDesktop>
     implements ChatDebugSnapshot {
   // RENAMED STATE
   @override
-  final TextEditingController composerController = TextEditingController();
+  /// Keeps `/` and `@` picks as atomic chips (idea 68).
+  @override
+  final ChipTextEditingController composerController =
+      ChipTextEditingController();
+
+  /// The `/` and `@` menu over [composerController].
+  late final ComposerTriggerController _trigger = ComposerTriggerController(
+    text: composerController,
+    source: _buildTriggerSource,
+  );
   final List<Map<String, String>> _messages = [];
+
+  // --- Outbox on screen (docs/OFFLINE_SEND.md) ---
+
+  @override
+  bool outboxTurnRunningFor(String chatId) =>
+      _isSending || _isStreaming || OfflineSendExecutor.isTurnRunning(chatId);
+
+  @override
+  Future<void> outboxReloadFromStorage(String chatId) =>
+      _onOutboxChangedChat(chatId);
   String? _activeChatId;
   final ScrollController _composerScrollController = ScrollController();
   late final ComposerCaretFollower _composerCaretFollower;
@@ -318,9 +382,149 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   int? _activeSendOperationId;
   int? _cancelledSendOperationId;
 
-  /// Queued message text — when the user sends while AI is still streaming,
-  /// the text is parked here and dispatched after the current response ends.
-  String? _pendingMessageText;
+  /// Messages sent while a reply runs: queued for after it, or steering it
+  /// (lib/services/composer/composer_follow_ups.dart). The dock above the
+  /// field draws them.
+  late final ComposerFollowUps _followUps = ComposerFollowUps(
+    chatId: () => _activeChatId,
+  );
+
+  /// The + button: files, or a reference to another chat (the same two
+  /// entries the phone's attachment menu has).
+  Future<void> _handleAddTap(BuildContext anchorContext) async {
+    final AppLocalizations l =
+        AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));
+    final Color iconFg = Theme.of(context).resolvedIconColor;
+    final String? choice = await showAnchoredComposerMenu<String>(
+      anchorContext: anchorContext,
+      items: <PopupMenuEntry<String>>[
+        composerMenuRow<String>(
+          value: 'files',
+          iconFg: iconFg,
+          icon: Icons.attach_file,
+          label: l.files,
+        ),
+        composerMenuRow<String>(
+          value: 'chat',
+          iconFg: iconFg,
+          icon: Icons.chat_bubble_outline,
+          label: l.chatReferenceAction,
+        ),
+      ],
+    );
+    if (!mounted || choice == null) return;
+    if (choice == 'files') {
+      _fileHandler.modelSupportsImageInput = modelSupportsImageInput;
+      unawaited(_fileHandler.uploadFiles());
+      return;
+    }
+    final AttachedFile? file = await pickChatReference(
+      context,
+      currentChatId: _activeChatId,
+    );
+    if (file != null && mounted) {
+      setState(() => _fileHandler.addReadyFile(file));
+    }
+  }
+
+  /// What the `/` and `@` menu lists for this chat.
+  ComposerTriggerSource _buildTriggerSource() {
+    final AppLocalizations l =
+        AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));
+    return buildComposerTriggerSource(
+      l: l,
+      chatId: _activeChatId,
+      messages: _messages,
+      workspaceId: _selectedWorkspaceId ?? _pendingWorkspaceId,
+      agentsThread: widget.agentsThread,
+      onCompact: widget.agentsThread || _messages.isEmpty
+          ? null
+          : () => unawaited(_compactChatNow()),
+      onModel: openModelScreen,
+      onNewChat: widget.agentsThread ? null : newChat,
+      onExport: _messages.isEmpty
+          ? null
+          : () => unawaited(
+              copyChatAsMarkdown(
+                context,
+                List<Map<String, String>>.of(_messages),
+                doneLabel: l.copiedToClipboard,
+              ),
+            ),
+      onReferenceChat: (String chatId) async {
+        final AttachedFile? file = await ChatReferenceService.loadAttachment(
+          chatId,
+        );
+        if (file != null && mounted) _fileHandler.addReadyFile(file);
+      },
+      onSelectWorkspace: kFeatureWorkspaces
+          ? (String id) => setState(() => _selectedWorkspaceId = id)
+          : null,
+    );
+  }
+
+  /// The `/compact` command: summarize the earlier messages now
+  /// (lib/platform_specific/chat/manual_compaction.dart).
+  Future<void> _compactChatNow() async {
+    final AppLocalizations l =
+        AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));
+    final String? chatId = _activeChatId;
+    if (chatId == null || _messages.isEmpty) return;
+    if (_isSending || _isStreaming) {
+      showSnackBar(l.composerCompactBusy);
+      return;
+    }
+    showSnackBar(l.composerCompactRunning);
+    final String? provider = await ensureProviderSlugForCurrentModel();
+    final String? systemPrompt = await _resolveSystemPromptForSend();
+    if (!mounted || _activeChatId != chatId) return;
+    final Workspace? workspace = _resolveWorkspaceForCurrentChat();
+    final CompactionOutcome outcome = await runManualCompaction(
+      ManualCompactionRequest(
+        messages: _messages,
+        chatId: chatId,
+        modelId: selectedModelId,
+        providerSlug: provider ?? 'openai',
+        baseSystemPrompt: systemPrompt,
+        workspace: workspace,
+        toolCallingEnabled: widget.toolCallingEnabled,
+        discoveryMode: widget.toolDiscoveryMode,
+        skipIdentity: workspace != null && !workspace.memoryEnabled,
+        includeRecentImages: widget.includeRecentImagesInHistory,
+        includeAllImages: widget.includeAllImagesInHistory,
+        includeReasoning: widget.includeReasoningInHistory,
+        includeToolResults: widget.includeToolResultsInHistory,
+      ),
+    );
+    if (!mounted) return;
+    if (outcome.compacted) _storeCompaction(chatId, outcome);
+    showSnackBar(switch (outcome.status) {
+      CompactionStatus.compacted => l.composerCompactDone,
+      CompactionStatus.notNeeded =>
+        outcome.reason == 'busy'
+            ? l.composerCompactBusy
+            : l.composerCompactNothing,
+      CompactionStatus.failed => l.composerCompactFailed,
+    });
+  }
+
+  /// Two Esc presses within 500 ms stop the running reply.
+  final DoubleEscapeDetector _escapeStop = DoubleEscapeDetector();
+
+  /// Bounded retries of a drain that found the chat still busy.
+  int _drainRetries = 0;
+
+  @override
+  bool get composerBusy =>
+      _isStreaming || _isSending || _activeSendOperationId != null;
+
+  @override
+  Future<void> queueOrSteerComposer({required bool alternate}) async {
+    final String text = composerController.text.trim();
+    if (text.isEmpty) return;
+    setState(() => _followUps.enqueue(text, alternate: alternate));
+    composerController.clear();
+  }
 
   // Answer-version pager plumbing (seed stash/restore/fold) lives in
   // RegenVariantSeedMixin, shared with the mobile State. This State supplies
@@ -332,6 +536,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   bool _isLoadingChat = false; // Loading indicator for chat switching
   final StreamingManager _streamingManager = StreamingManager();
+
+  /// Reloads the open chat when the offline outbox wrote into it.
+  StreamSubscription<OfflineRetryEvent>? _outboxSub;
 
   // Computed property - checks if CURRENT chat is streaming
   bool get _isStreaming =>
@@ -390,7 +597,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   static const double _kAttachmentBarMarginBottom =
       8.0; // Margin between attachment bar and search bar
   static const double _kQueuedBannerHeight =
-      26.0; // Queued-message banner row height (icon + text + bottom padding)
+      40.0; // One queue-dock row (36 px row + 4 px gap)
   static const double _kHorizontalPaddingLarge = 16.0;
   static const double _kHorizontalPaddingSmall = 8.0;
   static const double _kMessageListBottomLift = 40.0;
@@ -410,6 +617,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   void initState() {
     super.initState();
     initShiftKeyTracker();
+    unawaited(ComposerBusySetting.load());
     // chuk_chat's screen builds its tool loop on mount, as before, so the
     // tools are ready by the first send. The Agents thread does not: the host
     // runs every tool. Each send still picks its loop by chat id.
@@ -418,9 +626,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     // loadSavedModelPreference in the post-frame pass below — the single
     // entry point, so startup writes and picked-model refreshes run once.
     _audioHandler = AudioRecordingHandler();
+    _outboxSub = OfflineSendBridge.listen(_onOutboxChangedChat);
     messageActionsHandler = MessageActionsHandler()
       ..onShowSnackBar = showSnackBar
-      ..onSpeak = _speakMessage
       ..onSubmitEdit = (index, newText) {
         unawaited(
           _submitEditedMessage(
@@ -437,6 +645,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       ..onChatIdAssigned = _adoptAssignedChatId;
     composerFocusNode = FocusNode(
       onKeyEvent: (node, event) {
+        // The `/` and `@` menu takes the arrows, Tab, Enter and Esc first.
+        if (_trigger.handleKey(event)) return KeyEventResult.handled;
         if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
         // Note: Cmd+V / Ctrl+V is NOT intercepted here. It's handled via an
@@ -446,17 +656,29 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         // keep working whether they simulate Cmd+V or use NSTextInputClient
         // directly.
 
+        // Ctrl+/ (Cmd+/): the shortcut list.
+        if (AppShortcuts.matches(AppShortcuts.showShortcuts, event)) {
+          unawaited(showShortcutsDialog(context));
+          return KeyEventResult.handled;
+        }
+
         // Escape: cancel editing mode
-        if (event.logicalKey == LogicalKeyboardKey.escape &&
+        if (AppShortcuts.matches(AppShortcuts.cancelEdit, event) &&
             messageActionsHandler.isEditing) {
           cancelEditMessage();
+          return KeyEventResult.handled;
+        }
+
+        // Esc twice within 500 ms stops the running reply.
+        if (event.logicalKey == LogicalKeyboardKey.escape && composerBusy) {
+          if (_escapeStop.press()) unawaited(_cancelCurrentOperation());
           return KeyEventResult.handled;
         }
 
         // Up in an empty composer edits the last own message (the Agents
         // desktop, docs/DESIGN.md §14.7).
         if (widget.agentsThread &&
-            event.logicalKey == LogicalKeyboardKey.arrowUp &&
+            AppShortcuts.matches(AppShortcuts.editLast, event) &&
             composerController.text.isEmpty &&
             !messageActionsHandler.isEditing &&
             !_isStreaming) {
@@ -488,7 +710,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         // Bare Enter: send message (or submit edit), consume to prevent newline.
         // Route through sendOrSubmitEdit so an edit keeps its (possibly
         // modified) attachment set instead of dropping the user's changes.
-        unawaited(sendOrSubmitEdit());
+        // While a reply runs, Enter queues or steers (the "While busy"
+        // setting) and Ctrl/Cmd+Enter does the other.
+        final bool alternate =
+            HardwareKeyboard.instance.isControlPressed ||
+            HardwareKeyboard.instance.isMetaPressed;
+        unawaited(sendOrSubmitEdit(alternate: alternate));
         return KeyEventResult.handled;
       },
     );
@@ -497,6 +724,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       vsync: this,
     );
     _fileHandler = DesktopFileHandler()
+      ..isAgentsThread = (() => ChatOrigin.isAgentsThread(_activeChatId))
       ..onShowSnackBar = showSnackBar
       ..onUpdate = () {
         if (mounted) setState(() {});
@@ -516,6 +744,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       scrollController: _composerScrollController,
     );
     TtsAudioService.activeText.addListener(_onSpeechPlaybackChanged);
+    TtsAudioService.phase.addListener(_onSpeechPlaybackChanged);
     if (voiceCallUiEnabled) {
       _voice = ChatVoiceBinding(
         currentChatId: () => _activeChatId,
@@ -679,6 +908,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       }
 
       if (widget.agentsThread) _resetThreadTransientState();
+      // A follow-up typed in the chat being left stays parked under it and
+      // goes out from there (FollowUpDispatcher), never into the next chat.
+      _followUps.leaveChat(_activeChatId);
+      FollowUpDispatcher.instance.kick();
       _loadChatById(widget.selectedChatId);
       if (widget.agentsThread) {
         WidgetsBinding.instance.addPostFrameCallback(
@@ -703,7 +936,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     // the original app dropped fresh ones on remount without deleting them.
     _fileHandler.attachedFiles.clear();
     restoredAttachmentIds.clear();
-    _pendingMessageText = null;
+    _followUps.leaveChat(_activeChatId);
     _flyInKey = null;
   }
 
@@ -745,6 +978,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   void dispose() {
     AgentsThreadComposer.detach(_agentsThreadSend); // AGENTS
     AgentsThreadComposer.prefillChanges.removeListener(_takeAgentsPrefill);
+    _outboxSub?.cancel();
+    _followUps.dispose();
+    _trigger.dispose();
+    _fileHandler.dispose();
     // CRITICAL: Clear loading lock if we're disposed while loading
     // This prevents the flag from getting stuck
     if (_isLoadingChat) {
@@ -760,6 +997,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     _audioHandler.onLevelsChanged = null;
     scrollController.removeListener(onScrollChanged);
     TtsAudioService.activeText.removeListener(_onSpeechPlaybackChanged);
+    TtsAudioService.phase.removeListener(_onSpeechPlaybackChanged);
     _composerCaretFollower.dispose();
     composerController.dispose();
     scrollController.dispose();
@@ -988,6 +1226,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
     scrollChatToBottom(animate: false, force: true);
     Future.delayed(Duration.zero, () => composerFocusNode.requestFocus());
+    // The cached fast path ends here, not in [_loadChatByIdAsync]: a
+    // follow-up parked for this chat goes out from here too.
+    unawaited(_restoreParkedFollowUp(chatId));
   }
 
   Future<void> _loadChatByIdAsync(String? chatId) async {
@@ -1182,6 +1423,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     });
     scrollChatToBottom(animate: false, force: true);
     Future.delayed(Duration.zero, () => composerFocusNode.requestFocus());
+    // A follow-up typed during a turn that the app did not live to send.
+    final String? loadedId = _activeChatId;
+    if (loadedId != null) unawaited(_restoreParkedFollowUp(loadedId));
     stopwatch.stop();
     unawaited(
       DiagnosticsLogService.timing(
@@ -1517,9 +1761,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         final session = SupabaseService.auth.currentSession;
         if (session != null) return session.accessToken;
         sessionLookupFailed = true;
-        if (mounted) {
-          showSnackBar(AppLocalizations.of(context)!.sessionExpired);
-        }
         return null;
       },
       onStateChanged: () {
@@ -1530,6 +1771,17 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     if (!mounted || result == null) return;
 
     if (!result.success) {
+      // Offline or the transcription could not connect: the recording is
+      // on disk. It waits in the outbox and is transcribed and sent later.
+      final String? saved = result.savedPath;
+      if (result.queueable && saved != null) {
+        await _queueVoiceRecording(saved, result.durationMs);
+        return;
+      }
+      if (sessionLookupFailed) {
+        showSnackBar(AppLocalizations.of(context)!.sessionExpired);
+        return;
+      }
       if (!sessionLookupFailed) {
         showSnackBar(
           result.error ?? AppLocalizations.of(context)!.transcriptionFailed,
@@ -1566,6 +1818,53 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     }
   }
 
+  /// ask_user questions the reader skipped: the seat gives way to the
+  /// composer, and the bubble's option chips stay as the way back.
+  final Set<String> _skippedQuestionIds = <String>{};
+
+  /// The open ask_user question of a plain chat: the last answer asked it,
+  /// no turn runs, and the reader did not skip it. Agents threads bring
+  /// their own card ([ChukChatUIDesktop.composerSeat]).
+  AgentsQuestionRequest? _openChatQuestion() {
+    if (widget.agentsThread || _messages.isEmpty) return null;
+    if (_isStreaming || _isSending || _activeSendOperationId != null) {
+      return null;
+    }
+    if (messageActionsHandler.isEditing) return null;
+    final int index = _messages.length - 1;
+    final String sender = _messages[index]['sender'] ?? '';
+    if (sender != 'ai' && sender != 'assistant') return null;
+    final MessageRenderData data = _messageRenderCache.build(
+      messages: _messages,
+      index: index,
+      isStreaming: false,
+    );
+    final ToolCall? call = lastCompletedAskUser(
+      data.toolCalls,
+      data.contentBlocks,
+    );
+    if (call == null || _skippedQuestionIds.contains(call.id)) return null;
+    return askUserRequestFor(call);
+  }
+
+  /// The question card in the composer's seat, or null for the composer.
+  Widget? _buildQuestionSeat() {
+    final AgentsQuestionRequest? request = _openChatQuestion();
+    if (request == null) return null;
+    return ChatQuestionSeat(
+      request: request,
+      dense: true,
+      onAnswer: (String text) {
+        // The answer goes out as given; a draft in the composer stays.
+        unawaited(_sendMessage(voiceText: text));
+      },
+      onSkip: () {
+        setState(() => _skippedQuestionIds.add(request.questionId));
+        composerFocusNode.requestFocus();
+      },
+    );
+  }
+
   /// Returns a callback for the ask_user interactive buttons if [index] is
   /// the last AI message, is not streaming, and contains a completed
   /// ask_user tool call. Otherwise returns null.
@@ -1582,6 +1881,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     }
 
     if (!ChatUiHelpers.hasCompletedTool(data, 'ask_user')) return null;
+    // The open question sits in the composer's seat; the chips come back
+    // once the reader skipped it.
+    if (_openChatQuestion() != null) return null;
 
     return (String answer) {
       composerController.text = answer;
@@ -1677,8 +1979,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     final Map<String, String> rawMessage = _messages[index];
     final String messageText = rawMessage['text'] ?? '';
 
-    return messageActionsHandler.buildActionsForMessage(
-      activeSpeechText: TtsAudioService.activeText.value,
+    final actions = messageActionsHandler.buildActionsForMessage(
       index: index,
       messageText: messageText,
       isUser: data.isUser,
@@ -1686,6 +1987,15 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       onEdit: editMessageAt,
       onResendMessage: resendMessageAt,
       onBranch: branchFromIndex,
+    );
+    return withReadAloudAction(
+      actions,
+      messageText: messageText,
+      isUser: data.isUser,
+      isStreaming: data.isStreamingMessage,
+      activeText: TtsAudioService.activeText.value,
+      phase: TtsAudioService.phase.value,
+      onSpeak: _speakMessage,
     );
   }
 
@@ -1776,6 +2086,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       messageText: messageText,
       onEdit: editMessageAt,
       onResendMessage: resendMessageAt,
+      forkFromHere: agentsForkAction(context, _activeChatId, _messages[index]),
     );
   }
 
@@ -1821,6 +2132,70 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   }
 
   /// Persist chat with a specific chatId (for background streaming to correct chat)
+  /// A recording that could not be transcribed now: a voice bubble that
+  /// waits, and a voice row in the outbox (docs/OFFLINE_SEND.md).
+  Future<void> _queueVoiceRecording(String path, int? durationMs) async {
+    final bool isNewChat = _activeChatId == null;
+    _activeChatId ??= _uuid.v4();
+    final String chatId = _activeChatId!;
+    final String modelId = selectedModelId;
+    final String provider = selectedProviderSlug ?? '';
+    // The chat as it is now: the awaits below may see a chat switch.
+    final List<Map<String, String>> before = _messages
+        .map(Map<String, String>.from)
+        .toList();
+    final String? systemPrompt = await _resolveSystemPromptForSend();
+    String queueId;
+    try {
+      queueId = await OfflineSendCoordinator.enqueueVoice(
+        OfflineSendPayload(
+          chatId: chatId,
+          messageText: '',
+          modelId: modelId,
+          providerSlug: provider,
+          systemPrompt: systemPrompt,
+          reasoningEffort: clampedReasoningEffort(modelId, provider),
+          voicePath: path,
+          voiceDurationMs: durationMs,
+          autoSend: widget.autoSendVoiceTranscription,
+        ),
+        kick: NetworkStatusService.isOnline,
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[Desktop-Voice] enqueue failed: ${e.runtimeType}');
+      }
+      if (mounted) {
+        showSnackBar(AppLocalizations.of(context)!.transcriptionFailed);
+      }
+      return;
+    }
+    final Map<String, String> bubble = OfflineSendBridge.voiceBubble(
+      queueId: queueId,
+      durationMs: durationMs,
+      modelId: modelId,
+      provider: provider,
+    );
+    final List<Map<String, String>>? offScreen =
+        OfflineSendBridge.voiceBubbleOffScreen(
+          chatId: chatId,
+          activeChatId: _activeChatId,
+          mounted: mounted,
+          before: before,
+          bubble: bubble,
+        );
+    if (offScreen != null) {
+      // Another chat is on screen now: the bubble goes into the chat that
+      // started the queue, never into the list on screen.
+      _persistChatWithIdAndMessages(chatId, offScreen);
+      return;
+    }
+    setState(() => _messages.add(bubble));
+    _persistChatWithId(chatId);
+    if (isNewChat) widget.onChatIdChanged(chatId);
+    scrollChatToBottom(force: true);
+  }
+
   void _persistChatWithId(String chatId, {bool commit = true}) {
     if (_messages.isEmpty) return;
     unawaited(
@@ -1930,6 +2305,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     });
   }
 
+  /// The turn rail's row keys (plain chats, wide windows).
+  final ChatTurnRailController _turnRail = ChatTurnRailController();
+
   // ── unread pill (bead chuk_chat-f5wd) ──
   final GlobalKey _firstUnreadKey = GlobalKey(debugLabel: 'first unread row');
 
@@ -2013,10 +2391,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             ? () => _continueGenerationAt(i)
             : null,
       );
+      // A user row carries the turn rail's key, so a tick can find it.
+      final Widget railed = !widget.agentsThread && data.isUser
+          ? KeyedSubtree(key: _turnRail.keyFor(i), child: item)
+          : item;
       // The first row the reader has not seen carries the unread pill's key.
       return i == firstUnreadIndex
-          ? KeyedSubtree(key: _firstUnreadKey, child: item)
-          : item;
+          ? KeyedSubtree(key: _firstUnreadKey, child: railed)
+          : railed;
     }
 
     Widget itemBuilder(BuildContext context, int i) => rowBuilder(context, i);
@@ -2091,10 +2473,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       inputAreaVisualHeight +=
           _kAttachmentBarHeight + _kAttachmentBarMarginBottom;
     }
-    // Queued-message banner adds a row above the text field.
-    if (_pendingMessageText != null) {
-      inputAreaVisualHeight += _kQueuedBannerHeight;
-    }
+    // Each queued message adds a dock row above the text field.
+    inputAreaVisualHeight += _kQueuedBannerHeight * _followUps.queue.length;
     // Reserve the composer's real measured height when available (it grows as
     // the text field wraps to multiple lines); fall back to the constant-based
     // estimate for the first frame before MeasureSize reports. The composer is
@@ -2308,6 +2688,23 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                             ),
                           ),
                         ),
+                      // One tick per user message on the right edge; hidden
+                      // under 900 px by the rail itself.
+                      if (!isChatEmpty && !widget.agentsThread)
+                        Positioned.fill(
+                          key: const ValueKey<String>('desktop-turn-rail'),
+                          child: ChatTurnRail(
+                            messages: _messages,
+                            topPadding: widget.topInset + 12,
+                            bottomPadding: inputAreaTotalHeight + 12,
+                            onTickTap: (int index) => scrollToTurn(
+                              _turnRail,
+                              index: index,
+                              itemCount: _messages.length,
+                              controller: scrollController,
+                            ),
+                          ),
+                        ),
                       // "N new": jumps to the first unread row (bead
                       // chuk_chat-f5wd).
                       if (_unreadPillCount > 0)
@@ -2386,10 +2783,24 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                               child: Column(
                                 mainAxisSize: MainAxisSize.min, // Crucial for column inside AnimatedPositioned/Center
                                 children: [
+                                  // AGENTS: mode bar, then the composer or
+                                  // the card that takes its seat.
+                                  ?widget.composerAbove,
                                   // Search Bar (attachment bar is now inside)
-                                  _buildSearchBar(
-                                    isCompactMode: widget.isCompactMode,
-                                  ),
+                                  widget.composerSeat ??
+                                      _buildQuestionSeat() ??
+                                      _buildSearchBar(
+                                        isCompactMode: widget.isCompactMode,
+                                      ),
+                                  if (!isChatEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: ChatStatsRow(
+                                        chatId: _activeChatId,
+                                        modelId: selectedModelId,
+                                        providerSlug: selectedProviderSlug,
+                                      ),
+                                    ),
                                   const SizedBox(height: 8),
                                   Text(
                                     AppLocalizations.of(context)!.aiDisclaimer,
@@ -2449,180 +2860,173 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       child: Stack(
         fit: StackFit.passthrough,
         children: [
-          // Main content column
+          // Main content column: the field block on top, the action row
+          // pinned to the bottom of the box. Exactly two children, so
+          // spaceBetween puts all free height between them. An empty slot
+          // in the top block (a closed `/` menu, an empty queue dock) would
+          // otherwise take a share of it and push the field down under the
+          // floating send target.
           Column(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Attachment previews inside the textbox (right-padded so cards don't go under send button)
-              if (_fileHandler.attachedFiles.isNotEmpty)
-                Padding(
-                  padding: EdgeInsets.only(
-                    bottom: 14,
-                    left: 2,
-                    right: btnW + 8,
-                  ),
-                  child: AttachmentPreviewBar(
-                    files: _fileHandler.attachedFiles,
-                    onRemove: removeComposerAttachment,
-                  ),
-                ),
-              // Editing indicator
-              if (messageActionsHandler.isEditing)
-                Padding(
-                  // Clear the floating top-right send button so the "Cancel"
-                  // action isn't hidden underneath it.
-                  padding: EdgeInsets.only(bottom: 6, right: btnW + 8),
-                  child: Row(
-                    children: [
-                      AppIcon(
-                        Icons.edit,
-                        size: 14,
-                        color: iconFg.withValues(alpha: 0.6),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Attachment previews inside the textbox (right-padded so cards don't go under send button)
+                  if (_fileHandler.attachedFiles.isNotEmpty)
+                    Padding(
+                      padding: EdgeInsets.only(
+                        bottom: 14,
+                        left: 2,
+                        right: btnW + 8,
                       ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Editing message',
-                        style: TextStyle(
-                          color: iconFg.withValues(alpha: 0.6),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
+                      child: AttachmentPreviewBar(
+                        files: _fileHandler.attachedFiles,
+                        onRemove: removeComposerAttachment,
                       ),
-                      const Spacer(),
-                      GestureDetector(
-                        onTap: cancelEditMessage,
-                        child: Text(
-                          'Cancel',
-                          style: TextStyle(
-                            color: accent.withValues(alpha: 0.8),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              // Queued message indicator — shown when the user sent a message
-              // while the AI was still streaming. It auto-sends on completion.
-              if (_pendingMessageText != null)
-                Padding(
-                  // Clear the floating top-right send/stop button.
-                  padding: EdgeInsets.only(bottom: 6, right: btnW + 8),
-                  child: Row(
-                    children: [
-                      AppIcon(
-                        Icons.schedule,
-                        size: 14,
-                        color: iconFg.withValues(alpha: 0.6),
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          '${AppLocalizations.of(context)!.queuedLabel}: '
-                          '"${_pendingMessageText!}"',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
+                    ),
+                  // Editing indicator
+                  if (messageActionsHandler.isEditing)
+                    Padding(
+                      // Clear the floating top-right send button so the "Cancel"
+                      // action isn't hidden underneath it.
+                      padding: EdgeInsets.only(bottom: 6, right: btnW + 8),
+                      child: Row(
+                        children: [
+                          AppIcon(
+                            Icons.edit,
+                            size: 14,
                             color: iconFg.withValues(alpha: 0.6),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
                           ),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      GestureDetector(
-                        onTap: _cancelPendingMessage,
-                        child: AppIcon(
-                          Icons.close,
-                          size: 16,
-                          color: accent.withValues(alpha: 0.8),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              // Text field with right padding to avoid send button overlap.
-              // While the microphone is open the live waveform is drawn over
-              // it, the phone's arrangement: the field keeps its slot, so the
-              // composer is exactly as tall recording as at rest.
-              Padding(
-                padding: EdgeInsets.only(right: btnW + 8),
-                child: ComposerInputRow(
-                  isRecording: _audioHandler.isMicActive,
-                  audioLevels: _audioHandler.audioLevels,
-                  accentColor: Colors.red,
-                  timeColor: iconFg.withValues(alpha: 0.7),
-                  child: ConstrainedBox(
-                    // Raised so the composer grows to a comfortable ~10 lines
-                    // before it starts scrolling, and the internal scrollbar is
-                    // hidden (scrollbars: false) since it reads as clutter.
-                    constraints: const BoxConstraints(maxHeight: 240),
-                    child: _wrapWithSmartPasteActions(
-                      ScrollConfiguration(
-                        behavior: ScrollConfiguration.of(context)
-                            .copyWith(scrollbars: false),
-                        child: KeyedSubtree(
-                          key: TourKeyRegistry.instance.anchorFor(
-                            TourSlots.chatInput,
-                          ),
-                          child: TextField(
-                            controller: composerController,
-                            focusNode: composerFocusNode,
-                            selectionControls:
-                                ComposerSelectionControls.instance,
-                            contextMenuBuilder: _buildComposerContextMenu,
-                            autofocus: true,
-                            showCursor: true,
-                            minLines: 1,
-                            maxLines: null,
-                            keyboardType: TextInputType.multiline,
-                            textInputAction: TextInputAction.done,
-                            scrollController: _composerScrollController,
-                            textAlignVertical: TextAlignVertical.top,
+                          const SizedBox(width: 6),
+                          Text(
+                            'Editing message',
                             style: TextStyle(
-                              color: iconFg,
-                              fontWeight: FontWeight.w600,
-                              height: 1.4,
+                              color: iconFg.withValues(alpha: 0.6),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
                             ),
-                            decoration: InputDecoration(
-                              hintText: messageActionsHandler.isEditing
-                                  ? AppLocalizations.of(context)!
-                                        .editYourMessage
-                                  : hasAttachments
-                                  ? AppLocalizations.of(context)!
-                                        .addMessageOrDocs
-                                  : AppLocalizations.of(context)!.askMeAnything,
-                              hintStyle: TextStyle(
-                                color: iconFg.withValues(alpha: 0.8),
+                          ),
+                          const Spacer(),
+                          GestureDetector(
+                            onTap: cancelEditMessage,
+                            child: Text(
+                              'Cancel',
+                              style: TextStyle(
+                                color: accent.withValues(alpha: 0.8),
+                                fontSize: 12,
                                 fontWeight: FontWeight.w600,
                               ),
-                              border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              errorBorder: InputBorder.none,
-                              focusedErrorBorder: InputBorder.none,
-                              disabledBorder: InputBorder.none,
-                              filled: false,
-                              fillColor: Colors.transparent,
-                              contentPadding: const EdgeInsets.symmetric(
-                                vertical: 8,
-                                horizontal: 0,
-                              ),
-                              isDense: true,
                             ),
-                            cursorColor: accent,
-                            cursorWidth: 2,
-                            cursorRadius: const Radius.circular(1),
+                          ),
+                        ],
+                      ),
+                    ),
+                  // The `/` and `@` menu, while a trigger is open.
+                  ComposerTriggerMenu(
+                    controller: _trigger,
+                    trailingInset: btnW + 8,
+                  ),
+                  // The queue dock: messages sent while the reply runs. They go
+                  // out after it (queued) or into it at its next step (steer).
+                  QueueDock(
+                    queue: _followUps.queue,
+                    // Clear the floating top-right send/stop button.
+                    trailingInset: btnW + 8,
+                    onEdit: (String id, String text) =>
+                        setState(() => _followUps.edit(id, text)),
+                    onRemove: (String id) =>
+                        setState(() => _followUps.remove(id)),
+                    onSteerNow: _followUps.steerAvailable
+                        ? (String id) => setState(() => _followUps.steerNow(id))
+                        : null,
+                  ),
+                  // Text field with right padding to avoid send button overlap.
+                  // While the microphone is open the live waveform is drawn over
+                  // it, the phone's arrangement: the field keeps its slot, so the
+                  // composer is exactly as tall recording as at rest.
+                  Padding(
+                    padding: EdgeInsets.only(right: btnW + 8),
+                    child: ComposerInputRow(
+                      isRecording: _audioHandler.isMicActive,
+                      audioLevels: _audioHandler.audioLevels,
+                      accentColor: Colors.red,
+                      timeColor: iconFg.withValues(alpha: 0.7),
+                      child: ConstrainedBox(
+                        // Raised so the composer grows to a comfortable ~10 lines
+                        // before it starts scrolling, and the internal scrollbar is
+                        // hidden (scrollbars: false) since it reads as clutter.
+                        constraints: const BoxConstraints(maxHeight: 240),
+                        child: _wrapWithSmartPasteActions(
+                          ScrollConfiguration(
+                            behavior: ScrollConfiguration.of(context)
+                                .copyWith(scrollbars: false),
+                            child: KeyedSubtree(
+                              key: TourKeyRegistry.instance.anchorFor(
+                                TourSlots.chatInput,
+                              ),
+                              child: TextField(
+                                controller: composerController,
+                                focusNode: composerFocusNode,
+                                selectionControls:
+                                    ComposerSelectionControls.instance,
+                                contextMenuBuilder: _buildComposerContextMenu,
+                                autofocus: true,
+                                showCursor: true,
+                                minLines: 1,
+                                maxLines: null,
+                                keyboardType: TextInputType.multiline,
+                                textInputAction: TextInputAction.done,
+                                scrollController: _composerScrollController,
+                                textAlignVertical: TextAlignVertical.top,
+                                style: TextStyle(
+                                  color: iconFg,
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.4,
+                                  // 16 on the web, or mobile Safari zooms in.
+                                  fontSize: kIsWeb ? 16 : null,
+                                ),
+                                decoration: InputDecoration(
+                                  hintText: messageActionsHandler.isEditing
+                                      ? AppLocalizations.of(context)!
+                                            .editYourMessage
+                                      : hasAttachments
+                                      ? AppLocalizations.of(context)!
+                                            .addMessageOrDocs
+                                      : AppLocalizations.of(context)!
+                                            .askMeAnything,
+                                  hintStyle: TextStyle(
+                                    color: iconFg.withValues(alpha: 0.8),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  border: InputBorder.none,
+                                  enabledBorder: InputBorder.none,
+                                  focusedBorder: InputBorder.none,
+                                  errorBorder: InputBorder.none,
+                                  focusedErrorBorder: InputBorder.none,
+                                  disabledBorder: InputBorder.none,
+                                  filled: false,
+                                  fillColor: Colors.transparent,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    vertical: 8,
+                                    horizontal: 0,
+                                  ),
+                                  isDense: true,
+                                ),
+                                cursorColor: accent,
+                                cursorWidth: 2,
+                                cursorRadius: const Radius.circular(1),
+                              ),
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
-                ),
+                  // Extra breathing room between text field and toolbar when attachments push content down
+                  if (hasAttachments) const SizedBox(height: 8),
+                ],
               ),
-              // Extra breathing room between text field and toolbar when attachments push content down
-              if (hasAttachments) const SizedBox(height: 8),
               Row(
                 children: <Widget>[
                   Expanded(
@@ -2649,11 +3053,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                   builder: (context, _, _) => _buildIconBtn(
                                     icon: Icons.add_rounded,
                                     iconSize: 24,
-                                    onTap: () {
-                                      _fileHandler.modelSupportsImageInput =
-                                          modelSupportsImageInput;
-                                      _fileHandler.uploadFiles();
-                                    },
+                                    onTap: () =>
+                                        unawaited(_handleAddTap(context)),
                                     isActive: false,
                                     debugLabel: 'Add button',
                                   ),
@@ -2784,6 +3185,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               spinnerSize: 20,
               spinnerStroke: 2.5,
               semanticsId: 'desktop_send_button',
+              sendTooltip: AppShortcuts.tooltip('Send', AppShortcuts.send),
             ),
           ),
         ],

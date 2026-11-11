@@ -16,6 +16,7 @@ import 'package:chuk_chat/models/workspace_model.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
+import 'package:chuk_chat/widgets/workspace/workspace_persona_flags.dart';
 
 class WorkspaceInstructionsPage extends StatefulWidget {
   final String workspaceId;
@@ -185,6 +186,9 @@ class _WorkspaceInstructionsPageState extends State<WorkspaceInstructionsPage> {
                 ),
               ),
             ),
+            const SizedBox(height: 16),
+            if (_workspace case final workspace?)
+              WorkspacePersonaFlags(workspace: workspace),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,

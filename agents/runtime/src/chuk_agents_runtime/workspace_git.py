@@ -44,6 +44,34 @@ A sent email, a POST to an API, a package installed on the host are recorded in
 the journal but are not reverted by a rollback. Anything surfacing this in a UI
 must say so.
 
+**Whose repo** (bead B14): a fresh workspace gets the agent's own ``.git``.
+A workspace that already is the USER's repo is never committed into: the
+agent keeps its checkpoints in a private git dir (``GIT_DIR`` +
+``GIT_WORK_TREE``), so the user's index, refs and history stay as they were.
+``.agents/`` is added to the user's ``info/exclude`` (a local, uncommitted
+file) so their ``git add -A`` never sweeps the agent's journal.
+A ``.git`` the agent made earlier (its identity is in the local config) keeps
+working in place.
+
+**Host state, not workspace** (security review of 3cb9aa01, H3): the private
+git dir and the rewind ledger live in the HOST's state directory
+(:func:`git_state_home`, one folder per workspace, keyed by the hash of the
+resolved workspace path), never inside the workspace. The agent can write
+every file in its workspace; a git config or a ledger it can write is a git
+config it can make the host execute (``core.fsmonitor``, ``diff.external``,
+filter drivers, textconv) and a ledger it can make lie. A private dir that an
+older build left at ``.agents/git`` is moved into the host state once (copied,
+verified, then deleted; a symlinked or symlink-holding one is not trusted and
+is left alone). Every git call also runs with those hooks switched off
+(``_HARDENING``, ``--no-ext-diff --no-textconv``, attributes from the empty
+tree only), because the agent's OWN ``.git`` in a fresh workspace stays inside
+the workspace.
+
+**Rewind never writes through a symlink** (H2): a restored or deleted path is
+walked one directory at a time from the workspace root with ``O_NOFOLLOW``;
+a symlinked parent refuses the path, a symlink at the leaf is replaced, not
+followed.
+
 **Where git runs**: on the filesystem this process sees, in ``root``. That is
 the same assumption :mod:`chuk_agents_runtime.memory` and :mod:`chuk_agents_runtime.skills`
 already make about the workspace path; with a container sandbox the workspace is
@@ -52,8 +80,10 @@ a bind mount, so both sides see one directory.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import stat
 import re
 import shutil
 import subprocess
@@ -88,10 +118,102 @@ JOURNAL_DIRNAME = ".agents"
 JOURNAL_FILENAME = "journal.jsonl"
 JOURNAL_PATH = f"{JOURNAL_DIRNAME}/{JOURNAL_FILENAME}"
 
+#: Where an older build kept the agent's private git directory: INSIDE the
+#: workspace, writable by the agent. Only read to migrate it into the host
+#: state (:func:`git_state_home`); nothing is ever created here again.
+LEGACY_PRIVATE_GIT_DIR = f"{JOURNAL_DIRNAME}/git"
+#: Kept as an alias for callers of the old name.
+PRIVATE_GIT_DIR = LEGACY_PRIVATE_GIT_DIR
+
+#: Moves the host state folder for workspace git (tests, a host with an
+#: explicit state directory). Wins over :func:`set_git_state_home`.
+GIT_STATE_ENV = "AGENTS_GIT_STATE_DIR"
+#: Under the host state directory (``$AGENTS_HOME`` /
+#: ``$XDG_DATA_HOME/chuk-agents``).
+GIT_STATE_DIRNAME = "workspace-git"
+#: Inside one workspace's state folder: the private git dir and the ledger.
+STATE_GIT_DIRNAME = "git"
+LEDGER_FILENAME = "agents-writes.json"
+#: Subagent worktrees of a PRIVATE repo: inside the workspace, so a container
+#: sandbox that mounts only the workspace still sees them; excluded from the
+#: private repo so its ``git add -A`` never sweeps them.
+PRIVATE_WORKTREE_DIR = f"{JOURNAL_DIRNAME}/worktrees"
+
+#: The well-known empty tree. Attributes are read from it only
+#: (``GIT_ATTR_SOURCE``), so a ``.gitattributes`` the agent writes into the
+#: workspace can never select a filter, diff or merge driver.
+EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
+#: Per-invocation config that switches off every way a repo config or a
+#: worktree file can make git run a program (security review H3).
+_HARDENING: tuple[str, ...] = (
+    "-c", "core.fsmonitor=false",
+    "-c", "core.untrackedCache=false",
+    "-c", "core.hooksPath=" + os.devnull,
+    "-c", "diff.external=",
+    "-c", "core.attributesFile=" + os.devnull,
+    "-c", "core.sshCommand=",
+    "-c", "core.askPass=",
+    "-c", "credential.helper=",
+)
+#: Subcommands that can run an external diff or a textconv filter.
+_DIFF_COMMANDS = frozenset({"diff", "log", "show", "diff-tree", "diff-index", "diff-files"})
+#: Config keys of a named driver that run a program. Overridden with an empty
+#: value for every driver name the repo config defines.
+_DRIVER_KEY = re.compile(
+    r"^(filter\.(.+)\.(clean|smudge|process)|diff\.(.+)\.(command|textconv)|merge\.(.+)\.driver)$"
+)
+
+_STATE_HOME_OVERRIDE: Path | None = None
+
+
+def set_git_state_home(path: str | os.PathLike | None) -> None:
+    """The host process says where its state is (``LocalHost`` passes
+    ``<state>/workspace-git``). ``$AGENTS_GIT_STATE_DIR`` still wins."""
+    global _STATE_HOME_OVERRIDE
+    _STATE_HOME_OVERRIDE = Path(path) if path else None
+
+
+def git_state_home() -> Path:
+    """The host-side folder that holds every workspace's private git dir and
+    ledger. Never inside a workspace."""
+    explicit = os.environ.get(GIT_STATE_ENV, "").strip()
+    if explicit:
+        return Path(explicit).expanduser()
+    if _STATE_HOME_OVERRIDE is not None:
+        return _STATE_HOME_OVERRIDE
+    for name in ("AGENTS_HOME", "COWORK_HOME"):
+        value = os.environ.get(name, "").strip()
+        if value:
+            return Path(value).expanduser() / GIT_STATE_DIRNAME
+    xdg = os.environ.get("XDG_DATA_HOME", "").strip()
+    base = Path(xdg).expanduser() if xdg else Path.home() / ".local" / "share"
+    return base / "chuk-agents" / GIT_STATE_DIRNAME
+
+
+def workspace_state_dir(root: str | os.PathLike) -> Path:
+    """The host state folder of one workspace (keyed by its resolved path)."""
+    try:
+        resolved = str(Path(root).resolve())
+    except OSError:
+        resolved = os.path.abspath(os.fspath(root))
+    key = hashlib.sha256(resolved.encode("utf-8", "surrogateescape")).hexdigest()[:32]
+    return git_state_home() / key
+
 DEFAULT_AUTHOR_NAME = "Agents Agent"
 DEFAULT_AUTHOR_EMAIL = "agent@cowork.local"
 
 ROLLBACK_TOOL = "__rollback__"
+#: Journal tools of the checkpoint feature (docs/WIRE_CONTRACT.md,
+#: "Checkpoints, rewind and fork").
+REWIND_TOOL = "__rewind__"
+OUTSIDE_TOOL = "__outside__"
+CHECKPOINT_REF_PREFIX = "refs/agents/checkpoints/"
+REWIND_SAFE = "safe"
+REWIND_KEEP = "keep_user_edits"
+REWIND_MERGE = "merge"
+REWIND_FORCE = "force"
+REWIND_MODES = (REWIND_SAFE, REWIND_KEEP, REWIND_MERGE, REWIND_FORCE)
 MERGE_TOOL = "__subagent_merge__"
 
 #: Where a subagent's worktree is checked out (§7.6/§7.7). Inside the git
@@ -203,6 +325,220 @@ class CommitInfo:
         }
 
 
+def _hardened_env(extra_env: dict[str, str] | None = None) -> dict[str, str]:
+    """The environment of every host-side git call (H3)."""
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        # Inherited git plumbing would point these calls at another repo or
+        # make them run a program.
+        if not k.startswith("GIT_") or k in ("GIT_EXEC_PATH",)
+    }
+    if extra_env:
+        env.update(extra_env)
+    env.update(
+        {
+            # Deterministic: the agent's repo must not depend on, or be
+            # broken by, whatever config the host user carries.
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_TERMINAL_PROMPT": "0",
+            "GIT_OPTIONAL_LOCKS": "0",
+            "GIT_PAGER": "cat",
+            # Attributes come from the empty tree only: a .gitattributes the
+            # agent writes can never select a filter, diff or merge driver.
+            "GIT_ATTR_NOSYSTEM": "1",
+            "GIT_ATTR_SOURCE": EMPTY_TREE,
+        }
+    )
+    return env
+
+
+def _config_signature(files: tuple[str, ...]) -> tuple:
+    out = []
+    for name in files:
+        try:
+            st = os.stat(name)
+            out.append((name, st.st_mtime_ns, st.st_size, st.st_ino))
+        except OSError:
+            out.append((name, None))
+    return tuple(out)
+
+
+def _is_real_dir(path: Path) -> bool:
+    """A directory that is not a symlink (nor reached through one at the
+    leaf)."""
+    try:
+        return stat.S_ISDIR(os.lstat(path).st_mode)
+    except OSError:
+        return False
+
+
+#: What survives of a migrated private repo's config: the format, the
+#: identity. Everything else was agent-writable and is dropped.
+_KEEP_CONFIG = re.compile(
+    r"^(core\.(repositoryformatversion|filemode|bare|logallrefupdates)|"
+    r"extensions\.[a-z0-9]+|user\.(name|email))$"
+)
+
+
+def _sanitise_private_config(config: Path, author: tuple[str, str]) -> None:
+    """Rewrite a migrated private repo's config from an allowlist. Parsed with
+    ``git config --file`` (no repo, no program run), written fresh."""
+    proc = subprocess.run(
+        ["git", "config", "--file", str(config), "--list", "-z"],
+        capture_output=True, text=True, timeout=GIT_TIMEOUT_S,
+        env=_hardened_env(), check=False,
+    )
+    kept: list[tuple[str, str]] = []
+    if proc.returncode == 0:
+        for item in proc.stdout.split("\0"):
+            name, _, value = item.partition("\n")
+            if _KEEP_CONFIG.match(name.lower()):
+                kept.append((name.lower(), value))
+    names = {name for name, _ in kept}
+    if "core.repositoryformatversion" not in names:
+        kept.append(("core.repositoryformatversion", "0"))
+    kept = [(n, v) for n, v in kept if n != "core.bare"] + [("core.bare", "false")]
+    if "user.name" not in names:
+        kept.append(("user.name", author[0]))
+    if "user.email" not in names:
+        kept.append(("user.email", author[1]))
+    fresh = config.with_name("config.fresh")
+    fresh.unlink(missing_ok=True)
+    fresh.touch()
+    for name, value in kept:
+        subprocess.run(
+            ["git", "config", "--file", str(fresh), "--add", name, value],
+            capture_output=True, timeout=GIT_TIMEOUT_S, env=_hardened_env(), check=False,
+        )
+    os.replace(fresh, config)
+
+
+class UnsafePath(Exception):
+    """A workspace path that leaves the root or passes a symlink (H2)."""
+
+
+class _MissingParent(UnsafePath):
+    """A parent directory of the path does not exist (and was not made)."""
+
+
+def _split_rel(rel: str) -> list[str]:
+    parts = [p for p in rel.replace("\\", "/").split("/") if p not in ("", ".")]
+    if not parts or rel.startswith("/") or any(p == ".." for p in parts):
+        raise UnsafePath(rel)
+    return parts
+
+
+@contextmanager
+def _open_parent(root: Path, rel: str, *, create: bool) -> Iterator[tuple[int, str]]:
+    """``(dir fd, leaf name)`` of ``rel`` under ``root``. Every parent
+    component is opened with ``O_NOFOLLOW``: a symlinked (or non-directory)
+    parent raises :class:`UnsafePath`, and nothing below it is touched.
+    ``create`` makes missing directories (never through a symlink)."""
+    parts = _split_rel(rel)
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
+    try:
+        fd = os.open(str(root), flags)
+    except OSError as exc:
+        raise UnsafePath(rel) from exc
+    try:
+        for part in parts[:-1]:
+            try:
+                nxt = os.open(part, flags, dir_fd=fd)
+            except FileNotFoundError:
+                if not create:
+                    raise _MissingParent(rel)
+                try:
+                    os.mkdir(part, 0o777, dir_fd=fd)
+                    nxt = os.open(part, flags, dir_fd=fd)
+                except OSError as exc:
+                    raise UnsafePath(rel) from exc
+            except OSError as exc:  # ELOOP (symlink), ENOTDIR
+                raise UnsafePath(rel) from exc
+            os.close(fd)
+            fd = nxt
+        yield fd, parts[-1]
+    finally:
+        os.close(fd)
+
+
+def _leaf_stat(dir_fd: int, name: str) -> os.stat_result | None:
+    try:
+        return os.stat(name, dir_fd=dir_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return None
+
+
+def _safe_write(root: Path, rel: str, data: bytes, *, mode: str = "100644") -> None:
+    """Write ``rel`` under ``root``: a temp file in the real parent, then a
+    rename over the leaf. A symlink at the leaf is replaced, never written
+    through; a directory at the leaf is left alone."""
+    with _open_parent(root, rel, create=True) as (dfd, leaf):
+        st = _leaf_stat(dfd, leaf)
+        if st is not None and stat.S_ISDIR(st.st_mode):
+            raise UnsafePath(rel)
+        tmp = f".{leaf}.agents-rewind-{os.getpid()}-{threading.get_ident()}"
+        try:
+            os.unlink(tmp, dir_fd=dfd)
+        except FileNotFoundError:
+            pass
+        if mode == "120000":
+            os.symlink(data.decode("utf-8", "surrogateescape"), tmp, dir_fd=dfd)
+        else:
+            perm = 0o755 if mode == "100755" else 0o644
+            fd = os.open(
+                tmp,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
+                perm,
+                dir_fd=dfd,
+            )
+            try:
+                view = memoryview(data)
+                while view:
+                    view = view[os.write(fd, view):]
+            finally:
+                os.close(fd)
+        os.replace(tmp, leaf, src_dir_fd=dfd, dst_dir_fd=dfd)
+
+
+def _safe_unlink(root: Path, rel: str) -> None:
+    """Delete ``rel`` (a file or a symlink itself, never its target). A
+    symlinked parent raises :class:`UnsafePath`."""
+    try:
+        with _open_parent(root, rel, create=False) as (dfd, leaf):
+            st = _leaf_stat(dfd, leaf)
+            if st is None or stat.S_ISDIR(st.st_mode):
+                return
+            os.unlink(leaf, dir_fd=dfd)
+    except _MissingParent:
+        return  # nothing there to delete
+
+
+def _safe_read(root: Path, rel: str) -> tuple[str, bytes] | None:
+    """``(kind, bytes)`` of the leaf without following a symlink: ``file``
+    content, or ``link`` target text. ``None`` when missing or a directory.
+    A symlinked parent raises :class:`UnsafePath`."""
+    try:
+        with _open_parent(root, rel, create=False) as (dfd, leaf):
+            return _read_leaf(dfd, leaf)
+    except _MissingParent:
+        return None
+
+
+def _read_leaf(dfd: int, leaf: str) -> tuple[str, bytes] | None:
+    st = _leaf_stat(dfd, leaf)
+    if st is None or stat.S_ISDIR(st.st_mode):
+        return None
+    if stat.S_ISLNK(st.st_mode):
+        return "link", os.fsencode(os.readlink(leaf, dir_fd=dfd))
+    if not stat.S_ISREG(st.st_mode):
+        return None
+    fd = os.open(leaf, os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0), dir_fd=dfd)
+    with os.fdopen(fd, "rb") as handle:
+        return "file", handle.read()
+
+
 _REPO_LOCKS: dict[str, threading.RLock] = {}
 _REPO_LOCKS_GUARD = threading.Lock()
 
@@ -232,8 +568,15 @@ class GitWorkspace:
         author_name: str = DEFAULT_AUTHOR_NAME,
         author_email: str = DEFAULT_AUTHOR_EMAIL,
         journal_path: str = JOURNAL_PATH,
+        state_dir: str | os.PathLike | None = None,
     ) -> None:
         self.root = Path(root)
+        # Host-side, outside the workspace (H3): the private git dir and the
+        # rewind ledger. Resolved in ``_bootstrap`` once ``root`` exists.
+        self._state_dir: Path | None = Path(state_dir) if state_dir is not None else None
+        # (config file signature) -> driver overrides; see ``_driver_overrides``.
+        self._driver_cache: tuple[tuple, list[str]] | None = None
+        self._ledger_file: Path | None = None
         self.max_blob_bytes = max_blob_bytes
         # One journal file per agent (§7.6): a subagent working in a worktree of
         # this repo writes its own, because two agents appending to one
@@ -243,6 +586,9 @@ class GitWorkspace:
         self._enabled = False
         self._git_dir: Path | None = None
         self._common_dir: Path | None = None
+        # Set when the agent keeps its checkpoints in a private git directory
+        # because ``root`` is the user's own repo (bead B14).
+        self._private_dir: Path | None = None
         # Coarse, reentrant, and shared by every instance on this repo in the
         # process: the parent's own journaling, a subagent thread merging its
         # branch back, and a tool thread a Stop abandoned in the previous task
@@ -260,11 +606,10 @@ class GitWorkspace:
             "commit.gpgsign=false",  # never block on a GPG passphrase prompt
             "-c",
             "gc.auto=0",  # no surprise repack in the middle of a round
-            "-c",
             # An agent commit must not fire the user's hooks (CI, formatters,
-            # push triggers). A path that cannot exist disables all of them,
-            # including post-commit, which `--no-verify` does not cover.
-            "core.hooksPath=" + os.path.join(os.sep, "nonexistent", "agents-no-hooks"),
+            # push triggers), nor anything the agent planted in a config it
+            # can write (fsmonitor, external diff, ...): ``_HARDENING``.
+            *_HARDENING,
             # Every commit the agent makes says the agent made it, even in a
             # repo the user already had an identity in.
             "-c",
@@ -284,6 +629,7 @@ class GitWorkspace:
         author_name: str = DEFAULT_AUTHOR_NAME,
         author_email: str = DEFAULT_AUTHOR_EMAIL,
         journal_path: str = JOURNAL_PATH,
+        state_dir: str | os.PathLike | None = None,
     ) -> "GitWorkspace | None":
         """Initialise (or adopt) the repo at ``root``.
 
@@ -299,6 +645,7 @@ class GitWorkspace:
             author_name=author_name,
             author_email=author_email,
             journal_path=journal_path,
+            state_dir=state_dir,
         )
         ws._enabled = ws._bootstrap()
         return ws
@@ -307,41 +654,124 @@ class GitWorkspace:
     def enabled(self) -> bool:
         return self._enabled
 
+    @property
+    def private(self) -> bool:
+        """True when the checkpoints live in a private git dir (host state)
+        because the workspace is a repo of the user's own (bead B14)."""
+        return self._private_dir is not None
+
+    @property
+    def state_dir(self) -> Path | None:
+        """This workspace's host state folder (private git dir, ledger)."""
+        return self._state_dir
+
     # -- git plumbing ------------------------------------------------------
 
     def _git(
-        self, *args: str, timeout: int = GIT_TIMEOUT_S
+        self,
+        *args: str,
+        timeout: int = GIT_TIMEOUT_S,
+        text: bool = True,
+        input: bytes | str | None = None,
     ) -> subprocess.CompletedProcess:
-        return self._git_in(self.root, *args, timeout=timeout)
+        # The work tree is always ``root``: a ``core.worktree`` the agent
+        # writes into its own ``.git/config`` cannot point host git elsewhere.
+        extra: dict[str, str] = {}
+        if self._private_dir is not None or (args and args[0] != "init"):
+            extra["GIT_WORK_TREE"] = str(self.root.resolve())
+        if self._private_dir is not None:
+            # The agent's own repo over the user's files: the user's ``.git``
+            # is never read or written by these calls.
+            extra["GIT_DIR"] = str(self._private_dir)
+        return self._git_in(
+            self.root, *args, timeout=timeout, extra_env=extra, text=text, input=input
+        )
 
     def _git_in(
         self,
         cwd: str | os.PathLike,
         *args: str,
         timeout: int = GIT_TIMEOUT_S,
+        extra_env: dict[str, str] | None = None,
+        text: bool = True,
+        input: bytes | str | None = None,
     ) -> subprocess.CompletedProcess:
         """The same git, run in another checkout of the same repo — a subagent's
-        worktree."""
-        env = dict(os.environ)
-        env.update(
-            {
-                # Deterministic: the agent's repo must not depend on, or be
-                # broken by, whatever config the host user carries.
-                "GIT_CONFIG_NOSYSTEM": "1",
-                "GIT_CONFIG_GLOBAL": os.devnull,
-                "GIT_TERMINAL_PROMPT": "0",
-                "GIT_OPTIONAL_LOCKS": "0",
-                "GIT_PAGER": "cat",
-            }
-        )
+        worktree. A worktree finds its git directory through its ``.git`` file,
+        so it never gets ``GIT_DIR``."""
+        env = _hardened_env(extra_env)
+        if args and args[0] in _DIFF_COMMANDS:
+            # No external diff, no textconv: both run a program the repo
+            # config (agent-writable for an own ``.git``) names.
+            args = (args[0], "--no-ext-diff", "--no-textconv", *args[1:])
+        self._neutralise_attributes()
+        overrides = self._driver_overrides(cwd, env)
         return subprocess.run(
-            ["git", "-C", str(cwd), *self._config, *args],
+            ["git", "-C", str(cwd), *self._config, *overrides, *args],
             capture_output=True,
-            text=True,
+            text=text,
             timeout=timeout,
             env=env,
             check=False,
+            input=input,
         )
+
+    def _neutralise_attributes(self) -> None:
+        """``info/attributes`` is read even with ``GIT_ATTR_SOURCE``; in an own
+        ``.git`` the agent can write it. Keep it empty (and never follow a
+        symlink there)."""
+        base = self._common_dir or self._git_dir
+        if base is None:
+            return
+        path = base / "info" / "attributes"
+        try:
+            st = os.lstat(path)
+        except OSError:
+            return
+        try:
+            if stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode):
+                os.unlink(path)
+            elif st.st_size:
+                fd = os.open(path, os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW)
+                os.close(fd)
+        except OSError:
+            return
+
+    def _driver_overrides(self, cwd: str | os.PathLike, env: dict[str, str]) -> list[str]:
+        """``-c <key>=`` for every filter/diff/merge driver command the repo
+        config defines: an empty command is no command. Defence in depth next
+        to ``GIT_ATTR_SOURCE`` (no driver can be selected anyway). Cached on
+        the stat of every config file git read."""
+        cache_key = f"{cwd}\0{env.get('GIT_DIR', '')}"
+        cached = self._driver_cache
+        if cached is not None and cached[0][0] == cache_key and _config_signature(cached[0][1]) == cached[0][2]:
+            return cached[1]
+        try:
+            proc = subprocess.run(
+                ["git", "-C", str(cwd), *self._config, "config", "--list",
+                 "--show-origin", "--name-only", "-z"],
+                capture_output=True, text=True, timeout=GIT_TIMEOUT_S, env=env, check=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return []
+        if proc.returncode != 0:
+            return []
+        overrides: list[str] = []
+        origins: set[str] = set()
+        fields = proc.stdout.split("\0")
+        # -z with --show-origin: "<origin>\0<name>\0" pairs.
+        for i in range(0, len(fields) - 1, 2):
+            origin, name = fields[i], fields[i + 1]
+            if origin.startswith("file:"):
+                origins.add(origin[5:])
+            match = _DRIVER_KEY.match(name.strip())
+            if match:
+                overrides += ["-c", f"{name.strip()}="]
+                if name.startswith("filter."):
+                    overrides += ["-c", f"filter.{match.group(2)}.required=false"]
+        files = tuple(sorted(origins))
+        self._driver_cache = ((cache_key, files, _config_signature(files)), overrides)
+        return overrides
 
     def _bootstrap(self) -> bool:
         if shutil.which("git") is None:
@@ -352,9 +782,32 @@ class GitWorkspace:
             return False
 
         try:
-            # "Already a repo" is the normal case from the second start on, and
-            # adopting a repo the user already had is legitimate too.
-            if not (self.root / ".git").exists():
+            # Three cases (bead B14):
+            # 1. A private git dir exists in the host state (or an older
+            #    build left one at ``.agents/git``, moved there now): the
+            #    agent's private repo from an earlier start, over a repo of
+            #    the user's.
+            # 2. ``.git`` exists and is the agent's own (its identity is in the
+            #    local config; also true for a subagent worktree of it): keep
+            #    using it, exactly as before.
+            # 3. ``.git`` exists and belongs to the user: never commit into it.
+            #    The agent gets a private git dir over the same files.
+            # No repo at all: the agent makes its own ``.git``, as before.
+            created = False
+            if self._state_dir is None:
+                self._state_dir = workspace_state_dir(self.root)
+            private = self._state_dir / STATE_GIT_DIRNAME
+            legacy = self.root / LEGACY_PRIVATE_GIT_DIR
+            if _is_real_dir(private):
+                self._private_dir = private.resolve()
+            elif _is_real_dir(legacy) and self._migrate_legacy_private(legacy, private):
+                self._private_dir = private.resolve()
+            elif (self.root / ".git").exists():
+                if not self._is_own_repo():
+                    if not self._init_private(private):
+                        return False
+                    created = True
+            else:
                 if self._git("init", "-q").returncode != 0:
                     return False
                 # Written into our own repo so it works outside this process
@@ -362,6 +815,7 @@ class GitWorkspace:
                 # `_git` switches off, so a host without one still commits.
                 self._git("config", "--local", "user.name", self._author[0])
                 self._git("config", "--local", "user.email", self._author[1])
+                created = True
 
             git_dir = self._git("rev-parse", "--absolute-git-dir")
             if git_dir.returncode != 0:
@@ -376,10 +830,19 @@ class GitWorkspace:
                 if common.returncode == 0 and common.stdout.strip()
                 else self._git_dir
             )
+            self._ledger_file = self._resolve_ledger_file()
 
-            gitignore = self.root / ".gitignore"
-            if not gitignore.exists():
-                gitignore.write_text(GITIGNORE_BODY, encoding="utf-8")
+            if self._private_dir is not None:
+                # The user's tree gets no .gitignore of ours: the patterns go
+                # into the private repo's own exclude file instead.
+                self._ensure_private_excludes()
+            elif created:
+                # Only a repo the agent just made gets a .gitignore. An adopted
+                # checkout (a subagent worktree) already carries it, and a file
+                # written here would end up in a merge back.
+                gitignore = self.root / ".gitignore"
+                if not gitignore.exists():
+                    gitignore.write_text(GITIGNORE_BODY, encoding="utf-8")
 
             journal = self.root / self.journal_path
             journal.parent.mkdir(parents=True, exist_ok=True)
@@ -392,6 +855,185 @@ class GitWorkspace:
         if self._git("rev-parse", "--verify", "-q", "HEAD").returncode != 0:
             self._commit("agents: workspace initialised", [])
         return True
+
+    def _is_own_repo(self) -> bool:
+        """True when ``root/.git`` is a repo the agent made: its local config
+        carries the agent identity (written at ``init``). A subagent worktree
+        of such a repo reads the same config. A user's repo does not."""
+        probe = self._git("config", "--local", "--get", "user.email")
+        if probe.returncode != 0:
+            return False
+        return probe.stdout.strip() in {self._author[1], DEFAULT_AUTHOR_EMAIL}
+
+    def _init_private(self, private: Path) -> bool:
+        """Create the private git dir (host state) for a workspace that is the
+        user's repo."""
+        try:
+            private.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        except OSError:
+            return False
+        done = self._git_in(
+            self.root,
+            "--git-dir",
+            str(private),
+            "init",
+            "-q",
+            extra_env={"GIT_WORK_TREE": str(self.root.resolve())},
+        )
+        if done.returncode != 0:
+            return False
+        self._private_dir = private.resolve()
+        self._git("config", "--local", "user.name", self._author[0])
+        self._git("config", "--local", "user.email", self._author[1])
+        self._hide_from_user_repo()
+        return True
+
+    def _migrate_legacy_private(self, legacy: Path, private: Path) -> bool:
+        """Move a private git dir an older build kept at ``.agents/git`` into
+        the host state: copy, sanitise the config, verify HEAD and every ref,
+        and only then delete the old one. False (nothing moved, nothing
+        deleted) when the old dir holds a symlink or does not verify: it is
+        then not trusted, and a fresh private dir is made instead."""
+        try:
+            for dirpath, dirnames, filenames in os.walk(legacy, followlinks=False):
+                for name in dirnames + filenames:
+                    if os.path.islink(os.path.join(dirpath, name)):
+                        return False
+        except OSError:
+            return False
+        work_tree = str(self.root.resolve())
+
+        def git_at(git_dir: Path, *args: str) -> subprocess.CompletedProcess:
+            return self._git_in(
+                self.root, *args,
+                extra_env={"GIT_DIR": str(git_dir), "GIT_WORK_TREE": work_tree},
+            )
+
+        before = git_at(legacy, "rev-parse", "--verify", "-q", "HEAD")
+        if before.returncode != 0 or not before.stdout.strip():
+            return False
+        head = before.stdout.strip()
+        # A subagent checkout under the old dir goes away with it: commit what
+        # it still holds onto its branch first, so no work is lost.
+        listing = git_at(legacy, "worktree", "list", "--porcelain")
+        for line in listing.stdout.splitlines() if listing.returncode == 0 else []:
+            if not line.startswith("worktree "):
+                continue
+            path = Path(line[len("worktree "):])
+            if path.is_dir() and path.resolve() != self.root.resolve():
+                self._git_in(path, "add", "-A", "--", ".")
+                self._git_in(path, "commit", "-q", "--no-verify", "-m",
+                             "subagent: state before private repo move")
+        refs_before = git_at(legacy, "for-each-ref", "--format=%(objectname) %(refname)")
+        if refs_before.returncode != 0:
+            return False
+        tmp = private.with_name(private.name + ".migrating")
+        try:
+            private.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            if tmp.exists():
+                shutil.rmtree(tmp)
+            shutil.copytree(legacy, tmp, symlinks=True,
+                            ignore=shutil.ignore_patterns(WORKTREE_DIRNAME))
+            _sanitise_private_config(tmp / "config", self._author)
+            # Agent-writable until now, so not carried over. Without a ledger
+            # a rewind treats every changed file as the user's (safe refuses).
+            for name in (LEDGER_FILENAME, "info/attributes"):
+                if (tmp / name).exists():
+                    (tmp / name).unlink()
+            if (tmp / "hooks").is_dir():
+                shutil.rmtree(tmp / "hooks")
+        except OSError:
+            shutil.rmtree(tmp, ignore_errors=True)
+            return False
+        after = git_at(tmp, "rev-parse", "--verify", "-q", "HEAD")
+        refs_after = git_at(tmp, "for-each-ref", "--format=%(objectname) %(refname)")
+        tree_ok = git_at(tmp, "cat-file", "-e", "HEAD^{tree}").returncode == 0
+        if (
+            after.returncode != 0
+            or after.stdout.strip() != head
+            or refs_after.stdout != refs_before.stdout
+            or not tree_ok
+        ):
+            shutil.rmtree(tmp, ignore_errors=True)
+            return False
+        try:
+            os.replace(tmp, private)
+        except OSError:
+            shutil.rmtree(tmp, ignore_errors=True)
+            return False
+        # The verified copy is in place: only now the old one goes.
+        shutil.rmtree(legacy, ignore_errors=True)
+        git_at(private, "worktree", "prune")
+        return True
+
+    def _ensure_private_excludes(self) -> None:
+        """The private repo never commits the legacy dir or the subagent
+        checkouts, and keeps the media patterns a fresh workspace has in its
+        .gitignore."""
+        if self._private_dir is None:
+            return
+        exclude = self._private_dir / "info" / "exclude"
+        wanted = [f"/{LEGACY_PRIVATE_GIT_DIR}/", f"/{PRIVATE_WORKTREE_DIR}/"]
+        try:
+            existing = exclude.read_text(encoding="utf-8") if exclude.exists() else ""
+            lines = existing.splitlines()
+            missing = [line for line in wanted if line not in lines]
+            if not missing:
+                return
+            exclude.parent.mkdir(parents=True, exist_ok=True)
+            with exclude.open("a", encoding="utf-8") as handle:
+                if existing and not existing.endswith("\n"):
+                    handle.write("\n")
+                handle.write("# Agents private checkpoints (bead B14)\n")
+                for line in missing:
+                    handle.write(f"{line}\n")
+                if "*.mp4" not in lines:
+                    handle.write(GITIGNORE_BODY)
+        except OSError:
+            return
+
+    def _resolve_ledger_file(self) -> Path | None:
+        """The ledger of this repo, in the host state. Shared by the
+        workspace and its subagent worktrees (keyed by the common git dir)."""
+        common = self._common_dir or self._git_dir
+        if common is None:
+            return None
+        try:
+            common = common.resolve()
+            home = git_state_home().resolve()
+        except OSError:
+            return None
+        if common.name == STATE_GIT_DIRNAME and common.parent.parent == home:
+            return common.parent / LEDGER_FILENAME  # a private repo's folder
+        # An own ``.git``: keyed by the workspace that holds it.
+        return workspace_state_dir(common.parent) / LEDGER_FILENAME
+
+    def _hide_from_user_repo(self) -> None:
+        """Keep ``.agents/`` out of the user's ``git status`` and ``git add -A``.
+
+        Written to the user's ``info/exclude``: a local file, never committed,
+        not the index, refs or history. Without it a ``git add -A`` of the user
+        would sweep the agent's whole object store into the user's repo."""
+        try:
+            # No ``--path-format=absolute``: it needs Git 2.31, and on an older
+            # Git the probe failed and nothing was excluded. The plain answer
+            # is relative to ``root`` (``-C``) or absolute; ``root / value``
+            # handles both.
+            probe = self._git_in(self.root, "rev-parse", "--git-common-dir")
+            if probe.returncode != 0 or not probe.stdout.strip():
+                return
+            exclude = Path(self.root) / probe.stdout.strip() / "info" / "exclude"
+            line = f"/{JOURNAL_DIRNAME}/"
+            existing = exclude.read_text(encoding="utf-8") if exclude.exists() else ""
+            if line in existing.splitlines():
+                return
+            exclude.parent.mkdir(parents=True, exist_ok=True)
+            with exclude.open("a", encoding="utf-8") as handle:
+                if existing and not existing.endswith("\n"):
+                    handle.write("\n")
+                handle.write(f"{line}\n")
+        except (OSError, subprocess.SubprocessError):
+            return
 
     def _last_seq(self) -> int:
         """Resume numbering across process restarts: the journal is the record,
@@ -692,6 +1334,284 @@ class GitWorkspace:
             ),
         }
 
+    # -- checkpoints, rewind (docs/WIRE_CONTRACT.md, "Checkpoints, rewind
+    # and fork", Hermes H30/H31) ------------------------------------------
+
+    def _ledger_path(self) -> Path | None:
+        """The agent-write ledger: ``{path: blob sha | "-"}`` of the last
+        version of each file the AGENT wrote ("-" = the agent deleted it).
+        In the host state (H3), never in the workspace: the agent cannot
+        make it lie about who wrote a file. Never committed, never rewound."""
+        return self._ledger_file
+
+    def agent_writes(self) -> dict[str, str]:
+        path = self._ledger_path()
+        if path is None:
+            return {}
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+        return {str(k): str(v) for k, v in data.items()} if isinstance(data, dict) else {}
+
+    def _save_agent_writes(self, ledger: dict[str, str]) -> None:
+        path = self._ledger_path()
+        if path is None:
+            return
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            tmp = path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(ledger, sort_keys=True), encoding="utf-8")
+            os.replace(tmp, path)
+        except OSError:
+            return
+
+    def _blob_of(self, rel: str) -> str:
+        """The blob sha of a working-tree file, or ``"-"`` when it is gone,
+        ``"?"`` when it cannot be read safely. Read without following a
+        symlink (a symlink hashes as its target text, the way git stores it),
+        so the hash never reveals a file outside the workspace."""
+        try:
+            found = _safe_read(self.root, rel)
+        except (UnsafePath, OSError):
+            return "?"
+        if found is None:
+            return "-"
+        proc = self._git("hash-object", "--no-filters", "--stdin", text=False, input=found[1])
+        return proc.stdout.decode("ascii", "replace").strip() if proc.returncode == 0 else "?"
+
+    def note_agent_writes(self, paths: list[str]) -> None:
+        """Record that the agent wrote ``paths`` (the files a tool call
+        changed). The ledger is what lets a rewind tell the agent's work from
+        the user's own later hand edits (Hermes H31)."""
+        if not self._enabled or not paths:
+            return
+        with self._lock:
+            ledger = self.agent_writes()
+            for rel in paths:
+                if rel == self.journal_path or rel.startswith(JOURNAL_DIRNAME + "/"):
+                    continue
+                ledger[rel] = self._blob_of(rel)
+            self._save_agent_writes(ledger)
+
+    def outside_changes(self) -> list[str]:
+        """Paths changed since the last commit, journal excluded: before an
+        agent call these are changes made OUTSIDE the agent."""
+        if not self._enabled:
+            return []
+        return [p for _, p in self._pending() if p != self.journal_path]
+
+    def commit_outside_changes(self) -> CommitInfo | None:
+        """Commit what changed outside the agent as its own commit, so the
+        next commit holds only the agent's changes and the ledger stays true.
+        Inside :meth:`batch` nothing is committed: the pending changes are the
+        batch's own (the agent's), and the batch is one commit by design."""
+        if not self._enabled or self._batch is not None:
+            return None
+        with self._lock:
+            pending = self._pending()
+            changed = [p for _, p in pending if p != self.journal_path]
+            if not changed:
+                return None
+            return self._commit(
+                "outside: changes made outside the agent",
+                [f"tool: {OUTSIDE_TOOL}", f"files-changed: {len(changed)}"],
+                pending,
+            )
+
+    def create_checkpoint(self, checkpoint_id: str) -> CommitInfo | None:
+        """The workspace as it is now, pinned under
+        ``refs/agents/checkpoints/<id>``. Changes outside the agent are
+        committed first, so the checkpoint is exactly what the user had."""
+        if not self._enabled or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", checkpoint_id or ""):
+            return None
+        with self._lock:
+            self.commit_outside_changes()
+            head = self._git("rev-parse", "HEAD")
+            if head.returncode != 0:
+                return None
+            sha = head.stdout.strip()
+            self._git("update-ref", f"{CHECKPOINT_REF_PREFIX}{checkpoint_id}", sha)
+            return CommitInfo(commit=sha, short=sha[:8], time=_now(), subject=f"checkpoint {checkpoint_id}")
+
+    def drop_checkpoint(self, checkpoint_id: str) -> None:
+        if self._enabled and re.fullmatch(r"[A-Za-z0-9_-]{1,64}", checkpoint_id or ""):
+            self._git("update-ref", "-d", f"{CHECKPOINT_REF_PREFIX}{checkpoint_id}")
+
+    def rewind(self, commit: str, *, mode: str = REWIND_SAFE) -> dict:
+        """Restore the files the agent changed since ``commit`` (a checkpoint).
+
+        A file that differs from the checkpoint is the agent's when its
+        current content is the version the agent last wrote (the ledger). Any
+        other difference is a change made outside the agent (the user's hand
+        edit). ``mode``:
+
+        - ``safe`` (default): refuse the whole rewind when there is one such
+          file; nothing changes; the answer lists them;
+        - ``keep_user_edits``: restore the agent's files, leave the others;
+        - ``merge``: like ``keep_user_edits``, but a text file the agent
+          wrote and the user then edited gets a 3-way merge (base = the
+          agent's version, ours = now, theirs = the checkpoint); a clean merge
+          is written, a conflict leaves the file as it is;
+        - ``force``: restore every file, also the user's edits.
+
+        Like :meth:`rollback`, the restore is a new commit; history and the
+        journal are kept."""
+        if not self._enabled:
+            return {"ok": False, "error": "workspace versioning is not enabled"}
+        if mode not in REWIND_MODES:
+            return {"ok": False, "error": f"mode must be one of {', '.join(REWIND_MODES)}"}
+        with self._lock:
+            resolved = self._git("rev-parse", "--verify", "-q", f"{commit}^{{commit}}")
+            if resolved.returncode != 0 or not resolved.stdout.strip():
+                return {"ok": False, "error": "no such checkpoint"}
+            target = resolved.stdout.strip()
+            self.commit_outside_changes()
+            diff = self._git("diff", "--name-only", "-z", "--no-renames", target, "HEAD", "--")
+            if diff.returncode != 0:
+                return {"ok": False, "error": (diff.stderr or "diff failed").strip()[:400]}
+            paths = [
+                p for p in diff.stdout.split("\0")
+                if p and p != self.journal_path and not p.startswith(JOURNAL_DIRNAME + "/")
+            ]
+            ledger = self.agent_writes()
+            agent_owned: list[str] = []
+            user_edited: list[str] = []
+            for rel in paths:
+                current = self._blob_of(rel)
+                if ledger.get(rel) == current:
+                    agent_owned.append(rel)
+                else:
+                    user_edited.append(rel)
+            if user_edited and mode == REWIND_SAFE:
+                return {
+                    "ok": False,
+                    "error": "files changed outside the agent since this checkpoint",
+                    "conflicts": user_edited[:200],
+                    "restorable": len(agent_owned),
+                }
+            restore = list(agent_owned) + (list(user_edited) if mode == REWIND_FORCE else [])
+            merged: list[str] = []
+            kept: list[str] = []
+            if mode == REWIND_MERGE:
+                for rel in user_edited:
+                    if self._merge_back(rel, ledger.get(rel), target):
+                        merged.append(rel)
+                    else:
+                        kept.append(rel)
+            elif mode == REWIND_KEEP:
+                kept = list(user_edited)
+            # A path through a symlink is refused, not restored (H2).
+            refused = [rel for rel in restore if not self._restore_path(rel, target)]
+            restore = [rel for rel in restore if rel not in refused]
+            entry = self._build_entry(
+                REWIND_TOOL,
+                {"target": target, "mode": mode},
+                {"ok": True, "restored": len(restore), "merged": len(merged),
+                 "kept": len(kept), "refused": len(refused)},
+                None,
+                restore + merged,
+            )
+            self._append_journal(entry)
+            info = self._commit(
+                f"rewind: restore workspace to checkpoint {target[:8]}",
+                [f"tool: {REWIND_TOOL}", f"journal-seq: {entry['seq']}"],
+            )
+            # What the rewind wrote is now the agent's version.
+            ledger = self.agent_writes()
+            for rel in restore + merged:
+                ledger[rel] = self._blob_of(rel)
+            self._save_agent_writes(ledger)
+            return {
+                "ok": True,
+                "restored": restore[:200],
+                "merged": merged[:200],
+                "kept": kept[:200],
+                "refused": refused[:200],
+                "commit": info.commit if info else None,
+                "note": (
+                    "Files are restored. Effects outside the workspace (sent mail, "
+                    "API calls, installed packages) are NOT undone."
+                ),
+            }
+
+    def _tree_entry(self, target: str, rel: str) -> tuple[str, str] | None:
+        """``(mode, blob sha)`` of ``rel`` in commit ``target``, or ``None``."""
+        proc = self._git("ls-tree", "-z", target, "--", rel)
+        if proc.returncode != 0 or not proc.stdout:
+            return None
+        meta, _, name = proc.stdout.rstrip("\0").partition("\t")
+        parts = meta.split()
+        if name != rel or len(parts) != 3 or parts[1] != "blob":
+            return None
+        return parts[0], parts[2]
+
+    def _blob_bytes(self, sha: str) -> bytes | None:
+        """Raw blob bytes: ``cat-file blob`` runs no filter and no textconv."""
+        proc = self._git("cat-file", "blob", sha, text=False)
+        return proc.stdout if proc.returncode == 0 else None
+
+    def _restore_path(self, rel: str, target: str) -> bool:
+        """Put ``rel`` back to its version in ``target`` (or delete it). Never
+        writes or deletes through a symlink (H2): a symlinked parent refuses
+        the path; a symlink at the leaf is replaced, not followed."""
+        entry = self._tree_entry(target, rel)
+        try:
+            if entry is None:
+                _safe_unlink(self.root, rel)
+                return True
+            mode, sha = entry
+            if mode not in ("100644", "100755", "120000"):
+                return False  # a submodule entry: nothing to write
+            data = self._blob_bytes(sha)
+            if data is None:
+                return False
+            _safe_write(self.root, rel, data, mode=mode)
+            return True
+        except (UnsafePath, OSError):
+            return False
+
+    def _merge_back(self, rel: str, base_blob: str | None, target: str) -> bool:
+        """3-way: undo the agent's change (base -> checkpoint) on top of the
+        current file with the user's edit in it. True when the merge was
+        clean and written. A symlink anywhere on the path refuses the merge."""
+        if not base_blob or base_blob in ("-", "?"):
+            return False
+        try:
+            current = _safe_read(self.root, rel)
+        except (UnsafePath, OSError):
+            return False
+        if current is None or current[0] != "file":
+            return False
+        entry = self._tree_entry(target, rel)
+        if entry is None or entry[0] not in ("100644", "100755"):
+            return False
+        import tempfile
+
+        base = self._blob_bytes(base_blob)
+        theirs = self._blob_bytes(entry[1])
+        ours = current[1]
+        if base is None or theirs is None or b"\0" in base or b"\0" in theirs or b"\0" in ours:
+            return False
+        # Scratch files in the host's temp dir, never in the workspace.
+        with tempfile.TemporaryDirectory(prefix="agents-merge-") as tmp:
+            files = []
+            for name, data in (("ours", ours), ("base", base), ("theirs", theirs)):
+                path = Path(tmp) / name
+                path.write_bytes(data)
+                files.append(str(path))
+            proc = subprocess.run(
+                ["git", "merge-file", "-p", *files],
+                capture_output=True, timeout=GIT_TIMEOUT_S, env=_hardened_env(), check=False,
+            )
+        if proc.returncode != 0:
+            return False
+        try:
+            _safe_write(self.root, rel, proc.stdout, mode=entry[0])
+        except (UnsafePath, OSError):
+            return False
+        return True
+
     # -- subagent branches / worktrees (§7.6, §7.7) ------------------------
 
     def create_worktree(self, name: str) -> "WorktreeInfo | None":
@@ -794,6 +1714,11 @@ class GitWorkspace:
     # -- worktree internals -----------------------------------------------
 
     def _worktree_path(self, branch: str) -> Path:
+        if self._private_dir is not None:
+            # The private git dir is host state, outside the workspace; the
+            # child's checkout stays inside it (a container sandbox mounts
+            # only the workspace) and is excluded from the private repo.
+            return self.root / PRIVATE_WORKTREE_DIR / branch.replace("/", "_")
         base = self._common_dir or self._git_dir or (self.root / ".git")
         return base / WORKTREE_DIRNAME / branch.replace("/", "_")
 

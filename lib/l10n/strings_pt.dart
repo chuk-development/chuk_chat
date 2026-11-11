@@ -22,7 +22,6 @@ const Map<String, String> stringsPt = {
   'pricingPlans': 'Planos e Preços',
   'pricingPlansSubtitle': 'Veja nossos planos de assinatura e preços',
   'accountSettings': 'Configurações da Conta',
-  'accountSettingsSubtitle': 'Gerencie seu perfil e conta',
   'exportChats': 'Exportar Conversas',
   'exportChatsSubtitle': 'Baixe suas conversas como JSON',
   'about': 'Sobre',
@@ -40,8 +39,6 @@ const Map<String, String> stringsPt = {
   // ── Customization page ─────────────────────────────────────
   'language': 'Idioma',
   'languageSubtitle': 'Escolha seu idioma preferido',
-  'english': 'English',
-  'german': 'Deutsch',
   'voiceTranscription': 'Transcrição de Voz',
   'autoSendVoice': 'Envio automático de mensagens de voz',
   'autoSendVoiceSubtitle':
@@ -130,8 +127,6 @@ const Map<String, String> stringsPt = {
   'catGitHub': 'GitHub',
   'catSlack': 'Slack',
   'catGoogleCalGmail': 'Google (Agenda / Gmail)',
-  'catEmailImapSmtp': 'Email (IMAP/SMTP)',
-  'catNextcloud': 'Nextcloud',
   'catSearchWebDesc':
       'Pesquisar na web, buscar páginas, gerar imagens e consultar dados',
   'catUtilitiesDesc':
@@ -146,18 +141,11 @@ const Map<String, String> stringsPt = {
   'catSlackDesc': 'Enviar mensagens, pesquisar canais e buscar dados do Slack',
   'catGoogleCalGmailDesc':
       'Gerenciar sua agenda e email via Google Agenda e Gmail',
-  'catEmailImapSmtpDesc': 'Enviar e receber email via IMAP e SMTP',
-  'catNextcloudDesc':
-      'Navegar por arquivos, calendário e contatos no Nextcloud',
   'connect': 'Conectar',
   'disconnect': 'Desconectar',
   'disconnectCategory': 'Desconectar {label}?',
   'removeCredentialsWarning': 'Isso removerá suas credenciais salvas.',
   'cancel': 'Cancelar',
-  'categoryConnected': '{label} conectado',
-  'failedToConnect': 'Falha ao conectar {label}',
-  'unableToConnect':
-      'Não foi possível conectar {label}. Por favor, tente novamente.',
   'toolWebSearch': 'Busca na Web',
   'toolWebCrawl': 'Rastreamento Web',
   'toolImageGen': 'Geração de Imagem',
@@ -187,16 +175,12 @@ const Map<String, String> stringsPt = {
 
   // ── Account settings page ──────────────────────────────────
   'profile': 'Perfil',
-  'profileSubtitle': 'Atualize como seu nome e email aparecem no Chuk Chat.',
   'displayName': 'Nome de exibição',
   'displayNameHint': 'Como outras pessoas veem você',
   'emailAddress': 'Endereço de email',
   'emailAddressHint': 'Para onde enviamos notificações',
   'security': 'Segurança',
-  'securitySubtitle': 'Tenha certeza de que tudo está protegido.',
   'changePassword': 'Alterar senha',
-  'changePasswordSubtitle':
-      'Atualize sua senha do Supabase e recriptografe suas conversas salvas.',
   'currentPassword': 'Senha atual',
   'newPassword': 'Nova senha',
   'minCharsPassword': 'Mínimo de 8 caracteres.',
@@ -208,8 +192,6 @@ const Map<String, String> stringsPt = {
   'lockedChatsPlural':
       '{count} conversas criptografadas com uma senha anterior.',
   'recoverChats': 'Recuperar conversas',
-  'dangerZone': 'Zona de Perigo',
-  'dangerZoneSubtitle': 'Ações irreversíveis que afetam toda a sua conta.',
   'deleteAccountWarning':
       'Excluir sua conta cancelará todas as assinaturas, removerá seus dados e não pode ser desfeito.',
   'deleteAccount': 'Excluir Conta',
@@ -275,7 +257,6 @@ const Map<String, String> stringsPt = {
   'openSourceLicenses': 'Licenças de Código Aberto',
   'openSourceLicensesSubtitle':
       'Revise as licenças de todas as dependências incluídas nesta compilação.',
-  'legalDocuments': 'Documentos Legais',
   'termsOfService': 'Termos de Serviço',
   'privacyPolicy': 'Política de Privacidade',
   'versionText': 'Versão {version}',
@@ -305,9 +286,6 @@ const Map<String, String> stringsPt = {
   'manageBilling': 'Gerenciar Cobrança',
   'manageBillingSubtitle':
       'Use o portal de cobrança para cancelar sua assinatura ou atualizar métodos de pagamento.',
-  'subscribeToGetCredits': 'Assine para Obter Créditos de IA',
-  'subscriptionDesktopOnly':
-      'O gerenciamento de assinatura está disponível apenas no desktop.',
   'active': 'ATIVO',
   'getCreditsMonthly': 'Receba \u20ac16 em créditos de IA mensalmente',
   'accessAllModels': 'Acesso a todos os modelos de IA',
@@ -317,10 +295,19 @@ const Map<String, String> stringsPt = {
   'creditsExplanation':
       'Seus \u20ac16 em créditos de IA são consumidos por token com base no modelo escolhido. Créditos não utilizados expiram no final de cada mês.',
   'immediateAccessAck':
-      'Quero acesso imediato ao Chuk Chat e reconheço que perco meu ',
+      'Solicito expressamente que o Chuk Chat comece a prestar o serviço antes do fim do prazo de desistência. Sei que, se desistir, pagarei um valor proporcional ao serviço prestado até esse momento. Informações sobre o ',
   'rightOfWithdrawal': 'direito de desistência',
-  'onceServiceBegins': ' assim que o serviço começar. Concordo com os ',
-  'subscribeNow': 'Assinar Agora',
+  'onceServiceBegins': '. Concordo com os ',
+  'subscribeNow': 'Assinar com obrigação de pagamento',
+  'viewSubscription': 'Ver assinatura',
+  'consentTermsSuffix': '.',
+  'cancelContractHere': 'Cancelar contrato aqui',
+  'cancelContractHereSubtitle':
+      'Abre o formulário de cancelamento. Sem iniciar sessão.',
+  'withdrawContract': 'Desistir do contrato aqui',
+  'withdrawContractSubtitle':
+      'Abre o formulário de desistência. Sem iniciar sessão.',
+  'linkOpenFailed': 'Não foi possível abrir o link. Abra-o você mesmo: {url}',
   'alreadySubscribed': 'Você já possui uma assinatura ativa.',
   'opening': 'Abrindo...',
   'agreeToTermsFirst':
@@ -332,9 +319,6 @@ const Map<String, String> stringsPt = {
   'createAccountWithEmail': 'Crie uma conta com email e senha',
   'supabaseNotConfigured':
       'As credenciais do Supabase não estão configuradas. Atualize-as antes de executar uma compilação de produção.',
-  'confirmEmailToContinue': 'Confirme seu email para continuar',
-  'confirmEmailBody':
-      'Enviamos um link de confirmação para o seu endereço de email. Por favor, abra-o e clique no link antes de entrar.',
   'howOthersSeeYou': 'Como outras pessoas verão você',
   'email': 'Email',
   'emailPlaceholder': 'voce@exemplo.com',
@@ -410,7 +394,6 @@ const Map<String, String> stringsPt = {
       'Funciona em compilações de produção. Registra metadados do app/runtime para solução de problemas de lag e bandeja do sistema.',
   'diagnosticsEnabled': 'Registro de diagnóstico habilitado',
   'diagnosticsDisabled': 'Registro de diagnóstico desabilitado',
-  'logFile': 'Arquivo de log',
   'notInitializedYet': 'Ainda não inicializado',
   'refresh': 'Atualizar',
   'copyRecent': 'Copiar Recentes',
@@ -426,7 +409,6 @@ const Map<String, String> stringsPt = {
   'failedToShareLog': 'Falha ao compartilhar log de diagnóstico: {error}',
   'diagnosticsLogCleared': 'Log de diagnóstico limpo',
   'failedToClearLog': 'Falha ao limpar log de diagnóstico: {error}',
-  'recentLogLines': 'Linhas de log recentes',
   'devOptionsDisabledMsg': 'Opções de desenvolvedor desativadas.',
   'noLogsYet':
       'Nenhum log ainda. Habilite o registro de diagnóstico e use o app para coletar dados.',
@@ -456,44 +438,20 @@ const Map<String, String> stringsPt = {
 
   // ── Model selector page ────────────────────────────────────
   'sessionExpired': 'Sessão expirada. Por favor, entre novamente.',
-  'offlineMessage':
-      'Você parece estar offline. Por favor, verifique sua conexão com a internet.',
-  'cannotReachApi': 'Não é possível alcançar o servidor da API.',
-  'maintenanceMessage':
-      'Estamos em manutenção no momento e voltaremos em breve.',
   'free': 'Grátis',
-  'perMillion': '/M',
-  'perRequest': '/req',
   'best': 'Melhor',
 
   // ── Message bubble / chat ──────────────────────────────────
   'openInMailApp': 'Abrir no App de Email',
-  'costLabel': 'Custo: {cost}',
-  'generatedLabel': 'Gerado: {label}',
-  'unableToCopyImage': 'Não foi possível copiar a imagem',
   'unableToSaveImage': 'Não foi possível salvar a imagem',
   'image': 'Imagem',
-  'openLink': 'Abrir Link',
-  'openLinkConfirm': 'Você realmente deseja sair do app e abrir {url}?',
   'open': 'Abrir',
-  'contentCopied': 'Conteúdo copiado para a área de transferência',
-  'artifactCopied': 'Página copiada para a área de transferência',
-  'fileSaved': 'Arquivo salvo',
-  'failedToExportArtifact': 'Falha ao exportar página: {error}',
-  'failedToSave': 'Falha ao salvar: {error}',
-  'markdownSaved': 'Markdown salvo',
 
   // ── Misc / shared ─────────────────────────────────────────
   'original': 'Original',
   'markdown': 'Markdown',
-  'viewMarkdownSummary': 'Ver Resumo em Markdown',
-  'addSummary': 'Adicionar resumo',
-  'deletedFile': 'Arquivo Excluído',
   'deleteFile': 'Excluir Arquivo',
-  'deleteFileConfirm': 'Excluir "{name}"?',
   'deleteFailed': 'Falha ao excluir: {error}',
-  'uploadedFile': 'Enviado: {name}',
-  'freeMessagePlaceholder': 'Grátis: --',
 
   // ── Chat UI ────────────────────────────────────────────────
   'askMeAnything': 'Pergunte-me qualquer coisa!',
@@ -510,8 +468,6 @@ const Map<String, String> stringsPt = {
   'voiceMessage': 'Mensagem de voz',
   'voiceMessageShowTranscript': 'Mostrar transcrição',
   'voiceMessageHideTranscript': 'Ocultar transcrição',
-  'replyTargetSelected': 'Alvo da resposta selecionado',
-  'clearReply': 'Limpar resposta',
   'nothingToResend': 'Nada para reenviar',
   'freeMessagesUsed': 'Mensagens Gratuitas Esgotadas',
   'ok': 'OK',
@@ -532,18 +488,11 @@ const Map<String, String> stringsPt = {
   'modelsFoundOne': '{count} modelo encontrado',
   'modelsFoundMany': '{count} modelos encontrados',
   'modelError': 'Erro: {error}',
-  'copyImage': 'Copiar imagem',
-  'downloadImage': 'Baixar imagem',
-  'imageDetails': 'Detalhes da imagem',
-  'imageCopied': 'Imagem copiada',
-  'freeMessages': 'Mensagens Gratuitas',
-  'freeUsed': 'Usadas: {count}',
 
   // ── Message bubble extras ──────────────────────────────────
 
   // ── Free message display ───────────────────────────────────
   'freeTotal': 'Total: {count}',
-  'subscribeToContinue': 'Assine para continuar conversando',
   'freeRemaining': 'Grátis: {remaining}/{total}',
 
   // ── Model selection dropdown ───────────────────────────────
@@ -598,7 +547,6 @@ const Map<String, String> stringsPt = {
   'removeFile': 'Remover {name}',
   'edit': 'Editar',
   'close': 'Fechar',
-  'maybeLater': 'Talvez Depois',
 
   // ── Subscription dialogs ───────────────────────────────────
   'bashSandboxFolder': 'Pasta do sandbox',

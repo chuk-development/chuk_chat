@@ -116,6 +116,10 @@ class MaterialYouTokens extends ThemeExtension<MaterialYouTokens> {
     required this.warning,
     required this.warningContainer,
     required this.onWarningContainer,
+    required this.selection,
+    required this.onSelection,
+    required this.selectedFill,
+    required this.onSelectedFill,
   });
 
   final Color surfaceContainerLow;
@@ -139,6 +143,21 @@ class MaterialYouTokens extends ThemeExtension<MaterialYouTokens> {
   final Color warningContainer;
   final Color onWarningContainer;
 
+  /// Fill of a selected row: the open chat in the sidebar, the current
+  /// entry of a list. Most packs tint it with the accent; a pack with its
+  /// own palette (Plane) uses a neutral grey step instead.
+  final Color selection;
+
+  /// Text and icons on [selection].
+  final Color onSelection;
+
+  /// The solid fill of a picked segment, chip or tab (the on-capsule of a
+  /// segmented switch). The accent for most packs; neutral grey for Plane.
+  final Color selectedFill;
+
+  /// Label on [selectedFill].
+  final Color onSelectedFill;
+
   @override
   MaterialYouTokens copyWith({
     Color? surfaceContainerLow,
@@ -161,6 +180,10 @@ class MaterialYouTokens extends ThemeExtension<MaterialYouTokens> {
     Color? warning,
     Color? warningContainer,
     Color? onWarningContainer,
+    Color? selection,
+    Color? onSelection,
+    Color? selectedFill,
+    Color? onSelectedFill,
   }) {
     return MaterialYouTokens(
       surfaceContainerLow: surfaceContainerLow ?? this.surfaceContainerLow,
@@ -184,6 +207,10 @@ class MaterialYouTokens extends ThemeExtension<MaterialYouTokens> {
       warning: warning ?? this.warning,
       warningContainer: warningContainer ?? this.warningContainer,
       onWarningContainer: onWarningContainer ?? this.onWarningContainer,
+      selection: selection ?? this.selection,
+      onSelection: onSelection ?? this.onSelection,
+      selectedFill: selectedFill ?? this.selectedFill,
+      onSelectedFill: onSelectedFill ?? this.onSelectedFill,
     );
   }
 
@@ -274,6 +301,10 @@ class MaterialYouTokens extends ThemeExtension<MaterialYouTokens> {
         other.onWarningContainer,
         t,
       )!,
+      selection: Color.lerp(selection, other.selection, t) ?? selection,
+      onSelection: Color.lerp(onSelection, other.onSelection, t) ?? onSelection,
+      selectedFill: Color.lerp(selectedFill, other.selectedFill, t) ?? selectedFill,
+      onSelectedFill: Color.lerp(onSelectedFill, other.onSelectedFill, t) ?? onSelectedFill,
     );
   }
 }
@@ -323,6 +354,13 @@ extension MaterialYouTokensX on ThemeData {
       onWarningContainer: isDark
           ? const Color(0xFFFFDEA4)
           : const Color(0xFF291800),
+      selection: Color.alphaBlend(
+        cs.primary.withValues(alpha: 0.20),
+        isDark ? const Color(0xFF1D2024) : const Color(0xFFEDEEF3),
+      ),
+      onSelection: cs.primary,
+      selectedFill: cs.primary,
+      onSelectedFill: cs.onPrimary,
     );
   }
 }

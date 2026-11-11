@@ -15,6 +15,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/utils/theme_extensions.dart';
+
 import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/ui/expressive/pill_geometry.dart';
 
@@ -155,7 +157,7 @@ class _Segment extends StatelessWidget {
         // The tap reaches into the hairline, so the capsule can paint short of
         // a touch target while the finger still gets one.
         hitPadding: EdgeInsets.symmetric(vertical: slop),
-        color: selected ? scheme.primary : Colors.transparent,
+        color: selected ? Theme.of(context).m3.selectedFill : Colors.transparent,
         // A stadium at rest and a stadium while held: the press springs, it
         // does not turn the capsule into a rounded box.
         shape: const StadiumBorder(),
@@ -174,7 +176,9 @@ class _Segment extends StatelessWidget {
               style: TextStyle(
                 fontWeight: FontWeight.w700,
                 fontSize: 14,
-                color: selected ? scheme.onPrimary : scheme.onSurfaceVariant,
+                color: selected
+                    ? Theme.of(context).m3.onSelectedFill
+                    : scheme.onSurfaceVariant,
               ),
             ),
           ),

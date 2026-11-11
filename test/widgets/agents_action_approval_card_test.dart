@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -13,6 +14,7 @@ import 'package:chuk_chat/services/agents/agents_replay_loader.dart';
 import 'package:chuk_chat/services/agents/agents_run_cost.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import 'package:chuk_chat/services/agents/agents_thread_composer.dart';
+import 'package:chuk_chat/services/agents/agents_thread_modes.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/settings/verbose_service.dart';
@@ -69,7 +71,11 @@ AgentsRelayApprovalRequest _request({
     'browser_tool': 'browser_click',
     'element': 'Buy now',
   },
+  String? decision,
+  String? decisionReason,
 }) => AgentsRelayApprovalRequest(
+  decision: decision,
+  decisionReason: decisionReason,
   approvalId: id,
   action: 'action_approval',
   path: '',
@@ -110,6 +116,51 @@ void main() {
       );
       await tester.pump();
     }
+
+    // H1: the keys are scoped to the card. Enter typed in another field,
+    // or with the card in a half that cannot take the focus, answers
+    // nothing.
+    testWidgets('Enter / Esc answer only with the focus in the card', (
+      tester,
+    ) async {
+      final picked = <String>[];
+      final FocusNode other = FocusNode();
+      addTearDown(other.dispose);
+      Widget build({required bool hidden}) => _app(
+        Column(
+          children: <Widget>[
+            Focus(focusNode: other, child: const SizedBox(height: 10)),
+            ExcludeFocus(
+              excluding: hidden,
+              child: AgentsActionApprovalCard(
+                request: _request(),
+                agentName: 'Ada',
+                keyboardShortcuts: true,
+                onSelect: picked.add,
+              ),
+            ),
+          ],
+        ),
+      );
+      // Hidden (like the Agents half behind chuk's chat): nothing answers.
+      await tester.pumpWidget(build(hidden: true));
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      expect(picked, isEmpty);
+      // Visible, but the focus is elsewhere: still nothing.
+      await tester.pumpWidget(build(hidden: false));
+      other.requestFocus();
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      expect(picked, isEmpty);
+      // The focus in the card: Enter allows once, Esc denies.
+      Focus.of(tester.element(find.text('Allow once'))).requestFocus();
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      expect(picked, <String>['once', 'deny']);
+    });
 
     testWidgets('one button per option, in order, with the contract words', (
       tester,
@@ -196,6 +247,33 @@ void main() {
       expect(find.text('Allow once'), findsNothing);
       expect(find.text('Allowed always for Ada'), findsOneWidget);
     });
+
+    // B11: the host closed the wait itself and sent the request again.
+    for (final (String reason, String en, String de)
+        in <(String, String, String)>[
+          (
+            'timeout',
+            'Timed out. Not allowed.',
+            'Zeit abgelaufen. Nicht erlaubt.',
+          ),
+          ('stopped', 'Stopped. Not allowed.', 'Gestoppt. Nicht erlaubt.'),
+        ]) {
+      testWidgets('closed by $reason: no buttons, says why', (tester) async {
+        final request = _request(decision: 'denied', decisionReason: reason);
+        await pumpCard(tester, request);
+        expect(find.text('Allow once'), findsNothing);
+        expect(find.text('Deny'), findsNothing);
+        expect(
+          find.byKey(const ValueKey<String>('agents-approval-closed')),
+          findsOneWidget,
+        );
+        expect(find.text(en), findsOneWidget);
+
+        await pumpCard(tester, request, locale: const Locale('de'));
+        expect(find.text(de), findsOneWidget);
+        expect(find.text('Einmal erlauben'), findsNothing);
+      });
+    }
 
     testWidgets('German', (tester) async {
       await pumpCard(tester, _request(), locale: const Locale('de'));
@@ -294,7 +372,7 @@ void main() {
     for (final bool phone in <bool>[false, true]) {
       final String layout = phone ? 'phone' : 'desktop';
 
-      testWidgets('$layout: the card sits in the transcript; an answer sends '
+      testWidgets('$layout: the card takes the composer seat; an answer sends '
           'its scope and the card goes when the agent moves on', (
         tester,
       ) async {
@@ -309,9 +387,12 @@ void main() {
           const ValueKey<String>('agents-approval-card'),
         );
         expect(card, findsOneWidget);
+        // In the composer's seat, not in the scrolling transcript: the run
+        // waits on it, so it stays in reach (and Enter / Esc answer it on a
+        // desktop keyboard).
         expect(
           find.ancestor(of: card, matching: find.byType(CustomScrollView)),
-          findsOneWidget,
+          findsNothing,
         );
         expect(ledger.runFor('thread-1')!.waitingForUser, isTrue);
 
@@ -330,6 +411,47 @@ void main() {
       });
     }
 
+    // M4: "Always allow <prefix>" goes out as a whole frame. When that
+    // frame cannot be sent, the card must not stay decided (the host would
+    // wait for ever): the answer is taken back and the card is open again.
+    testWidgets('a prefix answer that cannot be sent opens the card again', (
+      tester,
+    ) async {
+      final controller = await pumpPaired(tester);
+      AgentsThreadModes.instance.sender = (Map<String, dynamic> _) async =>
+          throw StateError('Not paired');
+      addTearDown(AgentsThreadModes.instance.reset);
+      AgentsRunLedger.instance.begin('thread-1');
+      controller.emit(
+        _request(
+          id: 'ap-p',
+          actionClass: 'run_command',
+          options: const <String>['once', 'always_this_prefix', 'deny'],
+          summary: 'Run a command',
+          site: null,
+          details: const <String, dynamic>{'command': 'git push origin master'},
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      final Finder prefix = find.byKey(
+        const ValueKey<String>('agents-approval-option-always_this_prefix'),
+      );
+      expect(prefix, findsOneWidget);
+      await tester.tap(prefix);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      // Open again, waiting on the user, and the user is told why.
+      expect(prefix, findsOneWidget);
+      expect(
+        AgentsThreadModes.instance.waitKindOf('thread-1'),
+        AgentsWaitKind.approval,
+      );
+      expect(find.textContaining('Not connected'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(minutes: 2));
+    });
+
     testWidgets('Deny says no with scope deny', (tester) async {
       final controller = await pumpPaired(tester);
       AgentsRunLedger.instance.begin('thread-1');
@@ -342,6 +464,116 @@ void main() {
       expect(find.text('Denied'), findsOneWidget);
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump(const Duration(minutes: 2));
+    });
+
+    testWidgets('a timed-out request closes its open card: no buttons', (
+      tester,
+    ) async {
+      final controller = await pumpPaired(tester);
+      final ledger = AgentsRunLedger.instance;
+      ledger.begin('thread-1');
+      controller.emit(_request(id: 'ap-t'));
+      await tester.pump();
+      expect(find.text('Allow once'), findsOneWidget);
+      expect(ledger.runFor('thread-1')!.waitingForUser, isTrue);
+
+      // A closing frame for another id changes nothing.
+      controller.emit(
+        _request(id: 'ap-other', decision: 'denied', decisionReason: 'timeout'),
+      );
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Allow once'), findsOneWidget);
+
+      controller.emit(
+        _request(id: 'ap-t', decision: 'denied', decisionReason: 'timeout'),
+      );
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Allow once'), findsNothing);
+      expect(find.text('Deny'), findsNothing);
+      expect(find.text('Timed out. Not allowed.'), findsOneWidget);
+      expect(ledger.runFor('thread-1')!.waitingForUser, isFalse);
+      expect(controller.approvalDecisions, isEmpty);
+
+      // The agent moves on: the closed card goes, like an answered one.
+      controller.emit(const AgentsRelayTool('browser_click', result: 'ok'));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(
+        find.byKey(const ValueKey<String>('agents-approval-card')),
+        findsNothing,
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(minutes: 2));
+    });
+
+    testWidgets('a closing frame never replaces the user\'s answer', (
+      tester,
+    ) async {
+      final controller = await pumpPaired(tester);
+      AgentsRunLedger.instance.begin('thread-1');
+      controller.emit(_request(id: 'ap-u'));
+      await tester.pump();
+      await tester.tap(find.text('Allow once'));
+      await tester.pump(const Duration(milliseconds: 400));
+      controller.emit(
+        _request(id: 'ap-u', decision: 'denied', decisionReason: 'stopped'),
+      );
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Allowed once'), findsOneWidget);
+      expect(find.text('Stopped. Not allowed.'), findsNothing);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(minutes: 2));
+    });
+
+    testWidgets('a stopped publish closes its bar: no Publish button', (
+      tester,
+    ) async {
+      final controller = await pumpPaired(tester);
+      AgentsRunLedger.instance.begin('thread-1');
+      AgentsRelayApprovalRequest publish({String? decision, String? reason}) =>
+          AgentsRelayApprovalRequest(
+            approvalId: 'ap-p',
+            action: 'herenow_publish',
+            path: 'site',
+            name: 'site',
+            fileCount: 1,
+            totalBytes: 10,
+            baseUrl: 'here.now',
+            public: false,
+            sessionKey: 'thread-1',
+            decision: decision,
+            decisionReason: reason,
+          );
+      controller.emit(publish());
+      await tester.pump();
+      // The title plus the Publish button.
+      expect(find.textContaining('Publish'), findsNWidgets(2));
+      controller.emit(publish(decision: 'denied', reason: 'stopped'));
+      await tester.pump(const Duration(milliseconds: 400));
+      // Only the title is left: no button to press.
+      expect(find.textContaining('Publish'), findsOneWidget);
+      expect(find.text('Stopped. Not allowed.'), findsOneWidget);
+      expect(controller.approvalDecisions, isEmpty);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(minutes: 2));
+    });
+
+    test('the ledger closes the open line instead of adding a second', () {
+      final ledger = AgentsRunLedger.instance;
+      ledger.begin('thread-1');
+      ledger.approval('thread-1', _request(id: 'ap-l'));
+      ledger.approval(
+        'thread-1',
+        _request(id: 'ap-l', decision: 'denied', decisionReason: 'timeout'),
+      );
+      final lines = ledger
+          .runFor('thread-1')!
+          .toolCalls
+          .where((c) => c.arguments['approvalId'] == 'ap-l')
+          .toList();
+      expect(lines, hasLength(1));
+      expect(lines.single.arguments['decision'], 'Denied');
+      expect(lines.single.arguments['options'], isNull);
+      expect(lines.single.arguments['decision_reason'], 'timeout');
     });
 
     testWidgets('an old publish keeps its bar and sends no scope', (

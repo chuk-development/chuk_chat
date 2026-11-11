@@ -31,3 +31,58 @@ if command -v bd >/dev/null 2>&1; then
   if [ $_bd_exit -ne 0 ]; then exit $_bd_exit; fi
 fi
 # --- END BEADS INTEGRATION v1.2.2 ---
+
+# --- chuk_chat staged-file checks (outside the beads markers) ---
+# Fast checks on what is staged; CI and the full `flutter test` own the rest.
+# Skip with CHUK_SKIP_PRECOMMIT=1 only when a check is wrong, never to hide a
+# real error.
+if [ "${CHUK_SKIP_PRECOMMIT:-0}" != "1" ]; then
+  # 1. Whitespace errors (trailing spaces, conflict markers) in the staged diff.
+  if ! git diff --cached --check; then
+    echo >&2 "pre-commit: whitespace errors in the staged diff (listed above)."
+    exit 1
+  fi
+
+  # 2. dart format on staged .dart files, but only on files that were already
+  #    formatted at HEAD (and on new files). Formatting a file that was not
+  #    formatted before would bury the real change under reformat churn.
+  if command -v dart >/dev/null 2>&1; then
+    _chuk_root=$(git rev-parse --show-toplevel)
+    _chuk_files=$(git diff --cached --name-only --diff-filter=ACMR -- '*.dart' \
+      | grep -v -E '^(vendor|third_party|ci/linux_full)/|\.g\.dart$' || true)
+    if [ -n "$_chuk_files" ]; then
+      # The copies sit under .dart_tool/ (gitignored) so dart format finds the
+      # repository's pubspec and analysis_options and picks the same style.
+      _chuk_tmp="$_chuk_root/.dart_tool/pre_commit_format"
+      rm -rf "$_chuk_tmp"
+      mkdir -p "$_chuk_tmp/head" "$_chuk_tmp/index"
+      for _f in $_chuk_files; do
+        mkdir -p "$_chuk_tmp/index/$(dirname "$_f")"
+        git show ":$_f" > "$_chuk_tmp/index/$_f"
+        if git cat-file -e "HEAD:$_f" 2>/dev/null; then
+          mkdir -p "$_chuk_tmp/head/$(dirname "$_f")"
+          git show "HEAD:$_f" > "$_chuk_tmp/head/$_f"
+        fi
+      done
+      # Files unformatted at HEAD are exempt.
+      _chuk_exempt=$(cd "$_chuk_tmp/head" && dart format --output=none \
+        --show=changed . 2>/dev/null | sed -n 's/^Changed \(\.\/\)\{0,1\}//p')
+      _chuk_bad=$(cd "$_chuk_tmp/index" && dart format --output=none \
+        --show=changed . 2>/dev/null | sed -n 's/^Changed \(\.\/\)\{0,1\}//p')
+      rm -rf "$_chuk_tmp"
+      _chuk_fail=""
+      for _f in $_chuk_bad; do
+        if ! printf '%s\n' "$_chuk_exempt" | grep -qxF "$_f"; then
+          _chuk_fail="$_chuk_fail $_f"
+        fi
+      done
+      if [ -n "$_chuk_fail" ]; then
+        echo >&2 "pre-commit: these staged Dart files are not formatted:"
+        for _f in $_chuk_fail; do echo >&2 "  $_f"; done
+        echo >&2 "Run: dart format$_chuk_fail && git add$_chuk_fail"
+        echo >&2 "(Only these files. Never dart format a whole directory.)"
+        exit 1
+      fi
+    fi
+  fi
+fi

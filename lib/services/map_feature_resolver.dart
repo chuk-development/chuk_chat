@@ -15,6 +15,7 @@
 // queue. Results are cached for the session; a failed lookup returns empty
 // geometry and is not cached, so the next open tries again.
 
+import 'package:chuk_chat/utils/browser_user_agent.dart';
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
@@ -30,7 +31,7 @@ import 'package:chuk_chat/utils/map_features.dart';
 const String _nominatimBase = 'https://nominatim.openstreetmap.org';
 const Map<String, String> _headers = {
   'Accept': 'application/json',
-  'User-Agent': 'chuk-chat/1.0',
+  'User-Agent': kBrowserUserAgent,
 };
 const Duration _timeout = Duration(seconds: 15);
 const Duration _nominatimSpacing = Duration(milliseconds: 1100);

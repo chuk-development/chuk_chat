@@ -239,6 +239,35 @@ presentation, zip, database, image, video, book.
 Never a bare `IconButton`, `IconButton.filledTonal` or `CircleAvatar` in a new
 surface: they are the old idiom and they do not match what sits next to them.
 
+### 6.1 Radius by height
+
+The table above wins for the shapes it names. For every other surface, take
+the corner from the scale in `lib/constants.dart`. Do not write a new literal
+such as 6, 7, 9, 10 or 18.
+
+| Height of the element | Corner | Constant |
+|---|---|---|
+| Below 20 (key cap, inline code, small badge) | 4 | `kRadiusXs` |
+| 20 to 28 (compact chip, small button) | 8 | `kRadiusSm` |
+| 32 to 40 (button, field, one-line row) | 12 | `kRadiusMd` |
+| Code block, diff, grouped content | 16 | `kRadiusLg` |
+| Independent card | 20 | `kRadiusXl` |
+| Main surface (dialog, panel, composer) | 28 | `kRadiusXxl` |
+
+- `radiusForHeight(h)` gives the corner for a height. Use the height that
+  the design gives the element. A card that grows with its content stays a
+  card.
+- **Inner = outer − inset.** A surface inside another surface, with the same
+  centre, gets `innerRadius(outer, inset)` = max(0, outer − inset). Example:
+  outer 16, inset 4, inner 12. A header inside a 1 px border of a corner 8
+  gets 7. A separate card inside a surface takes its own step of the scale;
+  do not subtract the padding of the parent.
+- A fill or a hover that touches the edge of its container uses the corner
+  of the container (clip it), not a second corner.
+- Where a border and a shadow only separate a surface from the page, use one
+  hairline (0.5 to 1 px, `outlineVariant`) and no shadow.
+- Circles and pills keep their shape (`kRadiusPill`, `BoxShape.circle`).
+
 ## 7. Colour
 
 - The app theme owns surfaces and text. A screen never tints a surface.

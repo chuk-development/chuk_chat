@@ -15,6 +15,7 @@ library;
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/utils/composer_focus_policy.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 
 class ChatComposerBox extends StatelessWidget {
@@ -118,14 +119,18 @@ class ChatComposerField extends StatelessWidget {
           autofocus: false,
           keyboardType: TextInputType.multiline,
           textInputAction: TextInputAction.newline,
-          style: TextStyle(color: scheme.onSurface, fontSize: 15, height: 1.35),
+          style: TextStyle(
+            color: scheme.onSurface,
+            fontSize: composerFontSize(),
+            height: 1.35,
+          ),
           minLines: minLines,
           maxLines: maxLines,
           decoration: InputDecoration(
             hintText: hintText,
             hintStyle: TextStyle(
               color: scheme.onSurface.withValues(alpha: 0.5),
-              fontSize: 15,
+              fontSize: composerFontSize(),
             ),
             filled: false,
             border: InputBorder.none,

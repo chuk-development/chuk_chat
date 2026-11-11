@@ -28,6 +28,11 @@ mixin ModelProviderResolutionMixin<T extends StatefulWidget> on State<T> {
   /// Optional chat override. Unscoped legacy hosts retain account defaults.
   String? get modelSelectionChatId => null;
 
+  /// The chat a send belongs to, for Auto's warm-cache check
+  /// ([ProviderCacheAffinity]). Unlike [modelSelectionChatId] it is set for
+  /// every chat, not only for chats with their own model.
+  String? get providerAffinityChatId => modelSelectionChatId;
+
   /// Called when a provider lookup finds that the chat has its own model and
   /// it is not the model on screen: something (a mode restore, the global
   /// model notifier) put another model into a chat that has its own. The
@@ -141,6 +146,7 @@ mixin ModelProviderResolutionMixin<T extends StatefulWidget> on State<T> {
         return ProviderResolutionService.resolveForSend(
           choice.modelId,
           choice.providerSlug,
+          chatId: providerAffinityChatId,
         );
       }
       if (!mounted || modelSelectionChatId != chatId) return null;
@@ -173,6 +179,7 @@ mixin ModelProviderResolutionMixin<T extends StatefulWidget> on State<T> {
     final String? resolved = await ProviderResolutionService.resolveForSend(
       modelId,
       slug,
+      chatId: providerAffinityChatId,
     );
     if (kDebugMode && (slug == null || slug.isEmpty) && resolved != null) {
       debugPrint('Provider fallback: cheapest for $modelId (nothing stored)');

@@ -997,6 +997,8 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
               selectedId: selectedId,
               controller: _swipeController,
               onSelected: _onSwipeSelected,
+              // Only the name in the strip moves (owner, 2026-11-05).
+              moveChild: false,
               child: _buildChatView(
                 topInset: topInset,
                 onToggleSidebar: _openSwipeMenu,

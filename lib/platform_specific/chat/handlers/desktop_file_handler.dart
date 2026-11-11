@@ -10,8 +10,11 @@ import 'package:chuk_chat/constants/file_constants.dart';
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
+import 'package:chuk_chat/services/offline_image_preparer.dart';
 import 'package:chuk_chat/utils/io_helper.dart';
+import 'package:chuk_chat/platform_specific/chat/handlers/agents_composer_files.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/scanned_pdf_pages.dart';
+import 'package:chuk_chat/services/agents/agents_attachment_store.dart';
 
 /// Temporary container for validated files before upload.
 class ValidatedFile {
@@ -49,10 +52,25 @@ class DesktopFileHandler {
   /// Set by the parent widget before calling file processing methods.
   bool modelSupportsImageInput = false;
 
+  /// True while the composer belongs to an Agents thread: any file up to
+  /// 25 MB goes to the host as it is, and a picture is fine for any model.
+  bool Function()? isAgentsThread;
+
+  bool get _agents => isAgentsThread?.call() ?? false;
+
+  bool get _imagesAllowed => modelSupportsImageInput || _agents;
+
   /// Guards against opening a second native picker while one is already open.
   /// The picker can take a moment to appear on Linux, so rapid taps on the
   /// add button would otherwise stack multiple picker windows.
   bool _isPicking = false;
+
+  /// Uploads images kept offline once the network is back.
+  late final OfflineAttachmentWatcher _offlineWatcher =
+      OfflineAttachmentWatcher(
+        attachments: () => attachedFiles,
+        onChanged: () => onUpdate?.call(),
+      );
 
   void initialize(ChatApiService apiService) {
     _chatApiService = apiService;
@@ -85,6 +103,15 @@ class DesktopFileHandler {
         fileExtension,
       );
 
+      if (_agents && !isImage) {
+        await _keepForAgents(
+          fileName: fileName,
+          fileSize: fileSize,
+          readBytes: file.readAsBytes,
+        );
+        continue;
+      }
+
       // Validate extension
       if (!FileConstants.allowedExtensions.contains(fileExtension)) {
         onShowSnackBar?.call('Unsupported file type: .$fileExtension');
@@ -97,7 +124,7 @@ class DesktopFileHandler {
         continue;
       }
 
-      if (isImage && !modelSupportsImageInput) {
+      if (isImage && !_imagesAllowed) {
         onShowSnackBar?.call(
           'Image uploads are not supported by the selected model.',
         );
@@ -175,9 +202,13 @@ class DesktopFileHandler {
       final Uint8List imageBytes = await file.readAsBytes();
 
       // Upload to encrypted storage (compression + encryption happens inside)
-      final String storagePath = await ImageStorageService.uploadEncryptedImage(
+      // With a bad network the image is kept encrypted on the device (an
+      // `offline://img/` path) and uploaded later, never dropped.
+      final String storagePath = await OfflineImageAttach.uploadOrKeep(
         imageBytes,
       );
+      // The name the host gets for the picture of an Agents task.
+      AgentsAttachmentStore.rememberName(storagePath, fileName);
 
       // Update the attached file with the storage path
       final int index = attachedFiles.indexWhere((f) => f.id == fileId);
@@ -188,6 +219,7 @@ class DesktopFileHandler {
         );
       }
       onUpdate?.call();
+      _afterStore(storagePath, stillAttached: index != -1);
 
       if (kDebugMode) {
         debugPrint(
@@ -214,10 +246,13 @@ class DesktopFileHandler {
     _isPicking = true;
     final List<PlatformFile> pickedFiles;
     try {
-      pickedFiles = await FilePicker.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: FileConstants.allowedExtensions,
-      );
+      // An Agents thread takes any file: the host stores it as it is.
+      pickedFiles = _agents
+          ? await FilePicker.pickFiles(type: FileType.any)
+          : await FilePicker.pickFiles(
+              type: FileType.custom,
+              allowedExtensions: FileConstants.allowedExtensions,
+            );
     } finally {
       // Clear as soon as the native dialog closes, so processing/uploading the
       // selection does not block the user from opening the picker again.
@@ -268,6 +303,15 @@ class DesktopFileHandler {
 
       final isImage = FileConstants.imageExtensions.contains(fileExtension);
 
+      if (_agents && !isImage) {
+        await _keepForAgents(
+          fileName: fileName,
+          fileSize: fileSize,
+          readBytes: platformFile.readAsBytes,
+        );
+        continue;
+      }
+
       // Check file size (skip for images)
       if (!isImage && fileSize > maxFileSize) {
         onShowSnackBar?.call('File "$fileName" exceeds 10MB limit');
@@ -281,7 +325,7 @@ class DesktopFileHandler {
         continue;
       }
 
-      if (isImage && !modelSupportsImageInput) {
+      if (isImage && !_imagesAllowed) {
         onShowSnackBar?.call(
           'Image uploads are not supported by the selected model.',
         );
@@ -325,9 +369,13 @@ class DesktopFileHandler {
     String fileId,
   ) async {
     try {
-      final String storagePath = await ImageStorageService.uploadEncryptedImage(
+      // With a bad network the image is kept encrypted on the device (an
+      // `offline://img/` path) and uploaded later, never dropped.
+      final String storagePath = await OfflineImageAttach.uploadOrKeep(
         imageBytes,
       );
+      // The name the host gets for the picture of an Agents task.
+      AgentsAttachmentStore.rememberName(storagePath, fileName);
 
       final int index = attachedFiles.indexWhere((f) => f.id == fileId);
       if (index != -1) {
@@ -337,6 +385,7 @@ class DesktopFileHandler {
         );
       }
       onUpdate?.call();
+      _afterStore(storagePath, stillAttached: index != -1);
 
       if (kDebugMode) {
         debugPrint(
@@ -355,6 +404,49 @@ class DesktopFileHandler {
     }
   }
 
+  /// An Agents thread: the file is sealed on this device and uploaded to
+  /// the host when the message goes out. Read only after the checks.
+  Future<void> _keepForAgents({
+    required String fileName,
+    required int fileSize,
+    required Future<Uint8List> Function() readBytes,
+  }) async {
+    final String? refused = AgentsComposerFiles.refusal(
+      fileName: fileName,
+      sizeBytes: fileSize,
+      attached: attachedFiles,
+    );
+    if (refused != null) {
+      onShowSnackBar?.call(refused);
+      return;
+    }
+    try {
+      final AttachedFile kept = await AgentsComposerFiles.keep(
+        id: _uuid.v4(),
+        fileName: fileName,
+        bytes: await readBytes(),
+      );
+      attachedFiles.add(kept);
+      onUpdate?.call();
+      onScrollToBottom?.call();
+    } catch (error) {
+      onShowSnackBar?.call('Could not keep "$fileName" for the agent: $error');
+    }
+  }
+
+  /// Watches an offline image that is still attached, or deletes one whose
+  /// attachment was removed while it was being stored.
+  void _afterStore(String storagePath, {required bool stillAttached}) {
+    if (!ImageStorageService.isOfflinePath(storagePath)) return;
+    if (stillAttached) {
+      _offlineWatcher.track();
+    } else {
+      unawaited(
+        ImageStorageService.deleteOfflineImage(storagePath).catchError((_) {}),
+      );
+    }
+  }
+
   /// Handles files dropped via drag and drop
   Future<void> handleDroppedFiles(List<String> filePaths) async {
     await processFilePaths(filePaths);
@@ -364,7 +456,9 @@ class DesktopFileHandler {
   void removeAttachedFile(String fileId) {
     // If this was an uploaded image, delete it from Supabase Storage
     final file = attachedFiles.where((f) => f.id == fileId).firstOrNull;
-    if (file != null && file.encryptedImagePath != null) {
+    if (AgentsAttachmentStore.isRef(file?.encryptedImagePath)) {
+      unawaited(AgentsComposerFiles.discard(file?.encryptedImagePath));
+    } else if (file != null && file.encryptedImagePath != null) {
       unawaited(
         ImageStorageService.deleteEncryptedImage(
           file.encryptedImagePath!,
@@ -427,10 +521,21 @@ class DesktopFileHandler {
     onScrollToBottom?.call();
   }
 
+  /// Adds a document that is ready as it is (no upload), e.g. a chat
+  /// reference snapshot (ChatReferenceService).
+  void addReadyFile(AttachedFile file) {
+    attachedFiles.add(file);
+    onUpdate?.call();
+  }
+
   /// Clear all attachments.
   void clearAll() {
     for (final file in attachedFiles) {
-      if (file.encryptedImagePath != null) {
+      // An offline image may already belong to a queued message; the outbox
+      // deletes it when that message is gone.
+      if (file.encryptedImagePath != null &&
+          !AgentsAttachmentStore.isRef(file.encryptedImagePath) &&
+          !ImageStorageService.isOfflinePath(file.encryptedImagePath!)) {
         unawaited(
           ImageStorageService.deleteEncryptedImage(
             file.encryptedImagePath!,
@@ -439,5 +544,10 @@ class DesktopFileHandler {
       }
     }
     attachedFiles.clear();
+  }
+
+  /// Stops listening for the network. Call from the owner's dispose.
+  void dispose() {
+    _offlineWatcher.dispose();
   }
 }

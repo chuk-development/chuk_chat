@@ -194,6 +194,7 @@ def task_payload(
     provider: str | None = None,
     reasoning_effort: str | None = None,
     regenerate: bool = False,
+    plan: bool | None = None,
 ) -> dict[str, Any]:
     """Build the ``task`` frame that opens a run.
 
@@ -249,6 +250,10 @@ def task_payload(
         payload["provider"] = provider
     if reasoning_effort:
         payload["reasoning_effort"] = reasoning_effort
+    # docs/WIRE_CONTRACT.md, "Plan mode": ``true`` turns plan mode on for
+    # this session from this task on, ``false`` turns it off. Absent: no change.
+    if plan is not None:
+        payload["plan"] = bool(plan)
     return payload
 
 
@@ -462,8 +467,133 @@ def action_approval_request_payload(
     }
 
 
+#: The ``action`` of an ``approval_request`` that shows a plan for review
+#: (docs/WIRE_CONTRACT.md, "Plan mode"). ``approved: true`` = Approve,
+#: ``false`` = Keep planning (with optional ``feedback``).
+ACTION_PLAN_REVIEW = "plan_review"
+PLAN_REVIEW_OPTIONS = ("approve", "keep_planning")
+
+
+def plan_review_request_payload(
+    *,
+    approval_id: str,
+    plan: str,
+    title: str = "",
+    session_key: str | None = None,
+) -> dict[str, Any]:
+    """Executor -> app: the agent finished a plan in plan mode
+    (``exit_plan_mode``). The run blocks until the user approves it or asks
+    to keep planning. The publish fields stay present with empty values, so
+    an older app still parses the frame; ``options`` makes it draw a card
+    with two answers."""
+    return {
+        "type": "approval_request",
+        "approval_id": approval_id,
+        "action": ACTION_PLAN_REVIEW,
+        "kind": ACTION_PLAN_REVIEW,
+        "action_class": ACTION_PLAN_REVIEW,
+        "options": list(PLAN_REVIEW_OPTIONS),
+        "summary": title or "Review the plan",
+        "plan": plan,
+        "path": "",
+        "name": "",
+        "file_count": 0,
+        "total_bytes": 0,
+        "base_url": "",
+        "public": False,
+        **({"session_key": session_key} if session_key else {}),
+    }
+
+
+def goal_payload(session_key: str, goal: dict[str, Any] | None) -> dict[str, Any]:
+    """Executor -> app: the goal of a session changed (docs/WIRE_CONTRACT.md,
+    "Goal mode"). ``goal`` is ``None`` after a clear. Persisted as an event
+    row, so a replay carries the latest one; the app keeps only the last."""
+    return {"type": "goal", "session_key": session_key, "goal": goal}
+
+
+def goal_control_payload(*, session_key: str, action: str) -> dict[str, Any]:
+    """App -> executor: the user pauses, resumes or clears the goal."""
+    return {"type": "goal_control", "session_key": session_key, "action": action}
+
+
+def plan_mode_payload(session_key: str, active: bool) -> dict[str, Any]:
+    """Executor -> app: plan mode of a session went on or off."""
+    return {"type": "plan_mode", "session_key": session_key, "active": bool(active)}
+
+
+def todo_payload(session_key: str, todos: list[dict[str, Any]]) -> dict[str, Any]:
+    """Executor -> app: the agent's latest task list (``todo_write``), for
+    the sticky card. Persisted as an event row; the last one wins."""
+    counts = {
+        status: sum(1 for t in todos if t.get("status") == status)
+        for status in ("pending", "in_progress", "completed")
+    }
+    return {"type": "todo", "session_key": session_key, "todos": list(todos), "counts": counts}
+
+
+#: ``question_request.status`` values (docs/WIRE_CONTRACT.md, "Questions to
+#: the user").
+QUESTION_OPEN = "open"
+QUESTION_ANSWERED = "answered"
+QUESTION_PENDING = "pending"
+QUESTION_STOPPED = "stopped"
+
+
+def question_request_payload(
+    *,
+    question_id: str,
+    questions: list[dict[str, Any]],
+    timeout_seconds: int,
+    session_key: str | None = None,
+    status: str = QUESTION_OPEN,
+    answers: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Executor -> app: the agent asks (``ask_user``). ``question_id`` is the
+    tool call id. Sent again with a new ``status`` when it is answered, ran
+    out (``pending``: still answerable, a late answer starts a new turn) or
+    the run stopped."""
+    payload: dict[str, Any] = {
+        "type": "question_request",
+        "question_id": question_id,
+        "questions": list(questions),
+        "timeout_seconds": int(timeout_seconds),
+        "status": status,
+    }
+    if answers is not None:
+        payload["answers"] = list(answers)
+    if session_key:
+        payload["session_key"] = session_key
+    return payload
+
+
+def question_answer_payload(
+    *, question_id: str, answers: list[dict[str, Any]], session_key: str | None = None
+) -> dict[str, Any]:
+    """App -> executor: the user's answer batch to one ``question_request``."""
+    payload: dict[str, Any] = {
+        "type": "question_answer",
+        "question_id": question_id,
+        "answers": list(answers),
+    }
+    if session_key:
+        payload["session_key"] = session_key
+    return payload
+
+
+def ask_visible_payload(*, question_id: str, visible: bool) -> dict[str, Any]:
+    """App -> executor: the question card is on screen (``visible: true``)
+    or not. The wait does not count down while it is."""
+    return {"type": "ask_visible", "question_id": question_id, "visible": bool(visible)}
+
+
 def approval_decision_payload(
-    *, approval_id: str, approved: bool, scope: str | None = None
+    *,
+    approval_id: str,
+    approved: bool,
+    scope: str | None = None,
+    remember_prefix: str | None = None,
+    feedback: str | None = None,
 ) -> dict[str, Any]:
     """App -> executor: the user's answer to one ``approval_request``.
 
@@ -471,14 +601,19 @@ def approval_decision_payload(
     a decision that arrives after the run already ended, matches nothing and is
     a no-op). ``approved`` True publishes; False (or no answer) does not.
     ``scope`` (per-action approvals, additive) is one of the request's
-    ``options``: ``once``, ``always_this_agent``, ``always_this_site`` or
-    ``deny``. Absent means ``once`` for a yes.
+    ``options``: ``once``, ``always_this_agent``, ``always_this_site``,
+    ``always_this_prefix`` or ``deny``. Absent means ``once`` for a yes.
+    ``remember_prefix`` (item 9, additive) is the command token prefix the user
+    chose to remember (e.g. ``git push``); the host stores it for the agent.
     """
     return {
         "type": "approval_decision",
         "approval_id": approval_id,
         "approved": bool(approved),
         **({"scope": scope} if scope else {}),
+        **({"remember_prefix": remember_prefix} if remember_prefix else {}),
+        # A plan review's "Keep planning" text (docs/WIRE_CONTRACT.md, "Plan mode").
+        **({"feedback": feedback} if feedback else {}),
     }
 
 
@@ -731,6 +866,7 @@ def done_payload(
     session_key: str | None = None,
     cost: dict[str, Any] | None = None,
     automation_result: dict[str, Any] | None = None,
+    goal: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "type": "done",
@@ -769,6 +905,10 @@ def done_payload(
     # did not notify, and the app collapses the run to "no change".
     if automation_result is not None:
         payload["automation_result"] = dict(automation_result)
+    # docs/WIRE_CONTRACT.md, "Goal mode": the session's goal after this run,
+    # with ``continues: true`` when the host already queued the next round.
+    if goal is not None:
+        payload["goal"] = dict(goal)
     return payload
 
 
@@ -840,11 +980,19 @@ def automation_create_payload(
     return payload
 
 
+#: The fields an ``automation_update`` may change (docs/WIRE_CONTRACT.md,
+#: "Automation guards" adds the last three).
+AUTOMATION_UPDATE_KEYS: tuple[str, ...] = (
+    "name", "prompt", "spec", "notify", "allow_chaining", "catch_up", "target",
+)
+
+
 def automation_update_payload(*, automation_id: str, **changes: Any) -> dict[str, Any]:
-    """App -> host: change ``name`` / ``prompt`` / ``spec`` / ``notify`` of one
-    automation. Only the given keys change."""
+    """App -> host: change ``name`` / ``prompt`` / ``spec`` / ``notify`` /
+    ``allow_chaining`` / ``catch_up`` / ``target`` of one automation. Only the
+    given keys change."""
     payload: dict[str, Any] = {"type": "automation_update", "id": automation_id}
-    for key in ("name", "prompt", "spec", "notify"):
+    for key in AUTOMATION_UPDATE_KEYS:
         if key in changes:
             payload[key] = changes[key]
     return payload
@@ -929,18 +1077,36 @@ def skills_list_request_payload() -> dict[str, Any]:
 
 
 def skill_proposal_payload(
-    *, proposal_id: str, agent_id: str, name: str, description: str, body: str
+    *,
+    proposal_id: str,
+    agent_id: str,
+    name: str,
+    description: str,
+    body: str,
+    kind: str = "create",
+    origin: str | None = None,
 ) -> dict[str, Any]:
     """Host -> app, on the run's stream and persisted for replay: the agent
-    offers to save a skill (docs/WIRE_CONTRACT.md, "Skill proposals")."""
-    return {
+    offers to save a skill (docs/WIRE_CONTRACT.md, "Skill proposals").
+    ``kind`` is ``create`` (a new skill) or ``patch`` (a new version of the
+    skill ``name``); ``origin`` is ``review`` for a background review's
+    proposal and absent for the agent's own ``propose_skill``."""
+    payload: dict[str, Any] = {
         "type": "skill_proposal",
         "proposal_id": proposal_id,
         "agent_id": agent_id,
         "name": name,
         "description": description,
         "body": body,
+        "kind": kind,
     }
+    if origin:
+        payload["origin"] = origin
+        if origin == "review":
+            # The typed source chip (docs/WIRE_CONTRACT.md, "Typed source on
+            # synthetic rows").
+            payload["source"] = "review"
+    return payload
 
 
 def skill_proposal_decision_payload(

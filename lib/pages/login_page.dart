@@ -16,6 +16,7 @@ import 'package:chuk_chat/utils/input_validator.dart';
 import 'package:chuk_chat/widgets/password_strength_meter.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/utils/url_launcher_helper.dart';
+import 'package:chuk_chat/widgets/cancel_contract_link.dart';
 import 'package:chuk_chat/widgets/nice_snackbar.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
@@ -565,6 +566,10 @@ class _LoginPageState extends State<LoginPage> {
                             : l.haveAccountSignIn,
                       ),
                     ),
+                    // § 312k BGB and Art. 11a withdrawal: both buttons must
+                    // work without a sign-in, so they sit on this page too.
+                    const SizedBox(height: 4),
+                    const CancelContractLink(),
                   ],
                 ),
               ),

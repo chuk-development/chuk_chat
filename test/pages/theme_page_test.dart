@@ -171,6 +171,19 @@ void main() {
       expect(state.contrast, v.contrast);
       // A pack never changes the font.
       expect(state.uiFont, kDefaultUiFontFamily);
+
+      // "Reset to default" brings the default pack (Plane) back.
+      final reset = find.byKey(const ValueKey('theme_reset_default'));
+      // The row sits right under the preset picker; scroll the page back to
+      // the top so the app bar does not cover it.
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, 600));
+      await tester.pumpAndSettle();
+      await tester.tap(reset);
+      await tester.pumpAndSettle();
+      expect(state.accent, kDefaultAccentColor);
+      expect(state.iconFg, kDefaultIconFgColor);
+      expect(state.bg, kDefaultBgColor);
+      expect(state.contrast, kDefaultContrast);
     });
   }
 }

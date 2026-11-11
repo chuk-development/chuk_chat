@@ -132,7 +132,8 @@ def test_a_url_watch_records_a_baseline_then_fires_only_on_a_text_change(tmp_pat
     row = manager.store.get(out["id"])
     assert row["next_fire_at"] == clock.now + 900
     # The request names no person and no host, just the tool.
-    assert site.requests[-1]["user-agent"] == "chuk-agents/1.0"
+    ua = site.requests[-1]["user-agent"]
+    assert ua.startswith("Mozilla/5.0") and "chuk" not in ua.lower()
     assert "from" not in site.requests[-1]
 
     # Not due yet: no request at all.

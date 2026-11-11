@@ -106,6 +106,9 @@ class SupabaseNotifier:
         # Diagnostics, read by tests and logs.
         self.delivered = 0
         self.dropped_duplicates = 0
+        # The block transitions already announced: (session, goal id, revision).
+        self._goal_blocks_told: set[tuple[str, str, int]] = set()
+        self._goal_blocks_lock = threading.Lock()
         # The host's own desktop-only path composes its text through
         # ``desktop_notify.completion_text``, which has no store to read; hand
         # it this notifier's lookup so it names the agent, not the codename.
@@ -142,7 +145,8 @@ class SupabaseNotifier:
             return False
         failed = bool(summary.get("error")) or str(summary.get("reason") or "") == "failed"
         labels = self.labels(summary)
-        title, body = completion_text(labels, failed=failed)
+        goal_blocked = self._goal_blocked_now(summary)
+        title, body = completion_text(labels, failed=failed, goal_blocked=goal_blocked)
         record = self._record(
             run_id=run_id,
             agent_id=self._agent_id(),
@@ -153,6 +157,39 @@ class SupabaseNotifier:
             body=body,
         )
         self._fire(title, body, record)
+        return True
+
+    def _goal_blocked_now(self, summary: dict) -> bool:
+        """The run's push says "the goal is blocked" only for the run in
+        which the goal BECAME blocked, once per block. ``goal.needs_user``
+        stays true on every later run of the thread until the user acts, and
+        those runs are ordinary answers.
+
+        The block belongs to this run when it was written after the run
+        started (a ``blocked`` tool call in the run, or the round limit set at
+        its end). The (goal id, revision) set stops a second run that
+        overlapped the block from announcing it again."""
+        goal = summary.get("goal")
+        if not isinstance(goal, dict) or goal.get("needs_user") is not True:
+            return False
+        try:
+            updated_at = float(goal.get("updated_at") or 0.0)
+            started_at = float(summary.get("started_at") or 0.0)
+        except (TypeError, ValueError):
+            return False
+        if started_at and updated_at < started_at:
+            return False  # blocked before this run began: already told
+        try:
+            revision = int(goal.get("revision") or 0)
+        except (TypeError, ValueError):
+            revision = 0
+        key = (str(summary.get("session_key") or "default"), str(goal.get("id") or ""), revision)
+        with self._goal_blocks_lock:
+            if key in self._goal_blocks_told:
+                return False
+            if len(self._goal_blocks_told) > 1000:
+                self._goal_blocks_told.clear()
+            self._goal_blocks_told.add(key)
         return True
 
     def notify_approval_pending(self, info: dict, *, session_key: str = "default") -> None:

@@ -11,6 +11,8 @@
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/utils/theme_extensions.dart';
+
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/agents/schedule_spec.dart';
 import 'package:chuk_chat/services/automations/simple_schedule.dart';
@@ -345,13 +347,17 @@ class _DayToggle extends StatelessWidget {
       excludeSemantics: true,
       child: MorphTap(
         onTap: onTap,
-        color: selected ? scheme.primary : scheme.surfaceContainerLow,
+        color: selected
+            ? Theme.of(context).m3.selectedFill
+            : scheme.surfaceContainerLow,
         shape: const CircleBorder(),
         child: Center(
           child: Text(
             label,
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: selected ? scheme.onPrimary : scheme.onSurfaceVariant,
+              color: selected
+                  ? Theme.of(context).m3.onSelectedFill
+                  : scheme.onSurfaceVariant,
               fontWeight: FontWeight.w700,
             ),
           ),

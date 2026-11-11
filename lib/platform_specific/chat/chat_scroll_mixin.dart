@@ -425,12 +425,26 @@ mixin ChatScrollMixin<T extends StatefulWidget> on State<T> {
     if (!mounted) return;
     if ((size.height - composerHeight).abs() < 0.5) return;
     final bool grew = size.height > composerHeight;
+    // Decided now, before the new padding lays out: that layout moves the
+    // bottom away by the growth, and the scroll listener would then call the
+    // reader "not at the bottom" any more.
+    final bool follow = grew && isStickyBottom && !hasTopPin;
     setState(() {
       composerHeight = size.height;
     });
-    if (grew && isStickyBottom) {
-      scrollChatToBottom();
-    }
+    if (!follow) return;
+    // Not scrollChatToBottom: its "near the bottom" test (100 px) fails for
+    // exactly the big growths, an attached picture adds about 110 px, and
+    // the last message (its sources row) stayed behind the composer.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !scrollController.hasClients) return;
+      final ScrollPosition position = scrollController.position;
+      if (position.isScrollingNotifier.value) return;
+      isStickyBottom = true;
+      if ((position.maxScrollExtent - position.pixels).abs() > 0.5) {
+        scrollController.jumpTo(position.maxScrollExtent);
+      }
+    });
   }
 
   /// Lightweight per-token pin used during streaming. Unlike

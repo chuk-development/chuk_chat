@@ -14,7 +14,6 @@ class MessageActionsHandler {
   Function(String)? onShowSnackBar;
   Function(int, String)? onSubmitEdit;
   Function(int)? onResend;
-  Future<void> Function(String)? onSpeak;
 
   int? _editingMessageIndex;
 
@@ -95,14 +94,11 @@ class MessageActionsHandler {
     Future<void> Function(int)? onRetryToolPass,
     bool canRetryToolPass = false,
     void Function(int)? onBranch,
-    Future<void> Function(String)? onSpeak,
-    String? activeSpeechText,
   }) {
     // User message actions are built separately via buildUserMessageActions.
     if (isUser) return const [];
 
     final bool isAssistantPending = isStreaming;
-    final speak = onSpeak ?? this.onSpeak;
     final List<MessageBubbleAction> actions = [];
 
     // Copy action for AI messages — message text only (no tool call metadata)
@@ -116,21 +112,9 @@ class MessageActionsHandler {
           isEnabled: !isAssistantPending,
         ),
       );
-
-      if (!isAssistantPending && speak != null) {
-        final String speechText = _forExport(messageText).trim();
-        if (speechText.isNotEmpty) {
-          final isSpeaking = activeSpeechText == speechText;
-          actions.add(
-            MessageBubbleAction(
-              icon: isSpeaking ? Icons.stop_rounded : Icons.volume_up_outlined,
-              tooltip: isSpeaking ? 'Stop reading' : 'Read aloud',
-              label: isSpeaking ? 'Stop' : 'Read aloud',
-              onPressed: () => unawaited(speak(speechText)),
-            ),
-          );
-        }
-      }
+      // Read aloud is added by `withReadAloudAction`
+      // (lib/widgets/message_bubble/read_aloud_action.dart), which knows the
+      // loading, playing and paused states.
     }
 
     // Retry action — always available on finalized AI messages
@@ -176,6 +160,7 @@ class MessageActionsHandler {
     required String messageText,
     required Function(int) onEdit,
     required Function(int) onResendMessage,
+    MessageBubbleAction? forkFromHere, // checkpoints: Agents threads only
   }) {
     final List<MessageBubbleAction> actions = [];
 
@@ -207,6 +192,8 @@ class MessageActionsHandler {
         onPressed: () => onResendMessage(index),
       ),
     );
+
+    if (forkFromHere != null) actions.add(forkFromHere); // checkpoints
 
     return actions;
   }

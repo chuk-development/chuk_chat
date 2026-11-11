@@ -65,6 +65,7 @@ import 'package:chuk_chat/pages/settings/herenow_settings_page.dart';
 import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/voice/incoming/incoming_call_bootstrap.dart';
 import 'package:chuk_chat/voice/incoming/voice_call_settings_page.dart';
+import 'package:chuk_chat/widgets/cancel_contract_link.dart';
 
 class SettingsPage extends StatefulWidget {
   final AppShellConfig config;
@@ -195,6 +196,10 @@ class _SettingsPageState extends State<SettingsPage> {
                   },
                 ),
               ),
+              // § 312k BGB cancellation and Art. 11a withdrawal buttons,
+              // next to the subscription.
+              const CancelContractRow(),
+              const WithdrawContractRow(),
             ],
           ),
 

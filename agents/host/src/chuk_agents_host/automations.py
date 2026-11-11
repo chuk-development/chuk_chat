@@ -26,7 +26,10 @@ Event triggers (docs/WIRE_CONTRACT.md, "Event triggers"): a ``watch_url``
 row fires on a changed page; a ``mail`` row fires when the mail dispatcher
 offers a claimed mail that matches its filter (:meth:`AutomationManager.offer_mail`).
 Both go through the same pending table as a watcher's report, so the rate
-limit and the busy gate apply to them too.
+limit and the busy gate apply to them too. A ``webhook`` row (research H44,
+"Inbound webhooks") fires when the relay forwards a call to its secret URL
+that passes its HMAC check and filter (:meth:`AutomationManager.offer_webhook`);
+a burst is merged into one fire (``debounce_s`` / ``max_wait_s``).
 
 "Notify only on change": a row with ``notify = on_change`` asks the fired run
 to call ``automation_result(changed, summary)``. When the run ends the
@@ -76,6 +79,8 @@ from chuk_agents_runtime.automations import (
     KIND_SCHEDULE,
     KIND_WATCH_URL,
     KIND_WATCHER,
+    KIND_WEBHOOK,
+    MAX_PAYLOAD_BYTES,
     MAX_RESULT_SUMMARY_CHARS,
     NOTIFY_ALWAYS,
     NOTIFY_ON_CHANGE,
@@ -84,22 +89,38 @@ from chuk_agents_runtime.automations import (
     STATE_FAILED,
     STATE_PAUSED,
     TRIGGERS_FILENAME,
+    CREATED_BY_AGENT,
+    CREATED_BY_AUTOMATION,
+    CREATED_BY_USER,
+    MAX_AUTOMATIONS_PER_AGENT,
+    RETRY_LADDER_SECONDS,
+    TARGET_THIS_SESSION,
     AutomationSpecError,
     cap_payload,
+    catch_up_window,
+    check_agent_interval,
     decide_changed,
+    error_digest,
     fired_prompt,
     mail_matches,
     next_fire,
     parse_mail_spec,
     parse_notify,
     parse_schedule_spec,
+    owner_session_key,
+    parse_catch_up,
+    parse_target,
     parse_watch_url_spec,
+    parse_webhook_spec,
     spec_label,
     summary_digest,
+    target_session_key,
+    webhook_matches,
 )
 from chuk_agents_runtime import agents_hooks as _hooks_module
 
 from . import url_watch
+from . import webhooks as _webhooks
 
 #: ``fire(session_key, prompt, meta) -> run_id | None``. ``meta`` carries
 #: ``automation_id`` and ``name``. ``None`` = the host cannot run a task now.
@@ -126,9 +147,19 @@ EVENT_DONE = "done"
 EVENT_UPDATED = "updated"
 #: An ``on_change`` run reported its result (``changed`` + ``summary``).
 EVENT_RESULT = "result"
+#: A missed occurrence was older than the catch-up window and did not fire.
+EVENT_SKIPPED = "skipped"
+#: A run failed for a transient reason; a re-run is set (``retry_at``).
+EVENT_RETRY = "retry"
 
 #: Mails one pending mail trigger collects before it fires.
 MAX_PENDING_MAILS = 10
+#: Webhook events one pending webhook row collects (newest last). The merged
+#: payload is also cut to the payload cap: the oldest events go first.
+MAX_PENDING_WEBHOOK_EVENTS = 20
+#: ``scope(agent_id, device_id) -> outcome | None``: whether a webhook event
+#: addressed to that agent / host is for this host (``None`` = yes).
+WebhookScope = Callable[[str | None, str | None], "str | None"]
 #: An ``automation_result`` that no run end picked up is dropped after this.
 RESULT_TTL_SECONDS = 6 * 3600
 
@@ -174,6 +205,18 @@ _ADDED_COLUMNS = (
     ("last_summary", "TEXT"),
     ("last_result_at", "REAL"),
     ("unchanged_count", "INTEGER NOT NULL DEFAULT 0"),
+    # Guards (research H37-H40). An old row reads as made by the user, in its
+    # own session, with the default catch-up window and no incident.
+    ("created_by", "TEXT NOT NULL DEFAULT 'user'"),
+    ("allow_chaining", "INTEGER NOT NULL DEFAULT 0"),
+    ("target", "TEXT NOT NULL DEFAULT 'this_session'"),
+    ("catch_up_seconds", "REAL"),
+    ("retry_count", "INTEGER NOT NULL DEFAULT 0"),
+    ("retry_at", "REAL"),
+    ("last_skip_at", "REAL"),
+    ("skipped_count", "INTEGER NOT NULL DEFAULT 0"),
+    ("incident_digest", "TEXT"),
+    ("incident_count", "INTEGER NOT NULL DEFAULT 0"),
 )
 
 
@@ -226,6 +269,7 @@ class AutomationStore:
         next_fire_at: float | None,
         automation_id: str | None = None,
         notify: str = NOTIFY_ALWAYS,
+        extra: dict | None = None,
     ) -> dict:
         row_id = automation_id or _new_id()
         with self._connect() as conn:
@@ -245,7 +289,28 @@ class AutomationStore:
                     notify,
                 ),
             )
+        if extra:
+            return self.update(row_id, **extra)  # type: ignore[return-value]
         return self.get(row_id)  # type: ignore[return-value]
+
+    def count_open(self, session_key: str) -> int:
+        """Rows of one owner that are not cancelled (the per-agent cap)."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM automations WHERE session_key=? AND state != ?",
+                (session_key, STATE_DONE),
+            ).fetchone()
+        return int(row[0]) if row else 0
+
+    def retries_due(self, now: float) -> list[dict]:
+        """Active schedules whose transient-failure re-run is due."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM automations WHERE kind=? AND state=? AND retry_at IS NOT NULL "
+                "AND retry_at<=? ORDER BY retry_at, rowid",
+                (KIND_SCHEDULE, STATE_ACTIVE, now),
+            ).fetchall()
+        return [self._row(r) for r in rows]  # type: ignore[misc]
 
     def get(self, automation_id: str) -> dict | None:
         with self._connect() as conn:
@@ -359,11 +424,36 @@ def automation_fields(row: dict, *, log_path: str | None = None) -> dict:
         # reads as ``always``.
         "notify": row.get("notify") or NOTIFY_ALWAYS,
     }
-    for key in ("next_fire_at", "last_fired_at", "last_error", "last_summary", "last_result_at"):
+    for key in (
+        "next_fire_at",
+        "last_fired_at",
+        "last_error",
+        "last_summary",
+        "last_result_at",
+        "catch_up_seconds",
+        "retry_at",
+        "last_skip_at",
+    ):
         if row.get(key) is not None:
             out[key] = row[key]
-    if row.get("unchanged_count"):
-        out["unchanged_count"] = int(row["unchanged_count"])
+    for key in ("unchanged_count", "skipped_count", "retry_count", "incident_count"):
+        if row.get(key):
+            out[key] = int(row[key])
+    # Additive (docs/WIRE_CONTRACT.md, "Automation guards"): who made the
+    # row, where it runs, whether its runs may make automations.
+    out["created_by"] = row.get("created_by") or CREATED_BY_USER
+    if (row.get("target") or TARGET_THIS_SESSION) != TARGET_THIS_SESSION:
+        out["target"] = row["target"]
+    if row.get("allow_chaining"):
+        out["allow_chaining"] = True
+    if row["kind"] == KIND_WEBHOOK:
+        # The signing secret never leaves the host again (not to the app, not
+        # into the model's list); the app sees only that one is set. The
+        # secret URL is the app's: the host never has it.
+        spec = dict(out["spec"])
+        if spec.pop("signing_secret", None):
+            spec["signed"] = True
+        out["spec"] = spec
     if log_path:
         out["log_path"] = log_path
     return out
@@ -392,11 +482,18 @@ class _Watcher:
 
 @dataclass
 class _Pending:
-    """A trigger held back by the rate limit: the last payload wins."""
+    """A trigger held back by the rate limit: the last payload wins.
+
+    A webhook burst also sets ``first_at`` (its first event) and ``due_at``
+    (quiet window or ``max_wait`` from the first event, whichever is
+    earlier): the entry waits until then before the rate limit and the busy
+    gate are asked."""
 
     reason: str
     payload: Any
     folded: int = 0
+    first_at: float | None = None
+    due_at: float | None = None
 
 
 class AutomationManager:
@@ -422,6 +519,9 @@ class AutomationManager:
         url_fetcher: UrlFetcher | None = None,
         network_allowed: Callable[[], bool] | None = None,
         allow_private_urls: bool = False,
+        chaining_allowed: Callable[[str], bool] | None = None,
+        max_per_agent: int = MAX_AUTOMATIONS_PER_AGENT,
+        webhook_scope: WebhookScope | None = None,
     ) -> None:
         self._db_path = db_path
         self._workspace = Path(workspace).expanduser().resolve()
@@ -445,10 +545,20 @@ class AutomationManager:
         self._url_fetcher: UrlFetcher = url_fetcher or self._default_fetch
         # The agent's ``network`` permission: off = no URL is fetched for it.
         self._network_allowed = network_allowed or (lambda: True)
+        # The user's switch "runs of an automation may set up automations"
+        # for one owning session (research H37). Off unless the host wires
+        # it; a single row can also allow it (``allow_chaining``).
+        self._chaining_allowed = chaining_allowed or (lambda _key: False)
+        self._max_per_agent = int(max_per_agent)
         # ``run_id -> {automation_id, changed, summary, at}``: what an
         # ``on_change`` run reported through ``automation_result``, until the
         # executor ends the run (:meth:`finish_run`).
         self._results: dict[str, dict] = {}
+        # Inbound webhooks (docs/WIRE_CONTRACT.md, "Inbound webhooks"): which
+        # agent / host an event is for, and the double-delivery guard.
+        self._webhook_scope = webhook_scope or (lambda _agent, _device: None)
+        self._seen_events = _webhooks.SeenEvents()
+        self._replays = _webhooks.ReplayGuard()
 
         self.store = AutomationStore(db_path)
         self._dir = self._workspace / AUTOMATIONS_DIRNAME
@@ -522,6 +632,49 @@ class AutomationManager:
     def bound(self, session_key: str) -> "SessionAutomations":
         return SessionAutomations(self, session_key)
 
+    # -- guards (docs/WIRE_CONTRACT.md, "Automation guards") ----------------------
+
+    def chaining_allowed(self, session_key: str, automation_id: str | None) -> bool:
+        """May a run that ``automation_id`` started set up automations? Only
+        when the user said so: for the whole agent (``chaining_allowed``) or
+        for that one row (``allow_chaining``)."""
+        owner = owner_session_key(session_key)
+        try:
+            if self._chaining_allowed(owner):
+                return True
+        except Exception:  # noqa: BLE001 — a broken switch allows nothing
+            return False
+        row = self.store.get(automation_id) if automation_id else None
+        return bool(row is not None and row.get("allow_chaining"))
+
+    def _guard_create(
+        self, session_key: str, created_by: str, chain_from: str | None
+    ) -> str | None:
+        """Why a new row may not be made, or ``None``."""
+        if created_by == CREATED_BY_AUTOMATION and not self.chaining_allowed(session_key, chain_from):
+            return (
+                "a run that an automation started cannot set up new automations; "
+                "the user can allow this in the app. Tell the user what you would set up instead"
+            )
+        if self.store.count_open(session_key) >= self._max_per_agent:
+            return (
+                f"this agent already has {self._max_per_agent} automations, the limit; "
+                "cancel one first (list_automations, cancel_automation)"
+            )
+        return None
+
+    @staticmethod
+    def _guard_fields(created_by: str, target: str | None, catch_up: float | None, allow_chaining: bool) -> dict:
+        extra: dict[str, Any] = {"created_by": created_by}
+        if target and target != TARGET_THIS_SESSION:
+            extra["target"] = target
+        if catch_up is not None:
+            extra["catch_up_seconds"] = float(catch_up)
+        if allow_chaining and created_by == CREATED_BY_USER:
+            # Only the user can allow a row's runs to make automations.
+            extra["allow_chaining"] = 1
+        return extra
+
     def schedule(
         self,
         session_key: str,
@@ -529,12 +682,27 @@ class AutomationManager:
         prompt: str,
         name: str | None,
         notify: str = NOTIFY_ALWAYS,
+        *,
+        created_by: str = CREATED_BY_USER,
+        target: str | None = None,
+        catch_up: Any = None,
+        allow_chaining: bool = False,
+        chain_from: str | None = None,
     ) -> dict:
+        session_key = owner_session_key(session_key)
         try:
             parsed = parse_schedule_spec(spec)
             notify = parse_notify(notify)
+            where = parse_target(target)
+            window = parse_catch_up(catch_up)
+            if created_by != CREATED_BY_USER:
+                # The model's floor: 5 minutes. The user may go to 60 s.
+                check_agent_interval(parsed, now=self._now())
         except AutomationSpecError as exc:
             return {"ok": False, "error": str(exc)}
+        refused = self._guard_create(session_key, created_by, chain_from)
+        if refused:
+            return {"ok": False, "error": refused}
         now = self._now()
         when = next_fire(parsed, after=now)
         if when is None:
@@ -547,6 +715,7 @@ class AutomationManager:
             prompt=prompt,
             next_fire_at=when,
             notify=notify,
+            extra=self._guard_fields(created_by, where, window, allow_chaining),
         )
         self._emit(row, EVENT_CREATED)
         return {"ok": True, **automation_fields(row)}
@@ -558,9 +727,14 @@ class AutomationManager:
         prompt: str,
         name: str | None,
         notify: str = NOTIFY_ALWAYS,
+        *,
+        created_by: str = CREATED_BY_USER,
+        allow_chaining: bool = False,
+        chain_from: str | None = None,
     ) -> dict:
         """A ``watch_url`` row. The first check runs at the next URL tick and
         only records the page; a later check with other text fires."""
+        session_key = owner_session_key(session_key)
         try:
             parsed = parse_watch_url_spec(spec.get("url"), spec.get("every"))
             notify = parse_notify(notify)
@@ -568,6 +742,9 @@ class AutomationManager:
             return {"ok": False, "error": str(exc)}
         if not isinstance(prompt, str) or not prompt.strip():
             return {"ok": False, "error": "prompt must not be empty"}
+        refused = self._guard_create(session_key, created_by, chain_from)
+        if refused:
+            return {"ok": False, "error": refused}
         row = self.store.create(
             session_key=session_key,
             kind=KIND_WATCH_URL,
@@ -576,6 +753,7 @@ class AutomationManager:
             prompt=prompt.strip(),
             next_fire_at=self._now(),
             notify=notify,
+            extra=self._guard_fields(created_by, None, None, allow_chaining),
         )
         self._emit(row, EVENT_CREATED)
         return {"ok": True, **automation_fields(row)}
@@ -587,8 +765,13 @@ class AutomationManager:
         prompt: str,
         name: str | None,
         notify: str = NOTIFY_ALWAYS,
+        *,
+        created_by: str = CREATED_BY_USER,
+        allow_chaining: bool = False,
+        chain_from: str | None = None,
     ) -> dict:
         """A ``mail`` row: fires for each claimed mail that matches."""
+        session_key = owner_session_key(session_key)
         try:
             parsed = parse_mail_spec(spec.get("from"), spec.get("subject"), spec.get("alias"))
             notify = parse_notify(notify)
@@ -596,6 +779,9 @@ class AutomationManager:
             return {"ok": False, "error": str(exc)}
         if not isinstance(prompt, str) or not prompt.strip():
             return {"ok": False, "error": "prompt must not be empty"}
+        refused = self._guard_create(session_key, created_by, chain_from)
+        if refused:
+            return {"ok": False, "error": refused}
         row = self.store.create(
             session_key=session_key,
             kind=KIND_MAIL,
@@ -604,6 +790,7 @@ class AutomationManager:
             prompt=prompt.strip(),
             next_fire_at=None,
             notify=notify,
+            extra=self._guard_fields(created_by, None, None, allow_chaining),
         )
         self._emit(row, EVENT_CREATED)
         return {"ok": True, **automation_fields(row)}
@@ -620,6 +807,9 @@ class AutomationManager:
         prompt = payload.get("prompt")
         name = _clean_name(payload.get("name"))
         notify = payload.get("notify")
+        # The user's own switch for this row (docs/WIRE_CONTRACT.md,
+        # "Automation guards"): its runs may set up automations.
+        chaining = payload.get("allow_chaining") is True
         if not isinstance(prompt, str) or not prompt.strip():
             return {"ok": False, "error": "prompt must not be empty"}
         if kind == KIND_SCHEDULE:
@@ -629,14 +819,66 @@ class AutomationManager:
                 mode = parse_notify(notify)
             except AutomationSpecError as exc:
                 return {"ok": False, "error": str(exc)}
-            return self.schedule(session_key, spec, prompt.strip(), name, mode)
+            return self.schedule(
+                session_key,
+                spec,
+                prompt.strip(),
+                name,
+                mode,
+                created_by=CREATED_BY_USER,
+                target=payload.get("target"),
+                catch_up=payload.get("catch_up"),
+                allow_chaining=chaining,
+            )
         if not isinstance(spec, dict):
             return {"ok": False, "error": "spec must be an object"}
         if kind == KIND_WATCH_URL:
-            return self.watch_url(session_key, spec, prompt, name, notify)
+            return self.watch_url(session_key, spec, prompt, name, notify, allow_chaining=chaining)
         if kind == KIND_MAIL:
-            return self.watch_mail(session_key, spec, prompt, name, notify)
+            return self.watch_mail(session_key, spec, prompt, name, notify, allow_chaining=chaining)
+        if kind == KIND_WEBHOOK:
+            return self.watch_webhook(session_key, spec, prompt, name, notify, allow_chaining=chaining)
         return {"ok": False, "error": f"cannot create an automation of kind {kind!r}"}
+
+    def watch_webhook(
+        self,
+        session_key: str,
+        spec: dict,
+        prompt: str,
+        name: str | None,
+        notify: str = NOTIFY_ALWAYS,
+        *,
+        allow_chaining: bool = False,
+    ) -> dict:
+        """A ``webhook`` row (the app only; there is no model tool).
+        ``spec.webhook_id`` is the id of the server webhook the app made
+        (``POST /v1/agents/webhooks``). One live row per server webhook."""
+        session_key = owner_session_key(session_key)
+        try:
+            parsed = parse_webhook_spec(spec)
+            notify = parse_notify(notify)
+        except AutomationSpecError as exc:
+            return {"ok": False, "error": str(exc)}
+        if not isinstance(prompt, str) or not prompt.strip():
+            return {"ok": False, "error": "prompt must not be empty"}
+        existing = self._webhook_row(parsed["webhook_id"])
+        if existing is not None and existing["state"] != STATE_DONE:
+            return {"ok": False, "error": "this webhook already has an automation; change that one"}
+        refused = self._guard_create(session_key, CREATED_BY_USER, None)
+        if refused:
+            return {"ok": False, "error": refused}
+        row = self.store.create(
+            session_key=session_key,
+            kind=KIND_WEBHOOK,
+            name=name or spec_label(parsed),
+            spec=parsed,
+            prompt=prompt.strip(),
+            next_fire_at=None,
+            notify=notify,
+            extra=self._guard_fields(CREATED_BY_USER, None, None, allow_chaining),
+        )
+        self._emit(row, EVENT_CREATED)
+        return {"ok": True, **automation_fields(row)}
 
     def update(self, session_key: str | None, automation_id: str, changes: dict) -> dict:
         """Change ``name`` / ``prompt`` / ``notify`` / ``spec`` of one row
@@ -662,6 +904,12 @@ class AutomationManager:
                 if not prompt.strip() and row["kind"] != KIND_WATCHER:
                     return {"ok": False, "error": "prompt must not be empty"}
                 fields["prompt"] = prompt.strip()
+            if "allow_chaining" in changes:
+                fields["allow_chaining"] = 1 if changes.get("allow_chaining") is True else 0
+            if "catch_up" in changes and row["kind"] == KIND_SCHEDULE:
+                fields["catch_up_seconds"] = parse_catch_up(changes.get("catch_up"))
+            if "target" in changes and row["kind"] == KIND_SCHEDULE:
+                fields["target"] = parse_target(changes.get("target"))
             if "notify" in changes:
                 fields["notify"] = parse_notify(changes.get("notify"))
                 if fields["notify"] == NOTIFY_ALWAYS:
@@ -680,6 +928,15 @@ class AutomationManager:
                     fields.update(spec=parsed, next_fire_at=self._now())
                 elif row["kind"] == KIND_MAIL and isinstance(spec, dict):
                     fields["spec"] = parse_mail_spec(spec.get("from"), spec.get("subject"), spec.get("alias"))
+                elif row["kind"] == KIND_WEBHOOK and isinstance(spec, dict):
+                    # The id stays; a key the app leaves out keeps its value
+                    # (``signing_secret``: "" or null removes it, ``filter``:
+                    # null removes it).
+                    old = {k: v for k, v in (row["spec"] or {}).items() if k != "webhook_id"}
+                    merged = {**old, **{k: v for k, v in spec.items() if k != "webhook_id"}}
+                    fields["spec"] = parse_webhook_spec(
+                        merged, webhook_id=str(row["spec"].get("webhook_id") or "")
+                    )
                 else:
                     return {"ok": False, "error": f"the spec of a {row['kind']} cannot be changed here"}
         except AutomationSpecError as exc:
@@ -695,7 +952,20 @@ class AutomationManager:
         self._emit(row, EVENT_UPDATED)
         return {"ok": True, **automation_fields(row)}
 
-    def start_watcher(self, session_key: str, script_path: str, name: str | None, restart: bool) -> dict:
+    def start_watcher(
+        self,
+        session_key: str,
+        script_path: str,
+        name: str | None,
+        restart: bool,
+        *,
+        created_by: str = CREATED_BY_AGENT,
+        chain_from: str | None = None,
+    ) -> dict:
+        session_key = owner_session_key(session_key)
+        refused = self._guard_create(session_key, created_by, chain_from)
+        if refused:
+            return {"ok": False, "error": refused}
         rel = script_path.strip().lstrip("./")
         target = (self._workspace / rel).resolve()
         try:
@@ -712,6 +982,7 @@ class AutomationManager:
             spec=spec,
             prompt="",
             next_fire_at=None,
+            extra={"created_by": created_by},
         )
         self._ensure_dir()
         started = self._spawn(row)
@@ -721,7 +992,7 @@ class AutomationManager:
         return {"ok": row["state"] == STATE_ACTIVE, **automation_fields(row, log_path=self.log_path(row["id"]))}
 
     def list(self, session_key: str | None = None) -> list[dict]:
-        rows = self.store.list(session_key)
+        rows = self.store.list(owner_session_key(session_key) if session_key is not None else None)
         return [
             automation_fields(r, log_path=self.log_path(r["id"]) if r["kind"] == KIND_WATCHER else None)
             for r in rows
@@ -732,7 +1003,7 @@ class AutomationManager:
         another session is "not found". ``None`` = the app (the user), which
         may manage every automation of this host."""
         row = self.store.get(automation_id)
-        if row is None or (session_key is not None and row["session_key"] != session_key):
+        if row is None or (session_key is not None and row["session_key"] != owner_session_key(session_key)):
             return {"ok": False, "error": "not found"}
         if action == "pause":
             if row["state"] != STATE_ACTIVE:
@@ -744,7 +1015,7 @@ class AutomationManager:
         elif action == "resume":
             if row["state"] != STATE_PAUSED:
                 return {"ok": False, "error": f"cannot resume an automation that is {row['state']}"}
-            fields: dict[str, Any] = {"state": STATE_ACTIVE, "last_error": None}
+            fields: dict[str, Any] = {"state": STATE_ACTIVE, "last_error": None, "retry_at": None, "retry_count": 0}
             if row["kind"] == KIND_SCHEDULE:
                 now = self._now()
                 if row.get("next_fire_at") is None or float(row["next_fire_at"]) <= now:
@@ -805,9 +1076,56 @@ class AutomationManager:
         now = self._now()
         fired = 0
         for row in self.store.due(now):
+            if self._skip_missed(row, now):
+                continue
             if self._fire_row(row, payload=None, reason=None):
                 fired += 1
+        for row in self.store.retries_due(now):
+            nxt = row.get("next_fire_at")
+            if nxt is not None and float(nxt) <= now:
+                # The regular fire is due as well; it runs instead.
+                self.store.update(row["id"], retry_at=None)
+                continue
+            # Cleared before the fire, so a guard that schedules the NEXT retry
+            # while this run is still starting is not wiped afterwards...
+            self.store.update(row["id"], retry_at=None)
+            if self._fire_row(row, payload=None, reason="retry", retry=True):
+                fired += 1
+            else:
+                # ...but a fire that did not start keeps the retry due: the
+                # next tick tries again, like a due regular fire. Otherwise a
+                # spent one-shot (active, no next fire) would never fire again.
+                self.store.update(row["id"], retry_at=row.get("retry_at"))
         return fired
+
+    def _skip_missed(self, row: dict, now: float) -> bool:
+        """A due fire older than its catch-up window does not run late
+        (research H38: a "09:00 market open" job must not fire at 18:00).
+        The row moves to its next time and notes the skip. Returns True when
+        the occurrence was skipped."""
+        due_at = row.get("next_fire_at")
+        if due_at is None:
+            return False
+        late = now - float(due_at)
+        window = catch_up_window(row["spec"], row.get("catch_up_seconds"), now=float(due_at))
+        if late <= window:
+            return False
+        when = next_fire(row["spec"], after=now)
+        fields: dict[str, Any] = {
+            "next_fire_at": when,
+            "last_skip_at": now,
+            "skipped_count": int(row.get("skipped_count") or 0) + 1,
+            "last_error": f"missed run of {_stamp(float(due_at))} skipped: the host was away "
+            f"{int(late // 60)} min, longer than the catch-up window of {int(window // 60)} min",
+        }
+        if when is None:
+            fields["state"] = STATE_DONE
+        updated = self.store.update(row["id"], **fields) or row
+        self._log(f"[automations] {row['id']}: missed run skipped ({int(late)} s late)")
+        self._emit(updated, EVENT_SKIPPED, extra={"missed_at": float(due_at)})
+        if when is None:
+            self._emit(updated, EVENT_DONE)
+        return True
 
     # -- watchdog: triggers + supervisor ----------------------------------------------
 
@@ -842,7 +1160,9 @@ class AutomationManager:
 
     def _save_triggers(self) -> None:
         with self._lock:
-            pending = {key: {'reason': value.reason, 'payload': value.payload, 'folded': value.folded}
+            pending = {key: {'reason': value.reason, 'payload': value.payload, 'folded': value.folded,
+                             **({'first_at': value.first_at, 'due_at': value.due_at}
+                                if value.due_at is not None else {})}
                        for key, value in self._pending.items()}
             snapshot = (self._trigger_offset, json.dumps(pending))
             if snapshot == self._checkpoint_cache:
@@ -945,6 +1265,9 @@ class AutomationManager:
                 with self._lock:
                     self._pending.pop(automation_id, None)
                 continue
+            if pending.due_at is not None and now < pending.due_at:
+                # A webhook burst still in its quiet window.
+                continue
             last = float(row.get("last_fired_at") or 0.0)
             if now - last < self._rate_window:
                 continue
@@ -955,7 +1278,10 @@ class AutomationManager:
                     continue
             except Exception as exc:  # noqa: BLE001 — a broken probe must not stop the schedule
                 self._log(f"[automations] busy probe failed: {type(exc).__name__}: {exc}")
-            if self._fire_row(row, payload=pending.payload, reason=pending.reason, suppressed=pending.folded):
+            merged = pending.folded + 1 if row["kind"] == KIND_WEBHOOK else 0
+            if self._fire_row(
+                row, payload=pending.payload, reason=pending.reason, suppressed=pending.folded, merged=merged
+            ):
                 fired += 1
                 with self._lock:
                     if self._pending.get(automation_id) is pending:
@@ -963,7 +1289,16 @@ class AutomationManager:
         self._save_triggers()
         return fired
 
-    def _fire_row(self, row: dict, *, payload: Any, reason: str | None, suppressed: int = 0) -> bool:
+    def _fire_row(
+        self,
+        row: dict,
+        *,
+        payload: Any,
+        reason: str | None,
+        suppressed: int = 0,
+        retry: bool = False,
+        merged: int = 0,
+    ) -> bool:
         automation_id = row["id"]
         notify = row.get("notify") or NOTIFY_ALWAYS
         prompt = fired_prompt(
@@ -973,10 +1308,30 @@ class AutomationManager:
             payload,
             notify=notify,
             last_summary=row.get("last_summary") if notify == NOTIFY_ON_CHANGE else None,
+            merged=merged,
         )
         meta = {"automation_id": automation_id, "name": row["name"], "kind": row["kind"], "reason": reason}
+        # The auto reviewer (docs/WIRE_CONTRACT.md, "Auto review") counts the
+        # prompt of an automation the USER created as the user's words. It
+        # gets this stored copy, never the fired text: that text also carries
+        # the payload, the previous result and the header (security review
+        # C2). An automation the agent or another automation created gives
+        # no copy.
+        user_prompt = row.get("prompt")
+        if (row.get("created_by") or CREATED_BY_USER) == CREATED_BY_USER and isinstance(user_prompt, str):
+            if user_prompt.strip():
+                meta["user_prompt"] = user_prompt.strip()
+        target = row.get("target") or TARGET_THIS_SESSION
+        # A retry re-runs the occurrence that failed: same chat as that run.
+        fire_number = int(row.get("fire_count") or 0) + (0 if retry else 1)
+        run_session = target_session_key(row["session_key"], automation_id, target, max(1, fire_number))
+        if run_session != row["session_key"]:
+            # A new chat: it has no last run, so the run takes the owner's
+            # model / provider / effort (``Executor.submit_task``).
+            meta["mode_session_key"] = row["session_key"]
+            meta["target"] = target
         try:
-            run_id = self._fire(row["session_key"], prompt, meta)
+            run_id = self._fire(run_session, prompt, meta)
         except Exception as exc:  # noqa: BLE001 — a broken host must not kill the schedule
             run_id = None
             self._log(f"[automations] fire {automation_id}: {type(exc).__name__}: {exc}")
@@ -990,6 +1345,13 @@ class AutomationManager:
         now = self._now()
         state: str | None = None
         when: float | None = None
+        if retry:
+            # A retry does not move the schedule and does not count as a fire
+            # of its own; the row keeps its next time.
+            updated = self.store.get(automation_id) or row
+            self.fired += 1
+            self._emit(updated, EVENT_FIRED, run_id=run_id, reason=reason, extra=self._session_extra(run_session, row))
+            return True
         if row["kind"] == KIND_SCHEDULE:
             when = next_fire(row["spec"], after=now)
             if when is None:
@@ -1003,10 +1365,17 @@ class AutomationManager:
             automation_id, fired_at=now, next_fire_at=when, suppressed=suppressed, state=state
         ) or row
         self.fired += 1
-        self._emit(updated, EVENT_FIRED, run_id=run_id, reason=reason)
+        self._emit(updated, EVENT_FIRED, run_id=run_id, reason=reason, extra=self._session_extra(run_session, row))
         if state == STATE_DONE:
             self._emit(updated, EVENT_DONE)
         return True
+
+    @staticmethod
+    def _session_extra(run_session: str, row: dict) -> dict | None:
+        """``run_session_key`` on a ``fired`` event whose run is in another chat."""
+        if run_session == row["session_key"]:
+            return None
+        return {"run_session_key": run_session}
 
     # -- event triggers: URL watch -----------------------------------------------------
 
@@ -1016,6 +1385,7 @@ class AutomationManager:
                 self.run_url_checks_once()
             except Exception as exc:  # noqa: BLE001 — the checker must keep running
                 self._log(f"[automations] url checks: {type(exc).__name__}: {exc}")
+
 
     def _default_fetch(self, url: str, etag: str | None, last_modified: str | None) -> url_watch.FetchResult:
         return url_watch.fetch_url(
@@ -1145,6 +1515,102 @@ class AutomationManager:
                 pending.payload = value
                 pending.folded += 1
 
+    # -- event triggers: inbound webhooks (research H44) -------------------------------
+
+    def offer_webhook(self, frame: dict) -> str:
+        """A ``webhook_event`` relay frame (docs/WIRE_CONTRACT.md, "Inbound
+        webhooks"). Returns what became of it, one of the ``OUTCOME_*`` words
+        of :mod:`chuk_agents_host.webhooks`: ``queued``, ``filtered``,
+        ``unknown_webhook`` (no row here: another host of the user may own
+        it), ``other_agent`` / ``other_device`` (addressed elsewhere),
+        ``unknown_version``, ``duplicate``, ``replay``, ``paused``, ``bad_signature``,
+        ``too_large`` or ``malformed``. Called on the relay thread; no
+        network."""
+        try:
+            event = _webhooks.decode_event(frame if isinstance(frame, dict) else {})
+        except _webhooks.WebhookFrameError as exc:
+            return exc.reason
+        try:
+            elsewhere = self._webhook_scope(event.agent_id, event.device_id)
+        except Exception:  # noqa: BLE001 — a broken probe takes nothing
+            elsewhere = _webhooks.OUTCOME_OTHER_AGENT
+        if elsewhere:
+            return elsewhere
+        row = self._webhook_row(event.webhook_id)
+        if row is None or row["state"] == STATE_DONE:
+            return _webhooks.OUTCOME_UNKNOWN
+        # A look only: the id is recorded after the state and signature
+        # checks, so a forged frame that reuses a real event id cannot make
+        # the real delivery a "duplicate".
+        if event.event_id in self._seen_events:
+            return _webhooks.OUTCOME_DUPLICATE
+        if row["state"] != STATE_ACTIVE:
+            return _webhooks.OUTCOME_PAUSED
+        spec = row["spec"] or {}
+        secret = spec.get("signing_secret")
+        if secret and not _webhooks.verify_signature(str(secret), event):
+            self._log(f"[automations] webhook {row['id']}: a call with a missing or wrong signature was dropped")
+            self.store.update(row["id"], last_error="a call with a missing or wrong signature was dropped")
+            return _webhooks.OUTCOME_BAD_SIGNATURE
+        if secret:
+            # A captured signed call POSTed again gets a new event_id from the
+            # server; the sender's own (signed) message id gives it away.
+            # Only after the signature passed, so a forger cannot burn ids.
+            message_ids = _webhooks.sender_message_ids(event)
+            if message_ids and self._replays.check_and_add(event.webhook_id, message_ids, self._now()):
+                self._log(f"[automations] webhook {row['id']}: a replayed call was dropped")
+                return _webhooks.OUTCOME_REPLAY
+        if self._seen_events.check_and_add(event.event_id):
+            return _webhooks.OUTCOME_DUPLICATE
+        if not webhook_matches(spec, event.document, event.headers):
+            return _webhooks.OUTCOME_FILTERED
+        self._queue_webhook(row, _webhooks.event_payload(event))
+        self._save_triggers()
+        return _webhooks.OUTCOME_QUEUED
+
+    def _webhook_row(self, webhook_id: str) -> dict | None:
+        found: dict | None = None
+        for row in self.store.list():
+            if row["kind"] == KIND_WEBHOOK and (row["spec"] or {}).get("webhook_id") == webhook_id:
+                # A live row wins over a cancelled one with the same id.
+                if found is None or found["state"] == STATE_DONE:
+                    found = row
+        return found
+
+    def _queue_webhook(self, row: dict, item: dict) -> None:
+        """Collect one event into the row's pending entry (newest last) and
+        set when it may fire: ``debounce_s`` after this event, but at the
+        latest ``max_wait_s`` after the first one of the burst."""
+        spec = row["spec"] or {}
+        debounce = float(spec.get("debounce_s") or 0)
+        max_wait = float(spec.get("max_wait_s") or 0)
+        now = self._now()
+        with self._lock:
+            pending = self._pending.get(row["id"])
+            events: list = []
+            if pending is not None and isinstance(pending.payload, dict):
+                events = list(pending.payload.get("events") or [])
+            events = (events + [item])[-MAX_PENDING_WEBHOOK_EVENTS:]
+            # The merged payload must fit the payload cap with room for the
+            # wrapper; the oldest events go first. The newest always stays
+            # (``cap_payload`` cuts it when it alone is too big).
+            budget = MAX_PAYLOAD_BYTES - 256
+            while len(events) > 1 and len(json.dumps({"events": events}, ensure_ascii=False).encode()) > budget:
+                events.pop(0)
+            first = pending.first_at if pending is not None and pending.first_at is not None else now
+            due = min(now + debounce, first + max_wait)
+            value = {"events": events}
+            if pending is None:
+                self._pending[row["id"]] = _Pending(
+                    reason="webhook", payload=value, first_at=first, due_at=due
+                )
+            else:
+                pending.reason = "webhook"
+                pending.payload = value
+                pending.folded += 1
+                pending.first_at = first
+                pending.due_at = due
+
     # -- "notify only on change" -------------------------------------------------------
 
     def wants_result(self, session_key: str, automation_id: str | None) -> bool:
@@ -1153,7 +1619,7 @@ class AutomationManager:
         row = self.store.get(automation_id)
         return bool(
             row is not None
-            and row["session_key"] == session_key
+            and row["session_key"] == owner_session_key(session_key)
             and (row.get("notify") or NOTIFY_ALWAYS) == NOTIFY_ON_CHANGE
         )
 
@@ -1176,11 +1642,28 @@ class AutomationManager:
             }
         return {"ok": True, "recorded": True, "note": "the host decides at the end of the run whether the user is told"}
 
-    def finish_run(self, run_id: str | None, automation_id: str | None, *, ok: bool = True) -> dict | None:
-        """The run of an automation ended. For an ``on_change`` row: compare
-        the reported summary's digest with the last one and store the new
-        one. Returns ``{"changed": bool, "summary": str}`` (the run counts as
-        a change or not) or ``None`` when the row is not ``on_change``.
+    def finish_run(
+        self,
+        run_id: str | None,
+        automation_id: str | None,
+        *,
+        ok: bool = True,
+        error: str | None = None,
+        transient: bool = False,
+    ) -> dict | None:
+        """The run of an automation ended.
+
+        A failed run first goes through the guards (docs/WIRE_CONTRACT.md,
+        "Automation guards"): a transient failure before the model answered
+        sets a re-run after 5 / 15 / 30 min (``retry_at``) and tells nobody
+        yet; the same error as the last failure is not told again
+        (``repeated_error``). Both come back as ``changed: false`` so the host
+        skips the toast and the push. A successful run closes the incident.
+
+        For an ``on_change`` row: compare the reported summary's digest with
+        the last one and store the new one. Returns ``{"changed": bool,
+        "summary": str}`` (the run counts as a change or not) or ``None``
+        when the row is neither ``on_change`` nor a failure to report.
 
         Fail-open: a failed run, or a run that never called
         ``automation_result``, is a change (the user is told as before), and
@@ -1190,7 +1673,18 @@ class AutomationManager:
         if not automation_id:
             return None
         row = self.store.get(automation_id)
-        if row is None or (row.get("notify") or NOTIFY_ALWAYS) != NOTIFY_ON_CHANGE:
+        if row is None:
+            return None
+        if not ok:
+            guarded = self._guard_failure(row, error=error, transient=transient)
+            if guarded is not None:
+                self._emit(self.store.get(automation_id) or row, EVENT_RESULT, run_id=run_id, extra=guarded)
+                return guarded
+            row = self.store.get(automation_id) or row
+        else:
+            self._resolve_incident(row)
+            row = self.store.get(automation_id) or row
+        if (row.get("notify") or NOTIFY_ALWAYS) != NOTIFY_ON_CHANGE:
             return None
         if not ok or reported is None or reported.get("automation_id") != automation_id:
             outcome = {"changed": True, "reported": False}
@@ -1209,6 +1703,56 @@ class AutomationManager:
         outcome = {"changed": changed, "summary": summary, "reported": True}
         self._emit(row, EVENT_RESULT, run_id=run_id, extra=outcome)
         return outcome
+
+    def _guard_failure(self, row: dict, *, error: str | None, transient: bool) -> dict | None:
+        """The retry ladder and the incident rule for a failed run. Returns
+        the quiet outcome (``changed: false``) when the user is not told
+        now, else ``None`` (the failure is told as before)."""
+        now = self._now()
+        tries = int(row.get("retry_count") or 0)
+        if transient and row["kind"] == KIND_SCHEDULE and tries < len(RETRY_LADDER_SECONDS):
+            retry_at = now + RETRY_LADDER_SECONDS[tries]
+            fields: dict[str, Any] = {
+                "retry_at": retry_at,
+                "retry_count": tries + 1,
+                "last_error": f"run failed ({error or 'network not reachable'}); retry {tries + 1} of "
+                f"{len(RETRY_LADDER_SECONDS)} at {_stamp(retry_at)}",
+            }
+            if row["state"] == STATE_DONE and row.get("next_fire_at") is None:
+                # A spent one-shot: it stays active until the retry ran.
+                fields["state"] = STATE_ACTIVE
+            updated = self.store.update(row["id"], **fields) or row
+            self._emit(updated, EVENT_RETRY, extra={"retry_at": retry_at})
+            return {"changed": False, "reported": False, "retry_at": retry_at}
+        fields = {"retry_at": None, "retry_count": 0}
+        if row["kind"] == KIND_SCHEDULE and row["state"] == STATE_ACTIVE and row.get("next_fire_at") is None:
+            fields["state"] = STATE_DONE
+        digest = error_digest(error or "failed")
+        same = row.get("incident_digest") == digest and int(row.get("incident_count") or 0) > 0
+        fields.update(
+            incident_digest=digest,
+            incident_count=int(row.get("incident_count") or 0) + 1 if same else 1,
+            last_error=str(error or "the run failed")[:500],
+        )
+        self.store.update(row["id"], **fields)
+        if same:
+            # Research H40: one alert per incident. The same error again is
+            # quiet until a different error or a success.
+            self._log(f"[automations] {row['id']}: same error again, not notified")
+            return {"changed": False, "reported": False, "repeated_error": True}
+        return None
+
+    def _resolve_incident(self, row: dict) -> None:
+        fields: dict[str, Any] = {}
+        if row.get("incident_digest") or row.get("incident_count"):
+            fields.update(incident_digest=None, incident_count=0)
+        if row.get("retry_count") or row.get("retry_at"):
+            fields.update(retry_count=0, retry_at=None)
+        if row["kind"] == KIND_SCHEDULE and row["state"] == STATE_ACTIVE and row.get("next_fire_at") is None:
+            # A one-shot that ran on its retry is spent now.
+            fields["state"] = STATE_DONE
+        if fields:
+            self.store.update(row["id"], **fields)
 
     # -- watcher supervisor -----------------------------------------------------------
 
@@ -1600,6 +2144,14 @@ class AutomationManager:
         return True
 
 
+def _stamp(when: float) -> str:
+    """Local wall-clock text for a note (``2026-11-04 09:00``)."""
+    try:
+        return time.strftime("%Y-%m-%d %H:%M", time.localtime(when))
+    except (OverflowError, OSError, ValueError):
+        return str(int(when))
+
+
 def _clean_name(name: Any) -> str | None:
     if not isinstance(name, str):
         return None
@@ -1613,7 +2165,11 @@ def _env_name_ok(name: str) -> bool:
 
 class SessionAutomations:
     """The :class:`chuk_agents_runtime.automations.AutomationBackend` for ONE session.
-    Every call carries the bound key; there is no way to name another."""
+    Every call carries the bound key; there is no way to name another.
+
+    ``origin`` is the run's origin (``app``, ``automation``, ``job``, ...).
+    A run an automation started creates rows as ``created_by: automation``
+    and only when the user allowed chaining (:meth:`can_create`)."""
 
     def __init__(
         self,
@@ -1622,11 +2178,13 @@ class SessionAutomations:
         *,
         run_id: str | None = None,
         automation_id: str | None = None,
+        origin: str | None = None,
     ) -> None:
         self._manager = manager
         self._session_key = session_key
         self._run_id = run_id
         self._automation_id = automation_id
+        self._origin = origin
 
     @property
     def session_key(self) -> str:
@@ -1636,17 +2194,56 @@ class SessionAutomations:
         """The same session, bound to one fired run: ``automation_result``
         reports for that run and that automation only."""
         return SessionAutomations(
-            self._manager, self._session_key, run_id=run_id, automation_id=automation_id
+            self._manager,
+            self._session_key,
+            run_id=run_id,
+            automation_id=automation_id,
+            origin=self._origin,
         )
 
-    def schedule(self, spec: dict, prompt: str, name: str | None, notify: str = NOTIFY_ALWAYS) -> dict:
-        return self._manager.schedule(self._session_key, spec, prompt, name, notify)
+    def with_origin(self, origin: str | None) -> "SessionAutomations":
+        """The same binding for a run of ``origin``."""
+        return SessionAutomations(
+            self._manager,
+            self._session_key,
+            run_id=self._run_id,
+            automation_id=self._automation_id,
+            origin=origin,
+        )
+
+    @property
+    def _by_automation(self) -> bool:
+        return self._origin == "automation"
+
+    @property
+    def _created_by(self) -> str:
+        return CREATED_BY_AUTOMATION if self._by_automation else CREATED_BY_AGENT
+
+    def can_create(self) -> bool:
+        if not self._by_automation:
+            return True
+        return self._manager.chaining_allowed(self._session_key, self._automation_id)
+
+    def _guard(self) -> dict:
+        return {"created_by": self._created_by, "chain_from": self._automation_id}
+
+    def schedule(
+        self,
+        spec: dict,
+        prompt: str,
+        name: str | None,
+        notify: str = NOTIFY_ALWAYS,
+        target: str = TARGET_THIS_SESSION,
+    ) -> dict:
+        return self._manager.schedule(
+            self._session_key, spec, prompt, name, notify, target=target, **self._guard()
+        )
 
     def watch_url(self, spec: dict, prompt: str, name: str | None, notify: str = NOTIFY_ALWAYS) -> dict:
-        return self._manager.watch_url(self._session_key, spec, prompt, name, notify)
+        return self._manager.watch_url(self._session_key, spec, prompt, name, notify, **self._guard())
 
     def watch_mail(self, spec: dict, prompt: str, name: str | None, notify: str = NOTIFY_ALWAYS) -> dict:
-        return self._manager.watch_mail(self._session_key, spec, prompt, name, notify)
+        return self._manager.watch_mail(self._session_key, spec, prompt, name, notify, **self._guard())
 
     def wants_result(self) -> bool:
         return self._manager.wants_result(self._session_key, self._automation_id)
@@ -1657,7 +2254,9 @@ class SessionAutomations:
         )
 
     def start_watcher(self, script_path: str, name: str | None, restart: bool) -> dict:
-        return self._manager.start_watcher(self._session_key, script_path, name, restart)
+        return self._manager.start_watcher(
+            self._session_key, script_path, name, restart, **self._guard()
+        )
 
     def list(self) -> list[dict]:
         return self._manager.list(self._session_key)
@@ -1680,4 +2279,6 @@ __all__ = [
     "EVENT_DONE",
     "EVENT_RESULT",
     "EVENT_UPDATED",
+    "EVENT_SKIPPED",
+    "EVENT_RETRY",
 ]

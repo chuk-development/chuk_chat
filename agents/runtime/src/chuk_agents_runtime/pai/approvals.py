@@ -59,11 +59,17 @@ from ..action_policy import (
     SEND_EXTERNAL,
     SITE_CLASSES,
     BROWSER_ACT,
+    LOCAL_ACTION_TOOLS,
+    LOCAL_ACTIONS,
+    MODE_REVIEW_STRICT,
+    REVIEW_MODES,
+    SCOPE_DENY,
     ActionApprovals,
     ActionDecision,
     ActionPolicy,
     ActionRequest,
     describe_browser,
+    describe_local,
     describe_mail,
     describe_mcp,
     describe_publish,
@@ -113,6 +119,10 @@ class ApprovalRule:
     #: the browser shows (``browser_navigate`` -> the host of its URL).
     #: ``None`` from it, or no callable, means the browser's current site.
     site_of: Callable[[dict], str | None] | None = None
+    #: ``reviewer(args)`` -> :class:`~chuk_agents_runtime.auto_review.ReviewVerdict`
+    #: for a class in a review mode (docs/WIRE_CONTRACT.md, "Auto review").
+    #: ``None`` in a review mode = every call asks the user.
+    reviewer: Callable[[dict], Any] | None = None
 
     def mode(self, site: str | None = None) -> str:
         """``ask`` / ``allow`` / ``deny`` for one call, from the live policy."""
@@ -215,6 +225,14 @@ class ApprovalPolicy:
                 return ToolApproved()
             if mode == MODE_DENY:
                 return self._deny(call_id, rule.declined(args, "denied_by_policy"))
+        verdict = None
+        if rule.action_class is not None and mode in REVIEW_MODES:
+            # Auto review (research item 31): the cheap model decides first.
+            verdict = await anyio.to_thread.run_sync(_review, rule, args)
+            if verdict.allowed:
+                return ToolApproved()
+            if mode == MODE_REVIEW_STRICT and verdict.valid:
+                return self._deny(call_id, rule.declined(args, _review_reason(verdict)))
         try:
             request = await anyio.to_thread.run_sync(_prepare, rule, args, site)
         except Exception as exc:  # noqa: BLE001 — a failed preflight is a no
@@ -224,6 +242,10 @@ class ApprovalPolicy:
         if isinstance(request, dict):
             # The preflight already answered (a scan error): that is the result.
             return self._deny(call_id, request)
+        if verdict is not None and isinstance(request, ActionRequest):
+            # The card says why it asks; a review card is for this call only.
+            request.details = {**request.details, "kind": "auto_review", "review": verdict.to_dict()}
+            request.options = (SCOPE_ONCE, SCOPE_DENY)
         if rule.ask is None:
             return self._deny(call_id, rule.declined(args, "unattended"))
         try:
@@ -250,6 +272,22 @@ class ApprovalPolicy:
             record = self.toolset.calls.setdefault(call_id, CallRecord(started_at=0.0))
             record.result = result
         return ToolDenied(message=json.dumps(result, separators=(",", ":")))
+
+
+def _review(rule: ApprovalRule, args: dict) -> Any:
+    from ..auto_review import ReviewVerdict
+
+    if rule.reviewer is None:
+        return ReviewVerdict(False, reason="no reviewer")
+    try:
+        verdict = rule.reviewer(args)
+    except Exception:  # noqa: BLE001 — a failed review asks the user
+        return ReviewVerdict(False, reason="the reviewer failed")
+    return verdict if isinstance(verdict, ReviewVerdict) else ReviewVerdict(False, reason="no verdict")
+
+
+def _review_reason(verdict: Any) -> str:
+    return f"review_denied:{verdict.risk}:{verdict.reason}"
 
 
 def _read_site(reader: Callable[[], str]) -> str:
@@ -320,6 +358,15 @@ def class_declined(action_class: str) -> Callable[[dict, str], dict]:
                 "ask the user what to do instead."
             )
             return {"ok": False, "declined": True, "action_class": action_class, "error": error}
+        if reason.startswith("review_denied:"):
+            _, risk, why = reason.split(":", 2)
+            error = (
+                f"the automatic reviewer refused this action (risk {risk})"
+                + (f": {why}" if why else "")
+                + ". It did not run. Do not retry it or work around it; tell the user what you "
+                "wanted to do and why, so the user can do it or allow it."
+            )
+            return {"ok": False, "declined": True, "action_class": action_class, "review": risk, "error": error}
         return {"ok": False, "action_class": action_class, "error": reason}
 
     return declined
@@ -341,7 +388,9 @@ def action_rule(
     )
 
 
-def action_rules(registry: Any, manager: Any, approvals: ActionApprovals) -> dict[str, ApprovalRule]:
+def action_rules(
+    registry: Any, manager: Any, approvals: ActionApprovals, reviewer: Any = None
+) -> dict[str, ApprovalRule]:
     """The class rules for the tools this run has, decided by structure:
 
     - ``send_external``: ``mail_send`` / ``mail_reply`` when registered;
@@ -351,6 +400,16 @@ def action_rules(registry: Any, manager: Any, approvals: ActionApprovals) -> dic
       server declared ``destructiveHint: true`` (and not read-only).
     """
     rules: dict[str, ApprovalRule] = {}
+    # ``local_actions`` (docs/WIRE_CONTRACT.md, "Auto review"): commands and
+    # file changes in the sandbox. Default ``allow``: no deferral, no cost.
+    for name in sorted(LOCAL_ACTION_TOOLS):
+        if registry.has(name):
+            rule = action_rule(
+                LOCAL_ACTIONS, lambda args, _n=name: describe_local(_n, args), approvals
+            )
+            if reviewer is not None:
+                rule.reviewer = lambda args, _n=name: reviewer(_n, args)
+            rules[name] = rule
     for name in sorted(MAIL_SEND_TOOLS):
         if registry.has(name):
             rules[name] = action_rule(

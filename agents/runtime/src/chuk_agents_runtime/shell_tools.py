@@ -30,6 +30,7 @@ import json
 import re
 import secrets as _secrets
 import shlex
+import time
 from collections.abc import Callable, Mapping
 from typing import Any
 
@@ -292,7 +293,11 @@ class JobManager:
             f"D=$1; ID={job_id}; T=$2\n"
             'echo $$ > "$D/$ID.pid"\n'
             f"{cd_line}"
-            f'timeout --signal=TERM -k 10 {self.timeout_s} bash "$D/$ID.cmd" > "$D/$ID.log" 2>&1\n'
+            # ``timeout`` makes its own process group, so a signal to this
+            # wrapper's group never reaches the command: forward it.
+            "trap 'kill -TERM -- \"-$tp\" 2>/dev/null; wait \"$tp\" 2>/dev/null; exit 143' TERM INT HUP\n"
+            f'timeout --signal=TERM -k 10 {self.timeout_s} bash "$D/$ID.cmd" > "$D/$ID.log" 2>&1 &\n'
+            'tp=$!; wait "$tp"\n'
             "rc=$?\n"
             'if [ -e "$D/$ID.cancelled" ]; then exit 0; fi\n'
             'echo $rc > "$D/$ID.exit"\n'
@@ -301,6 +306,160 @@ class JobManager:
             "\"exit_code\":%d,\"timed_out\":%s,\"ts\":%s}\\n' "
             f'"$ID" {shlex.quote(session_json)} "$rc" "$to" "$(date +%s)" >> "$T"\n'
         )
+
+    def _foreground_wrapper(self, job_id: str) -> str:
+        """The wrapper of a foreground command (research item 38). It runs in
+        the directory the caller's shell was in (``$3``), keeps stdout in the
+        log and stderr in ``.err`` apart (the command file itself loads the
+        caller's shell state and writes the final one), and writes the wake-up trigger only once the
+        caller adopted it as a background job (the ``.notify`` file)."""
+        session_json = json.dumps(self.session_key) if self.session_key else "null"
+        return (
+            "#!/bin/bash\n"
+            f"D=$1; ID={job_id}; T=$2\n"
+            'echo $$ > "$D/$ID.pid"\n'
+            'cd "$3" 2>/dev/null\n'
+            # A stop or a cancel signals this wrapper's group. ``timeout`` makes
+            # its own group, so the signal is forwarded to it. The command's
+            # EXIT trap still writes the state (bash runs it on TERM); once the
+            # command ended the plaintext snapshot is removed.
+            "trap 'kill -TERM -- \"-$tp\" 2>/dev/null; wait \"$tp\" 2>/dev/null; "
+            'rm -f "$D/$ID.env" "$D/$ID.state"; exit 143\' TERM INT HUP\n'
+            'export __CW_ENV_FILE="$D/$ID.env" __CW_STATE_FILE="$D/$ID.state"\n'
+            f'timeout --signal=TERM -k 10 {self.timeout_s} bash "$D/$ID.cmd" > "$D/$ID.log" 2> "$D/$ID.err" &\n'
+            'tp=$!; wait "$tp"\n'
+            "rc=$?\n"
+            'if [ -e "$D/$ID.cancelled" ]; then rm -f "$D/$ID.env" "$D/$ID.state"; exit 0; fi\n'
+            'echo $rc > "$D/$ID.exit"\n'
+            # Not adopted: the caller loads the state and removes every file of
+            # the job. When the caller never comes (it was stopped, its shell
+            # died), the snapshot of its exports must not stay on disk in plain
+            # text: wait a bounded time for the caller, then remove it.
+            'if [ ! -e "$D/$ID.notify" ]; then\n'
+            '  i=0; while [ -e "$D/$ID.exit" ] && [ $i -lt 600 ]; do sleep 0.1; i=$((i+1)); done\n'
+            '  rm -f "$D/$ID.env" "$D/$ID.state"; exit 0\n'
+            'fi\n'
+            # Adopted: the caller never loads this state. The snapshot holds
+            # the caller's exports in plain text; it must not stay on disk.
+            'rm -f "$D/$ID.env" "$D/$ID.state"\n'
+            "to=false; [ $rc -eq 124 ] && to=true\n"
+            "printf '{\"kind\":\"job\",\"job_id\":\"%s\",\"session_key\":%s,"
+            "\"exit_code\":%d,\"timed_out\":%s,\"ts\":%s}\\n' "
+            f'"$ID" {shlex.quote(session_json)} "$rc" "$to" "$(date +%s)" >> "$T"\n'
+        )
+
+    def run_foreground(
+        self,
+        command: str,
+        *,
+        timeout: int,
+        env: Mapping[str, str] | None = None,
+    ) -> dict | None:
+        """Run ``command`` in the foreground as an adoptable job (research
+        item 38). It ends within ``timeout``: ``{"finished": True, "result":
+        ProcessResult}``. It runs longer: the SAME process is adopted as a
+        background job, ``{"moved": True, "job_id", "log_path", "stdout",
+        "stderr"}`` — it is never stopped and started a second time. ``None``
+        when the job could not be set up: the command did not run at all, so
+        the caller may run it the plain way.
+
+        The persistent shell keeps working: the job starts in the caller's
+        directory with the caller's exported variables, functions and aliases,
+        and when it ends in time its final directory, exports, functions and
+        aliases are loaded back into the caller's shell. ``env`` (the secrets)
+        reaches the process only; it is unset before any state is written."""
+        if not isinstance(command, str) or not command.strip():
+            return None
+        names = [k for k in (env or {}) if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", str(k))]
+        forget = f"unset -v {' '.join(names)} 2>/dev/null; " if names else ""
+        job_id = self._new_id()
+        meta = {
+            "job_id": job_id,
+            "command": command,
+            "cwd": None,
+            "session_key": self.session_key,
+            "foreground": True,
+        }
+        dump = '{ declare -px; declare -f; alias; } 2>/dev/null'
+        body = (
+            "shopt -s expand_aliases 2>/dev/null\n"
+            'source "$__CW_ENV_FILE" 2>/dev/null; rm -f "$__CW_ENV_FILE"\n'
+            "trap '__cw_rc=$?; __cw_sf=$__CW_STATE_FILE; unset -v __CW_ENV_FILE __CW_STATE_FILE; "
+            + forget.replace("'", "")
+            + dump
+            + " > \"$__cw_sf\"; printf \"cd %q\\n\" \"$PWD\" >> \"$__cw_sf\"; "
+            + "exit $__cw_rc' EXIT\n"
+            + command
+            + "\n"
+        )
+        kw = {"env": dict(env)} if env else {}
+        started = time.monotonic()
+        setup = (
+            self._prelude()
+            + f'printf %s {shlex.quote(_b64(body))} | base64 -d > "$__cw_d/{job_id}.cmd" || exit 98; '
+            + f'printf %s {shlex.quote(_b64(self._foreground_wrapper(job_id)))} | base64 -d > "$__cw_d/{job_id}.sh" || exit 98; '
+            # The caller's shell state, without the secrets (they reach the
+            # process through its environment, never through a file).
+            + f'( {forget}{dump} > "$__cw_d/{job_id}.env" ) || exit 98; '
+            + f'__cw_m="$(printf %s {shlex.quote(_b64(json.dumps(meta)))} | base64 -d)"; '
+            + "__cw_now=$(date +%s); "
+            + 'printf \'%s,"started_at":%s}\' "${__cw_m%\\}}" "$__cw_now" > "$__cw_d/'
+            + job_id
+            + '.json" || exit 98; '
+            + f'setsid bash "$__cw_d/{job_id}.sh" "$__cw_d" "$__cw_t" "$PWD" </dev/null >/dev/null 2>&1 & '
+            + 'echo "$!"'
+        )
+        launched = self.env.run_bash(setup, timeout=60, internal=True, **kw)
+        if not launched.ok:
+            return None
+        marker = f"__CW_MOVED_{job_id}__"
+        cap = SHELL_OUTPUT_CAP
+        # No ``exit`` anywhere: a persistent shell runs this inside its own
+        # envelope and must reach its state dump afterwards. ``$?`` of the last
+        # statement is the command's exit code.
+        wait = (
+            self._prelude()
+            + f"__cw_i={job_id}; "
+            # A stop of the caller stops the command too, unless it was adopted.
+            + "__cw_stop() { [ -e \"$__cw_d/$__cw_i.notify\" ] || { __cw_p=$(cat \"$__cw_d/$__cw_i.pid\" 2>/dev/null); "
+            + '[ -n "$__cw_p" ] && kill -TERM -- "-$__cw_p" 2>/dev/null; '
+            # The stopped command's EXIT trap may still write the state file:
+            # remove the plaintext snapshot once the process group is gone.
+            + '( sleep 1; [ -n "$__cw_p" ] && kill -KILL -- "-$__cw_p" 2>/dev/null; '
+            + 'rm -f "$__cw_d/$__cw_i.env" "$__cw_d/$__cw_i.state" ) >/dev/null 2>&1 & }; exit 130; }; '
+            + "trap __cw_stop TERM INT HUP; "
+            + f"__cw_end=$(( $(date +%s) + {max(1, int(timeout))} )); __cw_n=0; "
+            + 'while [ ! -e "$__cw_d/$__cw_i.exit" ] && [ "$(date +%s)" -lt "$__cw_end" ]; do '
+            + 'if [ $__cw_n -lt 40 ]; then sleep 0.05; else sleep 0.2; fi; __cw_n=$((__cw_n+1)); done; '
+            # Adopt first, then look again: a job that ended in between is
+            # still reported as finished.
+            + '[ -e "$__cw_d/$__cw_i.exit" ] || touch "$__cw_d/$__cw_i.notify"; '
+            + "trap - TERM INT HUP; unset -f __cw_stop; "
+            + 'if [ -e "$__cw_d/$__cw_i.exit" ]; then '
+            + 'cat "$__cw_d/$__cw_i.log" 2>/dev/null; cat "$__cw_d/$__cw_i.err" >&2 2>/dev/null; '
+            + '__cw_rc=$(cat "$__cw_d/$__cw_i.exit"); '
+            + '[ -e "$__cw_d/$__cw_i.state" ] && source "$__cw_d/$__cw_i.state" >/dev/null 2>&1; '
+            + 'rm -f "$__cw_d/$__cw_i".*; '
+            + '( exit "$__cw_rc" ); '
+            + "else "
+            + f"echo {marker}; "
+            + f'tail -c {cap} "$__cw_d/$__cw_i.log" 2>/dev/null; '
+            + f'tail -c {cap} "$__cw_d/$__cw_i.err" >&2 2>/dev/null; '
+            + "true; fi"
+        )
+        result = self.env.run_bash(wait, timeout=max(1, int(timeout)) + 30, **kw)
+        stdout = result.stdout or ""
+        if not result.timed_out and stdout.startswith(marker):
+            return {
+                "moved": True,
+                "job_id": job_id,
+                "log_path": f"{JOBS_DIRNAME}/{job_id}.log",
+                "stderr_path": f"{JOBS_DIRNAME}/{job_id}.err",
+                "stdout": stdout[len(marker):].lstrip("\n"),
+                "stderr": result.stderr or "",
+            }
+        result.duration_s = time.monotonic() - started
+        return {"finished": True, "result": result}
 
     # -- API -------------------------------------------------------------------
 
@@ -458,6 +617,9 @@ class JobManager:
             + 'kill -TERM -- "-$__pid" 2>/dev/null || kill -TERM "$__pid" 2>/dev/null; '
             + "for __i in 1 2 3 4 5 6 7 8 9 10; do kill -0 \"$__pid\" 2>/dev/null || break; sleep 0.5; done; "
             + 'kill -KILL -- "-$__pid" 2>/dev/null; kill -KILL "$__pid" 2>/dev/null; '
+            # A killed foreground job's EXIT trap writes the caller's exports
+            # to ``.state``; nobody loads it after a cancel, so remove it.
+            + f'rm -f "$__cw_d/{job_id}.env" "$__cw_d/{job_id}.state"; '
             + f'echo 143 > "$__cw_d/{job_id}.exit"; echo cancelled'
         )
         result = self.env.run_bash(script, timeout=60)

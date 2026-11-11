@@ -32,8 +32,11 @@ import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/widgets/agent_activity/agent_activity_model.dart';
 import 'package:chuk_chat/widgets/agent_activity/agent_activity_timeline.dart';
 import 'package:chuk_chat/widgets/agent_activity/agents_live_status.dart';
+import 'package:chuk_chat/widgets/agent_activity/tool_activity_category.dart';
+import 'package:chuk_chat/widgets/terminal_block.dart';
 import 'package:chuk_chat/services/agents/agents_approval_grants.dart';
 import 'package:chuk_chat/widgets/agents_approval_row.dart';
+import 'package:chuk_chat/widgets/agents_context_chip.dart';
 import 'package:chuk_chat/models/artifact.dart';
 import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/services/app_theme_service.dart';
@@ -62,8 +65,12 @@ import 'package:chuk_chat/services/settings/mobile_chat_preferences.dart';
 import 'package:chuk_chat/widgets/messenger_typing_indicator.dart';
 import 'package:chuk_chat/widgets/message_bubble/web_search_sources.dart';
 import 'package:chuk_chat/widgets/message_bubble/voice_message_bubble.dart';
+import 'package:chuk_chat/widgets/message_bubble/outbox_status_line.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
 import 'package:chuk_chat/widgets/document_viewer.dart';
+import 'package:chuk_chat/services/spreadsheet/spreadsheet_parser.dart'
+    show SpreadsheetDocument;
+import 'package:chuk_chat/widgets/spreadsheet/spreadsheet_viewer.dart';
 import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/nice_snackbar.dart';
 import 'package:chuk_chat/widgets/sandbox_artifact_block.dart';
@@ -82,7 +89,14 @@ import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/utils/json_helpers.dart';
+import 'package:chuk_chat/utils/secret_mask.dart';
+import 'package:chuk_chat/widgets/masked_secret_text.dart';
+import 'package:chuk_chat/models/turn_usage.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
+import 'package:chuk_chat/services/agents/agents_attachments.dart'
+    show AgentsAttachmentInfo;
+import 'package:chuk_chat/widgets/agents_attachment_chips.dart'
+    show AgentsAttachmentChips;
 
 part 'message_bubble/models.dart';
 part 'message_bubble/layout.dart';
@@ -189,6 +203,7 @@ class MessageBubble extends StatefulWidget {
     this.modelLabel,
     this.modelProvider,
     this.tps,
+    this.usage,
     this.isEditing = false,
     this.initialEditText,
     this.onSubmitEdit,
@@ -207,6 +222,7 @@ class MessageBubble extends StatefulWidget {
     this.images,
     this.imageMetas,
     this.attachments,
+    this.agentsAttachments,
     this.imageCostEur,
     this.imageGeneratedAt,
     this.onAskUserAnswer,
@@ -214,6 +230,7 @@ class MessageBubble extends StatefulWidget {
     this.userMessageActions = const <MessageBubbleAction>[],
     this.useSharedSelectionArea = false,
     this.status,
+    this.queueId,
     this.lastError,
     this.onRetryPending,
     this.onContinueGeneration,
@@ -280,6 +297,11 @@ class MessageBubble extends StatefulWidget {
   final String? modelLabel;
   final String? modelProvider;
   final double? tps; // Tokens per second metric
+
+  /// Token usage of this answer (prompt, completion, cached), when the
+  /// server reported it. Null on older answers and while streaming.
+  final TurnUsage? usage;
+
   final bool isEditing;
   final String? initialEditText;
   final ValueChanged<String>? onSubmitEdit;
@@ -326,6 +348,10 @@ class MessageBubble extends StatefulWidget {
   /// generated and carries the AI-supplied caption rendered under each image.
   final List<ImageMeta>? imageMetas;
   final List<DocumentAttachment>? attachments; // Document attachments
+
+  /// The files a user sent to an Agents task (a live send's sealed files,
+  /// or the host's replayed list), drawn as rows on the user bubble.
+  final List<AgentsAttachmentInfo>? agentsAttachments;
   final double? imageCostEur;
   final DateTime? imageGeneratedAt;
 
@@ -350,10 +376,15 @@ class MessageBubble extends StatefulWidget {
   /// behaves like [ChatMessageStatus.sent].
   final ChatMessageStatus? status;
 
+  /// The offline outbox row of this (user) message. The status line under
+  /// the bubble reads the row's state by this id.
+  final String? queueId;
+
   /// Last error text shown in the failed-status tooltip.
   final String? lastError;
 
-  /// Called when the user taps the inline retry button on a failed message.
+  /// Retry for a pending/failed message that has no outbox row (an Agents
+  /// outbox entry). A message with a row retries that row itself.
   final VoidCallback? onRetryPending;
 
   /// Called when the user taps the inline "Continue generation" button on

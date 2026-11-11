@@ -36,8 +36,8 @@ void main() {
     test(
       'states it is a setup step so the model does not stop there',
       () async {
-        // The CONTINUATION block tells the model to answer once tool results
-        // satisfy the request. After a bare ack that reads as "done".
+        // The after-tool-results block tells the model to answer once tool
+        // results satisfy the request. After a bare ack that reads as "done".
         final executor = _executorWith(['skill', 'weather', 'geocode']);
 
         final result = await executor.execute('skill', {
@@ -45,7 +45,9 @@ void main() {
         });
 
         expect(result.output, contains('SETUP step, not the answer'));
-        expect(result.output, contains('## ACTIVE SKILL: weather-cards'));
+        // The body comes as a <skill_content> message, not in the system
+        // prompt.
+        expect(result.output, contains('<skill_content name="weather-cards">'));
       },
     );
 

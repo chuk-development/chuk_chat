@@ -452,6 +452,60 @@ def resolve_model(
     return ResolvedModel(model_id=chosen["id"], provider_slug=slug)
 
 
+def model_supports_vision_in_catalog(models: list[dict[str, Any]], model_id: str) -> bool | None:
+    """The catalogue's ``supports_vision`` flag of ``model_id`` (also read
+    from ``input_modalities`` containing ``image``). ``None`` when unknown."""
+    for entry in models or []:
+        if not isinstance(entry, dict) or entry.get("id") != model_id:
+            continue
+        flag = entry.get("supports_vision")
+        if isinstance(flag, bool):
+            return flag
+        modalities = entry.get("input_modalities") or (entry.get("architecture") or {}).get("input_modalities")
+        if isinstance(modalities, list):
+            return "image" in modalities
+        return None
+    return None
+
+
+def model_limits_from_catalog(
+    models: list[dict[str, Any]], model_id: str, provider_slug: str | None = None
+) -> tuple[int | None, int | None]:
+    """``(context_length, max_completion_tokens)`` of ``model_id`` in a
+    ``/v1/models_info`` list (bead B18). The pinned provider's figures first,
+    then the model's own, then the smallest any provider reports (the window
+    every route of the model can hold). ``None`` when the catalogue is silent."""
+
+    def num(value: Any) -> int | None:
+        if isinstance(value, bool):
+            return None
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            return None
+        return number if number > 0 else None
+
+    for entry in models:
+        if not isinstance(entry, dict) or entry.get("id") != model_id:
+            continue
+        providers = [p for p in entry.get("providers") or [] if isinstance(p, dict)]
+        pinned = next((p for p in providers if provider_slug and p.get("slug") == provider_slug), None)
+        ctx = num(pinned.get("context_length")) if pinned else None
+        out = num(pinned.get("max_completion_tokens")) if pinned else None
+        if ctx is None:
+            ctx = num(entry.get("context_length"))
+        if out is None:
+            out = num(entry.get("max_completion_tokens"))
+        if ctx is None:
+            sizes = [n for n in (num(p.get("context_length")) for p in providers) if n]
+            ctx = min(sizes) if sizes else None
+        if out is None:
+            outs = [n for n in (num(p.get("max_completion_tokens")) for p in providers) if n]
+            out = min(outs) if outs else None
+        return ctx, out
+    return None, None
+
+
 #: Every graded reasoning token the chat API knows, weakest to strongest. Only
 #: the ORDER is fixed here; which tokens a model accepts is the catalogue's
 #: ``supported_efforts`` list, never this ladder.
@@ -618,8 +672,18 @@ class BackendModelClient:
         transport: Any = None,
         timeout: float = DEFAULT_TIMEOUT,
         clock: Callable[[], float] = time.monotonic,
+        context_length: int | None = None,
+        max_output_tokens: int | None = None,
+        supports_vision: bool | None = None,
     ) -> None:
         self._session = session
+        #: The catalogue's ``supports_vision`` for the model (docs/
+        #: WIRE_CONTRACT.md, "Attachments to Agents"); ``None`` = unknown.
+        self.supports_vision = supports_vision
+        # The model's window and output cap from the catalogue (bead B18):
+        # the context ladder sizes itself from these. ``None`` = unknown.
+        self._context_length = context_length
+        self._max_output_tokens = max_output_tokens
         self._model_id = model_id
         self._provider_slug = provider_slug
         self._base_url = base_url.rstrip("/")
@@ -650,6 +714,17 @@ class BackendModelClient:
     def model_id(self) -> str:
         """The model this client calls (what a run's cost is priced on)."""
         return self._model_id
+
+    @property
+    def context_length(self) -> int | None:
+        """The model's context window from the catalogue, or ``None``."""
+        return self._context_length
+
+    @property
+    def max_output_tokens(self) -> int | None:
+        """What one answer may spend: this client's ``max_tokens`` cap, else
+        the catalogue's ``max_completion_tokens``, else ``None``."""
+        return self._max_tokens or self._max_output_tokens
 
     @property
     def provider_slug(self) -> str | None:

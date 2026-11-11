@@ -1,4 +1,6 @@
 // lib/platform_specific/chat/handlers/chat_persistence_handler.dart
+import 'package:chuk_chat/services/chat_turn_stats.dart';
+
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -241,6 +243,11 @@ class ChatPersistenceHandler {
     // from the local save on, whether or not the cloud write below lands.
     // Silent mode is used when persisting old chat in background after user moved to new chat
     if (!silent && (chatIdAtStart == null || chatIdAtStart != local.id)) {
+      // The reply's tok/s and usage were recorded under the id the stream
+      // ran with; the stats row reads the chat's real id from now on.
+      if (chatIdAtStart != null) {
+        ChatTurnStats.instance.rename(chatIdAtStart, local.id);
+      }
       onChatIdAssigned?.call(local.id);
     }
 
@@ -475,6 +482,10 @@ class ChatPersistenceHandler {
       if (pending.tps != null) {
         messages[pending.messageIndex]['tps'] = pending.tps;
       }
+      final String? usage = ChatTurnStats.instance
+          .usageOf(pending.chatId)
+          ?.encode();
+      if (usage != null) messages[pending.messageIndex]['usage'] = usage;
       if (pending.status != null) {
         messages[pending.messageIndex]['status'] = pending.status;
       }

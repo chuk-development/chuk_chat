@@ -13,6 +13,8 @@ from .backend import (
     fetch_models_info,
     login,
     clamp_reasoning_effort,
+    model_limits_from_catalog,
+    model_supports_vision_in_catalog,
     resolve_model,
     supported_efforts,
 )
@@ -569,6 +571,8 @@ __all__ = [
     "render_transcript",
     "resolve_in_workspace",
     "clamp_reasoning_effort",
+    "model_limits_from_catalog",
+    "model_supports_vision_in_catalog",
     "resolve_model",
     "supported_efforts",
     "sanitize_match",

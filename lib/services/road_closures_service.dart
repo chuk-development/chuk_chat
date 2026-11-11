@@ -14,6 +14,7 @@
 //
 // Parsing is pure and unit tested; the fetch helpers are thin wrappers.
 
+import 'package:chuk_chat/utils/browser_user_agent.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -32,7 +33,7 @@ const String kRoadworksMapServer =
 /// Neutral agent string: the app name only, no user or device data.
 const Map<String, String> kRoadworksHeaders = {
   'Accept': 'application/json',
-  'User-Agent': 'chuk-chat/1.0',
+  'User-Agent': kBrowserUserAgent,
 };
 
 const Duration _timeout = Duration(seconds: 20);

@@ -12,6 +12,7 @@ import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/models/artifact.dart';
 import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/services/file_save_service.dart';
+import 'package:chuk_chat/services/image_disk_cache.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
@@ -57,7 +58,7 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
   // so a library of 99 put ~200 isolates in flight and the spinners never
   // came back. Four at a time keeps the pictures arriving steadily and the
   // phone responsive.
-  final _ThumbGate _thumbGate = _ThumbGate(maxInFlight: 4);
+  final _ThumbGate _thumbGate = _ThumbGate(maxInFlight: 6);
 
   @override
   void initState() {
@@ -150,22 +151,14 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
             if (!mounted || _thumbs[path] != notifier) {
               throw StateError('thumbnail cancelled');
             }
-            return ImageStorageService.downloadAndDecryptImage(path);
+            return _loadTileBytes(path);
           })
           // Outside the gate on purpose: a slow download keeps its slot
           // until it really ends, so repeated timeouts cannot push the
           // number of downloads in flight past the bound.
           .timeout(const Duration(seconds: 45));
       if (_thumbs[path] != notifier) return;
-      // Flutter's decoder handles PNG/JPEG/GIF/WebP/BMP and nothing else. A
-      // HEIC or AVIF file downloads and decrypts perfectly and then renders
-      // as a broken glyph, which reads as data loss. Name the format instead.
-      final String? unsupported = _unsupportedImageLabel(bytes);
-      if (unsupported != null) {
-        notifier.value = _ThumbState.failed(unsupported);
-        return;
-      }
-      notifier.value = _ThumbState.ready(bytes);
+      notifier.value = bytes;
     } on StateError {
       return;
     } catch (error) {
@@ -175,6 +168,35 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
       // tells the reader whether to worry and whether retrying can help.
       notifier.value = _ThumbState.failed(_thumbErrorLabel(error));
     }
+  }
+
+  /// The tile's state for [path]: the small thumbnail kept on disk when there
+  /// is one (no network, no decrypt, no full-size decode), otherwise the full
+  /// picture, shrunk once and the thumbnail stored for every later open.
+  static Future<_ThumbState> _loadTileBytes(String path) async {
+    final Uint8List? cached = await ImageDiskCache.readThumb(path);
+    if (cached != null) return _ThumbState.ready(cached);
+
+    final Uint8List full = await ImageStorageService.downloadAndDecryptImage(
+      path,
+    );
+    // Flutter's decoder handles PNG/JPEG/GIF/WebP/BMP and nothing else. A
+    // HEIC or AVIF file downloads and decrypts perfectly and then renders
+    // as a broken glyph, which reads as data loss. Name the format instead.
+    final String? unsupported = _unsupportedImageLabel(full);
+    if (unsupported != null) return _ThumbState.failed(unsupported);
+
+    Uint8List? thumb;
+    try {
+      thumb = await ImageDiskCache.makeThumbnail(full);
+    } catch (_) {
+      thumb = null;
+    }
+    // The `image` package cannot read every file Flutter can (some WebP
+    // variants); then the tile shows the full picture and nothing is stored.
+    if (thumb == null) return _ThumbState.ready(full);
+    unawaited(ImageDiskCache.writeThumb(path, thumb));
+    return _ThumbState.ready(thumb);
   }
 
   /// Retries one failed thumbnail, bypassing the service's own cache.
@@ -1389,7 +1411,7 @@ class _MediaFilterBar extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 8),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: selected ? theme.colorScheme.primary : Colors.transparent,
+          color: selected ? m3.selectedFill : Colors.transparent,
           borderRadius: BorderRadius.circular(999),
         ),
         child: Text(
@@ -1398,7 +1420,7 @@ class _MediaFilterBar extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: theme.textTheme.labelLarge?.copyWith(
             fontWeight: FontWeight.w600,
-            color: selected ? theme.colorScheme.onPrimary : m3.onSurfaceVariant,
+            color: selected ? m3.onSelectedFill : m3.onSurfaceVariant,
           ),
         ),
       ),

@@ -16,6 +16,7 @@ import 'package:chuk_chat/services/workspace_message_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/workspace/workspace_actions_mixin.dart';
 import 'package:chuk_chat/widgets/workspace/workspace_common_widgets.dart';
+import 'package:chuk_chat/widgets/workspace/workspace_persona_flags.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
@@ -555,6 +556,10 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
               ),
             ),
           ),
+
+          const SizedBox(height: 16),
+          if (_project case final project?)
+            WorkspacePersonaFlags(workspace: project),
 
           const SizedBox(height: 24),
 

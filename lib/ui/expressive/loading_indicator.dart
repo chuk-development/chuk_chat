@@ -127,13 +127,18 @@ class _M3LoadingIndicatorState extends State<M3LoadingIndicator>
         // The spring overshoots a little; the turn shows that, the morph
         // itself stays between its two shapes.
         final double morph = local.clamp(0.0, 1.0);
-        final ShapeBorder border = ShapeBorder.lerp(
-          MaterialShapeBorder(shape: kLoadingIndicatorShapes[index]),
-          MaterialShapeBorder(
-            shape: kLoadingIndicatorShapes[(index + 1) % _steps],
-          ),
-          morph,
-        )!;
+        final ShapeBorder from = MaterialShapeBorder(
+          shape: kLoadingIndicatorShapes[index],
+        );
+        final ShapeBorder border =
+            ShapeBorder.lerp(
+              from,
+              MaterialShapeBorder(
+                shape: kLoadingIndicatorShapes[(index + 1) % _steps],
+              ),
+              morph,
+            ) ??
+            from;
         final double steady =
             (_c.lastElapsedDuration?.inMicroseconds ?? 0) /
             _kTurn.inMicroseconds *

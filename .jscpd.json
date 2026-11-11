@@ -1,0 +1,23 @@
+{
+  "_comment": "Duplicate-code check for lib/. Advisory: the CI job (.github/workflows/ci.yml, job duplicates) reports, it does not fail. Run locally: npx --yes jscpd@4. Wrap a deliberate duplicate in // jscpd:ignore-start ... // jscpd:ignore-end with a reason above it.",
+  "minTokens": 60,
+  "minLines": 6,
+  "mode": "mild",
+  "pattern": "**/*.dart",
+  "ignore": [
+    "**/*.g.dart",
+    "**/l10n/strings_*.dart"
+  ],
+  "ignorePattern": [
+    "// jscpd:ignore-start[\\s\\S]*?// jscpd:ignore-end"
+  ],
+  "reporters": [
+    "console"
+  ],
+  "exitCode": 0,
+  "noColors": true,
+  "noTips": true,
+  "path": [
+    "lib"
+  ]
+}

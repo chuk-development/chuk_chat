@@ -1,14 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
+import 'package:chuk_chat/services/agents/agents_attachment_store.dart';
+import 'package:chuk_chat/services/agents/agents_attachments.dart'
+    show AgentsAttachmentInfo;
+import 'package:chuk_chat/widgets/agents_attachment_chips.dart';
 import 'package:chuk_chat/models/chat_message.dart' show ChatMessageStatus;
+import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
+import 'package:chuk_chat/services/agents/agents_context_rows.dart';
 import 'package:chuk_chat/services/agents/agents_run_cost.dart';
+import 'package:chuk_chat/services/chat_compaction.dart';
 import 'package:chuk_chat/services/chat_runtime.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
 import 'package:chuk_chat/services/dictation_tracker.dart';
 import 'package:chuk_chat/services/offline_retry_manager.dart';
+import 'package:chuk_chat/widgets/agents_context_chip.dart';
 import 'package:chuk_chat/widgets/agents_quiet_run_fold.dart';
+import 'package:chuk_chat/widgets/compaction_divider.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/widgets/message_fly_in.dart';
 
@@ -99,6 +108,22 @@ class ChatMessageListItem extends StatelessWidget {
         index == messages.length - 1 || nextIsUser != data.isUser;
     final String uiKey = ChatUiHelpers.stableUiKey(messages[index], uuid);
 
+    // AGENTS: a prompt nobody typed (a goal round, a schedule, a mail) is a
+    // small chip, never a user bubble (docs/WIRE_CONTRACT.md, "Typed source
+    // on synthetic rows").
+    final String? rowSource = data.isUser
+        ? agentsRowSource(messages[index])
+        : null;
+    if (rowSource != null) {
+      return _rowBoundary(
+        AgentsContextChip(
+          key: ValueKey<String>(uiKey),
+          source: rowSource,
+          text: data.displayText,
+        ),
+      );
+    }
+
     // True from the moment Send is pressed, not only once the server stream
     // is registered. The status header has to be on screen for the whole
     // wait, including the stretch where the request is still going out.
@@ -120,6 +145,34 @@ class ChatMessageListItem extends StatelessWidget {
         ? null
         : splitRunMeta(data.toolCalls, data.contentBlocks);
     final String? runId = costSplit?.runId;
+    // AGENTS: context rows the run wrote ride on its answer as synthetic
+    // calls; they are lifted off here and drawn as chips above it.
+    final contextSplit = data.isUser
+        ? null
+        : splitAgentsContext(
+            costSplit?.toolCalls ?? data.toolCalls ?? const <ToolCall>[],
+          );
+    final List<ToolCall>? bubbleCalls =
+        contextSplit == null || contextSplit.context.isEmpty
+        ? (costSplit?.toolCalls ?? data.toolCalls)
+        : contextSplit.rest;
+
+    // AGENTS: the files a user sent to a task. The host's replayed list
+    // wins; a live send's sealed files ride in `images` as store refs and
+    // are drawn as rows, never as broken pictures.
+    final List<AgentsAttachmentInfo> agentsFiles = data.isUser
+        ? AgentsAttachmentChips.forMessage(
+            replayed: messages[index]['agentsAttachments'],
+            paths: data.images,
+          )
+        : const <AgentsAttachmentInfo>[];
+    final bool hostListedFiles =
+        data.isUser && (messages[index]['agentsAttachments'] ?? '').isNotEmpty;
+    final List<String>? bubbleImages = hostListedFiles
+        ? null
+        : data.images
+              ?.where((String p) => !AgentsAttachmentStore.isRef(p))
+              .toList();
 
     MessageBubble buildBubble(String text, String? reasoning) => MessageBubble(
       key: ValueKey<String>(uiKey),
@@ -138,7 +191,8 @@ class ChatMessageListItem extends StatelessWidget {
       modelLabel: data.modelLabel,
       modelProvider: data.modelProvider,
       tps: data.tps,
-      toolCalls: costSplit == null ? data.toolCalls : costSplit.toolCalls,
+      usage: data.usage,
+      toolCalls: bubbleCalls,
       showToolCalls: showToolCalls,
       contentBlocks: costSplit == null
           ? data.contentBlocks
@@ -147,11 +201,14 @@ class ChatMessageListItem extends StatelessWidget {
       chatId: activeChatId,
       turnStartedAt: data.turnStartedAt,
       workedFor: data.workedFor,
-      images: data.images,
+      images: bubbleImages == null || bubbleImages.isEmpty
+          ? null
+          : bubbleImages,
       imageMetas: data.imageMetas,
       imageCostEur: data.imageCostEur,
       imageGeneratedAt: data.imageGeneratedAt,
       attachments: data.attachments,
+      agentsAttachments: agentsFiles.isEmpty ? null : agentsFiles,
       actions: actions,
       userMessageActions: userMessageActions,
       isEditing: isEditing,
@@ -172,11 +229,14 @@ class ChatMessageListItem extends StatelessWidget {
           ? () => onSwitchVariant(data.variantIndex + 1)
           : null,
       status: data.status,
+      queueId: data.isUser ? data.queueId : null,
       lastError: data.lastError,
       onRetryPending:
           data.isUser &&
               (data.status == ChatMessageStatus.pending ||
                   data.status == ChatMessageStatus.failed)
+          // Used only when the message has no outbox row (Agents); a row
+          // retries itself through OfflineSendCoordinator.retryRow.
           ? () => OfflineRetryManager.instance.retryNow()
           : null,
       onContinueGeneration: onContinueGeneration,
@@ -216,14 +276,39 @@ class ChatMessageListItem extends StatelessWidget {
     final String? reasoning = data.reasoning.trim().isEmpty
         ? null
         : data.reasoning;
-    final Widget answer = buildBubble(data.displayText, reasoning);
+    final Widget plainAnswer = buildBubble(data.displayText, reasoning);
+    final Widget answer = (contextSplit?.context.isEmpty ?? true)
+        ? plainAnswer
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              for (final c in contextSplit!.context)
+                AgentsContextChip(source: c.source, text: c.text),
+              plainAnswer,
+            ],
+          );
     final Widget bubble = runId == null || data.isStreamingMessage
         ? answer
         : AgentsQuietRunFold(runId: runId, child: answer);
+    final Widget row = data.isUser && uiKey == flyInKey
+        ? MessageFlyIn(key: ValueKey<String>('flyin_$uiKey'), child: bubble)
+        : bubble;
+    // The first message a compaction kept: the turns above it reach the
+    // model as a summary only (lib/services/chat_compaction.dart).
+    final bool compactedHere =
+        data.isUser &&
+        index > 0 &&
+        CompactionRecord.decode(messages[index][ChatCompaction.fieldKey]) !=
+            null;
     return _rowBoundary(
-      data.isUser && uiKey == flyInKey
-          ? MessageFlyIn(key: ValueKey<String>('flyin_$uiKey'), child: bubble)
-          : bubble,
+      compactedHere
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[const CompactionDivider(), row],
+            )
+          : row,
     );
   }
 

@@ -6,7 +6,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
+import 'package:chuk_chat/theme/theme_palette.dart';
 import 'package:chuk_chat/theme/theme_presets.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 
 /// Captures every setter call so a test can assert what a preset applied.
 class _Recorder {
@@ -104,16 +106,28 @@ const _preset = ThemePreset(
 );
 
 void main() {
-  test('kThemePresets is non-empty and Aya default matches the dark defaults',
+  test('kThemePresets is non-empty and Plane default matches the dark defaults',
       () {
     expect(kThemePresets, isNotEmpty);
-    final aya = kThemePresets.first;
-    expect(aya.name, 'Aya');
-    expect(aya.dark.accent, kDefaultAccentColor);
-    expect(aya.dark.iconFg, kDefaultIconFgColor);
-    expect(aya.dark.bg, kDefaultBgColor);
+    final plane = kThemePresets.first;
+    expect(plane.name, 'Plane');
+    expect(kDefaultThemePreset, same(plane));
+    expect(plane.dark.accent, kDefaultAccentColor);
+    expect(plane.dark.iconFg, kDefaultIconFgColor);
+    expect(plane.dark.bg, kDefaultBgColor);
     // A light variant exists and differs from the dark one.
-    expect(aya.light.bg, isNot(kDefaultBgColor));
+    expect(plane.light.bg, isNot(kDefaultBgColor));
+    // The default look gets the exact palette.
+    expect(
+      paletteForLook(
+        brightness: Brightness.dark,
+        accent: kDefaultAccentColor,
+        iconFg: kDefaultIconFgColor,
+        bg: kDefaultBgColor,
+        contrast: kDefaultContrast,
+      ),
+      same(kPlaneDarkPalette),
+    );
   });
 
   test('every variant has an in-range contrast', () {
@@ -182,5 +196,78 @@ void main() {
     final rOff = _Recorder();
     _preset.applyTo(_config(rOff, dynamicColorEnabled: false), Brightness.dark);
     expect(rOff.dynamicCalls, [false]);
+  });
+
+  group('Plane pack', () {
+    final plane = kThemePresets.firstWhere((p) => p.name == 'Plane');
+    ThemePalette? lookup({double contrast = kDefaultContrast}) =>
+        paletteForLook(
+          brightness: Brightness.dark,
+          accent: plane.dark.accent,
+          iconFg: plane.dark.iconFg,
+          bg: plane.dark.bg,
+          contrast: contrast,
+        );
+
+    test('the dark variant carries the exact Plane palette', () {
+      expect(plane.dark.palette, same(kPlaneDarkPalette));
+      expect(lookup(), same(kPlaneDarkPalette));
+    });
+
+    test('a moved contrast slider drops back to the derived ladder', () {
+      expect(lookup(contrast: 0.8), isNull);
+    });
+
+    test('packs without a palette never get one', () {
+      final aya = kThemePresets.firstWhere((p) => p.name == 'Aya');
+      expect(
+        paletteForLook(
+          brightness: Brightness.dark,
+          accent: aya.dark.accent,
+          iconFg: aya.dark.iconFg,
+          bg: aya.dark.bg,
+          contrast: aya.dark.contrast,
+        ),
+        isNull,
+      );
+    });
+
+    test('buildAppTheme uses the palette greys and the neutral selection', () {
+      final theme = buildAppTheme(
+        accent: plane.dark.accent,
+        iconFg: plane.dark.iconFg,
+        bg: plane.dark.bg,
+        brightness: Brightness.dark,
+        palette: kPlaneDarkPalette,
+      );
+      final m3 = theme.extension<MaterialYouTokens>()!;
+      expect(theme.scaffoldBackgroundColor, const Color(0xFF141415));
+      expect(theme.colorScheme.surfaceContainerLowest, const Color(0xFF0F0F10));
+      expect(m3.surfaceContainerLow, const Color(0xFF181A1B));
+      expect(m3.surfaceContainer, const Color(0xFF1D1F20));
+      expect(m3.surfaceContainerHigh, const Color(0xFF222425));
+      expect(m3.surfaceContainerHighest, const Color(0xFF2C2E30));
+      expect(m3.selection, const Color(0xFF2B2B2C));
+      expect(m3.selectedFill, const Color(0xFF2B2B2C));
+      expect(m3.onSelection, const Color(0xFFE4E6E7));
+      expect(theme.colorScheme.primary, const Color(0xFFAFB3B6));
+    });
+
+    test('without a palette the selection stays accent-tinted', () {
+      final theme = buildAppTheme(
+        accent: kDefaultAccentColor,
+        iconFg: kDefaultIconFgColor,
+        bg: kDefaultBgColor,
+        brightness: Brightness.dark,
+      );
+      final m3 = theme.extension<MaterialYouTokens>()!;
+      expect(
+        m3.selection,
+        Color.alphaBlend(
+          kDefaultAccentColor.withValues(alpha: 0.20),
+          m3.surfaceContainer,
+        ),
+      );
+    });
   });
 }

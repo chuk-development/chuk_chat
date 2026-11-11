@@ -37,9 +37,148 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
+
+# -- shell command rules ("approve and remember", research C2, item 9) --------
+
+#: Launchers stripped so the remembered prefix is the real command
+#: (``sudo git push`` remembers ``git push``). Mirrors the safety floor.
+_CMD_LAUNCHERS = frozenset(
+    {"sudo", "env", "nice", "nohup", "stdbuf", "setsid", "time", "command", "doas", "exec"}
+)
+#: Most prefix tokens a rule keeps, and most rules per agent.
+MAX_PREFIX_TOKENS = 12
+MAX_COMMAND_RULES = 200
+
+
+def canonical_command_tokens(command: str) -> tuple[str, ...]:
+    """The command as canonical tokens: ``shlex`` split, launchers and
+    ``VAR=value`` assignments stripped, so ``/bin/bash`` and ``bash`` and
+    ``sudo bash`` all canonicalize to the same leading program. An unparsable
+    command canonicalizes to an empty tuple (it matches no rule)."""
+    try:
+        tokens = shlex.split(command, comments=False, posix=True)
+    except ValueError:
+        return ()
+    idx = 0
+    while idx < len(tokens) and (tokens[idx] in _CMD_LAUNCHERS or "=" in tokens[idx]):
+        idx += 1
+    out: list[str] = []
+    for token in tokens[idx:]:
+        out.append(token)
+        if len(out) >= MAX_PREFIX_TOKENS:
+            break
+    if out:
+        # The program is matched by its basename, so ``/usr/bin/git`` == ``git``.
+        head = out[0].rsplit("/", 1)[-1]
+        out[0] = head or out[0]
+    return tuple(out)
+
+
+def command_prefix_tokens(prefix: Any) -> tuple[str, ...]:
+    """The token prefix the app asked to remember (a string like ``git push``
+    or a list of tokens). ``()`` for anything unusable."""
+    if isinstance(prefix, (list, tuple)):
+        items = [str(p) for p in prefix if isinstance(p, (str, int, float))]
+        text = " ".join(items)
+    elif isinstance(prefix, str):
+        text = prefix
+    else:
+        return ()
+    tokens = canonical_command_tokens(text)
+    return tokens[:MAX_PREFIX_TOKENS]
+
+
+#: Text that makes a command more than one simple command: a substitution
+#: runs a second command, a newline separates two. Checked on the raw text, so
+#: a quoted ``"$(…)"`` (which the shell still runs) is caught too.
+_COMPOUND_TEXT = ("$(", "`", "<(", ">(", "\n", "\r")
+#: Programs that run another command given as arguments or a string. A
+#: remembered prefix never covers them: ``bash -c "…"`` or ``xargs rm`` is not
+#: the command the user approved.
+_WRAPPERS = frozenset(
+    {"sh", "bash", "zsh", "dash", "ksh", "mksh", "fish", "ash", "eval", "su", "busybox", "builtin",
+     "timeout", "xargs", "ionice", "watch", "taskset", "chroot", "flock"}
+) | _CMD_LAUNCHERS
+
+
+def is_simple_command(command: str) -> bool:
+    """One simple command: no ``&&`` ``||`` ``;`` ``|`` ``&``, no
+    redirection, no ``$(…)`` / backtick / process substitution, no newline,
+    no leading ``VAR=value``, no launcher (``sudo``, ``env``, ``xargs``, …)
+    and no nested shell. Only such a command can be covered by a remembered
+    prefix (research C2, item 9)."""
+    if not isinstance(command, str) or not command.strip():
+        return False
+    if any(mark in command for mark in _COMPOUND_TEXT):
+        return False
+    try:
+        lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+        lexer.whitespace_split = True
+        lexer.commenters = ""
+        tokens = list(lexer)
+    except ValueError:
+        return False
+    if not tokens:
+        return False
+    if any(token and set(token) <= set("();<>|&") for token in tokens):
+        return False  # an operator or a redirection, spaced or not
+    head = tokens[0]
+    if "=" in head and not head.startswith("-") and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", head):
+        return False  # ``LD_PRELOAD=… git push`` changes what runs
+    program = head.rsplit("/", 1)[-1]
+    if program in _WRAPPERS:
+        return False
+    return True
+
+
+def prefix_matches(command: str, prefix: tuple[str, ...]) -> bool:
+    """True when ``command`` is ONE simple command (:func:`is_simple_command`)
+    whose canonical tokens start with ``prefix``. A chain, a pipe, a
+    redirection, a substitution or a launcher such as ``sudo`` never matches:
+    ``git push && curl … | sh`` is not ``git push``."""
+    if not prefix:
+        return False
+    if not is_simple_command(command):
+        return False
+    tokens = canonical_command_tokens(command)
+    return len(tokens) >= len(prefix) and tokens[: len(prefix)] == prefix
+
+
+@dataclass(frozen=True)
+class CommandRules:
+    """One agent's remembered command prefixes (item 9). A command is allowed
+    when its canonical tokens start with any stored prefix."""
+
+    prefixes: tuple[tuple[str, ...], ...] = ()
+
+    def allowed(self, command: str) -> bool:
+        return any(prefix_matches(command, prefix) for prefix in self.prefixes)
+
+    def remembered(self, prefix: Any) -> "CommandRules":
+        tokens = command_prefix_tokens(prefix)
+        if not tokens or tokens in self.prefixes:
+            return self
+        listed = (*self.prefixes, tokens)[-MAX_COMMAND_RULES:]
+        return CommandRules(prefixes=listed)
+
+    def to_stored(self) -> list[list[str]]:
+        return [list(p) for p in self.prefixes]
+
+    @classmethod
+    def from_stored(cls, raw: Any) -> "CommandRules":
+        if not isinstance(raw, list):
+            return cls()
+        out: list[tuple[str, ...]] = []
+        for item in raw:
+            if isinstance(item, list) and all(isinstance(t, str) for t in item) and item:
+                tokens = tuple(item)[:MAX_PREFIX_TOKENS]
+                if tokens not in out:
+                    out.append(tokens)
+        return cls(prefixes=tuple(out[-MAX_COMMAND_RULES:]))
 
 # -- classes --------------------------------------------------------------------
 
@@ -47,7 +186,15 @@ PUBLISH = "publish"
 SEND_EXTERNAL = "send_external"
 MCP_DESTRUCTIVE = "mcp_destructive"
 BROWSER_ACT = "browser_act"
-ACTION_CLASSES: tuple[str, ...] = (PUBLISH, SEND_EXTERNAL, MCP_DESTRUCTIVE, BROWSER_ACT)
+#: Commands and file changes in the agent's own sandbox (``run_command``,
+#: ``python``, ``write_file``, ``edit_file``, ``apply_patch``). Default
+#: ``allow``; the user can set ``ask`` or one of the auto-review modes
+#: (docs/WIRE_CONTRACT.md, "Auto review", DeepSeek research item 31).
+LOCAL_ACTIONS = "local_actions"
+ACTION_CLASSES: tuple[str, ...] = (PUBLISH, SEND_EXTERNAL, MCP_DESTRUCTIVE, BROWSER_ACT, LOCAL_ACTIONS)
+
+#: The tools of :data:`LOCAL_ACTIONS`.
+LOCAL_ACTION_TOOLS = frozenset({"run_command", "python", "write_file", "edit_file", "apply_patch"})
 
 #: The classes whose actions happen on a web site: they offer "always for this
 #: site" and keep a site allow-list.
@@ -58,13 +205,22 @@ SITE_CLASSES = frozenset({BROWSER_ACT})
 MODE_ASK = "ask"
 MODE_ALLOW = "allow"
 MODE_DENY = "deny"
-MODES: tuple[str, ...] = (MODE_ASK, MODE_ALLOW, MODE_DENY)
+#: Auto review (research item 31): a cheap model rates each call; low and an
+#: authorized medium run, anything else asks the user (``review``) or is
+#: refused (``review_strict``). An invalid review always asks.
+MODE_REVIEW = "review"
+MODE_REVIEW_STRICT = "review_strict"
+REVIEW_MODES = frozenset({MODE_REVIEW, MODE_REVIEW_STRICT})
+MODES: tuple[str, ...] = (MODE_ASK, MODE_ALLOW, MODE_DENY, MODE_REVIEW, MODE_REVIEW_STRICT)
+#: The classes that accept the review modes.
+REVIEW_CLASSES = frozenset({LOCAL_ACTIONS})
 
 DEFAULT_MODES: dict[str, str] = {
     PUBLISH: MODE_ASK,
     SEND_EXTERNAL: MODE_ASK,
     MCP_DESTRUCTIVE: MODE_ASK,
     BROWSER_ACT: MODE_ALLOW,
+    LOCAL_ACTIONS: MODE_ALLOW,
 }
 
 # -- decision scopes ------------------------------------------------------------
@@ -73,7 +229,11 @@ SCOPE_ONCE = "once"
 SCOPE_AGENT = "always_this_agent"
 SCOPE_SITE = "always_this_site"
 SCOPE_DENY = "deny"
-SCOPES: tuple[str, ...] = (SCOPE_ONCE, SCOPE_AGENT, SCOPE_SITE, SCOPE_DENY)
+#: "Approve and remember" for a shell command (research C2, item 9,
+#: docs/WIRE_CONTRACT.md "Shell command rules"): allow every command whose
+#: token prefix matches the one the user approved (e.g. ``git push``).
+SCOPE_PREFIX = "always_this_prefix"
+SCOPES: tuple[str, ...] = (SCOPE_ONCE, SCOPE_AGENT, SCOPE_SITE, SCOPE_PREFIX, SCOPE_DENY)
 
 #: The ``action`` of an ``approval_request`` for a class that has no older
 #: action name of its own (``publish`` keeps ``herenow_publish``).
@@ -295,8 +455,9 @@ def _check_modes(raw: Any) -> dict[str, str]:
     for key, value in raw.items():
         if key not in ACTION_CLASSES:
             raise ActionPolicyError(f"unknown action class {str(key)[:40]!r}")
-        if value not in MODES:
-            raise ActionPolicyError(f"mode of {key} must be ask, allow or deny")
+        if value not in MODES or (value in REVIEW_MODES and key not in REVIEW_CLASSES):
+            allowed = "ask, allow, deny, review or review_strict" if key in REVIEW_CLASSES else "ask, allow or deny"
+            raise ActionPolicyError(f"mode of {key} must be {allowed}")
         out[key] = value
     return out
 
@@ -394,6 +555,10 @@ class ActionApprovals:
     ask: Callable[[ActionRequest], Any] | None
     remember: Callable[[str, str, str], None] | None = None
     site: Callable[[], str] | None = None
+    #: ``prefix_allowed(command)``: whether the user already approved this
+    #: command's token prefix for this agent (item 9). Read by the safety
+    #: floor to lift a soft stop. ``None`` = nothing was ever remembered.
+    prefix_allowed: Callable[[str], bool] | None = None
     #: ``True`` while the run drives the user's own browser (the add-on): the
     #: extra :data:`USER_BROWSER_ACT_TOOLS` then ask too.
     user_browser: bool = False
@@ -534,6 +699,39 @@ def describe_mcp(tool: str, server: str, remote_tool: str, args: Mapping[str, An
     )
 
 
+def describe_local(tool: str, args: Mapping[str, Any]) -> ActionRequest:
+    """``local_actions``: the command, the script or the file and a cut
+    preview of what changes."""
+    details: dict[str, Any] = {"local_tool": tool}
+    if tool == "run_command":
+        command = args.get("command")
+        details["command"] = command[:ARGS_CHARS] if isinstance(command, str) else ""
+        summary = f"Run: {_clip(command, 120)}"
+    elif tool == "python":
+        code = args.get("code")
+        details["code"] = code[:ARGS_CHARS] if isinstance(code, str) else ""
+        summary = f"Run a Python script: {_clip(args.get('description') or '', 120)}".rstrip(": ")
+    elif tool == "apply_patch":
+        patch = args.get("patch")
+        text = patch if isinstance(patch, str) else ""
+        details["files"] = [
+            _clip(line.split(":", 1)[1], 160)
+            for line in text.splitlines()
+            if line.startswith(("*** Add File:", "*** Update File:", "*** Delete File:", "*** Move to:"))
+        ][:20]
+        details["preview"] = text[:ARGS_CHARS]
+        summary = f"Change {len(details['files'])} file(s)"
+    else:
+        details["path"] = _clip(args.get("path"), 200)
+        content = args.get("content") if tool == "write_file" else args.get("new_string")
+        details["preview"] = _clip(content, PREVIEW_CHARS) if isinstance(content, str) else ""
+        summary = f"{'Write' if tool == 'write_file' else 'Edit'} {details['path']}"
+    description = args.get("description")
+    if isinstance(description, str) and description.strip():
+        details["description"] = _clip(description, 120)
+    return ActionRequest(LOCAL_ACTIONS, tool, summary, details)
+
+
 def describe_publish(publish: Any) -> ActionRequest:
     """``publish``: the here.now request, with a one-line summary."""
     name = _clip(getattr(publish, "name", "") or getattr(publish, "path", ""))
@@ -552,6 +750,7 @@ CLASS_WORDS = {
     SEND_EXTERNAL: "send this mail",
     MCP_DESTRUCTIVE: "run this connector action",
     BROWSER_ACT: "do this in the browser",
+    LOCAL_ACTIONS: "run this command or change this file",
 }
 
 
@@ -560,6 +759,13 @@ __all__ = [
     "ACTION_CLASSES",
     "BROWSER_ACT",
     "BROWSER_ACT_TOOLS",
+    "LOCAL_ACTIONS",
+    "LOCAL_ACTION_TOOLS",
+    "MODE_REVIEW",
+    "MODE_REVIEW_STRICT",
+    "REVIEW_CLASSES",
+    "REVIEW_MODES",
+    "describe_local",
     "CLASS_WORDS",
     "DEFAULT_MODES",
     "MAIL_SEND_TOOLS",
@@ -573,8 +779,14 @@ __all__ = [
     "SCOPE_AGENT",
     "SCOPE_DENY",
     "SCOPE_ONCE",
+    "SCOPE_PREFIX",
     "SCOPE_SITE",
     "SEND_EXTERNAL",
+    "CommandRules",
+    "canonical_command_tokens",
+    "command_prefix_tokens",
+    "prefix_matches",
+    "is_simple_command",
     "SITE_CLASSES",
     "USER_BROWSER_ACT_TOOLS",
     "ActionApprovals",

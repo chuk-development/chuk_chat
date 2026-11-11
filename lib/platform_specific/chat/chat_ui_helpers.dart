@@ -28,6 +28,7 @@ import 'package:chuk_chat/ui/expressive/bubble_shape.dart'
 import 'package:chuk_chat/widgets/message_bubble.dart'
     show DocumentAttachment, ImageMeta;
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
+import 'package:chuk_chat/models/turn_usage.dart';
 
 /// Data class holding pre-parsed render information for a single chat message.
 ///
@@ -42,6 +43,7 @@ class MessageRenderData {
     this.modelLabel,
     this.modelProvider,
     this.tps,
+    this.usage,
     this.images,
     this.imageMetas,
     this.imageCostEur,
@@ -66,6 +68,9 @@ class MessageRenderData {
   final String? modelLabel;
   final String? modelProvider;
   final double? tps;
+
+  /// Token usage of an answer, from `raw['usage']` (see [TurnUsage]).
+  final TurnUsage? usage;
   final List<String>? images;
 
   /// Per-image metadata aligned with [images]. Each entry carries a
@@ -586,6 +591,12 @@ class ChatUiHelpers {
     if (message.generationMs != null && message.generationMs!.isNotEmpty) {
       map['generationMs'] = message.generationMs!;
     }
+    // What the model was told around a user message (prompt snapshot,
+    // notes, loaded skills): the next request rebuilds the same bytes from
+    // it, so the prompt cache keeps hitting (prompt_context.dart).
+    if (message.modelContext != null && message.modelContext!.isNotEmpty) {
+      map['modelContext'] = message.modelContext!;
+    }
     // Preserve local delivery status + offline-queue id so a message that was
     // pending/failed/interrupted keeps its state (and "Continue generation"
     // affordance) across reload instead of silently reverting to "sent".
@@ -614,6 +625,17 @@ class ChatUiHelpers {
         message.voiceDurationMs!.isNotEmpty) {
       map['voiceDurationMs'] = message.voiceDurationMs!;
     }
+    // The reply's token usage and a compaction summary survive reload.
+    final String? usage = message.usage;
+    if (usage != null && usage.isNotEmpty) {
+      map['usage'] = usage;
+    }
+    final String? compactSummary = message.compactSummary;
+    if (compactSummary != null && compactSummary.isNotEmpty) {
+      map['compactSummary'] = compactSummary;
+    }
+    final String? hostMid = message.hostMid; // checkpoints
+    if (hostMid != null && hostMid.isNotEmpty) map['hostMid'] = hostMid;
     return map;
   }
 
@@ -1324,6 +1346,7 @@ class ChatUiHelpers {
       modelLabel: modelLabel,
       modelProvider: modelProvider,
       tps: tps,
+      usage: isAiMessage ? TurnUsage.tryDecode(raw['usage']) : null,
       images: images,
       imageMetas: imageMetas,
       imageCostEur: imageCostEur,

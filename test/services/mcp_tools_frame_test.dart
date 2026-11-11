@@ -20,6 +20,18 @@ class _MemorySecrets implements AgentsSecureKeyValueStore {
   Future<void> delete(String key) async => map.remove(key);
 }
 
+/// Secure storage that fails for one key, like a keyring that is locked.
+class _FailingSecrets extends _MemorySecrets {
+  _FailingSecrets(this.failingKey);
+  final String failingKey;
+
+  @override
+  Future<String?> read(String key) async {
+    if (key == failingKey) throw StateError('keyring locked');
+    return super.read(key);
+  }
+}
+
 void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
@@ -143,5 +155,79 @@ void main() {
     });
     expect(applied, 1);
     expect((await McpService.store.load()).single.tools, isEmpty);
+  });
+
+  test('a host error never keeps the connector API key', () async {
+    await McpService.store.upsert(
+      const McpConnection(
+        id: 'svc',
+        name: 'Service',
+        url: 'https://svc.example/mcp',
+        auth: McpAuth.apiKey,
+      ),
+    );
+    await McpService.store.setApiCredentials('svc', <String, String>{
+      'service_token': 'secret123value',
+    });
+    await McpService.applyToolsFrame(<String, dynamic>{
+      'servers': <Map<String, dynamic>>[
+        {
+          'id': 'svc',
+          'connected': false,
+          'tools': [],
+          'error':
+              'GET https://svc.example/mcp?service_token=secret123value: 500',
+        },
+      ],
+    });
+    final String error = (await McpService.store.load()).single.lastError!;
+    expect(error, isNot(contains('secret123value')));
+    expect(error, contains('service_token=[redacted]'));
+  });
+
+  // Regression: a secure-storage read that threw while masking the host's
+  // error text aborted the whole frame, so later connectors stayed stale.
+  test('a failed secret lookup hides the error and the frame goes on', () async {
+    McpService.resetForTest(
+      store: McpStore(secrets: _FailingSecrets(McpStore.secretKey('broken'))),
+    );
+    await McpService.store.upsert(
+      const McpConnection(
+        id: 'broken',
+        name: 'Broken',
+        url: 'https://broken.example.com/mcp',
+      ),
+    );
+    await McpService.store.upsert(
+      const McpConnection(
+        id: 'fine',
+        name: 'Fine',
+        url: 'https://fine.example.com/mcp',
+      ),
+    );
+
+    final applied = await McpService.applyToolsFrame(<String, dynamic>{
+      'servers': <Map<String, dynamic>>[
+        {
+          'id': 'broken',
+          'tools': [],
+          'error': 'GET https://broken.example.com/mcp?token=abc failed',
+        },
+        {
+          'id': 'fine',
+          'tools': [
+            {'name': 'search'},
+          ],
+        },
+      ],
+    });
+
+    expect(applied, 2);
+    final stored = await McpService.store.load();
+    final broken = stored.firstWhere((c) => c.id == 'broken');
+    final fine = stored.firstWhere((c) => c.id == 'fine');
+    expect(broken.lastError, McpService.hiddenHostError);
+    expect(fine.tools.map((t) => t.name), ['search']);
+    expect(McpService.connections.value.map((c) => c.id), contains('fine'));
   });
 }

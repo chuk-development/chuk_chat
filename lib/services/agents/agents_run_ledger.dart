@@ -25,8 +25,10 @@ import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/automations/automation_ledger.dart';
+import 'package:chuk_chat/services/agents/agents_context_rows.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_run_cost.dart'; // F1: cost
+import 'package:chuk_chat/services/agents/agents_tool_row_info.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 
 /// The renderer's shape of one host `tool` frame.
@@ -46,6 +48,21 @@ ToolCall toolCallFromRelay(AgentsRelayTool event, {DateTime? now}) {
       'command': event.arguments,
     if (event.exitCode != null) 'exit_code': event.exitCode,
   };
+  // The model's label for the call, when the host sent it at the top level
+  // only (`description`, research item 40).
+  final Object? description = event.raw['description'];
+  if (description is String &&
+      description.trim().isNotEmpty &&
+      arguments['description'] == null) {
+    arguments['description'] = description.trim();
+  }
+  // `+a -r` of a file edit: the `ui` block is live only, so the counts are
+  // kept on the call.
+  final diff = toolUiDiffStat(event.raw['ui']);
+  if (diff != null) {
+    arguments[kToolDiffAddedKey] = diff.added;
+    arguments[kToolDiffRemovedKey] = diff.removed;
+  }
   final startedAt = event.startedAt ?? clock;
   final duration = event.duration;
   final completedAt =
@@ -1075,9 +1092,34 @@ class AgentsRunLedger extends ChangeNotifier {
   /// The options ride in [ToolCall.arguments] because that is where the
   /// imported `AskUserCard` reads them from; the same payload is mirrored into
   /// [ToolCall.result] so the expanded tool line shows the whole request.
+  ///
+  /// The host sends the SAME request again, decided, when it closes the wait
+  /// itself (timeout, Stop, or a takeover it resolved; docs/WIRE_CONTRACT.md,
+  /// "Closed by timeout or stop"). That frame replaces the open line, so the
+  /// transcript never keeps a second line, nor an open one for a dead
+  /// request. A line that already holds the user's answer keeps it.
   ToolCall approval(String sessionKey, AgentsRelayApprovalRequest request) {
     final run = _live(sessionKey);
     final call = approvalCallFromRelay(request);
+    final int existing = run.toolCalls.indexWhere(
+      (ToolCall c) =>
+          c.name == 'ask_user' &&
+          c.arguments['approvalId'] == request.approvalId,
+    );
+    if (existing >= 0) {
+      final ToolCall old = run.toolCalls[existing];
+      if (!request.isDecided || old.arguments['decision'] != null) return old;
+      run.toolCalls[existing] = ToolCall(
+        id: old.id,
+        name: call.name,
+        arguments: call.arguments,
+        status: call.status,
+        result: call.result,
+        startedAt: old.startedAt,
+      )..completedAt = call.completedAt;
+      notifyListeners();
+      return run.toolCalls[existing];
+    }
     run.toolCalls.add(call);
     notifyListeners();
     return call;
@@ -1124,6 +1166,14 @@ class AgentsRunLedger extends ChangeNotifier {
     }
   }
   // ── end F1 ──
+
+  /// A context row the run wrote (plan rules, a loaded skill, a settled
+  /// subagent): one chip on the run's answer.
+  void context(String sessionKey, AgentsRelayContext event) {
+    final run = _live(sessionKey);
+    run.toolCalls.add(contextCallFromRelay(event));
+    notifyListeners();
+  }
 
   /// Accumulates the model's thinking for the run.
   void reasoning(String sessionKey, String text) {

@@ -23,6 +23,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'package:chuk_chat/main.dart' as app;
 import 'package:chuk_chat/platform_specific/chat/chat_ui_mobile.dart';
+import 'package:chuk_chat/platform_specific/mobile/swipe_chat_pager.dart';
 import 'package:chuk_chat/platform_specific/sidebar_mobile.dart';
 import 'package:chuk_chat/services/chat_payload_codec.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
@@ -497,7 +498,73 @@ class _Runner {
     await _kbClose();
   }
 
+  /// The phone build of the Agents app has no sidebar: chats are switched by
+  /// a swipe ([SwipeChatPager]).
+  SwipeChatPager? get _pager =>
+      _find((e) => e.widget is SwipeChatPager)?.widget as SwipeChatPager?;
+
+  bool get _swipeMode => _pager != null;
+
+  /// Opens [id] through the pager's own callback, the path a finished swipe
+  /// takes.
+  Future<void> _pagerSelect(String id) async {
+    _pager!.onSelected(id);
+    await _awaitChat(id);
+  }
+
+  /// One real sideways swipe on the chat body. [next] moves to the next
+  /// chat (finger to the left).
+  Future<void> _swipe({required bool next, double y = .5}) async {
+    final Size s = _logical;
+    final double dx = next ? -28 : 28;
+    final Offset from = Offset(next ? s.width * .85 : s.width * .15, s.height * y);
+    await _drag(from, Offset(dx, 0), 10);
+    await _settle();
+  }
+
+  Future<void> _swipePhases() async {
+    // The strip sits in the top bar, the chat body below it.
+    final double stripY = (MediaQueryData.fromView(
+              PlatformDispatcher.instance.views.first,
+            ).viewPadding.top +
+            90) /
+        _logical.height;
+    await _phase(
+      'swipe next then back, long chat',
+      () async {
+        await _swipe(next: true);
+        await _swipe(next: false);
+      },
+      reps: 4,
+      note: 'finger on the chat body, 280 px in 10 frames, twice',
+    );
+    await _phase(
+      'swipe on the strip, next then back',
+      () async {
+        await _swipe(next: true, y: stripY);
+        await _swipe(next: false, y: stripY);
+      },
+      reps: 3,
+      note: 'finger on the title strip',
+    );
+    await _phase(
+      'swipe drag held, no commit',
+      () async {
+        final Size s = _logical;
+        await _drag(Offset(s.width * .5, s.height * .5), const Offset(-2, 0), 40);
+        await _settle();
+      },
+      reps: 3,
+      note: '80 px slow, may spring back or switch',
+    );
+    await _pagerSelect(kBenchLongChatId);
+  }
+
   Future<void> _openChat(String title, String id) async {
+    if (_swipeMode) {
+      await _pagerSelect(id);
+      return;
+    }
     await _sidebarOpen();
     await _wait(400);
     Offset? at = _textCenter(title);
@@ -522,6 +589,7 @@ class _Runner {
   }
 
   Future<void> _switchChat(String id) async {
+    if (_swipeMode) return _pagerSelect(id);
     final Element? e = _find((e) => e.widget is SidebarMobile);
     (e?.widget as SidebarMobile?)?.onChatSelected(id);
     await _awaitChat(id);
@@ -811,7 +879,11 @@ class _Runner {
     await _scrollPhases();
     _chat()!.scrollChatToBottom(animate: false, force: true);
     await _wait(1000);
-    await _phase('sidebar open, long chat', _sidebarOpen, reps: 5, between: _sidebarClose);
+    if (_swipeMode) {
+      await _swipePhases();
+    } else {
+      await _phase('sidebar open, long chat', _sidebarOpen, reps: 5, between: _sidebarClose);
+    }
     await _phase(
       'chat switch short then long',
       () async {

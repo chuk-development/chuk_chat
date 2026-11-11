@@ -16,6 +16,14 @@ run did. It **never installs it**:
    user may edit the name, the description and the body first. A reject drops
    the draft.
 
+**Updates (Hermes H3).** ``propose_skill(update=true)`` offers a new version
+of an EXISTING skill. Read-before-write: the model must have loaded that skill
+in this conversation, and the file must still be the text it loaded (the hash
+taken at load time). The draft carries ``base_sha256``, the hash of the file it
+replaces; the accept re-reads the file and refuses with ``stale`` when it
+changed meanwhile. An update keeps the skill's own frontmatter (its flags, its
+metadata) and replaces only the description line and the body.
+
 The skill is then on disk like any other workspace skill, so the next task
 loads it into the catalogue (``build_runtime`` reads the skills directory on
 every task). A running task never sees it: the frozen prompt of that turn must
@@ -46,8 +54,10 @@ from .skills import (
     MAX_SKILLS,
     SKILL_FILENAME,
     SkillError,
+    SkillLibrary,
     load_skills,
     parse_skill,
+    text_sha256,
 )
 from .sqlite_tuning import tune_connection
 
@@ -81,6 +91,13 @@ SAVING_STALE_SECONDS = 120.0
 #: Decision outcomes that are not a stored status.
 STATUS_INVALID = "invalid"
 STATUS_NOT_FOUND = "not_found"
+#: An update whose skill file changed after it was proposed. Terminal: the
+#: draft was written against text that no longer exists.
+STATUS_STALE = "stale"
+
+KIND_CREATE = "create"
+KIND_PATCH = "patch"
+PROPOSAL_KINDS = (KIND_CREATE, KIND_PATCH)
 
 # Personal data the draft must not carry. Bounded patterns, no nested
 # quantifiers. A phone number needs a leading ``+`` so a version number or a
@@ -96,6 +113,10 @@ class SkillDraft:
     name: str
     description: str
     body: str
+    #: ``create`` (a new skill) or ``patch`` (a new version of ``name``).
+    kind: str = KIND_CREATE
+    #: For a patch: sha256 of the SKILL.md text the draft replaces.
+    base_sha256: str | None = None
 
 
 # -- shaping ------------------------------------------------------------------
@@ -184,6 +205,53 @@ def render_skill_md(draft: SkillDraft) -> str:
         "---\n\n"
         f"{draft.body}\n"
     )
+
+
+def render_patched_skill_md(original: str, draft: SkillDraft) -> str:
+    """A new version of an existing SKILL.md: the original frontmatter with
+    only its ``description`` line replaced, then the new body. Flags such as
+    ``disable-model-invocation`` or ``pinned`` survive the update."""
+    lines = original.splitlines()
+    end = None
+    if lines and lines[0].strip() == "---":
+        for index in range(1, len(lines)):
+            if lines[index].strip() == "---":
+                end = index
+                break
+    if end is None:
+        return render_skill_md(draft)
+    front: list[str] = []
+    replaced = False
+    for line in lines[1:end]:
+        if line[:1] not in (" ", "\t", "-") and line.partition(":")[0].strip().lower() == "description":
+            front.append(f'description: "{draft.description}"')
+            replaced = True
+        else:
+            front.append(line)
+    if not replaced:
+        front.append(f'description: "{draft.description}"')
+    return "---\n" + "\n".join(front) + "\n---\n\n" + draft.body + "\n"
+
+
+def skill_file(root: str | Path | None, name: str) -> Path | None:
+    """The SKILL.md of the skill called ``name`` under ``root`` (loaded or
+    switched off), found by its frontmatter name, or None."""
+    if root is None or not isinstance(name, str) or not name:
+        return None
+    library = load_skills(root)
+    skill = library.skills.get(name) or library.disabled.get(name)
+    return Path(skill.path) if skill is not None and skill.path else None
+
+
+def read_skill_text(root: str | Path | None, name: str) -> str | None:
+    """The current SKILL.md text of ``name`` under ``root``, or None."""
+    path = skill_file(root, name)
+    if path is None:
+        return None
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
 
 
 def validate_draft(draft: SkillDraft) -> list[str]:
@@ -276,6 +344,15 @@ class SkillProposalStore:
                 " created_at REAL NOT NULL,"
                 " decided_at REAL)"
             )
+            # Skill updates (Hermes H3): added later, so an older database
+            # gets the columns on open. A missing column reads as a create.
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(skill_proposals)")}
+            if "kind" not in columns:
+                conn.execute(
+                    "ALTER TABLE skill_proposals ADD COLUMN kind TEXT NOT NULL DEFAULT 'create'"
+                )
+            if "base_sha256" not in columns:
+                conn.execute("ALTER TABLE skill_proposals ADD COLUMN base_sha256 TEXT")
 
     def _connect(self) -> sqlite3.Connection:
         conn = tune_connection(sqlite3.connect(self._path, timeout=5.0))
@@ -296,8 +373,9 @@ class SkillProposalStore:
         with self._connect() as conn:
             conn.execute(
                 "INSERT INTO skill_proposals (proposal_id, session_key, run_id,"
-                " skills_root, name, description, body, status, created_at)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " skills_root, name, description, body, status, created_at,"
+                " kind, base_sha256)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     pid,
                     session_key,
@@ -308,6 +386,8 @@ class SkillProposalStore:
                     draft.body,
                     STATUS_PENDING,
                     time.time(),
+                    draft.kind if draft.kind in PROPOSAL_KINDS else KIND_CREATE,
+                    draft.base_sha256,
                 ),
             )
         return pid
@@ -473,6 +553,9 @@ def decide_skill_proposal(
     # The user's edits replace the draft field by field; an absent field keeps
     # the draft. Edits are scrubbed like the draft was: whatever is saved here
     # is read by the model on every future task that loads the skill.
+    kind = row.get("kind") or KIND_CREATE
+    if kind == KIND_PATCH:
+        return _decide_patch(store, row, description=description, body=body, vault=vault)
     draft = normalize_draft(
         name if isinstance(name, str) else row["name"],
         description if isinstance(description, str) else row["description"],
@@ -513,6 +596,80 @@ def decide_skill_proposal(
     return _result(pid, STATUS_SAVED, name=draft.name, path=str(path), scrubbed=scrubbed)
 
 
+def _decide_patch(
+    store: SkillProposalStore,
+    row: dict,
+    *,
+    description: object,
+    body: object,
+    vault: Callable[[Any], Any] | None,
+) -> dict:
+    """Accept of a skill update. The name is fixed (it names the skill being
+    updated); the file is re-read and must still hash to ``base_sha256``."""
+    pid = row["proposal_id"]
+    draft = normalize_draft(
+        row["name"],
+        description if isinstance(description, str) else row["description"],
+        body if isinstance(body, str) else row["body"],
+    )
+    draft, scrubbed = scrub_draft(draft, vault)
+    errors = validate_draft(draft)
+    if errors:
+        return _result(pid, STATUS_INVALID, name=draft.name, errors=errors, scrubbed=scrubbed)
+    path = skill_file(row["skills_root"], draft.name)
+    current = None
+    if path is not None:
+        try:
+            current = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            current = None
+    if current is None or text_sha256(current) != (row.get("base_sha256") or ""):
+        # Written against a version that is gone: close it, never overwrite.
+        store.decide(pid, STATUS_STALE)
+        return _result(
+            pid,
+            STATUS_STALE,
+            name=draft.name,
+            errors=[
+                "the skill changed (or was removed) after this update was "
+                "proposed; nothing was written"
+            ],
+        )
+    if not store.claim_for_save(pid):
+        return _already_decided(store, pid, draft.name)
+    try:
+        _atomic_write(path, render_patched_skill_md(current, draft))
+        parse_skill(path.read_text(encoding="utf-8"), path=str(path))
+    except (OSError, SkillError) as exc:
+        # Put the old text back: a half-valid update must not cost the skill.
+        try:
+            _atomic_write(path, current)
+        except OSError:
+            pass
+        store.release_claim(pid)
+        return _result(
+            pid, STATUS_INVALID, name=draft.name, errors=[f"could not write the skill: {exc}"]
+        )
+    except BaseException:
+        store.release_claim(pid)
+        raise
+    if not store.finish_save(pid, draft):
+        return _already_decided(store, pid, draft.name)
+    return _result(
+        pid, STATUS_SAVED, name=draft.name, path=str(path), scrubbed=scrubbed, kind=KIND_PATCH
+    )
+
+
+def _atomic_write(target: Path, text: str) -> None:
+    temp = target.parent / f".{target.name}.{uuid.uuid4().hex[:8]}.tmp"
+    try:
+        temp.write_text(text, encoding="utf-8")
+        os.replace(temp, target)
+    except BaseException:
+        temp.unlink(missing_ok=True)
+        raise
+
+
 def _already_decided(store: SkillProposalStore, pid: str, name: str) -> dict:
     current = store.get(pid) or {}
     return _result(
@@ -548,7 +705,11 @@ PROPOSE_SKILL_SCHEMA = {
         "or tool calls that did the job. Generalize: no secrets, no personal "
         "data, no one-off values (paths, ids, dates, names of this one case); "
         "use placeholders like <URL> instead. Do not write files under "
-        "`skills/` yourself."
+        "`skills/` yourself. To fix a skill you loaded in this task that "
+        "turned out wrong or incomplete, set update=true with its name and "
+        "the full new body. Do not save environment failures, 'tool X is "
+        "broken' claims, transient errors, one-off narratives or approaches "
+        "that did not work."
     ),
     "properties": {
         "name": {
@@ -574,9 +735,59 @@ PROPOSE_SKILL_SCHEMA = {
                 "and the checks that prove the result."
             ),
         },
+        "update": {
+            "type": "boolean",
+            "description": (
+                "True to offer a new version of an existing skill you loaded "
+                "with the `skill` tool in this task. The body replaces the "
+                "old body; an empty description keeps the old one."
+            ),
+            "default": False,
+        },
     },
     "required": ["name", "description", "body"],
 }
+
+
+def prepare_patch(
+    skills_root: str | Path | None,
+    name: object,
+    description: object,
+    body: object,
+    *,
+    library: SkillLibrary | None = None,
+    loaded_sha256: str | None = None,
+) -> SkillDraft | str:
+    """Build an update draft against the CURRENT file, or the reason it
+    cannot be offered. The file is re-read here, and it must be the text the
+    model loaded (``library.loaded_hash`` or ``loaded_sha256``): an update
+    written against an older version would silently undo a newer edit."""
+    key = name.strip() if isinstance(name, str) else ""
+    current = read_skill_text(skills_root, key)
+    if current is None:
+        return f"no skill named {key!r} to update"
+    expected = loaded_sha256
+    if expected is None and library is not None:
+        expected = library.loaded_hash(key)
+    if expected is None:
+        return (
+            f"load the skill {key!r} with the `skill` tool first: an update "
+            "must start from its current text"
+        )
+    digest = text_sha256(current)
+    if digest != expected:
+        return (
+            f"the skill {key!r} changed since you loaded it; load it again and "
+            "base the update on the new text"
+        )
+    text_description = description if isinstance(description, str) else ""
+    if not text_description.strip():
+        try:
+            text_description = parse_skill(current).description
+        except SkillError:
+            text_description = ""
+    draft = normalize_draft(key, text_description, body)
+    return replace(draft, kind=KIND_PATCH, base_sha256=digest)
 
 
 def make_propose_skill_handler(
@@ -584,22 +795,37 @@ def make_propose_skill_handler(
     *,
     skills_root: str | Path | None,
     registry: ToolRegistry | None = None,
+    library: SkillLibrary | None = None,
 ):
     """The ``propose_skill`` handler. It reads ``registry.result_filter`` (the
-    user's secret values) at call time, so a secret set mid-run is masked too."""
+    user's secret values) at call time, so a secret set mid-run is masked too.
+    ``library`` is the run's skill library: an update is only offered for a
+    skill the model loaded in this conversation (read-before-write)."""
     submitted: list[str] = []
 
-    def propose_skill(name: str, description: str, body: str) -> dict:
+    def propose_skill(name: str, description: str, body: str, update: bool = False) -> dict:
         if len(submitted) >= MAX_PROPOSALS_PER_RUN:
             return {
                 "ok": False,
                 "error": "you already offered a skill in this task; one offer per task",
             }
         vault = registry.result_filter if registry is not None else None
-        draft, scrubbed = scrub_draft(normalize_draft(name, description, body), vault)
-        errors = validate_draft(draft)
-        if not errors and draft.name in existing_skill_names(skills_root):
-            errors.append(f"a skill named {draft.name!r} already exists; pick another name")
+        if update:
+            prepared = prepare_patch(
+                skills_root, name, description, body, library=library
+            )
+            if isinstance(prepared, str):
+                return {"ok": False, "error": prepared}
+            draft, scrubbed = scrub_draft(prepared, vault)
+            errors = validate_draft(draft)
+        else:
+            draft, scrubbed = scrub_draft(normalize_draft(name, description, body), vault)
+            errors = validate_draft(draft)
+            if not errors and draft.name in existing_skill_names(skills_root):
+                errors.append(
+                    f"a skill named {draft.name!r} already exists; pick another "
+                    "name, or load it and offer an update (update=true)"
+                )
         if errors:
             return {"ok": False, "error": "; ".join(errors)}
         try:
@@ -613,6 +839,7 @@ def make_propose_skill_handler(
             "ok": True,
             "proposal_id": reply.get("proposal_id"),
             "name": draft.name,
+            "kind": draft.kind,
             "status": "waiting_for_user",
             "note": (
                 "The user sees a card with the draft and decides whether to save "
@@ -635,6 +862,7 @@ def register_propose_skill_tool(
     sink: SkillProposalSink | None,
     *,
     skills_root: str | Path | None,
+    library: SkillLibrary | None = None,
 ) -> None:
     """Register ``propose_skill``. ``None`` (no host, no app to ask) or no
     skills directory registers nothing. Deferred behind ``search_tools``: the
@@ -644,7 +872,9 @@ def register_propose_skill_tool(
     registry.register(
         PROPOSE_SKILL_TOOL,
         PROPOSE_SKILL_SCHEMA,
-        make_propose_skill_handler(sink, skills_root=skills_root, registry=registry),
+        make_propose_skill_handler(
+            sink, skills_root=skills_root, registry=registry, library=library
+        ),
         deferrable=True,
     )
 

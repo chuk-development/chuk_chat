@@ -286,6 +286,16 @@ class _ThemePageState extends State<ThemePage> {
                 subtitle: l.themePresetPackSubtitle,
                 customLabel: l.themePresetCustom,
               ),
+              ExpressiveRow(
+                key: const ValueKey('theme_reset_default'),
+                icon: Icons.restart_alt_rounded,
+                title: l.themeResetDefault,
+                subtitle: l.themeResetDefaultSubtitle,
+                // Already on the default look: nothing to reset.
+                onTap: _matchedPreset == kDefaultThemePreset
+                    ? null
+                    : () => _applyPreset(kDefaultThemePreset),
+              ),
             ],
           ),
 

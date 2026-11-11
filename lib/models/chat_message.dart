@@ -78,6 +78,10 @@ class ChatMessage {
     this.activeVariant,
     this.inputMode,
     this.voiceDurationMs,
+    this.modelContext,
+    this.usage,
+    this.compactSummary,
+    this.hostMid, // checkpoints
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -107,6 +111,10 @@ class ChatMessage {
       activeVariant: parseFlexibleInt(json['activeVariant']),
       inputMode: json['inputMode'] as String?,
       voiceDurationMs: json['voiceDurationMs']?.toString(),
+      modelContext: json['modelContext'] as String?,
+      usage: json['usage'] as String?,
+      compactSummary: json['compactSummary'] as String?,
+      hostMid: json['hostMid']?.toString(), // checkpoints
     );
   }
 
@@ -191,6 +199,40 @@ class ChatMessage {
   /// Length of the dictation in whole milliseconds, when it is known.
   final String? voiceDurationMs;
 
+  /// User messages: what the model was told around this message, as JSON
+  /// (`TurnPromptContext`, lib/services/prompt_cache/prompt_context.dart):
+  /// the chat's prompt snapshot, `[memory updated]` style notes and the
+  /// skills loaded in this turn. Rebuilding the history from it gives the
+  /// bytes that were sent, so the provider's prompt cache keeps hitting. Never
+  /// shown. An older app ignores the field.
+  ///
+  /// Bounded in storage (`PromptContextLedger.storedContextOf`): the snapshot
+  /// is stored once per chat, a later change only as the fields that changed
+  /// (`stateDiff`), a skill body the transcript holds is not stored twice,
+  /// and a transcript over the replay budget (never replayed) keeps only its
+  /// size and skill names. Older, unbounded values still load.
+  final String? modelContext;
+
+  /// Assistant messages: the token usage of the reply (`TurnUsage.encode`,
+  /// lib/models/turn_usage.dart: prompt, completion, total and cached
+  /// tokens). The meta line and the stats row read it after a reload, and
+  /// the context estimate anchors on it (`TokenEstimator.anchoredPrompt
+  /// Tokens`). Absent on older messages; an older app ignores it.
+  final String? usage;
+
+  /// User messages: a summary of everything before this message, as JSON
+  /// (`CompactionRecord`, lib/services/chat_compaction.dart). The newest one
+  /// in a chat makes the history start with the summary and continue with
+  /// this message (docs/GOTCHAS.md, "Chat compaction"). Stored encrypted
+  /// with the rest of the payload. An older app ignores it and sends the
+  /// whole history.
+  final String? compactSummary;
+
+  /// Agents threads: the host's message-store row id (`mid`) of a replayed
+  /// message, so "Fork from here" can name it (docs/WIRE_CONTRACT.md,
+  /// "Checkpoints, rewind and fork"). Null for every other chat.
+  final String? hostMid;
+
   /// [generationMs] as a duration, or null when it was never recorded or
   /// cannot be read.
   Duration? get workedFor {
@@ -236,6 +278,10 @@ class ChatMessage {
     int? activeVariant,
     String? inputMode,
     String? voiceDurationMs,
+    String? modelContext,
+    String? usage,
+    String? compactSummary,
+    String? hostMid,
   }) {
     return ChatMessage(
       role: role ?? this.role,
@@ -263,6 +309,10 @@ class ChatMessage {
       activeVariant: activeVariant ?? this.activeVariant,
       inputMode: inputMode ?? this.inputMode,
       voiceDurationMs: voiceDurationMs ?? this.voiceDurationMs,
+      modelContext: modelContext ?? this.modelContext,
+      usage: usage ?? this.usage,
+      compactSummary: compactSummary ?? this.compactSummary,
+      hostMid: hostMid ?? this.hostMid,
     );
   }
 
@@ -301,5 +351,11 @@ class ChatMessage {
     if (inputMode != null && inputMode!.isNotEmpty) 'inputMode': inputMode,
     if (voiceDurationMs != null && voiceDurationMs!.isNotEmpty)
       'voiceDurationMs': voiceDurationMs,
+    if (modelContext != null && modelContext!.isNotEmpty)
+      'modelContext': modelContext,
+    if (usage case final String u when u.isNotEmpty) 'usage': u,
+    if (compactSummary case final String c when c.isNotEmpty)
+      'compactSummary': c,
+    if (hostMid case final String m when m.isNotEmpty) 'hostMid': m,
   };
 }
