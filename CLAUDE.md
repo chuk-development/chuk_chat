@@ -220,6 +220,12 @@ release with run.sh's defines, stops the running "Chuk Chat (Dev)", copies
 the bundle to `~/.local/opt/chuk-chat-dev`, refreshes the desktop entry and
 starts the new build (via `user-app`, X11). He opens it from the menu as
 "Chuk Chat (Dev)". Do not leave him on a `flutter-hot` session instead.
+**The dev install is always the FULL app** (owner instruction, 2026-11-11):
+"install the current version" means `scripts/install_dev.sh`, which turns on
+Agents, Workspaces and Voice call on top of run.sh's flags. Only
+`FEATURE_LINUX_KEYRING` (10 s+ start stall) and `FEATURE_VOICE_MODE` (dead
+placeholder) stay off. Public GitHub releases keep the plain flag set for
+now; do not carry these flags into a release.
 
 **Starting the app for live/hot-reload work: ALWAYS use `./run-hot.sh`**, never
 `flutter-hot start` bare. Bare `flutter-hot` runs `flutter run` with no
