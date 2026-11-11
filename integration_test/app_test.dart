@@ -119,9 +119,7 @@ void main() {
     // 1. Sign-in page.
     final Finder emailField = find.bySemanticsIdentifier('login_email_field');
     await _pumpUntil(tester, emailField, 'the sign-in page');
-    final AppLocalizations l = AppLocalizations.of(
-      tester.element(emailField),
-    )!;
+    final AppLocalizations l = AppLocalizations.of(tester.element(emailField))!;
     await tester.enterText(
       find.descendant(of: emailField, matching: find.byType(EditableText)),
       _email,
@@ -250,10 +248,9 @@ Future<void> _deleteServerChats() async {
     signIn.headers
       ..set('apikey', _supabaseAnonKey)
       ..contentType = ContentType.json;
-    signIn.write(jsonEncode(<String, String>{
-      'email': _email,
-      'password': _password,
-    }));
+    signIn.write(
+      jsonEncode(<String, String>{'email': _email, 'password': _password}),
+    );
     final HttpClientResponse signInResponse = await signIn.close();
     final String body = await utf8.decodeStream(signInResponse);
     if (signInResponse.statusCode != 200) {
@@ -319,5 +316,10 @@ List<String> _visibleTexts() {
     final String? data = (e.widget as Text).data;
     if (data != null && data.trim().isNotEmpty) out.add(data);
   }
-  return out.take(80).toList();
+  // Markdown and selectable answers draw RichText, not Text.
+  for (final Element e in find.byType(RichText).evaluate()) {
+    final String plain = (e.widget as RichText).text.toPlainText();
+    if (plain.trim().isNotEmpty && !out.contains(plain)) out.add(plain);
+  }
+  return out.take(120).toList();
 }

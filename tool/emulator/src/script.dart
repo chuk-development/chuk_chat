@@ -125,11 +125,16 @@ List<ScriptTurn> parseScript(Object? body) {
   );
 }
 
+/// The `[Sent: Thu 2026-11-12 00:52 UTC+01:00]` line the app puts in front
+/// of a user message (`sentStampLine` in lib/services/prompt_cache/). It
+/// carries the wall clock, so it is dropped before the echo: the answer
+/// stays deterministic and the integration test can find it.
+final RegExp _sentStampLine = RegExp(r'^\s*\[Sent: [^\]\n]*\]\s*\n?');
+
 /// The answer when no script is queued: a deterministic echo.
 ScriptTurn defaultTurn(String message) {
-  final text = message.trim().isEmpty
-      ? 'Echo: (empty message)'
-      : 'Echo: ${message.trim()}';
+  final body = message.replaceFirst(_sentStampLine, '').trim();
+  final text = body.isEmpty ? 'Echo: (empty message)' : 'Echo: $body';
   return [
     ScriptStep('text', {'type': 'text', 'text': text}),
   ];
