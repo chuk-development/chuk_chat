@@ -5,6 +5,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 
 import 'package:chuk_chat/services/image_disk_cache.dart';
+// image_disk_cache.dart takes io_helper's Directory, which the analyzer
+// resolves to the web stub; wrap the dart:io path in it.
+import 'package:chuk_chat/utils/io_helper.dart' as ioh;
 
 Uint8List _jpeg(int width, int height) {
   final image = img.Image(width: width, height: height);
@@ -22,7 +25,7 @@ void main() {
 
   setUp(() {
     dir = Directory.systemTemp.createTempSync('image_disk_cache_test');
-    ImageDiskCache.debugRootOverride = dir;
+    ImageDiskCache.debugRootOverride = ioh.Directory(dir.path);
   });
 
   tearDown(() {
@@ -102,7 +105,7 @@ void main() {
     final old = File('${dir.path}/old.img')..writeAsBytesSync(Uint8List(600));
     old.setLastModifiedSync(DateTime(2020));
     final fresh = File('${dir.path}/new.img')..writeAsBytesSync(Uint8List(600));
-    await ImageDiskCache.pruneForTest(dir, 1000);
+    await ImageDiskCache.pruneForTest(ioh.Directory(dir.path), 1000);
     expect(old.existsSync(), isFalse);
     expect(fresh.existsSync(), isTrue);
   });
