@@ -112,6 +112,7 @@ import 'package:chuk_chat/utils/desktop_drop_stub.dart'
     if (dart.library.io) 'package:desktop_drop/desktop_drop.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
 import 'package:chuk_chat/platform_specific/chat/regen_variant_seed.dart';
+import 'package:chuk_chat/platform_specific/chat/row_extent_cache.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/desktop_clipboard_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/desktop_file_handler.dart';
@@ -1096,6 +1097,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     }
 
     _messageRenderCache.clear();
+    _rowExtents.clear();
 
     // Synchronous fast path: if the requested chat is already fully cached,
     // populate inline without entering async / showing the spinner. This
@@ -2313,8 +2315,20 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     });
   }
 
-  /// The turn rail's row keys (plain chats, wide windows).
+  /// The turn rail's row keys (wide windows).
   final ChatTurnRailController _turnRail = ChatTurnRailController();
+
+  /// Measured row heights of the open chat, by row key.
+  final RowExtentCache _rowExtents = RowExtentCache();
+
+  /// Height of row [i]: measured, else estimated. Rows past the messages
+  /// (the transcript footer) count as one short row.
+  double _rowExtentOf(int i) {
+    if (i < 0 || i >= _messages.length) return 48;
+    final Map<String, String> row = _messages[i];
+    return _rowExtents[row[ChatUiHelpers.kUiKeyField]] ??
+        estimateChatRowExtent(row);
+  }
 
   // ── unread pill (bead chuk_chat-f5wd) ──
   final GlobalKey _firstUnreadKey = GlobalKey(debugLabel: 'first unread row');
@@ -2399,10 +2413,17 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             ? () => _continueGenerationAt(i)
             : null,
       );
+      // Every row reports its height, so the list's length (and the
+      // scrollbar) stays put while scrolling (row_extent_cache.dart).
+      final Widget measured = RowExtentReporter(
+        cache: _rowExtents,
+        rowKey: ChatUiHelpers.stableUiKey(_messages[i], _uuid),
+        child: item,
+      );
       // A user row carries the turn rail's key, so a tick can find it.
       final Widget railed = !widget.agentsThread && data.isUser
-          ? KeyedSubtree(key: _turnRail.keyFor(i), child: item)
-          : item;
+          ? KeyedSubtree(key: _turnRail.keyFor(i), child: measured)
+          : measured;
       // The first row the reader has not seen carries the unread pill's key.
       return i == firstUnreadIndex
           ? KeyedSubtree(key: _firstUnreadKey, child: railed)
@@ -2420,18 +2441,23 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         itemBuilder: itemBuilder,
         scrollCacheExtent: cacheExtent,
         addAutomaticKeepAlives: true,
+        extentOf: _rowExtentOf,
       );
     }
-    return ListView.builder(
+    return ListView.custom(
       controller: scrollController,
       padding: padding,
-      itemCount: itemCount,
-      addAutomaticKeepAlives: true, // Keep message widgets alive
-      // Each item already wraps its own RepaintBoundary below, so the
-      // builder's automatic one would just be a redundant layer on every row.
-      addRepaintBoundaries: false,
       scrollCacheExtent: cacheExtent,
-      itemBuilder: itemBuilder,
+      childrenDelegate: CachedExtentChildDelegate(
+        itemBuilder,
+        childCount: itemCount,
+        extentOf: _rowExtentOf,
+        addAutomaticKeepAlives: true, // Keep message widgets alive
+        // Each item already wraps its own RepaintBoundary below, so the
+        // builder's automatic one would just be a redundant layer on every
+        // row.
+        addRepaintBoundaries: false,
+      ),
     );
   }
 

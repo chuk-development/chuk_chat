@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart' show ScrollCacheExtent, ScrollDirection;
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
+import 'package:chuk_chat/platform_specific/chat/row_extent_cache.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 
 /// Shared message-list scroll behaviour for the desktop and mobile chat UIs.
@@ -165,6 +166,11 @@ mixin ChatScrollMixin<T extends StatefulWidget> on State<T> {
   ///
   /// [itemCount] may exceed the rows (a trailing typing row); indices at and
   /// above [split] always go below the line.
+  ///
+  /// [extentOf] (the row's measured or estimated height, see
+  /// `row_extent_cache.dart`) gives both slivers a stable length; without
+  /// it Flutter extrapolates from the rows laid out right now, and the
+  /// scrollbar thumb changes size on every scroll.
   Widget buildAnchoredTranscript({
     required int split,
     required int itemCount,
@@ -172,7 +178,31 @@ mixin ChatScrollMixin<T extends StatefulWidget> on State<T> {
     required IndexedWidgetBuilder itemBuilder,
     required ScrollCacheExtent scrollCacheExtent,
     required bool addAutomaticKeepAlives,
+    double Function(int index)? extentOf,
   }) {
+    SliverChildBuilderDelegate delegate(
+      NullableIndexedWidgetBuilder builder,
+      int count,
+      int Function(int j) row,
+    ) {
+      final double Function(int index)? extent = extentOf;
+      if (extent == null) {
+        return SliverChildBuilderDelegate(
+          builder,
+          childCount: count,
+          addAutomaticKeepAlives: addAutomaticKeepAlives,
+          addRepaintBoundaries: false,
+        );
+      }
+      return CachedExtentChildDelegate(
+        builder,
+        childCount: count,
+        extentOf: (int j) => extent(row(j)),
+        addAutomaticKeepAlives: addAutomaticKeepAlives,
+        addRepaintBoundaries: false,
+      );
+    }
+
     return CustomScrollView(
       controller: scrollController,
       center: _kTranscriptCenterKey,
@@ -191,12 +221,11 @@ mixin ChatScrollMixin<T extends StatefulWidget> on State<T> {
             0,
           ),
           sliver: SliverList(
-            delegate: SliverChildBuilderDelegate(
+            delegate: delegate(
               (BuildContext context, int j) =>
                   itemBuilder(context, split - 1 - j),
-              childCount: split,
-              addAutomaticKeepAlives: addAutomaticKeepAlives,
-              addRepaintBoundaries: false,
+              split,
+              (int j) => split - 1 - j,
             ),
           ),
         ),
@@ -209,11 +238,10 @@ mixin ChatScrollMixin<T extends StatefulWidget> on State<T> {
             padding.bottom,
           ),
           sliver: SliverList(
-            delegate: SliverChildBuilderDelegate(
+            delegate: delegate(
               (BuildContext context, int j) => itemBuilder(context, split + j),
-              childCount: math.max(0, itemCount - split),
-              addAutomaticKeepAlives: addAutomaticKeepAlives,
-              addRepaintBoundaries: false,
+              math.max(0, itemCount - split),
+              (int j) => split + j,
             ),
           ),
         ),
