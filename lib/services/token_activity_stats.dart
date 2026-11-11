@@ -121,12 +121,29 @@ class TokenActivityStatsService {
   }) {
     final Map<DateTime, _DayAggregate> byDay = <DateTime, _DayAggregate>{};
 
+    // Rows come sorted by time, so most rows fall in the same day as the row
+    // before. Building a local DateTime costs about 11 us; at 16k rows that
+    // was 200 ms. Reuse the last day while the timestamp is inside it.
+    DateTime? lastDay;
+    DateTime? lastDayEnd;
     for (final UsageLogEntry entry in entries) {
       final DateTime? createdAt = entry.createdAt;
       if (createdAt == null) {
         continue;
       }
-      final DateTime day = dateOnly(createdAt);
+      final DateTime? cachedDay = lastDay;
+      final DateTime? cachedEnd = lastDayEnd;
+      final DateTime day;
+      if (cachedDay != null &&
+          cachedEnd != null &&
+          !createdAt.isBefore(cachedDay) &&
+          createdAt.isBefore(cachedEnd)) {
+        day = cachedDay;
+      } else {
+        day = dateOnly(createdAt);
+        lastDay = day;
+        lastDayEnd = DateTime(day.year, day.month, day.day + 1);
+      }
       final _DayAggregate agg = byDay.putIfAbsent(day, _DayAggregate.new);
       agg.tokens += entry.totalTokens;
       agg.requests += 1;

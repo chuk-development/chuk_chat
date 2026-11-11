@@ -49,28 +49,46 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
   @override
   void initState() {
     super.initState();
-    _loadUsageOverview();
+    _openWithCache();
   }
 
-  Future<void> _loadUsageOverview() async {
+  /// Shows the locally cached usage at once (decoded off the UI isolate),
+  /// then refreshes from the server behind the thin progress bar.
+  Future<void> _openWithCache() async {
+    try {
+      final UsageDetails? cached = await UsageLogsService.loadCachedDetails();
+      // A refresh that already finished wins over the cache.
+      if (cached != null && mounted && _overview == null) {
+        setState(() => _applyDetails(cached));
+      }
+    } catch (_) {
+      // No cache: the refresh below shows the spinner, then the data.
+    }
+    if (!mounted) return;
+    await _loadUsageOverview();
+  }
+
+  /// Pull-to-refresh: a full resync, so rows changed on the server show too.
+  Future<void> _refreshFull() => _loadUsageOverview(forceFullSync: true);
+
+  Future<void> _loadUsageOverview({bool forceFullSync = false}) async {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     try {
-      final overview = await UsageLogsService.loadOverview();
-      if (!mounted) return;
-
-      _syncSelectedScope(overview);
       // The heatmap and both streaks come from this one fetch so they can
       // never disagree with each other. This panel is deliberately all-time
       // and does not follow the period chip — a "longest streak within June"
-      // would be a meaningless number.
-      final stats = TokenActivityStatsService.build(overview.entries);
+      // would be a meaningless number. The service builds both on a
+      // background isolate.
+      final UsageDetails details = await UsageLogsService.loadDetails(
+        forceFullSync: forceFullSync,
+      );
+      if (!mounted) return;
       setState(() {
-        _overview = overview;
-        _activityStats = stats;
+        _applyDetails(details);
         _isLoading = false;
         _lastUpdatedAt = DateTime.now();
       });
@@ -87,6 +105,12 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
         _errorMessage = 'Failed to load usage details: $error';
       });
     }
+  }
+
+  void _applyDetails(UsageDetails details) {
+    _syncSelectedScope(details.overview);
+    _overview = details.overview;
+    _activityStats = details.activity;
   }
 
   void _syncSelectedScope(UsageOverview overview) {
@@ -170,7 +194,7 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
       backgroundColor: cs.surface,
       appBar: _appBar(context),
       body: RefreshIndicator(
-        onRefresh: _loadUsageOverview,
+        onRefresh: _refreshFull,
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [

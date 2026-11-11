@@ -6,6 +6,7 @@ import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/pages/usage_details_page.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/usage_logs_service.dart';
 import 'package:chuk_chat/services/user_status_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
@@ -155,6 +156,11 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadUserStatus();
+    // Warm the "Open usage details" page: with a cache this is one small
+    // request; it starts after the first frame so it never slows this page.
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => UsageLogsService.prefetch(),
+    );
   }
 
   @override

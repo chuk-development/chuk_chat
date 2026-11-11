@@ -1,6 +1,15 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/token_activity_stats.dart';
+import 'package:chuk_chat/services/usage_logs_cache.dart';
+
+export 'package:chuk_chat/services/usage_logs_cache.dart'
+    show UsageBillingSnapshot;
 
 class UsageLogEntry {
   const UsageLogEntry({
@@ -156,158 +165,471 @@ class UsageOverview {
 class UsageLogsService {
   const UsageLogsService._();
 
-  static const int _kBatchSize = 500;
+  /// Rows per request. Supabase caps a response at 1000 rows by default
+  /// (`max_rows`); a lower server cap is detected from the first page.
+  static const int _kPageSize = 1000;
 
-  static Future<UsageOverview> loadOverview() async {
-    final user = SupabaseService.auth.currentUser;
-    if (user == null) {
-      throw const UsageLogsServiceException('User is not signed in.');
-    }
+  /// Range requests in flight at once on a first load without a cache.
+  static const int _kMaxConcurrentPages = 8;
 
+  /// A cache older than this is refetched in full, in the background, while
+  /// the page already shows it. Rows are append-only in practice, so the
+  /// incremental path is right almost always; the full pass only catches
+  /// rare edits or deletes on the server (refunds, account clean-up).
+  /// Pull-to-refresh also forces a full pass.
+  static const Duration fullResyncInterval = Duration(days: 7);
+
+  /// The incremental fetch starts this far before the newest cached row.
+  /// `created_at` is set when a transaction starts, so a row can become
+  /// visible after a newer one; the overlap catches it, and the duplicate
+  /// boundary rows are removed by signature.
+  static const Duration _kIncrementalOverlap = Duration(minutes: 10);
+
+  /// Above this many rows the totals are built on a background isolate;
+  /// below it the isolate start costs more than it saves. The cache string
+  /// threshold is the same row count at about 100 characters per row.
+  /// Timings: `test/services/usage_logs_cache_test.dart`.
+  static const int _kIsolateThreshold = 2000;
+  static const int _kIsolateThresholdChars = _kIsolateThreshold * 100;
+
+  static const String _kColumns =
+      'model_id,provider_slug,prompt_tokens,completion_tokens,total_tokens,total_cost_usd,credits_deducted_eur,created_at,cache_read_tokens,cache_write_tokens,cache_read_cost_usd,cache_write_cost_usd,prompt_cost_usd,completion_cost_usd';
+
+  /// Per-user copy of the last refresh in this process. Keyed by user id, so
+  /// it never serves another account's rows.
+  static final Map<String, UsageLogsCacheSnapshot> _memory =
+      <String, UsageLogsCacheSnapshot>{};
+
+  /// The last built details per user, so a second open in the same session
+  /// (or an open after [prefetch]) shows them with no work at all.
+  static final Map<String, UsageDetails> _lastDetails =
+      <String, UsageDetails>{};
+  static final Map<String, Future<UsageDetails>> _inFlight =
+      <String, Future<UsageDetails>>{};
+  static Future<void> _writeTail = Future<void>.value();
+
+  /// The details built from the local cache only (no network), or null when
+  /// there is no cache for the signed-in user. The page shows this on open
+  /// and then calls [loadDetails] to refresh. Decoding and the totals run on
+  /// a background isolate.
+  static Future<UsageDetails?> loadCachedDetails() async {
+    final String? userId = _currentUserId();
+    if (userId == null) return null;
+    final UsageDetails? last = _lastDetails[userId];
+    if (last != null) return last;
+    if (kIsWeb) return null;
     try {
-      final results = await Future.wait<dynamic>([
-        _loadUsageEntries(user.id),
-        _loadBillingSnapshot(user.id),
-      ]);
+      final String? raw = await LocalChatCacheService.kvGet(
+        usageLogsCacheKey(userId),
+      );
+      if (raw == null || raw.isEmpty) return null;
+      final _Decoded? decoded = raw.length > _kIsolateThresholdChars
+          ? await compute(_decodeAndBuild, (raw, userId))
+          : _decodeAndBuild((raw, userId));
+      if (decoded == null) return null;
+      // A refresh may have finished while the cache was being read.
+      _memory.putIfAbsent(userId, () => decoded.snapshot);
+      _lastDetails.putIfAbsent(userId, () => decoded.details);
+      return decoded.details;
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          'UsageLogsService: cache read failed (${error.runtimeType})',
+        );
+      }
+      return null;
+    }
+  }
 
-      final List<UsageLogEntry> entries = (results[0] as List<UsageLogEntry>)
-          .toList(growable: false);
-      final _UsageBillingSnapshot billing = results[1] as _UsageBillingSnapshot;
+  /// [loadCachedDetails] without the activity panel.
+  static Future<UsageOverview?> loadCachedOverview() async =>
+      (await loadCachedDetails())?.overview;
 
-      final List<UsageModelSummary> modelSummaries = _buildModelSummaries(
-        entries,
+  /// Fetches the usage rows and billing figures.
+  ///
+  /// With a cache: only rows from the newest cached row on are fetched
+  /// (normally one small request). Without one, or when [forceFullSync] is
+  /// set, or the last full pass is older than [fullResyncInterval]: every
+  /// row, in parallel range requests. The result is written back to the
+  /// cache. Calls for the same user while one is running share its result.
+  static Future<UsageDetails> loadDetails({bool forceFullSync = false}) {
+    final String? userId = _currentUserId();
+    if (userId == null) {
+      return Future<UsageDetails>.error(
+        const UsageLogsServiceException('User is not signed in.'),
       );
+    }
+    final Future<UsageDetails>? running = _inFlight[userId];
+    if (running != null) {
+      if (!forceFullSync) return running;
+      return running
+          .then<void>((_) {}, onError: (_) {})
+          .then((_) => loadDetails(forceFullSync: true));
+    }
+    final Future<UsageDetails> future = _refresh(userId, forceFullSync);
+    _inFlight[userId] = future;
+    future.then<void>((_) {}, onError: (_) {}).whenComplete(() {
+      if (identical(_inFlight[userId], future)) _inFlight.remove(userId);
+    });
+    return future;
+  }
 
-      int totalPromptTokens = 0;
-      int totalCompletionTokens = 0;
-      int totalTextTokens = 0;
-      int totalMediaRequests = 0;
-      double totalCostUsd = 0;
-      double totalCreditsEur = 0;
-      final int? totalCacheReadTokens = sumKnownInts(
-        entries.map((e) => e.cacheReadTokens),
-      );
-      final int? totalCacheWriteTokens = sumKnownInts(
-        entries.map((e) => e.cacheWriteTokens),
-      );
-      final double? totalCacheReadCostUsd = sumKnownDoubles(
-        entries.map((e) => e.cacheReadCostUsd),
-      );
-      final double? totalCacheWriteCostUsd = sumKnownDoubles(
-        entries.map((e) => e.cacheWriteCostUsd),
-      );
-      double totalPromptCostUsd = 0;
-      double totalCompletionCostUsd = 0;
+  /// [loadDetails] without the activity panel.
+  static Future<UsageOverview> loadOverview({
+    bool forceFullSync = false,
+  }) async => (await loadDetails(forceFullSync: forceFullSync)).overview;
 
-      for (final entry in entries) {
-        totalPromptTokens += entry.promptTokens;
-        totalCompletionTokens += entry.completionTokens;
-        totalTextTokens += entry.textTokens;
-        if (entry.isMediaRequest) {
-          totalMediaRequests += 1;
-        }
-        totalCostUsd += entry.totalCostUsd;
-        totalCreditsEur += entry.creditsDeductedEur;
-        totalPromptCostUsd += entry.promptCostUsd;
-        totalCompletionCostUsd += entry.completionCostUsd;
+  /// Starts a background refresh so the usage page opens warm. Errors are
+  /// dropped here; the page shows them when it loads.
+  static void prefetch() {
+    if (_currentUserId() == null) return;
+    unawaited(loadDetails().then<void>((_) {}, onError: (_) {}));
+  }
+
+  /// The signed-in user's id; null when signed out or when Supabase is not
+  /// set up (tests, a build without credentials).
+  static String? _currentUserId() {
+    if (!SupabaseService.isInitialized) return null;
+    return SupabaseService.auth.currentUser?.id;
+  }
+
+  static Future<UsageDetails> _refresh(String userId, bool forceFull) async {
+    try {
+      final Future<UsageBillingSnapshot> billingFuture = _loadBillingSnapshot(
+        userId,
+      );
+      final UsageLogsCacheSnapshot? cached = forceFull
+          ? null
+          : await _readSnapshot(userId);
+      final DateTime now = DateTime.now().toUtc();
+      final DateTime? newest = cached == null
+          ? null
+          : newestUsageTimestamp(cached.entries);
+
+      final bool incremental =
+          cached != null &&
+          newest != null &&
+          !cached.lastFullSyncAt.isAfter(now) &&
+          now.difference(cached.lastFullSyncAt) < fullResyncInterval;
+
+      final List<UsageLogEntry> rows;
+      final DateTime lastFullSyncAt;
+      if (incremental) {
+        final List<UsageLogEntry> incoming = await _fetchSince(
+          userId,
+          newest.subtract(_kIncrementalOverlap),
+        );
+        rows = mergeUsageEntries(cached.entries, incoming);
+        lastFullSyncAt = cached.lastFullSyncAt;
+      } else {
+        rows = await _fetchAll(userId);
+        lastFullSyncAt = now;
       }
 
-      return UsageOverview(
-        entries: entries,
-        modelSummaries: modelSummaries,
-        totalRequests: entries.length,
-        totalPromptTokens: totalPromptTokens,
-        totalCompletionTokens: totalCompletionTokens,
-        totalTextTokens: totalTextTokens,
-        totalMediaRequests: totalMediaRequests,
-        totalCostUsd: totalCostUsd,
-        totalCreditsEur: totalCreditsEur,
-        totalCacheReadTokens: totalCacheReadTokens,
-        totalCacheWriteTokens: totalCacheWriteTokens,
-        totalCacheReadCostUsd: totalCacheReadCostUsd,
-        totalCacheWriteCostUsd: totalCacheWriteCostUsd,
-        totalPromptCostUsd: totalPromptCostUsd,
-        totalCompletionCostUsd: totalCompletionCostUsd,
-        totalCreditsAllocated: billing.totalCreditsAllocated,
-        creditsRemaining: billing.creditsRemaining,
-        creditsLastRenewedPeriod: billing.creditsLastRenewedPeriod,
+      final UsageBillingSnapshot billing = await billingFuture;
+      // A full fetch still has the page overlap in it; the dedupe runs in
+      // the same background pass as the totals.
+      final UsageDetails details = await buildDetailsAsync(
+        rows,
+        billing,
+        dedupe: !incremental,
       );
+      final UsageLogsCacheSnapshot snapshot = UsageLogsCacheSnapshot(
+        userId: userId,
+        entries: details.overview.entries,
+        lastFullSyncAt: lastFullSyncAt,
+        billing: billing,
+      );
+      _memory[userId] = snapshot;
+      _lastDetails[userId] = details;
+      _scheduleWrite(snapshot);
+      return details;
     } on PostgrestException catch (error) {
       throw UsageLogsServiceException(error.message);
+    } on UsageLogsServiceException {
+      rethrow;
     } catch (error) {
       throw UsageLogsServiceException('Failed to load usage details: $error');
     }
   }
 
-  static Future<List<UsageLogEntry>> _loadUsageEntries(String userId) async {
-    final List<UsageLogEntry> entries = <UsageLogEntry>[];
-    int start = 0;
+  static Future<UsageLogsCacheSnapshot?> _readSnapshot(String userId) async {
+    final UsageLogsCacheSnapshot? memory = _memory[userId];
+    if (memory != null || kIsWeb) return memory;
+    try {
+      final String? raw = await LocalChatCacheService.kvGet(
+        usageLogsCacheKey(userId),
+      );
+      if (raw == null || raw.isEmpty) return null;
+      return raw.length > _kIsolateThresholdChars
+          ? await compute(_decodeOnly, (raw, userId))
+          : _decodeOnly((raw, userId));
+    } catch (_) {
+      return null;
+    }
+  }
 
-    while (true) {
-      final int end = start + _kBatchSize - 1;
-
-      final response = await SupabaseService.client
-          .from('usage_logs')
-          .select(
-            'model_id,provider_slug,prompt_tokens,completion_tokens,total_tokens,total_cost_usd,credits_deducted_eur,created_at,cache_read_tokens,cache_write_tokens,cache_read_cost_usd,cache_write_cost_usd,prompt_cost_usd,completion_cost_usd',
-          )
-          .eq('user_id', userId)
-          .order('created_at', ascending: false)
-          .range(start, end);
-
-      final rows = (response as List).cast<Map<String, dynamic>>();
-      entries.addAll(rows.map(UsageLogEntry.fromMap));
-
-      if (rows.length < _kBatchSize) {
-        break;
+  /// Writes are chained so an older snapshot can never land after a newer
+  /// one. Web keeps only the in-memory copy: there the KV store is
+  /// SharedPreferences, which must not hold megabytes.
+  static void _scheduleWrite(UsageLogsCacheSnapshot snapshot) {
+    if (kIsWeb) return;
+    _writeTail = _writeTail.then((_) async {
+      try {
+        final String raw = snapshot.entries.length > _kIsolateThreshold
+            ? await compute(UsageLogsCacheCodec.encode, snapshot)
+            : UsageLogsCacheCodec.encode(snapshot);
+        await LocalChatCacheService.kvSet(
+          usageLogsCacheKey(snapshot.userId),
+          raw,
+        );
+      } catch (error) {
+        if (kDebugMode) {
+          debugPrint(
+            'UsageLogsService: cache write failed (${error.runtimeType})',
+          );
+        }
       }
-      start += _kBatchSize;
+    });
+  }
+
+  static PostgrestFilterBuilder<PostgrestList> _baseQuery(String userId) =>
+      SupabaseService.client
+          .from('usage_logs')
+          .select(_kColumns)
+          .eq('user_id', userId);
+
+  static List<UsageLogEntry> _parseRows(Object? data) => (data as List)
+      .cast<Map<String, dynamic>>()
+      .map(UsageLogEntry.fromMap)
+      .toList();
+
+  /// Rows with `created_at >= since`, newest first. Normally one request.
+  static Future<List<UsageLogEntry>> _fetchSince(
+    String userId,
+    DateTime since,
+  ) async {
+    final List<UsageLogEntry> out = <UsageLogEntry>[];
+    int start = 0;
+    while (true) {
+      final PostgrestList rows = await _baseQuery(userId)
+          .gte('created_at', since.toUtc().toIso8601String())
+          .order('created_at', ascending: false)
+          .range(start, start + _kPageSize - 1);
+      out.addAll(_parseRows(rows));
+      if (rows.length < _kPageSize || rows.isEmpty) break;
+      start += rows.length;
+    }
+    return out;
+  }
+
+  /// Every row of the user, newest first, possibly with a repeated row
+  /// where two pages overlapped.
+  ///
+  /// The first page also asks for the exact row count; the remaining pages
+  /// then run [_kMaxConcurrentPages] at a time instead of one after another.
+  /// 15.8k rows: 1 + 2 rounds of requests instead of 32.
+  static Future<List<UsageLogEntry>> _fetchAll(String userId) async {
+    final PostgrestResponse<PostgrestList> first = await _baseQuery(userId)
+        .order('created_at', ascending: false)
+        .range(0, _kPageSize - 1)
+        .count(CountOption.exact);
+    final List<Map<String, dynamic>> firstRows = first.data;
+    final int total = first.count;
+    // A server `max_rows` below our page size shows up as a short first page
+    // while the count says there is more.
+    final int pageSize =
+        firstRows.length < _kPageSize && total > firstRows.length
+        ? firstRows.length
+        : _kPageSize;
+
+    final List<int> offsets = <int>[
+      if (pageSize > 0)
+        for (int o = firstRows.length; o < total; o += pageSize) o,
+    ];
+    final List<PostgrestList?> pages = List<PostgrestList?>.filled(
+      offsets.length,
+      null,
+    );
+    int next = 0;
+    Future<void> worker() async {
+      while (next < offsets.length) {
+        final int index = next++;
+        final int start = offsets[index];
+        pages[index] = await _baseQuery(userId)
+            .order('created_at', ascending: false)
+            .range(start, start + pageSize - 1);
+      }
     }
 
+    await Future.wait(<Future<void>>[
+      for (int i = 0; i < _kMaxConcurrentPages && i < offsets.length; i++)
+        worker(),
+    ]);
+
+    final List<UsageLogEntry> entries = <UsageLogEntry>[
+      ..._parseRows(firstRows),
+      for (final PostgrestList? page in pages) ..._parseRows(page),
+    ];
+
+    // Rows inserted during the fetch push older rows past `total`. A full
+    // last page means there may be more: read on until a short page.
+    final int lastLength = pages.isEmpty
+        ? firstRows.length
+        : (pages.last?.length ?? 0);
+    if (pageSize > 0 && lastLength == pageSize) {
+      int start = (offsets.isEmpty
+          ? firstRows.length
+          : offsets.last + pageSize);
+      while (true) {
+        final PostgrestList rows = await _baseQuery(userId)
+            .order('created_at', ascending: false)
+            .range(start, start + pageSize - 1);
+        entries.addAll(_parseRows(rows));
+        if (rows.length < pageSize) break;
+        start += pageSize;
+      }
+    }
+
+    // Not yet de-duplicated: [_refresh] does that on the background pass.
     return entries;
   }
 
-  static Future<_UsageBillingSnapshot> _loadBillingSnapshot(
+  static Future<UsageBillingSnapshot> _loadBillingSnapshot(
     String userId,
   ) async {
     double? totalCreditsAllocated;
     DateTime? creditsLastRenewedPeriod;
     double? creditsRemaining;
 
-    try {
-      final billing = await SupabaseService.client
-          .from('user_billing')
-          .select('total_credits_allocated,credits_last_renewed_period')
-          .eq('user_id', userId)
-          .maybeSingle();
+    await Future.wait<void>(<Future<void>>[
+      () async {
+        try {
+          final billing = await SupabaseService.client
+              .from('user_billing')
+              .select('total_credits_allocated,credits_last_renewed_period')
+              .eq('user_id', userId)
+              .maybeSingle();
 
-      if (billing != null) {
-        totalCreditsAllocated = _parseNullableDouble(
-          billing['total_credits_allocated'],
-        );
-        creditsLastRenewedPeriod = _parseDateTime(
-          billing['credits_last_renewed_period'],
-        );
-      }
-    } on PostgrestException {
-      // Keep usage page functional even if billing snapshot is unavailable.
-    }
+          if (billing != null) {
+            totalCreditsAllocated = _parseNullableDouble(
+              billing['total_credits_allocated'],
+            );
+            creditsLastRenewedPeriod = _parseDateTime(
+              billing['credits_last_renewed_period'],
+            );
+          }
+        } on PostgrestException {
+          // Keep usage page functional even if billing snapshot is unavailable.
+        }
+      }(),
+      () async {
+        try {
+          final result = await SupabaseService.client.rpc(
+            'get_credits_remaining',
+            params: {'p_user_id': userId},
+          );
+          creditsRemaining = _parseNullableDouble(result);
+        } on PostgrestException {
+          // Keep usage page functional even if rpc is unavailable.
+        }
+      }(),
+    ]);
 
-    try {
-      final result = await SupabaseService.client.rpc(
-        'get_credits_remaining',
-        params: {'p_user_id': userId},
-      );
-      creditsRemaining = _parseNullableDouble(result);
-    } on PostgrestException {
-      // Keep usage page functional even if rpc is unavailable.
-    }
-
-    return _UsageBillingSnapshot(
+    return UsageBillingSnapshot(
       totalCreditsAllocated: totalCreditsAllocated,
       creditsRemaining: creditsRemaining,
       creditsLastRenewedPeriod: creditsLastRenewedPeriod,
     );
+  }
+
+  /// The overview and the activity panel of [entries], on a background
+  /// isolate when the list is large. [TokenActivityStatsService.build] alone
+  /// takes about 300 ms at 16k rows (debug VM), far over a frame. `compute`
+  /// works on every platform (on web it runs inline). With [dedupe], page
+  /// overlap is removed first and the rows come back newest first.
+  static Future<UsageDetails> buildDetailsAsync(
+    List<UsageLogEntry> entries,
+    UsageBillingSnapshot billing, {
+    bool dedupe = false,
+  }) async {
+    if (entries.length < _kIsolateThreshold) {
+      return _buildDetails((entries, billing, dedupe));
+    }
+    return compute(_buildDetails, (entries, billing, dedupe));
+  }
+
+  /// Pure: the totals and per-model summaries of [entries].
+  static UsageOverview buildOverview(
+    List<UsageLogEntry> entries,
+    UsageBillingSnapshot billing,
+  ) {
+    final List<UsageModelSummary> modelSummaries = _buildModelSummaries(
+      entries,
+    );
+
+    int totalPromptTokens = 0;
+    int totalCompletionTokens = 0;
+    int totalTextTokens = 0;
+    int totalMediaRequests = 0;
+    double totalCostUsd = 0;
+    double totalCreditsEur = 0;
+    final int? totalCacheReadTokens = sumKnownInts(
+      entries.map((e) => e.cacheReadTokens),
+    );
+    final int? totalCacheWriteTokens = sumKnownInts(
+      entries.map((e) => e.cacheWriteTokens),
+    );
+    final double? totalCacheReadCostUsd = sumKnownDoubles(
+      entries.map((e) => e.cacheReadCostUsd),
+    );
+    final double? totalCacheWriteCostUsd = sumKnownDoubles(
+      entries.map((e) => e.cacheWriteCostUsd),
+    );
+    double totalPromptCostUsd = 0;
+    double totalCompletionCostUsd = 0;
+
+    for (final entry in entries) {
+      totalPromptTokens += entry.promptTokens;
+      totalCompletionTokens += entry.completionTokens;
+      totalTextTokens += entry.textTokens;
+      if (entry.isMediaRequest) {
+        totalMediaRequests += 1;
+      }
+      totalCostUsd += entry.totalCostUsd;
+      totalCreditsEur += entry.creditsDeductedEur;
+      totalPromptCostUsd += entry.promptCostUsd;
+      totalCompletionCostUsd += entry.completionCostUsd;
+    }
+
+    return UsageOverview(
+      entries: entries,
+      modelSummaries: modelSummaries,
+      totalRequests: entries.length,
+      totalPromptTokens: totalPromptTokens,
+      totalCompletionTokens: totalCompletionTokens,
+      totalTextTokens: totalTextTokens,
+      totalMediaRequests: totalMediaRequests,
+      totalCostUsd: totalCostUsd,
+      totalCreditsEur: totalCreditsEur,
+      totalCacheReadTokens: totalCacheReadTokens,
+      totalCacheWriteTokens: totalCacheWriteTokens,
+      totalCacheReadCostUsd: totalCacheReadCostUsd,
+      totalCacheWriteCostUsd: totalCacheWriteCostUsd,
+      totalPromptCostUsd: totalPromptCostUsd,
+      totalCompletionCostUsd: totalCompletionCostUsd,
+      totalCreditsAllocated: billing.totalCreditsAllocated,
+      creditsRemaining: billing.creditsRemaining,
+      creditsLastRenewedPeriod: billing.creditsLastRenewedPeriod,
+    );
+  }
+
+  /// Drops the in-process copy (tests).
+  @visibleForTesting
+  static void debugClearMemory() {
+    _memory.clear();
+    _lastDetails.clear();
+    _inFlight.clear();
   }
 
   static List<UsageModelSummary> _buildModelSummaries(
@@ -362,6 +684,48 @@ class UsageLogsService {
   }
 }
 
+/// The usage overview plus the token-activity panel, built in one pass so
+/// they always describe the same rows.
+@immutable
+class UsageDetails {
+  const UsageDetails({required this.overview, required this.activity});
+
+  final UsageOverview overview;
+  final TokenActivityStats activity;
+}
+
+class _Decoded {
+  const _Decoded(this.snapshot, this.details);
+
+  final UsageLogsCacheSnapshot snapshot;
+  final UsageDetails details;
+}
+
+// Top-level so `compute` can run them on a background isolate.
+UsageLogsCacheSnapshot? _decodeOnly((String, String) args) =>
+    UsageLogsCacheCodec.decode(args.$1, expectedUserId: args.$2);
+
+_Decoded? _decodeAndBuild((String, String) args) {
+  final UsageLogsCacheSnapshot? snapshot = _decodeOnly(args);
+  if (snapshot == null) return null;
+  return _Decoded(
+    snapshot,
+    _buildDetails((snapshot.entries, snapshot.billing, false)),
+  );
+}
+
+UsageDetails _buildDetails(
+  (List<UsageLogEntry>, UsageBillingSnapshot, bool) args,
+) {
+  final List<UsageLogEntry> entries = args.$3
+      ? dedupeUsageEntries(args.$1)
+      : args.$1;
+  return UsageDetails(
+    overview: UsageLogsService.buildOverview(entries, args.$2),
+    activity: TokenActivityStatsService.build(entries),
+  );
+}
+
 class UsageLogsServiceException implements Exception {
   const UsageLogsServiceException(this.message);
 
@@ -369,18 +733,6 @@ class UsageLogsServiceException implements Exception {
 
   @override
   String toString() => message;
-}
-
-class _UsageBillingSnapshot {
-  const _UsageBillingSnapshot({
-    required this.totalCreditsAllocated,
-    required this.creditsRemaining,
-    required this.creditsLastRenewedPeriod,
-  });
-
-  final double? totalCreditsAllocated;
-  final double? creditsRemaining;
-  final DateTime? creditsLastRenewedPeriod;
 }
 
 class _MutableModelSummary {
