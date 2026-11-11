@@ -21,7 +21,6 @@ const Set<String> _frameFiles = {
 /// FloatingPageScaffold; remove each entry when its page is done.
 const Set<String> _notMigratedYet = {
   'lib/pages/messenger_shell.dart',
-  'lib/pages/usage_details_page.dart',
   // Another session owns this file right now. It already floats its header
   // over the page; only the switch to FloatingPageScaffold is missing.
   'lib/pages/media_manager_page.dart',

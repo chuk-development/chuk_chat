@@ -152,16 +152,14 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
     final UsageOverview? overview = _overview;
 
     if (_isLoading && overview == null) {
-      return Scaffold(
-        backgroundColor: cs.surface,
+      return FloatingPageScaffold(
         appBar: _appBar(context),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     if (overview == null) {
-      return Scaffold(
-        backgroundColor: cs.surface,
+      return FloatingPageScaffold(
         appBar: _appBar(context),
         body: Center(
           child: Padding(
@@ -190,17 +188,25 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
     final _UsageScopeOption selectedScope = _selectedScope(scopeOptions);
     final _UsageSlice usageSlice = _buildSlice(selectedScope, overview.entries);
 
-    return Scaffold(
-      backgroundColor: cs.surface,
+    return FloatingPageScaffold(
       appBar: _appBar(context),
       body: RefreshIndicator(
+        // The spinner comes down below the floating header, not under it.
+        edgeOffset: floatingHeaderInset(context).top,
         onRefresh: _refreshFull,
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                // Inside the scroll view: the list starts below the header
+                // and still scrolls on behind it.
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  floatingHeaderInset(context).top + 8,
+                  16,
+                  0,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -292,7 +298,7 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
     );
   }
 
-  PreferredSizeWidget _appBar(BuildContext context) {
+  FloatingAppBar _appBar(BuildContext context) {
     return FloatingAppBar(
       title: Text(AppLocalizations.of(context)!.usageDetails),
     );
