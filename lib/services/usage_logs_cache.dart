@@ -109,7 +109,9 @@ class UsageLogsCacheCodec {
       return UsageLogsCacheSnapshot(
         userId: userId,
         entries: entries,
-        lastFullSyncAt: _time(decoded['f'])!,
+        // No sync time reads as "long ago": the next refresh is a full one.
+        lastFullSyncAt:
+            _time(decoded['f']) ?? DateTime.fromMillisecondsSinceEpoch(0),
         billing: UsageBillingSnapshot(
           totalCreditsAllocated: b.isNotEmpty ? _dbl(b[0]) : null,
           creditsRemaining: b.length > 1 ? _dbl(b[1]) : null,
@@ -132,15 +134,15 @@ class UsageLogsCacheCodec {
       promptTokens: row[2] as int,
       completionTokens: row[3] as int,
       totalTokens: row[4] as int,
-      totalCostUsd: _dbl(row[5])!,
-      creditsDeductedEur: _dbl(row[6])!,
+      totalCostUsd: _dbl(row[5]) ?? 0,
+      creditsDeductedEur: _dbl(row[6]) ?? 0,
       createdAt: _time(row[7]),
       cacheReadTokens: row[8] as int?,
       cacheWriteTokens: row[9] as int?,
       cacheReadCostUsd: _dbl(row[10]),
       cacheWriteCostUsd: _dbl(row[11]),
-      promptCostUsd: _dbl(row[12])!,
-      completionCostUsd: _dbl(row[13])!,
+      promptCostUsd: _dbl(row[12]) ?? 0,
+      completionCostUsd: _dbl(row[13]) ?? 0,
     );
   }
 
@@ -208,9 +210,8 @@ List<UsageLogEntry> mergeUsageEntries(
   final DateTime? oldestIncoming = _oldestTimestamp(incoming);
   final Set<Object> known = <Object>{
     for (final UsageLogEntry e in cached)
-      if (e.createdAt == null ||
-          oldestIncoming == null ||
-          !e.createdAt!.isBefore(oldestIncoming))
+      if (oldestIncoming == null ||
+          !(e.createdAt?.isBefore(oldestIncoming) ?? false))
         usageEntrySignature(e),
   };
   final List<UsageLogEntry> fresh = <UsageLogEntry>[
