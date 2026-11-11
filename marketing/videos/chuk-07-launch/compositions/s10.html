@@ -1,0 +1,146 @@
+<template>
+  <style>
+
+@font-face { font-family: 'Newsreader'; src: url('assets/fonts/Newsreader-Disp600.ttf') format('truetype'); font-weight: 600; font-style: normal; }
+@font-face { font-family: 'ChukMono'; src: url('assets/fonts/jetbrains-mono-latin-wght.woff2') format('woff2'); font-weight: 100 800; font-style: normal; }
+#root { position: absolute; inset: 0; overflow: hidden; font-family: 'ChukMono', monospace; color: #2A1F17; }
+.serif { font-family: 'Newsreader', serif; font-weight: 600; letter-spacing: -0.01em; color: #2A1F17; }
+.mono { font-family: 'ChukMono', monospace; }
+.abs { position: absolute; }
+.ic { width: 1em; height: 1em; display: block; flex: none; }
+.star { display: block; transform-origin: 50% 50%; }
+.mark { display: block; }
+.surface { background: #FFFDF9; border: 2px solid #E2D6C6; box-shadow: 0 8px 30px rgba(42,31,23,.08); }
+.bubble { background: #EADFCF; color: #2A1F17; border-radius: 28px; white-space: nowrap; }
+.word { display: inline-block; }
+.cur { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 60; }
+.cur svg { position: absolute; overflow: visible; }
+.cur-arrow { left: -5px; top: -4px; width: 48px; height: 68px; transform-origin: 5px 4px; }
+.cur-hand { left: -21px; top: -5px; width: 56px; height: 62px; opacity: 0; transform-origin: 21px 5px; }
+.caret { display: inline-block; width: 3px; height: 1.05em; background: #8B5A2B; vertical-align: -0.16em; margin-left: 2px; }
+
+
+#s10-cam { position: absolute; inset: 0; transform-origin: 960px 540px; }
+#s10-desk { position: absolute; left: 110px; top: 140px; width: 1290px; height: 800px; border-radius: 26px; overflow: hidden; background: #FFFDF9; }
+.tbar { position: absolute; left: 0; right: 0; top: 0; height: 58px; border-bottom: 2px solid #E2D6C6; display: flex; align-items: center; gap: 12px; padding: 0 24px; background: #FAF5EE; }
+.tbar i { width: 16px; height: 16px; border-radius: 50%; background: #E2D6C6; display: block; }
+.side { position: absolute; left: 0; top: 58px; bottom: 0; width: 320px; background: #F7F1E8; border-right: 2px solid #E2D6C6; padding: 28px 18px; }
+.side .sh { display: flex; align-items: center; gap: 14px; font-size: 30px; padding: 0 12px 24px; }
+.side .sh .mark { width: 40px; height: 40px; color: #2A1F17; }
+.side .it { font-size: 28px; color: #6E5D4E; padding: 16px 14px; border-radius: 14px; white-space: nowrap; }
+.side .it.on { background: #EADFCF; color: #2A1F17; }
+.main { position: absolute; left: 320px; right: 70px; top: 58px; bottom: 0; padding: 40px 48px; }
+.main .ub { position: absolute; right: 48px; top: 40px; font-size: 28px; padding: 18px 26px; border-radius: 22px; }
+.main .ans { position: absolute; left: 48px; top: 150px; display: flex; gap: 18px; align-items: flex-start; font-size: 30px; line-height: 1.4; width: 820px; }
+.main .ans .star { width: 44px; height: 44px; flex: none; margin-top: 2px; }
+.mchart { position: absolute; left: 110px; top: 270px; width: 560px; height: 260px; border-radius: 22px; padding: 26px 30px; }
+.mchart .mb { position: absolute; left: 30px; right: 30px; bottom: 26px; height: 150px; display: flex; gap: 30px; align-items: flex-end; }
+.mchart .mb div { flex: 1; border-radius: 10px 10px 4px 4px; }
+.mchart .mt { font-size: 28px; color: #6E5D4E; }
+.main .rc { position: absolute; left: 48px; right: 48px; bottom: 34px; height: 96px; border-radius: 30px; border: 2px solid #E2D6C6; font-size: 28px; color: #9A8877; display: flex; align-items: center; padding: 0 30px; }
+.main .rc .snd { position: absolute; right: 16px; top: 13px; width: 66px; height: 66px; border-radius: 50%; background: #8B5A2B; color: #FFFDF9; display: flex; align-items: center; justify-content: center; font-size: 30px; }
+#s10-phone { position: absolute; left: 1330px; top: 110px; width: 470px; height: 880px; border-radius: 64px; background: #2A1F17; padding: 14px; }
+#s10-phone .scr { position: relative; width: 100%; height: 100%; border-radius: 52px; background: #FFFDF9; overflow: hidden; }
+#s10-phone .ph-h { position: absolute; left: 0; right: 0; top: 0; height: 120px; border-bottom: 2px solid #E2D6C6; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 20px; font-size: 28px; }
+#s10-phone .pub { position: absolute; right: 22px; top: 150px; width: 340px; font-size: 28px; padding: 16px 22px; border-radius: 22px; white-space: normal; line-height: 1.35; }
+#s10-phone .pans { position: absolute; left: 26px; top: 330px; width: 390px; font-size: 28px; line-height: 1.4; }
+#s10-phone .pans .star { width: 40px; height: 40px; margin-bottom: 12px; }
+#s10-phone .pch { position: absolute; left: 26px; right: 26px; top: 540px; height: 170px; border-radius: 20px; }
+#s10-phone .pch .mb { position: absolute; left: 20px; right: 20px; bottom: 18px; height: 120px; display: flex; gap: 18px; align-items: flex-end; }
+#s10-phone .pch .mb div { flex: 1; border-radius: 8px 8px 3px 3px; }
+#s10-phone .prc { position: absolute; left: 22px; right: 22px; bottom: 26px; height: 84px; border-radius: 42px; border: 2px solid #E2D6C6; font-size: 28px; color: #9A8877; display: flex; align-items: center; padding: 0 26px; }
+
+  </style>
+  <div id="root" data-composition-id="s10" data-width="1920" data-height="1080" data-duration="3.44">
+
+    <div id="s10-cam">
+      <div id="s10-desk" class="surface">
+        <div class="tbar"><i></i><i></i><i></i></div>
+        <div class="side"><div class="sh"><svg class="mark" viewBox="0 0 500 500"><g transform="translate(0,500) scale(0.1,-0.1)" fill="currentColor"><path d="M2365 4644 c-123 -17 -233 -41 -310 -66 -641 -213 -1147 -829 -1251
+-1521 -20 -136 -20 -368 1 -493 79 -468 376 -837 785 -977 135 -46 265 -67
+418 -67 208 0 366 34 609 131 88 35 103 44 107 67 6 27 106 651 106 659 0 2
+-30 -20 -67 -50 -141 -112 -280 -186 -428 -229 -117 -33 -319 -33 -425 0 -123
+39 -187 78 -285 177 -76 75 -99 106 -138 185 -60 120 -86 224 -94 370 -11 213
+35 416 141 636 66 135 146 243 257 350 139 132 288 219 444 260 100 26 316 26
+405 0 148 -44 273 -123 361 -228 29 -35 51 -54 54 -46 11 35 105 663 100 675
+-11 31 -223 116 -370 149 -67 15 -353 27 -420 18z"/><path d="M2758 3464 c-89 -16 -231 -60 -375 -115 -89 -35 -102 -43 -107 -67
+-6 -28 -106 -651 -106 -659 0 -3 21 14 47 37 115 101 302 201 453 242 69 19
+109 23 215 22 220 -1 342 -52 495 -204 70 -70 94 -102 133 -180 72 -144 90
+-224 91 -410 0 -92 -5 -185 -13 -229 -30 -167 -114 -372 -211 -517 -73 -108
+-235 -269 -340 -336 -170 -109 -284 -142 -485 -142 -133 0 -145 1 -238 33
+-120 41 -239 121 -315 210 -30 36 -54 56 -57 49 -11 -34 -105 -663 -101 -674
+11 -29 183 -102 331 -140 82 -21 131 -27 265 -31 261 -8 455 32 690 144 213
+100 438 271 600 454 241 273 414 639 465 986 21 141 21 375 -1 501 -91 539
+-471 940 -973 1026 -116 20 -354 20 -463 0z"/></g></svg><span>Chuk Chat</span></div>
+          <div class="it on">Coffee spend</div><div class="it">Kiel cafés walk</div><div class="it">Hamburg trip</div><div class="it">Tax letter</div></div>
+        <div class="main">
+          <div class="ub bubble">what did i spend on coffee this month?</div>
+          <div class="ans"><svg class="star" viewBox="0 0 24 24" fill="none" stroke="#8B5A2B" stroke-width="2.6" stroke-linecap="round"><path d="M14.20 11.92L22.59 11.63M13.47 13.63L18.29 18.99M12.08 14.20L12.36 22.19M10.37 13.47L5.31 18.02M9.80 12.08L1.21 12.38M10.53 10.37L5.58 4.87M11.92 9.80L11.65 2.01M13.63 10.53L18.84 5.84"/></svg><div>You spent €42.80 on coffee in October.</div></div>
+          <div class="mchart surface"><div class="mt">Coffee · October</div><div class="mb"><div style="height:77%;background:#D3BEA3"></div><div style="height:99%;background:#D3BEA3"></div><div style="height:66%;background:#D3BEA3"></div><div style="height:100%;background:#8B5A2B"></div></div></div>
+          <div class="rc">Reply…<div class="snd"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3 10.5 13.5"/><path d="M21 3 14.5 21l-4-7.5L3 9.5z"/></svg></div></div>
+        </div>
+      </div>
+      <div id="s10-phone"><div class="scr">
+        <div class="ph-h">Coffee spend</div>
+        <div class="pub bubble">what did i spend on coffee this month?</div>
+        <div class="pans"><svg class="star" viewBox="0 0 24 24" fill="none" stroke="#8B5A2B" stroke-width="2.6" stroke-linecap="round"><path d="M14.20 11.92L22.59 11.63M13.47 13.63L18.29 18.99M12.08 14.20L12.36 22.19M10.37 13.47L5.31 18.02M9.80 12.08L1.21 12.38M10.53 10.37L5.58 4.87M11.92 9.80L11.65 2.01M13.63 10.53L18.84 5.84"/></svg><div>You spent €42.80 on coffee in October.</div></div>
+        <div class="pch surface"><div class="mb"><div style="height:77%;background:#D3BEA3"></div><div style="height:99%;background:#D3BEA3"></div><div style="height:66%;background:#D3BEA3"></div><div style="height:100%;background:#8B5A2B"></div></div></div>
+        <div class="prc">Reply…</div>
+      </div></div>
+    </div>
+
+  </div>
+  <script>
+
+function hfWords(sel) {
+  document.querySelectorAll(sel).forEach(function (el) {
+    var words = el.textContent.trim().split(/\s+/);
+    el.textContent = '';
+    words.forEach(function (w, i) {
+      var s = document.createElement('span');
+      s.className = 'word';
+      s.textContent = w;
+      el.appendChild(s);
+      if (i < words.length - 1) el.appendChild(document.createTextNode(' '));
+    });
+  });
+}
+function hfType(tl, el, text, start, cps) {
+  el.textContent = '';
+  var spans = [];
+  Array.from(text).forEach(function (c) {
+    var s = document.createElement('span');
+    s.textContent = c;
+    s.style.display = 'none';
+    el.appendChild(s);
+    spans.push(s);
+  });
+  spans.forEach(function (s, i) { tl.set(s, { display: 'inline' }, start + (i + 1) / cps); });
+  return start + text.length / cps;
+}
+function hfClick(tl, cur, t, hand) {
+  var sel = cur + (hand ? ' .cur-hand' : ' .cur-arrow');
+  tl.to(sel, { scale: 0.86, duration: 0.08, ease: 'power2.out' }, t);
+  tl.to(sel, { scale: 1, duration: 0.14, ease: 'power2.out' }, t + 0.08);
+}
+function hfHand(tl, cur, t, on) {
+  tl.to(cur + ' .cur-arrow', { opacity: on ? 0 : 1, duration: 0.06 }, t);
+  tl.to(cur + ' .cur-hand', { opacity: on ? 1 : 0, duration: 0.06 }, t);
+}
+function hfHash(i, j) {
+  var h = (i * 374761393 + j * 668265263) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+}
+
+(function () {
+  var tl = gsap.timeline({ paused: true });
+
+  tl.fromTo('#s10-desk', { x: -260, opacity: 0.4, filter: 'blur(12px)' }, { x: 0, opacity: 1, filter: 'blur(0px)', duration: 0.6, ease: 'expo.out' }, 0);
+  tl.fromTo('#s10-phone', { x: 300, opacity: 0.3, filter: 'blur(12px)' }, { x: 0, opacity: 1, filter: 'blur(0px)', duration: 0.6, ease: 'expo.out' }, 0.06);
+  tl.fromTo('#s10-cam', { scale: 1.07 }, { scale: 1, duration: 1.4, ease: 'power2.out' }, 0);
+
+  window.__timelines["s10"] = tl;
+})();
+  </script>
+</template>

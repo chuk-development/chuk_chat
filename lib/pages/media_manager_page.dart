@@ -4,6 +4,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:pdfrx/pdfrx.dart';
 
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/floating_chrome_surface.dart';
@@ -36,6 +37,10 @@ class MediaManagerPage extends StatefulWidget {
 
 class _MediaManagerPageState extends State<MediaManagerPage> {
   List<StoredImage> _images = [];
+
+  /// Files in the image bucket that turned out to be PDFs (old uploads used
+  /// the image ending). Shown under Pages, never in the picture grid.
+  List<StoredImage> _pdfs = [];
   bool _isLoading = true;
   String? _error;
   final Set<String> _selectedImages = {};
@@ -111,9 +116,21 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
         return b.createdAt!.compareTo(a.createdAt!);
       });
 
+      // Sort out the files already known to be PDFs before the grid draws,
+      // so they never flash up as broken pictures.
+      final pdfFlags = await Future.wait(
+        images.map((image) => ImageDiskCache.isPdf(image.path)),
+      );
+      final pictures = <StoredImage>[];
+      final pdfs = <StoredImage>[];
+      for (int i = 0; i < images.length; i++) {
+        (pdfFlags[i] ? pdfs : pictures).add(images[i]);
+      }
+
       if (mounted) {
         setState(() {
-          _images = images;
+          _images = pictures;
+          _pdfs = pdfs;
           _isLoading = false;
         });
       }
@@ -158,6 +175,10 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
           // number of downloads in flight past the bound.
           .timeout(const Duration(seconds: 45));
       if (_thumbs[path] != notifier) return;
+      if (bytes.error == _pdfLabel) {
+        _moveToPdfs(path);
+        return;
+      }
       notifier.value = bytes;
     } on StateError {
       return;
@@ -184,6 +205,9 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
     // HEIC or AVIF file downloads and decrypts perfectly and then renders
     // as a broken glyph, which reads as data loss. Name the format instead.
     final String? unsupported = _unsupportedImageLabel(full);
+    if (unsupported == _pdfLabel) {
+      await ImageDiskCache.markPdf(path);
+    }
     if (unsupported != null) return _ThumbState.failed(unsupported);
 
     Uint8List? thumb;
@@ -197,6 +221,45 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
     if (thumb == null) return _ThumbState.ready(full);
     unawaited(ImageDiskCache.writeThumb(path, thumb));
     return _ThumbState.ready(thumb);
+  }
+
+  static const String _pdfLabel = 'PDF - not a picture';
+
+  /// Takes the file at [path] out of the picture grid and lists it as a PDF.
+  void _moveToPdfs(String path) {
+    if (!mounted) return;
+    final int index = _images.indexWhere((image) => image.path == path);
+    if (index < 0) return;
+    setState(() {
+      final StoredImage file = _images.removeAt(index);
+      _pdfs = [..._pdfs, file];
+      _selectedImages.remove(path);
+    });
+  }
+
+  Future<void> _openPdf(StoredImage file) async {
+    try {
+      final bytes = await ImageStorageService.downloadAndDecryptImage(
+        file.path,
+      );
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (context) =>
+            _PdfPreviewDialog(name: _pdfName(file), bytes: bytes),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      AppNotifications.error(context, _thumbErrorLabel(error));
+    }
+  }
+
+  static String _pdfName(StoredImage file) {
+    final DateTime? created = file.createdAt?.toLocal();
+    if (created == null) return 'PDF';
+    String two(int v) => v.toString().padLeft(2, '0');
+    return 'PDF ${created.year}-${two(created.month)}-${two(created.day)} '
+        '${two(created.hour)}:${two(created.minute)}';
   }
 
   /// Retries one failed thumbnail, bypassing the service's own cache.
@@ -229,7 +292,7 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
       }
       if (brand.startsWith('jxl')) return 'JPEG XL - not supported';
     }
-    if (ascii(0, 4) == '%pdf') return 'PDF - not a picture';
+    if (ascii(0, 4) == '%pdf') return _pdfLabel;
     final String head = ascii(0, 5);
     if (head.startsWith('<?xml') || head.startsWith('<svg')) {
       return 'SVG - not supported';
@@ -491,7 +554,10 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
 
     if (mounted) {
       if (failedCount > 0) {
-        AppNotifications.show(context, l.deletedImagesResult(deletedCount, failedCount));
+        AppNotifications.show(
+          context,
+          l.deletedImagesResult(deletedCount, failedCount),
+        );
       } else {
         AppNotifications.show(context, l.deletedImagesSuccess(deletedCount));
       }
@@ -541,14 +607,20 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
       final l = AppLocalizations.of(context)!;
       switch (result.outcome) {
         case SaveOutcome.savedToFolder:
-        case SaveOutcome.savedViaPicker:AppNotifications.show(context, l.savedToPath(result.path ?? ''));
+        case SaveOutcome.savedViaPicker:
+          AppNotifications.show(context, l.savedToPath(result.path ?? ''));
         case SaveOutcome.savedViaShare:
         case SaveOutcome.cancelled:
           break;
-        case SaveOutcome.failed:AppNotifications.show(context, l.unableToSaveImage);
+        case SaveOutcome.failed:
+          AppNotifications.show(context, l.unableToSaveImage);
       }
     } catch (e) {
-      if (!mounted) return;AppNotifications.show(context, AppLocalizations.of(context)!.unableToSaveImage);
+      if (!mounted) return;
+      AppNotifications.show(
+        context,
+        AppLocalizations.of(context)!.unableToSaveImage,
+      );
     }
   }
 
@@ -565,8 +637,7 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
         final timestamp = DateTime.now().millisecondsSinceEpoch;
         final result = await FileSaveService.save(
           bytes: bytes,
-          suggestedName:
-              'chuk_chat_image_${timestamp}_$savedCount.png',
+          suggestedName: 'chuk_chat_image_${timestamp}_$savedCount.png',
           dialogTitle: 'Save image',
           allowedExtensions: const ['png'],
         );
@@ -589,7 +660,8 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
 
     final parts = <String>['Saved $savedCount images'];
     if (failedCount > 0) parts.add('$failedCount failed');
-    if (cancelledCount > 0) parts.add('$cancelledCount cancelled');AppNotifications.show(context, parts.join(', '));
+    if (cancelledCount > 0) parts.add('$cancelledCount cancelled');
+    AppNotifications.show(context, parts.join(', '));
   }
 
   String _formatFileSize(int? bytes) {
@@ -772,10 +844,11 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
           Positioned.fill(
             child: switch (_filter) {
               _MediaFilter.images =>
-                _images.isEmpty ? _buildImagesEmpty(iconFg, l) :
-                (isMobile
-                    ? _buildMobileList(iconFg, contentTop)
-                    : _buildDesktopGrid(iconFg, contentTop)),
+                _images.isEmpty
+                    ? _buildImagesEmpty(iconFg, l)
+                    : (isMobile
+                          ? _buildMobileList(iconFg, contentTop)
+                          : _buildDesktopGrid(iconFg, contentTop)),
               _MediaFilter.artifacts => _buildArtifactsView(iconFg, contentTop),
             },
           ),
@@ -788,7 +861,7 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
             child: _MediaFilterBar(
               value: _filter,
               imageCount: _images.length,
-              artifactCount: _artifacts.length,
+              artifactCount: _artifacts.length + _pdfs.length,
               onChanged: (next) => setState(() => _filter = next),
             ),
           ),
@@ -829,7 +902,7 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
     if (_isLoadingArtifacts) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (_artifacts.isEmpty) {
+    if (_artifacts.isEmpty && _pdfs.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -860,9 +933,17 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
     }
     return ListView.separated(
       padding: EdgeInsets.fromLTRB(16, topPad, 16, 16),
-      itemCount: _artifacts.length,
+      itemCount: _artifacts.length + _pdfs.length,
       separatorBuilder: (_, i) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
+        if (index >= _artifacts.length) {
+          final StoredImage file = _pdfs[index - _artifacts.length];
+          return _PdfFileTile(
+            name: _pdfName(file),
+            size: file.size,
+            onTap: () => _openPdf(file),
+          );
+        }
         final artifact = _artifacts[index];
         return _ArtifactTile(
           artifact: artifact,
@@ -1143,8 +1224,8 @@ class _ImageTileState extends State<_ImageTile> {
               // The two numbers only while the pointer is on the tile: a
               // permanent gradient band across every picture is the thing
               // that made the grid look busy.
-              if (showChrome && (widget.dateLine != null ||
-                  widget.sizeLine != null))
+              if (showChrome &&
+                  (widget.dateLine != null || widget.sizeLine != null))
                 Positioned(
                   left: 0,
                   right: 0,
@@ -1240,50 +1321,50 @@ class _ThumbError extends StatelessWidget {
     return GestureDetector(
       onTap: compact ? onRetry : null,
       child: Center(
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppIcon(
-              Icons.image_not_supported_outlined,
-              size: compact ? 18 : 22,
-              color: muted,
-            ),
-            if (compact) ...[
-              const SizedBox(height: 4),
-              // Even a thumb-sized tile says why it is empty — a bare glyph
-              // reads as lost data.
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 9, height: 1.2, color: muted),
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AppIcon(
+                Icons.image_not_supported_outlined,
+                size: compact ? 18 : 22,
+                color: muted,
               ),
-            ],
-            if (!compact) ...[
-              const SizedBox(height: 6),
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelSmall?.copyWith(color: muted),
-              ),
-              const SizedBox(height: 2),
-              TextButton(
-                onPressed: onRetry,
-                style: TextButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
+              if (compact) ...[
+                const SizedBox(height: 4),
+                // Even a thumb-sized tile says why it is empty — a bare glyph
+                // reads as lost data.
+                Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 9, height: 1.2, color: muted),
                 ),
-                child: Text(AppLocalizations.of(context)!.retry),
-              ),
+              ],
+              if (!compact) ...[
+                const SizedBox(height: 6),
+                Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelSmall?.copyWith(color: muted),
+                ),
+                const SizedBox(height: 2),
+                TextButton(
+                  onPressed: onRetry,
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                  child: Text(AppLocalizations.of(context)!.retry),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
-      ),
       ),
     );
   }
@@ -1371,24 +1452,29 @@ class _MediaFilterBar extends StatelessWidget {
       radius: 999,
       padding: const EdgeInsets.all(4),
       child: SizedBox(
-      height: kMediaFilterBarHeight - 8,
-      child: Row(
-        children: [
-          Expanded(
-            child: _segment(context, _MediaFilter.images, 'Images', imageCount),
-          ),
-          Expanded(
-            child: _segment(
-              context,
-              _MediaFilter.artifacts,
-              // Artifacts are called Pages wherever the user reads it
-              // (docs/PAGES.md). Code and storage keep the old name.
-              'Pages',
-              artifactCount,
+        height: kMediaFilterBarHeight - 8,
+        child: Row(
+          children: [
+            Expanded(
+              child: _segment(
+                context,
+                _MediaFilter.images,
+                'Images',
+                imageCount,
+              ),
             ),
-          ),
-        ],
-      ),
+            Expanded(
+              child: _segment(
+                context,
+                _MediaFilter.artifacts,
+                // Artifacts are called Pages wherever the user reads it
+                // (docs/PAGES.md). Code and storage keep the old name.
+                'Pages',
+                artifactCount,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1484,16 +1570,20 @@ class _ArtifactTile extends StatelessWidget {
                             color: m3.onSurfaceVariant,
                           ),
                         ),
-                        Text(' · ',
-                            style: TextStyle(color: m3.onSurfaceVariant)),
+                        Text(
+                          ' · ',
+                          style: TextStyle(color: m3.onSurfaceVariant),
+                        ),
                         Text(
                           'v${artifact.version}',
                           style: theme.textTheme.labelSmall?.copyWith(
                             color: m3.onSurfaceVariant,
                           ),
                         ),
-                        Text(' · ',
-                            style: TextStyle(color: m3.onSurfaceVariant)),
+                        Text(
+                          ' · ',
+                          style: TextStyle(color: m3.onSurfaceVariant),
+                        ),
                         Expanded(
                           child: Text(
                             _relative(artifact.updatedAt),
@@ -1526,13 +1616,143 @@ class _ArtifactTile extends StatelessWidget {
   }
 
   static IconData _iconForType(ArtifactType type) => switch (type) {
-        ArtifactType.svg => Icons.image_outlined,
-        ArtifactType.html => Icons.html_outlined,
-        ArtifactType.mermaid => Icons.account_tree_outlined,
-        ArtifactType.technicalDrawing => Icons.architecture_outlined,
-        ArtifactType.typst => Icons.picture_as_pdf_outlined,
-        ArtifactType.excalidraw => Icons.draw_outlined,
-        ArtifactType.code => Icons.code,
-        ArtifactType.markdown => Icons.description_outlined,
-      };
+    ArtifactType.svg => Icons.image_outlined,
+    ArtifactType.html => Icons.html_outlined,
+    ArtifactType.mermaid => Icons.account_tree_outlined,
+    ArtifactType.technicalDrawing => Icons.architecture_outlined,
+    ArtifactType.typst => Icons.picture_as_pdf_outlined,
+    ArtifactType.excalidraw => Icons.draw_outlined,
+    ArtifactType.code => Icons.code,
+    ArtifactType.markdown => Icons.description_outlined,
+  };
+}
+
+/// A PDF that sat in the image bucket, listed under Pages like a page.
+class _PdfFileTile extends StatelessWidget {
+  const _PdfFileTile({
+    required this.name,
+    required this.size,
+    required this.onTap,
+  });
+
+  final String name;
+  final int? size;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final m3 = theme.m3;
+    final int? bytes = size;
+    final String detail = bytes == null
+        ? 'PDF'
+        : 'PDF · ${bytes < 1024 * 1024 ? '${(bytes / 1024).toStringAsFixed(0)} KB' : '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB'}';
+    return Material(
+      color: m3.surfaceContainer,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: cs.primaryContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: AppIcon(
+                  Icons.picture_as_pdf_outlined,
+                  color: cs.onPrimaryContainer,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      detail,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: m3.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              AppIcon(Icons.chevron_right, color: m3.onSurfaceVariant),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The PDF itself, inside the media manager instead of the side panel.
+class _PdfPreviewDialog extends StatelessWidget {
+  const _PdfPreviewDialog({required this.name, required this.bytes});
+
+  final String name;
+  final Uint8List bytes;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final size = MediaQuery.sizeOf(context);
+    return Dialog(
+      clipBehavior: Clip.antiAlias,
+      insetPadding: const EdgeInsets.all(32),
+      child: SizedBox(
+        width: size.width * 0.8,
+        height: size.height * 0.85,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 8, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      name,
+                      style: theme.textTheme.titleMedium,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const AppIcon(Icons.close),
+                    tooltip: MaterialLocalizations.of(context)
+                        .closeButtonTooltip,
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: PdfViewer.data(
+                bytes,
+                sourceName: name,
+                params: const PdfViewerParams(margin: 8),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

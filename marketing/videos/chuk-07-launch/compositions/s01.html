@@ -1,0 +1,87 @@
+<template>
+  <style>
+
+@font-face { font-family: 'Newsreader'; src: url('assets/fonts/Newsreader-Disp600.ttf') format('truetype'); font-weight: 600; font-style: normal; }
+@font-face { font-family: 'ChukMono'; src: url('assets/fonts/jetbrains-mono-latin-wght.woff2') format('woff2'); font-weight: 100 800; font-style: normal; }
+#root { position: absolute; inset: 0; overflow: hidden; font-family: 'ChukMono', monospace; color: #2A1F17; }
+.serif { font-family: 'Newsreader', serif; font-weight: 600; letter-spacing: -0.01em; color: #2A1F17; }
+.mono { font-family: 'ChukMono', monospace; }
+.abs { position: absolute; }
+.ic { width: 1em; height: 1em; display: block; flex: none; }
+.star { display: block; transform-origin: 50% 50%; }
+.mark { display: block; }
+.surface { background: #FFFDF9; border: 2px solid #E2D6C6; box-shadow: 0 8px 30px rgba(42,31,23,.08); }
+.bubble { background: #EADFCF; color: #2A1F17; border-radius: 28px; white-space: nowrap; }
+.word { display: inline-block; }
+.cur { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 60; }
+.cur svg { position: absolute; overflow: visible; }
+.cur-arrow { left: -5px; top: -4px; width: 48px; height: 68px; transform-origin: 5px 4px; }
+.cur-hand { left: -21px; top: -5px; width: 56px; height: 62px; opacity: 0; transform-origin: 21px 5px; }
+.caret { display: inline-block; width: 3px; height: 1.05em; background: #8B5A2B; vertical-align: -0.16em; margin-left: 2px; }
+
+
+#s01-bg { position: absolute; inset: 0; background: #DCCBB4; }
+#s01-t { position: absolute; left: 0; right: 0; top: 470px; text-align: center; font-size: 110px; line-height: 1.1; }
+
+  </style>
+  <div id="root" data-composition-id="s01" data-width="1920" data-height="1080" data-duration="2.46">
+
+    <div id="s01-bg"></div>
+    <h1 id="s01-t" class="serif">Meet Chuk Chat.</h1>
+
+  </div>
+  <script>
+
+function hfWords(sel) {
+  document.querySelectorAll(sel).forEach(function (el) {
+    var words = el.textContent.trim().split(/\s+/);
+    el.textContent = '';
+    words.forEach(function (w, i) {
+      var s = document.createElement('span');
+      s.className = 'word';
+      s.textContent = w;
+      el.appendChild(s);
+      if (i < words.length - 1) el.appendChild(document.createTextNode(' '));
+    });
+  });
+}
+function hfType(tl, el, text, start, cps) {
+  el.textContent = '';
+  var spans = [];
+  Array.from(text).forEach(function (c) {
+    var s = document.createElement('span');
+    s.textContent = c;
+    s.style.display = 'none';
+    el.appendChild(s);
+    spans.push(s);
+  });
+  spans.forEach(function (s, i) { tl.set(s, { display: 'inline' }, start + (i + 1) / cps); });
+  return start + text.length / cps;
+}
+function hfClick(tl, cur, t, hand) {
+  var sel = cur + (hand ? ' .cur-hand' : ' .cur-arrow');
+  tl.to(sel, { scale: 0.86, duration: 0.08, ease: 'power2.out' }, t);
+  tl.to(sel, { scale: 1, duration: 0.14, ease: 'power2.out' }, t + 0.08);
+}
+function hfHand(tl, cur, t, on) {
+  tl.to(cur + ' .cur-arrow', { opacity: on ? 0 : 1, duration: 0.06 }, t);
+  tl.to(cur + ' .cur-hand', { opacity: on ? 1 : 0, duration: 0.06 }, t);
+}
+function hfHash(i, j) {
+  var h = (i * 374761393 + j * 668265263) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+}
+
+(function () {
+  var tl = gsap.timeline({ paused: true });
+
+  hfWords('#s01-t');
+  var w = document.querySelectorAll('#s01-t .word');
+  tl.fromTo(w, { color: '#B7A285', filter: 'blur(5px)' }, { color: '#2A1F17', filter: 'blur(0px)', duration: 0.32, ease: 'power2.out', stagger: 0.12 }, 0.05);
+  tl.to('#s01-t', { opacity: 1, duration: 0.01 }, 2.4);
+
+  window.__timelines["s01"] = tl;
+})();
+  </script>
+</template>

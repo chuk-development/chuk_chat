@@ -1,0 +1,99 @@
+<template>
+  <style>
+
+@font-face { font-family: 'Newsreader'; src: url('assets/fonts/Newsreader-Disp600.ttf') format('truetype'); font-weight: 600; font-style: normal; }
+@font-face { font-family: 'ChukMono'; src: url('assets/fonts/jetbrains-mono-latin-wght.woff2') format('woff2'); font-weight: 100 800; font-style: normal; }
+#root { position: absolute; inset: 0; overflow: hidden; font-family: 'ChukMono', monospace; color: #2A1F17; }
+.serif { font-family: 'Newsreader', serif; font-weight: 600; letter-spacing: -0.01em; color: #2A1F17; }
+.mono { font-family: 'ChukMono', monospace; }
+.abs { position: absolute; }
+.ic { width: 1em; height: 1em; display: block; flex: none; }
+.star { display: block; transform-origin: 50% 50%; }
+.mark { display: block; }
+.surface { background: #FFFDF9; border: 2px solid #E2D6C6; box-shadow: 0 8px 30px rgba(42,31,23,.08); }
+.bubble { background: #EADFCF; color: #2A1F17; border-radius: 28px; white-space: nowrap; }
+.word { display: inline-block; }
+.cur { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 60; }
+.cur svg { position: absolute; overflow: visible; }
+.cur-arrow { left: -5px; top: -4px; width: 48px; height: 68px; transform-origin: 5px 4px; }
+.cur-hand { left: -21px; top: -5px; width: 56px; height: 62px; opacity: 0; transform-origin: 21px 5px; }
+.caret { display: inline-block; width: 3px; height: 1.05em; background: #8B5A2B; vertical-align: -0.16em; margin-left: 2px; }
+
+
+#s09-h { position: absolute; left: 0; right: 0; top: 150px; text-align: center; font-size: 84px; line-height: 1.1; }
+#s09-grid { position: absolute; left: 394px; top: 330px; width: 1132px; display: grid; grid-template-columns: repeat(3, 356px); gap: 32px; }
+.tile { position: relative; height: 250px; border-radius: 30px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 26px; font-size: 32px; color: #2A1F17; }
+.tile img { width: 104px; height: 104px; }
+.tok { position: absolute; right: 18px; top: 18px; width: 52px; height: 52px; border-radius: 50%; background: #8B5A2B; color: #FFFDF9; display: flex; align-items: center; justify-content: center; font-size: 32px; opacity: 0; }
+
+  </style>
+  <div id="root" data-composition-id="s09" data-width="1920" data-height="1080" data-duration="3.93">
+
+    <div id="s09-h" class="serif">Connect the tools you already use.</div>
+    <div id="s09-grid"><div class="tile surface" id="s09-t0"><img src="assets/logos/notion.svg" alt=""/><span>Notion</span><div class="tok" id="s09-ok"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></div></div><div class="tile surface" id="s09-t1"><img src="assets/logos/github.svg" alt=""/><span>GitHub</span></div><div class="tile surface" id="s09-t2"><img src="assets/logos/google-calendar.svg" alt=""/><span>Google Calendar</span></div><div class="tile surface" id="s09-t3"><img src="assets/logos/gmail.svg" alt=""/><span>Gmail</span></div><div class="tile surface" id="s09-t4"><img src="assets/logos/slack.svg" alt=""/><span>Slack</span></div><div class="tile surface" id="s09-t5"><img src="assets/logos/todoist.svg" alt=""/><span>Todoist</span></div></div>
+    <div class="cur" id="s09-cur"><svg class="cur-arrow" viewBox="0 0 28 40"><path d="M2.5 2.5v29.2l7.3-6.9 4.9 11.6 4.6-2-4.8-11.3h9.9z" fill="#14100c" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round"/></svg><svg class="cur-hand" viewBox="0 0 34 38"><path d="M12 4.2a2.6 2.6 0 0 1 5.2 0V15.5h.4v-2.6a2.6 2.6 0 0 1 5.2 0v3.4a2.6 2.6 0 0 1 5.2 0v2.4a2.5 2.5 0 0 1 4.6 1.3v6.4c0 5.6-3.8 9.6-9.6 9.6h-3.3c-3.6 0-5.8-1.6-7.9-4.6L4.9 23.2a2.6 2.6 0 0 1 4-3.3l3.1 3.6z" fill="#ffffff" stroke="#14100c" stroke-width="2" stroke-linejoin="round"/><path d="M17.4 16v6.5M22.6 17v5.5M27.8 19v4" stroke="#14100c" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+
+  </div>
+  <script>
+
+function hfWords(sel) {
+  document.querySelectorAll(sel).forEach(function (el) {
+    var words = el.textContent.trim().split(/\s+/);
+    el.textContent = '';
+    words.forEach(function (w, i) {
+      var s = document.createElement('span');
+      s.className = 'word';
+      s.textContent = w;
+      el.appendChild(s);
+      if (i < words.length - 1) el.appendChild(document.createTextNode(' '));
+    });
+  });
+}
+function hfType(tl, el, text, start, cps) {
+  el.textContent = '';
+  var spans = [];
+  Array.from(text).forEach(function (c) {
+    var s = document.createElement('span');
+    s.textContent = c;
+    s.style.display = 'none';
+    el.appendChild(s);
+    spans.push(s);
+  });
+  spans.forEach(function (s, i) { tl.set(s, { display: 'inline' }, start + (i + 1) / cps); });
+  return start + text.length / cps;
+}
+function hfClick(tl, cur, t, hand) {
+  var sel = cur + (hand ? ' .cur-hand' : ' .cur-arrow');
+  tl.to(sel, { scale: 0.86, duration: 0.08, ease: 'power2.out' }, t);
+  tl.to(sel, { scale: 1, duration: 0.14, ease: 'power2.out' }, t + 0.08);
+}
+function hfHand(tl, cur, t, on) {
+  tl.to(cur + ' .cur-arrow', { opacity: on ? 0 : 1, duration: 0.06 }, t);
+  tl.to(cur + ' .cur-hand', { opacity: on ? 1 : 0, duration: 0.06 }, t);
+}
+function hfHash(i, j) {
+  var h = (i * 374761393 + j * 668265263) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+}
+
+(function () {
+  var tl = gsap.timeline({ paused: true });
+
+  tl.fromTo('.tile', { opacity: 0.3, scale: 0.82, y: 30 }, { opacity: 1, scale: 1, y: 0, duration: 0.5, stagger: 0.05, ease: 'back.out(1.4)' }, 0.0);
+  hfWords('#s09-h');
+  tl.fromTo('#s09-h .word', { opacity: 0, filter: 'blur(6px)' }, { opacity: 1, filter: 'blur(0px)', duration: 0.16, stagger: 0.07, ease: 'power2.out' }, 0.55);
+  tl.fromTo('#s09-cur', { x: 1980, y: 1150 }, { x: 688, y: 452, duration: 1.0, ease: 'power2.inOut' }, 1.2);
+  hfHand(tl, '#s09-cur', 2.05, true);
+  tl.to('#s09-t0', { backgroundColor: '#F7F0E5', duration: 0.1 }, 2.05);
+  hfClick(tl, '#s09-cur', 2.35, true);
+  tl.to('#s09-t0', { scale: 0.97, duration: 0.08 }, 2.35);
+  tl.to('#s09-t0', { scale: 1, borderColor: '#8B5A2B', duration: 0.16 }, 2.43);
+  tl.fromTo('#s09-ok', { opacity: 0, scale: 0.4 }, { opacity: 1, scale: 1, duration: 0.35, ease: 'back.out(2)' }, 2.5);
+  hfHand(tl, '#s09-cur', 2.75, false);
+  tl.to('#s09-cur', { x: 300, y: 1180, duration: 0.6, ease: 'power3.in' }, 2.8);
+
+  window.__timelines["s09"] = tl;
+})();
+  </script>
+</template>

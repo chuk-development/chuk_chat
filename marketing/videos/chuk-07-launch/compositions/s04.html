@@ -1,0 +1,119 @@
+<template>
+  <style>
+
+@font-face { font-family: 'Newsreader'; src: url('assets/fonts/Newsreader-Disp600.ttf') format('truetype'); font-weight: 600; font-style: normal; }
+@font-face { font-family: 'ChukMono'; src: url('assets/fonts/jetbrains-mono-latin-wght.woff2') format('woff2'); font-weight: 100 800; font-style: normal; }
+#root { position: absolute; inset: 0; overflow: hidden; font-family: 'ChukMono', monospace; color: #2A1F17; }
+.serif { font-family: 'Newsreader', serif; font-weight: 600; letter-spacing: -0.01em; color: #2A1F17; }
+.mono { font-family: 'ChukMono', monospace; }
+.abs { position: absolute; }
+.ic { width: 1em; height: 1em; display: block; flex: none; }
+.star { display: block; transform-origin: 50% 50%; }
+.mark { display: block; }
+.surface { background: #FFFDF9; border: 2px solid #E2D6C6; box-shadow: 0 8px 30px rgba(42,31,23,.08); }
+.bubble { background: #EADFCF; color: #2A1F17; border-radius: 28px; white-space: nowrap; }
+.word { display: inline-block; }
+.cur { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 60; }
+.cur svg { position: absolute; overflow: visible; }
+.cur-arrow { left: -5px; top: -4px; width: 48px; height: 68px; transform-origin: 5px 4px; }
+.cur-hand { left: -21px; top: -5px; width: 56px; height: 62px; opacity: 0; transform-origin: 21px 5px; }
+.caret { display: inline-block; width: 3px; height: 1.05em; background: #8B5A2B; vertical-align: -0.16em; margin-left: 2px; }
+
+
+#s04-cam { position: absolute; inset: 0; transform-origin: 960px 620px; }
+#s04-card { position: absolute; left: 210px; top: 150px; width: 1500px; height: 780px; border-radius: 36px; overflow: hidden; }
+#s04-bar { position: absolute; left: 0; right: 0; top: 0; height: 100px; display: flex; align-items: center; gap: 18px; padding: 0 40px; font-size: 34px; border-bottom: 2px solid #E2D6C6; background: #FFFDF9; }
+#s04-bar .ic { font-size: 38px; color: #8B5A2B; }
+#s04-bar .dot { color: #6E5D4E; }
+#s04-map { position: absolute; left: 0; top: 100px; width: 1500px; height: 680px; }
+.pin { position: absolute; width: 0; height: 0; }
+.pin svg { position: absolute; left: -30px; top: -78px; width: 60px; height: 80px; transform-origin: 30px 78px; }
+.plab { position: absolute; white-space: nowrap; font-size: 30px; padding: 12px 20px; border-radius: 16px; background: #FFFDF9; border: 2px solid #E2D6C6; color: #2A1F17; }
+
+  </style>
+  <div id="root" data-composition-id="s04" data-width="1920" data-height="1080" data-duration="3.86">
+
+    <div id="s04-cam">
+      <div id="s04-card" class="surface">
+        <div id="s04-bar"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="2.2"/><circle cx="18" cy="5" r="2.2"/><path d="M8.2 19H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h6.8"/></svg><span>3 cafés</span><span class="dot">·</span><span>2.4 km walk</span><span class="dot">·</span><span>32 min</span></div>
+        <svg id="s04-map" viewBox="0 0 1500 680">
+          <rect width="1500" height="680" fill="#F3ECE0"/>
+          <path d="M560 680C640 520 820 420 980 330S1240 160 1300 0H1500V680Z" fill="#D5DDDB"/>
+          <path d="M560 680C640 520 820 420 980 330S1240 160 1300 0" fill="none" stroke="#C9D2CF" stroke-width="6"/>
+          <path d="M120 120h260v170H120zM180 380h190v140H180zM640 90h220v140H640z" fill="#E6E2CE"/>
+          <g fill="none" stroke="#FFFFFF" stroke-linecap="round">
+            <path d="M0 330C200 320 340 300 470 250S700 160 760 0" stroke-width="16"/>
+            <path d="M0 560H520" stroke-width="12"/><path d="M300 680V0" stroke-width="12"/>
+            <path d="M0 200H600" stroke-width="10"/><path d="M520 680C560 500 600 420 640 340" stroke-width="10"/>
+            <path d="M100 680V420M420 0V130M900 0V180M1000 0C960 100 940 160 900 220" stroke-width="8"/>
+          </g>
+          <path id="s04-route" pathLength="1" d="M430 556C500 520 560 470 640 430S760 380 800 352 920 280 980 250 1060 200 1090 176" fill="none" stroke="#8B5A2B" stroke-width="9" stroke-linecap="round" stroke-dasharray="1 1.2" stroke-dashoffset="1.1"/>
+        </svg>
+        <div class="pin" id="s04-p0" style="left:430px;top:656px"><svg viewBox="0 0 60 80"><path d="M30 78C30 78 4 46 4 28a26 26 0 0 1 52 0c0 18-26 50-26 50z" fill="#8B5A2B"/><circle cx="30" cy="28" r="10" fill="#FFFDF9"/></svg></div>
+        <div class="pin" id="s04-p1" style="left:800px;top:452px"><svg viewBox="0 0 60 80"><path d="M30 78C30 78 4 46 4 28a26 26 0 0 1 52 0c0 18-26 50-26 50z" fill="#8B5A2B"/><circle cx="30" cy="28" r="10" fill="#FFFDF9"/></svg></div>
+        <div class="pin" id="s04-p2" style="left:1090px;top:276px"><svg viewBox="0 0 60 80"><path d="M30 78C30 78 4 46 4 28a26 26 0 0 1 52 0c0 18-26 50-26 50z" fill="#8B5A2B"/><circle cx="30" cy="28" r="10" fill="#FFFDF9"/></svg></div>
+        <div class="plab" id="s04-l0" style="left:150px;top:680px">Rösterei am Hafen</div>
+        <div class="plab" id="s04-l1" style="left:846px;top:392px">Café Kiellinie</div>
+        <div class="plab" id="s04-l2" style="left:640px;top:196px">Strandcafé Seeburg</div>
+      </div>
+    </div>
+
+  </div>
+  <script>
+
+function hfWords(sel) {
+  document.querySelectorAll(sel).forEach(function (el) {
+    var words = el.textContent.trim().split(/\s+/);
+    el.textContent = '';
+    words.forEach(function (w, i) {
+      var s = document.createElement('span');
+      s.className = 'word';
+      s.textContent = w;
+      el.appendChild(s);
+      if (i < words.length - 1) el.appendChild(document.createTextNode(' '));
+    });
+  });
+}
+function hfType(tl, el, text, start, cps) {
+  el.textContent = '';
+  var spans = [];
+  Array.from(text).forEach(function (c) {
+    var s = document.createElement('span');
+    s.textContent = c;
+    s.style.display = 'none';
+    el.appendChild(s);
+    spans.push(s);
+  });
+  spans.forEach(function (s, i) { tl.set(s, { display: 'inline' }, start + (i + 1) / cps); });
+  return start + text.length / cps;
+}
+function hfClick(tl, cur, t, hand) {
+  var sel = cur + (hand ? ' .cur-hand' : ' .cur-arrow');
+  tl.to(sel, { scale: 0.86, duration: 0.08, ease: 'power2.out' }, t);
+  tl.to(sel, { scale: 1, duration: 0.14, ease: 'power2.out' }, t + 0.08);
+}
+function hfHand(tl, cur, t, on) {
+  tl.to(cur + ' .cur-arrow', { opacity: on ? 0 : 1, duration: 0.06 }, t);
+  tl.to(cur + ' .cur-hand', { opacity: on ? 1 : 0, duration: 0.06 }, t);
+}
+function hfHash(i, j) {
+  var h = (i * 374761393 + j * 668265263) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+}
+
+(function () {
+  var tl = gsap.timeline({ paused: true });
+
+  tl.fromTo('#s04-card', { opacity: 0.4, y: 60, filter: 'blur(10px)' }, { opacity: 1, y: 0, filter: 'blur(0px)', duration: 0.5, ease: 'expo.out' }, 0);
+  ['#s04-p0', '#s04-p1', '#s04-p2'].forEach(function (p, i) {
+    tl.fromTo(p + ' svg', { y: -60, scale: 0.6, opacity: 0 }, { y: 0, scale: 1, opacity: 1, duration: 0.45, ease: 'back.out(1.6)' }, 0.45 + i * 0.18);
+    tl.fromTo('#s04-l' + i, { opacity: 0, filter: 'blur(6px)' }, { opacity: 1, filter: 'blur(0px)', duration: 0.2 }, 0.6 + i * 0.18);
+  });
+  tl.fromTo('#s04-route', { attr: { 'stroke-dashoffset': 1.1 } }, { attr: { 'stroke-dashoffset': 0 }, duration: 1.4, ease: 'power2.inOut' }, 1.0);
+  tl.fromTo('#s04-cam', { scale: 1 }, { scale: 1.3, duration: 2.2, ease: 'power2.inOut' }, 1.55);
+
+  window.__timelines["s04"] = tl;
+})();
+  </script>
+</template>

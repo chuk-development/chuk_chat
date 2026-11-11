@@ -1,0 +1,138 @@
+<template>
+  <style>
+
+@font-face { font-family: 'Newsreader'; src: url('assets/fonts/Newsreader-Disp600.ttf') format('truetype'); font-weight: 600; font-style: normal; }
+@font-face { font-family: 'ChukMono'; src: url('assets/fonts/jetbrains-mono-latin-wght.woff2') format('woff2'); font-weight: 100 800; font-style: normal; }
+#root { position: absolute; inset: 0; overflow: hidden; font-family: 'ChukMono', monospace; color: #2A1F17; }
+.serif { font-family: 'Newsreader', serif; font-weight: 600; letter-spacing: -0.01em; color: #2A1F17; }
+.mono { font-family: 'ChukMono', monospace; }
+.abs { position: absolute; }
+.ic { width: 1em; height: 1em; display: block; flex: none; }
+.star { display: block; transform-origin: 50% 50%; }
+.mark { display: block; }
+.surface { background: #FFFDF9; border: 2px solid #E2D6C6; box-shadow: 0 8px 30px rgba(42,31,23,.08); }
+.bubble { background: #EADFCF; color: #2A1F17; border-radius: 28px; white-space: nowrap; }
+.word { display: inline-block; }
+.cur { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 60; }
+.cur svg { position: absolute; overflow: visible; }
+.cur-arrow { left: -5px; top: -4px; width: 48px; height: 68px; transform-origin: 5px 4px; }
+.cur-hand { left: -21px; top: -5px; width: 56px; height: 62px; opacity: 0; transform-origin: 21px 5px; }
+.caret { display: inline-block; width: 3px; height: 1.05em; background: #8B5A2B; vertical-align: -0.16em; margin-left: 2px; }
+
+
+.composer { position: absolute; border-radius: 38px; background: #FFFDF9; border: 2px solid #E2D6C6; box-shadow: 0 8px 30px rgba(42,31,23,.08); }
+.composer .ph { position: absolute; color: #9A8877; }
+.composer .txt { position: absolute; color: #2A1F17; white-space: normal; }
+.composer .send { position: absolute; border-radius: 50%; background: #8B5A2B; color: #FFFDF9; display: flex; align-items: center; justify-content: center; }
+.composer .row { position: absolute; display: flex; align-items: center; }
+.composer .rbtn { border-radius: 50%; border: 2px solid #E2D6C6; display: flex; align-items: center; justify-content: center; color: #6E5D4E; flex: none; }
+.composer .pill { display: flex; align-items: center; border: 2px solid #E2D6C6; border-radius: 999px; color: #6E5D4E; flex: none; }
+
+#s03-comp { left: 216px; top: 360px; width: 1488px; height: 280px; border-radius: 45px; }
+#s03-comp .ph { left: 42px; top: 42px; font-size: 41px; }
+#s03-comp .txt { left: 42px; top: 40px; width: 1310px; font-size: 41px; line-height: 58px; }
+#s03-comp .send { right: 32px; top: 29px; width: 84px; height: 84px; font-size: 40px; }
+#s03-comp .row.l { left: 32px; bottom: 29px; gap: 19px; }
+#s03-comp .row.r { right: 32px; bottom: 29px; gap: 19px; }
+#s03-comp .rbtn { width: 70px; height: 70px; font-size: 34px; }
+#s03-comp .pill { height: 70px; padding: 0 26px; gap: 12px; font-size: 34px; }
+#s03-mode { background: #EADFCF; border-color: #EADFCF !important; color: #2A1F17 !important; }
+#s03-ub { position: absolute; right: 216px; top: 150px; font-size: 36px; padding: 24px 34px; opacity: 0; }
+#s03-status { position: absolute; left: 216px; top: 282px; display: flex; align-items: center; gap: 24px; opacity: 0; }
+#s03-status .star { width: 66px; height: 66px; }
+#s03-status .serif { font-size: 58px; }
+#s03-srcs { position: absolute; left: 216px; top: 410px; width: 1488px; border-radius: 32px; padding: 10px 0; opacity: 0; }
+.srow { display: flex; align-items: center; gap: 30px; height: 122px; padding: 0 40px; border-top: 2px solid #EFE6D9; }
+.srow:first-child { border-top: none; }
+.fav { width: 66px; height: 66px; border-radius: 50%; background: #EADFCF; color: #8B5A2B; display: flex; align-items: center; justify-content: center; font-size: 34px; flex: none; }
+.st { font-size: 34px; color: #2A1F17; }
+.sd { font-size: 28px; color: #6E5D4E; margin-top: 6px; }
+
+  </style>
+  <div id="root" data-composition-id="s03" data-width="1920" data-height="1080" data-duration="7.86">
+
+    <div id="s03-comp" class="composer">
+      <div class="ph" id="s03-ph">Ask me anything</div>
+      <div class="txt"><span id="s03-typed"></span><span class="caret" id="s03-caret"></span></div>
+      <div class="send" id="s03-send"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3 10.5 13.5"/><path d="M21 3 14.5 21l-4-7.5L3 9.5z"/></svg></div>
+      <div class="row l"><div class="rbtn"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></div><div class="pill" id="s03-mode"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/></svg><span>Plan a trip</span></div></div>
+      <div class="row r"><div class="pill"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H12z"/></svg><span>Fast</span><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div><div class="rbtn"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></div></div>
+    </div>
+    <div id="s03-ub" class="bubble">find three cafés near kiel harbour and a walk between them</div>
+    <div id="s03-status"><svg id="s03-star" class="star" viewBox="0 0 24 24" fill="none" stroke="#8B5A2B" stroke-width="2.6" stroke-linecap="round"><path d="M14.20 11.92L22.59 11.63M13.47 13.63L18.29 18.99M12.08 14.20L12.36 22.19M10.37 13.47L5.31 18.02M9.80 12.08L1.21 12.38M10.53 10.37L5.58 4.87M11.92 9.80L11.65 2.01M13.63 10.53L18.84 5.84"/></svg><div class="serif">Searching the web…</div></div>
+    <div id="s03-srcs" class="surface"><div class="srow" id="s03-src0"><div class="fav"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3.2 3.6 3.2 14.4 0 18M12 3c-3.2 3.6-3.2 14.4 0 18"/></svg></div><div class="stxt"><div class="st">Cafés at the Kiel harbour front</div><div class="sd">kiel-sailing-city.de</div></div></div><div class="srow" id="s03-src1"><div class="fav"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3.2 3.6 3.2 14.4 0 18M12 3c-3.2 3.6-3.2 14.4 0 18"/></svg></div><div class="stxt"><div class="st">Kiellinie: where locals get coffee</div><div class="sd">kn-online.de</div></div></div><div class="srow" id="s03-src2"><div class="fav"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3.2 3.6 3.2 14.4 0 18M12 3c-3.2 3.6-3.2 14.4 0 18"/></svg></div><div class="stxt"><div class="st">Walk: Kiellinie to Seeburg, 2.4 km</div><div class="sd">komoot.com</div></div></div></div>
+    <div class="cur" id="s03-cur"><svg class="cur-arrow" viewBox="0 0 28 40"><path d="M2.5 2.5v29.2l7.3-6.9 4.9 11.6 4.6-2-4.8-11.3h9.9z" fill="#14100c" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round"/></svg><svg class="cur-hand" viewBox="0 0 34 38"><path d="M12 4.2a2.6 2.6 0 0 1 5.2 0V15.5h.4v-2.6a2.6 2.6 0 0 1 5.2 0v3.4a2.6 2.6 0 0 1 5.2 0v2.4a2.5 2.5 0 0 1 4.6 1.3v6.4c0 5.6-3.8 9.6-9.6 9.6h-3.3c-3.6 0-5.8-1.6-7.9-4.6L4.9 23.2a2.6 2.6 0 0 1 4-3.3l3.1 3.6z" fill="#ffffff" stroke="#14100c" stroke-width="2" stroke-linejoin="round"/><path d="M17.4 16v6.5M22.6 17v5.5M27.8 19v4" stroke="#14100c" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+
+  </div>
+  <script>
+
+function hfWords(sel) {
+  document.querySelectorAll(sel).forEach(function (el) {
+    var words = el.textContent.trim().split(/\s+/);
+    el.textContent = '';
+    words.forEach(function (w, i) {
+      var s = document.createElement('span');
+      s.className = 'word';
+      s.textContent = w;
+      el.appendChild(s);
+      if (i < words.length - 1) el.appendChild(document.createTextNode(' '));
+    });
+  });
+}
+function hfType(tl, el, text, start, cps) {
+  el.textContent = '';
+  var spans = [];
+  Array.from(text).forEach(function (c) {
+    var s = document.createElement('span');
+    s.textContent = c;
+    s.style.display = 'none';
+    el.appendChild(s);
+    spans.push(s);
+  });
+  spans.forEach(function (s, i) { tl.set(s, { display: 'inline' }, start + (i + 1) / cps); });
+  return start + text.length / cps;
+}
+function hfClick(tl, cur, t, hand) {
+  var sel = cur + (hand ? ' .cur-hand' : ' .cur-arrow');
+  tl.to(sel, { scale: 0.86, duration: 0.08, ease: 'power2.out' }, t);
+  tl.to(sel, { scale: 1, duration: 0.14, ease: 'power2.out' }, t + 0.08);
+}
+function hfHand(tl, cur, t, on) {
+  tl.to(cur + ' .cur-arrow', { opacity: on ? 0 : 1, duration: 0.06 }, t);
+  tl.to(cur + ' .cur-hand', { opacity: on ? 1 : 0, duration: 0.06 }, t);
+}
+function hfHash(i, j) {
+  var h = (i * 374761393 + j * 668265263) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+}
+
+(function () {
+  var tl = gsap.timeline({ paused: true });
+
+  tl.fromTo('#s03-comp', { scale: 1.03 }, { scale: 1, duration: 0.45, ease: 'power3.out' }, 0);
+  tl.set('#s03-ph', { opacity: 0 }, 0.3);
+  var end = hfType(tl, document.getElementById('s03-typed'), 'find three cafés near kiel harbour and a walk between them', 0.3, 18);
+  tl.fromTo('#s03-caret', { opacity: 1 }, { opacity: 0, duration: 0.01, repeat: 9, yoyo: true, repeatDelay: 0.42 }, end + 0.05);
+  // cursor to send
+  tl.fromTo('#s03-cur', { x: 1990, y: 1100 }, { x: 1632, y: 438, duration: 0.95, ease: 'power2.inOut' }, 3.55);
+  hfHand(tl, '#s03-cur', 4.4, true);
+  tl.to('#s03-send', { backgroundColor: '#76491F', duration: 0.1 }, 4.4);
+  hfClick(tl, '#s03-cur', 4.78, true);
+  tl.to('#s03-send', { scale: 0.9, duration: 0.08 }, 4.78);
+  tl.to('#s03-send', { scale: 1, duration: 0.14 }, 4.86);
+  // sent: composer leaves, the message becomes the bubble
+  tl.to('#s03-comp', { y: 140, opacity: 0, duration: 0.3, ease: 'power3.in' }, 4.98);
+  tl.to('#s03-cur', { x: 1760, y: 1160, duration: 0.5, ease: 'power3.in' }, 4.98);
+  tl.fromTo('#s03-ub', { opacity: 0, y: 220, scale: 0.92, filter: 'blur(8px)' }, { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)', duration: 0.55, ease: 'expo.out' }, 5.05);
+  tl.fromTo('#s03-status', { opacity: 0, filter: 'blur(8px)' }, { opacity: 1, filter: 'blur(0px)', duration: 0.2, ease: 'power2.out' }, 5.3);
+  tl.fromTo('#s03-star', { rotation: 0, scale: 0.6 }, { rotation: 180, scale: 1, duration: 0.6, ease: 'expo.out' }, 5.3);
+  tl.to('#s03-star', { rotation: 420, duration: 2.0, ease: 'none' }, 5.9);
+  tl.to('#s03-star', { scale: 0.82, duration: 0.33, yoyo: true, repeat: 5, ease: 'sine.inOut' }, 5.9);
+  tl.fromTo('#s03-srcs', { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.45, ease: 'expo.out' }, 5.5);
+  tl.fromTo('.srow', { opacity: 0, x: -24 }, { opacity: 1, x: 0, duration: 0.4, stagger: 0.12, ease: 'expo.out' }, 5.58);
+
+  window.__timelines["s03"] = tl;
+})();
+  </script>
+</template>

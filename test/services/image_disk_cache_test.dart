@@ -47,6 +47,14 @@ void main() {
     expect(names, isNot(contains('user-123')));
   });
 
+  test('a path marked as PDF stays marked until removed', () async {
+    expect(await ImageDiskCache.isPdf('u/doc.enc'), isFalse);
+    await ImageDiskCache.markPdf('u/doc.enc');
+    expect(await ImageDiskCache.isPdf('u/doc.enc'), isTrue);
+    await ImageDiskCache.remove('u/doc.enc');
+    expect(await ImageDiskCache.isPdf('u/doc.enc'), isFalse);
+  });
+
   test('remove deletes picture and thumbnail', () async {
     await ImageDiskCache.write('u/b.enc', Uint8List(10));
     await ImageDiskCache.writeThumb('u/b.enc', Uint8List(5));
