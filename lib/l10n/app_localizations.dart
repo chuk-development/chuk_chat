@@ -823,6 +823,8 @@ class AppLocalizations {
   // ── Navigation / sidebar ────────────────────────────────────
   String get newChat => _get('newChat');
   String get workspaces => _get('workspaces');
+  String get workspacesEnable => _get('workspacesEnable');
+  String get workspacesEnableSubtitle => _get('workspacesEnableSubtitle');
   String get media => _get('media');
   String get search => _get('search');
   String get retryConnection => _get('retryConnection');

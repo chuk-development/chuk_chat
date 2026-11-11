@@ -44,6 +44,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_debug_snapshot.dart';
 import 'package:chuk_chat/services/share/share_intent_service.dart';
+import 'package:chuk_chat/services/settings/workspaces_setting.dart';
 
 /* ---------- ROOT WRAPPER MOBILE (for Phones) ---------- */
 class RootWrapperMobile extends StatefulWidget {
@@ -126,9 +127,15 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
   /// deleted or reordered by a new message.
   StreamSubscription<String?>? _chatListSubscription;
 
+  void _onWorkspacesSettingChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void initState() {
     super.initState();
+    // Workspaces is a setting now: rebuild when it is switched.
+    WorkspacesSetting.instance.addListener(_onWorkspacesSettingChanged);
     WidgetsBinding.instance.addObserver(this);
     if (widget.swipeNavigation) _startSwipeNavigation();
     if (kFeatureArtifacts) {
@@ -246,6 +253,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
 
   @override
   void dispose() {
+    WorkspacesSetting.instance.removeListener(_onWorkspacesSettingChanged);
     ShareIntentService.instance.incoming.removeListener(_onShareIncoming);
     if (kFeatureArtifacts) {
       ArtifactStorageService.activeArtifactNotifier.removeListener(
@@ -839,7 +847,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
               label: l?.media ?? 'Media',
               onTap: _openMediaPage,
             ),
-          if (kFeatureWorkspaces)
+          if (workspacesEnabled)
             MobileMenuItem(
               icon: Icons.folder_rounded,
               label: l?.workspaces ?? 'Workspaces',

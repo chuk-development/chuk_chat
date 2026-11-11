@@ -35,7 +35,9 @@ Workspaces for organizing chats with custom AI behavior.
 - `lib/widgets/workspace_file_viewer.dart` - File viewer dialog
 - `lib/widgets/workspace_selection_dropdown.dart` - Workspace dropdown in chat
 
-**Flag:** `--dart-define=FEATURE_WORKSPACES=true` (there is no `FEATURE_PROJECTS`)
+**Switch:** a user setting, Settings > Personalization > Workspaces, off by
+default (`lib/services/settings/workspaces_setting.dart`, stored per device).
+There is no build flag: `FEATURE_WORKSPACES` and `FEATURE_PROJECTS` are gone.
 
 ## Image Generation
 AI image generation through the `generate_image` tool. The API server

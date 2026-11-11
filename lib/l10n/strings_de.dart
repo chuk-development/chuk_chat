@@ -815,6 +815,9 @@ const Map<String, String> stringsDe = {
   // ── Navigation / sidebar ────────────────────────────────────
   'newChat': 'Neuer Chat',
   'workspaces': 'Arbeitsbereiche',
+  'workspacesEnable': 'Arbeitsbereiche nutzen',
+  'workspacesEnableSubtitle':
+      'Eigene KI-Personas mit eigenem Prompt, Dateien und Gedächtnis. Zeigt Arbeitsbereiche in der Seitenleiste und im Chat-Eingabefeld.',
   'media': 'Medien',
   'search': 'Suche',
   'retryConnection': 'Erneut versuchen',

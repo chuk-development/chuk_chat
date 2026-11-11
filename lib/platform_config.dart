@@ -28,7 +28,7 @@ const bool kAutoDetectPlatform = !kPlatformMobile && !kPlatformDesktop;
 // Set to true to enable, false to disable (hide from UI).
 //
 // Build with features enabled:
-// flutter build apk --dart-define=FEATURE_VOICE_MODE=true --dart-define=FEATURE_WORKSPACES=true
+// flutter build apk --dart-define=FEATURE_VOICE_MODE=true
 //
 // Build with defaults (workspaces enabled, others off):
 // flutter build apk
@@ -52,14 +52,8 @@ const bool kFeatureVoiceCall = bool.fromEnvironment(
   defaultValue: false,
 );
 
-/// Workspaces — custom AI personas with system prompts, files, and memory
-/// settings. Off: the feature earned its place in nobody's day, so it is
-/// hidden rather than removed. Nothing is deleted in Supabase — flipping the
-/// flag back brings every workspace back with it.
-const bool kFeatureWorkspaces = bool.fromEnvironment(
-  'FEATURE_WORKSPACES',
-  defaultValue: false,
-);
+// Workspaces are no build flag any more: a user setting, off by default
+// (lib/services/settings/workspaces_setting.dart).
 
 /// Artifacts - editable code/markdown/HTML/technical drawing panels alongside chat
 const bool kFeatureArtifacts = bool.fromEnvironment(

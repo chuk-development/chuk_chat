@@ -108,7 +108,7 @@ void main() {
   });
 
   test('the @ source without a workspace lists only the chat files', () async {
-    // FEATURE_WORKSPACES is off in tests and no workspace is handed in.
+    // Workspaces are off by default (a setting) and no workspace is handed in.
     final items = await at();
     expect(items.map((i) => i.id), <String>['file:plan.pdf']);
   });

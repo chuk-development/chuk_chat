@@ -416,12 +416,11 @@ fi
 # Override any of them from .env or the shell, e.g.:
 #   FEATURE_SKILLS=false ./run.sh linux
 #
-# NOTE: FEATURE_PROJECTS used to be passed here and is a no-op — nothing in
-# lib/ reads it. The flag that exists is FEATURE_WORKSPACES.
+# NOTE: FEATURE_PROJECTS and FEATURE_WORKSPACES are gone. Workspaces are a
+# user setting now (Settings > Personalization, off by default).
 
 # On by default.
 FEATURE_VOICE_MODE="${FEATURE_VOICE_MODE:-false}"
-FEATURE_WORKSPACES="${FEATURE_WORKSPACES:-false}"
 FEATURE_ARTIFACTS="${FEATURE_ARTIFACTS:-true}"
 FEATURE_SERVER_TOOLS="${FEATURE_SERVER_TOOLS:-true}"
 FEATURE_SKILLS="${FEATURE_SKILLS:-true}"
@@ -454,7 +453,7 @@ esac
 # One list, used for both the defines and the startup log — two lists drift,
 # and a log that disagrees with what was actually passed is worse than none.
 ALL_FEATURE_FLAGS=(
-  FEATURE_VOICE_MODE FEATURE_WORKSPACES FEATURE_ARTIFACTS
+  FEATURE_VOICE_MODE FEATURE_ARTIFACTS
   FEATURE_SERVER_TOOLS FEATURE_SKILLS
   FEATURE_SYSTEM_TRAY FEATURE_PAYMENTS_DIRECT
   FEATURE_LINUX_KEYRING FEATURE_AGENTS FEATURE_VOICE_CALL

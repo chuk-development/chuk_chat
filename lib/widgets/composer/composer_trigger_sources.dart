@@ -22,6 +22,7 @@ import 'package:chuk_chat/services/composer/composer_trigger.dart';
 import 'package:chuk_chat/services/skills/skill_registry.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/widgets/composer/chip_text_controller.dart';
+import 'package:chuk_chat/services/settings/workspaces_setting.dart';
 
 /// The most chats the `@` menu lists (newest first).
 const int kTriggerMaxChats = 200;
@@ -191,7 +192,7 @@ ComposerTriggerSource buildComposerTriggerSource({
     ];
     if (workspace != null) {
       items.addAll(workspaceFileItems(workspace, skip: chatFiles.toSet()));
-    } else if (kFeatureWorkspaces) {
+    } else if (workspacesEnabled) {
       try {
         await WorkspaceStorageService.loadFromCache();
         items.addAll(
@@ -225,7 +226,7 @@ ComposerTriggerSource buildComposerTriggerSource({
         // No roster: no agents in the menu.
       }
     }
-    if (kFeatureWorkspaces) {
+    if (workspacesEnabled) {
       for (final w in WorkspaceStorageService.activeProjects) {
         items.add(
           TriggerItem(
