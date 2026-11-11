@@ -83,15 +83,35 @@ to `master` — no long-lived feature branches, no waiting on a PR. If `master`
 moved under you, `git fetch` + `git merge origin/master` first, then push. This
 overrides any "conservative: do not push" default in the Beads block below.
 
-## Bug/Task tracking with `bd` (mandatory)
+## Tasks: Plane (not beads, not GitHub Issues)
 
-`bd` (beads) is this project's task board — use it, always. For EVERY new bug or
-task you discover, create a `bd` issue (`bd create "<title>" -d "<detail>" -l bug`)
-before or as you start on it. Claim it while working (`bd update <id> --claim`),
-and close it the moment it is done and verified (`bd close <id>`). Treat it as
-your personal kanban: nothing worked on without a bead, nothing left open once
-fixed. Do NOT use TodoWrite or ad-hoc markdown checklists for this. The same rule
-holds in the `api_server` repo, which has its own `bd` database.
+Owner instruction (2026-11-11): all tasks, bugs and ideas live in **Plane**,
+workspace `chuk-development` (https://app.plane.so/chuk-development), project
+**CHAT** ("Chuk Chat"). It covers this repo and `api_server`. `bd` (beads) is
+old: do not create new beads. The beads blocks further down are history.
+
+- Use Plane only through the **Plane MCP** (`mcp__plane__*`). If the tools are
+  missing or a call fails with an auth error, tell the owner at once so he can
+  connect it (`/mcp` -> plane). Do not go on without Plane and stay silent.
+- Labels: `claude` = Claude may work on the item. `notclaude` = humans only;
+  Claude does not touch, close or rewrite it. Every item Claude creates gets
+  one of the two.
+- **Plane is the record of every task.** Each task from the owner gets a work
+  item in CHAT (search for an existing one first). Set "In Progress" when you
+  start.
+- **One problem = several small items.** Split a problem into its parts (find
+  the cause, fix, test, docs) and create one item per part, in the project it
+  belongs to.
+- "Leg das an" means create the item only, do not solve it.
+- **Found a side problem** (also in another repo)? Create its own item at once,
+  with the problem and where it is.
+- **Nothing gets lost:** what is still open at the end of a session is an item
+  in Plane, not only a chat message.
+- **When done:** update the item description in words, not code: the problem,
+  the cause, the fix, what to watch out for next time. At the end, the commit
+  hashes as links (`https://github.com/chuk-development/chuk_chat/commit/<hash>`)
+  so autonomous work can be checked. Then set "Done".
+- Commit messages name the item, e.g. `CHAT-12: media manager disk cache`.
 
 ## Git Workflow (default: no worktrees)
 
@@ -724,7 +744,7 @@ bd close <id>         # Complete work
 
 ### Rules
 
-- Use `bd` for ALL task tracking — do NOT use TodoWrite, TaskCreate, or markdown TODO lists
+- Old: tasks now live in Plane (see "Tasks: Plane" above). Do NOT use TodoWrite, TaskCreate, or markdown TODO lists
 - Run `bd prime` for detailed command reference and session close protocol
 - Use `bd remember` for persistent knowledge — do NOT use MEMORY.md files
 
