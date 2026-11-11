@@ -122,6 +122,17 @@ old: do not create new beads. The beads blocks further down are history.
 
 ## Git Workflow (default: no worktrees)
 
+**One branch, forever: `master`** (owner instruction, 2026-11-11). There are
+no other branches on GitHub and none are created: no feature branches, no
+"for review" branches, no long-lived worktree branches. If several agents
+work at once and one of them really needs a worktree, its branch exists only
+for that one task: when the task is done, it is merged into `master` at once
+and on its own initiative (no asking), and the branch and worktree are
+deleted. A branch that is still there the next day is a bug. The history was
+rewritten on 2026-11-11 to remove `.pseudomap` (new tip `e65c12fb`). Never
+merge a commit from the old history back in. The full backup of all old refs
+is `~/git/chuk_chat-backup-2026-11-11.bundle`.
+
 **Default: work directly in `/home/user/git/chuk_chat` on `master`, commit and
 push straight to `master`.** No feature branch, no worktree. That is the normal
 case, because normally exactly one agent works this repo.
