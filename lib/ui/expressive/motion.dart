@@ -7,14 +7,14 @@
 /// it, so a press feels the same everywhere.
 library;
 
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
 import 'package:chuk_chat/ui/expressive/huge_icon.dart';
+import 'package:chuk_chat/ui/expressive/loading_indicator.dart';
 import 'package:flutter/physics.dart';
+import 'package:material_ui/material_ui.dart' as mui show Springs;
 
 /// The bouncy spatial spring used for press and selection feedback.
 /// The curve for widgets that cannot take a spring.
@@ -31,18 +31,83 @@ const Cubic kExpressiveDecelerate = Cubic(0.05, 0.7, 0.1, 1.0);
 /// waited for.
 const Duration kExpressiveShort = Duration(milliseconds: 180);
 
-const SpringDescription kSpatialSpring = SpringDescription(
-  mass: 1,
-  stiffness: 420,
-  damping: 22,
-);
+// The official Material 3 Expressive motion scheme. The values come from
+// `Springs` in package:material_ui (the Flutter port of the Compose
+// `MotionTokens`), so they follow Google's tokens when the package updates.
+// Spatial springs (position, size, shape) may overshoot; effect springs
+// (colour, opacity) never do (damping ratio 1).
 
-/// A snappier spring for small effects (icons, indicators).
-const SpringDescription kEffectSpring = SpringDescription(
-  mass: 1,
-  stiffness: 600,
-  damping: 26,
-);
+/// Expressive spatial fast (stiffness 800, ratio 0.6): a press, a thumb, a chip.
+const SpringDescription kM3eSpatialFast = mui.Springs.expressiveFastSpatial;
+
+/// Expressive spatial default (380, 0.8): menus, sheets, cards, FAB menu items.
+const SpringDescription kM3eSpatialDefault =
+    mui.Springs.expressiveDefaultSpatial;
+
+/// Expressive spatial slow (200, 0.8): full-screen and large-container moves.
+const SpringDescription kM3eSpatialSlow = mui.Springs.expressiveSlowSpatial;
+
+/// Effects fast (3800, 1): colour and opacity of small parts.
+const SpringDescription kM3eEffectsFast = mui.Springs.expressiveFastEffects;
+
+/// Effects default (1600, 1).
+const SpringDescription kM3eEffectsDefault =
+    mui.Springs.expressiveDefaultEffects;
+
+/// Effects slow (800, 1).
+const SpringDescription kM3eEffectsSlow = mui.Springs.expressiveSlowEffects;
+
+/// A [Curve] that follows a spring from 0 to 1, for APIs that only take a
+/// curve (route transitions, implicit animations, a repeating controller).
+///
+/// The spring runs over the first `1 - hold` of the curve and is then held
+/// at 1. An under-damped spatial spring overshoots past 1 on the way, the
+/// way the real spring would; an effects spring never does.
+class SpringCurve extends Curve {
+  SpringCurve(SpringDescription spring, {this.hold = 0})
+    : assert(hold >= 0 && hold < 1),
+      _sim = SpringSimulation(spring, 0, 1, 0),
+      _settle = _settleTime(spring);
+
+  /// Fraction of the curve at the end that stays at 1.
+  final double hold;
+
+  final SpringSimulation _sim;
+  final double _settle;
+
+  static double _settleTime(SpringDescription spring) {
+    final SpringSimulation sim = SpringSimulation(spring, 0, 1, 0);
+    double t = 0;
+    while (t < 5 && !sim.isDone(t)) {
+      t += 0.005;
+    }
+    return t <= 0 ? 1 : t;
+  }
+
+  @override
+  double transformInternal(double t) {
+    final double moveEnd = 1 - hold;
+    if (t >= moveEnd) return 1;
+    return _sim.x(t / moveEnd * _settle);
+  }
+}
+
+/// How long a [SpringCurve] of [spring] needs to settle, for a route or an
+/// implicit animation that asks for a duration.
+Duration springSettleDuration(SpringDescription spring) {
+  final SpringSimulation sim = SpringSimulation(spring, 0, 1, 0);
+  double t = 0;
+  while (t < 5 && !sim.isDone(t)) {
+    t += 0.005;
+  }
+  return Duration(microseconds: (t * 1e6).round());
+}
+
+/// The spring for press and selection feedback: M3E spatial fast.
+const SpringDescription kSpatialSpring = kM3eSpatialFast;
+
+/// The spring for small effects (icons, indicators): M3E effects fast.
+const SpringDescription kEffectSpring = kM3eEffectsFast;
 
 /// A surface that springs and morphs on press. Wrap ANY tappable element.
 class MorphTap extends StatefulWidget {
@@ -432,79 +497,22 @@ class ExpressiveIconButton extends StatelessWidget {
   }
 }
 
-/// The expressive spinner: a cookie blob that turns while its scallop depth
-/// pulses. Replaces a plain [CircularProgressIndicator] on expressive surfaces.
-class ExpressiveLoader extends StatefulWidget {
-  const ExpressiveLoader({super.key, this.size = 48, this.color});
+/// The expressive loader: the official Material 3 Expressive loading
+/// indicator ([M3LoadingIndicator]). Use it for short waits of unknown length
+/// instead of a plain [CircularProgressIndicator].
+class ExpressiveLoader extends StatelessWidget {
+  const ExpressiveLoader({
+    super.key,
+    this.size = 48,
+    this.color,
+    this.contained = false,
+  });
 
   final double size;
   final Color? color;
+  final bool contained;
 
   @override
-  State<ExpressiveLoader> createState() => _ExpressiveLoaderState();
-}
-
-class _ExpressiveLoaderState extends State<ExpressiveLoader>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1400),
-  )..repeat();
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final Color color = widget.color ?? Theme.of(context).colorScheme.primary;
-    return AnimatedBuilder(
-      animation: _c,
-      builder: (BuildContext context, Widget? _) => SizedBox(
-        width: widget.size,
-        height: widget.size,
-        child: CustomPaint(
-          painter: _BlobPainter(t: _c.value, color: color),
-        ),
-      ),
-    );
-  }
-}
-
-class _BlobPainter extends CustomPainter {
-  _BlobPainter({required this.t, required this.color});
-
-  final double t;
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final Offset centre = size.center(Offset.zero);
-    final double base = size.shortestSide / 2;
-    final double pulse = 0.10 + 0.06 * (0.5 + 0.5 * math.sin(t * 2 * math.pi));
-    final double rot = t * 2 * math.pi;
-    final Path path = Path();
-    const int steps = 120;
-    for (int i = 0; i <= steps; i++) {
-      final double a = (i / steps) * 2 * math.pi + rot;
-      final double r =
-          base * (1 - pulse) + base * pulse * math.cos(6 * (a - rot));
-      final Offset p = Offset(
-        centre.dx + r * math.cos(a),
-        centre.dy + r * math.sin(a),
-      );
-      if (i == 0) {
-        path.moveTo(p.dx, p.dy);
-      } else {
-        path.lineTo(p.dx, p.dy);
-      }
-    }
-    path.close();
-    canvas.drawPath(path, Paint()..color = color);
-  }
-
-  @override
-  bool shouldRepaint(_BlobPainter old) => old.t != t || old.color != color;
+  Widget build(BuildContext context) =>
+      M3LoadingIndicator(size: size, color: color, contained: contained);
 }

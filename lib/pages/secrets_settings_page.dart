@@ -88,7 +88,7 @@ class _SecretsSettingsPageState extends State<SecretsSettingsPage> {
     final ColorScheme scheme = Theme.of(anchor).colorScheme;
     final String? choice = await showAnchoredMenu<String>(
       anchor,
-      color: scheme.surfaceContainerHigh,
+      color: scheme.surfaceContainerLow,
       items: <PopupMenuEntry<String>>[
         const PopupMenuItem<String>(
           value: 'change',

@@ -1,13 +1,23 @@
 /// The full-width bar under the mode switch that names the chat in view.
 ///
-/// It is the swipe surface of the phone (owner, 2026-11-05): no chevron, no
-/// dropdown, no list, and no peek at the neighbours. A sideways drag on the
-/// bar drives the [SwipeChatPager] below through its
-/// [SwipeChatPagerController]. The chat itself stays still; only the name
-/// here moves: it follows the finger out and fades, and the new name slides
-/// in from the other side. A row of dots at the foot of the bar shows where
-/// in the list the chat is, Instagram style: a window of at most [_kMaxDots]
-/// dots that shrink towards its ends when the list goes on.
+/// It is the swipe surface of the phone (owner, 2026-11-05): a sideways
+/// drag on the bar drives the [SwipeChatPager] below through its
+/// [SwipeChatPagerController], and chat and title move together.
+///
+/// Shape (redesign 2026-11-10, owner: "no big gap on the left, no big
+/// animations, quick to work with"): one search-bar-sized pill, content
+/// left-aligned like the M3 Expressive app bar title.
+///
+/// ```
+/// ( face )  Title of the chat                 • ━ • •
+///           last line or status
+/// ```
+///
+/// The neighbours do not peek in any more: a centred carousel pushed the
+/// title to the middle and left a wide empty band on the left. The position
+/// dots on the right say "there is more this way" instead. During a swipe
+/// the title slides a little with the finger and fades; the next one fades
+/// in from the other side. A tap opens the list of chats ([onTap]).
 library;
 
 import 'dart:math' as math;
@@ -19,26 +29,20 @@ import 'package:chuk_chat/platform_specific/mobile/swipe_chat_pager.dart';
 import 'package:chuk_chat/ui/expressive/working_dots.dart';
 import 'package:chuk_chat/widgets/floating_chrome_surface.dart';
 
-/// Height of the strip, without its outer margin.
-const double kChatTitleStripHeight = 58;
+/// Height of the strip, without its outer margin. The M3 search bar height.
+const double kChatTitleStripHeight = 56;
 
 /// Corner radius of the strip: a full pill.
 const double kChatTitleStripRadius = kChatTitleStripHeight / 2;
 
 /// Size of the leading face or icon slot.
-const double _kLeadingSize = 30;
+const double _kLeadingSize = 36;
 
-/// Distance between two titles on the track, as a fraction of the width.
-const double _kSlotFraction = 0.6;
-
-/// The widest a title may be, as a fraction of the width.
-const double _kItemFraction = 0.66;
-
-/// How small a peeking title gets.
-const double _kPeekScale = 0.88;
+/// How far the title travels with a full page of swipe progress.
+const double _kTitleTravel = 56;
 
 /// The most dots the position row shows at once.
-const int _kMaxDots = 7;
+const int _kMaxDots = 5;
 
 /// The bar that names the entry in view.
 class ChatTitleStrip extends StatelessWidget {
@@ -49,7 +53,7 @@ class ChatTitleStrip extends StatelessWidget {
     this.controller,
     this.progress,
     this.onTap,
-    this.margin = const EdgeInsets.symmetric(horizontal: 16),
+    this.margin = const EdgeInsets.symmetric(horizontal: 13),
     this.semanticsHint = 'Swipe to switch chats',
     this.workingLabel = 'working',
     this.emptyTitle = '',
@@ -59,18 +63,19 @@ class ChatTitleStrip extends StatelessWidget {
   final List<SwipeChatEntry> entries;
   final String? selectedId;
 
-  /// The pager below. A sideways drag on the strip moves it, a tap on a
-  /// peeking title steps it, and its [SwipeChatPagerController.carousel]
-  /// moves the titles. Null makes the strip a still label.
+  /// The pager below. A sideways drag on the strip moves it, and its
+  /// [SwipeChatPagerController.progress] moves the title. Null makes the
+  /// strip a still label.
   final SwipeChatPagerController? controller;
 
-  /// Overrides the controller's carousel value (tests).
+  /// Overrides the controller's progress value (tests).
   final ValueListenable<double>? progress;
 
-  /// A tap on the title in the middle.
+  /// A tap on the strip: the list of chats.
   final VoidCallback? onTap;
 
-  /// Room around the bar. The default leaves 16 px on each side.
+  /// Room around the bar. The default lines its edges up with the round
+  /// chips of the row above (10 px row padding + 3 px chip slop).
   final EdgeInsetsGeometry margin;
   final String semanticsHint;
 
@@ -86,32 +91,82 @@ class ChatTitleStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final int index = swipeChatIndexOf(entries, selectedId);
-    final String title = index >= 0 ? entries[index].title : emptyTitle;
+    final SwipeChatEntry? entry = index >= 0 ? entries[index] : null;
+    final String title = entry?.title ?? emptyTitle;
     final SwipeChatPagerController? pager = controller;
     final ValueListenable<double>? motion = progress ?? pager?.progress;
     final bool dots = showPosition && index >= 0 && entries.length > 1;
 
-    Widget track(double p) => _Track(
-      entries: entries,
-      index: index,
-      progress: p,
+    final Widget line = _EntryLine(
+      entry: entry,
+      fallbackTitle: emptyTitle,
       workingLabel: workingLabel,
-      emptyTitle: emptyTitle,
-      dots: dots,
     );
 
-    final Widget content = motion == null
-        ? track(0)
-        : ValueListenableBuilder<double>(
-            valueListenable: motion,
-            builder: (BuildContext context, double p, Widget? _) => track(p),
-          );
+    Widget moving(double p) {
+      final double t = p.clamp(-1.0, 1.0);
+      // Gone by a third of a page: the swipe is short and so is the fade.
+      final double opacity = (1 - t.abs() * 3).clamp(0.0, 1.0);
+      return Opacity(
+        opacity: opacity,
+        child: Transform.translate(
+          offset: Offset(t * _kTitleTravel, 0),
+          child: line,
+        ),
+      );
+    }
 
-    final bool hasNext = index >= 0 && index < entries.length - 1;
-    final bool hasPrev = index > 0;
+    final Widget content = Row(
+      children: <Widget>[
+        Expanded(
+          child: ClipRect(
+            child: motion == null
+                ? line
+                : ValueListenableBuilder<double>(
+                    valueListenable: motion,
+                    builder: (BuildContext context, double p, Widget? _) =>
+                        moving(p),
+                  ),
+          ),
+        ),
+        if (dots) ...<Widget>[
+          const SizedBox(width: 12),
+          SizedBox(
+            width: _PositionDots.widthFor(entries.length),
+            height: 8,
+            child: motion == null
+                ? _PositionDots(
+                    key: const ValueKey<String>('chat_title_strip_position'),
+                    count: entries.length,
+                    position: index.toDouble(),
+                  )
+                : ValueListenableBuilder<double>(
+                    valueListenable: motion,
+                    builder: (BuildContext context, double p, Widget? _) =>
+                        _PositionDots(
+                          key: const ValueKey<String>(
+                            'chat_title_strip_position',
+                          ),
+                          count: entries.length,
+                          // During the "in" half the index has changed
+                          // already; the dots then simply rest on it.
+                          position: (index - p.clamp(-1.0, 1.0)).clamp(
+                            0.0,
+                            (entries.length - 1).toDouble(),
+                          ),
+                        ),
+                  ),
+          ),
+        ],
+      ],
+    );
 
     Widget bar = Container(
       height: kChatTitleStripHeight,
+      padding: EdgeInsetsDirectional.only(
+        start: entry?.leading != null ? 10 : 20,
+        end: 18,
+      ),
       decoration: ShapeDecoration(
         color: FloatingChromeSurface.fillOf(context),
         shape: const StadiumBorder(),
@@ -120,24 +175,21 @@ class ChatTitleStrip extends StatelessWidget {
       child: content,
     );
 
+    final bool hasNext = index >= 0 && index < entries.length - 1;
+    final bool hasPrev = index > 0;
+
     if (pager != null) {
-      final Widget plain = bar;
-      // The bar's own width (inside the margin), so it matches the tap's
-      // `localPosition`.
-      bar = LayoutBuilder(
-        builder: (BuildContext context, BoxConstraints constraints) =>
-            GestureDetector(
-              key: const ValueKey<String>('chat_title_strip_swipe'),
-              behavior: HitTestBehavior.opaque,
-              onHorizontalDragStart: (_) => pager.dragStart(),
-              onHorizontalDragUpdate: (DragUpdateDetails d) =>
-                  pager.dragUpdate(d.delta.dx),
-              onHorizontalDragEnd: (DragEndDetails d) =>
-                  pager.dragEnd(d.primaryVelocity ?? 0),
-              onHorizontalDragCancel: pager.dragCancel,
-              onTap: onTap,
-              child: plain,
-            ),
+      bar = GestureDetector(
+        key: const ValueKey<String>('chat_title_strip_swipe'),
+        behavior: HitTestBehavior.opaque,
+        onHorizontalDragStart: (_) => pager.dragStart(),
+        onHorizontalDragUpdate: (DragUpdateDetails d) =>
+            pager.dragUpdate(d.delta.dx),
+        onHorizontalDragEnd: (DragEndDetails d) =>
+            pager.dragEnd(d.primaryVelocity ?? 0),
+        onHorizontalDragCancel: pager.dragCancel,
+        onTap: onTap,
+        child: bar,
       );
     } else if (onTap != null) {
       bar = GestureDetector(onTap: onTap, child: bar);
@@ -165,152 +217,17 @@ class ChatTitleStrip extends StatelessWidget {
   }
 }
 
-/// The titles on their track, and the dots under them.
-class _Track extends StatelessWidget {
-  const _Track({
-    required this.entries,
-    required this.index,
-    required this.progress,
-    required this.workingLabel,
-    required this.emptyTitle,
-    required this.dots,
-  });
-
-  final List<SwipeChatEntry> entries;
-  final int index;
-
-  /// [SwipeChatPagerController.carousel]: < 0 moves towards index + 1.
-  final double progress;
-  final String workingLabel;
-  final String emptyTitle;
-  final bool dots;
-
-  @override
-  Widget build(BuildContext context) {
-    final double p = progress.clamp(-1.0, 1.0);
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final double w = constraints.maxWidth;
-        final double slot = w * _kSlotFraction;
-        final double itemWidth = w * _kItemFraction;
-        final List<Widget> items = <Widget>[];
-        if (index < 0) {
-          items.add(
-            _place(
-              key: const ValueKey<String>('chat_title_strip_current'),
-              entry: null,
-              position: 0,
-              slot: slot,
-              width: w,
-              itemWidth: itemWidth,
-            ),
-          );
-        } else {
-          // Only the chat in view: its name rides the finger out, and the
-          // next name comes in from the other side once the switch is made
-          // (the pager's progress runs to ±1, then from ∓1 back to 0). No
-          // neighbour is shown (owner, 2026-11-05).
-          items.add(
-            _place(
-              key: const ValueKey<String>('chat_title_strip_current'),
-              entry: entries[index],
-              position: p,
-              slot: slot,
-              width: w,
-              itemWidth: itemWidth,
-            ),
-          );
-        }
-        return Stack(
-          clipBehavior: Clip.hardEdge,
-          children: <Widget>[
-            Positioned.fill(
-              bottom: dots ? 8 : 0,
-              child: ShaderMask(
-                // Fades the peeking titles into the bar's ends.
-                shaderCallback: (Rect r) => const LinearGradient(
-                  colors: <Color>[
-                    Color(0x00000000),
-                    Color(0xFF000000),
-                    Color(0xFF000000),
-                    Color(0x00000000),
-                  ],
-                  stops: <double>[0, 0.14, 0.86, 1],
-                ).createShader(r),
-                blendMode: BlendMode.dstIn,
-                child: Stack(children: items),
-              ),
-            ),
-            if (dots)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 7,
-                height: 5,
-                child: _PositionDots(
-                  key: const ValueKey<String>('chat_title_strip_position'),
-                  count: entries.length,
-                  position: index.toDouble(),
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _place({
-    required Key key,
-    required SwipeChatEntry? entry,
-    required double position,
-    required double slot,
-    required double width,
-    required double itemWidth,
-  }) {
-    final double t = position.abs().clamp(0.0, 1.0);
-    final double scale = 1 - (1 - _kPeekScale) * t;
-    final double opacity = 1 - t;
-    final double left = (width - itemWidth) / 2 + position * slot;
-    return Positioned(
-      key: key,
-      left: left,
-      top: 0,
-      bottom: 0,
-      width: itemWidth,
-      child: IgnorePointer(
-        child: Opacity(
-          opacity: opacity,
-          child: Transform.scale(
-            scale: scale,
-            child: _EntryLine(
-              entry: entry,
-              fallbackTitle: emptyTitle,
-              workingLabel: workingLabel,
-              detail: 1,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Face · title over subtitle (or the working dots), centred.
+/// Face · title over subtitle (or the working dots), left-aligned.
 class _EntryLine extends StatelessWidget {
   const _EntryLine({
     required this.entry,
     required this.fallbackTitle,
     required this.workingLabel,
-    required this.detail,
   });
 
   final SwipeChatEntry? entry;
   final String fallbackTitle;
   final String workingLabel;
-
-  /// 1 in the middle, 0 at a peek: the second line fades out as the title
-  /// moves aside, so a peek is one quiet line.
-  final double detail;
 
   @override
   Widget build(BuildContext context) {
@@ -320,10 +237,8 @@ class _EntryLine extends StatelessWidget {
     final String? subtitle = e?.subtitle;
     final bool hasSubtitle = subtitle != null && subtitle.isNotEmpty;
     final bool working = e != null && e.working;
-    final bool secondLine = (working || hasSubtitle) && detail > 0.02;
 
     final Widget title = Row(
-      mainAxisSize: MainAxisSize.min,
       children: <Widget>[
         Flexible(
           child: Text(
@@ -331,9 +246,10 @@ class _EntryLine extends StatelessWidget {
             maxLines: 1,
             softWrap: false,
             overflow: TextOverflow.ellipsis,
-            style: (text.titleSmall ?? const TextStyle()).copyWith(
-              fontSize: 15.5,
-              height: 1.2,
+            // Title medium, emphasized: the one key element of the bar.
+            style: (text.titleMedium ?? const TextStyle()).copyWith(
+              fontSize: 16,
+              height: 1.25,
               fontWeight: FontWeight.w700,
               letterSpacing: -0.1,
               color: scheme.onSurface,
@@ -354,57 +270,49 @@ class _EntryLine extends StatelessWidget {
       ],
     );
 
-    return Center(
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          if (e?.leading != null) ...<Widget>[
-            SizedBox.square(
-              dimension: _kLeadingSize,
-              child: Center(child: e!.leading),
-            ),
-            const SizedBox(width: 10),
-          ],
-          Flexible(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                title,
-                if (secondLine)
-                  ClipRect(
-                    child: Align(
-                      alignment: Alignment.topLeft,
-                      heightFactor: detail,
-                      child: Opacity(
-                        opacity: detail,
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 1),
-                          child: working
-                              ? WorkingDots(
-                                  color: scheme.primary,
-                                  label: workingLabel,
-                                )
-                              : Text(
-                                  subtitle!,
-                                  maxLines: 1,
-                                  softWrap: false,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: text.bodySmall?.copyWith(
-                                    fontSize: 12,
-                                    height: 1.25,
-                                    color: scheme.onSurfaceVariant,
-                                  ),
-                                ),
-                        ),
-                      ),
+    return Row(
+      children: <Widget>[
+        if (e?.leading != null) ...<Widget>[
+          SizedBox.square(
+            dimension: _kLeadingSize,
+            child: Center(child: e!.leading),
+          ),
+          const SizedBox(width: 12),
+        ],
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              title,
+              if (working)
+                Padding(
+                  padding: const EdgeInsets.only(top: 1),
+                  child: WorkingDots(
+                    color: scheme.primary,
+                    label: workingLabel,
+                  ),
+                )
+              else if (hasSubtitle)
+                Padding(
+                  padding: const EdgeInsets.only(top: 1),
+                  child: Text(
+                    subtitle,
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.ellipsis,
+                    style: text.bodySmall?.copyWith(
+                      fontSize: 12.5,
+                      height: 1.25,
+                      color: scheme.onSurfaceVariant,
                     ),
                   ),
-              ],
-            ),
+                ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -414,6 +322,13 @@ class _EntryLine extends StatelessWidget {
 /// has more beyond it get smaller.
 class _PositionDots extends StatelessWidget {
   const _PositionDots({super.key, required this.count, required this.position});
+
+  /// The width the row needs for [count] entries.
+  static double widthFor(int count) {
+    final int shown = math.min(count, _kMaxDots);
+    return (shown - 1) * (_DotsPainter._dot + _DotsPainter._gap) +
+        _DotsPainter._pill;
+  }
 
   final int count;
 
@@ -462,7 +377,8 @@ class _DotsPainter extends CustomPainter {
     final double shift = start - first;
     final double pitch = _dot + _gap;
     final double totalWidth = (shown - 1) * pitch + _pill;
-    final double x0 = (size.width - totalWidth) / 2 + _pill / 2;
+    // Right-aligned: the row ends where the strip's content ends.
+    final double x0 = size.width - totalWidth + _pill / 2;
     final double cy = size.height / 2;
     final Paint paint = Paint()..isAntiAlias = true;
 

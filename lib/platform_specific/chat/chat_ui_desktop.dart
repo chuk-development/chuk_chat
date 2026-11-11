@@ -2667,7 +2667,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                               WidgetsBinding.instance
                                                   .addPostFrameCallback((_) {
                                                     if (mounted) {
-                                                      onScrollChanged();
+                                                      onScrollMetricsChanged();
                                                     }
                                                   });
                                               return false;

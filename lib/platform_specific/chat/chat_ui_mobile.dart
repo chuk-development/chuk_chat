@@ -669,6 +669,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // The disclaimer under the composer steps aside while the field has the
     // caret, so the focus change has to repaint it.
     composerFocusNode.addListener(_onComposerFocusChanged);
+    WidgetsBinding.instance.addObserver(_metricsObserver);
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _onWindowMetricsChanged(),
+    );
     if (widget.messengerMode) {
       _messengerListening = true;
       ChatReactionService.instance.addListener(_onMessengerStoreChanged);
@@ -685,6 +689,20 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
   void _onComposerFocusChanged() {
     if (mounted) setState(() {});
+  }
+
+  /// The soft keyboard is on screen. Read from the view, because a parent
+  /// already takes the keyboard out of this subtree's MediaQuery insets.
+  /// Rebuilds only when it flips, not on every frame of the slide.
+  bool _keyboardOpen = false;
+  late final _MetricsObserver _metricsObserver = _MetricsObserver(
+    _onWindowMetricsChanged,
+  );
+
+  void _onWindowMetricsChanged() {
+    if (!mounted) return;
+    final bool open = View.of(context).viewInsets.bottom > 0;
+    if (open != _keyboardOpen) setState(() => _keyboardOpen = open);
   }
 
   // --- Messenger mode (Agents) ---------------------------------------------
@@ -1486,6 +1504,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     scrollController.dispose();
     _composerScrollController.dispose();
     composerFocusNode.removeListener(_onComposerFocusChanged);
+    WidgetsBinding.instance.removeObserver(_metricsObserver);
     TtsAudioService.phase.removeListener(_onSpeechPlaybackChanged);
     if (_messengerListening) {
       ChatReactionService.instance.removeListener(_onMessengerStoreChanged);
@@ -2167,13 +2186,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     return showAnchoredMenu<T>(
       anchorContext,
       items: items,
-      color: theme.scaffoldBackgroundColor.withValues(alpha: 0.94),
+      color: theme.colorScheme.surfaceContainerLow,
       borderColor: theme.resolvedIconColor.withValues(alpha: 0.3),
       // The attach and workspace menus are read against the chat behind
       // them, the same as the model picker, so they keep the frame that says
       // where the list ends.
       outlined: true,
-      borderRadius: 18,
     );
   }
 
@@ -4412,10 +4430,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     //
     // Not paddingOf: `padding.bottom` falls from the gesture bar to 0 over
     // the first frames of the keyboard, and each step would rebuild this
-    // screen. The focus says the same thing once, and the composer's own
-    // SafeArea still follows the padding frame by frame.
+    // screen. [_keyboardOpen] says the same thing once, and the composer's
+    // own SafeArea still follows the padding frame by frame.
+    //
+    // Not the focus either: the field keeps the caret with the keyboard
+    // closed (autofocus on a new chat, the back key hides the keyboard).
+    // Then the gesture bar was left out of the reserved room and the last
+    // message's actions sat under the composer.
     final double availableWidth = MediaQuery.sizeOf(context).width;
-    final double bottomPadding = composerFocusNode.hasFocus
+    final double bottomPadding = _keyboardOpen
         ? 0
         : MediaQuery.viewPaddingOf(context).bottom;
 
@@ -4541,7 +4564,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                     onNotification: (_) {
                                       WidgetsBinding.instance
                                           .addPostFrameCallback((_) {
-                                            if (mounted) onScrollChanged();
+                                            if (mounted) onScrollMetricsChanged();
                                           });
                                       return false;
                                     },
@@ -5183,4 +5206,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       ),
     );
   }
+}
+
+/// Forwards window metric changes (the keyboard sliding in or out) without
+/// making the chat state itself a [WidgetsBindingObserver].
+class _MetricsObserver with WidgetsBindingObserver {
+  _MetricsObserver(this._onChange);
+
+  final VoidCallback _onChange;
+
+  @override
+  void didChangeMetrics() => _onChange();
 }

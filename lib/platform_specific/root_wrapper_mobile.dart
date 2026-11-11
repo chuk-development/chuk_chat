@@ -28,6 +28,8 @@ import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/widgets/accent_icon_button.dart';
 import 'package:chuk_chat/widgets/artifact_panel.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show AuthChangeEvent, AuthState;
 import 'package:chuk_chat/utils/debug_chat_formatter.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/brand_wordmark.dart';
@@ -93,6 +95,14 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
   /// system dialog isn't re-shown on every screen unlock. Static so it
   /// survives widget rebuilds within the same launch.
   static bool _batteryPromptedThisLaunch = false;
+
+  /// Same guard for the notification prompt: asked at most once per app
+  /// process, never again on every resume.
+  static bool _notificationPromptedThisLaunch = false;
+
+  /// Asks for the signed-in permissions the moment the user signs in, so
+  /// the login page never shows a system prompt.
+  StreamSubscription<AuthState>? _authSubscription;
 
   bool _isSidebarExpanded = false;
   bool _artifactSheetOpen = false;
@@ -185,6 +195,15 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _ensurePermissions();
     });
+    try {
+      _authSubscription = SupabaseService.auth.onAuthStateChange.listen((
+        AuthState state,
+      ) {
+        if (state.event == AuthChangeEvent.signedIn) _ensurePermissions();
+      });
+    } catch (_) {
+      // Supabase not configured: there is no sign-in to wait for.
+    }
 
     // Content shared into the app from the system share sheet.
     ShareIntentService.instance.incoming.addListener(_onShareIncoming);
@@ -238,6 +257,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     }
     _stopSwipeNavigation(unmounting: true);
     _sidebarAnimController.dispose();
+    _authSubscription?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -302,8 +322,8 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
 
     if (state == AppLifecycleState.resumed) {
       _refreshSessionOnResume();
-      // Re-check permissions on resume — Android can revoke them after
-      // an APK update or if the user toggled them in system settings.
+      // A sign-in that finished in the browser lands here; the guards
+      // inside keep this from asking twice.
       _ensurePermissions();
       // Reconnect the chat socket proactively. While backgrounded, Android
       // Doze freezes the heartbeat timer and the load balancer drops the
@@ -332,33 +352,38 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     }
   }
 
-  /// Re-check and request runtime permissions.
+  /// Asks for the runtime permissions the app needs in the background.
   ///
-  /// Called both on first launch and on every resume so that permissions
-  /// are restored after an APK update or after the user toggles them
-  /// in Android system settings.
+  /// Only when signed in: the login page never shows a system prompt.
+  /// Each prompt at most once per launch. The microphone, the camera and
+  /// the location are not asked here: the feature that uses them asks at
+  /// the moment the user starts it (recording, voice call, map).
   Future<void> _ensurePermissions() async {
-    if (!Platform.isAndroid) return;
+    if (!Platform.isAndroid || !mounted) return;
+    if (!_isSignedIn()) return;
 
-    // Microphone
-    final micStatus = await Permission.microphone.status;
-    if (micStatus.isPermanentlyDenied) {
-      _showPermissionBlockedSnackBar('Microphone');
-    } else if (micStatus.isDenied || micStatus.isRestricted) {
-      await Permission.microphone.request();
-    }
-
-    // Notifications (Android 13+ / API 33+)
-    final notifStatus = await Permission.notification.status;
-    if (notifStatus.isPermanentlyDenied) {
-      _showPermissionBlockedSnackBar('Notifications');
-    } else if (notifStatus.isDenied || notifStatus.isRestricted) {
-      await Permission.notification.request();
+    // Notifications (Android 13+ / API 33+): replies and agent messages
+    // that finish while the app is in the background.
+    if (!_RootWrapperMobileState._notificationPromptedThisLaunch) {
+      _RootWrapperMobileState._notificationPromptedThisLaunch = true;
+      final PermissionStatus notifStatus = await Permission.notification.status;
+      if (notifStatus.isDenied) {
+        await Permission.notification.request();
+      }
     }
 
     // Battery optimization exemption — without it Android freezes the app
     // shortly after the screen locks, killing in-flight multi-pass tool loops.
+    if (!mounted) return;
     await _ensureBatteryOptimizationDisabled();
+  }
+
+  bool _isSignedIn() {
+    try {
+      return SupabaseService.auth.currentUser != null;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Ask the user to exempt the app from battery optimization.
@@ -404,23 +429,6 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     if (proceed == true) {
       await StreamingForegroundService.requestIgnoreBatteryOptimization();
     }
-  }
-
-  void _showPermissionBlockedSnackBar(String permissionName) {
-    if (!mounted) return;
-
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    if (messenger == null) return;
-
-    messenger.hideCurrentSnackBar();
-    AppNotifications.showOn(
-      messenger,
-      '$permissionName permission is blocked. Enable it in app settings.',
-      actionLabel: 'Settings',
-      onAction: () {
-        unawaited(openAppSettings());
-      },
-    );
   }
 
   void _toggleSidebar() {
@@ -487,7 +495,10 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
         .push(MaterialPageRoute(builder: (_) => const MediaManagerPage()));
   }
 
-  void _handleChatSelected(String? chatId) {
+  /// [keepKeyboard]: a swipe moves on to the next chat while the user may
+  /// be typing; the keyboard stays up (owner, 2026-11-10). Every other way
+  /// of opening a chat closes it.
+  void _handleChatSelected(String? chatId, {bool keepKeyboard = false}) {
     // Add guard like desktop has - prevent rapid chat switching during load
     if (ChatStorageService.isLoadingChat) {
       if (kDebugMode) {
@@ -522,8 +533,8 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
         '└─────────────────────────────────────────────────────────────',
       );
     }
-    // Hide keyboard when switching chats
-    FocusManager.instance.primaryFocus?.unfocus();
+    // Hide keyboard when switching chats, except on a swipe.
+    if (!keepKeyboard) FocusManager.instance.primaryFocus?.unfocus();
 
     // Update chat ID and close sidebar in a single setState to guarantee
     // the widget tree rebuilds with the new selectedChatId.
@@ -559,9 +570,9 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     setState(() {});
   }
 
-  void _newChatFromAppBar() {
-    // Hide keyboard when creating new chat
-    FocusManager.instance.primaryFocus?.unfocus();
+  void _newChatFromAppBar({bool keepKeyboard = false}) {
+    // Hide keyboard when creating new chat, except on a swipe.
+    if (!keepKeyboard) FocusManager.instance.primaryFocus?.unfocus();
     _chatUIMobileKey.currentState?.newChat();
     if (kFeatureArtifacts) {
       unawaited(ArtifactStorageService.setActiveChat(null, forceRefresh: true));
@@ -800,11 +811,11 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
   void _onSwipeSelected(String id) {
     if (id == _kNewChatEntryId) {
       // newChat() hands null to onChatIdChanged, which selects it.
-      _newChatFromAppBar();
+      _newChatFromAppBar(keepKeyboard: true);
       setState(() {});
       return;
     }
-    _handleChatSelected(id);
+    _handleChatSelected(id, keepKeyboard: true);
   }
 
   /// The menu chip: the pages the sidebar used to hold.
@@ -816,7 +827,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     unawaited(
       showMobileMenuSheet(
         context,
-        items: <MobileMenuItem>[
+        shortcuts: <MobileMenuItem>[
           MobileMenuItem(
             icon: Icons.settings,
             label: l?.settings ?? 'Settings',
@@ -840,28 +851,37 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
               label: kSidebarAddComputerLabel,
               onTap: onAddComputer,
             ),
-          MobileMenuItem(
-            icon: Icons.copy_all,
-            label: l?.chatSwipeCopyChat ?? 'Copy full chat',
-            onTap: _copyDebugChat,
-          ),
-          // The chat in view; there is no list to do it from any more.
-          if (current != null) ...<MobileMenuItem>[
+        ],
+        // The chat in view; there is no list to do it from any more.
+        sectionTitle: current == null ? null : _titleOfChat(current),
+        items: <MobileMenuItem>[
+          if (current != null)
             MobileMenuItem(
               icon: Icons.edit_outlined,
               label: l?.chatSwipeRename ?? 'Rename',
               onTap: () => unawaited(_renameCurrentChat(current)),
             ),
+          MobileMenuItem(
+            icon: Icons.copy_all,
+            label: l?.chatSwipeCopyChat ?? 'Copy full chat',
+            onTap: _copyDebugChat,
+          ),
+          if (current != null)
             MobileMenuItem(
               icon: Icons.delete_outline_rounded,
               label: l?.delete ?? 'Delete',
               destructive: true,
               onTap: () => unawaited(_deleteCurrentChat(current)),
             ),
-          ],
         ],
       ),
     );
+  }
+
+  /// The title the strip shows for [chatId], for the menu's section header.
+  String? _titleOfChat(String chatId) {
+    final StoredChat? chat = ChatStorageService.getChatById(chatId);
+    return chat == null ? null : deriveSidebarChatTitle(chat);
   }
 
   /// The sidebar's delete path ([SidebarStateCommon]): the same question,

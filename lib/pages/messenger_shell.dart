@@ -1316,7 +1316,7 @@ class _MessengerShellState extends State<MessengerShell>
     final AppShellConfig? config = widget.shellConfig;
     return showMobileMenuSheet(
       context,
-      items: <MobileMenuItem>[
+      shortcuts: <MobileMenuItem>[
         if (config != null)
           MobileMenuItem(
             icon: Icons.settings_outlined,
@@ -1341,6 +1341,9 @@ class _MessengerShellState extends State<MessengerShell>
           label: l?.agentsCwControlRooms ?? 'Control rooms',
           onTap: _openRooms,
         ),
+      ],
+      sectionTitle: agent?.name,
+      items: <MobileMenuItem>[
         if (agent != null) ...<MobileMenuItem>[
           MobileMenuItem(
             icon: Icons.person_outline_rounded,

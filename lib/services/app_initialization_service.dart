@@ -319,9 +319,15 @@ class AppInitializationService {
     );
 
     // Keep cross-device settings synced in background, but avoid competing
-    // with startup rendering and chat hydration.
+    // with startup rendering and chat hydration. With an empty chat cache
+    // (fresh sign-in on this device) the theme and the rest of the settings
+    // are still the defaults, so they come at once instead of switching
+    // under the user ten seconds later.
+    final Duration settingsDelay = ChatStorageService.savedChats.isEmpty
+        ? Duration.zero
+        : const Duration(seconds: 10);
     unawaited(
-      Future<void>.delayed(const Duration(seconds: 10), () async {
+      Future<void>.delayed(settingsDelay, () async {
         await SettingsSyncService.syncAllFromSupabase(forceRefresh: false);
       }).catchError((error) {
         if (kDebugMode) {
@@ -332,8 +338,9 @@ class AppInitializationService {
   }
 
   void _startSyncAfterKey(Stopwatch stopwatch) {
-    // Start sync after cache and encryption key are ready.
-    ChatSyncService.start();
+    // Start sync after cache and encryption key are ready. An empty cache
+    // (fresh sign-in on this device) syncs at once: the user is waiting.
+    ChatSyncService.start(immediate: ChatStorageService.savedChats.isEmpty);
     _afterKeyReady();
 
     // Delay preload to keep startup/input smooth, then run in background.
@@ -357,7 +364,7 @@ class AppInitializationService {
     required bool keyReady,
   }) {
     // Start sync timer immediately after sidebar cache is ready on Linux.
-    ChatSyncService.start();
+    ChatSyncService.start(immediate: ChatStorageService.savedChats.isEmpty);
     if (keyReady) _afterKeyReady();
     _startDeferredPreload();
 

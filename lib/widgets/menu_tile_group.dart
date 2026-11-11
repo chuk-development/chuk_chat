@@ -3,42 +3,44 @@
 // The one menu surface of the app. Every dropdown and every long-press
 // action sheet is drawn with it, so they all read the same.
 //
-// Material 3 Expressive draws a menu the way it draws a settings group: one
-// filled tile per row, large corners at the ends of a run, small corners
-// where two tiles meet, and a thin gap instead of a divider. There is no
-// frame around the whole menu — the tiles carry the grouping on their own.
+// Material 3 Expressive vertical menu (m3.material.io/components/menus):
+// each group of rows is ONE rounded container in `surfaceContainerLow`
+// with a small shadow. Groups are split by a small gap instead of a divider
+// line; the spec allows one or two gaps per menu. Rows inside a group have
+// no gaps. The chosen row of a choice menu is an inset pill in
+// `tertiaryContainer`.
 
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/constants.dart' show kCompactModeBreakpoint;
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
-/// Corner radius at the outer edges of a run.
+/// Corner radius of a group container: the spec's large corner family,
+/// taken one step up so a 48 px row's ink and the selected pill sit well
+/// inside it.
+const double kMenuOuterRadius = 20;
+
+/// Corner of the selected pill and of the row ink inside a group:
+/// [kMenuOuterRadius] minus [kMenuRowInset].
+const double kMenuInnerRadius = 16;
+
+/// Inset of a row's ink and selected pill from the container edge.
+const double kMenuRowInset = 4;
+
+/// Gap between two groups. Material 3 Expressive groups a menu with gaps,
+/// not divider lines, and does not change the gap size.
+const double kMenuGroupGap = 4;
+
+/// Kept for callers that still read it; rows of one group no longer have a
+/// gap between them.
+const double kMenuTileGap = 0;
+
+/// The Material 3 Expressive vertical menu surface.
 ///
-/// 26 is nearly a capsule on a 48 px row; take 20 for shorter rows.
-const double kMenuOuterRadius = 26;
-
-/// Where two tiles of one run meet.
-const double kMenuInnerRadius = 6;
-
-/// Air between two tiles of one run. The gap is left open, so whatever the
-/// menu sits on shows through — that is what makes the grouping readable.
-const double kMenuTileGap = 3;
-
-/// Air instead of a divider, between two runs.
-const double kMenuGroupGap = 10;
-
-/// A menu drawn as a run of filled tiles instead of one boxed card.
-///
-/// No frame, no elevation, no dividers: each row is its own filled tile, the
-/// outward corners of a run stay large and the joints between neighbours
-/// tighten, and what used to be a divider becomes a wider gap that starts a
-/// new run.
-///
-/// [groups] holds the runs: the rows inside one run are tight together and
-/// only the first and the last corner of the run round outwards; between two
-/// runs sits [kMenuGroupGap] instead of a divider line. The rows themselves
-/// are unchanged; this only gives them their shape.
+/// [groups] holds the groups: each one is one rounded container with the
+/// rows stacked inside it, and [kMenuGroupGap] sits between two groups where
+/// a divider line used to be. Pass [color] `surfaceContainerLow` for the
+/// spec's standard menu, `tertiaryContainer` for the vibrant one.
 class MenuTileGroup extends StatelessWidget {
   const MenuTileGroup({
     super.key,
@@ -75,25 +77,28 @@ class MenuTileGroup extends StatelessWidget {
     for (final List<Widget> run in groups) {
       if (run.isEmpty) continue;
       if (out.isNotEmpty) out.add(const SizedBox(height: kMenuGroupGap));
-      for (int i = 0; i < run.length; i++) {
-        if (i > 0) out.add(const SizedBox(height: kMenuTileGap));
-        out.add(
-          Material(
-            color: color,
-            // Without the clip the ink splash runs square over the corners.
-            clipBehavior: Clip.antiAlias,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.vertical(
-                top: Radius.circular(i == 0 ? outerRadius : kMenuInnerRadius),
-                bottom: Radius.circular(
-                  i == run.length - 1 ? outerRadius : kMenuInnerRadius,
-                ),
-              ),
-            ),
-            child: run[i],
+      out.add(
+        Material(
+          color: color,
+          // Level 2: a small neutral shadow lifts the menu off the page. Never
+          // a coloured one.
+          elevation: 2,
+          shadowColor: Colors.black,
+          surfaceTintColor: Colors.transparent,
+          clipBehavior: Clip.antiAlias,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(outerRadius),
           ),
-        );
-      }
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: kMenuRowInset),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: run,
+            ),
+          ),
+        ),
+      );
     }
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -142,7 +147,10 @@ class MenuActionRow extends StatelessWidget {
   /// pass `scheme.error` for a destructive row.
   final Color? tone;
 
-  /// Draws the check on the right, for a row that is a choice.
+  /// The chosen row of a choice menu. Material 3 Expressive marks it with
+  /// shape and vibrant colour: the whole tile fills with
+  /// `tertiaryContainer`, the text and glyphs turn `onTertiaryContainer` and
+  /// a check leads the label (m3.material.io/components/menus, selection).
   final bool selected;
 
   /// A parked row: it still reads, it just does not answer.
@@ -155,20 +163,27 @@ class MenuActionRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
     final TextTheme text = Theme.of(context).textTheme;
-    final Color fg = (tone ?? scheme.onSurface).withValues(
-      alpha: enabled ? 1 : 0.38,
-    );
-    return InkWell(
+    final Color fg =
+        (selected ? scheme.onTertiaryContainer : (tone ?? scheme.onSurface))
+            .withValues(alpha: enabled ? 1 : 0.38);
+    // A selected row leads with the check; its own icon steps aside. A row
+    // with a custom leading (an avatar, a lab logo) keeps it and shows the
+    // check after the label instead, so the logo column stays aligned.
+    final bool leadCheck = selected && leading == null;
+    final Widget row = InkWell(
       onTap: enabled ? onTap : null,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         child: Row(
           children: <Widget>[
             if (leading != null)
               leading!
+            else if (leadCheck)
+              AppIcon(Icons.check, size: 20, color: fg)
             else if (icon != null)
               AppIcon(icon!, size: 20, color: fg),
-            if (leading != null || icon != null) const SizedBox(width: 14),
+            if (leading != null || icon != null || leadCheck)
+              const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -180,16 +195,19 @@ class MenuActionRow extends StatelessWidget {
                     overflow: maxLines == null ? null : TextOverflow.ellipsis,
                     style: text.bodyLarge?.copyWith(
                       color: fg,
-                      fontWeight: FontWeight.w500,
+                      // Emphasized type for the chosen row.
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                     ),
                   ),
                   if (subtitle != null)
                     Text(
                       subtitle!,
                       style: text.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant.withValues(
-                          alpha: enabled ? 1 : 0.5,
-                        ),
+                        color:
+                            (selected
+                                    ? scheme.onTertiaryContainer
+                                    : scheme.onSurfaceVariant)
+                                .withValues(alpha: enabled ? 1 : 0.5),
                       ),
                     ),
                 ],
@@ -198,9 +216,9 @@ class MenuActionRow extends StatelessWidget {
             if (trailing != null) ...<Widget>[
               const SizedBox(width: 12),
               trailing!,
-            ] else if (selected) ...<Widget>[
+            ] else if (selected && !leadCheck) ...<Widget>[
               const SizedBox(width: 12),
-              AppIcon(Icons.check, size: 18, color: scheme.primary),
+              AppIcon(Icons.check, size: 20, color: fg),
             ],
             if (shortcut != null) ...<Widget>[
               const SizedBox(width: 16),
@@ -213,6 +231,20 @@ class MenuActionRow extends StatelessWidget {
             ],
           ],
         ),
+      ),
+    );
+    // Every row's ink, and the selected pill, sit inset in the group
+    // container with a smaller corner, as in the spec's vertical menu.
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: kMenuRowInset),
+      child: Material(
+        type: selected ? MaterialType.canvas : MaterialType.transparency,
+        color: selected ? scheme.tertiaryContainer : null,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(kMenuInnerRadius),
+        ),
+        child: row,
       ),
     );
   }

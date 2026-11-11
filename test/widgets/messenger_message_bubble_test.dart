@@ -362,16 +362,18 @@ void main() {
       find.byKey(const ValueKey('context_message_actions')),
       findsOneWidget,
     );
-    // No divider any more: the menu is a run of separate tiles, the same
-    // surface every dropdown uses (MenuTileGroup). Reply and Copy, with Edit
+    // No divider: the menu is the M3 Expressive vertical menu every dropdown
+    // uses (MenuTileGroup), Reply and Copy in ONE group container. Edit is
     // gone (bead cowork-9edt).
     expect(find.byType(Divider), findsNothing);
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('context_message_actions')),
-        matching: find.byType(Material),
+        matching: find.byWidgetPredicate(
+          (widget) => widget is Material && widget.elevation == 2,
+        ),
       ),
-      findsNWidgets(2),
+      findsOneWidget,
     );
     expect(find.byTooltip('Nachricht kopieren'), findsNothing);
     // The entry is not there, and the callback behind it is never reached.

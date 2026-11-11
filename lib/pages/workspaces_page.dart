@@ -453,7 +453,7 @@ class _SortButton extends StatelessWidget {
           final ProjectSortMode? picked =
               await showAnchoredMenu<ProjectSortMode>(
                 anchor,
-                color: Theme.of(anchor).colorScheme.surfaceContainerHigh,
+                color: Theme.of(anchor).colorScheme.surfaceContainerLow,
                 items: <PopupMenuEntry<ProjectSortMode>>[
                   _sortItem(
                     ProjectSortMode.recentlyUpdated,

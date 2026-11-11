@@ -64,6 +64,7 @@ const String kChatFontFamilyInter = 'inter';
 const String kChatFontFamilyArimo = 'arimo';
 const String kChatFontFamilyMerriweather = 'merriweather';
 const String kChatFontFamilyJetBrainsMono = 'jetbrains_mono';
+
 /// Inter is the default for chat and UI: open shapes, a tall x-height and
 /// full Latin-Ext (ä ö ü ß ẞ). Mono is selectable but never a default.
 const String kDefaultChatFontFamily = kChatFontFamilyInter;
@@ -167,6 +168,34 @@ const EdgeInsets _kButtonPadding = EdgeInsets.symmetric(
   horizontal: 20,
   vertical: 14,
 );
+
+/// Material 3 Expressive button shape: round at rest, and squarer while the
+/// button is held (m3.material.io/components/buttons, "shape morph"). A 48 px
+/// button sits between the spec's small (40, pressed 8) and medium (56,
+/// pressed 12) sizes and takes the medium corner. [Material] animates the
+/// change, so every themed button morphs on press.
+final WidgetStateProperty<OutlinedBorder> _kM3eButtonShape =
+    WidgetStateProperty.resolveWith((Set<WidgetState> states) {
+      if (states.contains(WidgetState.pressed)) {
+        return const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+        );
+      }
+      return const StadiumBorder();
+    });
+
+/// The same morph for a small (40 px) icon button: circle at rest, corner 8
+/// while held, as in the spec's icon button table.
+final WidgetStateProperty<OutlinedBorder> _kM3eIconButtonShape =
+    WidgetStateProperty.resolveWith((Set<WidgetState> states) {
+      if (states.contains(WidgetState.pressed)) {
+        return const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(8)),
+        );
+      }
+      return const CircleBorder();
+    });
+
 const Size _kButtonMinSize = Size(0, 48);
 const TextStyle _kButtonTextStyle = TextStyle(
   fontSize: 14,
@@ -241,8 +270,7 @@ ThemeData buildAppTheme({
       p?.secondaryContainer ??
       (isDark ? bg.lighten(scaled(0.18)) : bg.darken(scaled(0.15)));
   final Color selection =
-      p?.selection ??
-      Color.alphaBlend(accent.withValues(alpha: 0.20), surface);
+      p?.selection ?? Color.alphaBlend(accent.withValues(alpha: 0.20), surface);
   // A pack with its own palette keeps every selection neutral; the accent is
   // then only for the primary action, as in the product it was taken from.
   final Color onSelection =
@@ -265,8 +293,7 @@ ThemeData buildAppTheme({
       p?.onSurfaceVariant ?? iconFg.withValues(alpha: scaled(0.82));
 
   final Color errorColor =
-      p?.error ??
-      (isDark ? const Color(0xFFFFB4AB) : const Color(0xFFBA1A1A));
+      p?.error ?? (isDark ? const Color(0xFFFFB4AB) : const Color(0xFFBA1A1A));
   final Color errorContainer =
       p?.errorContainer ??
       (isDark ? const Color(0xFF93000A) : const Color(0xFFFFDAD6));
@@ -475,48 +502,42 @@ ThemeData buildAppTheme({
         foregroundColor: colorScheme.onPrimary,
         disabledBackgroundColor: iconFg.withValues(alpha: 0.12),
         disabledForegroundColor: iconFg.withValues(alpha: 0.38),
-        shape: RoundedRectangleBorder(borderRadius: kBorderRadiusPill),
         padding: _kButtonPadding,
         minimumSize: _kButtonMinSize,
         textStyle: _kButtonTextStyle,
         elevation: 0,
-      ),
+      ).copyWith(shape: _kM3eButtonShape),
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
         backgroundColor: surfaceHigh,
         foregroundColor: iconFg,
-        shape: RoundedRectangleBorder(borderRadius: kBorderRadiusPill),
         padding: _kButtonPadding,
         minimumSize: _kButtonMinSize,
         textStyle: _kButtonTextStyle,
         elevation: 0,
-      ),
+      ).copyWith(shape: _kM3eButtonShape),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         foregroundColor: iconFg,
         side: BorderSide(color: outline),
-        shape: RoundedRectangleBorder(borderRadius: kBorderRadiusPill),
         padding: _kButtonPadding,
         minimumSize: _kButtonMinSize,
         textStyle: _kButtonTextStyle,
-      ),
+      ).copyWith(shape: _kM3eButtonShape),
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
         foregroundColor: accentInk,
-        shape: RoundedRectangleBorder(borderRadius: kBorderRadiusPill),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         minimumSize: const Size(0, 44),
         textStyle: _kButtonTextStyle,
-      ),
+      ).copyWith(shape: _kM3eButtonShape),
     ),
     iconButtonTheme: IconButtonThemeData(
-      style: IconButton.styleFrom(
-        foregroundColor: iconFg,
-        shape: const CircleBorder(),
-      ),
+      style: IconButton.styleFrom(foregroundColor: iconFg)
+          .copyWith(shape: _kM3eIconButtonShape),
     ),
     segmentedButtonTheme: SegmentedButtonThemeData(
       style: SegmentedButton.styleFrom(
@@ -535,6 +556,16 @@ ThemeData buildAppTheme({
       shape: RoundedRectangleBorder(borderRadius: kBorderRadiusPill),
       labelStyle: TextStyle(color: iconFg, fontSize: 13),
     ),
+
+    // Progress and sliders on the current Material 3 spec (not the 2023
+    // one): rounded track ends, a gap between active and inactive track,
+    // the stop dot at the end, the tall slider handle. M3 Expressive builds
+    // on this geometry (m3.material.io/components/progress-indicators,
+    // /sliders).
+    // ignore: deprecated_member_use
+    progressIndicatorTheme: const ProgressIndicatorThemeData(year2023: false),
+    // ignore: deprecated_member_use
+    sliderTheme: const SliderThemeData(year2023: false),
 
     // ── Menus & dialogs ───────────────────────────────────────────────
     // The vertical menu padding matters: without it a highlighted first
@@ -581,7 +612,9 @@ ThemeData buildAppTheme({
       backgroundColor: surfaceLow,
       elevation: 0,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(kRadiusDialog)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(kRadiusDialog),
+        ),
       ),
     ),
     tooltipTheme: TooltipThemeData(

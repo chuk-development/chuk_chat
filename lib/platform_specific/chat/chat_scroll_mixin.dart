@@ -396,6 +396,27 @@ mixin ChatScrollMixin<T extends StatefulWidget> on State<T> {
     }
   }
 
+  /// For a [ScrollMetricsNotification]: the list's size or extent changed
+  /// without the user scrolling. The keyboard opened, the composer grew, the
+  /// disclaimer appeared, a card expanded, an image sized itself.
+  ///
+  /// A layout change is not the reader's intent, so it never lets go of the
+  /// bottom. [onScrollChanged] alone would read the new distance (often more
+  /// than 100 px after the keyboard opens) as "scrolled up" and unpin the
+  /// list, and the last message stayed behind the composer. Here a list that
+  /// was pinned follows the new bottom at once.
+  void onScrollMetricsChanged() {
+    if (!mounted || !scrollController.hasClients) return;
+    final ScrollPosition position = scrollController.position;
+    if (isStickyBottom &&
+        !hasTopPin &&
+        !position.isScrollingNotifier.value &&
+        position.maxScrollExtent - position.pixels > 0.5) {
+      scrollController.jumpTo(position.maxScrollExtent);
+    }
+    onScrollChanged();
+  }
+
   /// Fed by `MeasureSize` wrapping the composer. When the input grows
   /// (multi-line text, attachments, banners) the reserved bottom space must
   /// grow with it, and if we're pinned to the bottom we re-scroll so the last
