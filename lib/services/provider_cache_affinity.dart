@@ -35,7 +35,9 @@ class ProviderAffinity {
   final int completionTokens;
 }
 
-class ProviderCacheAffinity {
+/// Notifies when the provider a model runs on changes, so the "Auto · X"
+/// labels update the moment the server names the provider.
+class ProviderCacheAffinity extends ChangeNotifier {
   ProviderCacheAffinity._();
 
   static final ProviderCacheAffinity instance = ProviderCacheAffinity._();
@@ -45,6 +47,28 @@ class ProviderCacheAffinity {
   DateTime Function() now = DateTime.now;
 
   final Map<String, ProviderAffinity> _byChat = <String, ProviderAffinity>{};
+
+  /// The provider each model was last sent to, and when. Set from the
+  /// stream's `meta` frame, before the first token, so the UI can show the
+  /// provider while the answer is still coming.
+  final Map<String, (String, DateTime)> _servingByModel =
+      <String, (String, DateTime)>{};
+
+  /// The provider Auto ran [modelId] on last, while that provider's cache
+  /// is still warm. Null when the model has not run lately.
+  String? currentProviderFor(String modelId) {
+    final (String, DateTime)? serving = _servingByModel[modelId];
+    if (serving == null) return null;
+    final (String slug, DateTime at) = serving;
+    if (now().difference(at) > cacheTtlFor(slug)) return null;
+    return slug;
+  }
+
+  void _noteServing(String modelId, String slug) {
+    final (String, DateTime)? previous = _servingByModel[modelId];
+    _servingByModel[modelId] = (slug, now());
+    if (previous?.$1 != slug) notifyListeners();
+  }
 
   /// How long a provider keeps a prompt prefix cached, by provider family
   /// (the slug before the first `/`). Measured on our own `usage_logs`
@@ -97,6 +121,7 @@ class ProviderCacheAffinity {
     required int completionTokens,
   }) {
     if (chatId.isEmpty || modelId.isEmpty || providerSlug.isEmpty) return;
+    _noteServing(modelId, providerSlug);
     _byChat[chatId] = ProviderAffinity(
       modelId: modelId,
       providerSlug: providerSlug,
@@ -124,7 +149,10 @@ class ProviderCacheAffinity {
       if (event is MetaEvent) {
         final Object? p = event.meta['provider'];
         final Object? slug = p is Map ? p['slug'] : null;
-        if (slug is String && slug.isNotEmpty) provider = slug;
+        if (slug is String && slug.isNotEmpty) {
+          provider = slug;
+          _noteServing(modelId, slug);
+        }
       } else if (event is UsageEvent) {
         prompt = _int(event.usage['prompt_tokens']) ?? prompt;
         completion = _int(event.usage['completion_tokens']) ?? completion;
@@ -147,6 +175,7 @@ class ProviderCacheAffinity {
   @visibleForTesting
   void clearForTesting() {
     _byChat.clear();
+    _servingByModel.clear();
     now = DateTime.now;
   }
 

@@ -31,6 +31,7 @@ import 'package:chuk_chat/core/model_selection_events.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/widgets/per_model_system_prompt_sheet.dart';
+import 'package:chuk_chat/services/provider_cache_affinity.dart';
 import 'package:chuk_chat/services/provider_resolution_service.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart'
     show kAutoCheapestProviderSlug, ModelProviderSummary;
@@ -133,6 +134,55 @@ class ModelProviderInfo {
   }
 }
 
+ModelProviderSummary _summaryOf(ModelProviderInfo p) => ModelProviderSummary(
+  slug: p.slug,
+  name: p.name,
+  promptPrice: p.pricing.prompt,
+  completionPrice: p.pricing.completion,
+  cacheReadPrice: p.pricing.cacheRead,
+  throughput: p.throughput,
+  latencyP95Ms: p.latencyP95Ms,
+);
+
+/// The provider "Auto" uses for a model now: the one the model last ran on
+/// while that provider's prompt cache is still warm (set the moment the
+/// server names it), otherwise the cheapest for a fresh turn by the send
+/// path's own rule ([ProviderResolutionService.cheapestOf]). So the label
+/// names the provider that answers.
+ModelProviderInfo? autoProviderAmong(
+  List<ModelProviderInfo> providers,
+  String modelId,
+) {
+  if (providers.isEmpty) return null;
+  final String? serving = ProviderCacheAffinity.instance.currentProviderFor(
+    modelId,
+  );
+  if (serving != null) {
+    for (final ModelProviderInfo p in providers) {
+      if (p.slug == serving) return p;
+    }
+  }
+  final ModelProviderSummary? best = ProviderResolutionService.cheapestOf(
+    <ModelProviderSummary>[for (final p in providers) _summaryOf(p)],
+  );
+  return providers.firstWhere(
+    (p) => p.slug == best?.slug,
+    orElse: () => providers.first,
+  );
+}
+
+/// [providers] ordered by what one typical turn costs on each (prompt and
+/// output; see [ProviderResolutionService.estimatedCost]), cheapest first.
+/// Chats send far more input than output, so output price alone misleads.
+List<ModelProviderInfo> providersByTurnCost(List<ModelProviderInfo> providers) {
+  final List<(ModelProviderInfo, double)> priced = <(ModelProviderInfo, double)>[
+    for (final p in providers)
+      (p, ProviderResolutionService.estimatedCost(_summaryOf(p))),
+  ];
+  priced.sort((a, b) => a.$2.compareTo(b.$2));
+  return <ModelProviderInfo>[for (final e in priced) e.$1];
+}
+
 class CustomModelInfo {
   final String id;
   final String name;
@@ -233,6 +283,8 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
   @override
   void initState() {
     super.initState();
+    // "Auto · X" follows the provider the server names, live.
+    ProviderCacheAffinity.instance.addListener(_onAutoProviderChanged);
     _searchController.addListener(() {
       setState(() {
         _searchQuery = _searchController.text.toLowerCase();
@@ -729,30 +781,10 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
     await UserPreferencesService.refreshModelSelections();
   }
 
-  /// The provider Auto sends to for a fresh turn: the same rule as the send
-  /// path ([ProviderResolutionService.cheapestOf]), so the label never names
-  /// a different provider than the one that answers.
-  ModelProviderInfo? _cheapestProvider(CustomModelInfo model) {
-    if (model.providers.isEmpty) return null;
-    final ModelProviderSummary? best = ProviderResolutionService.cheapestOf(
-      <ModelProviderSummary>[
-        for (final p in model.providers)
-          ModelProviderSummary(
-            slug: p.slug,
-            name: p.name,
-            promptPrice: p.pricing.prompt,
-            completionPrice: p.pricing.completion,
-            cacheReadPrice: p.pricing.cacheRead,
-            throughput: p.throughput,
-            latencyP95Ms: p.latencyP95Ms,
-          ),
-      ],
-    );
-    return model.providers.firstWhere(
-      (p) => p.slug == best?.slug,
-      orElse: () => model.providers.first,
-    );
-  }
+  /// The provider Auto uses for [model] now ([autoProviderAmong]).
+  ModelProviderInfo? _cheapestProvider(CustomModelInfo model) =>
+      autoProviderAmong(model.providers, model.id);
+
 
   String _formatContextLength(int? tokens) {
     if (tokens == null) return 'N/A';
@@ -1001,8 +1033,13 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
     );
   }
 
+  void _onAutoProviderChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
+    ProviderCacheAffinity.instance.removeListener(_onAutoProviderChanged);
     stopApiAvailabilityPolling();
     _refreshSubscription?.cancel();
     _refreshSubscription = null;
@@ -1456,9 +1493,7 @@ class _ProviderPill extends StatelessWidget {
                 ? l.autoCheapest
                 : l.autoCheapestCurrently(
                     cheapest.name,
-                    cheapest.pricing.formatTokenPrice(
-                      cheapest.pricing.completion,
-                    ),
+                    '${cheapest.pricing.formatTokenPrice(cheapest.pricing.prompt)} in',
                   ),
             subtitle: cheapest == null ? null : _formatInOutPrice(cheapest),
             leading: AppIcon(
@@ -1468,7 +1503,7 @@ class _ProviderPill extends StatelessWidget {
             ),
             selected: isAutoSelected,
           ),
-        for (final provider in model.providers)
+        for (final provider in providersByTurnCost(model.providers))
           PickerOption<String>(
             value: provider.slug,
             label: provider.name,
@@ -1513,7 +1548,9 @@ class _ProviderPill extends StatelessWidget {
     final String label;
     if (isAutoSelected) {
       iconWidget = AppIcon(Icons.bolt, color: m3.onSurfaceVariant, size: 16);
-      label = 'Auto';
+      // Auto names the provider it uses right now, not just "Auto".
+      final ModelProviderInfo? now = _cheapestProvider();
+      label = now == null ? 'Auto' : 'Auto · ${now.name}';
     } else if (selectedProvider != null) {
       iconWidget = buildIconWidget(
         selectedProvider!.iconUrl,
@@ -1547,21 +1584,21 @@ class _ProviderPill extends StatelessWidget {
     );
   }
 
-  ModelProviderInfo? _cheapestProvider() {
-    if (model.providers.isEmpty) return null;
-    ModelProviderInfo best = model.providers.first;
-    for (final p in model.providers.skip(1)) {
-      if (p.pricing.completion < best.pricing.completion) best = p;
-    }
-    return best;
-  }
+  ModelProviderInfo? _cheapestProvider() =>
+      autoProviderAmong(model.providers, model.id);
 
+  /// "$0.04/M in · $0.5/M out · 137 tok/s": price both ways, and the
+  /// measured speed when the catalogue has it.
   String _formatInOutPrice(ModelProviderInfo provider) {
     final inPrice = provider.pricing.formatTokenPrice(provider.pricing.prompt);
     final outPrice = provider.pricing.formatTokenPrice(
       provider.pricing.completion,
     );
-    return '$inPrice in · $outPrice out';
+    final double? tps = provider.throughput;
+    final String speed = tps == null || tps <= 0
+        ? ''
+        : ' · ${tps.round()} tok/s';
+    return '$inPrice in · $outPrice out$speed';
   }
 }
 
@@ -1722,10 +1759,21 @@ class _ModePickerPanel extends StatelessWidget {
           icon: Icons.dns_outlined,
           label: 'Provider',
           value: provider?.name ??
-              (hasSingleProvider ? data.providers.first.name : 'Auto'),
+              (hasSingleProvider
+                  ? data.providers.first.name
+                  : () {
+                      final ModelProviderInfo? now = autoProviderAmong(
+                        data.providers,
+                        data.modelId,
+                      );
+                      return now == null ? 'Auto' : 'Auto · ${now.name}';
+                    }()),
           valueLeading: () {
             final ModelProviderInfo? shown =
-                provider ?? (hasSingleProvider ? data.providers.first : null);
+                provider ??
+                (hasSingleProvider
+                    ? data.providers.first
+                    : autoProviderAmong(data.providers, data.modelId));
             return shown == null
                 ? null
                 : buildIconWidget(shown.iconUrl, Icons.business, size: 16);
@@ -1739,7 +1787,7 @@ class _ModePickerPanel extends StatelessWidget {
                   title: '${data.title} · Provider',
                   onSelected: data.onPickProvider,
                   options: [
-                    for (final p in data.providers)
+                    for (final p in providersByTurnCost(data.providers))
                       PickerOption<String>(
                         value: p.slug,
                         label: p.name,

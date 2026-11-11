@@ -5,6 +5,8 @@
 // Prices are per token, shaped like DeepSeek V4.1 Flash on OpenRouter
 // (2026-11-11).
 
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:chuk_chat/models/chat_stream_event.dart';
@@ -163,6 +165,41 @@ void main() {
       served(deepinfra.slug);
       clock = clock.add(const Duration(minutes: 12));
       expect(pick(<ModelProviderSummary>[deepinfra, _wafer]), deepinfra);
+    });
+  });
+
+  group('the provider Auto runs on now', () {
+    test('is known from the meta frame, before the answer is done', () async {
+      int changes = 0;
+      void listener() => changes++;
+      affinity.addListener(listener);
+      addTearDown(() => affinity.removeListener(listener));
+      final controller = StreamController<ChatStreamEvent>();
+      final Future<void> drained = affinity
+          .observe(
+            controller.stream,
+            chatId: 'chat-1',
+            modelId: _model,
+            requestedProviderSlug: 'wafer/us',
+          )
+          .drain<void>();
+      controller.add(
+        const ChatStreamEvent.meta(<String, dynamic>{
+          'provider': <String, dynamic>{'slug': 'wafer/us'},
+        }),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(affinity.currentProviderFor(_model), 'wafer/us');
+      expect(changes, 1);
+      await controller.close();
+      await drained;
+    });
+
+    test('expires with the provider cache', () {
+      served(_sail.slug);
+      expect(affinity.currentProviderFor(_model), _sail.slug);
+      clock = clock.add(const Duration(minutes: 6));
+      expect(affinity.currentProviderFor(_model), isNull);
     });
   });
 

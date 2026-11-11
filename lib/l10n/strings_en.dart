@@ -689,8 +689,8 @@ const Map<String, String> stringsEn = {
   'sessionExpired': 'Session expired. Please sign in again.',
   'free': 'Free',
   'best': 'Best',
-  'autoCheapest': 'Auto (cheapest)',
-  'autoCheapestCurrently': 'Auto (cheapest) — currently: {provider} ({price})',
+  'autoCheapest': 'Auto',
+  'autoCheapestCurrently': 'Auto · now {provider} ({price})',
 
   // ── Message bubble / chat ──────────────────────────────────
   'openInMailApp': 'Open in Mail App',
