@@ -20,7 +20,7 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/ui/expressive/pill_geometry.dart';
 
-class ConnectedGroup extends StatelessWidget {
+class ConnectedGroup extends StatefulWidget {
   const ConnectedGroup({
     super.key,
     required this.labels,
@@ -55,65 +55,184 @@ class ConnectedGroup extends StatelessWidget {
   /// The corner of the filled capsule under the selected segment.
   static const double selectedRadius = PillGeometry.filterSegmentRadius;
 
+  /// The key of the one filled capsule that slides under the selection.
+  static const Key pillKey = ValueKey<String>('connected-group-pill');
+
+  /// How long the capsule takes to slide from one segment to the next.
+  static const Duration slideDuration = Duration(milliseconds: 280);
+
+  /// The curve of the slide: fast off the mark, soft landing, no overshoot
+  /// (an overshoot would push the capsule past the ends of the strip).
+  static const Curve slideCurve = Curves.easeOutCubic;
+
+  @override
+  State<ConnectedGroup> createState() => _ConnectedGroupState();
+}
+
+class _ConnectedGroupState extends State<ConnectedGroup>
+    with SingleTickerProviderStateMixin {
+  /// The capsule's position in segments: 0 under the first, 1 under the
+  /// second, 0.5 half way between them. One value drives the capsule and the
+  /// label colours, so the two can never disagree.
+  late final AnimationController _slide = AnimationController.unbounded(
+    vsync: this,
+    value: widget.selected.toDouble(),
+  );
+
+  bool get _hasSelection =>
+      widget.selected >= 0 && widget.selected < widget.labels.length;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context) && _slide.isAnimating) {
+      _slide.value = widget.selected.toDouble();
+    }
+  }
+
+  @override
+  void didUpdateWidget(ConnectedGroup oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final double target = widget.selected.toDouble();
+    if (_slide.value == target && !_slide.isAnimating) {
+      return;
+    }
+    final bool fromNowhere =
+        oldWidget.selected < 0 ||
+        oldWidget.selected >= oldWidget.labels.length ||
+        oldWidget.labels.length != widget.labels.length;
+    if (!_hasSelection ||
+        fromNowhere ||
+        MediaQuery.disableAnimationsOf(context)) {
+      // Reduced motion, or no old place to slide from: land at once.
+      _slide.value = target;
+      return;
+    }
+    if (widget.selected != oldWidget.selected) {
+      _slide.animateTo(
+        target,
+        duration: ConnectedGroup.slideDuration,
+        curve: ConnectedGroup.slideCurve,
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _slide.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
+    final List<String> labels = widget.labels;
+    const double inset = PillGeometry.filterInset;
     // The strip paints short and the targets reach past it: a switch over a
     // list is a strip, not a bar, but a finger still gets its 48. What the
     // segments take above and below the strip is transparent and lies inside
     // the room [margin] leaves anyway. A strip given a [height] of its own is
     // usually already past 48, and then there is nothing left to reach for.
-    final double barHeight = height ?? PillGeometry.filterHeight;
-    final double segmentHeight = barHeight - PillGeometry.filterInset * 2;
+    final double barHeight = widget.height ?? PillGeometry.filterHeight;
+    final double segmentHeight = barHeight - inset * 2;
     final double tapHeight = math.max(PillGeometry.filterTapHeight, barHeight);
     final double overhang = (tapHeight - barHeight) / 2;
     // Concentric with the capsule inside it, whatever the height.
-    final double shellRadius = segmentHeight / 2 + PillGeometry.filterInset;
+    final double shellRadius = segmentHeight / 2 + inset;
     return Padding(
-      padding: margin,
+      padding: widget.margin,
       child: SizedBox(
         height: tapHeight,
-        child: Stack(
-          children: <Widget>[
-            Positioned(
-              left: 0,
-              right: 0,
-              top: overhang,
-              bottom: overhang,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: scheme.surfaceContainerHighest.withValues(alpha: 0.96),
-                  borderRadius: BorderRadius.circular(shellRadius),
-                ),
-              ),
-            ),
-            // The segments split the width evenly, so neither label is cramped
-            // and the first and the last capsule end at the same distance from
-            // the ends of the strip.
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: PillGeometry.filterInset,
-              ),
-              child: Row(
-                children: <Widget>[
-                  for (int i = 0; i < labels.length; i++) ...<Widget>[
-                    if (i > 0)
-                      const SizedBox(width: PillGeometry.filterInset),
-                    Expanded(
-                      child: _Segment(
-                        label: labels[i],
-                        count: badges[i] ?? 0,
-                        selected: i == selected,
-                        height: segmentHeight,
-                        slop: overhang + PillGeometry.filterInset,
-                        onTap: () => onSelected(i),
-                      ),
+        child: AnimatedBuilder(
+          animation: _slide,
+          builder: (BuildContext context, Widget? track) {
+            final double position = _slide.value;
+            final int n = labels.length;
+            return Stack(
+              children: <Widget>[
+                track ?? const SizedBox.shrink(),
+                // ONE capsule for the whole switch. It slides from the old
+                // segment to the new one; it never fades in per segment.
+                // It measures the width inside a positioned child: a Stack
+                // never asks positioned children for intrinsic sizes, so the
+                // switch still works inside IntrinsicWidth.
+                if (_hasSelection && n > 0)
+                  Positioned.fill(
+                    child: LayoutBuilder(
+                      builder: (BuildContext context, BoxConstraints box) {
+                        // The segments split the width evenly, so neither
+                        // label is cramped and the first and the last capsule
+                        // end at the same distance from the ends of the strip.
+                        final double segmentWidth = math.max(
+                          0.0,
+                          (box.maxWidth - inset * 2 - inset * (n - 1)) / n,
+                        );
+                        return Stack(
+                          children: <Widget>[
+                            Positioned(
+                              left: inset + position * (segmentWidth + inset),
+                              top: overhang + inset,
+                              width: segmentWidth,
+                              height: segmentHeight,
+                              child: IgnorePointer(
+                                child: DecoratedBox(
+                                  key: ConnectedGroup.pillKey,
+                                  decoration: ShapeDecoration(
+                                    color: Theme.of(context).m3.selectedFill,
+                                    shape: const StadiumBorder(),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     ),
-                  ],
-                ],
+                  ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: inset),
+                  child: Row(
+                    children: <Widget>[
+                      for (int i = 0; i < n; i++) ...<Widget>[
+                        if (i > 0) const SizedBox(width: inset),
+                        Expanded(
+                          child: _Segment(
+                            label: labels[i],
+                            count: widget.badges[i] ?? 0,
+                            selected: i == widget.selected,
+                            // How much of the capsule sits under this
+                            // segment right now: the label colour follows
+                            // the capsule, not the tap.
+                            lit: _hasSelection
+                                ? (1 - (position - i).abs()).clamp(0.0, 1.0)
+                                : 0.0,
+                            height: segmentHeight,
+                            slop: overhang + inset,
+                            onTap: () => widget.onSelected(i),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+          child: Positioned(
+            left: 0,
+            right: 0,
+            top: overhang,
+            bottom: overhang,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                // One step below the capsule's fill: the picked segment has
+                // to stand out at a glance (Plane: track #222425, capsule
+                // #45484A).
+                color: scheme.surfaceContainerHigh.withValues(alpha: 0.96),
+                borderRadius: BorderRadius.circular(shellRadius),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -125,6 +244,7 @@ class _Segment extends StatelessWidget {
     required this.label,
     required this.count,
     required this.selected,
+    required this.lit,
     required this.height,
     required this.slop,
     required this.onTap,
@@ -133,6 +253,10 @@ class _Segment extends StatelessWidget {
   final String label;
   final int count;
   final bool selected;
+
+  /// 0 = the capsule is elsewhere, 1 = the capsule sits right under this
+  /// label. The label colour and weight follow it.
+  final double lit;
 
   /// The painted height of the capsule.
   final double height;
@@ -157,7 +281,9 @@ class _Segment extends StatelessWidget {
         // The tap reaches into the hairline, so the capsule can paint short of
         // a touch target while the finger still gets one.
         hitPadding: EdgeInsets.symmetric(vertical: slop),
-        color: selected ? Theme.of(context).m3.selectedFill : Colors.transparent,
+        // No fill of its own: the one capsule of the group slides under the
+        // selected label. The press still springs the label.
+        color: Colors.transparent,
         // A stadium at rest and a stadium while held: the press springs, it
         // does not turn the capsule into a rounded box.
         shape: const StadiumBorder(),
@@ -174,11 +300,17 @@ class _Segment extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.lerp(
+                  FontWeight.w500,
+                  FontWeight.w700,
+                  lit,
+                ),
                 fontSize: 14,
-                color: selected
-                    ? Theme.of(context).m3.onSelectedFill
-                    : scheme.onSurfaceVariant,
+                color: Color.lerp(
+                  scheme.onSurfaceVariant,
+                  Theme.of(context).m3.onSelectedFill,
+                  lit,
+                ),
               ),
             ),
           ),

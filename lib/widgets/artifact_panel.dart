@@ -26,6 +26,7 @@ import 'package:chuk_chat/widgets/excalidraw_svg_export.dart';
 import 'package:chuk_chat/widgets/html_artifact_view.dart';
 import 'package:chuk_chat/widgets/pane_header.dart';
 import 'package:chuk_chat/ui/components/components.dart';
+import 'package:chuk_chat/ui/expressive/connected_group.dart';
 import 'package:chuk_chat/widgets/anchored_menu.dart';
 import 'package:chuk_chat/widgets/menu_tile_group.dart';
 import 'package:chuk_chat/widgets/technical_drawing_svg_export.dart';
@@ -1847,39 +1848,18 @@ class _ViewModeToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SegmentedButton<_ArtifactViewMode>(
-      showSelectedIcon: false,
-      style: ButtonStyle(
-        visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
-        tapTargetSize: compact
-            ? MaterialTapTargetSize.shrinkWrap
-            : MaterialTapTargetSize.padded,
-        padding: WidgetStateProperty.all(
-          compact
-              ? const EdgeInsets.symmetric(horizontal: 10, vertical: 4)
-              : const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        ),
-        textStyle: WidgetStateProperty.all(
-          TextStyle(fontSize: compact ? 12 : 13),
-        ),
+    // The app's one segmented switch. In the desktop header it gets a fixed
+    // width (it shares the row with the title and the buttons); on mobile it
+    // takes the row.
+    final Widget group = ConnectedGroup(
+      labels: const <String>['Preview', 'Code'],
+      selected: mode == _ArtifactViewMode.preview ? 0 : 1,
+      onSelected: (int i) => onChanged(
+        i == 0 ? _ArtifactViewMode.preview : _ArtifactViewMode.code,
       ),
-      segments: [
-        ButtonSegment(
-          value: _ArtifactViewMode.preview,
-          icon: AppIcon(Icons.visibility_outlined, size: compact ? 14 : 16),
-          label: const Text('Preview'),
-        ),
-        ButtonSegment(
-          value: _ArtifactViewMode.code,
-          icon: AppIcon(Icons.code, size: compact ? 14 : 16),
-          label: const Text('Code'),
-        ),
-      ],
-      selected: {mode},
-      onSelectionChanged: (set) {
-        if (set.isNotEmpty) onChanged(set.first);
-      },
+      margin: EdgeInsets.zero,
     );
+    return compact ? SizedBox(width: 184, child: group) : group;
   }
 }
 
