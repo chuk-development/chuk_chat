@@ -55,9 +55,9 @@ the owner says CoWork, he means Agents. Code, flags and docs use "Agents".
 
 ## Workflow Rules
 
-> **CodeRabbit paused on 2026-11-11 only** (owner; login expired, plan
-> unpaid): skip step 2 that day, here and in `api_server`. From 2026-11-12
-> use it again; if login still fails, ask the owner first.
+> **CodeRabbit paused** (owner, 2026-11-12; login expired, plan unpaid):
+> skip step 2 here and in `api_server` until the owner says it is paid and
+> logged in again. Tests stay mandatory.
 
 **After completing any task, ALWAYS do this in order:**
 
