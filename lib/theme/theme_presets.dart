@@ -137,7 +137,10 @@ ThemePalette? paletteForLook({
 /// Plane's dark mode (the open-source project tracker), taken from its
 /// design tokens (`@makeplane/propel`, `[data-theme="dark"]`): a canvas a
 /// step below the panels, then one grey per layer in front of it, a neutral
-/// grey for the selected row and Plane's blue accent.
+/// grey for the selected row. Plane's blue (#2893CC) is left out on purpose:
+/// it looked too loud on the many accent-coloured parts of this app (sidebar
+/// icons, the send button), so the accent is Plane's mid grey.
+const Color kPlaneAccentGrey = Color(0xFFAFB3B6); // neutral-1000
 const ThemePalette kPlaneDarkPalette = ThemePalette(
   surfaceLowest: Color(0xFF0F0F10), // bg-canvas
   surfaceLow: Color(0xFF181A1B), // bg-layer-1
@@ -154,8 +157,8 @@ const ThemePalette kPlaneDarkPalette = ThemePalette(
   outline: Color(0xFF45484A), // border-strong-1
   outlineVariant: Color(0xFF2C2E30), // border-subtle-1
   onSurfaceVariant: Color(0xFFAFB3B6), // txt-tertiary
-  primaryContainer: Color(0xFF0A2533), // bg-accent-subtle
-  onPrimaryContainer: Color(0xFF4CA9DC), // txt-accent-secondary
+  primaryContainer: Color(0xFF2B2B2C), // neutral, like the selection
+  onPrimaryContainer: Color(0xFFE4E6E7), // txt-primary
   error: Color(0xFFE8847D), // txt-danger-secondary
   errorContainer: Color(0xFF4E120E), // red-100
   onErrorContainer: Color(0xFFF6CECB), // red-900
@@ -186,15 +189,15 @@ const List<ThemePreset> kThemePresets = <ThemePreset>[
   ),
   ThemePreset(
     name: 'Plane',
-    // Plane's light theme: white panels on a light grey canvas.
+    // Plane's light theme: white panels on a light grey canvas, grey accent.
     light: ThemeVariant(
-      accent: Color(0xFF006399),
+      accent: Color(0xFF45484A),
       iconFg: Color(0xFF0F0F10),
       bg: Color(0xFFFFFFFF),
       contrast: 0.5,
     ),
     dark: ThemeVariant(
-      accent: Color(0xFF2893CC), // brand-default
+      accent: kPlaneAccentGrey,
       iconFg: Color(0xFFE4E6E7), // txt-primary
       bg: Color(0xFF141415), // bg-surface-1
       palette: kPlaneDarkPalette,

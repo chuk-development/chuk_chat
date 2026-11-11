@@ -237,7 +237,7 @@ void main() {
       expect(m3.selection, const Color(0xFF2B2B2C));
       expect(m3.selectedFill, const Color(0xFF2B2B2C));
       expect(m3.onSelection, const Color(0xFFE4E6E7));
-      expect(theme.colorScheme.primary, const Color(0xFF2893CC));
+      expect(theme.colorScheme.primary, const Color(0xFFAFB3B6));
     });
 
     test('without a palette the selection stays accent-tinted', () {
