@@ -26,6 +26,10 @@ extension _MessageBubbleTools on _MessageBubbleState {
     // the interleaved layout showed a bare "Thought" with no time at all.
     final bool isRunning = widget.isStreamingMessage && live;
     return AgentActivityTimeline(
+      foldKey: _foldKey(
+        'reasoning:${carriesTurnStatus ? 'turn' : 'step'}:'
+        '${_foldTextSlot(text)}',
+      ),
       toolCalls: const <ToolCall>[],
       steps: <AgentActivityStep>[AgentActivityStep.reasoning(text)],
       isRunning: isRunning,
@@ -79,6 +83,7 @@ extension _MessageBubbleTools on _MessageBubbleState {
     }
 
     return AgentActivityTimeline(
+      foldKey: _foldKey('info'),
       toolCalls: const <ToolCall>[],
       steps: <AgentActivityStep>[
         if (reasoning.trim().isNotEmpty) AgentActivityStep.reasoning(reasoning),
@@ -194,6 +199,7 @@ extension _MessageBubbleTools on _MessageBubbleState {
   ) {
     return AgentActivityTimeline(
       key: const ValueKey<String>('agents-live-panel'),
+      foldKey: _foldKey('live'),
       toolCalls: const <ToolCall>[],
       isRunning: true,
       liveDots: true,
@@ -510,6 +516,9 @@ extension _MessageBubbleTools on _MessageBubbleState {
           ];
 
     return AgentActivityTimeline(
+      foldKey: _foldKey(
+        toolCalls.isEmpty ? 'tools' : 'tools:${toolCalls.first.id}',
+      ),
       toolCalls: toolCalls,
       steps: steps,
       isRunning: isRunning,
@@ -528,6 +537,20 @@ extension _MessageBubbleTools on _MessageBubbleState {
       onSourceTap: _openSourceUrl,
     );
   }
+
+  /// The [AgentActivityTimeline.foldKey] of the block in [slot] of this
+  /// message, or null when the message has no id (then the block keeps its
+  /// state itself, as before).
+  String? _foldKey(String slot) {
+    final String? id = widget.messageId;
+    return id == null || id.isEmpty ? null : '$id:$slot';
+  }
+
+  /// A slot for a reasoning block that does not move while its text grows:
+  /// the hash of its first 48 characters (a block with less than that is
+  /// still streaming and folds when the turn ends anyway).
+  static String _foldTextSlot(String text) =>
+      text.length < 48 ? 'short' : text.substring(0, 48).hashCode.toString();
 
   /// Open a source chip's page in the browser.
   Future<void> _openSourceUrl(AgentActivitySource source) async {

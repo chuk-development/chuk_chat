@@ -126,7 +126,9 @@ void main() {
     expect(find.textContaining('second', findRichText: true), findsOneWidget);
   });
 
-  testWidgets('a failed turn stays open in every mode', (tester) async {
+  testWidgets('a failed turn folds like any other, except in Verbose', (
+    tester,
+  ) async {
     for (final ToolDetailMode mode in ToolDetailMode.values) {
       await _pump(
         tester,
@@ -142,7 +144,7 @@ void main() {
       );
       expect(
         find.textContaining('Search failed', findRichText: true),
-        findsOneWidget,
+        mode == ToolDetailMode.verbose ? findsOneWidget : findsNothing,
         reason: mode.name,
       );
     }

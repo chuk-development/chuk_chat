@@ -370,7 +370,7 @@ void main() {
       expect(findIcon(Icons.search), findsNothing);
     });
 
-    testWidgets('a finished turn with a failed step stays open', (tester) async {
+    testWidgets('a finished turn with a failed step folds too', (tester) async {
       await _pumpTimeline(
         tester,
         calls: [
@@ -386,14 +386,14 @@ void main() {
       );
 
       expect(find.text('Worked for 13s'), findsOneWidget);
-      // Open by default: the failure must not hide behind a folded header.
-      expect(findIcon(Icons.keyboard_arrow_right), findsNothing);
-      expect(find.textContaining('Search failed', findRichText: true), findsOneWidget);
+      // Folded like every finished turn (T3 Code): only the answer matters.
+      expect(findIcon(Icons.keyboard_arrow_right), findsOneWidget);
+      expect(find.textContaining('Search failed', findRichText: true), findsNothing);
 
-      // The reader can still fold it.
+      // One tap shows the failure; its group opens by itself.
       await tester.tap(find.text('Worked for 13s'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('Search failed', findRichText: true), findsNothing);
+      expect(find.textContaining('Search failed', findRichText: true), findsOneWidget);
     });
 
     testWidgets('tapping the header opens and closes it', (tester) async {

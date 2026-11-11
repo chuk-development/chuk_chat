@@ -15,6 +15,7 @@ import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/agents/agents_tool_row_info.dart';
 import 'package:chuk_chat/services/settings/tool_detail_service.dart';
 import 'package:chuk_chat/utils/favicon.dart';
+import 'package:chuk_chat/widgets/agent_activity/activity_fold_store.dart';
 import 'package:chuk_chat/widgets/agent_activity/agent_activity_model.dart';
 import 'package:chuk_chat/widgets/agent_activity/min_duration_hold.dart';
 import 'package:chuk_chat/widgets/agent_activity/tool_activity_category.dart';
@@ -32,6 +33,7 @@ class AgentActivityTimeline extends StatefulWidget {
     this.isRunning = false,
     this.clock,
     this.initiallyExpanded,
+    this.foldKey,
     this.onStepTap,
     this.onSourceTap,
     this.footer,
@@ -103,6 +105,12 @@ class AgentActivityTimeline extends StatefulWidget {
   /// once finished).
   final bool? initiallyExpanded;
 
+  /// Names this block for [ActivityFoldStore]: the message id and the
+  /// block's slot in it. With a key, the reader's open/closed choice lives
+  /// in the store and survives the row being thrown away and built again by
+  /// the lazy list (a scroll, a minimap jump). Null keeps it in the State.
+  final String? foldKey;
+
   /// Called when a reader taps a step, to show its arguments and result.
   /// Thinking notes are not tappable — they stand for no call.
   final void Function(ToolCall toolCall)? onStepTap;
@@ -133,8 +141,17 @@ class AgentActivityTimeline extends StatefulWidget {
 }
 
 class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
+  /// The reader's choices for this block: from [ActivityFoldStore] when the
+  /// block has a [AgentActivityTimeline.foldKey], else local.
+  late ActivityFold _fold;
+
   /// Null until the reader taps: before that the state follows the round.
-  bool? _expandedOverride;
+  bool? get _expandedOverride => _fold.expanded;
+  set _expandedOverride(bool? value) {
+    _fold
+      ..expanded = value
+      ..chosenWhileRunning = widget.isRunning;
+  }
 
   Timer? _ticker;
 
@@ -155,7 +172,7 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
   Timer? _holdTimer;
 
   /// Groups the reader opened or closed by hand, by their position.
-  final Map<int, bool> _groupOverrides = <int, bool>{};
+  Map<int, bool> get _groupOverrides => _fold.groups;
 
   ToolDetailMode get _mode =>
       widget.toolDetailMode ?? ToolDetailService.instance.value;
@@ -163,10 +180,26 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
   @override
   void initState() {
     super.initState();
-    _expandedOverride = widget.initiallyExpanded;
+    _fold = _foldFor(widget);
     _syncTicker();
     widget.liveListenable?.addListener(_onLive);
     ToolDetailService.instance.addListener(_onMode);
+  }
+
+  /// The fold for [w]. A choice made while the turn ran ended with the turn:
+  /// a row rebuilt after it finished starts folded, like one that watched
+  /// the turn finish.
+  ActivityFold _foldFor(AgentActivityTimeline w) {
+    final String? key = w.foldKey;
+    final bool fresh = key == null || !ActivityFoldStore.instance.contains(key);
+    final ActivityFold fold = key == null
+        ? ActivityFold()
+        : ActivityFoldStore.instance.of(key);
+    if (!w.isRunning && fold.chosenWhileRunning) fold.reset();
+    if (fresh && w.initiallyExpanded != null) {
+      fold.expanded = w.initiallyExpanded;
+    }
+    return fold;
   }
 
   void _onMode() {
@@ -213,7 +246,12 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
   @override
   void didUpdateWidget(AgentActivityTimeline oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.foldKey != widget.foldKey) _fold = _foldFor(widget);
     if (oldWidget.isRunning && !widget.isRunning) {
+      // The turn is done: only the answer matters now. Fold the block, even
+      // if the reader opened it while it ran (T3 Code folds a settled turn
+      // behind "Worked for …" the same way).
+      _fold.reset();
       // The moment the turn settles, keep the number the counter last
       // showed. A turn whose length was never written down would otherwise
       // drop from "Thought for 12s" to a bare "Thought" the instant it
@@ -262,23 +300,14 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
     });
   }
 
-  /// Whether any step of the round failed. Set in [build].
-  bool _hasError = false;
-
-  /// Open while the round runs; once it settles it folds to one line, unless
-  /// a step failed (then it stays open so the failure is not hidden, in every
-  /// mode) or the reader chose Verbose.
+  /// Open while the round runs; once it settles it folds to one line, as
+  /// in T3 Code: only the answer matters then. A failed step does not keep
+  /// it open (the group inside still opens on it). Verbose, the reader's own
+  /// choice, keeps a settled turn open.
   bool get _isExpanded =>
       _expandedOverride ??
       ((widget.isRunning && !widget.liveDots) ||
-          (!widget.isRunning && (_hasError || _mode.keepsSettledTurnOpen)));
-
-  static bool _anyError(Iterable<AgentActivityEntry> entries) {
-    for (final e in entries) {
-      if (e.anyError) return true;
-    }
-    return false;
-  }
+          (!widget.isRunning && _mode.keepsSettledTurnOpen));
 
   /// Whether the group at [index] shows its steps: the reader's choice,
   /// else open when a step failed, else what the mode says.
@@ -297,7 +326,7 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
   bool get _showsDots => widget.liveDots && widget.isRunning;
 
   /// Thinking notes the reader opened, by their position in the list.
-  final Set<int> _openBodies = <int>{};
+  Set<int> get _openBodies => _fold.bodies;
 
   DateTime get _now => (widget.clock ?? DateTime.now)();
 
@@ -313,9 +342,6 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
     // The Agents live panel lists every call with its result: opening it is
     // the request to see each step, so it is not grouped.
     final entries = widget.liveDots ? flat : groupAgentActivityEntries(flat);
-    _hasError =
-        _anyError(entries) ||
-        widget.toolCalls.any((c) => c.status == ToolCallStatus.error);
     // A settled round with neither a step nor a model line has nothing to
     // show. A RUNNING one still does: the header is what tells the reader
     // the turn is alive and how long it has been waiting, and at that point
