@@ -119,9 +119,20 @@ class ImageDiskCache {
   static Future<void> writeThumb(String storagePath, Uint8List bytes) =>
       _write(storagePath, 'thumb', bytes);
 
+  /// Records that [storagePath] holds a PDF, not a picture. Old uploads gave
+  /// files the same `.enc` ending as images, so the bucket listing cannot tell
+  /// them apart; only the decrypted bytes can, once. The mark lets the media
+  /// manager sort the file under Pages on every later open without loading it.
+  static Future<void> markPdf(String storagePath) =>
+      _write(storagePath, 'pdf', Uint8List.fromList(const <int>[1]));
+
+  /// Whether [storagePath] was found to be a PDF earlier.
+  static Future<bool> isPdf(String storagePath) async =>
+      await _read(storagePath, 'pdf') != null;
+
   /// Removes the picture and its thumbnail, e.g. after the image was deleted.
   static Future<void> remove(String storagePath) async {
-    for (final ext in const ['img', 'thumb']) {
+    for (final ext in const ['img', 'thumb', 'pdf']) {
       try {
         final file = await _file(storagePath, ext);
         if (file != null && await file.exists()) await file.delete();
