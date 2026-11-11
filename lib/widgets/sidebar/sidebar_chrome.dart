@@ -776,6 +776,37 @@ class _SbSearchFieldState extends State<SbSearchField> {
   }
 }
 
+/// Side of the settings gear's place in [SbAccountLine] when the parent
+/// draws the gear itself (see [SbAccountLine.settingsSlot]).
+const double kSbAccountSettingsBox = 40.0;
+
+/// Top and bottom padding of [SbAccountLine].
+const double kSbAccountLinePad = 4.0;
+
+/// Right padding of [SbAccountLine]: the gear's place ends this far in.
+const double kSbAccountLineEndPad = 4.0;
+
+/// Gap between the account line and the bottom edge of the desktop panel.
+const double kSbFooterBottomInset = 10.0;
+
+/// Centre of the gear's place in the desktop account line, measured up from
+/// the bottom of the panel. The folded rail puts its gear on the same line,
+/// so the gear only travels sideways when the panel opens.
+const double kSbFooterSettingsCentreFromBottom =
+    kSbFooterBottomInset + kSbAccountLinePad + kSbAccountSettingsBox / 2;
+
+/// Centre of the gear's place in the desktop account line, measured in from
+/// the right edge of the open panel.
+const double kSbFooterSettingsCentreFromRight =
+    kSbBlockInset + kSbAccountLineEndPad + kSbAccountSettingsBox / 2;
+
+/// Key of the desktop sidebar's one settings gear: at the foot of the folded
+/// rail, at the right end of the open panel's account line, and on the way
+/// between the two while the panel opens or closes.
+const ValueKey<String> kSbRailSettingsKey = ValueKey<String>(
+  'sidebar-rail-settings',
+);
+
 /// The bottom bar of the phone sidebar: who is signed in, what is left on the
 /// account, and the way into the settings — one quiet, translucent card.
 ///
@@ -792,6 +823,7 @@ class SbAccountLine extends StatelessWidget {
     this.settingsTooltip,
     this.onNewChat,
     this.newChatTooltip,
+    this.settingsSlot = false,
   });
 
   final String name;
@@ -806,6 +838,11 @@ class SbAccountLine extends StatelessWidget {
   final VoidCallback? onNewChat;
   final String? newChatTooltip;
 
+  /// Keeps an empty [kSbAccountSettingsBox] square where the gear goes, for
+  /// a parent that draws the gear itself. The desktop does: its gear flies
+  /// between the folded rail and this row as the panel opens and closes.
+  final bool settingsSlot;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -815,7 +852,12 @@ class SbAccountLine extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 4, 4, 4),
+          padding: const EdgeInsets.fromLTRB(
+            14,
+            kSbAccountLinePad,
+            kSbAccountLineEndPad,
+            kSbAccountLinePad,
+          ),
           child: Row(
             children: [
               Expanded(
@@ -847,7 +889,9 @@ class SbAccountLine extends StatelessWidget {
                   child: balance!,
                 ),
               ],
-              if (onSettings != null)
+              if (settingsSlot)
+                const SizedBox.square(dimension: kSbAccountSettingsBox)
+              else if (onSettings != null)
                 IconButton(
                   onPressed: onSettings,
                   icon: const AppIcon(Icons.settings_rounded, size: 20),

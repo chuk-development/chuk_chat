@@ -69,7 +69,8 @@ class RootWrapperDesktop extends StatefulWidget {
   State<RootWrapperDesktop> createState() => _RootWrapperDesktopState();
 }
 
-class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
+class _RootWrapperDesktopState extends State<RootWrapperDesktop>
+    with SingleTickerProviderStateMixin {
   /// What [RootWrapperDesktop.headerCenter] keeps clear on the right: the
   /// copy button (48 wide, 12 from the edge) and a gap.
   static const double _kCopyButtonReserve = 12 + 48 + 8;
@@ -84,6 +85,24 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
 
   bool _isSidebarExpanded = false;
   bool _hasOpenedSidebar = false;
+
+  /// The panel opening (1) and closing (0). The panel's fade and the
+  /// settings gear's flight between the rail and the account line both read
+  /// this one value, so every frame shows them at the same point.
+  late final AnimationController _sidebarAnim = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 220),
+  )..addStatusListener(_onSidebarAnimStatus);
+  late final Animation<double> _sidebarProgress = CurvedAnimation(
+    parent: _sidebarAnim,
+    curve: Curves.easeInOutCubic,
+  );
+
+  /// The panel stays in place while it fades out, and leaves once the
+  /// closing animation has run.
+  void _onSidebarAnimStatus(AnimationStatus status) {
+    if (status == AnimationStatus.dismissed && mounted) setState(() {});
+  }
 
   String? _activeProjectId;
   /// 'workspaces' for the full-page workspace list, or null.
@@ -168,6 +187,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
 
   @override
   void dispose() {
+    _sidebarAnim.dispose();
     WorkspacesSetting.instance.removeListener(_onWorkspacesSettingChanged);
     if (kFeatureSystemTray) {
       TrayActionBus.instance.newChatRequested.removeListener(_onTrayNewChat);
@@ -370,6 +390,11 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
       }
       _isSidebarExpanded = !_isSidebarExpanded;
     });
+    if (_isSidebarExpanded) {
+      _sidebarAnim.forward();
+    } else {
+      _sidebarAnim.reverse();
+    }
   }
 
   void _copyDebugChat() {
@@ -406,19 +431,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
       return Positioned(
         top: top,
         left: kSbNavIconLeft,
-        child: Tooltip(
-          message: tooltip,
-          child: Material(
-            type: MaterialType.transparency,
-            shape: const CircleBorder(),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              customBorder: const CircleBorder(),
-              onTap: onPressed,
-              child: SbNavIcon(icon: icon, size: kSbNavIconTile),
-            ),
-          ),
-        ),
+        child: _railTile(icon: icon, tooltip: tooltip, onPressed: onPressed),
       );
     }
 
@@ -458,6 +471,58 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
       );
     }
     return items;
+  }
+
+  /// One icon of the left column: the glyph in its tile, round ink.
+  Widget _railTile({
+    Key? key,
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onPressed,
+  }) {
+    return Tooltip(
+      key: key,
+      message: tooltip,
+      child: Material(
+        type: MaterialType.transparency,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onPressed,
+          child: SbNavIcon(icon: icon, size: kSbNavIconTile),
+        ),
+      ),
+    );
+  }
+
+  /// The sidebar's one settings gear. Folded, it stands at the foot of the
+  /// rail, on the column of the icons above it. Open, it sits at the right
+  /// end of the account line, in the place [SidebarDesktop] keeps free for
+  /// it. In between it flies along the bottom with [_sidebarProgress], the
+  /// value the panel fades with, so the two always move together.
+  Widget _sidebarSettingsGear(AppLocalizations l, double panelWidth) {
+    const double railCentre = kSbNavIconCentre;
+    final double openCentre = panelWidth - kSbFooterSettingsCentreFromRight;
+    final Widget gear = _railTile(
+      key: kSbRailSettingsKey,
+      icon: Icons.settings_rounded,
+      tooltip: l.settings,
+      onPressed: _openSettingsPage,
+    );
+    return AnimatedBuilder(
+      animation: _sidebarProgress,
+      child: gear,
+      builder: (context, child) {
+        final double t = _sidebarProgress.value;
+        final double centre = railCentre + (openCentre - railCentre) * t;
+        return Positioned(
+          left: centre - kSbNavIconTile / 2,
+          bottom: kSbFooterSettingsCentreFromBottom - kSbNavIconTile / 2,
+          child: child ?? gear,
+        );
+      },
+    );
   }
 
   // Fired from the desktop system tray "New Chat" menu item. Reuses the exact
@@ -709,13 +774,15 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
           // Lazy-mount sidebar to keep startup frame light.
           if (_isSidebarExpanded || _hasOpenedSidebar)
             Positioned(
-              left: _isSidebarExpanded ? 0 : -effectiveSidebarWidth,
+              // Kept in place until the closing fade has run.
+              left: _isSidebarExpanded || !_sidebarAnim.isDismissed
+                  ? 0
+                  : -effectiveSidebarWidth,
               top: 0,
               bottom: 0,
               width: effectiveSidebarWidth,
-              child: AnimatedOpacity(
-                opacity: _isSidebarExpanded ? 1.0 : 0.0,
-                duration: const Duration(milliseconds: 200),
+              child: FadeTransition(
+                opacity: _sidebarProgress,
                 child: IgnorePointer(
                   ignoring: !_isSidebarExpanded,
                   child: SidebarDesktop(
@@ -729,6 +796,8 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                     isCompactMode: isCompactMode,
                     showWorkspacesButton: !isCompactMode || _isSidebarExpanded,
                     onAddComputerTapped: widget.onAddComputer,
+                    // The gear is drawn here, above the panel, so it can fly.
+                    showSettingsGear: false,
                   ),
                 ),
               ),
@@ -773,6 +842,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
           // then nav rows are kButtonVisualHeight (40) tall. Search is NOT
           // in the mini-rail — only New chat, Workspaces, Media.
           if (!_isSidebarExpanded) ..._buildMiniRail(l),
+          _sidebarSettingsGear(l, effectiveSidebarWidth),
 
           // Copy full chat button (top-right of chat area)
           if (showContent && _activeProjectId == null)

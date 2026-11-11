@@ -43,6 +43,11 @@ class SidebarDesktop extends StatefulWidget {
   /// The Agents build's "Add your computer" entry. Null draws no row.
   final VoidCallback? onAddComputerTapped;
 
+  /// False leaves the gear's place in the account line empty: the parent
+  /// draws the one gear itself, so it can fly between the folded rail and
+  /// this row (see `RootWrapperDesktop`).
+  final bool showSettingsGear;
+
   const SidebarDesktop({
     super.key,
     required this.onChatSelected,
@@ -55,6 +60,7 @@ class SidebarDesktop extends StatefulWidget {
     required this.isCompactMode,
     required this.showWorkspacesButton,
     this.onAddComputerTapped,
+    this.showSettingsGear = true,
   });
 
   @override
@@ -185,7 +191,7 @@ class _SidebarDesktopState extends State<SidebarDesktop>
     const double topChromeHeight = kMenuButtonHeight;
     const double bottomChromeHeight = 54.0;
     const double topInset = kTopInitialSpacing;
-    const double bottomInset = 10.0;
+    const double bottomInset = kSbFooterBottomInset;
 
     return Container(
       color: sidebarBg,
@@ -284,6 +290,7 @@ class _SidebarDesktopState extends State<SidebarDesktop>
                       name: sidebarDisplayName(profile),
                       onTap: widget.onSettingsTapped,
                       onSettings: widget.onSettingsTapped,
+                      settingsSlot: !widget.showSettingsGear,
                       balance: BalanceBadge(
                         textStyle: TextStyle(
                           color: accent,
