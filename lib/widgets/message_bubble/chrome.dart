@@ -337,13 +337,24 @@ extension _MessageBubbleChrome on _MessageBubbleState {
                 return Tooltip(
                   message: action.tooltip,
                   child: IconButton(
-                    icon: AppIcon(
-                      action.icon,
-                      color: (action.isEnabled || !dimDisabledIcon)
-                          ? iconFgColor
-                          : iconFgColor.withValues(alpha: 0.38),
-                      size: 18,
-                    ),
+                    icon: action.isLoading
+                        ? SizedBox.square(
+                            dimension: 18,
+                            child: Padding(
+                              padding: const EdgeInsets.all(2),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: iconFgColor,
+                              ),
+                            ),
+                          )
+                        : AppIcon(
+                            action.icon,
+                            color: (action.isEnabled || !dimDisabledIcon)
+                                ? iconFgColor
+                                : iconFgColor.withValues(alpha: 0.38),
+                            size: 18,
+                          ),
                     padding: EdgeInsets.all(kPlatformMobile ? 5 : 8),
                     visualDensity: VisualDensity.compact,
                     constraints: BoxConstraints(

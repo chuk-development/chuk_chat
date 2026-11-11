@@ -52,6 +52,7 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/tts_audio_service.dart';
+import 'package:chuk_chat/widgets/message_bubble/read_aloud_action.dart';
 import 'package:chuk_chat/voice/voice_transcript_migration.dart';
 import 'package:chuk_chat/services/dictation_tracker.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
@@ -628,7 +629,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     _outboxSub = OfflineSendBridge.listen(_onOutboxChangedChat);
     messageActionsHandler = MessageActionsHandler()
       ..onShowSnackBar = showSnackBar
-      ..onSpeak = _speakMessage
       ..onSubmitEdit = (index, newText) {
         unawaited(
           _submitEditedMessage(
@@ -744,6 +744,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       scrollController: _composerScrollController,
     );
     TtsAudioService.activeText.addListener(_onSpeechPlaybackChanged);
+    TtsAudioService.phase.addListener(_onSpeechPlaybackChanged);
     if (voiceCallUiEnabled) {
       _voice = ChatVoiceBinding(
         currentChatId: () => _activeChatId,
@@ -996,6 +997,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     _audioHandler.onLevelsChanged = null;
     scrollController.removeListener(onScrollChanged);
     TtsAudioService.activeText.removeListener(_onSpeechPlaybackChanged);
+    TtsAudioService.phase.removeListener(_onSpeechPlaybackChanged);
     _composerCaretFollower.dispose();
     composerController.dispose();
     scrollController.dispose();
@@ -1977,8 +1979,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     final Map<String, String> rawMessage = _messages[index];
     final String messageText = rawMessage['text'] ?? '';
 
-    return messageActionsHandler.buildActionsForMessage(
-      activeSpeechText: TtsAudioService.activeText.value,
+    final actions = messageActionsHandler.buildActionsForMessage(
       index: index,
       messageText: messageText,
       isUser: data.isUser,
@@ -1986,6 +1987,15 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       onEdit: editMessageAt,
       onResendMessage: resendMessageAt,
       onBranch: branchFromIndex,
+    );
+    return withReadAloudAction(
+      actions,
+      messageText: messageText,
+      isUser: data.isUser,
+      isStreaming: data.isStreamingMessage,
+      activeText: TtsAudioService.activeText.value,
+      phase: TtsAudioService.phase.value,
+      onSpeak: _speakMessage,
     );
   }
 

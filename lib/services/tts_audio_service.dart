@@ -21,15 +21,19 @@ class TtsAudioService {
   static const int _maxRequestChars = 3800;
   static final ValueNotifier<bool> _isPlaying = ValueNotifier(false);
   static final ValueNotifier<String?> _activeText = ValueNotifier(null);
+  static final ValueNotifier<TtsPhase> _phase = ValueNotifier(TtsPhase.idle);
   static bool _hasPlayback = false;
   static final AudioPlayer _player = AudioPlayer();
   static final TtsPlaybackController _playback = TtsPlaybackController(
     playAudio: (bytes) =>
         _player.play(BytesSource(bytes, mimeType: 'audio/mpeg')),
     stopAudio: _player.stop,
+    pauseAudio: _player.pause,
+    resumeAudio: _player.resume,
     onComplete: _player.onPlayerComplete,
     isPlayingNotifier: _isPlaying,
     activeTextNotifier: _activeText,
+    phaseNotifier: _phase,
   );
   static final Map<(String, Object), Future<Uint8List>> _inFlight = {};
   static _SpeechScope? _activeScope;
@@ -39,6 +43,9 @@ class TtsAudioService {
   /// The answer being loaded or played; null when read aloud is idle.
   static ValueListenable<String?> get activeText => _activeText;
 
+  /// Loading, playing or paused for [activeText]; idle otherwise.
+  static ValueListenable<TtsPhase> get phase => _phase;
+
   /// Stop playback and cancel the current answer, including queued chunks.
   static Future<void> stop() {
     _activeScope = null;
@@ -46,7 +53,9 @@ class TtsAudioService {
   }
 
   /// Speak [text]. Repeated requests reuse the encrypted Supabase object.
-  /// Starting another answer interrupts the current playback.
+  /// Starting another answer interrupts the current playback. For the
+  /// active answer, a call cancels the load, pauses, or resumes at the
+  /// saved position ([TtsPlaybackController.toggle]).
   static Future<void> speak(String text) async {
     final normalized = text.trim();
     if (normalized.isEmpty) return;
@@ -59,7 +68,7 @@ class TtsAudioService {
 
     final scope = _SpeechScope(user.id, EncryptionService.keyIdentity!);
     if (activeText.value == normalized) {
-      await stop();
+      await _playback.toggle();
       return;
     }
 
@@ -241,36 +250,125 @@ class _SpeechScope {
   }
 }
 
+/// Where read aloud stands for the active answer.
+enum TtsPhase {
+  /// Nothing is loaded or played.
+  idle,
+
+  /// The first audio of the answer is fetched or generated.
+  loading,
+
+  /// Audio plays. Between two chunks the next chunk can still load.
+  playing,
+
+  /// Playback holds its position. Resume continues from that position.
+  paused,
+}
+
 /// Serial answer playback with cancellation independent of player completion.
 /// A stopped native player does not emit a completion event.
+///
+/// A tap on the active answer moves the phase: [TtsPhase.loading] stops (the
+/// load is cancelled), [TtsPhase.playing] pauses, [TtsPhase.paused] resumes at
+/// the saved position. Another answer, [stop] or the end of the answer resets
+/// the phase to [TtsPhase.idle].
 @visibleForTesting
 class TtsPlaybackController {
   TtsPlaybackController({
     required this.playAudio,
     required this.stopAudio,
     required this.onComplete,
+    Future<void> Function()? pauseAudio,
+    Future<void> Function()? resumeAudio,
     ValueNotifier<bool>? isPlayingNotifier,
     ValueNotifier<String?>? activeTextNotifier,
-  }) : _isPlaying = isPlayingNotifier ?? ValueNotifier(false),
-       _activeText = activeTextNotifier ?? ValueNotifier(null);
+    ValueNotifier<TtsPhase>? phaseNotifier,
+  }) : pauseAudio = pauseAudio ?? _noop,
+       resumeAudio = resumeAudio ?? _noop,
+       _isPlaying = isPlayingNotifier ?? ValueNotifier(false),
+       _activeText = activeTextNotifier ?? ValueNotifier(null),
+       _phase = phaseNotifier ?? ValueNotifier(TtsPhase.idle);
+
+  static Future<void> _noop() async {}
 
   final Future<void> Function(Uint8List) playAudio;
   final Future<void> Function() stopAudio;
+  final Future<void> Function() pauseAudio;
+  final Future<void> Function() resumeAudio;
   final Stream<void> onComplete;
+
+  /// True while an answer is loading, playing or paused.
   final ValueNotifier<bool> _isPlaying;
   ValueListenable<bool> get isPlaying => _isPlaying;
   final ValueNotifier<String?> _activeText;
   ValueListenable<String?> get activeText => _activeText;
+  final ValueNotifier<TtsPhase> _phase;
+  ValueListenable<TtsPhase> get phase => _phase;
   Completer<void>? _cancel;
   int _generation = 0;
+
+  /// Completes when a paused answer resumes; null while not paused.
+  Completer<void>? _resumed;
+
+  /// True while a chunk is in the native player and has not completed.
+  bool _chunkInPlayer = false;
+
+  /// Counts pause and resume steps, so a paused wait is not a stuck player.
+  int _pauseSteps = 0;
+
+  void _setPhase(TtsPhase value) {
+    _phase.value = value;
+    _isPlaying.value = value != TtsPhase.idle;
+  }
+
+  void _releasePause() {
+    final resumed = _resumed;
+    _resumed = null;
+    if (resumed != null && !resumed.isCompleted) resumed.complete();
+  }
 
   Future<void> stop() async {
     _generation++;
     _cancel?.complete();
     _cancel = null;
-    _isPlaying.value = false;
+    _releasePause();
+    _chunkInPlayer = false;
     _activeText.value = null;
+    _setPhase(TtsPhase.idle);
     await stopAudio();
+  }
+
+  /// The tap on the active answer: cancel a load, pause, or resume.
+  Future<void> toggle() async {
+    switch (_phase.value) {
+      case TtsPhase.idle:
+        return;
+      case TtsPhase.loading:
+        await stop();
+      case TtsPhase.playing:
+        await pause();
+      case TtsPhase.paused:
+        await resume();
+    }
+  }
+
+  /// Hold playback at the current position.
+  Future<void> pause() async {
+    if (_phase.value != TtsPhase.playing) return;
+    _resumed = Completer<void>();
+    _pauseSteps++;
+    _setPhase(TtsPhase.paused);
+    if (_chunkInPlayer) await pauseAudio();
+  }
+
+  /// Continue from the position where [pause] stopped.
+  Future<void> resume() async {
+    if (_phase.value != TtsPhase.paused) return;
+    _pauseSteps++;
+    _setPhase(TtsPhase.playing);
+    final inPlayer = _chunkInPlayer;
+    _releasePause();
+    if (inPlayer) await resumeAudio();
   }
 
   Future<void> speak(
@@ -281,27 +379,42 @@ class TtsPlaybackController {
   }) async {
     final answer = answerText ?? chunks.join('\n');
     if (_activeText.value == answer) {
-      await stop();
+      await toggle();
       return;
     }
     final generation = ++_generation;
     _cancel?.complete();
     final cancel = Completer<void>();
     _cancel = cancel;
+    _releasePause();
+    _chunkInPlayer = false;
     _activeText.value = answer;
-    _isPlaying.value = true;
+    _setPhase(TtsPhase.loading);
+    bool isLive() =>
+        generation == _generation && !cancel.isCompleted && isCurrent();
     try {
       await stopAudio();
-      if (generation != _generation || !isCurrent()) return;
-      for (final chunk in chunks) {
+      if (!isLive()) return;
+      Future<Uint8List>? prefetched;
+      for (var i = 0; i < chunks.length; i++) {
+        final pending = prefetched ?? loadAudio(chunks[i]);
+        prefetched = null;
         final audio = await Future.any<Uint8List?>([
-          loadAudio(chunk),
+          pending,
           cancel.future.then((_) => null),
         ]);
-        if (audio == null || cancel.isCompleted || !isCurrent()) return;
+        if (audio == null || !isLive()) return;
+        if (!await _waitWhilePaused(cancel) || !isLive()) return;
+        if (i + 1 < chunks.length) {
+          // Load the next chunk while this one plays, so the gap is short.
+          final next = loadAudio(chunks[i + 1]);
+          unawaited(next.then<void>((_) {}, onError: (Object _) {}));
+          prefetched = next;
+        }
         final completed = Completer<void>();
         final subscription = onComplete.listen(
           (_) {
+            if (generation == _generation) _chunkInPlayer = false;
             if (!completed.isCompleted) completed.complete();
           },
           onError: (Object error, StackTrace stack) {
@@ -309,21 +422,55 @@ class TtsPlaybackController {
           },
         );
         try {
+          _chunkInPlayer = true;
+          if (_phase.value == TtsPhase.loading) _setPhase(TtsPhase.playing);
           await playAudio(audio);
-          if (cancel.isCompleted || !isCurrent()) return;
-          await Future.any([completed.future, cancel.future])
-              .timeout(const Duration(minutes: 10));
+          if (!isLive()) return;
+          // A pause during the start of the player must still hold it.
+          if (_phase.value == TtsPhase.paused) await pauseAudio();
+          await _waitForChunkEnd(completed.future, cancel.future);
         } finally {
+          if (generation == _generation) _chunkInPlayer = false;
           await subscription.cancel();
         }
-        if (cancel.isCompleted || !isCurrent()) return;
+        if (!isLive()) return;
       }
     } finally {
       if (identical(_cancel, cancel)) {
         _cancel = null;
-        _isPlaying.value = false;
+        _releasePause();
+        _chunkInPlayer = false;
         _activeText.value = null;
+        _setPhase(TtsPhase.idle);
         await stopAudio();
+      }
+    }
+  }
+
+  /// Returns false when the answer was cancelled while paused.
+  Future<bool> _waitWhilePaused(Completer<void> cancel) async {
+    while (_phase.value == TtsPhase.paused && !cancel.isCompleted) {
+      final resumed = _resumed;
+      if (resumed == null) break;
+      await Future.any<void>([resumed.future, cancel.future]);
+    }
+    return !cancel.isCompleted;
+  }
+
+  /// Waits for the native completion event. A paused chunk can wait longer
+  /// than the stuck-player limit; only a wait without a pause step times out.
+  Future<void> _waitForChunkEnd(
+    Future<void> completed,
+    Future<void> cancelled,
+  ) async {
+    while (true) {
+      final steps = _pauseSteps;
+      try {
+        await Future.any<void>([completed, cancelled])
+            .timeout(const Duration(minutes: 10));
+        return;
+      } on TimeoutException {
+        if (_phase.value != TtsPhase.paused && steps == _pauseSteps) rethrow;
       }
     }
   }

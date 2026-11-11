@@ -73,6 +73,7 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/tts_audio_service.dart';
+import 'package:chuk_chat/widgets/message_bubble/read_aloud_action.dart';
 import 'package:chuk_chat/voice/voice_transcript_migration.dart';
 import 'package:chuk_chat/services/dictation_tracker.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
@@ -812,7 +813,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     messageActionsHandler = MessageActionsHandler()
       ..onShowSnackBar = showSnackBar
-      ..onSpeak = _speakMessage
       ..onSubmitEdit = (index, newText) {
         unawaited(
           submitEditedMessage(
@@ -1075,6 +1075,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // chat. See [_viewInsetRepin].
     WidgetsBinding.instance.addObserver(_viewInsetRepin);
 
+    TtsAudioService.phase.addListener(_onSpeechPlaybackChanged);
     // Text field focus listener — collapse mic & model buttons while typing
 
     // Text controller listener
@@ -1485,6 +1486,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     scrollController.dispose();
     _composerScrollController.dispose();
     composerFocusNode.removeListener(_onComposerFocusChanged);
+    TtsAudioService.phase.removeListener(_onSpeechPlaybackChanged);
     if (_messengerListening) {
       ChatReactionService.instance.removeListener(_onMessengerStoreChanged);
       ChatModelSelectionService.instance.removeListener(_onChatModelChanged);
@@ -4288,15 +4290,22 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         index: i,
         isStreaming: _isCurrentChatStreaming,
       );
-      final actions = messageActionsHandler.buildActionsForMessage(
-        activeSpeechText: TtsAudioService.activeText.value,
-        index: i,
+      final actions = withReadAloudAction(
+        messageActionsHandler.buildActionsForMessage(
+          index: i,
+          messageText: data.displayText,
+          isUser: data.isUser,
+          isStreaming: data.isStreamingMessage,
+          onEdit: editMessageAt,
+          onResendMessage: resendMessageAt,
+          onBranch: branchFromIndex,
+        ),
         messageText: data.displayText,
         isUser: data.isUser,
         isStreaming: data.isStreamingMessage,
-        onEdit: editMessageAt,
-        onResendMessage: resendMessageAt,
-        onBranch: branchFromIndex,
+        activeText: TtsAudioService.activeText.value,
+        phase: TtsAudioService.phase.value,
+        onSpeak: _speakMessage,
       );
       final userActions = data.isUser
           ? messageActionsHandler.buildUserMessageActions(

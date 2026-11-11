@@ -75,6 +75,7 @@ class MessageBubbleAction {
     required this.onPressed,
     this.isEnabled = true,
     this.label,
+    this.isLoading = false,
   });
 
   final IconData icon;
@@ -82,6 +83,10 @@ class MessageBubbleAction {
   final VoidCallback onPressed;
   final bool isEnabled;
   final String? label;
+
+  /// Draws a small progress ring in place of [icon]; the button stays
+  /// tappable, so a tap can cancel the work.
+  final bool isLoading;
 }
 
 class _RenderSegment {
