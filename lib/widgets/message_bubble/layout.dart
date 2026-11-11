@@ -290,22 +290,18 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     final Color iconFgColor = Theme.of(context).resolvedIconColor;
 
     final double effectiveMaxWidth =
-        widget.maxWidth ?? MediaQuery.of(context).size.width * 0.8;
+        widget.maxWidth ?? MediaQuery.sizeOf(context).width * 0.8;
 
     final EdgeInsetsGeometry containerPadding = const EdgeInsets.symmetric(
       horizontal: 14,
       vertical: 10,
     );
 
-    // The bubble is the accent at 80 % over the page. Its text keeps the
-    // reader's icon colour unless that falls below 2 : 1 on the blended fill
-    // (the pastel default with a near-white icon colour was 2.0 : 1); then it
-    // is black or white, whichever reads better. White on orange stays.
-    final Color bubbleFill = accentColor.withValues(alpha: .8);
-    final Color bubbleTextColor = readableOnFill(
-      Color.alphaBlend(bubbleFill, bgColor),
-      iconFgColor,
-    );
+    // The theme decides the bubble: the accent at 80 % over the page for
+    // most packs, a neutral grey for Plane (see buildAppTheme). Its text is
+    // the theme's readable colour for that fill.
+    final Color bubbleFill = Theme.of(context).m3.userBubble;
+    final Color bubbleTextColor = Theme.of(context).m3.onUserBubble;
 
     final BoxDecoration decoration = BoxDecoration(
       color: bubbleFill,

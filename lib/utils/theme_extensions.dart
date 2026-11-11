@@ -87,8 +87,8 @@ extension ThemeDataIconColorX on ThemeData {
   /// One place decides for both platforms, so they cannot drift apart again.
   Color accentButtonForeground(Color fill) =>
       ThemeData.estimateBrightnessForColor(fill) == Brightness.dark
-          ? Colors.white
-          : Colors.black;
+      ? Colors.white
+      : Colors.black;
 }
 
 /// Material You extension tokens that aren't exposed on the default
@@ -120,6 +120,8 @@ class MaterialYouTokens extends ThemeExtension<MaterialYouTokens> {
     required this.onSelection,
     required this.selectedFill,
     required this.onSelectedFill,
+    required this.userBubble,
+    required this.onUserBubble,
   });
 
   final Color surfaceContainerLow;
@@ -158,6 +160,13 @@ class MaterialYouTokens extends ThemeExtension<MaterialYouTokens> {
   /// Label on [selectedFill].
   final Color onSelectedFill;
 
+  /// The fill of the user's own chat bubble. It can be translucent; it is
+  /// painted over the page.
+  final Color userBubble;
+
+  /// Text on [userBubble] (over the page), readable as body text.
+  final Color onUserBubble;
+
   @override
   MaterialYouTokens copyWith({
     Color? surfaceContainerLow,
@@ -184,6 +193,8 @@ class MaterialYouTokens extends ThemeExtension<MaterialYouTokens> {
     Color? onSelection,
     Color? selectedFill,
     Color? onSelectedFill,
+    Color? userBubble,
+    Color? onUserBubble,
   }) {
     return MaterialYouTokens(
       surfaceContainerLow: surfaceContainerLow ?? this.surfaceContainerLow,
@@ -211,6 +222,8 @@ class MaterialYouTokens extends ThemeExtension<MaterialYouTokens> {
       onSelection: onSelection ?? this.onSelection,
       selectedFill: selectedFill ?? this.selectedFill,
       onSelectedFill: onSelectedFill ?? this.onSelectedFill,
+      userBubble: userBubble ?? this.userBubble,
+      onUserBubble: onUserBubble ?? this.onUserBubble,
     );
   }
 
@@ -303,8 +316,13 @@ class MaterialYouTokens extends ThemeExtension<MaterialYouTokens> {
       )!,
       selection: Color.lerp(selection, other.selection, t) ?? selection,
       onSelection: Color.lerp(onSelection, other.onSelection, t) ?? onSelection,
-      selectedFill: Color.lerp(selectedFill, other.selectedFill, t) ?? selectedFill,
-      onSelectedFill: Color.lerp(onSelectedFill, other.onSelectedFill, t) ?? onSelectedFill,
+      selectedFill:
+          Color.lerp(selectedFill, other.selectedFill, t) ?? selectedFill,
+      onSelectedFill:
+          Color.lerp(onSelectedFill, other.onSelectedFill, t) ?? onSelectedFill,
+      userBubble: Color.lerp(userBubble, other.userBubble, t) ?? userBubble,
+      onUserBubble:
+          Color.lerp(onUserBubble, other.onUserBubble, t) ?? onUserBubble,
     );
   }
 }
@@ -361,6 +379,11 @@ extension MaterialYouTokensX on ThemeData {
       onSelection: cs.primary,
       selectedFill: cs.primary,
       onSelectedFill: cs.onPrimary,
+      userBubble: cs.primary.withValues(alpha: .8),
+      onUserBubble: readableOnFill(
+        Color.alphaBlend(cs.primary.withValues(alpha: .8), cs.surface),
+        cs.onSurface,
+      ),
     );
   }
 }

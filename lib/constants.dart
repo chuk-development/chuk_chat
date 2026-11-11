@@ -278,6 +278,14 @@ ThemeData buildAppTheme({
   final Color selectedFill = p?.selectedFill ?? accent;
   final Color onSelectedFill =
       p?.onSelectedFill ?? readableOnFill(accent, iconFg);
+  // The user's own bubble: the accent at 80 % over the page, unless the pack
+  // has a neutral bubble of its own (Plane: a raised grey, light text). Its
+  // text keeps the reader's icon colour unless that falls below 2 : 1 on the
+  // blended fill; then it is black or white, whichever reads better.
+  final Color userBubble = p?.userBubble ?? accent.withValues(alpha: .8);
+  final Color onUserBubble =
+      p?.onUserBubble ??
+      readableOnFill(Color.alphaBlend(userBubble, bg), iconFg);
   final Color onSecondaryContainer = iconFg;
 
   // The accent as a text or icon colour on the page (a text button, a
@@ -384,6 +392,8 @@ ThemeData buildAppTheme({
     onSelection: onSelection,
     selectedFill: selectedFill,
     onSelectedFill: onSelectedFill,
+    userBubble: userBubble,
+    onUserBubble: onUserBubble,
   );
 
   // 'system' leaves [ThemeData.fontFamily] unset, so the platform default

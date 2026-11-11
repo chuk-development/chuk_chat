@@ -248,8 +248,19 @@ void main() {
       expect(m3.surfaceContainerHigh, const Color(0xFF222425));
       expect(m3.surfaceContainerHighest, const Color(0xFF2C2E30));
       expect(m3.selection, const Color(0xFF2B2B2C));
-      expect(m3.selectedFill, const Color(0xFF2B2B2C));
+      expect(m3.selectedFill, const Color(0xFF45484A));
       expect(m3.onSelection, const Color(0xFFE4E6E7));
+      // The user's bubble is a raised grey with light text, readable as
+      // body text (the grey accent at 80 % gave 2.4 : 1).
+      expect(m3.userBubble, const Color(0xFF2C2E30));
+      expect(m3.onUserBubble, const Color(0xFFE4E6E7));
+      expect(
+        contrastRatio(
+          m3.onUserBubble,
+          Color.alphaBlend(m3.userBubble, theme.scaffoldBackgroundColor),
+        ),
+        greaterThanOrEqualTo(4.5),
+      );
       expect(theme.colorScheme.primary, const Color(0xFFAFB3B6));
     });
 

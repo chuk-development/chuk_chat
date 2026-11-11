@@ -152,8 +152,15 @@ const ThemePalette kPlaneDarkPalette = ThemePalette(
   // over the panel, measured as #2B2B2C in the running app.
   selection: Color(0xFF2B2B2C),
   onSelection: Color(0xFFE4E6E7), // txt-primary
-  selectedFill: Color(0xFF2B2B2C),
-  onSelectedFill: Color(0xFFE4E6E7),
+  // A picked segment, chip or tab must stand out from its track
+  // (surfaceHighest #2C2E30), so it takes border-strong-1 (neutral-700)
+  // with Plane's white label, not the row selection grey.
+  selectedFill: Color(0xFF45484A),
+  onSelectedFill: Color(0xFFFAFAFA),
+  // The user's bubble: a raised grey (bg-layer-3-hover) with txt-primary.
+  // The grey accent at 80 % gave #929598 under near-white text (2.4 : 1).
+  userBubble: Color(0xFF2C2E30),
+  onUserBubble: Color(0xFFE4E6E7),
   outline: Color(0xFF45484A), // border-strong-1
   outlineVariant: Color(0xFF2C2E30), // border-subtle-1
   onSurfaceVariant: Color(0xFFAFB3B6), // txt-tertiary

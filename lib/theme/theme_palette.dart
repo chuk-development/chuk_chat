@@ -39,6 +39,8 @@ class ThemePalette {
     required this.warning,
     required this.warningContainer,
     required this.onWarningContainer,
+    this.userBubble,
+    this.onUserBubble,
   });
 
   /// Behind the page: the frame around the panels.
@@ -92,4 +94,10 @@ class ThemePalette {
   final Color warning;
   final Color warningContainer;
   final Color onWarningContainer;
+
+  /// The user's own chat bubble. Null keeps the accent bubble.
+  final Color? userBubble;
+
+  /// Text on [userBubble].
+  final Color? onUserBubble;
 }
