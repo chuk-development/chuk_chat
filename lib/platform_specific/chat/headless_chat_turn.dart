@@ -26,7 +26,6 @@ import 'package:uuid/uuid.dart';
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/models/queued_message.dart';
 import 'package:chuk_chat/models/tool_call.dart';
-import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/streaming_message_handler.dart';
 import 'package:chuk_chat/services/app_theme_service.dart';
@@ -42,6 +41,7 @@ import 'package:chuk_chat/services/offline_send_coordinator.dart';
 import 'package:chuk_chat/services/offline_send_executor.dart';
 import 'package:chuk_chat/services/streaming_manager.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
+import 'package:chuk_chat/services/settings/workspaces_setting.dart';
 
 /// The user settings a send reads from the chat screen's widget. The screen
 /// gets them from [AppThemeService]; so does the headless turn.
@@ -121,7 +121,7 @@ abstract final class HeadlessChatTurn {
   static Future<String?> _defaultResolvePrompt(String chatId) =>
       ChatUiHelpers.resolveSystemPromptForSend(
         cachedSystemPrompt: null,
-        selectedWorkspaceId: kFeatureWorkspaces
+        selectedWorkspaceId: workspacesEnabled
             ? WorkspaceStorageService.selectedWorkspaceId
             : null,
         activeChatId: chatId,

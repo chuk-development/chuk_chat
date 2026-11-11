@@ -216,7 +216,6 @@ write_defines() {
   "E2E_EMAIL": "$E2E_EMAIL",
   "E2E_PASSWORD": "$E2E_PASSWORD",
   "FEATURE_VOICE_MODE": "false",
-  "FEATURE_WORKSPACES": "false",
   "FEATURE_ARTIFACTS": "true",
   "FEATURE_SERVER_TOOLS": "true",
   "FEATURE_SKILLS": "true",

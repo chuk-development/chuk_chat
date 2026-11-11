@@ -55,12 +55,9 @@ the owner says CoWork, he means Agents. Code, flags and docs use "Agents".
 
 ## Workflow Rules
 
-> **CodeRabbit paused on 2026-11-11 (owner instruction).** The CodeRabbit
-> login expired and the plan is not paid yet. On 2026-11-11 skip step 2
-> below completely, in this repository and in `api_server`: commit and push
-> without a CodeRabbit review. This is temporary. From 2026-11-12, use
-> CodeRabbit again as normal. If the login still fails then, ask the owner
-> before you skip it again.
+> **CodeRabbit paused on 2026-11-11 only** (owner; login expired, plan
+> unpaid): skip step 2 that day, here and in `api_server`. From 2026-11-12
+> use it again; if login still fails, ask the owner first.
 
 **After completing any task, ALWAYS do this in order:**
 
@@ -231,12 +228,11 @@ release with run.sh's defines, stops the running "Chuk Chat (Dev)", copies
 the bundle to `~/.local/opt/chuk-chat-dev`, refreshes the desktop entry and
 starts the new build (via `user-app`, X11). He opens it from the menu as
 "Chuk Chat (Dev)". Do not leave him on a `flutter-hot` session instead.
-**The dev install is always the FULL app** (owner instruction, 2026-11-11):
-"install the current version" means `scripts/install_dev.sh`, which turns on
-Agents, Workspaces and Voice call on top of run.sh's flags. Only
-`FEATURE_LINUX_KEYRING` (10 s+ start stall) and `FEATURE_VOICE_MODE` (dead
-placeholder) stay off. Public GitHub releases keep the plain flag set for
-now; do not carry these flags into a release.
+**The dev install is the FULL app** (owner, 2026-11-11): "install the
+current version" = `scripts/install_dev.sh` (adds Agents and Voice call).
+Build from the newest `origin/master`; if the main checkout is behind with
+foreign uncommitted work, use a fresh worktree. GitHub releases keep the
+plain flag set.
 
 **Starting the app for live/hot-reload work: ALWAYS use `./run-hot.sh`**, never
 `flutter-hot start` bare. Bare `flutter-hot` runs `flutter run` with no
@@ -270,7 +266,6 @@ Pass via `--dart-define=FLAG=value`. Defined in `lib/platform_config.dart`.
 |------|---------|-------|
 | `PLATFORM_MOBILE` | `false` | Mobile UI layout (set `true` for Android). Leave BOTH platform flags unset to let `kAutoDetectPlatform` pick from the device |
 | `PLATFORM_DESKTOP` | `false` | Desktop UI layout |
-| `FEATURE_WORKSPACES` | `false` | Workspaces (custom AI personas + files + memory). `platform_config.dart` and `run.sh` both default it to false |
 | `FEATURE_ARTIFACTS` | **`true`** | Editable code/markdown/HTML/drawing panels |
 | `FEATURE_PAYMENTS_DIRECT` | **`true`** | Stripe. MUST be false for Play Store builds — `fastlane build_aab` forces `false`, see `docs/FASTLANE.md` |
 | `FEATURE_IMAGE_GEN` | **always on** | Hardcoded, no flag needed |
@@ -284,8 +279,10 @@ Pass via `--dart-define=FLAG=value`. Defined in `lib/platform_config.dart`.
 | `FEATURE_LINUX_KEYRING` | `false` | Use libsecret/keyring for encryption key (causes 10s+ startup stall) |
 | `FEATURE_SPOTIFY` | `false` | Leave off — the API server no longer exposes the OAuth route, so the tool registers and then fails at call time |
 
-**There is no `FEATURE_PROJECTS`.** Nothing in `lib/` reads it; the flag is
-`FEATURE_WORKSPACES`, and it defaults to `false` (`lib/platform_config.dart`). `build.sh`,
+**There is no `FEATURE_PROJECTS` and no `FEATURE_WORKSPACES`.** Workspaces
+are a user setting since 2026-11-11: Settings > Personalization > Workspaces,
+off by default in every build, stored per device
+(`lib/services/settings/workspaces_setting.dart`). `build.sh`,
 `codemagic.yaml` and the build examples below still pass `--dart-define=FEATURE_PROJECTS=…`,
 which does nothing.
 
@@ -784,26 +781,6 @@ The managed Beads block is task-tracking guidance, not permission to override re
 
 ## Session Completion
 
-This protocol applies when ending a Beads implementation workflow. It is subordinate to explicit user, repository, and orchestrator instructions.
-
-1. **File issues for remaining work** - Create beads for anything that needs follow-up
-2. **Run quality gates** (if code changed) - Tests, linters, builds
-3. **Update issue status** - Close finished work, update in-progress items
-4. **Handle git/sync by active profile**:
-   ```bash
-   # Conservative/minimal/default: report status and proposed commands; wait for approval.
-   git status
-
-   # Team-maintainer opt-in only, unless current instructions forbid it:
-   git pull --rebase
-   bd dolt push
-   git push
-   git status
-   ```
-5. **Hand off** - Summarize changes, validation, issue status, and any blocked sync/commit/push step
-
-**Critical rules:**
-- Explicit user or orchestrator instructions override this Beads block.
-- Do not commit or push without clear authority from the active profile or the current user request.
-- If a required sync or push is blocked, stop and report the exact command and error.
+History (beads era). Today: open work goes to Plane, tests + push per
+"Workflow Rules" above.
 <!-- END BEADS INTEGRATION -->

@@ -15,6 +15,7 @@ import 'package:chuk_chat/services/update_check_service.dart';
 import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 import 'package:chuk_chat/widgets/sidebar/sidebar_chrome.dart';
+import 'package:chuk_chat/services/settings/workspaces_setting.dart';
 
 const int kSidebarPageSize = 40;
 
@@ -102,7 +103,7 @@ List<Widget> buildSidebarNavigationCards({
         label: l?.newChat ?? 'New chat',
         onTap: onNewChatTapped,
       ),
-    if (kFeatureWorkspaces && showWorkspaces)
+    if (workspacesEnabled && showWorkspaces)
       SbNavCard(
         icon: Icons.folder_rounded,
         label: l?.workspaces ?? 'Workspaces',

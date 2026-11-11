@@ -29,6 +29,7 @@ import 'package:chuk_chat/widgets/icons/icon_map.dart';
 import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/settings/verbose_service.dart';
 import 'package:chuk_chat/services/settings/tool_detail_service.dart';
+import 'package:chuk_chat/services/settings/workspaces_setting.dart';
 
 class CustomizationPage extends StatefulWidget {
   final AppShellConfig config;
@@ -371,6 +372,25 @@ class _CustomizationPageState extends State<CustomizationPage> {
             ],
           ),
 
+
+          // Workspaces: a setting, off by default (no build flag).
+          ExpressiveSectionHeader(l.workspaces),
+          ExpressiveGroup(
+            children: [
+              ValueListenableBuilder<bool>(
+                valueListenable: WorkspacesSetting.instance,
+                builder: (BuildContext context, bool enabled, Widget? _) =>
+                    ExpressiveSwitchRow(
+                      icon: Icons.folder_outlined,
+                      title: l.workspacesEnable,
+                      subtitle: l.workspacesEnableSubtitle,
+                      value: enabled,
+                      onChanged: (bool value) =>
+                          unawaited(WorkspacesSetting.instance.setEnabled(value)),
+                    ),
+              ),
+            ],
+          ),
 
           // Typography.
           const ExpressiveSectionHeader('Typography'),

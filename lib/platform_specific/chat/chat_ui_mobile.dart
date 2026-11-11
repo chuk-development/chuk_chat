@@ -137,6 +137,7 @@ import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_binding.dart';
 import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_call_button.dart';
 import 'package:chuk_chat/platform_specific/chat/voice/voice_turn_queue.dart';
 import 'package:chuk_chat/voice/voice_call_models.dart' show VoiceTurn;
+import 'package:chuk_chat/services/settings/workspaces_setting.dart';
 
 /// What the plus menu can start.
 enum _AttachChoice { camera, photos, files, chatReference, workspace }
@@ -327,7 +328,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         );
         if (file != null && mounted) _fileHandler.addReadyFile(file);
       },
-      onSelectWorkspace: kFeatureWorkspaces
+      onSelectWorkspace: workspacesEnabled
           ? (String id) => setState(() => _selectedWorkspaceId = id)
           : null,
     );
@@ -525,9 +526,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   /// opens the keyboard by itself (`composer_focus_policy.dart`).
   bool get _mayFocusOnLoad => _mayAutoFocusComposer;
 
-  /// Workspaces are hidden in upstream's chat ([kFeatureWorkspaces] is off)
+  /// Workspaces are hidden in upstream's chat (Workspaces are off in Settings)
   /// but the Agents composer offers them, as the original app did.
-  bool get _workspacesEnabled => kFeatureWorkspaces || widget.messengerMode;
+  bool get _workspacesEnabled => workspacesEnabled || widget.messengerMode;
 
   late final VoidCallback _modelSelectionListener;
 
@@ -624,9 +625,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   static const double _kMaxChatContentWidth = 760.0;
   static const double _kHorizontalPaddingSmall = 8.0;
 
+  void _onWorkspacesSettingChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void initState() {
     super.initState();
+    // Workspaces is a setting now: rebuild when it is switched.
+    WorkspacesSetting.instance.addListener(_onWorkspacesSettingChanged);
     unawaited(ComposerBusySetting.load());
     // chuk_chat's screen builds its tool loop on mount, as before, so the
     // tools are ready by the first send. The Agents thread does not: the host
@@ -1472,6 +1479,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
   @override
   void dispose() {
+    WorkspacesSetting.instance.removeListener(_onWorkspacesSettingChanged);
     if (widget.messengerMode) _carryDraftAcrossRemount();
     AgentsThreadComposer.detach(_agentsThreadSend); // AGENTS
     AgentsThreadComposer.prefillChanges.removeListener(_takeAgentsPrefill);

@@ -790,6 +790,9 @@ const Map<String, String> stringsEn = {
   // ── Navigation / sidebar ────────────────────────────────────
   'newChat': 'New chat',
   'workspaces': 'Workspaces',
+  'workspacesEnable': 'Use workspaces',
+  'workspacesEnableSubtitle':
+      'Custom AI personas with their own prompt, files and memory. Shows Workspaces in the sidebar and the chat composer.',
   'media': 'Media',
   'search': 'Search',
   'retryConnection': 'Try again',

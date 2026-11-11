@@ -34,6 +34,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_debug_snapshot.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
+import 'package:chuk_chat/services/settings/workspaces_setting.dart';
 
 /* ---------- ROOT WRAPPER DESKTOP (for Desktop, Web, and Tablets) ---------- */
 class RootWrapperDesktop extends StatefulWidget {
@@ -101,9 +102,15 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     return read != null ? read() : ChatStorageService.selectedChatId;
   }
 
+  void _onWorkspacesSettingChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void initState() {
     super.initState();
+    // Workspaces is a setting now: rebuild when it is switched.
+    WorkspacesSetting.instance.addListener(_onWorkspacesSettingChanged);
     if (kFeatureSystemTray) {
       TrayActionBus.instance.newChatRequested.addListener(_onTrayNewChat);
     }
@@ -161,6 +168,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
 
   @override
   void dispose() {
+    WorkspacesSetting.instance.removeListener(_onWorkspacesSettingChanged);
     if (kFeatureSystemTray) {
       TrayActionBus.instance.newChatRequested.removeListener(_onTrayNewChat);
     }
@@ -421,7 +429,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
         onPressed: _handleNewChatFromSidebar,
       ),
     );
-    if (kFeatureWorkspaces) {
+    if (workspacesEnabled) {
       items.add(
         railIcon(
           icon: Icons.folder_rounded,

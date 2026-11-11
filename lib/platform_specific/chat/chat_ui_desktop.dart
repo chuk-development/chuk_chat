@@ -125,6 +125,7 @@ import 'package:chuk_chat/platform_specific/chat/voice/voice_turn_queue.dart';
 import 'package:chuk_chat/voice/voice_call_models.dart' show VoiceTurn;
 import 'package:chuk_chat/services/shortcut_registry.dart';
 import 'package:chuk_chat/widgets/shortcuts_dialog.dart';
+import 'package:chuk_chat/services/settings/workspaces_setting.dart';
 
 part 'desktop_send_logic.dart';
 
@@ -457,7 +458,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         );
         if (file != null && mounted) _fileHandler.addReadyFile(file);
       },
-      onSelectWorkspace: kFeatureWorkspaces
+      onSelectWorkspace: workspacesEnabled
           ? (String id) => setState(() => _selectedWorkspaceId = id)
           : null,
     );
@@ -613,9 +614,15 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   ) =>
       _clipboardHandler.buildMessageContextMenu(context, selectableRegionState);
 
+  void _onWorkspacesSettingChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void initState() {
     super.initState();
+    // Workspaces is a setting now: rebuild when it is switched.
+    WorkspacesSetting.instance.addListener(_onWorkspacesSettingChanged);
     initShiftKeyTracker();
     unawaited(ComposerBusySetting.load());
     // chuk_chat's screen builds its tool loop on mount, as before, so the
@@ -976,6 +983,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   @override
   void dispose() {
+    WorkspacesSetting.instance.removeListener(_onWorkspacesSettingChanged);
     AgentsThreadComposer.detach(_agentsThreadSend); // AGENTS
     AgentsThreadComposer.prefillChanges.removeListener(_takeAgentsPrefill);
     _outboxSub?.cancel();
@@ -3060,7 +3068,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                   ),
                                 ),
                                 // Workspace Selection Dropdown (only when feature enabled)
-                                if (kFeatureWorkspaces) ...[
+                                if (workspacesEnabled) ...[
                                   const SizedBox(width: 8),
                                   WorkspaceSelectionDropdown(
                                     selectedWorkspaceId: _selectedWorkspaceId,
