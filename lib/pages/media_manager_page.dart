@@ -16,6 +16,7 @@ import 'package:chuk_chat/services/file_save_service.dart';
 import 'package:chuk_chat/services/image_disk_cache.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/artifact_panel.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
@@ -51,6 +52,9 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
   List<ArtifactDocument> _artifacts = const <ArtifactDocument>[];
   bool _isLoadingArtifacts = true;
   _MediaFilter _filter = _MediaFilter.images;
+
+  /// The page shown in full inside the library (desktop). Null = the list.
+  ArtifactDocument? _previewArtifact;
 
   // One notifier per image path, holding that thumbnail's whole state:
   // loading, the decoded bytes, or the reason it failed. The tile listens to
@@ -899,6 +903,21 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
   }
 
   Widget _buildArtifactsView(Color iconFg, double topPad) {
+    final ArtifactDocument? previewing = _previewArtifact;
+    if (previewing != null) {
+      // The page itself, inside the library: the same preview, code view,
+      // versions and exports as the side panel, without leaving this screen.
+      return Padding(
+        padding: EdgeInsets.only(top: topPad),
+        child: ArtifactPanel(
+          key: ValueKey<String>('media-preview-${previewing.id}'),
+          artifact: previewing,
+          showHeader: true,
+          onClose: () => setState(() => _previewArtifact = null),
+          onOpenSourceChat: (_) => _openArtifactBesideChat(previewing),
+        ),
+      );
+    }
     if (_isLoadingArtifacts) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -947,10 +966,27 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
         final artifact = _artifacts[index];
         return _ArtifactTile(
           artifact: artifact,
-          onTap: () => _showArtifactPreview(artifact),
+          onTap: () => _openArtifact(artifact),
         );
       },
     );
+  }
+
+  /// Desktop shows the page inside the library. The phone has no room for
+  /// a second pane and keeps its full-screen sheet.
+  void _openArtifact(ArtifactDocument artifact) {
+    final bool isPhone = MediaQuery.sizeOf(context).width < 800;
+    if (isPhone) {
+      _showArtifactPreview(artifact);
+      return;
+    }
+    setState(() => _previewArtifact = artifact);
+  }
+
+  /// Leaves the library and opens [artifact] next to the chat it came from.
+  void _openArtifactBesideChat(ArtifactDocument artifact) {
+    Navigator.of(context).maybePop();
+    _showArtifactPreview(artifact);
   }
 
   void _showArtifactPreview(ArtifactDocument artifact) {
