@@ -122,6 +122,7 @@ class MaterialYouTokens extends ThemeExtension<MaterialYouTokens> {
     required this.onSelectedFill,
     required this.userBubble,
     required this.onUserBubble,
+    required this.userBubbleBorder,
   });
 
   final Color surfaceContainerLow;
@@ -167,6 +168,9 @@ class MaterialYouTokens extends ThemeExtension<MaterialYouTokens> {
   /// Text on [userBubble] (over the page), readable as body text.
   final Color onUserBubble;
 
+  /// The hairline around [userBubble].
+  final Color userBubbleBorder;
+
   @override
   MaterialYouTokens copyWith({
     Color? surfaceContainerLow,
@@ -195,6 +199,7 @@ class MaterialYouTokens extends ThemeExtension<MaterialYouTokens> {
     Color? onSelectedFill,
     Color? userBubble,
     Color? onUserBubble,
+    Color? userBubbleBorder,
   }) {
     return MaterialYouTokens(
       surfaceContainerLow: surfaceContainerLow ?? this.surfaceContainerLow,
@@ -224,6 +229,7 @@ class MaterialYouTokens extends ThemeExtension<MaterialYouTokens> {
       onSelectedFill: onSelectedFill ?? this.onSelectedFill,
       userBubble: userBubble ?? this.userBubble,
       onUserBubble: onUserBubble ?? this.onUserBubble,
+      userBubbleBorder: userBubbleBorder ?? this.userBubbleBorder,
     );
   }
 
@@ -323,6 +329,9 @@ class MaterialYouTokens extends ThemeExtension<MaterialYouTokens> {
       userBubble: Color.lerp(userBubble, other.userBubble, t) ?? userBubble,
       onUserBubble:
           Color.lerp(onUserBubble, other.onUserBubble, t) ?? onUserBubble,
+      userBubbleBorder:
+          Color.lerp(userBubbleBorder, other.userBubbleBorder, t) ??
+          userBubbleBorder,
     );
   }
 }
@@ -384,6 +393,7 @@ extension MaterialYouTokensX on ThemeData {
         Color.alphaBlend(cs.primary.withValues(alpha: .8), cs.surface),
         cs.onSurface,
       ),
+      userBubbleBorder: cs.onSurface.withValues(alpha: .3),
     );
   }
 }

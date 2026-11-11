@@ -278,14 +278,6 @@ ThemeData buildAppTheme({
   final Color selectedFill = p?.selectedFill ?? accent;
   final Color onSelectedFill =
       p?.onSelectedFill ?? readableOnFill(accent, iconFg);
-  // The user's own bubble: the accent at 80 % over the page, unless the pack
-  // has a neutral bubble of its own (Plane: a raised grey, light text). Its
-  // text keeps the reader's icon colour unless that falls below 2 : 1 on the
-  // blended fill; then it is black or white, whichever reads better.
-  final Color userBubble = p?.userBubble ?? accent.withValues(alpha: .8);
-  final Color onUserBubble =
-      p?.onUserBubble ??
-      readableOnFill(Color.alphaBlend(userBubble, bg), iconFg);
   final Color onSecondaryContainer = iconFg;
 
   // The accent as a text or icon colour on the page (a text button, a
@@ -299,6 +291,25 @@ ThemeData buildAppTheme({
       p?.outlineVariant ?? iconFg.withValues(alpha: scaled(0.25));
   final Color onSurfaceVariant =
       p?.onSurfaceVariant ?? iconFg.withValues(alpha: scaled(0.82));
+
+  // The user's own bubble. A coloured accent fills it at 80 % over the page;
+  // its text keeps the reader's icon colour unless that falls below 2 : 1,
+  // then black or white. A grey accent (Plane, white, black) would give grey
+  // under white or black text, which reads as a disabled button. Then the
+  // bubble is a raised surface like a card or menu, with the normal text
+  // colour and the quiet outline every other surface has.
+  final bool neutralAccent = HSLColor.fromColor(accent).saturation < 0.15;
+  final Color userBubble =
+      p?.userBubble ??
+      (neutralAccent ? surfaceHigh : accent.withValues(alpha: .8));
+  final Color onUserBubble =
+      p?.onUserBubble ??
+      (neutralAccent
+          ? iconFg
+          : readableOnFill(Color.alphaBlend(userBubble, bg), iconFg));
+  final Color userBubbleBorder = neutralAccent
+      ? outlineVariant
+      : iconFg.withValues(alpha: .3);
 
   final Color errorColor =
       p?.error ?? (isDark ? const Color(0xFFFFB4AB) : const Color(0xFFBA1A1A));
@@ -394,6 +405,7 @@ ThemeData buildAppTheme({
     onSelectedFill: onSelectedFill,
     userBubble: userBubble,
     onUserBubble: onUserBubble,
+    userBubbleBorder: userBubbleBorder,
   );
 
   // 'system' leaves [ThemeData.fontFamily] unset, so the platform default

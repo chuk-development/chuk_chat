@@ -106,29 +106,31 @@ const _preset = ThemePreset(
 );
 
 void main() {
-  test('kThemePresets is non-empty and Plane default matches the dark defaults',
-      () {
-    expect(kThemePresets, isNotEmpty);
-    final plane = kThemePresets.first;
-    expect(plane.name, 'Plane');
-    expect(kDefaultThemePreset, same(plane));
-    expect(plane.dark.accent, kDefaultAccentColor);
-    expect(plane.dark.iconFg, kDefaultIconFgColor);
-    expect(plane.dark.bg, kDefaultBgColor);
-    // A light variant exists and differs from the dark one.
-    expect(plane.light.bg, isNot(kDefaultBgColor));
-    // The default look gets the exact palette.
-    expect(
-      paletteForLook(
-        brightness: Brightness.dark,
-        accent: kDefaultAccentColor,
-        iconFg: kDefaultIconFgColor,
-        bg: kDefaultBgColor,
-        contrast: kDefaultContrast,
-      ),
-      same(kPlaneDarkPalette),
-    );
-  });
+  test(
+    'kThemePresets is non-empty and Plane default matches the dark defaults',
+    () {
+      expect(kThemePresets, isNotEmpty);
+      final plane = kThemePresets.first;
+      expect(plane.name, 'Plane');
+      expect(kDefaultThemePreset, same(plane));
+      expect(plane.dark.accent, kDefaultAccentColor);
+      expect(plane.dark.iconFg, kDefaultIconFgColor);
+      expect(plane.dark.bg, kDefaultBgColor);
+      // A light variant exists and differs from the dark one.
+      expect(plane.light.bg, isNot(kDefaultBgColor));
+      // The default look gets the exact palette.
+      expect(
+        paletteForLook(
+          brightness: Brightness.dark,
+          accent: kDefaultAccentColor,
+          iconFg: kDefaultIconFgColor,
+          bg: kDefaultBgColor,
+          contrast: kDefaultContrast,
+        ),
+        same(kPlaneDarkPalette),
+      );
+    },
+  );
 
   test('every variant has an in-range contrast', () {
     for (final p in kThemePresets) {
@@ -187,16 +189,21 @@ void main() {
     expect(r2.contrast, 0.3);
   });
 
-  test('applyTo always disables dynamic colour, regardless of the snapshot',
-      () {
-    final rOn = _Recorder();
-    _preset.applyTo(_config(rOn, dynamicColorEnabled: true), Brightness.dark);
-    expect(rOn.dynamicCalls, [false]);
+  test(
+    'applyTo always disables dynamic colour, regardless of the snapshot',
+    () {
+      final rOn = _Recorder();
+      _preset.applyTo(_config(rOn, dynamicColorEnabled: true), Brightness.dark);
+      expect(rOn.dynamicCalls, [false]);
 
-    final rOff = _Recorder();
-    _preset.applyTo(_config(rOff, dynamicColorEnabled: false), Brightness.dark);
-    expect(rOff.dynamicCalls, [false]);
-  });
+      final rOff = _Recorder();
+      _preset.applyTo(
+        _config(rOff, dynamicColorEnabled: false),
+        Brightness.dark,
+      );
+      expect(rOff.dynamicCalls, [false]);
+    },
+  );
 
   group('Plane pack', () {
     final plane = kThemePresets.firstWhere((p) => p.name == 'Plane');
@@ -250,10 +257,12 @@ void main() {
       expect(m3.selection, const Color(0xFF2B2B2C));
       expect(m3.selectedFill, const Color(0xFF45484A));
       expect(m3.onSelection, const Color(0xFFE4E6E7));
-      // The user's bubble is a raised grey with light text, readable as
-      // body text (the grey accent at 80 % gave 2.4 : 1).
-      expect(m3.userBubble, const Color(0xFF2C2E30));
+      // A grey accent gives no grey-under-white bubble: the bubble is a
+      // raised surface (bg-layer-3) with the normal text and the quiet
+      // outline (the grey accent at 80 % gave 2.4 : 1).
+      expect(m3.userBubble, const Color(0xFF222425));
       expect(m3.onUserBubble, const Color(0xFFE4E6E7));
+      expect(m3.userBubbleBorder, const Color(0xFF2C2E30));
       expect(
         contrastRatio(
           m3.onUserBubble,
@@ -262,6 +271,38 @@ void main() {
         greaterThanOrEqualTo(4.5),
       );
       expect(theme.colorScheme.primary, const Color(0xFFAFB3B6));
+    });
+
+    test('the light Plane bubble is a raised surface with dark text', () {
+      final ThemeVariant light = kDefaultThemePreset.light;
+      final theme = buildAppTheme(
+        accent: light.accent,
+        iconFg: light.iconFg,
+        bg: light.bg,
+        contrast: light.contrast,
+        brightness: Brightness.light,
+      );
+      final m3 = theme.extension<MaterialYouTokens>()!;
+      expect(m3.onUserBubble, light.iconFg);
+      expect(
+        contrastRatio(
+          m3.onUserBubble,
+          Color.alphaBlend(m3.userBubble, theme.scaffoldBackgroundColor),
+        ),
+        greaterThanOrEqualTo(4.5),
+      );
+      expect(m3.userBubble, isNot(theme.scaffoldBackgroundColor));
+    });
+
+    test('a coloured accent keeps the accent bubble', () {
+      final theme = buildAppTheme(
+        accent: const Color(0xFF2F5EA8),
+        iconFg: const Color(0xFF111111),
+        bg: const Color(0xFFFFFFFF),
+        brightness: Brightness.light,
+      );
+      final m3 = theme.extension<MaterialYouTokens>()!;
+      expect(m3.userBubble, const Color(0xFF2F5EA8).withValues(alpha: .8));
     });
 
     test('without a palette the selection stays accent-tinted', () {

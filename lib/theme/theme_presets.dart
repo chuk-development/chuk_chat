@@ -157,10 +157,6 @@ const ThemePalette kPlaneDarkPalette = ThemePalette(
   // with Plane's white label, not the row selection grey.
   selectedFill: Color(0xFF45484A),
   onSelectedFill: Color(0xFFFAFAFA),
-  // The user's bubble: a raised grey (bg-layer-3-hover) with txt-primary.
-  // The grey accent at 80 % gave #929598 under near-white text (2.4 : 1).
-  userBubble: Color(0xFF2C2E30),
-  onUserBubble: Color(0xFFE4E6E7),
   outline: Color(0xFF45484A), // border-strong-1
   outlineVariant: Color(0xFF2C2E30), // border-subtle-1
   onSurfaceVariant: Color(0xFFAFB3B6), // txt-tertiary

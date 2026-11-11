@@ -311,7 +311,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
         bottomLeft: const Radius.circular(16),
         bottomRight: Radius.circular(widget.endsGroup ? 5 : 16),
       ),
-      border: Border.all(color: iconFgColor.withValues(alpha: .3)),
+      border: Border.all(color: Theme.of(context).m3.userBubbleBorder),
     );
 
     // A voice message saved offline has no transcript yet: say what
@@ -412,7 +412,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     final Color iconFgColor = Theme.of(context).resolvedIconColor;
 
     final double effectiveMaxWidth =
-        widget.maxWidth ?? MediaQuery.of(context).size.width * 0.8;
+        widget.maxWidth ?? MediaQuery.sizeOf(context).width * 0.8;
 
     final bool hasActions = widget.actions.isNotEmpty;
 
@@ -1187,12 +1187,9 @@ extension _MessageBubbleLayout on _MessageBubbleState {
   /// A steer inside the answer: the user's message, right-aligned in the
   /// user-bubble fill, a little smaller than a real user bubble.
   Widget _buildSteerNote(String text, Color iconFgColor, Color bgColor) {
-    final Color accentColor = Theme.of(context).colorScheme.primary;
-    final Color fill = accentColor.withValues(alpha: .8);
-    final Color textColor = readableOnFill(
-      Color.alphaBlend(fill, bgColor),
-      iconFgColor,
-    );
+    // The same bubble as the user's own message (theme tokens).
+    final Color fill = Theme.of(context).m3.userBubble;
+    final Color textColor = Theme.of(context).m3.onUserBubble;
     return Align(
       key: const ValueKey<String>('message-steer-note'),
       alignment: Alignment.centerRight,
@@ -1202,7 +1199,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
         decoration: BoxDecoration(
           color: fill,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: iconFgColor.withValues(alpha: .3)),
+          border: Border.all(color: Theme.of(context).m3.userBubbleBorder),
         ),
         child: _buildUserText(text, textColor),
       ),
