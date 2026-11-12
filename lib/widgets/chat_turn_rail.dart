@@ -123,11 +123,24 @@ int? chatTurnRailIndexFromPointer({
   return (progress * (count - 1)).round().clamp(0, count - 1);
 }
 
+/// Room kept free above and below the rail inside its band.
+const double kChatTurnRailBandMargin = 16;
+
 /// The rail's height for [count] strips in a window of [windowHeight].
-double chatTurnRailHeight(int count, double windowHeight) {
+///
+/// [bandHeight] is the free band between the header line and the composer
+/// the rail is centred in. T3 Code only caps by the window; here the
+/// composer is taller, and a long chat's rail (window minus 288 px) ran
+/// 29 px into the composer, with its centre 14.5 px below the band's.
+double chatTurnRailHeight(
+  int count,
+  double windowHeight, {
+  double bandHeight = double.infinity,
+}) {
   final double natural = math.max(1, (count - 1) * kChatTurnRailItemSpacing);
   final double cap = math.max(1, windowHeight - kChatTurnRailHeightReserve);
-  return math.min(natural, cap);
+  final double band = math.max(1, bandHeight - 2 * kChatTurnRailBandMargin);
+  return math.min(natural, math.min(cap, band));
 }
 
 /// Side gutter between the pane edge and a centred column.
@@ -153,6 +166,25 @@ double chatTurnRailStripWidth(int? distance) => switch (distance) {
   2 => 10,
   _ => 8,
 };
+
+/// Where the top of row [index] lies in the list, as a share (0..1) of all
+/// rows: by [extentOf] (row heights) when given, else by count.
+double chatTurnRailRowShare({
+  required int index,
+  required int itemCount,
+  double Function(int index)? extentOf,
+}) {
+  if (itemCount <= 1 || index <= 0) return 0;
+  if (extentOf == null) return index.clamp(0, itemCount) / itemCount;
+  double before = 0;
+  double total = 0;
+  for (int i = 0; i < itemCount; i++) {
+    final double h = extentOf(i);
+    if (i < index) before += h;
+    total += h;
+  }
+  return total <= 0 ? 0 : before / total;
+}
 
 /// Holds one key per user row so the rail can find a row that is built, and
 /// walks the list to one that is not.
@@ -186,12 +218,14 @@ class ChatTurnRailController {
   /// [kChatTurnRailJumpOffset] below the top.
   ///
   /// A lazily built list has no widget for a row far off screen, so the
-  /// first jump is an estimate (the row's share of the whole list); then the
-  /// row is built and its exact offset is used.
+  /// first jump is an estimate (the row's share of the whole list, by
+  /// [extentOf] when given: the measured row heights); then the row is built
+  /// and its exact offset is used.
   Future<void> scrollTo({
     required int index,
     required int itemCount,
     required ScrollController controller,
+    double Function(int index)? extentOf,
   }) async {
     for (int attempt = 0; attempt < 6; attempt++) {
       if (!controller.hasClients) return;
@@ -213,9 +247,20 @@ class ChatTurnRailController {
         );
         return;
       }
-      final double share = itemCount <= 1 ? 0 : index / (itemCount - 1);
+      // The content runs from minScrollExtent (an anchored list grows
+      // upwards past 0) to maxScrollExtent plus one viewport; the row's top
+      // sits at its share of that.
+      final double share = chatTurnRailRowShare(
+        index: index,
+        itemCount: itemCount,
+        extentOf: extentOf,
+      );
+      final double content =
+          position.maxScrollExtent +
+          position.viewportDimension -
+          position.minScrollExtent;
       position.jumpTo(
-        (position.maxScrollExtent * share).clamp(
+        (position.minScrollExtent + content * share).clamp(
           position.minScrollExtent,
           position.maxScrollExtent,
         ),
@@ -382,9 +427,12 @@ class _ChatTurnRailState extends State<ChatTurnRail> {
         final bool persistent = gutter >= kChatTurnRailPersistentGutter;
         final double hitStrip = chatTurnRailHitStripWidth(gutter);
         final double windowHeight = MediaQuery.sizeOf(context).height;
+        final double band =
+            pane.maxHeight - widget.topPadding - widget.bottomPadding;
         final double railHeight = chatTurnRailHeight(
           _ticks.length,
           windowHeight,
+          bandHeight: band.isFinite ? band : double.infinity,
         );
         final bool open = _active != null;
         // While the card is open the hit box spans the pane's height too, so
@@ -444,15 +492,6 @@ class _ChatTurnRailState extends State<ChatTurnRail> {
     final int count = _ticks.length;
     final int? active = _active;
     final ChatTurnRailTick? activeTick = active == null ? null : _ticks[active];
-    // The card hangs from its strip: first strip top-aligned, last
-    // bottom-aligned, the rest centred (T3's translateY 0 / -100% / -50%).
-    final double cardAnchor = active == null
-        ? 0
-        : active == 0
-        ? 0
-        : active == count - 1
-        ? 1
-        : 0.5;
 
     return Focus(
       focusNode: _focus,
@@ -489,6 +528,7 @@ class _ChatTurnRailState extends State<ChatTurnRail> {
               children: <Widget>[
                 // The guide line (T3: w-px bg-border/15 at left-3 of the strip).
                 Positioned(
+                  key: const ValueKey<String>('turn-rail-guide'),
                   left: kChatTurnRailStripLeft,
                   top: railTop,
                   height: railHeight,
@@ -506,14 +546,19 @@ class _ChatTurnRailState extends State<ChatTurnRail> {
                         railHeight * chatTurnRailTopFraction(i, count),
                     distance: active == null ? null : (i - active).abs(),
                   ),
+                // The card's first line (the message) sits on its strip,
+                // pushed back inside the box where the strip is near an
+                // edge. T3 centres the whole card on the strip, which put
+                // the message 32 px above the strip it names.
                 if (activeTick != null && active != null)
-                  Positioned(
-                    left: kChatTurnRailPreviewLeft,
-                    top:
-                        railTop +
-                        railHeight * chatTurnRailTopFraction(active, count),
-                    child: FractionalTranslation(
-                      translation: Offset(0, -cardAnchor),
+                  Positioned.fill(
+                    child: CustomSingleChildLayout(
+                      delegate: _PreviewPlacement(
+                        left: kChatTurnRailPreviewLeft,
+                        stripY:
+                            railTop +
+                            railHeight * chatTurnRailTopFraction(active, count),
+                      ),
                       child: _PreviewCard(
                         key: _previewKey,
                         tick: activeTick,
@@ -561,6 +606,34 @@ class _ChatTurnRailState extends State<ChatTurnRail> {
   }
 }
 
+/// From the card's top edge to the centre of its first line: the 1 px
+/// border, the 12 px padding and half a 20 px line.
+const double kChatTurnRailPreviewFirstLine = 1 + 12 + 10;
+
+/// Puts the preview card so its first line's centre is on [stripY], kept
+/// inside the box.
+class _PreviewPlacement extends SingleChildLayoutDelegate {
+  const _PreviewPlacement({required this.left, required this.stripY});
+
+  final double left;
+  final double stripY;
+
+  @override
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
+      constraints.loosen().copyWith(maxHeight: double.infinity);
+
+  @override
+  Offset getPositionForChild(Size size, Size childSize) {
+    final double wanted = stripY - kChatTurnRailPreviewFirstLine;
+    final double maxTop = math.max(0.0, size.height - childSize.height);
+    return Offset(left, wanted.clamp(0.0, maxTop));
+  }
+
+  @override
+  bool shouldRelayout(_PreviewPlacement old) =>
+      old.left != left || old.stripY != stripY;
+}
+
 class _PreviewCard extends StatelessWidget {
   const _PreviewCard({super.key, required this.tick, required this.fallback});
 
@@ -601,6 +674,7 @@ class _PreviewCard extends StatelessWidget {
             children: <Widget>[
               Text(
                 tick.userText.isEmpty ? fallback : tick.userText,
+                key: const ValueKey<String>('turn-rail-preview-first-line'),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: base.copyWith(
@@ -631,8 +705,14 @@ void scrollToTurn(
   required int index,
   required int itemCount,
   required ScrollController controller,
+  double Function(int index)? extentOf,
 }) {
   unawaited(
-    rail.scrollTo(index: index, itemCount: itemCount, controller: controller),
+    rail.scrollTo(
+      index: index,
+      itemCount: itemCount,
+      controller: controller,
+      extentOf: extentOf,
+    ),
   );
 }

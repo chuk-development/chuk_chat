@@ -42,6 +42,27 @@ void main() {
       expect(chatTurnRailHeight(1, 800), 1);
     });
 
+    test('height never leaves the band between header and composer', () {
+      // 900 px window: the window cap is 612, the band only 583 (the
+      // composer is tall): the rail keeps 16 px free at each end.
+      expect(chatTurnRailHeight(500, 900, bandHeight: 583), 551);
+      expect(chatTurnRailHeight(5, 900, bandHeight: 583), 32);
+    });
+
+    test('jump estimate: a row share by measured heights', () {
+      expect(chatTurnRailRowShare(index: 0, itemCount: 4), 0);
+      expect(chatTurnRailRowShare(index: 2, itemCount: 4), 0.5);
+      // Rows 0 and 1 are tall: row 2 starts at 90 % of the list.
+      expect(
+        chatTurnRailRowShare(
+          index: 2,
+          itemCount: 4,
+          extentOf: (int i) => i < 2 ? 450 : 50,
+        ),
+        0.9,
+      );
+    });
+
     test('index from pointer rounds to the nearest strip', () {
       expect(
         chatTurnRailIndexFromPointer(count: 5, railHeight: 32, pointerY: 0),

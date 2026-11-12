@@ -2421,7 +2421,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         child: item,
       );
       // A user row carries the turn rail's key, so a tick can find it.
-      final Widget railed = !widget.agentsThread && data.isUser
+      final Widget railed = data.isUser
           ? KeyedSubtree(key: _turnRail.keyFor(i), child: measured)
           : measured;
       // The first row the reader has not seen carries the unread pill's key.
@@ -2725,7 +2725,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                       // The message minimap on the left edge, after T3
                       // Code: one strip per user message, hover preview,
                       // click to jump, bright strips follow the scroll.
-                      if (!isChatEmpty && !widget.agentsThread)
+                      if (!isChatEmpty)
                         Positioned.fill(
                           key: const ValueKey<String>('desktop-turn-rail'),
                           child: ChatTurnRail(
@@ -2740,6 +2740,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                               index: index,
                               itemCount: _messages.length,
                               controller: scrollController,
+                              extentOf: _rowExtentOf,
                             ),
                           ),
                         ),
