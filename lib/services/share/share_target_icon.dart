@@ -3,7 +3,7 @@
 /// The PNG is laid out as an adaptive icon: the launcher shows only the middle
 /// 72 of 108 units, cut by its own mask (mostly a circle). So the background
 /// fills the whole square, a light tint of the agent's colour, and the face
-/// (the same cube figure as [AgentAvatar], at rest) sits in the visible
+/// (the same round figure as [AgentAvatar], at rest) sits in the visible
 /// middle. An agent with a picture shows the picture edge to edge.
 library;
 
@@ -67,7 +67,7 @@ Future<Uint8List?> paintShareTargetIcon({
     );
     canvas.save();
     canvas.translate(faceRect.left, faceRect.top);
-    paintCubeAvatar(canvas, face, accent, const AvatarPose());
+    paintRoundAvatar(canvas, face, accent, const AvatarPose());
     canvas.restore();
   }
 

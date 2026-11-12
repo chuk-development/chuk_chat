@@ -122,19 +122,40 @@ void main() {
     expect(r.pupil.distance, lessThanOrEqualTo(1 + 1e-9));
   });
 
-  test('every pose stays inside the frame at every size', () {
-    for (final double s in <double>[24, 32, 48, 64, 128]) {
-      final Camera cam = cubeCamera(s);
-      for (final RigPose r in fitPoses()) {
-        r.jump *= kCubeJump;
-        final Scene sc = Scene(cam);
-        buildCube(sc, r, const Color(0xFF2962FF));
-        final Rect b = sc.bounds()!;
-        expect(b.left, greaterThanOrEqualTo(-0.01), reason: 'size $s');
-        expect(b.top, greaterThanOrEqualTo(-0.01), reason: 'size $s');
-        expect(b.right, lessThanOrEqualTo(s + 0.01), reason: 'size $s');
-        expect(b.bottom, lessThanOrEqualTo(s + 0.01), reason: 'size $s');
+  for (final bool round in <bool>[true, false]) {
+    test('every pose stays inside the frame at every size (round: $round)', () {
+      for (final double s in <double>[24, 32, 48, 50, 64, 128]) {
+        final Camera cam = cubeCamera(s, round: round);
+        for (final RigPose r in fitPoses()) {
+          r.jump *= kCubeJump;
+          final Scene sc = Scene(cam);
+          if (round) {
+            buildRound(sc, r, const Color(0xFF2962FF));
+          } else {
+            buildCube(sc, r, const Color(0xFF2962FF));
+          }
+          final Rect b = sc.bounds()!;
+          expect(b.left, greaterThanOrEqualTo(-0.01), reason: 'size $s');
+          expect(b.top, greaterThanOrEqualTo(-0.01), reason: 'size $s');
+          expect(b.right, lessThanOrEqualTo(s + 0.01), reason: 'size $s');
+          expect(b.bottom, lessThanOrEqualTo(s + 0.01), reason: 'size $s');
+        }
       }
+    });
+  }
+
+  test('the resting round figure sits in the middle of its frame', () {
+    for (final double s in <double>[32, 50, 64]) {
+      final Camera cam = cubeCamera(s, round: true);
+      final Scene sc = Scene(cam);
+      buildRound(
+        sc,
+        rigFor(AgentAvatarState.idle, 10, 0, Offset.zero, 0),
+        const Color(0xFF2962FF),
+      );
+      final Rect b = sc.bounds()!;
+      expect(b.center.dx, closeTo(s / 2, s * 0.03), reason: 'size $s');
+      expect(b.center.dy, closeTo(s / 2, s * 0.06), reason: 'size $s');
     }
   });
 
@@ -151,7 +172,7 @@ void main() {
   test('the body takes the agent colour hue', () async {
     const Color accent = Color(0xFF00BFA5);
     final ui.PictureRecorder rec = ui.PictureRecorder();
-    paintCubeAvatar(Canvas(rec), 64, accent, const AvatarPose());
+    paintRoundAvatar(Canvas(rec), 64, accent, const AvatarPose());
     final ui.Image img = await rec.endRecording().toImage(64, 64);
     final ByteData data = (await img.toByteData())!;
     final Color centre = Color.fromARGB(

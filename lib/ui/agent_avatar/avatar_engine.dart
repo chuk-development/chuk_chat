@@ -307,6 +307,54 @@ class Scene {
     face(xf, back, color, center: c);
   }
 
+  /// A faceted superellipsoid around [c] with radii [rx], [ry], [rz]:
+  /// [e] = 1 is an ellipsoid, smaller is boxier (about 0.6 is a soft,
+  /// rounded cube). [sy] squashes it vertically.
+  void superBall(
+    Xf xf,
+    V3 c,
+    double rx,
+    double ry,
+    double rz,
+    Color color, {
+    double e = 1,
+    int seg = 12,
+    int rings = 8,
+  }) {
+    double sp(double v) => v.sign * math.pow(v.abs(), e).toDouble();
+    V3 pt(double th, double ph) => V3(
+      c.x + rx * sp(math.sin(th)) * sp(math.cos(ph)),
+      c.y + ry * sp(math.cos(th)),
+      c.z + rz * sp(math.sin(th)) * sp(math.sin(ph)),
+    );
+    for (int i = 0; i < rings; i++) {
+      final double t0 = math.pi * i / rings, t1 = math.pi * (i + 1) / rings;
+      for (int k = 0; k < seg; k++) {
+        final double p0 = 2 * math.pi * k / seg;
+        final double p1 = 2 * math.pi * (k + 1) / seg;
+        final List<V3> q = <V3>[pt(t1, p0), pt(t1, p1), pt(t0, p1), pt(t0, p0)];
+        if (i == 0) {
+          face(xf, <V3>[q[0], q[1], q[2]], color, center: c);
+        } else if (i == rings - 1) {
+          face(xf, <V3>[q[0], q[2], q[3]], color, center: c);
+        } else {
+          face(xf, q, color, center: c);
+        }
+      }
+    }
+  }
+
+  /// A low-poly ellipsoid (flat facets); [sy] scales it vertically.
+  void ball(
+    Xf xf,
+    V3 c,
+    double r,
+    Color color, {
+    int seg = 8,
+    int rings = 5,
+    double sy = 1,
+  }) => superBall(xf, c, r, r * sy, r, color, seg: seg, rings: rings);
+
   /// The screen bounds of everything added so far.
   Rect? bounds() {
     Rect? b;

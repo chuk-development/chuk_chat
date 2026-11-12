@@ -1,4 +1,4 @@
-# Agent avatar (the cube figure)
+# Agent avatar (the round figure)
 
 Every agent face is `AgentAvatar` (`lib/ui/agent_avatar/agent_avatar.dart`).
 `AgentFace` and `ExpressiveFace` in `lib/ui/expressive/agent_face.dart` only
@@ -6,8 +6,11 @@ forward to it. A picture that the user set for the agent replaces the figure.
 
 ## The figure
 
-- A cube body with a face, short arms at the sides and two feet. Nothing is
-  on its head. Code: `cube_figure.dart` (geometry, face, props, camera fit),
+- The round figure ("D1 rund"): a soft, rounded cube body (a faceted
+  superellipsoid), ball arms, ball feet, and a big face (white eyes with
+  pupils, cheeks, a mouth) drawn at its projected spot so it turns with the
+  body. Nothing is on its head. The square cube is the second style
+  (`paintCubeAvatar`). Code: `cube_figure.dart` (geometry, face, props, camera fit),
   `avatar_rig.dart` (states and poses), `avatar_engine.dart` (a small
   software 3D renderer: perspective, back-face culling, painter's sort,
   Lambert light from the top left, decals in face UV space).
@@ -15,7 +18,8 @@ forward to it. A picture that the user set for the agent replaces the figure.
   (`cubeBodyColor`).
 - The camera is fitted once to the union of all poses (`fitPoses`). Every
   move stays inside a round or square frame of any size. The resting figure
-  has the same margin at the sides and at the bottom.
+  sits in the middle. Visual check with the real engine:
+  `tool/agent_avatar_shot.dart` (see its header).
 - To change the style, change `kAgentAvatarPainter`. A new style is one
   function with the same signature.
 

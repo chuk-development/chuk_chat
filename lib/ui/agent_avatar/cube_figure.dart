@@ -364,46 +364,224 @@ void buildCube(Scene sc, RigPose r, Color accent) {
   _props(sc, b, arms, r, body, accent);
 }
 
-Rect? _fit;
+/// Body radius of the round figure (half edge of the cube it replaces).
+const double _rr = 2.05;
 
-/// The union of all poses in camera space at scale 1, computed once.
-Rect cubeFitBounds() => _fit ??= () {
-  final Camera c0 = Camera(center: Offset.zero, scale: 1);
-  Rect? u;
-  for (final RigPose r in fitPoses()) {
-    r.jump *= kCubeJump;
-    final Scene sc = Scene(c0);
-    buildCube(sc, r, const Color(0xFF7C4DFF));
-    final Rect? b = sc.bounds();
-    if (b != null) u = u == null ? b : u.expandToInclude(b);
+/// Adds the round figure ("D1 rund") in pose [r] to [sc]: the same creature
+/// as [buildCube] with a soft, rounded body (a faceted superellipsoid),
+/// ball arms and ball feet. Its face is drawn on top by [_roundFace].
+void buildRound(Scene sc, RigPose r, Color accent) {
+  final Color body = cubeBodyColor(accent);
+  final Xf b = _bodyXf(r);
+  for (final bool left in <bool>[true, false]) {
+    final double swing = left ? r.legLx : r.legRx;
+    final double x = left ? -0.95 : 0.95;
+    final double fz = -swing * 0.7;
+    final double lift = math.max(0, -swing) * 0.4;
+    sc.ball(
+      b,
+      V3(x, 0.45 + lift, 0.2 + fz),
+      0.62,
+      _shade(body, -0.16),
+      seg: 9,
+      sy: 0.7,
+    );
   }
-  return u ?? Rect.zero;
-}();
-
-/// The resting figure's bounds (looking around), computed once.
-Rect? _rest;
-Rect _restBounds() => _rest ??= () {
-  final Camera c0 = Camera(center: Offset.zero, scale: 1);
-  Rect? u;
-  for (final RigPose r in fitPoses().take(4)) {
-    final Scene sc = Scene(c0);
-    buildCube(sc, r, const Color(0xFF7C4DFF));
-    final Rect? b = sc.bounds();
-    if (b != null) u = u == null ? b : u.expandToInclude(b);
+  sc.superBall(
+    b,
+    _centre,
+    _rr * 1.02,
+    _rr * 0.98,
+    _rr * 0.92,
+    body,
+    e: 0.62,
+    seg: 16,
+    rings: 11,
+  );
+  final List<Xf> arms = <Xf>[];
+  for (final bool left in <bool>[true, false]) {
+    final double sx = left ? -_rr * 0.98 : _rr * 0.98;
+    final double side = left ? -1 : 1;
+    final Xf arm =
+        b *
+        Xf.about(
+          V3(sx, _base + 2.3, 0),
+          M3.rotZ(side * (left ? r.armLz : r.armRz) * 0.9) *
+              M3.rotX((left ? r.armLx : r.armRx) * 0.9),
+        );
+    arms.add(arm);
+    sc.ball(
+      arm,
+      V3(sx + side * 0.3, _base + 1.5, 0),
+      0.55,
+      _shade(body, -0.05),
+      sy: 1.25,
+    );
   }
-  return u ?? Rect.zero;
-}();
+  _props(sc, b, arms, r, body, accent);
+}
 
-/// A camera for a square of [s]: the resting figure fills [fill] of it with
-/// even margins at the sides and the bottom; every other move still stays
-/// inside (2 % edge).
-Camera cubeCamera(double s, {double fill = 0.8}) {
-  final Rect rest = _restBounds(), any = cubeFitBounds();
+/// The round figure's face, H2 style: big white eyes with pupils and a
+/// highlight, cheeks, a mouth; drawn at their projected spots on the body,
+/// so they turn with it and hide when it turns away.
+void _roundFace(Canvas canvas, Camera cam, RigPose r, Color accent) {
+  final Color body = cubeBodyColor(accent);
+  final Xf b = _bodyXf(r);
+  final V3 vc = cam.view(b.apply(_centre));
+  final Offset c0 = cam.project(vc);
+  final double unit =
+      (cam.project(cam.view(b.apply(_centre + const V3(1, 0, 0)))) - c0)
+          .distance;
+  Offset? at(V3 local) {
+    final V3 vw = cam.view(b.apply(local));
+    if ((vw - vc).unit.z < 0.2) return null;
+    return cam.project(vw);
+  }
+
+  Paint fill(Color c) => Paint()
+    ..isAntiAlias = true
+    ..color = c;
+  final double er = unit * 0.43;
+  const double fz = _rr * 0.92;
+  for (final double side in <double>[-1, 1]) {
+    final Offset? c = at(V3(side * 1.25, _base + _h - 0.35, fz * 0.92));
+    if (c != null) {
+      canvas.drawOval(
+        Rect.fromCenter(center: c, width: er * 1.5, height: er * 0.8),
+        fill(_shade(body, 0.16).withValues(alpha: 0.8)),
+      );
+    }
+  }
+  if (r.prop != AvatarProp.binoculars) {
+    for (final double side in <double>[-1, 1]) {
+      final V3 local = V3(side * 0.72, _base + _h + 0.35, fz);
+      final Offset? e = at(local);
+      if (e == null) continue;
+      final double nz = (cam.view(b.apply(local)) - vc).unit.z;
+      final double squeeze = nz.clamp(0.35, 1.0);
+      switch (r.eyes) {
+        case AvatarEyes.closed:
+        case AvatarEyes.happy:
+          canvas.drawArc(
+            Rect.fromCenter(
+              center: e,
+              width: er * 2 * squeeze,
+              height: er * 1.4,
+            ),
+            r.eyes == AvatarEyes.happy ? math.pi : 0.1,
+            math.pi * 0.8,
+            false,
+            Paint()
+              ..isAntiAlias = true
+              ..style = PaintingStyle.stroke
+              ..strokeCap = StrokeCap.round
+              ..strokeWidth = math.max(1.2, er * 0.38)
+              ..color = _ink,
+          );
+        case AvatarEyes.open:
+        case AvatarEyes.focus:
+          final double open =
+              (1 - r.blink).clamp(0.1, 1.0) *
+              (r.eyes == AvatarEyes.focus ? 0.7 : 1);
+          canvas.drawOval(
+            Rect.fromCenter(
+              center: e,
+              width: er * 2 * squeeze,
+              height: er * 2.3 * open,
+            ),
+            fill(Colors.white),
+          );
+          final Offset look = clampLook(r.pupil);
+          final Offset pp =
+              e + Offset(look.dx * er * 0.38, look.dy * er * 0.4 * open);
+          canvas.drawOval(
+            Rect.fromCenter(
+              center: pp,
+              width: er * 1.2 * squeeze,
+              height: er * 1.4 * open,
+            ),
+            fill(_ink),
+          );
+          canvas.drawCircle(
+            pp + Offset(-er * 0.22, -er * 0.28 * open),
+            er * 0.24,
+            fill(Colors.white),
+          );
+      }
+    }
+  }
+  final Offset? m = at(const V3(0, _base + _h - 0.55, fz * 0.97));
+  if (m != null) {
+    if (r.eyes == AvatarEyes.happy) {
+      canvas.drawArc(
+        Rect.fromCenter(
+          center: m.translate(0, -er * 0.3),
+          width: er * 1.3,
+          height: er * 1.1,
+        ),
+        0,
+        math.pi,
+        true,
+        fill(_ink),
+      );
+    } else if (r.eyes != AvatarEyes.closed) {
+      canvas.drawArc(
+        Rect.fromCenter(
+          center: m.translate(0, -er * 0.35),
+          width: er * 0.9,
+          height: er * 0.6,
+        ),
+        0.2,
+        math.pi - 0.4,
+        false,
+        Paint()
+          ..isAntiAlias = true
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round
+          ..strokeWidth = math.max(1.0, er * 0.3)
+          ..color = _ink,
+      );
+    }
+  }
+}
+
+typedef _Build = void Function(Scene sc, RigPose r, Color accent);
+
+final Map<String, Rect> _bounds = <String, Rect>{};
+
+Rect _union(String key, _Build build, Iterable<RigPose> poses) =>
+    _bounds.putIfAbsent(key, () {
+      final Camera c0 = Camera(center: Offset.zero, scale: 1);
+      Rect? u;
+      for (final RigPose r in poses) {
+        r.jump *= kCubeJump;
+        final Scene sc = Scene(c0);
+        build(sc, r, const Color(0xFF7C4DFF));
+        final Rect? b = sc.bounds();
+        if (b != null) u = u == null ? b : u.expandToInclude(b);
+      }
+      return u ?? Rect.zero;
+    });
+
+/// The union of all poses of the square figure, at scale 1, computed once.
+Rect cubeFitBounds({bool round = false}) => _union(
+  '${round ? 'round' : 'cube'}/any',
+  round ? buildRound : buildCube,
+  fitPoses(),
+);
+
+/// A camera for a square of [s]: the resting figure (looking around) fills
+/// [fill] of it and sits in the middle; every other move still stays inside
+/// (2 % edge), which can shift or shrink it a little.
+Camera cubeCamera(double s, {double fill = 0.8, bool round = false}) {
+  final _Build build = round ? buildRound : buildCube;
+  final String tag = round ? 'round' : 'cube';
+  final Rect rest = _union('$tag/rest', build, fitPoses().take(4));
+  final Rect any = cubeFitBounds(round: round);
   double k = s * fill / math.max(rest.width, rest.height);
   k = math.min(k, s * 0.96 / math.max(any.width, any.height));
-  final double margin = (s - math.max(rest.width, rest.height) * k) / 2;
   double cx = s / 2 - rest.center.dx * k;
-  double cy = s - margin - rest.bottom * k;
+  double cy = s / 2 - rest.center.dy * k;
   final double top = cy + any.top * k, bottom = cy + any.bottom * k;
   if (top < s * 0.02) cy += s * 0.02 - top;
   if (bottom > s * 0.98) cy -= bottom - s * 0.98;
@@ -465,19 +643,43 @@ void _zzz(Canvas canvas, double s, RigPose r, double t, Color color) {
   }
 }
 
-/// Paints the figure for [pose] into a square of [s] logical pixels.
+/// Paints the square figure for [pose] into a square of [s] logical pixels.
 void paintCubeAvatar(
   Canvas canvas,
   double s,
   Color accent,
   AvatarPose pose, {
   bool dark = false,
+}) => _paint(canvas, s, accent, pose, dark: dark, round: false);
+
+/// Paints the round figure ("D1 rund", the app's avatar) for [pose] into a
+/// square of [s] logical pixels.
+void paintRoundAvatar(
+  Canvas canvas,
+  double s,
+  Color accent,
+  AvatarPose pose, {
+  bool dark = false,
+}) => _paint(canvas, s, accent, pose, dark: dark, round: true);
+
+void _paint(
+  Canvas canvas,
+  double s,
+  Color accent,
+  AvatarPose pose, {
+  required bool dark,
+  required bool round,
 }) {
   final RigPose r = rigForPose(pose)..jump *= kCubeJump;
-  final Camera cam = cubeCamera(s);
+  final Camera cam = cubeCamera(s, round: round);
   _shadow(canvas, cam, r, s);
   final Scene sc = Scene(cam);
-  buildCube(sc, r, accent);
+  if (round) {
+    buildRound(sc, r, accent);
+  } else {
+    buildCube(sc, r, accent);
+  }
   sc.render(canvas);
+  if (round) _roundFace(canvas, cam, r, accent);
   _zzz(canvas, s, r, pose.t, dark ? Colors.white : _ink);
 }

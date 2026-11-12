@@ -43,8 +43,8 @@ import 'package:chuk_chat/utils/io_helper.dart' show Platform;
 export 'package:chuk_chat/ui/agent_avatar/avatar_rig.dart'
     show AgentAvatarState;
 
-/// The figure painter. One style today (the cube, "D1"); a second style is
-/// a second function with this shape, picked here.
+/// The figure painter: the round figure ("D1 rund"). The square cube
+/// ([paintCubeAvatar]) is the other style; swap it here.
 typedef AgentAvatarPainter = void Function(
   Canvas canvas,
   double size,
@@ -53,7 +53,7 @@ typedef AgentAvatarPainter = void Function(
   bool dark,
 });
 
-const AgentAvatarPainter kAgentAvatarPainter = paintCubeAvatar;
+const AgentAvatarPainter kAgentAvatarPainter = paintRoundAvatar;
 
 /// No activity for this long and the avatar sleeps.
 const Duration kAgentSleepAfter = Duration(hours: 6);
