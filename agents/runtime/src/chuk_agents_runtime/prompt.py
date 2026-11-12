@@ -486,6 +486,7 @@ def build_system_prompt(
     skills: str | None = None,
     memory: str | None = None,
     mcp_servers: Sequence[str] | None = None,
+    naming: str | None = None,
 ) -> str:
     """Compose the full system prompt: behaviour + the workspace + the skill
     catalogue + the connected MCP server names + the memory snapshot + the
@@ -540,6 +541,10 @@ def build_system_prompt(
             + "\n\nThese are wired up for you. Load their tools with `search_tools` "
             "(the server name or what you need), then call them."
         )
+    # The agent's name and the self-naming rules (agent_naming.py). Before
+    # the memory snapshot: it changes only when the agent is renamed.
+    if naming and naming.strip():
+        parts.append(naming.strip())
     if memory and memory.strip():
         parts.append(memory.strip())
     if persona and persona.strip():

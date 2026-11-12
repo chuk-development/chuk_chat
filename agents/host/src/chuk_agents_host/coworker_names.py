@@ -19,12 +19,19 @@ from .identity import HOST_DEVICE_ID
 
 MAX_NAME_LEN = 80
 
+#: Named in ``host_route.capabilities``: this host takes ``agent_delete``.
+AGENT_DELETE_CAPABILITY = "agent_delete"
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS coworker_names (
     agent_id       TEXT PRIMARY KEY,
     name           TEXT NOT NULL,
     created_by_app INTEGER NOT NULL DEFAULT 0,
     updated_at     TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS coworker_deleted (
+    agent_id   TEXT PRIMARY KEY,
+    deleted_at TEXT NOT NULL
 );
 """
 
@@ -60,8 +67,18 @@ class CoworkerNameStore:
         return self._host_id
 
     def upsert(self, agent_id: str, name: str, *, created_by_app: bool) -> bool:
-        """Set ``name`` for ``agent_id``. Returns True when a row changed."""
+        """Set ``name`` for ``agent_id``. Returns True when a row changed.
+
+        A deleted id stays deleted: a create or rename of it is dropped. The
+        app makes every new agent with a fresh random id, so the same id only
+        comes back from an app that still holds the old agent and announces
+        it again (``agentsMissingOnHost``); that must not undo the delete."""
         with self._lock:
+            tomb = self._conn.execute(
+                "SELECT 1 FROM coworker_deleted WHERE agent_id = ?", (agent_id,)
+            ).fetchone()
+            if tomb is not None:
+                return False
             row = self._conn.execute(
                 "SELECT name FROM coworker_names WHERE agent_id = ?", (agent_id,)
             ).fetchone()
@@ -80,6 +97,43 @@ class CoworkerNameStore:
                 )
             self._conn.commit()
             return True
+
+    def name_of(self, agent_id: str) -> str | None:
+        """The stored name of ``agent_id``, or ``None``."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT name FROM coworker_names WHERE agent_id = ?", (agent_id,)
+            ).fetchone()
+        return row["name"] if row is not None else None
+
+    def delete(self, agent_id: str) -> bool:
+        """Forget ``agent_id`` and remember that it was deleted, so every app
+        drops it from its roster (``agent_list.deleted``). The host's own
+        agent cannot be deleted. Returns True when something changed."""
+        if not agent_id or agent_id == self._host_id:
+            return False
+        with self._lock:
+            cur = self._conn.execute(
+                "DELETE FROM coworker_names WHERE agent_id = ?", (agent_id,)
+            )
+            known = self._conn.execute(
+                "SELECT 1 FROM coworker_deleted WHERE agent_id = ?", (agent_id,)
+            ).fetchone()
+            if known is None:
+                self._conn.execute(
+                    "INSERT INTO coworker_deleted (agent_id, deleted_at) VALUES (?, ?)",
+                    (agent_id, _now_iso()),
+                )
+            self._conn.commit()
+        return cur.rowcount > 0 or known is None
+
+    def deleted(self) -> list[str]:
+        """The ids deleted on this host, oldest first."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT agent_id FROM coworker_deleted ORDER BY deleted_at, agent_id"
+            ).fetchall()
+        return [row["agent_id"] for row in rows]
 
     def list(self) -> list[dict[str, Any]]:
         """The ``agent_list`` entries, ``updated_at`` ascending."""
@@ -113,10 +167,20 @@ def handle_agent_frame(
     *,
     log: Callable[[str], None] | None = None,
 ) -> list[dict[str, Any]]:
-    """Apply one ``agent_create`` / ``agent_rename`` / ``agent_list`` payload
-    and return the current list (the executor sends it as ``agent_list``). A
-    bad create/rename is dropped with a log line; the list is still answered."""
+    """Apply one ``agent_create`` / ``agent_rename`` / ``agent_delete`` /
+    ``agent_list`` payload and return the current list (the executor sends it
+    as ``agent_list``, see :func:`agent_list_answer`). A bad frame is dropped
+    with a log line; the list is still answered."""
     kind = payload.get("type") if isinstance(payload, dict) else None
+    if kind == "agent_delete":
+        agent_id = payload.get("agent_id")
+        if not isinstance(agent_id, str) or not agent_id:
+            if log is not None:
+                log("[agent-names] dropped agent_delete: bad agent_id")
+        elif store.delete(agent_id):
+            if log is not None:
+                log(f"[agent-names] {agent_id} deleted")
+        return store.list()
     if kind in ("agent_create", "agent_rename"):
         agent_id = payload.get("agent_id")
         name = clean_name(payload.get("name"))
@@ -127,3 +191,13 @@ def handle_agent_frame(
             if log is not None:
                 log(f"[agent-names] {agent_id} -> {name!r}")
     return store.list()
+
+
+def agent_list_answer(store: CoworkerNameStore, rows: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """The full ``agent_list`` payload: the names plus ``deleted``, the ids an
+    app must drop from its roster (docs/WIRE_CONTRACT.md, "Agent names")."""
+    return {
+        "type": "agent_list",
+        "agents": list(rows if rows is not None else store.list()),
+        "deleted": store.deleted(),
+    }

@@ -1056,12 +1056,25 @@ def agent_list_request_payload() -> dict[str, Any]:
     return {"type": "agent_list"}
 
 
-def agent_list_payload(agents: list[dict[str, Any]]) -> dict[str, Any]:
+def agent_list_payload(
+    agents: list[dict[str, Any]], deleted: list[str] | None = None
+) -> dict[str, Any]:
     """Host -> app: the agent names. One entry per id:
     ``{"agent_id", "name", "host"}`` — ``host`` marks the agent that runs
     on this host. Answers ``agent_list`` and follows every applied
-    ``agent_create`` / ``agent_rename``."""
-    return {"type": "agent_list", "agents": list(agents)}
+    ``agent_create`` / ``agent_rename`` / ``agent_delete``, and every name an
+    agent gave itself (``rename_self``). ``deleted`` (additive) lists the ids
+    the app must drop from its roster."""
+    payload: dict[str, Any] = {"type": "agent_list", "agents": list(agents)}
+    if deleted is not None:
+        payload["deleted"] = [str(x) for x in deleted if isinstance(x, str) and x]
+    return payload
+
+
+def agent_delete_payload(*, agent_id: str) -> dict[str, Any]:
+    """App -> host: the user deleted an agent. The host forgets its name and
+    lists the id under ``agent_list.deleted`` for every other device."""
+    return {"type": "agent_delete", "agent_id": agent_id}
 
 
 def skills_list_payload(

@@ -1041,6 +1041,55 @@ void main() {
     expect(find.text('From Phone'), findsWidgets);
   });
 
+  testWidgets('an agent the host lists as deleted leaves the roster', (
+    tester,
+  ) async {
+    final (controller, roster) = await pumpShell(tester);
+    controller.pair();
+    await tester.pumpAndSettle();
+    final hostId = roster.agents.single.id;
+    final test = roster.addAgent(name: 'r2-p1');
+    final keep = roster.addAgent(name: 'Mail');
+    await tester.pumpAndSettle();
+
+    controller.emit(
+      AgentsRelayAgentList(
+        agents: [AgentsHostAgentName(agentId: keep.id, name: 'Mail')],
+        // The host agent can never be deleted; an unknown id is ignored.
+        deleted: [test.id, hostId, 'local:never:9:9'],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(roster.byId(test.id), isNull);
+    expect(roster.byId(keep.id), isNotNull);
+    expect(roster.byId(hostId), isNotNull);
+    expect(find.text('r2-p1'), findsNothing);
+
+    // A later list that names the deleted id again does not bring it back.
+    controller.emit(
+      AgentsRelayAgentList(
+        agents: [AgentsHostAgentName(agentId: test.id, name: 'r2-p1')],
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(roster.byId(test.id), isNull);
+  });
+
+  test('agent_list reads the deleted ids and skips bad entries', () {
+    final list = AgentsRelayAgentList.fromPayload(<String, dynamic>{
+      'type': 'agent_list',
+      'agents': <Object?>[],
+      'deleted': <Object?>['local:a:1:1', '', 7, null, 'local:b:2:2'],
+    });
+    expect(list.deleted, ['local:a:1:1', 'local:b:2:2']);
+    final old = AgentsRelayAgentList.fromPayload(<String, dynamic>{
+      'type': 'agent_list',
+      'agents': <Object?>[],
+    });
+    expect(old.deleted, isEmpty);
+  });
+
   testWidgets('a host run of an app-made agent marks it as running on '
       'the host (bead chuk_chat-89vl)', (tester) async {
     final (controller, roster) = await pumpShell(tester);

@@ -1207,9 +1207,16 @@ class AgentsHostAgentName {
 /// The host's `agent_list`: every agent name it keeps, sent once per attach
 /// and after each `agent_create` / `agent_rename` it applied.
 class AgentsRelayAgentList extends AgentsRelayInbound {
-  const AgentsRelayAgentList({required this.agents});
+  const AgentsRelayAgentList({
+    required this.agents,
+    this.deleted = const <String>[],
+  });
 
   final List<AgentsHostAgentName> agents;
+
+  /// The ids deleted on the host (on another device, or by the host itself).
+  /// The app drops each from its roster. Empty from a host before the field.
+  final List<String> deleted;
 
   static AgentsRelayAgentList fromPayload(Map<String, dynamic> payload) {
     final raw = payload['agents'];
@@ -1231,7 +1238,13 @@ class AgentsRelayAgentList extends AgentsRelayInbound {
         );
       }
     }
-    return AgentsRelayAgentList(agents: list);
+    final deletedRaw = payload['deleted'];
+    final deleted = <String>[
+      if (deletedRaw is List)
+        for (final Object? id in deletedRaw)
+          if (id is String && id.isNotEmpty) id,
+    ];
+    return AgentsRelayAgentList(agents: list, deleted: deleted);
   }
 }
 
@@ -2010,6 +2023,9 @@ class AgentsRelayClient
   /// What the paired host said it can do beyond the base contract
   /// (`host_route.capabilities`). Empty until it says; a host from before the
   /// field never does, so a feature gated on it stays off there.
+  /// The host capability that says it understands `agent_delete`.
+  static const String agentDeleteCapability = 'agent_delete';
+
   static final ValueNotifier<Set<String>> hostCapabilities =
       ValueNotifier<Set<String>>(const <String>{});
 

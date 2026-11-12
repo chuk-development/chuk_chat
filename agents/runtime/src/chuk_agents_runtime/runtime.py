@@ -58,6 +58,7 @@ from .registry import ToolRegistry
 from .search import register_search_tool
 from .secrets import SecretsAccess
 from .agent_mail import MailBinding, register_agent_mail_tools
+from .agent_naming import AgentNamingBackend, naming_prompt_section, register_naming_tools
 from .automations import AutomationBackend, register_automation_tools
 from .calls import CallBackend, register_call_tools
 from .takeover import TakeoverBackend, register_takeover_tool
@@ -428,6 +429,7 @@ def build_runtime(
     tool_event_observer: Callable[[dict], None] | None = None,
     secrets: SecretsAccess | None = None,
     automations: AutomationBackend | None = None,
+    agent_naming: AgentNamingBackend | None = None,
     calls: CallBackend | None = None,
     takeover: TakeoverBackend | None = None,
     phase_observer: Callable[[str, str | None], None] | None = None,
@@ -662,6 +664,11 @@ def build_runtime(
     # start_watcher / list / pause / resume / cancel, bound to ONE session by
     # the executor. ``None`` (no host, no clock) registers nothing.
     register_automation_tools(registry, automations)
+
+    # Self-naming (docs/WIRE_CONTRACT.md, "Agent names"): ``rename_self``,
+    # bound to THIS agent's id by the executor. ``None`` (no host, a room or
+    # a child run) registers nothing, and the prompt then says nothing either.
+    register_naming_tools(registry, agent_naming)
 
     # The agent calls the user (docs/WIRE_CONTRACT.md, "The agent calls the
     # user"): ``call_user`` rings the app and returns at once, ``call_status``
@@ -939,6 +946,11 @@ def build_runtime(
             workspace=workspace,
             skills=library.catalog(),
             memory=memory.snapshot() if memory else None,
+            naming=(
+                naming_prompt_section(_current_agent_name(agent_naming))
+                if agent_naming is not None and registry.has("rename_self")
+                else None
+            ),
             # Names only (§9): lets the model answer "what integrations do you
             # have" truthfully now that tool schemas no longer live in the prompt.
             # Only servers that actually connected: a configured-but-dead server
@@ -1099,3 +1111,11 @@ def build_runtime(
         # ``fork=true`` copies the history of the run that calls it.
         subagents.supervisor.history_provider = lambda: loop_history(loop)
     return loop
+
+
+def _current_agent_name(backend: AgentNamingBackend) -> str | None:
+    """The agent's name for its prompt; a failing lookup is no name."""
+    try:
+        return backend.current_name()
+    except Exception:  # noqa: BLE001 — a name never breaks a prompt
+        return None

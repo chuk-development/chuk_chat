@@ -1368,6 +1368,50 @@ def _script_window_count(stdout: bytes | None) -> int | None:
     return None
 
 
+def is_agent_session_key(session_key: str) -> bool:
+    """Whether ``session_key`` is an agent's own thread: the app's agent id,
+    ``local:<name>:<n>:<random>`` or ``host:<device id>`` (docs/WIRE_CONTRACT.md,
+    "Agent names"). Room members, children and the bare ``default`` are not."""
+    if not isinstance(session_key, str):
+        return False
+    head, sep, rest = session_key.partition(":")
+    return bool(sep and rest) and head in ("local", "host")
+
+
+def _as_agent_list(rows: Any) -> dict[str, Any]:
+    """The host hook's answer as one ``agent_list`` payload: a full dict
+    (with ``deleted``) passes through, a bare list of names is wrapped."""
+    if isinstance(rows, dict) and rows.get("type") == "agent_list":
+        agents = rows.get("agents")
+        deleted = rows.get("deleted")
+        return agent_list_payload(
+            agents if isinstance(agents, list) else [],
+            deleted if isinstance(deleted, list) else None,
+        )
+    return agent_list_payload(rows if isinstance(rows, list) else [])
+
+
+class _AgentNaming:
+    """The ``rename_self`` backend of one agent (chuk_agents_runtime.agent_naming)."""
+
+    def __init__(self, executor: "Executor", session_key: str) -> None:
+        self._executor = executor
+        self._session_key = session_key
+
+    def current_name(self) -> str | None:
+        hook = self._executor._agent_name_for
+        if hook is None:
+            return None
+        try:
+            name = hook(self._session_key)
+        except Exception:  # noqa: BLE001 — a name never breaks a run
+            return None
+        return str(name) if name else None
+
+    def rename(self, name: str) -> dict:
+        return self._executor._apply_self_rename(self._session_key, name)
+
+
 class Executor:
     """One executor bound to one transport endpoint and one sandbox.
 
@@ -2162,7 +2206,7 @@ class Executor:
             # answered with one terminal frame, like a replay.
             self._handle_automation_frame(kind, request_id, payload)
             return
-        if kind in ("agent_create", "agent_rename", "agent_list"):
+        if kind in ("agent_create", "agent_rename", "agent_delete", "agent_list"):
             # The agent names the host keeps (docs/WIRE_CONTRACT.md,
             # "Agent names"). Every one of the three is answered with the
             # current list as one terminal frame, like a replay.
@@ -2625,7 +2669,45 @@ class Executor:
         except Exception as exc:  # noqa: BLE001 — the serve loop must survive a bad hook
             self._terminal(request_id, error_payload(f"agent frame failed: {type(exc).__name__}"))
             return
-        self._terminal(request_id, agent_list_payload(rows if isinstance(rows, list) else []))
+        self._terminal(request_id, _as_agent_list(rows))
+
+    def _agent_naming_backend(self, session_key: str):
+        """``rename_self`` for the agent of ``session_key`` (the app's agent
+        id: ``local:...`` or ``host:...``). ``None`` when the host keeps no
+        names or the session is not an agent's own thread (a room, a child)."""
+        hook = self._on_agent_frame
+        if hook is None or not is_agent_session_key(session_key):
+            return None
+        return _AgentNaming(self, session_key)
+
+    def _apply_self_rename(self, session_key: str, name: str) -> dict:
+        """The agent renamed itself: store the name through the host's hook,
+        exactly like an app ``agent_rename``, and push the new ``agent_list``
+        to every attached app so each roster shows it at once."""
+        hook = self._on_agent_frame
+        if hook is None:
+            return {"ok": False, "error": "agent names are not kept on this host"}
+        try:
+            rows = hook({"type": "agent_rename", "agent_id": session_key, "name": name})
+        except Exception as exc:  # noqa: BLE001 — a name never breaks a run
+            return {"ok": False, "error": f"rename failed: {type(exc).__name__}"}
+        answer = _as_agent_list(rows)
+        stored = next(
+            (row.get("name") for row in answer.get("agents", [])
+             if isinstance(row, dict) and row.get("agent_id") == session_key),
+            None,
+        )
+        if stored != name:
+            return {"ok": False, "error": "the host did not keep the name"}
+        with self._codec_lock:
+            sealer = self._sealer
+        pushed = False
+        if sealer is not None:
+            try:
+                pushed = self.emit_host_payload(answer, sealer)
+            except Exception as exc:  # noqa: BLE001 — the name is stored anyway
+                logger.info("agent_list push failed: %s", type(exc).__name__)
+        return {"ok": True, "name": name, "pushed": pushed}
 
     def _handle_permissions_frame(self, request_id: str, payload: dict) -> None:
         """Hand ``agent_permissions_get`` / ``_set`` to the host's agent hook
@@ -5718,6 +5800,9 @@ class Executor:
             # "Automations"): bound to ``session_key`` here, so the model can
             # only ever name its own schedules and watchers.
             automations=self._automation_backend(run, session_key),
+            # ``rename_self`` (docs/WIRE_CONTRACT.md, "Agent names"): bound to
+            # this agent's id, so a model can only ever rename itself.
+            agent_naming=self._agent_naming_backend(session_key),
             # ``call_user`` / ``call_status`` (docs/WIRE_CONTRACT.md, "The
             # agent calls the user"), bound to ``session_key`` the same way:
             # a fired automation run gets them too, which is what makes a

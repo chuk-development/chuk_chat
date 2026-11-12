@@ -2266,9 +2266,38 @@ Host → app, `agent_list`:
   the app sees). When no name was ever set for it there is no entry, and the
   app keeps showing the device id, as today.
 - Order is `updated_at` ascending. The app does not care about order.
-- A deleted agent (`removeAgent` in the app) is not on the wire yet; the
-  host keeps the row and the app ignores an id it deleted in this session
-  only. Bead to follow if it matters.
+- A deleted agent is on the wire since CHAT-44 (2026-11-12), see "Agent
+  delete and self-naming" below.
+
+### Agent delete and self-naming (CHAT-44, CHAT-46)
+
+Additive.
+
+- App -> host `{"type": "agent_delete", "agent_id": "local:..."}`. Sent only
+  to a host that names `agent_delete` in `host_route.capabilities`. The host
+  removes the name and writes the id to its `coworker_deleted` table. The
+  host's own agent (`host:<device id>`) cannot be deleted.
+- Every `agent_list` from such a host carries `"deleted": [ids]`. The app
+  drops each id from its roster with the same cascade as a local delete, and
+  sends nothing back. A host before the field sends no key: nothing changes.
+- A deleted id stays deleted: a later `agent_create` or `agent_rename` of it
+  is dropped. An app before this change still holds the agent and announces
+  it again (`agentsMissingOnHost`); that must not bring it back. A new agent
+  always gets a new random id.
+- `agents-host agents list` shows every agent (messages, last activity,
+  running automations). `agents-host agents delete <id>... [--purge]` is
+  the same delete from the command line; it also stops the agent's
+  automations, and `--purge` removes its workspace and message history.
+  Restart the host after a delete so no automation is still held in memory.
+- `rename_self(name)` is a runtime tool (`chuk_agents_runtime/agent_naming.py`).
+  The executor binds it to the run's own agent id (`local:` or `host:`
+  session keys only; rooms, children and `default` get no tool). It goes
+  through the same host hook as an app `agent_rename`, and the executor then
+  pushes the new `agent_list` to every attached app, so the roster updates
+  live. The prompt section "# Your name" tells the agent its name: an agent
+  with a placeholder name (random codename, "Your computer") proposes one
+  name and asks; later it may suggest a new name once when its job clearly
+  changed. It calls the tool only after the user agreed or asked.
 
 ### Implemented
 

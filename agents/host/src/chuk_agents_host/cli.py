@@ -297,6 +297,23 @@ def _build_parser() -> argparse.ArgumentParser:
         help="skip starting the browser server (no container, no minute of wait)",
     )
 
+    agents_parser = sub.add_parser(
+        "agents",
+        help="list or delete agents on this host",
+        description="Housekeeping for the agents of this host. A delete reaches "
+        "every app at its next pairing (agent_list.deleted).",
+    )
+    agents_parser.add_argument("--workspace", default=None, help=WORKSPACE_HELP)
+    agents_sub = agents_parser.add_subparsers(dest="agents_command")
+    agents_sub.add_parser("list", help="every agent: messages, last activity, automations")
+    delete_parser = agents_sub.add_parser("delete", help="delete agents by id")
+    delete_parser.add_argument("agent_ids", nargs="+", metavar="AGENT_ID")
+    delete_parser.add_argument(
+        "--purge",
+        action="store_true",
+        help="also remove the workspace and the message history (back them up first)",
+    )
+
     trace_parser = sub.add_parser(
         "trace",
         help="read a run trace back: where did the four minutes go",
@@ -1058,7 +1075,43 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_doctor(args)
     if command == "trace":
         return cmd_trace(args)
+    if command == "agents":
+        return cmd_agents(args)
     return cmd_run(args)
+
+
+def cmd_agents(args: argparse.Namespace, *, out: Callable[..., Any] = print) -> int:
+    """``agents-host agents list`` / ``agents-host agents delete <id>...``."""
+    from .agent_admin import delete_agent, list_agents
+
+    workspace = Path(args.workspace).expanduser()
+    if getattr(args, "agents_command", None) == "delete":
+        failed = 0
+        for agent_id in args.agent_ids:
+            result = delete_agent(workspace, agent_id, purge=args.purge)
+            if not result.get("ok"):
+                failed += 1
+                out(f"  {agent_id}: {result.get('error')}")
+                continue
+            out(
+                f"  {agent_id}: deleted (automations stopped: "
+                f"{result.get('automations_stopped', 0)}"
+                + (
+                    f", messages removed: {result.get('messages_removed', 0)}, "
+                    f"workspaces removed: {len(result.get('workspaces_removed', []))}"
+                    if args.purge
+                    else ""
+                )
+                + ")"
+            )
+        return 1 if failed else 0
+    for row in list_agents(workspace):
+        autos = ", ".join(row.active_automations) or "-"
+        out(
+            f"  {row.agent_id}\t{row.name or '(no name)'}\tnamed {row.created_at[:10] or '?'}"
+            f"\t{row.messages} msgs\tlast {row.last_activity[:16] or '-'}\tautomations: {autos}"
+        )
+    return 0
 
 
 if __name__ == "__main__":

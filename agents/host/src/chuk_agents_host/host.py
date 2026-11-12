@@ -122,7 +122,13 @@ from .room_agents import RoomAgentPool
 from chuk_agents_config import resolve_state_home
 
 from .room_service import RoomService, dispatch_room_frame
-from .coworker_names import CoworkerNameStore, handle_agent_frame, host_agent_id
+from .coworker_names import (
+    AGENT_DELETE_CAPABILITY,
+    CoworkerNameStore,
+    agent_list_answer,
+    handle_agent_frame,
+    host_agent_id,
+)
 from .coworker_templates import seed_persona, template_seed
 from .secrets_key import mail_key_at_rest_key, mcp_grants_at_rest_key, secrets_at_rest_key
 from .seed_skills import seed_skills_dir, seed_workspace_skills
@@ -2194,11 +2200,15 @@ class LocalHost:
                 APPROVALS_CAPABILITY,
                 BUDGET_CAPABILITY,
                 USER_BROWSER_RESUME_CAPABILITY,
+                # ``agent_delete`` (docs/WIRE_CONTRACT.md, "Agent names").
+                AGENT_DELETE_CAPABILITY,
             ],
         })
         names = handle_agent_frame(self._coworker_names, payload, log=self._log)
         self._seed_template_persona(payload)
-        return names
+        # The full answer carries ``deleted`` too, so every app drops an agent
+        # that was deleted on another device or on the host itself.
+        return agent_list_answer(self._coworker_names, names)
 
     # -- agent templates (lib/services/agents/agent_templates.dart) -
 

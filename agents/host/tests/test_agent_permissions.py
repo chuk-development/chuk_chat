@@ -367,7 +367,8 @@ def test_the_host_answers_both_frames_through_its_agent_hook(tmp_path):
         )
         assert got["permissions"]["secrets_env"] is False
         # Agent frames still get the name list.
-        assert isinstance(host._on_agent_frame({"type": "agent_list"}), list)
+        listed = host._on_agent_frame({"type": "agent_list"})
+        assert listed["type"] == "agent_list" and isinstance(listed["agents"], list)
         # The local sandbox of that agent reads the same store.
         env = host._environment_for("local:amber:1")
         assert env.policy.secrets_env is False

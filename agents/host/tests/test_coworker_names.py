@@ -10,6 +10,7 @@ from chuk_agents_manager import RosterStore
 
 from chuk_agents_host.coworker_names import (
     CoworkerNameStore,
+    agent_list_answer,
     clean_name,
     handle_agent_frame,
     host_agent_id,
@@ -88,3 +89,49 @@ def test_lives_next_to_the_roster_and_never_touches_the_agents_row(tmp_path):
     again = CoworkerNameStore(path)
     assert again.list() == [{"agent_id": "host:cowork-host", "name": "Laptop Bot", "host": True}]
     again.close()
+
+
+def test_delete_forgets_the_name_and_lists_the_id_as_deleted():
+    store = CoworkerNameStore(device_id="cowork-host")
+    handle_agent_frame(store, {"type": "agent_create", "agent_id": "local:r2-p1:8:7", "name": "r2-p1"})
+    handle_agent_frame(store, {"type": "agent_create", "agent_id": "local:Mail:14:1", "name": "Mail"})
+
+    out = handle_agent_frame(store, {"type": "agent_delete", "agent_id": "local:r2-p1:8:7"})
+    assert [e["agent_id"] for e in out] == ["local:Mail:14:1"]
+    answer = agent_list_answer(store, out)
+    assert answer == {
+        "type": "agent_list",
+        "agents": [{"agent_id": "local:Mail:14:1", "name": "Mail", "host": False}],
+        "deleted": ["local:r2-p1:8:7"],
+    }
+    # A second delete changes nothing and lists the id once.
+    assert store.delete("local:r2-p1:8:7") is False
+    assert store.deleted() == ["local:r2-p1:8:7"]
+
+
+def test_neither_a_rename_nor_a_re_announce_revives_a_deleted_agent():
+    """An older app still holds the agent and sends ``agent_create`` again for
+    every agent the host does not list; the delete must survive that."""
+    store = CoworkerNameStore(device_id="cowork-host")
+    store.upsert("local:a:1:1", "A", created_by_app=True)
+    store.delete("local:a:1:1")
+    assert store.upsert("local:a:1:1", "Renamed", created_by_app=False) is False
+    assert store.upsert("local:a:1:1", "A", created_by_app=True) is False
+    assert store.list() == []
+    assert store.deleted() == ["local:a:1:1"]
+    assert store.name_of("local:a:1:1") is None
+
+
+def test_the_host_agent_cannot_be_deleted():
+    store = CoworkerNameStore(device_id="cowork-host")
+    store.upsert("host:cowork-host", "Main", created_by_app=False)
+    assert store.delete("host:cowork-host") is False
+    assert store.name_of("host:cowork-host") == "Main"
+    assert store.deleted() == []
+
+
+def test_bad_delete_is_dropped_with_a_log_line():
+    store = CoworkerNameStore(device_id="cowork-host")
+    logs: list[str] = []
+    assert handle_agent_frame(store, {"type": "agent_delete"}, log=logs.append) == []
+    assert any("dropped agent_delete" in line for line in logs)

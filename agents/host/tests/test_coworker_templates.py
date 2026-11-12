@@ -121,7 +121,7 @@ def test_host_seeds_the_new_coworker_on_agent_create(tmp_path):
         host._coworker_names.close()
 
     # The name is kept and the list answered, as before.
-    assert any(row["agent_id"] == "local:Researcher:0:7" for row in listed)
+    assert any(row["agent_id"] == "local:Researcher:0:7" for row in listed["agents"])
     assert PERSONA in (workspace / SOUL_RELATIVE).read_text(encoding="utf-8")
     # The host's own agent is not touched.
     assert workspace != own
@@ -152,7 +152,7 @@ def test_a_plain_create_still_works_and_writes_no_persona(tmp_path):
     finally:
         host._roster.close()
         host._coworker_names.close()
-    assert any(row["agent_id"] == "local:amber:1:2" for row in listed)
+    assert any(row["agent_id"] == "local:amber:1:2" for row in listed["agents"])
     soul = workspace / SOUL_RELATIVE
     assert not soul.exists() or "template:" not in soul.read_text(encoding="utf-8")
 

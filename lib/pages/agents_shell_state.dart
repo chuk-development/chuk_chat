@@ -288,6 +288,14 @@ mixin AgentsShellHost on State<MessengerShell> {
       return;
     }
     if (event is! AgentsRelayAgentList) return;
+    // Agents deleted on the host (another device, or the host's own
+    // cleanup): drop them here too, with the same cascade as a delete in
+    // this app, but without sending the delete back.
+    for (final String id in event.deleted) {
+      if (id.startsWith('host:')) continue;
+      if (_roster.byId(id) == null && _deletedAgentIds.contains(id)) continue;
+      _deleteAgent(id, fromHost: true);
+    }
     _roster.applyHostNames(
       event.agents,
       peerDeviceId: _controller.value?.state.value.peerDeviceId,
@@ -1266,12 +1274,16 @@ mixin AgentsShellHost on State<MessengerShell> {
     _controller.value?.renameRoom(roomId, name);
   }
 
-  void _deleteAgent(String agentId) {
+  void _deleteAgent(String agentId, {bool fromHost = false}) {
     // Drop the agent, and cascade: pull it out of every room it is in (a room
     // that falls below two members is deleted), telling the host to forget each
     // deleted room so nothing is orphaned. If the deleted agent was selected,
     // clear the selection so the thread pane does not point at a ghost.
     _deletedAgentIds.add(agentId);
+    // Tell the host, so every other device drops the agent too
+    // (`agent_list.deleted`). Only a host that names the capability gets the
+    // frame; an older one would answer it with an error.
+    if (!fromHost) _hostDeleteAgent(agentId);
     final removed = _roster.byId(agentId);
     _roster.removeAgent(agentId);
     // Nothing of a deleted agent may survive to be inherited by a later one
@@ -1311,6 +1323,28 @@ mixin AgentsShellHost on State<MessengerShell> {
       // Do not leave the user in an empty chat: fall to the top of the list.
       _autoSelect();
     }
+  }
+
+  void _hostDeleteAgent(String agentId) {
+    if (agentId.startsWith('host:')) return;
+    final controller = _controller.value;
+    if (controller is! AgentsRelayClient) return;
+    if (!AgentsRelayClient.hostCapabilities.value.contains(
+      AgentsRelayClient.agentDeleteCapability,
+    )) {
+      return;
+    }
+    unawaited(
+      controller
+          .sendControlFrame(<String, dynamic>{
+            'type': 'agent_delete',
+            'agent_id': agentId,
+          })
+          .catchError((Object _) {
+            // Not sent (link down): the host keeps the name until the next
+            // delete; this device already forgot the agent.
+          }),
+    );
   }
 
   /// Copies the selected thread's full debug export, like chuk_chat's
