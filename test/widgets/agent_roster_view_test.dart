@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 
 import 'package:chuk_chat/models/agents_agent.dart';
@@ -26,7 +27,13 @@ import '../support/icon_finder.dart';
 void main() {
   final DateTime now = DateTime(2026, 8, 13, 12);
 
-  setUp(() => RosterPins.instance.reset());
+  setUp(() {
+    RosterPins.instance.reset();
+    // LocalAgentRosterSource writes the roster in the background. Without a
+    // mock that write hits the missing plugin after the test has ended and
+    // fails it late (seen in CI, shard 3).
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
 
   testWidgets('Chuk Chat brand has no C logo', (tester) async {
     await tester.pumpWidget(
