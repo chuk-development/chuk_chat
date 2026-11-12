@@ -141,12 +141,9 @@ push straight to `master`.** No feature branch, no worktree. That is the normal
 case, because normally exactly one agent works this repo.
 
 **Owner rule (2026-11-12): all agents work in this one checkout, no worktrees.**
-On 2026-11-11 one agent built and installed from its own worktree
-(`chuk_chat-minimap`) while another agent's commits sat unpushed in the main
-checkout. The installed app then lacked the settings gear, and each install
-showed a different version. So: no own worktree, push finished work at once,
-build `scripts/install_dev.sh` only from the main checkout after
-`git merge origin/master`. The text below is the old exception rule.
+A build from a private worktree once missed unpushed commits of the main
+checkout. Push finished work at once; run `scripts/install_dev.sh` only here,
+after `git merge origin/master`. Old exception rule below.
 
 A `git worktree` is the **exception, not the rule**. Create one only when there
 is a real conflict risk that cannot be solved otherwise:
