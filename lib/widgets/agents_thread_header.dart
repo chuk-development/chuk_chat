@@ -43,8 +43,8 @@ class AgentsThreadAction {
 ///
 /// From left to right:
 ///
-///  * the agent pill — face, name and status line ("Active now", three
-///    dots while it works, "Offline · Reconnect"). A tap opens the details
+///  * the agent pill — face, name and status line ("Active now", also
+///    while it works, or "Offline · Reconnect"). A tap opens the details
 ///    pane. A desktop window has no back chip: the roster is beside it;
 ///  * the running automation, when there is one;
 ///  * the three primary chips, in the phone's order: Documents, Call,

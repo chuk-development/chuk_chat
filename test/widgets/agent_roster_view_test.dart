@@ -224,7 +224,8 @@ void main() {
     expect(find.text('cobalt-lynx'), findsOneWidget);
     // A working agent carries chuk's dot for a chat still being written; the
     // others do not.
-    expect(tileOf(tester, busy.id).streaming, isTrue);
+    // No working mark in the row: the face's animation says it (CHAT-74).
+    expect(tileOf(tester, busy.id).streaming, isFalse);
     expect(tileOf(tester, scheduled.id).streaming, isFalse);
     // A messenger row: nothing said yet, so the second line is empty and
     // there is no time — never the brief, never the time of a run.
@@ -247,15 +248,16 @@ void main() {
     expect(tileOf(tester, busy.id).preview, 'Build is green');
     expect(tileOf(tester, busy.id).timeLabel, 'Yesterday');
     expect(find.text('Build is green'), findsOneWidget);
-    // It is still running: small still dots stand where the time goes.
+    // It is still running, and the row still shows its time: no dots, the
+    // face's animation says it works (CHAT-74).
     expect(
       find.descendant(
         of: find.byKey(ValueKey<String>('agent-tile-${busy.id}')),
         matching: find.byType(WorkingDots),
       ),
-      findsOneWidget,
+      findsNothing,
     );
-    expect(find.text('Yesterday'), findsNothing);
+    expect(find.text('Yesterday'), findsOneWidget);
     ThreadPreviewStore.instance.noteRows(busy.threads.first.key, [
       <String, dynamic>{
         'sender': 'user',
@@ -423,15 +425,20 @@ void main() {
       await pumpRoster(tester, source);
 
       final Finder row = find.byKey(ValueKey<String>('agent-tile-${a.id}'));
-      expect(tileOf(tester, a.id).leading, isA<AgentFace>());
+      // The face is drawn at kRosterTileFaceDrawn inside a kRosterTileFace
+      // slot, so it uses the row's height and the names keep their x.
       expect(
         tester
             .widget<AgentFace>(
               find.descendant(of: row, matching: find.byType(AgentFace)),
             )
             .size,
-        kRosterTileFace,
+        kRosterTileFaceDrawn,
       );
+      final Rect face = tester.getRect(
+        find.descendant(of: row, matching: find.byType(AgentFace)),
+      );
+      expect(face.center.dy, closeTo(tester.getRect(row).center.dy, 0.5));
       // The row sits in chuk's card, under the group's lid.
       expect(
         find.ancestor(of: row, matching: find.byType(SbCardShape)),
@@ -998,7 +1005,7 @@ void main() {
   });
 
   group('working (§16.1)', () {
-    testWidgets("a row carries chuk's working dot only while its agent works", (
+    testWidgets("a row never carries a working mark (CHAT-74)", (
       tester,
     ) async {
       final source = LocalAgentRosterSource(random: Random(7));
@@ -1010,7 +1017,7 @@ void main() {
 
       source.markRunning(a.id, true);
       await tester.pumpAndSettle();
-      expect(tileOf(tester, a.id).streaming, isTrue);
+      expect(tileOf(tester, a.id).streaming, isFalse);
 
       source.markRunning(a.id, false);
       await tester.pumpAndSettle();

@@ -23,6 +23,7 @@ import 'package:chuk_chat/pages/agent_host_activity_page.dart';
 import 'package:chuk_chat/pages/agent_profile_edit_page.dart';
 import 'package:chuk_chat/pages/automations_page.dart';
 import 'package:chuk_chat/widgets/chat_documents_panel.dart';
+import 'package:chuk_chat/models/agents_agent.dart' show AgentActivity;
 import 'package:chuk_chat/models/stored_chat.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/widgets/room_create_sheet.dart';
@@ -1324,15 +1325,18 @@ void main() {
     AgentsRunLedger.instance.begin(threadKey);
     await tester.pump();
 
-    // The roster row carries chuk's dot for a chat still being written.
+    // The agent is working; its row carries no working mark, the face's
+    // animation says it (CHAT-74).
     SbChatTile row() => tester.widget<SbChatTile>(
       find.byKey(ValueKey<String>('agent-tile-${roster.agents.single.id}')),
     );
-    expect(row().streaming, isTrue);
+    expect(roster.agents.single.activity, AgentActivity.working);
+    expect(row().streaming, isFalse);
 
     AgentsRunLedger.instance.finish(threadKey, reason: 'finished');
     await tester.pump();
 
+    expect(roster.agents.single.activity, isNot(AgentActivity.working));
     expect(row().streaming, isFalse);
     // The row is a messenger row: it dates the last MESSAGE, not the run.
     // Nothing was said in this thread, so no time and an empty line.

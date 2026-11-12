@@ -116,11 +116,11 @@ void main() {
     Finder inRow(String id, Finder f) =>
         find.descendant(of: findId('mobile-agent-row-$id'), matching: f);
 
-    // A running agent keeps its last message (markdown stripped); small
-    // working dots take the time's place.
+    // A running agent keeps its last message (markdown stripped) and its
+    // time: no working mark, the face's animation says it (CHAT-74).
     expect(inRow('chief', find.text('Digest sent')), findsOneWidget);
     expect(find.text('Working…'), findsNothing);
-    expect(inRow('chief', find.byType(WorkingDots)), findsOneWidget);
+    expect(inRow('chief', find.byType(WorkingDots)), findsNothing);
 
     // The last message and ITS time, not the brief, the role or the time of
     // the last run.

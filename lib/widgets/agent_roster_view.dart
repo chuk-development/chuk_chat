@@ -58,9 +58,30 @@ import 'package:chuk_chat/widgets/update_banner.dart';
 // language; it is exported here so every caller keeps one import.
 export 'package:chuk_chat/widgets/agent_name_dialog.dart';
 
-/// The face in front of an agent or a room in the open pane: a messenger
-/// sized face next to the name and the last message.
+/// The slot in front of an agent or a room in the open pane: the room the
+/// face takes in the row's layout, so every name starts on one x.
 const double kRosterTileFace = 44;
+
+/// The size an agent's face is drawn at in a roster row (CHAT-74). Larger
+/// than its slot: the row's two text lines are 50 px high, so the face uses
+/// that height and grows to the left into the card's padding. The row stays
+/// as tall as before and the text does not move.
+const double kRosterTileFaceDrawn = 50;
+
+/// [face] drawn at [kRosterTileFaceDrawn] in a [kRosterTileFace] slot,
+/// centred on the row, its right edge on the slot's.
+Widget rosterFaceSlot(Widget face) => SizedBox(
+  width: kRosterTileFace,
+  height: kRosterTileFace,
+  child: OverflowBox(
+    minWidth: kRosterTileFaceDrawn,
+    maxWidth: kRosterTileFaceDrawn,
+    minHeight: kRosterTileFaceDrawn,
+    maxHeight: kRosterTileFaceDrawn,
+    alignment: Alignment.centerRight,
+    child: face,
+  ),
+);
 
 class AgentRosterView extends StatefulWidget {
   const AgentRosterView({
@@ -1080,7 +1101,6 @@ class _AgentRosterViewState extends State<AgentRosterView> {
     final ThemeData theme = Theme.of(context);
     final Color iconFg = theme.resolvedIconColor;
     final Color accent = theme.colorScheme.primary;
-    final bool working = agent.activity == AgentActivity.working;
     final AgentsWaitKind? waitKind = agentsWaitKindFor(agent);
     final bool unread = _marks.isUnread(agent);
     final bool pinned = _pins.isPinned(agent.id);
@@ -1102,12 +1122,14 @@ class _AgentRosterViewState extends State<AgentRosterView> {
           ),
           selected: _isSelected(agent),
           unread: unread,
-          // chuk's dot for a chat that is still being written.
-          streaming: working,
-          leading: AgentFace(
-            agent: agent,
-            size: kRosterTileFace,
-            store: _profiles,
+          // No "working" mark in the row: the face's own work animation
+          // says it, and the time stays where it always is (CHAT-74).
+          leading: rosterFaceSlot(
+            AgentFace(
+              agent: agent,
+              size: kRosterTileFaceDrawn,
+              store: _profiles,
+            ),
           ),
           onTap: () => _pick(agent),
           onSecondaryTap: (Offset at) =>
@@ -1214,11 +1236,13 @@ class _AgentRosterViewState extends State<AgentRosterView> {
     return SbChatTile(
       key: ValueKey<String>('hidden-tile-${agent.id}'),
       title: agent.name,
-      leading: AgentFace(
-        agent: agent,
-        size: kRosterTileFace,
-        store: _profiles,
-        dimmed: true,
+      leading: rosterFaceSlot(
+        AgentFace(
+          agent: agent,
+          size: kRosterTileFaceDrawn,
+          store: _profiles,
+          dimmed: true,
+        ),
       ),
       trailing: TextButton(
         style: TextButton.styleFrom(

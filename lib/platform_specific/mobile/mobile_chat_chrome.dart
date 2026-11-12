@@ -1,7 +1,7 @@
 /// The chips and the agent pill of chuk_chat's floating top bar, with an
 /// agent in it: [ChromeChip] (chuk's 42 px round chip with a 48 px press) and
 /// [AgentChromePill] (chuk's title pill carrying the agent's face, its name
-/// and its status line — "Active now", three dots while it works, or
+/// and its status line — "Active now" (also while it works) or
 /// "Offline · Reconnect").
 ///
 /// The desktop thread header (`agents_thread_header.dart`) draws them. The
@@ -19,7 +19,6 @@ import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/ui/agent_avatar/agent_avatar.dart';
 import 'package:chuk_chat/ui/expressive/agent_status.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
-import 'package:chuk_chat/ui/expressive/working_dots.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/floating_chrome_surface.dart';
@@ -227,32 +226,8 @@ class AgentChromePill extends StatelessWidget {
         ),
       );
     }
-    if (agent.running && paired) {
-      return Semantics(
-        label: 'Working',
-        child: SizedBox(
-          height:
-              MediaQuery.textScalerOf(context).scale(_kPillStatusFontSize) *
-              1.3,
-          child: ExcludeSemantics(
-            child: _statusLine(
-              context,
-              paired: paired,
-              child: MediaQuery.disableAnimationsOf(context)
-                  ? Text(
-                      '…',
-                      style: TextStyle(
-                        color: scheme.primary,
-                        fontSize: _kPillStatusFontSize,
-                        height: 1.3,
-                      ),
-                    )
-                  : WorkingDots(color: scheme.primary, label: ''),
-            ),
-          ),
-        ),
-      );
-    }
+    // A run in flight shows no dots here: the face's work animation says
+    // it, and the line keeps the normal status (CHAT-74).
     return _statusLine(
       context,
       paired: paired,

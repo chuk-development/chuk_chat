@@ -447,8 +447,10 @@ Never a picture the agent drew, never a second bar widget.
 - A roster row is 64 px: face 48 (the main agent's row 88 px, face 64), name, the last line that was actually said,
   the time of that line (`rosterTimeLabel`: clock today, "Yesterday", weekday,
   short date), and a count badge when something is unread. No role tag, no
-  brief, no "Working…": a running agent keeps its last line and shows still
-  working dots where the time goes. Never a placeholder line like
+  brief, no "Working…" and no working dots: a running agent keeps its last
+  line and its time; its face's work animation says it works (CHAT-74).
+  The chat header's status line stays "Active now", without dots. Never a
+  placeholder line like
   "No activity yet" — an empty line says it better.
 - The preview text is plain: markdown markers are stripped
   (`ThreadPreviewStore`), and the user's own line is prefixed "You: ".
@@ -548,10 +550,12 @@ in `mobile_chat_chrome.dart`), so both layouts read the same.
 - The roster is chuk_chat's sidebar (`sidebar_chrome.dart`): every row is an
   `SbChatTile` card (about 59 px), the same card as a chat in the chuk
   sidebar (AGENTS_UI_UNIFY.md, Result D), in its messenger shape (`preview`,
-  `timeLabel`, about 66 px): face 44, name with the last message's time on
-  its baseline at the far right edge, the last message below across the
-  whole width (§10). A run shows still working dots in the time's place;
-  a wait pill and the unread dot end the message line.
+  `timeLabel`, about 66 px): the face drawn 50 px in a 44 px slot
+  (`rosterFaceSlot`), so it uses the two text lines' height and the names
+  keep their x; name with the last message's time on its baseline at the
+  far right edge, the last message below across the whole width (§10). A
+  run shows no mark in the row; a wait pill and the unread dot end the
+  message line.
 - Hover: `surfaceContainerHigh`. Selected: the accent at 20 % over the card
   fill, the name in `accentForegroundOn` that fill. Unread: bold name plus a
   small accent dot, no big badge.

@@ -21,7 +21,7 @@
 ///  * one row per agent, like a messenger: its face with the presence dot,
 ///    the name, the time of the last message, that message on the second line
 ///    (empty until something was said), and the unread count. A running agent
-///    shows small working dots where the time goes. The row springs and morphs
+///    shows its time; the face's work animation says it works. The row springs and morphs
 ///    on press, and the list cascades in.
 ///
 /// A group ROOM is a conversation too, so it is a row in this same list — same
@@ -60,7 +60,6 @@ import 'package:chuk_chat/widgets/agents_wait_label.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agent_read_marks.dart';
 import 'package:chuk_chat/services/agents/thread_preview_store.dart';
-import 'package:chuk_chat/ui/expressive/working_dots.dart';
 import 'package:chuk_chat/utils/roster_time_label.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
 import 'package:chuk_chat/services/agents/roster_pins.dart';
@@ -1210,11 +1209,8 @@ class MobileAgentRow extends StatelessWidget {
                             if (waitKind != null) ...<Widget>[
                               const SizedBox(width: 8),
                               AgentsWaitPill(kind: waitKind!),
-                            ] else if (agent.running) ...<Widget>[
-                              // A run in flight takes the time's place, small;
-                              // the last message stays on the line below.
-                              const SizedBox(width: 8),
-                              WorkingDots(color: timeColour, animate: false),
+                              // A run in flight shows no mark of its own: the
+                              // face's work animation says it (CHAT-74).
                             ] else if (time.isNotEmpty) ...<Widget>[
                               const SizedBox(width: 8),
                               Text(
