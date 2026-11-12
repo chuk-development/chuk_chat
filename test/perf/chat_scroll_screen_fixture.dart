@@ -71,10 +71,13 @@ Future<void> resetScreenWorld() async {
 
 /// Seeds [disk] with the thread, mounts the shell, opens the thread and
 /// returns the [ScrollableState] of its transcript.
+///
+/// [transcript] replaces the 300 mixed messages (e.g. a short thread).
 Future<ScrollableState> mountRealScreenThread(
   WidgetTester tester,
-  FakeDisk disk,
-) async {
+  FakeDisk disk, {
+  List<Map<String, String>>? transcript,
+}) async {
   const String key = 'host:perf-host';
   final agents = <AgentsAgent>[
     AgentsAgent(
@@ -89,7 +92,10 @@ Future<ScrollableState> mountRealScreenThread(
   await tester.runAsync(() async {
     disk.install();
     AgentsChatStore.userIdProvider = () => 'perf-user';
-    await AgentsChatStore.replaceThread(key, scrollPerfTranscript());
+    await AgentsChatStore.replaceThread(
+      key,
+      transcript ?? scrollPerfTranscript(),
+    );
     await AgentsChatStore.pending(key);
     await AgentsChatStore.rememberUser('perf-user');
     await AgentsChatStore.reset();

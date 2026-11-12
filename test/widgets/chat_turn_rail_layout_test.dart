@@ -1,9 +1,12 @@
-// The message minimap on the real desktop screen (an Agents thread in
-// `MessengerShell`, at desktop sizes): its strips sit centred between the
-// header line and the composer, every strip centred on its own line, and
-// the hover card's first text line centred on the hovered strip.
+// The message minimap on the real desktop screens, in both halves of the
+// app: the plain chat (`ChukChatUIDesktop`) and an Agents thread (in
+// `MessengerShell`). In every window size and for short and long chats the
+// rail's middle is the middle of the chat area: between the header line and
+// the window's bottom edge (the list runs behind the composer, as in
+// T3 Code). It never reaches into the composer. The hover card's first
+// text line sits on the hovered strip.
 //
-// Set CHUK_RAIL_SHOT=<dir> to also write a PNG of each size there.
+// Set CHUK_RAIL_SHOT=<dir> to also write a PNG of each case there.
 
 import 'dart:io';
 import 'dart:typed_data';
@@ -14,17 +17,37 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:chuk_chat/models/chat_message.dart';
+import 'package:chuk_chat/models/stored_chat.dart';
+import 'package:chuk_chat/platform_specific/chat/chat_ui_desktop.dart';
 import 'package:chuk_chat/services/agents/agents_chat_core.dart';
+import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/widgets/chat_turn_rail.dart';
 
 import '../perf/chat_scroll_screen_fixture.dart';
 import '../perf/perf_support.dart';
+import '../support/test_app.dart';
 
 const Timeout _guard = Timeout(Duration(minutes: 3));
 
-Rect _rect(WidgetTester tester, Finder f) => tester.getRect(f);
+const List<Size> _sizes = <Size>[
+  Size(1440, 1035),
+  Size(1920, 1080),
+  Size(1440, 900),
+];
+
+/// [turns] questions, each with an answer.
+List<Map<String, String>> _transcript(int turns) => <Map<String, String>>[
+  for (int i = 0; i < turns; i++) ...<Map<String, String>>[
+    <String, String>{'sender': 'user', 'text': 'Question $i, please help.'},
+    <String, String>{
+      'sender': 'ai',
+      'text': 'Answer $i. ${"The assistant explains a step. " * 6}',
+    },
+  ],
+];
 
 Future<void> _shot(WidgetTester tester, String name) async {
   final String? dir = Platform.environment['CHUK_RAIL_SHOT'];
@@ -39,6 +62,86 @@ Future<void> _shot(WidgetTester tester, String name) async {
     );
     await File('$dir/$name.png').writeAsBytes(png!.buffer.asUint8List());
   });
+}
+
+/// Measures the rail on screen and checks it; returns the strips.
+List<Rect> _expectCentred(WidgetTester tester, String label) {
+  final Finder rail = find.byType(ChatTurnRail);
+  expect(rail, findsOneWidget, reason: '$label: no minimap on the screen');
+  final ChatTurnRail widget = tester.widget(rail);
+  final Rect pane = tester.getRect(rail);
+  final List<Rect> strips =
+      find
+          .byWidgetPredicate(
+            (w) =>
+                w is Positioned &&
+                w.key is ValueKey<String> &&
+                (w.key! as ValueKey<String>).value.startsWith(
+                  'turn-rail-tick-',
+                ),
+          )
+          .evaluate()
+          .map((e) => tester.getRect(find.byWidget(e.widget)))
+          .toList()
+        ..sort((a, b) => a.top.compareTo(b.top));
+  expect(strips.length, greaterThanOrEqualTo(2), reason: label);
+
+  final double areaTop = pane.top + widget.topPadding;
+  final double areaCentre = (areaTop + pane.bottom) / 2;
+  final double composerTop = pane.bottom - widget.bottomPadding;
+  final double railCentre =
+      (strips.first.center.dy + strips.last.center.dy) / 2;
+  // ignore: avoid_print
+  print(
+    '$label: area ${areaTop.toStringAsFixed(1)}..${pane.bottom} '
+    '(middle ${areaCentre.toStringAsFixed(1)}), composer from '
+    '${composerTop.toStringAsFixed(1)}, strips '
+    '${strips.first.center.dy.toStringAsFixed(1)}..'
+    '${strips.last.center.dy.toStringAsFixed(1)} '
+    '(middle ${railCentre.toStringAsFixed(1)}), ${strips.length} strips',
+  );
+  expect(
+    (railCentre - areaCentre).abs(),
+    lessThanOrEqualTo(1.0),
+    reason: label,
+  );
+  expect(strips.first.top, greaterThanOrEqualTo(areaTop), reason: label);
+  expect(strips.last.bottom, lessThanOrEqualTo(composerTop), reason: label);
+  final double step = strips[1].center.dy - strips[0].center.dy;
+  for (int i = 1; i < strips.length; i++) {
+    expect(
+      (strips[i].center.dy - strips[i - 1].center.dy - step).abs(),
+      lessThan(0.01),
+      reason: label,
+    );
+  }
+  return strips;
+}
+
+/// Hovers the middle strip; the card's first line must sit on it.
+Future<void> _expectCardOnStrip(
+  WidgetTester tester,
+  List<Rect> strips,
+  String label,
+) async {
+  final Rect hovered = strips[strips.length ~/ 2];
+  final TestGesture mouse = await tester.createGesture(
+    kind: PointerDeviceKind.mouse,
+  );
+  await mouse.addPointer(location: hovered.center);
+  await mouse.moveTo(hovered.center);
+  await tester.pump(const Duration(milliseconds: 200));
+  final Finder firstLine = find.byKey(
+    const ValueKey<String>('turn-rail-preview-first-line'),
+  );
+  expect(firstLine, findsOneWidget, reason: label);
+  final double line = tester.getRect(firstLine).center.dy;
+  expect((line - hovered.center.dy).abs(), lessThan(1.0), reason: label);
+  // The strips do not move while the card is open.
+  final List<Rect> open = _expectCentred(tester, '$label (hover)');
+  expect(open.first.top, strips.first.top, reason: label);
+  await _shot(tester, '${label.replaceAll(' ', '_')}_hover');
+  await mouse.removePointer();
 }
 
 void main() {
@@ -57,100 +160,87 @@ void main() {
     await resetScreenWorld();
   });
 
-  for (final Size size in const <Size>[Size(1440, 900), Size(1920, 1080)]) {
-    testWidgets(
-      'minimap strips are centred at ${size.width.toInt()}x'
-      '${size.height.toInt()}',
-      timeout: _guard,
-      (tester) async {
+  for (final Size size in _sizes) {
+    final String px = '${size.width.toInt()}x${size.height.toInt()}';
+    for (final int turns in const <int>[5, 150]) {
+      testWidgets('Agents thread, $turns questions, $px: rail centred', (
+        tester,
+      ) async {
         silenceUnrelatedPlugins(tester);
         tester.view.physicalSize = size;
         tester.view.devicePixelRatio = 1;
         addTearDown(tester.view.resetPhysicalSize);
         addTearDown(tester.view.resetDevicePixelRatio);
 
-        await mountRealScreenThread(tester, disk);
-        await tester.pump(const Duration(milliseconds: 300));
-
-        final Finder rail = find.byType(ChatTurnRail);
-        expect(rail, findsOneWidget, reason: 'no minimap on the screen');
-        final ChatTurnRail widget = tester.widget(rail);
-        final Rect pane = _rect(tester, rail);
-        final Finder ticks = find.byWidgetPredicate(
-          (w) =>
-              w is Positioned &&
-              w.key is ValueKey<String> &&
-              (w.key! as ValueKey<String>).value.startsWith('turn-rail-tick-'),
-        );
-        final List<Rect> strips =
-            ticks
-                .evaluate()
-                .map((e) => tester.getRect(find.byWidget(e.widget)))
-                .toList()
-              ..sort((a, b) => a.top.compareTo(b.top));
-        expect(strips.length, greaterThanOrEqualTo(2));
-
-        // The free band: below the header line, above the composer.
-        final double bandTop = pane.top + widget.topPadding;
-        final double bandBottom = pane.bottom - widget.bottomPadding;
-        final double bandCentre = (bandTop + bandBottom) / 2;
-        final double railCentre =
-            (strips.first.center.dy + strips.last.center.dy) / 2;
-        final Rect line = _rect(
+        await mountRealScreenThread(
           tester,
-          find.byKey(const ValueKey<String>('turn-rail-guide')),
+          disk,
+          transcript: _transcript(turns),
         );
-        // ignore: avoid_print
-        print(
-          'size=$size pane=$pane band=$bandTop..$bandBottom '
-          'railCentre=$railCentre bandCentre=$bandCentre '
-          'line=$line first=${strips.first} last=${strips.last}',
-        );
-        expect((railCentre - bandCentre).abs(), lessThan(1.0));
-        // The guide line runs exactly from the first strip's centre to the
-        // last one's.
-        expect((line.top - strips.first.center.dy).abs(), lessThan(0.6));
-        expect((line.bottom - strips.last.center.dy).abs(), lessThan(0.6));
-        // Every strip is centred on its own line, and they are evenly
-        // spaced.
-        for (final Rect s in strips) {
-          expect(s.height, 2);
-        }
-        final double step = strips[1].center.dy - strips[0].center.dy;
-        for (int i = 1; i < strips.length; i++) {
-          expect(
-            (strips[i].center.dy - strips[i - 1].center.dy - step).abs(),
-            lessThan(0.01),
-          );
-        }
-        // Inside the band, with its margin.
-        expect(strips.first.top, greaterThanOrEqualTo(bandTop));
-        expect(strips.last.bottom, lessThanOrEqualTo(bandBottom));
-        await _shot(tester, 'rail_${size.width.toInt()}');
+        await tester.pump(const Duration(milliseconds: 300));
+        final String label = 'agents $turns $px';
+        final List<Rect> strips = _expectCentred(tester, label);
+        await _shot(tester, label.replaceAll(' ', '_'));
+        await _expectCardOnStrip(tester, strips, label);
 
-        // Hover the middle strip: the card's first line sits on it.
-        final int middle = strips.length ~/ 2;
-        final TestGesture mouse = await tester.createGesture(
-          kind: PointerDeviceKind.mouse,
-        );
-        await mouse.addPointer(location: strips[middle].center);
-        await mouse.moveTo(strips[middle].center);
-        await tester.pump(const Duration(milliseconds: 200));
-        final Finder firstLine = find.byKey(
-          const ValueKey<String>('turn-rail-preview-first-line'),
-        );
-        expect(firstLine, findsOneWidget);
-        final double lineCentre = _rect(tester, firstLine).center.dy;
-        final Rect hovered = strips[middle];
-        // ignore: avoid_print
-        print('hover strip=${hovered.center.dy} cardLine=$lineCentre');
-        expect((lineCentre - hovered.center.dy).abs(), lessThan(1.0));
-        await _shot(tester, 'rail_${size.width.toInt()}_hover');
-        await mouse.removePointer();
         await releaseIdleTimers(tester);
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pump(const Duration(seconds: 3));
-      },
-    );
+      }, timeout: _guard);
+
+      testWidgets('plain chat, $turns questions, $px: rail centred', (
+        tester,
+      ) async {
+        silenceUnrelatedPlugins(tester);
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        const String chatId = 'rail-layout-chat';
+        ChatStorageState.chatsById[chatId] = StoredChat(
+          id: chatId,
+          createdAt: DateTime.utc(2026, 11, 12),
+          isStarred: false,
+          messages: <ChatMessage>[
+            for (final Map<String, String> row in _transcript(turns))
+              ChatMessage(
+                role: row['sender'] == 'user' ? 'user' : 'assistant',
+                text: row['text']!,
+              ),
+          ],
+        );
+        await tester.pumpWidget(
+          testApp(
+            Scaffold(
+              body: ChukChatUIDesktop(
+                onToggleSidebar: () {},
+                selectedChatId: chatId,
+                onChatIdChanged: (_) {},
+                isSidebarExpanded: false,
+                isCompactMode: false,
+                showReasoningTokens: false,
+                showModelInfo: false,
+                showTps: false,
+                // The Agents build's header band (Chat | Agents switch).
+                topInset: 52,
+              ),
+            ),
+          ),
+        );
+        for (int i = 0; i < 20; i++) {
+          await tester.pump(const Duration(milliseconds: 50));
+        }
+        final String label = 'chat $turns $px';
+        final List<Rect> strips = _expectCentred(tester, label);
+        await _shot(tester, label.replaceAll(' ', '_'));
+        await _expectCardOnStrip(tester, strips, label);
+
+        await releaseIdleTimers(tester);
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump(const Duration(seconds: 3));
+        ChatStorageState.chatsById.remove(chatId);
+      }, timeout: _guard);
+    }
   }
 }

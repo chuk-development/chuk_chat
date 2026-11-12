@@ -49,6 +49,16 @@ void main() {
       expect(chatTurnRailHeight(5, 900, bandHeight: 583), 32);
     });
 
+    test('band: centred below the header, clear of the composer', () {
+      // 1035 px pane, header line at 76, composer 241 px: the centre is
+      // 555.5, 238.5 px above the composer; the rail may use twice that.
+      expect(chatTurnRailBand(paneHeight: 1035, top: 76, bottom: 241), 477);
+      // No composer: the whole area below the header.
+      expect(chatTurnRailBand(paneHeight: 900, top: 76, bottom: 0), 824);
+      // A composer taller than half the area leaves no room.
+      expect(chatTurnRailBand(paneHeight: 400, top: 0, bottom: 300), 0);
+    });
+
     test('jump estimate: a row share by measured heights', () {
       expect(chatTurnRailRowShare(index: 0, itemCount: 4), 0);
       expect(chatTurnRailRowShare(index: 2, itemCount: 4), 0.5);

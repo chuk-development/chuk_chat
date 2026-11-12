@@ -128,10 +128,10 @@ const double kChatTurnRailBandMargin = 16;
 
 /// The rail's height for [count] strips in a window of [windowHeight].
 ///
-/// [bandHeight] is the free band between the header line and the composer
-/// the rail is centred in. T3 Code only caps by the window; here the
-/// composer is taller, and a long chat's rail (window minus 288 px) ran
-/// 29 px into the composer, with its centre 14.5 px below the band's.
+/// [bandHeight] is the room the rail may fill around its centre without
+/// touching the header or the composer (see [chatTurnRailBand]). T3 Code
+/// only caps by the window; here the composer is taller, and a long chat's
+/// rail (window minus 288 px) ran 29 px into the composer.
 double chatTurnRailHeight(
   int count,
   double windowHeight, {
@@ -141,6 +141,26 @@ double chatTurnRailHeight(
   final double cap = math.max(1, windowHeight - kChatTurnRailHeightReserve);
   final double band = math.max(1, bandHeight - 2 * kChatTurnRailBandMargin);
   return math.min(natural, math.min(cap, band));
+}
+
+/// The room for a rail centred between the header line ([top]) and the
+/// window's bottom edge, in a pane [paneHeight] tall whose lowest [bottom]
+/// px are the composer. The rail must stay clear of the composer, and it is
+/// centred, so it gets twice the smaller distance from the centre.
+///
+/// Centred on the whole pane below the header, not on the band above the
+/// composer: the list runs behind the composer, and the composer here
+/// reserves about 240 px (chip, field, hint line). Centred above it, the
+/// rail stood about 110 px above the middle of the chat (owner's 1035 px
+/// window: strips 280..597, middle 438, chat middle about 550).
+double chatTurnRailBand({
+  required double paneHeight,
+  required double top,
+  required double bottom,
+}) {
+  if (!paneHeight.isFinite) return double.infinity;
+  final double area = paneHeight - top;
+  return math.max(0, math.min(area, area - 2 * bottom));
 }
 
 /// Side gutter between the pane edge and a centred column.
@@ -271,7 +291,8 @@ class ChatTurnRailController {
 }
 
 /// The minimap. Place it with [Positioned.fill] over the chat pane; it lays
-/// itself out on the left edge between [topPadding] and [bottomPadding].
+/// itself out on the left edge, centred between [topPadding] and the pane's
+/// bottom edge, and keeps clear of the lowest [bottomPadding] px.
 class ChatTurnRail extends StatefulWidget {
   const ChatTurnRail({
     super.key,
@@ -427,28 +448,28 @@ class _ChatTurnRailState extends State<ChatTurnRail> {
         final bool persistent = gutter >= kChatTurnRailPersistentGutter;
         final double hitStrip = chatTurnRailHitStripWidth(gutter);
         final double windowHeight = MediaQuery.sizeOf(context).height;
-        final double band =
-            pane.maxHeight - widget.topPadding - widget.bottomPadding;
         final double railHeight = chatTurnRailHeight(
           _ticks.length,
           windowHeight,
-          bandHeight: band.isFinite ? band : double.infinity,
-        );
-        final bool open = _active != null;
-        // While the card is open the hit box spans the pane's height too, so
-        // a card that hangs past the (short) rail still keeps the hover. In
-        // the browser an overflowing child keeps it by itself; Flutter only
-        // hit-tests inside a box's own size.
-        final double paneHeight = math.max(
-          railHeight,
-          pane.maxHeight - widget.topPadding - widget.bottomPadding,
-        );
-        final bool visible = persistent || _hovered || _focus.hasFocus;
-        return Padding(
-          padding: EdgeInsets.only(
+          bandHeight: chatTurnRailBand(
+            paneHeight: pane.maxHeight,
             top: widget.topPadding,
             bottom: widget.bottomPadding,
           ),
+        );
+        final bool open = _active != null;
+        // While the card is open the hit box spans the pane's height below
+        // the header, so a card that hangs past the (short) rail still keeps
+        // the hover. In the browser an overflowing child keeps it by itself;
+        // Flutter only hit-tests inside a box's own size. Same centre as the
+        // closed box, so the strips do not move.
+        final double paneHeight = math.max(
+          railHeight,
+          pane.maxHeight - widget.topPadding,
+        );
+        final bool visible = persistent || _hovered || _focus.hasFocus;
+        return Padding(
+          padding: EdgeInsets.only(top: widget.topPadding),
           child: Align(
             alignment: Alignment.centerLeft,
             child: AnimatedOpacity(
@@ -555,6 +576,8 @@ class _ChatTurnRailState extends State<ChatTurnRail> {
                     child: CustomSingleChildLayout(
                       delegate: _PreviewPlacement(
                         left: kChatTurnRailPreviewLeft,
+                        // Above the composer.
+                        bottomLimit: boxHeight - widget.bottomPadding,
                         stripY:
                             railTop +
                             railHeight * chatTurnRailTopFraction(active, count),
@@ -611,12 +634,17 @@ class _ChatTurnRailState extends State<ChatTurnRail> {
 const double kChatTurnRailPreviewFirstLine = 1 + 12 + 10;
 
 /// Puts the preview card so its first line's centre is on [stripY], kept
-/// inside the box.
+/// inside the box and above [bottomLimit].
 class _PreviewPlacement extends SingleChildLayoutDelegate {
-  const _PreviewPlacement({required this.left, required this.stripY});
+  const _PreviewPlacement({
+    required this.left,
+    required this.stripY,
+    required this.bottomLimit,
+  });
 
   final double left;
   final double stripY;
+  final double bottomLimit;
 
   @override
   BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
@@ -625,13 +653,16 @@ class _PreviewPlacement extends SingleChildLayoutDelegate {
   @override
   Offset getPositionForChild(Size size, Size childSize) {
     final double wanted = stripY - kChatTurnRailPreviewFirstLine;
-    final double maxTop = math.max(0.0, size.height - childSize.height);
+    final double floor = math.min(size.height, bottomLimit);
+    final double maxTop = math.max(0.0, floor - childSize.height);
     return Offset(left, wanted.clamp(0.0, maxTop));
   }
 
   @override
   bool shouldRelayout(_PreviewPlacement old) =>
-      old.left != left || old.stripY != stripY;
+      old.left != left ||
+      old.stripY != stripY ||
+      old.bottomLimit != bottomLimit;
 }
 
 class _PreviewCard extends StatelessWidget {
