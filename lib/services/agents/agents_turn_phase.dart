@@ -293,10 +293,8 @@ String agentsTurnPhaseLabel(
   final AppLocalizations? l = l10n;
   return switch (phase) {
     AgentsTurnPhase.sending => l?.agentsPhaseSending ?? 'Sending',
-    AgentsTurnPhase.noAnswer =>
-      l?.agentsPhaseNoAnswer ?? 'Your computer is not answering',
-    AgentsTurnPhase.offline =>
-      l?.agentsPhaseOffline ?? 'Your computer is offline',
+    AgentsTurnPhase.noAnswer => l?.agentsPhaseNoAnswer ?? 'Connecting…',
+    AgentsTurnPhase.offline => l?.agentsPhaseOffline ?? 'Connecting…',
     AgentsTurnPhase.received => l?.agentsPhaseReceived ?? 'Got it',
     AgentsTurnPhase.queued => l?.agentsPhaseQueued ?? 'Queued',
     AgentsTurnPhase.preparing => l?.agentsPhasePreparing ?? 'Preparing',

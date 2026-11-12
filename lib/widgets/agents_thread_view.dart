@@ -3551,7 +3551,9 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   Widget _buildReconnectBar(BuildContext context, String? banner) {
     final theme = Theme.of(context);
     final reconnecting = _busy;
-    final status = banner ?? 'Reconnecting to your Sidekicks…';
+    // A paired device never shows why a dial failed (owner, 2026-11-12): the
+    // app keeps redialling on its own, so the bar only says that, calmly.
+    const status = 'Connecting…';
     return SafeArea(
       top: false,
       child: Padding(
@@ -3561,9 +3563,9 @@ class AgentsThreadViewState extends State<AgentsThreadView>
             Expanded(
               child: Text(
                 status,
-                style: banner != null
-                    ? TextStyle(color: theme.colorScheme.error)
-                    : theme.textTheme.bodySmall,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
                 overflow: TextOverflow.ellipsis,
               ),
             ),

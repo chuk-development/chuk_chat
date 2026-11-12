@@ -218,8 +218,8 @@ const Map<String, String> stringsEn = {
   'archive': 'Archive',
   // Agents: the live status line and the browser takeover card.
   'agentsPhaseSending': 'Sending',
-  'agentsPhaseNoAnswer': 'Your computer is not answering',
-  'agentsPhaseOffline': 'Your computer is offline',
+  'agentsPhaseNoAnswer': 'Connecting…',
+  'agentsPhaseOffline': 'Connecting…',
   'agentsPhaseReceived': 'Got it',
   'agentsPhaseQueued': 'Queued',
   'agentsPhaseRetryingIn':
@@ -1517,7 +1517,7 @@ const Map<String, String> stringsEn = {
   'dashCancel': 'Cancel',
   'dashSizeHalf': 'Half',
   'dashSizeFull': 'Full',
-  'dashOffline': 'Your computer is offline',
+  'dashOffline': 'Connecting…',
   'dashPendingN': '{n} changes wait to sync',
   'dashPending1': '1 change waits to sync',
   'dashJustNow': 'just now',

@@ -162,7 +162,7 @@ void main() {
       _app(timeline(source(retry: () async => retries++))),
     );
     await tester.pump();
-    expect(find.text('Your computer is offline'), findsOneWidget);
+    expect(find.text('Connecting…'), findsOneWidget);
     final retry = find.byKey(const ValueKey<String>('agents-status-retry'));
     expect(retry, findsOneWidget);
     await tester.tap(retry);

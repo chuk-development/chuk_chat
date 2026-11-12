@@ -68,7 +68,7 @@ void main() {
     final status = agentsTurnStatusFor(run: ledger.runFor(key), linkUp: false)!;
     expect(status.phase, AgentsTurnPhase.offline);
     expect(status.offersRetry, isTrue);
-    expect(status.label(), 'Your computer is offline');
+    expect(status.label(), 'Connecting…');
   });
 
   test('tokens say Writing; a tool after them says Working, not Writing', () {

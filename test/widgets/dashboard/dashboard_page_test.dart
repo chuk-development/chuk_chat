@@ -208,7 +208,7 @@ void main() {
           .evaluate()
           .map((Element e) => (e.widget as Text).data)
           .single,
-      'Your computer is offline · 1 change waits to sync',
+      'Connecting… · 1 change waits to sync',
     );
   });
 

@@ -5,7 +5,7 @@
 // (a) not paired            -> "Add your computer" (and "Looking for your
 //                              computer…" while a restore can still land)
 // (b) paired, connecting    -> "Connecting to your computer…"
-// (c) paired, host away     -> "Your computer is offline" + Reconnect, and a
+// (c) paired, host away     -> "Connecting…" + Reconnect, and a
 //                              short neutral line while a heal is running
 // (d) connected, no agents  -> "No agents yet" + Add an agent
 //
@@ -286,13 +286,13 @@ void main() {
           controller: () => FakeRelayController()..reconnectFails = true,
         );
         // Still trying: that is "connecting", not an alarm.
-        expect(title('Your computer is offline'), findsNothing);
+        expect(title('Connecting to your Sidekicks…'), findsNothing);
         for (var i = 0; i < 6; i++) {
           await tester.pump(const Duration(seconds: 10));
         }
         await tester.pumpAndSettle();
 
-        expect(title('Your computer is offline'), findsOneWidget);
+        expect(title('Connecting to your Sidekicks…'), findsOneWidget);
         // No Reconnect button: the app redials on its own.
         expect(find.byKey(AgentsStatusPanel.reconnectKey), findsNothing);
         expectNoTransportWords();

@@ -63,7 +63,7 @@ class AgentsStatusPanel extends StatelessWidget {
     AgentsShellStatus.lookingForComputer => 'Looking for your computer…',
     AgentsShellStatus.connecting => 'Connecting to your computer…',
     AgentsShellStatus.healing => 'Renewing your computer’s sign-in…',
-    AgentsShellStatus.offline => 'Your computer is offline',
+    AgentsShellStatus.offline => 'Connecting to your Sidekicks…',
     AgentsShellStatus.noAgents => 'No agents yet',
     AgentsShellStatus.ready => 'Choose an agent',
   };
@@ -77,8 +77,7 @@ class AgentsStatusPanel extends StatelessWidget {
       'Checking your account for a computer you added before.',
     AgentsShellStatus.connecting => 'This usually takes a few seconds.',
     AgentsShellStatus.healing => 'This takes a few seconds.',
-    AgentsShellStatus.offline =>
-      'Make sure it is on and Agents is running there.',
+    AgentsShellStatus.offline => 'The app keeps trying on its own.',
     AgentsShellStatus.noAgents =>
       'Your computer is connected. Add an agent to start.',
     AgentsShellStatus.ready => 'Pick one from the list to open its chat.',
