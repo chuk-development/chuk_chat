@@ -57,6 +57,7 @@ from .context import (
 )
 from .model_retry import EmptyModelResponse, RetryPolicy, RetryTracker
 from .registry import ToolRegistry
+from .tool_search import relevance_search
 from .sources import REPLAYED_CONTEXT_SOURCES, tag_row, valid_source
 from .state import UNKNOWN_OUTCOME_RESULT, StateStore
 from .tool_events import tool_event_fields, tool_status
@@ -331,7 +332,7 @@ def _tool_schema_tokens(tools: object) -> int:
 # kill switch and INTERRUPTED_TOOL_RESULT from this module.
 
 from pydantic_ai import Agent, CancellationToken  # noqa: E402
-from pydantic_ai.capabilities import HandleDeferredToolCalls, ProcessHistory  # noqa: E402
+from pydantic_ai.capabilities import HandleDeferredToolCalls, ProcessHistory, ToolSearch  # noqa: E402
 from pydantic_ai.exceptions import (  # noqa: E402
     ContentFilterError,
     RunCancelled,
@@ -812,6 +813,9 @@ class AgentLoop:
     def _build_agent(self) -> Agent:
         capabilities: list[Any] = [ProcessHistory(self._process_history)]
         capabilities.append(HandleDeferredToolCalls(handler=self._policy.handler))
+        # Relevance-only ranking: the default one hides a found tool behind
+        # weaker unfound matches (tool_search.relevance_search, CHAT-40).
+        capabilities.append(ToolSearch(strategy=relevance_search))
         capabilities.extend(self._extra_capabilities)
         return Agent(
             self._pai_model,

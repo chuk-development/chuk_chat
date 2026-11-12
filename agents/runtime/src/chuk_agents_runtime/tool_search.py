@@ -60,6 +60,9 @@ defer at the wrong size.
 from __future__ import annotations
 
 import json
+import re
+from collections.abc import Sequence
+from typing import Any
 from dataclasses import dataclass, field
 
 from .context import estimate_tokens
@@ -211,3 +214,37 @@ def apply_tool_search(
         # declaration comes on top (a few hundred tokens).
         tokens_after=tool_doc_tokens(registry),
     )
+
+
+_SEARCH_TOKEN_RE = re.compile(r"[a-z0-9]+")
+
+
+def relevance_search(_ctx: Any, queries: Sequence[str], tools: Sequence[Any]) -> list[str]:
+    """``search_tools`` ranked by relevance alone (bead CHAT-40).
+
+    Pydantic AI's default keyword search sorts every not-yet-found match before
+    every already-found one, and cuts at ten. A thread that found
+    ``mcp__Fastmail__search_email`` once then searched "search_email" again and
+    got ten GitHub tools: the best match was pushed out by weaker, unfound
+    ones. The model read that as "the Fastmail mail tools are gone" and fell
+    back to the wrong mailbox for three weeks. Here the score (query tokens
+    that appear in the tool's name or description) is the only key; a tie
+    keeps the corpus order. A name match counts double, so the exact tool
+    the model asked for comes first.
+    """
+    terms: set[str] = set()
+    for query in queries:
+        terms.update(_SEARCH_TOKEN_RE.findall(str(query).lower()))
+    if not terms:
+        return []
+    scored: list[tuple[int, int, str]] = []
+    for index, tool in enumerate(tools):
+        name = str(getattr(tool, "name", "") or "")
+        description = str(getattr(tool, "description", "") or "")
+        name_terms = set(_SEARCH_TOKEN_RE.findall(name.lower()))
+        desc_terms = set(_SEARCH_TOKEN_RE.findall(description.lower()))
+        score = 2 * len(terms & name_terms) + len(terms & (desc_terms - name_terms))
+        if score > 0:
+            scored.append((-score, index, name))
+    scored.sort()
+    return [name for _, _, name in scored]
