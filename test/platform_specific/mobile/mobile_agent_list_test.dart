@@ -177,7 +177,7 @@ void main() {
     expect(first.top, greaterThan(kPhonePadding.top + 58));
     // No page headline any more — the switch in the middle of the row says
     // what the list is showing.
-    expect(find.text('Agents'), findsNothing);
+    expect(find.text('Sidekicks'), findsNothing);
     expect(find.text('All'), findsOneWidget);
     // The segment carries its unread count, so the label is "Unread $n".
     expect(find.textContaining('Unread'), findsOneWidget);

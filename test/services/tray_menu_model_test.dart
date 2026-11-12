@@ -128,7 +128,7 @@ void main() {
         );
         expect(chats.label, 'Chats');
         expect(chats.checked, isFalse);
-        expect(agents.label, 'Agents');
+        expect(agents.label, 'Sidekicks');
         expect(agents.checked, isTrue);
         expect(entries.indexOf(chats), 1, reason: 'right under New chat');
       },

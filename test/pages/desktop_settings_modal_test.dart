@@ -15,7 +15,7 @@ import '../support/test_app.dart';
 /// The desktop settings modal lists the same destinations as the phone's
 /// SettingsPage. The "Chat" half of the Agents build is chuk_chat, so that
 /// build keeps every chuk destination, leaves out only the onboarding replay
-/// (it wires no tour) and adds one 'Agents' group, which holds the host's own
+/// (it wires no tour) and adds one 'Sidekicks' group, which holds the host's own
 /// skills as "Host skills". The rarely used rows sit in one closed
 /// "Advanced" fold (docs/SETTINGS_ORDER.md). These tests hold both lists in
 /// place.
@@ -99,7 +99,7 @@ void main() {
     'Connectors',
     'Skills',
     'GitHub',
-    'Agents',
+    'Sidekicks',
     'here.now',
     'Embedding',
     'API Keys',
@@ -187,7 +187,7 @@ void main() {
       'Tool Calling',
       'Skills',
       'GitHub',
-      'Agents',
+      'Sidekicks',
       'here.now',
       'Embedding',
       'API Keys',

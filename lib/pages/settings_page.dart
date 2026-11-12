@@ -387,7 +387,7 @@ class _SettingsPageState extends State<SettingsPage> {
               // Agents only: about the host the agents run on, which a hosted
               // chat account has no equivalent for.
               if (agentsChatCore) ...[
-                ExpressiveSectionHeader('Agents'),
+                ExpressiveSectionHeader('Sidekicks'),
                 ExpressiveGroup(
                   children: [
                     _SettingsRow(

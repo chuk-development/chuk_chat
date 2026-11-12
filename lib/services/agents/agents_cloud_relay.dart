@@ -607,8 +607,7 @@ class AgentsCloudRelaySocket implements RelaySocket, RelaySocketProbe {
     }
     if (_targetDeviceId == null || _targetDeviceId!.isEmpty) {
       throw const AgentsCloudRelayException(
-        'Your computer is not reachable right now. Make sure Agents is '
-        'running on it, then try again.',
+        'Your Sidekicks are offline. Reconnecting on its own…',
         code: 'no_target',
       );
     }

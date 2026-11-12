@@ -226,10 +226,8 @@ flutter test               # Run tests
 flutter analyze            # Static analysis
 ```
 
-**Showing an image to the user: open it in qimgv on their display**, do not
-only hand over the file path or send the file. One command, detached:
-`(DISPLAY=:1 setsid qimgv <file> >/dev/null 2>&1 </dev/null &)`. The arrow keys
-then walk the whole folder, which is what makes a set of screenshots judgeable.
+**Showing an image to the user:** open it in qimgv, detached:
+`(DISPLAY=:1 setsid qimgv <file> >/dev/null 2>&1 </dev/null &)`.
 
 **Desktop testing = full reinstall, not hot reload** (owner instruction,
 2026-10-25, standing). After every change the owner should see, rebuild and
@@ -685,14 +683,9 @@ replacement: the chuk_chat rules keep applying to the app.
 ## Proving an Agents run without the app
 
 `agents/host/.venv/bin/python scripts/agents_e2e_probe.py "<prompt>" [--fastmail]`
-runs one real task through the host's own Executor code and the account's
-real model route (api.chuk.chat), with a loopback controller and its own
-state in `_scratch/agents_e2e_probe/`. It uses the account access token
-WITHOUT the refresh token, so it can never rotate the owner's login (needs a
-token with > 2 min left; the host refreshes it). It prints tool names, the
-`message` notes and the answer. The host service is the systemd user unit
-`agents-manager` (`journalctl --user -u agents-manager`; its log tag is
-`chuk-agents-manager`).
+runs one real task through the host's Executor and the real model route. It
+uses the access token only (cannot rotate the owner's login). Host unit:
+`agents-manager`.
 
 ## Shell and task tracking
 

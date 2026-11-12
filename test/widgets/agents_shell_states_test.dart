@@ -293,15 +293,9 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(title('Your computer is offline'), findsOneWidget);
-        final Finder reconnect = find.byKey(AgentsStatusPanel.reconnectKey);
-        expect(reconnect, findsOneWidget);
+        // No Reconnect button: the app redials on its own.
+        expect(find.byKey(AgentsStatusPanel.reconnectKey), findsNothing);
         expectNoTransportWords();
-
-        final before = built.length;
-        await tester.tap(reconnect);
-        await tester.pumpAndSettle();
-        expect(built.length, greaterThan(before));
-        expect(built.last.reconnectCalls, greaterThan(0));
       });
 
       testWidgets('(d) connected with no agents: "No agents yet" + Add', (

@@ -1254,7 +1254,7 @@ class _MessengerShellState extends State<MessengerShell>
       return <SwipeChatEntry>[
         SwipeChatEntry(
           id: _kPhoneStatusId,
-          title: l?.agentsModeAgents ?? 'Agents',
+          title: l?.agentsModeAgents ?? 'Sidekicks',
           leading: _PhoneEntryIcon(
             icon: Icons.computer_rounded,
             color: scheme.onSurfaceVariant,
@@ -1612,7 +1612,7 @@ class _MessengerShellState extends State<MessengerShell>
                             semanticsHint:
                                 l?.agentsStripHint ?? 'Swipe to switch agents',
                             workingLabel: l?.chatSwipeWorking ?? 'working',
-                            emptyTitle: l?.agentsModeAgents ?? 'Agents',
+                            emptyTitle: l?.agentsModeAgents ?? 'Sidekicks',
                           ),
                   ),
                 ),

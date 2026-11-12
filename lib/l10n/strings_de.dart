@@ -1703,7 +1703,7 @@ const Map<String, String> stringsDe = {
   'shortcutsSearchHint': 'Tastenkürzel suchen',
   'shortcutsNoMatch': 'Kein Tastenkürzel passt',
   'shortcutsGroupChat': 'Chat',
-  'shortcutsGroupAgents': 'Agents',
+  'shortcutsGroupAgents': 'Sidekicks',
   'shortcutsClose': 'Schließen',
   // ── end Chat UI: shortcuts ──
   // ── Chat UI: secret mask ──
@@ -1972,7 +1972,7 @@ const Map<String, String> stringsDe = {
   // ── end feedback ──
   // ── tray menu ──
   'trayModeChats': 'Chats',
-  'trayModeAgents': 'Agents',
+  'trayModeAgents': 'Sidekicks',
   'trayRecentChats': 'Letzte Chats',
   'trayNoRecentChats': 'Noch keine Chats',
   'trayShowWindow': 'Fenster anzeigen',

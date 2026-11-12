@@ -235,7 +235,7 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
                 // full-log switch that only an Agents thread reads. Neither is
                 // about one chat, so the gate stays on the build.
                 if (agentsChatCore) ...[
-                  const ExpressiveSectionHeader('Agents'),
+                  const ExpressiveSectionHeader('Sidekicks'),
                   ExpressiveGroup(
                     children: [
                       ExpressiveRow(

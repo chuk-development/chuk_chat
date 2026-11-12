@@ -986,7 +986,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
       if (rest.isNotEmpty)
         ..._group(
           _kGroupAgents,
-          'Agents',
+          'Sidekicks',
           <Widget>[
             for (final AgentsAgent a in rest) ..._agentTiles(context, a),
           ],

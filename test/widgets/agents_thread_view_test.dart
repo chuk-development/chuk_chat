@@ -595,7 +595,11 @@ void main() {
         // Still paired (stored), so the code form stays gone; the bottom bar
         // offers Reconnect. Removing the computer is one step away, in the
         // overflow menu, never a button beside Reconnect.
-        expect(find.widgetWithText(FilledButton, 'Reconnect'), findsOneWidget);
+        expect(find.widgetWithText(FilledButton, 'Reconnect'), findsNothing);
+        expect(
+          find.byKey(const ValueKey<String>('agents-reconnect-spinner')),
+          findsOneWidget,
+        );
         expect(find.widgetWithText(TextButton, 'Forget'), findsNothing);
         expect(
           find.byKey(const ValueKey<String>('agents-reconnect-more')),

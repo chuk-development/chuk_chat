@@ -1510,8 +1510,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   }
 
   static const String _kComputerAway =
-      'Your computer is not reachable right now. Make sure it is on and '
-      'Agents is running there.';
+      'Your Sidekicks are offline. Reconnecting on its own…';
 
   /// What the connect bar says about the transport. The relay's own detail
   /// ("Bad state: Host closed the connection during pairing", a socket
@@ -3552,9 +3551,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   Widget _buildReconnectBar(BuildContext context, String? banner) {
     final theme = Theme.of(context);
     final reconnecting = _busy;
-    final status =
-        banner ??
-        (reconnecting ? 'Reconnecting…' : 'Your computer is not connected.');
+    final status = banner ?? 'Reconnecting to your Sidekicks…';
     return SafeArea(
       top: false,
       child: Padding(
@@ -3588,16 +3585,15 @@ class AgentsThreadViewState extends State<AgentsThreadView>
               ],
             ),
             const SizedBox(width: 4),
-            FilledButton(
-              onPressed: reconnecting ? null : _reconnect,
-              child: reconnecting
-                  ? const SizedBox(
-                      height: 18,
-                      width: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Reconnect'),
+            // No Reconnect button (owner, 2026-11-12): the app redials on its
+            // own (_scheduleAutoReconnect), so the bar only shows that it does.
+            Icon(
+              Icons.sync,
+              key: const ValueKey<String>('agents-reconnect-spinner'),
+              size: 18,
+              color: theme.colorScheme.onSurfaceVariant,
             ),
+            const SizedBox(width: 8),
           ],
         ),
       ),

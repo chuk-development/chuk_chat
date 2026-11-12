@@ -370,12 +370,12 @@ void main() {
       // empty.
       await tester.pump();
       final Rect chats = tester.getRect(find.text('Chats'));
-      final Rect agents = tester.getRect(find.text('Agents'));
+      final Rect agents = tester.getRect(find.text('Sidekicks'));
       expect(chats.center.dx, lessThan(agents.center.dx));
       // The strip is the chips' 42, in a 48 px box a finger can hit.
       expect(tester.getSize(find.byType(AppModeSwitch)).height, 48);
 
-      await tester.tap(find.text('Agents'));
+      await tester.tap(find.text('Sidekicks'));
       await tester.pump();
       expect(picked, isEmpty, reason: 'the half in front is not picked again');
       await tester.tap(find.text('Chats'));
@@ -419,7 +419,7 @@ void main() {
         find.descendant(of: onStageSwitch(), matching: find.text('Chats')),
       );
       final Rect agentsLabel = tester.getRect(
-        find.descendant(of: onStageSwitch(), matching: find.text('Agents')),
+        find.descendant(of: onStageSwitch(), matching: find.text('Sidekicks')),
       );
       expect(homeLabel.center.dx, lessThan(chatsLabel.center.dx));
       expect(chatsLabel.center.dx, lessThan(agentsLabel.center.dx));
@@ -474,7 +474,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(home, findsOneWidget);
 
-      await pick(tester, 'Agents');
+      await pick(tester, 'Sidekicks');
       expect(home, findsNothing);
       expect(conversation, findsOneWidget);
       expect(shownMode(tester), AppMode.agents);
@@ -512,7 +512,7 @@ void main() {
       final SharedPreferences prefs = await SharedPreferences.getInstance();
       expect(prefs.getString(AppModeService.prefsKey), 'chats');
 
-      await pick(tester, 'Agents');
+      await pick(tester, 'Sidekicks');
       expect(find.text('chuk phone chat'), findsNothing);
       expect(conversation, findsOneWidget);
       expect(prefs.getString(AppModeService.prefsKey), 'agents');
@@ -561,7 +561,10 @@ void main() {
         await tester.pumpAndSettle();
 
         await tester.tap(
-          find.descendant(of: onStageSwitch(), matching: find.text('Agents')),
+          find.descendant(
+            of: onStageSwitch(),
+            matching: find.text('Sidekicks'),
+          ),
         );
         await tester.pump();
         expect(conversation, findsOneWidget);
@@ -594,7 +597,7 @@ void main() {
       // Home kept its state behind the switch.
       await pickHome(tester);
       expect(find.text('home taps 1'), findsOneWidget);
-      await pick(tester, 'Agents');
+      await pick(tester, 'Sidekicks');
       expect(conversation, findsOneWidget);
 
       await pick(tester, 'Chats');
@@ -679,7 +682,7 @@ void main() {
       // The Agents half is mounted behind it: it owns the socket.
       expect(threadView, findsOneWidget);
 
-      await pick(tester, 'Agents');
+      await pick(tester, 'Sidekicks');
       expect(find.byType(AgentsStatusPanel), findsOneWidget);
       expect(statusAddComputer, findsOneWidget);
     });
@@ -709,7 +712,7 @@ void main() {
             },
       );
       expect(controllerBuilds, 1);
-      await pick(tester, 'Agents');
+      await pick(tester, 'Sidekicks');
       await tester.tap(statusAddComputer);
       await tester.pumpAndSettle();
 
@@ -845,7 +848,7 @@ void main() {
       expect(threadView, findsOneWidget);
       expect(controllerBuilds, 1);
 
-      await pick(tester, 'Agents');
+      await pick(tester, 'Sidekicks');
       expect(find.text('chuk desktop chat'), findsNothing);
       expect(find.byType(AgentsThreadView), findsOneWidget);
       expect(controllerBuilds, 1);
@@ -885,7 +888,7 @@ void main() {
         reason: 'the half in front keeps its chat',
       );
 
-      await pick(tester, 'Agents');
+      await pick(tester, 'Sidekicks');
       final String? agentsPointer = ChatStorageService.selectedChatId;
       expect(agentsPointer, isNot('11111111-2222-3333-4444-555555555555'));
 

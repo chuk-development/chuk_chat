@@ -21,7 +21,7 @@ import '../support/test_app.dart';
 /// One settings page for both builds. With Agents on it is upstream
 /// chuk_chat's page: the same frame, the same account row, the same sections,
 /// the same rows (the "Chat" half is chuk_chat and reads them) and the same
-/// sign-out, minus the onboarding replay, plus one 'Agents' section. These
+/// sign-out, minus the onboarding replay, plus one 'Sidekicks' section. These
 /// tests hold that list in place.
 void main() {
   setUp(() {
@@ -156,7 +156,7 @@ void main() {
       'Tool Calling',
       'Skills',
       'GitHub',
-      'Agents',
+      'Sidekicks',
       'here.now',
       'Embedding',
       'API Keys',
@@ -257,7 +257,7 @@ void main() {
     debugAgentsChatCoreOverride = false;
     await pumpSettings(tester);
 
-    expect(find.text('Agents'), findsNothing);
+    expect(find.text('Sidekicks'), findsNothing);
     expect(find.text('here.now'), findsNothing);
     expect(find.text('Host skills'), findsNothing);
     expect(find.text('Mailbox'), findsNothing);

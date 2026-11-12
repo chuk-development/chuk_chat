@@ -292,7 +292,7 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
       // Agents only: about the host the agents run on, which a hosted
       // chat account has no equivalent for.
       if (agentsChatCore)
-        _SettingsGroup('Agents', advanced: true, [
+        _SettingsGroup('Sidekicks', advanced: true, [
           _SettingsDest(
             id: 'herenow',
             icon: Icons.place_outlined,

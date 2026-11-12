@@ -616,7 +616,7 @@ const Map<String, String> stringsFr = {
   'fontFamilyInter': 'Inter (sans empattement)',
   // ── tray menu ──
   'trayModeChats': 'Discussions',
-  'trayModeAgents': 'Agents',
+  'trayModeAgents': 'Sidekicks',
   'trayRecentChats': 'Discussions récentes',
   'trayNoRecentChats': 'Aucune discussion',
   'trayShowWindow': 'Afficher la fenêtre',

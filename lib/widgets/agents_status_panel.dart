@@ -180,7 +180,6 @@ class AgentsStatusPanel extends StatelessWidget {
 
   List<Widget> _actions(BuildContext context) {
     final VoidCallback? addComputer = onAddComputer;
-    final VoidCallback? reconnect = onReconnect;
     final VoidCallback? addAgent = onAddAgent;
     switch (status) {
       case AgentsShellStatus.notPaired:
@@ -211,18 +210,8 @@ class AgentsStatusPanel extends StatelessWidget {
           ),
         ];
       case AgentsShellStatus.offline:
-        if (reconnect == null) return const <Widget>[];
-        return <Widget>[
-          const SizedBox(height: 24),
-          _Primary(
-            key: reconnectKey,
-            label: 'Reconnect',
-            icon: Icons.refresh,
-            busy: busy,
-            busyLabel: 'Reconnecting…',
-            onTap: reconnect,
-          ),
-        ];
+        // No Reconnect button (owner, 2026-11-12): the app redials on its own.
+        return const <Widget>[];
       case AgentsShellStatus.noAgents:
         if (addAgent == null) return const <Widget>[];
         return <Widget>[

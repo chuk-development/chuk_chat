@@ -48,7 +48,7 @@ class AppModeSwitch extends StatelessWidget {
 
   /// The labels in English, in [AppMode] order. The switch shows the
   /// localised ones ([labelsOf]) when the tree has localisations.
-  static const List<String> labels = <String>['Chats', 'Agents'];
+  static const List<String> labels = <String>['Chats', 'Sidekicks'];
 
   /// The labels for [context], in [AppMode] order.
   static List<String> labelsOf(BuildContext context) {

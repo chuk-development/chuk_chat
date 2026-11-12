@@ -840,7 +840,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
                             label:
                                 AppLocalizations.of(context)
                                     ?.agentsModeAgents ??
-                                'Agents',
+                                'Sidekicks',
                           );
                         }
                         final int i = index - lead;

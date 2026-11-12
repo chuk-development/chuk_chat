@@ -444,7 +444,7 @@ void main() {
         find.ancestor(of: row, matching: find.byType(SbCardShape)),
         findsWidgets,
       );
-      expect(find.text('Agents'), findsOneWidget);
+      expect(find.text('Sidekicks'), findsOneWidget);
       // No role line: the role lives in the details pane.
       expect(find.text('researcher'), findsNothing);
     });

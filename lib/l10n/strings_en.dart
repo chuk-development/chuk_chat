@@ -738,7 +738,7 @@ const Map<String, String> stringsEn = {
   'composerMenuModes': 'Modes',
   'composerMenuCommands': 'Commands',
   'composerMenuFiles': 'Files',
-  'composerMenuAgents': 'Agents',
+  'composerMenuAgents': 'Sidekicks',
   'composerMenuWorkspaces': 'Workspaces',
   'composerMenuChats': 'Chats',
   'composerMenuNoMatch': 'No matches',
@@ -1136,7 +1136,7 @@ const Map<String, String> stringsEn = {
   'agentsHostYourComputer': 'Your computer',
   'agentsModeChats': 'Chats',
   'agentsModeHome': 'Home',
-  'agentsModeAgents': 'Agents',
+  'agentsModeAgents': 'Sidekicks',
   'agentsYourAssistant': 'Your assistant',
   'agentsMakeMainAgent': 'Make main agent',
   'agentsMakeMainAgentSubtitle': 'Show it at the top of your agents and open it from Home',
@@ -1666,7 +1666,7 @@ const Map<String, String> stringsEn = {
   'shortcutsSearchHint': 'Search shortcuts',
   'shortcutsNoMatch': 'No shortcut matches',
   'shortcutsGroupChat': 'Chat',
-  'shortcutsGroupAgents': 'Agents',
+  'shortcutsGroupAgents': 'Sidekicks',
   'shortcutsClose': 'Close',
   // ── end Chat UI: shortcuts ──
   // ── Chat UI: secret mask ──
@@ -1935,7 +1935,7 @@ const Map<String, String> stringsEn = {
   // ── end feedback ──
   // ── tray menu ──
   'trayModeChats': 'Chats',
-  'trayModeAgents': 'Agents',
+  'trayModeAgents': 'Sidekicks',
   'trayRecentChats': 'Recent chats',
   'trayNoRecentChats': 'No chats yet',
   'trayShowWindow': 'Show window',
