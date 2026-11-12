@@ -231,14 +231,29 @@ def test_a_stream_that_sends_only_keep_alives_is_aborted(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize(
     ("status", "message"),
-    [(402, "no credits left"), (429, "rate limited, try again shortly")],
+    [(402, "credits are used up"), (429, "rate limited, try again shortly")],
 )
 def test_402_and_429_become_messages_for_the_app(tmp_path, status, message):
     endpoint = FakeChatEndpoint([status, status])
     model, settings = _model(endpoint)
     with pytest.raises(ModelServiceError) as caught:
         AgentLoop(model, ToolRegistry(), _store(tmp_path), model_settings=settings).run("s", "q")
-    assert caught.value.user_message == message
+    assert message in caught.value.user_message
+
+
+def test_a_424_carries_the_route_reason():
+    """CHAT-81/82: the API names why a model cannot run; that text, not a
+    class name, is what the app shows, and it is not retried."""
+    from chuk_agents_runtime.loop import model_service_error
+    from chuk_agents_runtime.model_retry import classify
+
+    class _StatusError(Exception):
+        status_code = 424
+        body = {"error": {"message": "This model is not available right now: the service that runs it refused our account. Pick another model."}}
+
+    mapped = model_service_error(_StatusError())
+    assert mapped is not None and "refused our account" in mapped.user_message
+    assert classify(_StatusError()) == (False, "HTTP 424")
 
 
 # -- 6. a Stop mid-stream never stores broken JSON ---------------------------------

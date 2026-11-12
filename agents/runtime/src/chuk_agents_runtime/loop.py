@@ -367,7 +367,7 @@ Sink = Callable[[str], None]
 #: A streamed request that produced nothing at all in this time is aborted.
 #: The route answers a status within 30 s and then sends keep-alives while an
 #: upstream stalls, so only the first real event proves the model started.
-FIRST_EVENT_TIMEOUT_S = 90.0
+FIRST_EVENT_TIMEOUT_S = 45.0
 
 
 class ModelServiceError(RuntimeError):
@@ -389,9 +389,29 @@ class FirstEventTimeout(ModelServiceError):
 
 #: HTTP statuses of the route with a message the user can act on.
 _STATUS_MESSAGES = {
-    402: "no credits left",
+    401: "The model service refused this agent's sign-in. Open the app once so it can renew it.",
+    402: "Your credits are used up. Top up your balance, then send the message again.",
+    403: "The model service refused this request.",
+    404: "This model is not available any more. Pick another model for this agent.",
+    424: "This model is not available right now. Pick another model for this agent.",
     429: "rate limited, try again shortly",
 }
+
+
+def _route_message(exc: BaseException) -> str | None:
+    """The route's own error text (``{"error": {"message": ...}}``), when the
+    exception carries the body. CHAT-82: the API names the real reason
+    ("the service that runs it refused our account"), better than a status."""
+    for item in (exc, getattr(exc, "__cause__", None)):
+        if item is None:
+            continue
+        body = getattr(item, "body", None)
+        if isinstance(body, dict):
+            inner = body.get("error") if isinstance(body.get("error"), dict) else body
+            message = inner.get("message") if isinstance(inner, dict) else None
+            if isinstance(message, str) and message.strip():
+                return message.strip()[:300]
+    return None
 
 
 def model_service_error(exc: BaseException) -> ModelServiceError | None:
@@ -401,7 +421,11 @@ def model_service_error(exc: BaseException) -> ModelServiceError | None:
         return exc
     status = getattr(exc, "status_code", None)
     message = _STATUS_MESSAGES.get(status) if isinstance(status, int) else None
-    return ModelServiceError(message, status=status) if message else None
+    if message is None:
+        return None
+    if status in (403, 424):
+        message = _route_message(exc) or message
+    return ModelServiceError(message, status=status)
 
 
 #: What the model is told, once per run, after a reply with no text and no

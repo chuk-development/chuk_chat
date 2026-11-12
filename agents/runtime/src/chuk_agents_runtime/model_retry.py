@@ -112,8 +112,11 @@ def _is_network_error(exc: BaseException) -> bool:
             # openai SDK
             "APIConnectionError",
             "APITimeoutError",
-            # the loop's own "nothing for 90 s"
+            # the loop's own "nothing for 45 s"
             "FirstEventTimeout",
+            # an error event inside a started stream (the route's
+            # ``upstream_interrupted``): no status, the request was fine
+            "APIError",
         }
     )
 
@@ -202,10 +205,10 @@ class RetryTracker:
     def give_up_message(self) -> str:
         """What the app shows when the window is used up."""
         if self.first_failure is None:
-            return f"the model service failed ({self.last_reason})"
+            return f"The model service failed ({self.last_reason}). Send the message again."
         minutes = max(1, round((self.clock() - self.first_failure) / 60))
         return (
-            f"the model service did not answer for {minutes} min "
-            f"({self.attempts} retries, last error: {self.last_reason}); "
-            "the task stopped"
+            f"The model service did not answer for {minutes} min "
+            f"({self.attempts} tries, last error: {self.last_reason}), so the "
+            "task stopped. Send the message again later, or pick another model."
         )

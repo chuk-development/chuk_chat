@@ -744,6 +744,16 @@ def _mcp_trace_fields(manager: Any) -> dict[str, Any]:
     }
 
 
+def _human_failure(exc: BaseException) -> str:
+    """The error text of a run that failed without a user message (CHAT-82).
+    Was "loop failed: APIError": a class name, nothing a reader can act on.
+    The class name stays in brackets for the log reader."""
+    return (
+        "The task stopped because of an unexpected error. Send the message "
+        f"again; if it happens again, pick another model. ({type(exc).__name__})"
+    )
+
+
 class _Heartbeat:
     """The ``heartbeat`` emitter of one run (``protocol.py``), phase-aware.
 
@@ -5967,7 +5977,7 @@ class Executor:
         except Exception as exc:  # a crashing loop must not kill the serve thread
             # A model failure the user can act on (no credits, rate limited, a
             # stalled model) carries its own message (loop.ModelServiceError).
-            message = getattr(exc, "user_message", None) or f"loop failed: {type(exc).__name__}"
+            message = getattr(exc, "user_message", None) or _human_failure(exc)
             run.timing = clock.summary(reason=f"failed: {type(exc).__name__}")
             logger.info("%s", run.timing)
             # The durable record closes BEFORE the stream: it must exist even if
@@ -6508,7 +6518,7 @@ class Executor:
             with trace_run_scope(run.run_id or run.request_id, run.session_key):
                 result = loop.run(run.session_key, run.prompt)
         except Exception as exc:  # noqa: BLE001 — one bad mail must not kill the worker
-            message = getattr(exc, "user_message", None) or f"loop failed: {type(exc).__name__}"
+            message = getattr(exc, "user_message", None) or _human_failure(exc)
             self._record_run(run, failed=message)
             self._forget(run.request_id)
             self._call_hook(

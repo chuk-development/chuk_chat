@@ -229,7 +229,7 @@ def test_no_credits_is_not_retried(tmp_path):
     loop = AgentLoop(model, ToolRegistry(), _store(tmp_path), model_settings=settings, retry_policy=FAST)
     with pytest.raises(ModelServiceError) as info:
         loop.run("s", "q")
-    assert info.value.user_message == "no credits left"
+    assert "credits are used up" in info.value.user_message
     assert len(endpoint.requests) == 1
 
 
