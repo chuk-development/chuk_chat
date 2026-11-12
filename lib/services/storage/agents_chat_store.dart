@@ -155,6 +155,41 @@ class AgentsChatStore {
   /// overtaken by a later, newer one for the same thread.
   static final Map<String, Future<void>> _chains = <String, Future<void>>{};
 
+  /// Cloud write throttle (CHAT-91). A thread is one encrypted row, written
+  /// whole: a 3.5 MB Mail thread saved on every event of a run used up the
+  /// Supabase disk IO budget. The local copy and the outbox flag are written
+  /// at once as before; the cloud row follows at most once per
+  /// [cloudWriteInterval] per thread (longer for a big one), by one trailing
+  /// flush. An unchanged payload is not sent again at all.
+  static Duration cloudWriteInterval = const Duration(seconds: 60);
+  static Duration cloudWriteIntervalLarge = const Duration(minutes: 10);
+  static const int _kLargePayloadChars = 400 * 1024;
+  static final Map<String, DateTime> _lastCloudPush = <String, DateTime>{};
+  static final Map<String, int> _lastCloudHash = <String, int>{};
+  static Timer? _trailingFlush;
+
+  static Duration _intervalFor(int payloadChars) =>
+      payloadChars >= _kLargePayloadChars
+      ? cloudWriteIntervalLarge
+      : cloudWriteInterval;
+
+  /// How long the cloud write of [sessionKey] has to wait; zero when it may
+  /// go now.
+  static Duration _cloudWait(String sessionKey, int payloadChars) {
+    final last = _lastCloudPush[sessionKey];
+    if (last == null) return Duration.zero;
+    final left = _intervalFor(payloadChars) - DateTime.now().difference(last);
+    return left.isNegative ? Duration.zero : left;
+  }
+
+  static void _scheduleTrailingFlush(Duration wait) {
+    if (_trailingFlush != null) return;
+    _trailingFlush = Timer(wait + const Duration(seconds: 1), () {
+      _trailingFlush = null;
+      unawaited(flushOutbox());
+    });
+  }
+
   /// The outbox: session key → `updated_at` (ISO 8601) of the local copy
   /// that still has to reach the cloud. Loaded per user from SQLite.
   static final Map<String, String> _dirty = <String, String>{};
@@ -298,7 +333,16 @@ class AgentsChatStore {
       await _writeLocalCache(userId, chat, payloadJson);
       // The local copy is newer than the cloud from this moment on. Mark it
       // before the attempt: a crash mid-write then still flushes later.
+      if (_lastCloudHash[sessionKey] == payloadJson.hashCode &&
+          !_dirty.containsKey(sessionKey)) {
+        return; // The cloud already has exactly this.
+      }
       await _markDirty(userId, sessionKey, chat.updatedAt ?? now);
+      final wait = _cloudWait(sessionKey, payloadJson.length);
+      if (wait > Duration.zero) {
+        _scheduleTrailingFlush(wait);
+        return; // Stays dirty; the trailing flush sends the newest copy.
+      }
       final ok = await _pushToCloud(
         userId,
         id: sessionKey,
@@ -880,9 +924,7 @@ class AgentsChatStore {
   /// `id` and `updated_at` of every row of the user, read in pages of
   /// [idPageSize] until a short page. One plain read would stop at the
   /// server's row limit and leave the rest out without a word.
-  static Future<List<Map<String, dynamic>>> _selectIdList(
-    String userId,
-  ) async {
+  static Future<List<Map<String, dynamic>>> _selectIdList(String userId) async {
     final out = <Map<String, dynamic>>[];
     final size = idPageSize;
     // The server may cap a page below the size asked for, so a short page is
@@ -1038,6 +1080,12 @@ class AgentsChatStore {
       ChatStorageState.savingChats.remove(id);
     }
     _dirty.clear();
+    _lastCloudPush.clear();
+    _lastCloudHash.clear();
+    _trailingFlush?.cancel();
+    _trailingFlush = null;
+    cloudWriteInterval = const Duration(seconds: 60);
+    cloudWriteIntervalLarge = const Duration(minutes: 10);
     _dirtyUser = null;
     _outboxLoad = null;
     _outboxChain = Future<void>.value();
@@ -1146,6 +1194,8 @@ class AgentsChatStore {
       final upsert = cloudUpsert ?? _supabaseUpsert;
       final stored = await upsert(userId, row);
       if (stored == null) return false;
+      _lastCloudPush[id] = DateTime.now();
+      _lastCloudHash[id] = payloadJson.hashCode;
       _adoptServerTimestamps(id, stored);
       // The sidebar title cache is what paints the next launch's list before
       // any network; keep it in step with the row we just made durable.
@@ -1298,6 +1348,11 @@ class AgentsChatStore {
         continue;
       }
 
+      final wait = _cloudWait(id, copy.payloadJson.length);
+      if (wait > Duration.zero) {
+        _scheduleTrailingFlush(wait);
+        continue;
+      }
       final ok = await _pushToCloud(
         userId,
         id: id,

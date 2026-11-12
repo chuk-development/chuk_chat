@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:chuk_chat/services/storage/agents_chat_storage_bootstrap.dart';
+import 'package:chuk_chat/services/storage/agents_chat_store.dart';
 import 'package:chuk_chat/services/storage/chat_origin.dart';
 
 void main() {
@@ -16,6 +17,8 @@ void main() {
 
   setUp(() async {
     await AgentsChatStorageBootstrap.reset();
+    AgentsChatStore.cloudWriteInterval = Duration.zero;
+    AgentsChatStore.cloudWriteIntervalLarge = Duration.zero;
     auth = StreamController<AuthState>.broadcast();
     log = <String>[];
     user = null;

@@ -24,6 +24,8 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     await ChatStorageService.reset();
     await AgentsChatStore.reset();
+    AgentsChatStore.cloudWriteInterval = Duration.zero;
+    AgentsChatStore.cloudWriteIntervalLarge = Duration.zero;
   });
 
   tearDown(() async {
@@ -90,6 +92,54 @@ void main() {
     expect(cloudWrites, 0);
     expect(ChatStorageService.getChatById('agent-1'), isNotNull);
   });
+
+  test(
+    'CHAT-91: quick saves of one thread reach the cloud once, then once '
+    'more by the trailing flush; the same payload is never sent twice',
+    () async {
+      AgentsChatStore.cloudWriteInterval = const Duration(milliseconds: 300);
+      final cloud = <int>[];
+      var cache = 0;
+      AgentsChatStore.userIdProvider = () => 'user-7';
+      AgentsChatStore.keyLoader = () async => true;
+      AgentsChatStore.encryptor = (plain) async => plain;
+      AgentsChatStore.localCacheWriter = (_, _) async => cache++;
+      AgentsChatStore.localCacheReader = null;
+      AgentsChatStore.cloudUpsert = (userId, row) async {
+        cloud.add((row['encrypted_payload'] as String).length);
+        return <String, dynamic>{'id': row['id']};
+      };
+      List<Map<String, dynamic>> thread(int n) => rows([
+        ['user', 'go'],
+        for (var i = 0; i < n; i++) ['ai', 'step $i'],
+      ]);
+
+      await AgentsChatStore.replaceThread('agent-1', thread(1));
+      await AgentsChatStore.pending('agent-1');
+      expect(cloud.length, 1);
+
+      for (var n = 2; n <= 6; n++) {
+        await AgentsChatStore.replaceThread('agent-1', thread(n));
+        await AgentsChatStore.pending('agent-1');
+      }
+      // Every save is local at once; the cloud row waits.
+      expect(cache, 6);
+      expect(cloud.length, 1);
+
+      await Future<void>.delayed(const Duration(milliseconds: 1700));
+      expect(
+        cloud.length,
+        2,
+        reason: 'one trailing flush with the newest copy',
+      );
+      expect(cloud.last, greaterThan(cloud.first));
+
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      await AgentsChatStore.replaceThread('agent-1', thread(6));
+      await AgentsChatStore.pending('agent-1');
+      expect(cloud.length, 2, reason: 'nothing changed, nothing sent');
+    },
+  );
 
   test('signed in: SQLite row first, then the encrypted upsert', () async {
     final log = <String>[];

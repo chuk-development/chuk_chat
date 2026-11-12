@@ -70,6 +70,8 @@ void main() {
     ChatOrigin.reset();
     await ChatStorageService.reset();
     await AgentsChatStore.reset();
+    AgentsChatStore.cloudWriteInterval = Duration.zero;
+    AgentsChatStore.cloudWriteIntervalLarge = Duration.zero;
 
     crudSaves = <String>[];
     crudUpdates = <String>[];
