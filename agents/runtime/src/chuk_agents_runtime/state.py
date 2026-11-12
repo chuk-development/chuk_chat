@@ -258,6 +258,10 @@ class Message:
     created_at: float
 
 
+#: Failure reasons that are a code word, not a message for the reader.
+_FAIL_CODES = frozenset({"failed", "host_restarted", "error", "bridge_failed"})
+
+
 def run_stamp_fields(row: dict | None) -> dict[str, Any]:
     """``started_at`` / ``finished_at`` / ``first_mid`` / ``last_mid`` of a
     ``runs`` row, for a ``done`` frame (live and replayed alike). Only the
@@ -1226,11 +1230,19 @@ class StateStore:
         lines = self.usage_lines_for([r["run_id"] for r in rows])
         events: list[dict] = []
         for r in rows:
+            reason = r["reason"] or ("finished" if r["state"] == RUN_FINISHED else "failed")
+            error: str | None = None
+            if r["state"] == RUN_FAILED and reason not in _FAIL_CODES:
+                # A failed run's row holds the user-facing message
+                # (``fail_run``): it goes out as ``error`` and the reason is
+                # the word ``failed``, so the app can show the real cause.
+                error, reason = reason, "failed"
             events.append(
                 {
                     "type": "done",
                     "final_answer": r["final_answer"],
-                    "reason": r["reason"] or ("finished" if r["state"] == RUN_FINISHED else "failed"),
+                    "reason": reason,
+                    **({"error": error} if error else {}),
                     "iterations": int(r["iterations"] or 0),
                     "tokens_spent": int(r["tokens_spent"] or 0),
                     "replay": True,

@@ -611,7 +611,7 @@ class AgentsChatTransport {
             break;
           }
           terminated = true;
-          ledger.finish(ledgerKey, reason: 'error');
+          ledger.finish(ledgerKey, reason: 'error', error: message);
           emit(ErrorEvent(message, code: StreamErrorCodes.streamFailure));
           emit(DoneEvent());
           closeOut();

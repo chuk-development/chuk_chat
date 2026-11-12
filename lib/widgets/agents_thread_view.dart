@@ -2138,7 +2138,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       _releaseStaleComposer(key);
       final outcome = run.outcome;
       if (outcome == null || !run.endedWithoutAnswer) return;
-      final notice = agentsRunEndNotice(outcome);
+      final notice = agentsRunEndNotice(outcome, error: run.error);
       if (notice == null) return;
       // Appended to what is on disk. If the imported screen saves the turn it
       // was drawing a moment later, its save wins and the line is simply not

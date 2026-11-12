@@ -573,6 +573,7 @@ class AgentsReplayLoader extends ChangeNotifier {
             reason: event.reason,
             finalAnswer: event.finalAnswer,
           ),
+          error: event.error,
         );
         // A turn the host reports as STILL RUNNING is not a dead turn. The
         // `run_state` header that opened this replay says so, and its word

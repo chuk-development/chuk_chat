@@ -76,6 +76,25 @@ void main() {
     return chat.messages.map((m) => m.toJson()).toList();
   }
 
+  test(
+    'CHAT-84: a failed run shows the host reason, not a generic line',
+    () async {
+      await replay(const <AgentsRelayInbound>[
+        AgentsRelayRunState(sessionKey: sessionKey, state: 'idle'),
+        AgentsRelayUser('Hallo', mid: 1),
+        AgentsRelayDone(
+          reason: 'failed',
+          error: 'Your credits are used up. Top up your balance, then send the message again.',
+          replay: true,
+          lastMid: 2,
+        ),
+        AgentsRelayDone(reason: 'replay', replay: true),
+      ]);
+      final rows = rowsFor(sessionKey);
+      expect(rows.last['text'], startsWith('Your credits are used up.'));
+    },
+  );
+
   test('CHAT-79: a note the agent sent is its own bubble', () async {
     await replay(const <AgentsRelayInbound>[
       AgentsRelayRunState(sessionKey: sessionKey, state: 'idle'),
@@ -113,86 +132,94 @@ void main() {
     expect(rows.every((row) => row['sentAt'] == null), isTrue);
   });
 
-  test(
-    'the text of every turn of a run stays, one paragraph per turn '
-    '(beads chuk_chat-6ze4, chuk_chat-qcdt)',
-    () async {
-      const report = '## Ergebnisse\n\n- GitHub: nichts Neues\n';
-      const heading = '📅 Tägliche Routine wird eingerichtet';
-      const closing = 'Die Routine läuft jetzt täglich.';
-      await replay(const <AgentsRelayInbound>[
-        AgentsRelayUser('check it', mid: 1),
-        AgentsRelayDelta(report, replay: true, mid: 2),
-        AgentsRelayTool('run_command', arguments: 'ls', replay: true, mid: 2),
-        AgentsRelayDelta(heading, replay: true, mid: 4),
-        AgentsRelayDelta(closing, replay: true, mid: 6),
-        AgentsRelayDone(reason: 'finished', replay: true),
-        AgentsRelayDone(reason: 'replay', replay: true),
-      ]);
-
-      final rows = rowsFor(sessionKey);
-      expect(rows, hasLength(2));
-      // The same text as the host's `final_answer`: the turns stripped and
-      // joined with a paragraph break. The heading does not take in the
-      // closing line.
-      expect(
-        rows[1]['text'],
-        '## Ergebnisse\n\n- GitHub: nichts Neues'
-        '$agentsPassBreak$heading$agentsPassBreak$closing',
-      );
-    },
-  );
-
-  test('replay preserves real host timestamps independently of run duration', () async {
-    final userTime = DateTime.utc(2026, 9, 8, 12, 30);
-    final answerTime = userTime.add(const Duration(seconds: 5));
-    await replay(<AgentsRelayInbound>[
-      AgentsRelayUser('hello', mid: 1, sentAt: userTime),
-      AgentsRelayReasoning('checking', mid: 2, replay: true, sentAt: answerTime),
-      AgentsRelayDelta('hi', mid: 2, replay: true, sentAt: answerTime),
-      const AgentsRelayDone(reason: 'replay', replay: true),
-    ]);
-    final rows = rowsFor(sessionKey);
-    expect(rows[0]['sentAt'], userTime.toIso8601String());
-    expect(rows[1]['sentAt'], answerTime.toIso8601String());
-    expect(rows[1]['startedAt'], isNull);
-    expect(rows[1]['generationMs'], isNull);
-  });
-
-  test('a replayed tool lands as a completed tool call on the answer',
-      () async {
+  test('the text of every turn of a run stays, one paragraph per turn '
+      '(beads chuk_chat-6ze4, chuk_chat-qcdt)', () async {
+    const report = '## Ergebnisse\n\n- GitHub: nichts Neues\n';
+    const heading = '📅 Tägliche Routine wird eingerichtet';
+    const closing = 'Die Routine läuft jetzt täglich.';
     await replay(const <AgentsRelayInbound>[
-      AgentsRelayUser('do the thing', mid: 1),
-      AgentsRelayDelta('working', replay: true, mid: 2),
-      AgentsRelayTool(
-        'run_command',
-        arguments: 'ls /nope',
-        result: 'No such file',
-        detail: 'ls: /nope: No such file',
-        exitCode: 2,
-        failed: true,
-        replay: true,
-        mid: 3,
-      ),
-      AgentsRelaySubagent(
-        subagentId: 'sa_1',
-        title: 'writer',
-        state: 'succeeded',
-        result: 'the summary',
-        replay: true,
-        mid: 4,
-      ),
+      AgentsRelayUser('check it', mid: 1),
+      AgentsRelayDelta(report, replay: true, mid: 2),
+      AgentsRelayTool('run_command', arguments: 'ls', replay: true, mid: 2),
+      AgentsRelayDelta(heading, replay: true, mid: 4),
+      AgentsRelayDelta(closing, replay: true, mid: 6),
+      AgentsRelayDone(reason: 'finished', replay: true),
       AgentsRelayDone(reason: 'replay', replay: true),
     ]);
 
     final rows = rowsFor(sessionKey);
-    final calls = jsonDecode(rows.last['toolCalls'] as String) as List<dynamic>;
-    expect(calls, hasLength(2));
-    expect((calls[0] as Map)['name'], 'run_command');
-    expect((calls[0] as Map)['status'], 'error');
-    expect((calls[1] as Map)['name'], 'subagent');
-    expect((calls[1] as Map)['status'], 'completed');
+    expect(rows, hasLength(2));
+    // The same text as the host's `final_answer`: the turns stripped and
+    // joined with a paragraph break. The heading does not take in the
+    // closing line.
+    expect(
+      rows[1]['text'],
+      '## Ergebnisse\n\n- GitHub: nichts Neues'
+      '$agentsPassBreak$heading$agentsPassBreak$closing',
+    );
   });
+
+  test(
+    'replay preserves real host timestamps independently of run duration',
+    () async {
+      final userTime = DateTime.utc(2026, 9, 8, 12, 30);
+      final answerTime = userTime.add(const Duration(seconds: 5));
+      await replay(<AgentsRelayInbound>[
+        AgentsRelayUser('hello', mid: 1, sentAt: userTime),
+        AgentsRelayReasoning(
+          'checking',
+          mid: 2,
+          replay: true,
+          sentAt: answerTime,
+        ),
+        AgentsRelayDelta('hi', mid: 2, replay: true, sentAt: answerTime),
+        const AgentsRelayDone(reason: 'replay', replay: true),
+      ]);
+      final rows = rowsFor(sessionKey);
+      expect(rows[0]['sentAt'], userTime.toIso8601String());
+      expect(rows[1]['sentAt'], answerTime.toIso8601String());
+      expect(rows[1]['startedAt'], isNull);
+      expect(rows[1]['generationMs'], isNull);
+    },
+  );
+
+  test(
+    'a replayed tool lands as a completed tool call on the answer',
+    () async {
+      await replay(const <AgentsRelayInbound>[
+        AgentsRelayUser('do the thing', mid: 1),
+        AgentsRelayDelta('working', replay: true, mid: 2),
+        AgentsRelayTool(
+          'run_command',
+          arguments: 'ls /nope',
+          result: 'No such file',
+          detail: 'ls: /nope: No such file',
+          exitCode: 2,
+          failed: true,
+          replay: true,
+          mid: 3,
+        ),
+        AgentsRelaySubagent(
+          subagentId: 'sa_1',
+          title: 'writer',
+          state: 'succeeded',
+          result: 'the summary',
+          replay: true,
+          mid: 4,
+        ),
+        AgentsRelayDone(reason: 'replay', replay: true),
+      ]);
+
+      final rows = rowsFor(sessionKey);
+      final calls =
+          jsonDecode(rows.last['toolCalls'] as String) as List<dynamic>;
+      expect(calls, hasLength(2));
+      expect((calls[0] as Map)['name'], 'run_command');
+      expect((calls[0] as Map)['status'], 'error');
+      expect((calls[1] as Map)['name'], 'subagent');
+      expect((calls[1] as Map)['status'], 'completed');
+    },
+  );
 
   test('a replayed file becomes a sandbox artifact block', () async {
     await replay(<AgentsRelayInbound>[
@@ -220,7 +247,10 @@ void main() {
       ContentBlockType.sandboxArtifact,
     ]);
     expect(blocks.last.sandboxArtifact!.filename, 'report.csv');
-    expect(blocks.last.sandboxArtifact!.storagePath, startsWith('cowork://blob/'));
+    expect(
+      blocks.last.sandboxArtifact!.storagePath,
+      startsWith('cowork://blob/'),
+    );
     // The file row moved the cursor (docs/WIRE_CONTRACT.md, cowork-266).
     expect(loader.cursorFor(sessionKey), 3);
   });
@@ -242,7 +272,11 @@ void main() {
         declaredSize: 1,
         bytes: Uint8List.fromList(<int>[1]),
       ),
-      const AgentsRelaySubagent(subagentId: 'sa_live', title: 't', state: 'running'),
+      const AgentsRelaySubagent(
+        subagentId: 'sa_live',
+        title: 't',
+        state: 'running',
+      ),
       const AgentsRelayDone(reason: 'replay', replay: true),
     ]);
 
@@ -251,119 +285,142 @@ void main() {
     expect(row['toolCalls'] ?? '', isNot(contains('sa_live')));
   });
 
-  test('replayed child-agent states fold into one card, last state wins',
-      () async {
-    await replay(<AgentsRelayInbound>[
-      const AgentsRelayUser('research it', mid: 1),
-      const AgentsRelayDelta('on it', replay: true, mid: 2),
-      const AgentsRelaySubagent(
-        subagentId: 'sa_1', title: 'reader', state: 'queued', replay: true, mid: 3,
-      ),
-      const AgentsRelaySubagent(
-        subagentId: 'sa_1', title: 'reader', state: 'running', replay: true, mid: 4,
-      ),
-      const AgentsRelaySubagent(
-        subagentId: 'sa_1',
-        title: 'reader',
-        state: 'succeeded',
-        result: 'found it',
-        replay: true,
-        mid: 5,
-      ),
-      const AgentsRelayDone(reason: 'replay', replay: true),
-    ]);
+  test(
+    'replayed child-agent states fold into one card, last state wins',
+    () async {
+      await replay(<AgentsRelayInbound>[
+        const AgentsRelayUser('research it', mid: 1),
+        const AgentsRelayDelta('on it', replay: true, mid: 2),
+        const AgentsRelaySubagent(
+          subagentId: 'sa_1',
+          title: 'reader',
+          state: 'queued',
+          replay: true,
+          mid: 3,
+        ),
+        const AgentsRelaySubagent(
+          subagentId: 'sa_1',
+          title: 'reader',
+          state: 'running',
+          replay: true,
+          mid: 4,
+        ),
+        const AgentsRelaySubagent(
+          subagentId: 'sa_1',
+          title: 'reader',
+          state: 'succeeded',
+          result: 'found it',
+          replay: true,
+          mid: 5,
+        ),
+        const AgentsRelayDone(reason: 'replay', replay: true),
+      ]);
 
-    final calls = toolCallsOf(rowsFor(sessionKey).last);
-    expect(calls, hasLength(1));
-    expect(calls.single.name, 'subagent');
-    expect(calls.single.arguments['subagent_id'], 'sa_1');
-    expect(calls.single.arguments['state'], 'succeeded');
-    expect(calls.single.status, ToolCallStatus.completed);
-    expect(calls.single.result, 'found it');
-    expect(loader.cursorFor(sessionKey), 5);
-  });
+      final calls = toolCallsOf(rowsFor(sessionKey).last);
+      expect(calls, hasLength(1));
+      expect(calls.single.name, 'subagent');
+      expect(calls.single.arguments['subagent_id'], 'sa_1');
+      expect(calls.single.arguments['state'], 'succeeded');
+      expect(calls.single.status, ToolCallStatus.completed);
+      expect(calls.single.result, 'found it');
+      expect(loader.cursorFor(sessionKey), 5);
+    },
+  );
 
-  test('a replayed, decided approval is a card with nothing to press',
-      () async {
-    await replay(<AgentsRelayInbound>[
-      const AgentsRelayUser('publish it', mid: 1),
-      const AgentsRelayApprovalRequest(
-        approvalId: 'ap1',
-        action: 'herenow_publish',
-        path: 'site',
-        name: 'My site',
-        fileCount: 2,
-        totalBytes: 10,
-        baseUrl: 'here.now',
-        public: true,
-        replay: true,
-        mid: 2,
-        decision: 'approved',
-        decisionReason: 'user',
-      ),
-      const AgentsRelayDelta('published', replay: true, mid: 3),
-      const AgentsRelayDone(reason: 'replay', replay: true),
-    ]);
+  test(
+    'a replayed, decided approval is a card with nothing to press',
+    () async {
+      await replay(<AgentsRelayInbound>[
+        const AgentsRelayUser('publish it', mid: 1),
+        const AgentsRelayApprovalRequest(
+          approvalId: 'ap1',
+          action: 'herenow_publish',
+          path: 'site',
+          name: 'My site',
+          fileCount: 2,
+          totalBytes: 10,
+          baseUrl: 'here.now',
+          public: true,
+          replay: true,
+          mid: 2,
+          decision: 'approved',
+          decisionReason: 'user',
+        ),
+        const AgentsRelayDelta('published', replay: true, mid: 3),
+        const AgentsRelayDone(reason: 'replay', replay: true),
+      ]);
 
-    final calls = toolCallsOf(rowsFor(sessionKey).last);
-    expect(calls.single.name, 'ask_user');
-    expect(calls.single.arguments.containsKey('options'), isFalse,
-        reason: 'no options under the key the AskUserCard reads');
-    expect(calls.single.arguments['offered_options'], ['Publish', 'Deny']);
-    expect(calls.single.arguments['decision'], 'Publish');
-    expect(calls.single.arguments['decision_reason'], 'user');
-    expect(calls.single.arguments['approvalId'], 'ap1');
-  });
+      final calls = toolCallsOf(rowsFor(sessionKey).last);
+      expect(calls.single.name, 'ask_user');
+      expect(
+        calls.single.arguments.containsKey('options'),
+        isFalse,
+        reason: 'no options under the key the AskUserCard reads',
+      );
+      expect(calls.single.arguments['offered_options'], ['Publish', 'Deny']);
+      expect(calls.single.arguments['decision'], 'Publish');
+      expect(calls.single.arguments['decision_reason'], 'user');
+      expect(calls.single.arguments['approvalId'], 'ap1');
+    },
+  );
 
-  test('a replayed open approval on a run still in flight is drawn as live',
-      () async {
-    await replay(<AgentsRelayInbound>[
-      const AgentsRelayRunState(sessionKey: sessionKey, state: 'running', runId: 'r1'),
-      const AgentsRelayUser('publish it', mid: 1),
-      const AgentsRelayApprovalRequest(
-        approvalId: 'ap1',
-        action: 'herenow_publish',
-        path: 'site',
-        name: 'My site',
-        fileCount: 2,
-        totalBytes: 10,
-        baseUrl: 'here.now',
-        public: true,
-        replay: true,
-        mid: 2,
-      ),
-      const AgentsRelayDone(reason: 'replay', replay: true),
-    ]);
+  test(
+    'a replayed open approval on a run still in flight is drawn as live',
+    () async {
+      await replay(<AgentsRelayInbound>[
+        const AgentsRelayRunState(
+          sessionKey: sessionKey,
+          state: 'running',
+          runId: 'r1',
+        ),
+        const AgentsRelayUser('publish it', mid: 1),
+        const AgentsRelayApprovalRequest(
+          approvalId: 'ap1',
+          action: 'herenow_publish',
+          path: 'site',
+          name: 'My site',
+          fileCount: 2,
+          totalBytes: 10,
+          baseUrl: 'here.now',
+          public: true,
+          replay: true,
+          mid: 2,
+        ),
+        const AgentsRelayDone(reason: 'replay', replay: true),
+      ]);
 
-    final calls = toolCallsOf(rowsFor(sessionKey).last);
-    expect(calls.single.arguments['options'], ['Publish', 'Deny']);
-    expect(calls.single.arguments.containsKey('decision'), isFalse);
-  });
+      final calls = toolCallsOf(rowsFor(sessionKey).last);
+      expect(calls.single.arguments['options'], ['Publish', 'Deny']);
+      expect(calls.single.arguments.containsKey('decision'), isFalse);
+    },
+  );
 
-  test('a replayed open approval on an idle run is history, not a prompt',
-      () async {
-    await replay(<AgentsRelayInbound>[
-      const AgentsRelayRunState(sessionKey: sessionKey, state: 'idle'),
-      const AgentsRelayUser('publish it', mid: 1),
-      const AgentsRelayApprovalRequest(
-        approvalId: 'ap1',
-        action: 'herenow_publish',
-        path: 'site',
-        name: 'My site',
-        fileCount: 1,
-        totalBytes: 1,
-        baseUrl: 'here.now',
-        public: true,
-        replay: true,
-        mid: 2,
-      ),
-      const AgentsRelayDone(reason: 'replay', replay: true),
-    ]);
+  test(
+    'a replayed open approval on an idle run is history, not a prompt',
+    () async {
+      await replay(<AgentsRelayInbound>[
+        const AgentsRelayRunState(sessionKey: sessionKey, state: 'idle'),
+        const AgentsRelayUser('publish it', mid: 1),
+        const AgentsRelayApprovalRequest(
+          approvalId: 'ap1',
+          action: 'herenow_publish',
+          path: 'site',
+          name: 'My site',
+          fileCount: 1,
+          totalBytes: 1,
+          baseUrl: 'here.now',
+          public: true,
+          replay: true,
+          mid: 2,
+        ),
+        const AgentsRelayDone(reason: 'replay', replay: true),
+      ]);
 
-    final calls = toolCallsOf(rowsFor(sessionKey).last);
-    expect(calls.single.arguments.containsKey('options'), isFalse);
-    expect(calls.single.arguments['decision'], 'Expired');
-  });
+      final calls = toolCallsOf(rowsFor(sessionKey).last);
+      expect(calls.single.arguments.containsKey('options'), isFalse);
+      expect(calls.single.arguments['decision'], 'Expired');
+    },
+  );
 
   test('a second full replay overwrites, it never duplicates', () async {
     const script = <AgentsRelayInbound>[
@@ -398,54 +455,58 @@ void main() {
     expect(loader.cursorFor(sessionKey), 9);
   });
 
-  test('pre-timestamp cursor re-fetches history without deleting its cache', () async {
-    await replay(const <AgentsRelayInbound>[
-      AgentsRelayUser('old message', mid: 1),
-      AgentsRelayDone(reason: 'replay', replay: true),
-    ]);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('$kReplayTimestampCursorPrefix$sessionKey');
-    loader.reset();
-    await loader.load();
-    expect(loader.cursorFor(sessionKey), 0);
-    expect(rowsFor(sessionKey).single['text'], 'old message');
-  });
+  test(
+    'pre-timestamp cursor re-fetches history without deleting its cache',
+    () async {
+      await replay(const <AgentsRelayInbound>[
+        AgentsRelayUser('old message', mid: 1),
+        AgentsRelayDone(reason: 'replay', replay: true),
+      ]);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('$kReplayTimestampCursorPrefix$sessionKey');
+      loader.reset();
+      await loader.load();
+      expect(loader.cursorFor(sessionKey), 0);
+      expect(rowsFor(sessionKey).single['text'], 'old message');
+    },
+  );
 
-  test('forgetting the cursor makes the next replay replace instead of append',
-      () async {
-    // A live turn is written locally by the UI, so the cursor still points
-    // below it. Asking from there lets the host honour the cursor and the
-    // loader appends the host's copy of the same turn underneath the local
-    // one — the reported double bubble (bead cowork-bkw). Forgetting the
-    // cursor turns the next replay into a full one, which replaces.
-    await replay(const <AgentsRelayInbound>[
-      AgentsRelayUser('why', mid: 1),
-      AgentsRelayDelta('because', replay: true, mid: 2),
-      AgentsRelayDone(reason: 'replay', replay: true),
-    ]);
-    expect(loader.cursorFor(sessionKey), 2);
+  test(
+    'forgetting the cursor makes the next replay replace instead of append',
+    () async {
+      // A live turn is written locally by the UI, so the cursor still points
+      // below it. Asking from there lets the host honour the cursor and the
+      // loader appends the host's copy of the same turn underneath the local
+      // one — the reported double bubble (bead cowork-bkw). Forgetting the
+      // cursor turns the next replay into a full one, which replaces.
+      await replay(const <AgentsRelayInbound>[
+        AgentsRelayUser('why', mid: 1),
+        AgentsRelayDelta('because', replay: true, mid: 2),
+        AgentsRelayDone(reason: 'replay', replay: true),
+      ]);
+      expect(loader.cursorFor(sessionKey), 2);
 
-    loader.invalidateCursor(sessionKey);
-    expect(loader.cursorFor(sessionKey), 0);
-    final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getInt('$kReplayCursorPrefix$sessionKey'), 0);
+      loader.invalidateCursor(sessionKey);
+      expect(loader.cursorFor(sessionKey), 0);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getInt('$kReplayCursorPrefix$sessionKey'), 0);
 
-    // The host now re-sends the whole thread. It must land as two rows, not
-    // four.
-    loader.attach();
-    await replay(const <AgentsRelayInbound>[
-      AgentsRelayUser('why', mid: 1),
-      AgentsRelayDelta('because', replay: true, mid: 2),
-      AgentsRelayDone(reason: 'replay', replay: true),
-    ]);
+      // The host now re-sends the whole thread. It must land as two rows, not
+      // four.
+      loader.attach();
+      await replay(const <AgentsRelayInbound>[
+        AgentsRelayUser('why', mid: 1),
+        AgentsRelayDelta('because', replay: true, mid: 2),
+        AgentsRelayDone(reason: 'replay', replay: true),
+      ]);
 
-    final rows = rowsFor(sessionKey);
-    expect(rows, hasLength(2));
-    expect(rows.map((r) => r['text']), <String>['why', 'because']);
-  });
+      final rows = rowsFor(sessionKey);
+      expect(rows, hasLength(2));
+      expect(rows.map((r) => r['text']), <String>['why', 'because']);
+    },
+  );
 
-  test('a cursor with no local thread is dropped and the thread replayed whole',
-      () async {
+  test('a cursor with no local thread is dropped and the thread replayed whole', () async {
     // The reported loss (bead cowork-izh): the cursor lives in preferences and
     // the transcript lives in the store, so a store that lost its threads
     // leaves a cursor pointing at rows nobody has. "Nothing after 106" then
@@ -463,37 +524,33 @@ void main() {
     await ChatStorageService.deleteChat(sessionKey);
 
     loader.attach();
-    await replay(
-      const <AgentsRelayInbound>[
-        AgentsRelayDone(reason: 'replay', replay: true),
-      ],
-      afterId: 106,
-    );
+    await replay(const <AgentsRelayInbound>[
+      AgentsRelayDone(reason: 'replay', replay: true),
+    ], afterId: 106);
 
     expect(loader.cursorFor(sessionKey), 0);
     expect(loader.takeReplayWanted(sessionKey), isTrue);
   });
 
-  test('an empty delta with the thread still cached leaves the cursor alone',
-      () async {
-    await replay(const <AgentsRelayInbound>[
-      AgentsRelayUser('yesterday', mid: 100),
-      AgentsRelayDelta('an answer', replay: true, mid: 106),
-      AgentsRelayDone(reason: 'replay', replay: true),
-    ]);
-
-    loader.attach();
-    await replay(
-      const <AgentsRelayInbound>[
+  test(
+    'an empty delta with the thread still cached leaves the cursor alone',
+    () async {
+      await replay(const <AgentsRelayInbound>[
+        AgentsRelayUser('yesterday', mid: 100),
+        AgentsRelayDelta('an answer', replay: true, mid: 106),
         AgentsRelayDone(reason: 'replay', replay: true),
-      ],
-      afterId: 106,
-    );
+      ]);
 
-    expect(loader.cursorFor(sessionKey), 106);
-    expect(loader.takeReplayWanted(sessionKey), isFalse);
-    expect(rowsFor(sessionKey), hasLength(2));
-  });
+      loader.attach();
+      await replay(const <AgentsRelayInbound>[
+        AgentsRelayDone(reason: 'replay', replay: true),
+      ], afterId: 106);
+
+      expect(loader.cursorFor(sessionKey), 106);
+      expect(loader.takeReplayWanted(sessionKey), isFalse);
+      expect(rowsFor(sessionKey), hasLength(2));
+    },
+  );
 
   test('invalidating a cursor that was never set changes nothing', () async {
     loader.invalidateCursor('never-seen');
@@ -536,14 +593,11 @@ void main() {
     expect(rowsFor(sessionKey), hasLength(2));
 
     loader.attach();
-    await replay(
-      const <AgentsRelayInbound>[
-        AgentsRelayUser('second', mid: 3),
-        AgentsRelayDelta('second answer', replay: true, mid: 4),
-        AgentsRelayDone(reason: 'replay', replay: true),
-      ],
-      afterId: 2,
-    );
+    await replay(const <AgentsRelayInbound>[
+      AgentsRelayUser('second', mid: 3),
+      AgentsRelayDelta('second answer', replay: true, mid: 4),
+      AgentsRelayDone(reason: 'replay', replay: true),
+    ], afterId: 2);
 
     final rows = rowsFor(sessionKey);
     expect(rows, hasLength(4));
@@ -558,45 +612,49 @@ void main() {
 
   // Bead chuk_chat-kl8x: the reconcile after a resume must not remount the
   // screen when the live stream already painted every word of the delta.
-  test('a delta that is already on screen changes nothing and repaints nothing',
-      () async {
-    await replay(const <AgentsRelayInbound>[
-      AgentsRelayUser('first', mid: 1),
-      AgentsRelayDelta('first answer', replay: true, mid: 2),
-      AgentsRelayDone(reason: 'replay', replay: true),
-    ]);
-    const delta = <AgentsRelayInbound>[
-      AgentsRelayUser('second', mid: 3),
-      AgentsRelayDelta('second answer', replay: true, mid: 4),
-      AgentsRelayDone(reason: 'replay', replay: true),
-    ];
-    loader.attach();
-    await replay(delta, afterId: 2);
-    final int revision = loader.revisionFor(sessionKey);
-    final rowsBefore = rowsFor(sessionKey);
+  test(
+    'a delta that is already on screen changes nothing and repaints nothing',
+    () async {
+      await replay(const <AgentsRelayInbound>[
+        AgentsRelayUser('first', mid: 1),
+        AgentsRelayDelta('first answer', replay: true, mid: 2),
+        AgentsRelayDone(reason: 'replay', replay: true),
+      ]);
+      const delta = <AgentsRelayInbound>[
+        AgentsRelayUser('second', mid: 3),
+        AgentsRelayDelta('second answer', replay: true, mid: 4),
+        AgentsRelayDone(reason: 'replay', replay: true),
+      ];
+      loader.attach();
+      await replay(delta, afterId: 2);
+      final int revision = loader.revisionFor(sessionKey);
+      final rowsBefore = rowsFor(sessionKey);
 
-    loader.attach();
-    await replay(delta, afterId: 2);
+      loader.attach();
+      await replay(delta, afterId: 2);
 
-    expect(loader.revisionFor(sessionKey), revision, reason: 'no remount');
-    expect(rowsFor(sessionKey), rowsBefore, reason: 'no turn twice');
-    expect(loader.cursorFor(sessionKey), 4);
-  });
+      expect(loader.revisionFor(sessionKey), revision, reason: 'no remount');
+      expect(rowsFor(sessionKey), rowsBefore, reason: 'no turn twice');
+      expect(loader.cursorFor(sessionKey), 4);
+    },
+  );
 
-  test('a host that ignores the cursor replaces instead of duplicating',
-      () async {
-    const script = <AgentsRelayInbound>[
-      AgentsRelayUser('first', mid: 1),
-      AgentsRelayDelta('first answer', replay: true, mid: 2),
-      AgentsRelayDone(reason: 'replay', replay: true),
-    ];
-    await replay(script);
-    // Asked with a cursor, answered with the whole history anyway (the old
-    // executor). The lowest mid gives it away, so the cache is replaced.
-    await replay(script, afterId: 2);
+  test(
+    'a host that ignores the cursor replaces instead of duplicating',
+    () async {
+      const script = <AgentsRelayInbound>[
+        AgentsRelayUser('first', mid: 1),
+        AgentsRelayDelta('first answer', replay: true, mid: 2),
+        AgentsRelayDone(reason: 'replay', replay: true),
+      ];
+      await replay(script);
+      // Asked with a cursor, answered with the whole history anyway (the old
+      // executor). The lowest mid gives it away, so the cache is replaced.
+      await replay(script, afterId: 2);
 
-    expect(rowsFor(sessionKey), hasLength(2));
-  });
+      expect(rowsFor(sessionKey), hasLength(2));
+    },
+  );
 
   test('an empty delta replay leaves the cache alone', () async {
     await replay(const <AgentsRelayInbound>[
@@ -606,46 +664,47 @@ void main() {
     ]);
     final revision = loader.revisionFor(sessionKey);
 
-    await replay(
-      const <AgentsRelayInbound>[AgentsRelayDone(reason: 'replay', replay: true)],
-      afterId: 2,
-    );
+    await replay(const <AgentsRelayInbound>[
+      AgentsRelayDone(reason: 'replay', replay: true),
+    ], afterId: 2);
 
     expect(rowsFor(sessionKey), hasLength(2));
     expect(loader.revisionFor(sessionKey), revision);
   });
 
-  test('a replayed run terminal closes the answer and marks it ready',
-      () async {
-    await replay(const <AgentsRelayInbound>[
-      AgentsRelayUser('do the thing', mid: 1),
-      AgentsRelayDelta('the answer', replay: true, mid: 2),
-      AgentsRelayDone(
-        reason: 'finished',
-        replay: true,
-        whileAway: true,
-        runId: 'run-3',
-      ),
-      AgentsRelayUser('and again', mid: 3),
-      AgentsRelayDelta('the second answer', replay: true, mid: 4),
-      AgentsRelayDone(reason: 'replay', replay: true),
-    ]);
+  test(
+    'a replayed run terminal closes the answer and marks it ready',
+    () async {
+      await replay(const <AgentsRelayInbound>[
+        AgentsRelayUser('do the thing', mid: 1),
+        AgentsRelayDelta('the answer', replay: true, mid: 2),
+        AgentsRelayDone(
+          reason: 'finished',
+          replay: true,
+          whileAway: true,
+          runId: 'run-3',
+        ),
+        AgentsRelayUser('and again', mid: 3),
+        AgentsRelayDelta('the second answer', replay: true, mid: 4),
+        AgentsRelayDone(reason: 'replay', replay: true),
+      ]);
 
-    final rows = rowsFor(sessionKey);
-    expect(rows.map((r) => r['text']), <String>[
-      'do the thing',
-      'the answer',
-      'and again',
-      'the second answer',
-    ]);
-    expect(loader.answerReadyFor(sessionKey), isTrue);
-    // The waiting answer knows its run, so a second answer can be told from
-    // a re-replay of this one (review F7).
-    expect(loader.answerReadyRunFor(sessionKey), 'run-3');
-    loader.clearAnswerReady(sessionKey);
-    expect(loader.answerReadyFor(sessionKey), isFalse);
-    expect(loader.answerReadyRunFor(sessionKey), isNull);
-  });
+      final rows = rowsFor(sessionKey);
+      expect(rows.map((r) => r['text']), <String>[
+        'do the thing',
+        'the answer',
+        'and again',
+        'the second answer',
+      ]);
+      expect(loader.answerReadyFor(sessionKey), isTrue);
+      // The waiting answer knows its run, so a second answer can be told from
+      // a re-replay of this one (review F7).
+      expect(loader.answerReadyRunFor(sessionKey), 'run-3');
+      loader.clearAnswerReady(sessionKey);
+      expect(loader.answerReadyFor(sessionKey), isFalse);
+      expect(loader.answerReadyRunFor(sessionKey), isNull);
+    },
+  );
 
   test('a running run_state is adopted so the thread shows Working', () async {
     controller.emit(
@@ -681,55 +740,65 @@ void main() {
     expect(rowsFor(sessionKey), isEmpty);
   });
 
-  test('the run_state header routes a replay to the session it names',
-      () async {
-    loader.expect('other-thread');
-    controller.emit(
-      const AgentsRelayRunState(sessionKey: 'other-thread', state: 'idle'),
-    );
-    controller.emit(const AgentsRelayUser('over there', mid: 1));
-    controller.emit(const AgentsRelayDone(reason: 'replay', replay: true));
-    await _drain();
+  test(
+    'the run_state header routes a replay to the session it names',
+    () async {
+      loader.expect('other-thread');
+      controller.emit(
+        const AgentsRelayRunState(sessionKey: 'other-thread', state: 'idle'),
+      );
+      controller.emit(const AgentsRelayUser('over there', mid: 1));
+      controller.emit(const AgentsRelayDone(reason: 'replay', replay: true));
+      await _drain();
 
-    expect(rowsFor('other-thread'), hasLength(1));
-    expect(rowsFor(sessionKey), isEmpty);
-  });
+      expect(rowsFor('other-thread'), hasLength(1));
+      expect(rowsFor(sessionKey), isEmpty);
+    },
+  );
 
-  test('two overlapping replay requests land in their own threads (F1)',
-      () async {
-    // The first pairing asks for `default` and, one frame later, for the host
-    // agent's thread. The host answers in order, each answer headed by its
-    // run_state. The second request must not pull the tail of the first
-    // answer into the second thread.
-    loader.expect('default');
-    controller.emit(
-      const AgentsRelayRunState(sessionKey: 'default', state: 'idle'),
-    );
-    controller.emit(const AgentsRelayUser('first question', mid: 1));
-    await _drain();
-    // Second request while the first answer is still streaming.
-    loader.expect('host:peer', afterId: 10);
-    controller.emit(const AgentsRelayDelta('first answer', replay: true, mid: 2));
-    controller.emit(const AgentsRelayDone(reason: 'replay', replay: true));
-    // Now the host answers the second request.
-    controller.emit(
-      const AgentsRelayRunState(sessionKey: 'host:peer', state: 'idle'),
-    );
-    controller.emit(const AgentsRelayUser('other question', mid: 11));
-    controller.emit(const AgentsRelayDelta('other answer', replay: true, mid: 12));
-    controller.emit(const AgentsRelayDone(reason: 'replay', replay: true));
-    await _drain();
+  test(
+    'two overlapping replay requests land in their own threads (F1)',
+    () async {
+      // The first pairing asks for `default` and, one frame later, for the host
+      // agent's thread. The host answers in order, each answer headed by its
+      // run_state. The second request must not pull the tail of the first
+      // answer into the second thread.
+      loader.expect('default');
+      controller.emit(
+        const AgentsRelayRunState(sessionKey: 'default', state: 'idle'),
+      );
+      controller.emit(const AgentsRelayUser('first question', mid: 1));
+      await _drain();
+      // Second request while the first answer is still streaming.
+      loader.expect('host:peer', afterId: 10);
+      controller.emit(
+        const AgentsRelayDelta('first answer', replay: true, mid: 2),
+      );
+      controller.emit(const AgentsRelayDone(reason: 'replay', replay: true));
+      // Now the host answers the second request.
+      controller.emit(
+        const AgentsRelayRunState(sessionKey: 'host:peer', state: 'idle'),
+      );
+      controller.emit(const AgentsRelayUser('other question', mid: 11));
+      controller.emit(
+        const AgentsRelayDelta('other answer', replay: true, mid: 12),
+      );
+      controller.emit(const AgentsRelayDone(reason: 'replay', replay: true));
+      await _drain();
 
-    expect(rowsFor('default').map((r) => r['text']),
-        <String>['first question', 'first answer']);
-    expect(loader.cursorFor('default'), 2);
-    // A delta (cursor honoured) onto a thread with no local rows is a cache
-    // miss (F2), so the second thread is asked for again — but nothing of
-    // `default` ever landed in it, and its cursor was not moved to 2.
-    expect(rowsFor('host:peer'), isEmpty);
-    expect(loader.cursorFor('host:peer'), 0);
-    expect(loader.takeReplayWanted('host:peer'), isTrue);
-  });
+      expect(rowsFor('default').map((r) => r['text']), <String>[
+        'first question',
+        'first answer',
+      ]);
+      expect(loader.cursorFor('default'), 2);
+      // A delta (cursor honoured) onto a thread with no local rows is a cache
+      // miss (F2), so the second thread is asked for again — but nothing of
+      // `default` ever landed in it, and its cursor was not moved to 2.
+      expect(rowsFor('host:peer'), isEmpty);
+      expect(loader.cursorFor('host:peer'), 0);
+      expect(loader.takeReplayWanted('host:peer'), isTrue);
+    },
+  );
 
   test('a second request for the same thread queues behind the answer in '
       'flight (F1)', () async {
@@ -756,8 +825,12 @@ void main() {
     controller.emit(const AgentsRelayDelta('a2', replay: true, mid: 4));
     controller.emit(const AgentsRelayDone(reason: 'replay', replay: true));
     await _drain();
-    expect(rowsFor(sessionKey).map((r) => r['text']),
-        <String>['q1', 'a1', 'q2', 'a2']);
+    expect(rowsFor(sessionKey).map((r) => r['text']), <String>[
+      'q1',
+      'a1',
+      'q2',
+      'a2',
+    ]);
     expect(loader.cursorFor(sessionKey), 4);
   });
 
@@ -777,14 +850,11 @@ void main() {
     expect(rowsFor(sessionKey), isEmpty);
 
     loader.attach();
-    await replay(
-      const <AgentsRelayInbound>[
-        AgentsRelayUser('second', mid: 3),
-        AgentsRelayDelta('second answer', replay: true, mid: 4),
-        AgentsRelayDone(reason: 'replay', replay: true),
-      ],
-      afterId: 2,
-    );
+    await replay(const <AgentsRelayInbound>[
+      AgentsRelayUser('second', mid: 3),
+      AgentsRelayDelta('second answer', replay: true, mid: 4),
+      AgentsRelayDone(reason: 'replay', replay: true),
+    ], afterId: 2);
 
     // Nothing was written over the thread, the cursor is gone, and the view
     // is told to ask for the whole thread again.
@@ -812,10 +882,7 @@ void main() {
           .toList();
     }
 
-    expect(
-      splitRunMeta(callsOf(rowsFor(sessionKey)[1]), null).cost,
-      isNull,
-    );
+    expect(splitRunMeta(callsOf(rowsFor(sessionKey)[1]), null).cost, isNull);
     // Its cursor predates the mark (the old app wrote no mark).
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('$kReplayRunMetaCursorPrefix$sessionKey');
@@ -862,15 +929,17 @@ void main() {
   });
   // ── end chuk_chat-dksi ──
 
-  test('a LIVE user frame is ignored like every other live frame (F13)',
-      () async {
-    await replay(const <AgentsRelayInbound>[
-      AgentsRelayUser('not history', replay: false),
-      AgentsRelayUser('history', mid: 1),
-      AgentsRelayDone(reason: 'replay', replay: true),
-    ]);
-    expect(rowsFor(sessionKey).map((r) => r['text']), <String>['history']);
-  });
+  test(
+    'a LIVE user frame is ignored like every other live frame (F13)',
+    () async {
+      await replay(const <AgentsRelayInbound>[
+        AgentsRelayUser('not history', replay: false),
+        AgentsRelayUser('history', mid: 1),
+        AgentsRelayDone(reason: 'replay', replay: true),
+      ]);
+      expect(rowsFor(sessionKey).map((r) => r['text']), <String>['history']);
+    },
+  );
 }
 
 /// Lets the loader's internal handler chain settle.

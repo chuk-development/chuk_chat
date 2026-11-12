@@ -299,6 +299,24 @@ Apply the SQL through the Management API instead:
 - The table must exist in production before client code that uses it lands
   on master (a push to master deploys the web app).
 
+### Deploying an Edge Function
+
+Functions live in `supabase/functions/<name>/index.ts`. Deploy one with the
+CLI login from the keyring (no Docker needed):
+
+```bash
+supabase functions deploy <name> --project-ref xooposctxswumvgtyqlg --use-api
+supabase functions list --project-ref xooposctxswumvgtyqlg   # check
+```
+
+`notify-run` (the host's completion push) was missing in production until
+2026-11-12: every run notice ended in `notify: cloud delivery failed: 404`
+in `journalctl --user -u agents-manager`. Push to a phone also needs
+`FCM_PROJECT_ID` and `FCM_SERVICE_ACCOUNT` as function secrets
+(`supabase secrets set`) and a Firebase project with `google-services.json`
+in the Android build; neither exists yet. Without them the function marks
+the row `pushed_at` and sends nothing.
+
 ## Encryption
 
 All sensitive data is encrypted client-side using AES-256-GCM before being stored:

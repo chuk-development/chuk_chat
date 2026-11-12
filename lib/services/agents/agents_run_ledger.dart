@@ -132,7 +132,20 @@ AgentsRunOutcome agentsRunOutcomeFor({String? reason, String? finalAnswer}) {
 /// ONE wording for both paths, like every other live/replay mapping in this
 /// file: the live thread writes it when the terminal lands, and the replay
 /// loader writes it when the same run comes back from the host's transcript.
-String? agentsRunEndNotice(AgentsRunOutcome outcome) => switch (outcome) {
+///
+/// [error] is the host's own reason for a failed run ("Your credits are used
+/// up ...", "This model is not available right now ..."): when it came, the
+/// line is that reason, so the thread and the roster preview say what went
+/// wrong instead of a generic "failed" (CHAT-84).
+String? agentsRunEndNotice(AgentsRunOutcome outcome, {String? error}) {
+  final String reason = (error ?? '').trim();
+  if (outcome == AgentsRunOutcome.failed && reason.isNotEmpty) {
+    return _clipNotice(reason);
+  }
+  return _plainRunEndNotice(outcome);
+}
+
+String? _plainRunEndNotice(AgentsRunOutcome outcome) => switch (outcome) {
   AgentsRunOutcome.answered => null,
   AgentsRunOutcome.stopped => 'Stopped. No answer was written.',
   AgentsRunOutcome.failed => 'This run failed. No answer was written.',
@@ -140,6 +153,9 @@ String? agentsRunEndNotice(AgentsRunOutcome outcome) => switch (outcome) {
   AgentsRunOutcome.notDelivered =>
     'This message did not reach your host. Nothing ran — send it again.',
 };
+
+String _clipNotice(String text) =>
+    text.length <= 300 ? text : '${text.substring(0, 299)}…';
 
 /// The row key that marks an answer row written by the app as a run's end
 /// notice ([agentsRunEndNotice]). The thread draws such a row as one quiet
@@ -180,6 +196,9 @@ enum AgentsRunSignal {
 
 /// Everything one run produced, in renderer shapes.
 class AgentsRun {
+  /// The host's reason when the run failed (CHAT-84), for the end notice.
+  String? error;
+
   AgentsRun(this.sessionKey);
 
   /// The executor session (thread) this run belongs to.
@@ -1240,11 +1259,13 @@ class AgentsRunLedger extends ChangeNotifier {
     int? firstMid,
     int? lastMid,
     AgentsRunCost? cost, // F1: cost
+    String? error,
   }) {
     final run = _ensure(sessionKey);
     run.running = false;
     run.finalAnswer = finalAnswer;
     run.reason = reason;
+    if (error != null && error.trim().isNotEmpty) run.error = error.trim();
     run.outcome = agentsRunOutcomeFor(reason: reason, finalAnswer: finalAnswer);
     run.iterations = iterations;
     run.tokensSpent = tokensSpent;

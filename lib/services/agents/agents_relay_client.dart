@@ -744,6 +744,7 @@ class AgentsRelayFile extends AgentsRelayInbound {
 class AgentsRelayDone extends AgentsRelayInbound {
   const AgentsRelayDone({
     this.finalAnswer,
+    this.error,
     this.sessionKey,
     this.hostNotified = false,
     this.reason,
@@ -768,6 +769,11 @@ class AgentsRelayDone extends AgentsRelayInbound {
   /// What the run cost (docs/WIRE_CONTRACT.md, "Cost per run and weekly
   /// budget"), live and replayed. Null on an old host and for a run that
   /// spent no tokens.
+  /// A failed run's reason in words (wire `done.error`, CHAT-84), e.g.
+  /// "Your credits are used up ...". Null on a run that did not fail, and on
+  /// a host that does not send it.
+  final String? error;
+
   final AgentsRunCost? cost;
 
   /// The agent's weekly budget refused the run before it started. Neither
@@ -3914,6 +3920,11 @@ class AgentsRelayClient
                 : null,
             hostNotified: payload['host_notified'] == true,
             reason: reason is String ? reason : null,
+            error:
+                payload['error'] is String &&
+                    (payload['error'] as String).trim().isNotEmpty
+                ? payload['error'] as String
+                : null,
             iterations: iterations is int
                 ? iterations
                 : (iterations is num ? iterations.toInt() : null),
