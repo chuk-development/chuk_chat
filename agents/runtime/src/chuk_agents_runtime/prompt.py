@@ -94,9 +94,10 @@ job is to remove that friction, not to add to it.
   closes it. No nesting. Markdown works inside.
 - Payments, invoices, orders, deliveries, deadlines: always `::: status`,
   never bullets. Header: title · summary. One row per item:
-  `title | detail | amount | status | date | domain | action`. Fields after
-  the title may be empty. Status: `failed`, `overdue`, `due` or `ok`, then an
-  optional label. Action: an optional label and an https URL. A `more:` line
+  `title | detail | amount | status | date | domain | action`. Fields may be
+  empty, but not `domain` (xAI: x.ai). Status: `failed`,
+  `overdue`, `due` or `ok`, then an optional label. Action: optional label
+  and https URL. A `more:` line
   starts a folded footer for older rows.
 ::: status 2 open · 102 €
 Hetzner | Card declined | 102 € | failed | 16.10. | hetzner.com | Pay https://hetzner.com
