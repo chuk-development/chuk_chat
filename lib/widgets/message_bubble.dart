@@ -36,6 +36,7 @@ import 'package:chuk_chat/widgets/agent_activity/tool_activity_category.dart';
 import 'package:chuk_chat/widgets/terminal_block.dart';
 import 'package:chuk_chat/services/agents/agents_approval_grants.dart';
 import 'package:chuk_chat/widgets/agents_approval_row.dart';
+import 'package:chuk_chat/widgets/agents_reconnect_card.dart';
 import 'package:chuk_chat/widgets/agents_context_chip.dart';
 import 'package:chuk_chat/models/artifact.dart';
 import 'package:chuk_chat/services/storage/chat_origin.dart';

@@ -348,6 +348,17 @@ class AppLocalizations {
   String get mcpStatusConnecting => _get('mcpStatusConnecting');
   String get mcpActionSignInAgain => _get('mcpActionSignInAgain');
   String get mcpDetails => _get('mcpDetails');
+  String agentsReconnectTitle(String name) =>
+      _get('agentsReconnectTitle').replaceAll('{name}', name);
+  String agentsReconnectButton(String name) =>
+      _get('agentsReconnectButton').replaceAll('{name}', name);
+  String agentsReconnectDone(String name) =>
+      _get('agentsReconnectDone').replaceAll('{name}', name);
+  String agentsReconnectFailed(String name) =>
+      _get('agentsReconnectFailed').replaceAll('{name}', name);
+  String agentsReconnectContinue(String name) =>
+      _get('agentsReconnectContinue').replaceAll('{name}', name);
+  String get agentsReconnectBusy => _get('agentsReconnectBusy');
   String mcpSignInExpiredNamed(String name) =>
       _get('mcpSignInExpiredNamed').replaceAll('{name}', name);
   String mcpNoAnswerDetail(String reason) =>

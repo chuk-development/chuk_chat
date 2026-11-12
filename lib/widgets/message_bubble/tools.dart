@@ -226,7 +226,22 @@ extension _MessageBubbleTools on _MessageBubbleState {
     }
     final List<Widget> rows = <Widget>[];
     final Set<String> seen = <String>{};
+    final Set<String> reconnects = <String>{};
     for (final ToolCall call in calls) {
+      // A connector whose sign-in lapsed (CHAT-77): one reconnect card per
+      // connector, drawn from the host's structured `auth_required`.
+      final AgentsAuthRequired? auth = AgentsAuthRequired.fromToolCall(call);
+      if (auth != null) {
+        if (reconnects.add(auth.dedupeKey)) {
+          rows.add(
+            Padding(
+              padding: EdgeInsets.only(top: rows.isEmpty ? 0 : _kArtifactGap),
+              child: AgentsReconnectCard(auth: auth, threadKey: chatId),
+            ),
+          );
+        }
+        continue;
+      }
       if (call.name != 'ask_user') continue;
       final AgentsApprovalGrant? grant = AgentsApprovalGrant.fromArguments(
         call.arguments,

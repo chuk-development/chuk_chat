@@ -375,6 +375,29 @@ starts and the row carries `"error": "refused to start: <reason>"` with
   third-party text, and cut at 32 KB. It never enters the system prompt, so a
   server that connects late does not break the prompt cache.
 
+### `auth_required` tool result (IMPLEMENTED, additive; CHAT-77)
+
+A connector whose sign-in is refused and cannot be renewed (`error_kind`
+`auth`, or a dead grant at call time) keeps its tools in the run: the ones
+from the tool cache, else one stand-in `<server>__sign_in_required`. A call
+answers at once, without a request to the server:
+
+```json
+{"ok": false, "server": "Fastmail", "tool": "list_mailboxes",
+ "error": "auth_required",
+ "auth_required": {"server": "Fastmail", "connector_id": "<device id>",
+                   "url": "<scheme://host/path, no query>"},
+ "message": "<what the model tells the user>"}
+```
+
+It rides in the normal `tool` frame (`result`, compact JSON). The app draws a
+"<Server>: sign-in expired · Reconnect <Server>" card from the
+`auth_required` object only, never from the text. The card runs the browser
+sign-in on the device (`McpService.connect(forceSignIn: true)`); when it
+worked it sends the thread a plain task "<Server> is connected again. Please
+continue." Before, such a server offered no tools at all: the model never
+heard of the failure and looked for another way for minutes.
+
 ### `mcp_credentials` (NEW, executor → app)
 
 The return half of the forward payload above. It lives in this section because

@@ -2751,6 +2751,12 @@ class MCPManager:
         registered: list[str] = []
         for name, connection in self.connections.items():
             if not _usable(connection):
+                if not self.auth_required(name):
+                    continue
+                # CHAT-77: the sign-in lapsed. Offer what the server had
+                # (seeded from the tool cache), or one stand-in tool, so a
+                # call returns ``auth_required`` instead of nothing at all.
+                registered.extend(self._register_signed_out(registry, name, connection))
                 continue
             for info in connection.tools:
                 full = tool_name(name, info.name)
@@ -2780,6 +2786,98 @@ class MCPManager:
                 registered.append(full)
         return registered
 
+    def auth_required(self, server: str) -> bool:
+        """Whether [server] failed because its sign-in is refused and could
+        not be renewed (``error_kind`` ``auth``): only a new sign-in helps."""
+        connection = self.connections.get(server)
+        if connection is None or getattr(connection, "pending", False):
+            return False
+        if _usable(connection):
+            return False
+        return getattr(connection, "error_kind", None) == ERROR_KIND_AUTH
+
+    @staticmethod
+    def _grant_dead(connection: Any) -> bool:
+        config = getattr(connection, "config", None)
+        grants = getattr(connection, "_grants", None)
+        if config is None or grants is None or not getattr(config, "oauth", None):
+            return False
+        try:
+            return bool(grants.is_dead(config))
+        except Exception:  # noqa: BLE001 — no answer is "not dead"
+            return False
+
+    def auth_required_result(self, server: str, tool: str) -> dict:
+        """The tool result of a call to a server whose sign-in lapsed
+        (docs/WIRE_CONTRACT.md, "auth_required"). Structured, so the app draws
+        a reconnect card from ``auth_required`` and never from the text."""
+        connection = self.connections.get(server)
+        config = getattr(connection, "config", None)
+        # Scheme, host and path only: an API-key server carries its key in
+        # the query, and this result is stored in the transcript.
+        from urllib.parse import urlsplit, urlunsplit
+
+        try:
+            parts = urlsplit(getattr(config, "url", None) or "")
+            url = urlunsplit((parts.scheme, parts.hostname or "", parts.path, "", ""))
+        except ValueError:
+            url = ""
+        return {
+            "ok": False,
+            "server": server,
+            "tool": tool,
+            "error": "auth_required",
+            "auth_required": {
+                "server": server,
+                "connector_id": getattr(config, "connector_id", None) or "",
+                "url": url,
+            },
+            "message": (
+                f"The {server} sign-in has expired, so {server} cannot be used "
+                "right now. Tell the user at once, in one short sentence, that "
+                f"{server} must be connected again; the chat shows them a "
+                f"'Reconnect {server}' card for it. Then go on with whatever "
+                "you can do without it."
+            ),
+        }
+
+    def _register_signed_out(
+        self, registry: ToolRegistry, server: str, connection: Any
+    ) -> list[str]:
+        infos = list(getattr(connection, "tools", None) or [])
+        if not infos and self.tool_cache is not None:
+            config = getattr(connection, "config", None)
+            if config is not None:
+                infos = self.tool_cache.get(config)
+        if not infos:
+            infos = [
+                MCPToolInfo(
+                    name="sign_in_required",
+                    description=(
+                        f"{server} is connected for this agent, but its sign-in "
+                        f"has expired. Call this when the task needs {server}: "
+                        "it tells you what to say to the user."
+                    ),
+                    schema={"type": "object", "properties": {}},
+                    annotations={"readOnlyHint": True},
+                )
+            ]
+        names: list[str] = []
+        for info in infos:
+            full = tool_name(server, info.name)
+            if registry.has(full):
+                continue
+            registry.register(
+                full,
+                _tool_schema(server, info),
+                _make_handler(self, server, info.name),
+                check_fn=_make_check(self, server),
+                deferrable=True,
+            )
+            self._registered.add(full)
+            names.append(full)
+        return names
+
     # -- call routing -----------------------------------------------------
 
     def is_alive(self, server: str) -> bool:
@@ -2802,6 +2900,10 @@ class MCPManager:
             await_start = getattr(connection, "await_start", None)
             if callable(await_start):
                 await_start()
+        if self.auth_required(server):
+            # The sign-in lapsed: answer at once (CHAT-77). A new sign-in from
+            # the app replaces the connection, and the next call goes through.
+            return self.auth_required_result(server, tool)
         # A session that dropped is redialed once before the model is told the
         # tool is gone.
         if not connection.alive() and self._revive(server):
@@ -2818,6 +2920,10 @@ class MCPManager:
                 refresh = getattr(connection, "refresh_token", None)
                 if callable(refresh) and refresh(force=True, seen_token=seen):
                     result = connection.call(tool, args)
+                elif self._grant_dead(connection):
+                    # The provider refused the refresh for good: the same
+                    # answer as a server that failed its handshake (CHAT-77).
+                    return self.auth_required_result(server, tool)
             return result
 
         guard = self.call_guard
@@ -2928,7 +3034,10 @@ def _make_handler(manager: "MCPManager", server: str, tool: str):
 
 def _make_check(manager: "MCPManager", server: str):
     def check() -> bool:
-        return manager.is_alive(server)
+        # A server whose sign-in lapsed stays visible: a call answers at once
+        # with ``auth_required`` (CHAT-77), so the model tells the user
+        # instead of searching another way for minutes.
+        return manager.is_alive(server) or manager.auth_required(server)
 
     return check
 
