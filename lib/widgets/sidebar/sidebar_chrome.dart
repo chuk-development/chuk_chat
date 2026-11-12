@@ -22,6 +22,7 @@ import 'package:chuk_chat/services/offline_retry_manager.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/widgets/floating_chrome_surface.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/ui/expressive/working_dots.dart';
 import 'package:chuk_chat/widgets/sidebar/hover_marquee_text.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 import 'package:chuk_chat/widgets/brand_wordmark.dart';
@@ -942,6 +943,9 @@ class SbChatTile extends StatelessWidget {
     this.leading,
     this.unread = false,
     this.outboxChatId,
+    this.preview,
+    this.timeLabel,
+    this.previewTrailing,
   });
 
   final String title;
@@ -951,6 +955,23 @@ class SbChatTile extends StatelessWidget {
   final bool streaming;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
+
+  /// The messenger shape the Agents roster uses: the last message as the
+  /// second line, in place of [dateLine], with [timeLabel] at the far right
+  /// of the name line, and [trailing] / [hoverTrailing] shown only on hover,
+  /// over the time. Non-null keeps the line's height even when it is empty,
+  /// so a row with nothing said yet is as tall as the others. Null keeps the
+  /// chat row as it always was.
+  final String? preview;
+
+  /// The time of that last message, at the right end of the title line,
+  /// on the title's baseline. Null or empty shows nothing. While [streaming],
+  /// small working dots take its place.
+  final String? timeLabel;
+
+  /// A small mark at the end of the [preview] line (the unread dot), so the
+  /// time column above it stays one straight column down the list.
+  final Widget? previewTrailing;
 
   /// Long press with the position of the finger, for a menu that opens there.
   final void Function(Offset globalPosition)? onLongPressAt;
@@ -983,7 +1004,11 @@ class SbChatTile extends StatelessWidget {
       onLongPress: onLongPress,
       onLongPressAt: onLongPressAt,
       onSecondaryTap: onSecondaryTap,
-      padding: const EdgeInsets.fromLTRB(12, 6, 4, 6),
+      // The messenger shape keeps the same air on both sides: its time is
+      // the last thing on the right, not a 28 px button with its own inset.
+      padding: preview == null
+          ? const EdgeInsets.fromLTRB(12, 6, 4, 6)
+          : const EdgeInsets.fromLTRB(12, 8, 12, 8),
       child: _SbChatTileBody(
         title: title,
         dateLine: dateLine,
@@ -995,6 +1020,9 @@ class SbChatTile extends StatelessWidget {
         leading: leading,
         unread: unread,
         outboxChatId: outboxChatId,
+        preview: preview,
+        timeLabel: timeLabel,
+        previewTrailing: previewTrailing,
       ),
     );
   }
@@ -1014,6 +1042,9 @@ class _SbChatTileBody extends StatelessWidget {
     required this.leading,
     required this.unread,
     required this.outboxChatId,
+    required this.preview,
+    required this.timeLabel,
+    required this.previewTrailing,
   });
 
   final String title;
@@ -1026,6 +1057,141 @@ class _SbChatTileBody extends StatelessWidget {
   final Widget? leading;
   final bool unread;
   final String? outboxChatId;
+  final String? preview;
+  final String? timeLabel;
+  final Widget? previewTrailing;
+
+  Widget _titleLine(ThemeData theme, Color titleColor) {
+    final TextStyle? style = theme.textTheme.bodyLarge?.copyWith(
+      fontWeight: selected || unread ? FontWeight.w700 : FontWeight.w500,
+      color: titleColor,
+      fontStyle: locked ? FontStyle.italic : null,
+    );
+    final Widget name = HoverMarqueeText(title, style: style);
+    final String? time = timeLabel;
+    if (streaming) {
+      return Row(
+        children: [
+          Expanded(child: name),
+          const SizedBox(width: 8),
+          WorkingDots(
+            color: theme.m3.onSurfaceVariant,
+            animate: false,
+          ),
+        ],
+      );
+    }
+    if (time == null || time.isEmpty) return name;
+    // One line, one baseline: the time is smaller than the name, so a
+    // centred row would put it a pixel or two off the name's baseline.
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: [
+        Expanded(child: name),
+        const SizedBox(width: 8),
+        Text(
+          time,
+          maxLines: 1,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.m3.onSurfaceVariant,
+            fontWeight: unread ? FontWeight.w700 : null,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// The messenger shape: face, then the name with the time at the far right
+  /// edge, the last message under it across the whole width. The row's
+  /// actions (pin, "…") only show while the pointer is over the card; they
+  /// then cover the time, on the card's own fill, so nothing reflows.
+  Widget _messengerBody(
+    ThemeData theme,
+    Color titleColor,
+    bool hovered,
+    String line,
+  ) {
+    final Widget? pin = hoverTrailing;
+    final Widget? more = trailing;
+    final Widget text = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _titleLine(theme, titleColor),
+        const SizedBox(height: 3),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                line,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: unread
+                      ? theme.colorScheme.onSurface
+                      : theme.m3.onSurfaceVariant,
+                ),
+              ),
+            ),
+            if (previewTrailing case final Widget mark) ...[
+              const SizedBox(width: 8),
+              mark,
+            ],
+          ],
+        ),
+      ],
+    );
+    return Stack(
+      children: [
+        Row(
+          children: [
+            // The same gap as the plain tile, so a room row and an agent
+            // row start their names on one x.
+            if (leading case final Widget face) ...[
+              face,
+              const SizedBox(width: 10),
+            ],
+            Expanded(child: text),
+          ],
+        ),
+        if (pin != null || more != null)
+          Positioned(
+            top: 0,
+            bottom: 0,
+            right: 0,
+            child: AnimatedOpacity(
+              opacity: hovered ? 1 : 0,
+              duration: const Duration(milliseconds: 120),
+              // Gone for everyone while hidden, as the hover pin always was:
+              // no tab stop and no screen-reader item on an invisible button.
+              child: ExcludeFocus(
+                excluding: !hovered,
+                child: ExcludeSemantics(
+                  excluding: !hovered,
+                  child: IgnorePointer(
+                    ignoring: !hovered,
+                    child: Container(
+                      alignment: Alignment.center,
+                      padding: const EdgeInsets.only(left: 6),
+                      // The hovered card's own fill, so the actions sit on
+                      // the card and not on the time under them.
+                      color: selected
+                          ? theme.m3.selection
+                          : theme.m3.surfaceContainerHigh,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [?pin, ?more],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1039,6 +1205,9 @@ class _SbChatTileBody extends StatelessWidget {
               ? theme.m3.onSelection
               : theme.colorScheme.onSurface);
 
+    if (preview case final String line) {
+      return _messengerBody(theme, titleColor, hovered, line);
+    }
     return Row(
       children: [
         if (leading != null) ...[leading!, const SizedBox(width: 10)],

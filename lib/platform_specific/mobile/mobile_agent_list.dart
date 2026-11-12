@@ -18,9 +18,11 @@
 ///    choice ([RosterPins.mainAgentId], "Make main agent" in the row menu),
 ///    else the first agent ([resolveMainAgent]). A search or the Unread
 ///    filter folds it back into the list, first when it matches;
-///  * one row per agent: its blob face with the presence dot, the name, the
-///    role tag, the time of the last activity, one line of preview, and an
-///    unread dot. The row springs and morphs on press, and the list cascades in.
+///  * one row per agent, like a messenger: its face with the presence dot,
+///    the name, the time of the last message, that message on the second line
+///    (empty until something was said), and the unread count. A running agent
+///    shows small working dots where the time goes. The row springs and morphs
+///    on press, and the list cascades in.
 ///
 /// A group ROOM is a conversation too, so it is a row in this same list — same
 /// height, same name line, same preview line, no badge and no second card
@@ -58,6 +60,8 @@ import 'package:chuk_chat/widgets/agents_wait_label.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agent_read_marks.dart';
 import 'package:chuk_chat/services/agents/thread_preview_store.dart';
+import 'package:chuk_chat/ui/expressive/working_dots.dart';
+import 'package:chuk_chat/utils/roster_time_label.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
 import 'package:chuk_chat/services/agents/roster_pins.dart';
 import 'package:chuk_chat/services/agents/room_source.dart';
@@ -339,10 +343,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
         (AgentsAgent agent) =>
             agent.name.toLowerCase().contains(q) ||
             (_roleOf(agent)?.toLowerCase().contains(q) ?? false) ||
-            MobileAgentRow.previewOf(
-              agent,
-              profiles: _profiles,
-            ).toLowerCase().contains(q),
+            MobileAgentRow.previewOf(agent).toLowerCase().contains(q),
       );
     }
     final AgentsAgent? main = _mainAgent;
@@ -473,7 +474,6 @@ class _MobileAgentListState extends State<MobileAgentList> {
       selected: agent.id == widget.selectedAgentId,
       unread: _marks.isUnread(agent),
       unreadThreads: _marks.unreadThreads(agent),
-      role: _roleOf(agent),
       now: _now(),
       profiles: _profiles,
       pinned: !main && RosterPins.instance.isPinned(agent.id),
@@ -1046,7 +1046,6 @@ class MobileAgentRow extends StatelessWidget {
     this.selected = false,
     this.unread = false,
     this.unreadThreads = 1,
-    this.role,
     this.onTap,
     this.onLongPress,
     this.profiles,
@@ -1070,7 +1069,7 @@ class MobileAgentRow extends StatelessWidget {
   final bool main;
 
   /// The main agent row's minimum height.
-  static const double mainHeight = 80;
+  static const double mainHeight = 88;
   final bool selected;
   final bool unread;
 
@@ -1081,9 +1080,6 @@ class MobileAgentRow extends StatelessWidget {
   /// How many of this agent's threads have something new in them. Shown as
   /// the number on the badge.
   final int unreadThreads;
-
-  /// The role line to show; null hides the tag.
-  final String? role;
 
   /// Opens the agent's thread. It is handed the row's own rounded rect, in
   /// global coordinates: the chat grows out of exactly that rect
@@ -1103,43 +1099,35 @@ class MobileAgentRow extends StatelessWidget {
   /// loose enough for a 52 px face plus two lines of text.
   static const double height = 64;
 
-  /// The preview line under the name. What the agent is doing now beats a
-  /// stale thread title; a thread title beats the brief; the brief beats
-  /// silence.
-  static String previewOf(AgentsAgent agent, {AgentProfileStore? profiles}) {
-    if (agent.running) return 'Working…';
-    // What was actually said last, whoever said it. This is the line a roster
-    // is read for; a thread title is what it falls back to.
-    final ThreadPreview? preview = ThreadPreviewStore.instance.newestOf(
-      agent.threads.map((AgentsThreadInfo thread) => thread.key),
-    );
-    if (preview != null && preview.text.isNotEmpty) {
-      return preview.fromUser ? 'You: ${preview.text}' : preview.text;
-    }
-    for (final AgentsThreadInfo thread in agent.threads) {
-      final String title = thread.title.trim();
-      if (title.isNotEmpty && title != 'default' && title != 'General') {
-        return title;
-      }
-    }
-    // The user's own brief wins, a cleared one included (nothing shows).
-    final String? brief = (profiles ?? AgentProfileStore.instance)
-        .profileOf(agent.id)
-        .briefOver(agent.brief);
-    if (brief != null) return brief;
-    // Nothing to say beats saying "No activity yet" on every row of a fresh
-    // install: the line is for what happened, and an empty line reads as
-    // "nothing yet" without spelling it out. The real last message lands here
-    // with the preview cache (bead: thread preview store).
-    return '';
-  }
+  /// The line under the name: the last message in the agent's threads,
+  /// whoever wrote it, the user's own prefixed "You: " (DESIGN.md §10).
+  /// Empty when nothing was said yet. Never the brief, the role, a thread
+  /// title or the run state: the row is read for what was said.
+  static String previewOf(AgentsAgent agent) => ThreadPreviewStore.rosterLine(
+    ThreadPreviewStore.instance.lastMessageOf(agent),
+  );
 
   @override
   Widget build(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
     final TextTheme text = Theme.of(context).textTheme;
     final Color accent = agentAccent(context, agent.id, store: profiles);
-    final String time = mobileTimeLabel(agent.lastActivity, now: now);
+    // The time of the last message, not of the last run: the column dates
+    // the line beside it.
+    final String time = rosterTimeLabel(
+      ThreadPreviewStore.instance.lastMessageAt(agent),
+      now: now,
+      alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(context),
+    );
+    final Color timeColour = unread
+        ? accentForegroundFor(
+            accent,
+            Color.alphaBlend(
+              accent.withValues(alpha: 0.13),
+              Theme.of(context).scaffoldBackgroundColor,
+            ),
+          )
+        : scheme.onSurfaceVariant;
 
     return Semantics(
       identifier: 'mobile-agent-row-${agent.id}',
@@ -1185,23 +1173,24 @@ class MobileAgentRow extends StatelessWidget {
               ),
               child: Row(
                 children: <Widget>[
-                  AgentFace(agent: agent, size: main ? 58 : 48, store: profiles),
-                  SizedBox(width: main ? 14 : 12),
+                  AgentFace(agent: agent, size: main ? 64 : 48, store: profiles),
+                  SizedBox(width: main ? 16 : 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: <Widget>[
                         Row(
+                          // One baseline: the time is smaller than the name,
+                          // so a centred row set it 1.4 px high.
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
                           children: <Widget>[
-                            // The name comes first: the role tag only gets
-                            // the room the whole name leaves, and goes when
-                            // there is too little (DESIGN §13.5: an agent
-                            // name is not ellipsised for a tag).
                             Expanded(
-                              child: _NameWithRole(
-                                name: agent.name,
-                                role: role,
+                              child: Text(
+                                agent.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: (main ? text.titleLarge : text.titleMedium)
                                     ?.copyWith(
                                       fontWeight: unread
@@ -1221,6 +1210,11 @@ class MobileAgentRow extends StatelessWidget {
                             if (waitKind != null) ...<Widget>[
                               const SizedBox(width: 8),
                               AgentsWaitPill(kind: waitKind!),
+                            ] else if (agent.running) ...<Widget>[
+                              // A run in flight takes the time's place, small;
+                              // the last message stays on the line below.
+                              const SizedBox(width: 8),
+                              WorkingDots(color: timeColour, animate: false),
                             ] else if (time.isNotEmpty) ...<Widget>[
                               const SizedBox(width: 8),
                               Text(
@@ -1229,17 +1223,7 @@ class MobileAgentRow extends StatelessWidget {
                                   // The accent as text: a darker shade of it
                                   // on a light page, so a pastel accent stays
                                   // readable.
-                                  color: unread
-                                      ? accentForegroundFor(
-                                          accent,
-                                          Color.alphaBlend(
-                                            accent.withValues(alpha: 0.13),
-                                            Theme.of(
-                                              context,
-                                            ).scaffoldBackgroundColor,
-                                          ),
-                                        )
-                                      : scheme.onSurfaceVariant,
+                                  color: timeColour,
                                   fontWeight: unread
                                       ? FontWeight.w800
                                       : FontWeight.w500,
@@ -1248,12 +1232,12 @@ class MobileAgentRow extends StatelessWidget {
                             ],
                           ],
                         ),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: 4),
                         Row(
                           children: <Widget>[
                             Expanded(
                               child: Text(
-                                previewOf(agent, profiles: profiles),
+                                previewOf(agent),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: text.bodyMedium?.copyWith(
@@ -1313,7 +1297,11 @@ class MobileDerivedThreadRow extends StatelessWidget {
     final TextTheme text = Theme.of(context).textTheme;
     final AppLocalizations l =
         AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));
-    final String time = mobileTimeLabel(thread.lastActivity, now: now);
+    final String time = rosterTimeLabel(
+      thread.lastActivity,
+      now: now,
+      alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(context),
+    );
     return Semantics(
       identifier: 'mobile-derived-thread-${thread.key}',
       button: true,
@@ -1482,92 +1470,6 @@ class MobileRoomRow extends StatelessWidget {
   }
 }
 
-/// The small grey tag next to the name (the agent's role).
-/// An agent's name with its role tag after it. The name keeps its whole
-/// width; the tag takes what is left (at most 110 px) and is dropped when
-/// less than [_minTagWidth] remains.
-class _NameWithRole extends StatelessWidget {
-  const _NameWithRole({required this.name, required this.role, this.style});
-
-  final String name;
-  final String? role;
-  final TextStyle? style;
-
-  static const double _gap = 8;
-  static const double _minTagWidth = 48;
-
-  @override
-  Widget build(BuildContext context) {
-    final Widget nameText = Text(
-      name,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      style: style,
-    );
-    final String? tag = role?.trim();
-    if (tag == null || tag.isEmpty) return nameText;
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final TextPainter painter = TextPainter(
-          text: TextSpan(
-            text: name,
-            style: DefaultTextStyle.of(context).style.merge(style),
-          ),
-          maxLines: 1,
-          textDirection: Directionality.of(context),
-          textScaler: MediaQuery.textScalerOf(context),
-        )..layout();
-        final double room = constraints.maxWidth - painter.width - _gap;
-        painter.dispose();
-        if (room < _minTagWidth) return nameText;
-        return Row(
-          children: <Widget>[
-            Flexible(child: nameText),
-            const SizedBox(width: _gap),
-            ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: room < 110 ? room : 110),
-              child: _RoleTag(role: tag),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _RoleTag extends StatelessWidget {
-  const _RoleTag({required this.role});
-
-  final String role;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 110),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(9),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-          child: Text(
-            role,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _MenuRow extends StatelessWidget {
   const _MenuRow({required this.icon, required this.label, this.color});
 
@@ -1658,35 +1560,6 @@ class _EmptyState extends StatelessWidget {
       ),
     );
   }
-}
-
-/// The time column of an inbox row, like a messenger: a clock time today,
-/// "Yesterday", the weekday inside a week, a short date after that. Empty when
-/// nothing has happened.
-String mobileTimeLabel(DateTime? when, {required DateTime now}) {
-  if (when == null) return '';
-  final DateTime day = DateTime(when.year, when.month, when.day);
-  final DateTime today = DateTime(now.year, now.month, now.day);
-  final int days = today.difference(day).inDays;
-  if (days <= 0) {
-    final int h12 = when.hour % 12 == 0 ? 12 : when.hour % 12;
-    final String mm = when.minute.toString().padLeft(2, '0');
-    return '$h12:$mm ${when.hour < 12 ? 'AM' : 'PM'}';
-  }
-  if (days == 1) return 'Yesterday';
-  if (days < 7) {
-    const List<String> names = <String>[
-      'Mon',
-      'Tue',
-      'Wed',
-      'Thu',
-      'Fri',
-      'Sat',
-      'Sun',
-    ];
-    return names[when.weekday - 1];
-  }
-  return '${when.day}.${when.month}.';
 }
 
 /// The number of new threads on an agent, in that agent's colour.

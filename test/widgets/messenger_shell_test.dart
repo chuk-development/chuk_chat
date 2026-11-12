@@ -6,6 +6,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:chuk_chat/widgets/settings_surface.dart';
 
 import 'package:chuk_chat/services/app_mode_service.dart';
 import 'package:chuk_chat/services/storage/chat_origin.dart';
@@ -511,7 +512,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Details (Ctrl+.)'), findsOneWidget);
     expect(find.text('Copy full chat'), findsOneWidget);
-    expect(find.text('Profile'), findsOneWidget);
+    expect(find.text('Settings'), findsOneWidget);
     expect(find.text('Rename'), findsOneWidget);
     expect(find.byType(AppBar), findsNothing);
     // The composer's "More models" way out is wired.
@@ -1333,17 +1334,11 @@ void main() {
     await tester.pump();
 
     expect(row().streaming, isFalse);
-    // The row's date line says when it last did something: today, so the
-    // time.
+    // The row is a messenger row: it dates the last MESSAGE, not the run.
+    // Nothing was said in this thread, so no time and an empty line.
     expect(roster.agents.single.lastActivity, isNotNull);
-    expect(
-      row().dateLine,
-      sbChatDateLine(
-        tester.element(find.byType(AgentRosterView)),
-        roster.agents.single.lastActivity,
-      ),
-    );
-    expect(row().dateLine, isNotEmpty);
+    expect(row().preview, '');
+    expect(row().timeLabel, '');
   });
 
   testWidgets(
@@ -1413,11 +1408,20 @@ void main() {
       // Nothing is paired in this test, so the panel says so instead of
       // showing a figure it does not have.
       expect(find.text('Not paired with a host.'), findsNWidgets(4));
-      await tester.tap(find.byTooltip('Back'));
-      await tester.pumpAndSettle();
-
-      // Esc closes it again.
-      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      // A row of the agent's settings opens its page inside the right pane
+      // (CHAT-54, docs/DESIGN.md §2), not in the centred modal.
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('desk-right-pane')),
+          matching: find.byType(AgentHostActivityPage),
+        ),
+        findsOneWidget,
+      );
+      expect(find.byType(SettingsModalFrame), findsNothing);
+      // Its header's close chip closes the pane.
+      await tester.tap(
+        find.byKey(const ValueKey<String>('settings-surface-close')),
+      );
       await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey<String>('desk-right-pane')),

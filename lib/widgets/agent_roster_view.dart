@@ -37,9 +37,11 @@ import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import 'package:chuk_chat/services/agents/agents_thread_modes.dart';
 import 'package:chuk_chat/services/agents/roster_pins.dart';
 import 'package:chuk_chat/services/agents/room_source.dart';
+import 'package:chuk_chat/services/agents/thread_preview_store.dart';
 import 'package:chuk_chat/services/profile_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
+import 'package:chuk_chat/utils/roster_time_label.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/agents_desktop/desktop_controls.dart';
 import 'package:chuk_chat/widgets/brand_wordmark.dart';
@@ -56,9 +58,9 @@ import 'package:chuk_chat/widgets/update_banner.dart';
 // language; it is exported here so every caller keeps one import.
 export 'package:chuk_chat/widgets/agent_name_dialog.dart';
 
-/// The face in front of an agent or a room in the open pane. It fits the
-/// chat tile's two lines with air above and below.
-const double kRosterTileFace = 32;
+/// The face in front of an agent or a room in the open pane: a messenger
+/// sized face next to the name and the last message.
+const double kRosterTileFace = 44;
 
 class AgentRosterView extends StatefulWidget {
   const AgentRosterView({
@@ -550,6 +552,8 @@ class _AgentRosterViewState extends State<AgentRosterView> {
         _marks,
         _profiles,
         _pins,
+        // The last message of every row.
+        ThreadPreviewStore.instance,
         // The "waits on you" labels and the automation chats.
         AgentsThreadModes.instance,
         AgentsRunLedger.instance,
@@ -661,6 +665,14 @@ class _AgentRosterViewState extends State<AgentRosterView> {
     final ThemeData theme = Theme.of(context);
     final Color iconFg = theme.resolvedIconColor;
     final bool hasMenuButton = widget.onToggleCollapsed != null;
+    // The last line of threads this device holds but has not read yet (a
+    // restart): read once per thread, then kept (as the phone inbox does).
+    unawaited(
+      ThreadPreviewStore.instance.ensureFor(<String>[
+        for (final AgentsAgent agent in widget.source.visibleAgents)
+          for (final AgentsThreadInfo thread in agent.threads) thread.key,
+      ]),
+    );
 
     final List<_NavRow> rows = _navRows(context);
     final List<Widget> navCards = <Widget>[
@@ -1070,8 +1082,6 @@ class _AgentRosterViewState extends State<AgentRosterView> {
     final Color accent = theme.colorScheme.primary;
     final bool working = agent.activity == AgentActivity.working;
     final AgentsWaitKind? waitKind = agentsWaitKindFor(agent);
-    final AppLocalizations l10n =
-        AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));
     final bool unread = _marks.isUnread(agent);
     final bool pinned = _pins.isPinned(agent.id);
     return Builder(
@@ -1079,10 +1089,17 @@ class _AgentRosterViewState extends State<AgentRosterView> {
         SbChatTile(
           key: ValueKey<String>('agent-tile-${agent.id}'),
           title: agent.name,
-          // A waiting agent says what it waits for instead of when.
-          dateLine: waitKind != null
-              ? agentsWaitLabel(l10n, waitKind)
-              : sbChatDateLine(context, agent.lastActivity, now: _now()),
+          // A messenger row: the last message under the name and its time
+          // beside it (DESIGN.md §10). Nothing said yet: an empty line and
+          // no time, never the brief.
+          preview: ThreadPreviewStore.rosterLine(
+            ThreadPreviewStore.instance.lastMessageOf(agent),
+          ),
+          timeLabel: rosterTimeLabel(
+            ThreadPreviewStore.instance.lastMessageAt(agent),
+            now: _now(),
+            alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(context),
+          ),
           selected: _isSelected(agent),
           unread: unread,
           // chuk's dot for a chat that is still being written.
@@ -1115,28 +1132,35 @@ class _AgentRosterViewState extends State<AgentRosterView> {
               onPressed: () => _pins.toggle(agent.id),
             ),
           ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              if (waitKind != null) AgentsWaitPill(kind: waitKind),
-              if (unread)
-                Container(
-                  key: const ValueKey<String>('roster-unread-dot'),
-                  width: 8,
-                  height: 8,
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  // A flat dot. No halo: the design has no glow anywhere.
-                  decoration: BoxDecoration(
-                    color: accent,
-                    shape: BoxShape.circle,
-                  ),
+          // What waits on the user and the unread dot end the message line,
+          // so the time above stays at the far right edge of every row.
+          previewTrailing: waitKind == null && !unread
+              ? null
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    if (waitKind != null) AgentsWaitPill(kind: waitKind),
+                    if (waitKind != null && unread) const SizedBox(width: 6),
+                    if (unread)
+                      Container(
+                        key: const ValueKey<String>('roster-unread-dot'),
+                        width: 8,
+                        height: 8,
+                        // A flat dot. No halo: the design has no glow
+                        // anywhere.
+                        decoration: BoxDecoration(
+                          color: accent,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                  ],
                 ),
-              _moreButton(
-                iconFg,
-                (BuildContext anchor) =>
-                    unawaited(_showMenu(anchor, _agentMenu(agent))),
-              ),
-            ],
+          // In the messenger row the "…" shows on hover, over the time
+          // (right click and the Menu key open the same menu).
+          trailing: _moreButton(
+            iconFg,
+            (BuildContext anchor) =>
+                unawaited(_showMenu(anchor, _agentMenu(agent))),
           ),
         ),
         () => unawaited(_showMenu(rowContext, _agentMenu(agent))),

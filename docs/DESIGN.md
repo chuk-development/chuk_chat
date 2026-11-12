@@ -444,8 +444,11 @@ Never a picture the agent drew, never a second bar widget.
 
 ## 10. Lists
 
-- A roster row is 64 px: face 48, name, the last line that was actually said,
-  time, and a count badge when something is unread. Never a placeholder line like
+- A roster row is 64 px: face 48 (the main agent's row 88 px, face 64), name, the last line that was actually said,
+  the time of that line (`rosterTimeLabel`: clock today, "Yesterday", weekday,
+  short date), and a count badge when something is unread. No role tag, no
+  brief, no "Working…": a running agent keeps its last line and shows still
+  working dots where the time goes. Never a placeholder line like
   "No activity yet" — an empty line says it better.
 - The preview text is plain: markdown markers are stripped
   (`ThreadPreviewStore`), and the user's own line is prefixed "You: ".
@@ -543,14 +546,18 @@ in `mobile_chat_chrome.dart`), so both layouts read the same.
 ### 14.3 Rows (roster)
 
 - The roster is chuk_chat's sidebar (`sidebar_chrome.dart`): every row is an
-  `SbChatTile` card (about 59 px: face, name, date line), the same card as a
-  chat in the chuk sidebar (AGENTS_UI_UNIFY.md, Result D).
+  `SbChatTile` card (about 59 px), the same card as a chat in the chuk
+  sidebar (AGENTS_UI_UNIFY.md, Result D), in its messenger shape (`preview`,
+  `timeLabel`, about 66 px): face 44, name with the last message's time on
+  its baseline at the far right edge, the last message below across the
+  whole width (§10). A run shows still working dots in the time's place;
+  a wait pill and the unread dot end the message line.
 - Hover: `surfaceContainerHigh`. Selected: the accent at 20 % over the card
   fill, the name in `accentForegroundOn` that fill. Unread: bold name plus a
   small accent dot, no big badge.
-- Right click opens the context menu (rename, pin, hide, delete). The pin
-  shows on hover. The "…" button is on every row today (open point: audit
-  2026-10-05, desktop item 6, asks for hover only).
+- Right click (and the Menu key) opens the context menu (rename, pin, hide,
+  delete). The pin and the "…" show on hover only, over the time, on the
+  card's own fill (audit 2026-10-05, desktop item 6).
 
 ### 14.4 Transcript
 

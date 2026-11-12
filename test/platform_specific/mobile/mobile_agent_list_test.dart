@@ -6,6 +6,8 @@ import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_agent_list.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
 import 'package:chuk_chat/services/agents/thread_preview_store.dart';
+import 'package:chuk_chat/ui/expressive/working_dots.dart';
+import 'package:chuk_chat/utils/roster_time_label.dart';
 
 import 'mobile_support.dart';
 
@@ -37,12 +39,20 @@ void main() {
       ];
 
   /// Writes one stored line for [threadKey], the way the replay loader does.
-  void storeLine(String threadKey, String text, {required bool fromUser}) =>
-      ThreadPreviewStore.instance.noteRows(threadKey, <Map<String, dynamic>>[
-        <String, dynamic>{'role': fromUser ? 'user' : 'assistant', 'text': text},
-      ]);
+  void storeLine(
+    String threadKey,
+    String text, {
+    required bool fromUser,
+    DateTime? at,
+  }) => ThreadPreviewStore.instance.noteRows(threadKey, <Map<String, dynamic>>[
+    <String, dynamic>{
+      'role': fromUser ? 'user' : 'assistant',
+      'text': text,
+      if (at != null) 'timestamp': at.toIso8601String(),
+    },
+  ]);
 
-  testWidgets('renders one row per visible agent with preview and time',
+  testWidgets('a row reads like a messenger: name, last message and its time',
       (tester) async {
     // Thread keys of this test alone: the preview store is a process-wide
     // singleton, so a key shared with another test would make the result
@@ -63,7 +73,8 @@ void main() {
         name: 'Design',
         role: 'ux',
         brief: 'Proposes UI directions',
-        lastActivity: now.subtract(const Duration(days: 1)),
+        // A run after the last message: the row dates the message.
+        lastActivity: now.subtract(const Duration(minutes: 10)),
         threads: <AgentsThreadInfo>[
           AgentsThreadInfo(key: 'render-design', title: 'default'),
         ],
@@ -71,12 +82,25 @@ void main() {
       agent(
         id: 'inbox',
         name: 'Inbox Triage',
-        threads: const <AgentsThreadInfo>[],
+        brief: 'Sorts the mail',
+        lastActivity: now.subtract(const Duration(hours: 1)),
+        threads: <AgentsThreadInfo>[
+          AgentsThreadInfo(key: 'render-inbox', title: 'Mail'),
+        ],
       ),
     ];
-    // The working agent has a stored line too — a live run has to outrank
-    // it, or the row would report what was said before the run started.
-    storeLine('render-chief', 'Digest sent', fromUser: false);
+    storeLine(
+      'render-chief',
+      '**Digest** sent',
+      fromUser: false,
+      at: now.subtract(const Duration(minutes: 3)),
+    );
+    storeLine(
+      'render-design',
+      'Here are two directions',
+      fromUser: false,
+      at: now.subtract(const Duration(days: 1)),
+    );
 
     await pumpPhone(
       tester,
@@ -89,49 +113,50 @@ void main() {
         now: () => now,
       ),
     );
-    expect(find.text('Chief of Staff'), findsOneWidget);
-    expect(find.text('Working…'), findsOneWidget);
-    expect(find.text('Digest sent'), findsNothing);
-    expect(find.text('2:27 PM'), findsOneWidget);
-    // No stored line, and 'default' is a placeholder rather than a title, so
-    // the brief carries this row.
-    expect(find.text('Design'), findsOneWidget);
-    expect(find.text('Proposes UI directions'), findsOneWidget);
-    expect(find.text('Yesterday'), findsOneWidget);
-    // Nothing ever happened here: the line stays empty. "No activity yet"
-    // under every row of a fresh install said nothing and read as an error.
-    expect(find.text('Inbox Triage'), findsOneWidget);
-    expect(find.text('No activity yet'), findsNothing);
-    expect(
-      find.descendant(
-        of: findId('mobile-agent-row-inbox'),
-        matching: find.text(''),
-      ),
-      findsOneWidget,
-      reason: 'the preview line of a silent agent is empty',
-    );
+    Finder inRow(String id, Finder f) =>
+        find.descendant(of: findId('mobile-agent-row-$id'), matching: f);
+
+    // A running agent keeps its last message (markdown stripped); small
+    // working dots take the time's place.
+    expect(inRow('chief', find.text('Digest sent')), findsOneWidget);
+    expect(find.text('Working…'), findsNothing);
+    expect(inRow('chief', find.byType(WorkingDots)), findsOneWidget);
+
+    // The last message and ITS time, not the brief, the role or the time of
+    // the last run.
+    expect(inRow('design', find.text('Here are two directions')), findsOneWidget);
+    expect(inRow('design', find.text('Yesterday')), findsOneWidget);
+    expect(find.text('Proposes UI directions'), findsNothing);
+    expect(find.text('ux'), findsNothing, reason: 'no role tag');
+    expect(find.text('ops'), findsNothing, reason: 'no role tag');
+
+    // Nothing said yet: the line stays empty and there is no time.
+    expect(find.text('Sorts the mail'), findsNothing);
+    expect(find.text('Mail'), findsNothing);
+    expect(inRow('inbox', find.text('')), findsOneWidget);
+    expect(inRow('inbox', find.text('1:30 PM')), findsNothing);
+
     // No account target up here any more: settings has one way in, the
     // navigation bar.
     expect(find.text('SL'), findsNothing, reason: 'no account monogram');
-    // The role tag sits after a name that leaves room for it. (A name that
-    // needs the whole width drops the tag; see the group at the end.)
-    expect(find.text('ux'), findsOneWidget, reason: 'role tag');
     // The unread mark is a count, not a dot: one thread with something new.
     expect(
-      find.descendant(
-        of: findId('mobile-agent-row-chief'),
-        matching: find.text('1'),
-      ),
+      inRow('chief', find.text('1')),
       findsOneWidget,
       reason: 'unread badge counts the threads with something new',
     );
 
-    // A line arrives for the idle agent: it beats the brief, and the list
-    // follows the store without being rebuilt by its caller.
-    storeLine('render-design', 'Ship the palette', fromUser: true);
+    // The user answers: the row follows the store without being rebuilt by
+    // its caller, prefixed "You: ", with the new time.
+    storeLine(
+      'render-design',
+      'Ship the palette',
+      fromUser: true,
+      at: now.subtract(const Duration(minutes: 1)),
+    );
     await tester.pump();
-    expect(find.text('You: Ship the palette'), findsOneWidget);
-    expect(find.text('Proposes UI directions'), findsNothing);
+    expect(inRow('design', find.text('You: Ship the palette')), findsOneWidget);
+    expect(inRow('design', find.text('2:29 PM')), findsOneWidget);
   });
 
   testWidgets('rows are a real touch target and start under the header row',
@@ -287,13 +312,21 @@ void main() {
     expect(find.text('Design'), findsNothing);
   });
 
-  test('mobileTimeLabel: today, yesterday, weekday, date, none', () {
-    expect(mobileTimeLabel(null, now: now), '');
-    expect(mobileTimeLabel(DateTime(2026, 9, 5, 9, 5), now: now), '9:05 AM');
-    expect(mobileTimeLabel(DateTime(2026, 9, 5, 0, 0), now: now), '12:00 AM');
-    expect(mobileTimeLabel(DateTime(2026, 9, 4, 23, 59), now: now), 'Yesterday');
-    expect(mobileTimeLabel(DateTime(2026, 9, 1), now: now), 'Tue');
-    expect(mobileTimeLabel(DateTime(2026, 8, 20), now: now), '20.8.');
+  test('rosterTimeLabel: today, yesterday, weekday, date, none', () {
+    expect(rosterTimeLabel(null, now: now), '');
+    expect(
+      rosterTimeLabel(
+        DateTime(2026, 9, 5, 9, 5),
+        now: now,
+        alwaysUse24HourFormat: true,
+      ),
+      '09:05',
+    );
+    expect(rosterTimeLabel(DateTime(2026, 9, 5, 9, 5), now: now), '9:05 AM');
+    expect(rosterTimeLabel(DateTime(2026, 9, 5, 0, 0), now: now), '12:00 AM');
+    expect(rosterTimeLabel(DateTime(2026, 9, 4, 23, 59), now: now), 'Yesterday');
+    expect(rosterTimeLabel(DateTime(2026, 9, 1), now: now), 'Tue');
+    expect(rosterTimeLabel(DateTime(2026, 8, 20), now: now), '20.8.');
   });
 
   test('accountMonogram', () {
@@ -303,66 +336,31 @@ void main() {
     expect(accountMonogram('  '), '');
   });
 
-  test('MobileAgentRow.previewOf', () {
-    AgentsAgent withThread(String key, String title) => agent(
+  test('MobileAgentRow.previewOf is the last message and nothing else', () {
+    AgentsAgent withThread(String key, String title, {bool running = false}) =>
+        agent(
           id: 'a',
           name: 'A',
+          brief: 'Do X',
+          role: 'ops',
+          running: running,
           threads: <AgentsThreadInfo>[AgentsThreadInfo(key: key, title: title)],
         );
 
-    // A live run outranks everything, including a stored line.
+    // A live run does not replace what was said.
     storeLine('preview-run', 'Said earlier', fromUser: false);
     expect(
-      MobileAgentRow.previewOf(agent(
-        id: 'a',
-        name: 'A',
-        running: true,
-        threads: <AgentsThreadInfo>[
-          AgentsThreadInfo(key: 'preview-run', title: 'Digest'),
-        ],
-      )),
-      'Working…',
+      MobileAgentRow.previewOf(withThread('preview-run', 'Digest', running: true)),
+      'Said earlier',
     );
-
-    // What was actually said last beats the thread title, and the row says
-    // who said it.
     storeLine('preview-them', 'Digest sent', fromUser: false);
     expect(MobileAgentRow.previewOf(withThread('preview-them', 'Digest')),
         'Digest sent');
     storeLine('preview-you', 'Ship the palette', fromUser: true);
     expect(MobileAgentRow.previewOf(withThread('preview-you', 'Digest')),
         'You: Ship the palette');
-
-    // No stored line: the thread title.
-    expect(MobileAgentRow.previewOf(withThread('preview-title', 'Digest')),
-        'Digest');
-
-    // 'default' and 'General' are placeholders, not titles, so they fall
-    // through to the brief.
-    expect(
-      MobileAgentRow.previewOf(agent(
-        id: 'a',
-        name: 'A',
-        brief: 'Do X',
-        threads: <AgentsThreadInfo>[
-          AgentsThreadInfo(key: 'preview-brief', title: 'default'),
-        ],
-      )),
-      'Do X',
-    );
-    expect(
-      MobileAgentRow.previewOf(agent(
-        id: 'a',
-        name: 'A',
-        brief: 'Do X',
-        threads: <AgentsThreadInfo>[
-          AgentsThreadInfo(key: 'preview-brief2', title: 'General'),
-        ],
-      )),
-      'Do X',
-    );
-
-    // Nothing to say: an empty line, not "No activity yet".
+    // No stored line: empty, never the title or the brief.
+    expect(MobileAgentRow.previewOf(withThread('preview-title', 'Digest')), '');
     expect(
       MobileAgentRow.previewOf(
         agent(id: 'a', name: 'A', threads: const <AgentsThreadInfo>[]),
@@ -371,50 +369,32 @@ void main() {
     );
   });
 
-  group('the name comes before the role tag at 360 px and 1.3', () {
-    Future<void> pumpRow(WidgetTester tester, String name) async {
-      final DateTime now = DateTime(2026, 1, 5, 15);
-      await pumpPhone(
-        tester,
-        Builder(
-          builder: (BuildContext context) => MediaQuery(
-            data: MediaQuery.of(
-              context,
-            ).copyWith(textScaler: const TextScaler.linear(1.3)),
-            child: Align(
-              alignment: Alignment.topLeft,
-              child: SizedBox(
-                width: 360,
-                child: MobileAgentRow(
-                  agent: agent(id: 'amber', name: name),
-                  now: now,
-                  role: 'Research and long-form writing',
-                ),
+  testWidgets('a long name keeps the row at 360 px and 1.3', (tester) async {
+    await pumpPhone(
+      tester,
+      Builder(
+        builder: (BuildContext context) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: const TextScaler.linear(1.3)),
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 360,
+              child: MobileAgentRow(
+                agent: agent(id: 'amber', name: 'Amber', role: 'Research'),
+                now: DateTime(2026, 1, 5, 15),
               ),
             ),
           ),
         ),
-      );
-    }
-
-    testWidgets('a name that fits is whole; the tag takes what is left', (
-      tester,
-    ) async {
-      await pumpRow(tester, 'Amber');
-      expect(
-        tester.renderObject<RenderParagraph>(find.text('Amber')).didExceedMaxLines,
-        isFalse,
-      );
-      expect(find.text('Research and long-form writing'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('a long name drops the tag instead of being cut for it', (
-      tester,
-    ) async {
-      await pumpRow(tester, 'Amber Fitzgerald');
-      expect(find.text('Research and long-form writing'), findsNothing);
-      expect(tester.takeException(), isNull);
-    });
+      ),
+    );
+    expect(
+      tester.renderObject<RenderParagraph>(find.text('Amber')).didExceedMaxLines,
+      isFalse,
+    );
+    expect(find.text('Research'), findsNothing, reason: 'no role tag');
+    expect(tester.takeException(), isNull);
   });
 }

@@ -20,6 +20,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/agents/media_index.dart';
 
@@ -108,6 +109,28 @@ class ThreadPreviewStore extends ChangeNotifier {
       if (b == null || a.isAfter(b)) best = candidate;
     }
     return best;
+  }
+
+  /// The last message an agent's threads hold, whoever wrote it, or null
+  /// when nothing was said yet. This is what a roster row shows.
+  ThreadPreview? lastMessageOf(AgentsAgent agent) =>
+      newestOf(agent.threads.map((AgentsThreadInfo thread) => thread.key));
+
+  /// [preview] as one roster line: the user's own line gets "You: ", the
+  /// agent's stands alone (DESIGN.md §10). Empty when there is none: a row
+  /// never shows a placeholder or the agent's brief in its place.
+  static String rosterLine(ThreadPreview? preview) {
+    if (preview == null || preview.text.isEmpty) return '';
+    return preview.fromUser ? 'You: ${preview.text}' : preview.text;
+  }
+
+  /// When [agent]'s last message was written, for the time column of its
+  /// row. Null when nothing was said yet. A line stored by an older build
+  /// carries no time; the agent's last activity stands in for it.
+  DateTime? lastMessageAt(AgentsAgent agent) {
+    final ThreadPreview? preview = lastMessageOf(agent);
+    if (preview == null) return null;
+    return preview.at ?? agent.lastActivity;
   }
 
   Future<void> load() async {

@@ -14,9 +14,11 @@ import 'package:chuk_chat/services/agents/roster_pins.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart'
     show AgentsHostAgentName;
 import 'package:chuk_chat/services/agents/schedule_spec.dart';
+import 'package:chuk_chat/services/agents/thread_preview_store.dart';
 import 'package:chuk_chat/widgets/agent_avatar.dart';
 import 'package:chuk_chat/widgets/agent_roster_view.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/ui/expressive/working_dots.dart';
 import 'package:chuk_chat/widgets/sidebar/sidebar_chrome.dart';
 import 'package:chuk_chat/widgets/brand_wordmark.dart';
 import 'package:chuk_chat/services/agents/agent_read_marks.dart';
@@ -193,7 +195,7 @@ void main() {
     expect(opened, 1);
   });
 
-  testWidgets('entries show the name, the state and the last activity', (
+  testWidgets('entries show the name, the state, the last message and its time', (
     tester,
   ) async {
     final source = LocalAgentRosterSource(random: Random(1));
@@ -224,17 +226,46 @@ void main() {
     // others do not.
     expect(tileOf(tester, busy.id).streaming, isTrue);
     expect(tileOf(tester, scheduled.id).streaming, isFalse);
-    // The line under the name is chuk's date line: the time for today, and
-    // nothing at all when nothing happened yet — never a time the app made up.
-    final MaterialLocalizations l10n = MaterialLocalizations.of(
-      tester.element(find.byKey(ValueKey<String>('agent-tile-${busy.id}'))),
-    );
-    expect(
-      tileOf(tester, busy.id).dateLine,
-      l10n.formatTimeOfDay(const TimeOfDay(hour: 11, minute: 55)),
-    );
-    expect(tileOf(tester, scheduled.id).dateLine, '');
+    // A messenger row: nothing said yet, so the second line is empty and
+    // there is no time — never the brief, never the time of a run.
+    expect(tileOf(tester, busy.id).preview, '');
+    expect(tileOf(tester, busy.id).timeLabel, '');
+    expect(tileOf(tester, scheduled.id).preview, '');
+    expect(find.text('watch the build'), findsNothing);
+    expect(find.text('weekly news'), findsNothing);
     expect(find.textContaining('no activity yet'), findsNothing);
+    // The agent writes: its line and its time arrive without a rebuild from
+    // outside; the user's own line is prefixed "You: ".
+    ThreadPreviewStore.instance.noteRows(busy.threads.first.key, [
+      <String, dynamic>{
+        'sender': 'agent',
+        'text': 'Build is **green**',
+        'timestamp': DateTime(2026, 8, 12, 18).toIso8601String(),
+      },
+    ]);
+    await tester.pump();
+    expect(tileOf(tester, busy.id).preview, 'Build is green');
+    expect(tileOf(tester, busy.id).timeLabel, 'Yesterday');
+    expect(find.text('Build is green'), findsOneWidget);
+    // It is still running: small still dots stand where the time goes.
+    expect(
+      find.descendant(
+        of: find.byKey(ValueKey<String>('agent-tile-${busy.id}')),
+        matching: find.byType(WorkingDots),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Yesterday'), findsNothing);
+    ThreadPreviewStore.instance.noteRows(busy.threads.first.key, [
+      <String, dynamic>{
+        'sender': 'user',
+        'text': 'ship it',
+        'timestamp': DateTime(2026, 8, 13, 11, 58).toIso8601String(),
+      },
+    ]);
+    await tester.pump();
+    expect(tileOf(tester, busy.id).preview, 'You: ship it');
+    expect(tileOf(tester, busy.id).timeLabel, '11:58 AM');
     source.markRunning(busy.id, false);
     await tester.pumpAndSettle();
     expect(tileOf(tester, busy.id).streaming, isFalse);
