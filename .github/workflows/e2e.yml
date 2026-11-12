@@ -9,10 +9,26 @@ name: E2E
 # comes from .github/workflows/e2e-comment.yml (workflow_run), which never
 # runs code from the pull request. See docs/E2E_CI.md.
 
+# Docs-only pushes skip it: the app binary does not change. (CI still runs
+# on them, because test/repo_checks guards CLAUDE.md and docs/.)
 on:
   pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'marketing/**'
+      - 'fastlane/metadata/**'
+      - '.beads/**'
+      - 'tasks/**'
   push:
     branches: [master]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'marketing/**'
+      - 'fastlane/metadata/**'
+      - '.beads/**'
+      - 'tasks/**'
 
 concurrency:
   group: e2e-${{ github.workflow }}-${{ github.ref }}

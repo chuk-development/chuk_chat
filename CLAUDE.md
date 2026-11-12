@@ -72,6 +72,9 @@ the owner says CoWork, he means Agents. Code, flags and docs use "Agents".
 
 **Do NOT push if tests fail or CodeRabbit finds issues. Fix first.**
 
+**Keep CI green:** pre-push runs `scripts/ci_analyze.sh` (CI's analyze);
+after a push, check `gh run list -L 5`.
+
 **Commit after every finished piece of work, at once.** Owner instruction
 (2026-10-20): when a task or a subagent's result is done and its tests are
 green, the coordinator commits it right away (as chukfinley, one commit per
@@ -682,7 +685,7 @@ replacement: the chuk_chat rules keep applying to the app.
 ## Shell and task tracking
 
 - Use non-interactive file operations (`cp -f`, `mv -f`, `rm -f`) and narrowly resolved targets.
-- Use the project Beads skill at `.agents/skills/beads/SKILL.md`, then `bd prime` for current workflow context. Use `bd` for task tracking and `bd remember` for persistent project memory; never create ad hoc memory files.
+- Tasks: Plane, not beads.
 
 ## Build & Test
 
@@ -748,14 +751,6 @@ arbeiten im selben Working Tree) und welche Tests gruen sein muessen.
 All UI follows `docs/DESIGN.md` — Material 3 Expressive, one button family, no
 glows, files as their own messages. Read it before adding or changing a screen,
 and run its checklist before calling one done.
-
-## Architecture Overview
-
-_Add a brief overview of your project architecture_
-
-## Conventions & Patterns
-
-_Add your project-specific conventions here_
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:970c3bf2 -->
 ## Beads Issue Tracker

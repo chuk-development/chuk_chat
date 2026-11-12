@@ -27,9 +27,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
 
-      - name: Flutter pins agree
-        run: ./scripts/check_flutter_pins.sh
-
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -39,18 +36,11 @@ jobs:
 
       - run: flutter pub get
 
-      # Explicit paths: vendor/openui_core/test needs its own dev
-      # dependencies (package:test, very_good_analysis), which the app's
-      # package config does not resolve, so a bare `flutter analyze` reports
-      # thousands of unresolved-import errors there. Errors stay fatal.
-      # Warnings are not fatal yet: lib/models/content_block.dart has one
-      # (invalid_use_of_visible_for_testing_member). Drop
-      # --no-fatal-warnings when that is fixed.
+      # Pin check + flutter analyze. The same script runs in the pre-push
+      # hook (.beads/hooks/pre-push), so local and CI cannot drift. The
+      # paths and the fatal levels are explained in the script.
       - name: Analyze
-        run: >
-          flutter analyze --no-fatal-infos --no-fatal-warnings
-          lib test tool integration_test test_driver test_screenshots
-          vendor/markdraw/lib vendor/openui/lib vendor/openui_core/lib
+        run: ./scripts/ci_analyze.sh
 
   test:
     runs-on: ubuntu-latest

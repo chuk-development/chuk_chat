@@ -11,6 +11,24 @@
 
 set -u
 
+# A) Analyzer gate, blocking (chuk_chat). Same command as CI's analyze job
+#    (scripts/ci_analyze.sh), so a push that CI would fail on an analyzer
+#    error stops here instead of mailing "run failed" to the owner. Runs on
+#    the working tree (about 40 s). Skip once with NO_ANALYZE=1 git push,
+#    e.g. when a foreign uncommitted file in the shared checkout is broken.
+_repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [ "${NO_ANALYZE:-}" != "1" ] && [ -x "$_repo_root/scripts/ci_analyze.sh" ] \
+  && command -v flutter >/dev/null 2>&1; then
+  echo "pre-push: scripts/ci_analyze.sh (skip with NO_ANALYZE=1) ..."
+  mkdir -p "$_repo_root/_scratch"
+  _log="$_repo_root/_scratch/pre_push_analyze.log"
+  if ! "$_repo_root/scripts/ci_analyze.sh" >"$_log" 2>&1; then
+    grep -E "error •|ERROR|drift" "$_log" | head -20 >&2
+    echo "pre-push: analyzer errors, push stopped (CI would fail)." >&2
+    exit 1
+  fi
+fi
+
 # 0) Nur laufen, wenn der Push aus einer Claude-Code-Sitzung kommt.
 #    Claude Code setzt CLAUDECODE=1. Im normalen Terminal ist die Variable
 #    nicht gesetzt -> Hook macht nichts, Push laeuft ohne Review durch.
