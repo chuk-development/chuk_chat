@@ -141,7 +141,7 @@ def test_settings_from_env(tmp_path):
     assert settings.recall_timeout == 1.5 and settings.recall_budget == "high"
     assert settings.import_mem0 is False
     assert settings.sidecar_project == tmp_path / "sc"
-    assert settings.llm_model == "deepseek/deepseek-v4-flash"
+    assert settings.llm_model == "deepseek/deepseek-v4.1-flash-1017"
     assert settings.stamp_label == "qwen3-embedding-8b@1536"
 
 
@@ -162,7 +162,7 @@ def test_the_sidecar_env_is_loopback_rrf_pinned_and_keyless(tmp_path, monkeypatc
     assert env["HINDSIGHT_API_EMBEDDINGS_OPENAI_BASE_URL"] == "http://127.0.0.1:1/v1"
     assert env["HINDSIGHT_API_EMBEDDINGS_OPENAI_API_KEY"] == "gw-secret"
     assert env["HINDSIGHT_API_LLM_API_KEY"] == "gw-secret"
-    assert env["HINDSIGHT_API_LLM_MODEL"] == "deepseek/deepseek-v4-flash"
+    assert env["HINDSIGHT_API_LLM_MODEL"] == "deepseek/deepseek-v4.1-flash-1017"
     assert env["HINDSIGHT_API_RETAIN_MAX_COMPLETION_TOKENS"] == "8192"
     # One call, one bill: a single retry, and a timeout above the gateway budget.
     from chuk_agents_runtime.memory_gateway import CHAT_BUDGET_SECONDS

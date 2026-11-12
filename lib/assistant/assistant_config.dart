@@ -24,7 +24,7 @@ const String kAssistantProviderSlug = 'fireworks/serverless';
 /// `none` for this model anyway (`chat/reasoning.py`), so sending one would
 /// silently land on the provider default (`max`) instead — slower, not faster.
 /// Switch to a model with `reasoning_mandatory: false` (for example
-/// `deepseek/deepseek-v4-flash-0731`) if reasoning must be off entirely.
+/// `deepseek/deepseek-v4.1-flash-1017`) if reasoning must be off entirely.
 const String kAssistantReasoningEffort = 'low';
 
 /// Upper bound on tool rounds in one turn, so a confused model cannot loop.

@@ -21,7 +21,7 @@ def write(tmp_path, text):
 
 def test_default_wins_when_nothing_else_is_set(tmp_path):
     config = load_config(path=tmp_path / "config.toml", environ={})
-    assert config.model.default == "deepseek/deepseek-v4-flash"
+    assert config.model.default == "deepseek/deepseek-v4.1-flash-1017"
     assert config.vnc.port == 5900
     assert config.browser.auto_open is True
 

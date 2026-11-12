@@ -71,7 +71,7 @@ import httpx
 logger = logging.getLogger(__name__)
 
 #: The memory model: cheap, calls tools, answers JSON. Reasoning is turned off.
-DEFAULT_MEMORY_MODEL = "deepseek/deepseek-v4-flash"
+DEFAULT_MEMORY_MODEL = "deepseek/deepseek-v4.1-flash-1017"
 #: ``api.chuk.chat``'s OpenAI-compatible base: ``/embeddings`` and
 #: ``/chat/completions`` both live under it.
 DEFAULT_API_BASE_URL = "https://api.chuk.chat/v1"

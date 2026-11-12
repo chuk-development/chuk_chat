@@ -64,17 +64,20 @@ DEFAULT_BASE_URL = "https://api.chuk.chat"
 # gpt-oss-20b was the old default and is exactly the failure the user hit: the
 # model says "I'll use write_file" in its reasoning and then prints the file.
 # Cheapest of the working set, and it calls tools reliably.
-DEFAULT_MODEL_ID = "deepseek/deepseek-v4-flash"
+# 2026-11-12: deepseek-v4-flash (0423) left the catalog (api_server
+# model_info/retired_models.py); its successor V4.1 Flash 1017 is the default.
+# A default the catalog does not list makes resolve_model fall back to the
+# catalog's first model, so this must name a served model.
+DEFAULT_MODEL_ID = "deepseek/deepseek-v4.1-flash-1017"
 
 # Models proven to emit usable tool calls, cheapest first. Kept as data so a
-# fallback chain can walk it when the preferred model is unavailable.
+# fallback chain can walk it when the preferred model is unavailable. Only
+# models the catalog still serves; the 2026-11-12 cleanup dropped
+# llama-3.3-70b, qwen3-32b, minimax-m2.7 and kimi-k2.6 (successors not
+# re-measured).
 TOOL_CALL_CAPABLE_MODELS = (
-    "deepseek/deepseek-v4-flash",
-    "meta-llama/llama-3.3-70b-instruct",
-    "qwen/qwen3-32b",
+    "deepseek/deepseek-v4.1-flash-1017",
     "mistralai/mistral-small-2603",
-    "minimax/minimax-m2.7",
-    "moonshotai/kimi-k2.6",
 )
 
 

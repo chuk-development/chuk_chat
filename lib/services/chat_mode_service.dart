@@ -15,7 +15,9 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:chuk_chat/services/model_cache_service.dart';
 import 'package:chuk_chat/services/model_capabilities_service.dart';
+import 'package:chuk_chat/services/retired_model_fallback.dart';
 
 enum ChatMode {
   /// Answers right away. Fast means fast — a light model, reasoning off.
@@ -410,9 +412,13 @@ class ChatModeService {
       final decoded = jsonDecode(raw);
       if (decoded is! Map) return fallback;
 
-      final config = ModeConfig.fromJson(
-        Map<String, dynamic>.from(decoded),
-        fallback: fallback,
+      final config = await _replaceRetiredModel(
+        mode,
+        ModeConfig.fromJson(
+          Map<String, dynamic>.from(decoded),
+          fallback: fallback,
+        ),
+        fallback,
       );
       return config.copyWith(
         reasoningEffort: sanitizeReasoningForModel(
@@ -429,6 +435,49 @@ class ChatModeService {
       }
       return fallback;
     }
+  }
+
+  /// [config] with its model moved off a model the server retired.
+  ///
+  /// The server drops old models from the catalog and names the successor in
+  /// the successor's `replaces` list ([replacementForRetiredModel]). A mode
+  /// still on a dropped model moves to that successor, or to the mode's
+  /// default model when the server names none. The provider pinned for the
+  /// old model may not serve the new one, so it is cleared (Auto picks the
+  /// cheapest) unless the new model is the default, which keeps the default
+  /// provider. The result is stored, so the move happens once.
+  static Future<ModeConfig> _replaceRetiredModel(
+    ChatMode mode,
+    ModeConfig config,
+    ModeConfig fallback,
+  ) async {
+    List<Map<String, dynamic>> catalog;
+    try {
+      catalog = await ModelCacheService.loadAvailableModels();
+    } catch (_) {
+      // No readable catalog is no evidence the model is gone: keep it.
+      return config;
+    }
+    final String? replacement = replacementForRetiredModel(
+      config.modelId,
+      catalog,
+      fallbackModelId: fallback.modelId,
+    );
+    if (replacement == null || replacement == config.modelId) return config;
+    final ModeConfig moved = config.copyWith(
+      modelId: replacement,
+      providerSlug: replacement == fallback.modelId
+          ? fallback.providerSlug
+          : '',
+    );
+    if (kDebugMode) {
+      debugPrint(
+        '[ChatMode] ${mode.name}: retired model ${config.modelId} '
+        '-> $replacement',
+      );
+    }
+    await saveConfig(mode, moved);
+    return moved;
   }
 
   /// Persist [config] for [mode]. Failures are swallowed: losing the

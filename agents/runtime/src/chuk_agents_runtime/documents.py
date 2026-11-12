@@ -25,13 +25,13 @@ answered 404):
   ``choices[0].message.content`` is the text. Errors arrive as
   ``{"error": {"message": ...}}``.
 - The model must be marked ``supports_vision`` in the catalogue
-  (``qwen/qwen3.6-35b-a3b`` is).
+  (``z-ai/glm-5.3-flash`` is).
 - A big picture is shrunk to :data:`VISION_MAX_SIDE` pixels first: the
   answer does not get better, the bill gets smaller.
 
 So :class:`BackendVisionReader` is a real, working image path.
 **Video is not**: there is no endpoint today that accepts a video part, even
-though the model the plan picks (``qwen/qwen3.6-35b-a3b``) reads video. Rather
+though the model the plan first picked (Qwen3.6 35B A3B) read video. Rather
 than invent a route, this module refuses video with a named reason and leaves
 :class:`VisionReader` as the documented seam that a future video route plugs
 into without touching the tool.
@@ -73,8 +73,9 @@ MARKDOWN_CAP = 60_000
 CHAT_PATH = "/v1/chat/completions"
 #: A picture check is a short answer; a transcription of a scan is longer.
 VISION_MAX_TOKENS = 4096
-# Open-weight default from §9: cheap MoE, ~3B active, reads images and video.
-DEFAULT_VISION_MODEL = "qwen/qwen3.6-35b-a3b"
+# Cheapest open-weight model in the catalog that reads images. Was Qwen3.6
+# 35B A3B (§9) until it left the catalog on 2026-11-12.
+DEFAULT_VISION_MODEL = "z-ai/glm-5.3-flash"
 VISION_TIMEOUT = 180.0
 # The backend refuses a larger image part (api_server MAX_IMAGE_SIZE).
 VISION_MAX_IMAGE_BYTES = 20 * 1024 * 1024

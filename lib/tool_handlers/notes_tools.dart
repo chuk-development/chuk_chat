@@ -26,7 +26,7 @@ const String _identityMemoryColumn = 'identity_memory';
 const String _identityEnabledColumn = 'identity_enabled';
 const String _legacyPreferencesColumn = 'preferences';
 const String _selectedModelColumn = 'selected_model_id';
-const String _fallbackSelectedModelId = 'moonshotai/kimi-k2.5';
+const String _fallbackSelectedModelId = 'z-ai/glm-5.3-flash';
 
 const Duration _identitySyncCacheTtl = Duration(minutes: 1);
 

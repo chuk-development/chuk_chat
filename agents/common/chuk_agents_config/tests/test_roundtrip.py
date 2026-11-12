@@ -105,7 +105,7 @@ def test_only_changed_values_can_be_written(tmp_path):
 def test_set_value_returns_a_new_configuration():
     config = AgentsConfig()
     changed = set_value(config, "model.default", "claude-opus-5")
-    assert config.model.default == "deepseek/deepseek-v4-flash"
+    assert config.model.default == "deepseek/deepseek-v4.1-flash-1017"
     assert changed.model.default == "claude-opus-5"
     with pytest.raises(dataclasses.FrozenInstanceError):
         config.model.default = "no"  # type: ignore[misc]

@@ -209,13 +209,13 @@ that is in neither list, so this table cannot fall behind the code.
 | `AGENTS_VNC_XDAMAGE` | `vnc.xdamage` | boolean | `true` | Use the X DAMAGE extension to find changed screen regions. |
 | `AGENTS_DOC_MAX_BYTES` | `documents.max_bytes` | integer | `20971520` | The largest file `read_document` will pull out of the sandbox. |
 | `AGENTS_DOC_MARKDOWN_CAP` | `documents.markdown_cap` | integer | `60000` | How much of the converted Markdown reaches the model. |
-| `AGENTS_DOC_VISION_MODEL` | `documents.vision_model` | string | `qwen/qwen3.6-35b-a3b` | The model that reads a scan or a photograph. |
+| `AGENTS_DOC_VISION_MODEL` | `documents.vision_model` | string | `z-ai/glm-5.3-flash` | The model that reads a scan or a photograph. |
 | `AGENTS_DOC_VISION_TIMEOUT_SECONDS` | `documents.vision_timeout_seconds` | number | `180.0` | How long one vision read may take before it is given up. |
 | `AGENTS_DOC_VISION_MAX_IMAGE_BYTES` | `documents.vision_max_image_bytes` | integer | `20971520` | The per-image ceiling the backend enforces. |
-| `AGENTS_MODEL_DEFAULT` | `model.default` | string | `deepseek/deepseek-v4-flash` | The model a new session uses when the app names none. |
+| `AGENTS_MODEL_DEFAULT` | `model.default` | string | `deepseek/deepseek-v4.1-flash-1017` | The model a new session uses when the app names none. |
 | `AGENTS_MODEL_PROVIDER` | `model.provider` | string | *(empty)* | The provider slug new autonomous sessions route through. |
 | `AGENTS_MODEL_REASONING_EFFORT` | `model.reasoning_effort` | string | *(empty)* | The default reasoning effort for new autonomous sessions. |
-| `AGENTS_MODEL_AUX` | `model.aux` | string | `deepseek/deepseek-v4-flash-0731` | The housekeeping model (context summary, Mem0 extraction). Fast, cheap, reasoning can be off. Empty means the task's own model. |
+| `AGENTS_MODEL_AUX` | `model.aux` | string | `deepseek/deepseek-v4.1-flash-1017` | The housekeeping model (context summary, Mem0 extraction). Fast, cheap, reasoning can be off. Empty means the task's own model. |
 | `AGENTS_MODEL_AUX_PROVIDER` | `model.aux_provider` | string | *(empty)* | The provider slug the housekeeping model is pinned to. Empty means the backend's cheapest healthy provider. |
 | `AGENTS_MODEL_AUX_REASONING_EFFORT` | `model.aux_reasoning_effort` | string | `none` | The reasoning effort of the housekeeping model. `none` turns thinking off. |
 | `AGENTS_MODEL_API_KEY_REF` | `model.api_key_ref` | string | *(empty)* | The **name** of the vault entry holding the model API key, never a key. |
@@ -233,7 +233,7 @@ that is in neither list, so this table cannot fall behind the code.
 | `AGENTS_MEM_FASTEMBED_DIMS` | `memory.fastembed_dims` | integer | `768` | The output dimension of the local model. |
 | `AGENTS_MEM_EMBED_QUERY_PREFIX` | `memory.embed_query_prefix` | string | `Instruct: Given a question, retrieve memories that answer it\nQuery: ` | Hindsight only: the instruction put in front of every recall query before it is embedded. Part of the embedding stamp. |
 | `AGENTS_MEM_HINDSIGHT_DIRNAME` | `memory.hindsight_dirname` | string | `hindsight` | Hindsight only: the directory under the state directory with the embedded Postgres, the embedding stamp and the sidecar log. |
-| `AGENTS_MEM_HINDSIGHT_LLM_MODEL` | `memory.hindsight_llm_model` | string | `deepseek/deepseek-v4-flash` | Hindsight only: the model that extracts and consolidates facts, through the account's backend with reasoning off. |
+| `AGENTS_MEM_HINDSIGHT_LLM_MODEL` | `memory.hindsight_llm_model` | string | `deepseek/deepseek-v4.1-flash-1017` | Hindsight only: the model that extracts and consolidates facts, through the account's backend with reasoning off. |
 | `AGENTS_MEM_HINDSIGHT_LLM_MAX_TOKENS` | `memory.hindsight_llm_max_tokens` | integer | `8192` | Hindsight only: the output cap of one memory model call. |
 | `AGENTS_MEM_RATE_PER_MINUTE` | `memory.rate_per_minute` | integer | `20` | Hindsight only: the most model and embedding requests memory may send in any minute. |
 | `AGENTS_MEM_RERANK_PROVIDER` | `memory.rerank_provider` | string | `rrf` | Hindsight only: the recall reranker; `rrf` loads no model. |

@@ -473,7 +473,7 @@ class DocumentsConfig:
         ),
     )
     vision_model: str = setting(
-        "qwen/qwen3.6-35b-a3b",
+        "z-ai/glm-5.3-flash",
         env="AGENTS_DOC_VISION_MODEL",
         doc=(
             "The model that reads a scan or a photograph. The offline "
@@ -501,7 +501,7 @@ class ModelConfig:
     """Which model answers, and how hard it thinks."""
 
     default: str = setting(
-        "deepseek/deepseek-v4-flash",
+        "deepseek/deepseek-v4.1-flash-1017",
         env="AGENTS_MODEL_DEFAULT",
         doc=(
             "The model a new session uses when the app names none. This is "
@@ -527,7 +527,7 @@ class ModelConfig:
         ),
     )
     aux: str = setting(
-        "deepseek/deepseek-v4-flash-0731",
+        "deepseek/deepseek-v4.1-flash-1017",
         env="AGENTS_MODEL_AUX",
         doc=(
             "The housekeeping model: the context summary and the Mem0 fact "
@@ -685,7 +685,7 @@ class MemoryConfig:
         ),
     )
     hindsight_llm_model: str = setting(
-        "deepseek/deepseek-v4-flash",
+        "deepseek/deepseek-v4.1-flash-1017",
         env="AGENTS_MEM_HINDSIGHT_LLM_MODEL",
         doc=(
             "Hindsight only: the model that extracts facts and consolidates "

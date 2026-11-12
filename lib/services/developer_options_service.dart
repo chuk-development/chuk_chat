@@ -23,7 +23,7 @@ class DeveloperOptionsService {
   static const String _remotePreferencesColumn = 'preferences';
   static const String _remoteFlagKey = 'developer_options_enabled';
   static const String _selectedModelColumn = 'selected_model_id';
-  static const String _fallbackSelectedModelId = 'moonshotai/kimi-k2.5';
+  static const String _fallbackSelectedModelId = 'z-ai/glm-5.3-flash';
   static const Duration _syncTtl = Duration(seconds: 20);
 
   static final ValueNotifier<bool> enabledNotifier = ValueNotifier<bool>(false);

@@ -181,7 +181,7 @@ def test_chat_is_a_forward_with_the_model_pinned_reasoning_off_and_a_cap(make_ga
     assert str(call.url) == "https://api.chuk.chat/v1/chat/completions"
     assert call.headers["Authorization"] == "Bearer live"
     sent = json.loads(call.content)
-    assert sent["model"] == "deepseek/deepseek-v4-flash"
+    assert sent["model"] == "deepseek/deepseek-v4.1-flash-1017"
     assert sent["reasoning_effort"] == "none"
     assert sent["max_tokens"] == 8192 and "max_completion_tokens" not in sent
     assert sent["response_format"] == {"type": "json_object"}
