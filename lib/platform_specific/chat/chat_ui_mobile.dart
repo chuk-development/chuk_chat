@@ -874,6 +874,17 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       }
       ..onMessageUpdate = updateAiMessage
       ..onMessageFinalize = _finalizeAiMessage
+      // The turn ended on an error after its retries: only this answer
+      // offers Retry (MessageActionsHandler.buildActionsForMessage).
+      ..onTurnError = (String chatId, int index, String _, String? _) {
+        if (!mounted || _activeChatId != chatId) return;
+        if (index < 0 || index >= _messages.length) return;
+        // A new map, so the row memo sees a changed row.
+        setState(() {
+          _messages[index] = Map<String, String>.from(_messages[index])
+            ..[kTurnErrorKey] = '1';
+        });
+      }
       ..onToolCallsUpdate = _updateToolCallsForMessage
       ..onToolImagesProcessed = _handleToolImagesProcessed
       ..onContentBlocksUpdate = _updateContentBlocksForMessage
@@ -2583,6 +2594,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         if (message['status'] == 'interrupted') {
           message.remove('status');
         }
+        // A new finalize starts clean; `onTurnError` marks a failed turn
+        // right after this.
+        markTurnError(message, failed: false);
         // Answer-version pager: on a regenerate, append this fresh answer as a
         // new variant. Content blocks / tool calls / images are written into
         // the message before finalize on mobile, so the snapshot is complete.
@@ -4325,6 +4339,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           onEdit: editMessageAt,
           onResendMessage: resendMessageAt,
           onBranch: branchFromIndex,
+          failed:
+              isTurnError(_messages[i]) ||
+              data.status == ChatMessageStatus.interrupted,
+          agentsThread: ChatOrigin.isAgentsThread(_activeChatId),
         ),
         messageText: data.displayText,
         isUser: data.isUser,
@@ -4338,7 +4356,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
               index: i,
               messageText: data.displayText,
               onEdit: editMessageAt,
-              onResendMessage: resendMessageAt,
               forkFromHere: agentsForkAction(
                 context,
                 _activeChatId,

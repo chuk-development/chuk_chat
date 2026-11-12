@@ -913,7 +913,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                       _isSending = false;
                     });
                   }
-                  _finalizeAiMessage(placeholderIndex, 'Error: $error');
+                  _finalizeAiMessage(
+                    placeholderIndex,
+                    'Error: $error',
+                    failed: true,
+                  );
                   _persistChatWithId(chatIdForStream);
                 } else {
                   _persistBackgroundAssistant(
@@ -1025,6 +1029,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                 placeholderIndex,
                 errorText,
                 contentBlocks: errorBlocksJson,
+                failed: true,
               );
               _persistChatWithId(chatIdForStream);
             } else {
@@ -1066,7 +1071,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         if (kDebugMode) {
           debugPrint('Streaming error: $e');
         }
-        _finalizeAiMessage(placeholderIndex, 'Error: $e');
+        _finalizeAiMessage(placeholderIndex, 'Error: $e', failed: true);
         if (mounted) {
           setState(() {
             _isSending = false;
@@ -2449,7 +2454,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                         _isSending = false;
                       });
                     }
-                    _finalizeAiMessage(placeholderIndex, errorText);
+                    _finalizeAiMessage(
+                      placeholderIndex,
+                      errorText,
+                      failed: true,
+                    );
                     _persistChatWithId(chatIdForStream);
                   } else {
                     _persistBackgroundAssistant(
@@ -2632,6 +2641,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                 placeholderIndex,
                 errorText,
                 contentBlocks: errorBlocksJson,
+                failed: true,
               );
               if (mounted) {
                 AppNotifications.show(
@@ -2686,6 +2696,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         _finalizeAiMessage(
           placeholderIndex,
           'Failed to start streaming: $error',
+          failed: true,
         );
         if (mounted) {
           setState(() {
@@ -2960,6 +2971,9 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     double? tps,
     String? contentBlocks,
     bool commit = false,
+    // The turn ended on an error (provider, stream, start). Only such an
+    // answer offers Retry (MessageActionsHandler.buildActionsForMessage).
+    bool failed = false,
   }) {
     _voice?.completeTurn(_activeChatId, index, content);
     _autoSaveTimer?.cancel();
@@ -2998,6 +3012,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         if (tps != null) message['tps'] = tps.toString();
         if (usageStored != null) message['usage'] = usageStored;
         if (contentBlocks != null) message['contentBlocks'] = contentBlocks;
+        markTurnError(message, failed: failed);
         foldRegenVariantOnto(message);
         _messages[index] = message;
         _isSending = false;
@@ -3011,6 +3026,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       if (tps != null) message['tps'] = tps.toString();
       if (usageStored != null) message['usage'] = usageStored;
       if (contentBlocks != null) message['contentBlocks'] = contentBlocks;
+      markTurnError(message, failed: failed);
       foldRegenVariantOnto(message);
       _messages[index] = message;
       _isSending = false;

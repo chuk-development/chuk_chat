@@ -1997,6 +1997,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       onEdit: editMessageAt,
       onResendMessage: resendMessageAt,
       onBranch: branchFromIndex,
+      failed:
+          isTurnError(rawMessage) ||
+          data.status == ChatMessageStatus.interrupted,
+      agentsThread: ChatOrigin.isAgentsThread(_activeChatId),
     );
     return withReadAloudAction(
       actions,
@@ -2095,7 +2099,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       index: index,
       messageText: messageText,
       onEdit: editMessageAt,
-      onResendMessage: resendMessageAt,
       forkFromHere: agentsForkAction(context, _activeChatId, _messages[index]),
     );
   }

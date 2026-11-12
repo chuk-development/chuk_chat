@@ -1389,6 +1389,42 @@ class ChatUiHelpers {
 DateTime? messageRowTime(Map<String, String> raw) =>
     _rowTimeFor(raw['sentAt'] ?? raw['startedAt'] ?? '');
 
+/// How long the talk must rest before an Agents thread draws a new time
+/// line ([messageOpensTimeDivider]).
+const Duration kTimeDividerPause = Duration(hours: 1);
+
+/// Whether the row at [index] opens a centred time line in an Agents
+/// thread: the first dated row, a new local day, or the first row after a
+/// pause of [kTimeDividerPause]. An undated row never opens one.
+bool messageOpensTimeDivider(List<Map<String, String>> messages, int index) {
+  final Map<String, String> row = messages[index];
+  final DateTime? now = messageRowTime(row);
+  if (now == null) return false;
+  if (index <= 0) return true;
+  final Map<String, String> previous = messages[index - 1];
+  if (messageOpensDay(previous, row)) return true;
+  final DateTime? before = messageRowTime(previous);
+  if (before == null) return false;
+  return now.difference(before) >= kTimeDividerPause;
+}
+
+/// The row key that marks an answer whose turn ended on an error (provider
+/// error, broken stream, failed start). Only such an answer offers Retry.
+const String kTurnErrorKey = 'turnError';
+
+/// Sets or clears the error mark on an answer row as it is finalized. A
+/// regenerate that succeeds clears the mark of the attempt before it.
+void markTurnError(Map<String, String> row, {required bool failed}) {
+  if (failed) {
+    row[kTurnErrorKey] = '1';
+  } else {
+    row.remove(kTurnErrorKey);
+  }
+}
+
+/// Whether the answer row ended on an error ([markTurnError]).
+bool isTurnError(Map<String, String> row) => row[kTurnErrorKey] == '1';
+
 const int _kRowTimeCacheCap = 4096;
 final Map<String, DateTime?> _rowTimeCache = <String, DateTime?>{};
 final Map<String, int> _rowLocalDayCache = <String, int>{};

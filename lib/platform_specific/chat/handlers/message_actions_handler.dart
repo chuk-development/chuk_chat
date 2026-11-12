@@ -94,6 +94,8 @@ class MessageActionsHandler {
     Future<void> Function(int)? onRetryToolPass,
     bool canRetryToolPass = false,
     void Function(int)? onBranch,
+    bool failed = false,
+    bool agentsThread = false,
   }) {
     // User message actions are built separately via buildUserMessageActions.
     if (isUser) return const [];
@@ -117,8 +119,10 @@ class MessageActionsHandler {
       // loading, playing and paused states.
     }
 
-    // Retry action — always available on finalized AI messages
-    if (!isAssistantPending) {
+    // Retry only where a request really failed (provider error, broken or
+    // cut stream): [failed]. A good answer has nothing to retry. An Agents
+    // thread never offers it: the host retries a failed run on its own.
+    if (!isAssistantPending && failed && !agentsThread) {
       final shouldUsePassRetry = canRetryToolPass && onRetryToolPass != null;
       actions.add(
         MessageBubbleAction(
@@ -155,11 +159,14 @@ class MessageActionsHandler {
   }
 
   /// Build actions for user messages (shown in long-press popup).
+  ///
+  /// There is no Resend here: a sent message is either answered, or its
+  /// answer failed and carries Retry itself. An unsent message is retried by
+  /// its outbox line. An Agents host retries a failed run on its own.
   List<MessageBubbleAction> buildUserMessageActions({
     required int index,
     required String messageText,
     required Function(int) onEdit,
-    required Function(int) onResendMessage,
     MessageBubbleAction? forkFromHere, // checkpoints: Agents threads only
   }) {
     final List<MessageBubbleAction> actions = [];
@@ -181,15 +188,6 @@ class MessageActionsHandler {
         tooltip: 'Edit message',
         label: 'Edit',
         onPressed: () => onEdit(index),
-      ),
-    );
-
-    actions.add(
-      MessageBubbleAction(
-        icon: Icons.replay,
-        tooltip: 'Resend message',
-        label: 'Resend',
-        onPressed: () => onResendMessage(index),
       ),
     );
 
