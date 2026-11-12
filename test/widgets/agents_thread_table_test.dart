@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/platform_specific/chat/widgets/chat_message_list_item.dart';
 import 'package:chuk_chat/services/account_session.dart';
@@ -283,6 +284,14 @@ void main() {
       findsOneWidget,
     );
     final Map<String, Object?> agents = _tableLook(tester);
+    // An Agents answer is a bubble (CHAT-52): its text takes the bubble's
+    // text colour and the bubble's padding narrows the table. Everything
+    // else is chuk's table.
+    final Color bubbleText = Theme.of(
+      tester.element(find.byType(ChukTableClassic)),
+    ).m3.onUserBubble;
+    expect(agents.remove('textColor'), bubbleText);
+    agents.remove('width');
     final double bubbleWidth = tester
         .getSize(
           find
@@ -298,7 +307,9 @@ void main() {
     // The same answer in a plain chuk chat of the same width.
     await tester.pumpWidget(_plainChat(_wideTable, width: bubbleWidth));
     await tester.pumpAndSettle();
-    final Map<String, Object?> chat = _tableLook(tester);
+    final Map<String, Object?> chat = _tableLook(tester)
+      ..remove('textColor')
+      ..remove('width');
 
     expect(agents, chat);
     expect(agents['type'], ChukTableClassic);

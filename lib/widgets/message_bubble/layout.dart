@@ -44,10 +44,24 @@ extension _MessageBubbleLayout on _MessageBubbleState {
 
   Widget _withMessengerMenu(Widget child) {
     if (widget.message.trim().isEmpty) return child;
+    // A desktop Agents thread also shows react, reply and more beside the
+    // bubble on hover (CHAT-52); the phone keeps the long press.
+    if (!kPlatformMobile && _agentsBubbles) {
+      child = AgentsBubbleHoverActions(
+        alignEnd: widget.isUser,
+        onReact: widget.onReaction == null ? null : _showMessengerMenu,
+        onReply: widget.onReply,
+        onMore: _showMessengerMenu,
+        child: child,
+      );
+    }
     return Semantics(
       onLongPress: () => _showMessengerMenu(null),
       child: GestureDetector(
         onLongPressStart: (details) =>
+            _showMessengerMenu(details.globalPosition),
+        // A mouse: right click opens the same menu (desktop Agents thread).
+        onSecondaryTapDown: (details) =>
             _showMessengerMenu(details.globalPosition),
         child: child,
       ),
@@ -170,9 +184,8 @@ extension _MessageBubbleLayout on _MessageBubbleState {
                   'Automation',
                 if (wake.name.isNotEmpty) wake.name,
                 if (wake.merged > 1)
-                  AppLocalizations.of(context)?.webhookMerged(
-                        '${wake.merged}',
-                      ) ??
+                  AppLocalizations.of(context)
+                          ?.webhookMerged('${wake.merged}') ??
                       '${wake.merged} calls merged',
               ].join(' · '),
               style: style,
@@ -242,6 +255,11 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     );
   }
 
+  /// An Agents thread (the phone messenger view or the desktop thread): every
+  /// message is its own bubble, the answer included (CHAT-52).
+  bool get _agentsBubbles =>
+      widget.messengerMode || ChatOrigin.isAgentsThread(widget.chatId);
+
   /// A dictated message whose recording waits in the outbox: no text yet.
   bool get _isVoiceSavedOffline =>
       widget.isVoiceInput &&
@@ -300,8 +318,15 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     // The theme decides the bubble: the accent at 80 % over the page for
     // most packs, a neutral grey for Plane (see buildAppTheme). Its text is
     // the theme's readable colour for that fill.
-    final Color bubbleFill = Theme.of(context).m3.userBubble;
-    final Color bubbleTextColor = Theme.of(context).m3.onUserBubble;
+    // In an Agents thread the user's bubble takes the agent's colour, like a
+    // messenger gives every contact its own (CHAT-52).
+    final Color? agentFill = _agentsBubbles
+        ? AgentThreadAccent.colorOf(context)
+        : null;
+    final Color bubbleFill = agentFill ?? Theme.of(context).m3.userBubble;
+    final Color bubbleTextColor = agentFill == null
+        ? Theme.of(context).m3.onUserBubble
+        : readableOnFill(agentFill, Colors.white);
 
     final BoxDecoration decoration = BoxDecoration(
       color: bubbleFill,
@@ -311,7 +336,9 @@ extension _MessageBubbleLayout on _MessageBubbleState {
         bottomLeft: const Radius.circular(16),
         bottomRight: Radius.circular(widget.endsGroup ? 5 : 16),
       ),
-      border: Border.all(color: Theme.of(context).m3.userBubbleBorder),
+      border: agentFill == null
+          ? Border.all(color: Theme.of(context).m3.userBubbleBorder)
+          : null,
     );
 
     // A voice message saved offline has no transcript yet: say what
@@ -334,7 +361,8 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     final bool hasUserActions = widget.userMessageActions.isNotEmpty;
     // A dictated message: the voice bubble owns the tap (open / fold the
     // transcript) and shows the action bar while it is open.
-    final bool asVoice = widget.isVoiceInput && widget.message.trim().isNotEmpty;
+    final bool asVoice =
+        widget.isVoiceInput && widget.message.trim().isNotEmpty;
     final Widget bubbleContent = asVoice
         ? VoiceMessageBubble(
             text: widget.message,
@@ -358,7 +386,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
 
     // The messenger thread keeps its long-press menu (reply, react, copy) in
     // place of the tap-to-open action bar.
-    final Widget userBubble = widget.messengerMode
+    final Widget userBubble = _agentsBubbles
         ? _withMessengerMenu(bubbleContent)
         : asVoice
         ? bubbleContent
@@ -388,7 +416,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
               const SizedBox(height: 2),
             ],
             if (!hideEmptyUserBubble) userBubble,
-            if (!widget.messengerMode && hasUserActions && _showUserActions)
+            if (!_agentsBubbles && hasUserActions && _showUserActions)
               _buildUserActionButtons(iconFgColor),
             if (OutboxStatusLine.applies(widget.status, widget.queueId))
               _buildStatusIndicator(context),
@@ -414,7 +442,15 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     final double effectiveMaxWidth =
         widget.maxWidth ?? MediaQuery.sizeOf(context).width * 0.8;
 
-    final bool hasActions = widget.actions.isNotEmpty;
+    // Inside an Agents answer bubble the body takes the bubble's text colour;
+    // the action row under the bubble keeps the page's (CHAT-52).
+    final Color bodyFgColor = _agentsBubbles
+        ? Theme.of(context).m3.onUserBubble
+        : iconFgColor;
+
+    // An Agents thread keeps copy and the rest in the messenger menu
+    // (long press, right click); no pill under every bubble.
+    final bool hasActions = widget.actions.isNotEmpty && !_agentsBubbles;
 
     final bool useContentBlocks =
         widget.contentBlocks != null && widget.contentBlocks!.isNotEmpty;
@@ -457,13 +493,13 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     _metaBelowFiles = null;
     final List<Widget> bodyChildren = useContentBlocks
         ? _buildContentBlocksLayout(
-            iconFgColor: iconFgColor,
+            iconFgColor: bodyFgColor,
             accentColor: accentColor,
             bgColor: bgColor,
             alignRight: alignRight,
           )
         : _buildClassicLayout(
-            iconFgColor: iconFgColor,
+            iconFgColor: bodyFgColor,
             accentColor: accentColor,
             bgColor: bgColor,
             isUserMessage: isUserMessage,
@@ -496,9 +532,14 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     // nothing at all and leaves the thread untouched.
     // A turn whose whole content is a file is not an empty turn: the file was
     // lifted out of `bodyChildren` on purpose and is drawn below the bubble.
+    // An Agents answer's pictures are tiles under the bubble, so a picture
+    // alone is still a message (CHAT-52).
+    final bool hasImageTiles =
+        _agentsBubbles && (widget.images?.isNotEmpty ?? false);
     if (widget.messengerMode &&
         bodyChildren.isEmpty &&
         _artifactPayloads.isEmpty &&
+        !hasImageTiles &&
         !working &&
         widget.status != ChatMessageStatus.interrupted) {
       final List<ToolCall> calls = _collectAllToolCalls();
@@ -509,8 +550,19 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     // With the files pulled out, an answer that was nothing but a file would
     // leave an empty block. Then the file is the message.
     final bool bubbleCarriesContent =
-        bodyChildren.isNotEmpty || _artifactPayloads.isEmpty;
+        bodyChildren.isNotEmpty ||
+        (_artifactPayloads.isEmpty && !hasImageTiles);
 
+    // An Agents thread draws every answer as its own bubble on the left, in
+    // the shape and colours of chuk_chat's user bubble (CHAT-52). A
+    // chuk_chat chat keeps the answer straight on the page.
+    final bool answerBubble = _agentsBubbles;
+    final ThemeData pageTheme = Theme.of(context);
+    final Widget answerBody = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: bodyChildren,
+    );
     final Widget bubbleContent = Container(
       // A sender label opens the run and carries its gap (see
       // [MessageBubble.senderLabel]).
@@ -518,14 +570,42 @@ extension _MessageBubbleLayout on _MessageBubbleState {
         top: widget.senderLabel != null ? 0 : _runGapAbove,
         bottom: 2,
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 2),
-      decoration: null,
-      clipBehavior: Clip.none,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: bodyChildren,
-      ),
+      padding: answerBubble
+          ? const EdgeInsets.fromLTRB(14, 6, 14, 6)
+          : const EdgeInsets.symmetric(horizontal: 0, vertical: 2),
+      decoration: answerBubble
+          ? BoxDecoration(
+              color: pageTheme.m3.userBubble,
+              borderRadius: BorderRadius.only(
+                topLeft: const Radius.circular(16),
+                topRight: const Radius.circular(16),
+                bottomLeft: Radius.circular(widget.endsGroup ? 5 : 16),
+                bottomRight: const Radius.circular(16),
+              ),
+              border: Border.all(color: pageTheme.m3.userBubbleBorder),
+            )
+          : null,
+      clipBehavior: answerBubble ? Clip.antiAlias : Clip.none,
+      child: answerBubble
+          // The answer's text reads the theme's foreground; inside the
+          // bubble that is the bubble's own text colour.
+          ? Theme(
+              data: pageTheme.copyWith(
+                colorScheme: pageTheme.colorScheme.copyWith(
+                  onSurface: pageTheme.m3.onUserBubble,
+                ),
+                // List markers fall back to the title colour.
+                textTheme: pageTheme.textTheme.apply(
+                  bodyColor: pageTheme.m3.onUserBubble,
+                  displayColor: pageTheme.m3.onUserBubble,
+                ),
+              ),
+              child: DefaultTextStyle.merge(
+                style: TextStyle(color: pageTheme.m3.onUserBubble),
+                child: answerBody,
+              ),
+            )
+          : answerBody,
     );
 
     final bool showContinueButton =
@@ -555,7 +635,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
                 child: label,
               ),
             if (bubbleCarriesContent)
-              widget.messengerMode
+              _agentsBubbles
                   ? _withMessengerMenu(bubbleContent)
                   : bubbleContent,
             // A file an agent hands over (an Agents host delivery) is its
@@ -577,6 +657,13 @@ extension _MessageBubbleLayout on _MessageBubbleState {
                   payload: _artifactPayloads[i],
                   borderRadius: kBorderRadiusCard,
                 ),
+              ),
+            // An Agents answer's pictures: their own tiles under the bubble
+            // (CHAT-52).
+            if (hasImageTiles)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: _buildImagesGrid(widget.images ?? const <String>[]),
               ),
             // The meta line draws 2 px of air above itself.
             if (_metaBelowFiles case final Widget meta?)
@@ -657,8 +744,10 @@ extension _MessageBubbleLayout on _MessageBubbleState {
   }) {
     final bool hasImages = widget.images != null && widget.images!.isNotEmpty;
     final bool placeQrImageAboveResponse = hasImages && _isQrImageMessage;
-    // User messages render images above the bubble (see build()).
-    final bool renderImagesInBubble = hasImages && !isUserMessage;
+    // User messages render images above the bubble (see build()); an
+    // Agents answer draws them as tiles under its bubble.
+    final bool renderImagesInBubble =
+        hasImages && !isUserMessage && !_agentsBubbles;
 
     // When streaming AND the model emitted text before any tool call started
     // (text is visible while tools are still pending/running), render the
@@ -780,8 +869,10 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     final children = <Widget>[];
 
     // Images render just above the first text block (after tool calls),
-    // so they appear in visual order with the tool that generated them.
-    final bool hasImages = widget.images != null && widget.images!.isNotEmpty;
+    // so they appear in visual order with the tool that generated them. An
+    // Agents answer draws them as tiles under its bubble instead.
+    final bool hasImages =
+        widget.images != null && widget.images!.isNotEmpty && !_agentsBubbles;
 
     var insertedImage = false;
 

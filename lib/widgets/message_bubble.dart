@@ -63,6 +63,8 @@ import 'package:chuk_chat/widgets/menu_tile_group.dart';
 import 'package:chuk_chat/widgets/messenger_context_menu.dart';
 import 'package:chuk_chat/services/settings/mobile_chat_preferences.dart';
 import 'package:chuk_chat/widgets/messenger_typing_indicator.dart';
+import 'package:chuk_chat/widgets/agent_thread_accent.dart';
+import 'package:chuk_chat/widgets/agents_bubble_hover_actions.dart';
 import 'package:chuk_chat/widgets/message_bubble/web_search_sources.dart';
 import 'package:chuk_chat/widgets/message_bubble/voice_message_bubble.dart';
 import 'package:chuk_chat/widgets/message_bubble/outbox_status_line.dart';

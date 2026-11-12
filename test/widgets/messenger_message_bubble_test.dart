@@ -4,6 +4,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../support/icon_finder.dart';
+
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/chat_message.dart';
@@ -266,7 +267,8 @@ void main() {
     expect(tester.getSize(container.first).width, lessThanOrEqualTo(400 * .8));
   });
 
-  testWidgets('an incoming answer draws no bubble behind it', (tester) async {
+  // CHAT-52: the messenger thread draws every answer as its own bubble.
+  testWidgets('an incoming answer is its own bubble', (tester) async {
     await tester.pumpWidget(
       wrap(
         const Padding(
@@ -285,7 +287,7 @@ void main() {
       find.byWidgetPredicate(
         (widget) => widget is Container && widget.decoration is BoxDecoration,
       ),
-      findsNothing,
+      findsOneWidget,
     );
     expect(find.text('Ja.', findRichText: true), findsOneWidget);
   });
@@ -617,9 +619,7 @@ void main() {
     expect(find.text('Worked · 1 step'), findsOneWidget);
   });
 
-  testWidgets('details show the work as chuk_chat shows it', (
-    tester,
-  ) async {
+  testWidgets('details show the work as chuk_chat shows it', (tester) async {
     await tester.pumpWidget(
       wrap(
         MessageBubble(

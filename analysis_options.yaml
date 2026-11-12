@@ -20,6 +20,9 @@ analyzer:
     # Marketing video tooling: widget tests that render real screens as
     # fidelity references for the videos. Not app code.
     - marketing/**
+    # Headless design previews (PNG renders into _scratch/), run by hand
+    # with --update-goldens; not part of `flutter test`.
+    - test_previews/**
     - build/**
     - android/**
     - ios/**

@@ -240,7 +240,7 @@ presentation, zip, database, image, video, book.
 | File message row | 18, full lane width |
 | Dropdown, overflow menu, long-press action sheet | `MenuTileGroup` (`widgets/menu_tile_group.dart`) — the official M3 Expressive vertical menu: each group is ONE container (`surfaceContainerLow`, corner 20, small neutral shadow, 4 inset top and bottom), groups split by a 4 gap instead of a divider line (the spec allows one or two gaps per menu), no outline. Row ink and the selected pill sit 4 in from the container edge with corner 16. The chosen row is the vibrant selection: `tertiaryContainer` pill, `onTertiaryContainer` content, emphasized label, a check leading it (or after the label when the row has a logo). The menu expands from its anchor on the spatial default spring. The anchored dropdown and the message menu share this surface. |
 | Dialog | `kRadiusDialog` |
-| Chat bubble | chuk_chat's bubble (`lib/widgets/message_bubble/layout.dart`): user bubble 16, the tail corner 5 on the last bubble of a run. The AI answer has no bubble. `ui/expressive/bubble_shape.dart` (22 / 7) is no longer drawn by the thread. |
+| Chat bubble | chuk_chat's bubble (`lib/widgets/message_bubble/layout.dart`): user bubble 16, the tail corner 5 on the last bubble of a run. The AI answer has no bubble in chuk_chat and a bubble of the same shape in an Agents thread (§9). `ui/expressive/bubble_shape.dart` (22 / 7) is no longer drawn by the thread. |
 | Agent face | the expressive silhouette family (`ui/expressive/shapes.dart`) |
 
 Never a bare `IconButton`, `IconButton.filledTonal` or `CircleAvatar` in a new
@@ -323,7 +323,19 @@ group. The thread does the same. The bubble itself is chuk_chat's
 
 - **Corners.** The user bubble is 16 on every corner; the last bubble of a run
   gets a 5 tail corner at the bottom on the sender's side
-  (`message_bubble/layout.dart`). The AI answer is plain text with no bubble.
+  (`message_bubble/layout.dart`). In chuk_chat the AI answer is plain text
+  with no bubble.
+- **Agents thread = messenger (owner, 2026-11-12, CHAT-52).** Every message is
+  its own bubble. The user's bubble is right, in the agent's colour
+  (`AgentThreadAccent` above the chat screen, `agentAccent`), text
+  `readableOnFill`, no border. Every answer is a bubble on the left in the
+  shape and colours of chuk_chat's user bubble (`m3.userBubble`,
+  `m3.onUserBubble`, the hairline, tail bottom left). Several answers are
+  several bubbles. Pictures are their own tiles under the bubble. Copy,
+  reply and react sit in the messenger menu (long press, right click), not
+  in a pill under every bubble. On desktop, react, reply and more show
+  beside the bubble while the mouse is over it, centred on it
+  (`AgentsBubbleHoverActions`).
 - **Gaps.** Inside a run `kBubbleGapInGroup` = **3**; between two runs
   `kBubbleGapBetweenGroups` = **14**. Nearly five times as much air, so the eye
   sorts the thread into groups before it reads a word. The gap is a TOP margin
@@ -338,9 +350,18 @@ group. The thread does the same. The bubble itself is chuk_chat's
   blocks of that run: `bubblePositionInStack` gives the first block the run's
   top corners and the last one its bottom corners, and everything between is
   square-ish on both ends.
-- **The clock shows once per run**, on the last block. A stamp under every line
-  of a burst is noise. When a document closes the run, its own version-and-time
-  line is the clock.
+- **Time lines (owner, 2026-11-12, CHAT-30, CHAT-53).** An Agents thread
+  shows time like a messenger: one quiet centred line with the day and the
+  time ("Today 8:39 PM", "Yesterday 9:03 AM", "Wed, Nov 4 8:39 PM", the
+  year when it is another year) above the first message of a day and above
+  the first message after a pause of `kTimeDividerPause` (1 hour)
+  (`MessageTimeDivider`, `lib/widgets/message_time_label.dart`;
+  `messageOpensTimeDivider` in `chat_ui_helpers.dart`). No bubble carries
+  its own stamp. A chuk_chat chat draws no time line.
+- **Retry and Resend (CHAT-32).** No message offers Resend. Only an answer
+  whose request failed (provider error, broken or cut stream: the row mark
+  `turnError`, or the `interrupted` status) offers Retry, and only in a
+  chuk_chat chat. An Agents host retries a failed run on its own.
 
 - A file the agent produced is **its own message**, hung under the text
   bubble — not a block inside it. An agent may send several messages in a turn.
@@ -497,7 +518,9 @@ in `mobile_chat_chrome.dart`), so both layouts read the same.
 ### 14.4 Transcript
 
 - Reading measure stays 720 px, centred in the centre pane.
-- Message actions (copy, retry, branch) are chuk_chat's action bar under the
+- Message actions sit in the messenger menu (right click, long press); an
+  Agents thread draws no action pill under its bubbles and no retry (the
+  host retries). chuk_chat keeps its action bar under the
   answer (AGENTS_UI_UNIFY.md: `MessageHoverActions` was deleted, chuk's action
   bar wins).
 - Day chips and bubble runs as on the phone.

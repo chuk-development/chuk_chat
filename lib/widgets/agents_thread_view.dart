@@ -7,6 +7,8 @@ import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kDebugMode, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/widgets/agent_thread_accent.dart';
+
 import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
 import 'package:chuk_chat/constants.dart';
@@ -2399,59 +2401,67 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     final Widget? takeover = approval != null && approval.isTakeover
         ? _buildTakeoverCard(context, approval, dense: desktop)
         : _transcriptCards(context, dense: desktop); // F1
+    // The user's bubbles take the agent's colour (CHAT-52).
+    Widget withAccent(Widget chat) =>
+        AgentThreadAccent(agentId: widget.agent?.id, child: chat);
     if (desktop) {
-      return ChukChatUIDesktop(
+      return withAccent(
+        ChukChatUIDesktop(
+          key: key,
+          onToggleSidebar: _noopToggleSidebar,
+          selectedChatId: widget.threadKey,
+          onChatIdChanged: _onChatIdChanged,
+          isSidebarExpanded: false,
+          isCompactMode: false,
+          showReasoningTokens: AppThemeService.instance.showReasoningTokens,
+          showModelInfo: config?.showModelInfo ?? _verbose,
+          showTps: _verbose,
+          showToolCalls: _verbose,
+          toolCallingEnabled: false,
+          toolDiscoveryMode: false,
+          autoSendVoiceTranscription:
+              config?.autoSendVoiceTranscription ?? false,
+          onOpenModelSettings: widget.onOpenModelScreen == null
+              ? null
+              : () async => widget.onOpenModelScreen!(),
+          agentsThread: true,
+          agentsTitle: widget.title,
+          topInset: desktopTopInset,
+          transcriptFooter: takeover,
+          composerAbove: _composerAbove(dense: true),
+          composerSeat: _composerSeat(context, dense: true),
+          unreadSince: widget.unreadSince,
+          onUnreadSeen: widget.onUnreadSeen,
+        ),
+      );
+    }
+    return withAccent(
+      ChukChatUIMobile(
         key: key,
+        messengerMode: true,
+        hostRunActive: _ledger.isRunning(widget.threadKey),
+        // Reserve chrome inside the scrollable, not above its viewport: messages
+        // can pass behind the floating contact pill like the messenger reference.
+        // Action-required bars remain below the header and own their inset.
+        topInset: _hasBarAboveChat ? 0 : widget.topInset,
+        transcriptFooter: takeover,
+        composerAbove: _composerAbove(dense: false),
+        composerSeat: _composerSeat(context, dense: false),
+        agentsTitle: widget.title,
+        unreadSince: widget.unreadSince,
+        onUnreadSeen: widget.onUnreadSeen,
         onToggleSidebar: _noopToggleSidebar,
         selectedChatId: widget.threadKey,
         onChatIdChanged: _onChatIdChanged,
         isSidebarExpanded: false,
-        isCompactMode: false,
-        showReasoningTokens: AppThemeService.instance.showReasoningTokens,
-        showModelInfo: config?.showModelInfo ?? _verbose,
-        showTps: _verbose,
-        showToolCalls: _verbose,
+        showReasoningTokens: MobileChatPreferences.instance.showThinking,
+        showModelInfo: false,
+        showTps: false,
+        showToolCalls: MobileChatPreferences.instance.showActivity,
         toolCallingEnabled: false,
         toolDiscoveryMode: false,
         autoSendVoiceTranscription: config?.autoSendVoiceTranscription ?? false,
-        onOpenModelSettings: widget.onOpenModelScreen == null
-            ? null
-            : () async => widget.onOpenModelScreen!(),
-        agentsThread: true,
-        agentsTitle: widget.title,
-        topInset: desktopTopInset,
-        transcriptFooter: takeover,
-        composerAbove: _composerAbove(dense: true),
-        composerSeat: _composerSeat(context, dense: true),
-        unreadSince: widget.unreadSince,
-        onUnreadSeen: widget.onUnreadSeen,
-      );
-    }
-    return ChukChatUIMobile(
-      key: key,
-      messengerMode: true,
-      hostRunActive: _ledger.isRunning(widget.threadKey),
-      // Reserve chrome inside the scrollable, not above its viewport: messages
-      // can pass behind the floating contact pill like the messenger reference.
-      // Action-required bars remain below the header and own their inset.
-      topInset: _hasBarAboveChat ? 0 : widget.topInset,
-      transcriptFooter: takeover,
-      composerAbove: _composerAbove(dense: false),
-      composerSeat: _composerSeat(context, dense: false),
-      agentsTitle: widget.title,
-      unreadSince: widget.unreadSince,
-      onUnreadSeen: widget.onUnreadSeen,
-      onToggleSidebar: _noopToggleSidebar,
-      selectedChatId: widget.threadKey,
-      onChatIdChanged: _onChatIdChanged,
-      isSidebarExpanded: false,
-      showReasoningTokens: MobileChatPreferences.instance.showThinking,
-      showModelInfo: false,
-      showTps: false,
-      showToolCalls: MobileChatPreferences.instance.showActivity,
-      toolCallingEnabled: false,
-      toolDiscoveryMode: false,
-      autoSendVoiceTranscription: config?.autoSendVoiceTranscription ?? false,
+      ),
     );
   }
 

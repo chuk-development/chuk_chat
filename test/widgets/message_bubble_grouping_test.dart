@@ -79,8 +79,7 @@ BorderRadius radiusOf(WidgetTester tester, int index) {
   final Container container = tester.widget<Container>(
     decoratedBoxes.at(index),
   );
-  return (container.decoration! as BoxDecoration).borderRadius!
-      as BorderRadius;
+  return (container.decoration! as BoxDecoration).borderRadius! as BorderRadius;
 }
 
 void main() {
@@ -123,13 +122,22 @@ void main() {
     expect(nextRun.top - last.bottom, gapBetweenRuns);
   });
 
-  testWidgets('an agent\'s run draws no bubble at all', (
+  // CHAT-52: in the messenger thread every answer is its own bubble, the
+  // last one of a run with the tail at the bottom left.
+  testWidgets('an agent\'s run draws one bubble per answer', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(wrap(threeMessageRun(isUser: false)));
     await tester.pump();
 
-    expect(decoratedBoxes, findsNothing);
+    expect(decoratedBoxes, findsNWidgets(4));
+    expect(radiusOf(tester, 0).bottomLeft, full);
+    expect(radiusOf(tester, 1).bottomLeft, full);
+    expect(radiusOf(tester, 2).bottomLeft, tail);
+    expect(radiusOf(tester, 3).bottomLeft, tail);
+    for (int i = 0; i < 4; i++) {
+      expect(radiusOf(tester, i).bottomRight, full);
+    }
     // The run gap lives in the margin above the answer's column.
     double marginTop(int index) {
       final Container box = tester.widget<Container>(
