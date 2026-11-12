@@ -15,6 +15,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import 'package:chuk_chat/services/agents/agent_model.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/skills/skills_source.dart';
@@ -78,6 +79,7 @@ class AgentModelChoice {
     required this.id,
     this.provider,
     this.reasoningEffort,
+    this.source,
   });
 
   /// The model id, as the account's catalogue names it.
@@ -88,6 +90,13 @@ class AgentModelChoice {
 
   /// How hard it thought — Fast mode is this turned down.
   final String? reasoningEffort;
+
+  /// `agent` when this is the agent's own model as the host stores it,
+  /// `run` when it is what the last run used.
+  final String? source;
+
+  /// The host stores this as the agent's own model (CHAT-36).
+  bool get isStored => source == 'agent';
 
   /// `anthropic · low`, or null when the host named neither.
   String? get detail {
@@ -109,6 +118,7 @@ class AgentModelChoice {
       id: id,
       provider: text(payload['provider']),
       reasoningEffort: text(payload['reasoning_effort']),
+      source: text(payload['source']),
     );
   }
 }
@@ -475,6 +485,18 @@ class RelayAgentControlSource implements AgentControlSource {
     final notifier = _notifier(event.sessionKey);
     const nothingYet = 'The host has nothing to report for this agent yet.';
     final model = AgentModelChoice.fromPayload(event.model);
+    if (model != null && model.isStored) {
+      // A reinstalled app has no record of the agent's own model; the
+      // host has (CHAT-36).
+      unawaited(
+        AgentModel.adoptFromHost(
+          event.sessionKey,
+          modelId: model.id,
+          providerSlug: model.provider,
+          reasoningEffort: model.reasoningEffort,
+        ),
+      );
+    }
     final tokens = AgentTokenUsage.fromPayload(event.tokens);
     final runtime = AgentSessionRuntime.fromPayload(event.runtime);
     final sandbox = AgentSandbox.fromPayload(event.sandbox);

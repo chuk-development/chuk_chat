@@ -14,10 +14,13 @@ The API server code lives at **`/home/user/git/api_server`** (deployed at
   provider prices, keyed under `prices/<provider>`), `model_info/data/model_icons.json`.
 - **Direct providers registry:** `api_server/direct_providers.py`
   (`DIRECT_PROVIDERS`, e.g. `fireworks`). Provider slugs the client pins map here.
-- **Known model ids:** DeepSeek V4 Flash = `deepseek/deepseek-v4-flash-0731`,
+- **Known model ids:** DeepSeek V4.1 Flash = `deepseek/deepseek-v4.1-flash-1017`
+  (the current Flash; `deepseek/deepseek-v4-flash-0731` is retired and the
+  API serves it from 1017, see `api_server/model_info/retired_models.py`),
   V4 Pro = `deepseek/deepseek-v4-pro-0813`, GLM 5.3 Flash = `z-ai/glm-5.3-flash`
   (priced via orcarouter in `direct_prices.json`; fireworks direct catalog
   carries glm-5p2/5p1, i.e. GLM 5.2/5.1, not 5.3-flash).
+  Where an Agents agent's model is stored: `docs/agents/AGENT_MODEL.md`.
 
 ## Agents (= CoWork) — naming and shape
 

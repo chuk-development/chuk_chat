@@ -12,13 +12,20 @@
 ///   set in Settings → Model Selection ([ChatModeService]). An agent with no
 ///   model of its own runs on it, and so does a plain chat.
 ///
-/// Nothing else picks an agent's model. The host stores none: every task
-/// names the model it runs on, and the host's status frame reports what the
-/// last run really used (`AgentModelChoice`).
+/// Nothing else picks an agent's model. Every change is also sent to the
+/// host (`agent_model_set`, docs/agents/AGENT_MODEL.md), which stores it per
+/// thread in its state database. The host's copy is the one that lasts: it
+/// runs the agent's scheduled jobs on it, it wins over the model a task
+/// names, and its status frame reports it (`source: agent`). A reinstalled
+/// app has no local record and takes the host's ([adoptFromHost]).
 library;
+
+import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/services/chat_model_selection_service.dart';
 import 'package:chuk_chat/services/model_cache_service.dart';
@@ -184,11 +191,7 @@ class AgentModel {
         : await ChatModelSelectionService.instance.load(chatId);
     final mode = await ChatModeService.load();
     final config = await ChatModeService.loadConfig(mode);
-    return AgentModelState(
-      own: own,
-      defaultMode: mode,
-      defaultConfig: config,
-    );
+    return AgentModelState(own: own, defaultMode: mode, defaultConfig: config);
   }
 
   /// How long a page or a row waits for the model data before it shows what
@@ -224,11 +227,7 @@ class AgentModel {
       () => ChatModeService.loadConfig(mode),
       ChatModeService.defaultConfig(mode),
     );
-    return AgentModelState(
-      own: own,
-      defaultMode: mode,
-      defaultConfig: config,
-    );
+    return AgentModelState(own: own, defaultMode: mode, defaultConfig: config);
   }
 
   /// What to show when the agent's model could not be read in time: the
@@ -322,12 +321,71 @@ class AgentModel {
       ),
     );
     await ChatModelSelectionService.instance.save(chatId, selection);
+    unawaited(_pushToHost(chatId, selection));
     return selection;
   }
 
   /// Drops the agent's own model: it follows the app default again.
-  static Future<void> useDefault(String chatId) =>
-      ChatModelSelectionService.instance.clear(chatId);
+  static Future<void> useDefault(String chatId) async {
+    await ChatModelSelectionService.instance.clear(chatId);
+    unawaited(_pushToHost(chatId, null));
+  }
+
+  /// The host's stored model for [chatId] (`source: agent` in its status
+  /// frame). Taken into the local record only when this install has none:
+  /// that is the reinstall, and the host has the user's last choice.
+  static Future<void> adoptFromHost(
+    String chatId, {
+    required String modelId,
+    String? providerSlug,
+    String? reasoningEffort,
+  }) async {
+    if (chatId.isEmpty || modelId.isEmpty) return;
+    final own = await ChatModelSelectionService.instance.load(chatId);
+    if (own != null) return;
+    await ChatModelSelectionService.instance.save(
+      chatId,
+      ChatModelSelection(
+        modelId: modelId,
+        providerSlug: providerSlug ?? '',
+        reasoningEffort: reasoningEffort,
+      ),
+    );
+  }
+
+  /// Test seam: replaces the relay send of `agent_model_set`.
+  @visibleForTesting
+  static Future<void> Function(Map<String, dynamic> payload)? debugSendFrame;
+
+  /// Sends the agent's model to the host. Never throws: with no host
+  /// connected the local record still holds, and the next change sends again.
+  static Future<void> _pushToHost(
+    String chatId,
+    ChatModelSelection? selection,
+  ) async {
+    if (chatId.isEmpty) return;
+    final payload = <String, dynamic>{
+      'type': 'agent_model_set',
+      'session_key': chatId,
+      'model': selection?.modelId,
+      if (selection != null && selection.providerSlug.isNotEmpty)
+        'provider': selection.providerSlug,
+      if (selection?.reasoningEffort != null)
+        'reasoning_effort': selection!.reasoningEffort,
+    };
+    try {
+      final send = debugSendFrame;
+      if (send != null) {
+        await send(payload);
+        return;
+      }
+      final Object? controller = AgentsRelayLink.instance.controller.value;
+      if (controller is! AgentsRelayClient) return;
+      await controller.sendControlFrame(payload);
+    } catch (e) {
+      if (kDebugMode) debugPrint('AgentModel: host push failed: $e');
+    }
+  }
 }
 
 /// `fireworks/serverless` → `Fireworks`; `deepinfra` → `Deepinfra`. Only for a

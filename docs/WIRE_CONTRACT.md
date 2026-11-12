@@ -2657,7 +2657,7 @@ Host → app, `agent_status` (reply, and a push):
 ```json
 {"type": "agent_status", "session_key": "<key>",
  "model":   {"id": "<model id>", "provider": "<slug>"?, "reasoning_effort": "<level>"?,
-             "source": "run" | "default"},
+             "source": "agent" | "run" | "default"},
  "tokens":  {"total": <int>, "runs": <int>, "last_run": <int>},
  "runtime": {"started_at": <unix seconds>, "active_seconds": <float>,
              "runs": <int>, "running": true | false, "current_seconds": <float>?},
@@ -2983,6 +2983,16 @@ Executor: `calls=` / `on_call_frame=` on `Executor` and `TaskServer`, the
 `in <n>` spec in `automations.py`. Tests: `agents/host/tests/test_calls.py`,
 `agents/host/tests/test_calls_e2e.py`, `agents/executor/tests/test_calls.py`,
 `agents/runtime/tests/test_calls.py`.
+
+## Agent model (CHAT-36)
+
+The agent's own model is stored on the host, per thread, and wins over the
+model a task names and over the last run's. App to host:
+`{"type": "agent_model_set", "session_key": "<key>", "model": "<id>" | null,
+"provider": "<slug>"?, "reasoning_effort": "<level>"?}`. The host answers one
+terminal `{"type": "agent_model", "session_key": "<key>", "model": {...} | null}`.
+`agent_status.model` then has `source: "agent"`. Details:
+`docs/agents/AGENT_MODEL.md`.
 
 ## Agent permissions (bead chuk_chat-voq3)
 
