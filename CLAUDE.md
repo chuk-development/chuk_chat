@@ -682,6 +682,18 @@ replacement: the chuk_chat rules keep applying to the app.
 - Local workflow: from the repository root, `FEATURE_AGENTS=true ./run-hot.sh linux`, then `flutter-hot reload`; capture with `bash scripts/capture_app_window.sh _scratch/agents-window.png` from the repository root. The helper validates executable/PID/window ownership and prints the selected IDs; no desktop fallback.
 - If GNOME reports `org.gnome.ScreenSaver.GetActive = true`, window pixels may be stale: defer visual acceptance until the user unlocks; never unlock the session automatically.
 
+## Proving an Agents run without the app
+
+`agents/host/.venv/bin/python scripts/agents_e2e_probe.py "<prompt>" [--fastmail]`
+runs one real task through the host's own Executor code and the account's
+real model route (api.chuk.chat), with a loopback controller and its own
+state in `_scratch/agents_e2e_probe/`. It uses the account access token
+WITHOUT the refresh token, so it can never rotate the owner's login (needs a
+token with > 2 min left; the host refreshes it). It prints tool names, the
+`message` notes and the answer. The host service is the systemd user unit
+`agents-manager` (`journalctl --user -u agents-manager`; its log tag is
+`chuk-agents-manager`).
+
 ## Shell and task tracking
 
 - Use non-interactive file operations (`cp -f`, `mv -f`, `rm -f`) and narrowly resolved targets.

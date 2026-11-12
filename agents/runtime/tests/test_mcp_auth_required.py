@@ -68,7 +68,10 @@ def test_a_lapsed_sign_in_keeps_the_tools_and_answers_auth_required():
     manager = _manager(seeded=[tool])
     registry = ToolRegistry()
     names = manager.register(registry)
-    assert len(names) == 1 and names[0].endswith("list_mailboxes")
+    # The stand-in, never deferred, plus the server's own (deferred) tools.
+    assert sorted(n.split("__")[-1] for n in names) == ["list_mailboxes", "sign_in_required"]
+    stand_in = next(n for n in names if n.endswith("sign_in_required"))
+    assert not registry.is_deferred(stand_in)
 
     result = manager.call("Fastmail", "list_mailboxes", {})
     assert result["ok"] is False
@@ -88,7 +91,7 @@ def test_tools_come_from_the_cache_when_the_connection_has_none(tmp_path):
     cache.put(config, [MCPToolInfo("search", "", {"type": "object", "properties": {}})])
     manager = _manager(cache=cache)
     names = manager.register(ToolRegistry())
-    assert len(names) == 1 and names[0].endswith("search")
+    assert sorted(n.split("__")[-1] for n in names) == ["search", "sign_in_required"]
 
 
 def test_with_no_known_tools_one_stand_in_is_offered():
@@ -103,3 +106,38 @@ def test_a_network_failure_still_offers_nothing():
     manager = _manager(kind=ERROR_KIND_NETWORK, seeded=[tool])
     assert manager.register(ToolRegistry()) == []
     assert manager.auth_required("Fastmail") is False
+
+
+def test_a_server_dialled_in_the_background_still_offers_its_stand_in(tmp_path):
+    """CHAT-88: a server whose last handshake failed is dialled in the
+    background and registered nothing, so the model never heard of it. Now
+    its stand-in is offered; a call waits for the handshake and answers
+    auth_required."""
+    cache = MCPToolCache(tmp_path / "cache.json")
+    config = MCPServerConfig(name="Fastmail", transport="http", url="https://api.fastmail.example/mcp")
+    cache.put_failed(config)
+
+    class _Slow(_Refused):
+        def __init__(self, config):
+            super().__init__(config)
+            self.pending = True
+            self.tools = []
+
+        def begin(self):
+            return True
+
+        def await_start(self):
+            self.pending = False
+            return False
+
+    _Refused.kind = ERROR_KIND_AUTH
+    manager = MCPManager([config], connection_factory=_Slow, tool_cache=cache)
+    manager.start(lazy=True)
+    # What the lazy start does for a server the cache marks as failed: it
+    # dials it in the background and reports it unusable for now.
+    manager.connections["Fastmail"].pending = True
+    manager._background.add("Fastmail")  # noqa: SLF001
+    registry = ToolRegistry()
+    names = manager.register(registry)
+    assert [n.split("__")[-1] for n in names] == ["sign_in_required"]
+    assert manager.call("Fastmail", "sign_in_required", {})["error"] == "auth_required"

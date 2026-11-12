@@ -261,7 +261,12 @@ def test_a_server_that_failed_is_not_waited_for_after_a_restart(tmp_path):
         assert sorted(manager.pending()) == ["broken", "github"]
         # Only the known tools are offered; nothing is recorded as an error
         # while the broken server is still connecting.
-        assert manager.register(ToolRegistry()) == [tool_name("github", "t")]
+        # The broken server is not waited for, but its stand-in is offered
+        # (CHAT-88): the model learns it exists and what is wrong with it.
+        assert manager.register(ToolRegistry()) == [
+            tool_name("github", "t"),
+            tool_name("broken", "sign_in_required"),
+        ]
         assert manager.errors == []
         # The next task of the same session does not wait for it either.
         started = time.monotonic()

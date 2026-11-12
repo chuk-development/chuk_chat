@@ -2751,7 +2751,11 @@ class MCPManager:
         registered: list[str] = []
         for name, connection in self.connections.items():
             if not _usable(connection):
-                if not self.auth_required(name):
+                # A server dialled in the background because its last
+                # handshake failed (``_background``) is not given up either:
+                # its stand-in tells the model to call it, the call waits for
+                # the handshake and answers ``auth_required`` (CHAT-88).
+                if not self.auth_required(name) and name not in self._background:
                     continue
                 # CHAT-77: the sign-in lapsed. Offer what the server had
                 # (seeded from the tool cache), or one stand-in tool, so a
@@ -2849,21 +2853,25 @@ class MCPManager:
             config = getattr(connection, "config", None)
             if config is not None:
                 infos = self.tool_cache.get(config)
-        if not infos:
-            infos = [
-                MCPToolInfo(
-                    name="sign_in_required",
-                    description=(
-                        f"{server} is connected for this agent, but its sign-in "
-                        f"has expired. Call this when the task needs {server}: "
-                        "it tells you what to say to the user."
-                    ),
-                    schema={"type": "object", "properties": {}},
-                    annotations={"readOnlyHint": True},
-                )
-            ]
+        # The stand-in is always there and never behind tool search: the
+        # model sees at once that the server needs a new sign-in (CHAT-88: the
+        # Mail agent searched tools four times before it found out). The
+        # cached tools stay deferred.
+        stand_in = [
+            MCPToolInfo(
+                name="sign_in_required",
+                description=(
+                    f"{server} is connected for this agent but cannot be used "
+                    f"right now (its sign-in expired, or it does not answer). "
+                    f"Call this FIRST when the task needs {server}: it says "
+                    "what is wrong and what to tell the user."
+                ),
+                schema={"type": "object", "properties": {}},
+                annotations={"readOnlyHint": True},
+            )
+        ]
         names: list[str] = []
-        for info in infos:
+        for info, deferrable in [(i, False) for i in stand_in] + [(i, True) for i in infos]:
             full = tool_name(server, info.name)
             if registry.has(full):
                 continue
@@ -2872,7 +2880,7 @@ class MCPManager:
                 _tool_schema(server, info),
                 _make_handler(self, server, info.name),
                 check_fn=_make_check(self, server),
-                deferrable=True,
+                deferrable=deferrable,
             )
             self._registered.add(full)
             names.append(full)
@@ -2904,6 +2912,22 @@ class MCPManager:
             # The sign-in lapsed: answer at once (CHAT-77). A new sign-in from
             # the app replaces the connection, and the next call goes through.
             return self.auth_required_result(server, tool)
+        if tool == "sign_in_required":
+            # The stand-in of a server that is not signed out: it came up
+            # after all, or it does not answer.
+            if self.is_alive(server):
+                return {
+                    "ok": True,
+                    "server": server,
+                    "tool": tool,
+                    "note": f"{server} is connected. Find its tools with search_tools and use them.",
+                }
+            return {
+                "ok": False,
+                "server": server,
+                "tool": tool,
+                "error": f"{server} is not reachable right now. Tell the user, then go on without it.",
+            }
         # A session that dropped is redialed once before the model is told the
         # tool is gone.
         if not connection.alive() and self._revive(server):
@@ -3037,7 +3061,13 @@ def _make_check(manager: "MCPManager", server: str):
         # A server whose sign-in lapsed stays visible: a call answers at once
         # with ``auth_required`` (CHAT-77), so the model tells the user
         # instead of searching another way for minutes.
-        return manager.is_alive(server) or manager.auth_required(server)
+        return (
+            manager.is_alive(server)
+            or manager.auth_required(server)
+            # Still dialling in the background after a failed handshake: its
+            # stand-in stays offered; a call waits for the answer (CHAT-88).
+            or server in manager._background  # noqa: SLF001
+        )
 
     return check
 
