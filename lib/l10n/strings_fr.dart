@@ -515,6 +515,7 @@ const Map<String, String> stringsFr = {
   'search': 'Recherche',
   'retryConnection': 'Réessayer',
   'today': 'Aujourd\'hui',
+  'yesterday': 'Hier',
   'thisWeek': 'Cette semaine',
   'thisMonth': 'Ce mois-ci',
   'pinned': 'Épinglés',

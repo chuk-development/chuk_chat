@@ -513,6 +513,7 @@ const Map<String, String> stringsEs = {
   'search': 'Buscar',
   'retryConnection': 'Reintentar',
   'today': 'Hoy',
+  'yesterday': 'Ayer',
   'thisWeek': 'Esta semana',
   'thisMonth': 'Este mes',
   'pinned': 'Fijados',

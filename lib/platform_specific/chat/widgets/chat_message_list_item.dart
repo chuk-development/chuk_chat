@@ -15,11 +15,13 @@ import 'package:chuk_chat/services/chat_runtime.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
 import 'package:chuk_chat/services/dictation_tracker.dart';
 import 'package:chuk_chat/services/offline_retry_manager.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/widgets/agents_context_chip.dart';
 import 'package:chuk_chat/widgets/agents_quiet_run_fold.dart';
 import 'package:chuk_chat/widgets/compaction_divider.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/widgets/message_fly_in.dart';
+import 'package:chuk_chat/widgets/message_time_label.dart';
 
 /// One message row shared by the desktop and mobile chat lists.
 ///
@@ -115,7 +117,7 @@ class ChatMessageListItem extends StatelessWidget {
         ? agentsRowSource(messages[index])
         : null;
     if (rowSource != null) {
-      return _rowBoundary(
+      return _row(
         AgentsContextChip(
           key: ValueKey<String>(uiKey),
           source: rowSource,
@@ -253,7 +255,7 @@ class ChatMessageListItem extends StatelessWidget {
         isLastAiMessage &&
         (data.isStreamingMessage || runtime.isSending.value);
     if (wrapForStream) {
-      return _rowBoundary(
+      return _row(
         ValueListenableBuilder<StreamingLive?>(
           valueListenable: runtime.streamingLive,
           builder: (context, live, _) {
@@ -301,7 +303,7 @@ class ChatMessageListItem extends StatelessWidget {
         index > 0 &&
         CompactionRecord.decode(messages[index][ChatCompaction.fieldKey]) !=
             null;
-    return _rowBoundary(
+    return _row(
       compactedHere
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -312,13 +314,35 @@ class ChatMessageListItem extends StatelessWidget {
     );
   }
 
+  /// The row, with the centred time line above it when an Agents thread
+  /// starts a new day or the talk resumes after a pause
+  /// ([messageOpensTimeDivider]).
+  Widget _row(Widget child) {
+    final DateTime? when =
+        ChatOrigin.isAgentsThread(activeChatId) || messengerMode
+        ? messageRowTime(messages[index])
+        : null;
+    if (when == null || !messageOpensTimeDivider(messages, index)) {
+      return _rowBoundary(child);
+    }
+    return _rowBoundary(
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          MessageTimeDivider(when: when),
+          child,
+        ],
+      ),
+    );
+  }
+
   /// One layer and one [TickerMode] per row.
   ///
   /// Every implicit animation listens to the nearest TickerMode's notifier,
   /// and `removeListener` scans that list. With one notifier for the whole
   /// app, tearing down rows was quadratic: over half of the "open long chat"
   /// frame went to `ChangeNotifier.removeListener`. See docs/PERFORMANCE.md.
-  static Widget _rowBoundary(Widget child) => RepaintBoundary(
-    child: TickerMode(enabled: true, child: child),
-  );
+  static Widget _rowBoundary(Widget child) =>
+      RepaintBoundary(child: TickerMode(enabled: true, child: child));
 }

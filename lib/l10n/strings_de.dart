@@ -822,6 +822,7 @@ const Map<String, String> stringsDe = {
   'search': 'Suche',
   'retryConnection': 'Erneut versuchen',
   'today': 'Heute',
+  'yesterday': 'Gestern',
   'thisWeek': 'Diese Woche',
   'thisMonth': 'Diesen Monat',
   'pinned': 'Angeheftet',

@@ -829,6 +829,7 @@ class AppLocalizations {
   String get search => _get('search');
   String get retryConnection => _get('retryConnection');
   String get today => _get('today');
+  String get yesterday => _get('yesterday');
   String get thisWeek => _get('thisWeek');
   String get thisMonth => _get('thisMonth');
   String get pinned => _get('pinned');

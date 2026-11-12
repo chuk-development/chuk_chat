@@ -797,6 +797,7 @@ const Map<String, String> stringsEn = {
   'search': 'Search',
   'retryConnection': 'Try again',
   'today': 'Today',
+  'yesterday': 'Yesterday',
   'thisWeek': 'This week',
   'thisMonth': 'This month',
   'pinned': 'Pinned',

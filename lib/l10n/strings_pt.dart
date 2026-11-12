@@ -506,6 +506,7 @@ const Map<String, String> stringsPt = {
   'search': 'Pesquisar',
   'retryConnection': 'Tentar novamente',
   'today': 'Hoje',
+  'yesterday': 'Ontem',
   'thisWeek': 'Esta semana',
   'thisMonth': 'Este mês',
   'pinned': 'Fixados',
