@@ -22,6 +22,9 @@ import 'package:chuk_chat/services/agents/agent_roster_source.dart';
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
 import 'package:chuk_chat/ui/expressive/feedback.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/widgets/settings_list_view.dart';
+import 'package:chuk_chat/widgets/settings_surface.dart';
 
 class AgentProfileEditPage extends StatefulWidget {
   const AgentProfileEditPage({
@@ -52,14 +55,13 @@ class AgentProfileEditPage extends StatefulWidget {
     void Function(AgentsAgent agent)? onRename,
     AgentProfileStore? profiles,
   }) {
-    return Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (BuildContext context) => AgentProfileEditPage(
-          agent: agent,
-          source: source,
-          onRename: onRename,
-          profiles: profiles,
-        ),
+    return openSettingsSurface(
+      context,
+      (BuildContext context) => AgentProfileEditPage(
+        agent: agent,
+        source: source,
+        onRename: onRename,
+        profiles: profiles,
       ),
     );
   }
@@ -175,10 +177,38 @@ class _AgentProfileEditPageState extends State<AgentProfileEditPage> {
     Navigator.of(context).maybePop();
   }
 
+  /// A text field in the settings field shape ([ExpressiveField]).
+  Widget _field(
+    TextEditingController controller, {
+    required String hint,
+    int minLines = 1,
+    int maxLines = 1,
+  }) => ExpressiveField(
+    child: TextField(
+      controller: controller,
+      minLines: minLines,
+      maxLines: maxLines,
+      decoration: InputDecoration(
+        hintText: hint,
+        border: InputBorder.none,
+        filled: false,
+        contentPadding: const EdgeInsets.symmetric(vertical: 14),
+      ),
+    ),
+  );
+
+  /// The quiet line under a field.
+  Widget _note(String text) => Padding(
+    padding: const EdgeInsets.fromLTRB(6, 6, 6, 0),
+    child: Text(
+      text,
+      style: Theme.of(context).textTheme.bodySmall
+          ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    final TextTheme text = Theme.of(context).textTheme;
     return AnimatedBuilder(
       animation: _store,
       builder: (BuildContext context, Widget? _) {
@@ -198,17 +228,16 @@ class _AgentProfileEditPageState extends State<AgentProfileEditPage> {
               ),
             ],
           ),
-          // The header floats over the page, so the room for it is reserved
-          // inside the list, the way chuk's other sub-pages do it
-          // ([floatingHeaderInset]: the header band plus the status bar).
+          // chuk's settings list and rows (docs/DESIGN.md §2): the room for
+          // the floating header is reserved inside the list.
           body: Builder(
-            builder: (BuildContext context) => ListView(
+            builder: (BuildContext context) => SettingsListView(
               padding: EdgeInsets.fromLTRB(
-                20,
-                12,
-                20,
+                16,
+                8,
+                16,
                 24 + MediaQuery.paddingOf(context).bottom,
-              ).add(floatingHeaderInset(context)),
+              ),
               children: <Widget>[
                 Center(
                   child: Column(
@@ -245,25 +274,14 @@ class _AgentProfileEditPageState extends State<AgentProfileEditPage> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 26),
-                _SectionLabel('Figure'),
-                const SizedBox(height: 8),
-                // Colour and silhouette are one decision — what this agent
-                // looks like everywhere — so they sit in one card with one reset,
-                // instead of two labelled sections the user has to connect.
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 14,
-                  ),
-                  decoration: BoxDecoration(
-                    color: scheme.surfaceContainerHigh.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: <Widget>[
-                      _ColorRow(
+                const SizedBox(height: 10),
+                const ExpressiveSectionHeader('Figure'),
+                // The colour and its reset, in one group.
+                ExpressiveGroup(
+                  children: <Widget>[
+                    ExpressiveCard(
+                      padding: const EdgeInsets.all(14),
+                      child: _ColorRow(
                         selected: shownColor,
                         onPick: (int value) => setState(() {
                           _color = value;
@@ -274,13 +292,10 @@ class _AgentProfileEditPageState extends State<AgentProfileEditPage> {
                           _clearColor = true;
                         }),
                       ),
-                      const SizedBox(height: 14),
-                      Divider(
-                        height: 1,
-                        color: scheme.outlineVariant.withValues(alpha: 0.5),
-                      ),
-                      const SizedBox(height: 14),
-                      _ShapeRow(
+                    ),
+                    ExpressiveCard(
+                      padding: const EdgeInsets.all(14),
+                      child: _ShapeRow(
                         agentId: agent.id,
                         colour: shownColor == null
                             ? agentAccent(context, agent.id, store: _store)
@@ -289,112 +304,41 @@ class _AgentProfileEditPageState extends State<AgentProfileEditPage> {
                         onPick: (AgentAvatarShape? shape) =>
                             setState(() => _shape = shape),
                       ),
-                      const SizedBox(height: 6),
-                      Divider(
-                        height: 1,
-                        color: scheme.outlineVariant.withValues(alpha: 0.5),
-                      ),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: TextButton(
-                          key: const ValueKey('avatar_reset_default'),
-                          onPressed: () => setState(() {
-                            _color = null;
-                            _clearColor = true;
-                            _shape = AgentAvatarShape.expressive;
-                          }),
-                          child: const Text('Reset to default'),
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                    ExpressiveRow(
+                      key: const ValueKey('avatar_reset_default'),
+                      icon: Icons.restart_alt_rounded,
+                      title: 'Reset to default',
+                      subtitle: "How this agent's mark looks everywhere",
+                      onTap: () => setState(() {
+                        _color = null;
+                        _clearColor = true;
+                        _shape = AgentAvatarShape.expressive;
+                      }),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  "How this agent's mark looks everywhere",
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-                ),
-                const SizedBox(height: 24),
                 if (widget.onRename != null) ...<Widget>[
-                  _SectionLabel('Name'),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _name,
-                    decoration: const InputDecoration(
-                      filled: true,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(18)),
-                        borderSide: BorderSide.none,
-                      ),
-                      hintText: 'Agent name',
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
+                  const ExpressiveSectionHeader('Name'),
+                  _field(_name, hint: 'Agent name'),
+                  _note(
                     'The host keeps the name, so it survives a fresh install.',
-                    style: text.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
                   ),
-                  const SizedBox(height: 24),
                 ],
-                _SectionLabel('Role'),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _role,
-                  decoration: const InputDecoration(
-                    filled: true,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(18)),
-                      borderSide: BorderSide.none,
-                    ),
-                    hintText: 'researcher, release manager, …',
-                  ),
-                ),
-                const SizedBox(height: 24),
-                _SectionLabel('Standing brief'),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _brief,
+                const ExpressiveSectionHeader('Role'),
+                _field(_role, hint: 'researcher, release manager, …'),
+                const ExpressiveSectionHeader('Standing brief'),
+                _field(
+                  _brief,
+                  hint: 'What this agent takes care of',
                   minLines: 3,
                   maxLines: 8,
-                  decoration: const InputDecoration(
-                    filled: true,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(18)),
-                      borderSide: BorderSide.none,
-                    ),
-                    hintText: 'What this agent takes care of',
-                  ),
                 ),
-                const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: scheme.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Row(
-                    children: <Widget>[
-                      AppIcon(
-                        Icons.info_outline_rounded,
-                        size: 18,
-                        color: scheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'Picture, shape, colour, role and brief are kept on this '
-                          'device. The relay carries names only.',
-                          style: text.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                const SizedBox(height: 16),
+                const ExpressiveInfoCard(
+                  text:
+                      'Picture, shape, colour, role and brief are kept on '
+                      'this device. The relay carries names only.',
                 ),
               ],
             ),
@@ -435,25 +379,6 @@ class _FacePreview extends StatelessWidget {
               clearColor: overrideColor == null,
               shape: shape,
             ),
-      ),
-    );
-  }
-}
-
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel(this.label);
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    return Text(
-      label.toUpperCase(),
-      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-        color: scheme.onSurfaceVariant,
-        fontWeight: FontWeight.w800,
-        letterSpacing: 0.8,
       ),
     );
   }

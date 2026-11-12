@@ -6,6 +6,7 @@ import 'package:chuk_chat/pages/agent_profile_edit_page.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
+
 import '../support/test_app.dart';
 
 void main() {
@@ -43,13 +44,14 @@ void main() {
       final colour = find.byKey(
         ValueKey('avatar_color_${kAgentAccents.first.toARGB32()}'),
       );
-      await tester.ensureVisible(colour);
+      // Centred, not at the top edge: the floating header covers the top.
+      await Scrollable.ensureVisible(tester.element(colour), alignment: 0.5);
+      await tester.pumpAndSettle();
       await tester.tap(colour);
       await tester.pumpAndSettle();
-      // Preview may be outside the lazy list viewport, so scroll back first.
-      // The page body and the horizontal shape row are both ListViews; drag
-      // the page, which is the first one.
-      await tester.drag(find.byType(ListView).first, const Offset(0, 600));
+      // Preview may be scrolled out of view, so scroll back first.
+      // Drag the page, the first scroll view, back to the preview.
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, 600));
       await tester.pumpAndSettle();
       expect(
         tester
