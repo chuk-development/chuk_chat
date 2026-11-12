@@ -69,6 +69,10 @@ DEFAULT_BASE_URL = "https://api.chuk.chat"
 # A default the catalog does not list makes resolve_model fall back to the
 # catalog's first model, so this must name a served model.
 DEFAULT_MODEL_ID = "deepseek/deepseek-v4.1-flash-1017"
+#: The highest ``max_tokens`` a request asks for (see
+#: ``BackendModelClient.request_max_tokens``). Room for a long answer plus
+#: its reasoning; a run that needs more continues in the next round.
+DEFAULT_REQUEST_MAX_TOKENS = 32_768
 
 # Models proven to emit usable tool calls, cheapest first. Kept as data so a
 # fallback chain can walk it when the preferred model is unavailable. Only
@@ -362,7 +366,9 @@ def login(
 @dataclass
 class ResolvedModel:
     model_id: str
-    provider_slug: str
+    #: ``None``: the API routes the model itself (a model the catalogue does
+    #: not list, see :func:`resolve_model`).
+    provider_slug: str | None
 
 
 def fetch_models_info(
@@ -429,6 +435,17 @@ def resolve_model(
         raise BackendModelError("no models available from /v1/models_info")
 
     by_id = {m.get("id"): m for m in models if m.get("id")}
+    if preferred_model_id and preferred_model_id not in by_id:
+        # A model the user chose by name, which this account's catalogue does
+        # not list (an older id the API still routes as an alias, e.g.
+        # ``deepseek/deepseek-v4-flash-0731``). Sent as named: the API maps
+        # or refuses it. Swapping in the catalogue's first model instead ran
+        # the Mail agent on ``tencent/hy4`` without a word (CHAT-36).
+        logger.warning(
+            "model %s is not in the account catalogue; sending it as named",
+            preferred_model_id,
+        )
+        return ResolvedModel(model_id=preferred_model_id, provider_slug=preferred_provider or None)
     chosen: dict[str, Any] | None = None
     for candidate in (preferred_model_id, default_model_id):
         if candidate and candidate in by_id:
@@ -735,6 +752,20 @@ class BackendModelClient:
         model's cheapest provider, the API's own fallback)."""
         return self._provider_slug
 
+    @property
+    def request_max_tokens(self) -> int:
+        """The ``max_tokens`` every request sends: this client's cap, else
+        the catalogue's output cap, never above
+        :data:`DEFAULT_REQUEST_MAX_TOKENS`.
+
+        A request without it lets the upstream reserve the model's whole
+        output window. OpenRouter checks that reserve against the account
+        credit and answers ``402``, which api.chuk.chat passes on as ``502``
+        (2026-11-12: every DeepSeek and GLM 5.3 run of the Mail agent failed
+        so, while the same call with ``max_tokens`` went through)."""
+        cap = self._max_tokens or self._max_output_tokens or DEFAULT_REQUEST_MAX_TOKENS
+        return max(1, min(int(cap), DEFAULT_REQUEST_MAX_TOKENS))
+
     def chat_spec(self) -> dict[str, Any]:
         """What this client runs on, for the agent loop's streaming model
         (``chuk_agents_runtime.pai.wiring``)."""
@@ -744,6 +775,7 @@ class BackendModelClient:
             "provider_slug": self._provider_slug,
             "reasoning_effort": self._reasoning_effort,
             "base_url": self._base_url,
+            "max_tokens": self.request_max_tokens,
         }
 
     # -- ModelClient -----------------------------------------------------
@@ -793,7 +825,7 @@ class BackendModelClient:
                 model_id=self._model_id,
                 provider_slug=self._provider_slug,
                 reasoning_effort=self._reasoning_effort,
-                max_tokens=self._max_tokens,
+                max_tokens=self.request_max_tokens,
                 temperature=self._temperature,
             ),
             base_url=self._base_url,

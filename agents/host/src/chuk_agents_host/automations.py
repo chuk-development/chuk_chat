@@ -1650,8 +1650,17 @@ class AutomationManager:
         ok: bool = True,
         error: str | None = None,
         transient: bool = False,
+        unreachable: list[str] | None = None,
     ) -> dict | None:
         """The run of an automation ended.
+
+        ``unreachable`` names the session's connectors that did not connect
+        in this run (CHAT-38). An ``on_change`` run that lacked one may
+        report "nothing new" only because it could not look: the Mail
+        agent's hourly Fastmail check said so for three weeks while its
+        Fastmail sign-in was dead. So the first run of such an incident is a
+        change with a note in front of the summary; the same set of
+        connectors again stays quiet until a run connects them all.
 
         A failed run first goes through the guards (docs/WIRE_CONTRACT.md,
         "Automation guards"): a transient failure before the model answered
@@ -1681,18 +1690,26 @@ class AutomationManager:
                 self._emit(self.store.get(automation_id) or row, EVENT_RESULT, run_id=run_id, extra=guarded)
                 return guarded
             row = self.store.get(automation_id) or row
-        else:
+        elif not unreachable:
             self._resolve_incident(row)
             row = self.store.get(automation_id) or row
         if (row.get("notify") or NOTIFY_ALWAYS) != NOTIFY_ON_CHANGE:
             return None
+        alert = self._connector_alert(row, unreachable) if ok and unreachable else None
+        if alert is not None:
+            row = self.store.get(automation_id) or row
         if not ok or reported is None or reported.get("automation_id") != automation_id:
             outcome = {"changed": True, "reported": False}
+            if alert is not None:
+                outcome["summary"] = alert
             self._emit(row, EVENT_RESULT, run_id=run_id, extra=outcome)
             return outcome
         summary = str(reported.get("summary") or "")
         digest = summary_digest(summary)
         changed = decide_changed(bool(reported.get("changed")), digest, row.get("last_digest"))
+        if alert is not None:
+            changed = True
+            summary = f"{alert}\n\n{summary}" if summary else alert
         fields: dict[str, Any] = {
             "last_digest": digest,
             "last_summary": summary,
@@ -1741,6 +1758,29 @@ class AutomationManager:
             self._log(f"[automations] {row['id']}: same error again, not notified")
             return {"changed": False, "reported": False, "repeated_error": True}
         return None
+
+    def _connector_alert(self, row: dict, unreachable: list[str]) -> str | None:
+        """The note for a run that missed connectors, once per incident.
+        ``None`` when the same connectors were already reported."""
+        names = sorted({str(n) for n in unreachable if str(n).strip()})
+        if not names:
+            return None
+        error = "connectors not reachable: " + ", ".join(names)
+        digest = error_digest(error)
+        same = row.get("incident_digest") == digest and int(row.get("incident_count") or 0) > 0
+        self.store.update(
+            row["id"],
+            incident_digest=digest,
+            incident_count=int(row.get("incident_count") or 0) + 1 if same else 1,
+            last_error=error[:500],
+        )
+        if same:
+            self._log(f"[automations] {row['id']}: same connectors unreachable, not notified again")
+            return None
+        return (
+            f"Could not reach {', '.join(names)}: the sign-in may have expired. "
+            "Connect it again in the app. Until then this check cannot see that data."
+        )
 
     def _resolve_incident(self, row: dict) -> None:
         fields: dict[str, Any] = {}

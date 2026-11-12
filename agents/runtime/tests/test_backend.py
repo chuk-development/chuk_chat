@@ -20,6 +20,7 @@ import pytest
 
 from chuk_agents_runtime.backend import (
     clamp_reasoning_effort,
+    DEFAULT_REQUEST_MAX_TOKENS,
     BackendModelClient,
     BackendModelError,
     SupabaseSession,
@@ -141,8 +142,9 @@ def test_payload_is_the_openai_request_with_the_provider_pin():
     assert body["provider"] == "fireworks/serverless"
     assert body["reasoning_effort"] == "low"
     assert not body.get("stream")
-    # The WebSocket route ignored sampling fields; nothing is forced here.
-    assert "max_tokens" not in body and "max_completion_tokens" not in body
+    # Always a cap: without one OpenRouter reserves the model's whole output
+    # window against the credit and refuses (402 -> 502).
+    assert body["max_completion_tokens"] == DEFAULT_REQUEST_MAX_TOKENS
     assert "temperature" not in body
     messages = body["messages"]
     assert messages[0] == {"role": "system", "content": "be brief"}
@@ -287,6 +289,7 @@ def test_chat_spec_describes_the_client_for_the_loop():
         "provider_slug": "fireworks",
         "reasoning_effort": "high",
         "base_url": "https://api.test",
+        "max_tokens": DEFAULT_REQUEST_MAX_TOKENS,
     }
 
 
@@ -497,6 +500,14 @@ def test_resolve_model_honours_preferences():
 def test_resolve_model_falls_back_to_first_when_default_absent():
     resolved = resolve_model(_MODELS, default_model_id="does/not-exist")
     assert resolved.model_id == "openai/gpt-oss-20b"
+
+
+def test_resolve_model_sends_an_uncatalogued_chosen_model_as_named():
+    """CHAT-36: a chosen id the catalogue does not list (an alias the API
+    still routes) is not swapped for the first catalogue model."""
+    resolved = resolve_model(_MODELS, preferred_model_id="deepseek/deepseek-v4-flash-0731")
+    assert resolved.model_id == "deepseek/deepseek-v4-flash-0731"
+    assert resolved.provider_slug is None
 
 
 def test_fetch_models_info_uses_bearer_token():

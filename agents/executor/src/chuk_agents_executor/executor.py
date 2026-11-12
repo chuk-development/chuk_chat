@@ -380,6 +380,13 @@ MCP_TOOLS_CACHE_FILE = "mcp-tools-cache.json"
 #: The OAuth grants of the forwarded connectors, shared by every session and
 #: probe of this process and kept over a restart (bead chuk_chat-mj2o).
 MCP_GRANTS_FILE = "mcp-grants.json"
+#: The agent's own model (CHAT-36): the frame that sets it, its answer, and
+#: the ``session_features`` kind that stores it.
+AGENT_MODEL_SET = "agent_model_set"
+AGENT_MODEL_REPLY = "agent_model"
+AGENT_MODEL_FEATURE = "agent_model"
+#: The sealed connector list of each session (CHAT-37), next to the grants.
+MCP_FORWARDED_FILE = "mcp-forwarded.json"
 
 # Fields of a forwarded ``mcp_servers`` entry that ROTATE without the connector
 # changing (docs/WIRE_CONTRACT.md, "A rotated token is not a changed connector"):
@@ -1678,6 +1685,9 @@ class Executor:
             _mcp_grants.GRANTS.set_path(
                 os.path.join(os.path.dirname(os.path.abspath(db_path)), MCP_GRANTS_FILE)
             )
+            _mcp_grants.FORWARDED.set_path(
+                os.path.join(os.path.dirname(os.path.abspath(db_path)), MCP_FORWARDED_FILE)
+            )
         # Per session, per connector: the refresh token the connector was
         # STARTED with (the device's forward at build time). It is the reference
         # that tells a device re-sign-in (new token ≠ baseline → adopt) apart
@@ -2185,6 +2195,12 @@ class Executor:
             # The question card is on screen or not: the wait pauses while it is.
             self._handle_ask_visible(payload)
             return
+        if kind == AGENT_MODEL_SET:
+            # The agent's own model (CHAT-36): stored on the host so every
+            # run of the thread, scheduled ones included, uses it. Answered
+            # with one terminal ``agent_model`` frame.
+            self._handle_agent_model_set(request_id, payload)
+            return
         if kind == "secrets":
             # The user's whole secret set (docs/WIRE_CONTRACT.md, "Secrets"):
             # replace what the vault holds and wake a tool waiting for it. A
@@ -2331,6 +2347,14 @@ class Executor:
         model = payload.get("model") or None
         provider = payload.get("provider") or None
         reasoning_effort = payload.get("reasoning_effort") or None
+        # The agent's own model, when the host stores one, wins over what the
+        # task names (CHAT-36): a reinstalled app forgot it and sends its
+        # default. Every app change reaches the host first (``agent_model_set``).
+        stored = self._agent_model(str(session_key))
+        if stored is not None:
+            model = stored["id"]
+            provider = stored.get("provider")
+            reasoning_effort = stored.get("reasoning_effort")
         run = _Run(
             request_id=request_id,
             session_key=str(session_key),
@@ -2541,6 +2565,16 @@ class Executor:
             model = last.get("model") or None
             provider = last.get("provider") or None
             effort = last.get("reasoning_effort") or None
+        # The agent's own model, stored on the host, wins over the last run
+        # (CHAT-36). A ``new``-target chat runs in its owner's model.
+        owner = session_key
+        if not self._agent_model(owner) and isinstance(meta.get("mode_session_key"), str):
+            owner = meta["mode_session_key"] or session_key
+        stored = self._agent_model(owner)
+        if stored is not None:
+            model = stored["id"]
+            provider = stored.get("provider")
+            effort = stored.get("reasoning_effort")
         # The restricted mail run (docs/AGENT_MAIL.md §7) runs on the host's
         # default model: its session is new, and the user's mode belongs to
         # the user's own threads.
@@ -3158,6 +3192,9 @@ class Executor:
         ``None`` when the session has never run: the panel then shows no model
         rather than a guess.
         """
+        stored = self._agent_model(session_key)
+        if stored is not None:
+            return {**stored, "source": "agent"}
         for row in reversed(rows):
             model_id = row.get("model")
             if model_id:
@@ -6239,7 +6276,16 @@ class Executor:
             return None
         try:
             if ok:
-                outcome = finish(run.run_id, run.automation_id, ok=ok)
+                unreachable = self._unreachable_connectors(run.session_key)
+                if unreachable:
+                    try:
+                        outcome = finish(
+                            run.run_id, run.automation_id, ok=ok, unreachable=unreachable
+                        )
+                    except TypeError:  # an older host hook
+                        outcome = finish(run.run_id, run.automation_id, ok=ok)
+                else:
+                    outcome = finish(run.run_id, run.automation_id, ok=ok)
             else:
                 # The guards (retry ladder, one alert per incident) need the
                 # error and whether it was the network before the model
@@ -6266,6 +6312,101 @@ class Executor:
         if outcome.get("repeated_error"):
             out["repeated_error"] = True
         return out
+
+    # -- the agent's own model (CHAT-36) ----------------------------------
+    def _agent_model(self, session_key: str) -> dict | None:
+        """The model this thread's agent is set to, or ``None`` (it follows
+        the task / the last run). ``{"id", "provider"?, "reasoning_effort"?}``."""
+        if not session_key:
+            return None
+        try:
+            store = StateStore(self._db_path)
+            try:
+                data = store.load_feature(session_key, AGENT_MODEL_FEATURE)
+            finally:
+                store.close()
+        except Exception:  # noqa: BLE001 — no stored model, the old rule
+            return None
+        if not data or not isinstance(data.get("id"), str) or not data["id"].strip():
+            return None
+        out = {"id": data["id"].strip()}
+        for key in ("provider", "reasoning_effort"):
+            value = data.get(key)
+            if isinstance(value, str) and value.strip():
+                out[key] = value.strip()
+        return out
+
+    def set_agent_model(
+        self,
+        session_key: str,
+        model: str | None,
+        *,
+        provider: str | None = None,
+        reasoning_effort: str | None = None,
+    ) -> dict | None:
+        """Store (or with ``model=None`` drop) the agent's own model. Returns
+        what is stored now (docs/agents/AGENT_MODEL.md)."""
+        data = None
+        if isinstance(model, str) and model.strip():
+            data = {"id": model.strip()}
+            if isinstance(provider, str) and provider.strip():
+                data["provider"] = provider.strip()
+            if isinstance(reasoning_effort, str) and reasoning_effort.strip():
+                data["reasoning_effort"] = reasoning_effort.strip()
+        store = StateStore(self._db_path)
+        try:
+            store.save_feature(session_key, AGENT_MODEL_FEATURE, data)
+        finally:
+            store.close()
+        logger.info(
+            "agent model %s session=%s model=%s",
+            "set" if data else "cleared", session_key, data["id"] if data else "-",
+        )
+        return self._agent_model(session_key)
+
+    def _handle_agent_model_set(self, request_id: str, payload: dict) -> None:
+        session_key = payload.get("session_key")
+        reply: dict = {"type": AGENT_MODEL_REPLY, "session_key": session_key if isinstance(session_key, str) else ""}
+        if not isinstance(session_key, str) or not session_key:
+            self._terminal(request_id, {**reply, "error": "agent_model_set needs a session_key"})
+            return
+        model = payload.get("model")
+        try:
+            stored = self.set_agent_model(
+                session_key,
+                model if isinstance(model, str) else None,
+                provider=payload.get("provider") if isinstance(payload.get("provider"), str) else None,
+                reasoning_effort=(
+                    payload.get("reasoning_effort")
+                    if isinstance(payload.get("reasoning_effort"), str)
+                    else None
+                ),
+            )
+        except Exception as exc:  # noqa: BLE001 — the serve loop must survive
+            self._terminal(request_id, {**reply, "error": f"agent model failed: {type(exc).__name__}"})
+            return
+        self._terminal(request_id, {**reply, "model": stored})
+
+    def _unreachable_connectors(self, session_key: str) -> list[str]:
+        """The session's forwarded connectors that are not connected now
+        (CHAT-38). The browser entry is the host's own and is left out; a
+        connector the user turned off is not "unreachable". Never raises."""
+        try:
+            with self._mcp_lock:
+                manager = self._mcp_managers.get(session_key)
+            if manager is None:
+                return []
+            names: list[str] = []
+            for row in manager.status():
+                server = str(row.get("server") or "")
+                if not server or server == "playwright" or row.get("connected"):
+                    continue
+                if row.get("error") in (None, "", "disabled"):
+                    continue
+                names.append(server)
+            return names
+        except Exception:  # noqa: BLE001 — bookkeeping must not mask a result
+            return []
 
     # -- agent mail (docs/AGENT_MAIL.md §7) --------------------------------
     def _handle_mail_key(self, request_id: str, payload: dict) -> None:
@@ -6680,10 +6821,25 @@ class Executor:
         with self._mcp_lock:
             if run.mcp_servers is not None:
                 self._mcp_forwarded[session_key] = list(run.mcp_servers)
-                return list(run.mcp_servers)
-            if run.origin in CONNECTORLESS_ORIGINS:
-                return list(self._mcp_forwarded.get(session_key) or [])
-        return []
+                forwarded = list(run.mcp_servers)
+            elif run.origin in CONNECTORLESS_ORIGINS:
+                cached = self._mcp_forwarded.get(session_key)
+                if cached is not None:
+                    return list(cached)
+                forwarded = None
+            else:
+                return []
+        if forwarded is not None:
+            # On disk too, so a scheduled run after a host restart still has
+            # the session's connectors (CHAT-37). Sealed, no access tokens.
+            _mcp_grants.FORWARDED.put(session_key, forwarded)
+            return forwarded
+        stored = _mcp_grants.FORWARDED.get(session_key)
+        if stored is None:
+            return []
+        with self._mcp_lock:
+            self._mcp_forwarded.setdefault(session_key, list(stored))
+        return list(stored)
 
     def _forget_session_mcp(self, *, close: bool, session_key: str) -> None:
         """Drop everything cached for this session's MCP connectors.

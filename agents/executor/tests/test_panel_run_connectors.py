@@ -103,3 +103,29 @@ def test_an_app_task_without_a_list_does_not_borrow_one(tmp_path):
     _manager_for(executor, _run("app", _servers()))
     assert executor._forwarded_mcp_servers(_run("app", None), "s") == []
     executor._close_mcp_managers()
+
+
+def test_an_automation_after_a_restart_keeps_the_connectors(tmp_path):
+    """CHAT-37: the list is on disk (sealed), so a new executor's automation
+    run still speaks to the session's connectors."""
+    import os
+
+    from chuk_agents_runtime import mcp_client
+
+    saved_key, saved_path = mcp_client.GRANTS._key, mcp_client.FORWARDED._path
+    mcp_client.GRANTS.set_key(os.urandom(32))
+    mcp_client.FORWARDED.set_path(tmp_path / "mcp-forwarded.json")
+    try:
+        first = _executor(tmp_path)
+        first._forwarded_mcp_servers(_run("app", _servers()), "s")
+        first._close_mcp_managers()
+        # A restart: a new executor, an empty memory, the same disk.
+        mcp_client.FORWARDED.set_path(tmp_path / "mcp-forwarded.json")
+        second = _executor(tmp_path)
+        names = {e["name"] for e in second._forwarded_mcp_servers(_run("automation", None), "s")}
+        assert names == {e["name"] for e in _servers()}
+        assert all("access_token" not in e for e in second._forwarded_mcp_servers(_run("automation", None), "s"))
+        second._close_mcp_managers()
+    finally:
+        mcp_client.GRANTS._key = saved_key
+        mcp_client.FORWARDED.set_path(saved_path)

@@ -1189,10 +1189,125 @@ class GrantKeeper:
                 logger.warning("mcp grant keeper failed: %s", type(exc).__name__)
 
 
+#: Additional authenticated data of the sealed connector-list file.
+_FORWARDED_AAD = b"chuk-agents/mcp-forwarded-at-rest/v1"
+
+
+class ForwardedConnectorStore:
+    """The connector list each session's last app task forwarded, on disk
+    (CHAT-37).
+
+    An automation, a mail wake or a goal round carries no ``mcp_servers`` of
+    its own: it speaks to the connectors the session's last app task brought.
+    That list used to live only in the executor's memory, so after any host
+    restart every scheduled run of a thread ran with no connectors at all
+    until the user wrote in that thread again. The Mail agent's hourly
+    Fastmail check ran three weeks that way and read the wrong mailbox.
+
+    Sealed with the grant store's key (AES-256-GCM, its own AAD); without a
+    key nothing is written and the list stays in memory only, as before.
+    Access tokens are never written: an oauth entry is rebuilt from its
+    refresh token, which :data:`GRANTS` keeps current.
+    """
+
+    def __init__(self, grants: "OAuthGrantStore", path: str | os.PathLike | None = None) -> None:
+        self._grants = grants
+        self._path = Path(path) if path else None
+        self._lock = threading.Lock()
+        self._data: dict[str, list[dict]] | None = None
+
+    def set_path(self, path: str | os.PathLike | None) -> None:
+        with self._lock:
+            self._path = Path(path) if path else None
+            self._data = None
+
+    @staticmethod
+    def _strip(entries: list[dict]) -> list[dict]:
+        out: list[dict] = []
+        for entry in entries:
+            if isinstance(entry, dict):
+                out.append({k: v for k, v in entry.items() if k != "access_token"})
+        return out
+
+    def _key(self) -> bytes | None:
+        return getattr(self._grants, "_key", None)
+
+    def _load_locked(self) -> dict[str, list[dict]]:
+        if self._data is not None:
+            return self._data
+        data: dict[str, list[dict]] = {}
+        key = self._key()
+        if self._path is not None and key is not None:
+            try:
+                raw = json.loads(self._path.read_text(encoding="utf-8"))
+                from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+                nonce = base64.b64decode(raw["nonce"], validate=True)
+                sealed = base64.b64decode(raw["ciphertext"], validate=True)
+                plain = json.loads(AESGCM(key).decrypt(nonce, sealed, _FORWARDED_AAD))
+                if isinstance(plain, dict):
+                    data = {
+                        str(k): [e for e in v if isinstance(e, dict)]
+                        for k, v in plain.items()
+                        if isinstance(v, list)
+                    }
+            except Exception:  # noqa: BLE001 — no file or a foreign key is an empty store
+                data = {}
+        self._data = data
+        return data
+
+    def get(self, session_key: str) -> list[dict] | None:
+        """The stored list of ``session_key`` (a copy), or ``None``."""
+        with self._lock:
+            entries = self._load_locked().get(session_key)
+            return [dict(e) for e in entries] if entries is not None else None
+
+    def put(self, session_key: str, entries: list[dict]) -> None:
+        """Remember ``entries`` for ``session_key``. Never raises."""
+        try:
+            with self._lock:
+                data = self._load_locked()
+                stripped = self._strip(entries)
+                if data.get(session_key) == stripped:
+                    return
+                data[session_key] = stripped
+                self._write_locked(data)
+        except Exception as exc:  # noqa: BLE001 — persistence must not fail a task
+            logger.info("mcp forwarded list not saved: %s", type(exc).__name__)
+
+    def _write_locked(self, data: dict[str, list[dict]]) -> None:
+        key = self._key()
+        if self._path is None or key is None:
+            return
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+        nonce = os.urandom(_GRANT_NONCE_LEN)
+        plain = json.dumps(data, separators=(",", ":")).encode("utf-8")
+        payload = {
+            "version": _GRANT_FILE_VERSION,
+            "nonce": base64.b64encode(nonce).decode("ascii"),
+            "ciphertext": base64.b64encode(
+                AESGCM(key).encrypt(nonce, plain, _FORWARDED_AAD)
+            ).decode("ascii"),
+        }
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self._path.with_name(f"{self._path.name}.{os.getpid()}.tmp")
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, self._path)
+
+
 #: The process-wide grant store. Every :class:`MCPConnection` uses it unless a
 #: test passes its own. The executor gives it a file next to its state db, and
 #: the host gives it the key that seals that file.
 GRANTS = OAuthGrantStore()
+
+#: The process-wide store of forwarded connector lists, sealed with
+#: :data:`GRANTS`' key. The executor gives it a file next to its state db.
+FORWARDED = ForwardedConnectorStore(GRANTS)
 
 
 #: Query parameters are where an API-key connector keeps the user's key: the

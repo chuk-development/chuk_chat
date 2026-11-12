@@ -465,3 +465,29 @@ def test_create_and_update_answers_echo_the_apps_request_id(tmp_path):
         )
     )
     assert "request_id" not in plain and plain["ok"] is True
+
+
+def test_on_change_tells_once_when_a_connector_was_unreachable(tmp_path):
+    """CHAT-38: "nothing new" from a run that could not reach its connector
+    is not silence. The first such run is a change with a note; the same
+    connector again is quiet; a run with every connector up closes it."""
+    host, clock = _Host(), _Clock()
+    manager = _manager(tmp_path, host, clock)
+    aid = manager.schedule("s1", "every 1h", "Check mail.", "mail", notify="on_change")["id"]
+
+    manager.bound("s1").for_run("run-1", aid).record_result(False, "nothing new")
+    first = manager.finish_run("run-1", aid, unreachable=["Fastmail"])
+    assert first["changed"] is True
+    assert first["summary"].startswith("Could not reach Fastmail")
+    assert first["summary"].endswith("nothing new")
+
+    manager.bound("s1").for_run("run-2", aid).record_result(False, "nothing new")
+    assert manager.finish_run("run-2", aid, unreachable=["Fastmail"])["changed"] is False
+
+    manager.bound("s1").for_run("run-3", aid).record_result(False, "nothing new")
+    assert manager.finish_run("run-3", aid)["changed"] is False
+    assert manager.store.get(aid)["incident_count"] == 0
+
+    # A new incident is told again.
+    manager.bound("s1").for_run("run-4", aid).record_result(False, "nothing new")
+    assert manager.finish_run("run-4", aid, unreachable=["Fastmail"])["changed"] is True

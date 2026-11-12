@@ -90,6 +90,7 @@ def openai_model_from_client(model: Any) -> tuple[Any, Any, Any, Any] | None:
         model_id=str(spec["model_id"]),
         provider_slug=spec.get("provider_slug") or None,
         reasoning_effort=spec.get("reasoning_effort"),
+        max_tokens=spec.get("max_tokens"),
     )
     base_url = str(spec.get("base_url") or "https://api.chuk.chat")
     session = spec["session"]
