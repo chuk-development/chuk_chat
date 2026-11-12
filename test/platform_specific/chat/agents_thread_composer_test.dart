@@ -1,8 +1,8 @@
 // The Agents phone thread's composer is chuk_chat's (docs/AGENTS_UI_UNIFY.md):
 // opening a thread does not take the focus (no keyboard), chuk's AI notice
-// sits under the composer and steps aside for the focus, and the plus and
-// mode menus are chuk's framed menus at radius 18, the plus menu offering
-// Workspace.
+// sits under the composer and steps aside for the focus, the plus menu is
+// chuk's framed menu at radius 18 offering Workspace, and there is no model
+// picker (CHAT-54).
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -168,30 +168,11 @@ void main() {
     expect(composerHasFocus(tester), isFalse);
   });
 
-  testWidgets('the mode menu is the M3E vertical menu, unframed', (
-    tester,
-  ) async {
+  testWidgets('the composer has no model picker: the model is set in the '
+      "agent's settings", (tester) async {
     await pumpPhoneThread(tester);
 
-    await tester.tap(find.byType(ChatModeSelector));
-    await tester.pumpAndSettle();
-
-    final MenuTileGroup group = tester.widget<MenuTileGroup>(
-      find.byType(MenuTileGroup),
-    );
-    expect(group.outerRadius, kMenuOuterRadius);
-    expect(
-      find.ancestor(
-        of: find.byType(MenuTileGroup),
-        matching: find.byWidgetPredicate(
-          (Widget w) =>
-              w is Container &&
-              w.decoration is BoxDecoration &&
-              (w.decoration! as BoxDecoration).border != null,
-        ),
-      ),
-      findsNothing,
-      reason: 'M3 Expressive menus have no outline',
-    );
+    expect(find.byType(ChatModeSelector), findsNothing);
+    expect(find.text('More models'), findsNothing);
   });
 }

@@ -3244,6 +3244,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   /// one level deeper inside its sheet. Same control as the mobile
   /// composer, so a reader moving between the two finds the same thing.
   Widget _buildModelControlPill({required bool isCompactMode}) {
+    // An Agents thread has no model picker: the agent's model is set in its
+    // settings ("Model", AgentModelPage) and nowhere else.
+    if (widget.agentsThread) return const SizedBox.shrink();
     // Rebuild when capability data hydrates: the reasoning levels below are
     // read synchronously, so a cold start would otherwise keep the graded
     // ladder for a binary/non-reasoning model until an unrelated rebuild.

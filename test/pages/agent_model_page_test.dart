@@ -18,6 +18,27 @@ import '../support/kv_cache_test_env.dart';
 const String _chat = 'host:alex';
 
 const List<AgentCatalogueModel> _catalogue = <AgentCatalogueModel>[
+  // The agent default (CHAT-54): what an agent with no own model runs on.
+  AgentCatalogueModel(
+    id: 'deepseek/deepseek-v4-flash-0731',
+    name: 'DeepSeek: V4 Flash',
+    providers: <AgentProvider>[
+      AgentProvider(
+        slug: 'fireworks/serverless',
+        name: 'Fireworks',
+        promptPrice: 0.0000002,
+        completionPrice: 0.0000008,
+        contextLength: 131072,
+      ),
+      AgentProvider(
+        slug: 'runanywhere/serverless',
+        name: 'RunAnywhere',
+        promptPrice: 0.0000001,
+        completionPrice: 0.0000004,
+        contextLength: 131072,
+      ),
+    ],
+  ),
   AgentCatalogueModel(
     id: 'z-ai/glm-5.3-flash',
     name: 'Z.ai: GLM 5.3 Flash',
@@ -128,13 +149,13 @@ void main() {
 
     final own = await ChatModelSelectionService.instance.load(_chat);
     expect(own, isNotNull);
-    expect(own!.modelId, 'z-ai/glm-5.3-flash');
+    expect(own!.modelId, 'deepseek/deepseek-v4-flash-0731');
     expect(own.providerSlug, 'runanywhere/serverless');
     expect(own.reasoningEffort, 'low');
     expect(find.text('Own choice for Alex'), findsOneWidget);
     expect(find.text('via RunAnywhere · Reasoning low'), findsOneWidget);
     expect(
-      find.text('Next message: GLM 5.3 Flash via RunAnywhere'),
+      find.text('Next message: V4 Flash via RunAnywhere'),
       findsOneWidget,
     );
   });
@@ -160,7 +181,7 @@ void main() {
 
     final own = await ChatModelSelectionService.instance.load(_chat);
     expect(own!.reasoningEffort, 'high');
-    expect(own.modelId, 'z-ai/glm-5.3-flash');
+    expect(own.modelId, 'deepseek/deepseek-v4-flash-0731');
     expect(own.providerSlug, 'fireworks/serverless');
   });
 

@@ -254,10 +254,18 @@ void main() {
       await details();
       expect(rightPane, findsNothing);
 
-      // The agent pill at the left of the header is the same toggle.
+      // The agent pill at the left of the header opens the pane on the
+      // agent's settings (CHAT-54); a second tap closes it.
       await tester.tap(find.byType(AgentChromePill));
       await tester.pumpAndSettle();
       expect(rightPane, findsOneWidget);
+      expect(
+        find.descendant(
+          of: rightPane,
+          matching: find.byType(AgentSettingsView),
+        ),
+        findsOneWidget,
+      );
       await tester.tap(find.byType(AgentChromePill));
       await tester.pumpAndSettle();
       expect(rightPane, findsNothing);
@@ -290,6 +298,70 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.getSize(rightPane).width, kDeskDetailsDefault + 40);
       expect(rightPane, findsOneWidget);
+    });
+  });
+
+  group("an agent's settings open in the right pane on a desktop window", () {
+    Finder settingsInPane() => find.descendant(
+      of: rightPane,
+      matching: find.byType(AgentSettingsView),
+    );
+
+    Future<void> closePane(WidgetTester tester) async {
+      if (rightPane.evaluate().isEmpty) return;
+      await tester.tap(find.byTooltip('Close (Esc)'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('from Settings in the header\'s "…" menu', (tester) async {
+      await pumpDesktop(tester);
+      await closePane(tester);
+      await tester.tap(find.byTooltip('More actions'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Settings').last);
+      await tester.pumpAndSettle();
+      expect(settingsInPane(), findsOneWidget);
+      // Not a page over the window, not the centred modal.
+      expect(find.byType(AgentSettingsView), findsOneWidget);
+      expect(dialogBox, findsNothing);
+    });
+
+    testWidgets("from the roster row's Profile, for another agent", (
+      tester,
+    ) async {
+      final (roster, _) = await pumpDesktop(tester);
+      await closePane(tester);
+      final String id = roster.agents[2].id;
+      await tester.tap(
+        find.byKey(ValueKey<String>('agent-tile-$id')),
+        buttons: kSecondaryButton,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Profile'));
+      await tester.pumpAndSettle();
+      expect(settingsInPane(), findsOneWidget);
+      expect(
+        tester.widget<AgentSettingsView>(settingsInPane()).agentId,
+        id,
+      );
+      // The thread follows the agent whose settings are shown.
+      expect(selectedThread(tester), roster.agents[2].threads.single.key);
+    });
+
+    testWidgets('a row inside opens its page inside the pane', (tester) async {
+      await pumpDesktop(tester);
+      await closePane(tester);
+      await tester.tap(find.byType(AgentChromePill));
+      await tester.pumpAndSettle();
+      final Finder profileRow = find.descendant(
+        of: rightPane,
+        matching: find.text('Profile & preferences'),
+      );
+      await tester.tap(profileRow);
+      await tester.pumpAndSettle();
+      // The profile page sits in the pane, over the settings list.
+      expect(rightPane, findsOneWidget);
+      expect(settingsInPane(), findsNothing);
     });
   });
 

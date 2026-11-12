@@ -999,9 +999,12 @@ class _MessengerShellState extends State<MessengerShell>
   /// same content ([_agentSettings] with `page: false`).
   @override
   void _openAgentProfile(AgentsAgent agent) {
-    Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(builder: (_) => _agentSettings(agent)),
-    );
+    // A desktop window shows an agent's settings in the right pane, next to
+    // the thread (owner, 2026-11-12). A phone has no room for a side panel.
+    if (!_isPhone && _deskOpenAgentSettings(agent)) return;
+    // The one settings pattern: a page on a phone, the settings modal on a
+    // desktop window (settings_surface.dart, docs/DESIGN.md §2).
+    unawaited(openSettingsSurface(context, (_) => _agentSettings(agent)));
   }
 
   /// The one agent settings content. [page] true: the phone-style page with

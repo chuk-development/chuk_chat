@@ -243,11 +243,13 @@ One record per agent, one page to change it, one app default.
 
 | What | Where it is set | Where it is stored |
 |---|---|---|
-| An agent's own model, provider, reasoning level | `AgentModelPage` (`lib/pages/agent_model_page.dart`), reached from the profile ("Model" row on phone and desktop), the desktop details pane, the phone "Host & activity" page and the composer's "More models". The composer of that agent's thread writes the same record: a model pick or a reasoning level becomes the agent's own; Fast / Thinking drop it again. | `ChatModelSelectionService`, keyed by the thread key, on this device. `AgentModel` (`lib/services/agents/agent_model.dart`) resolves own-or-default. |
-| The app default (new chats, and every agent with no own model) | Settings → Model Selection (`ModelSelectorPage` unscoped): the Fast / Thinking cards. | `ChatModeService`, account-wide mode. |
+| An agent's own model, provider, reasoning level | `AgentModelPage` (`lib/pages/agent_model_page.dart`), reached from the profile ("Model" row on phone and desktop), the desktop details pane and the phone "Host & activity" page. An Agents thread's composer has no model picker (CHAT-54). | `ChatModelSelectionService`, keyed by the thread key, on this device. `AgentModel` (`lib/services/agents/agent_model.dart`) resolves own-or-default. |
+| The agent default (every agent with no own model) | Fixed: DeepSeek V4 Flash (`deepseek/deepseek-v4-flash-0731`, `AgentModel.defaultConfig`). | Code constant. |
+| The app default (plain chats) | Settings → Model Selection (`ModelSelectorPage` unscoped): the Fast / Thinking cards. | `ChatModeService`, account-wide mode. |
 | What the last run really used | Read only: "Last run" on the model page and in the details pane. | The host's status frame (`AgentModelChoice`). |
 
 The relay send resolves the own record again at send time, reasoning level
-included (`AgentsChatTransport`), so the composer cannot send something the
-profile does not show. `ModelSelectorPage(chatId: …)` is the agent page.
+included (`AgentsChatTransport`), and falls back to the agent default, never
+to the composer's mode, so the composer cannot send something the profile
+does not show. `ModelSelectorPage(chatId: …)` is the agent page.
 The record is per device: the host stores no agent model.

@@ -114,8 +114,10 @@ void main() {
     final Rect mic = tester.getRect(
       find.descendant(of: composer, matching: findIcon(Icons.mic)),
     );
-    final Rect pill = tester.getRect(
+    // An Agents thread has no model picker (CHAT-54).
+    expect(
       find.descendant(of: composer, matching: find.byType(ChatModeSelector)),
+      findsNothing,
     );
 
     // The target shares the field's first line: it does not stand on a row
@@ -129,7 +131,7 @@ void main() {
     expect(field.top, lessThan(send.center.dy));
 
     // Every action-row target shares one vertical centre, under the field.
-    for (final Rect r in <Rect>[add, pill, mic]) {
+    for (final Rect r in <Rect>[add, mic]) {
       expect(r.center.dy, closeTo(mic.center.dy, 1));
       expect(r.top, greaterThanOrEqualTo(field.bottom));
     }

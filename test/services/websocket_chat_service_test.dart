@@ -14,6 +14,7 @@ import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import 'package:chuk_chat/services/agents/agents_task_outbox.dart';
 import 'package:chuk_chat/services/settings/verbose_service.dart';
 import 'package:chuk_chat/services/agents/agents_chat_transport.dart';
+import 'package:chuk_chat/services/agents/agent_model.dart';
 import 'package:chuk_chat/services/chat_model_selection_service.dart';
 
 import '../support/fake_relay_controller.dart';
@@ -139,14 +140,18 @@ void main() {
     return seen;
   }
 
-  test('the task carries the session key and the composer settings', () async {
+  test('the task carries the session key and, for an agent with no own '
+      'model, the agent default (not the composer model)', () async {
     await run(const <AgentsRelayInbound>[AgentsRelayDone(reason: 'finished')]);
 
+    final ChatModelSelection agentDefault = AgentModel.defaultSelection;
     expect(controller.tasks, <String>['do the thing']);
     expect(controller.taskSessionKeys, <String>[sessionKey]);
-    expect(controller.taskModelIds, <String?>['gpt-5']);
-    expect(controller.taskProviderSlugs, <String?>['openai']);
-    expect(controller.taskReasoning, <String?>['low']);
+    expect(controller.taskModelIds, <String?>[
+      'deepseek/deepseek-v4-flash-0731',
+    ]);
+    expect(controller.taskProviderSlugs, <String?>[agentDefault.providerSlug]);
+    expect(controller.taskReasoning, <String?>[agentDefault.reasoningEffort]);
     // Quiet by default: no debug echo is asked for.
     expect(controller.taskDebugFlags, <bool>[false]);
   });
@@ -178,8 +183,8 @@ void main() {
   );
 
   test(
-    'an agent with its own reasoning level runs at it, one without keeps '
-    'the composer level',
+    'an agent with its own reasoning level runs at it, one without runs '
+    'on the agent default',
     () async {
       await ChatModelSelectionService.instance.save(
         'own',
@@ -191,9 +196,13 @@ void main() {
       );
       await run(const [AgentsRelayDone(reason: 'finished')], chatId: 'own');
       await run(const [AgentsRelayDone(reason: 'finished')], chatId: 'plain');
-      expect(controller.taskModelIds, ['own-model', 'gpt-5']);
-      expect(controller.taskProviderSlugs, ['own-provider', 'openai']);
-      expect(controller.taskReasoning, ['high', 'low']);
+      final ChatModelSelection agentDefault = AgentModel.defaultSelection;
+      expect(controller.taskModelIds, ['own-model', agentDefault.modelId]);
+      expect(controller.taskProviderSlugs, [
+        'own-provider',
+        agentDefault.providerSlug,
+      ]);
+      expect(controller.taskReasoning, ['high', agentDefault.reasoningEffort]);
     },
   );
 

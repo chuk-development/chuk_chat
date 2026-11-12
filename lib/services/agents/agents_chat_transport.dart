@@ -24,6 +24,7 @@ import 'package:chuk_chat/services/agents/agents_queued_marks.dart';
 import 'package:chuk_chat/services/agents/agents_task_outbox.dart';
 import 'package:chuk_chat/services/settings/verbose_service.dart';
 import 'package:chuk_chat/services/chat_model_selection_service.dart';
+import 'package:chuk_chat/services/agents/agent_model.dart';
 
 /// Service for handling streaming chat responses.
 ///
@@ -161,11 +162,11 @@ class AgentsChatTransport {
         ? Future.value(
             ChatModelSelection(modelId: modelId, providerSlug: providerSlug),
           )
-        : ChatModelSelectionService.instance.resolveForSend(
-            sessionKey,
-            modelId: modelId,
-            providerSlug: providerSlug,
-          );
+        // The agent's own model, else the agent default: an Agents thread
+        // has no model picker, so the composer's mode never names the model.
+        : ChatModelSelectionService.instance
+              .load(sessionKey)
+              .then((own) => own ?? AgentModel.defaultSelection);
 
     // The local copies of the files this send carries (pictures and store
     // refs, all sealed on this device). They are uploaded with

@@ -47,6 +47,29 @@ its scroll view. That is what
 AGENTS_UI_UNIFY.md (section 5) decided; there is one settings look for both
 halves.
 
+**One settings pattern** (CHAT-29, both halves). Every settings menu is
+the same thing: a `FloatingPageScaffold` page with a `FloatingAppBar`, a
+`SettingsListView` and the `Expressive*` rows and sections
+(`lib/widgets/expressive_settings.dart`). Only the container changes, and
+it changes with the window, not with the half. On a phone the page is
+pushed full screen. On a desktop window it opens in the settings modal,
+the centred panel of the Chat settings (`SettingsModalFrame`); its own
+navigator keeps the pages it opens inside the panel, and its header ends
+in the close chip. Open every settings page with `openSettingsSurface`
+(`lib/widgets/settings_surface.dart`); never push a settings page with a
+bare `MaterialPageRoute` and never show one in a sheet or a dialog.
+**Agent settings on a desktop window are the exception: they open in the
+right side pane next to the thread** (the details pane, like Grok Bot;
+owner, CHAT-54). The agent pill in the thread header, "Settings" in the
+"…" menu, the roster row's "Profile" and the pane's gear all land there.
+The pane runs its own `SettingsSurfaceNavigator`, so a row in it (Model,
+Profile, Host & activity, ...) opens its page inside the pane. The Chat
+(app) settings stay in the centred modal. A phone has no room for a side
+panel: there the agent settings stay a full page. Confirm dialogs
+(delete?), pickers, editors of one item and viewers stay dialogs or
+sheets: they are not settings menus.
+Inventory and decisions: `docs/notes/implemented/SETTINGS_UNIFY_2026-11-12.md`.
+
 **One header on every agent sub-page** (bead chuk_chat-8hz4): the agent
 page, Host & activity, Permissions, Skills, connectors, Mail, Files, the
 model page, Control Rooms and the pairing page all use `FloatingPageScaffold`. The back target is always the bar's round

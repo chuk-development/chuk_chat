@@ -155,6 +155,40 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
     _deskScheduleSave();
   }
 
+  /// Opens [agent]'s settings ([AgentSettingsView]) in the right pane, the
+  /// side panel next to the thread. The chat header's agent pill, the "…"
+  /// menu's Settings and the roster row's Profile all land here; on a
+  /// desktop window the agent settings never open as a page or a modal.
+  /// Another agent is selected first, so the pane and the thread agree.
+  ///
+  /// [toggle]: a second tap on the pill closes the pane again. Returns false
+  /// when the pane cannot show (an agent with no thread, or a window too
+  /// narrow for it); the caller then opens the settings surface instead.
+  bool _deskOpenAgentSettings(AgentsAgent agent, {bool toggle = false}) {
+    if (toggle &&
+        _deskRightPane == 'details' &&
+        _deskDetailsSettingsFor == agent.id &&
+        agent.id == _selectedAgentId) {
+      _deskCloseRightPane();
+      return true;
+    }
+    final double width = MediaQuery.sizeOf(context).width;
+    if (width < kDeskRailWidth + 320 + 240) return false;
+    if (agent.id != _selectedAgentId) {
+      if (agent.threads.isEmpty) return false;
+      _select(agent.id, agent.threads.first.key);
+    }
+    _deskCloseRoom();
+    _leaveAgentsHome();
+    setState(() {
+      _deskRightPane = 'details';
+      _deskDetailsShownFor = agent.id;
+      _deskDetailsSettingsFor = agent.id;
+    });
+    _deskScheduleSave();
+    return true;
+  }
+
   void _deskCloseRightPane() {
     if (_deskRightPane == null) return;
     setState(() {
@@ -274,8 +308,8 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
 
   /// The thread header's "…" menu on the desktop. Documents, Call and Screen
   /// are the header's own chips, as on the phone; Control Rooms lives in the
-  /// roster. The details pane is also a tap on the agent pill, and
-  /// Ctrl+.
+  /// roster. The details pane is also Ctrl+.; the agent pill and Settings
+  /// open the pane on the agent's settings.
   List<AgentsThreadAction> _deskMenuActions(AgentsAgent? agent) =>
       <AgentsThreadAction>[
         if (agent != null)
@@ -292,8 +326,8 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
         ),
         if (agent != null)
           AgentsThreadAction(
-            icon: Icons.person_outline,
-            tooltip: 'Profile',
+            icon: Icons.settings_outlined,
+            tooltip: 'Settings',
             onPressed: () => _openAgentProfile(agent),
           ),
         if (agent != null)
@@ -427,9 +461,10 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
           child: Offstage(
             offstage: room != null || home,
             child: _buildThread(
+              // The agent pill opens the agent's settings on the right.
               onOpenAgent: agent == null
                   ? null
-                  : () => _deskToggleRightPane('details'),
+                  : () => _deskOpenAgentSettings(agent, toggle: true),
               menuActions: _deskMenuActions(agent),
             ),
           ),
@@ -582,54 +617,62 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
         ),
       );
     }
-    return Material(
-      type: MaterialType.transparency,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          // chuk's panel header in form (height, padding, hairline), with
-          // the back arrow where [PaneHeader] puts its icon.
-          Container(
-            height: 56,
-            padding: const EdgeInsets.only(left: 4, right: 12),
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: Theme.of(context).resolvedIconColor
-                      .withValues(alpha: 0.12),
-                ),
-              ),
-            ),
-            child: Row(
-              children: <Widget>[
-                FloatingHeaderButton(
-                  key: const ValueKey<String>('desk-details-back'),
-                  icon: Icons.arrow_back_rounded,
-                  tooltip: 'Back',
-                  onPressed: () =>
-                      setState(() => _deskDetailsSettingsFor = null),
-                ),
-                const SizedBox(width: 2),
-                const Expanded(
-                  child: Text(
-                    'Settings',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: PaneHeader.titleStyle,
+    // The settings run in their own navigator: a row inside them (Model,
+    // Profile, Host & activity, ...) opens its page inside this pane, on
+    // top of the settings, and its back chip returns here
+    // (openSettingsSurface finds this navigator).
+    return SettingsSurfaceNavigator(
+      key: ValueKey<String>('desk-settings-nav-${agent.id}'),
+      onClose: _deskCloseRightPane,
+      builder: (BuildContext context) => Material(
+        type: MaterialType.transparency,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            // chuk's panel header in form (height, padding, hairline), with
+            // the back arrow where [PaneHeader] puts its icon.
+            Container(
+              height: 56,
+              padding: const EdgeInsets.only(left: 4, right: 12),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: Theme.of(context).resolvedIconColor
+                        .withValues(alpha: 0.12),
                   ),
                 ),
-                FloatingHeaderButton(
-                  icon: Icons.refresh,
-                  tooltip: 'Refresh',
-                  onPressed: () => unawaited(_deskRefreshDetails(sessionKey)),
-                ),
-                closeButton,
-              ],
+              ),
+              child: Row(
+                children: <Widget>[
+                  FloatingHeaderButton(
+                    key: const ValueKey<String>('desk-details-back'),
+                    icon: Icons.arrow_back_rounded,
+                    tooltip: 'Back',
+                    onPressed: () =>
+                        setState(() => _deskDetailsSettingsFor = null),
+                  ),
+                  const SizedBox(width: 2),
+                  const Expanded(
+                    child: Text(
+                      'Settings',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: PaneHeader.titleStyle,
+                    ),
+                  ),
+                  FloatingHeaderButton(
+                    icon: Icons.refresh,
+                    tooltip: 'Refresh',
+                    onPressed: () => unawaited(_deskRefreshDetails(sessionKey)),
+                  ),
+                  closeButton,
+                ],
+              ),
             ),
-          ),
-          // The same settings content as the phone page, in the pane.
-          Expanded(child: _agentSettings(agent, page: false)),
-        ],
+            // The same settings content as the phone page, in the pane.
+            Expanded(child: _agentSettings(agent, page: false)),
+          ],
+        ),
       ),
     );
   }

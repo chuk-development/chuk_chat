@@ -189,10 +189,38 @@ class AgentModel {
     final own = chatId.isEmpty
         ? null
         : await ChatModelSelectionService.instance.load(chatId);
-    final mode = await ChatModeService.load();
-    final config = await ChatModeService.loadConfig(mode);
-    return AgentModelState(own: own, defaultMode: mode, defaultConfig: config);
+    return AgentModelState(
+      own: own,
+      defaultMode: defaultMode,
+      defaultConfig: defaultConfig,
+    );
   }
+
+  /// What an agent with no model of its own runs on: DeepSeek V4 Flash
+  /// (owner, 2026-11-12). Fixed for agents, not the composer's account-wide
+  /// mode: an Agents thread has no model picker, so the model is only ever
+  /// chosen in the agent's settings. The relay send falls back to it too
+  /// ([defaultSelection], `AgentsChatTransport`).
+  static const String defaultModelId = 'deepseek/deepseek-v4-flash-0731';
+
+  /// The default's provider, reasoning level and the mode it is labelled as.
+  static const ModeConfig defaultConfig = ModeConfig(
+    modelId: defaultModelId,
+    providerSlug: ChatModeService.defaultProviderSlug,
+    reasoningEffort: 'low',
+  );
+  static const ChatMode defaultMode = ChatMode.fast;
+
+  /// [defaultConfig] as the record the relay send resolves to.
+  static ChatModelSelection get defaultSelection => ChatModelSelection(
+    modelId: defaultConfig.modelId,
+    providerSlug: defaultConfig.providerSlug,
+    reasoningEffort: ChatModeService.sanitizeReasoningForModel(
+      defaultConfig.reasoningEffort,
+      modelId: defaultConfig.modelId,
+      providerSlug: defaultConfig.providerSlug,
+    ),
+  );
 
   /// How long a page or a row waits for the model data before it shows what
   /// it has ([fallbackState], a Retry row). The waiting widget owns the
@@ -219,23 +247,19 @@ class AgentModel {
             () => ChatModelSelectionService.instance.load(chatId),
             null,
           );
-    final ChatMode mode = await safely<ChatMode>(
-      ChatModeService.load,
-      ChatModeService.fallbackMode,
+    return AgentModelState(
+      own: own,
+      defaultMode: defaultMode,
+      defaultConfig: defaultConfig,
     );
-    final ModeConfig config = await safely<ModeConfig>(
-      () => ChatModeService.loadConfig(mode),
-      ChatModeService.defaultConfig(mode),
-    );
-    return AgentModelState(own: own, defaultMode: mode, defaultConfig: config);
   }
 
   /// What to show when the agent's model could not be read in time: the
-  /// built-in default mode and its model.
-  static AgentModelState fallbackState() => AgentModelState(
+  /// agent default.
+  static AgentModelState fallbackState() => const AgentModelState(
     own: null,
-    defaultMode: ChatModeService.fallbackMode,
-    defaultConfig: ChatModeService.defaultConfig(ChatModeService.fallbackMode),
+    defaultMode: defaultMode,
+    defaultConfig: defaultConfig,
   );
 
   /// The catalogue as this device last cached it. Empty before the first

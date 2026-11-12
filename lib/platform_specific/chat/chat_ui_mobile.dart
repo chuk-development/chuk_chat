@@ -4790,6 +4790,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     required bool isCompactMode,
     required Color iconFg,
   }) {
+    // An Agents thread has no model picker: the agent's model is set in its
+    // settings ("Model", AgentModelPage) and nowhere else.
+    if (widget.messengerMode) return const SizedBox.shrink();
     // Rebuild when capability data hydrates: the reasoning levels below are
     // read synchronously, so a cold start would otherwise keep the graded
     // ladder for a binary/non-reasoning model until an unrelated rebuild.
