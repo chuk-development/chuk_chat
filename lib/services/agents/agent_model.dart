@@ -196,12 +196,12 @@ class AgentModel {
     );
   }
 
-  /// What an agent with no model of its own runs on: DeepSeek V4 Flash
+  /// What an agent with no model of its own runs on: DeepSeek V4.1 Flash
   /// (owner, 2026-11-12). Fixed for agents, not the composer's account-wide
   /// mode: an Agents thread has no model picker, so the model is only ever
   /// chosen in the agent's settings. The relay send falls back to it too
   /// ([defaultSelection], `AgentsChatTransport`).
-  static const String defaultModelId = 'deepseek/deepseek-v4-flash-0731';
+  static const String defaultModelId = 'deepseek/deepseek-v4.1-flash-1017';
 
   /// The default's provider, reasoning level and the mode it is labelled as.
   static const ModeConfig defaultConfig = ModeConfig(

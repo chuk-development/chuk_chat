@@ -20,8 +20,8 @@ const String _chat = 'host:alex';
 const List<AgentCatalogueModel> _catalogue = <AgentCatalogueModel>[
   // The agent default (CHAT-54): what an agent with no own model runs on.
   AgentCatalogueModel(
-    id: 'deepseek/deepseek-v4-flash-0731',
-    name: 'DeepSeek: V4 Flash',
+    id: 'deepseek/deepseek-v4.1-flash-1017',
+    name: 'DeepSeek: V4.1 Flash',
     providers: <AgentProvider>[
       AgentProvider(
         slug: 'fireworks/serverless',
@@ -149,13 +149,13 @@ void main() {
 
     final own = await ChatModelSelectionService.instance.load(_chat);
     expect(own, isNotNull);
-    expect(own!.modelId, 'deepseek/deepseek-v4-flash-0731');
+    expect(own!.modelId, 'deepseek/deepseek-v4.1-flash-1017');
     expect(own.providerSlug, 'runanywhere/serverless');
     expect(own.reasoningEffort, 'low');
     expect(find.text('Own choice for Alex'), findsOneWidget);
     expect(find.text('via RunAnywhere · Reasoning low'), findsOneWidget);
     expect(
-      find.text('Next message: V4 Flash via RunAnywhere'),
+      find.text('Next message: V4.1 Flash via RunAnywhere'),
       findsOneWidget,
     );
   });
@@ -181,7 +181,7 @@ void main() {
 
     final own = await ChatModelSelectionService.instance.load(_chat);
     expect(own!.reasoningEffort, 'high');
-    expect(own.modelId, 'deepseek/deepseek-v4-flash-0731');
+    expect(own.modelId, 'deepseek/deepseek-v4.1-flash-1017');
     expect(own.providerSlug, 'fireworks/serverless');
   });
 

@@ -510,6 +510,22 @@ def test_resolve_model_sends_an_uncatalogued_chosen_model_as_named():
     assert resolved.provider_slug is None
 
 
+def test_resolve_model_runs_the_successor_of_a_retired_id():
+    """A retired id (the old app default 0731) runs on the catalogue entry
+    whose ``replaces`` names it, on that entry's cheapest provider."""
+    models = [
+        *_MODELS,
+        {
+            "id": "deepseek/deepseek-v4.1-flash-1017",
+            "replaces": ["deepseek/deepseek-v4-flash-0731"],
+            "providers": [{"slug": "deepseek", "pricing": {"completion": 0.0001}}],
+        },
+    ]
+    resolved = resolve_model(models, preferred_model_id="deepseek/deepseek-v4-flash-0731")
+    assert resolved.model_id == "deepseek/deepseek-v4.1-flash-1017"
+    assert resolved.provider_slug == "deepseek"
+
+
 def test_fetch_models_info_uses_bearer_token():
     seen = {}
 

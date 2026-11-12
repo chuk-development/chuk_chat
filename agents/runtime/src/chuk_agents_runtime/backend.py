@@ -436,6 +436,15 @@ def resolve_model(
 
     by_id = {m.get("id"): m for m in models if m.get("id")}
     if preferred_model_id and preferred_model_id not in by_id:
+        successor = _successor_of(models, preferred_model_id)
+        if successor is not None:
+            # A retired id (an old app default, a stored pin): the catalogue
+            # entry that ``replaces`` it runs instead, with no warning. The
+            # API would serve the successor anyway; naming it here keeps the
+            # run row, the cost line and the provider pick on the real model.
+            logger.info("model %s is retired; running %s", preferred_model_id, successor)
+            preferred_model_id = successor
+    if preferred_model_id and preferred_model_id not in by_id:
         # A model the user chose by name, which this account's catalogue does
         # not list (an older id the API still routes as an alias, e.g.
         # ``deepseek/deepseek-v4-flash-0731``). Sent as named: the API maps
@@ -602,6 +611,16 @@ def clamp_reasoning_effort(
     return weakest
 
 
+def _successor_of(models: list[dict[str, Any]], model_id: str) -> str | None:
+    """The catalogue model whose ``replaces`` list names ``model_id`` (the
+    API's retired-model table, ``/v1/models_info``), else ``None``."""
+    for entry in models:
+        replaces = entry.get("replaces")
+        if isinstance(replaces, list) and model_id in replaces and entry.get("id"):
+            return str(entry["id"])
+    return None
+
+
 def _default_effort(models: list[dict[str, Any]], model_id: str) -> str | None:
     for entry in models:
         if entry.get("id") == model_id:
@@ -616,10 +635,10 @@ def _default_effort(models: list[dict[str, Any]], model_id: str) -> str | None:
 #: Mem0 extraction run on it. It must be cheap and fast, and it must really
 #: turn reasoning off: ``glm-5.3-flash`` has mandatory reasoning, so
 #: ``reasoning_effort="none"`` was clamped to its weakest level and every
-#: summary still thought for 5-17k tokens. DeepSeek V4 Flash lists ``none``
-#: (reasoning is optional), costs $0.05 / $0.16 per M tokens and has a 1.3M
-#: context. Keep it equal to ``model.aux`` in chuk_agents_config.
-DEFAULT_AUX_MODEL = "deepseek/deepseek-v4-flash-0731"
+#: summary still thought for 5-17k tokens. DeepSeek V4.1 Flash (1017, the
+#: current Flash; 0731 is retired) lists ``none`` (reasoning is optional) and
+#: is cheap and fast. Keep it equal to ``model.aux`` in chuk_agents_config.
+DEFAULT_AUX_MODEL = "deepseek/deepseek-v4.1-flash-1017"
 DEFAULT_AUX_REASONING_EFFORT = "none"
 AUX_MODEL_ENV = "AGENTS_MODEL_AUX"
 AUX_PROVIDER_ENV = "AGENTS_MODEL_AUX_PROVIDER"

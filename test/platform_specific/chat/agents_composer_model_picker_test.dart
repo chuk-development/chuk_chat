@@ -1,6 +1,6 @@
 // CHAT-54: an Agents thread has no model picker. The agent's model is set
 // only in its settings ("Model" -> AgentModelPage); an agent with no model
-// of its own runs on DeepSeek V4 Flash. chuk_chat's own composer keeps its
+// of its own runs on DeepSeek V4.1 Flash. chuk_chat's own composer keeps its
 // Fast / Thinking picker unchanged.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -178,8 +178,8 @@ void main() {
   });
 
   group('the agent default model', () {
-    test('is DeepSeek V4 Flash', () async {
-      expect(AgentModel.defaultModelId, 'deepseek/deepseek-v4-flash-0731');
+    test('is DeepSeek V4.1 Flash', () async {
+      expect(AgentModel.defaultModelId, 'deepseek/deepseek-v4.1-flash-1017');
       expect(AgentModel.fallbackState().modelId, AgentModel.defaultModelId);
       expect(AgentModel.defaultSelection.modelId, AgentModel.defaultModelId);
     });
@@ -189,7 +189,7 @@ void main() {
         'host:no-own-model',
       );
       expect(state.followsDefault, isTrue);
-      expect(state.modelId, 'deepseek/deepseek-v4-flash-0731');
+      expect(state.modelId, 'deepseek/deepseek-v4.1-flash-1017');
     });
   });
 }
