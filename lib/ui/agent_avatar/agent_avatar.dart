@@ -43,8 +43,9 @@ import 'package:chuk_chat/utils/io_helper.dart' show Platform;
 export 'package:chuk_chat/ui/agent_avatar/avatar_rig.dart'
     show AgentAvatarState;
 
-/// The figure painter: the round figure ("D1 rund"). The square cube
-/// ([paintCubeAvatar]) is the other style; swap it here.
+/// A figure painter: the square cube ([paintCubeAvatar], the default) or
+/// the round figure ([paintRoundAvatar]), picked per agent in its profile
+/// ([AgentProfile.round]).
 typedef AgentAvatarPainter = void Function(
   Canvas canvas,
   double size,
@@ -53,7 +54,8 @@ typedef AgentAvatarPainter = void Function(
   bool dark,
 });
 
-const AgentAvatarPainter kAgentAvatarPainter = paintRoundAvatar;
+AgentAvatarPainter agentAvatarPainterFor({required bool round}) =>
+    round ? paintRoundAvatar : paintCubeAvatar;
 
 /// No activity for this long and the avatar sleeps.
 const Duration kAgentSleepAfter = Duration(hours: 6);
@@ -517,6 +519,7 @@ class _AgentAvatarState extends State<AgentAvatar>
               painter: _AvatarPainter(
                 frame: _frame,
                 accent: accent,
+                round: profile.round ?? false,
                 dpr: MediaQuery.devicePixelRatioOf(context),
               ),
             ),
@@ -578,6 +581,7 @@ class _Frame extends ChangeNotifier {
   double imageDpr = 0;
   double imageSize = 0;
   Color? imageAccent;
+  bool? imageRound;
 
   void tick() {
     version++;
@@ -603,11 +607,16 @@ class _Frame extends ChangeNotifier {
 /// which has no raster cache, does not re-raster an unchanged avatar every
 /// frame: it only draws the image again.
 class _AvatarPainter extends CustomPainter {
-  _AvatarPainter({required this.frame, required this.accent, required this.dpr})
-    : super(repaint: frame);
+  _AvatarPainter({
+    required this.frame,
+    required this.accent,
+    required this.round,
+    required this.dpr,
+  }) : super(repaint: frame);
 
   final _Frame frame;
   final Color accent;
+  final bool round;
   final double dpr;
 
   @override
@@ -620,11 +629,18 @@ class _AvatarPainter extends CustomPainter {
         frame.imageVersion != frame.version ||
         frame.imageDpr != dpr ||
         frame.imageSize != s ||
-        frame.imageAccent != accent) {
+        frame.imageAccent != accent ||
+        frame.imageRound != round) {
       final ui.PictureRecorder rec = ui.PictureRecorder();
       final Canvas c = Canvas(rec);
       c.scale(dpr);
-      kAgentAvatarPainter(c, s, accent, frame.pose, dark: frame.dark);
+      agentAvatarPainterFor(round: round)(
+        c,
+        s,
+        accent,
+        frame.pose,
+        dark: frame.dark,
+      );
       final ui.Picture picture = rec.endRecording();
       final ui.Image next = picture.toImageSync(px, px);
       picture.dispose();
@@ -635,6 +651,7 @@ class _AvatarPainter extends CustomPainter {
       frame.imageDpr = dpr;
       frame.imageSize = s;
       frame.imageAccent = accent;
+      frame.imageRound = round;
     }
     canvas.drawImageRect(
       image,
@@ -648,5 +665,8 @@ class _AvatarPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_AvatarPainter old) =>
-      old.accent != accent || old.frame != frame || old.dpr != dpr;
+      old.accent != accent ||
+      old.round != round ||
+      old.frame != frame ||
+      old.dpr != dpr;
 }

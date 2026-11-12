@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
 import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/ui/agent_avatar/agent_avatar.dart';
 
 final GlobalKey _shot = GlobalKey();
@@ -24,8 +25,14 @@ const List<String> _ids = <String>[
   'watcher',
 ];
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Two agents pick the round figure in their profile; the rest keep the
+  // square default.
+  await AgentProfileStore.instance.load();
+  for (final String id in <String>['research', 'watcher']) {
+    await AgentProfileStore.instance.update(id, round: true);
+  }
   runApp(const _Sheet());
   Timer(const Duration(seconds: 2), () async {
     final String dir =

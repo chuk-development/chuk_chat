@@ -86,6 +86,10 @@ class _AgentProfileEditPageState extends State<AgentProfileEditPage> {
   /// The colour picked in this session; null means "keep what is stored".
   int? _color;
   AgentAvatarShape? _shape;
+
+  /// The avatar figure picked in this session (true round, false square);
+  /// null means "keep what is stored".
+  bool? _round;
   bool _clearColor = false;
   bool _busy = false;
 
@@ -170,6 +174,7 @@ class _AgentProfileEditPageState extends State<AgentProfileEditPage> {
       colorValue: _color,
       clearColor: _clearColor,
       shape: _shape,
+      round: _round,
     );
     if (!mounted) return;
     setState(() => _busy = false);
@@ -249,6 +254,8 @@ class _AgentProfileEditPageState extends State<AgentProfileEditPage> {
                         store: _store,
                         overrideColor: shownColor,
                         shape: _shape ?? _store.profileOf(agent.id).shape,
+                        round:
+                            _round ?? _store.profileOf(agent.id).round ?? false,
                       ),
                       const SizedBox(height: 14),
                       Row(
@@ -294,6 +301,40 @@ class _AgentProfileEditPageState extends State<AgentProfileEditPage> {
                       ),
                     ),
                     ExpressiveCard(
+                      key: const ValueKey('avatar_figure'),
+                      padding: const EdgeInsets.all(14),
+                      child: Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: Text(
+                              'Avatar',
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                          ),
+                          SegmentedButton<bool>(
+                            showSelectedIcon: false,
+                            segments: const <ButtonSegment<bool>>[
+                              ButtonSegment<bool>(
+                                value: false,
+                                label: Text('Square'),
+                              ),
+                              ButtonSegment<bool>(
+                                value: true,
+                                label: Text('Round'),
+                              ),
+                            ],
+                            selected: <bool>{
+                              _round ??
+                                  _store.profileOf(agent.id).round ??
+                                  false,
+                            },
+                            onSelectionChanged: (Set<bool> v) =>
+                                setState(() => _round = v.first),
+                          ),
+                        ],
+                      ),
+                    ),
+                    ExpressiveCard(
                       padding: const EdgeInsets.all(14),
                       child: _ShapeRow(
                         agentId: agent.id,
@@ -314,6 +355,7 @@ class _AgentProfileEditPageState extends State<AgentProfileEditPage> {
                         _color = null;
                         _clearColor = true;
                         _shape = AgentAvatarShape.expressive;
+                        _round = false;
                       }),
                     ),
                   ],
@@ -337,7 +379,7 @@ class _AgentProfileEditPageState extends State<AgentProfileEditPage> {
                 const SizedBox(height: 16),
                 const ExpressiveInfoCard(
                   text:
-                      'Picture, shape, colour, role and brief are kept on '
+                      'Picture, figure, colour, role and brief are kept on '
                       'this device. The relay carries names only.',
                 ),
               ],
@@ -356,12 +398,14 @@ class _FacePreview extends StatelessWidget {
     required this.store,
     required this.overrideColor,
     required this.shape,
+    required this.round,
   });
 
   final AgentsAgent agent;
   final AgentProfileStore store;
   final int? overrideColor;
   final AgentAvatarShape? shape;
+  final bool round;
 
   @override
   Widget build(BuildContext context) {
@@ -378,6 +422,7 @@ class _FacePreview extends StatelessWidget {
               colorValue: overrideColor,
               clearColor: overrideColor == null,
               shape: shape,
+              round: round,
             ),
       ),
     );

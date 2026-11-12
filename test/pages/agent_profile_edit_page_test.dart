@@ -76,6 +76,50 @@ void main() {
     },
   );
 
+  testWidgets('the avatar figure is square by default and Round sticks', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = AgentProfileStore();
+    final source = LocalAgentRosterSource(
+      seed: [const AgentsAgent(id: 'alex', name: 'Alex', threads: [])],
+    );
+    addTearDown(store.dispose);
+    addTearDown(source.dispose);
+    await tester.pumpWidget(
+      testApp(
+        AgentProfileEditPage(
+          agent: source.agents.single,
+          source: source,
+          profiles: store,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(store.profileOf('alex').round, isNull);
+    final Finder round = find.descendant(
+      of: find.byKey(const ValueKey('avatar_figure')),
+      matching: find.text('Round'),
+    );
+    await Scrollable.ensureVisible(tester.element(round), alignment: 0.5);
+    await tester.pumpAndSettle();
+    await tester.tap(round);
+    await tester.pumpAndSettle();
+    // The preview shows it before Save; the store only after.
+    expect(
+      tester.widget<AgentFace>(find.byType(AgentFace)).profileOverride!.round,
+      isTrue,
+    );
+    expect(store.profileOf('alex').round, isNull);
+    await tester.tap(find.widgetWithText(TextButton, 'Save'));
+    await tester.pumpAndSettle();
+    expect(store.profileOf('alex').round, isTrue);
+    final restored = AgentProfileStore();
+    addTearDown(restored.dispose);
+    await restored.load();
+    expect(restored.profileOf('alex').round, isTrue);
+  });
+
   // The page runs under chuk's floating header. The header band grows by the
   // status bar, so the preview must clear the band at every status-bar
   // height, not only at the zero a test gets by default.

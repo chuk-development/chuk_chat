@@ -115,6 +115,17 @@ void main() {
     }
   });
 
+  test('square is the default figure; round is picked per agent', () {
+    expect(agentAvatarPainterFor(round: false), paintCubeAvatar);
+    expect(agentAvatarPainterFor(round: true), paintRoundAvatar);
+    const AgentProfile plain = AgentProfile();
+    expect(plain.round, isNull);
+    final AgentProfile picked = plain.copyWith(round: true);
+    expect(AgentProfile.fromJson(picked.toJson()).round, isTrue);
+    expect(picked.copyWith(round: false).round, isNull);
+    expect(picked.copyWith(round: false).isEmpty, isTrue);
+  });
+
   test('eye offsets clamp to the unit circle', () {
     expect(clampLook(const Offset(3, 4)).distance, closeTo(1, 1e-9));
     expect(clampLook(const Offset(0.3, 0.1)), const Offset(0.3, 0.1));

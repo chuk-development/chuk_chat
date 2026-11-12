@@ -61,7 +61,12 @@ class AgentProfile {
     this.role,
     this.brief,
     this.shape,
+    this.round,
   });
+
+  /// The avatar figure: true is the round figure, null or false the square
+  /// cube (the default).
+  final bool? round;
 
   /// Null keeps the original stable expressive silhouette.
   final AgentAvatarShape? shape;
@@ -113,7 +118,8 @@ class AgentProfile {
       colorValue == null &&
       role == null &&
       brief == null &&
-      shape == null;
+      shape == null &&
+      round == null;
 
   /// Merges the given fields. A `clear*` flag wins over a value, so an emptied
   /// text field really removes what was stored instead of merging the old value
@@ -124,12 +130,14 @@ class AgentProfile {
     String? role,
     String? brief,
     AgentAvatarShape? shape,
+    bool? round,
     bool clearPhoto = false,
     bool clearColor = false,
     bool clearRole = false,
     bool clearBrief = false,
     bool clearShape = false,
   }) => AgentProfile(
+    round: round == null ? this.round : (round ? true : null),
     photoPath: clearPhoto ? null : (photoPath ?? this.photoPath),
     colorValue: clearColor ? null : (colorValue ?? this.colorValue),
     role: clearRole ? null : (role ?? this.role),
@@ -143,6 +151,7 @@ class AgentProfile {
     if (role != null) 'role': role,
     if (brief != null) 'brief': brief,
     if (shape != null) 'shape': shape!.name,
+    if (round == true) 'round': true,
   };
 
   static AgentProfile fromJson(Map<String, dynamic> json) => AgentProfile(
@@ -153,6 +162,7 @@ class AgentProfile {
     role: json['role'] as String?,
     brief: json['brief'] as String?,
     shape: _readShape(json['shape']),
+    round: json['round'] == true ? true : null,
   );
 
   static AgentAvatarShape? _readShape(Object? value) {
@@ -214,6 +224,7 @@ class AgentProfileStore extends ChangeNotifier {
     String? role,
     String? brief,
     AgentAvatarShape? shape,
+    bool? round,
     bool clearPhoto = false,
     bool clearColor = false,
     bool clearRole = false,
@@ -221,6 +232,7 @@ class AgentProfileStore extends ChangeNotifier {
     bool clearShape = false,
   }) async {
     final AgentProfile next = profileOf(agentId).copyWith(
+      round: round,
       photoPath: photoPath,
       colorValue: colorValue,
       role: role,
