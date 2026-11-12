@@ -59,7 +59,7 @@ from .search import register_search_tool
 from .secrets import SecretsAccess
 from .agent_mail import MailBinding, register_agent_mail_tools
 from .agent_message import PROMPT_SECTION as PROGRESS_PROMPT_SECTION
-from .agent_message import AgentMessageBackend, register_message_tools
+from .agent_message import AgentMessageBackend, make_interim_writer, register_message_tools
 from .agent_naming import AgentNamingBackend, naming_prompt_section, register_naming_tools
 from .automations import AutomationBackend, register_automation_tools
 from .calls import CallBackend, register_call_tools
@@ -744,6 +744,16 @@ def build_runtime(
             ),
         )
 
+    # CHAT-89: the one sentence a run says before its first tools when the
+    # model wrote none (loop ``_send_interim``). A fresh cheap client per
+    # call: it runs on a side thread next to the run's own model.
+    interim_factory = aux_model_factory or (
+        getattr(aux_model, "cheap_clone", None) if aux_model is not None else None
+    )
+    interim_writer = (
+        make_interim_writer(interim_factory) if callable(interim_factory) else None
+    )
+
     store = StateStore(db_path)
     if ladder is not None:
         # The summary outlives this run (bead chuk_chat-p5xm): the executor
@@ -1044,6 +1054,7 @@ def build_runtime(
         ),
         # Typed context rows (``source``) as live ``context`` frames.
         context_observer=context_observer,
+        interim_writer=interim_writer,
         context_ladder=ladder,
         # The debug "copy raw context" tap (off by default): fired each round with
         # the exact outbound payload and the ladder's stats. Unset -> not wired.

@@ -70,3 +70,106 @@ def test_a_stored_message_replays_as_itself(tmp_path):
     events = store.replay_events(sid)
     mine = [e for e in events if e.get("type") == "message"]
     assert mine == [{"type": "message", "text": "Looking now.", "replay": True, "mid": mid}]
+
+
+# -- CHAT-89: the loop makes sure the user hears something ---------------
+
+import threading
+import time
+
+from chuk_agents_runtime.agent_message import make_interim_writer
+from chuk_agents_runtime.loop import AgentLoop
+from chuk_agents_runtime.model import MockModelClient, ModelResponse, tool_call_response
+
+
+def _loop_registry(backend):
+    registry = ToolRegistry()
+    register_message_tools(registry, backend)
+    registry.register(
+        "mail_list",
+        {"type": "object", "properties": {}},
+        lambda: {"mails": []},
+    )
+    return registry
+
+
+def _wait_for(predicate, timeout=5.0):
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        if predicate():
+            return True
+        time.sleep(0.02)
+    return predicate()
+
+
+def test_text_before_the_tools_goes_out_once(tmp_path):
+    backend = _Backend()
+    model = MockModelClient(
+        [tool_call_response(("mail_list", {}), text="Ich schaue in deine Mails."), "Nichts Neues."]
+    )
+    loop = AgentLoop(model, _loop_registry(backend), StateStore(str(tmp_path / "s.db")))
+    result = loop.run("local:Mail:1:a", "Check meine Mails")
+    assert backend.sent == ["Ich schaue in deine Mails."]
+    assert result.final_answer == "Nichts Neues."
+
+
+def test_no_text_the_writer_says_it(tmp_path):
+    backend = _Backend()
+    seen = {}
+
+    def writer(message, tools):
+        seen["args"] = (message, list(tools))
+        return "Ich schaue gerade in deine Mails."
+
+    model = MockModelClient([tool_call_response(("mail_list", {})), "Nichts Neues."])
+    loop = AgentLoop(
+        model, _loop_registry(backend), StateStore(str(tmp_path / "s.db")), interim_writer=writer
+    )
+    loop.run("local:Mail:1:a", "Check meine Mails")
+    assert _wait_for(lambda: backend.sent == ["Ich schaue gerade in deine Mails."])
+    assert seen["args"] == ("Check meine Mails", ["mail_list"])
+
+
+def test_model_sent_its_own_message_no_second_one(tmp_path):
+    backend = _Backend()
+    calls = []
+    model = MockModelClient(
+        [tool_call_response(("send_message", {"text": "Moment."}), ("mail_list", {})), "ok"]
+    )
+    loop = AgentLoop(
+        model,
+        _loop_registry(backend),
+        StateStore(str(tmp_path / "s.db")),
+        interim_writer=lambda m, t: calls.append(1) or "x",
+    )
+    loop.run("local:Mail:1:a", "Check meine Mails")
+    assert backend.sent == ["Moment."]
+    assert calls == []
+
+
+def test_unattended_run_gets_no_interim(tmp_path):
+    backend = _Backend()
+    model = MockModelClient([tool_call_response(("mail_list", {}), text="Looking."), "ok"])
+    loop = AgentLoop(
+        model, _loop_registry(backend), StateStore(str(tmp_path / "s.db")),
+        interim_writer=lambda m, t: "x",
+    )
+    loop.run("local:Mail:1:a", "hourly check", source="schedule")
+    time.sleep(0.1)
+    assert backend.sent == []
+
+
+def test_writer_uses_a_fresh_client_and_closes_it():
+    closed = []
+
+    class _Client:
+        def complete(self, messages):
+            assert "Check meine Mails" in messages[0]["content"]
+            return ModelResponse(text='"Ich schaue in deine Mails."')
+
+        def close(self):
+            closed.append(1)
+
+    write = make_interim_writer(_Client)
+    assert write("Check meine Mails", ["mail_list"]) == "Ich schaue in deine Mails."
+    assert closed == [1]

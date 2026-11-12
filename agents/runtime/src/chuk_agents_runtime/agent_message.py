@@ -112,3 +112,36 @@ def register_message_tools(
         make_send_message_handler(backend),
     )
     return ["send_message"]
+
+
+#: The prompt for the interim sentence the loop writes when the model went to
+#: its tools without a word (CHAT-89). The user's own text sets the language.
+INTERIM_PROMPT = (
+    "An assistant is about to work on the user's message below with these "
+    "tools: {tools}.\n"
+    "Write ONE short sentence (at most 15 words) to the user that says what "
+    "the assistant is doing now, e.g. 'Ich schaue gerade in deine Mails.' "
+    "Write it in the language of the user's message. No greeting, no result, "
+    "no question, no quotes. Only the sentence.\n\n"
+    "User's message:\n{message}"
+)
+
+
+def make_interim_writer(client_factory):
+    """``(user_message, tool_names) -> sentence`` with a fresh cheap client
+    per call (the loop calls it on a side thread)."""
+
+    def write(message: str, tools) -> str | None:
+        client = client_factory()
+        try:
+            names = ", ".join(sorted({str(t) for t in tools})[:6]) or "tools"
+            prompt = INTERIM_PROMPT.format(tools=names, message=str(message or "")[:2000])
+            response = client.complete([{"role": "user", "content": prompt}])
+            text = (getattr(response, "text", None) or "").strip().strip('"').strip()
+            return text[:MAX_MESSAGE_CHARS] or None
+        finally:
+            close = getattr(client, "close", None)
+            if callable(close):
+                close()
+
+    return write

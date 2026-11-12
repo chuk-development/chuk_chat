@@ -580,6 +580,13 @@ class _ActiveRun:
     #: row of the turn is stored: a user row between two tool results breaks
     #: the call/result pairing a strict provider requires.
     pending_notes: list[str] = field(default_factory=list)
+    #: The user's prompt and whether a person typed it (no ``source``): only
+    #: such a run gets the automatic interim message (CHAT-89).
+    user_message: str = ""
+    interactive: bool = False
+    #: Set once the run told the user what it is doing (the model's own
+    #: ``send_message``, its text before the tools, or the written fallback).
+    interim_sent: bool = False
 
 
 class _PendingRecall:
@@ -691,6 +698,7 @@ class AgentLoop:
         clock_provider: Callable[[], list[dict]] | None = None,
         task_context_providers: Sequence[Callable[[], list[dict]]] | None = None,
         context_observer: Callable[[dict], None] | None = None,
+        interim_writer: Callable[[str, Sequence[str]], str | None] | None = None,
         # -- Pydantic AI only -------------------------------------------
         model_settings: ModelSettings | None = None,
         on_delta: Sink | None = None,
@@ -752,6 +760,7 @@ class AgentLoop:
         #: draw its chip live (docs/WIRE_CONTRACT.md, "Typed source on
         #: synthetic rows"). ``None``: not wired.
         self._context_observer = context_observer
+        self._interim_writer = interim_writer
         self._turn_observer = turn_observer
         #: Told what the run does right now (docs/WIRE_CONTRACT.md,
         #: ``heartbeat.phase``): ``preparing``, ``model`` or ``tool`` + name.
@@ -1060,6 +1069,8 @@ class AgentLoop:
 
         active = _ActiveRun(session_key=session_key, session_id=session_id)
         active.recall = pending_recall
+        active.user_message = user_message or ""
+        active.interactive = not valid_source(source) and not regenerate
         # The first request's tools are built before its history (Pydantic AI
         # prepares the tools first), so the found set is read once here.
         if self._registry.deferred_names():
@@ -1294,6 +1305,8 @@ class AgentLoop:
                                         state.reason = StopReason.FINISHED
                                         break
                                     finish_summary = _finish_summary(calls, response)
+                                    if finish_summary is None:
+                                        self._send_interim(active, state, response, calls)
                                     tool_started = time.monotonic()
                                     try:
                                         async with node.stream(run.ctx) as stream:
@@ -1604,6 +1617,62 @@ class AgentLoop:
                 completion_tokens=usage.get("completion_tokens"),
                 total_tokens=usage.get("total_tokens"),
             )
+
+    def _send_interim(
+        self,
+        active: _ActiveRun,
+        state: "_DriveState",
+        response: ModelResponse,
+        calls: list[ToolCallPart],
+    ) -> None:
+        """Tell the user what the run is doing before its first tools run
+        (CHAT-89, like Hermes Agent's interim messages).
+
+        The prompt asks the model to call ``send_message`` first, but models
+        (DeepSeek) often skip it and the user waits minutes in silence. So the
+        loop makes sure of it on the first tool turn of a run a person started:
+        the model's own text next to its calls goes out as the message; with no
+        text, ``interim_writer`` (the cheap aux model) writes one sentence on a
+        side thread while the tools run. Never on an unattended run."""
+        if active.interim_sent or not active.interactive:
+            return
+        registry = self._registry
+        if not registry.has("send_message"):
+            return
+        names = [c.tool_name for c in calls]
+        active.interim_sent = True
+        if "send_message" in names:
+            return
+        handler = registry.spec("send_message").handler
+
+        def deliver(text: str | None) -> None:
+            text = (text or "").strip()
+            if not text:
+                return
+            try:
+                handler(text=text)
+            except Exception:  # noqa: BLE001 - an interim message never fails a run
+                logger.warning("interim message failed", exc_info=True)
+
+        own = (_response_text(response) or "").strip()
+        if own:
+            deliver(own)
+            # Said once, as its own message: not again in the final answer.
+            if state.passes and state.passes[-1].strip() == own:
+                state.passes.pop()
+            return
+        writer = self._interim_writer
+        if writer is None:
+            return
+        prompt = active.user_message
+
+        def write() -> None:
+            try:
+                deliver(writer(prompt, names))
+            except Exception:  # noqa: BLE001
+                logger.warning("interim writer failed", exc_info=True)
+
+        threading.Thread(target=write, name="interim-message", daemon=True).start()
 
     def _persist_assistant(self, session_id: int, response: ModelResponse) -> None:
         self._append(session_id, "assistant", response_to_row(response))

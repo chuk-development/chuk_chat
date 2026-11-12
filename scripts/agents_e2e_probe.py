@@ -10,7 +10,7 @@ owner's login. Prints only frame types, tool names, statuses and the answer.
 import base64, json, sys, time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "agents/executor/tests"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "agents/executor/tests"))
 from wiring import paired_channel  # noqa: E402
 
 from chuk_agents_executor import ControllerSession, Executor, loopback_pair
@@ -24,7 +24,7 @@ HERE = Path(__file__).resolve().parents[1] / "_scratch" / "agents_e2e_probe"
 HERE.mkdir(parents=True, exist_ok=True)
 
 def account():
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "agents/host/src"))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "agents/host/src"))
     from chuk_agents_host.account_store import AccountStore
     t = AccountStore(ROOT / "account.json").token() or {}
     assert t.get("expires_at", 0) > time.time() + 120, "account token too old"
