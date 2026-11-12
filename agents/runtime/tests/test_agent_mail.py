@@ -181,7 +181,7 @@ def _tools(binding: MailBinding, **kw) -> ToolRegistry:
 
 def test_the_client_sends_the_bearer_and_a_neutral_agent_string():
     server = Server()
-    server.on("GET", "/mailbox", (200, {"address": "k7f3q9x2mh@chukagents.com", "status": "active"}))
+    server.on("GET", "/mailboxes", (200, {"mailboxes": [{"address": "k7f3q9x2mh@chukagents.com", "status": "active"}]}))
     box = server.client().mailbox()
     assert box["address"] == "k7f3q9x2mh@chukagents.com"
     request = server.requests[0]
@@ -194,7 +194,7 @@ def test_the_client_sends_the_bearer_and_a_neutral_agent_string():
 
 def test_a_401_is_retried_once_after_a_refresh():
     server = Server()
-    server.on("GET", "/mailbox", (401, {"detail": "invalid token"}), (200, {"address": "a@b.c"}))
+    server.on("GET", "/mailboxes", (401, {"detail": "invalid token"}), (200, {"mailboxes": [{"address": "a@b.c"}]}))
     session = FakeSession()
     assert server.client(session).mailbox() == {"address": "a@b.c"}
     assert session.refreshes == [("token_expired", "jwt-1")]
@@ -211,7 +211,7 @@ def test_a_session_without_seen_token_still_refreshes():
             self.access_token = "t2"
 
     server = Server()
-    server.on("GET", "/mailbox", (401, {"detail": "expired"}), (200, {"address": "a@b.c"}))
+    server.on("GET", "/mailboxes", (401, {"detail": "expired"}), (200, {"mailboxes": [{"address": "a@b.c"}]}))
     assert server.client(Plain()).mailbox()["address"] == "a@b.c"
     assert Plain.refreshes == 1
 

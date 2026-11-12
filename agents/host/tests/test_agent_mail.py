@@ -212,10 +212,12 @@ class _Api:
     def handle(self, request: httpx.Request) -> httpx.Response:
         self.calls.append(request)
         path = request.url.path.removeprefix("/v1/agent-mail")
-        if path == "/mailbox":
+        if path == "/mailboxes":
             if self.mailbox_status != 200:
                 return httpx.Response(self.mailbox_status, json={"detail": "no_subscription"})
-            return httpx.Response(200, json={"address": "x@chukagents.com", "status": "active"})
+            return httpx.Response(
+                200, json={"mailboxes": [{"address": "x@chukagents.com", "status": "active"}]}
+            )
         if path == "/messages" and request.method == "GET":
             assert request.url.params["undelivered"] == "true"
             if self.list_failures:

@@ -508,7 +508,16 @@ class AgentMailClient:
     # -- the routes (docs/AGENT_MAIL.md §5.3) -----------------------------
 
     def mailbox(self) -> dict:
-        return self.request("GET", "/mailbox") or {}
+        """The account's mailbox. Mail v3 (api_server ``routers/agent_mail``)
+        lists the live mailboxes under ``GET /mailboxes``; the old single
+        ``GET /mailbox`` is gone and answers 404. The first live one is the
+        account's address; an empty list means none is made yet."""
+        data = self.request("GET", "/mailboxes") or {}
+        boxes = data.get("mailboxes") if isinstance(data, dict) else None
+        for box in boxes or []:
+            if isinstance(box, dict) and box.get("address"):
+                return box
+        return {"address": None, "status": "needs_key"}
 
     def list_messages(
         self,
