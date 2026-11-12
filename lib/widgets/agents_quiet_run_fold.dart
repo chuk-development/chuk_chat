@@ -23,7 +23,12 @@ class AgentsQuietRunFold extends StatefulWidget {
     required this.runId,
     required this.child,
     this.source,
+    this.hideWhenQuiet = false,
   });
+
+  /// A quiet run leaves nothing in the thread at all, not even its line
+  /// (the Agents chat, CHAT-68). The run stays in the agent's activity.
+  final bool hideWhenQuiet;
 
   /// The host's id of the run that wrote this answer.
   final String runId;
@@ -49,6 +54,7 @@ class _AgentsQuietRunFoldState extends State<AgentsQuietRunFold> {
       listenable: source,
       builder: (BuildContext context, Widget? _) {
         if (!source.isQuietRun(widget.runId)) return widget.child;
+        if (widget.hideWhenQuiet) return const SizedBox.shrink();
         final Widget line = _line(
           context,
           source.quietRunSummary(widget.runId),

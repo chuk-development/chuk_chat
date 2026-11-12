@@ -570,6 +570,7 @@ class AgentsReplayLoader extends ChangeNotifier {
           _openAiRow(draft);
           draft.aiText.write(notice);
           draft.aiRow!['status'] = 'interrupted';
+          draft.aiRow![kAgentsNoticeKey] = '1';
         }
         _closeAiRow(draft);
         if (event.whileAway) {
@@ -1056,6 +1057,7 @@ class AgentsReplayLoader extends ChangeNotifier {
         'text': notice,
         'reasoning': '',
         'status': 'interrupted',
+        kAgentsNoticeKey: '1',
         'sentAt': DateTime.now().toIso8601String(),
       },
     ];

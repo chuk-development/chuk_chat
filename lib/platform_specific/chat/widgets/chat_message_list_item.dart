@@ -10,6 +10,8 @@ import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
 import 'package:chuk_chat/services/agents/agents_context_rows.dart';
 import 'package:chuk_chat/services/agents/agents_run_cost.dart';
+import 'package:chuk_chat/services/agents/agents_run_ledger.dart'
+    show isAgentsRunNoticeRow;
 import 'package:chuk_chat/services/chat_compaction.dart';
 import 'package:chuk_chat/services/chat_runtime.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
@@ -22,6 +24,7 @@ import 'package:chuk_chat/widgets/compaction_divider.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/widgets/message_fly_in.dart';
 import 'package:chuk_chat/widgets/message_time_label.dart';
+import 'package:chuk_chat/utils/automation_message.dart';
 
 /// One message row shared by the desktop and mobile chat lists.
 ///
@@ -116,6 +119,12 @@ class ChatMessageListItem extends StatelessWidget {
     final String? rowSource = data.isUser
         ? agentsRowSource(messages[index])
         : null;
+    // An Agents thread hides the raw "Schedule [automation … fired]" row: the
+    // run's answer (if any) and the time line say enough (CHAT-68).
+    if ((rowSource != null && _hidesSourceRow(rowSource)) ||
+        _isHiddenWake(messages[index])) {
+      return _rowBoundary(const SizedBox.shrink());
+    }
     if (rowSource != null) {
       return _row(
         AgentsContextChip(
@@ -231,7 +240,10 @@ class ChatMessageListItem extends StatelessWidget {
           ? () => onSwitchVariant(data.variantIndex + 1)
           : null,
       status: data.status,
-      turnFailed: !data.isUser && isTurnError(messages[index]),
+      turnFailed:
+          !data.isUser &&
+          (isTurnError(messages[index]) ||
+              isAgentsRunNoticeRow(messages[index])),
       queueId: data.isUser ? data.queueId : null,
       lastError: data.lastError,
       onRetryPending:
@@ -291,9 +303,16 @@ class ChatMessageListItem extends StatelessWidget {
               plainAnswer,
             ],
           );
-    final Widget bubble = runId == null || data.isStreamingMessage
+    // A quiet automation run (nothing new) leaves nothing in an Agents
+    // thread; its time line goes with it, so the line sits inside the fold.
+    final bool foldsQuiet = runId != null && !data.isStreamingMessage;
+    final Widget bubble = !foldsQuiet
         ? answer
-        : AgentsQuietRunFold(runId: runId, child: answer);
+        : AgentsQuietRunFold(
+            runId: runId,
+            hideWhenQuiet: _agentsThread,
+            child: _withTimeDivider(answer),
+          );
     final Widget row = data.isUser && uiKey == flyInKey
         ? MessageFlyIn(key: ValueKey<String>('flyin_$uiKey'), child: bubble)
         : bubble;
@@ -305,6 +324,7 @@ class ChatMessageListItem extends StatelessWidget {
         CompactionRecord.decode(messages[index][ChatCompaction.fieldKey]) !=
             null;
     return _row(
+      divider: !foldsQuiet,
       compactedHere
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -318,23 +338,55 @@ class ChatMessageListItem extends StatelessWidget {
   /// The row, with the centred time line above it when an Agents thread
   /// starts a new day or the talk resumes after a pause
   /// ([messageOpensTimeDivider]).
-  Widget _row(Widget child) {
-    final DateTime? when =
-        ChatOrigin.isAgentsThread(activeChatId) || messengerMode
-        ? messageRowTime(messages[index])
-        : null;
-    if (when == null || !messageOpensTimeDivider(messages, index)) {
-      return _rowBoundary(child);
+  Widget _row(Widget child, {bool divider = true}) =>
+      _rowBoundary(divider ? _withTimeDivider(child) : child);
+
+  bool get _agentsThread =>
+      ChatOrigin.isAgentsThread(activeChatId) || messengerMode;
+
+  /// Sources an Agents thread does not show as a row of their own: the
+  /// automation that fired is not something anybody said (CHAT-68).
+  bool _hidesSourceRow(String source) =>
+      _agentsThread && (source == 'schedule' || source == 'job');
+
+  /// A fired automation that reached the thread as a user turn. The Agents
+  /// thread shows its result, not the wake (CHAT-68).
+  bool _isHiddenWake(Map<String, String> row) =>
+      _agentsThread &&
+      (row['sender'] ?? 'ai') == 'user' &&
+      parseAutomationWake(row['text'] ?? '') != null;
+
+  /// [child] with the centred time line above it, when this row opens a new
+  /// day or follows a pause. Hidden automation rows are skipped when looking
+  /// back, so a run's answer compares with the last row that is on screen.
+  Widget _withTimeDivider(Widget child) {
+    if (!_agentsThread) return child;
+    final Map<String, String> row = messages[index];
+    final DateTime? when = messageRowTime(row);
+    if (when == null) return child;
+    int previous = index - 1;
+    while (previous >= 0) {
+      final String? source = (messages[previous]['sender'] ?? 'ai') == 'user'
+          ? agentsRowSource(messages[previous])
+          : null;
+      final bool hidden =
+          (source != null && _hidesSourceRow(source)) ||
+          _isHiddenWake(messages[previous]);
+      if (!hidden) break;
+      previous--;
     }
-    return _rowBoundary(
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          MessageTimeDivider(when: when),
-          child,
-        ],
-      ),
+    final List<Map<String, String>> pair = <Map<String, String>>[
+      if (previous >= 0) messages[previous],
+      row,
+    ];
+    if (!messageOpensTimeDivider(pair, pair.length - 1)) return child;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        MessageTimeDivider(when: when),
+        child,
+      ],
     );
   }
 

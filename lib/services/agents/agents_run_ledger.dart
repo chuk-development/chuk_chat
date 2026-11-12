@@ -141,6 +141,25 @@ String? agentsRunEndNotice(AgentsRunOutcome outcome) => switch (outcome) {
     'This message did not reach your host. Nothing ran — send it again.',
 };
 
+/// The row key that marks an answer row written by the app as a run's end
+/// notice ([agentsRunEndNotice]). The thread draws such a row as one quiet
+/// status line, not as an answer bubble (CHAT-68).
+const String kAgentsNoticeKey = 'agentsNotice';
+
+/// Whether [row] is a run's end notice: marked by [kAgentsNoticeKey], or, for
+/// rows written before the mark, an `interrupted` row whose text is exactly
+/// one of the app's own notices.
+bool isAgentsRunNoticeRow(Map<String, String> row) {
+  if (row[kAgentsNoticeKey] == '1') return true;
+  if (row['status'] != 'interrupted') return false;
+  final String text = (row['text'] ?? '').trim();
+  if (text.isEmpty) return false;
+  for (final AgentsRunOutcome outcome in AgentsRunOutcome.values) {
+    if (agentsRunEndNotice(outcome) == text) return true;
+  }
+  return false;
+}
+
 /// The kind of the newest frame that folded into a run: what the agent
 /// was doing the last time it said anything. The live status line reads it
 /// (`agents_turn_phase.dart`), so a run that wrote a line and then went into a
