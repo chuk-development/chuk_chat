@@ -433,6 +433,12 @@ class _MessageBubbleState extends State<MessageBubble> {
   /// line stays at the end of the body (no files) or the turn has none.
   Widget? _metaBelowFiles;
 
+  /// In an Agents thread: the index in the body where the final answer text
+  /// starts. Everything before it is the turn's work (thinking, tools,
+  /// interim text), drawn folded outside the bubble. Null: no answer text,
+  /// so no bubble (CHAT-67, CHAT-69).
+  int? _agentsAnswerStart;
+
   bool _complexBubbleLogged = false;
   bool _showUserActions = false;
 

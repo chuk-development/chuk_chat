@@ -14,6 +14,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/models/chat_message.dart' show ChatMessageStatus;
+import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/message_actions_handler.dart';
 import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
@@ -134,6 +135,28 @@ void main() {
         ),
       );
     }
+    // A run that thought and said an interim line before its answer: only
+    // the answer is in the bubble, the rest folds into the work block.
+    out.add(
+      MessageBubble(
+        message:
+            'Nichts Relevantes – der Posteingang ist leer, keine neuen Mails.',
+        isUser: false,
+        chatId: chatId,
+        maxWidth: width * 0.85,
+        messengerMode: messenger,
+        startsNewGroup: true,
+        workedFor: const Duration(seconds: 13),
+        contentBlocks: const <ContentBlock>[
+          ContentBlock.reasoning('The user wants a mailbox check.'),
+          ContentBlock.text("I'll check the current mailbox state."),
+          ContentBlock.reasoning('The inbox is empty.'),
+          ContentBlock.text(
+            'Nichts Relevantes – der Posteingang ist leer, keine neuen Mails.',
+          ),
+        ],
+      ),
+    );
     // The host gave up after its retries (CHAT-64): a quiet line.
     out.add(
       MessageBubble(

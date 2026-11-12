@@ -359,6 +359,17 @@ group. The thread does the same. The bubble itself is chuk_chat's
   in a pill under every bubble. On desktop, react, reply and more show
   beside the bubble while the mouse is over it, centred on it
   (`AgentsBubbleHoverActions`).
+  Only the final answer text is in the bubble. The turn's work (thinking,
+  tools, interim lines like "I'll check the mailbox") folds into the one
+  work block above it ("Thought for 13s ›"). A turn with no answer text
+  draws no bubble at all, and an empty action row draws nothing (CHAT-67,
+  CHAT-69). Bubbles read in the app font, not the chat font picked for
+  answers, which can be a monospace face (CHAT-70).
+- **Automation runs in an Agents thread (CHAT-68).** The fired automation
+  ("Schedule …", the wake line) is not a row. A quiet run ("No change")
+  leaves nothing in the thread. A run with a result is a normal answer
+  bubble under its time line. A failed or stopped run is one quiet status
+  line (`agentsNotice` rows, `isAgentsRunNoticeRow`).
 - **Gaps.** Inside a run `kBubbleGapInGroup` = **3**; between two runs
   `kBubbleGapBetweenGroups` = **14**. Nearly five times as much air, so the eye
   sorts the thread into groups before it reads a word. The gap is a TOP margin

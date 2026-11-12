@@ -308,6 +308,9 @@ extension _MessageBubbleChrome on _MessageBubbleState {
     required bool dimDisabledIcon,
     Widget? trailing,
   }) {
+    // No action, no pill: an empty bar drew a small grey capsule under the
+    // message (CHAT-67).
+    if (actions.isEmpty && trailing == null) return const SizedBox.shrink();
     final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
     return Row(
       mainAxisSize: MainAxisSize.min,

@@ -72,6 +72,13 @@ extension _MessageBubbleLayout on _MessageBubbleState {
   /// Returns the user-selected chat font family, falling back to the historic
   /// Arimo default when the user has explicitly picked the system font.
   String get _chatFontFamily {
+    // An Agents thread is a messenger: its bubbles read in the app's own
+    // font, not the chat font picked for answers (that can be a monospace
+    // face) (CHAT-70).
+    if (_agentsBubbles) {
+      final String? ui = Theme.of(context).textTheme.bodyMedium?.fontFamily;
+      if (ui != null && ui.isNotEmpty) return ui;
+    }
     final resolved = resolveChatFontFamily(
       AppThemeService.instance.chatFontFamily,
     );
@@ -529,6 +536,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     // construction.
     _artifactPayloads.clear();
     _metaBelowFiles = null;
+    _agentsAnswerStart = null;
     final List<Widget> bodyChildren = useContentBlocks
         ? _buildContentBlocksLayout(
             iconFgColor: bodyFgColor,
@@ -537,7 +545,11 @@ extension _MessageBubbleLayout on _MessageBubbleState {
             alignRight: alignRight,
           )
         : _buildClassicLayout(
-            iconFgColor: bodyFgColor,
+            // No answer text: the body is work outside the bubble, in the
+            // page's colour.
+            iconFgColor: _strippedMessage.trim().isEmpty
+                ? iconFgColor
+                : bodyFgColor,
             accentColor: accentColor,
             bgColor: bgColor,
             isUserMessage: isUserMessage,
@@ -587,9 +599,25 @@ extension _MessageBubbleLayout on _MessageBubbleState {
 
     // With the files pulled out, an answer that was nothing but a file would
     // leave an empty block. Then the file is the message.
-    final bool bubbleCarriesContent =
-        bodyChildren.isNotEmpty ||
-        (_artifactPayloads.isEmpty && !hasImageTiles);
+    // An Agents answer splits in two: the turn's work (thinking, tools,
+    // interim text), folded and outside the bubble, and the final answer
+    // text, the only thing in the bubble. No answer text, no bubble: an
+    // empty grey capsule under a run was the result (CHAT-67, CHAT-69).
+    final int? answerStart = !_agentsBubbles
+        ? 0
+        : useContentBlocks
+        ? _agentsAnswerStart
+        : (_strippedMessage.trim().isEmpty ? null : 0);
+    final List<Widget> workKids = answerStart == null
+        ? bodyChildren
+        : bodyChildren.sublist(0, answerStart);
+    final List<Widget> answerKids = answerStart == null
+        ? const <Widget>[]
+        : bodyChildren.sublist(answerStart);
+    final bool bubbleCarriesContent = _agentsBubbles
+        ? answerKids.isNotEmpty
+        : bodyChildren.isNotEmpty ||
+              (_artifactPayloads.isEmpty && !hasImageTiles);
 
     // An Agents thread draws every answer as its own bubble on the left, in
     // the shape and colours of chuk_chat's user bubble (CHAT-52). A
@@ -599,13 +627,17 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     final Widget answerBody = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: bodyChildren,
+      children: answerKids,
     );
     final Widget bubbleContent = Container(
       // A sender label opens the run and carries its gap (see
       // [MessageBubble.senderLabel]).
       margin: EdgeInsets.only(
-        top: widget.senderLabel != null ? 0 : _runGapAbove,
+        top: widget.senderLabel != null
+            ? 0
+            : workKids.isNotEmpty
+            ? 4
+            : _runGapAbove,
         bottom: 2,
       ),
       padding: answerBubble
@@ -671,6 +703,18 @@ extension _MessageBubbleLayout on _MessageBubbleState {
                   bottom: 3,
                 ),
                 child: label,
+              ),
+            // The Agents turn's work, folded, above its answer bubble.
+            if (workKids.isNotEmpty)
+              Padding(
+                padding: EdgeInsets.only(
+                  top: widget.senderLabel != null ? 0 : _runGapAbove,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: workKids,
+                ),
               ),
             if (bubbleCarriesContent)
               _agentsBubbles
@@ -1001,7 +1045,25 @@ extension _MessageBubbleLayout on _MessageBubbleState {
       }
     }
 
+    // An Agents thread shows only the final answer in its bubble. Text that
+    // came BEFORE the turn's last piece of work (a tool call or thinking),
+    // like "I'll check the mailbox.", is interim and folds into the work
+    // block (CHAT-69). Text after the last work is the answer, all of it.
+    int lastWorkBlock = -1;
+    if (_agentsBubbles) {
+      for (int i = blocks.length - 1; i >= 0; i--) {
+        final ContentBlockType type = blocks[i].type;
+        if (type == ContentBlockType.toolCalls ||
+            type == ContentBlockType.reasoning) {
+          lastWorkBlock = i;
+          break;
+        }
+      }
+    }
+    int blockIndex = -1;
+
     for (final block in blocks) {
+      blockIndex++;
       switch (block.type) {
         case ContentBlockType.reasoning:
           // The phone thread's "Show thinking" switch (see tools.dart).
@@ -1046,6 +1108,11 @@ extension _MessageBubbleLayout on _MessageBubbleState {
           // (mirroring the trailing-text `isNotEmpty` guard) so adjacent
           // tool-call blocks still merge into a single bar.
           if (t.isEmpty) break;
+          if (_agentsBubbles && blockIndex < lastWorkBlock) {
+            // Interim text: part of the work, folded with it.
+            current.timeline.add(_ToolTimelineEntry.reasoning(t));
+            break;
+          }
           closeCurrentRound();
           segments.add(_RenderSegment.text(t));
         case ContentBlockType.sandboxArtifact:
@@ -1222,6 +1289,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     for (int i = 0; i < segments.length; i++) {
       final seg = segments[i];
       if (seg.isText) {
+        _agentsAnswerStart ??= children.length;
         children.addAll(
           _buildTextParagraphs(
             text: seg.text!,
@@ -1344,9 +1412,9 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     final TextStyle style = TextStyle(
       color: color,
       fontSize: _chatFontSize,
-      fontFamily: resolveChatFontFamily(
-        AppThemeService.instance.chatFontFamily,
-      ),
+      fontFamily: _agentsBubbles
+          ? _chatFontFamily
+          : resolveChatFontFamily(AppThemeService.instance.chatFontFamily),
       height: 1.38,
     );
     final List<SecretMatch> secrets = findSecrets(text);

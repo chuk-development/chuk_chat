@@ -292,6 +292,14 @@ void main() {
     ).m3.onUserBubble;
     expect(agents.remove('textColor'), bubbleText);
     agents.remove('width');
+    // An Agents bubble reads in the app's font, not the chat font (CHAT-70).
+    expect(
+      agents.remove('fontFamily'),
+      Theme.of(tester.element(find.byType(ChukTableClassic)))
+          .textTheme
+          .bodyMedium
+          ?.fontFamily,
+    );
     final double bubbleWidth = tester
         .getSize(
           find
@@ -309,7 +317,8 @@ void main() {
     await tester.pumpAndSettle();
     final Map<String, Object?> chat = _tableLook(tester)
       ..remove('textColor')
-      ..remove('width');
+      ..remove('width')
+      ..remove('fontFamily');
 
     expect(agents, chat);
     expect(agents['type'], ChukTableClassic);

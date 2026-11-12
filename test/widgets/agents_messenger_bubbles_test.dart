@@ -9,7 +9,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/message_actions_handler.dart';
+import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/services/agents/agents_chat_core.dart';
+import 'package:chuk_chat/services/agents/agents_run_ledger.dart'
+    show isAgentsRunNoticeRow;
 import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
 import 'package:chuk_chat/widgets/agent_thread_accent.dart';
@@ -258,6 +261,75 @@ void main() {
       expect(find.byTooltip('Retry response'), findsNothing);
     });
 
+    testWidgets('only the final answer is in the bubble; interim folds', (
+      tester,
+    ) async {
+      debugAgentsChatCoreOverride = true;
+      addTearDown(() => debugAgentsChatCoreOverride = null);
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: kTestLocalizationsDelegates,
+          home: const Scaffold(
+            body: MessageBubble(
+              message: 'Nothing new.',
+              isUser: false,
+              chatId: 'agent:chief:main',
+              maxWidth: 360,
+              contentBlocks: <ContentBlock>[
+                ContentBlock.reasoning('Check the mailbox.'),
+                ContentBlock.text("I'll check the mailbox."),
+                ContentBlock.reasoning('Mailbox is empty.'),
+                ContentBlock.text('Nothing new.'),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(
+        find.textContaining('Nothing new.', findRichText: true),
+        findsOneWidget,
+      );
+      // The interim line is folded into the closed work block.
+      expect(
+        find.textContaining("I'll check the mailbox.", findRichText: true),
+        findsNothing,
+      );
+    });
+
+    testWidgets('an answer with no text draws no empty bubble', (tester) async {
+      debugAgentsChatCoreOverride = true;
+      addTearDown(() => debugAgentsChatCoreOverride = null);
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: kTestLocalizationsDelegates,
+          home: const Scaffold(
+            body: MessageBubble(
+              message: '',
+              isUser: false,
+              chatId: 'agent:chief:main',
+              maxWidth: 360,
+              contentBlocks: <ContentBlock>[
+                ContentBlock.reasoning('Nothing to say.'),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(
+        find.byWidgetPredicate(
+          (Widget w) =>
+              w is Container &&
+              w.decoration is BoxDecoration &&
+              (w.decoration! as BoxDecoration).color != null &&
+              (w.decoration! as BoxDecoration).borderRadius != null &&
+              w.padding == const EdgeInsets.fromLTRB(14, 6, 14, 6),
+        ),
+        findsNothing,
+      );
+    });
+
     testWidgets('no stamp on the bubble itself', (tester) async {
       debugAgentsChatCoreOverride = true;
       addTearDown(() => debugAgentsChatCoreOverride = null);
@@ -302,6 +374,27 @@ void main() {
 
     test('a failed Agents answer has no Retry: the host retries', () {
       expect(ai(failed: true, agents: true), isNot(contains('Retry')));
+    });
+
+    test('a run end notice row is recognised, marked or legacy', () {
+      expect(
+        isAgentsRunNoticeRow(<String, String>{'agentsNotice': '1'}),
+        isTrue,
+      );
+      expect(
+        isAgentsRunNoticeRow(<String, String>{
+          'status': 'interrupted',
+          'text': 'This run failed. No answer was written.',
+        }),
+        isTrue,
+      );
+      expect(
+        isAgentsRunNoticeRow(<String, String>{
+          'status': 'interrupted',
+          'text': 'A real answer that was cut.',
+        }),
+        isFalse,
+      );
     });
 
     test('the error mark is set and cleared on finalize', () {
