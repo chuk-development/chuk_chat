@@ -614,6 +614,14 @@ class _Run:
     # across a reconnect; this id can.
     run_id: str = ""
     started_at: float = 0.0
+    # CHAT-80: a run that answers a new message while another run of the
+    # same agent is still working ("side run"). ``side_of`` is that
+    # background run; ``store_key`` the private store session the side run's
+    # model context lives in, so the two runs never interleave their rows.
+    side_of: "_Run | None" = None
+    store_key: str | None = None
+    #: The final answer, once the run has one (merging a side run's answer).
+    final_answer: str | None = None
     # When the worker took the run off the queue (wall clock). With
     # ``started_at`` it splits the wait before preparation into queue time and
     # the sandbox lease (the pre-run trace, bead chuk_chat-4xc5).
@@ -926,6 +934,39 @@ APPROVAL_WAIT_SECONDS = 600.0
 #: poll and the run closes with ``reason == "timeout"`` (persisted, notified,
 #: rendered by the app like a stop). Generous by default; ``0`` disables it.
 RUN_MAX_SECONDS = float(os.environ.get("AGENTS_RUN_MAX_SECONDS", "7200") or 0)
+
+
+def _env_int(name: str, default: int) -> int:
+    """An integer from the environment; ``default`` when unset or bad."""
+    try:
+        return int(os.environ.get(name, "") or default)
+    except ValueError:
+        return default
+
+
+#: CHAT-80: the context row a side run starts with. ``{prompt}`` is what the
+#: agent is still working on, ``{minutes}`` how long it has been at it.
+SIDE_RUN_NOTE = (
+    "[background] You are still working on an earlier request of this user "
+    "in the background: \"{prompt}\" (started {minutes} min ago). That work "
+    "goes on and its result comes as its own message. The user has now "
+    "written a NEW message (below). Answer it now and briefly. Do not start "
+    "the background work again; if the new message changes that work, say "
+    "what you will do."
+)
+#: CHAT-80: what the background run is told when a side run answered.
+SIDE_DONE_NOTE = (
+    "[meanwhile] While you worked, the user wrote: \"{prompt}\". It was "
+    "answered in a separate reply: \"{answer}\". Take it into account if it "
+    "changes your current work; do not answer it again."
+)
+#: How many earlier rows a side run's context copies at most.
+SIDE_HISTORY_ROWS = 160
+
+
+def _clip(text: str, limit: int) -> str:
+    text = " ".join(str(text or "").split())
+    return text if len(text) <= limit else text[: limit - 1] + "…"
 #: The ``done.reason`` of a run the guard stopped (docs/WIRE_CONTRACT.md, ``done``).
 RUN_TIMEOUT_REASON = "timeout"
 
@@ -1768,6 +1809,21 @@ class Executor:
         self._runs: dict[str, _Run] = {}
         self._runs_lock = threading.Lock()
         self._queue: "queue.Queue[_Run]" = queue.Queue()
+        # CHAT-80: one worker per agent (session key), not one for the whole
+        # executor. Runs of one agent stay in order; two agents run at once,
+        # up to ``_max_parallel``. ``_lane_current`` is the run each lane
+        # works on now (what a side run answers next to).
+        self._lanes: dict[str, "queue.Queue[_Run]"] = {}
+        self._lane_current: dict[str, _Run] = {}
+        self._lanes_lock = threading.Lock()
+        self._max_parallel = max(1, _env_int("AGENTS_MAX_PARALLEL_RUNS", 4))
+        self._parallel = threading.BoundedSemaphore(self._max_parallel)
+        # Side runs that finished while their background run still works:
+        # the notes the background run is told after its next tool round, and
+        # the turns merged into the agent's thread when it ends.
+        self._side_notes: dict[str, list[str]] = {}
+        self._side_merges: dict[str, list[tuple[str, str]]] = {}
+        self._side_lock = threading.Lock()
 
         # In-flight here.now publish approvals, by approval id. The worker thread
         # (inside the publish tool) registers one and blocks on its event; the
@@ -1998,72 +2054,124 @@ class Executor:
                 )
 
     def _work(self) -> None:
-        """Run accepted tasks, one at a time, off the queue.
+        """Hand accepted tasks to their agent's lane (CHAT-80).
 
-        Serial on purpose: one executor owns one sandbox and one session db, so
-        two tasks at once would interleave in both.
+        One lane (worker thread) per session key: the runs of one agent stay
+        in order, because they share its sandbox and its thread. Different
+        agents run at once, up to ``AGENTS_MAX_PARALLEL_RUNS``. A side run (a
+        new message while the agent works, see :meth:`_side_eligible`) gets a
+        thread of its own at once.
         """
         while not self._stop.is_set():
             try:
                 run = self._queue.get(timeout=self._poll)
             except queue.Empty:
                 continue
-            # Off the queue: the run builds its context from here on.
-            run.dequeued_at = time.time()
-            self._set_phase(run.request_id, PHASE_PREPARING)
-            # The run's sandbox lease (docs/WIRE_CONTRACT.md, "Agent
-            # permissions"): the policy is snapshot here, and the box cannot
-            # change under this run — not even for a room turn that shares it.
-            # A restricted mail run touches no sandbox, so it leases none.
-            leased = (
-                None
-                if run.profile == PROFILE_MAIL_UNTRUSTED
-                else self._lease_sandbox(run.session_key)
-            )
+            if run.side_of is not None:
+                threading.Thread(
+                    target=self._execute_run,
+                    args=(run,),
+                    name=f"executor-{self._name}-side",
+                    daemon=True,
+                ).start()
+                continue
+            with self._lanes_lock:
+                lane = self._lanes.get(run.session_key)
+                fresh = lane is None
+                if fresh:
+                    lane = self._lanes[run.session_key] = queue.Queue()
+                lane.put(run)
+            if fresh:
+                threading.Thread(
+                    target=self._lane_loop,
+                    args=(run.session_key, lane),
+                    name=f"executor-{self._name}-lane",
+                    daemon=True,
+                ).start()
+
+    def _lane_loop(self, session_key: str, lane: "queue.Queue[_Run]") -> None:
+        """The runs of one agent, one after the other. Ends after a quiet
+        minute; the next task starts a new lane."""
+        while not self._stop.is_set():
             try:
-                self._run_task(run)
-            except Exception as exc:  # noqa: BLE001 — one bad task must not kill the worker
-                # ``_run_task`` builds the model (a per-task ``ModelSelect`` can
-                # raise on an unknown model id) and the runtime BEFORE its own
-                # try/finally. Left uncaught, that exception would end this
-                # worker thread for the rest of the executor's life: no terminal
-                # frame for the app, and every later task queued forever. So the
-                # failure becomes an ``error`` terminal and the worker lives on.
-                message = f"task failed: {type(exc).__name__}: {exc}"
-                # The run never reached _run_task's finally, so unbind the shim
-                # hook it had already pointed at this request (hygiene: the next
-                # task rebinds it anyway, but a stale binding is a stale binding).
+                run = lane.get(timeout=max(self._poll, 60.0))
+            except queue.Empty:
+                with self._lanes_lock:
+                    if lane.empty() and self._lanes.get(session_key) is lane:
+                        self._lanes.pop(session_key, None)
+                        return
+                continue
+            with self._parallel:
+                with self._lanes_lock:
+                    self._lane_current[session_key] = run
                 try:
-                    self._shim_for(run.session_key).on_run = None
-                except Exception:  # noqa: BLE001 — never mask the real failure
-                    pass
-                # The durable record closes first (docs/WIRE_CONTRACT.md): an
-                # app that reconnects later must see this run as failed too.
-                self._record_run(run, failed=message)
-                # The host's automation bookkeeping ends with the run. A no-op
-                # when the run already finished it before the crash.
-                automation_result = self._finish_automation(run, ok=False)
-                self._terminal(run.request_id, _run_error(run, message))
-                self._call_hook(
-                    self._on_run_finished,
-                    self._run_summary(
-                        run,
-                        reason="failed",
-                        final_answer=None,
-                        error=message,
-                        automation_result=automation_result,
-                    ),
-                )
-            finally:
-                self._release_sandbox(leased)
-                self._forget(run.request_id)
-                # A job wake queued for this run that its turn never consumed
-                # becomes a new task of the session (docs/WIRE_CONTRACT.md,
-                # "The wake-up", 5). Guarded like every hook.
-                try:
-                    self._jobs.flush_after_run(run.session_key)
-                except Exception as exc:  # noqa: BLE001
-                    logger.info("job flush failed: %s", type(exc).__name__)
+                    self._execute_run(run)
+                finally:
+                    with self._lanes_lock:
+                        if self._lane_current.get(session_key) is run:
+                            self._lane_current.pop(session_key, None)
+                    self._flush_side_merges(run)
+
+    def _execute_run(self, run: _Run) -> None:
+        """One run, start to terminal. Never raises."""
+        # Off the queue: the run builds its context from here on.
+        run.dequeued_at = time.time()
+        self._set_phase(run.request_id, PHASE_PREPARING)
+        # The run's sandbox lease (docs/WIRE_CONTRACT.md, "Agent
+        # permissions"): the policy is snapshot here, and the box cannot
+        # change under this run — not even for a room turn that shares it.
+        # A restricted mail run touches no sandbox, so it leases none.
+        leased = (
+            None
+            if run.profile == PROFILE_MAIL_UNTRUSTED
+            else self._lease_sandbox(run.session_key)
+        )
+        try:
+            self._run_task(run)
+        except Exception as exc:  # noqa: BLE001 — one bad task must not kill the worker
+            # ``_run_task`` builds the model (a per-task ``ModelSelect`` can
+            # raise on an unknown model id) and the runtime BEFORE its own
+            # try/finally. Left uncaught, that exception would end this
+            # worker thread for the rest of the executor's life: no terminal
+            # frame for the app, and every later task queued forever. So the
+            # failure becomes an ``error`` terminal and the worker lives on.
+            message = f"task failed: {type(exc).__name__}: {exc}"
+            # The run never reached _run_task's finally, so unbind the shim
+            # hook it had already pointed at this request (hygiene: the next
+            # task rebinds it anyway, but a stale binding is a stale binding).
+            try:
+                self._shim_for(run.session_key).on_run = None
+            except Exception:  # noqa: BLE001 — never mask the real failure
+                pass
+            # The durable record closes first (docs/WIRE_CONTRACT.md): an
+            # app that reconnects later must see this run as failed too.
+            self._record_run(run, failed=message)
+            # The host's automation bookkeeping ends with the run. A no-op
+            # when the run already finished it before the crash.
+            automation_result = self._finish_automation(run, ok=False)
+            self._terminal(run.request_id, _run_error(run, message))
+            self._call_hook(
+                self._on_run_finished,
+                self._run_summary(
+                    run,
+                    reason="failed",
+                    final_answer=None,
+                    error=message,
+                    automation_result=automation_result,
+                ),
+            )
+        finally:
+            self._release_sandbox(leased)
+            self._forget(run.request_id)
+            if run.side_of is not None:
+                self._finish_side(run)
+            # A job wake queued for this run that its turn never consumed
+            # becomes a new task of the session (docs/WIRE_CONTRACT.md,
+            # "The wake-up", 5). Guarded like every hook.
+            try:
+                self._jobs.flush_after_run(run.session_key)
+            except Exception as exc:  # noqa: BLE001
+                logger.info("job flush failed: %s", type(exc).__name__)
 
     # -- one sandbox per agent (§6, bead cowork-jo2) ----------------------
     def _is_primary_session(self, session_key: str | None) -> bool:
@@ -2558,10 +2666,18 @@ class Executor:
                 store.close()
         except Exception:  # noqa: BLE001 — bookkeeping must not block a task
             pass
+        # CHAT-80: a new message while this agent works is answered at once,
+        # next to the running work, instead of waiting behind it.
+        background = self._side_eligible(run)
+        if background is not None:
+            run.side_of = background
+            run.store_key = f"{run.session_key}~side~{run.run_id[:12]}"
+            self._seed_side_session(run)
         with self._runs_lock:
-            # One worker serves every run of this executor: anything already
-            # registered is queued or in flight ahead of this one.
-            behind = bool(self._runs)
+            # A run waits only behind runs of its own agent (its lane).
+            behind = run.side_of is None and any(
+                other.session_key == run.session_key for other in self._runs.values()
+            )
             self._runs[run.request_id] = run
         # The first heartbeat, at once (docs/WIRE_CONTRACT.md,
         # ``heartbeat.phase``). Not for a restricted mail run: nobody watches
@@ -2569,6 +2685,128 @@ class Executor:
         if run.profile != PROFILE_MAIL_UNTRUSTED:
             self._arm_heartbeat(run, PHASE_QUEUED if behind else PHASE_PREPARING)
         self._queue.put(run)
+
+    # -- side runs (CHAT-80) --------------------------------------------
+    def _side_eligible(self, run: _Run) -> "_Run | None":
+        """The background run a new task should answer next to, or ``None``
+        (then it waits in its lane as before). Only a message the user typed
+        in an agent's own thread, while that agent's lane works on a run that
+        is not itself a side run. A Retry, an automation or a mail run waits."""
+        if (
+            run.origin != "app"
+            or run.regenerate
+            or run.profile is not None
+            or not is_agent_session_key(run.session_key)
+        ):
+            return None
+        with self._lanes_lock:
+            current = self._lane_current.get(run.session_key)
+        if current is None or current.side_of is not None:
+            return None
+        with self._runs_lock:
+            if current.request_id not in self._runs:
+                return None
+        return current
+
+    def _seed_side_session(self, run: _Run) -> None:
+        """Give the side run its own store session: the agent's thread up to
+        the background run's start, then a note on what still runs. Its own
+        rows never land between the background run's tool calls."""
+        background = run.side_of
+        if background is None or not run.store_key:
+            return
+        try:
+            store = StateStore(self._db_path)
+            try:
+                source = store.route(run.session_key)
+                target = store.route(run.store_key)
+                rows = [
+                    m
+                    for m in store.get_conversation(source)
+                    if m.created_at < (background.started_at or time.time())
+                ]
+                system = [m for m in rows if m.role == "system"][:1]
+                rest = [m for m in rows if m.role != "system"]
+                if len(rest) > SIDE_HISTORY_ROWS:
+                    rest = rest[-SIDE_HISTORY_ROWS:]
+                    # Start at a user turn: a tool row without its call is
+                    # not a valid history.
+                    while rest and rest[0].role != "user":
+                        rest.pop(0)
+                for message in system + rest:
+                    store.append_message(target, message.role, message.content)
+                minutes = max(0, round((time.time() - (background.started_at or time.time())) / 60))
+                store.append_message(
+                    target,
+                    "context",
+                    {
+                        "role": "user",
+                        "source": "background",
+                        "content": SIDE_RUN_NOTE.format(
+                            prompt=_clip(background.prompt, 400), minutes=minutes
+                        ),
+                    },
+                )
+            finally:
+                store.close()
+        except Exception as exc:  # noqa: BLE001 — then it answers with less context
+            logger.info("side run seed failed: %s", type(exc).__name__)
+
+    def _side_provider(self, session_key: str):
+        """A context provider for a background run: what side runs answered
+        while it worked, after its next tool round."""
+
+        def pending() -> list[dict]:
+            with self._side_lock:
+                texts = self._side_notes.pop(session_key, [])
+            return [
+                {"role": "user", "content": text, "role_tag": "context", "source": "background"}
+                for text in texts
+            ]
+
+        return pending
+
+    def _finish_side(self, run: _Run) -> None:
+        """A side run ended. Its question and answer join the agent's thread:
+        at once when the background run is over, else when it ends (its rows
+        must not interleave). The background run hears of it meanwhile."""
+        answer = (run.final_answer or "").strip()
+        background = run.side_of
+        if background is None or not answer:
+            return
+        prompt = self._scrub_text(run.prompt)
+        with self._runs_lock:
+            still = background.request_id in self._runs
+        if still:
+            with self._side_lock:
+                self._side_notes.setdefault(run.session_key, []).append(
+                    SIDE_DONE_NOTE.format(prompt=_clip(prompt, 400), answer=_clip(answer, 800))
+                )
+                self._side_merges.setdefault(background.request_id, []).append((prompt, answer))
+            return
+        self._merge_side_turns(run.session_key, [(prompt, answer)])
+
+    def _flush_side_merges(self, run: _Run) -> None:
+        """The lane's run ended: merge the side turns that waited for it."""
+        with self._side_lock:
+            turns = self._side_merges.pop(run.request_id, [])
+            if run.side_of is None:
+                self._side_notes.pop(run.session_key, None)
+        if turns:
+            self._merge_side_turns(run.session_key, turns)
+
+    def _merge_side_turns(self, session_key: str, turns: list[tuple[str, str]]) -> None:
+        try:
+            store = StateStore(self._db_path)
+            try:
+                sid = store.route(session_key)
+                for prompt, answer in turns:
+                    store.append_message(sid, "user", {"role": "user", "content": prompt})
+                    store.append_message(sid, "assistant", {"role": "assistant", "content": answer})
+            finally:
+                store.close()
+        except Exception as exc:  # noqa: BLE001 — the answer was shown live
+            logger.info("side run merge failed: %s", type(exc).__name__)
 
     # -- automations (docs/WIRE_CONTRACT.md, "Automations") ---------------
     def submit_task(self, session_key: str, prompt: str, meta: dict | None = None) -> str:
@@ -5655,8 +5893,10 @@ class Executor:
         request_id, prompt, session_key = run.request_id, run.prompt, run.session_key
         clock = _PreRunClock(run)
         # A credential rotation that happens mid-task rides this task's stream.
-        with self._mcp_lock:
-            self._mcp_active_request[session_key] = request_id
+        # A side run (CHAT-80) leaves that to the run it answers next to.
+        if run.side_of is None:
+            with self._mcp_lock:
+                self._mcp_active_request[session_key] = request_id
         # The environment's shell hook is NOT the tool stream any more
         # (docs/WIRE_CONTRACT.md, "Tool events and timestamps"): a ``write_file``
         # is one tool card, not the printf/base64 helper commands it runs. The
@@ -5934,7 +6174,11 @@ class Executor:
             # background commands"): the session a job's end is routed to, and
             # the provider that hands a finished job's output to this turn.
             shell_session_key=session_key,
-            context_providers=[self._jobs.provider(session_key)],
+            context_providers=[
+                self._jobs.provider(session_key),
+                # CHAT-80: what side runs answered while this run works.
+                *([self._side_provider(session_key)] if run.side_of is None else []),
+            ],
             # The Home dashboard (docs/DASHBOARD.md): every agent of the host
             # gets the same store; ``by`` is this session's agent name.
             dashboard=self._dashboard,
@@ -6001,7 +6245,8 @@ class Executor:
         try:
             # Inside the run's trace scope (``_run_task``).
             result = loop.run(
-                session_key,
+                # A side run keeps its model context in its own store session.
+                run.store_key or session_key,
                 prompt,
                 regenerate=run.regenerate,
                 # A prompt nobody typed names its origin (docs/WIRE_CONTRACT.md,
@@ -6024,6 +6269,8 @@ class Executor:
                 run, ok=False, error=message, exc=exc, model_answered=self._run_was_billed(run, loop)
             )
             self._after_run_goal(run, "failed")
+            if run.side_of is None:
+                self._flush_side_merges(run)
             self._terminal(request_id, _run_error(run, message))
             # The run is over once its terminal went out: drop it from the
             # registry now, so a replay that races the hook below reports idle.
@@ -6110,6 +6357,11 @@ class Executor:
         # docs/WIRE_CONTRACT.md, "Goal mode": the next round is queued (or
         # not) before the ``done``, so the ``done`` can say so.
         goal_state = self._after_run_goal(run, reason)
+        run.final_answer = result.final_answer
+        # CHAT-80: side turns that waited for this run join the thread now,
+        # before the ``done``, so the replay it triggers already has them.
+        if run.side_of is None:
+            self._flush_side_merges(run)
         self._terminal(
             request_id,
             done_payload(
@@ -7753,6 +8005,18 @@ class Executor:
 
     def _event(self, request_id: str, payload: dict) -> None:
         """Stream a progress event as a relay notification carrying a sealed frame."""
+        # CHAT-80: several runs stream at once now (one lane per agent, side
+        # runs). Every event of a run names it, so the app can tell them
+        # apart; an event that already names them is left as it is.
+        with self._runs_lock:
+            owner = self._runs.get(request_id)
+        if owner is not None and isinstance(payload, dict):
+            if "run_id" not in payload or "session_key" not in payload:
+                payload = {
+                    **payload,
+                    "run_id": payload.get("run_id") or owner.run_id,
+                    "session_key": payload.get("session_key") or owner.session_key,
+                }
         with self._emit_lock:
             # A large payload goes out as several ``fragment`` frames. They are
             # sent here, under the lock, so nothing comes between them.

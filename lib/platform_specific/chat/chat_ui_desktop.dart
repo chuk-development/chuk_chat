@@ -83,6 +83,7 @@ import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart'; // NEW
 import 'package:chuk_chat/services/websocket_chat_service.dart';
+import 'package:chuk_chat/services/agents/agents_chat_transport.dart';
 import 'package:chuk_chat/models/chat_stream_event.dart' show StreamErrorCodes;
 import 'package:chuk_chat/services/client_request_ids.dart';
 import 'package:chuk_chat/services/storage/chat_origin.dart';
@@ -524,9 +525,17 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   Future<void> queueOrSteerComposer({required bool alternate}) async {
     final String text = composerController.text.trim();
     if (text.isEmpty) return;
+    // CHAT-80: an Agents thread has no queue. The message goes out now and
+    // is answered next to the running work.
+    if (_sendsNextToWork) return _sendMessage();
     setState(() => _followUps.enqueue(text, alternate: alternate));
     composerController.clear();
   }
+
+  /// CHAT-80: whether a send now goes out next to the running work instead
+  /// of into the queue. Only an Agents thread; a plain chat keeps its queue.
+  bool get _sendsNextToWork =>
+      widget.agentsThread && ChatOrigin.isAgentsThread(_activeChatId);
 
   // Answer-version pager plumbing (seed stash/restore/fold) lives in
   // RegenVariantSeedMixin, shared with the mobile State. This State supplies

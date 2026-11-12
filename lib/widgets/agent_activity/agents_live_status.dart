@@ -100,7 +100,12 @@ class AgentsLiveStatus {
   /// This turn's run in the ledger, or null. A run the ledger still holds
   /// from an EARLIER turn is not this turn's.
   AgentsRun? _run() {
-    final AgentsRun? run = _ledger.runFor(chatId);
+    // CHAT-80: while a reply runs next to the agent's work, the live bubble
+    // is the reply's; the work has the line at the bottom.
+    final AgentsRun? side = _ledger.runFor(agentsSideLedgerKey(chatId));
+    final AgentsRun? run = side != null && side.running
+        ? side
+        : _ledger.runFor(chatId);
     final DateTime? started = turnStartedAt;
     if (run != null &&
         !run.running &&

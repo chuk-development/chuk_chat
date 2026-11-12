@@ -391,6 +391,22 @@ class AgentsReplayLoader extends ChangeNotifier {
         });
         _noteMid(draft, mid);
 
+      case AgentsRelayMessage(:final replay, :final text, :final mid):
+        // CHAT-79: a note the agent sent while it worked (`send_message`):
+        // its own bubble, at its place, never part of the answer.
+        if (!replay) return;
+        final draft = _draftFor();
+        _closeAiRow(draft);
+        draft.rows.add(<String, String>{
+          'sender': 'ai',
+          'text': text.trim(),
+          'reasoning': '',
+          if (event.sentAt case final DateTime at)
+            'sentAt': at.toIso8601String(),
+          if (mid != null) kAgentsHostMidKey: '$mid',
+        });
+        _noteMid(draft, mid);
+
       case AgentsRelayContext(:final replay):
         if (!replay) return;
         // A runtime row with a source rides on the answer it belongs to, as

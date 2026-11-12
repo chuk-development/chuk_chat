@@ -1165,6 +1165,29 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     showSnackBar('Response cancelled');
   }
 
+  /// Lets go of the running work's stream without stopping it, so a new
+  /// message can stream its own reply (CHAT-80). No stop intent is declared:
+  /// the work goes on on the host and shows in the thread's bottom line; its
+  /// answer comes with the replay when it ends. An empty bubble is dropped.
+  Future<void> _detachForSideSend() async {
+    final String? id = _activeChatId;
+    if (id == null) return;
+    await _streamingManager.cancelStream(id);
+    _activeSendOperationId = null;
+    AgentsChatTransport.markSideSend(id);
+    if (!mounted) return;
+    setState(() {
+      _isSending = false;
+      if (_messages.isNotEmpty) {
+        final Map<String, String> last = _messages.last;
+        if ((last['sender'] ?? 'ai') != 'user' &&
+            (last['text'] ?? '').trim().isEmpty) {
+          _messages.removeLast();
+        }
+      }
+    });
+  }
+
   Future<void> _cancelStream() async {
     if (_activeChatId != null && _isStreaming) {
       if (kDebugMode) {
@@ -1434,6 +1457,15 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     String? voiceText,
     VoiceTurnStarted? onVoiceTurnStarted,
   }) async {
+    // CHAT-80: the agent still works on the last message. This one is
+    // answered next to it, at once: no queue in an Agents thread.
+    if (voiceText == null &&
+        continuationIndex == null &&
+        _sendsNextToWork &&
+        (_isStreaming || _isSending || _activeSendOperationId != null) &&
+        composerController.text.trim().isNotEmpty) {
+      await _detachForSideSend();
+    }
     if (_activeSendOperationId != null) {
       showSnackBar('Please wait');
       return;

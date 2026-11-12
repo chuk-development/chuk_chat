@@ -109,7 +109,8 @@ def test_replay_draws_the_same_tool_cards_and_the_same_done(tmp_path):
         return {
             k: v
             for k, v in event.items()
-            if k not in ("replay", "mid", "started_at", "completed_at", "duration_ms")
+            # run_id / session_key name the live run (CHAT-80), not the card.
+            if k not in ("replay", "mid", "started_at", "completed_at", "duration_ms", "run_id", "session_key")
         }
 
     live_tools = [stable(e) for e in live if e["type"] == "tool"]

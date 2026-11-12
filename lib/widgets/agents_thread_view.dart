@@ -598,6 +598,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
 
   @override
   void dispose() {
+    _replayWhenIdleTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     OfflineRetryManager.instance.registerFlush(widget.threadKey, null);
     OfflineRetryManager.instance.registerReconnect(null);
@@ -1187,6 +1188,32 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   }
 
   /// Asks the host to re-stream this thread from the replay cursor.
+  /// CHAT-79/80: a replay is due once no local stream owns the thread.
+  bool _replayAfterRun = false;
+  Timer? _replayWhenIdleTimer;
+
+  /// Ask for a FULL replay as soon as this thread streams nothing locally:
+  /// a note the agent sent ([AgentsRelayMessage]) and the answer of work
+  /// that ran next to a reply are drawn from the host's copy, each as its
+  /// own bubble. Full, because the cursor already moved past their rows.
+  void _replayWhenIdle({int tries = 0}) {
+    _replayWhenIdleTimer?.cancel();
+    _replayWhenIdleTimer = Timer(const Duration(milliseconds: 600), () {
+      if (!mounted) return;
+      final runtime = ChatRuntimeRegistry.instance.lookup(widget.threadKey);
+      final bool busy =
+          runtime?.isStreaming.value == true ||
+          runtime?.isSending.value == true;
+      if (busy && tries < 400) {
+        _replayWhenIdle(tries: tries + 1);
+        return;
+      }
+      _replayAfterRun = false;
+      _loader.invalidateCursor(widget.threadKey);
+      _requestReplay();
+    });
+  }
+
   void _requestReplay() {
     final controller = _controller;
     if (controller == null || !controller.state.value.isPaired) return;
@@ -1644,6 +1671,34 @@ class AgentsThreadViewState extends State<AgentsThreadView>
         if (event.sessionKey != null && event.sessionKey != widget.threadKey) {
           return;
         }
+        // CHAT-80: the reply next to running work ended. Its own stream
+        // shows it; the running work keeps the thread's ledger entry.
+        final String sideKey = agentsSideLedgerKey(widget.threadKey);
+        final AgentsRun? side = _ledger.runFor(sideKey);
+        final String? doneRun = event.runId;
+        if (side != null && doneRun != null && side.runId == doneRun) {
+          if (_ledger.isRunning(sideKey)) {
+            _ledger.finish(
+              sideKey,
+              finalAnswer: event.finalAnswer,
+              reason: event.reason,
+              runId: doneRun,
+            );
+          }
+          return;
+        }
+        final AgentsRun? main = _ledger.runFor(widget.threadKey);
+        if (doneRun != null &&
+            main != null &&
+            main.runId != null &&
+            main.runId != doneRun &&
+            !_ledger.isRunning(widget.threadKey)) {
+          // A run this thread does not track (the work the user sent a
+          // side message next to, after its entry ended): its answer comes
+          // with the replay.
+          _replayWhenIdle();
+          return;
+        }
         // The run is over: a takeover it waited on has nothing left to wait
         // for.
         _clearTakeover();
@@ -1677,7 +1732,19 @@ class AgentsThreadViewState extends State<AgentsThreadView>
             startedAt: event.startedAt,
             finishedAt: event.finishedAt,
           );
-          if (!localStreamActive && !event.hostNotified) _requestReplay();
+          if (!localStreamActive && !event.hostNotified) {
+            _requestReplay();
+          } else if (localStreamActive &&
+              (_replayAfterRun ||
+                  _ledger.runFor(agentsSideLedgerKey(widget.threadKey)) !=
+                      null)) {
+            // CHAT-79/80: a note the agent sent, or work that ended next to
+            // a live reply: once the stream is done, the replay draws each
+            // as its own bubble.
+            _replayWhenIdle();
+          }
+        } else if (localStreamActive || _replayAfterRun) {
+          _replayWhenIdle();
         }
         if (event.hostNotified) {
           // Background runs have no manual chat stream subscription.
@@ -1743,8 +1810,17 @@ class AgentsThreadViewState extends State<AgentsThreadView>
         // the status line above the answer; one that does not changes
         // nothing here — the adapter already counts the heartbeat itself.
         if (phase != null) {
+          final String beatKey = event.sessionKey ?? widget.threadKey;
+          final AgentsRun? sideRun = _ledger.runFor(
+            agentsSideLedgerKey(beatKey),
+          );
           _ledger.hostPhase(
-            event.sessionKey ?? widget.threadKey,
+            // CHAT-80: a beat of the reply next to running work is its own.
+            sideRun != null &&
+                    event.runId != null &&
+                    sideRun.runId == event.runId
+                ? agentsSideLedgerKey(beatKey)
+                : beatKey,
             phase: phase,
             tool: event.tool,
             retry: retry,
@@ -1769,6 +1845,14 @@ class AgentsThreadViewState extends State<AgentsThreadView>
           _clearTakeover();
         }
       // ── own browser ──
+      case AgentsRelayMessage(:final replay):
+        // CHAT-79: the running bubble shows the note now; after the run a
+        // replay draws it as its own bubble.
+        if (!replay &&
+            (event.sessionKey == null ||
+                event.sessionKey == widget.threadKey)) {
+          _replayAfterRun = true;
+        }
       case AgentsRelayRunState():
         _onBrowserTarget(event);
       // ── end own browser ──

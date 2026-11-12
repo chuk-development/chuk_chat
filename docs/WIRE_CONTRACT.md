@@ -375,6 +375,46 @@ starts and the row carries `"error": "refused to start: <reason>"` with
   third-party text, and cut at 32 KB. It never enters the system prompt, so a
   server that connects late does not break the prompt cache.
 
+### No queue in an agent's thread: lanes and side runs (IMPLEMENTED; CHAT-80)
+
+**One worker per agent.** The executor runs each session key in its own
+lane: the runs of one agent stay in order (they share its sandbox and its
+thread), different agents run at the same time, at most
+`AGENTS_MAX_PARALLEL_RUNS` (default 4). `heartbeat.phase` `queued` now means
+"behind a run of the same agent", never "behind another agent".
+
+**Every streamed event names its run.** Because several runs stream at once,
+the executor stamps `run_id` and `session_key` on every event of a run that
+does not carry them already (`delta`, `reasoning`, `tool`, `file`,
+`subagent`, `context`, `message`, ...). The app keeps only the frames of its
+own run in a stream: the `task_ack` of its `task_id` names the run; a frame
+of another run, or a run-stamped frame before that ack, is not its own. A
+host that stamps nothing is read as before.
+
+**A side run answers a new message next to running work.** A `task` the user
+typed (`origin` app, no `regenerate`, no profile) for an agent's own thread
+(`local:...`, `host:...`) while that agent's lane runs a task does not wait:
+
+- it runs at once, on its own thread, in a private store session
+  `<session_key>~side~<run id>`: a copy of the thread up to the start of the
+  running work, plus a context row (`source: background`) that names the
+  work still running. So it knows about it and does not start it again.
+- It uses the agent's tools and sandbox. Its frames carry its own `run_id`,
+  its `done` closes its own stream.
+- When it ends, the running work is told after its next tool round (a
+  context row "while you worked, the user wrote ... it was answered ...").
+  The question and the answer join the thread itself when the running work
+  ends, before that work's `done`; never in between its tool calls.
+- A Retry, a fired automation, a mail run or a message to a non-agent
+  session waits in the lane as before.
+
+**App.** In an Agents thread a send while the reply runs is never queued: the
+screen lets go of the running stream without a `stop` (the work goes on and
+shows in the line at the bottom), and the new message streams its own reply
+under its own ledger entry (`<thread>#side`). When the running work ends, the
+thread asks for a full replay and draws its answer from the host. A plain
+chat keeps its queue and its steer.
+
 ### `message`: a chat message while the run goes on (IMPLEMENTED, additive; CHAT-79)
 
 The model calls `send_message(text)` (agents/runtime, `agent_message.py`) at

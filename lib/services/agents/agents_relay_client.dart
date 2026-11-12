@@ -207,6 +207,50 @@ sealed class AgentsRelayInbound {
   const AgentsRelayInbound();
 }
 
+/// The run and thread a live frame came from (CHAT-80), as the host stamped
+/// them on it. Both null for a host that does not stamp them, and for a frame
+/// the app made itself. Several runs stream at once (one per agent, and a
+/// reply next to running work), so a stream keeps only its own run's frames.
+({String? sessionKey, String? runId}) agentsRelayRoute(
+  AgentsRelayInbound event,
+) => _agentsRelayRoutes[event] ?? (sessionKey: null, runId: null);
+
+final Expando<({String? sessionKey, String? runId})> _agentsRelayRoutes =
+    Expando<({String? sessionKey, String? runId})>('agentsRelayRoute');
+
+/// Stamps [event] with a route, as [AgentsRelayClient] does for a host frame.
+/// Test seam: a fake controller hands events over without a frame.
+@visibleForTesting
+AgentsRelayInbound debugRouteAgentsRelay(
+  AgentsRelayInbound event, {
+  String? sessionKey,
+  String? runId,
+}) {
+  _agentsRelayRoutes[event] = (sessionKey: sessionKey, runId: runId);
+  return event;
+}
+
+/// A chat message the agent sent while it keeps working (wire `message`,
+/// CHAT-79, `send_message`). The thread draws it as its own bubble; it is
+/// never part of the run's answer.
+class AgentsRelayMessage extends AgentsRelayInbound {
+  const AgentsRelayMessage(
+    this.text, {
+    this.replay = false,
+    this.mid,
+    this.sentAt,
+    this.sessionKey,
+    this.runId,
+  });
+
+  final String text;
+  final bool replay;
+  final int? mid;
+  final DateTime? sentAt;
+  final String? sessionKey;
+  final String? runId;
+}
+
 /// The host says the run for [sessionKey] is still running (wire `heartbeat`).
 ///
 /// The one frame that carries no content on purpose. A model reading a long
@@ -3605,6 +3649,17 @@ class AgentsRelayClient
     _dispatch(payload);
   }
 
+  /// The run and thread of the frame [_dispatch] is handling (CHAT-80).
+  ({String? sessionKey, String? runId}) _route = (
+    sessionKey: null,
+    runId: null,
+  );
+
+  void _addRouted(AgentsRelayInbound event) {
+    _agentsRelayRoutes[event] = _route;
+    _inbound.add(event);
+  }
+
   void _dispatch(Map<String, dynamic> payload) {
     if (_inbound.isClosed) return;
     // A replay stream re-sends stored turns marked ``replay`` so the UI renders
@@ -3612,6 +3667,15 @@ class AgentsRelayClient
     final replay = payload['replay'] == true;
     // The replay cursor. Every replayed event carries it; a live event may.
     final mid = AgentsRelayTool._asInt(payload['mid']);
+    // CHAT-80: which run and thread this frame belongs to. Several runs stream
+    // at once now (one per agent, plus a reply next to running work), so
+    // every event of a run carries both; [agentsRelayRoute] reads them back.
+    final Object? routeKey = payload['session_key'];
+    final Object? routeRun = payload['run_id'];
+    _route = (
+      sessionKey: routeKey is String && routeKey.isNotEmpty ? routeKey : null,
+      runId: routeRun is String && routeRun.isNotEmpty ? routeRun : null,
+    );
     // Agent modes (goal, plan, todo, questions) and the inbox's "waits on
     // you": a store of their own, fed beside the switch below.
     AgentsThreadModes.instance.ingest(payload);
@@ -3650,7 +3714,7 @@ class AgentsRelayClient
       case 'delta':
         final text =
             payload['text'] ?? payload['delta'] ?? payload['content'] ?? '';
-        _inbound.add(
+        _addRouted(
           AgentsRelayDelta(
             '$text',
             replay: replay,
@@ -3665,7 +3729,7 @@ class AgentsRelayClient
         final text = payload['text'] ?? payload['content'] ?? '';
         final Object? source = payload['source'];
         final Object? answerTo = payload['answer_to_pending_question'];
-        _inbound.add(
+        _addRouted(
           AgentsRelayUser(
             '$text',
             replay: replay,
@@ -3684,10 +3748,32 @@ class AgentsRelayClient
         final AgentsRelayContext? context = AgentsRelayContext.fromPayload(
           payload,
         );
-        if (context != null) _inbound.add(context);
+        if (context != null) _addRouted(context);
+      case 'message':
+        // CHAT-79: a chat message the agent sent while it keeps working
+        // (`send_message`): its own bubble, never part of the answer.
+        final Object? said = payload['text'];
+        if (said is String && said.trim().isNotEmpty) {
+          _addRouted(
+            AgentsRelayMessage(
+              said,
+              replay: replay,
+              mid: mid,
+              sentAt: epochSecondsToDateTime(
+                payload['sent_at'] ?? payload['created_at'],
+              ),
+              sessionKey: routeKey is String && routeKey.isNotEmpty
+                  ? routeKey
+                  : null,
+              runId: routeRun is String && routeRun.isNotEmpty
+                  ? routeRun
+                  : null,
+            ),
+          );
+        }
       case 'reasoning':
         final text = payload['text'] ?? payload['reasoning'] ?? '';
-        _inbound.add(
+        _addRouted(
           AgentsRelayReasoning(
             '$text',
             replay: replay,
@@ -3700,12 +3786,12 @@ class AgentsRelayClient
         // directly: it either clears the app's record of an unacknowledged
         // send, or it tells the thread the send failed and why.
         final ack = AgentsRelayTaskAck.fromPayload(payload);
-        if (ack != null) _inbound.add(ack);
+        if (ack != null) _addRouted(ack);
       case 'heartbeat':
         // Proof of life. Nothing is rendered from it: it only stops the app
         // from reading a long prefill or a long command as a dead host.
         final elapsed = payload['elapsed'];
-        _inbound.add(
+        _addRouted(
           AgentsRelayHeartbeat(
             runId: payload['run_id'] is String
                 ? payload['run_id'] as String
@@ -3725,20 +3811,20 @@ class AgentsRelayClient
           ),
         );
       case 'tool':
-        _inbound.add(AgentsRelayTool.fromPayload(payload));
+        _addRouted(AgentsRelayTool.fromPayload(payload));
       case 'file':
-        _inbound.add(_fileFromPayload(payload));
+        _addRouted(_fileFromPayload(payload));
       case 'browser_data':
         final data = payload['data'];
         if (data is String && data.isNotEmpty) {
           try {
-            _inbound.add(AgentsRelayBrowserData(base64.decode(data)));
+            _addRouted(AgentsRelayBrowserData(base64.decode(data)));
           } on FormatException {
             // A corrupt chunk is dropped, not fatal — the stream continues.
           }
         }
       case 'browser_view':
-        _inbound.add(
+        _addRouted(
           AgentsRelayBrowserView(
             status: '${payload['status'] ?? 'error'}',
             message: '${payload['message'] ?? ''}',
@@ -3751,25 +3837,25 @@ class AgentsRelayClient
         );
       case 'approval_request':
         final request = AgentsRelayApprovalRequest.fromPayload(payload);
-        if (request != null) _inbound.add(request);
+        if (request != null) _addRouted(request);
       case 'secret_request':
         // The model asked for keys by name; the run waits on the answer.
         final request = AgentsRelaySecretRequest.fromPayload(payload);
-        if (request != null) _inbound.add(request);
+        if (request != null) _addRouted(request);
       case 'automation':
         // A fire in a chat of its own (`run_session_key`): the inbox lists
         // that chat as a thread of the owning agent.
         AgentsDerivedThreads.instance.ingestAutomation(payload);
         final automation = AgentsRelayAutomation.fromPayload(payload);
-        if (automation != null) _inbound.add(automation);
+        if (automation != null) _addRouted(automation);
       case 'automation_list':
-        _inbound.add(AgentsRelayAutomationList.fromPayload(payload));
+        _addRouted(AgentsRelayAutomationList.fromPayload(payload));
       // ── F2: automations + cost totals ──
       case 'automation_saved':
         automationSavedSink?.call(payload);
       // ── end F2 ──
       case 'documents':
-        _inbound.add(AgentsRelayDocuments(payload));
+        _addRouted(AgentsRelayDocuments(payload));
       // Terminal replies to the app's own requests (checkpoints, the login
       // vault, attachment chunks): a service waits on them, nothing renders.
       case 'checkpoints':
@@ -3779,11 +3865,11 @@ class AgentsRelayClient
       case 'attachment_ack':
         AgentsReplyFrames.instance.add(payload);
       case 'skills_list':
-        _inbound.add(AgentsRelaySkillsList.fromPayload(payload));
+        _addRouted(AgentsRelaySkillsList.fromPayload(payload));
       // ── skill proposals ──
       case 'skill_proposal':
         final proposal = AgentsRelaySkillProposal.fromPayload(payload);
-        if (proposal != null) _inbound.add(proposal);
+        if (proposal != null) _addRouted(proposal);
       case 'skill_proposal_result':
         _completeSkillProposalDecision(payload);
       // ── end skill proposals ──
@@ -3792,7 +3878,7 @@ class AgentsRelayClient
           _agentStatus.add(AgentsRelayAgentStatus.fromPayload(payload));
         }
       case 'agent_list':
-        _inbound.add(AgentsRelayAgentList.fromPayload(payload));
+        _addRouted(AgentsRelayAgentList.fromPayload(payload));
       case 'agent_permissions':
         agentPermissionsSink?.call(payload);
       // ── own browser ──
@@ -3810,7 +3896,7 @@ class AgentsRelayClient
         break;
       case 'run_state':
         final runState = AgentsRelayRunState.fromPayload(payload);
-        if (runState != null) _inbound.add(runState);
+        if (runState != null) _addRouted(runState);
       case 'done':
         automationDoneSink?.call(
           payload,
@@ -3820,7 +3906,7 @@ class AgentsRelayClient
         final reason = payload['reason'];
         final tokens = payload['tokens_spent'] ?? payload['tokensSpent'];
         final runId = payload['run_id'];
-        _inbound.add(
+        _addRouted(
           AgentsRelayDone(
             finalAnswer: finalAnswer is String ? finalAnswer : null,
             sessionKey: payload['session_key'] is String
@@ -3882,7 +3968,7 @@ class AgentsRelayClient
       case 'error':
         final errorSession = payload['session_key'];
         final errorRun = payload['run_id'];
-        _inbound.add(
+        _addRouted(
           AgentsRelayRunError(
             '${payload['message'] ?? 'Unknown error'}',
             sessionKey: errorSession is String && errorSession.isNotEmpty
@@ -3893,7 +3979,7 @@ class AgentsRelayClient
         );
       case 'debug_context':
         final sessionKey = payload['session_key'];
-        _inbound.add(
+        _addRouted(
           AgentsRelayDebugContext(
             sessionKey: sessionKey is String ? sessionKey : '',
             round: AgentsRelayTool._asInt(payload['round']),
@@ -3902,18 +3988,18 @@ class AgentsRelayClient
         );
       case 'subagent':
         final sub = _subagentFromPayload(payload);
-        if (sub != null) _inbound.add(sub);
+        if (sub != null) _addRouted(sub);
       case 'room_turn':
         final turn = _roomTurnFromPayload(payload);
-        if (turn != null) _inbound.add(turn);
+        if (turn != null) _addRouted(turn);
       case 'room_history':
         final hist = _roomHistoryFromPayload(payload);
-        if (hist != null) _inbound.add(hist);
+        if (hist != null) _addRouted(hist);
       case 'room_done':
         final roomId = payload['room_id'];
         final reason = payload['reason'];
         if (roomId is String && reason is String) {
-          _inbound.add(
+          _addRouted(
             AgentsRelayRoomDone(
               roomId: roomId,
               reason: reason,

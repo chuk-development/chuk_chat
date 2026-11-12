@@ -233,10 +233,11 @@ def test_a_task_behind_another_says_queued(tmp_path):
     try:
         a = controller.send_task("long one", session_key="thread-a")
         assert first.started.wait(10.0)
-        b = controller.send_task("short one", session_key="thread-b")
+        # Same agent (lane): it waits. Another agent would run at once (CHAT-80).
+        b = controller.send_task("short one", session_key="thread-a")
         queued = _collect_until(controller, b, lambda ev: len(_beats(ev)) >= 1)
         assert queued[0]["phase"] == "queued" and queued[0]["seq"] == 1
-        assert queued[0]["session_key"] == "thread-b"
+        assert queued[0]["session_key"] == "thread-a"
         first.release()
         assert controller.collect(a, timeout=15.0)[-1]["type"] == "done"
         rest = _collect_until(

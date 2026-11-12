@@ -272,6 +272,77 @@ void main() {
     expect(controller.taskSessionKeys, <String>['other-thread']);
   });
 
+  test('CHAT-80: a stream keeps only the frames of its own run', () async {
+    final seen = <ChatStreamEvent>[];
+    final sub = AgentsChatTransport.sendStreamingChat(
+      accessToken: 'token',
+      message: 'quick question',
+      modelId: 'm',
+      providerSlug: 'p',
+      chatId: sessionKey,
+    ).listen(seen.add);
+    await _drain();
+    // Work that started earlier streams on: before this send's ack its
+    // frames are not this stream's.
+    controller.emit(
+      debugRouteAgentsRelay(
+        const AgentsRelayDelta('old work'),
+        sessionKey: sessionKey,
+        runId: 'run-work',
+      ),
+    );
+    await _drain();
+    controller.emit(
+      AgentsRelayTaskAck(
+        taskId: controller.taskIds.last!,
+        status: 'accepted',
+        sessionKey: sessionKey,
+        runId: 'run-mine',
+      ),
+    );
+    await _drain();
+    for (final AgentsRelayInbound event in <AgentsRelayInbound>[
+      debugRouteAgentsRelay(
+        const AgentsRelayMessage('Looking now.'),
+        sessionKey: sessionKey,
+        runId: 'run-mine',
+      ),
+      debugRouteAgentsRelay(
+        const AgentsRelayDelta('more old work'),
+        sessionKey: sessionKey,
+        runId: 'run-work',
+      ),
+      debugRouteAgentsRelay(
+        const AgentsRelayDelta('other agent'),
+        sessionKey: 'thread-2',
+        runId: 'run-x',
+      ),
+      debugRouteAgentsRelay(
+        const AgentsRelayDelta('mine'),
+        sessionKey: sessionKey,
+        runId: 'run-mine',
+      ),
+      debugRouteAgentsRelay(
+        const AgentsRelayDone(
+          reason: 'finished',
+          sessionKey: sessionKey,
+          runId: 'run-work',
+        ),
+        sessionKey: sessionKey,
+        runId: 'run-work',
+      ),
+    ]) {
+      controller.emit(event);
+      await _drain();
+    }
+    expect(seen.whereType<DoneEvent>(), isEmpty);
+    expect(
+      seen.whereType<ContentEvent>().map((e) => e.text).toList(),
+      <String>['Looking now.\n\n', 'mine'],
+    );
+    await sub.cancel();
+  });
+
   test('deltas become content events', () async {
     final seen = await run(const <AgentsRelayInbound>[
       AgentsRelayDelta('Hel'),

@@ -1555,6 +1555,24 @@ class StreamingMessageHandler {
     }
   }
 
+  /// Lets go of the stream of [chatId] WITHOUT stopping its run (CHAT-80).
+  /// The user sends an Agents thread a new message while its agent still
+  /// works: the work goes on on the host (no stop intent is declared, so the
+  /// transport sends no `stop`), and the thread's line at the bottom keeps
+  /// showing it. What the bubble already shows stays; the replay after the
+  /// work draws its answer.
+  Future<void> detachStream(String chatId) async {
+    if (!(_isStreaming || _isSending)) return;
+    _cancelRequested = true;
+    await _streamingManager.cancelStream(chatId);
+    _flushSnapshot(forceImmediate: true);
+    _markStreamFinalized();
+    _isStreaming = false;
+    _isSending = false;
+    onUpdateUI?.call();
+    await _releaseForegroundKeepAlive();
+  }
+
   /// Images already persisted for the message being streamed, so a second
   /// pass reports the whole set rather than replacing it with its own.
   ///

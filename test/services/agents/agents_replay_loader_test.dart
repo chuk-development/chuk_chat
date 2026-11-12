@@ -76,6 +76,24 @@ void main() {
     return chat.messages.map((m) => m.toJson()).toList();
   }
 
+  test('CHAT-79: a note the agent sent is its own bubble', () async {
+    await replay(const <AgentsRelayInbound>[
+      AgentsRelayRunState(sessionKey: sessionKey, state: 'idle'),
+      AgentsRelayUser('check my mail', mid: 1),
+      AgentsRelayMessage('Ich schau mir die Mails an.', replay: true, mid: 2),
+      AgentsRelayDelta('3 neue Mails.', replay: true, mid: 5),
+      AgentsRelayDone(reason: 'replay', replay: true),
+    ]);
+    final rows = rowsFor(sessionKey);
+    expect(rows.map((r) => r['text']).toList(), <String?>[
+      'check my mail',
+      'Ich schau mir die Mails an.',
+      '3 neue Mails.',
+    ]);
+    expect(rows[1]['role'], 'ai');
+    expect(rows[2]['role'], 'ai');
+  });
+
   test('a scripted replay becomes user and assistant rows', () async {
     await replay(const <AgentsRelayInbound>[
       AgentsRelayRunState(sessionKey: sessionKey, state: 'idle'),

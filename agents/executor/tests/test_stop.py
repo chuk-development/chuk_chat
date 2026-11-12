@@ -296,7 +296,8 @@ def test_a_stop_on_a_queued_task_stops_it_before_it_starts(gated):
 
     first = controller.send_task("work forever", session_key="thread-1")
     assert model.started.wait(10.0)
-    second = controller.send_task("the queued one", session_key="thread-2")
+    # Same agent: it waits in that agent's lane (CHAT-80).
+    second = controller.send_task("the queued one", session_key="thread-1")
 
     stop_id = controller.send_stop(request_id=second)
     assert controller.collect(stop_id, timeout=10.0)[-1]["stopping"] == [second]

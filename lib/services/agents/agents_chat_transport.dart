@@ -79,6 +79,17 @@ class AgentsChatTransport {
   /// belongs to, short enough that it can never arm an unrelated later one.
   static const Duration _stopIntentWindow = Duration(seconds: 5);
 
+  /// Threads whose NEXT send is a side send (CHAT-80): the screen detached
+  /// the stream of the running work and sends a new message next to it.
+  static final Set<String> _sideSends = <String>{};
+
+  /// The screen is about to send [sessionKey] a message while its agent still
+  /// works. The next send of that thread is tracked under its own ledger
+  /// entry ([agentsSideLedgerKey]); the running work keeps its own.
+  static void markSideSend(String sessionKey) {
+    if (sessionKey.isNotEmpty) _sideSends.add(sessionKey);
+  }
+
   /// Declares that the user asked to stop [sessionKey]'s run. Called by the
   /// composer's stop target (through the streaming handler) BEFORE the stream
   /// is cancelled; [withdrawStopIntent] takes it back when the same cancel
@@ -145,6 +156,17 @@ class AgentsChatTransport {
     final sessionKey = (chatId != null && chatId.isNotEmpty)
         ? chatId
         : link.sessionKey.value;
+    // CHAT-80: a message sent while this agent still works is a "side send":
+    // the host answers it next to the running work. Its run has its own
+    // ledger entry, so the running work keeps its own.
+    final bool sideSend = _sideSends.remove(sessionKey);
+    final String ledgerKey = sideSend
+        ? agentsSideLedgerKey(sessionKey)
+        : sessionKey;
+    // This send's run, once the host acknowledged it. Several runs of one
+    // thread (and of other agents) stream at once: only this run's frames
+    // belong to this stream.
+    String? myRunId;
     final verbose = VerboseService.instance.enabled;
     // The name of THIS SEND on the wire, minted once here rather than where
     // the frame is sealed: the re-send after a reconnect has to carry the
@@ -238,7 +260,7 @@ class AgentsChatTransport {
         ).catchError((Object _) {}),
       );
       ledger.finish(
-        sessionKey,
+        ledgerKey,
         finalAnswer: finalAnswer,
         reason: reason,
         iterations: iterations,
@@ -271,7 +293,7 @@ class AgentsChatTransport {
               paths: attachmentPaths,
               // Every acknowledged chunk is proof of life: a long upload is
               // not a lost run.
-              onChunk: () => ledger.touch(sessionKey),
+              onChunk: () => ledger.touch(ledgerKey),
             );
       // The agent's own reasoning level rides with its own model; a
       // chat with none keeps the level the composer sent.
@@ -301,7 +323,7 @@ class AgentsChatTransport {
           blobIds: blobIds,
         ).catchError((Object _) => _unrecorded(sessionKey, wireTaskId)),
       );
-      ledger.taskSent(sessionKey, wireTaskId);
+      ledger.taskSent(ledgerKey, wireTaskId);
       // F1: the one task "Run anyway" armed for this thread. Read, not
       // used up: it is disarmed only after the frame went out, so a send
       // that fails keeps it for the next try.
@@ -341,6 +363,16 @@ class AgentsChatTransport {
       // The replay loader owns history. A replayed frame must never enter a
       // live run's stream: it would append yesterday's answer to today's.
       if (_isReplay(event)) return;
+      // CHAT-80: a frame of another run is not this stream's. The ack that
+      // names this send is how the run id is learned; frames before it
+      // belong to runs that started earlier.
+      final route = agentsRelayRoute(event);
+      if (route.sessionKey != null && route.sessionKey != sessionKey) return;
+      if (event is! AgentsRelayTaskAck &&
+          route.runId != null &&
+          route.runId != myRunId) {
+        return;
+      }
 
       switch (event) {
         case AgentsRelayHeartbeat():
@@ -354,7 +386,7 @@ class AgentsChatTransport {
           // sends heartbeats but is too old to send a `task_ack`: without this
           // the record would sit there and the task would go out again on the
           // next pairing, on top of a run that is working perfectly.
-          ledger.heartbeat(sessionKey);
+          ledger.heartbeat(ledgerKey);
           unawaited(
             AgentsPendingTasks.clear(
               sessionKey,
@@ -386,12 +418,13 @@ class AgentsChatTransport {
             return;
           }
           if (event.isHeld) {
+            myRunId ??= event.runId;
             // `accepted` and `duplicate` are the same thing to the app: the
             // host has it. `duplicate` deliberately paints NOTHING — the
             // answer is coming from the first attempt, and a second bubble
             // would be this fix creating the duplicate it exists to prevent.
             ledger.taskAcknowledged(
-              sessionKey,
+              ledgerKey,
               taskId: event.taskId,
               runId: event.runId,
             );
@@ -407,7 +440,7 @@ class AgentsChatTransport {
           // attempt. The spinner goes now, and the bubble says the send
           // failed with the host's own reason.
           terminated = true;
-          ledger.taskRejected(sessionKey, reason: event.reason);
+          ledger.taskRejected(ledgerKey, reason: event.reason);
           unawaited(
             AgentsPendingTasks.clear(
               sessionKey,
@@ -441,7 +474,7 @@ class AgentsChatTransport {
           // A token is proof the run is alive: it restarts the ceiling that
           // would otherwise declare it lost. It is also proof the task
           // arrived, so nothing is left to re-send for this thread.
-          ledger.touch(sessionKey);
+          ledger.touch(ledgerKey);
           unawaited(
             AgentsPendingTasks.clear(
               sessionKey,
@@ -450,9 +483,16 @@ class AgentsChatTransport {
           );
           if (text.isNotEmpty) emit(ContentEvent(text));
 
+        case AgentsRelayMessage(:final text):
+          // CHAT-79: the agent's note while it works ("I am going through
+          // your inbox"). It shows in the running bubble at once; after the
+          // run the thread's replay draws it as its own bubble.
+          ledger.touch(ledgerKey);
+          if (text.trim().isNotEmpty) emit(ContentEvent('${text.trim()}\n\n'));
+
         case AgentsRelayReasoning(:final text):
           if (text.isNotEmpty) {
-            ledger.reasoning(sessionKey, text);
+            ledger.reasoning(ledgerKey, text);
             emit(ReasoningEvent(text));
           }
 
@@ -473,17 +513,17 @@ class AgentsChatTransport {
             );
           }
           if (started) {
-            ledger.openTool(sessionKey, event.name, arguments: event.arguments);
+            ledger.openTool(ledgerKey, event.name, arguments: event.arguments);
           } else {
             // One mapping for live and replay (bead cowork-b45): the ledger
             // draws this frame exactly as the replay loader will.
-            ledger.recordTool(sessionKey, event);
+            ledger.recordTool(ledgerKey, event);
             if (verbose) emit(ReasoningEvent(_toolOutcomeLine(event)));
           }
 
         case AgentsRelaySubagent():
           ledger.subagent(
-            sessionKey,
+            ledgerKey,
             subagentId: event.subagentId,
             title: event.title,
             state: event.state,
@@ -492,18 +532,18 @@ class AgentsChatTransport {
           );
 
         case AgentsRelayFile():
-          await ledger.file(sessionKey, event);
+          await ledger.file(ledgerKey, event);
 
         case AgentsRelayAutomation():
           // One transcript line per automation id (docs/WIRE_CONTRACT.md,
           // "Automations"); the strip and the page read the source.
-          ledger.automation(sessionKey, event);
+          ledger.automation(ledgerKey, event);
 
         case AgentsRelayContext():
           // A row nobody typed, written during the run: a chip on its answer.
           if (!event.replay &&
               (event.sessionKey == null || event.sessionKey == sessionKey)) {
-            ledger.context(sessionKey, event);
+            ledger.context(ledgerKey, event);
           }
 
         case AgentsRelayAutomationList():
@@ -513,7 +553,7 @@ class AgentsChatTransport {
           break;
 
         case AgentsRelayApprovalRequest():
-          ledger.approval(sessionKey, event);
+          ledger.approval(ledgerKey, event);
 
         case AgentsRelaySecretRequest():
           // Answered by the thread view's card (docs/WIRE_CONTRACT.md,
@@ -571,7 +611,7 @@ class AgentsChatTransport {
             break;
           }
           terminated = true;
-          ledger.finish(sessionKey, reason: 'error');
+          ledger.finish(ledgerKey, reason: 'error');
           emit(ErrorEvent(message, code: StreamErrorCodes.streamFailure));
           emit(DoneEvent());
           closeOut();
@@ -599,7 +639,7 @@ class AgentsChatTransport {
               ).catchError((Object _) {}),
             );
             ledger.adoptRunning(
-              sessionKey,
+              ledgerKey,
               runId: runId,
               prompt: message,
               startedAt: event.startedAt,
@@ -623,7 +663,9 @@ class AgentsChatTransport {
           // it instead: the next replay is then a delta and the local turn
           // stays as drawn.
           final lastMid = event.lastMid;
-          if (lastMid != null) {
+          // A side send's rows live in the host's side session (CHAT-80):
+          // its mids say nothing about this thread's cursor.
+          if (lastMid != null && !sideSend) {
             AgentsReplayLoader.instance.advanceCursor(sessionKey, lastMid);
           } else {
             AgentsReplayLoader.instance.invalidateCursor(sessionKey);
@@ -647,7 +689,7 @@ class AgentsChatTransport {
 
         case AgentsRelayDebugContext():
           ledger.debugContext(
-            sessionKey,
+            ledgerKey,
             Map<String, dynamic>.from(event.payload),
           );
 
@@ -680,7 +722,7 @@ class AgentsChatTransport {
     }
 
     out.onListen = () {
-      final AgentsRun thisRun = ledger.begin(sessionKey);
+      final AgentsRun thisRun = ledger.begin(ledgerKey);
       // The ledger can end this run with no frame from the host: the task got
       // no `task_ack` in three ack windows, so it never arrived
       // ([AgentsRunOutcome.notDelivered]). Nothing then reaches [handle], and
@@ -689,7 +731,7 @@ class AgentsChatTransport {
       // undelivered send ends: an error, then done.
       void onLedger() {
         if (terminated || out.isClosed) return;
-        final AgentsRun? run = ledger.runFor(sessionKey);
+        final AgentsRun? run = ledger.runFor(ledgerKey);
         if (!identical(run, thisRun)) return;
         if (thisRun.running ||
             thisRun.outcome != AgentsRunOutcome.notDelivered) {
@@ -724,7 +766,7 @@ class AgentsChatTransport {
           chain = chain.then((_) async {
             if (terminated) return;
             terminated = true;
-            ledger.finish(sessionKey, reason: 'error');
+            ledger.finish(ledgerKey, reason: 'error');
             // `connectionLost`, not `streamFailure`: what raised here is the
             // SOCKET under the stream, not the run. The run belongs to the
             // host process and survives the drop, so the turn must not be
@@ -742,7 +784,7 @@ class AgentsChatTransport {
       final controller = link.controller.value;
       if (controller == null) {
         terminated = true;
-        ledger.finish(sessionKey, reason: 'error');
+        ledger.finish(ledgerKey, reason: 'error');
         // The prompt is not lost because the socket is down: it waits in the
         // outbox and goes out on the next pairing (bead cowork-i7sd). The row
         // on screen is marked so the user can see it and ask for it again.
@@ -778,7 +820,7 @@ class AgentsChatTransport {
             // that is gone): nothing goes out and nothing is queued, the user
             // has to change the selection. Said in plain words.
             terminated = true;
-            ledger.finish(sessionKey, reason: 'error');
+            ledger.finish(ledgerKey, reason: 'error');
             _notices.add(
               AgentsSendNotice(
                 kind: AgentsSendNoticeKind.attachmentsRefused,
@@ -799,7 +841,7 @@ class AgentsChatTransport {
             return;
           }
           terminated = true;
-          ledger.finish(sessionKey, reason: 'error');
+          ledger.finish(ledgerKey, reason: 'error');
           // The socket said no, so nothing is in flight and there is nothing to
           // wait for an ack on. The prompt moves to the outbox instead, which
           // is the queue for what never went out at all.
@@ -856,7 +898,7 @@ class AgentsChatTransport {
       if (controller == null) return;
       // The thread stops animating even if the terminal this causes never
       // reaches the app (the subscription above is already gone).
-      ledger.stopRequested(sessionKey);
+      ledger.stopRequested(ledgerKey);
       try {
         await controller.requestStop(sessionKey: sessionKey);
       } catch (error) {
@@ -872,6 +914,7 @@ class AgentsChatTransport {
   static bool _isReplay(AgentsRelayInbound event) => switch (event) {
     AgentsRelayUser() => true,
     AgentsRelayDelta(:final replay) => replay,
+    AgentsRelayMessage(:final replay) => replay,
     AgentsRelayReasoning(:final replay) => replay,
     AgentsRelayTool(:final replay) => replay,
     AgentsRelaySubagent(:final replay) => replay,

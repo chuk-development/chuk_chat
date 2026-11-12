@@ -575,6 +575,11 @@ String approvalDecisionLabel({
 }
 // ── end F1 ──
 
+/// The ledger entry of a "side send" to [sessionKey] (CHAT-80): a message
+/// the user sent while the agent still works. The host answers it next to the
+/// running work; both runs are live at once, each under its own entry.
+String agentsSideLedgerKey(String sessionKey) => '$sessionKey#side';
+
 class AgentsRunLedger extends ChangeNotifier {
   AgentsRunLedger._();
 

@@ -26,6 +26,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/services/storage/chat_origin.dart';
+import 'package:chuk_chat/services/agents/agents_chat_transport.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/services.dart' show HardwareKeyboard;
 
@@ -554,8 +555,36 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   Future<void> queueOrSteerComposer({required bool alternate}) async {
     final String text = composerController.text.trim();
     if (text.isEmpty) return;
+    // CHAT-80: an Agents thread has no queue. The message goes out now and
+    // is answered next to the running work.
+    if (_sendsNextToWork) return sendMessage();
     setState(() => _followUps.enqueue(text, alternate: alternate));
     composerController.clear();
+  }
+
+  /// CHAT-80: whether a send now goes out next to the running work instead
+  /// of into the queue. Only an Agents thread; a plain chat keeps its queue.
+  bool get _sendsNextToWork =>
+      widget.messengerMode && ChatOrigin.isAgentsThread(_activeChatId);
+
+  /// Lets go of the running work's stream without stopping it, so the new
+  /// message can stream its own reply (CHAT-80). The work goes on on the
+  /// host and shows in the line at the bottom of the thread; its answer comes
+  /// with the replay when it ends. An empty bubble of it is dropped.
+  Future<void> _detachForSideSend() async {
+    final String? id = _activeChatId;
+    if (id == null) return;
+    await _streamingHandler.detachStream(id);
+    _isSendingMessage = false;
+    AgentsChatTransport.markSideSend(id);
+    if (_messages.isNotEmpty) {
+      final Map<String, String> last = _messages.last;
+      if ((last['sender'] ?? 'ai') != 'user' &&
+          (last['text'] ?? '').trim().isEmpty) {
+        _messages.removeLast();
+      }
+    }
+    if (mounted) setState(() {});
   }
 
   /// The payload of the send now streaming, per chat. A send that never
@@ -2978,6 +3007,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     String? voiceText,
     VoiceTurnStarted? onVoiceTurnStarted,
   }) async {
+    // CHAT-80: the agent still works on the last message. This one is
+    // answered next to it, at once: no queue in an Agents thread.
+    if (voiceText == null &&
+        _sendsNextToWork &&
+        (_isCurrentChatStreaming || _isSendingMessage) &&
+        composerController.text.trim().isNotEmpty) {
+      await _detachForSideSend();
+    }
     // Prevent double-send on slow network (user tapping send repeatedly)
     if (_isSendingMessage) return;
 
