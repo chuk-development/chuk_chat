@@ -1,0 +1,12 @@
+# Test files that run in their own process under tool/fast_test.dart, as
+# with plain `flutter test`. One path per line; give the reason.
+
+# Lays out every screen at many sizes: ~150 s on its own, so it gets its
+# own process and runs while the bundles run.
+test/layout/every_screen_layout_test.dart
+
+# Stopped a whole bundle (no test event for minutes) in the 2026-11-12 runs;
+# green on their own.
+test/widgets/messenger_shell_test.dart
+test/platform_specific/chat/mode_provider_resolution_test.dart
+test/services/chat_payload_migration_test.dart

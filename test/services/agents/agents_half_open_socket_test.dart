@@ -67,6 +67,13 @@ class _BlackHoleProxy {
 Future<HttpServer> _relay() async {
   final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
   server.listen((request) async {
+    // Port scanners on a dev box (T3 Code probes every local port with a
+    // plain GET) must not fail the test: only the client's upgrade counts.
+    if (!WebSocketTransformer.isUpgradeRequest(request)) {
+      request.response.statusCode = HttpStatus.notFound;
+      await request.response.close();
+      return;
+    }
     final ws = await WebSocketTransformer.upgrade(request);
     ws.listen(ws.add, onError: (Object _) {});
   });

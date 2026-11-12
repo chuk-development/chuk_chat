@@ -62,7 +62,7 @@ formatted at `HEAD`. Do not bypass it with `--no-verify`.
 
 In this order, as `CLAUDE.md` says:
 
-1. `flutter test` - the whole suite, all green.
+1. `dart tool/fast_test.dart` - the whole suite, all green (see below).
 2. `coderabbit review --uncommitted --include-untracked` - 10 to 20 minutes,
    start it in the background. Fix every finding.
 3. Commit as chukfinley, one commit per topic.
@@ -70,3 +70,29 @@ In this order, as `CLAUDE.md` says:
    `git push`.
 
 A scoped run is never a substitute for step 1. Do not push on red.
+
+## The full suite: `dart tool/fast_test.dart`
+
+Plain `flutter test` compiles the app once per test file (570 times) and
+starts up to 14 test processes. That cost 10 to 30 minutes and most of a
+16-core CPU. `tool/fast_test.dart` imports the files into 4 bundles that
+compile once each, so a full run takes a few minutes with 4 processes.
+
+- Start it with `dart`, not `dart run`: `dart run` first runs the package's
+  native build hooks and can wait minutes on another build's lock.
+- A file that hangs, fails or does not load in a bundle runs again on its
+  own; only that result counts. Files that need their own process are in
+  `tool/fast_test_isolated.txt` (checked in) and
+  `.dart_tool/fast_test_learned.txt` (learned on this machine; delete it to
+  re-learn). The summary lists "only green on their own" files: they leak
+  state into the next file, so fix them when you touch them.
+- Only one full run per checkout goes at a time (a lock); a second run
+  waits. Do not start the suite again while one is running.
+- Options: `--workers 2` (less CPU and RAM), `--only test/widgets`,
+  `-- --name foo` (passed to `flutter test`).
+- On a PC with T3 Code, run `scripts/patch_flutter_test_connect.sh` once
+  (again after `flutter upgrade`). T3 Code probes every local port with
+  `GET /`; without the patch that kills random test files at load with
+  `Unable to connect to flutter_tester process`. A test that starts its own
+  HTTP or WebSocket server must answer a non-upgrade request with 404
+  (example: `test/services/agents/agents_half_open_socket_test.dart`).

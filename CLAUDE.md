@@ -64,12 +64,11 @@ the owner says CoWork, he means Agents. Code, flags and docs use "Agents".
 
 **After completing any task, ALWAYS do this in order:**
 
-1. `flutter test` — all must pass
+1. `dart tool/fast_test.dart` (full suite, see pre-push skill) — all green
 2. `coderabbit review --uncommitted --include-untracked` — fix any findings.
    Plain text is the default now; `--plain` and `--type` were removed from the
    CLI. **`--include-untracked` matters**: a newly added file is invisible to
-   the review without it. Runs take 10–20 min, so start it in the background
-   rather than under a short timeout.
+   the review without it. Runs take 10–20 min: start it in the background.
 3. Commit with descriptive message
 4. `git push`
 
