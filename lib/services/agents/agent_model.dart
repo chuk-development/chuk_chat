@@ -394,8 +394,8 @@ class AgentModel {
       'model': selection?.modelId,
       if (selection != null && selection.providerSlug.isNotEmpty)
         'provider': selection.providerSlug,
-      if (selection?.reasoningEffort != null)
-        'reasoning_effort': selection!.reasoningEffort,
+      if (selection?.reasoningEffort case final String effort)
+        'reasoning_effort': effort,
     };
     try {
       final send = debugSendFrame;

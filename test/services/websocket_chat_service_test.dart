@@ -148,7 +148,7 @@ void main() {
     expect(controller.tasks, <String>['do the thing']);
     expect(controller.taskSessionKeys, <String>[sessionKey]);
     expect(controller.taskModelIds, <String?>[
-      'deepseek/deepseek-v4-flash-0731',
+      'deepseek/deepseek-v4.1-flash-1017',
     ]);
     expect(controller.taskProviderSlugs, <String?>[agentDefault.providerSlug]);
     expect(controller.taskReasoning, <String?>[agentDefault.reasoningEffort]);
