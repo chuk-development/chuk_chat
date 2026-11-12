@@ -6,6 +6,7 @@ import 'dart:typed_data' show BytesBuilder, Uint8List;
 import 'dart:ui' show PointerDeviceKind;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart' show TapGestureRecognizer;
 import 'package:flutter/material.dart';
 
 import 'package:flutter/services.dart';
@@ -26,6 +27,9 @@ import 'package:chuk_chat/utils/non_public_ip.dart';
 import 'package:chuk_chat/utils/phone_linkify.dart';
 import 'package:chuk_chat/widgets/chuk_table.dart';
 import 'package:chuk_chat/widgets/chuk_table_classic.dart';
+import 'package:chuk_chat/services/link_preview_service.dart'
+    show linkTextIsUrl, shortUrlLabel;
+import 'package:chuk_chat/widgets/link_preview_card.dart';
 import 'package:chuk_chat/utils/favicon.dart';
 import 'package:chuk_chat/widgets/icons/huge_icon.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
@@ -88,9 +92,81 @@ class InlineCodeNode extends SpanNode {
 /// A link that reads as a link: the accent colour plus an underline in that
 /// same colour, without losing the size or the weight of the text around it.
 class AccentLinkNode extends LinkNode {
-  AccentLinkNode(super.attributes, super.linkConfig, this.accentColor);
+  AccentLinkNode(
+    super.attributes,
+    super.linkConfig,
+    this.accentColor, {
+    this.hoverContext,
+  });
 
   final Color accentColor;
+
+  /// When set, the link gets the site icon in front of it, a bare URL reads
+  /// as `host/path`, the mouse opens the preview card on hover and a long
+  /// press opens it on touch (`lib/widgets/link_preview_card.dart`).
+  final BuildContext? hoverContext;
+
+  @override
+  InlineSpan build() {
+    final BuildContext? ctx = hoverContext;
+    final String url = attributes['href'] ?? '';
+    if (ctx == null || !isPreviewableUrl(url)) return super.build();
+    final TextStyle linkStyle = style;
+    final double fontSize = linkStyle.fontSize ?? 15;
+    final TapGestureRecognizer recognizer = linkPreviewRecognizer(ctx, url, () {
+      final void Function(String)? onTap = linkConfig.onTap;
+      if (onTap != null) {
+        onTap(url);
+      } else {
+        launchUrl(Uri.parse(url));
+      }
+    });
+    final List<InlineSpan> built = <InlineSpan>[
+      for (final SpanNode child in children) child.build(),
+    ];
+    final String text = built.map((InlineSpan s) => s.toPlainText()).join();
+    final List<InlineSpan> label = linkTextIsUrl(text, url)
+        ? <InlineSpan>[TextSpan(text: shortUrlLabel(url), style: linkStyle)]
+        : built;
+    return TextSpan(
+      children: <InlineSpan>[
+        WidgetSpan(
+          alignment: PlaceholderAlignment.middle,
+          // No underline under the icon: only the name is underlined.
+          style: linkStyle.copyWith(decoration: TextDecoration.none),
+          child: Padding(
+            padding: EdgeInsets.only(right: fontSize * 0.28),
+            child: LinkFavicon(url: url, size: fontSize),
+          ),
+        ),
+        for (final InlineSpan span in label)
+          _decorate(span, ctx, url, recognizer),
+      ],
+    );
+  }
+
+  static InlineSpan _decorate(
+    InlineSpan span,
+    BuildContext ctx,
+    String url,
+    TapGestureRecognizer recognizer,
+  ) {
+    if (span is! TextSpan) return span;
+    return TextSpan(
+      text: span.text,
+      children: span.children
+          ?.map((InlineSpan c) => _decorate(c, ctx, url, recognizer))
+          .toList(),
+      style: span.style,
+      recognizer: recognizer,
+      mouseCursor: SystemMouseCursors.click,
+      onEnter: (PointerEnterEvent e) => LinkPreviewHover.enter(ctx, url, e),
+      onExit: (PointerExitEvent e) => LinkPreviewHover.exit(),
+      semanticsLabel: span.semanticsLabel,
+      locale: span.locale,
+      spellOut: span.spellOut,
+    );
+  }
 
   @override
   TextStyle get style => _overlayStyle(
@@ -762,8 +838,12 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
         // link in a heading dropped to body size (see [_overlayStyle]).
         SpanNodeGeneratorWithTag(
           tag: MarkdownTag.a.name,
-          generator: (e, config, visitor) =>
-              AccentLinkNode(e.attributes, config.a, accentColor),
+          generator: (e, config, visitor) => AccentLinkNode(
+            e.attributes,
+            config.a,
+            accentColor,
+            hoverContext: context,
+          ),
         ),
         SpanNodeGeneratorWithTag(
           tag: MarkdownTag.code.name,

@@ -113,10 +113,11 @@ void main() {
       expect(_span(tester, 'see ').style?.color, kText);
     });
 
-    testWidgets('a bare URL is linkified and underlined', (tester) async {
+    testWidgets('a bare URL is linkified and shown short', (tester) async {
       await _pumpMarkdown(tester, 'go to https://example.com/bare now');
 
-      final TextSpan link = _span(tester, 'https://example.com/bare');
+      // The link reads as host/path (lib/widgets/link_preview_card.dart).
+      final TextSpan link = _span(tester, 'example.com/bare');
       expect(link.style?.decoration, TextDecoration.underline);
       expect(link.style?.color, kAccent);
       expect(link.recognizer, isNotNull);
