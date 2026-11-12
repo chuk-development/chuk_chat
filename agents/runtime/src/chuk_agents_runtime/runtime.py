@@ -58,6 +58,8 @@ from .registry import ToolRegistry
 from .search import register_search_tool
 from .secrets import SecretsAccess
 from .agent_mail import MailBinding, register_agent_mail_tools
+from .agent_message import PROMPT_SECTION as PROGRESS_PROMPT_SECTION
+from .agent_message import AgentMessageBackend, register_message_tools
 from .agent_naming import AgentNamingBackend, naming_prompt_section, register_naming_tools
 from .automations import AutomationBackend, register_automation_tools
 from .calls import CallBackend, register_call_tools
@@ -430,6 +432,7 @@ def build_runtime(
     secrets: SecretsAccess | None = None,
     automations: AutomationBackend | None = None,
     agent_naming: AgentNamingBackend | None = None,
+    agent_message: AgentMessageBackend | None = None,
     calls: CallBackend | None = None,
     takeover: TakeoverBackend | None = None,
     phase_observer: Callable[[str, str | None], None] | None = None,
@@ -669,6 +672,11 @@ def build_runtime(
     # bound to THIS agent's id by the executor. ``None`` (no host, a room or
     # a child run) registers nothing, and the prompt then says nothing either.
     register_naming_tools(registry, agent_naming)
+
+    # A message to the user while the work goes on (CHAT-79,
+    # docs/WIRE_CONTRACT.md, "send_message"). ``None`` (no thread to send
+    # to: a room, a child run, a mail run) registers nothing.
+    register_message_tools(registry, agent_message)
 
     # The agent calls the user (docs/WIRE_CONTRACT.md, "The agent calls the
     # user"): ``call_user`` rings the app and returns at once, ``call_status``
@@ -950,6 +958,9 @@ def build_runtime(
                 naming_prompt_section(_current_agent_name(agent_naming))
                 if agent_naming is not None and registry.has("rename_self")
                 else None
+            ),
+            progress=(
+                PROGRESS_PROMPT_SECTION if registry.has("send_message") else None
             ),
             # Names only (§9): lets the model answer "what integrations do you
             # have" truthfully now that tool schemas no longer live in the prompt.

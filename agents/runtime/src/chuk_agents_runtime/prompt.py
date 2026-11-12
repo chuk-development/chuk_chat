@@ -487,6 +487,7 @@ def build_system_prompt(
     memory: str | None = None,
     mcp_servers: Sequence[str] | None = None,
     naming: str | None = None,
+    progress: str | None = None,
 ) -> str:
     """Compose the full system prompt: behaviour + the workspace + the skill
     catalogue + the connected MCP server names + the memory snapshot + the
@@ -545,6 +546,10 @@ def build_system_prompt(
     # the memory snapshot: it changes only when the agent is renamed.
     if naming and naming.strip():
         parts.append(naming.strip())
+    # The "keep the user informed" rules of ``send_message`` (CHAT-79,
+    # agent_message.py). Fixed text: the cached prefix stays the same.
+    if progress and progress.strip():
+        parts.append(progress.strip())
     if memory and memory.strip():
         parts.append(memory.strip())
     if persona and persona.strip():

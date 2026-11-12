@@ -375,6 +375,26 @@ starts and the row carries `"error": "refused to start: <reason>"` with
   third-party text, and cut at 32 KB. It never enters the system prompt, so a
   server that connects late does not break the prompt cache.
 
+### `message`: a chat message while the run goes on (IMPLEMENTED, additive; CHAT-79)
+
+The model calls `send_message(text)` (agents/runtime, `agent_message.py`) at
+the start of work with several steps ("I am going through your inbox now")
+and at once when something blocks it. The host stores the frame as an
+`event` row first, then streams it on the run's own request:
+
+```json
+{"type": "message", "text": "<plain text, at most 1000 chars>",
+ "session_key": "<key>", "run_id": "<run>", "sent_at": <unix seconds>,
+ "mid": <row id>?, "replay": true?}
+```
+
+At most 6 per run; the run never ends because of it. The final answer is
+still the run's `done.final_answer`. App: a replay draws it as its own
+assistant bubble at its place; live, it shows in the running bubble at
+once, and the thread replays after the run so it stands as its own bubble.
+Only an agent's own thread gets the tool (`local:...`, `host:...`), never a
+restricted mail run. An app that does not know `message` ignores it.
+
 ### `auth_required` tool result (IMPLEMENTED, additive; CHAT-77)
 
 A connector whose sign-in is refused and cannot be renewed (`error_kind`

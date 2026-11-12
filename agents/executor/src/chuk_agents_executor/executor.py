@@ -1408,6 +1408,32 @@ def _as_agent_list(rows: Any) -> dict[str, Any]:
     return agent_list_payload(rows if isinstance(rows, list) else [])
 
 
+class _AgentMessage:
+    """The ``send_message`` backend of one run (CHAT-79): a ``message`` frame
+    on the run's own stream, stored as an event row first so a replay shows
+    it as its own bubble (docs/WIRE_CONTRACT.md, "send_message")."""
+
+    def __init__(self, executor: "Executor", request_id: str, session_key: str, run_id: str) -> None:
+        self._executor = executor
+        self._request_id = request_id
+        self._session_key = session_key
+        self._run_id = run_id
+
+    def send(self, text: str) -> dict:
+        payload = {
+            "type": "message",
+            "text": self._executor._scrub_text(text),
+            "session_key": self._session_key,
+            "run_id": self._run_id,
+            "sent_at": time.time(),
+        }
+        try:
+            self._executor._emit_persisted(self._request_id, self._session_key, payload)
+        except Exception as exc:  # noqa: BLE001 — the run goes on either way
+            return {"ok": False, "error": f"could not send: {type(exc).__name__}"}
+        return {"ok": True}
+
+
 class _AgentNaming:
     """The ``rename_self`` backend of one agent (chuk_agents_runtime.agent_naming)."""
 
@@ -5850,6 +5876,15 @@ class Executor:
             # ``rename_self`` (docs/WIRE_CONTRACT.md, "Agent names"): bound to
             # this agent's id, so a model can only ever rename itself.
             agent_naming=self._agent_naming_backend(session_key),
+            # ``send_message`` (CHAT-79): a chat message while the work goes
+            # on. Only an agent's own thread with a reader; never a restricted
+            # mail run.
+            agent_message=(
+                _AgentMessage(self, request_id, session_key, run.run_id)
+                if is_agent_session_key(session_key)
+                and run.profile != PROFILE_MAIL_UNTRUSTED
+                else None
+            ),
             # ``call_user`` / ``call_status`` (docs/WIRE_CONTRACT.md, "The
             # agent calls the user"), bound to ``session_key`` the same way:
             # a fired automation run gets them too, which is what makes a
