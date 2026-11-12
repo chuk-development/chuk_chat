@@ -1900,6 +1900,15 @@ class AppLocalizations {
   String get webhookFailed => _get('webhookFailed');
   String get webhookRollbackFailed => _get('webhookRollbackFailed');
   // ── end webhooks ──
+  // ── tray menu ──
+  String get trayModeChats => _get('trayModeChats');
+  String get trayModeAgents => _get('trayModeAgents');
+  String get trayRecentChats => _get('trayRecentChats');
+  String get trayNoRecentChats => _get('trayNoRecentChats');
+  String get trayShowWindow => _get('trayShowWindow');
+  String get trayHideWindow => _get('trayHideWindow');
+  String get trayQuit => _get('trayQuit');
+  // ── end tray menu ──
   // ── feedback ──
   // ── end feedback ──
 }

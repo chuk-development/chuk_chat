@@ -1961,4 +1961,13 @@ const Map<String, String> stringsDe = {
   // ── end webhooks ──
   // ── feedback ──
   // ── end feedback ──
+  // ── tray menu ──
+  'trayModeChats': 'Chats',
+  'trayModeAgents': 'Agents',
+  'trayRecentChats': 'Letzte Chats',
+  'trayNoRecentChats': 'Noch keine Chats',
+  'trayShowWindow': 'Fenster anzeigen',
+  'trayHideWindow': 'Fenster ausblenden',
+  'trayQuit': 'Chuk Chat beenden',
+  // ── end tray menu ──
 };

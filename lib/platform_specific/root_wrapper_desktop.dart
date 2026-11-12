@@ -132,6 +132,8 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop>
     WorkspacesSetting.instance.addListener(_onWorkspacesSettingChanged);
     if (kFeatureSystemTray) {
       TrayActionBus.instance.newChatRequested.addListener(_onTrayNewChat);
+      TrayActionBus.instance.chatOpenRequested.addListener(_onTrayOpenChat);
+      TrayActionBus.instance.settingsRequested.addListener(_onTraySettings);
     }
     if (kFeatureArtifacts) {
       _activeArtifact = ArtifactStorageService.activeArtifactNotifier.value;
@@ -191,6 +193,8 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop>
     WorkspacesSetting.instance.removeListener(_onWorkspacesSettingChanged);
     if (kFeatureSystemTray) {
       TrayActionBus.instance.newChatRequested.removeListener(_onTrayNewChat);
+      TrayActionBus.instance.chatOpenRequested.removeListener(_onTrayOpenChat);
+      TrayActionBus.instance.settingsRequested.removeListener(_onTraySettings);
     }
     if (kFeatureArtifacts) {
       ArtifactStorageService.activeArtifactNotifier.removeListener(
@@ -530,6 +534,27 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop>
   void _onTrayNewChat() {
     if (!mounted) return;
     _handleNewChatFromSidebar();
+  }
+
+  // Fired from a tray "recent chat" item. Same path as a sidebar tap, after
+  // closing any full-page panel and workspace scope that would hide the chat.
+  void _onTrayOpenChat() {
+    if (!mounted) return;
+    final String? chatId = TrayActionBus.instance.requestedChatId;
+    if (chatId == null || ChatStorageService.isLoadingChat) return;
+    if (_activePanel != null || _activeProjectId != null) {
+      setState(() {
+        _activePanel = null;
+        _activeProjectId = null;
+      });
+    }
+    _handleChatSelected(chatId);
+  }
+
+  // Fired from the tray "Settings" item.
+  void _onTraySettings() {
+    if (!mounted) return;
+    _openSettingsPage();
   }
 
   void _handleNewChatFromSidebar() {

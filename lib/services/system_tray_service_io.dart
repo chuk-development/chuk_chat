@@ -1,19 +1,27 @@
 // lib/services/system_tray_service_io.dart
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' show Locale;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/platform_config.dart';
+import 'package:chuk_chat/services/app_mode_service.dart';
+import 'package:chuk_chat/services/app_theme_service.dart';
+import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/tray_action_bus.dart';
+import 'package:chuk_chat/services/tray_menu_model.dart';
 
 /// Desktop system tray integration for Linux, Windows, and macOS.
 ///
-/// Closing the window hides the app to tray instead of exiting.
+/// Closing the window hides the app to tray instead of exiting. The menu
+/// content comes from [buildTrayMenu]; this class only draws it natively and
+/// rebuilds it when the window, the chats, the locale or the app mode change.
 class SystemTrayService with WindowListener {
   SystemTrayService._();
 
@@ -25,6 +33,14 @@ class SystemTrayService with WindowListener {
   Image? _iconImage;
   Menu? _menu;
   final List<MenuItem> _menuItems = <MenuItem>[];
+
+  /// The Agents build's Chats/Agents state, set by the app before the tray
+  /// starts. Null in the plain build.
+  AppModeService? _appMode;
+  StreamSubscription<String?>? _chatChanges;
+  Timer? _menuRebuildDebounce;
+  String? _menuLocale;
+  static const Duration _kMenuRebuildDelay = Duration(milliseconds: 400);
 
   bool _isInitialized = false;
   bool _isInitializing = false;
@@ -77,12 +93,12 @@ class SystemTrayService with WindowListener {
         trayIcon.setTooltip('Chuk Chat');
       }
 
-      // Linux reports no tray icon clicks: the panel keeps them and opens the
-      // context menu itself. Elsewhere a left click toggles the window and a
-      // right click opens the menu.
-      if (defaultTargetPlatform != TargetPlatform.linux) {
-        trayIcon.setContextMenuTrigger(ContextMenuTrigger.rightClicked);
-      }
+      // The trigger also decides whether the menu exists at all on Linux:
+      // nativeapi exports the dbusmenu to the StatusNotifierItem host only
+      // when the trigger is clicked or rightClicked. With the default (none)
+      // the item announces "/NO_DBUSMENU" and the panel shows an empty menu.
+      // rightClicked keeps the primary click free for "show the window".
+      trayIcon.setContextMenuTrigger(ContextMenuTrigger.rightClicked);
       trayIcon.addListener(_onTrayIconEvent);
       trayIcon.setVisible(true);
       _isInitialized = true;
@@ -91,11 +107,8 @@ class SystemTrayService with WindowListener {
       _retryTimer = null;
 
       await _syncWindowVisibility();
-      // Install the same context menu on every desktop platform. The labels
-      // are static (they do not depend on window visibility), so a single
-      // install works everywhere — including the Linux StatusNotifierItem,
-      // whose panel opens the menu on click and reports no click event.
-      _installMenu(trayIcon);
+      _rebuildMenu();
+      _startMenuSources();
 
       await DiagnosticsLogService.info(
         'tray',
@@ -247,33 +260,158 @@ class SystemTrayService with WindowListener {
     }
   }
 
-  void _installMenu(TrayIcon trayIcon) {
+  /// Gives the tray the Agents build's Chats/Agents state. Call before or
+  /// after [initialize]; the menu follows the mode from then on.
+  void attachAppMode(AppModeService appMode) {
+    if (identical(_appMode, appMode)) return;
+    _appMode?.removeListener(_scheduleMenuRebuild);
+    _appMode = appMode;
+    appMode.addListener(_scheduleMenuRebuild);
+    _scheduleMenuRebuild();
+  }
+
+  void _startMenuSources() {
+    _chatChanges ??= ChatStorageService.changes.listen(
+      (_) => _scheduleMenuRebuild(),
+    );
+    AppThemeService.instance.removeListener(_onThemeServiceChanged);
+    AppThemeService.instance.addListener(_onThemeServiceChanged);
+  }
+
+  void _stopMenuSources() {
+    _menuRebuildDebounce?.cancel();
+    _menuRebuildDebounce = null;
+    unawaited(_chatChanges?.cancel());
+    _chatChanges = null;
+    AppThemeService.instance.removeListener(_onThemeServiceChanged);
+  }
+
+  // The theme service notifies for every look setting; only a new UI
+  // language changes the menu.
+  void _onThemeServiceChanged() {
+    if (AppThemeService.instance.uiLocale != _menuLocale) {
+      _scheduleMenuRebuild();
+    }
+  }
+
+  /// Rebuilds the menu after [_kMenuRebuildDelay] of quiet, so a sync that
+  /// touches fifty chats rebuilds it once.
+  void _scheduleMenuRebuild() {
+    if (!_isInitialized) return;
+    _menuRebuildDebounce?.cancel();
+    _menuRebuildDebounce = Timer(_kMenuRebuildDelay, () {
+      _menuRebuildDebounce = null;
+      _rebuildMenu();
+    });
+  }
+
+  /// Draws [buildTrayMenu] as a native menu and swaps it in. The old handles
+  /// are released only after the new menu is set, so the tray is never left
+  /// without one.
+  void _rebuildMenu() {
+    final TrayIcon? trayIcon = _trayIcon;
+    if (trayIcon == null) return;
+
+    final String locale = AppThemeService.instance.uiLocale;
+    final AppModeService? appMode = _appMode;
+    final List<TrayMenuEntry> entries = buildTrayMenu(
+      l: AppLocalizations(Locale(locale)),
+      chats: ChatStorageService.savedChats,
+      windowVisible: _isWindowVisible,
+      agentsBuild: kFeatureAgents && appMode != null,
+      agentsInFront: appMode?.value == AppMode.agents,
+    );
+
     final menu = Menu.create();
     if (menu == null) {
       throw StateError('Unable to create tray menu');
     }
-
-    void addItem(String label, Future<void> Function() onClick) {
-      final item = MenuItem.createWithLabelAndType(label, MenuItemType.normal);
-      if (item == null) {
-        throw StateError('Unable to create tray menu item "$label"');
+    final List<MenuItem> items = <MenuItem>[];
+    for (final TrayMenuEntry entry in entries) {
+      if (entry.isSeparator) {
+        menu.addSeparator();
+        continue;
       }
+      final bool isChoice =
+          entry.action == TrayMenuAction.showChats ||
+          entry.action == TrayMenuAction.showAgents;
+      final item = MenuItem.createWithLabelAndType(
+        entry.label,
+        isChoice ? MenuItemType.radio : MenuItemType.normal,
+      );
+      if (item == null) {
+        throw StateError('Unable to create tray menu item "${entry.label}"');
+      }
+      if (isChoice) {
+        item.radioGroup = 1;
+        item.state = entry.checked
+            ? MenuItemState.checked
+            : MenuItemState.unchecked;
+      }
+      if (!entry.enabled) item.isEnabled = false;
       item.addListener((event) {
         if (event is MenuItemClickedEvent && _isInitialized) {
-          unawaited(onClick());
+          unawaited(_runMenuAction(entry));
         }
       });
       menu.addItem(item);
-      _menuItems.add(item);
+      items.add(item);
     }
 
-    addItem('Open Chuk Chat', showWindow);
-    addItem('New Chat', _startNewChat);
-    menu.addSeparator();
-    addItem('Quit Chuk Chat', _quitApplication);
-
     trayIcon.setContextMenu(menu);
+    _menuLocale = locale;
+
+    final Menu? oldMenu = _menu;
+    final List<MenuItem> oldItems = List<MenuItem>.of(_menuItems);
     _menu = menu;
+    _menuItems
+      ..clear()
+      ..addAll(items);
+    for (final item in oldItems) {
+      item.dispose();
+    }
+    oldMenu?.dispose();
+  }
+
+  Future<void> _runMenuAction(TrayMenuEntry entry) async {
+    switch (entry.action) {
+      case TrayMenuAction.newChat:
+        await _startNewChat();
+      case TrayMenuAction.openChat:
+        final String? chatId = entry.chatId;
+        if (chatId == null) return;
+        _selectMode(AppMode.chats);
+        await showWindow();
+        TrayActionBus.instance.requestOpenChat(chatId);
+      case TrayMenuAction.showChats:
+        _selectMode(AppMode.chats);
+        await showWindow();
+      case TrayMenuAction.showAgents:
+        _selectMode(AppMode.agents);
+        await showWindow();
+      case TrayMenuAction.toggleWindow:
+        await _toggleWindowVisibility();
+      case TrayMenuAction.settings:
+        // Settings is drawn by chuk_chat's half, so bring that one forward.
+        _selectMode(AppMode.chats);
+        await showWindow();
+        TrayActionBus.instance.requestSettings();
+      case TrayMenuAction.quit:
+        await _quitApplication();
+      case null:
+        return;
+    }
+  }
+
+  void _selectMode(AppMode mode) {
+    final AppModeService? appMode = _appMode;
+    if (appMode != null) unawaited(appMode.select(mode));
+  }
+
+  void _setWindowVisible(bool visible) {
+    if (_isWindowVisible == visible) return;
+    _isWindowVisible = visible;
+    _scheduleMenuRebuild();
   }
 
   /// Releases every native tray handle. Safe to call when none exist.
@@ -311,20 +449,21 @@ class SystemTrayService with WindowListener {
 
     await windowManager.show();
     await windowManager.focus();
-    _isWindowVisible = true;
+    _setWindowVisible(true);
   }
 
   Future<void> hideWindow() async {
     if (!_isInitialized) return;
 
     await windowManager.hide();
-    _isWindowVisible = false;
+    _setWindowVisible(false);
   }
 
   /// Brings the window to the front, then asks the running UI to start a fresh
   /// chat. The tray has no [BuildContext], so the actual new-chat action is
   /// performed by the desktop root wrapper listening on [TrayActionBus].
   Future<void> _startNewChat() async {
+    _selectMode(AppMode.chats);
     await showWindow();
     TrayActionBus.instance.requestNewChat();
   }
@@ -350,12 +489,16 @@ class SystemTrayService with WindowListener {
       }
     } finally {
       await windowManager.destroy();
+      // destroy() closes the window; if the engine keeps the process alive
+      // (a plugin holding the main loop), end it so Quit always quits.
+      Timer(const Duration(seconds: 2), () => exit(0));
     }
   }
 
   Future<void> _rollbackInitialization() async {
     _retryTimer?.cancel();
     _retryTimer = null;
+    _stopMenuSources();
 
     try {
       _destroyTray();
@@ -376,8 +519,21 @@ class SystemTrayService with WindowListener {
 
   void _onTrayIconEvent(TrayIconEvent event) {
     if (!_isInitialized) return;
-    if (event is TrayIconClickedEvent) {
-      unawaited(_toggleWindowVisibility());
+    // A primary click shows and focuses the window, as in the ChatGPT and
+    // Claude apps. GNOME's AppIndicator extension opens the menu on a single
+    // click itself and reports a double click, so take that too.
+    if (event is TrayIconClickedEvent || event is TrayIconDoubleClickedEvent) {
+      unawaited(showWindow());
+    }
+  }
+
+  @override
+  void onWindowEvent(String eventName) {
+    if (!_isInitialized) return;
+    if (eventName == 'show' || eventName == 'restore' || eventName == 'focus') {
+      _setWindowVisible(true);
+    } else if (eventName == 'hide' || eventName == 'minimize') {
+      _setWindowVisible(false);
     }
   }
 
@@ -393,6 +549,7 @@ class SystemTrayService with WindowListener {
 
     if (!_isInitialized) return;
 
+    _stopMenuSources();
     try {
       _destroyTray();
     } catch (error) {

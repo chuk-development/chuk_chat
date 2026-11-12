@@ -614,4 +614,13 @@ const Map<String, String> stringsFr = {
   // ── end OpenUI ──
   // Font picker.
   'fontFamilyInter': 'Inter (sans empattement)',
+  // ── tray menu ──
+  'trayModeChats': 'Discussions',
+  'trayModeAgents': 'Agents',
+  'trayRecentChats': 'Discussions récentes',
+  'trayNoRecentChats': 'Aucune discussion',
+  'trayShowWindow': 'Afficher la fenêtre',
+  'trayHideWindow': 'Masquer la fenêtre',
+  'trayQuit': 'Quitter Chuk Chat',
+  // ── end tray menu ──
 };

@@ -1924,4 +1924,13 @@ const Map<String, String> stringsEn = {
   // ── end webhooks ──
   // ── feedback ──
   // ── end feedback ──
+  // ── tray menu ──
+  'trayModeChats': 'Chats',
+  'trayModeAgents': 'Agents',
+  'trayRecentChats': 'Recent chats',
+  'trayNoRecentChats': 'No chats yet',
+  'trayShowWindow': 'Show window',
+  'trayHideWindow': 'Hide window',
+  'trayQuit': 'Quit Chuk Chat',
+  // ── end tray menu ──
 };

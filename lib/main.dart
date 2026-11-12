@@ -40,6 +40,7 @@ import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/openui/openui_license.dart';
 import 'package:chuk_chat/pages/login_page.dart';
 import 'package:chuk_chat/pages/messenger_shell.dart';
+import 'package:chuk_chat/services/app_mode_service.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/platform_specific/root_wrapper.dart';
 import 'package:chuk_chat/utils/certificate_pinning_register.dart'
@@ -317,6 +318,10 @@ class _AgentsAppState extends State<AgentsApp> {
   // settings pages, once chuk_chat's `theme_page` replaces them.
   final ThemeController _theme = ThemeController();
 
+  /// The Agents build's Chats/Agents state. Owned here rather than by the
+  /// shell so the desktop tray menu can switch halves too.
+  final AppModeService? _appMode = kFeatureAgents ? AppModeService() : null;
+
   /// Guards the two-way bridge against feeding a change straight back.
   bool _bridging = false;
 
@@ -393,6 +398,8 @@ class _AgentsAppState extends State<AgentsApp> {
         await Future<void>.delayed(const Duration(milliseconds: 1200));
       }
       if (!mounted) return;
+      final AppModeService? appMode = _appMode;
+      if (appMode != null) SystemTrayService.instance.attachAppMode(appMode);
       await SystemTrayService.instance.initialize();
     } catch (error) {
       if (kDebugMode) {
@@ -593,6 +600,7 @@ class _AgentsAppState extends State<AgentsApp> {
     _sessionManager.dispose();
     _themeService.dispose();
     unawaited(SystemTrayService.instance.dispose());
+    _appMode?.dispose();
     super.dispose();
   }
 
@@ -633,7 +641,11 @@ class _AgentsAppState extends State<AgentsApp> {
     // rewrite of the chats to payload v3 runs (docs/CHAT_PAYLOAD_FORMAT.md).
     buildShell: (_) => ChatMaintenanceGate(
       child: kFeatureAgents
-          ? MessengerShell(themeController: _theme, shellConfig: shellConfig)
+          ? MessengerShell(
+              themeController: _theme,
+              shellConfig: shellConfig,
+              appMode: _appMode,
+            )
           : _OnboardingFirstLaunchGate(
               shellConfig: shellConfig,
               child: RootWrapper(config: shellConfig),

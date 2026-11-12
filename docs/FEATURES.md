@@ -138,3 +138,21 @@ AI-powered automatic chat title generation.
 - `lib/utils/certificate_pinning.dart` - SSL pinning implementation
 - `lib/utils/api_rate_limiter.dart` - API rate limiting
 - `lib/utils/upload_rate_limiter.dart` - Upload rate limiting
+
+## Desktop tray menu (`FEATURE_SYSTEM_TRAY`)
+
+Menu content is plain data from `buildTrayMenu`
+(`lib/services/tray_menu_model.dart`): New chat, Chats/Agents (Agents build
+only), the last 5 chats, Show/Hide window, Settings, Quit. The native menu is
+rebuilt (debounced) when chats, window state, UI language or app mode change.
+Clicks reach the UI through `TrayActionBus`. A left click shows the window.
+
+Trap: nativeapi (tray_manager 0.8) exports the Linux dbusmenu only when the
+trigger is `clicked` or `rightClicked`. With the default `none` the item
+announces `/NO_DBUSMENU` and the panel shows an empty menu. So
+`setContextMenuTrigger` runs on every platform.
+
+Headless check on Linux: own Xvfb, own session bus (`dbus-run-session`), a
+fake `org.kde.StatusNotifierWatcher`, then `com.canonical.dbusmenu.GetLayout`
+on `/StatusNotifierItem/Menu`. Run the app with `CHUK_MULTI_INSTANCE=1` and a
+separate `HOME`, never with the owner's session.
