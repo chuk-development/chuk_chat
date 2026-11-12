@@ -812,12 +812,15 @@ PHASE_PREPARING = "preparing"
 PHASE_MODEL = "model"
 PHASE_TOOL = "tool"
 PHASE_WAITING_USER = "waiting_user"
+#: A failed model call waits for its next attempt; the beat carries ``retry``.
+PHASE_RETRYING = "retrying"
 HEARTBEAT_PHASES = (
     PHASE_QUEUED,
     PHASE_PREPARING,
     PHASE_MODEL,
     PHASE_TOOL,
     PHASE_WAITING_USER,
+    PHASE_RETRYING,
 )
 
 
@@ -829,6 +832,7 @@ def heartbeat_payload(
     elapsed: float | None = None,
     phase: str | None = None,
     tool: str | None = None,
+    retry: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a ``heartbeat``: the run named by ``run_id`` is still running.
 
@@ -837,7 +841,9 @@ def heartbeat_payload(
     can see a gap; ``elapsed`` is seconds since the run started, left out when
     the caller does not measure it. ``phase`` is what the run does now, and
     ``tool`` the tool that runs (sent with phase ``tool`` only); both are left
-    out when unset.
+    out when unset. ``retry`` (phase ``retrying`` only) says when the failed
+    model call is asked again: ``attempt``, ``in`` (seconds), ``reason`` and
+    ``gives_up_in`` (seconds until the turn fails).
     """
     payload: dict[str, Any] = {"type": "heartbeat", "seq": int(seq)}
     if run_id:
@@ -850,6 +856,8 @@ def heartbeat_payload(
         payload["phase"] = phase
         if phase == PHASE_TOOL and tool:
             payload["tool"] = tool
+        if phase == PHASE_RETRYING and retry:
+            payload["retry"] = dict(retry)
     return payload
 
 

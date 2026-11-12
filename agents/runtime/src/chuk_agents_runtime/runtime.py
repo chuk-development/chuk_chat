@@ -431,6 +431,7 @@ def build_runtime(
     calls: CallBackend | None = None,
     takeover: TakeoverBackend | None = None,
     phase_observer: Callable[[str, str | None], None] | None = None,
+    retry_observer: Callable[[dict | None], None] | None = None,
     agent_mail: MailBinding | None = None,
     tool_allowlist: Sequence[str] | None = None,
     base_instructions: str | None = None,
@@ -537,6 +538,10 @@ def build_runtime(
     what the loop is doing: ``("preparing", None)`` while it builds the
     context of a round, ``("model", None)`` when the request goes to the
     model, ``("tool", <name>)`` when a tool starts. Unset, nothing is called.
+
+    ``retry_observer`` (docs/WIRE_CONTRACT.md, ``heartbeat.retry``) is told
+    when a failed model call waits for its next attempt (a dict) and ``None``
+    when the attempt starts (:mod:`chuk_agents_runtime.model_retry`).
 
     ``agent_mail`` (docs/AGENT_MAIL.md §7) adds the mail tools: the full set,
     or the restricted set of one mail. Unset, no mail tool exists.
@@ -1028,6 +1033,8 @@ def build_runtime(
         # What the loop is doing right now, for the ``heartbeat.phase`` the
         # executor sends (docs/WIRE_CONTRACT.md). Unset -> not wired.
         phase_observer=phase_observer,
+        # A failed model call that waits for its next attempt (CHAT-31).
+        retry_observer=retry_observer,
         # The ``[clock]`` row (bead chuk_chat-gaep): the local date, weekday
         # and time zone, made fresh for each task and appended after its
         # prompt, so "today" and "tomorrow" are right in a session that

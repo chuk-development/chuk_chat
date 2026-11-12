@@ -210,6 +210,7 @@ from .protocol import (
     PHASE_PREPARING,
     PHASE_QUEUED,
     PHASE_TOOL,
+    PHASE_RETRYING,
     PHASE_WAITING_USER,
     INBOUND_METHODS,
     MAX_BROWSER_CHUNK,
@@ -773,6 +774,9 @@ class _Heartbeat:
         #: one interrupted; the outermost wait restores it.
         self._waits = 0
         self._before_wait: tuple[str, str | None] = (phase, None)
+        #: The pending retry of a failed model call (phase ``retrying``):
+        #: the loop's dict plus the monotonic time it was set.
+        self._retry: tuple[dict, float] | None = None
         self._thread: threading.Thread | None = None
 
     @property
@@ -811,6 +815,7 @@ class _Heartbeat:
                     elapsed=time.monotonic() - self._started,
                     phase=self._phase,
                     tool=self._tool,
+                    retry=self._retry_fields(),
                 )
             )
         except Exception:  # noqa: BLE001 — a dead socket ends the beat,
@@ -831,6 +836,35 @@ class _Heartbeat:
             if (phase, tool) == (self._phase, self._tool):
                 return
             self._phase, self._tool = phase, tool
+            self._beat_locked()
+
+    def _retry_fields(self) -> dict | None:
+        """The ``retry`` object of a beat: counts down on every beat."""
+        if self._phase != PHASE_RETRYING or self._retry is None:
+            return None
+        info, since = self._retry
+        passed = time.monotonic() - since
+        return {
+            "attempt": int(info.get("attempt") or 1),
+            "in": round(max(0.0, float(info.get("delay") or 0.0) - passed), 1),
+            "reason": str(info.get("reason") or ""),
+            "gives_up_in": round(max(0.0, float(info.get("gives_up_in") or 0.0) - passed), 1),
+        }
+
+    def set_retry(self, info: dict | None) -> None:
+        """A failed model call waits (``info``) or its next attempt starts
+        (``None``). Goes out at once."""
+        with self._lock:
+            if info is None:
+                if self._retry is None:
+                    return
+                self._retry = None
+                if self._phase == PHASE_RETRYING:
+                    self._phase, self._tool = PHASE_PREPARING, None
+                    self._beat_locked()
+                return
+            self._retry = (dict(info), time.monotonic())
+            self._phase, self._tool = PHASE_RETRYING, None
             self._beat_locked()
 
     def enter_wait(self) -> None:
@@ -5700,6 +5734,9 @@ class Executor:
             ),
             # What the loop does right now (``heartbeat.phase``).
             phase_observer=lambda phase, tool: self._set_phase(request_id, phase, tool),
+            # A failed model call that retries by itself (CHAT-31): the beat
+            # says when, so the app shows "retrying in 60 s", not a Resend.
+            retry_observer=lambda info: self._set_retry(request_id, info),
             # The mail tools (docs/AGENT_MAIL.md §7). ``user_requested`` is
             # decided here from the run's origin, never by the model.
             agent_mail=self._mail_binding(run),
@@ -6334,6 +6371,13 @@ class Executor:
         beat = self._beat_for(request_id)
         if beat is not None:
             beat.set_phase(phase, tool)
+
+    def _set_retry(self, request_id: str, info: dict | None) -> None:
+        """A model call retry waits (``info``) or starts (``None``);
+        docs/WIRE_CONTRACT.md, ``heartbeat.retry``."""
+        beat = self._beat_for(request_id)
+        if beat is not None:
+            beat.set_retry(info)
 
     @contextmanager
     def _waiting_user(self, request_id: str):

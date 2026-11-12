@@ -55,6 +55,7 @@ from .context import (
     prompt_tokens_from_usage,
     total_tokens_from_usage,
 )
+from .model_retry import EmptyModelResponse, RetryPolicy, RetryTracker
 from .registry import ToolRegistry
 from .sources import REPLAYED_CONTEXT_SOURCES, tag_row, valid_source
 from .state import UNKNOWN_OUTCOME_RESULT, StateStore
@@ -78,6 +79,8 @@ INTERRUPTED_TOOL_RESULT = "not run: the run was stopped before this tool started
 PHASE_PREPARING = "preparing"
 PHASE_MODEL = "model"
 PHASE_TOOL = "tool"
+#: Between two attempts of a failed model call (``model_retry``).
+PHASE_RETRYING = "retrying"
 
 
 class IterationBudget:
@@ -510,6 +513,17 @@ class _DriveState:
     passes: list[str] = field(default_factory=list)
 
 
+class _RetryModelCall(Exception):
+    """Leaves the Pydantic AI run so the failed model call is asked again
+    from the store (:mod:`chuk_agents_runtime.model_retry`)."""
+
+    def __init__(self, delay: float, reason: str, attempt: int) -> None:
+        super().__init__(reason)
+        self.delay = delay
+        self.reason = reason
+        self.attempt = attempt
+
+
 @dataclass
 class _ActiveRun:
     """Per-run state the history processor and the drivers share."""
@@ -647,6 +661,8 @@ class AgentLoop:
         recall_wait: float | None = None,
         turn_observer: Callable[[TurnRecord], None] | None = None,
         phase_observer: Callable[[str, str | None], None] | None = None,
+        retry_observer: Callable[[dict | None], None] | None = None,
+        retry_policy: RetryPolicy | None = None,
         clock_provider: Callable[[], list[dict]] | None = None,
         task_context_providers: Sequence[Callable[[], list[dict]]] | None = None,
         context_observer: Callable[[dict], None] | None = None,
@@ -715,6 +731,11 @@ class AgentLoop:
         #: Told what the run does right now (docs/WIRE_CONTRACT.md,
         #: ``heartbeat.phase``): ``preparing``, ``model`` or ``tool`` + name.
         self._phase_observer = phase_observer
+        #: Told when a failed model call waits for its next attempt (a dict:
+        #: ``attempt``, ``delay``, ``reason``, ``gives_up_in``) and ``None``
+        #: when the attempt starts (docs/WIRE_CONTRACT.md, ``heartbeat.retry``).
+        self._retry_observer = retry_observer
+        self._retry_policy = retry_policy or RetryPolicy.from_env()
         self._model_settings = model_settings
         self._on_delta = on_delta
         self._on_reasoning = on_reasoning
@@ -1106,135 +1127,175 @@ class AgentLoop:
         streaming = not is_legacy(run_model)
         request_log = getattr(run_model, "request_log", None)
 
+        tracker = RetryTracker(self._retry_policy)
         try:
-            with ToolManager.parallel_execution_mode("sequential"):
-                async with self._agent.iter(
-                    None,
-                    model=run_model,
-                    message_history=history,
-                    cancellation_token=token,
-                    usage_limits=self._usage_limits or UsageLimits(request_limit=None),
-                ) as run:
-                    node: Any = run.next_node
-                    while not Agent.is_end_node(node):
-                        if Agent.is_model_request_node(node):
-                            stop = self._pre_round_stop(state.iterations)
-                            if stop is not None:
-                                state.reason = stop
-                                break
-                            self._wrap_up(active, state)
-                            state.iterations += 1
-                            active.round = state.iterations
-                            self._budget.consume()
-                            if tracer.enabled:
-                                set_round(state.iterations)
-                                tracer.emit("round_start", iteration=state.iterations)
-                            model_started = time.monotonic()
-                            if joiner is not None:
-                                joiner.new_pass()
-                            mapper = StreamMapper(joiner, self._on_reasoning)
-                            state.request_mark = self._legacy_mark(run_model)
-                            state.in_request = True
-                            if request_log is not None:
-                                request_log.reset()
-                            try:
-                                if streaming:
-                                    await self._stream_request(node, run, mapper)
-                                node = await run.next(node)
-                                self._model_answered = True
-                            except (RunCancelled, asyncio.CancelledError):
-                                raise
-                            except Exception as exc:
-                                state.in_request = False
-                                timings.model_calls += 1
-                                timings.model_wait_ms += (time.monotonic() - model_started) * 1000
-                                _count_retries(request_log, timings)
-                                if self._kill.interrupted():
-                                    state.reason = StopReason.INTERRUPTED
-                                    break
-                                mapped = model_service_error(exc)
-                                if mapped is not None:
-                                    raise mapped from exc
-                                raise
-                            state.in_request = False
-                            _count_retries(request_log, timings)
-                            elapsed_ms = (time.monotonic() - model_started) * 1000
-                            timings.model_calls += 1
-                            # ``prepare_ms`` (the history rebuild) happened
-                            # inside the request node; keep the buckets apart.
-                            timings.prepare_ms += active.prepare_ms
-                            timings.model_wait_ms += max(0.0, elapsed_ms - active.prepare_ms)
-                            response = _last_response(run)
-                            self._take_turn(active, state, response)
-                            self._account(response, timings, active, elapsed_ms, mapper)
-                            if self._kill.interrupted():
-                                state.reason = StopReason.INTERRUPTED
-                                break
-                            continue
+            while True:
+                try:
+                    if state.iterations:
+                        # A retry: the store holds every finished turn and
+                        # tool result; the request is rebuilt from it.
+                        history = rows_to_messages(
+                            self._stored_rows(active.session_id),
+                            deferred=self._registry.deferred_names(),
+                            image_loader=self.image_loader,
+                        )
+                    with ToolManager.parallel_execution_mode("sequential"):
+                        async with self._agent.iter(
+                            None,
+                            model=run_model,
+                            message_history=history,
+                            cancellation_token=token,
+                            usage_limits=self._usage_limits or UsageLimits(request_limit=None),
+                        ) as run:
+                            node: Any = run.next_node
+                            while not Agent.is_end_node(node):
+                                if Agent.is_model_request_node(node):
+                                    stop = self._pre_round_stop(state.iterations)
+                                    if stop is not None:
+                                        state.reason = stop
+                                        break
+                                    self._wrap_up(active, state)
+                                    state.iterations += 1
+                                    active.round = state.iterations
+                                    self._budget.consume()
+                                    if tracer.enabled:
+                                        set_round(state.iterations)
+                                        tracer.emit("round_start", iteration=state.iterations)
+                                    model_started = time.monotonic()
+                                    if joiner is not None:
+                                        joiner.new_pass()
+                                    mapper = StreamMapper(joiner, self._on_reasoning)
+                                    state.request_mark = self._legacy_mark(run_model)
+                                    state.in_request = True
+                                    if request_log is not None:
+                                        request_log.reset()
+                                    try:
+                                        if streaming:
+                                            await self._stream_request(node, run, mapper)
+                                        node = await run.next(node)
+                                        if _empty_stream(_last_response(run)):
+                                            raise EmptyModelResponse()
+                                        self._model_answered = True
+                                    except (RunCancelled, asyncio.CancelledError):
+                                        raise
+                                    except Exception as exc:
+                                        state.in_request = False
+                                        timings.model_calls += 1
+                                        timings.model_wait_ms += (time.monotonic() - model_started) * 1000
+                                        _count_retries(request_log, timings)
+                                        if self._kill.interrupted():
+                                            state.reason = StopReason.INTERRUPTED
+                                            break
+                                        delay = tracker.next_delay(exc)
+                                        if delay is not None:
+                                            # Only this model call is asked
+                                            # again; the step is not counted.
+                                            state.iterations -= 1
+                                            active.round = state.iterations
+                                            self._budget.refund()
+                                            logger.warning(
+                                                "model call failed (%s); retry %d in %.0f s",
+                                                tracker.last_reason,
+                                                tracker.attempts,
+                                                delay,
+                                            )
+                                            raise _RetryModelCall(
+                                                delay, tracker.last_reason, tracker.attempts
+                                            ) from exc
+                                        if tracker.gave_up:
+                                            raise ModelServiceError(
+                                                tracker.give_up_message(),
+                                                status=getattr(exc, "status_code", None),
+                                            ) from exc
+                                        mapped = model_service_error(exc)
+                                        if mapped is not None:
+                                            raise mapped from exc
+                                        raise
+                                    state.in_request = False
+                                    tracker.reset()
+                                    _count_retries(request_log, timings)
+                                    elapsed_ms = (time.monotonic() - model_started) * 1000
+                                    timings.model_calls += 1
+                                    # ``prepare_ms`` (the history rebuild) happened
+                                    # inside the request node; keep the buckets apart.
+                                    timings.prepare_ms += active.prepare_ms
+                                    timings.model_wait_ms += max(0.0, elapsed_ms - active.prepare_ms)
+                                    response = _last_response(run)
+                                    self._take_turn(active, state, response)
+                                    self._account(response, timings, active, elapsed_ms, mapper)
+                                    if self._kill.interrupted():
+                                        state.reason = StopReason.INTERRUPTED
+                                        break
+                                    continue
 
-                        if Agent.is_call_tools_node(node):
-                            response = node.model_response
-                            calls = _calls(response)
-                            if not calls:
-                                if _no_output(response):
-                                    if response.finish_reason in ("length", "content_filter"):
-                                        # The provider cut the turn off (output
-                                        # limit, or its filter). No retry: the
-                                        # same request would end the same way.
-                                        _log_cut_off(response.finish_reason)
-                                        state.stop_note = response.finish_reason
+                                if Agent.is_call_tools_node(node):
+                                    response = node.model_response
+                                    calls = _calls(response)
+                                    if not calls:
+                                        if _no_output(response):
+                                            if response.finish_reason in ("length", "content_filter"):
+                                                # The provider cut the turn off (output
+                                                # limit, or its filter). No retry: the
+                                                # same request would end the same way.
+                                                _log_cut_off(response.finish_reason)
+                                                state.stop_note = response.finish_reason
+                                                state.reason = StopReason.FINISHED
+                                                break
+                                            if not state.nudged and not self._kill.interrupted():
+                                                # A turn with neither text nor a call (a
+                                                # thinking-only reply) would end the run
+                                                # with no answer. Ask once more. The nudge
+                                                # row is written only when the retry
+                                                # really follows; it is a context row,
+                                                # never replayed.
+                                                state.nudged = True
+                                                after = await run.next(node)
+                                                if Agent.is_model_request_node(after):
+                                                    self._append(
+                                                        active.session_id,
+                                                        "context",
+                                                        {"role": "user", "content": EMPTY_REPLY_NUDGE},
+                                                    )
+                                                    node = after
+                                                    continue
+                                            state.reason = StopReason.FINISHED
+                                            break
+                                        # This turn's text is the last pass (taken
+                                        # above); the text of the earlier passes stays.
+                                        state.final_answer = _join_passes(state.passes)
                                         state.reason = StopReason.FINISHED
                                         break
-                                    if not state.nudged and not self._kill.interrupted():
-                                        # A turn with neither text nor a call (a
-                                        # thinking-only reply) would end the run
-                                        # with no answer. Ask once more. The nudge
-                                        # row is written only when the retry
-                                        # really follows; it is a context row,
-                                        # never replayed.
-                                        state.nudged = True
-                                        after = await run.next(node)
-                                        if Agent.is_model_request_node(after):
-                                            self._append(
-                                                active.session_id,
-                                                "context",
-                                                {"role": "user", "content": EMPTY_REPLY_NUDGE},
-                                            )
-                                            node = after
-                                            continue
-                                    state.reason = StopReason.FINISHED
-                                    break
-                                # This turn's text is the last pass (taken
-                                # above); the text of the earlier passes stays.
-                                state.final_answer = _join_passes(state.passes)
-                                state.reason = StopReason.FINISHED
-                                break
-                            finish_summary = _finish_summary(calls, response)
-                            tool_started = time.monotonic()
-                            try:
-                                async with node.stream(run.ctx) as stream:
-                                    async for event in stream:
-                                        await self._ask_unsearched(active, calls, event)
-                                        self._on_tool_event_part(active, calls, event, tools_used)
-                            finally:
-                                timings.tool_ms += (time.monotonic() - tool_started) * 1000
-                            self._close_calls(active, calls, tools_used)
-                            if self._kill.interrupted():
-                                state.reason = StopReason.INTERRUPTED
-                                break
-                            if finish_summary is not None:
-                                state.final_answer = _finish_answer(
-                                    state.passes, response, finish_summary
-                                )
-                                state.reason = StopReason.FINISHED
-                                break
-                            if self._drain_context(active.session_id):
-                                state.final_step = True
-                            node = await run.next(node)
-                            continue
+                                    finish_summary = _finish_summary(calls, response)
+                                    tool_started = time.monotonic()
+                                    try:
+                                        async with node.stream(run.ctx) as stream:
+                                            async for event in stream:
+                                                await self._ask_unsearched(active, calls, event)
+                                                self._on_tool_event_part(active, calls, event, tools_used)
+                                    finally:
+                                        timings.tool_ms += (time.monotonic() - tool_started) * 1000
+                                    self._close_calls(active, calls, tools_used)
+                                    if self._kill.interrupted():
+                                        state.reason = StopReason.INTERRUPTED
+                                        break
+                                    if finish_summary is not None:
+                                        state.final_answer = _finish_answer(
+                                            state.passes, response, finish_summary
+                                        )
+                                        state.reason = StopReason.FINISHED
+                                        break
+                                    if self._drain_context(active.session_id):
+                                        state.final_step = True
+                                    node = await run.next(node)
+                                    continue
 
-                        # UserPromptNode (and any node we do not inspect).
-                        node = await run.next(node)
+                                # UserPromptNode (and any node we do not inspect).
+                                node = await run.next(node)
+                except _RetryModelCall as retry:
+                    if await self._wait_retry(retry, tracker):
+                        continue
+                    state.reason = StopReason.INTERRUPTED
+                break
         except RunCancelled as exc:
             state.reason = StopReason.INTERRUPTED
             self._keep_stopped_turn(active, state, exc.all_messages())
@@ -1262,6 +1323,40 @@ class AgentLoop:
         if state.reason.value in LIMIT_REASONS and not state.final_answer:
             state.final_answer = _limit_answer(state.passes, state.reason, state.iterations)
         return state.reason, state.final_answer, state.iterations, state.stop_note
+
+    async def _wait_retry(self, retry: _RetryModelCall, tracker: RetryTracker) -> bool:
+        """Wait before the next attempt of a failed model call and tell the
+        app. False when a Stop (or the e-stop) came during the wait."""
+        window = self._retry_policy.window
+        spent = 0.0 if tracker.first_failure is None else tracker.clock() - tracker.first_failure
+        info = {
+            "attempt": retry.attempt,
+            "delay": round(retry.delay, 1),
+            "reason": retry.reason,
+            "gives_up_in": round(max(0.0, window - spent), 1),
+        }
+        if self._retry_observer is None:
+            self._phase(PHASE_RETRYING)
+        self._notify_retry(info)
+        tracer = get_tracer()
+        if tracer.enabled:
+            tracer.emit("retry", reason=retry.reason, attempt=retry.attempt + 1, delay=retry.delay)
+        try:
+            interrupted = await asyncio.to_thread(self._kill.wait_interrupted, retry.delay)
+        finally:
+            self._notify_retry(None)
+        if interrupted or self._kill.interrupted() or self._kill.estop_engaged():
+            return False
+        return True
+
+    def _notify_retry(self, info: dict | None) -> None:
+        observer = self._retry_observer
+        if observer is None:
+            return
+        try:
+            observer(info)
+        except Exception:  # noqa: BLE001 — a UI sink error must not abort a run
+            pass
 
     def _steps_left(self, state: _DriveState) -> int:
         """Model steps this run may still take, this one included."""
@@ -2141,6 +2236,13 @@ def _response_tokens(response: ModelResponse) -> int:
         return total_tokens_from_usage(details.get("usage"))
     usage = response.usage
     return int(usage.input_tokens or 0) + int(usage.output_tokens or 0)
+
+
+def _empty_stream(response: ModelResponse) -> bool:
+    """A reply with no part at all and no finish reason: the stream closed
+    before the model said anything (a dropped upstream). A thinking-only
+    reply has parts and goes to the empty-reply nudge instead."""
+    return not response.parts and response.finish_reason is None
 
 
 def _no_output(response: ModelResponse) -> bool:

@@ -506,7 +506,7 @@ Rules:
 ```json
 {"type": "heartbeat", "run_id": "<uuid>"?, "session_key": "<key>"?,
  "seq": 3, "elapsed": 31.4,
- "phase": "queued" | "preparing" | "model" | "tool" | "waiting_user"?,
+ "phase": "queued" | "preparing" | "model" | "tool" | "waiting_user" | "retrying"?,
  "tool": "<tool name>"?}
 ```
 
@@ -549,6 +549,41 @@ The loop reports `preparing` / `model` / `tool` through `phase_observer`
 `secret_request` and a browser takeover, and the phase before the wait comes
 back when it closes. `AGENTS_HEARTBEAT_SECONDS=0` still turns every beat off,
 phase beats included. Every terminal of the request stops the beat first.
+
+### `heartbeat.retry` (IMPLEMENTED, additive; CHAT-31)
+
+```json
+{"type": "heartbeat", "run_id": "<uuid>", "session_key": "<key>", "seq": 9,
+ "elapsed": 212.0, "phase": "retrying",
+ "retry": {"attempt": 2, "in": 58.0, "reason": "HTTP 503", "gives_up_in": 1680.0}}
+```
+
+The model call of the run failed in a way that can pass (a timeout, a 5xx, a
+429, a network error, an empty stream) and the host asks again by itself. The
+app shows this state ("retrying in 58 s") and never needs a Resend button: the
+host keeps going when the app is closed.
+
+- `attempt`: the number of the retry that is waiting (1 = the first).
+- `in`: seconds until that retry starts. Every beat while waiting repeats the
+  object with a smaller `in`.
+- `reason`: short text: `HTTP 503`, `rate limited`, `network error`,
+  `no answer` (nothing for 90 s), `empty answer`.
+- `gives_up_in`: seconds until the host stops retrying and fails the turn.
+
+Policy (`agents/runtime/src/chuk_agents_runtime/model_retry.py`): retries after
+2, 5, 15 and 30 s, then once per 60 s, for 30 min from the first failure of
+that call (`AGENTS_MODEL_RETRY_WINDOW_S`, `0` = off). A `Retry-After` header is
+kept, at most 60 s. A wrong request (400, 401, 402 no credits, 403, 404, 422)
+is not retried. Only the model request is asked again: the loop rebuilds it
+from the store, so a tool that already ran keeps its result and never runs
+twice. Text that a stream sent before it broke stays on screen; the retried
+answer follows it, and the `done` frame carries the clean final answer.
+
+When the attempt starts, the next beat says `preparing` (then `model`). When
+the window is used up, the run ends with the normal `error` terminal and a
+message like `the model service did not answer for 30 min (9 retries, last
+error: HTTP 503); the task stopped`. A Stop during the wait ends the run at
+once.
 
 ### `browser_view` `started` (extended, additive)
 

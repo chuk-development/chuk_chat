@@ -309,3 +309,33 @@ def test_a_failed_task_stops_its_beat_before_the_error(tmp_path):
         assert not executor._beats
     finally:
         executor.stop()
+
+
+# -- heartbeat.retry (CHAT-31) -------------------------------------------------
+
+
+def test_the_payload_carries_retry_only_with_phase_retrying():
+    retry = {"attempt": 2, "in": 58.0, "reason": "HTTP 503", "gives_up_in": 1700.0}
+    beat = heartbeat_payload(seq=4, phase="retrying", retry=retry)
+    assert beat["phase"] == "retrying" and beat["retry"] == retry
+    assert "retry" not in heartbeat_payload(seq=4, phase="model", retry=retry)
+
+
+def test_a_waiting_retry_beats_at_once_counts_down_and_clears():
+    from chuk_agents_executor.executor import _Heartbeat
+
+    sent: list[dict] = []
+    beat = _Heartbeat(sent.append, interval=3600, run_id="r", session_key="s", phase="model")
+    beat.set_retry({"attempt": 1, "delay": 60, "reason": "rate limited", "gives_up_in": 1800})
+    assert sent[-1]["phase"] == "retrying"
+    first = sent[-1]["retry"]
+    assert first["attempt"] == 1 and first["reason"] == "rate limited"
+    assert 59 <= first["in"] <= 60 and 1799 <= first["gives_up_in"] <= 1800
+    beat._beat()  # an interval beat while waiting repeats the countdown
+    assert sent[-1]["phase"] == "retrying" and sent[-1]["retry"]["in"] <= first["in"]
+    beat.set_retry(None)
+    assert sent[-1]["phase"] == "preparing" and "retry" not in sent[-1]
+    count = len(sent)
+    beat.set_retry(None)  # nothing pending: no beat
+    assert len(sent) == count
+    beat.cancel()
