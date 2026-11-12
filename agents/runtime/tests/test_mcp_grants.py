@@ -148,18 +148,55 @@ def test_a_stale_device_copy_does_not_replace_the_host_state(ratchet):
     assert ratchet.calls == 1
 
 
-def test_a_new_sign_in_from_the_device_is_taken(ratchet):
-    """A token the grant never had is a new sign-in (or a refresh the device
-    did itself): the device wins."""
+def test_a_refresh_the_device_did_itself_is_kept_and_used_when_the_host_token_dies(ratchet):
+    """A token the grant never had, while the host's token is alive, waits as
+    an alternate (CHAT-78). When the provider refuses the host's token, the
+    alternate is tried and the grant lives on."""
     host = MCPConnection(_forwarded("rt-1", "at-1"))
     assert host.refresh_token(force=True) == "at-2"
-    # The device refreshed with rt-2 on its own.
+    # The device refreshed with rt-2 on its own: rt-2 and at-2 are dead now.
     assert ratchet(None, data={"refresh_token": "rt-2"}).status_code == 200
 
     fresh = MCPConnection(_forwarded("rt-3", "at-3"))
+    # Not taken on sight: the host's own token stays current.
+    assert fresh.config.oauth["refresh_token"] == "rt-2"
+    assert mcp_client.GRANTS.alternates(fresh.config) == 1
 
-    assert fresh.config.oauth["refresh_token"] == "rt-3"
-    assert host._http_headers()["Authorization"] == "Bearer at-3"  # noqa: SLF001
+    # The provider refuses at-2 (401): rt-2 is refused, rt-3 is tried.
+    assert host.refresh_token(force=True, seen_token="at-2") == "at-4"
+    assert host.config.oauth["refresh_token"] == "rt-4"
+    assert mcp_client.GRANTS.alternates(host.config) == 0
+    assert not mcp_client.GRANTS.is_dead(host.config)
+
+
+def test_an_old_token_from_another_device_does_not_kill_a_live_grant(ratchet):
+    """The bug behind CHAT-78: a device forwards a refresh token the host never
+    saw, but the provider already killed it (another device refreshed it
+    long ago). Taken on sight it replaced the host's live token, and the next
+    refresh gave invalid_grant: the connector was dead for good."""
+    host = MCPConnection(_forwarded("rt-1", "at-1"))
+    assert host.refresh_token(force=True) == "at-2"
+
+    stale = MCPConnection(_forwarded("rt-old-from-phone", "at-old"))
+    assert stale.config.oauth["refresh_token"] == "rt-2"
+
+    later = MCPConnection(_forwarded("rt-old-from-phone", "at-old", expires_at=_past()))
+    assert later.refresh_token(force=True) == "at-3"
+    assert ratchet.refused == 0
+    assert not mcp_client.GRANTS.is_dead(later.config)
+
+
+def test_a_dead_grant_with_only_bad_alternates_is_dead_once(ratchet):
+    notices: list[dict] = []
+    mcp_client.GRANTS.dead_listeners.append(notices.append)
+    host = MCPConnection(_forwarded("rt-1", "at-1"))
+    assert host.refresh_token(force=True) == "at-2"
+    MCPConnection(_forwarded("rt-junk", "at-junk"))  # an alternate, also dead
+    ratchet.ratchet = 99  # the provider revoked everything
+
+    assert host.refresh_token(force=True, seen_token="at-2") is None
+    assert ratchet.refused == 2  # rt-2, then rt-junk; nothing more
+    assert len(notices) == 1
 
 
 def test_the_grant_survives_a_host_restart(ratchet, tmp_path):

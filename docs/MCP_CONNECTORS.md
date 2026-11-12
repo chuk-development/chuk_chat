@@ -236,6 +236,22 @@ access token invalid; the second refresher gets `invalid_grant`).
 - Host: one `OAuthGrantStore` per process (`mcp-grants.json`, sealed, written
   with fsync + rename before the new token is used). `GrantKeeper` renews every
   grant once per 20 h so an idle refresh token never times out.
+- **A refresh token the grant never had is an alternate, not a replacement**
+  (CHAT-78). While the host's own token is alive, an unknown token a device
+  forwards waits in `alternates` (at most 4). When the provider refuses the
+  current token, the alternates are tried, newest first; only when all are
+  refused is the grant dead. Before, an unknown token replaced the host's on
+  sight ("device wins"). An old copy from another device (or from a build
+  that still refreshed on the device) then killed the grant at the next
+  refresh: Canva and Plane died that way on 2026-10-29 15:11 (adopted and
+  refused in the same second), Fastmail on 2026-10-31 09:36, two hours after
+  the host took a device token at 07:30. A dead grant never healed by itself,
+  which read as "the sign-in expires after a week".
+- Still a second refresher: a build without `FEATURE_AGENTS` (a GitHub
+  release, the web app) refreshes its own copy and rotates the grant under
+  the host. The alternate rule lets the host survive that once the Agents app
+  forwards the rotated token; until then the next host refresh tries its own
+  token, then the alternates.
 - `invalid_grant` / `invalid_client` marks the grant dead: no more refresh
   requests for that token (it used to try ~4 times per dial), `error_kind: auth`,
   and ONE push "<Connector>: sign-in expired" (`notify_connector_expired`,

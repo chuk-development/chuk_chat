@@ -602,6 +602,9 @@ def refresh_access_token_ex(
 _GRANT_FIELDS = ("refresh_token", "expires_at")
 #: How many earlier refresh tokens a grant remembers (as hashes).
 _GRANT_SEEN_CAP = 64
+#: How many unproven refresh tokens from devices a grant keeps as fallbacks
+#: (:meth:`OAuthGrantStore.promote_alternate`).
+_GRANT_ALTERNATES_CAP = 4
 #: The fields of a forwarded ``oauth`` block the store keeps with a grant, so
 #: it can renew the grant on its own (:meth:`OAuthGrantStore.keep_alive`) when
 #: no session holds a copy. They name the grant and the client; the sealed file
@@ -758,7 +761,27 @@ class OAuthGrantStore:
             if record is None or (
                 digest != record.get("current") and digest not in record.get("seen", [])
             ):
-                # First sight of this grant, or a token it never had.
+                live = (
+                    record is not None
+                    and record.get("refresh_token")
+                    and record.get("dead") != record.get("current")
+                )
+                if live:
+                    # A token this grant never had, while the grant's own
+                    # current token is alive (CHAT-78). It can be a refresh a
+                    # device did itself (then it is the newer one), or an old
+                    # copy from another device's earlier refresh (then the
+                    # provider already killed it). Taking it on sight is what
+                    # killed Canva, Plane and Fastmail: the host dropped its
+                    # live token for a dead one and the next refresh gave
+                    # ``invalid_grant``. So it waits as an alternate: the
+                    # store's token is tried first, the alternate only when
+                    # the provider refuses that one.
+                    self._add_alternate_locked(key, config)
+                    self._apply(config, data[key])
+                    return True
+                # First sight of this grant, a token it never had while the
+                # grant is dead (a new sign-in), or no refresh token stored.
                 self._adopt_locked(key, config)
                 return False
             if digest == record.get("current"):
@@ -828,6 +851,77 @@ class OAuthGrantStore:
             if gone:
                 self._write()
         return gone
+
+    # -- alternates (CHAT-78) ---------------------------------------------
+
+    def _add_alternate_locked(self, key: str, config: "MCPServerConfig") -> None:
+        record = self._load()[key]
+        token = str(config.oauth.get("refresh_token") or "")
+        digest = _token_hash(token)
+        kept = [
+            a
+            for a in record.get("alternates", [])
+            if isinstance(a, dict) and a.get("current") != digest
+        ]
+        kept.append(
+            {
+                "refresh_token": token,
+                "current": digest,
+                "access_token": config.auth_token or "",
+                "expires_at": config.oauth.get("expires_at") or "",
+                "at": round(time.time()),
+            }
+        )
+        record["alternates"] = kept[-_GRANT_ALTERNATES_CAP:]
+        self._write()
+
+    def alternates(self, config: "MCPServerConfig") -> int:
+        """How many alternate refresh tokens wait for the grant of ``config``."""
+        key = self.key(config.oauth)
+        if key is None:
+            return 0
+        with self._lock:
+            record = self._load().get(key) or {}
+            return len(record.get("alternates") or [])
+
+    def promote_alternate(self, config: "MCPServerConfig") -> bool:
+        """The provider refused the grant's current refresh token: make the
+        newest alternate the current one and point ``config`` at it. The
+        refused token goes to the earlier tokens. ``False`` when no alternate
+        is left (then the grant is dead)."""
+        key = self.key(config.oauth)
+        if key is None:
+            return False
+        with self._lock:
+            data = self._load()
+            record = data.get(key)
+            if not record:
+                return False
+            pending = [a for a in record.get("alternates") or [] if isinstance(a, dict)]
+            if not pending:
+                return False
+            nxt = pending.pop()
+            seen = [h for h in record.get("seen", []) if isinstance(h, str)]
+            refused = _token_hash(str(config.oauth.get("refresh_token") or ""))
+            for earlier in (record.get("current"), refused):
+                if earlier and earlier not in seen and earlier != nxt.get("current"):
+                    seen.append(earlier)
+            record.update(
+                {
+                    "refresh_token": nxt.get("refresh_token") or "",
+                    "current": nxt.get("current") or "",
+                    "access_token": nxt.get("access_token") or "",
+                    "expires_at": nxt.get("expires_at") or "",
+                    "seen": seen[-_GRANT_SEEN_CAP:],
+                    "alternates": pending,
+                    "updated_at": round(time.time()),
+                }
+            )
+            for name in ("dead", "dead_reason", "dead_at"):
+                record.pop(name, None)
+            self._write()
+            self._apply(config, record)
+            return True
 
     # -- dead grants --------------------------------------------------------
 
@@ -959,6 +1053,20 @@ class OAuthGrantStore:
                         current.pop("dead", None)
                         self._write()
                         renewed += 1
+                    elif reason in DEAD_GRANT_ERRORS and current.get("alternates"):
+                        # An alternate may be the live token (CHAT-78): make
+                        # it current and let the next round renew it.
+                        probe = MCPServerConfig(
+                            name=current.get("name") or "",
+                            url=current.get("url") or "",
+                            oauth={
+                                **{f: current[f] for f in _GRANT_IDENTITY_FIELDS if current.get(f)},
+                                "refresh_token": current.get("refresh_token"),
+                            },
+                        )
+                        self.promote_alternate(probe)
+                        data[key]["refreshed_at"] = 0
+                        self._write()
                     elif reason in DEAD_GRANT_ERRORS:
                         current["dead"] = current.get("current")
                         current["dead_reason"] = reason
@@ -1937,6 +2045,17 @@ class MCPConnection:
                 if minted is not None and time.monotonic() - minted < REFRESH_FLOOR:
                     return self.config.auth_token
             token, updated, reason = refresh_access_token_ex(oauth)
+            # The provider refused the current token for good: an alternate a
+            # device forwarded may be the live one (CHAT-78). Try each once.
+            while not token and reason in DEAD_GRANT_ERRORS:
+                try:
+                    promoted = self._grants.promote_alternate(self.config)
+                except Exception:  # noqa: BLE001 — then the refusal stands
+                    promoted = False
+                if not promoted:
+                    break
+                oauth = self.config.oauth
+                token, updated, reason = refresh_access_token_ex(oauth)
             dead_notice = None
             rotated = False
             if not token:
