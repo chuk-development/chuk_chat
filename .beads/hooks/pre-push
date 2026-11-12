@@ -11,22 +11,29 @@
 
 set -u
 
-# A) Analyzer gate, blocking (chuk_chat). Same command as CI's analyze job
+# A) Analyzer gate, blocking (chuk_chat). Same checks as CI's analyze job
 #    (scripts/ci_analyze.sh), so a push that CI would fail on an analyzer
-#    error stops here instead of mailing "run failed" to the owner. Runs on
-#    the working tree (about 40 s). Skip once with NO_ANALYZE=1 git push,
-#    e.g. when a foreign uncommitted file in the shared checkout is broken.
+#    error stops here instead of mailing "run failed" to the owner. It checks
+#    the pushed commit, exported to _scratch/ci_analyze/, not the shared
+#    working tree, so another agent's uncommitted files neither block nor
+#    hide anything. About 100 s. Skip once with NO_ANALYZE=1 git push.
+#    git gives the refs on stdin once; keep them for the steps below.
+_refs="$(cat)"
 _repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 if [ "${NO_ANALYZE:-}" != "1" ] && [ -x "$_repo_root/scripts/ci_analyze.sh" ] \
   && command -v flutter >/dev/null 2>&1; then
-  echo "pre-push: scripts/ci_analyze.sh (skip with NO_ANALYZE=1) ..."
-  mkdir -p "$_repo_root/_scratch"
-  _log="$_repo_root/_scratch/pre_push_analyze.log"
-  if ! "$_repo_root/scripts/ci_analyze.sh" >"$_log" 2>&1; then
-    grep -E "error •|ERROR|drift" "$_log" | head -20 >&2
-    echo "pre-push: analyzer errors, push stopped (CI would fail)." >&2
-    exit 1
-  fi
+  while read -r _lref _lsha _rref _rsha; do
+    [ -z "${_lsha:-}" ] && continue
+    [ "$_lsha" = "0000000000000000000000000000000000000000" ] && continue
+    echo "pre-push: scripts/ci_analyze.sh --commit ${_lsha:0:9} (skip with NO_ANALYZE=1) ..."
+    mkdir -p "$_repo_root/_scratch"
+    _log="$_repo_root/_scratch/pre_push_analyze.log"
+    if ! "$_repo_root/scripts/ci_analyze.sh" --commit "$_lsha" >"$_log" 2>&1; then
+      grep -E "error •|ERROR|drift|fatal" "$_log" | head -20 >&2
+      echo "pre-push: analyzer errors in ${_lsha:0:9}, push stopped (CI would fail). Log: $_log" >&2
+      exit 1
+    fi
+  done <<<"$_refs"
 fi
 
 # 0) Nur laufen, wenn der Push aus einer Claude-Code-Sitzung kommt.
@@ -57,7 +64,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     base_commit="$remote_sha"                      # bestehender Branch: gegen Remote-Stand
     break
   fi
-done
+done <<<"$_refs"
 
 # 4) Neuer Branch (kein Remote-Stand): auf den Default-Branch des Remotes
 #    zurueckfallen, damit auch der erste Push eines Feature-Branches reviewt wird.

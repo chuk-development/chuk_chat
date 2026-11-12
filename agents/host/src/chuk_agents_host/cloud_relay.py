@@ -74,6 +74,7 @@ from __future__ import annotations
 import base64
 import json
 import secrets
+import socket
 import threading
 import uuid
 from typing import Any, Callable, Iterator
@@ -149,6 +150,15 @@ CODE_PAIRING_UNCLAIMED = "pairing_unclaimed"
 #: How long before the code dies to say so. One minute is enough to re-run the
 #: command, and not so early that the warning is noise.
 EXPIRY_WARNING_LEAD_SECONDS = 60.0
+
+#: How long sent data may stay unacknowledged before the kernel drops the
+#: socket (``TCP_USER_TIMEOUT``). The websocket keepalive (ping every 20 s,
+#: 20 s for the pong) finds a silent link only while nothing else is being
+#: sent: a send that blocks on a dead path holds the library's send lock, so
+#: the keepalive cannot run, and the link stays "open" until TCP gives up on
+#: its own, about 15 minutes on Linux (Plane CHAT-33). The same budget as the
+#: keepalive, so neither one is cut short.
+TCP_USER_TIMEOUT_SECONDS = 40.0
 
 #: Bytes of CSPRNG entropy behind a pairing channel id. 32 bytes = 256 bits,
 #: url-safe base64 (43 chars, no padding). It is a bearer capability: whoever
@@ -267,6 +277,20 @@ def _close_quietly(ws: Any) -> None:
         pass
 
 
+def _bound_unacked_sends(ws: Any, seconds: float) -> None:
+    """Set ``TCP_USER_TIMEOUT`` on the socket under ``ws``, where the platform
+    has it (Linux). Then a send that stalls on a dead path fails, the socket
+    closes and the party redials. Elsewhere this does nothing."""
+    option = getattr(socket, "TCP_USER_TIMEOUT", None)
+    sock = getattr(ws, "socket", None)
+    if option is None or sock is None or seconds <= 0:
+        return
+    try:
+        sock.setsockopt(socket.IPPROTO_TCP, option, int(seconds * 1000))
+    except (OSError, AttributeError, TypeError, ValueError):
+        pass
+
+
 class CloudRelayTransport:
     """Opens an authenticated executor link to the cloud relay."""
 
@@ -286,6 +310,7 @@ class CloudRelayTransport:
         on_webhook: Callable[[dict[str, Any]], str] | None = None,
         logger: Callable[[str], None] | None = None,
         open_timeout: float = 15.0,
+        tcp_user_timeout: float = TCP_USER_TIMEOUT_SECONDS,
         connect: Callable[..., Any] = ws_connect,
     ) -> None:
         self._device_id = device_id
@@ -309,6 +334,7 @@ class CloudRelayTransport:
         self._on_webhook = on_webhook
         self._log = logger or (lambda _msg: None)
         self._open_timeout = open_timeout
+        self._tcp_user_timeout = tcp_user_timeout
         self._connect = connect
 
     @property
@@ -356,6 +382,7 @@ class CloudRelayTransport:
         }[kind]
         self._log(f"dialling the cloud relay at {url} as executor ({label})")
         ws = self._connect(url, open_timeout=self._open_timeout)
+        _bound_unacked_sends(ws, self._tcp_user_timeout)
         try:
             ws.send(json.dumps(frame, separators=(",", ":")))
             reply = decode_message(ws.recv(timeout=self._open_timeout))
