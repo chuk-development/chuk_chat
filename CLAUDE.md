@@ -587,6 +587,7 @@ Management API query endpoint; the steps are in `docs/DATABASE.md`
 | `docs/PERFORMANCE.md` | Phone and emulator benchmarks, the every-screen crawler, ranked hops, `scripts/perf_bench.sh` |
 | `docs/ASSISTANT_SURFACE.md` | Android assistant surface: assist role, overlay, device tools, the pinned model |
 | `docs/MCP_CONNECTORS.md` | Remote MCP connectors: the OAuth flow, storage, tool naming |
+| `docs/AGENT_AVATAR.md` | Agent avatar: states, focus, cost, Linux MSAA |
 | `docs/OFFLINE_SEND.md` | Offline outbox: text, image, voice kept and sent later; states, triggers, encryption, failure cases |
 | `docs/CHAT_PAYLOAD_FORMAT.md` | Chat payload v3 (no duplicates), compression frame, envelope `v:"2"`, old-client behaviour, the one-time migration behind the blocking maintenance screen |
 | `docs/LINUX_BUILDS.md` | Fastlane packaging (DEB, RPM, AppImage, Flatpak) |

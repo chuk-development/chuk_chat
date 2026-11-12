@@ -16,7 +16,7 @@ import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
-import 'package:chuk_chat/ui/expressive/agent_face.dart';
+import 'package:chuk_chat/ui/agent_avatar/agent_avatar.dart';
 import 'package:chuk_chat/ui/expressive/agent_status.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/ui/expressive/working_dots.dart';
@@ -137,7 +137,7 @@ class AgentChromePill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          AgentFace(
+          AgentAvatar(
             agent: agent,
             size: _kPillFaceSize,
             store: store,

@@ -14,7 +14,7 @@ import 'package:chuk_chat/models/agents_room.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agent_read_marks.dart';
 import 'package:chuk_chat/constants.dart';
-import 'package:chuk_chat/ui/expressive/agent_face.dart';
+import 'package:chuk_chat/ui/agent_avatar/agent_avatar.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/agents_desktop/desktop_metrics.dart';
 import 'package:chuk_chat/widgets/room_faces.dart';
@@ -266,7 +266,7 @@ class _QuickSwitcherState extends State<QuickSwitcher> {
         theme.m3.surfaceContainerHigh;
     final (Widget face, String name, String kind, bool unread) = switch (pick) {
       QuickSwitcherAgent(:final AgentsAgent agent) => (
-        AgentFace(agent: agent, size: _faceSize, store: widget.profiles),
+        AgentAvatar(agent: agent, size: _faceSize, store: widget.profiles),
         agent.name,
         'Agent',
         (widget.readMarks ?? AgentReadMarks.instance).isUnread(agent),

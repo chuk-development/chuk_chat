@@ -14,6 +14,7 @@ import 'package:chuk_chat/models/agents_room.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_agent_list.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
 import 'package:chuk_chat/services/agents/room_source.dart';
+import 'package:chuk_chat/ui/agent_avatar/agent_avatar.dart';
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
 import 'package:chuk_chat/widgets/agent_roster_view.dart';
 import 'package:chuk_chat/widgets/room_faces.dart';
@@ -81,23 +82,23 @@ void main() {
       expect(kRoomFacesMax, 2);
     });
 
-    // The reason the stack is two and not three: a third face drops the
-    // monogram to 8.4 px, and the layout suite refuses text under 10 px.
+    // Room faces draw the agents' figures, never a letter.
     for (final double slot in <double>[kRoomFacesInbox, kRoomFacesRail]) {
-      testWidgets('a monogram in a ${slot.toInt()} px slot stays over 10 px', (
+      testWidgets('a ${slot.toInt()} px slot draws figures, no letters', (
         tester,
       ) async {
         await _pumpFaces(tester, 5, slot);
-        final Iterable<Text> monograms = tester.widgetList<Text>(
+        expect(
+          find.descendant(of: find.byType(RoomFaces), matching: find.byType(Text)),
+          findsNothing,
+        );
+        expect(
           find.descendant(
             of: find.byType(RoomFaces),
-            matching: find.byType(Text),
+            matching: find.byType(AgentAvatar),
           ),
+          findsWidgets,
         );
-        expect(monograms, isNotEmpty);
-        for (final Text monogram in monograms) {
-          expect(monogram.style?.fontSize, greaterThanOrEqualTo(10.0));
-        }
       });
     }
 

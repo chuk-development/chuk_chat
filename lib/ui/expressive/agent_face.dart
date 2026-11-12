@@ -1,26 +1,19 @@
-/// An agent's face, in the expressive shape language.
-///
-/// The face is a scalloped blob ([expressiveShapeFor]) cut from the agent id, so
-/// one agent keeps one silhouette everywhere: the inbox row, the chat header,
-/// the profile page and the desktop roster. Inside the blob is
-///
-///  * the picture the user set for this agent ([AgentProfileStore]), or
-///  * the monogram on a colour, which is the accent the user picked, or the
-///    stable hue derived from the agent id — the same rule [AgentAvatar] used
-///    before, so an agent without a profile does not change colour.
-///
-/// A presence dot rides at the bottom right: green while a run is in flight,
-/// amber when a schedule is armed, nothing while the agent waits. That is
-/// read from [AgentsAgent.activity], which the app actually observes.
+/// Agent faces: the colour rule ([agentAccent], also the colour of the
+/// agent's bubbles), the old expressive silhouettes ([agentAvatarShape],
+/// still used for room-face gaps and the template and shape pickers), and
+/// [AgentFace] / [ExpressiveFace], which now draw the cube figure through
+/// [AgentAvatar] (`lib/ui/agent_avatar/agent_avatar.dart`).
 library;
 
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
-import 'package:chuk_chat/ui/expressive/face_image.dart';
+import 'package:chuk_chat/ui/agent_avatar/agent_avatar.dart';
 import 'package:chuk_chat/ui/expressive/shapes.dart';
-import 'package:chuk_chat/widgets/agent_avatar.dart';
+
+export 'package:chuk_chat/ui/agent_avatar/agent_avatar.dart'
+    show AgentAvatarFocus;
 
 /// The selected silhouette, shared by monograms, photos and editor previews.
 ShapeBorder agentAvatarShape(String id, AgentAvatarShape? shape, double size) =>
@@ -132,8 +125,8 @@ const List<Color> kAgentAccents = <Color>[
 ];
 
 /// A face for an identity the caller only knows as an id and a label — a room
-/// member, a room turn, a picker row. Same blob, same colour rule, same stored
-/// picture as [AgentFace]; there is simply no activity to show a dot for.
+/// member, a room turn, a picker row. The same figure and colour as
+/// [AgentFace]; there is no activity to show.
 class ExpressiveFace extends StatelessWidget {
   const ExpressiveFace({
     super.key,
@@ -151,55 +144,17 @@ class ExpressiveFace extends StatelessWidget {
   final bool dimmed;
 
   @override
-  Widget build(BuildContext context) {
-    final AgentProfileStore profiles = store ?? AgentProfileStore.instance;
-    return AnimatedBuilder(
-      animation: profiles,
-      builder: (BuildContext context, Widget? _) {
-        final ShapeBorder shape = agentAvatarShape(
-          id,
-          profiles.profileOf(id).shape,
-          size,
-        );
-        final Color color = agentAccent(context, id, store: profiles);
-        final ImageProvider<Object>? photo = faceImageProvider(
-          profiles.profileOf(id).photoPath,
-        );
-        return Opacity(
-          opacity: dimmed ? 0.4 : 1.0,
-          child: Container(
-            width: size,
-            height: size,
-            decoration: ShapeDecoration(
-              color: photo == null ? color : null,
-              shape: shape,
-              image: photo == null
-                  ? null
-                  : DecorationImage(image: photo, fit: BoxFit.cover),
-            ),
-            child: photo != null
-                ? null
-                : Center(
-                    child: Transform.translate(
-                      offset: Offset(0, size * monogramDrop(shape)),
-                      child: Text(
-                        AgentAvatar.monogramOf(label),
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                          fontSize: size * 0.38,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                    ),
-                  ),
-          ),
-        );
-      },
-    );
-  }
+  Widget build(BuildContext context) => AgentAvatar.id(
+    id: id,
+    label: label,
+    size: size,
+    store: store,
+    dimmed: dimmed,
+  );
 }
 
+/// An agent's face with its live state. Kept as the name the existing call
+/// sites use; it is [AgentAvatar].
 class AgentFace extends StatelessWidget {
   const AgentFace({
     super.key,
@@ -225,104 +180,16 @@ class AgentFace extends StatelessWidget {
   final AgentProfile? profileOverride;
 
   /// The presence dot colour for an activity, or null for no dot.
-  static Color? presenceColor(AgentActivity activity) {
-    switch (activity) {
-      case AgentActivity.working:
-        return const Color(0xFF34C759);
-      case AgentActivity.scheduled:
-        return const Color(0xFFFF9F0A);
-      case AgentActivity.waiting:
-        return null;
-    }
-  }
+  static Color? presenceColor(AgentActivity activity) =>
+      AgentAvatar.presenceColor(activity);
 
   @override
-  Widget build(BuildContext context) {
-    final AgentProfileStore profiles = store ?? AgentProfileStore.instance;
-    return AnimatedBuilder(
-      animation: profiles,
-      builder: (BuildContext context, Widget? _) => _build(context, profiles),
-    );
-  }
-
-  Widget _build(BuildContext context, AgentProfileStore profiles) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    final profile = profileOverride ?? profiles.profileOf(agent.id);
-    final ShapeBorder shape = agentAvatarShape(agent.id, profile.shape, size);
-    final Color color = profileOverride == null
-        ? agentAccent(context, agent.id, store: profiles)
-        : profile.colorValue != null
-        ? Color(profile.colorValue!)
-        : HSLColor.fromAHSL(
-            1,
-            AgentAvatar.hueOf(agent.id),
-            0.45,
-            Theme.of(context).brightness == Brightness.dark ? 0.42 : 0.62,
-          ).toColor();
-    final ImageProvider<Object>? photo = faceImageProvider(profile.photoPath);
-    final bool hasPhoto = photo != null;
-    final Color? dot = showPresence ? presenceColor(agent.activity) : null;
-    final double opacity = dimmed ? 0.4 : 1.0;
-
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Opacity(
-        opacity: opacity,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              width: size,
-              height: size,
-              // The picture is painted into the blob itself, so the colour
-              // cannot bleed out as a rim at the scalloped edges.
-              decoration: ShapeDecoration(
-                color: hasPhoto ? null : color,
-                shape: shape,
-                image: photo == null
-                    ? null
-                    : DecorationImage(image: photo, fit: BoxFit.cover),
-              ),
-              child: hasPhoto
-                  ? null
-                  : Center(
-                      child: Transform.translate(
-                        offset: Offset(0, size * monogramDrop(shape)),
-                        child: Text(
-                          AgentAvatar.monogramOf(agent.name),
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
-                            fontSize: size * 0.38,
-                            letterSpacing: -0.5,
-                          ),
-                        ),
-                      ),
-                    ),
-            ),
-            if (dot != null)
-              Positioned(
-                right: -2,
-                bottom: -2,
-                child: Semantics(
-                  label: agent.activity == AgentActivity.working
-                      ? 'working'
-                      : 'scheduled',
-                  child: Container(
-                    width: (size * 0.30).clamp(9.0, 18.0),
-                    height: (size * 0.30).clamp(9.0, 18.0),
-                    decoration: BoxDecoration(
-                      color: dot,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: scheme.surface, width: 2.5),
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => AgentAvatar(
+    agent: agent,
+    size: size,
+    showPresence: showPresence,
+    store: store,
+    dimmed: dimmed,
+    profileOverride: profileOverride,
+  );
 }

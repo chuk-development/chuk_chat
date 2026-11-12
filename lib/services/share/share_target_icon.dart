@@ -3,7 +3,7 @@
 /// The PNG is laid out as an adaptive icon: the launcher shows only the middle
 /// 72 of 108 units, cut by its own mask (mostly a circle). So the background
 /// fills the whole square, a light tint of the agent's colour, and the face
-/// (the same silhouette and monogram as [AgentFace]) sits in the visible
+/// (the same cube figure as [AgentAvatar], at rest) sits in the visible
 /// middle. An agent with a picture shows the picture edge to edge.
 library;
 
@@ -14,10 +14,10 @@ import 'dart:ui' as ui;
 import 'package:flutter/painting.dart';
 
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
+import 'package:chuk_chat/ui/agent_avatar/avatar_rig.dart';
+import 'package:chuk_chat/ui/agent_avatar/cube_figure.dart';
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
 import 'package:chuk_chat/ui/expressive/face_image.dart';
-import 'package:chuk_chat/ui/expressive/shapes.dart';
-import 'package:chuk_chat/widgets/agent_avatar.dart';
 
 const double _kCanvas = 432;
 
@@ -65,27 +65,10 @@ Future<Uint8List?> paintShareTargetIcon({
       width: face,
       height: face,
     );
-    final ShapeBorder shape = agentAvatarShape(agentId, profile.shape, face);
-    canvas.drawPath(shape.getOuterPath(faceRect), Paint()..color = accent);
-    final TextPainter monogram = TextPainter(
-      text: TextSpan(
-        text: AgentAvatar.monogramOf(name),
-        style: const TextStyle(
-          color: Color(0xFFFFFFFF),
-          fontWeight: FontWeight.w800,
-          fontSize: face * 0.38,
-          letterSpacing: -0.5,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    monogram.paint(
-      canvas,
-      faceRect.center -
-          Offset(monogram.width / 2, monogram.height / 2) +
-          Offset(0, face * monogramDrop(shape)),
-    );
-    monogram.dispose();
+    canvas.save();
+    canvas.translate(faceRect.left, faceRect.top);
+    paintCubeAvatar(canvas, face, accent, const AvatarPose());
+    canvas.restore();
   }
 
   final ui.Picture picture = recorder.endRecording();

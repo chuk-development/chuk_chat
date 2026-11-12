@@ -112,7 +112,15 @@ mixin AgentsShellHost on State<MessengerShell> {
   /// fresh key so the thread view re-runs its bootstrap and reconnects.
   GlobalKey _threadViewKey = GlobalKey();
 
-  String? _selectedAgentId;
+  String? _selectedAgentIdValue;
+
+  /// The open agent. Also tells the avatars which agent follows the pointer
+  /// when the pointer is over no agent row ([AgentAvatarFocus]).
+  String? get _selectedAgentId => _selectedAgentIdValue;
+  set _selectedAgentId(String? id) {
+    _selectedAgentIdValue = id;
+    AgentAvatarFocus.instance.openAgentId = id;
+  }
 
   /// The thread on screen. EMPTY means "nothing to mount yet", and that is
   /// deliberate: the old placeholder `'default'` was a thread key nobody ever

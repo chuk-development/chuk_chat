@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
+import 'package:chuk_chat/ui/agent_avatar/agent_avatar.dart';
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
 import '../support/test_app.dart';
 
@@ -37,16 +38,12 @@ void main() {
   );
 
   testWidgets(
-    'all avatar sizes and identity faces react to saved shapes including photos',
+    'all avatar sizes and identity faces draw the figure; a saved photo wins',
     (tester) async {
       final store = AgentProfileStore();
       addTearDown(store.dispose);
       const agent = AgentsAgent(id: 'alex', name: 'Alex', threads: []);
-      await store.update(
-        'alex',
-        shape: AgentAvatarShape.square,
-        colorValue: 0xFF00BFA5,
-      );
+      await store.update('alex', colorValue: 0xFF00BFA5);
       await tester.pumpWidget(
         testApp(
           Column(
@@ -64,21 +61,16 @@ void main() {
           .map((c) => c.decoration)
           .whereType<ShapeDecoration>()
           .toList();
-      expect(surfaces(), hasLength(4));
-      expect(
-        surfaces().every(
-          (d) =>
-              d.shape is RoundedRectangleBorder &&
-              d.color == const Color(0xFF00BFA5),
-        ),
-        isTrue,
-      );
+      // No picture: every face is the painted figure, no letter.
+      expect(find.byType(AgentAvatar), findsNWidgets(4));
+      expect(surfaces(), isEmpty);
+      expect(find.text('A'), findsNothing);
       await store.update(
         'alex',
-        shape: AgentAvatarShape.round,
         photoPath: File('assets/icons/app_icon.png').absolute.path,
       );
       await tester.pump();
+      expect(surfaces(), hasLength(4));
       expect(
         surfaces().every(
           (d) => d.shape is CircleBorder && d.image?.image is FileImage,

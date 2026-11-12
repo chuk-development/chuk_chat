@@ -23,7 +23,7 @@ import 'package:chuk_chat/ui/expressive/icon_map.dart';
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_binding.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
-import 'package:chuk_chat/ui/expressive/agent_face.dart';
+import 'package:chuk_chat/ui/agent_avatar/agent_avatar.dart';
 import 'package:chuk_chat/ui/expressive/feedback.dart';
 import 'package:chuk_chat/widgets/menu_tile_group.dart';
 
@@ -104,7 +104,7 @@ class MobileAgentSheet extends StatelessWidget {
     return <List<Widget>>[
       <Widget>[
         MenuActionRow(
-          leading: AgentFace(agent: agent, size: 44),
+          leading: AgentAvatar(agent: agent, size: 44),
           label: agent.name,
           subtitle: (role?.isNotEmpty ?? false) ? role : null,
           trailing: onProfile == null

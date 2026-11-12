@@ -295,3 +295,7 @@ Code: `lib/services/prompt_cache/`, test:
 
 See `docs/CHAT_COMPACTION.md`. The summary request continues the chat's
 own prefix byte for byte; never compact Agents threads.
+
+## Impeller on Linux: no on-screen MSAA
+
+On-screen paths get jagged edges; draw offscreen. See `docs/AGENT_AVATAR.md`.
