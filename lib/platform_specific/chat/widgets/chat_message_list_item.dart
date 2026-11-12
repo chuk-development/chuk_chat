@@ -231,6 +231,7 @@ class ChatMessageListItem extends StatelessWidget {
           ? () => onSwitchVariant(data.variantIndex + 1)
           : null,
       status: data.status,
+      turnFailed: !data.isUser && isTurnError(messages[index]),
       queueId: data.isUser ? data.queueId : null,
       lastError: data.lastError,
       onRetryPending:

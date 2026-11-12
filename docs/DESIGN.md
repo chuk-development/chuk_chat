@@ -361,7 +361,10 @@ group. The thread does the same. The bubble itself is chuk_chat's
 - **Retry and Resend (CHAT-32).** No message offers Resend. Only an answer
   whose request failed (provider error, broken or cut stream: the row mark
   `turnError`, or the `interrupted` status) offers Retry, and only in a
-  chuk_chat chat. An Agents host retries a failed run on its own.
+  chuk_chat chat. An Agents host retries a failed run on its own: while it
+  waits, the status line says "Provider not answering, trying again in N s"
+  (`heartbeat.retry`, `AgentsTurnPhase.retrying`, CHAT-64). When it gives
+  up, the error is one quiet line with an alert glyph, not a bubble.
 
 - A file the agent produced is **its own message**, hung under the text
   bubble — not a block inside it. An agent may send several messages in a turn.

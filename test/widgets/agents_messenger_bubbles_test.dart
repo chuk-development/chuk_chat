@@ -223,6 +223,41 @@ void main() {
       expect(find.byTooltip('Retry response'), findsNothing);
     });
 
+    testWidgets('a failed Agents turn is a quiet line, not a bubble', (
+      tester,
+    ) async {
+      debugAgentsChatCoreOverride = true;
+      addTearDown(() => debugAgentsChatCoreOverride = null);
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: kTestLocalizationsDelegates,
+          home: const Scaffold(
+            body: MessageBubble(
+              message: 'The model service did not answer for 30 min.',
+              isUser: false,
+              chatId: 'agent:chief:main',
+              maxWidth: 360,
+              turnFailed: true,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('agents-failed-turn-line')),
+        findsOneWidget,
+      );
+      expect(
+        decorationAround(
+          tester,
+          'The model service did not answer for 30 min.',
+        ),
+        isNull,
+      );
+      expect(find.byTooltip('Resend message'), findsNothing);
+      expect(find.byTooltip('Retry response'), findsNothing);
+    });
+
     testWidgets('no stamp on the bubble itself', (tester) async {
       debugAgentsChatCoreOverride = true;
       addTearDown(() => debugAgentsChatCoreOverride = null);

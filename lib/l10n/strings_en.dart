@@ -222,6 +222,9 @@ const Map<String, String> stringsEn = {
   'agentsPhaseOffline': 'Your computer is offline',
   'agentsPhaseReceived': 'Got it',
   'agentsPhaseQueued': 'Queued',
+  'agentsPhaseRetryingIn':
+      'Provider not answering, trying again in {seconds} s',
+  'agentsPhaseRetryingNow': 'Provider not answering, trying again',
   'agentsPhasePreparing': 'Preparing',
   'agentsPhaseThinking': 'Thinking',
   'agentsPhaseWorking': 'Working',

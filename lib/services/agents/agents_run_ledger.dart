@@ -294,6 +294,10 @@ class AgentsRun {
   String? hostPhaseTool;
   DateTime? hostPhaseAt;
 
+  /// While [hostPhase] is `retrying`: the host's wait before the next model
+  /// call (`heartbeat.retry`), as of [hostPhaseAt].
+  AgentsHostRetry? hostRetry;
+
   /// The run is blocked on the user: an approval, a secret request or a
   /// browser takeover is open in the thread. Set by the thread view, which
   /// owns those cards.
@@ -792,13 +796,24 @@ class AgentsRunLedger extends ChangeNotifier {
 
   /// The host said what the run is doing (`heartbeat.phase`). Notifies when
   /// the phase or its tool changed, so the status line moves at once.
-  void hostPhase(String sessionKey, {String? phase, String? tool}) {
+  void hostPhase(
+    String sessionKey, {
+    String? phase,
+    String? tool,
+    AgentsHostRetry? retry,
+  }) {
     final run = _runs[sessionKey];
     if (run == null || !run.running || phase == null || phase.isEmpty) return;
-    final bool changed = run.hostPhase != phase || run.hostPhaseTool != tool;
+    final AgentsHostRetry? wait = phase == 'retrying' ? retry : null;
+    // Every retry beat carries a smaller wait: the line counts down with it.
+    final bool changed =
+        run.hostPhase != phase ||
+        run.hostPhaseTool != tool ||
+        run.hostRetry != wait;
     run
       ..hostPhase = phase
       ..hostPhaseTool = tool
+      ..hostRetry = wait
       ..hostPhaseAt = DateTime.now();
     if (changed) notifyListeners();
   }
@@ -1225,10 +1240,7 @@ class AgentsRunLedger extends ChangeNotifier {
     if (cost != null) run.cost = cost;
     // The run id rides along too: it folds a quiet automation run to one
     // line ("notify only on change").
-    putRunMeta(
-      run.toolCalls,
-      runMetaCall(cost: cost, runId: runId),
-    );
+    putRunMeta(run.toolCalls, runMetaCall(cost: cost, runId: runId));
     // ── end F1 ──
     // Nothing may be left spinning once the host says the run is over.
     finalizeStaleToolCalls(run.toolCalls);

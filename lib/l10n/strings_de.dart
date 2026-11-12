@@ -230,6 +230,9 @@ const Map<String, String> stringsDe = {
   'agentsPhaseOffline': 'Dein Computer ist offline',
   'agentsPhaseReceived': 'Angekommen',
   'agentsPhaseQueued': 'In der Warteschlange',
+  'agentsPhaseRetryingIn':
+      'Anbieter antwortet nicht, neuer Versuch in {seconds} s',
+  'agentsPhaseRetryingNow': 'Anbieter antwortet nicht, neuer Versuch',
   'agentsPhasePreparing': 'Bereitet vor',
   'agentsPhaseThinking': 'Denkt nach',
   'agentsPhaseWorking': 'Arbeitet',

@@ -134,6 +134,20 @@ void main() {
         ),
       );
     }
+    // The host gave up after its retries (CHAT-64): a quiet line.
+    out.add(
+      MessageBubble(
+        message:
+            'The model service did not answer for 30 min (9 retries, last '
+            'error: HTTP 503); the task stopped.',
+        isUser: false,
+        chatId: chatId,
+        maxWidth: width * 0.85,
+        messengerMode: messenger,
+        startsNewGroup: true,
+        turnFailed: true,
+      ),
+    );
     out.add(const SizedBox(height: 24));
     out.add(
       MessageBubble(

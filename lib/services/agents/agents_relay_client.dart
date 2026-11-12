@@ -227,11 +227,16 @@ class AgentsRelayHeartbeat extends AgentsRelayInbound {
     this.elapsedSeconds,
     this.phase,
     this.tool,
+    this.retry,
   });
   final String? runId;
   final String? sessionKey;
   final int seq;
   final double? elapsedSeconds;
+
+  /// While [phase] is `retrying`: the host's wait before it asks the model
+  /// again (wire `heartbeat.retry`, CHAT-31). Null otherwise.
+  final AgentsHostRetry? retry;
 
   /// What the run is doing right now, when the host says (additive,
   /// docs/WIRE_CONTRACT.md "`heartbeat.phase`"): `queued`, `preparing`,
@@ -241,6 +246,57 @@ class AgentsRelayHeartbeat extends AgentsRelayInbound {
 
   /// The tool the run waits on while [phase] is `tool`.
   final String? tool;
+}
+
+/// The host waits to ask the model again after a call that can pass failed
+/// (wire `heartbeat.retry`, docs/WIRE_CONTRACT.md). The app shows it as a
+/// quiet status line; nobody presses Resend: the host keeps going alone.
+class AgentsHostRetry {
+  const AgentsHostRetry({
+    required this.attempt,
+    required this.inSeconds,
+    this.reason,
+    this.givesUpInSeconds,
+  });
+
+  /// The number of the retry that waits (1 = the first).
+  final int attempt;
+
+  /// Seconds until that retry starts, as of the beat.
+  final double inSeconds;
+
+  /// Short text: `HTTP 503`, `rate limited`, `network error`, ...
+  final String? reason;
+
+  /// Seconds until the host stops and fails the turn.
+  final double? givesUpInSeconds;
+
+  /// Reads the `retry` object of a heartbeat; null when it is not one.
+  static AgentsHostRetry? fromPayload(Object? raw) {
+    if (raw is! Map) return null;
+    final Object? wait = raw['in'];
+    if (wait is! num) return null;
+    final Object? attempt = raw['attempt'];
+    final Object? givesUp = raw['gives_up_in'];
+    final Object? reason = raw['reason'];
+    return AgentsHostRetry(
+      attempt: attempt is num ? attempt.toInt() : 1,
+      inSeconds: wait.toDouble(),
+      reason: reason is String && reason.isNotEmpty ? reason : null,
+      givesUpInSeconds: givesUp is num ? givesUp.toDouble() : null,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is AgentsHostRetry &&
+      other.attempt == attempt &&
+      other.inSeconds == inSeconds &&
+      other.reason == reason &&
+      other.givesUpInSeconds == givesUpInSeconds;
+
+  @override
+  int get hashCode => Object.hash(attempt, inSeconds, reason, givesUpInSeconds);
 }
 
 /// The host says what it did with one `task` frame (wire `task_ack`).
@@ -3665,6 +3721,7 @@ class AgentsRelayClient
             tool: payload['tool'] is String && payload['tool'] != ''
                 ? payload['tool'] as String
                 : null,
+            retry: AgentsHostRetry.fromPayload(payload['retry']),
           ),
         );
       case 'tool':

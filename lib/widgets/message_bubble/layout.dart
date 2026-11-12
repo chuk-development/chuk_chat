@@ -46,7 +46,8 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     if (widget.message.trim().isEmpty) return child;
     // A desktop Agents thread also shows react, reply and more beside the
     // bubble on hover (CHAT-52); the phone keeps the long press.
-    if (!kPlatformMobile && _agentsBubbles) {
+    // The phone thread (messengerMode) never hovers.
+    if (!kPlatformMobile && !widget.messengerMode && _agentsBubbles) {
       child = AgentsBubbleHoverActions(
         alignEnd: widget.isUser,
         onReact: widget.onReaction == null ? null : _showMessengerMenu,
@@ -426,9 +427,46 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     );
   }
 
+  /// An Agents answer whose turn failed after the host's retries: the
+  /// message as one quiet line, like the other status lines of the thread.
+  /// No bubble and no Resend: the host already tried (CHAT-64).
+  Widget _buildFailedTurnLine(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final Color color = theme.colorScheme.onSurfaceVariant;
+    final TextStyle style =
+        (theme.textTheme.bodySmall ?? const TextStyle(fontSize: 12)).copyWith(
+          color: color,
+          height: 1.35,
+        );
+    return Padding(
+      key: const ValueKey<String>('agents-failed-turn-line'),
+      padding: EdgeInsets.only(top: _runGapAbove + 4, bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          // One text line high, so the glyph sits on the first line.
+          SizedBox(
+            height: (style.fontSize ?? 12) * (style.height ?? 1.35),
+            child: Center(
+              child: AppIcon(Icons.error_outline, size: 14, color: color),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Flexible(child: Text(widget.message.trim(), style: style)),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAiBubble(BuildContext context) {
     const bool isUserMessage = false;
     const bool alignRight = false;
+    if (widget.turnFailed &&
+        _agentsBubbles &&
+        !widget.isStreamingMessage &&
+        widget.message.trim().isNotEmpty) {
+      return _buildFailedTurnLine(context);
+    }
     // Only the messenger thread swaps an empty running turn for typing dots;
     // the relay may stay silent for a while before the first token.
     final bool working =

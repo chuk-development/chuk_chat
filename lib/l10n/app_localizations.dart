@@ -238,6 +238,9 @@ class AppLocalizations {
   String get agentsPhaseOffline => _get('agentsPhaseOffline');
   String get agentsPhaseReceived => _get('agentsPhaseReceived');
   String get agentsPhaseQueued => _get('agentsPhaseQueued');
+  String agentsPhaseRetryingIn(String seconds) =>
+      _get('agentsPhaseRetryingIn').replaceAll('{seconds}', seconds);
+  String get agentsPhaseRetryingNow => _get('agentsPhaseRetryingNow');
   String get agentsPhasePreparing => _get('agentsPhasePreparing');
   String get agentsPhaseThinking => _get('agentsPhaseThinking');
   String get agentsPhaseWorking => _get('agentsPhaseWorking');

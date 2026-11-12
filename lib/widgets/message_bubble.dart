@@ -232,6 +232,7 @@ class MessageBubble extends StatefulWidget {
     this.userMessageActions = const <MessageBubbleAction>[],
     this.useSharedSelectionArea = false,
     this.status,
+    this.turnFailed = false,
     this.queueId,
     this.lastError,
     this.onRetryPending,
@@ -377,6 +378,11 @@ class MessageBubble extends StatefulWidget {
   /// Local offline-delivery status. Only rendered for user messages. `null`
   /// behaves like [ChatMessageStatus.sent].
   final ChatMessageStatus? status;
+
+  /// The answer's turn ended on an error after the host's own retries
+  /// (`turnError`, CHAT-64). An Agents thread draws it as a quiet status
+  /// line, never as a bubble with a Resend.
+  final bool turnFailed;
 
   /// The offline outbox row of this (user) message. The status line under
   /// the bubble reads the row's state by this id.

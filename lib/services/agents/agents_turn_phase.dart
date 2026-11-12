@@ -16,6 +16,8 @@
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/stream_phase.dart';
 import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/services/agents/agents_relay_client.dart'
+    show AgentsHostRetry;
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import 'package:chuk_chat/ui/expressive/agent_status.dart' show humanToolLabel;
 import 'package:chuk_chat/widgets/agent_activity/agent_activity_model.dart'
@@ -55,6 +57,10 @@ enum AgentsTurnPhase {
   /// Answer tokens are arriving.
   writing,
 
+  /// The model service did not answer; the host asks again by itself after
+  /// a wait (`heartbeat.retry`). [AgentsTurnStatus.retryInSeconds] says when.
+  retrying,
+
   /// The run is blocked on the user: an approval, keys or a takeover.
   waitingForYou,
 
@@ -69,9 +75,14 @@ class AgentsTurnStatus {
     this.toolLabel,
     this.toolName,
     this.toolFromHost = false,
+    this.retryInSeconds,
   });
 
   final AgentsTurnPhase phase;
+
+  /// For [AgentsTurnPhase.retrying]: whole seconds until the host asks the
+  /// model again. Null when the host gave no wait.
+  final int? retryInSeconds;
 
   /// Present-tense name of the running tool, for [AgentsTurnPhase.tool], in
   /// English.
@@ -96,6 +107,7 @@ class AgentsTurnStatus {
     phase,
     l10n: l10n,
     toolLabel: _localToolLabel(l10n) ?? toolLabel,
+    retryInSeconds: retryInSeconds,
   );
 
   String? _localToolLabel(AppLocalizations? l10n) {
@@ -112,10 +124,12 @@ class AgentsTurnStatus {
       other.phase == phase &&
       other.toolLabel == toolLabel &&
       other.toolName == toolName &&
-      other.toolFromHost == toolFromHost;
+      other.toolFromHost == toolFromHost &&
+      other.retryInSeconds == retryInSeconds;
 
   @override
-  int get hashCode => Object.hash(phase, toolLabel, toolName, toolFromHost);
+  int get hashCode =>
+      Object.hash(phase, toolLabel, toolName, toolFromHost, retryInSeconds);
 
   @override
   String toString() => 'AgentsTurnStatus($phase, $toolLabel)';
@@ -236,6 +250,19 @@ AgentsTurnStatus? _hostStatus(AgentsRun run) {
       );
     case 'waiting_user':
       return const AgentsTurnStatus(AgentsTurnPhase.waitingForYou);
+    case 'retrying':
+      // The wait as of the beat, less the time since: the line counts down
+      // between beats too, and never below zero.
+      final AgentsHostRetry? retry = run.hostRetry;
+      final DateTime? at = run.hostPhaseAt;
+      int? left;
+      if (retry != null) {
+        final double since = at == null
+            ? 0
+            : DateTime.now().difference(at).inMilliseconds / 1000;
+        left = (retry.inSeconds - since).ceil().clamp(0, 1 << 30);
+      }
+      return AgentsTurnStatus(AgentsTurnPhase.retrying, retryInSeconds: left);
     default:
       return null;
   }
@@ -247,6 +274,7 @@ String agentsTurnPhaseLabel(
   AgentsTurnPhase phase, {
   AppLocalizations? l10n,
   String? toolLabel,
+  int? retryInSeconds,
 }) {
   final AppLocalizations? l = l10n;
   return switch (phase) {
@@ -265,6 +293,12 @@ String agentsTurnPhaseLabel(
           : (l?.agentsPhaseWorking ?? 'Working'),
     AgentsTurnPhase.working => l?.agentsPhaseWorking ?? 'Working',
     AgentsTurnPhase.writing => l?.agentsPhaseWriting ?? 'Writing',
+    AgentsTurnPhase.retrying =>
+      retryInSeconds == null || retryInSeconds <= 0
+          ? (l?.agentsPhaseRetryingNow ??
+                'Provider not answering, trying again')
+          : (l?.agentsPhaseRetryingIn('$retryInSeconds') ??
+                'Provider not answering, trying again in $retryInSeconds s'),
     AgentsTurnPhase.waitingForYou =>
       l?.agentsPhaseWaitingForYou ?? 'Waiting for you',
     AgentsTurnPhase.notDelivered =>

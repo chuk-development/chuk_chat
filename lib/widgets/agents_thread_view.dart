@@ -1738,7 +1738,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
             ).catchError((Object _) {}),
           );
         }
-      case AgentsRelayHeartbeat(:final phase):
+      case AgentsRelayHeartbeat(:final phase, :final retry):
         // A host that says what the run is doing (`heartbeat.phase`) feeds
         // the status line above the answer; one that does not changes
         // nothing here — the adapter already counts the heartbeat itself.
@@ -1747,6 +1747,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
             event.sessionKey ?? widget.threadKey,
             phase: phase,
             tool: event.tool,
+            retry: retry,
           );
         }
       case AgentsRelayDelta(:final replay) ||
