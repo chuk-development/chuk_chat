@@ -29,6 +29,7 @@ import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/automation_editor_sheet.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
+import 'package:chuk_chat/widgets/settings_surface.dart';
 
 /// The root page: the screen box, then the routines.
 class AgentDetailsOverview extends StatelessWidget {
@@ -220,13 +221,14 @@ class _AgentRoutinesListState extends State<AgentRoutinesList> {
       );
       return;
     }
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (BuildContext context) => AutomationsPage(
-          source: _source,
-          sessionKey: widget.sessionKey,
-          chatName: widget.agentName,
-        ),
+    // A settings page: the settings modal on a desktop window, a page on a
+    // phone (settings_surface.dart).
+    await openSettingsSurface(
+      context,
+      (BuildContext context) => AutomationsPage(
+        source: _source,
+        sessionKey: widget.sessionKey,
+        chatName: widget.agentName,
       ),
     );
   }

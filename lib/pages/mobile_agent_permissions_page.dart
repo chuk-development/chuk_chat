@@ -23,6 +23,7 @@ import 'package:chuk_chat/widgets/agents_permissions/agent_permissions_section.d
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
+import 'package:chuk_chat/widgets/settings_surface.dart';
 
 class MobileAgentPermissionsPage extends StatefulWidget {
   const MobileAgentPermissionsPage({
@@ -41,11 +42,9 @@ class MobileAgentPermissionsPage extends StatefulWidget {
     BuildContext context, {
     required String agentId,
     AgentsPermissionsService? service,
-  }) => Navigator.of(context).push<void>(
-    MaterialPageRoute<void>(
-      builder: (_) =>
-          MobileAgentPermissionsPage(agentId: agentId, service: service),
-    ),
+  }) => openSettingsSurface(
+    context,
+    (_) => MobileAgentPermissionsPage(agentId: agentId, service: service),
   );
 
   @override

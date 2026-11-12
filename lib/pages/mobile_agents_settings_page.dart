@@ -24,6 +24,7 @@ import 'package:chuk_chat/widgets/agent_model_tile.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
+import 'package:chuk_chat/widgets/settings_surface.dart';
 
 /// An agent's settings: ONE content for every form factor (bead
 /// chuk_chat-8hz4). The phone shows it as a page under the shared
@@ -502,9 +503,7 @@ class _AgentSettingsViewState extends State<AgentSettingsView> {
   /// The agent's mailbox. The address belongs to the account, so every
   /// agent opens the same mailbox.
   void _openMail() => unawaited(
-    Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(builder: (_) => const AgentMailboxPage()),
-    ),
+    openSettingsSurface(context, (_) => const AgentMailboxPage()),
   );
 
   /// Hides the agent from the list. It keeps its session; the page closes.
@@ -554,8 +553,8 @@ class _AgentSettingsViewState extends State<AgentSettingsView> {
 
   /// [id] is the row's fixed English name: it keys the row, so a test or a
   /// tour finds it in every language.
-  void _openLogins() => Navigator.of(context).push<void>(
-    MaterialPageRoute<void>(builder: (_) => const AgentsLoginVaultPage()),
+  void _openLogins() => unawaited(
+    openSettingsSurface(context, (_) => const AgentsLoginVaultPage()),
   );
 
   Widget _row(

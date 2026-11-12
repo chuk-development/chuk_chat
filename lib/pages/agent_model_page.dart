@@ -37,6 +37,7 @@ import 'package:chuk_chat/widgets/icons/icon_map.dart';
 import 'package:chuk_chat/widgets/icons/model_logo.dart';
 import 'package:chuk_chat/widgets/searchable_picker.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
+import 'package:chuk_chat/widgets/settings_surface.dart';
 
 class AgentModelPage extends StatefulWidget {
   const AgentModelPage({
@@ -62,13 +63,12 @@ class AgentModelPage extends StatefulWidget {
     String? agentName,
     AgentControlSource? controlSource,
   }) {
-    return Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => AgentModelPage(
-          chatId: chatId,
-          agentName: agentName,
-          controlSource: controlSource,
-        ),
+    return openSettingsSurface(
+      context,
+      (_) => AgentModelPage(
+        chatId: chatId,
+        agentName: agentName,
+        controlSource: controlSource,
       ),
     );
   }

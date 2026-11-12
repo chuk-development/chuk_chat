@@ -16,6 +16,7 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/floating_chrome_surface.dart';
 import 'package:chuk_chat/widgets/icons/huge_icon.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
+import 'package:chuk_chat/widgets/settings_surface.dart';
 
 // Every page imports this file, so every page gets the page frame too.
 export 'package:chuk_chat/widgets/floating_page_scaffold.dart';
@@ -246,15 +247,34 @@ class FloatingAppBar extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final bool canPop = Navigator.of(context).canPop();
+    // Inside a settings modal (settings_surface.dart) the header is the same
+    // header, with the modal's close chip at its right end; the first page
+    // of a compact modal goes back to the modal's list.
+    final SettingsSurfaceScope? surface = SettingsSurfaceScope.maybeOf(
+      context,
+    );
+    final VoidCallback? rootBack = canPop ? null : surface?.onRootBack;
     final Widget? back =
         leading ??
-        (automaticallyImplyLeading && canPop
+        (automaticallyImplyLeading && (canPop || rootBack != null)
             ? FloatingHeaderButton(
                 icon: Icons.arrow_back_rounded,
                 tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-                onPressed: () => Navigator.of(context).maybePop(),
+                onPressed:
+                    rootBack ?? () => Navigator.of(context).maybePop(),
               )
             : null);
+    final List<Widget>? actions = surface == null
+        ? this.actions
+        : <Widget>[
+            ...?this.actions,
+            FloatingHeaderButton(
+              key: const ValueKey<String>('settings-surface-close'),
+              icon: Icons.close,
+              tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+              onPressed: surface.onClose,
+            ),
+          ];
 
     final Color pageColor = theme.scaffoldBackgroundColor;
 
@@ -324,7 +344,7 @@ class FloatingAppBar extends StatelessWidget implements PreferredSizeWidget {
       actions: actions == null
           ? null
           : <Widget>[
-              for (final Widget action in actions!) ...[
+              for (final Widget action in actions) ...[
                 Center(child: action),
                 const SizedBox(width: 8 - 2 * _kChipSlop),
               ],

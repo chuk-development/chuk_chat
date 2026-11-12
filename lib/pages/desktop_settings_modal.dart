@@ -13,21 +13,24 @@
 // instead of the phone-style full-screen drill-down list (SettingsPage).
 //
 // The right pane hosts each existing settings page verbatim inside its own
-// nested Navigator, so every page keeps its Scaffold/AppBar, its detail
-// pushes (skill editor, connector detail, color picker) and its dialogs —
-// but all of it stays inside the modal instead of covering the whole app.
+// nested Navigator (SettingsSurfaceNavigator), so every page keeps its
+// FloatingAppBar, its detail pushes (skill editor, connector detail, color
+// picker) and its dialogs — but all of it stays inside the modal instead of
+// covering the whole app. The panel and the header are the one settings
+// pattern (settings_surface.dart, docs/DESIGN.md §2): an agent's settings
+// open in the same panel.
 //
 // Mobile still uses SettingsPage. This modal is desktop-only chrome.
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
+import 'package:chuk_chat/widgets/settings_surface.dart';
 import 'package:flutter/services.dart';
 
 import 'package:file_picker/file_picker.dart';
@@ -83,19 +86,7 @@ Future<void> showDesktopSettingsModal(
     routeSettings: const RouteSettings(name: 'tour:settings'),
     pageBuilder: (dialogContext, anim, secondaryAnim) =>
         DesktopSettingsModal(config: config, initialSectionId: initialSectionId),
-    transitionBuilder: (dialogContext, animation, secondaryAnim, child) {
-      final curved = CurvedAnimation(
-        parent: animation,
-        curve: Curves.easeOutCubic,
-      );
-      return FadeTransition(
-        opacity: curved,
-        child: ScaleTransition(
-          scale: Tween<double>(begin: 0.98, end: 1.0).animate(curved),
-          child: child,
-        ),
-      );
-    },
+    transitionBuilder: settingsModalTransition,
   );
 }
 
@@ -432,10 +423,6 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
-    final m3 = theme.m3;
-    final size = MediaQuery.of(context).size;
-
     final groups = _groups(l);
     // If the current selection vanished (dev options toggled off), fall back.
     if (_findPage(groups, _selectedId) == null) {
@@ -443,44 +430,21 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
     }
     final selectedPage = _findPage(groups, _selectedId);
 
-    // Fit the modal to the window. On small windows go (near) full-bleed and
-    // switch to a single-column drill-down instead of the rail + content split.
-    final double margin = size.width < 560 || size.height < 560 ? 8 : 24;
-    final double panelWidth = math.min(1080.0, size.width - margin * 2);
-    final double panelHeight = math.min(760.0, size.height - margin * 2);
-    _compact = panelWidth < 720;
-    final double radius = _compact ? 20 : kRadiusDialog;
-
     // If the selection vanished, drop the compact drill-down too.
     if (_compactPageId != null && _findPage(groups, _compactPageId!) == null) {
       _compactPageId = null;
     }
 
-    // One Material draws the rounded border AND clips its children to the same
-    // shape, so the corners stay clean. (A ClipRRect wrapping a Container whose
-    // own border used the same radius clipped the border unevenly at the
-    // corners — that was the "weird corners".)
-    return Center(
-      child: Padding(
-        padding: EdgeInsets.all(margin),
-        child: Material(
-          color: theme.scaffoldBackgroundColor,
-          elevation: 12,
-          shadowColor: Colors.black.withValues(alpha: 0.4),
-          clipBehavior: Clip.antiAlias,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(radius),
-            side: BorderSide(color: m3.outlineVariant),
-          ),
-          child: SizedBox(
-            width: panelWidth,
-            height: panelHeight,
-            child: _compact
-                ? _buildCompact(context, l, groups)
-                : _buildWide(context, l, groups, selectedPage),
-          ),
-        ),
-      ),
+    // The one settings panel (settings_surface.dart). On a small window it
+    // goes (near) full-bleed and switches to a single-column drill-down
+    // instead of the rail + content split.
+    return SettingsModalFrame(
+      builder: (BuildContext context, Size panel) {
+        _compact = SettingsModalFrame.isCompact(panel);
+        return _compact
+            ? _buildCompact(context, l, groups)
+            : _buildWide(context, l, groups, selectedPage);
+      },
     );
   }
 
@@ -495,33 +459,17 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
       children: [
         _buildNavRail(context, l, groups, compact: false),
         Expanded(
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: selectedPage == null
-                    ? const SizedBox.shrink()
-                    // A fresh Navigator per section: switching the rail resets
-                    // any drill-down, while pushes from the page (detail views,
-                    // editors) stay local to the modal.
-                    : Navigator(
-                        key: ValueKey<String>(_selectedId),
-                        onGenerateRoute: (_) => MaterialPageRoute(
-                          builder: selectedPage.builder!,
-                        ),
-                      ),
-              ),
-              // Floating close button, top-right of the content pane.
-              Positioned(
-                top: 10,
-                right: 10,
-                child: FloatingHeaderButton(
-                  icon: Icons.close,
-                  tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
-                  onPressed: () => Navigator.of(context).pop(),
+          child: selectedPage == null
+              ? const SizedBox.shrink()
+              // A fresh navigator per section: switching the rail resets any
+              // drill-down, while pushes from the page (detail views,
+              // editors) stay local to the modal. The page's own header ends
+              // in the modal's close chip (settings_surface.dart).
+              : SettingsSurfaceNavigator(
+                  key: ValueKey<String>(_selectedId),
+                  builder: selectedPage.builder!,
+                  onClose: () => Navigator.of(context).pop(),
                 ),
-              ),
-            ],
-          ),
         ),
       ],
     );
@@ -532,8 +480,6 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
     AppLocalizations l,
     List<_SettingsGroup> groups,
   ) {
-    final theme = Theme.of(context);
-    final m3 = theme.m3;
     final page = _compactPageId == null
         ? null
         : _findPage(groups, _compactPageId!);
@@ -543,50 +489,13 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
       return _buildNavRail(context, l, groups, compact: true);
     }
 
-    // A selected page fills the modal, with a slim back bar above it.
-    return Column(
-      children: [
-        Container(
-          height: 48,
-          padding: const EdgeInsets.symmetric(horizontal: 6),
-          decoration: BoxDecoration(
-            color: m3.surfaceContainerLow,
-            border: Border(bottom: BorderSide(color: m3.outlineVariant)),
-          ),
-          child: Row(
-            children: [
-              FloatingHeaderButton(
-                icon: Icons.arrow_back_rounded,
-                tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-                onPressed: () => setState(() => _compactPageId = null),
-              ),
-              Expanded(
-                child: Text(
-                  page.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: theme.colorScheme.onSurface,
-                  ),
-                ),
-              ),
-              FloatingHeaderButton(
-                icon: Icons.close,
-                tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: Navigator(
-            key: ValueKey<String>('compact:${page.id}'),
-            onGenerateRoute: (_) =>
-                MaterialPageRoute(builder: page.builder!),
-          ),
-        ),
-      ],
+    // A selected page fills the modal under its own header: the back chip
+    // returns to the list, the close chip closes the modal.
+    return SettingsSurfaceNavigator(
+      key: ValueKey<String>('compact:${page.id}'),
+      builder: page.builder!,
+      onClose: () => Navigator.of(context).pop(),
+      onRootBack: () => setState(() => _compactPageId = null),
     );
   }
 

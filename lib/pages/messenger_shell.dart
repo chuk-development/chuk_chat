@@ -179,6 +179,7 @@ import 'package:chuk_chat/widgets/agents_desktop/quick_switcher.dart';
 import 'package:chuk_chat/widgets/browser_view_page.dart';
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/pane_header.dart';
+import 'package:chuk_chat/widgets/settings_surface.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/agents_status_panel.dart';
 import 'package:chuk_chat/widgets/agents_thread_header.dart';
@@ -1011,9 +1012,11 @@ class _MessengerShellState extends State<MessengerShell>
     final String? chatKey = agent.id == _selectedAgentId
         ? _selectedThreadKey
         : (agent.threads.isEmpty ? null : agent.threads.first.key);
+    // Every row opens its page the one way: inside the open settings modal,
+    // as a page on a phone, or in a new settings modal from the desktop
+    // details pane.
     void open(Widget target) =>
-        Navigator.of(context)
-            .push<void>(MaterialPageRoute<void>(builder: (_) => target));
+        unawaited(openSettingsSurface(context, (_) => target));
     void onChat() {
       if (agent.threads.isNotEmpty) {
         _select(
@@ -1121,6 +1124,8 @@ class _MessengerShellState extends State<MessengerShell>
       );
       return;
     }
+    // An agent's settings modal closes first, so two panels never stack.
+    closeSettingsModals();
     unawaited(showDesktopSettingsModal(context, config: config));
   }
 
@@ -1134,9 +1139,10 @@ class _MessengerShellState extends State<MessengerShell>
   }
 
   void _openChatModel(String chatKey) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (context) => ModelSelectorPage(chatId: chatKey),
+    unawaited(
+      openSettingsSurface(
+        context,
+        (context) => ModelSelectorPage(chatId: chatKey),
       ),
     );
   }
@@ -1354,9 +1360,10 @@ class _MessengerShellState extends State<MessengerShell>
           MobileMenuItem(
             icon: Icons.monitor_heart_outlined,
             label: l?.agentsCwHost ?? 'Host & activity',
-            onTap: () => Navigator.of(context).push<void>(
-              MaterialPageRoute<void>(
-                builder: (_) => AgentHostActivityPage(
+            onTap: () => unawaited(
+              openSettingsSurface(
+                context,
+                (_) => AgentHostActivityPage(
                   agent: _roster.byId(agent.id) ?? agent,
                   source: _controlSource,
                 ),
