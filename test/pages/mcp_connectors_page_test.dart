@@ -183,7 +183,7 @@ void main() {
       expect(find.widgetWithText(FilledButton, 'Sign in again'), findsOneWidget);
       expect(
         find.textContaining(
-          'Server a: sign-in expired. Sign in again to keep using it.',
+          'Server a: sign-in expired. Sign in again: a browser tab opens, sign in there, then come back here.',
         ),
         findsOneWidget,
       );
