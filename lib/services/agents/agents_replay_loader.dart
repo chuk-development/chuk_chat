@@ -569,8 +569,9 @@ class AgentsReplayLoader extends ChangeNotifier {
             draft.aiText.toString().trim().isEmpty) {
           _openAiRow(draft);
           draft.aiText.write(notice);
-          draft.aiRow!['status'] = 'interrupted';
-          draft.aiRow![kAgentsNoticeKey] = '1';
+          draft.aiRow
+            ?..['status'] = 'interrupted'
+            ..[kAgentsNoticeKey] = '1';
         }
         _closeAiRow(draft);
         if (event.whileAway) {
