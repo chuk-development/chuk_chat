@@ -171,6 +171,16 @@ class AgentsLiveStatus {
     if (current == null || !current.offersRetry) return null;
     return AgentsRetryButton(onRetry: _retry);
   }
+
+  /// The words beside the dots: a phase in which the turn is not simply
+  /// working ([AgentsTurnStatus.showsBesideDots]). Null otherwise.
+  String? note(BuildContext context) => agentsStatusNote(context, status());
+}
+
+/// [status] in words when it belongs next to the typing dots, else null.
+String? agentsStatusNote(BuildContext context, AgentsTurnStatus? status) {
+  if (status == null || !status.showsBesideDots) return null;
+  return status.label(AppLocalizations.of(context));
 }
 
 /// The one action the status line can offer: go and get the computer.
@@ -207,9 +217,10 @@ class AgentsRetryButton extends StatelessWidget {
 ///
 /// Only the three typing dots, like any messenger: they say the agent is
 /// still working. A tap opens what it is doing, in detail: the phase with
-/// its clock ("Preparing · 41s"), then every step the host reported. Retry
-/// stays next to the dots while the computer cannot be reached, because it
-/// is an action, not a status.
+/// its clock ("Preparing · 41s"), then every step the host reported. A phase
+/// that is not plain work (a provider retry, an offline computer, a card
+/// waiting for the reader) stands next to the dots in words, and Retry with
+/// it while the computer cannot be reached.
 class AgentsLiveStatusLine extends StatefulWidget {
   const AgentsLiveStatusLine({
     super.key,
@@ -297,6 +308,7 @@ class _AgentsLiveStatusLineState extends State<AgentsLiveStatusLine> {
         if (status == null || !status.offersRetry) return null;
         return const AgentsRetryButton();
       },
+      liveNote: (BuildContext context) => agentsStatusNote(context, _status()),
     );
   }
 }

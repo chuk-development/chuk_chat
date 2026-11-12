@@ -20,7 +20,8 @@ import 'package:chuk_chat/widgets/agent_activity/agent_activity_model.dart';
 import 'package:chuk_chat/widgets/agent_activity/min_duration_hold.dart';
 import 'package:chuk_chat/widgets/agent_activity/tool_activity_category.dart';
 import 'package:chuk_chat/widgets/agent_activity/turn_status.dart';
-import 'package:chuk_chat/widgets/diff_widget.dart' show diffChangeCountInResult;
+import 'package:chuk_chat/widgets/diff_widget.dart'
+    show diffChangeCountInResult;
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 import 'package:chuk_chat/widgets/messenger_typing_indicator.dart';
 import 'package:chuk_chat/widgets/text_shimmer.dart';
@@ -42,6 +43,7 @@ class AgentActivityTimeline extends StatefulWidget {
     this.finalDuration,
     this.liveVerb,
     this.liveTrailing,
+    this.liveNote,
     this.liveListenable,
     this.liveDots = false,
     this.liveSteps,
@@ -80,6 +82,12 @@ class AgentActivityTimeline extends StatefulWidget {
   /// Shown after the header while the round runs, e.g. a Retry target when
   /// the computer is offline. Read on every repaint, like [liveVerb].
   final Widget? Function(BuildContext context)? liveTrailing;
+
+  /// Words that stand beside the typing dots ([liveDots]) without a tap:
+  /// a phase in which the turn is not simply working, e.g. "Provider not
+  /// answering, trying again in 58 s" (CHAT-76). Null while plain work goes
+  /// on. Ignored when the header is a text line: it already says it.
+  final String? Function(BuildContext context)? liveNote;
 
   /// Repaints the header the moment it fires, instead of on the next tick —
   /// the host's acknowledgement should show within a frame, not a second.
@@ -355,10 +363,7 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
       hasSteps: entries.isNotEmpty,
       phase: widget.phase,
       runningToolLabel: hasRunningToolCall(widget.toolCalls)
-          ? runningActivityLabel(
-              widget.toolCalls,
-              AppLocalizations.of(context),
-            )
+          ? runningActivityLabel(widget.toolCalls, AppLocalizations.of(context))
           : null,
       elapsed: resolveTurnElapsed(
         finalDuration: widget.finalDuration,
@@ -370,9 +375,37 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
       ),
       liveVerb: widget.isRunning ? widget.liveVerb?.call(context) : null,
     );
-    final Widget? trailing = widget.isRunning
+    final Widget? retry = widget.isRunning
         ? widget.liveTrailing?.call(context)
         : null;
+    final String? noteText = widget.isRunning && _showsDots
+        ? widget.liveNote?.call(context)
+        : null;
+    final Widget? note = noteText == null || noteText.isEmpty
+        ? null
+        : Text(
+            noteText,
+            key: const ValueKey<String>('agents-status-note'),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+              fontWeight: FontWeight.w500,
+              fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+            ),
+          );
+    final Widget? trailing = note == null
+        ? retry
+        : retry == null
+        ? note
+        : Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Flexible(child: note),
+              const SizedBox(width: 6),
+              retry,
+            ],
+          );
 
     return SelectionContainer.disabled(
       child: Column(
@@ -392,7 +425,10 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
                       : _buildHeader(theme, muted, status),
                 ),
                 const SizedBox(width: 6),
-                trailing,
+                // A status note beside the dots can be long ("Provider not
+                // answering, trying again in 58 s"): it wraps, never
+                // overflows.
+                Flexible(flex: 4, child: trailing),
               ],
             ),
           if (_isExpanded) ...[

@@ -102,6 +102,20 @@ class AgentsTurnStatus {
   bool get offersRetry =>
       phase == AgentsTurnPhase.offline || phase == AgentsTurnPhase.noAnswer;
 
+  /// Whether the words stand next to the typing dots, not only in the panel
+  /// a tap opens: every phase in which the turn is not simply working. A
+  /// provider that fails and is asked again in 60 s, a computer that does
+  /// not answer, a card that waits for the reader. Dots alone would say
+  /// "working" while nothing moves (CHAT-76).
+  bool get showsBesideDots => switch (phase) {
+    AgentsTurnPhase.retrying ||
+    AgentsTurnPhase.offline ||
+    AgentsTurnPhase.noAnswer ||
+    AgentsTurnPhase.waitingForYou ||
+    AgentsTurnPhase.notDelivered => true,
+    _ => false,
+  };
+
   /// The words for the line, localised when [l10n] is given.
   String label([AppLocalizations? l10n]) => agentsTurnPhaseLabel(
     phase,

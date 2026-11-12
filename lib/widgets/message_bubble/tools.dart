@@ -209,6 +209,7 @@ extension _MessageBubbleTools on _MessageBubbleState {
       startedAt: widget.turnStartedAt,
       liveVerb: live.verb,
       liveTrailing: live.trailing,
+      liveNote: live.note,
       liveListenable: live.listenable,
       onStepTap: _showToolCallDetails,
       onSourceTap: _openSourceUrl,
@@ -668,9 +669,8 @@ extension _MessageBubbleTools on _MessageBubbleState {
             style: TextStyle(
               fontSize: 12,
               fontStyle: FontStyle.italic,
-              color: Theme.of(
-                context,
-              ).colorScheme.onSurface.withValues(alpha: 0.6),
+              color: Theme.of(context).colorScheme.onSurface
+                  .withValues(alpha: 0.6),
             ),
           ),
         ),
@@ -803,9 +803,7 @@ extension _MessageBubbleTools on _MessageBubbleState {
 
   /// Shell and code calls whose result reads as terminal output.
   bool _isTerminalCall(ToolCall toolCall) {
-    final ToolActivityCategory category = toolActivityCategoryOf(
-      toolCall.name,
-    );
+    final ToolActivityCategory category = toolActivityCategoryOf(toolCall.name);
     return category == ToolActivityCategory.commands ||
         category == ToolActivityCategory.code;
   }

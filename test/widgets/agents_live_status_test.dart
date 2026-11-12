@@ -214,42 +214,87 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('the phone typing pill is only dots; a tap shows the phase of an adopted run', (
-    tester,
-  ) async {
-    ledger.adoptRunning(
-      key,
-      runId: 'r-1',
-      prompt: 'tidy the inbox',
-      startedAt: DateTime.now().subtract(const Duration(seconds: 12)),
-    );
-    await tester.pumpWidget(
-      _app(AgentsLiveStatusLine(sessionKey: key, ledger: ledger, link: link)),
-    );
-    await tester.pump();
-    // Folded, the pill is the dots and nothing else.
-    expect(
-      find.byKey(const ValueKey<String>('agents-live-dots')),
-      findsOneWidget,
-    );
-    expect(find.textContaining('Working'), findsNothing);
-    // A tap opens the phase with its clock.
-    await tester.tap(find.byKey(const ValueKey<String>('agents-live-dots')));
-    await tester.pump();
-    expect(find.textContaining(RegExp(r'^Working · 1\ds$')), findsOneWidget);
-    ledger.openTool(key, 'web_search');
-    await tester.pump();
-    expect(
-      find.textContaining(RegExp(r'^Searching the web · 1\ds$')),
-      findsOneWidget,
-    );
-    // Nothing runs: the line is gone, not frozen.
-    ledger.finish(key, finalAnswer: 'done', reason: 'finished');
-    await tester.pump();
-    expect(
-      find.byKey(const ValueKey<String>('agents-live-status-line')),
-      findsNothing,
-    );
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
+  testWidgets(
+    'the phone typing pill is only dots; a tap shows the phase of an adopted run',
+    (tester) async {
+      ledger.adoptRunning(
+        key,
+        runId: 'r-1',
+        prompt: 'tidy the inbox',
+        startedAt: DateTime.now().subtract(const Duration(seconds: 12)),
+      );
+      await tester.pumpWidget(
+        _app(AgentsLiveStatusLine(sessionKey: key, ledger: ledger, link: link)),
+      );
+      await tester.pump();
+      // Folded, the pill is the dots and nothing else.
+      expect(
+        find.byKey(const ValueKey<String>('agents-live-dots')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Working'), findsNothing);
+      // A tap opens the phase with its clock.
+      await tester.tap(find.byKey(const ValueKey<String>('agents-live-dots')));
+      await tester.pump();
+      expect(find.textContaining(RegExp(r'^Working · 1\ds$')), findsOneWidget);
+      ledger.openTool(key, 'web_search');
+      await tester.pump();
+      expect(
+        find.textContaining(RegExp(r'^Searching the web · 1\ds$')),
+        findsOneWidget,
+      );
+      // Nothing runs: the line is gone, not frozen.
+      ledger.finish(key, finalAnswer: 'done', reason: 'finished');
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('agents-live-status-line')),
+        findsNothing,
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+  testWidgets(
+    'a provider retry stands in words next to the dots, without a tap (CHAT-76)',
+    (tester) async {
+      ledger.adoptRunning(
+        key,
+        runId: 'r-1',
+        prompt: 'check my mail',
+        startedAt: DateTime.now().subtract(const Duration(seconds: 70)),
+      );
+      ledger.hostPhase(
+        key,
+        phase: 'retrying',
+        retry: const AgentsHostRetry(
+          attempt: 1,
+          inSeconds: 60,
+          reason: 'HTTP 502',
+        ),
+      );
+      await tester.pumpWidget(
+        _app(AgentsLiveStatusLine(sessionKey: key, ledger: ledger, link: link)),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('agents-live-dots')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('agents-status-note')),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Provider not answering, trying again in'),
+        findsOneWidget,
+      );
+      // The model answers again: the note goes, the dots stay.
+      ledger.hostPhase(key, phase: 'model');
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('agents-status-note')),
+        findsNothing,
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 }
