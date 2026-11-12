@@ -67,10 +67,10 @@ class AppModeSwitch extends StatelessWidget {
 
   /// Its width at normal text size. It grows with the text, and a slot that is
   /// narrower squeezes it.
-  static const double width = 176;
+  static const double width = 190;
 
   /// Its width with the Home segment.
-  static const double widthWithHome = 258;
+  static const double widthWithHome = 288;
 
   /// The width it asks for at the current text scale.
   static double preferredWidth(BuildContext context, {bool withHome = false}) =>

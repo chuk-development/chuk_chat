@@ -26,6 +26,8 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/services/agents/agents_context_rows.dart';
+import 'package:chuk_chat/utils/automation_message.dart';
 
 /// Space between two strips (T3: TIMELINE_MINIMAP_ITEM_SPACING).
 const double kChatTurnRailItemSpacing = 8;
@@ -82,12 +84,25 @@ String? compactPreview(String? text) {
   return compact.isEmpty ? null : compact;
 }
 
-/// The ticks for [messages]: every row whose sender is `user`, in order, with
-/// the last non-user text before the next user row as its answer.
-List<ChatTurnRailTick> chatTurnRailTicks(List<Map<String, String>> messages) {
+/// At most this many strips: more than that no longer reads as strips but as
+/// one grey bar (a Mail thread had 450). The newest ones are kept.
+const int kChatTurnRailMaxTicks = 80;
+
+/// The ticks for [messages]: every row a person wrote, in order, with the
+/// last non-user text before the next user row as its answer. A prompt
+/// nobody typed (a fired schedule, a job wake, a mail: `agentsRowSource`, or
+/// an automation wake text) is not a strip, like it is not a bubble.
+List<ChatTurnRailTick> chatTurnRailTicks(
+  List<Map<String, String>> messages, {
+  int maxTicks = kChatTurnRailMaxTicks,
+}) {
   final List<ChatTurnRailTick> ticks = <ChatTurnRailTick>[];
   for (int i = 0; i < messages.length; i++) {
     if (messages[i]['sender'] != 'user') continue;
+    if (agentsRowSource(messages[i]) != null ||
+        parseAutomationWake(messages[i]['text'] ?? '') != null) {
+      continue;
+    }
     String? answer;
     for (int j = i + 1; j < messages.length; j++) {
       if (messages[j]['sender'] == 'user') break;
@@ -101,6 +116,9 @@ List<ChatTurnRailTick> chatTurnRailTicks(List<Map<String, String>> messages) {
         assistantText: answer,
       ),
     );
+  }
+  if (ticks.length > maxTicks) {
+    return ticks.sublist(ticks.length - maxTicks);
   }
   return ticks;
 }
