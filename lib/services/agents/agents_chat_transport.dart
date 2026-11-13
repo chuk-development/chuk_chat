@@ -167,6 +167,19 @@ class AgentsChatTransport {
     // thread (and of other agents) stream at once: only this run's frames
     // belong to this stream.
     String? myRunId;
+    // CHAT-118: the `task_ack` names the host's REQUEST (`task-358`), not the
+    // run: the run's frames carry the executor's run id. So this stream takes
+    // as its run the first run of the thread that shows up after the host
+    // accepted the task, and none that was there before: a run already
+    // working in this thread when the task went out (a reply next to it,
+    // CHAT-80) keeps its frames. Comparing the ack's id with the frames
+    // dropped every frame of every live run, and the thread showed typing
+    // dots until a replay brought the answer.
+    bool accepted = false;
+    final Set<String> foreignRuns = <String>{
+      ?ledger.runFor(sessionKey)?.runId,
+      ?ledger.runFor(agentsSideLedgerKey(sessionKey))?.runId,
+    };
     final verbose = VerboseService.instance.enabled;
     // The name of THIS SEND on the wire, minted once here rather than where
     // the frame is sealed: the re-send after a reconnect has to carry the
@@ -368,10 +381,17 @@ class AgentsChatTransport {
       // belong to runs that started earlier.
       final route = agentsRelayRoute(event);
       if (route.sessionKey != null && route.sessionKey != sessionKey) return;
+      final String? frameRun = route.runId;
       if (event is! AgentsRelayTaskAck &&
-          route.runId != null &&
-          route.runId != myRunId) {
-        return;
+          frameRun != null &&
+          frameRun != myRunId) {
+        if (!accepted || myRunId != null || foreignRuns.contains(frameRun)) {
+          // A run that was there before this send was accepted.
+          if (!accepted) foreignRuns.add(frameRun);
+          return;
+        }
+        myRunId = frameRun;
+        ledger.taskAcknowledged(ledgerKey, taskId: wireTaskId, runId: frameRun);
       }
 
       switch (event) {
@@ -418,7 +438,10 @@ class AgentsChatTransport {
             return;
           }
           if (event.isHeld) {
-            myRunId ??= event.runId;
+            // The ack's id is the host's request, not the run (CHAT-118):
+            // the run is the next new one of this thread. A duplicate's
+            // answer comes from the first attempt's stream.
+            if (!event.isDuplicate) accepted = true;
             // `accepted` and `duplicate` are the same thing to the app: the
             // host has it. `duplicate` deliberately paints NOTHING — the
             // answer is coming from the first attempt, and a second bubble

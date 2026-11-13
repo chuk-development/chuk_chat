@@ -68,6 +68,10 @@ mixin ChatScrollMixin<T extends StatefulWidget> on State<T> {
   /// build. The bottom of a freshly opened anchored thread sits here.
   double transcriptBottomInset = 0;
 
+  /// The list's top padding, written by the host's build: the room under a
+  /// floating header. A pinned message stops under it, not behind it.
+  double transcriptTopInset = 0;
+
   /// Bumped on every thread open and every long jump to the bottom. It keys
   /// the history sliver, so the next layout starts from the newest row instead
   /// of walking there, row by row, from wherever the old children were.
@@ -309,10 +313,26 @@ mixin ChatScrollMixin<T extends StatefulWidget> on State<T> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final BuildContext? target = pinnedTopKey.currentContext;
-      if (target == null) return;
-      Scrollable.ensureVisible(
-        target,
-        alignment: 0,
+      if (target == null || !scrollController.hasClients) return;
+      // Measured, not `Scrollable.ensureVisible`: in the anchored transcript
+      // (a center sliver) ensureVisible put the offset at the center line,
+      // so a send moved the list UP, away from the new message (CHAT-118).
+      // The row's distance from the top of the list's viewport is the
+      // distance to scroll.
+      final RenderObject? row = target.findRenderObject();
+      final RenderObject? list = Scrollable.of(target).context
+          .findRenderObject();
+      if (row is! RenderBox || list is! RenderBox || !row.attached) return;
+      final double dy = row.localToGlobal(Offset.zero, ancestor: list).dy;
+      final ScrollPosition position = scrollController.position;
+      // The list's top padding is the room under the floating header.
+      final double to = (position.pixels + dy - transcriptTopInset).clamp(
+        position.minScrollExtent,
+        position.maxScrollExtent,
+      );
+      if ((to - position.pixels).abs() < 0.5) return;
+      scrollController.animateTo(
+        to,
         duration: const Duration(milliseconds: 260),
         curve: Curves.easeOutCubic,
       );

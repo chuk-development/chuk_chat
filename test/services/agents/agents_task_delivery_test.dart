@@ -112,6 +112,57 @@ void main() {
         );
       });
 
+  test('the ack names the request, the frames the run: the live answer '
+      'still reaches the stream (CHAT-118)', () async {
+    final out = send();
+    await _drain();
+    final String taskId = controller.taskIds.single!;
+    // A run that was already working in the thread before the ack.
+    controller.emit(
+      debugRouteAgentsRelay(
+        const AgentsRelayDelta('not mine'),
+        sessionKey: sessionKey,
+        runId: 'run-old',
+      ),
+    );
+    // The host's ack carries its request id, not the run id.
+    controller.emit(
+      debugRouteAgentsRelay(
+        AgentsRelayTaskAck(
+          taskId: taskId,
+          status: 'accepted',
+          sessionKey: sessionKey,
+          runId: 'task-358',
+        ),
+        sessionKey: sessionKey,
+      ),
+    );
+    // The new run's frames: this stream's answer.
+    controller.emit(
+      debugRouteAgentsRelay(
+        const AgentsRelayDelta('mine'),
+        sessionKey: sessionKey,
+        runId: 'run-new',
+      ),
+    );
+    // The old run goes on writing: still not this stream's.
+    controller.emit(
+      debugRouteAgentsRelay(
+        const AgentsRelayDelta('still not mine'),
+        sessionKey: sessionKey,
+        runId: 'run-old',
+      ),
+    );
+    await _drain();
+    final List<String> text = <String>[
+      for (final ChatStreamEvent e in out.seen)
+        if (e is ContentEvent) e.text,
+    ];
+    expect(text.join(), 'mine');
+    expect(AgentsRunLedger.instance.runFor(sessionKey)?.runId, 'run-new');
+    await out.cancel();
+  });
+
   test('a task sent across a host restart arrives exactly once', () async {
     final out = send();
     await _drain();

@@ -72,6 +72,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/models/chat_message.dart';
 import 'package:chuk_chat/services/agents/agents_queued_marks.dart';
+import 'package:chuk_chat/services/agents/thread_preview_store.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/stored_chat.dart';
 import 'package:chuk_chat/services/chat_payload_codec.dart'
@@ -320,6 +321,17 @@ class AgentsChatStore {
 
     ChatStorageState.chatsById[sessionKey] = chat;
     ChatStorageState.notifyChanges(sessionKey);
+    // The sidebar's last line follows every write, the live answer too: it
+    // used to follow only the host's replay and stayed one answer behind
+    // (CHAT-118).
+    ThreadPreviewStore.instance.noteRows(sessionKey, <Map<String, dynamic>>[
+      for (final ChatMessage m in messages.skip(
+        messages.length > 3 ? messages.length - 3 : 0,
+      ))
+        // The placeholder of a turn that has not written yet says nothing.
+        if (m.text != 'Thinking...')
+          <String, dynamic>{...m.toJson(), 'timestamp': ?m.sentAt},
+    ]);
     _owned.add(sessionKey);
     _watchRemovals();
 

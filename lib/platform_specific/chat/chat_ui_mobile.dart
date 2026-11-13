@@ -4516,6 +4516,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     // The pin room comes and goes; the bottom of the thread does not.
     transcriptBottomInset = padding.bottom - pinnedExtraSpace;
+    transcriptTopInset = padding.top;
     return buildAnchoredTranscript(
       split: resolveTranscriptSplit(),
       itemCount: itemCount,
@@ -4678,7 +4679,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                     onNotification: (_) {
                                       WidgetsBinding.instance
                                           .addPostFrameCallback((_) {
-                                            if (mounted) onScrollMetricsChanged();
+                                            if (mounted)
+                                              onScrollMetricsChanged();
                                           });
                                       return false;
                                     },
