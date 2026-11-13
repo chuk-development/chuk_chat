@@ -15,28 +15,28 @@ void main() {
   final DateTime now = DateTime(2026, 9, 5, 14, 30);
 
   List<AgentsAgent> sample() => <AgentsAgent>[
-        agent(
-          id: 'chief',
-          name: 'Chief of Staff',
-          role: 'ops',
-          running: true,
-          lastActivity: now.subtract(const Duration(minutes: 3)),
-          threads: <AgentsThreadInfo>[
-            AgentsThreadInfo(key: 'chief-1', title: 'Morning digest'),
-          ],
-        ),
-        agent(
-          id: 'design',
-          name: 'Design',
-          brief: 'Proposes UI directions',
-          lastActivity: now.subtract(const Duration(days: 1)),
-        ),
-        agent(
-          id: 'inbox',
-          name: 'Inbox Triage',
-          threads: const <AgentsThreadInfo>[],
-        ),
-      ];
+    agent(
+      id: 'chief',
+      name: 'Chief of Staff',
+      role: 'ops',
+      running: true,
+      lastActivity: now.subtract(const Duration(minutes: 3)),
+      threads: <AgentsThreadInfo>[
+        AgentsThreadInfo(key: 'chief-1', title: 'Morning digest'),
+      ],
+    ),
+    agent(
+      id: 'design',
+      name: 'Design',
+      brief: 'Proposes UI directions',
+      lastActivity: now.subtract(const Duration(days: 1)),
+    ),
+    agent(
+      id: 'inbox',
+      name: 'Inbox Triage',
+      threads: const <AgentsThreadInfo>[],
+    ),
+  ];
 
   /// Writes one stored line for [threadKey], the way the replay loader does.
   void storeLine(
@@ -52,8 +52,9 @@ void main() {
     },
   ]);
 
-  testWidgets('a row reads like a messenger: name, last message and its time',
-      (tester) async {
+  testWidgets('a row reads like a messenger: name, last message and its time', (
+    tester,
+  ) async {
     // Thread keys of this test alone: the preview store is a process-wide
     // singleton, so a key shared with another test would make the result
     // depend on the order the tests run in.
@@ -124,7 +125,10 @@ void main() {
 
     // The last message and ITS time, not the brief, the role or the time of
     // the last run.
-    expect(inRow('design', find.text('Here are two directions')), findsOneWidget);
+    expect(
+      inRow('design', find.text('Here are two directions')),
+      findsOneWidget,
+    );
     expect(inRow('design', find.text('Yesterday')), findsOneWidget);
     expect(find.text('Proposes UI directions'), findsNothing);
     expect(find.text('ux'), findsNothing, reason: 'no role tag');
@@ -159,8 +163,9 @@ void main() {
     expect(inRow('design', find.text('2:29 PM')), findsOneWidget);
   });
 
-  testWidgets('rows are a real touch target and start under the header row',
-      (tester) async {
+  testWidgets('rows are a real touch target and start under the header row', (
+    tester,
+  ) async {
     await pumpPhone(
       tester,
       MobileAgentList(
@@ -184,8 +189,9 @@ void main() {
   });
 
   testWidgets('with a header slot the row is chuk\'s bar: the slot takes the '
-      'middle, search still opens and closes, All / Unread sits under it',
-      (tester) async {
+      'middle, search still opens and closes, All / Unread sits under it', (
+    tester,
+  ) async {
     await pumpPhone(
       tester,
       MobileAgentList(
@@ -200,7 +206,9 @@ void main() {
         ),
       ),
     );
-    final Rect slot = tester.getRect(find.byKey(const ValueKey<String>('slot')));
+    final Rect slot = tester.getRect(
+      find.byKey(const ValueKey<String>('slot')),
+    );
     final Rect search = tester.getRect(findId('mobile_home_search'));
     final Rect add = tester.getRect(findId('mobile_home_add'));
     // chuk's bar: 48 px presses around 42 px chips, the slot centred
@@ -240,8 +248,9 @@ void main() {
     expect(find.text('Inbox Triage'), findsNothing);
   });
 
-  testWidgets('tap opens the first thread; an agent without threads is inert',
-      (tester) async {
+  testWidgets('tap opens the first thread; an agent without threads is inert', (
+    tester,
+  ) async {
     final List<(String, String)> selected = <(String, String)>[];
     await pumpPhone(
       tester,
@@ -257,8 +266,9 @@ void main() {
     expect(selected, <(String, String)>[('chief', 'chief-1')]);
   });
 
-  testWidgets('search filters by name and role; closing clears it',
-      (tester) async {
+  testWidgets('search filters by name and role; closing clears it', (
+    tester,
+  ) async {
     await pumpPhone(
       tester,
       MobileAgentList(
@@ -301,6 +311,83 @@ void main() {
     expect(adds, 1);
   });
 
+  testWidgets('the sidebar shape: a summary line instead of All / Unread, a '
+      'word about a silent Sidekick, and the footer', (tester) async {
+    final source = rosterWith(<AgentsAgent>[
+      agent(
+        id: 'sb-chief',
+        name: 'Chief of Staff',
+        role: 'ops',
+        running: true,
+        threads: <AgentsThreadInfo>[
+          AgentsThreadInfo(key: 'sidebar-chief', title: 'default'),
+        ],
+      ),
+      agent(
+        id: 'sb-design',
+        name: 'Design',
+        brief: 'Proposes UI directions',
+        threads: <AgentsThreadInfo>[
+          AgentsThreadInfo(key: 'sidebar-design', title: 'default'),
+        ],
+      ),
+      agent(
+        id: 'sb-inbox',
+        name: 'Inbox Triage',
+        threads: <AgentsThreadInfo>[
+          AgentsThreadInfo(key: 'sidebar-inbox', title: 'default'),
+        ],
+      ),
+    ]);
+    storeLine('sidebar-chief', 'Digest sent', fromUser: false, at: now);
+    await pumpPhone(
+      tester,
+      MobileAgentList(
+        source: source,
+        onSelect: (_, _) {},
+        now: () => now,
+        headerCenter: const SizedBox(width: 120, height: 40),
+        summaryLine: true,
+        footer: const Text('the footer'),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+
+    // One line counts the list; the filter is gone.
+    expect(find.text('All'), findsNothing);
+    expect(find.text('Unread'), findsNothing);
+    final Finder summary = find.byKey(
+      const ValueKey<String>('mobile_list_summary'),
+    );
+    expect(summary, findsOneWidget);
+    expect(
+      find.descendant(
+        of: summary,
+        matching: find.textContaining('3 Sidekicks', findRichText: true),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: summary,
+        matching: find.textContaining('1 working', findRichText: true),
+      ),
+      findsOneWidget,
+    );
+    // What was said wins; a silent Sidekick says what it is for, or that it
+    // is new.
+    expect(find.text('Digest sent'), findsOneWidget);
+    expect(find.text('ops'), findsNothing);
+    expect(find.text('Proposes UI directions'), findsOneWidget);
+    expect(find.text('No messages yet'), findsOneWidget);
+    // The footer floats at the bottom, under the last row.
+    final Rect footer = tester.getRect(find.text('the footer'));
+    final Rect last = tester.getRect(find.text('Inbox Triage'));
+    final Size screen = tester.view.physicalSize / tester.view.devicePixelRatio;
+    expect(footer.bottom, lessThanOrEqualTo(screen.height));
+    expect(footer.top, greaterThan(last.bottom));
+  });
+
   testWidgets('the list follows the roster', (tester) async {
     final source = rosterWith(sample());
     await pumpPhone(
@@ -324,7 +411,10 @@ void main() {
     );
     expect(rosterTimeLabel(DateTime(2026, 9, 5, 9, 5), now: now), '9:05 AM');
     expect(rosterTimeLabel(DateTime(2026, 9, 5, 0, 0), now: now), '12:00 AM');
-    expect(rosterTimeLabel(DateTime(2026, 9, 4, 23, 59), now: now), 'Yesterday');
+    expect(
+      rosterTimeLabel(DateTime(2026, 9, 4, 23, 59), now: now),
+      'Yesterday',
+    );
     expect(rosterTimeLabel(DateTime(2026, 9, 1), now: now), 'Tue');
     expect(rosterTimeLabel(DateTime(2026, 8, 20), now: now), '20.8.');
   });
@@ -350,15 +440,21 @@ void main() {
     // A live run does not replace what was said.
     storeLine('preview-run', 'Said earlier', fromUser: false);
     expect(
-      MobileAgentRow.previewOf(withThread('preview-run', 'Digest', running: true)),
+      MobileAgentRow.previewOf(
+        withThread('preview-run', 'Digest', running: true),
+      ),
       'Said earlier',
     );
     storeLine('preview-them', 'Digest sent', fromUser: false);
-    expect(MobileAgentRow.previewOf(withThread('preview-them', 'Digest')),
-        'Digest sent');
+    expect(
+      MobileAgentRow.previewOf(withThread('preview-them', 'Digest')),
+      'Digest sent',
+    );
     storeLine('preview-you', 'Ship the palette', fromUser: true);
-    expect(MobileAgentRow.previewOf(withThread('preview-you', 'Digest')),
-        'You: Ship the palette');
+    expect(
+      MobileAgentRow.previewOf(withThread('preview-you', 'Digest')),
+      'You: Ship the palette',
+    );
     // No stored line: empty, never the title or the brief.
     expect(MobileAgentRow.previewOf(withThread('preview-title', 'Digest')), '');
     expect(
@@ -374,9 +470,8 @@ void main() {
       tester,
       Builder(
         builder: (BuildContext context) => MediaQuery(
-          data: MediaQuery.of(
-            context,
-          ).copyWith(textScaler: const TextScaler.linear(1.3)),
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: const TextScaler.linear(1.3)),
           child: Align(
             alignment: Alignment.topLeft,
             child: SizedBox(
@@ -391,7 +486,9 @@ void main() {
       ),
     );
     expect(
-      tester.renderObject<RenderParagraph>(find.text('Amber')).didExceedMaxLines,
+      tester
+          .renderObject<RenderParagraph>(find.text('Amber'))
+          .didExceedMaxLines,
       isFalse,
     );
     expect(find.text('Research'), findsNothing, reason: 'no role tag');

@@ -1604,6 +1604,12 @@ const Map<String, String> stringsDe = {
   // ── Chats half, swipe mode (phone) ──
   'chatSwipeMenu': 'Menü',
   'chatSwipeMore': 'Mehr',
+  'sidebarSummaryCount': '{count} Sidekicks',
+  'sidebarSummaryWorking': '{count} arbeiten',
+  'sidebarSummaryUnread': '{count} ungelesen',
+  'sidebarNoMessagesYet': 'Noch keine Nachrichten',
+  'sidebarComputerOnline': 'Computer online',
+  'sidebarComputerConnecting': 'Verbinde…',
   'chatSwipeCopyChat': 'Ganzen Chat kopieren',
   'chatSwipeRename': 'Umbenennen',
   'chatSwipeStripHint': 'Wischen wechselt den Chat',

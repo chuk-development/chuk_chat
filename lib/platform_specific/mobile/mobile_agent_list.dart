@@ -39,6 +39,7 @@
 library;
 
 import 'package:animations/animations.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -116,7 +117,20 @@ class MobileAgentList extends StatefulWidget {
     this.headerCenter,
     this.onSearchingChanged,
     this.mainAgentSection = false,
+    this.summaryLine = false,
+    this.footer,
   });
+
+  /// The phone's sidebar (owner, 2026-11-13: "so empty, add more info"):
+  /// under the bar, instead of All / Unread, one line that counts the
+  /// Sidekicks, the ones at work and the unread ones (only with
+  /// [headerCenter]), and a Sidekick that has said nothing yet says what it
+  /// is for ([MobileAgentRow.about]).
+  final bool summaryLine;
+
+  /// Floats over the bottom of the list: the sidebar's status and its ways
+  /// into Media and Settings. The list ends above it.
+  final Widget? footer;
 
   final AgentRosterSource source;
 
@@ -468,6 +482,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
     // grows out of it — the copy that rides inside the container while this
     // one is hidden.
     MobileAgentRow buildRow({required bool padded}) => MobileAgentRow(
+      about: widget.summaryLine,
       key: padded ? ValueKey<String>('mobile-agent-${agent.id}') : null,
       agent: agent,
       selected: agent.id == widget.selectedAgentId,
@@ -602,7 +617,8 @@ class _MobileAgentListState extends State<MobileAgentList> {
     );
 
     final bool bar = widget.headerCenter != null;
-    final bool canAdd = widget.onAddAgent != null || widget.onCreateRoom != null;
+    final bool canAdd =
+        widget.onAddAgent != null || widget.onCreateRoom != null;
     final bool addAsks =
         widget.onAddAgent != null && widget.onCreateRoom != null;
     final String addTooltip = addAsks
@@ -639,39 +655,39 @@ class _MobileAgentListState extends State<MobileAgentList> {
                 : null,
           )
         : Row(
-      key: const ValueKey<bool>(false),
-      children: <Widget>[
-        ExpressiveIconButton(
-          hugeIcon: HugeIcons.search01,
-          onTap: _openSearch,
-          size: _barControlHeight,
-          width: _barControlWidth,
-          color: scheme.surfaceContainerHighest,
-          tooltip: 'Search agents',
-          semanticsId: 'mobile_home_search',
-        ),
-        const SizedBox(width: 10),
-        // The switch takes the middle and the whole width left between the
-        // two targets, so it is the thing the eye lands on first.
-        Expanded(child: filters(height: _barControlHeight)),
-        const SizedBox(width: 10),
-        if (canAdd)
-          Builder(
-            builder: (BuildContext anchor) => ExpressiveIconButton(
-              hugeIcon: HugeIcons.plusSign,
-              // One action goes straight there. Both offered: the target asks.
-              // It is not hijacked — "New agent" is still the first item.
-              onTap: addAction(anchor),
-              size: _barControlHeight,
-              width: _barControlWidth,
-              color: scheme.primary,
-              onColor: scheme.onPrimary,
-              tooltip: addTooltip,
-              semanticsId: 'mobile_home_add',
-            ),
-          ),
-      ],
-    );
+            key: const ValueKey<bool>(false),
+            children: <Widget>[
+              ExpressiveIconButton(
+                hugeIcon: HugeIcons.search01,
+                onTap: _openSearch,
+                size: _barControlHeight,
+                width: _barControlWidth,
+                color: scheme.surfaceContainerHighest,
+                tooltip: 'Search agents',
+                semanticsId: 'mobile_home_search',
+              ),
+              const SizedBox(width: 10),
+              // The switch takes the middle and the whole width left between the
+              // two targets, so it is the thing the eye lands on first.
+              Expanded(child: filters(height: _barControlHeight)),
+              const SizedBox(width: 10),
+              if (canAdd)
+                Builder(
+                  builder: (BuildContext anchor) => ExpressiveIconButton(
+                    hugeIcon: HugeIcons.plusSign,
+                    // One action goes straight there. Both offered: the target asks.
+                    // It is not hijacked — "New agent" is still the first item.
+                    onTap: addAction(anchor),
+                    size: _barControlHeight,
+                    width: _barControlWidth,
+                    color: scheme.primary,
+                    onColor: scheme.onPrimary,
+                    tooltip: addTooltip,
+                    semanticsId: 'mobile_home_add',
+                  ),
+                ),
+            ],
+          );
 
     final Widget searchRow = bar
         ? _buildBarRow(
@@ -690,30 +706,30 @@ class _MobileAgentListState extends State<MobileAgentList> {
             ),
           )
         : Row(
-      key: const ValueKey<bool>(true),
-      children: <Widget>[
-        // Only the search back target lives on the left. The account used to
-        // sit here and opened settings — the navigation bar has that now, and
-        // one way in is enough.
-        ExpressiveIconButton(
-          hugeIcon: HugeIcons.arrowLeft02,
-          onTap: _closeSearch,
-          size: _barControlHeight,
-          width: _barControlWidth,
-          tooltip: 'Close search',
-          semanticsId: 'mobile_home_search_close',
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _SearchField(
-            controller: _query,
-            focusNode: _searchFocus,
-            height: _barControlHeight,
-            onClear: () => setState(_query.clear),
-          ),
-        ),
-      ],
-    );
+            key: const ValueKey<bool>(true),
+            children: <Widget>[
+              // Only the search back target lives on the left. The account used to
+              // sit here and opened settings — the navigation bar has that now, and
+              // one way in is enough.
+              ExpressiveIconButton(
+                hugeIcon: HugeIcons.arrowLeft02,
+                onTap: _closeSearch,
+                size: _barControlHeight,
+                width: _barControlWidth,
+                tooltip: 'Close search',
+                semanticsId: 'mobile_home_search_close',
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _SearchField(
+                  controller: _query,
+                  focusNode: _searchFocus,
+                  height: _barControlHeight,
+                  onClear: () => setState(_query.clear),
+                ),
+              ),
+            ],
+          );
 
     final Widget rowSwitcher = PageTransitionSwitcher(
       duration: const Duration(milliseconds: 280),
@@ -753,8 +769,14 @@ class _MobileAgentListState extends State<MobileAgentList> {
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 child: Align(
                   alignment: Alignment.centerLeft,
-                  // Two equal segments, each as wide as the longer label.
-                  child: IntrinsicWidth(child: filters()),
+                  child: widget.summaryLine
+                      ? _SummaryLine(
+                          agents: widget.source.visibleAgents,
+                          unread: unread,
+                        )
+                      // Two equal segments, each as wide as the longer
+                      // label.
+                      : IntrinsicWidth(child: filters()),
                 ),
               ),
             ],
@@ -807,14 +829,17 @@ class _MobileAgentListState extends State<MobileAgentList> {
                             child: widget.emptyState,
                           )
                         : _EmptyState(
-                      filter: _filters[_filter],
-                      query: _query.text.trim(),
-                      onAddAgent: widget.onAddAgent,
-                    )
+                            filter: _filters[_filter],
+                            query: _query.text.trim(),
+                            onAddAgent: widget.onAddAgent,
+                          )
                   : ListView.builder(
                       padding: EdgeInsets.only(
                         top: headerSpace,
-                        bottom: MediaQuery.paddingOf(context).bottom + 24,
+                        bottom:
+                            MediaQuery.paddingOf(context).bottom +
+                            24 +
+                            (widget.footer == null ? 0 : kMobileListFooter),
                       ),
                       itemCount: lead + rooms.length + agents.length,
                       itemBuilder: (BuildContext context, int index) {
@@ -869,12 +894,78 @@ class _MobileAgentListState extends State<MobileAgentList> {
           top: 0,
           left: 0,
           right: 0,
-          child: TopVeil(
-            fadeBelow: 14,
-            child: header,
+          child: TopVeil(fadeBelow: 14, child: header),
+        ),
+        if (widget.footer case final Widget footer)
+          Positioned(
+            left: 12,
+            right: 12,
+            bottom: MediaQuery.paddingOf(context).bottom + 12,
+            child: SizedBox(height: kMobileListFooter - 12, child: footer),
+          ),
+      ],
+    );
+  }
+}
+
+/// The room [MobileAgentList.footer] takes at the bottom of the list.
+const double kMobileListFooter = 68;
+
+/// "4 Sidekicks · 1 working · 2 unread": the list in one line.
+class _SummaryLine extends StatelessWidget {
+  const _SummaryLine({required this.agents, required this.unread});
+
+  final List<AgentsAgent> agents;
+  final int unread;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations? l = AppLocalizations.of(context);
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    final TextStyle? base = Theme.of(context).textTheme.labelLarge
+        ?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600);
+    final int working = agents.where((AgentsAgent a) => a.running).length;
+    final String sep = '  ·  ';
+    return SizedBox(
+      key: const ValueKey<String>('mobile_list_summary'),
+      height: 36,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Text.rich(
+            TextSpan(
+              style: base,
+              children: <InlineSpan>[
+                TextSpan(
+                  text:
+                      l?.sidebarSummaryCount(agents.length) ??
+                      '${agents.length} Sidekicks',
+                ),
+                if (working > 0)
+                  TextSpan(
+                    text:
+                        sep +
+                        (l?.sidebarSummaryWorking(working) ??
+                            '$working working'),
+                  ),
+                if (unread > 0)
+                  TextSpan(
+                    text:
+                        sep +
+                        (l?.sidebarSummaryUnread(unread) ?? '$unread unread'),
+                    style: TextStyle(
+                      color: scheme.primary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+              ],
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
-      ],
+      ),
     );
   }
 }
@@ -1052,7 +1143,13 @@ class MobileAgentRow extends StatelessWidget {
     this.padded = true,
     this.main = false,
     this.waitKind,
+    this.about = false,
   });
+
+  /// Fills the second line of a Sidekick that has said nothing yet with
+  /// what it is for ([aboutOf]). The phone's sidebar turns it on; off, the
+  /// line stays empty until something was said.
+  final bool about;
 
   final AgentsAgent agent;
 
@@ -1106,11 +1203,26 @@ class MobileAgentRow extends StatelessWidget {
     ThreadPreviewStore.instance.lastMessageOf(agent),
   );
 
+  /// What the row says about a Sidekick that has said nothing yet, so the
+  /// line is not empty (owner, 2026-11-13): what it is for, else that it is
+  /// new.
+  static String aboutOf(AgentsAgent agent, AppLocalizations? l) {
+    final String role = (agent.role ?? '').trim();
+    if (role.isNotEmpty) return role;
+    final String brief = (agent.brief ?? '').trim();
+    if (brief.isNotEmpty) return brief;
+    return l?.sidebarNoMessagesYet ?? 'No messages yet';
+  }
+
   @override
   Widget build(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
     final TextTheme text = Theme.of(context).textTheme;
     final Color accent = agentAccent(context, agent.id, store: profiles);
+    final String said = previewOf(agent);
+    final String line = said.isNotEmpty || !about
+        ? said
+        : aboutOf(agent, AppLocalizations.of(context));
     // The time of the last message, not of the last run: the column dates
     // the line beside it.
     final String time = rosterTimeLabel(
@@ -1172,7 +1284,11 @@ class MobileAgentRow extends StatelessWidget {
               ),
               child: Row(
                 children: <Widget>[
-                  AgentFace(agent: agent, size: main ? 64 : 48, store: profiles),
+                  AgentFace(
+                    agent: agent,
+                    size: main ? 64 : 48,
+                    store: profiles,
+                  ),
                   SizedBox(width: main ? 16 : 14),
                   Expanded(
                     child: Column(
@@ -1190,12 +1306,13 @@ class MobileAgentRow extends StatelessWidget {
                                 agent.name,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: (main ? text.titleLarge : text.titleMedium)
-                                    ?.copyWith(
-                                      fontWeight: unread
-                                          ? FontWeight.w800
-                                          : FontWeight.w600,
-                                    ),
+                                style:
+                                    (main ? text.titleLarge : text.titleMedium)
+                                        ?.copyWith(
+                                          fontWeight: unread
+                                              ? FontWeight.w800
+                                              : FontWeight.w600,
+                                        ),
                               ),
                             ),
                             if (pinned) ...<Widget>[
@@ -1233,7 +1350,7 @@ class MobileAgentRow extends StatelessWidget {
                           children: <Widget>[
                             Expanded(
                               child: Text(
-                                previewOf(agent),
+                                line,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: text.bodyMedium?.copyWith(
@@ -1306,9 +1423,7 @@ class MobileDerivedThreadRow extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(72, 0, 12, 2),
         child: MorphTap(
           onTap: onTap,
-          color: selected
-              ? Theme.of(context).m3.selection
-              : Colors.transparent,
+          color: selected ? Theme.of(context).m3.selection : Colors.transparent,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(kRadiusLg),
           ),

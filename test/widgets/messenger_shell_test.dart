@@ -1700,6 +1700,12 @@ void main() {
       expect(tester.getRect(conversation).left, 420);
       // The socket owner did not remount.
       expect(controllerBuilds, 1);
+      // The sidebar says whether the computer answers, and holds the ways
+      // into Media and Settings. (The summary line needs the switch above
+      // it: mobile_agent_list_test.)
+      expect(find.text('Computer online'), findsOneWidget);
+      expect(findId('phone_sidebar_media'), findsOneWidget);
+      expect(findId('phone_sidebar_settings'), findsOneWidget);
 
       await tester.tap(
         find.descendant(

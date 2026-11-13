@@ -1582,6 +1582,15 @@ class AppLocalizations {
   // ── Chats half, swipe mode (phone) ──
   String get chatSwipeMenu => _get('chatSwipeMenu');
   String get chatSwipeMore => _get('chatSwipeMore');
+  String sidebarSummaryCount(int count) =>
+      _get('sidebarSummaryCount').replaceAll('{count}', '$count');
+  String sidebarSummaryWorking(int count) =>
+      _get('sidebarSummaryWorking').replaceAll('{count}', '$count');
+  String sidebarSummaryUnread(int count) =>
+      _get('sidebarSummaryUnread').replaceAll('{count}', '$count');
+  String get sidebarNoMessagesYet => _get('sidebarNoMessagesYet');
+  String get sidebarComputerOnline => _get('sidebarComputerOnline');
+  String get sidebarComputerConnecting => _get('sidebarComputerConnecting');
   String get chatSwipeCopyChat => _get('chatSwipeCopyChat');
   String get chatSwipeRename => _get('chatSwipeRename');
   String get chatSwipeStripHint => _get('chatSwipeStripHint');

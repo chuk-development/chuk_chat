@@ -14,7 +14,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/platform_specific/chat/chat_ui_mobile.dart';
 import 'package:chuk_chat/platform_specific/mobile/chat_title_strip.dart';
-import 'package:chuk_chat/platform_specific/mobile/mobile_top_bar.dart';
 import 'package:chuk_chat/platform_specific/mobile/swipe_chat_pager.dart';
 import 'package:chuk_chat/platform_specific/root_wrapper_mobile.dart';
 import 'package:chuk_chat/platform_specific/sidebar_mobile.dart';

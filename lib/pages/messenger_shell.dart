@@ -180,6 +180,7 @@ import 'package:chuk_chat/widgets/agents_desktop/desktop_metrics.dart';
 import 'package:chuk_chat/widgets/agents_desktop/quick_switcher.dart';
 import 'package:chuk_chat/widgets/browser_view_page.dart';
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
+import 'package:chuk_chat/widgets/floating_chrome_surface.dart';
 import 'package:chuk_chat/widgets/pane_header.dart';
 import 'package:chuk_chat/widgets/settings_surface.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
@@ -1719,7 +1720,70 @@ class _MessengerShellState extends State<MessengerShell>
         mainAgentSection: true,
         emptyState: _buildStatusPanel(),
         headerCenter: _chatModeAvailable ? _buildModeSwitch(large: true) : null,
+        summaryLine: true,
+        footer: _buildPhoneSidebarFooter(context),
       ),
+    );
+  }
+
+  /// The foot of the phone's sidebar: whether the computer answers, and the
+  /// ways into Media and Settings.
+  Widget _buildPhoneSidebarFooter(BuildContext context) {
+    final AppLocalizations? l = AppLocalizations.of(context);
+    final AgentsAgent? anyAgent = _selectedAgent ?? _mainAgent;
+    void close() => _phoneSidebarOpen.value = false;
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: ValueListenableBuilder<AgentsRelayController?>(
+            valueListenable: _controller,
+            builder:
+                (
+                  BuildContext context,
+                  AgentsRelayController? controller,
+                  Widget? _,
+                ) {
+                  if (controller == null) {
+                    return const _PhoneLinkPill(online: false);
+                  }
+                  return ValueListenableBuilder<AgentsRelayState>(
+                    valueListenable: controller.state,
+                    builder:
+                        (
+                          BuildContext context,
+                          AgentsRelayState state,
+                          Widget? _,
+                        ) => _PhoneLinkPill(
+                          online: state.phase == AgentsRelayPhase.paired,
+                        ),
+                  );
+                },
+          ),
+        ),
+        const SizedBox(width: 6),
+        FloatingHeaderButton(
+          icon: Icons.photo_library_outlined,
+          tooltip: l?.media ?? 'Media',
+          semanticsId: 'phone_sidebar_media',
+          onPressed: () {
+            close();
+            _openPhoneMedia();
+          },
+        ),
+        FloatingHeaderButton(
+          icon: Icons.settings_outlined,
+          tooltip: l?.settings ?? 'Settings',
+          semanticsId: 'phone_sidebar_settings',
+          onPressed: () {
+            close();
+            if (widget.shellConfig != null) {
+              _openSettings();
+            } else if (anyAgent != null) {
+              _openAgentProfile(anyAgent);
+            }
+          },
+        ),
+      ],
     );
   }
 
@@ -1730,6 +1794,62 @@ class _MessengerShellState extends State<MessengerShell>
     );
     if (preview == null || preview.text.isEmpty) return null;
     return preview.fromUser ? 'You: ${preview.text}' : preview.text;
+  }
+}
+
+/// The sidebar's word on the link to the computer: a dot and "Computer
+/// online", or "Connecting" while the app dials. Never an error (owner:
+/// the app redials on its own).
+class _PhoneLinkPill extends StatelessWidget {
+  const _PhoneLinkPill({required this.online});
+
+  final bool online;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations? l = AppLocalizations.of(context);
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        key: const ValueKey<String>('phone_sidebar_link'),
+        height: 42,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: ShapeDecoration(
+          color: FloatingChromeSurface.fillOf(context),
+          shape: const StadiumBorder(),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Container(
+              width: 9,
+              height: 9,
+              decoration: BoxDecoration(
+                color: online
+                    ? const Color(0xFF34C759)
+                    : scheme.onSurfaceVariant.withValues(alpha: 0.5),
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Flexible(
+              child: Text(
+                online
+                    ? (l?.sidebarComputerOnline ?? 'Computer online')
+                    : (l?.sidebarComputerConnecting ?? 'Connecting…'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: scheme.onSurface,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
