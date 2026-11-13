@@ -32,8 +32,10 @@ class UpdateCheckService {
   /// passes `--dart-define=LINUX_VARIANT=full` from the `-full` jobs, so
   /// an installed full build always updates to a full build and never
   /// downgrades the user to the slim AppImage.
-  static const String _linuxVariant =
-      String.fromEnvironment('LINUX_VARIANT', defaultValue: 'slim');
+  static const String _linuxVariant = String.fromEnvironment(
+    'LINUX_VARIANT',
+    defaultValue: 'slim',
+  );
 
   static bool get _isLinuxFull =>
       !kIsWeb && Platform.isLinux && _linuxVariant == 'full';
@@ -204,10 +206,13 @@ class UpdateCheckService {
       switch (arch) {
         case 'arm64':
           return ['android-armv8', 'android-arm64', 'android'];
+        // The release names its APKs by ABI: arm64-v8a, armeabi-v7a,
+        // x86_64. 'android-arm' alone would also match the arm64 file, so
+        // the ABI's own name comes first.
         case 'arm':
-          return ['android-armv7', 'android-arm', 'android'];
+          return ['android-armeabi', 'android-armv7', 'android-arm', 'android'];
         case 'x64':
-          return ['android-x64', 'android'];
+          return ['android-x86_64', 'android-x64', 'android'];
         default:
           return ['android-armv8', 'android'];
       }
