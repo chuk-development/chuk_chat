@@ -84,7 +84,7 @@ extension _MessageBubbleImages on _MessageBubbleState {
       builder: (context, constraints) {
         final double maxWidth = constraints.maxWidth.isFinite
             ? constraints.maxWidth
-            : MediaQuery.of(context).size.width * 0.8;
+            : MediaQuery.sizeOf(context).width * 0.8;
 
         // Single loader: follow the requested aspect ratio, like a lone AI
         // image renders at its natural ratio.
@@ -257,7 +257,7 @@ extension _MessageBubbleImages on _MessageBubbleState {
       builder: (context, constraints) {
         final double maxWidth = constraints.maxWidth.isFinite
             ? constraints.maxWidth
-            : MediaQuery.of(context).size.width * 0.8;
+            : MediaQuery.sizeOf(context).width * 0.8;
         final bool compactQrLayout = _isQrImageMessage && images.length == 1;
 
         if (compactQrLayout) {

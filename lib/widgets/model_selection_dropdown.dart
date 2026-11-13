@@ -988,11 +988,13 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown>
       return const _WidthMetrics(menuWidth: 260.0, buttonWidth: 180.0);
     }
 
-    final mediaQuery = MediaQuery.of(context);
+    // Two aspects, not the whole MediaQuery: this runs from build, and the
+    // whole MediaQuery changes on every frame of the soft keyboard.
+    final Size screen = MediaQuery.sizeOf(context);
     final textStyle =
         Theme.of(context).textTheme.bodyMedium ?? const TextStyle(fontSize: 14);
     final textDirection = Directionality.of(context);
-    final textScaler = mediaQuery.textScaler;
+    final textScaler = MediaQuery.textScalerOf(context);
 
     double measure(String text) =>
         _measureTextWidth(text, textStyle, textDirection, textScaler);
@@ -1010,7 +1012,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown>
 
     final double safeMaxWidth = math.max(
       160.0,
-      mediaQuery.size.width - 32.0,
+      screen.width - 32.0,
     ); // padding to screen edge
 
     final double menuLowerBound = math.min(220.0, safeMaxWidth);

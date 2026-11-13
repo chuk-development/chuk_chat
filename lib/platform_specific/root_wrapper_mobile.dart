@@ -212,6 +212,13 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
       parent: _sidebarAnimController,
       curve: Curves.easeOutCubic,
     );
+    if (widget.swipeNavigation) {
+      // Swipe mode drops the closed sidebar from the tree: one rebuild when
+      // the closing move has ended.
+      _sidebarAnimController.addStatusListener((AnimationStatus status) {
+        if (status == AnimationStatus.dismissed && mounted) setState(() {});
+      });
+    }
 
     // Don't block UI startup - check permissions after first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -823,25 +830,78 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
   /// [deriveSidebarChatTitle]. Two differences: pinned chats are not pulled
   /// to the front (a swipe follows time, not pins), and locked chats are left
   /// out, because the sidebar does not open them either.
+  ///
+  /// The title and the date line of a chat are kept in [_swipeEntryMemo]:
+  /// this runs on every rebuild of the wrapper, and with a few hundred chats
+  /// formatting them all again was the biggest cost of a chat switch on a
+  /// phone. Only the working flag is read fresh each time.
   List<SwipeChatEntry> _swipeEntries(BuildContext context) {
     final AppLocalizations? l = AppLocalizations.of(context);
     final StreamingManager streaming = StreamingManager();
-    return <SwipeChatEntry>[
+    final DateTime now = DateTime.now();
+    final String scope =
+        '${Localizations.localeOf(context)}|'
+        '${MediaQuery.alwaysUse24HourFormatOf(context)}|'
+        '${now.year}-${now.month}-${now.day}';
+    if (scope != _swipeEntryScope) {
+      _swipeEntryScope = scope;
+      _swipeEntryMemo.clear();
+    }
+    final List<StoredChat> chats = ChatStorageService.savedChats;
+    final List<SwipeChatEntry> entries = <SwipeChatEntry>[
       SwipeChatEntry(
         id: _kNewChatEntryId,
         title: l?.newChat ?? 'New chat',
         leading: const _NewChatFace(),
       ),
-      for (final StoredChat chat in ChatStorageService.savedChats)
-        if (!chat.isLocked)
-          SwipeChatEntry(
-            id: chat.id,
-            title: deriveSidebarChatTitle(chat),
-            subtitle: sbChatDateLine(context, chat.updatedAt ?? chat.createdAt),
-            working: streaming.isStreaming(chat.id),
-          ),
     ];
+    final Set<String> live = <String>{};
+    for (final StoredChat chat in chats) {
+      if (chat.isLocked) continue;
+      live.add(chat.id);
+      final DateTime at = chat.updatedAt ?? chat.createdAt;
+      final _SwipeEntryMemo? memo = _swipeEntryMemo[chat.id];
+      final SwipeChatEntry base;
+      if (memo != null &&
+          memo.customName == chat.customName &&
+          memo.title == chat.title &&
+          memo.at == at) {
+        base = memo.entry;
+      } else {
+        base = SwipeChatEntry(
+          id: chat.id,
+          title: deriveSidebarChatTitle(chat),
+          subtitle: sbChatDateLine(context, at, now: now),
+        );
+        _swipeEntryMemo[chat.id] = _SwipeEntryMemo(
+          customName: chat.customName,
+          title: chat.title,
+          at: at,
+          entry: base,
+        );
+      }
+      entries.add(
+        streaming.isStreaming(chat.id)
+            ? SwipeChatEntry(
+                id: base.id,
+                title: base.title,
+                subtitle: base.subtitle,
+                working: true,
+              )
+            : base,
+      );
+    }
+    if (_swipeEntryMemo.length > live.length) {
+      _swipeEntryMemo.removeWhere((String id, _) => !live.contains(id));
+    }
+    return entries;
   }
+
+  /// [_swipeEntries]' memo, by chat id. Cleared when [_swipeEntryScope]
+  /// (locale, clock format, day) changes, since the date line depends on it.
+  final Map<String, _SwipeEntryMemo> _swipeEntryMemo =
+      <String, _SwipeEntryMemo>{};
+  String? _swipeEntryScope;
 
   /// The pager committed a switch: open that chat, or a new one.
   void _onSwipeSelected(String id) {
@@ -1203,37 +1263,45 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     // widget instance 60 times a second, and the sidebar rebuilds its whole
     // chat list, time buckets and footer every time — while it is off
     // screen.
-    final Widget sidebar = GestureDetector(
-      onHorizontalDragEnd: (DragEndDetails details) {
-        // Swipe left on sidebar to close it
-        if (_isSidebarExpanded &&
-            details.primaryVelocity != null &&
-            details.primaryVelocity! < -500) {
-          _toggleSidebar();
-        }
-      },
-      child: SidebarMobile(
-        onChatSelected: _handleChatSelected,
-        onSettingsTapped: _openSettingsPage,
-        onWorkspacesTapped: _openWorkspacesPage,
-        onMediaTapped: _openMediaPage,
-        onNewChatTapped: _newChatFromSidebar,
-        onChatDeleted: _handleChatDeleted,
-        // The drawer had no visible close control, only the swipe.
-        onCollapseTapped: _toggleSidebar,
-        // The page opens over the chat, so the drawer closes first.
-        onAddComputerTapped: widget.onAddComputer == null
-            ? null
-            : () {
-                if (_isSidebarExpanded) _toggleSidebar();
-                widget.onAddComputer!();
-              },
-        // Swipe mode: the switch between the halves is the sidebar's head.
-        header: swipe ? widget.headerCenter : null,
-        selectedChatId: _selectedChatId,
-        isCompactMode: true,
-      ),
-    );
+    //
+    // Swipe mode: closed, the sidebar is not built at all. It follows the
+    // chat storage, so behind a streaming chat it would rebuild its list on
+    // every change for nobody.
+    final bool sidebarInTree =
+        !swipe || _isSidebarExpanded || !_sidebarAnimController.isDismissed;
+    final Widget? sidebar = !sidebarInTree
+        ? null
+        : GestureDetector(
+            onHorizontalDragEnd: (DragEndDetails details) {
+              // Swipe left on sidebar to close it
+              if (_isSidebarExpanded &&
+                  details.primaryVelocity != null &&
+                  details.primaryVelocity! < -500) {
+                _toggleSidebar();
+              }
+            },
+            child: SidebarMobile(
+              onChatSelected: _handleChatSelected,
+              onSettingsTapped: _openSettingsPage,
+              onWorkspacesTapped: _openWorkspacesPage,
+              onMediaTapped: _openMediaPage,
+              onNewChatTapped: _newChatFromSidebar,
+              onChatDeleted: _handleChatDeleted,
+              // The drawer had no visible close control, only the swipe.
+              onCollapseTapped: _toggleSidebar,
+              // The page opens over the chat, so the drawer closes first.
+              onAddComputerTapped: widget.onAddComputer == null
+                  ? null
+                  : () {
+                      if (_isSidebarExpanded) _toggleSidebar();
+                      widget.onAddComputer!();
+                    },
+              // Swipe mode: the switch between the halves is the sidebar's head.
+              header: swipe ? widget.headerCenter : null,
+              selectedChatId: _selectedChatId,
+              isCompactMode: true,
+            ),
+          );
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -1267,14 +1335,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                   top: 0,
                   bottom: 0,
                   width: sidebarVisibleWidth,
-                  // Swipe mode: closed, the sidebar is off stage. It is not
-                  // laid out or painted behind the chat it never shows with.
-                  child: swipe
-                      ? Offstage(
-                          offstage: _sidebarAnimController.isDismissed,
-                          child: sidebar,
-                        )
-                      : sidebar,
+                  child: sidebar ?? const SizedBox.shrink(),
                 ),
               ],
             );
@@ -1287,6 +1348,21 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
 
 /// The face of the "New chat" page in the title strip: the new-chat glyph in
 /// a 32 px circle.
+/// One chat's swipe entry with the inputs it was made from.
+class _SwipeEntryMemo {
+  const _SwipeEntryMemo({
+    required this.customName,
+    required this.title,
+    required this.at,
+    required this.entry,
+  });
+
+  final String? customName;
+  final String? title;
+  final DateTime at;
+  final SwipeChatEntry entry;
+}
+
 class _NewChatFace extends StatelessWidget {
   const _NewChatFace();
 

@@ -2189,7 +2189,7 @@ class AgentsRelayClient
   final Set<String> _autoReplayed = <String>{};
 
   /// Completes once this connection has provisioned the account, or once
-  /// [_provisionGateTimeout] has passed without one.
+  /// [provisionGateTimeout] has passed without one.
   ///
   /// A replay is the first thing a reattaching view asks for, and it used to
   /// arrive before the account token did — the host logs "expected
@@ -2201,7 +2201,11 @@ class AgentsRelayClient
   Completer<void>? _provisionGate;
 
   /// How long a replay waits for the account provision before going anyway.
-  static const Duration _provisionGateTimeout = Duration(seconds: 10);
+  ///
+  /// Settable only so a test that never provisions does not wait the full
+  /// ten seconds per frame; the app never changes it.
+  @visibleForTesting
+  static Duration provisionGateTimeout = const Duration(seconds: 10);
   final int _keyVersion;
   final int Function()? _nowMs;
   final Duration _pairingTimeout;
@@ -3165,13 +3169,13 @@ class AgentsRelayClient
   }
 
   /// Waits for the account provision of this connection, or for
-  /// [_provisionGateTimeout] — see [_provisionGate]. Returns at once when
+  /// [provisionGateTimeout] — see [_provisionGate]. Returns at once when
   /// there is no gate or it is already open.
   Future<void> _awaitProvisionGate() async {
     final gate = _provisionGate;
     if (gate == null || gate.isCompleted) return;
     try {
-      await gate.future.timeout(_provisionGateTimeout);
+      await gate.future.timeout(provisionGateTimeout);
     } on TimeoutException {
       // Nobody provisioned. Send anyway; that is the old behaviour.
     }

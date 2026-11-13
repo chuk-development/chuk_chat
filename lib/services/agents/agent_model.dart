@@ -1,16 +1,16 @@
 /// What an agent runs on, in one answer: its own model when it has one, the
-/// app default when it has not.
+/// agent default (DeepSeek V4 Flash) when it has not.
 ///
 /// ## The one model of "model, provider, reasoning"
 ///
 /// * **An agent's own model** — model, provider and reasoning level — is
 ///   stored per agent thread in [ChatModelSelectionService]. The agent
-///   profile (the model page, [AgentModelState]) and the composer of that
-///   agent's thread both read and write this one record. The relay send
+///   profile (the model page, [AgentModelState]) reads and writes this one
+///   record; an Agents thread's composer has no model picker. The relay send
 ///   resolves it again at send time, so what the profile shows is what runs.
-/// * **The app default** is the composer's mode — Fast, Thinking or Custom —
-///   set in Settings → Model Selection ([ChatModeService]). An agent with no
-///   model of its own runs on it, and so does a plain chat.
+/// * **The agent default** ([AgentModel.defaultConfig], DeepSeek V4 Flash)
+///   is what an agent with no model of its own runs on. A plain chat keeps
+///   the composer's mode — Fast, Thinking or Custom ([ChatModeService]).
 ///
 /// Nothing else picks an agent's model. Every change is also sent to the
 /// host (`agent_model_set`, docs/agents/AGENT_MODEL.md), which stores it per
@@ -228,8 +228,7 @@ class AgentModel {
   static const Duration loadTimeout = Duration(seconds: 8);
 
   /// [resolve] that does not throw: a read that fails falls back on its own
-  /// (no own model when the stored choice cannot be read, the built-in
-  /// default mode and its model otherwise). A read that hangs is the
+  /// (no own model when the stored choice cannot be read). A read that hangs is the
   /// caller's watchdog's job ([loadTimeout]).
   static Future<AgentModelState> resolveOrFallback(String chatId) async {
     Future<T> safely<T>(Future<T> Function() read, T fallback) async {

@@ -42,6 +42,15 @@ const List<LayoutSize> kLayoutSizes = <LayoutSize>[
 
 const List<double> kTextScales = <double>[1.0, 1.3];
 
+/// How long [pumpAt] and [unpump] wait for a screen to settle.
+///
+/// A screen with an endless animation never settles. With the default limit
+/// of ten minutes, `pumpAndSettle` drew 6000 frames of 100 ms for each such
+/// screen before it gave up, and this alone made the layout test take
+/// minutes. Five seconds is 50 frames: a screen that can settle has settled
+/// long before that.
+const Duration _settleLimit = Duration(seconds: 5);
+
 /// Pumps [child] into a window of [size] with text scaled by [textScale].
 ///
 /// The scaler is installed BELOW `MaterialApp`, through its builder: the app
@@ -79,7 +88,11 @@ Future<void> pumpAt(
   await tester.pump();
   await tester.pump(settle);
   try {
-    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    await tester.pumpAndSettle(
+      const Duration(milliseconds: 100),
+      EnginePhase.sendSemanticsUpdate,
+      _settleLimit,
+    );
   } on FlutterError {
     // A screen with an endless animation (a spinner while it waits for the
     // host) never settles. Its frames are already pumped; carry on.
@@ -95,7 +108,11 @@ Future<void> unpump(WidgetTester tester) async {
   await tester.pumpWidget(const SizedBox.shrink());
   await tester.pump(const Duration(seconds: 1));
   try {
-    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    await tester.pumpAndSettle(
+      const Duration(milliseconds: 100),
+      EnginePhase.sendSemanticsUpdate,
+      _settleLimit,
+    );
   } on FlutterError {
     // ignore: nothing left on screen to settle.
   }

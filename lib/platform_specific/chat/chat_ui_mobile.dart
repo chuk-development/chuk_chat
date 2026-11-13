@@ -125,6 +125,7 @@ import 'package:chuk_chat/platform_specific/chat/regen_variant_seed.dart';
 import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/mobile_workspace_handler.dart';
 import 'package:chuk_chat/widgets/fullscreen_text_editor.dart';
+import 'package:chuk_chat/platform_specific/chat/transcript_row_memo.dart';
 import 'package:chuk_chat/platform_specific/chat/widgets/chat_message_list_item.dart';
 import 'package:chuk_chat/platform_specific/chat/widgets/composer_send_button.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
@@ -413,6 +414,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
   /// The Agents thread shares one decode cache across mounts; chuk_chat's
   /// screen keeps its own (see [MessageRenderCache]).
+  /// The built transcript rows, kept while their inputs hold
+  /// ([TranscriptRowMemo]).
+  final TranscriptRowMemo _rowMemo = TranscriptRowMemo();
+
   late final MessageRenderCache _messageRenderCache = MessageRenderCache(
     shared: widget.messengerMode,
   );
@@ -1135,12 +1140,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // Scroll listener for scroll-to-bottom button
     scrollController.addListener(onScrollChanged);
     TtsAudioService.activeText.addListener(_onSpeechPlaybackChanged);
+    TtsAudioService.phase.addListener(_onSpeechPlaybackChanged);
 
     // Agents's, kept: re-pin the newest message when the keyboard resizes the
     // chat. See [_viewInsetRepin].
     WidgetsBinding.instance.addObserver(_viewInsetRepin);
 
-    TtsAudioService.phase.addListener(_onSpeechPlaybackChanged);
     // Text field focus listener — collapse mic & model buttons while typing
 
     // Text controller listener
@@ -1349,6 +1354,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       setState(() {
         _messages.clear();
         _messageRenderCache.clear();
+        _rowMemo.clear();
         _fileHandler.clearAll();
         composerController.clear();
         messageActionsHandler.cancelEdit();
@@ -1546,6 +1552,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     );
     scrollController.removeListener(onScrollChanged);
     TtsAudioService.activeText.removeListener(_onSpeechPlaybackChanged);
+    TtsAudioService.phase.removeListener(_onSpeechPlaybackChanged);
     composerController.removeListener(_onControllerChanged);
     _composerCaretFollower.dispose();
     composerController.dispose();
@@ -1804,6 +1811,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       setState(() {
         _messages.clear();
         _messageRenderCache.clear();
+        _rowMemo.clear();
         _fileHandler.clearAll();
         messageActionsHandler.cancelEdit();
         _activeChatId = null;
@@ -1885,6 +1893,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     setState(() {
       _messages.clear();
       _messageRenderCache.clear();
+      _rowMemo.clear();
       _fileHandler.clearAll();
       messageActionsHandler.cancelEdit();
       _activeChatId = null;
@@ -1975,6 +1984,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     setState(() {
       _messages.clear();
       _messageRenderCache.clear();
+      _rowMemo.clear();
       _activeChatId = null;
       _voiceChatId = null;
       _fileHandler.clearAll();
@@ -2367,6 +2377,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       _voiceChatId = null;
       _messages.clear();
       _messageRenderCache.clear();
+      _rowMemo.clear();
       messageActionsHandler.cancelEdit();
       _selectedWorkspaceId = workspaceId;
       composerController.clear();
@@ -2947,6 +2958,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         ..clear()
         ..addAll(chat.messages.map(ChatUiHelpers.messageToRawMap));
       _messageRenderCache.clear();
+      _rowMemo.clear();
     });
   }
 
@@ -4333,6 +4345,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     required bool showHostTyping,
   }) {
     final int firstUnreadIndex = _firstUnreadIndex;
+    _rowMemo.trimTo(_messages.length);
     // 1000 px built roughly two extra tall bubbles off each end of the
     // viewport, and the viewport resizes while the keyboard animates.
     const ScrollCacheExtent cacheExtent = ScrollCacheExtent.pixels(400.0);
@@ -4362,6 +4375,43 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           ),
         );
       }
+      // Everything the row below reads besides its own message map. Equal
+      // inputs and an equal map hand back the row built last time, so a
+      // rebuild of this screen does not rebuild every bubble on it
+      // ([TranscriptRowMemo]).
+      final Map<String, String> raw = _messages[i];
+      final List<Object?> rowInputs = <Object?>[
+        _activeChatId,
+        _messages.length,
+        i == 0 ? null : _messages[i - 1]['sender'],
+        i + 1 < _messages.length ? _messages[i + 1]['sender'] : null,
+        _isCurrentChatStreaming,
+        _isSendingMessage,
+        expandedInputWidth,
+        _flyInKey,
+        widget.showToolCalls,
+        widget.showReasoningTokens,
+        widget.showModelInfo,
+        widget.showTps,
+        widget.messengerMode,
+        messageActionsHandler.editingMessageIndex == i,
+        TtsAudioService.activeText.value,
+        TtsAudioService.phase.value,
+        hasTopPin,
+        _pinnedUiKey,
+        i == firstUnreadIndex,
+        // The ask_user chips of the last answer hide while a question
+        // holds the composer's seat.
+        i == _messages.length - 1 ? _openChatQuestion() != null : null,
+        widget.messengerMode
+            ? ChatReactionService.instance.peek(
+                _messengerChatKey,
+                _reactionKeyAt(i),
+              )
+            : null,
+      ];
+      final Widget? kept = _rowMemo.lookup(i, raw, rowInputs);
+      if (kept != null) return kept;
       final data = _messageRenderCache.build(
         messages: _messages,
         index: i,
@@ -4455,9 +4505,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
             : null,
       );
       // The first row the reader has not seen carries the unread pill's key.
-      return i == firstUnreadIndex
+      final Widget row = i == firstUnreadIndex
           ? KeyedSubtree(key: _firstUnreadKey, child: item)
           : item;
+      _rowMemo.store(i, raw, rowInputs, row);
+      return row;
     }
 
     Widget itemBuilder(BuildContext context, int i) => rowBuilder(context, i);

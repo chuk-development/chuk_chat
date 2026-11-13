@@ -744,14 +744,39 @@ class _Runner {
     await _openChat(kBenchLongTitle, kBenchLongChatId);
     await _wait(1500);
     await _mark('open long chat');
-    await _sidebarOpen();
+    if (_swipeMode) {
+      for (int i = 0; i < 2; i++) {
+        await _pagerSelect(kBenchShortChatId);
+        await _wait(500);
+        await _pagerSelect(kBenchLongChatId);
+        await _wait(500);
+      }
+      await _mark('pager switch short and long x2');
+      final double stripY = (MediaQueryData.fromView(
+                PlatformDispatcher.instance.views.first,
+              ).viewPadding.top +
+              90) /
+          _logical.height;
+      for (int i = 0; i < 2; i++) {
+        await _swipe(next: true, y: stripY);
+        await _wait(400);
+        await _swipe(next: false, y: stripY);
+        await _wait(400);
+      }
+      await _mark('strip swipe next and back x2');
+    }
+    if (!_swipeMode) await _sidebarOpen();
     await _wait(500);
-    final Offset? shortRow = _textCenter(kBenchShortTitle);
+    final Offset? shortRow = _swipeMode ? null : _textCenter(kBenchShortTitle);
     emit(<String, Object?>{
       'error': 'probe: short row $shortRow, '
           'loading ${ChatStorageService.isLoadingChat}',
     });
-    if (shortRow != null) await _tap(shortRow);
+    if (_swipeMode) {
+      await _pagerSelect(kBenchShortChatId);
+    } else if (shortRow != null) {
+      await _tap(shortRow);
+    }
     await _wait(2500);
     await _mark('open short chat');
     await _openChat(kBenchLongTitle, kBenchLongChatId);
@@ -788,10 +813,12 @@ class _Runner {
     await _kbClose();
     await _wait(500);
     await _mark('close');
-    await _sidebarOpen();
-    await _wait(500);
-    await _sidebarClose();
-    await _mark('sidebar open and close');
+    if (!_swipeMode) {
+      await _sidebarOpen();
+      await _wait(500);
+      await _sidebarClose();
+      await _mark('sidebar open and close');
+    }
     await _mark('end');
     emit(<String, Object?>{'done': true});
   }

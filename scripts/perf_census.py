@@ -38,9 +38,14 @@ def report(name, out):
     stacks = collections.defaultdict(list)
     self_us = collections.Counter()
     count = collections.Counter()
+    roots = collections.Counter()
     for e in sorted((e for e in tl if e.get("ph") in "BE"), key=lambda e: e["ts"]):
         s = stacks[e["tid"]]
         if e["ph"] == "B":
+            # A build event right under BUILD is a dirty root: the widget
+            # whose markNeedsBuild started this rebuild.
+            if s and s[-1][0] == "BUILD":
+                roots[e["name"]] += 1
             s.append([e["name"], e["ts"], 0])
         elif s:
             n, ts, child = s.pop()
@@ -56,6 +61,10 @@ def report(name, out):
     out.write(f"\n=== {name}\n{'self ms':>9} {'count':>6}  name\n")
     for n, us in self_us.most_common(45):
         out.write(f"{us / 1000:>9.1f} {count[n]:>6}  {n}\n")
+    if roots:
+        out.write("dirty roots (widget built straight under BUILD):\n")
+        for n, c in roots.most_common(20):
+            out.write(f"{c:>7}  {n}\n")
     call("clearVMTimeline")
     profile(out)
 

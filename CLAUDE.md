@@ -239,10 +239,8 @@ starts the new build (via `user-app`, X11). He opens it from the menu as
 **The dev install is the FULL app** (owner, 2026-11-11): "install the
 current version" = `scripts/install_dev.sh` (adds Agents and Voice call).
 Build from the newest `origin/master`; if the main checkout is behind with
-foreign uncommitted work, use a fresh worktree. GitHub releases ship with
-Agents since v1.0.113 (owner, 2026-11-13): dispatch with
-`--field enable_agents=true`. `enable_voice` also turns on Voice calls
-(owner-only, costs money per call): never set it for a public release.
+foreign uncommitted work, use a fresh worktree. Releases: `enable_agents=true`,
+never `enable_voice`.
 
 **Starting the app for live/hot-reload work: ALWAYS use `./run-hot.sh`**, never
 `flutter-hot start` bare. Bare `flutter-hot` runs `flutter run` with no

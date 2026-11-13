@@ -8,7 +8,7 @@
 # the app's traffic as proof. All synthetic chats live in that package and go
 # with it: the script uninstalls it at the end unless --keep is given.
 #
-# Usage: scripts/perf_bench.sh [--serial S] [--label before] [--no-build]
+# Usage: scripts/perf_bench.sh [--serial S] [--phone] [--label before] [--no-build]
 #                              [--cold N] [--census|--census-widgets] [--keep]
 #                              [--crawl|--crawl-agents] [--no-semantics]
 # Runs on the AVD only (scripts/emulator.sh, headless). The device: --serial,
@@ -18,10 +18,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-SERIAL=${ANDROID_SERIAL:-} MODE=bench LABEL=run SEMANTICS=true BUILD=1 COLD=5 CENSUS=false WIDGETS=false KEEP=
+SERIAL=${ANDROID_SERIAL:-} PHONE= MODE=bench LABEL=run SEMANTICS=true BUILD=1 COLD=5 CENSUS=false WIDGETS=false KEEP=
 while [ $# -gt 0 ]; do
   case "$1" in
     --serial) SERIAL=$2; shift 2 ;;
+    --phone) PHONE=1; shift ;;
     --label) LABEL=$2; shift 2 ;;
     --no-build) BUILD=; shift ;;
     --cold) COLD=$2; shift 2 ;;
@@ -35,12 +36,21 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-[ -n "$SERIAL" ] || SERIAL=$(adb devices | awk '$1 ~ /^emulator-/ && $2=="device"{print $1; exit}')
-case "$SERIAL" in
-  emulator-*) ;;
-  "") echo "no emulator running: scripts/emulator.sh start" >&2; exit 2 ;;
-  *) echo "refused: $SERIAL is not an emulator" >&2; exit 2 ;;
-esac
+if [ -n "$PHONE" ]; then
+  # A physical phone: only with --phone. The benchmark package lives next to
+  # the owner's app and never touches it; bench_guard blocks all traffic.
+  [ -n "$SERIAL" ] || SERIAL=$(adb devices | awk 'NR>1 && $1 !~ /^emulator-/ && $2=="device"{print $1; exit}')
+  [ -n "$SERIAL" ] || { echo "no phone attached" >&2; exit 2; }
+  TARGET=android-arm64
+else
+  [ -n "$SERIAL" ] || SERIAL=$(adb devices | awk '$1 ~ /^emulator-/ && $2=="device"{print $1; exit}')
+  case "$SERIAL" in
+    emulator-*) ;;
+    "") echo "no emulator running: scripts/emulator.sh start" >&2; exit 2 ;;
+    *) echo "refused: $SERIAL is not an emulator (use --phone)" >&2; exit 2 ;;
+  esac
+  TARGET=android-x64
+fi
 
 PKG=dev.chuk.chat.perf
 APK=build/app/outputs/flutter-apk/app-profile.apk
@@ -52,7 +62,7 @@ if [ -n "$BUILD" ]; then
   # No real credentials on purpose: not --dart-define-from-file, and the
   # Supabase host is 127.0.0.1:9, where nothing answers.
   ORG_GRADLE_PROJECT_benchIdSuffix=.perf flutter build apk --profile \
-    -t test_driver/perf_bench_main.dart --target-platform android-x64 \
+    -t test_driver/perf_bench_main.dart --target-platform $TARGET \
     --dart-define=FEATURE_AGENTS=true \
     --dart-define=SUPABASE_URL=http://127.0.0.1:9 \
     --dart-define=SUPABASE_ANON_KEY=bench \
@@ -65,7 +75,7 @@ fi
 # adb install only: `flutter run/drive` uninstalls the old package when an
 # install fails, and that must never get near the owner's app.
 # The soft keyboard must be the real one, or the keyboard phases measure nothing.
-scripts/emulator.sh keyboard 1 >/dev/null 2>&1 || true
+[ -n "$PHONE" ] || scripts/emulator.sh keyboard 1 >/dev/null 2>&1 || true
 a install -r -t "$APK" >/dev/null
 for perm in android.permission.RECORD_AUDIO android.permission.POST_NOTIFICATIONS; do
   a shell pm grant "$PKG" "$perm" || true
@@ -134,6 +144,7 @@ fi
 # The AVD's RSS over the run. Its host process can grow far past hw.ramSize, so
 # past 8 GB the run stops: the machine has other work on it.
 qemu_rss_mb() {
+  [ -n "$PHONE" ] && { echo 0; return; }
   ps -eo rss,args | awk '/[q]emu-system-x86_64/{printf "%d\n", $1/1024; exit}'
 }
 RSS_LOG=_scratch/perf/$LABEL.rss

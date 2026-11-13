@@ -1473,25 +1473,32 @@ class _MessengerShellState extends State<MessengerShell>
   Widget _buildPhoneHome(BuildContext context, double top) {
     final AppLocalizations? l = AppLocalizations.of(context);
     final String? name = _mainAgent?.name.trim();
-    final MediaQueryData media = MediaQuery.of(context);
+    final Widget dashboard =
+        widget.homeBuilder?.call(context) ??
+        DashboardPage(
+          assistantName: name,
+          topChrome: top - MediaQuery.viewPaddingOf(context).top,
+          showAskPill: false,
+          bottomChrome: kMobileHomeComposerSpace,
+        );
     return Stack(
       children: <Widget>[
         Positioned.fill(
-          child: MediaQuery(
-            // The dashboard adds its top chrome to the safe area itself.
-            data: media.copyWith(
-              padding: media.padding.copyWith(
-                top: MediaQuery.viewPaddingOf(context).top,
-              ),
-            ),
-            child:
-                widget.homeBuilder?.call(context) ??
-                DashboardPage(
-                  assistantName: name,
-                  topChrome: top - MediaQuery.viewPaddingOf(context).top,
-                  showAskPill: false,
-                  bottomChrome: kMobileHomeComposerSpace,
+          // The whole MediaQuery is read inside this Builder only. Read in
+          // the phone body's own context, it made the body (both halves'
+          // worth of agents, threads and Home) rebuild on every frame of
+          // the keyboard, also while Home sits off stage behind the chats.
+          child: Builder(
+            builder: (BuildContext context) {
+              final MediaQueryData media = MediaQuery.of(context);
+              return MediaQuery(
+                // The dashboard adds its top chrome to the safe area itself.
+                data: media.copyWith(
+                  padding: media.padding.copyWith(top: media.viewPadding.top),
                 ),
+                child: dashboard,
+              );
+            },
           ),
         ),
         Positioned(
@@ -1622,7 +1629,7 @@ class _MessengerShellState extends State<MessengerShell>
           child: _PhoneSidebarScaffold(
             open: _phoneSidebarOpen,
             onClose: () => _phoneSidebarOpen.value = false,
-            sidebar: _buildPhoneSidebar(context),
+            sidebarBuilder: _buildPhoneSidebar,
             child: Stack(
               children: <Widget>[
                 Positioned.fill(
@@ -1860,13 +1867,17 @@ class _PhoneSidebarScaffold extends StatefulWidget {
   const _PhoneSidebarScaffold({
     required this.open,
     required this.onClose,
-    required this.sidebar,
+    required this.sidebarBuilder,
     required this.child,
   });
 
   final ValueListenable<bool> open;
   final VoidCallback onClose;
-  final Widget sidebar;
+
+  /// Builds the sidebar. Called only while it is open or moving: closed, it
+  /// is not in the tree at all, so a list that follows the roster and the
+  /// previews costs nothing behind a conversation.
+  final WidgetBuilder sidebarBuilder;
   final Widget child;
 
   @override
@@ -1889,11 +1900,14 @@ class _PhoneSidebarScaffoldState extends State<_PhoneSidebarScaffold>
   void initState() {
     super.initState();
     widget.open.addListener(_onOpen);
+    _controller.addStatusListener(_onStatus);
   }
 
   @override
   void didUpdateWidget(_PhoneSidebarScaffold old) {
     super.didUpdateWidget(old);
+    // The shell rebuilt: the open sidebar shows its new state.
+    _sidebar = null;
     if (old.open == widget.open) return;
     old.open.removeListener(_onOpen);
     widget.open.addListener(_onOpen);
@@ -1907,12 +1921,20 @@ class _PhoneSidebarScaffoldState extends State<_PhoneSidebarScaffold>
     super.dispose();
   }
 
+  /// The sidebar as last built, while it is in the tree.
+  Widget? _sidebar;
+
   void _onOpen() {
     if (widget.open.value) {
       _controller.forward();
     } else {
       _controller.reverse();
     }
+  }
+
+  void _onStatus(AnimationStatus status) {
+    // Gone from the tree: the next opening builds a fresh one.
+    if (status == AnimationStatus.dismissed) _sidebar = null;
   }
 
   @override
@@ -1923,10 +1945,9 @@ class _PhoneSidebarScaffoldState extends State<_PhoneSidebarScaffold>
       child: widget.child,
       builder: (BuildContext context, Widget? content) {
         final double t = _slide.value;
-        // Fully closed, the sidebar is off stage: not laid out, not
-        // painted, not in the focus or semantics tree.
-        final bool closed = _controller.isDismissed;
         final bool open = widget.open.value;
+        // Fully closed, the sidebar is not built.
+        final bool closed = _controller.isDismissed && !open;
         return Stack(
           children: <Widget>[
             Positioned.fill(
@@ -1938,10 +1959,9 @@ class _PhoneSidebarScaffoldState extends State<_PhoneSidebarScaffold>
                 ),
               ),
             ),
-            Positioned.fill(
-              key: const ValueKey<String>('phone-sidebar'),
-              child: Offstage(
-                offstage: closed,
+            if (!closed)
+              Positioned.fill(
+                key: const ValueKey<String>('phone-sidebar'),
                 child: FractionalTranslation(
                   translation: Offset(t - 1, 0),
                   child: IgnorePointer(
@@ -1953,12 +1973,13 @@ class _PhoneSidebarScaffoldState extends State<_PhoneSidebarScaffold>
                           widget.onClose();
                         }
                       },
-                      child: widget.sidebar,
+                      // One build per build of this widget and per start
+                      // of a move, not one per frame.
+                      child: _sidebar ??= widget.sidebarBuilder(context),
                     ),
                   ),
                 ),
               ),
-            ),
           ],
         );
       },

@@ -219,6 +219,24 @@ void main() {
   const int ts = 1723478400000;
   int clock() => ts;
 
+  // Most tests here never provision the account, so every task, replay and
+  // agent frame used to sit out the full ten-second provision gate: 19 tests
+  // took 10 to 20 s each. The gate itself is tested below with a long wait.
+  final Duration defaultGate = AgentsRelayClient.provisionGateTimeout;
+  setUpAll(() {
+    AgentsRelayClient.provisionGateTimeout = const Duration(milliseconds: 50);
+  });
+  tearDownAll(() => AgentsRelayClient.provisionGateTimeout = defaultGate);
+
+  /// For the tests of the gate: hold it far longer than [settle] takes.
+  void holdProvisionGate() {
+    AgentsRelayClient.provisionGateTimeout = const Duration(minutes: 1);
+    addTearDown(() {
+      AgentsRelayClient.provisionGateTimeout =
+          const Duration(milliseconds: 50);
+    });
+  }
+
   Future<(AgentsRelayClient, FakeExecutorHost, FakeRelaySocket)> paired({
     String channelId = 'chan1234',
     String digits = '428913',
@@ -725,6 +743,7 @@ void main() {
 
   test('sendTask waits for the account provision, so a task never overtakes '
       'its own auth', () async {
+    holdProvisionGate();
     // This is how a message disappeared. Right after a reconnect the task
     // frame could reach the host BEFORE the `account_authentication` that says
     // whose task it is, and a host with no provisioned controller session
@@ -804,6 +823,7 @@ void main() {
 
   test('a replay waits for the account provision, so auth goes out first',
       () async {
+    holdProvisionGate();
     // The host logs "expected account_authentication, got 'replay'" when the
     // order is the other way round: the reattaching view asks for its
     // transcript before the token that says whose transcript it is. Holding the
@@ -836,6 +856,7 @@ void main() {
 
   test('the agent_list request waits for the account provision too, and the '
       'agent frames carry the id and the name', () async {
+    holdProvisionGate();
     // Sent on pair, the list request used to reach the host before the token
     // ("expected account_authentication, got 'agent_list'") and was dropped;
     // nothing asked again until the next pairing, so the roster stayed

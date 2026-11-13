@@ -89,17 +89,19 @@ class _PullUpToCreateState extends State<PullUpToCreate> {
   bool _onScroll(ScrollNotification n) {
     if (!widget.enabled) return false;
     if (n.metrics.axis != Axis.vertical) return false;
-    // A text field scrolls too. A pull in the composer is not a pull on the
-    // chat.
-    if (n.context?.findAncestorWidgetOfExactType<EditableText>() != null) {
-      return false;
-    }
     if (n is ScrollEndNotification) {
       _release();
       return false;
     }
     final double? added = _added(n);
     if (added != null) {
+      // A text field scrolls too. A pull in the composer is not a pull on
+      // the chat. Looked up only when a pull starts: an ordinary scroll
+      // frame pays nothing for it.
+      if (_pull.value == 0 &&
+          n.context?.findAncestorWidgetOfExactType<EditableText>() != null) {
+        return false;
+      }
       final bool was = _armed;
       _pull.value += added;
       if (!was && _armed) HapticFeedback.selectionClick();

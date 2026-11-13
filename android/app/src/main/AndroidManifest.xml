@@ -160,11 +160,14 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
-        <!-- Impeller: New rendering engine for smoother UI and faster startup
-             To disable, remove this meta-data or set value to "false" -->
+        <!-- Impeller (Vulkan, OpenGL ES fallback): shaders are compiled at
+             build time, so the first frame of a new effect does not stall
+             the raster thread the way Skia did on the Pixel 7 Pro
+             (docs/PERFORMANCE.md). Off since 2026-01-24 with no recorded
+             reason; Flutter marks the opt-out as deprecated. -->
         <meta-data
             android:name="io.flutter.embedding.android.EnableImpeller"
-            android:value="false" />
+            android:value="true" />
         <!-- Default notification icon -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"

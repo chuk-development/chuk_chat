@@ -19,26 +19,43 @@ import 'package:chuk_chat/services/settings/workspaces_setting.dart';
 
 const int kSidebarPageSize = 40;
 
+final RegExp _kTitlePrefix = RegExp(r'^\s*title\s*:\s*', caseSensitive: false);
+final RegExp _kHeadingPrefix = RegExp(r'^\s*#+\s*');
+final RegExp _kWhitespaceRun = RegExp(r'\s+');
+final List<RegExp> _kTitleWrappers = <RegExp>[
+  RegExp(r'^\*\*(.+)\*\*$', dotAll: true),
+  RegExp(r'^__(.+)__$', dotAll: true),
+  RegExp(r'^\*(.+)\*$', dotAll: true),
+  RegExp(r'^_(.+)_$', dotAll: true),
+  RegExp(r'^`(.+)`$', dotAll: true),
+];
+
+/// Results of [normalizeSidebarTitle], by raw title. The sidebar and the
+/// phone's swipe strip ask for every chat's title on each rebuild; the
+/// regular expressions made that the biggest cost of a chat switch on a
+/// phone with many chats.
+final Map<String, String> _normalizedTitles = <String, String>{};
+const int _kNormalizedTitlesMax = 4096;
+
 /// Strips generated Markdown decoration from a chat title before display.
 String normalizeSidebarTitle(String title) {
-  var normalized = title.trim();
-  normalized = normalized.replaceFirst(
-    RegExp(r'^\s*title\s*:\s*', caseSensitive: false),
-    '',
-  );
-  normalized = normalized.replaceFirst(RegExp(r'^\s*#+\s*'), '');
+  final String? hit = _normalizedTitles[title];
+  if (hit != null) return hit;
+  if (_normalizedTitles.length >= _kNormalizedTitlesMax) {
+    _normalizedTitles.clear();
+  }
+  return _normalizedTitles[title] = _normalizeSidebarTitle(title);
+}
 
-  final wrappers = <RegExp>[
-    RegExp(r'^\*\*(.+)\*\*$', dotAll: true),
-    RegExp(r'^__(.+)__$', dotAll: true),
-    RegExp(r'^\*(.+)\*$', dotAll: true),
-    RegExp(r'^_(.+)_$', dotAll: true),
-    RegExp(r'^`(.+)`$', dotAll: true),
-  ];
+String _normalizeSidebarTitle(String title) {
+  var normalized = title.trim();
+  normalized = normalized.replaceFirst(_kTitlePrefix, '');
+  normalized = normalized.replaceFirst(_kHeadingPrefix, '');
+
   var changed = true;
   while (changed) {
     changed = false;
-    for (final pattern in wrappers) {
+    for (final pattern in _kTitleWrappers) {
       final match = pattern.firstMatch(normalized);
       if (match == null) continue;
       final inner = match.group(1)?.trim() ?? '';
@@ -48,7 +65,7 @@ String normalizeSidebarTitle(String title) {
     }
   }
 
-  return normalized.replaceAll(RegExp(r'\s+'), ' ').trim();
+  return normalized.replaceAll(_kWhitespaceRun, ' ').trim();
 }
 
 String deriveSidebarChatTitle(StoredChat chat) {
