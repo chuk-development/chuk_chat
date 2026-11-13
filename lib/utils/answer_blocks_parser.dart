@@ -22,6 +22,7 @@ enum AnswerBlockKind {
   scale,
   alert,
   bars,
+  share,
   kpi,
   tiles,
   cards,
@@ -74,6 +75,8 @@ const Map<String, AnswerBlockKind> _kBlockNames = <String, AnswerBlockKind>{
   'timeline': AnswerBlockKind.timeline,
   'scale': AnswerBlockKind.scale,
   'bars': AnswerBlockKind.bars,
+  'share': AnswerBlockKind.share,
+  'shares': AnswerBlockKind.share,
   'kpi': AnswerBlockKind.kpi,
   'tiles': AnswerBlockKind.tiles,
   'cards': AnswerBlockKind.cards,
@@ -828,6 +831,121 @@ BarsSpec parseBars(String arg, List<String> lines) {
     note: note,
     tag: tag,
   );
+}
+
+// ---------------------------------------------------------------------------
+// share — parts of one whole (ownership, market share, a budget split)
+//
+// ::: share Nvidia: who owns the shares
+// BlackRock | 7,43 % | ~1,81 Mrd. Aktien
+// Vanguard | 7,31 %
+// Jensen Huang | 3,58 %
+// Streubesitz | 73,19 %
+// :::
+//
+// One bar of 100 %, cut into segments, and a legend under it. Bars compare
+// rows with each other; a share shows how much of the whole each row is, so
+// a big rest stays visible instead of being left out. When the numbers add
+// up to less than the total and no row is the rest, the parser adds one
+// (`rest: Free float` names it). `total: 24,3 Mrd.` sets the whole for
+// values that are not percent.
+
+class ShareSpec {
+  const ShareSpec({
+    required this.title,
+    required this.rows,
+    required this.total,
+    required this.restIndex,
+    this.note = '',
+    this.tag = '',
+  });
+
+  final String title;
+
+  /// Every row has a value. The rest, when there is one, is last.
+  final List<BarRow> rows;
+
+  /// The whole the rows are parts of: 100 for percent values.
+  final double total;
+
+  /// Index of the rest row in [rows], or -1.
+  final int restIndex;
+  final String note;
+  final String tag;
+
+  /// The part of the whole that row [i] takes, 0..1.
+  double fraction(int i) =>
+      total <= 0 ? 0 : ((rows[i].value ?? 0) / total).clamp(0.0, 1.0);
+}
+
+final RegExp _restLabelRe = RegExp(
+  r'^(rest|others?|other holders|sonstige|übrige|andere|streubesitz|free float|remaining)\b',
+  caseSensitive: false,
+);
+
+/// Returns null when fewer than two rows carry a number; the caller then
+/// draws the lines as bars.
+ShareSpec? parseShare(String arg, List<String> lines) {
+  String restLabel = 'Rest';
+  double? total;
+  final List<String> body = <String>[];
+  for (final String raw in lines) {
+    final String line = raw.trim();
+    if (line.startsWith('rest:')) {
+      final String v = line.substring(5).trim();
+      if (v.isNotEmpty) restLabel = v;
+      continue;
+    }
+    if (line.startsWith('total:')) {
+      total = parseLooseNumber(line.substring(6));
+      continue;
+    }
+    body.add(raw);
+  }
+  final BarsSpec bars = parseBars(arg, body);
+  final List<BarRow> rows = bars.rows
+      .where((BarRow r) => (r.value ?? -1) >= 0)
+      .toList();
+  if (rows.length < 2) return null;
+  final double whole = (total != null && total > 0) ? total : 100;
+
+  int restIndex = rows.indexWhere((BarRow r) => _restLabelRe.hasMatch(r.label));
+  if (restIndex >= 0) {
+    rows.add(rows.removeAt(restIndex));
+    restIndex = rows.length - 1;
+  } else {
+    final double sum = rows.fold(0, (double a, BarRow r) => a + (r.value ?? 0));
+    final double rest = whole - sum;
+    // Under half a point is rounding, not a holder of its own.
+    if (rest >= 0.5) {
+      final String unit = rows.first.valueText.contains('%') ? ' %' : '';
+      rows.add(
+        BarRow(
+          label: restLabel,
+          valueText: '${_formatShare(rest, rows.first.valueText)}$unit',
+          sub: '',
+          value: rest,
+        ),
+      );
+      restIndex = rows.length - 1;
+    }
+  }
+  return ShareSpec(
+    title: bars.title,
+    rows: List<BarRow>.unmodifiable(rows),
+    total: whole,
+    restIndex: restIndex,
+    note: bars.note,
+    tag: bars.tag,
+  );
+}
+
+/// Two decimals at most, with the decimal mark the model used.
+String _formatShare(double v, String sample) {
+  String t = v.toStringAsFixed(2);
+  t = t.replaceFirst(RegExp(r'\.?0+$'), '');
+  final bool comma = RegExp(r'\d,\d').hasMatch(sample);
+  return comma ? t.replaceAll('.', ',') : t;
 }
 
 // ---------------------------------------------------------------------------

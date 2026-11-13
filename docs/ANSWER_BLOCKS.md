@@ -44,6 +44,10 @@ the model not to make them.
   buttons, because a `PageView` takes only touch drags by default.
 - `::: bars` draws bars only if `BarsSpec.isComparable`. Prose values draw as
   fact rows.
+- `::: share` is for parts of one whole (owners, market share). One 100 % bar
+  in segments and a legend. A missing rest is added (`rest:` names it,
+  `total:` sets the whole), so a 73 % free float is not left out. Bars scale
+  to the biggest row and hide that rest (CHAT-100, Nvidia owners).
 
 ## Card images
 

@@ -521,6 +521,171 @@ class _BarsBlock extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
+// share — parts of one whole: one 100 % bar in segments, a legend under it
+
+class _ShareBlock extends StatelessWidget {
+  const _ShareBlock({required this.spec, required this.s});
+
+  final ShareSpec spec;
+  final _AnswerBlockStyle s;
+
+  /// Segment shades from the accent. The theme may be one grey, so the
+  /// segments are told apart by shade and by the gap between them, and the
+  /// legend dot repeats the shade. The rest is the empty track itself.
+  Color _shade(int i) {
+    if (i == spec.restIndex) return s.tileFill;
+    const List<double> alphas = <double>[1, 0.72, 0.52, 0.38, 0.28, 0.2];
+    return s.accent.withValues(alpha: alphas[i % alphas.length]);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final List<Widget> legend = <Widget>[];
+    for (int i = 0; i < spec.rows.length; i++) {
+      if (i > 0) legend.add(const SizedBox(height: 10));
+      legend.add(_legendRow(i));
+    }
+    return _ModuleCard(
+      s: s,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          if (spec.tag.isNotEmpty || spec.title.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _moduleHead(spec.tag, spec.title, s),
+            ),
+          SelectionContainer.disabled(child: _bar()),
+          const SizedBox(height: 14),
+          ...legend,
+          if (spec.note.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 12),
+            s.markdown(
+              spec.note,
+              color: s.muted,
+              fontSize: s.baseFontSize * 0.9,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _bar() {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(7),
+      child: Container(
+        height: 22,
+        color: s.tileFill,
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints c) {
+            final List<Widget> parts = <Widget>[];
+            for (int i = 0; i < spec.rows.length; i++) {
+              if (i == spec.restIndex) continue;
+              final double w = c.maxWidth * spec.fraction(i);
+              if (w <= 0) continue;
+              parts.add(
+                Container(
+                  width: w,
+                  decoration: BoxDecoration(
+                    color: _shade(i),
+                    // A hairline of background between two segments keeps
+                    // neighbours of a similar shade apart.
+                    border: Border(
+                      right: BorderSide(color: s.backgroundColor, width: 2),
+                    ),
+                  ),
+                ),
+              );
+            }
+            return Row(children: parts);
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _legendRow(int i) {
+    final BarRow row = spec.rows[i];
+    final bool rest = i == spec.restIndex;
+    final double lineHeight = s.baseFontSize * 1.35;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        // The dot box is one text line high, so the dot sits on the middle
+        // of the first line.
+        SizedBox(
+          height: lineHeight,
+          child: Center(
+            child: Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: _shade(i),
+                shape: BoxShape.circle,
+                border: rest ? Border.all(color: s.hairline) : null,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              // Plain text, not Markdown: its line box must be exactly
+              // [lineHeight] so the dot and the value line up with it.
+              Text(
+                row.label.replaceAll('**', ''),
+                style: TextStyle(
+                  color: rest ? s.secondary : s.textColor,
+                  fontSize: s.baseFontSize,
+                  fontWeight: rest ? FontWeight.w500 : FontWeight.w600,
+                  height: 1.35,
+                  fontFamily: s.fontFamily,
+                ),
+              ),
+              if (row.sub.isNotEmpty)
+                Text(
+                  row.sub,
+                  style: TextStyle(
+                    color: s.muted,
+                    fontSize: s.baseFontSize * 0.86,
+                    height: 1.35,
+                    fontFamily: s.fontFamily,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 10),
+        SizedBox(
+          height: lineHeight,
+          child: Center(
+            child: Text(
+              row.valueText,
+              maxLines: 1,
+              style: TextStyle(
+                color: rest ? s.secondary : s.accent,
+                fontSize: s.baseFontSize * 0.95,
+                fontWeight: FontWeight.w700,
+                height: 1.0,
+                fontFamily: s.fontFamily,
+                fontFeatures: const <FontFeature>[
+                  FontFeature.tabularFigures(),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // kpi — stat tiles
 
 class _KpiBlock extends StatelessWidget {

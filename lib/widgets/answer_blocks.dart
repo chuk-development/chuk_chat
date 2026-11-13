@@ -110,6 +110,11 @@ Widget _buildAnswerBlock(
       return _AlertBlock(type: block.arg, lines: block.lines, s: s);
     case AnswerBlockKind.bars:
       return _BarsBlock(spec: parseBars(block.arg, block.lines), s: s);
+    case AnswerBlockKind.share:
+      final ShareSpec? share = parseShare(block.arg, block.lines);
+      return share == null
+          ? _BarsBlock(spec: parseBars(block.arg, block.lines), s: s)
+          : _ShareBlock(spec: share, s: s);
     case AnswerBlockKind.kpi:
       return _KpiBlock(spec: parseKpi(block.arg, block.lines), s: s);
     case AnswerBlockKind.tiles:

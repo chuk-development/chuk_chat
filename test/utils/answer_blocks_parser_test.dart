@@ -746,6 +746,7 @@ void main() {
       expect(prompt, contains('::: steps'));
       expect(prompt, contains('Never invent a date'));
       expect(prompt, contains('experimental'));
+      expect(prompt, contains('::: share'));
     });
 
     test('stays small', () {
@@ -755,8 +756,9 @@ void main() {
       final String section = prompt.substring(start, end + last.length);
       // 18 block kinds incl. the Figma visual library (check, term, grid,
       // sizes, quote, more); one short example each, plus the rules that
-      // stop the misuse seen in real answers (2026-11-01 audit).
-      expect(TokenEstimator.estimateTokens(section), lessThan(1100));
+      // stop the misuse seen in real answers (2026-11-01 audit), plus
+      // `::: share` for parts of a whole (CHAT-100).
+      expect(TokenEstimator.estimateTokens(section), lessThan(1160));
     });
   });
 }

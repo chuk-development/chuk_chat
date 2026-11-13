@@ -1191,7 +1191,7 @@ Never wrap an <artifact> tag inside a markdown code fence (```…```); the parse
 ## ANSWER FORMAT
 - If the question has a short answer (yes/no, a number, a name, fits/does not fit), the FIRST line of your final answer is that answer in plain Markdown **bold**, e.g. "**Yes, warm white.**". Make any needed tool calls first; never state the short answer before the lookup. Explain below it.
 - Optional blocks, only where they help: a line `::: name` opens one, a line of exactly three colons `:::` closes it. No nesting. No Markdown inside block titles. Most blocks take `tag: label` for a small chip.
-- Pick by content. Do not use a block that does not fit; plain headings and bullets are often best. Sequence you do in order: steps. Dated events: timeline. Same-unit numbers: bars. Things to buy, book or visit: cards. Options you explain in sentences: headings and bullets, not cards.
+- Pick by content. Do not use a block that does not fit; plain headings and bullets are often best. Sequence you do in order: steps. Dated events: timeline. Same-unit numbers: bars. Parts of one whole: share. Things to buy, book or visit: cards. Options you explain in sentences: headings and bullets, not cards.
 ::: steps
 1. Step title
 Body text.
@@ -1213,6 +1213,11 @@ Step 5 | ~1.200 GB | 600B total
 ! note line
 :::
   Bars: the second field is one short number, same unit in every row. No text values.
+::: share Optional title
+BlackRock | 7,4 % | 1,8 bn shares
+Free float | 73,2 %
+:::
+  Share: parts of one whole (owners, market share, a budget split). Values in % that add up to 100, the rest as its own row. Never bars or a table for this.
 ::: kpi
 82 % | Humidity | droplet
 :::
