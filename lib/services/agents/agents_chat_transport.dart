@@ -740,7 +740,7 @@ class AgentsChatTransport {
         terminated = true;
         emit(
           ErrorEvent(
-            agentsRunEndNotice(AgentsRunOutcome.notDelivered)!,
+            kAgentsNotSentNotice,
             code: StreamErrorCodes.connectionLost,
           ),
         );
@@ -784,7 +784,7 @@ class AgentsChatTransport {
       final controller = link.controller.value;
       if (controller == null) {
         terminated = true;
-        ledger.finish(ledgerKey, reason: 'error');
+        ledger.finish(ledgerKey, reason: kAgentsQueuedReason);
         // The prompt is not lost because the socket is down: it waits in the
         // outbox and goes out on the next pairing (bead cowork-i7sd). The row
         // on screen is marked so the user can see it and ask for it again.
@@ -799,9 +799,10 @@ class AgentsChatTransport {
           ),
         );
         emit(
-          const ErrorEvent(
-            'Your host is not reachable. The message is queued and goes out '
-            'as soon as it is back.',
+          // Calm words, no reason: the app sends it again on its own, and
+          // the owner never wants to read why a dial failed.
+          ErrorEvent(
+            kAgentsNotSentNotice,
             code: StreamErrorCodes.connectionLost,
           ),
         );
@@ -841,7 +842,7 @@ class AgentsChatTransport {
             return;
           }
           terminated = true;
-          ledger.finish(ledgerKey, reason: 'error');
+          ledger.finish(ledgerKey, reason: kAgentsQueuedReason);
           // The socket said no, so nothing is in flight and there is nothing to
           // wait for an ack on. The prompt moves to the outbox instead, which
           // is the queue for what never went out at all.
@@ -867,9 +868,10 @@ class AgentsChatTransport {
             ),
           );
           emit(
+            // The same calm words; the socket's own error text ("Bad
+            // state: Not paired") is not for the reader.
             ErrorEvent(
-              'Your host did not take the message ($error). It is queued and '
-              'goes out as soon as it is back.',
+              kAgentsNotSentNotice,
               code: StreamErrorCodes.connectionLost,
             ),
           );

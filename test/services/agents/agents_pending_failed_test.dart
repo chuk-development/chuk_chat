@@ -75,7 +75,7 @@ void main() {
       expect(entry.modelId, 'm1');
       expect(entry.lastError, AgentsPendingTasks.notConfirmedError);
       // The bubble offers Retry.
-      expect(transcript.single['status'], 'failed');
+      expect(transcript.single['status'], 'pending');
       expect(transcript.single['queueId'], entry.localId);
       // Automatic flushes leave it alone until the user asks.
       expect(await AgentsTaskOutbox.anyDue(), isFalse);

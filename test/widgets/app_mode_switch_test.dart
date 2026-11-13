@@ -335,8 +335,8 @@ void main() {
   /// The phone's sidebar of the Sidekicks half, when it is open.
   final Finder sidekicksSidebar = find.byType(MobileAgentList);
 
-  /// On a phone in a conversation the switch is in the sidebar: opens it
-  /// when no switch is on stage.
+  /// The switch is on top in every place; this opens the sidebar only if a
+  /// layout ever has none on stage.
   Future<void> showSwitch(WidgetTester tester) async {
     if (onStageSwitch().evaluate().isNotEmpty) return;
     await tester.tap(find.byTooltip('Menu'));
@@ -429,23 +429,12 @@ void main() {
   });
 
   group('phone', () {
-    testWidgets('a paired device opens on Agents: the conversation; the '
-        'switch Home | Chats | Agents is the head of the sidebar', (
-      tester,
-    ) async {
+    testWidgets('a paired device opens on Agents: the conversation, the '
+        'switch Home | Chats | Agents fixed at the top centre', (tester) async {
       await pumpShell(tester);
       expect(shownMode(tester), AppMode.agents);
       expect(conversation, findsOneWidget);
       expect(home, findsNothing, reason: 'Home is a segment, not in front');
-      // The top row of a conversation names it; the switch is not there.
-      expect(onStageSwitch(), findsNothing);
-      expect(sidekicksSidebar, findsNothing);
-      expect(find.byType(ChatTitleStrip), findsOneWidget);
-      expect(find.text('chuk phone chat'), findsNothing);
-      expect(threadView, findsOneWidget);
-
-      await showSwitch(tester);
-      expect(sidekicksSidebar, findsOneWidget);
       final AppModeSwitch modeSwitch = tester.widget(onStageSwitch());
       expect(modeSwitch.onHome, isNotNull);
       expect(modeSwitch.home, isFalse);
@@ -461,17 +450,12 @@ void main() {
       expect(homeLabel.center.dx, lessThan(chatsLabel.center.dx));
       expect(chatsLabel.center.dx, lessThan(agentsLabel.center.dx));
       final Rect bar = tester.getRect(onStageSwitch());
-      expect(bar.left, greaterThanOrEqualTo(0));
-      expect(bar.right, lessThanOrEqualTo(kPhone.width));
+      expect(bar.center.dx, closeTo(kPhone.width / 2, 0.5));
+      expect(bar.top, kPhoneInsets.top + 8);
       expect(bar.height, AppModeSwitch.boxHeight);
-      // The socket owner stays mounted behind the sidebar.
+      expect(find.byType(MobileAgentList, skipOffstage: false), findsNothing);
+      expect(find.text('chuk phone chat'), findsNothing);
       expect(threadView, findsOneWidget);
-
-      // Android back closes the sidebar; the conversation is in front again.
-      await closeSidebar(tester);
-      expect(sidekicksSidebar, findsNothing);
-      expect(conversation, findsOneWidget);
-      expect(home, findsNothing);
     });
 
     testWidgets('Home is the switch\'s first segment: it shows Home in the '
@@ -520,7 +504,7 @@ void main() {
       expect(home, findsNothing);
       expect(conversation, findsOneWidget);
       expect(shownMode(tester), AppMode.agents);
-      expect(onStageSwitch(), findsNothing, reason: 'it is in the sidebar');
+      expect(tester.widget<AppModeSwitch>(onStageSwitch()).home, isFalse);
       expect(find.byType(ChatTitleStrip), findsOneWidget);
       expect(
         tester.widget<SwipeChatPager>(find.byType(SwipeChatPager)).enabled,
@@ -586,8 +570,6 @@ void main() {
           }
         }
 
-        // On a phone the switch is the head of the sidebar.
-        if (phone) await showSwitch(tester);
         await tester.tap(
           find.descendant(of: onStageSwitch(), matching: find.text('Chats')),
         );

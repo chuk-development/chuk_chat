@@ -19,10 +19,13 @@ import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 
 /// Reads and writes the transcript. Tests replace both.
-typedef QueuedMarkReader =
-    List<Map<String, dynamic>>? Function(String sessionKey);
-typedef QueuedMarkWriter =
-    Future<void> Function(String sessionKey, List<Map<String, dynamic>> rows);
+typedef QueuedMarkReader = List<Map<String, dynamic>>? Function(
+  String sessionKey,
+);
+typedef QueuedMarkWriter = Future<void> Function(
+  String sessionKey,
+  List<Map<String, dynamic>> rows,
+);
 
 class AgentsQueuedMarks {
   AgentsQueuedMarks._();
@@ -32,8 +35,9 @@ class AgentsQueuedMarks {
   @visibleForTesting
   static QueuedMarkWriter? writeRows;
 
-  /// Marks the newest user row whose text is [prompt] as `failed`, and links
-  /// it to its outbox entry through [queueId].
+  /// Marks the newest user row whose text is [prompt] as `pending` (it waits,
+  /// it has not failed: the outbox sends it on its own), and links it to its
+  /// outbox entry through [queueId].
   ///
   /// Returns true when a row was found and changed. A miss is not an error:
   /// the queue still holds the prompt and still sends it. Only the button on
@@ -47,11 +51,11 @@ class AgentsQueuedMarks {
     return _mutate(sessionKey, (List<Map<String, dynamic>> rows) {
       final int index = _lastUserRow(rows, prompt);
       if (index < 0) return false;
-      if (rows[index]['status'] == 'failed' &&
+      if (rows[index]['status'] == 'pending' &&
           rows[index]['queueId'] == queueId) {
         return false;
       }
-      rows[index]['status'] = 'failed';
+      rows[index]['status'] = 'pending';
       rows[index]['queueId'] = queueId;
       return true;
     });

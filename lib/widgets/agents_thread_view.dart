@@ -2153,6 +2153,8 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       _releaseStaleComposer(key);
       final outcome = run.outcome;
       if (outcome == null || !run.endedWithoutAnswer) return;
+      // Queued, not failed: the stream said so already.
+      if (run.reason == kAgentsQueuedReason) return;
       final notice = agentsRunEndNotice(outcome, error: run.error);
       if (notice == null) return;
       // Appended to what is on disk. If the imported screen saves the turn it

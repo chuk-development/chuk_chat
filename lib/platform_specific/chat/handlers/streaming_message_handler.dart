@@ -1428,7 +1428,12 @@ class StreamingMessageHandler {
               null,
             );
           }
-          onShowSnackBar?.call(errorMessage);
+          // An Agents thread never pops a toast for a dropped link: the
+          // app redials and re-sends on its own, and the thread says so.
+          if (!(code == StreamErrorCodes.connectionLost &&
+              ChatOrigin.isAgentsThread(chatId))) {
+            onShowSnackBar?.call(errorMessage);
+          }
 
           // Mark the turn continuable. Previously `interrupted` was set only
           // on user cancel / teardown, so after an error the Continue button

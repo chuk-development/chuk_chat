@@ -841,13 +841,13 @@ void main() {
       expect(pending.single.reasoningEffort, 'low');
     });
 
-    test('is marked failed on screen, with the real queue id', () async {
+    test('is marked as waiting on screen, with the real queue id', () async {
       await sendWithNoHost();
       final pending = await AgentsTaskOutbox.pendingFor(sessionKey);
       final row = transcript[sessionKey]!.single;
-      // `failed`, not `pending`: the imported bubble offers Retry only for
-      // `failed` (widgets/message_bubble/chrome.dart, imported).
-      expect(row['status'], 'failed');
+      // `pending`, not `failed`: it waits, the outbox sends it on its own
+      // (owner, 2026-11-13: no failure text for a link that is down).
+      expect(row['status'], 'pending');
       expect(row['queueId'], pending.single.localId);
       expect(row['queueId'], isNotEmpty);
     });

@@ -311,6 +311,35 @@ void main() {
     expect(out.seen.whereType<ContentEvent>(), isEmpty);
   });
 
+  test('with no link the message waits: calm words, no failure, no raw '
+      'error', () async {
+    // The phone has not dialled yet (app just opened, network changed).
+    AgentsRelayLink.instance.reset();
+    final out = send();
+    await _drain();
+
+    final ErrorEvent error = out.seen.whereType<ErrorEvent>().single;
+    // One calm sentence: it is not sent yet and the app sends it on its own.
+    expect(error.message, agentsRunEndNotice(AgentsRunOutcome.notDelivered));
+    expect(error.message, isNot(contains('Bad state')));
+    expect(error.message, isNot(contains('host')));
+    expect(error.message.toLowerCase(), isNot(contains('fail')));
+    expect(error.code, StreamErrorCodes.connectionLost);
+    expect(out.seen.last, isA<DoneEvent>());
+    expect(out.closedFn(), isTrue);
+
+    // Queued is not failed: the thread writes no "This run failed" line.
+    final AgentsRun? run = AgentsRunLedger.instance.runFor(sessionKey);
+    expect(run?.outcome, AgentsRunOutcome.notDelivered);
+    expect(run?.reason, kAgentsQueuedReason);
+
+    // It waits in the outbox for the next pairing.
+    final List<OutboxTask> queued = await AgentsTaskOutbox.pendingFor(
+      sessionKey,
+    );
+    expect(queued.single.prompt, 'do the thing');
+  });
+
   test('a heartbeat proves the task arrived, so it is never re-sent', () async {
     final AgentsRunLedger ledger = AgentsRunLedger.instance;
     final DateTime t0 = DateTime(2026, 9, 13, 4, 49);
@@ -367,7 +396,7 @@ void main() {
         sessionKey,
       );
       expect(queued.single.prompt, 'do the thing');
-      expect(transcript[sessionKey]!.single['status'], 'failed');
+      expect(transcript[sessionKey]!.single['status'], 'pending');
 
       // The next pairing provisions the account and then flushes: the prompt
       // goes out without the user pressing anything.

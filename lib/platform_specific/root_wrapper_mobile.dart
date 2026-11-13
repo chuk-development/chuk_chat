@@ -1086,7 +1086,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     Widget bar(bool badge) => MobileTopBar(
       onMenu: _toggleSidebar,
       menuBadge: badge,
-      centre: null,
+      centre: widget.headerCenter,
       onMore: _openSwipeMenu,
       onAdd: _newChatFromAppBar,
       menuTooltip: l?.chatSwipeMenu ?? 'Menu',
@@ -1296,8 +1296,6 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                       if (_isSidebarExpanded) _toggleSidebar();
                       widget.onAddComputer!();
                     },
-              // Swipe mode: the switch between the halves is the sidebar's head.
-              header: swipe ? widget.headerCenter : null,
               selectedChatId: _selectedChatId,
               isCompactMode: true,
             ),

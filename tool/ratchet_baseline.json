@@ -3,7 +3,7 @@
   "totals": {
     "ignore": 43,
     "as_dynamic": 0,
-    "bang": 1487,
+    "bang": 1476,
     "debug_print": 33
   },
   "files": {
@@ -195,7 +195,7 @@
       "bang": 13
     },
     "lib/pages/media_manager_page.dart": {
-      "bang": 13
+      "bang": 8
     },
     "lib/pages/messenger_shell.dart": {
       "bang": 1
@@ -314,7 +314,7 @@
       "bang": 4
     },
     "lib/platform_specific/mobile/swipe_chat_pager.dart": {
-      "bang": 4
+      "bang": 3
     },
     "lib/platform_specific/root_wrapper_desktop.dart": {
       "bang": 2
@@ -352,9 +352,6 @@
       "ignore": 1,
       "bang": 5
     },
-    "lib/services/agents/agents_chat_transport.dart": {
-      "bang": 1
-    },
     "lib/services/agents/agents_cloud_relay.dart": {
       "bang": 7
     },
@@ -386,7 +383,7 @@
       "bang": 7
     },
     "lib/services/agents/agents_replay_loader.dart": {
-      "bang": 7
+      "bang": 6
     },
     "lib/services/agents/agents_resume_trace.dart": {
       "debug_print": 2
@@ -514,9 +511,6 @@
     },
     "lib/services/google_oauth.dart": {
       "bang": 5
-    },
-    "lib/services/image_storage_service.dart": {
-      "bang": 1
     },
     "lib/services/local_chat_cache_native.dart": {
       "bang": 3
@@ -674,9 +668,6 @@
       "bang": 5
     },
     "lib/tool_handlers/web_tools.dart": {
-      "bang": 1
-    },
-    "lib/ui/expressive/agent_face.dart": {
       "bang": 1
     },
     "lib/ui/expressive/agent_status.dart": {
@@ -923,7 +914,7 @@
       "bang": 6
     },
     "lib/widgets/floating_app_bar.dart": {
-      "bang": 5
+      "bang": 4
     },
     "lib/widgets/html_artifact_view_io.dart": {
       "ignore": 1,

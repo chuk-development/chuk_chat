@@ -106,6 +106,17 @@ enum AgentsRunOutcome {
   notDelivered,
 }
 
+/// The calm line for a message that has not gone out yet.
+const String kAgentsNotSentNotice =
+    'Not sent yet. The app sends it again on its own when your Sidekicks '
+    'answer.';
+
+/// The reason of a run that never started because the message waits in the
+/// outbox: the link was down when it was sent. It is not a failure. The
+/// stream already said, in calm words, that the app sends it on its own, so
+/// the thread writes no second line for it.
+const String kAgentsQueuedReason = 'queued';
+
 /// What a run terminal means for the thread, from the two fields that say it.
 ///
 /// A terminal that carries an answer is an answer whatever its reason says; one
@@ -116,6 +127,7 @@ AgentsRunOutcome agentsRunOutcomeFor({String? reason, String? finalAnswer}) {
   if (finalAnswer != null && finalAnswer.trim().isNotEmpty) {
     return AgentsRunOutcome.answered;
   }
+  if (reason == kAgentsQueuedReason) return AgentsRunOutcome.notDelivered;
   if (reason == 'estop' || reason == 'interrupted' || reason == 'timeout') {
     return AgentsRunOutcome.stopped;
   }
@@ -150,7 +162,7 @@ String? _plainRunEndNotice(AgentsRunOutcome outcome) => switch (outcome) {
   AgentsRunOutcome.stopped => 'Stopped. No answer was written.',
   AgentsRunOutcome.failed => 'This run failed. No answer was written.',
   AgentsRunOutcome.lost => 'Lost this run. No answer came back.',
-  AgentsRunOutcome.notDelivered => 'Not sent yet. The app sends it again on its own when your Sidekicks answer.',
+  AgentsRunOutcome.notDelivered => kAgentsNotSentNotice,
 };
 
 String _clipNotice(String text) =>

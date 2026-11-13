@@ -1,18 +1,19 @@
-/// The phone's top chrome in the Agents build: one row, the same in the
+/// The phone's top chrome in the Agents build: the same two rows in the
 /// Chats and the Sidekicks half, so a switch between the halves moves
 /// nothing on screen.
 ///
 /// ```
-/// [ menu ] ( face  Title ••• )            [ ... ] [ + ]   in a chat
-/// [ menu ]     [ Home | Chats | Sidekicks ]       [ + ]   on Home
+/// [ menu ]   [ Home | Chats | Sidekicks ]   [ + ]    row, 48 px
+/// ( face  Title ••• )                      [ ... ]   pill row, 56 px
 /// ```
 ///
-/// Owner, 2026-11-13: the sidebar is back. The menu chip opens it: the
-/// switch between the halves and the list of chats or Sidekicks, each with
-/// its last line and its unread mark. A dot on the chip says that something
-/// in that list is unread. The pill names the chat in view and is where the
-/// thumb swipes to the next one (it drives [SwipeChatPager]). The "..." chip
-/// holds what to do with this chat. The bar lies over the chat: the page
+/// Owner, 2026-11-13: the switch stays on top in every place, also over a
+/// conversation; it is not in the sidebar. The menu chip opens the sidebar:
+/// the list of chats or Sidekicks, each with its last line and its unread
+/// mark. A dot on the chip says that something in that list is unread. The
+/// pill names the chat in view and is where the thumb swipes to the next
+/// one (it drives [SwipeChatPager]). The "..." chip holds what to do with
+/// this chat. Home has no pill row. The bar lies over the chat: the page
 /// colour holds it down behind the chips and fades out under them.
 library;
 
@@ -26,23 +27,30 @@ import 'package:chuk_chat/widgets/icons/icon_map.dart';
 /// Space above the row inside the safe area.
 const double kMobileTopBarRowTop = 8;
 
-/// Height of the row: the title pill's height. The 42 px chips are centred
-/// in it.
-const double kMobileTopBarRow = kChatTitleStripHeight;
+/// Height of the row (the press reach of the 42 px chips).
+const double kMobileTopBarRow = 48;
 
-/// Space under the row before the chat may start.
+/// Gap between the row and the pill row.
+const double kMobileTopBarGap = 6;
+
+/// Space under the bar before the chat may start.
 const double kMobileTopBarBottom = 8;
 
 /// The height of the whole bar under the safe area: what a chat below it
 /// passes as its `topInset` (plus `MediaQuery.viewPaddingOf(context).top`).
 const double kMobileTopBarHeight =
+    kMobileTopBarRowTop +
+    kMobileTopBarRow +
+    kMobileTopBarGap +
+    kChatTitleStripHeight +
+    kMobileTopBarBottom;
+
+/// The height of the bar without a pill row (Home).
+const double kMobileTopBarRowOnlyHeight =
     kMobileTopBarRowTop + kMobileTopBarRow + kMobileTopBarBottom;
 
-/// The height of the bar on Home. The same row.
-const double kMobileTopBarRowOnlyHeight = kMobileTopBarHeight;
-
-/// The bar: the menu chip, the [strip] (or the [centre] where there is no
-/// chat to name), the "..." chip and the add button.
+/// The bar: the menu chip, the [centre] (the mode switch) and the add
+/// button; under them the [strip] and the "..." chip.
 class MobileTopBar extends StatelessWidget {
   const MobileTopBar({
     super.key,
@@ -64,17 +72,18 @@ class MobileTopBar extends StatelessWidget {
   /// Draws a dot on the menu chip: something in the sidebar is unread.
   final bool menuBadge;
 
-  /// Shown in the middle where there is no [strip] (Home): the mode switch.
+  /// The switch Home | Chats | Sidekicks. Null leaves the middle empty.
   final Widget? centre;
 
   /// The primary action of the half: a new chat, or a new Sidekick. Null
-  /// hides the button.
+  /// hides the button but keeps its room, so the switch stays centred.
   final VoidCallback? onAdd;
 
-  /// What to do with the chat in view. Null hides the chip.
+  /// What to do with the chat in view: the chip at the end of the pill row.
+  /// Null hides it.
   final VoidCallback? onMore;
 
-  /// The [ChatTitleStrip] of the half. Null (Home) shows [centre] instead.
+  /// The [ChatTitleStrip] of the half. Null (Home) leaves the row alone.
   final Widget? strip;
 
   final String menuTooltip;
@@ -105,63 +114,86 @@ class MobileTopBar extends StatelessWidget {
             10,
             kMobileTopBarBottom,
           ),
-          child: SizedBox(
-            height: kMobileTopBarRow,
-            child: Row(
-              children: <Widget>[
-                Stack(
-                  clipBehavior: Clip.none,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              SizedBox(
+                height: kMobileTopBarRow,
+                child: Row(
                   children: <Widget>[
-                    FloatingHeaderButton(
-                      icon: Icons.menu,
-                      onPressed: onMenu,
-                      tooltip: menuTooltip,
-                      semanticsId: 'mobile_menu_button',
-                    ),
-                    if (menuBadge)
-                      Positioned(
-                        top: 5,
-                        right: 5,
-                        child: IgnorePointer(
-                          child: Container(
-                            key: const ValueKey<String>('mobile_menu_badge'),
-                            width: 11,
-                            height: 11,
-                            decoration: BoxDecoration(
-                              color: scheme.primary,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: page, width: 2),
+                    Stack(
+                      clipBehavior: Clip.none,
+                      children: <Widget>[
+                        FloatingHeaderButton(
+                          icon: Icons.menu,
+                          onPressed: onMenu,
+                          tooltip: menuTooltip,
+                          semanticsId: 'mobile_menu_button',
+                        ),
+                        if (menuBadge)
+                          Positioned(
+                            top: 5,
+                            right: 5,
+                            child: IgnorePointer(
+                              child: Container(
+                                key: const ValueKey<String>(
+                                  'mobile_menu_badge',
+                                ),
+                                width: 11,
+                                height: 11,
+                                decoration: BoxDecoration(
+                                  color: scheme.primary,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: page, width: 2),
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ),
+                      ],
+                    ),
+                    Expanded(child: Center(child: centre ?? const SizedBox())),
+                    // FloatingHeaderButton, not AccentIconButton: the header
+                    // chip paints 42 px but takes a 48 px press.
+                    SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: onAdd == null
+                          ? null
+                          : FloatingHeaderButton(
+                              icon: addIcon,
+                              accent: true,
+                              onPressed: onAdd,
+                              tooltip: addTooltip,
+                              semanticsId: 'mobile_add_button',
+                            ),
+                    ),
                   ],
                 ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: strip ?? Center(child: centre ?? const SizedBox()),
+              ),
+              if (strip != null) ...<Widget>[
+                const SizedBox(height: kMobileTopBarGap),
+                SizedBox(
+                  height: kChatTitleStripHeight,
+                  child: Row(
+                    children: <Widget>[
+                      // 3 px: the pill's edge under the painted edge of the
+                      // menu chip (a 42 px chip in a 48 px press).
+                      const SizedBox(width: 3),
+                      Expanded(child: strip),
+                      if (onMore != null) ...<Widget>[
+                        const SizedBox(width: 4),
+                        FloatingHeaderButton(
+                          icon: Icons.more_horiz_rounded,
+                          onPressed: onMore,
+                          tooltip: moreTooltip,
+                          semanticsId: 'mobile_more_button',
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
-                if (onMore != null) ...<Widget>[
-                  const SizedBox(width: 4),
-                  FloatingHeaderButton(
-                    icon: Icons.more_horiz_rounded,
-                    onPressed: onMore,
-                    tooltip: moreTooltip,
-                    semanticsId: 'mobile_more_button',
-                  ),
-                ],
-                if (onAdd != null)
-                  // FloatingHeaderButton, not AccentIconButton: the header
-                  // chip paints 42 px but takes a 48 px press.
-                  FloatingHeaderButton(
-                    icon: addIcon,
-                    accent: true,
-                    onPressed: onAdd,
-                    tooltip: addTooltip,
-                    semanticsId: 'mobile_add_button',
-                  ),
               ],
-            ),
+            ],
           ),
         ),
       ),

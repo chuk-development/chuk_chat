@@ -133,41 +133,47 @@ void main() {
     ChatStorageState.chatsById.clear();
   });
 
-  testWidgets('one top row with the title strip; the menu chip opens the '
-      'sidebar, which holds the switch', (tester) async {
+  testWidgets('the switch on top, the title strip under it; the menu chip '
+      'opens the sidebar', (tester) async {
     await _pump(tester);
 
-    // Closed: the sidebar is off stage, and so is the switch in its head.
-    expect(find.byType(SidebarMobile), findsNothing);
-    expect(find.byKey(_kSwitchKey), findsNothing);
+    // Closed: the sidebar is not in the tree.
+    expect(find.byType(SidebarMobile, skipOffstage: false), findsNothing);
     // The plain build's floating bar and its sidebar toggle are gone.
     expect(findId('menu_button'), findsNothing);
     expect(findId('mobile_menu_button'), findsOneWidget);
     expect(findId('mobile_more_button'), findsOneWidget);
-    // The strip is in the row, between the chips.
+    // The switch is in the top row, the strip in the row under it, with
+    // the "..." chip at its end.
     final Rect menu = tester.getRect(findId('mobile_menu_button'));
     final Rect more = tester.getRect(findId('mobile_more_button'));
     final Rect pill = tester.getRect(find.byType(ChatTitleStrip));
-    expect(pill.left, greaterThanOrEqualTo(menu.right));
+    final Rect modeSwitch = tester.getRect(find.byKey(_kSwitchKey));
+    expect(
+      modeSwitch.center.dy,
+      moreOrLessEquals(menu.center.dy, epsilon: 0.5),
+    );
+    expect(pill.top, greaterThanOrEqualTo(menu.bottom));
     expect(pill.right, lessThanOrEqualTo(more.left));
-    expect(pill.center.dy, moreOrLessEquals(menu.center.dy, epsilon: 0.5));
+    expect(pill.center.dy, moreOrLessEquals(more.center.dy, epsilon: 0.5));
 
     await tester.tap(findId('mobile_menu_button'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.byType(SidebarMobile), findsOneWidget);
+    // The switch is not in the sidebar.
     expect(
       find.descendant(
         of: find.byType(SidebarMobile),
         matching: find.byKey(_kSwitchKey),
       ),
-      findsOneWidget,
+      findsNothing,
     );
     // Android back closes it and stays in the app.
     await tester.binding.handlePopRoute();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
-    expect(find.byType(SidebarMobile), findsNothing);
+    expect(find.byType(SidebarMobile, skipOffstage: false), findsNothing);
     expect(find.byType(RootWrapperMobile), findsOneWidget);
 
     final ChatTitleStrip strip = tester.widget(find.byType(ChatTitleStrip));

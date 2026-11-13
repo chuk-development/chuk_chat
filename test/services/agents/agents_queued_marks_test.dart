@@ -21,7 +21,7 @@ void main() {
     AgentsQueuedMarks.writeRows = null;
   });
 
-  test('a queued prompt is marked failed, with the outbox id on it', () async {
+  test('a queued prompt is marked pending, with the outbox id on it', () async {
     store['t'] = <Map<String, dynamic>>[
       <String, dynamic>{'sender': 'user', 'text': 'alte frage'},
       <String, dynamic>{'sender': 'ai', 'text': 'alte antwort'},
@@ -37,8 +37,8 @@ void main() {
       isTrue,
     );
 
-    // failed, not pending: pending gets no Retry button.
-    expect(store['t']![2]['status'], 'failed');
+    // pending, not failed: it waits, the outbox sends it on its own.
+    expect(store['t']![2]['status'], 'pending');
     expect(store['t']![2]['queueId'], 'q1');
     // The turn before it is untouched.
     expect(store['t']![0].containsKey('status'), isFalse);

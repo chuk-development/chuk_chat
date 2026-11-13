@@ -597,8 +597,7 @@ class _MessengerShellState extends State<MessengerShell>
   /// A device with no computer also gets chuk's sidebar entry "Add your
   /// computer" ([_addComputerAction]).
   Widget _buildChatMode(BuildContext context, bool phone) {
-    // On a phone the switch is the head of chuk's sidebar.
-    final Widget modeSwitch = _buildModeSwitch(large: phone && !kIsWeb);
+    final Widget modeSwitch = _buildModeSwitch();
     final VoidCallback? addComputer = _addComputerAction;
     final builder = widget.chatModeBuilder;
     if (builder != null) {
@@ -1726,7 +1725,21 @@ class _MessengerShellState extends State<MessengerShell>
         profiles: _agentProfiles,
         mainAgentSection: true,
         emptyState: _buildStatusPanel(),
-        headerCenter: _chatModeAvailable ? _buildModeSwitch(large: true) : null,
+        // The head names the list. The switch is on top of the conversation,
+        // not here (owner, 2026-11-13).
+        headerCenter: Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 6),
+            child: Text(
+              AppLocalizations.of(context)?.agentsModeAgents ?? 'Sidekicks',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w800),
+            ),
+          ),
+        ),
         summaryLine: true,
         footer: _buildPhoneSidebarFooter(context),
       ),
